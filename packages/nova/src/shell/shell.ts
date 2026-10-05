@@ -24,6 +24,7 @@ import { reconcileCanvas } from './reconcile';
 import { createJournal, DEFAULT_HISTORY_DEPTH } from './journal';
 import type { HistoryEntry, HistoryFrame } from './journal';
 import { createLifecycleOps } from './lifecycle-ops';
+import { createChainCount, rememberChainCount } from './chains';
 import { createNavigationHandler, navigatedChannel } from './navigation';
 import type { NavigatedMessage } from './navigation';
 import { createRuntimeRegistry } from './runtime-registry';
@@ -105,10 +106,13 @@ export const createShell = (config: ShellConfig): Shell => {
 
   const journal = createJournal(config.historyDepth ?? DEFAULT_HISTORY_DEPTH);
 
+  const chains = createChainCount();
+
   const ops = createLifecycleOps({
     registry,
     telemetry,
     onLifecycleError: handleLifecycleRejection,
+    onChain: chains.hold,
     onUnmount: (instanceId) => {
       origins.delete(instanceId);
       births.delete(instanceId);
@@ -369,6 +373,7 @@ export const createShell = (config: ShellConfig): Shell => {
     // Every endpoint call an action makes flows to telemetry — the shell's one
     // observability surface (state, data, and now endpoints all land here).
     onEndpoint: (event) => telemetry.fireEndpoint(event),
+    onChain: chains.hold,
   });
 
   const spawn = (
@@ -814,6 +819,7 @@ export const createShell = (config: ShellConfig): Shell => {
     dispose,
   };
   rememberShellRegistry(shell, registry);
+  rememberChainCount(shell, chains);
 
   // Seed canvases whose config declares an `initial` action (or list). Done
   // after the shell object is assembled so `push` works exactly as it would

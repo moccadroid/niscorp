@@ -134,6 +134,10 @@ export type ActionRuntimeConfig = {
   endpointTimeoutMs?: number;
   onNavigate?: NavigateHandler;
   onEndpoint?: EndpointHandler;
+  // Handed every chain this instance starts and does not await — a trigger's
+  // steps, a message on its way to its listeners — so whoever holds the instance
+  // can tell when nothing it started is still running (shell/chains.ts).
+  onChain?: (chain: Promise<unknown>) => void;
   strict?: boolean;
   onError?: OnErrorHandler;
   // THE WORDS THIS INSTANCE RENDERS IN — asked for, rather than held.

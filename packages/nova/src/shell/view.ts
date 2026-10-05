@@ -1,6 +1,7 @@
 import type { RenderNode } from '../layout';
 import type { RenderApi, Shell } from './types';
 import { isHeadNode } from './head';
+import { chainsInFlight } from './chains';
 import { ACTION_SLOT_NAME } from './slot-names';
 
 // ═══════════════════════════════════════════════════════════
@@ -85,22 +86,15 @@ export const shellView = (shell: Shell): ShellView => ({
   },
 });
 
-// THE FIRST SCREEN IS WHOLE. An instance is `initializing` until its mount hook
-// — the loads, and whatever they chain to — has been awaited, so "nothing is
-// initializing" is the shell saying its opening screen is complete. A mount can
-// open another action, which starts initializing in turn, so the question is
-// asked again on every change and answered true only when it still holds a
-// macrotask later.
-//
-// Resolves `false` when `waitMs` runs out first: the screen is then drawn as it
-// stands, with whatever is still loading drawn as loading. Default 300ms — a
-// page should not hang on one slow endpoint.
-export const DEFAULT_SETTLE_WAIT_MS = 300;
+// A WAIT ON THE SHELL, shared by the two below. Resolves `true` once `isBusy`
+// answers no and still answers no a macrotask later — a mount can open another
+// action, which starts initializing in turn, so the question is asked again on
+// every change. Resolves `false` when `waitMs` runs out first, or `stopped`
+// says to give up.
+type ShellWaitOptions = { waitMs?: number; stopped?: () => boolean };
 
-export const shellSettled = async (shell: Shell, options: { waitMs?: number; stopped?: () => boolean } = {}): Promise<boolean> => {
+const shellQuietWithin = async (shell: Shell, isBusy: () => boolean, options: ShellWaitOptions): Promise<boolean> => {
   const waitMs = options.waitMs ?? DEFAULT_SETTLE_WAIT_MS;
-  const mounting = (): boolean =>
-    Object.values(shell.getState().canvases).some((canvas) => canvas.stack.some((instance) => instance.status === 'initializing'));
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<boolean>((resolve) => {
     timer = setTimeout(() => resolve(false), waitMs);
@@ -108,9 +102,9 @@ export const shellSettled = async (shell: Shell, options: { waitMs?: number; sto
   const quiet = (async (): Promise<boolean> => {
     for (;;) {
       if (options.stopped?.() === true) return false;
-      if (!mounting()) {
+      if (!isBusy()) {
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
-        if (!mounting()) return true;
+        if (!isBusy()) return true;
       }
       await new Promise<void>((resolve) => {
         const off = shell.onStateChange(() => {
@@ -129,3 +123,38 @@ export const shellSettled = async (shell: Shell, options: { waitMs?: number; sto
   clearTimeout(timer);
   return settled;
 };
+
+const isMounting = (shell: Shell): boolean =>
+  Object.values(shell.getState().canvases).some((canvas) => canvas.stack.some((instance) => instance.status === 'initializing'));
+
+// THE FIRST SCREEN IS WHOLE. An instance is `initializing` until its mount hook
+// — the loads, and whatever they chain to — has been awaited, so "nothing is
+// initializing" is the shell saying its opening screen is complete.
+//
+// Resolves `false` when `waitMs` runs out first: the screen is then drawn as it
+// stands, with whatever is still loading drawn as loading. Default 300ms — a
+// page should not hang on one slow endpoint.
+//
+// It asks about MOUNTS and nothing else, on purpose. A page is read whenever it
+// is asked for — also while a call somebody pressed minutes ago is still out —
+// and that read must not wait on it. `shellIdle` is the wider question.
+export const DEFAULT_SETTLE_WAIT_MS = 300;
+
+export const shellSettled = (shell: Shell, options: { waitMs?: number; stopped?: () => boolean } = {}): Promise<boolean> =>
+  shellQuietWithin(shell, () => isMounting(shell), options);
+
+// NOTHING THE SHELL STARTED IS STILL RUNNING. Nothing is mounting, and no chain
+// is in flight (./chains.ts): no trigger's steps, no message on its way to its
+// listeners, no hook a navigation started. It is what a check awaits after it
+// presses something — the call the press made has answered, what that chained
+// to has run, and an action a `pop` revealed has re-read itself — and what
+// anything that runs an action for somebody else awaits before it reads the
+// screen.
+//
+// It is about THIS shell's own work. A followed read's next body arrives when
+// somebody else writes, and is not waited for; neither is anything outside the
+// shell that an endpoint set going. A call that never answers holds it until
+// the call's own timeout fails it (30s by default), so `waitMs` is what bounds
+// the wait — it resolves `false` when that runs out, as `shellSettled` does.
+export const shellIdle = (shell: Shell, options: { waitMs?: number; stopped?: () => boolean } = {}): Promise<boolean> =>
+  shellQuietWithin(shell, () => isMounting(shell) || chainsInFlight(shell) > 0, options);

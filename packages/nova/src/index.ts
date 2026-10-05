@@ -173,7 +173,7 @@ export { getPath } from './shared';
 // ═══════════════════════════════════════════════════════════
 // Shell — top-level entry point for users
 // ═══════════════════════════════════════════════════════════
-export { createShell, shellView, shellSettled, canvasTreeOf, hasVisibleContent, DEFAULT_SETTLE_WAIT_MS, CANVAS_SLOT_NAME, ACTION_SLOT_NAME, reconcileCanvas, DEFAULT_HISTORY_DEPTH, navigatedChannel } from './shell';
+export { createShell, shellView, shellSettled, shellIdle, canvasTreeOf, hasVisibleContent, DEFAULT_SETTLE_WAIT_MS, CANVAS_SLOT_NAME, ACTION_SLOT_NAME, reconcileCanvas, DEFAULT_HISTORY_DEPTH, navigatedChannel } from './shell';
 export type { ShellView } from './shell';
 
 // The head: the document's <head> as a node in a layout (`nova:head`), the

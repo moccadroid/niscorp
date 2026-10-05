@@ -67,9 +67,12 @@ const fireTrigger = (
   // `{{@event.payload}}` (e.g. the clicked list index).
   const ctx: StepContext =
     event === undefined ? base : { ...base, extras: { ...base.extras, '@event': event } };
-  void executeSteps(trigger.do, ctx).catch((err: unknown) => {
+  // Detached: the event that fired this has long returned when its first
+  // `call` answers. Reported, so the steps are not invisible while they run.
+  const chain = executeSteps(trigger.do, ctx).catch((err: unknown) => {
     ctx.onError(toNovaError(err));
   });
+  ctx.onChain?.(chain);
 };
 
 const eventOrigin = (event: unknown): string | undefined => {

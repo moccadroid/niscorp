@@ -169,6 +169,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     ...(config.onEndpoint === undefined
       ? {}
       : { onEndpoint: (event) => config.onEndpoint!({ ...event, instanceId: instance.id, canvasId: instance.canvasId }) }),
+    ...(config.onChain === undefined ? {} : { onChain: config.onChain }),
     calls,
     extras: {},
     initial: initialSnapshot,

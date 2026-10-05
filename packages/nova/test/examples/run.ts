@@ -1,5 +1,5 @@
 import { prismTransform } from '@niscorp/prism/migrations';
-import { createLayoutStore, createShell, shellSettled } from '../../src';
+import { createLayoutStore, createShell, shellIdle } from '../../src';
 import type { RenderNode, Shell } from '../../src';
 import type { NovaExample } from '../../src/examples';
 import { matcherFor } from '../../src/i18n';
@@ -56,13 +56,14 @@ export const shellOf = (example: NovaExample, asked: Asked[] = []): Shell => {
   });
 };
 
-// An example, run as it says: mounted, each thing done in turn, then what the
-// screen says, what its one action holds, what stands on each canvas, and what
-// it asked the outside for.
+// An example, run as it says: mounted, each thing done in turn — and whatever
+// that set going left to finish, however long an endpoint takes to answer —
+// then what the screen says, what its one action holds, what stands on each
+// canvas, and what it asked the outside for.
 export const runExample = async (example: NovaExample): Promise<NovaExample['expected']> => {
   const asked: Asked[] = [];
   const shell = shellOf(example, asked);
-  await shellSettled(shell);
+  await shellIdle(shell);
   const { isProse } = matcherFor(example.phraseKeys);
   const canvases = Object.keys(shell.getState().canvases);
   const top = (canvas: string): string | undefined => shell.getState().canvases[canvas]?.stack.at(-1)?.id;
@@ -76,7 +77,7 @@ export const runExample = async (example: NovaExample): Promise<NovaExample['exp
       if (origin === undefined) throw new Error(`${example.id}: nothing to press on ${press.canvas ?? canvases[0] ?? '(no canvas)'}`);
       shell.dispatch({ type: press.type ?? 'ui:click', ref: press.ref, ...(press.payload === undefined ? {} : { payload: press.payload }), origin });
     }
-    await shellSettled(shell);
+    await shellIdle(shell);
     screen();
   }
   const only = example.action === undefined ? undefined : top('main');

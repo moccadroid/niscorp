@@ -529,12 +529,12 @@ useEffect(() => {
 
 Always dispose shells you create — they hold references to runtimes which hold references to event listeners.
 
-### `shellView(shell)` and `shellSettled(shell)`
+### `shellView(shell)`, `shellSettled(shell)` and `shellIdle(shell)`
 
-Two helpers beside the shell, for anything that draws one.
+Three helpers beside the shell: for anything that draws one, and for anything that presses something on one and reads what came of it.
 
 ```ts
-import { shellView, shellSettled } from '@niscorp/nova';
+import { shellView, shellSettled, shellIdle } from '@niscorp/nova';
 
 const { api, subscribe } = shellView(shell);   // the shell, as a RenderApi
 api.frame();                                   // the shell layout's tree
@@ -543,11 +543,20 @@ api.dispatch('main', { type: 'ui:click', ref: 'save' });   // to the canvas's ac
 const stop = subscribe(() => redraw());        // once per burst of changes
 
 const whole = await shellSettled(shell, { waitMs: 300 });  // true: nothing is still mounting
+
+api.dispatch('main', { type: 'ui:click', ref: 'save' });
+const done = await shellIdle(shell, { waitMs: 5000 });     // true: what the press set going has finished
 ```
 
-`api.dispatch` stamps an event that names no `origin` with the canvas's active instance; `api.publish(channel, payload?)` is `shell.publish`. `shellSettled` also takes `stopped?: () => boolean` — once it answers `true` the wait ends with `false`.
+`api.dispatch` stamps an event that names no `origin` with the canvas's active instance; `api.publish(channel, payload?)` is `shell.publish`. `shellSettled` and `shellIdle` also take `stopped?: () => boolean` — once it answers `true` the wait ends with `false`.
 
 `shellView` is what lets an adapter written against `RenderApi` (the DOM and TTY adapters, a moss terminal) draw a shell that lives beside it. `shellSettled` resolves `true` once no instance is `initializing` — every mount hook, and what it chained to, has been awaited — and `false` if `waitMs` (default 300) runs out first. It is the moment to draw a shell to markup, and the moment for the page's own shell to adopt it.
+
+`shellSettled` asks about mounts and nothing else. A trigger's steps run detached from the event that fired them, so after a press it can answer `true` while the call the press made is still out. `shellIdle` is the wider question: nothing is mounting **and** no chain the shell started is still running — no trigger's steps, no `emit` on its way to its listeners (and what they then call), no re-read of an action a `pop` revealed. It is what a check awaits after `dispatch` instead of sleeping, and what anything that runs an action for somebody else awaits before it reads the screen. Same options, same default wait, `false` when the wait runs out.
+
+Two things it does not wait for, because they are not this shell's work: the next body of a read the shell is **following** (a reactive read under moss answers again when somebody writes — wait for that with `shell.onDataChange`), and anything outside the shell that an endpoint set going. A call that never answers holds it until the call's own timeout fails it (30s by default; an endpoint's `timeoutMs` wins), so pass the `waitMs` you mean.
+
+`shellSettled` is deliberately not widened to this. A page is read whenever it is asked for, also while a long call is out, and that read should not wait on it.
 
 ---
 

@@ -15,6 +15,8 @@ export type LifecycleOpsDeps = {
   // Called as an instance is torn down, so per-instance bookkeeping the shell
   // holds beside the registry (push origins) never outlives what it describes.
   onUnmount?: (instanceId: string) => void;
+  // Handed the hooks started here and not awaited (shell/chains.ts).
+  onChain?: (chain: Promise<unknown>) => void;
 };
 
 export type LifecycleOps = {
@@ -24,7 +26,16 @@ export type LifecycleOps = {
 };
 
 export const createLifecycleOps = (deps: LifecycleOpsDeps): LifecycleOps => {
-  const { registry, onLifecycleError, onUnmount } = deps;
+  const { registry, onLifecycleError, onUnmount, onChain } = deps;
+
+  // A hook runs detached, its failure routed to the shell. STARTED, THEN
+  // REPORTED — in that order and as two statements: an optional call does not
+  // evaluate its argument when there is nobody to call, so starting the hook
+  // inside it would make the hook itself optional.
+  const detached = (hook: Promise<void>): void => {
+    const chain = hook.catch(onLifecycleError);
+    onChain?.(chain);
+  };
 
   // Track instances we've already unmounted so a redundant unmount is a
   // no-op (idempotency) — never re-fires hooks, never re-disposes.
@@ -35,7 +46,7 @@ export const createLifecycleOps = (deps: LifecycleOpsDeps): LifecycleOps => {
     const runtime = registry.get(instanceId);
     if (runtime === undefined) return;
     unmounted.add(instanceId);
-    runtime.unmount().catch(onLifecycleError);
+    detached(runtime.unmount());
     runtime.dispose();
     registry.unregister(instanceId);
     onUnmount?.(instanceId);
@@ -57,14 +68,16 @@ export const createLifecycleOps = (deps: LifecycleOpsDeps): LifecycleOps => {
     // lifecycle event nothing happened to cause.
     if (top.status === 'suspended') return;
     const runtime = registry.get(top.id);
-    if (runtime !== undefined) runtime.suspend().catch(onLifecycleError);
+    if (runtime !== undefined) detached(runtime.suspend());
   };
 
   const resumeTop = (canvas: Canvas): void => {
     const top = canvas.peek();
     if (top === undefined) return;
     const runtime = registry.get(top.id);
-    if (runtime !== undefined) runtime.resume().catch(onLifecycleError);
+    // A revealed action re-runs its mount to refresh itself, already `active`:
+    // its status says nothing about that load, so the chain count has to.
+    if (runtime !== undefined) detached(runtime.resume());
   };
 
   return { unmountInstance, suspendTop, resumeTop };

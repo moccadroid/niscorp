@@ -71,6 +71,9 @@ export type StepContext = {
   // Reports a completed `call` step upward (the runtime stamps instance/canvas
   // and forwards to telemetry). Aborted calls are not reported.
   onEndpoint?: (event: EndpointEventInit) => void;
+  // Handed what these steps start and do not await. Absent in a bare step
+  // context: nothing is then counted.
+  onChain?: (chain: Promise<unknown>) => void;
   calls?: EndpointCalls;
   extras: ExtraScopes;
   // The action's data as it was built at spawn — what `reset` restores a path
@@ -359,8 +362,21 @@ export const executeSteps = async (steps: Step[], ctx: StepContext): Promise<voi
       // its own channel froze every other principal's shell, the socket and
       // HTTP with it. A task (./next-task.ts) yields between hops, so a chain costs its own
       // shell time and nobody else's; ./cause.ts is what ends it.
+      //
+      // The message is ON ITS WAY from here until its listeners have been
+      // told, and nobody awaits that: it is reported as a chain of its own, so
+      // the gap between this turn and the next task does not read as "done".
       const { messageBus, cause } = ctx;
-      nextTask(() => messageBus.publish(channel, payload, cause));
+      const delivered = new Promise<void>((resolve) => {
+        nextTask(() => {
+          try {
+            messageBus.publish(channel, payload, cause);
+          } finally {
+            resolve();
+          }
+        });
+      });
+      ctx.onChain?.(delivered);
       continue;
     }
     if ('push' in step) {

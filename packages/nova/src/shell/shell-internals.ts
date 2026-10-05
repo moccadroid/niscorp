@@ -91,6 +91,7 @@ export type RuntimeFactoryDeps = {
   instanceIdFn: IdFactory;
   onNavigate: (canvasId: string, effect: NavigationEffect) => void;
   onEndpoint?: EndpointHandler;
+  onChain?: (chain: Promise<unknown>) => void;
   // The shell's language cell, read per render. See ActionRuntimeConfig.i18n.
   i18n?: () => LanguageOptions | undefined;
 };
@@ -114,6 +115,7 @@ export const createRuntimeFactory = (deps: RuntimeFactoryDeps) => (
     ...(deps.endpointTimeoutMs === undefined ? {} : { endpointTimeoutMs: deps.endpointTimeoutMs }),
     onNavigate: (effect) => deps.onNavigate(canvasId, effect),
     ...(deps.onEndpoint === undefined ? {} : { onEndpoint: deps.onEndpoint }),
+    ...(deps.onChain === undefined ? {} : { onChain: deps.onChain }),
     strict: deps.strict,
     ...(deps.onError === undefined ? {} : { onError: deps.onError }),
     ...(deps.i18n === undefined ? {} : { i18n: deps.i18n }),
