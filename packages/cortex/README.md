@@ -89,9 +89,9 @@ How the envelope travels from model to runtime. One field,
 | `emit` | the model's completion IS the envelope (content channel) | everything else — auto-picked wherever neither of the above enforces anything: all of Groq, big schemas, models that mangle nested tool args |
 
 Zod validates in **every** strategy. Invalid output feeds back as a
-correction *inside the same run* (a tool error result / an appended
-message) — never a full re-run. Big recursive schemas (Prism nodes,
-Nova actions) ride `emit`; cortex injects
+correction *inside the same run* (the attempt and a system message
+naming the issues are appended) — never a full re-run. Big recursive
+schemas (Prism nodes, Nova actions) ride `emit`; cortex injects
 the JSON Schema into the prompt automatically (`output.doc: 'auto'`,
 via `schemaDoc()` — single-sourced from the Zod schema).
 
@@ -131,7 +131,17 @@ const agent = defineAgent<Data, Deps>({
 Deps are per-invocation, typed, and consumed by context entries,
 gates and hooks — agents are defined once, never rebuilt per call.
 Defaults when `stopWhen` is omitted: `stepCount(20)`,
-`outputRetries(3)`.
+`outputRetries(3)`. A `stopWhen` you pass replaces both, so keep a
+`stepCount` in it: `outputRetries` counts refused answers only, and
+a turn of prose with no envelope in it is corrected without being
+counted. `outputRetries(n)` ends the run at the n-th refused answer:
+n attempts, n − 1 corrections, so `outputRetries(1)` allows no
+second attempt.
+
+`policy.tools` lists take tool **ids** (`tool.id`), not the names
+the model calls: a name in `deny` or `requireApproval` matches
+nothing and says nothing, and a name in `allow` leaves the tool off
+the list.
 
 Multi-turn history is caller-owned: `input` accepts a `string`, a
 `Message[]` transcript, or any JSON value.
@@ -164,11 +174,22 @@ const result = await run.result;   // the no-streaming opt-out
 
 - `tool-start` fires **before** execution — drives live "running…" UIs.
 - `tool-end` carries a typed `ToolObservation` union (result / error /
-  denied / unknown-tool). No casting.
+  denied / unknown-tool). No casting. Through Signal, `unknown-tool`
+  is rare: Signal routes only calls to tools the step declared, and
+  reads a call to any other name as an attempted answer. It is
+  validated as the envelope (a `retry`, or the run's output if it
+  passes), or dropped when it comes beside a call to a declared tool,
+  and never reaches `tool-start`. The kind arises when `resumeRun` is
+  not handed the per-run tool the pending call names, or with a
+  client that does its own routing.
 - `output-delta` streams the raw envelope JSON as it generates;
   `output-partial` streams the progressively parsed envelope via
   [`@niscorp/solid`](../solid) — a chat `response` streams token-ish,
   a Nova screen in `data` becomes renderable before the run ends.
+  Both stream before cortex knows how the step ends: words written
+  beside a tool call (under `emit` and `native`) and a `respond` sent
+  beside other calls arrive as `output-delta` too and are not the
+  answer. The answer is what the last step streamed.
 - `retry` resets partial-output state (same contract consumers had
   in v1).
 - Nested runs (`asTool`) forward their events into the parent stream

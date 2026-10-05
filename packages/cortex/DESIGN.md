@@ -168,17 +168,21 @@ Cortex registers one synthetic tool per run:
   `{ data: <raw> }`. Envelope-first precedence; safe only because
   real data schemas are strict and discriminating — a correct
   answer is never failed for missing its coat.
-- **Validation feedback in-loop.** Invalid `respond` args produce a
-  tool error result carrying the Zod issues; the model retries the
-  call. One extra step, transcript intact, tools still warm — never a
-  full re-run.
+- **Validation feedback in-loop.** Invalid `respond` args are
+  appended as the assistant's turn, followed by a system message
+  carrying the Zod issues; the model answers again. One extra step,
+  transcript intact, tools still warm — never a full re-run.
 - **`respond` must be called alone.** If it appears alongside other
-  tool calls in one turn, it receives an error result and the other
-  calls execute normally.
+  tool calls in one turn, it is dropped: the other calls execute
+  normally and the model is told nothing about it. Its arguments have
+  already streamed as `output-delta` and `output-partial` by then.
 - **Termination without a result** (model stops on prose that is not
   an envelope) is a protocol violation: cortex appends a correction
   offering both exits (call `respond`, or emit ONLY the envelope) and
-  continues, bounded by the `outputRetries` stop condition. Per-agent
+  continues. These corrections are not counted against
+  `outputRetries`, which is for answers that parsed and were refused,
+  so it is `stepCount` (20 turns by default) that ends a run whose
+  model keeps writing prose. Per-agent
   hardening: `output.forceTool: true` sets `toolChoice: 'required'`
   so every turn must be a tool call and `respond` is the only exit —
   opt-in, because some models get tool-happy under `required`.
@@ -199,8 +203,9 @@ get grammar-level enforcement for free.
 The envelope travels on the content channel: the model's final
 completion IS the envelope, as raw JSON — no tool call, no provider
 grammar. First-class, not degraded: same envelope, same Zod
-validation, same correction retries (appended messages, bounded by
-`outputRetries`), same solid streaming via content deltas.
+validation, same correction retries (appended messages; a refused
+envelope counts against `outputRetries`, a turn with no envelope in
+it does not), same solid streaming via content deltas.
 Fence-tolerant parse. It is `auto`'s floor: wherever neither grammar
 nor tool params would enforce the contract, the contract rides the
 prompt either way, and emit carries the answer without a synthetic
@@ -242,7 +247,7 @@ step:
     execute (Zod-validated input, timeout)
     onToolResult hooks (replace / redact / truncate)
     append tool result message; emit tool-end observation
-  respond call → validate envelope → end (or error result + continue)
+  respond call → validate envelope → end (or correction + continue)
 ```
 
 Rules the loop lives by:
@@ -259,10 +264,16 @@ Rules the loop lives by:
   denied call becomes an error result the model sees and reacts to.
   The run only fails on structural conditions (stop limits, model
   call failure, abort, retries exhausted).
+- **A tool's `input` is enforced; its `output` is a type.** The input
+  schema is parsed before `execute` runs. The optional `output`
+  schema types what `execute` returns and is not applied at runtime:
+  the return value is not parsed, stripped or transformed by it.
 - **The model sees `tool.name`; `tool.id` is the policy identity.**
-  Descriptors carry the name (prompts say "call `query`"); the loop
-  resolves incoming calls by name OR id; gates, observations and
-  traces always carry the canonical id. Both namespaces must be
+  Descriptors carry the name (prompts say "call `query`"); the loop's
+  own table resolves a call by name OR id, but Signal routes only the
+  names it was sent, so through Signal a call by id is read as an
+  attempted answer and never reaches that table; gates, observations
+  and traces always carry the canonical id. Both namespaces must be
   collision-free per run, and nothing may claim `respond`. (v1 sent
   ids on the wire while documenting names — a prompt-literal model
   exposed the lie.)
@@ -448,7 +459,7 @@ const result = await run.result;
 | `tool-start` | `{ call }` | before gates + execution — drives live UIs |
 | `tool-end` | `{ observation }` | typed union incl. denials; no casting |
 | `approval-required` | `{ approval: { id, toolId, callId, args, reason } }` | run suspends |
-| `output-delta` | `{ text }` | raw envelope JSON fragments |
+| `output-delta` | `{ text }` | the output channel as it streams; the envelope's JSON on the step that ends the run |
 | `output-partial` | `{ output }` | solid-parsed partial envelope |
 | `retry` | `{ kind: 'output' \| 'termination' \| 'provider', attempt, issues }` | consumers reset partial state; `issues` carries the evidence (Zod issues, the rejected attempt, or the stray text) |
 | `run-end` | `{ result, meta }` | |
