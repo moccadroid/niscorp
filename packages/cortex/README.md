@@ -299,6 +299,24 @@ type CortexError = {
 Tool failures are **observations**, not exceptions — the model sees
 them and decides; the run fails only on structural conditions.
 
+A tool's `input` schema validates; it does not convert. It does two
+jobs: the model is sent its JSON Schema, taken from the schema's
+output side, and a call's arguments are parsed with it twice — by the
+loop, then again in front of `execute`. Converting belongs inside
+`execute`, and this is what it costs in the schema:
+
+- A schema with no JSON Schema (a `.transform()`, a `z.date()`) fails
+  the run before the model is asked: `code: 'unknown'`, with Zod's
+  message (`Transforms cannot be represented in JSON Schema`).
+- A schema whose output is another kind than its input
+  (`z.stringbool()`) is described to the model by its output and then
+  refuses what its own first parse produced: every call ends in an
+  `error` observation and `execute` never runs.
+- A schema that changes a value (`.overwrite()`) changes it twice.
+  That is harmless where a second pass changes nothing (`.trim()`),
+  and wrong where it does; the observation's `args` hold the value
+  as parsed once.
+
 ---
 
 ## Building
