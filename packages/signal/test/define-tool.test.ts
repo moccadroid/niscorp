@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
-import { defineTool } from '../src';
+import { createSignal, defineTool, SignalError } from '../src';
 
 describe('defineTool', () => {
   it('creates a tool with typed input', () => {
@@ -50,5 +50,38 @@ describe('defineTool', () => {
 
     expect(syncTool.execute({})).toBe('sync result');
     expect(await asyncTool.execute({})).toBe('async result');
+  });
+});
+
+// What DOCS.md says of a tool's input schema: the model is sent its JSON
+// Schema, so a schema that has none is refused when the request is built.
+describe('a tool input schema with no JSON Schema', () => {
+  const cases: [string, z.ZodType][] = [
+    ['a transform', z.object({ when: z.string().transform((text) => text.length) })],
+    ['a date', z.object({ when: z.date() })],
+  ];
+  it.each(cases)('%s rejects the call before any request, with the schema library\'s own error', async (_label, input) => {
+    let asked = 0;
+    const client = {
+      chat: {
+        completions: {
+          create: async () => {
+            asked += 1;
+            throw new Error('the provider was asked');
+          },
+        },
+      },
+    };
+    const signal = createSignal(
+      { baseUrl: 'https://fake.api.com/v1', apiKey: 'k', model: 'm', capabilities: { nativeTools: true } },
+      { client },
+    );
+    const tool = defineTool({ name: 't', description: 'A tool', input, execute: () => 'ok' });
+
+    const refusal: unknown = await signal.tools([tool]).complete('go').catch((error: unknown) => error);
+    expect(refusal).toBeInstanceOf(Error);
+    expect(refusal).not.toBeInstanceOf(SignalError);
+    expect(String(refusal)).toContain('cannot be represented in JSON Schema');
+    expect(asked).toBe(0);
   });
 });

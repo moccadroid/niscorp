@@ -320,6 +320,8 @@ const searchTool = defineTool({
 
 The Zod `input` schema validates the model's arguments before `execute` runs. The return value is stringified and sent back to the model. A call to an unknown tool, arguments that fail the schema, and an `execute` that throws do not fail the run: each goes back to the model as an `error: …` tool result (and is recorded in `meta.toolCalls`).
 
+The model is sent the `input` schema as JSON Schema, taken from the schema's output side, so an `input` schema validates and does not convert. One with no JSON Schema (a `.transform()`, a `z.date()`) rejects the call before any request is made, with Zod's own error (`Transforms cannot be represented in JSON Schema`) rather than a `SignalError`. One whose output is another kind than its input (`z.stringbool()`) is described to the model by its output: told `boolean`, a model that sends one gets `input_invalid` back, and it is the string (`"true"`) that is accepted. Convert inside `execute`.
+
 ### Using Tools
 
 ```typescript
