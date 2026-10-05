@@ -117,7 +117,8 @@ export const createLoomEditor = (config: LoomEditorConfig): LoomEditor => {
         // A non-object root binds one level in, under ROOT_KEY (see `needsWrap`).
         const wrap = needsWrap(document);
         if (wrap) wrappedDocs.add(name);
-        const value = artifact.documents?.[name] ?? buildDocument(ir, {});
+        const seed = artifact.documents?.[name];
+        const value = seed ?? buildDocument(ir, {});
         const built = toNova(ir, {
           id: canvasId,
           ...(wrap ? { rootKey: ROOT_KEY } : {}),
@@ -125,7 +126,13 @@ export const createLoomEditor = (config: LoomEditorConfig): LoomEditor => {
           widgets: plugin.widgets ?? [],
         });
         for (const [id, node] of Object.entries(built.layouts)) store.set(id, node);
-        action = built.action;
+        // A wrapped document's value need not be an object — a list, a string, a
+        // number — and the compiler's `value` takes objects. Such a seed goes
+        // under ROOT_KEY here, where the wrapping is the editor's own; without
+        // this it was dropped and the default opened in its place. One the schema
+        // refuses is still left out, and the default opens as it always did.
+        const seedsRoot = wrap && seed !== undefined && seed !== null && !isRecord(seed) && document.safeParse(seed).success;
+        action = seedsRoot ? { ...built.action, data: { [ROOT_KEY]: seed } } : built.action;
       }
       shell.registerAction(action);
       shell.addCanvas({ id: canvasId, initial: action.id });

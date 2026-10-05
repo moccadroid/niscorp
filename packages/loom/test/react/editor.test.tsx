@@ -303,6 +303,38 @@ describe('LoomForm — pixels and round-trip', () => {
   });
 });
 
+// The editor reports its documents on mount. A host that saves on change stores
+// that first report — so a seed that is dropped is a stored document replaced.
+describe('LoomForm — a document whose root is not an object', () => {
+  it('reports a list seed on mount and draws its items', () => {
+    const onChange = vi.fn();
+    render(<LoomForm schema={z.array(z.string())} options={{ value: ['stalls', 'circle'] }} onChange={onChange} />);
+
+    expect(onChange.mock.calls[0]?.[0]).toEqual(['stalls', 'circle']);
+    const boxes = screen.getAllByRole('textbox');
+    expect(boxes).toHaveLength(2);
+    expect(boxes[0]).toHaveProperty('value', 'stalls');
+    expect(boxes[1]).toHaveProperty('value', 'circle');
+  });
+
+  it('reports a string seed on mount and shows it', () => {
+    const onChange = vi.fn();
+    render(<LoomForm schema={z.string()} options={{ value: 'The Tempest' }} onChange={onChange} />);
+
+    expect(onChange.mock.calls[0]?.[0]).toBe('The Tempest');
+    expect(screen.getByRole('textbox')).toHaveProperty('value', 'The Tempest');
+  });
+
+  it('goes on from the seed when it is edited', () => {
+    const onChange = vi.fn();
+    render(<LoomForm schema={z.array(z.string())} options={{ value: ['stalls', 'circle'] }} onChange={onChange} />);
+
+    fireEvent.change(screen.getAllByRole('textbox')[1] ?? screen.getByRole('textbox'), { target: { value: 'gallery' } });
+
+    expect(onChange).toHaveBeenLastCalledWith(['stalls', 'gallery']);
+  });
+});
+
 // A <select> speaks strings; an enum's values need not be strings.
 describe('LoomForm — an enum', () => {
   it('writes the number an option stands for, which the schema accepts', () => {
