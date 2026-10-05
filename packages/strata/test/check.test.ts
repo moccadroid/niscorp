@@ -51,6 +51,48 @@ describe('snapshot — did the grammar change?', () => {
     expect(result.status).toBe('changed');
   });
 
+  // Most schema arrays are sets. A tuple's is not: its positions are the grammar.
+  it('a tuple whose positions swap is a change — a document valid before is not now', () => {
+    const before = z.object({ range: z.tuple([z.string(), z.number()]) }).strict();
+    const after = z.object({ range: z.tuple([z.number(), z.string()]) }).strict();
+    const stored = { range: ['a', 1] };
+    expect(before.safeParse(stored).success).toBe(true);
+    expect(after.safeParse(stored).success).toBe(false);
+
+    const result = compareSnapshot(snapshotOf(forms(), { 'acme.forms/form': before }), snapshotOf(forms(), { 'acme.forms/form': after }));
+    expect(result.status).toBe('changed');
+    if (result.status === 'changed') {
+      expect(result.changes[0]?.lines).toEqual([
+        '~ properties.range.prefixItems[0].type: "string" → "number"',
+        '~ properties.range.prefixItems[1].type: "number" → "string"',
+      ]);
+    }
+  });
+
+  it('a tuple that loses or gains a position says which', () => {
+    const pair = z.object({ pair: z.tuple([z.string(), z.string()]) }).strict();
+    const single = z.object({ pair: z.tuple([z.string()]) }).strict();
+    const shorter = compareSnapshot(snapshotOf(forms(), { 'acme.forms/form': pair }), snapshotOf(forms(), { 'acme.forms/form': single }));
+    const longer = compareSnapshot(snapshotOf(forms(), { 'acme.forms/form': single }), snapshotOf(forms(), { 'acme.forms/form': pair }));
+    expect(shorter.status === 'changed' && shorter.changes[0]?.lines).toContain('- properties.pair.prefixItems[1]');
+    expect(longer.status === 'changed' && longer.changes[0]?.lines).toContain('+ properties.pair.prefixItems[1]');
+  });
+
+  it('the same tuple is the same, and a union inside a position is still a set', () => {
+    const tuple = (members: readonly [z.ZodType, z.ZodType]) => z.object({ range: z.tuple([z.union(members), z.number()]) }).strict();
+    const one = tuple([z.object({ a: z.string() }).strict(), z.object({ b: z.string() }).strict()]);
+    const reordered = tuple([z.object({ b: z.string() }).strict(), z.object({ a: z.string() }).strict()]);
+    expect(compareSnapshot(snapshotOf(forms(), { 'acme.forms/form': one }), snapshotOf(forms(), { 'acme.forms/form': one }))).toEqual({ status: 'same' });
+    expect(compareSnapshot(snapshotOf(forms(), { 'acme.forms/form': one }), snapshotOf(forms(), { 'acme.forms/form': reordered }))).toEqual({ status: 'same' });
+  });
+
+  it('an enum reordered is still the same — it is a set', () => {
+    const tone = (values: readonly [string, string]) => z.object({ tone: z.enum(values) }).strict();
+    expect(
+      compareSnapshot(snapshotOf(forms(), { 'acme.forms/form': tone(['primary', 'quiet']) }), snapshotOf(forms(), { 'acme.forms/form': tone(['quiet', 'primary']) })),
+    ).toEqual({ status: 'same' });
+  });
+
   it('the record keeps what the validator wrote — the prose too', () => {
     expect(JSON.stringify(snapshotOf(forms(), { 'acme.forms/form': formV0 }).kinds)).toContain('What the form is called.');
   });

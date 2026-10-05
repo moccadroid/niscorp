@@ -104,17 +104,21 @@ export const snapshotOf = (sequence: Sequence, schemas: Readonly<Record<string, 
 export const snapshotText = (snapshot: Snapshot): string => `${JSON.stringify(sortKeys(snapshot), null, 2)}
 `;
 
-// Schema arrays are compared as sets (`sets`); a document's arrays by position —
-// `layout.children[1]` is how a person finds the thing that changed.
+// Schema arrays are compared as sets (`sets`) — all but a tuple's `prefixItems`,
+// see `diffPositions`; a document's arrays by position — `layout.children[1]` is
+// how a person finds the thing that changed.
 const diffLines = (a: unknown, b: unknown, path: string, out: string[], limit: number, canon: (v: unknown) => unknown = normalize, sets = true): void => {
   if (out.length >= limit) return;
   if (JSON.stringify(a) === JSON.stringify(b)) return;
   if (isRecord(a) && isRecord(b)) {
     for (const key of [...new Set([...Object.keys(a), ...Object.keys(b)])].sort()) {
       const at = path === '' ? key : `${path}.${key}`;
+      const before = a[key];
+      const after = b[key];
       if (!(key in a)) out.push(`+ ${at}`);
       else if (!(key in b)) out.push(`- ${at}`);
-      else diffLines(a[key], b[key], at, out, limit, canon, sets);
+      else if (sets && key === 'prefixItems' && Array.isArray(before) && Array.isArray(after)) diffPositions(before, after, at, out, limit, canon);
+      else diffLines(before, after, at, out, limit, canon, sets);
       if (out.length >= limit) return;
     }
     return;
@@ -152,6 +156,19 @@ const diffLines = (a: unknown, b: unknown, path: string, out: string[], limit: n
     return;
   }
   out.push(`~ ${path || '(root)'}: ${JSON.stringify(a)?.slice(0, 60)} → ${JSON.stringify(b)?.slice(0, 60)}`);
+};
+
+// A tuple's `prefixItems` is the one schema array that is a SEQUENCE: position
+// is the grammar, so [string, number] and [number, string] are different tuples
+// and a document valid for one is not for the other. Compared place by place;
+// what sits IN a place is a schema again, its own arrays sets as ever.
+const diffPositions = (a: readonly unknown[], b: readonly unknown[], path: string, out: string[], limit: number, canon: (v: unknown) => unknown): void => {
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+    if (out.length >= limit) return;
+    if (i >= a.length) out.push(`+ ${path}[${i}]`);
+    else if (i >= b.length) out.push(`- ${path}[${i}]`);
+    else diffLines(a[i], b[i], `${path}[${i}]`, out, limit, canon, true);
+  }
 };
 
 // ── canonical form ──────────────────────────────────────────────
