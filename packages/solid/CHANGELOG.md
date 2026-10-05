@@ -1,6 +1,6 @@
-# @niscorp/charter
+# @niscorp/solid
 
-## 0.1.2
+## 0.1.1
 
 ### Patch Changes
 
@@ -14,9 +14,3 @@
   Until now the `exports` map hid it, and the only way to the version was a path into `node_modules`. `check:packages` installs the tarballs and reads every package's version this way.
 
   **What to change:** nothing. An app that read a version by path can read it by name.
-
-## 0.1.1
-
-### Patch Changes
-
-- b67a125: Documentation only: each package's README, reference and design docs checked against its source and corrected — install lines and peers, signatures, defaults, status codes, licenses (loom, signal: Apache-2.0), and API that existed but was not documented.

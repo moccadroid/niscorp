@@ -1,5 +1,45 @@
 # @niscorp/nisc
 
+## 0.3.1
+
+### Patch Changes
+
+- 353b3c3: `@niscorp/nova/examples` — the reference as data. `NOVA_EXAMPLES` is 42 examples, in six groups (`NOVA_EXAMPLE_GROUPS`): the layout grammar (12), actions at work (7), endpoints (5), composition with fragments (5), shells (8) and i18n (5).
+
+  An example is a small app, what is done to it, and what it must then say: `{ id, group, title, description, action | shell, fragments?, layouts?, replies?, fetches?, phrases?, phraseKeys?, stage?, presses, expected }`. `action` is one action alone on one canvas (an example of the layout grammar is an action with no triggers); `shell` is several actions on several canvases. `replies` and `fetches` say what its endpoints are answered, so an example comes to the same thing wherever it is run. `presses` is what is done: a press, something typed, or the host changing the language. `expected` is every piece of text the screen then holds (its text, and what stands in props at a prose key), the one action's data, which actions stand on each canvas, and what was sent to each URL.
+
+  Every id an example brings begins with its own, so a host can hold all of them in one shell. The examples a host puts on its stage name only the plain components every kit has (`Stack`, `Text`, `Button`, `Input`) and nova's two slots, with no prop about looks, so whoever shows them draws them with its own kit. An example with `stage: false` (the five on i18n) is shown as what it comes to. The package's tests run each one and hold it to its `expected`.
+
+  Not in it: the adapters' own seams (`slotWrapper`), the look of nova's default components, and the harvest functions of `@niscorp/nova/i18n`, which are called, not mounted.
+
+  **What to change:** nothing.
+
+- 259a6f7: `@niscorp/prism/examples` — the reference as data. `PRISM_EXAMPLES` is 82 examples (`{ id, group, title, description, op?, source, config, expected }`): one for each of the 73 operators, named by the operator, then nine configs of several operators working together. `PRISM_EXAMPLE_GROUPS` names the groups they come in — the reference's own (Core, Arrays, Math, …), in its order. The package's tests evaluate each example against its `expected`, and fail when an operator has no example of its own or has two, so whatever shows them shows what the installed version does. `OP_KEYS`, the grammar's operator names in its own order, is now exported from the main entry. STYLE_GUIDE.md gains "Examples": a change to what a package does changes its examples in the same commit.
+- Updated dependencies [06d1531]
+- Updated dependencies [fe30458]
+- Updated dependencies [353b3c3]
+- Updated dependencies [7222c7d]
+- Updated dependencies [c8982c2]
+- Updated dependencies [1e6d55d]
+- Updated dependencies [259a6f7]
+- Updated dependencies [f801cc9]
+- Updated dependencies [fc31d1d]
+- Updated dependencies [18626f8]
+- Updated dependencies [d2f0357]
+- Updated dependencies [5c70059]
+  - @niscorp/cortex@0.1.2
+  - @niscorp/charter@0.1.2
+  - @niscorp/cli@0.3.1
+  - @niscorp/loom@0.2.1
+  - @niscorp/moss@0.3.1
+  - @niscorp/nova@0.2.1
+  - @niscorp/prism@0.2.1
+  - @niscorp/signal@0.1.2
+  - @niscorp/solid@0.1.1
+  - @niscorp/strata@0.1.2
+  - @niscorp/tide@0.1.3
+  - @niscorp/vex@0.2.1
+
 ## 0.3.0
 
 ### Minor Changes

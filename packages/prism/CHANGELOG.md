@@ -1,5 +1,33 @@
 # @niscorp/prism
 
+## 0.2.1
+
+### Patch Changes
+
+- fe30458: Every package exports its `package.json`, so an app can say which version of a package it runs by reading it from the package:
+
+  ```ts
+  import prism from '@niscorp/prism/package.json' with { type: 'json' };
+  prism.version; // the version that is installed, not the range that asked for it
+  ```
+
+  Until now the `exports` map hid it, and the only way to the version was a path into `node_modules`. `check:packages` installs the tarballs and reads every package's version this way.
+
+  **What to change:** nothing. An app that read a version by path can read it by name.
+
+- 259a6f7: `@niscorp/prism/examples` — the reference as data. `PRISM_EXAMPLES` is 82 examples (`{ id, group, title, description, op?, source, config, expected }`): one for each of the 73 operators, named by the operator, then nine configs of several operators working together. `PRISM_EXAMPLE_GROUPS` names the groups they come in — the reference's own (Core, Arrays, Math, …), in its order. The package's tests evaluate each example against its `expected`, and fail when an operator has no example of its own or has two, so whatever shows them shows what the installed version does. `OP_KEYS`, the grammar's operator names in its own order, is now exported from the main entry. STYLE_GUIDE.md gains "Examples": a change to what a package does changes its examples in the same commit.
+- f801cc9: `prismTransform` is exported from the main entry: Prism in the shape a host's transform seam takes, `(config: unknown, source: unknown) => unknown` — what nova's shell, tide's engine and strata's upgrader are handed.
+
+  ```ts
+  import { prismTransform } from '@niscorp/prism';
+
+  createTide({ store, transform: prismTransform, effects });
+  ```
+
+  `evaluate` is typed for a `JsonValue` source, so a host could not hand it to a seam without a cast, a JSON round trip or a parse of its own. `prismTransform` parses the config against `ConfigSchema` and refuses a source that is not plain JSON. It is the function `@niscorp/prism/migrations` has exported all along, and that export stays. Its refusal now reads `The source of a transform must be plain JSON.`; it said `A document to migrate must be plain JSON.`
+
+  **What to change:** nothing. A host that wrote the join itself can pass `prismTransform` instead.
+
 ## 0.2.0
 
 ### Minor Changes
