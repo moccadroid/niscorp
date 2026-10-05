@@ -156,6 +156,11 @@ const wireRun = <TData, TDeps>(wiring: Wiring<TData, TDeps>): RunHandle<TData> =
   const approvals = createApprovalBridge();
 
   const controller = new AbortController();
+  // What run.abort(reason) was given, for the aborted result's `cause`. Kept
+  // beside the controller, never handed to it: controller.abort(reason) would
+  // make the reason what a tool's ctx.signal aborts WITH, and a tool — or the
+  // fetch it started — telling an abort by its AbortError would stop seeing one.
+  let abortReason: string | undefined;
   const externalSignal = options?.signal;
   const onExternalAbort = (): void => controller.abort();
   if (externalSignal) {
@@ -280,6 +285,9 @@ const wireRun = <TData, TDeps>(wiring: Wiring<TData, TDeps>): RunHandle<TData> =
         },
       };
     }
+    if (!outcome.ok && outcome.error.code === 'aborted' && abortReason !== undefined) {
+      outcome = { ...outcome, error: { ...outcome.error, cause: abortReason } };
+    }
     channel.emit({ type: 'run-end', result: outcome, meta: outcome.meta });
     channel.close();
     if (externalSignal) externalSignal.removeEventListener('abort', onExternalAbort);
@@ -306,7 +314,13 @@ const wireRun = <TData, TDeps>(wiring: Wiring<TData, TDeps>): RunHandle<TData> =
       elapsedMs: state.elapsedBase + (Date.now() - state.startedAt),
       ...(state.pending && { pending: state.pending }),
     }),
-    abort: (): void => controller.abort(),
+    abort: (reason?: string): void => {
+      // The abort that stopped the run is the one whose reason is kept: a run
+      // already stopped — by an earlier call, or through options.signal — was
+      // not stopped for this one.
+      if (!controller.signal.aborted) abortReason = reason;
+      controller.abort();
+    },
   };
 };
 

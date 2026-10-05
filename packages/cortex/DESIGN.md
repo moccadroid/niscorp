@@ -574,6 +574,8 @@ run.result: Promise<RunResult<TData>>
 run.approve(id, { args? }) / run.deny(id, reason?)
 run.snapshot(): RunSnapshot
 run.abort(reason?)
+//   the reason is `error.cause` of the `aborted` result. A tool's
+//   ctx.signal still aborts with an AbortError, never with the reason.
 
 // composition
 createManifold({ llm?, gates?, onRun? }): Manifold

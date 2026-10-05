@@ -163,3 +163,107 @@ describe('approvals', () => {
     expect(toolMessage?.content).toBe('secret');
   });
 });
+
+// ═══════════════════════════════════════════════════════════
+// run.abort(reason) — the reason reaches the result
+// ═══════════════════════════════════════════════════════════
+
+describe('run.abort(reason)', () => {
+  // A run waiting for a person is a run that can be stopped at a known moment.
+  const stopWhileWaiting = async (stop: (run: RunHandle<{ done: boolean }>, controller: AbortController) => void) => {
+    const controller = new AbortController();
+    const events: CortexEvent[] = [];
+    let markWaiting: () => void = () => undefined;
+    const waiting = new Promise<void>((resolve) => {
+      markWaiting = resolve;
+    });
+    const run = makeAgent().run('go', {
+      llm: stubSignal(SCRIPT()),
+      signal: controller.signal,
+      onEvent: (event) => {
+        events.push(event);
+        if (event.type === 'approval-required') markWaiting();
+      },
+    });
+    await waiting;
+    stop(run, controller);
+    const result = await run.result;
+    if (result.ok) throw new Error('expected the run to be aborted');
+    return { error: result.error, result, events };
+  };
+
+  it('is the cause of the aborted result, and of the result run-end carries', async () => {
+    const { error, result, events } = await stopWhileWaiting((run) => run.abort('the member closed the tab'));
+    expect(error.code).toBe('aborted');
+    expect(error.message).toBe('run aborted');
+    expect(error.cause).toBe('the member closed the tab');
+    const ended = events.find((event) => event.type === 'run-end');
+    expect(ended?.type === 'run-end' && ended.result).toBe(result);
+  });
+
+  it('leaves the result as it was when no reason is given', async () => {
+    const { error } = await stopWhileWaiting((run) => run.abort());
+    expect(error).toEqual({ code: 'aborted', message: 'run aborted', runId: error.runId, agentPath: ['careful'] });
+    expect('cause' in error).toBe(false);
+  });
+
+  it('keeps the reason of the abort that stopped the run', async () => {
+    const { error } = await stopWhileWaiting((run) => {
+      run.abort('first');
+      run.abort('second');
+    });
+    expect(error.cause).toBe('first');
+  });
+
+  // The caller's own signal is the caller's: what it was aborted with is not
+  // read, so a run stopped that way gains nothing it did not have.
+  it('carries nothing when the run was stopped through options.signal', async () => {
+    const { error } = await stopWhileWaiting((_run, controller) => controller.abort(new Error('closed')));
+    expect(error.code).toBe('aborted');
+    expect('cause' in error).toBe(false);
+  });
+
+  it('gives no reason to a run that was already stopped through options.signal', async () => {
+    const { error } = await stopWhileWaiting((run, controller) => {
+      controller.abort();
+      run.abort('too late');
+    });
+    expect('cause' in error).toBe(false);
+  });
+
+  // The reason is kept beside the run's signal, never put ON it: a tool, or the
+  // fetch it started, tells an abort by its AbortError.
+  it("a tool's signal still aborts with an AbortError", async () => {
+    const seen: { reason?: unknown } = {};
+    let markStarted: () => void = () => undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const wait = defineTool({
+      id: 'wait',
+      name: 'wait',
+      description: 'Waits until it is told to stop.',
+      input: z.object({}),
+      execute: (_args, ctx) =>
+        new Promise<string>((_resolve, reject) => {
+          ctx.signal.addEventListener('abort', () => {
+            seen.reason = ctx.signal.reason;
+            reject(new Error('stopped'));
+          });
+          markStarted();
+        }),
+    });
+    const waiter = defineAgent({ id: 'waiter', instructions: 'wait', tools: [wait], output: { schema: OutSchema } });
+    const run = waiter.run('go', { llm: stubSignal([{ toolCalls: [{ id: 'c1', name: 'wait', args: {} }] }]) });
+    await started;
+    run.abort('the member closed the tab');
+    const result = await run.result;
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('aborted');
+    expect(result.error.cause).toBe('the member closed the tab');
+    const reason = seen.reason;
+    expect(typeof reason === 'object' && reason !== null && 'name' in reason ? reason.name : undefined).toBe('AbortError');
+  });
+});
