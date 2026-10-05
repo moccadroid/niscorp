@@ -166,6 +166,10 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
     pendingImmediateFires.length = 0;
 
     if (!finalState.resolved) {
+      // Pre-caught, as the strict failure above is: a stream read through
+      // callbacks alone holds no promise, and its teardown must not raise an
+      // unhandled rejection. A caller holding the promise still sees it reject.
+      finalState.promise.catch(() => {});
       finalState.reject(new Error('[solid] stream destroyed'));
     }
 

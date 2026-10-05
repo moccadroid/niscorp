@@ -439,6 +439,28 @@ describe('createStream — destroy()', () => {
     await expect(finalPromise).rejects.toThrow('[solid] stream destroyed');
   });
 
+  // A stream read through callbacks alone holds no promise, so nothing can catch
+  // a rejection of it — and in Node an uncaught one ends the process. Nothing
+  // here catches one either: vitest fails the run on an unhandled rejection.
+  it('raises no unhandled rejection when nobody holds final()', async () => {
+    const stream = createStream({ schema: ResponseSchema, initial: INITIAL });
+    stream.on(() => {});
+    stream.select('widget').on(() => {});
+    stream.select('response').onFinal(() => {});
+    stream.write('{"widget":{"type":"card"');
+    stream.destroy();
+    // An unhandled rejection is reported once the microtasks have drained.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(stream.current().widget.type).toBe('card');
+  });
+
+  it("rejects a selection's pending final promise", async () => {
+    const stream = createStream({ schema: ResponseSchema, initial: INITIAL });
+    const held = stream.select('widget').final();
+    stream.destroy();
+    await expect(held).rejects.toThrow('[solid] stream destroyed');
+  });
+
   it('clears listeners', () => {
     const stream = createStream({ schema: ResponseSchema, initial: INITIAL });
     const listener = vi.fn();

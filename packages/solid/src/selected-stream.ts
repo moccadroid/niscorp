@@ -138,6 +138,9 @@ export const createSelectedStream = <P>(deps: SelectedStreamDeps): Stream<P> => 
     errorListeners.clear();
     pendingImmediateFires.length = 0;
     if (!finalState.resolved) {
+      // Pre-caught — see the root's destroy(): a selection nobody awaited must
+      // not raise an unhandled rejection; a held promise still rejects.
+      finalState.promise.catch(() => {});
       finalState.reject(new Error('[solid] stream destroyed'));
     }
   };
