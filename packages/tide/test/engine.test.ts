@@ -103,6 +103,31 @@ describe('catch-up', () => {
     expect(calls).toHaveLength(5);
   });
 
+  // Every test here says `overlap: 'allow'`, and this is why. `overlap`
+  // defaults to 'skip', and occurrences missed together are repeats of one
+  // another: the oldest opens, and each later one finds it unsettled. The
+  // skips are run rows with a note and `run.skipped` events; the report's
+  // `skippedOccurrences` counts catch-up decisions and does not count them.
+  it('`run` under the default `overlap: skip` fires the oldest and records the rest as overlap skips', async () => {
+    const skips: string[] = [];
+    const { tide, calls } = await harness([{ ...after('run'), policy: { catchUp: 'run' } }], { work: noop }, {
+      onEvent: (event) => {
+        if (event.type === 'run.skipped') skips.push(event.reason);
+      },
+    });
+    const report = await tide.advance({ now: downtime, limit: 50 });
+    expect(report.materialized).toBe(1);
+    expect(report.skippedOccurrences).toBe(0);
+    expect(calls).toHaveLength(1);
+    const runs = await tide.ledger.runs();
+    const occurrences = runs.map((firing) => firing.occurrence ?? '').sort();
+    const skipped = runs.filter((firing) => firing.state === 'skipped');
+    expect(skipped).toHaveLength(4);
+    expect(skipped.every((firing) => firing.note?.includes('overlap') === true)).toBe(true);
+    expect(runs.find((firing) => firing.state !== 'skipped')?.occurrence).toBe(occurrences[0]);
+    expect(skips).toEqual(['overlap', 'overlap', 'overlap', 'overlap']);
+  });
+
   it('`latest` fires only the most recent, and records the rest as skipped', async () => {
     const { tide, calls } = await harness([after('latest')], { work: noop });
     const report = await tide.advance({ now: downtime, limit: 50 });

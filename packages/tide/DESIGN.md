@@ -526,7 +526,10 @@ The requirements doc calls this "the part that must not be hand-waved." In order
 - **Catch-up is authored, not guessed.** After downtime, `'run'` fires missed
   occurrences late, `'skip'` drops them, `'latest'` fires only the most recent of
   several missed. Each leaves a run row saying which happened — a skipped run is a
-  recorded decision. When a single advance would exceed the per-call cap, the watermark
+  recorded decision. `overlap` still governs what `'run'` opens: occurrences missed
+  together are due in one advance and are repeats of one another, so under the default
+  `overlap: 'skip'` the oldest runs and the rest are recorded as overlap skips, and it
+  is `overlap: 'allow'` that runs each. When a single advance would exceed the per-call cap, the watermark
   stops at the last occurrence actually materialized: **⟲** it used to jump to `now`
   regardless, so everything past the cap was unreachable forever with no row saying it
   had existed.

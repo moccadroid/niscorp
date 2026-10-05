@@ -32,8 +32,11 @@ export const PolicySchema = z
     // billing run still going at the next tick must not double-start.
     overlap: z.enum(['skip', 'allow']).default('skip'),
     catchUp: z.enum(['run', 'skip', 'latest']).default('run'),
-    // How late is "missed"? Only `catchUp: 'skip'` reads it — 'run' fires
-    // everything and 'latest' keeps the newest regardless of age.
+    // How late is "missed"? Only `catchUp: 'skip'` reads it — 'run' opens
+    // everything and 'latest' keeps the newest regardless of age. What
+    // `catchUp` opens still passes `overlap`: occurrences missed together are
+    // repeats of one another, so under 'skip' the oldest runs and the rest
+    // are recorded as overlap skips.
     lateMs: z.number().int().positive().default(3_600_000),
     order: z.enum(['any', 'serial']).default('any'),
   })

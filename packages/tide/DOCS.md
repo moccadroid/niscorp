@@ -221,9 +221,19 @@ type Policy = {
   event that exists exactly once, so it always opens a run whatever this says —
   discarding it would be data loss, and the tool for bounding concurrency
   without discarding is `order: 'serial'`, which queues.
-- **catchUp** — after downtime: `'run'` fires every missed occurrence,
+- **catchUp** — after downtime: `'run'` opens a run for every missed occurrence,
   `'latest'` fires only the most recent, `'skip'` fires only what is inside
   `lateMs`. Every decision leaves a run row saying which happened.
+
+  `overlap` is then asked of each run `catchUp` opens, and the two defaults meet
+  here. Occurrences missed together come due in one `advance` and are repeats of
+  one another, so under `overlap: 'skip'` the **oldest** runs and every later
+  one, the one that is on time included, is recorded `skipped` with an overlap
+  note and a `run.skipped` event. The report's `skippedOccurrences` counts
+  catch-up decisions and does not count those. To run each missed occurrence,
+  say `overlap: 'allow'` (with `order: 'serial'` they run one task at a time); to
+  run only the newest, say `catchUp: 'latest'`. `catchUp: 'skip'` meets the same
+  rule when `lateMs` spans more than one occurrence.
 - **order: 'serial'** — one in-flight task at a time for that reflex. Enforced
   inside the claim, not by a filter applied around it.
 
