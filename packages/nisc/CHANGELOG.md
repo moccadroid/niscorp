@@ -1,5 +1,60 @@
 # @niscorp/nisc
 
+## 0.3.2
+
+### Patch Changes
+
+- 6ab6f2b: `AGENTS.md` rule 10 says every charter defines a role named `public`. It is what a request with no session, and a signed-in principal with no assignment, resolve to; the name is fixed, and `public: []` grants nothing. Boot does not check for it: without it those requests fail with `Unknown role "public"`.
+
+  **What to change:** nothing, for a charter that has the role.
+
+- bd3184d: An upgrade keeps a document's stamp entries for grammars the upgrader was not given.
+
+  `upgrade` handed back the upgrader's own stamp, and `upgradeStore` wrote it over the row's. A row stamped `{ "acme.forms": 0, "acme.prices": 1 }`, upgraded by code that was given `acme.forms` only, was written back stamped `{ "acme.forms": 1 }`: its record of `acme.prices` was gone. Code that has that grammar then read the row as never migrated and ran `acme.prices/1` over it a second time — a price already in cents, multiplied again.
+
+  The stamp now handed back, and written, is the upgrader's own plus the document's entries for any grammar it was not given, as they were. Nothing new is refused, and nothing else is written differently: for a document whose stamp names only the upgrader's grammars, `upgrade` returns `upgrader.stamp` itself, as before. `upgrader.stamp`, `behind`, the lock file and every ledger checksum are untouched.
+
+  `TOO_NEW` is, as it always was, about the grammars the code was given — a stamp entry for one it was not given is neither ahead nor behind. The README, DESIGN and rule 19 of `@niscorp/nisc`'s `AGENTS.md` said "on any grammar"; they now say "on any grammar the code was given".
+
+  **What to change:** nothing.
+
+- Updated dependencies [2756aa7]
+- Updated dependencies [0b5a7d6]
+- Updated dependencies [4abbfcc]
+- Updated dependencies [a02a031]
+- Updated dependencies [d5c9d58]
+- Updated dependencies [fa3f038]
+- Updated dependencies [659b81e]
+- Updated dependencies [3029c34]
+- Updated dependencies [a7d4de4]
+- Updated dependencies [f70d461]
+- Updated dependencies [a7d4de4]
+- Updated dependencies [979b3e3]
+- Updated dependencies [63445cb]
+- Updated dependencies [8973c15]
+- Updated dependencies [ce21cf7]
+- Updated dependencies [5923e38]
+- Updated dependencies [2815107]
+- Updated dependencies [885bc1e]
+- Updated dependencies [f9f1b26]
+- Updated dependencies [e3e0ff2]
+- Updated dependencies [ed9d7f4]
+- Updated dependencies [18182d7]
+- Updated dependencies [bd3184d]
+- Updated dependencies [bab7b2c]
+- Updated dependencies [eef9cd9]
+- Updated dependencies [e9ad028]
+- Updated dependencies [1dfab19]
+- Updated dependencies [008b5e8]
+  - @niscorp/cortex@0.1.3
+  - @niscorp/loom@0.2.2
+  - @niscorp/moss@0.3.2
+  - @niscorp/signal@0.1.3
+  - @niscorp/solid@0.1.2
+  - @niscorp/strata@0.1.3
+  - @niscorp/tide@0.1.4
+  - @niscorp/vex@0.2.2
+
 ## 0.3.1
 
 ### Patch Changes

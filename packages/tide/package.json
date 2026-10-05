@@ -1,6 +1,6 @@
 {
   "name": "@niscorp/tide",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Host-blind automation engine — a reflex turns the clock and the fact into one named effect, through a durable ledger.",
   "license": "Apache-2.0",
   "repository": {

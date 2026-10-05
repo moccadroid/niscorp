@@ -1,5 +1,17 @@
 # @niscorp/tide
 
+## 0.1.4
+
+### Patch Changes
+
+- e9ad028: DOCS and DESIGN say what `catchUp: 'run'` does under `overlap: 'skip'`. Both are the defaults, and DOCS said `'run'` "fires every missed occurrence". It opens a run for each, and `overlap` is then asked of every one of them: occurrences missed together come due in one `advance` and are repeats of one another, so the oldest runs and each later one, the one that is on time included, is recorded `skipped` with an overlap note and a `run.skipped` event. The report's `skippedOccurrences` counts catch-up decisions and does not count those. `overlap: 'allow'` runs each missed occurrence (with `order: 'serial'`, one task at a time); `catchUp: 'latest'` runs only the newest. A test now holds this, and a source comment says it. No code changed.
+
+  **What to change:** nothing. A clock reflex on the default policy that should run every occurrence it missed says `overlap: 'allow'`.
+
+- 1dfab19: DOCS.md says which occurrence `preview()` shows and what `fired` means. For a clock reflex it is the most recent occurrence at or before `now` (a one-shot's own date, even when that is still ahead), whether or not the reflex was armed then or is enabled now, so an `advance` at the same `now` may create no run. `fired: false` means `when` did not match the fact passed in or the fan-out failed; `fired: true` does not say a run is due. No code changed.
+
+  **What to change:** nothing.
+
 ## 0.1.3
 
 ### Patch Changes

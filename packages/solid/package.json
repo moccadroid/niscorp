@@ -1,6 +1,6 @@
 {
   "name": "@niscorp/solid",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Structured Output Live Inference Decoding — always-valid schema-backed object stream over partial JSON",
   "license": "Apache-2.0",
   "type": "module",
