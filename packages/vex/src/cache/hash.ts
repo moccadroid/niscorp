@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
 import type { DatabaseSchema } from '../schemas/database.schema.js';
+import { hashText } from '../utils/canonical.js';
 
 // ───────────────────────────────────────────────────────────────
 // Shape normalization
@@ -46,7 +46,7 @@ export const normalizeShape = (shape: unknown): unknown => {
 // ───────────────────────────────────────────────────────────────
 
 export const mintFingerprint = (): string =>
-  `fp_${createHash('sha256').update(`${Date.now()}:${Math.random()}`).digest('hex').slice(0, 16)}`;
+  `fp_${hashText(`${Date.now()}:${Math.random()}`).slice(0, 16)}`;
 
 // ───────────────────────────────────────────────────────────────
 // Schema fingerprint
@@ -87,7 +87,7 @@ export const computeRequestHash = (request: {
     shape: normalizeShape(request.shape),
     contextKeys: Object.keys(request.context ?? {}).sort(),
   };
-  return createHash('sha256').update(JSON.stringify(identity)).digest('hex');
+  return hashText(JSON.stringify(identity));
 };
 
 // Which POLICY a generation ran under — part of the single-flight and
@@ -105,7 +105,7 @@ const canonical = (value: unknown): unknown => {
 };
 
 export const computePolicyKey = (policy: unknown): string =>
-  policy === undefined ? 'none' : createHash('sha256').update(JSON.stringify(canonical(policy))).digest('hex').slice(0, 16);
+  policy === undefined ? 'none' : hashText(JSON.stringify(canonical(policy))).slice(0, 16);
 
 export const computeSchemaFingerprint = (schema: DatabaseSchema): string => {
   const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
@@ -140,5 +140,5 @@ export const computeSchemaFingerprint = (schema: DatabaseSchema): string => {
     })),
   };
 
-  return createHash('sha256').update(JSON.stringify(stable)).digest('hex');
+  return hashText(JSON.stringify(stable));
 };

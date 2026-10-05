@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { sha256Hex } from './sha256.js';
 
 // ═══════════════════════════════════════════════════════════════
 // Canonical JSON — one text per value, whatever order its keys arrived in.
@@ -21,6 +21,6 @@ export const canonical = (value: unknown): unknown => {
 
 export const canonicalText = (value: unknown): string => JSON.stringify(canonical(value)) ?? 'undefined';
 
-export const hashText = (text: string): string => createHash('sha256').update(text).digest('hex');
+export const hashText = (text: string): string => sha256Hex(text);
 
 export const canonicalHash = (value: unknown): string => hashText(canonicalText(value));

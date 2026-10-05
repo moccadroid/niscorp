@@ -646,6 +646,7 @@ src/
   utils/
     context.ts                   buildValidationContext, resolveParams
     canonical.ts                 canonical JSON text + hash
+    sha256.ts                    SHA-256 of a text, synchronous, no node built-in
 
 scripts/                         Dev-only: docker, seed, dev server, fixtures
 ```
@@ -667,6 +668,17 @@ scripts/                         Dev-only: docker, seed, dev server, fixtures
 
 `zod`, `@niscorp/prism` and `@niscorp/strata` are mandatory. Everything else is
 pulled in only by the path you use.
+
+**No Node built-in on the path a page takes.** The main entry and
+`@niscorp/vex/pglite` import nothing from Node, so a bundler builds them for a
+browser as they are — vex over PGlite in the page, the client-degrade posture.
+The one thing that stood in the way was hashing: every identity vex computes (a
+request hash, a schema fingerprint, a policy key, the row and answer hashes of a
+reactive read) is a SHA-256, and it came from `node:crypto`. It is now written
+out in `utils/sha256.ts` — synchronous, because three exported functions answer
+with a hash directly and a reactive read's follower compares two inside a
+callback, which rules out WebCrypto's `subtle.digest`. The digests are node's,
+byte for byte, so nothing a cache already holds under one has moved.
 
 ---
 

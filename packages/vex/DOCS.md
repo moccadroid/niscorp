@@ -1126,6 +1126,11 @@ columns as raw strings. Pass the parsers to the adapter's pool; give the
 Postgres cache a pool without them — it reads its own timestamp columns as
 `Date`s.
 
+`@niscorp/vex` and `@niscorp/vex/pglite` import no Node built-in, so a bundler
+builds them for a page with no alias and no polyfill. Vex's hashes are the same
+SHA-256 digests in a page as on a server, so entries prewarmed at build time
+replay in the browser.
+
 ### Reactive reads (`refresh`)
 
 An entry's `refresh` says when its answer is refreshed: `'snapshot'` (the
