@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
+import type { PgPool } from '@niscorp/vex';
 import { STORE_CONTRACT } from '@niscorp/tide/testing';
 import { createTideStore, TIDE_TABLES } from '../src/tide';
 import { createDataLayer } from '../src/data';
@@ -28,6 +29,35 @@ describe('the store contract — postgres, via vex', () => {
   for (const check of STORE_CONTRACT)
     it(check.name, async () => {
       await check.run(await freshStore());
+    });
+});
+
+// The same contract over a pool whose transaction hands its client through as
+// it is: `query` is a method there, and it needs its receiver — the shape of a
+// checked-out `pg` client. The store took `query` off the transaction once,
+// and on such a pool every transaction failed inside the driver.
+const storeOverClient = async () => {
+  const db = new PGlite();
+  const pool = createPglitePool(db);
+  const clientOver = (inner: { query: PgPool['query'] }) => ({
+    inner,
+    query(this: { inner: { query: PgPool['query'] } }, text: string, values?: unknown[]) {
+      return this.inner.query(text, values);
+    },
+  });
+  const store = createTideStore({
+    query: (text, values) => pool.query(text, values),
+    statementTimeouts: false,
+    transaction: (fn) => db.transaction((tx) => fn(clientOver({ query: (text, values) => tx.query(text, values) }))),
+  });
+  await store.ready;
+  return store;
+};
+
+describe('the store contract — a transaction that hands its client through', () => {
+  for (const check of STORE_CONTRACT)
+    it(check.name, async () => {
+      await check.run(await storeOverClient());
     });
 });
 

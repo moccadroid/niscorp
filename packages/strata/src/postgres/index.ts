@@ -20,6 +20,11 @@ import { StrataError } from '../errors';
 // The pool shape nisc passes everywhere (vex's PgPool, a PGlite shim, a `pg`
 // pool wrapped to check a client out per transaction). Structural — strata
 // depends on no driver.
+//
+// `query` and `transaction` are called ON the object that has them, never
+// taken off it first. A driver's own object (a PGlite, a `pg` client handed
+// through as the transaction) has them as methods that reach for `this`; taken
+// off, they fail inside the driver on a property nobody here has heard of.
 export type StrataQuery = (text: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
 export type StrataPool = {
   query: StrataQuery;
@@ -72,8 +77,8 @@ export const ledgerDdl = (options: LedgerOptions = {}): string => {
 
 const text = (value: unknown): string => (value instanceof Date ? value.toISOString() : String(value));
 
-const readRows = async (query: StrataQuery, qualified: string): Promise<LedgerRow[]> => {
-  const { rows } = await query(`SELECT sequence, n, checksum, description, applied_at FROM ${qualified} ORDER BY sequence, n`);
+const readRows = async (on: { query: StrataQuery }, qualified: string): Promise<LedgerRow[]> => {
+  const { rows } = await on.query(`SELECT sequence, n, checksum, description, applied_at FROM ${qualified} ORDER BY sequence, n`);
   return rows.map((row) => ({
     sequence: text(row['sequence']),
     n: Number(row['n']),
@@ -89,7 +94,7 @@ export const readLedger = async (pool: StrataPool, options: LedgerOptions = {}):
   const { qualified } = ledgerNameOf(options);
   const { rows } = await pool.query('SELECT to_regclass($1) IS NOT NULL AS present', [qualified]);
   if (rows[0]?.['present'] !== true) return [];
-  return readRows(pool.query, qualified);
+  return readRows(pool, qualified);
 };
 
 // What `migrate` would do, without doing it — for a boot report, a CI check, a
@@ -111,8 +116,7 @@ const refuseGrammars = (prepared: readonly PreparedSequence[]): void => {
 export const migrate = async (pool: StrataPool, sequences: readonly Sequence[], options: MigrateOptions = {}): Promise<MigrateReport> => {
   const prepared = await prepare(sequences);
   refuseGrammars(prepared);
-  const { transaction } = pool;
-  if (transaction === undefined) {
+  if (pool.transaction === undefined) {
     throw new StrataError(
       'NO_TRANSACTION',
       'This pool cannot run a transaction, and a migration run must land whole or not at all. ' +
@@ -121,14 +125,14 @@ export const migrate = async (pool: StrataPool, sequences: readonly Sequence[], 
   }
   const { qualified, schema } = ledgerNameOf(options);
 
-  return transaction(async (tx) => {
+  return pool.transaction(async (tx) => {
     // The lock first: two processes creating the ledger at once would race in
     // the catalog before either reached a row.
     await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`strata:${qualified}`]);
     if (schema !== undefined) await tx.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`);
     await tx.query(ledgerDdl(options));
 
-    const plan = planMigrations(prepared, await readRows(tx.query, qualified));
+    const plan = planMigrations(prepared, await readRows(tx, qualified));
     refuseProblems(plan);
     if (options.mode === 'verify' && plan.pending.length > 0) {
       throw new StrataError(
@@ -204,8 +208,7 @@ export type StoreReport = {
 };
 
 export const upgradeStore = async (pool: StrataPool, store: DocumentStore, upgrader: Upgrader): Promise<StoreReport> => {
-  const { transaction } = pool;
-  if (transaction === undefined) {
+  if (pool.transaction === undefined) {
     throw new StrataError('NO_TRANSACTION', 'Rewriting a store must land whole or not at all; this pool cannot run a transaction.');
   }
   const table = store.schema === undefined ? quote(store.table, 'table') : `${quote(store.schema, 'schema')}.${quote(store.table, 'table')}`;
@@ -214,7 +217,7 @@ export const upgradeStore = async (pool: StrataPool, store: DocumentStore, upgra
   const keys = store.key.map((k) => quote(k, 'column'));
   if (keys.length === 0) throw new StrataError('INVALID_SEQUENCE', `The store ${store.table} names no key columns.`);
 
-  return transaction(async (tx) => {
+  return pool.transaction(async (tx) => {
     const { rows } = await tx.query(`SELECT ${[...keys, column, stamp].join(', ')} FROM ${table} FOR UPDATE`);
     const applied: Record<string, number> = {};
     let upgraded = 0;

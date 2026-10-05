@@ -500,7 +500,11 @@ export const createTideStore = (pool: PgPool, options: TideStoreOptions = {}): T
         await ready;
         if (client.transaction === undefined)
           throw new Error('tide store: this pool cannot transact — fan-out and attempt recording are transactions, not conventions');
-        return client.transaction((tx) => fn(build({ ...client, query: tx.query })));
+        // `query` is called ON the transaction, never taken off it: where the
+        // pool hands a checked-out client through, it is a method that needs
+        // its receiver, and taken off it failed inside the driver — which the
+        // fan-out then recorded as a deferred run, and nothing ever ran.
+        return client.transaction((tx) => fn(build({ ...client, query: (text, values) => tx.query(text, values) })));
       },
     };
     return store;

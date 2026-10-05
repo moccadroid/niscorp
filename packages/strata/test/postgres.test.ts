@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { createUpgrader, type Sequence } from '../src';
-import { migrate, readLedger, status, upgradeStore, type StrataPool } from '../src/postgres';
+import { migrate, readLedger, status, upgradeStore, type StrataPool, type StrataQuery } from '../src/postgres';
 
 // A PGlite database in the pool shape — query plus a pinned transaction.
 const freshPool = (): StrataPool & { db: PGlite } => {
@@ -106,6 +106,34 @@ describe('migrate — the ledger', () => {
     await expect(migrate({ query: pool.query }, [cache])).rejects.toMatchObject({ code: 'NO_TRANSACTION' });
   });
 
+  // A driver's own object has `query` and `transaction` as methods that need
+  // their receiver. They are called on the object, so one works as it is.
+  it('a PGlite works as it is — its methods are called on it, never taken off it', async () => {
+    const db = new PGlite();
+    expect((await migrate(db, [cache])).applied.map((m) => m.ref)).toEqual(['nisc.vex.cache/1', 'nisc.vex.cache/2']);
+    expect((await migrate(db, [cache])).applied).toEqual([]);
+    // Once a ledger exists, reading it goes through `query` too.
+    expect((await status(db, [cache])).pending).toEqual([]);
+    expect((await readLedger(db)).map((row) => `${row.sequence}/${row.n}`)).toEqual(['nisc.vex.cache/1', 'nisc.vex.cache/2']);
+  });
+
+  it('a transaction whose `query` needs its receiver works — a client handed through as it is', async () => {
+    const db = new PGlite();
+    // The shape of a checked-out `pg` client: `query` is a method on it.
+    const clientOver = (inner: { query: StrataQuery }) => ({
+      inner,
+      query(this: { inner: { query: StrataQuery } }, text: string, values?: unknown[]) {
+        return this.inner.query(text, values);
+      },
+    });
+    const pool: StrataPool = {
+      query: (text, values) => db.query(text, values),
+      transaction: (fn) => db.transaction((tx) => fn(clientOver({ query: (text, values) => tx.query(text, values) }))),
+    };
+    expect((await migrate(pool, [cache])).applied.map((m) => m.ref)).toEqual(['nisc.vex.cache/1', 'nisc.vex.cache/2']);
+    expect(await columnsOf(pool, 'vex_cache')).toEqual(['key', 'request_hash']);
+  });
+
   it('status plans without touching anything — not even the ledger table', async () => {
     const pool = freshPool();
     const plan = await status(pool, [cache]);
@@ -196,6 +224,12 @@ describe('upgradeStore — rows that hold documents', () => {
       { id: 'c', definition: { heading: 'Already' }, grammar: { 'acme.forms': 1 } },
     ]);
     expect(await upgradeStore(pool, store, upgrader)).toEqual({ total: 3, upgraded: 0, applied: {} });
+  });
+
+  it('a PGlite works as it is here too', async () => {
+    const { db } = await withForms();
+    const upgrader = await createUpgrader([grammar([renameTitle])], { transform });
+    expect(await upgradeStore(db, store, upgrader)).toEqual({ total: 3, upgraded: 2, applied: { 'acme.forms/1': 2 } });
   });
 
   it('a row written by newer code refuses the whole pass — nothing is rewritten', async () => {

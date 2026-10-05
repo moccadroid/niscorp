@@ -67,4 +67,21 @@ describe('the postgres adapter', () => {
     await adapter.execute(read, []);
     expect(log.at(-1)).toBe('SELECT 1');
   });
+
+  // A driver's own object (a PGlite) has `transaction` as a method that
+  // reaches for `this`. It is called on the pool, never taken off it.
+  it('wraps a read on a pool whose `transaction` needs its receiver', async () => {
+    const log: string[] = [];
+    const pool: PgPool & { log: string[] } = {
+      log,
+      query: poolShowing('0', log).query,
+      async transaction(fn) {
+        return fn({ query: async (text) => (this.log.push(`tx: ${text}`), { rows: [{ ok: 1 }], fields: [] }) });
+      },
+    };
+    const adapter = createPostgresAdapter({ pool });
+    expect(await adapter.limitReads?.(10_000)).toBe('statement');
+    await adapter.execute(read, []);
+    expect(log.slice(-2)).toEqual(['tx: SET LOCAL statement_timeout = 10000', 'tx: SELECT 1']);
+  });
 });

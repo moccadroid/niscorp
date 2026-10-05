@@ -88,12 +88,13 @@ export const createPostgresAdapter = (config: PostgresAdapterConfig): DatabaseAd
   };
 
   const execute = async (query: CompiledQuery, params: BoundParams): Promise<Row[]> => {
-    const { transaction } = pool;
     const limit = perStatementMs;
+    // `transaction` is called ON the pool, never taken off it: a driver's own
+    // object (a PGlite) has it as a method that needs its receiver.
     const result =
-      limit === undefined || transaction === undefined
+      limit === undefined || pool.transaction === undefined
         ? await pool.query(query.sql, params)
-        : await transaction(async (tx) => {
+        : await pool.transaction(async (tx) => {
             // SET cannot take a bind parameter; the limit is an integer the
             // engine configured, never request data.
             await tx.query(`SET LOCAL statement_timeout = ${limit}`);
