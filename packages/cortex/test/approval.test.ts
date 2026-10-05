@@ -162,6 +162,45 @@ describe('approvals', () => {
     const toolMessage = llm2.requests[0]?.messages.find((message) => message.role === 'tool');
     expect(toolMessage?.content).toBe('secret');
   });
+
+  // Resume re-asks: the gates run again and the ask is a new one. What the
+  // resumed run answers to is the id of its own event — the snapshot's
+  // `pending.approvalId` is the first run's ask (README, DESIGN §6).
+  it('a resumed run asks again under a new id, which is the one it answers to', async () => {
+    let snapshot: RunSnapshot | undefined;
+    let first: RunHandle<{ done: boolean }> | undefined;
+    const suspended = new Promise<void>((resolve) => {
+      first = makeAgent().run('go', {
+        llm: stubSignal(SCRIPT()),
+        onEvent: (event) => {
+          if (event.type === 'approval-required' && first) {
+            snapshot = first.snapshot();
+            first.abort();
+            resolve();
+          }
+        },
+      });
+    });
+    await suspended;
+    await first?.result;
+    if (!snapshot?.pending) throw new Error('expected a snapshot with a pending approval');
+
+    const asked: string[] = [];
+    let resumed: RunHandle<{ done: boolean }> | undefined;
+    resumed = resumeRun(makeAgent(), snapshot, {
+      llm: stubSignal([{ toolCalls: [{ id: 'c2', name: 'respond', args: { data: { done: true } } }] }]),
+      onEvent: (event) => {
+        if (event.type !== 'approval-required') return;
+        asked.push(event.approval.id);
+        resumed?.approve(event.approval.id);
+      },
+    });
+    const result = await resumed.result;
+
+    expect(result.ok).toBe(true);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).not.toBe(snapshot.pending.approvalId);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════

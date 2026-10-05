@@ -413,12 +413,20 @@ type StopCondition = (s: RunProgress) => StopVerdict;   // { stop: StopReason; m
   compiles to one built-in gate. Anything the sugar can't express is
   a function.
 - **Approvals suspend the run.** `ask` emits `approval-required`
-  with a stable id; the pending call blocks (tools are sequential, so
+  with an id that is that ask's for as long as the run handle lives —
+  the event, `run.approve` / `run.deny` and `run.snapshot()` all name
+  it; the pending call blocks (tools are sequential, so
   one pending approval at a time). `run.approve(id, { args? })` —
   approve, optionally with edited args — or `run.deny(id, reason)`.
+  An id the handle did not ask under is ignored.
   `run.snapshot()` serializes the suspended run (messages, pending
   call, usage); `resumeRun(agent, snapshot, opts)` restores it — so
-  approvals survive reloads and restarts.
+  approvals survive reloads and restarts. A resumed run **re-asks**:
+  its gates run again for the pending call (if they no longer ask, the
+  call simply runs) and `approval-required` fires with a new id — the
+  one the resumed handle answers to. `snapshot.pending.approvalId`
+  names the ask of the run the snapshot came from, not the resumed
+  one's.
 - **Output validation** closes the generate→verify loop in-run:
 
   ```ts

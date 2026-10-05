@@ -225,6 +225,11 @@ run.onEvent((e) => {
 Suspended runs serialize: `run.snapshot()` → JSON →
 `resumeRun(agent, snapshot, { llm, deps })` re-asks the pending
 approval and continues — approvals survive reloads and restarts.
+Re-asks means just that: the resumed run's gates run again for the
+pending call and `approval-required` fires again, with a **new** id.
+Answer with that event's id, as above. `snapshot.pending.approvalId` is
+the ask of the run the snapshot was taken from; the resumed run did not
+ask under it, and `approve` or `deny` with it does nothing.
 `policy.approvalTimeoutMs` turns an unanswered ask into a denial
 (an observation, not a run failure).
 
