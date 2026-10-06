@@ -108,11 +108,21 @@ const columnsOf = (m: Mutation): Record<string, unknown> =>
         ? { ...m.columns, ...(m.insert ?? {}) }
         : {};
 
+// Every value a statement sets, with its column. An insert's `values` and its
+// `onConflict.set` are read position by position, NOT merged by column name as
+// `columnsOf` merges them: the two may set one column from different context
+// keys, and each binds a parameter of its own — a key lost in the merge is not
+// in the signature, not required, and bound as NULL.
+const positionsSetBy = (m: Mutation): [column: string, value: unknown][] =>
+  m.op === 'insert' || m.op === 'insertEach'
+    ? [...Object.entries(m.values), ...Object.entries(m.onConflict?.set ?? {})]
+    : Object.entries(columnsOf(m));
+
 export const collectMutationContext = (def: MutationDefinition, schema?: DatabaseSchema): ContextSignature => {
   const sig: ContextSignature = {};
   const list = Array.isArray(def) ? def : [def];
   for (const m of list) {
-    for (const [col, v] of Object.entries(columnsOf(m))) {
+    for (const [col, v] of positionsSetBy(m)) {
       if (isLookupRef(v)) {
         // The lookup's WHERE binds context like any filter does.
         walkFilter(v.$lookup.where, schema, sig);
@@ -167,8 +177,7 @@ export const mutationEffect = (def: MutationDefinition): MutationEffect[] => {
 // insert branch, so requirement is computed after desugaring).
 export const requiredContextKeys = (m: CoreMutation): string[] => {
   const keys = new Set<string>();
-  const cols = m.op === 'insert' || m.op === 'insertEach' ? { ...m.values, ...(m.onConflict?.set ?? {}) } : m.op === 'update' ? m.set : {};
-  for (const v of Object.values(cols)) {
+  for (const [, v] of positionsSetBy(m)) {
     if (isContextRef(v)) keys.add(v.$context);
     else if (isLookupRef(v)) {
       const sub: ContextSignature = {};

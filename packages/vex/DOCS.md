@@ -900,6 +900,11 @@ Two guarantees, both enforced before any SQL runs:
   entry as the insert-plus-update it really is, so discovery visibility
   follows the same rule.
 
+`values` and `set` are separate positions, each binding its own parameter —
+also where they set the same column. Every `$context` key in either is in the
+entry's signature and must be sent on every call: the caller cannot know
+which half will run.
+
 ### `$lookup` — a value read from another table
 
 Any value position (insert `values`, update `set`, `onConflict.set`) may be a
