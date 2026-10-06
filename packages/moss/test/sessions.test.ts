@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
-import { initSessions, mintSession, sessionOf, revokeSession, revokeAllFor, sessionVerifierOf } from '../src/sessions';
+import { initSessions, mintSession, sessionOf, sessionRemainingMs, revokeSession, revokeAllFor, sessionVerifierOf } from '../src/sessions';
 import { mintDevToken } from '../src/runtime';
 import { createShellHost } from '../src/shells';
 import type { ShellHostContext } from '../src/shells';
@@ -27,6 +27,10 @@ describe('sessions — the human credential', () => {
     const token = await mintSession(pool, 'i_mara', 60_000);
     expect(token).toMatch(/^st_[A-Za-z0-9_-]{40,}$/);
     expect(await sessionOf(pool, token)).toBe('i_mara');
+    // …and for how much longer: what a browser is told to keep its cookie for
+    const remaining = (await sessionRemainingMs(pool, token)) ?? 0;
+    expect(remaining).toBeGreaterThan(50_000);
+    expect(remaining).toBeLessThanOrEqual(60_000);
   });
 
   it('refuses the 22-character forgery that started this case', async () => {
@@ -52,6 +56,7 @@ describe('sessions — the human credential', () => {
     const pool = await freshPool();
     const token = await mintSession(pool, 'i_mara', -1000);
     expect(await sessionOf(pool, token)).toBeNull();
+    expect(await sessionRemainingMs(pool, token)).toBeNull();
   });
 
   it("revokes one token without touching the principal's other sessions", async () => {

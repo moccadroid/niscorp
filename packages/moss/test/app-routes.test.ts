@@ -62,6 +62,11 @@ describe('a route the app adds to the built server', () => {
     const { server } = await boot();
     const answer = await server.request('/who');
     expect(await answer.json()).toEqual({ principal: null, roles: ['public'] });
+    // A browser sends a cookie with requests another site makes it send. So no
+    // route reads the one a session is kept in: who is asking is `Authorization`.
+    const held = mintDevToken('usr_staff');
+    const withCookie = await server.request('/who', { headers: { origin: 'http://localhost', host: 'localhost', cookie: `nisc.token=${held}; __Host-nisc.token=${held}` } });
+    expect(await withCookie.json()).toEqual({ principal: null, roles: ['public'] });
     server.close();
   });
 

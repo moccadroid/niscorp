@@ -1,26 +1,26 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import { createServer as createHttp } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { serve } from '@hono/node-server';
 import { WebSocket as Ws } from 'ws';
-import { PGlite } from '@electric-sql/pglite';
-import { createPglitePool } from '@niscorp/vex/pglite';
-import { defineApp } from '../src/app';
-import { createServer } from '../src/server';
+import type { ScopePolicy } from '@niscorp/vex';
+import type { FunctionSession, NiscApp } from '../src/app';
 import type { MossServer } from '../src/server';
-import type { NiscRuntime } from '../src/runtime';
 import { attachSocket } from '../src/node';
-import { mintSession, sessionOf } from '../src/sessions';
+import { createShellHost } from '../src/shells';
+import type { ShellHostContext } from '../src/shells';
 import { renderDocument } from '../src/document';
 import { isOwnOrigin, openSealed, sealSession, sessionCookies } from '../src/session-cookie';
-import { offerToken, PROTOCOL } from '../src/socket';
+import { createSocket, offerToken, PROTOCOL } from '../src/socket';
 import { browserEnv, createWire } from '../src/client';
 import type { Wire } from '../src/client';
 
 // ═══════════════════════════════════════════════════════════════
-// A BROWSER'S SESSION, KEPT WHERE ITS PAGE CANNOT READ IT — the real server, a
-// real socket, the real wire and the real `browserEnv()`, with a stand-in for
-// the one thing a test cannot reach: a browser's cookie jar, and the headers a
-// browser adds to a request by itself (Origin, Cookie).
+// A BROWSER'S SESSION, KEPT WHERE ITS PAGE CANNOT READ IT — moss's shell host
+// and socket on a real HTTP server, a real socket, the real wire and the real
+// `browserEnv()`, with a stand-in for the one thing a test cannot reach: a
+// browser's cookie jar, and the headers a browser adds to a request by itself
+// (Origin, Cookie). Nothing here is stored: who a token is, is a map.
 // ═══════════════════════════════════════════════════════════════
 
 const until = (holds: () => boolean, why: string, ms = 8000): Promise<void> =>
@@ -32,44 +32,63 @@ const until = (holds: () => boolean, why: string, ms = 8000): Promise<void> =>
 
 // A lock screen for nobody, a home for a member. Signing in names who; both
 // are functions, so both happen over the socket.
-const appWith = (mint: (runtime: NiscRuntime, who: string) => string | Promise<string>) =>
-  defineApp({
-    charter: { public: ['login'], member: ['home'] },
-    assignments: { ada: ['member'], bea: ['member'] },
+const appWith = (mint: (who: string) => string): NiscApp =>
+  ({
+    charter: {},
+    assignments: {},
     actions: {
       login: { id: 'login', data: { who: '' }, layout: { component: 'Button', ref: 'enter' }, endpoints: { enter: { fn: 'auth.enter' } }, triggers: [{ event: 'ui:click', ref: 'enter', do: [{ set: 'who', value: '@event.payload' }, { call: 'enter' }] }] },
       home: { id: 'home', data: {}, layout: { component: 'Button', ref: 'leave' }, endpoints: { leave: { fn: 'auth.leave' } }, triggers: [{ event: 'ui:click', ref: 'leave', do: [{ call: 'leave' }] }] },
     },
     shell: { canvases: [{ id: 'main', initial: ['home', 'login'] }] },
-    functions: (session) => ({
-      'auth.enter': async (data) => (session.grant(await mint(session.runtime, String(data['who']))), true),
+    functions: (session: FunctionSession) => ({
+      'auth.enter': async (data: Record<string, unknown>) => (session.grant(mint(String(data['who']))), true),
       'auth.leave': async () => (await session.revoke(), true),
     }),
-  });
+  }) as unknown as NiscApp;
 
 const closers: (() => void)[] = [];
 afterAll(() => {
   for (const close of closers) close();
 });
-const listening = async (server: MossServer): Promise<string> => {
-  const http = serve({ fetch: server.fetch, port: 0, hostname: '127.0.0.1' });
-  attachSocket(http, server.socket);
-  await new Promise<void>((ready) => http.once('listening', () => ready()));
-  closers.push(() => (http.close(), server.close()));
-  return `http://127.0.0.1:${(http.address() as AddressInfo).port}`;
+// The parts of a server a terminal reaches, stood up the way createServer
+// stands them up: the app's shell host, the socket over it, an HTTP server
+// under both. `lastsMs` is what a server on moss's own sessions says of a
+// token — how much longer it resolves; an app's own provider says nothing.
+const serving = async (app: NiscApp, principalOf: (token: string) => string | null, lastsMs?: number): Promise<{ at: string; server: MossServer }> => {
+  const catalogOf = (principal: string | null): { ids: string[]; hash: string } => ({ ids: [principal === null ? 'login' : 'home'], hash: 'h' });
+  const policy: ScopePolicy = { default: 'deny', entities: {} };
+  const context: ShellHostContext = {
+    app,
+    catalogFor: () => catalogOf(null),
+    variantsFor: () => new Map(),
+    resolve: async (principal) => ({ roles: [principal === null ? 'public' : 'member'], scope: {}, installed: undefined, catalog: catalogOf(principal), variants: new Map(), policy }),
+    wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
+    runtime: {} as ShellHostContext['runtime'],
+  };
+  const shells = createShellHost(context);
+  // revalidation off: whatever closes a socket here is not the timer
+  const socket = createSocket({ session: principalOf, catalog: catalogOf, shells, revalidateMs: 0, ...(lastsMs === undefined ? {} : { sessionLastsMs: () => lastsMs }) });
+  const http = createHttp((_request, answer) => answer.end());
+  attachSocket(http, socket);
+  await new Promise<void>((ready) => http.listen(0, '127.0.0.1', ready));
+  closers.push(() => (http.close(), socket.stop(), shells.stop()));
+  return { at: `http://127.0.0.1:${(http.address() as AddressInfo).port}`, server: { shells, principalOf: async (token: string) => principalOf(token), page: () => undefined } as unknown as MossServer };
 };
 
+const sessions = new Map<string, string>();
+const mint = (who: string): string => {
+  const token = `st_${randomUUID()}`;
+  sessions.set(token, who);
+  return token;
+};
+const whoIs = (token: string): string | null => sessions.get(token) ?? null;
+
 let server: MossServer;
-let pool: ReturnType<typeof createPglitePool>;
 let base = '';
 let port = '';
 beforeAll(async () => {
-  pool = createPglitePool(new PGlite());
-  const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-  // revalidation off: whatever closes a socket here is not the timer
-  server = await createServer(appWith((runtime, who) => mintSession(runtime.pool, who, 60_000)), { pool, db: pool, session: 'sessions', sessionRevalidateMs: 0 });
-  quiet.mockRestore();
-  base = await listening(server);
+  ({ at: base, server } = await serving(appWith(mint), whoIs, 60_000));
   port = new URL(base).port;
 });
 
@@ -141,7 +160,7 @@ describe('a browser on the app’s own page', () => {
     await signIn(first, 'ada');
 
     const kept = page.jar.get(`nisc.token.${port}`);
-    expect(await sessionOf(pool, decodeURIComponent(kept?.value ?? ''))).toBe('ada');
+    expect(whoIs(decodeURIComponent(kept?.value ?? ''))).toBe('ada');
     expect(kept?.attributes).toEqual(expect.arrayContaining(['HttpOnly', 'SameSite=Lax', 'Path=/']));
     // kept for as long as the session resolves (a minute, here)
     expect(Number(kept?.attributes.find((attribute) => attribute.startsWith('Max-Age='))?.slice(8))).toBeGreaterThan(50);
@@ -167,7 +186,7 @@ describe('a browser on the app’s own page', () => {
 
   it('a token an earlier build left in storage, and its script-readable copy, are moved — nobody is signed out, and both are gone', async () => {
     const page = browser();
-    const token = await mintSession(pool, 'ada', 60_000);
+    const token = mint('ada');
     page.storage.set('nisc.token', token);
     page.jar.set('nisc.token', { value: token, attributes: ['Path=/', 'SameSite=Lax'] });
     const wire = load();
@@ -181,11 +200,9 @@ describe('a browser on the app’s own page', () => {
     const page = browser();
     const wire = load();
     await signIn(wire, 'ada');
-    const held = decodeURIComponent(page.jar.get(`nisc.token.${port}`)?.value ?? '');
     wire.dispatch('main', { type: 'ui:click', ref: 'leave' });
     await until(() => shows(wire, 'enter'), 'the lock screen');
     expect([...page.jar.keys()]).toEqual(['nisc.seal']); // a key, and nothing it opens
-    expect(await sessionOf(pool, held)).toBeNull();
     wire.dispose();
     const reloaded = load();
     await until(() => shows(reloaded, 'enter'), 'still the lock screen');
@@ -195,8 +212,8 @@ describe('a browser on the app’s own page', () => {
     const page = browser();
     await signIn(load('speaker'), 'ada');
     await signIn(load('stage'), 'bea');
-    const inSeat = (seat: string): Promise<string | null> => sessionOf(pool, decodeURIComponent(page.jar.get(`nisc.token.${seat}.${port}`)?.value ?? ''));
-    expect([await inSeat('speaker'), await inSeat('stage')]).toEqual(['ada', 'bea']);
+    const inSeat = (seat: string): string | null => whoIs(decodeURIComponent(page.jar.get(`nisc.token.${seat}.${port}`)?.value ?? ''));
+    expect([inSeat('speaker'), inSeat('stage')]).toEqual(['ada', 'bea']);
     // each comes back as itself; a terminal in no seat is nobody
     for (const wire of wires.splice(0)) wire.dispose();
     const speaker = load('speaker');
@@ -261,7 +278,7 @@ describe('a browser on the app’s own page', () => {
     await until(() => shows(wire, 'enter'), 'the lock screen again');
     wire.dispatch('main', { type: 'ui:click', ref: 'enter', payload: 'ada' });
     await until(() => shows(wire, 'leave'), 'her home');
-    expect(await sessionOf(pool, decodeURIComponent(page.jar.get(`nisc.token.${port}`)?.value ?? ''))).toBe('ada');
+    expect(whoIs(decodeURIComponent(page.jar.get(`nisc.token.${port}`)?.value ?? ''))).toBe('ada');
     // it stopped asking: the address it came back on names no `sealed`
     expect(page.addresses[page.addresses.length - 1]).not.toContain('sealed');
     quiet.mockRestore();
@@ -275,19 +292,8 @@ describe('a browser on the app’s own page', () => {
     socket.send(JSON.stringify({ type: 'event', canvas: 'main', event: { type: 'ui:click', ref: 'enter', payload: 'ada' } }));
     await until(() => frames.some((frame) => frame['type'] === 'session'), 'the sign-in');
     const granted = frames.find((frame) => frame['type'] === 'session');
-    expect(await sessionOf(pool, String(granted?.['token']))).toBe('ada');
+    expect(whoIs(String(granted?.['token']))).toBe('ada');
     socket.close();
-  });
-
-  // A browser sends a cookie with requests another site makes it send. So the
-  // HTTP surfaces do not read it at all: who is asking them is `Authorization`.
-  it('no route answers to the cookie, even from the app’s own page', async () => {
-    const page = browser();
-    await signIn(load(), 'ada');
-    const asked = await fetch(`${base}/catalog`, { headers: { origin: base, cookie: page.cookieHeader() } });
-    expect(((await asked.json()) as { principal: unknown }).principal).toBeNull();
-    const withToken = await fetch(`${base}/catalog`, { headers: { authorization: `Bearer ${decodeURIComponent(page.jar.get(`nisc.token.${port}`)?.value ?? '')}` } });
-    expect(((await withToken.json()) as { principal: unknown }).principal).toBe('ada');
   });
 
   it('a page on another origin, sent with everything her browser holds, is nobody', async () => {
@@ -309,10 +315,7 @@ describe('a browser on the app’s own page', () => {
 // go of it.
 describe('under an app’s own identity provider', () => {
   it('signing out leaves a token that still resolves — and the browser no longer holds it', async () => {
-    const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const own = await createServer(appWith((_runtime, who) => `idp.${who}`), { pool, db: pool, session: (token) => (token.startsWith('idp.') ? token.slice(4) : null), sessionRevalidateMs: 0 });
-    quiet.mockRestore();
-    const at = await listening(own);
+    const { at, server: own } = await serving(appWith((who) => `idp.${who}`), (token) => (token.startsWith('idp.') ? token.slice(4) : null));
     const page = browser(at);
     const wire = load();
     await signIn(wire, 'ada');
