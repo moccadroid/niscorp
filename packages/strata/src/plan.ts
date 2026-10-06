@@ -33,7 +33,7 @@ export type PreparedSequence = {
 // One row of the ledger, as a runner read it back.
 export type LedgerRow = { sequence: string; n: number; checksum: string; description: string; appliedAt: string };
 
-export type Problem = { code: Exclude<StrataErrorCode, 'PENDING' | 'STEP_FAILED' | 'NO_TRANSACTION' | 'UNKNOWN_KIND' | 'WRONG_OWNER'>; detail: string };
+export type Problem = { code: Exclude<StrataErrorCode, 'PENDING' | 'STEP_FAILED' | 'DOES_NOT_FIT' | 'NO_TRANSACTION' | 'UNKNOWN_KIND' | 'WRONG_OWNER'>; detail: string };
 
 export type Plan = {
   // Already run, per sequence this code knows: how far each one is.

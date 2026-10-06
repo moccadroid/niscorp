@@ -16,6 +16,8 @@ export type StrataErrorCode =
   | 'PENDING'
   // A step threw; the whole run was rolled back.
   | 'STEP_FAILED'
+  // The run's guard said the result does not fit; the whole run was rolled back.
+  | 'DOES_NOT_FIT'
   // The pool cannot hold one connection for a transaction.
   | 'NO_TRANSACTION'
   // A document kind nobody declares — as the root being upgraded, a step's

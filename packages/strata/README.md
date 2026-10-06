@@ -78,7 +78,7 @@ own tables, the sessions table, the vex cache — in one ledgered run at boot.
 
 | | |
 |---|---|
-| `migrate(pool, sequences, { mode, table, schema })` | The run. `mode: 'apply'` (default) or `'verify'`. Returns `{ applied, plan }`. |
+| `migrate(pool, sequences, { mode, guard, dryRun, table, schema })` | The run. `mode: 'apply'` (default) or `'verify'`. Returns `{ applied, plan }`. `guard(tx)` is asked inside the run, after the last pending step — when nothing was pending too: every sentence it returns refuses the run (`DOES_NOT_FIT`), and nothing was applied. `dryRun` does all of it, guard included, then rolls it back — the report says what would be applied, and it takes the locks a real run takes. |
 | `status(pool, sequences, options)` | The plan, read-only — creates nothing, not even the ledger. |
 | `readLedger(pool, options)` | The ledger's rows; empty for a database never migrated. |
 | `ledgerDdl(options)` | The ledger table's DDL — the one statement strata runs outside a ledger. |

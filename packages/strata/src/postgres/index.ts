@@ -38,10 +38,21 @@ export type LedgerOptions = {
   schema?: string;
 };
 
+// What a host asks of a run before it may land: called inside the run's
+// transaction, after the last pending step — when nothing was pending too.
+// Every sentence it returns refuses the run (DOES_NOT_FIT) — and since
+// nothing has been committed, nothing happened. strata does not know what is
+// being asked; the host does.
+export type MigrateGuard = (tx: { query: StrataQuery }) => Promise<readonly string[]>;
+
 export type MigrateOptions = LedgerOptions & {
   // `apply` (default): run what is pending. `verify`: refuse if anything is —
   // a production boot that expects a deploy step to have migrated already.
   mode?: 'apply' | 'verify';
+  guard?: MigrateGuard;
+  // The whole run, guard included, then rolled back: the report says what
+  // WOULD be applied. It takes the locks a real run takes, for as long.
+  dryRun?: boolean;
 };
 
 export type MigrateReport = {
@@ -124,8 +135,12 @@ export const migrate = async (pool: StrataPool, sequences: readonly Sequence[], 
     );
   }
   const { qualified, schema } = ledgerNameOf(options);
+  // A dry run leaves by throwing: that is what rolls a transaction back in
+  // every pool there is. This is the throw, told apart by being this object.
+  const dryRunEnd = new Error('strata: dry run');
+  let dryRunReport: MigrateReport | undefined;
 
-  return pool.transaction(async (tx) => {
+  const run = pool.transaction(async (tx) => {
     // The lock first: two processes creating the ledger at once would race in
     // the catalog before either reached a row.
     await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`strata:${qualified}`]);
@@ -166,7 +181,21 @@ export const migrate = async (pool: StrataPool, sequences: readonly Sequence[], 
       ]);
       applied.push(migration);
     }
+
+    const reasons = options.guard === undefined ? [] : await options.guard(tx);
+    if (reasons.length > 0) {
+      throw new StrataError('DOES_NOT_FIT', 'What this run leaves does not fit what has to run on it. Nothing from this run was applied.', reasons);
+    }
+    if (options.dryRun === true) {
+      dryRunReport = { applied, plan };
+      throw dryRunEnd;
+    }
     return { applied, plan };
+  });
+
+  return run.catch((error: unknown) => {
+    if (error === dryRunEnd && dryRunReport !== undefined) return dryRunReport;
+    throw error;
   });
 };
 

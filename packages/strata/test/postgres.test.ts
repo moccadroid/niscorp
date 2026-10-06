@@ -149,6 +149,55 @@ describe('migrate — the ledger', () => {
   });
 });
 
+describe('migrate — a guard, and a dry run', () => {
+  // What a host would ask: is this table there, as the transaction sees it?
+  const sees = async (tx: { query: StrataQuery }, table: string): Promise<boolean> =>
+    (await tx.query('SELECT to_regclass($1) IS NOT NULL AS present', [table])).rows[0]?.['present'] === true;
+
+  it('the guard is asked inside the run, after the last step, and sees what the steps left', async () => {
+    const pool = freshPool();
+    const seen: boolean[] = [];
+    const report = await migrate(pool, [cache], {
+      guard: async (tx) => {
+        seen.push(await sees(tx, 'vex_cache'));
+        return [];
+      },
+    });
+    expect(seen).toEqual([true]);
+    expect(report.applied.map((m) => m.ref)).toEqual(['nisc.vex.cache/1', 'nisc.vex.cache/2']);
+  });
+
+  it('a sentence from the guard refuses the run — tables and ledger untouched', async () => {
+    const pool = freshPool();
+    const error = await migrate(pool, [cache], { guard: async () => ['notes/all reads notes.body, which is not there'] }).catch((e: unknown) => e);
+    expect(error).toMatchObject({ code: 'DOES_NOT_FIT' });
+    expect(String(error)).toContain('notes/all reads notes.body');
+    expect(await columnsOf(pool, 'vex_cache')).toEqual([]);
+    expect(await readLedger(pool)).toEqual([]);
+  });
+
+  it('the guard is asked when nothing is pending too — and may refuse', async () => {
+    const pool = freshPool();
+    await migrate(pool, [cache]);
+    await expect(migrate(pool, [cache], { guard: async () => ['what runs here does not fit'] })).rejects.toMatchObject({ code: 'DOES_NOT_FIT' });
+  });
+
+  it('a dry run says what would be applied and applies none of it', async () => {
+    const pool = freshPool();
+    const report = await migrate(pool, [cache], { dryRun: true });
+    expect(report.applied.map((m) => m.ref)).toEqual(['nisc.vex.cache/1', 'nisc.vex.cache/2']);
+    expect(await columnsOf(pool, 'vex_cache')).toEqual([]);
+    expect(await readLedger(pool)).toEqual([]);
+    // and the real run afterwards finds everything still to do
+    expect((await migrate(pool, [cache])).applied).toHaveLength(2);
+  });
+
+  it('a dry run is refused by the guard like a real one', async () => {
+    const pool = freshPool();
+    await expect(migrate(pool, [cache], { dryRun: true, guard: async () => ['no'] })).rejects.toMatchObject({ code: 'DOES_NOT_FIT' });
+  });
+});
+
 describe('adoption — a database created the old way', () => {
   // Before strata, packages converged their tables on every boot with
   // CREATE … IF NOT EXISTS + ADD COLUMN IF NOT EXISTS. A baseline written the
