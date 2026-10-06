@@ -43,6 +43,16 @@ export const attachSocket = (
     // upgrade rides the same server in dev).
     if (new URL(url, 'http://nisc.local').pathname !== path) return;
     wss.handleUpgrade(req, socket, head, (ws) => {
+      // `ws` reports what it refuses from a client — a malformed frame, a
+      // message over its size limit — as an 'error' on that connection, having
+      // already closed it with the status that says why (1002, 1009). An
+      // 'error' nobody listens for is thrown by Node, out of the socket's own
+      // data handler where nothing can catch it: one bad frame from one
+      // client took the process, and every session on it, down. Heard here it
+      // is that connection's alone, and the close it already got is the answer.
+      ws.on('error', (error) => {
+        console.warn(`[moss/node] a connection was closed on what it sent: ${error.message}`);
+      });
       // accept promises to handle its own failures (see socket.ts). This is
       // the floor under that promise: an await added there without a guard
       // degrades to one logged close here instead of an unhandled rejection

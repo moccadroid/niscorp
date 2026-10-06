@@ -917,6 +917,9 @@ Correctness, which matters more than the saving:
   value as `runtime.socketCompression` and defaults to `true`; `serve()` passes
   the runtime's through for you, so only a host running its own listener (a
   vite plugin, a dev check) ever needs it.
+- A frame the transport refuses — malformed, not UTF-8, over the limit — ends
+  that connection (`1002`, `1007`, `1009`) and logs one line; no other
+  connection is touched.
 
 - `mountSite(server, { dist, draw, htmlAttributes?, site?, tokenKey?, waitMs?, owned? })`
   — the built terminal, served by the same process as the app. Every GET that
