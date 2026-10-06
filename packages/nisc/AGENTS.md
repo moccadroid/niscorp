@@ -91,6 +91,7 @@ Pick per need; every piece works standalone. Nova is the only mandatory one for 
 7a. The manifest's three code seams are distinct, and app code goes in the one that describes it. `functions(session)` is for **endpoints** — things an action calls. `onSession(session)` is for per-shell code that is **not** an endpoint: an observer, a roster, an agent watching the screen. `runs` is the **sink** for model runs, fed by `session.recordRun`. Registering a handler nothing calls, to get code to run per session, is a lie about what that code is — use `onSession`. Both it and `functions` run before the shell finishes building, so neither may touch `session.shell` synchronously.
 8. Writes are endpoints fired by triggers, never inline mutations (D4). Identity and tenancy are stamped server-side from the session, never client-supplied: a form never carries `owner_id`. What a principal *is* beyond its id — a tenant, an org, a region — is the manifest's `scope(principal)` seam: moss always injects `{ userId }`, `scope` contributes the rest, and the merged set is what a behavior's `to:` resolves against at execute. The mapping is application knowledge, so the app supplies it; the values are injected server-side and unreferenceable by a request.
 9. Formatting and derivation live in Prism transforms, never in components and never in action code.
+9a. File pickers live in the kit. A file never goes over the socket; the app saves it wherever it wants.
 
 **Principals**
 
@@ -443,7 +444,7 @@ A `dev/all-checks.ts` runs the suite and is the app's `check` script. It spawns 
 A review pass checks, in order:
 
 1. Typecheck passes; every dev check passes; the manifest boots — moss refuses an incoherent charter, and a boot refusal is a finding, not an environment problem.
-2. No renderer code (JSX, a tty kit) outside `ui/` and the entry point. `server/document.ts` hands the kit's registry to moss to draw a page with; it imports the kit and contains no renderer code of its own. No `fetch` outside the endpoint layer. No formatting (`Intl`, `toLocaleString`, date libs) outside Prism transforms.
+2. No renderer code (JSX, a tty kit) outside `ui/` and the entry point. `server/document.ts` hands the kit's registry to moss to draw a page with; it imports the kit and contains no renderer code of its own. No `fetch` outside the endpoint layer, except to send a file (rule 9a). No formatting (`Intl`, `toLocaleString`, date libs) outside Prism transforms.
 3. Every action an opener loads with input declares it in the definition's `input`, and the declared fields are a subset of the action's `data` keys.
 4. Every displayer of an entity stays current after a write: its read is `refresh: 'reactive'`, or the write's success path emits a change channel the displayer listens to.
 5. No component name contains a domain noun; no component imports shell, action, or data code.
