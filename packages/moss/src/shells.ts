@@ -415,9 +415,19 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   // navigation lands near 80% and is deliberately left whole.
   const DELTA_CEILING = 0.6;
 
+  // And only between frames small enough to be worth comparing. The encode's
+  // cost follows the size of the frames, not of the change, and it is paid on
+  // the thread every session shares: about 7 ms for an in-place change at
+  // 64 KB, a second at 2.7 MB, and at 20 MB eight seconds and a gigabyte to
+  // fail and send the frame whole anyway. Past this length — of the frame the
+  // connections hold, or of the one replacing it — the answer is "whole"
+  // before anything is spent on finding out.
+  const DELTA_MAX_FRAME = 64 * 1024;
+
   // The delta message, or null to send the frame whole. Never throws: a frame
   // failing to encode is a reason to fall back, not a reason to lose the frame.
   const shorterAsDelta = (previous: string, next: string, canvasId: string): string | null => {
+    if (previous.length > DELTA_MAX_FRAME || next.length > DELTA_MAX_FRAME) return null;
     try {
       const ops = encodeDelta(previous, next);
       const message: ServerMessage = { type: 'render-delta', canvas: canvasId, ops, hash: frameHash(next) };

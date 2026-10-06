@@ -879,6 +879,12 @@ at most 60% of the whole frame. A terminal that never advertises — including
 every terminal built before this existed — receives whole frames forever, from
 the same shell, in the same pass. The two kinds of connection coexist.
 
+**A canvas whose frame is over 64 KB is always sent whole.** Comparing two
+frames costs the server in proportion to their size, not to what changed, and
+it does that work on the thread every session shares — about 7 ms at 64 KB, a
+second at 2.7 MB. So when the frame a terminal holds, or the one replacing it,
+is longer than 64 KB, the server does not compare them. It is not a setting.
+
 What it buys, measured on Lyra:
 
 | change | delta, as a share of the whole frame |

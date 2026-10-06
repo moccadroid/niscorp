@@ -567,6 +567,63 @@ describe('shells — frame deltas', () => {
     expect(frameHash(applyDelta(base, delta!['ops'] as DeltaOp[]))).toBe(delta!['hash']);
   });
 
+  // The encode's cost follows the size of the frames, not of the change, and it
+  // is paid on the thread every session shares. So past 64 KB — on either side
+  // of the change — a frame goes out whole without being compared. Before the
+  // bound, the two middle steps below went out as deltas, after the encode.
+  it('a frame over 64 KB is sent whole, whichever side of the change it is on', async () => {
+    const padded = {
+      ...app,
+      actions: {
+        counter: {
+          ...counter,
+          data: { n: 0, pad: '' },
+          triggers: [...counter.triggers, { event: 'ui:click', ref: 'pad', do: [{ set: 'pad', value: '@event.payload' }] }],
+          layout: [
+            ...Array.from({ length: 40 }, (_, i) => ({ component: 'Text', children: `a steady row of chrome that never changes, number ${i}` })),
+            { component: 'Text', children: '$.pad' },
+            { component: 'Text', children: '$.n' },
+          ],
+        },
+      },
+    } as unknown as NiscApp;
+    const host = createShellHost({ ...ctx, app: padded, delta: true });
+    const session = await host.session('t', 'usr_1');
+    const asked = textConnection();
+    const silent = textConnection();
+    session.attach(asked, { delta: true });
+    session.attach(silent);
+    await tick();
+
+    // What the delta terminal was sent for one change, and that the terminal
+    // which never asked was sent the frame it adds up to.
+    const sentFor = async (event: Record<string, unknown>): Promise<{ type: string; length: number }> => {
+      asked.texts.length = 0;
+      silent.texts.length = 0;
+      session.dispatch('main', event);
+      await tick();
+      const canvas = asked.texts.filter((t) => t.startsWith('{"type":"render'));
+      expect(canvas).toHaveLength(1);
+      const whole = silent.texts.filter((t) => t.startsWith('{"type":"render"')).at(-1)!;
+      const type = (JSON.parse(canvas[0]!) as { type: string }).type;
+      if (type === 'render') expect(canvas[0]).toBe(whole);
+      return { type, length: whole.length };
+    };
+
+    // under → over: the frame replacing the held one is past the bound
+    const grown = await sentFor({ type: 'ui:click', ref: 'pad', payload: 'x'.repeat(70 * 1024) });
+    expect(grown.length).toBeGreaterThan(64 * 1024);
+    expect(grown.type).toBe('render');
+    // over → over: one number changed in a frame past the bound
+    expect((await sentFor({ type: 'ui:click', ref: 'bump' })).type).toBe('render');
+    // over → under: the frame the connections HOLD is past the bound
+    const shrunk = await sentFor({ type: 'ui:click', ref: 'pad', payload: '' });
+    expect(shrunk.length).toBeLessThan(64 * 1024);
+    expect(shrunk.type).toBe('render');
+    // under → under: level again, and deltas resume against the whole frame
+    expect((await sentFor({ type: 'ui:click', ref: 'bump' })).type).toBe('render-delta');
+  });
+
   it('a detached connection is forgotten by both sets', async () => {
     const host = createShellHost({ ...ctx, app: wide, delta: true });
     const session = await host.session('t', 'usr_1');

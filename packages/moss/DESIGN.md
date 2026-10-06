@@ -237,7 +237,11 @@ Three rules keep it honest:
    everyone — so one encode serves the whole room.
 2. **Decisively smaller, or whole.** A delta is only sent at ≤60% of the frame.
    Below that it wins even after deflate; above it, deflate on the whole frame
-   does as well and the terminal does less work.
+   does as well and the terminal does less work. And a frame over 64 KB is not
+   compared at all: the encode's cost follows the size of the frames, not of
+   the change, on the thread every session shares — about 7 ms at 64 KB, a
+   second at 2.7 MB — so past that length, on either side of the change, the
+   canvas is sent whole before anything is spent on finding out.
 3. **Checksummed, always.** Every delta carries a hash of the frame it should
    rebuild. A terminal that lands anywhere else discards the result and sends
    `resync` — the failure this layer must not have is a screen that is silently

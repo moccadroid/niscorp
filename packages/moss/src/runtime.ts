@@ -85,7 +85,8 @@ export type NiscRuntime = {
   // falls to 1–4% of the frame, a navigation to about 80% before the
   // transport's own compression. It costs one encode per changed canvas per
   // flush and one previous frame held per canvas, which the host keeps anyway
-  // for its unchanged-frame check.
+  // for its unchanged-frame check. The encode's cost follows the frame's size,
+  // so a canvas whose frame is over 64 KB is sent whole and never encoded.
   //
   // Off by default because it is a protocol change: a terminal that does not
   // advertise support keeps receiving whole frames, and a delta that fails its
