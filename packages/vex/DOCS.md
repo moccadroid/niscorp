@@ -1052,7 +1052,15 @@ for reads / `effect` = `{ op, table, columns }` for writes), and the
 collectMutationContext(def, schema);  // { id: { type: 'string', column: 'tasks.id', note: 'upsert key — …' }, … }
 collectQueryContext(dsl, schema);     // same idea over a query's filter/compute/subqueries
 mutationEffect(def);                  // [{ op: 'update', table: 'tasks', columns: ['done'] }]
+mutationMisfits(def, schema);         // [] when it fits — else why not: ['"tasks.id" in the WHERE is not a column of "tasks".']
 ```
+
+`mutationMisfits` asks the column gates every write passes before it runs —
+table, written columns, WHERE, `$lookup`, conflict target, `$returned` —
+without running anything, an upsert as both statements it can become. Scope is
+not applied.
+moss's `migrateTables` asks it of every write entry before a migration run may
+commit.
 
 ### Authoring lint
 

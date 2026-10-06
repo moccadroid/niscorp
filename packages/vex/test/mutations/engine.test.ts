@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { executeMutation } from '../../src/mutations/engine.js';
+import { executeMutation, mutationMisfits } from '../../src/mutations/engine.js';
 import type { MutationClient } from '../../src/mutations/engine.js';
 import { MutationDefinitionSchema } from '../../src/mutations/schema.js';
 import { VexError } from '../../src/errors.js';
@@ -256,6 +256,48 @@ describe('upsert desugar', () => {
     });
     expect(calls[0]!.sql).toMatch(/^UPDATE tasks SET/);
     expect(calls[0]!.sql).not.toContain('deal_id');
+  });
+});
+
+// ─── Asking without running ─────────────────────────────────────
+
+describe('mutationMisfits', () => {
+  const without = (table: string, column: string): DatabaseSchema => ({
+    entities: schema.entities.map((entity) => (entity.table === table ? { ...entity, fields: entity.fields.filter((f) => f.name !== column) } : entity)),
+  });
+  const byId = MutationDefinitionSchema.parse({ op: 'delete', table: 'tasks', where: { eq: ['tasks.id', { $context: 'id' }] } });
+  const retitle = MutationDefinitionSchema.parse({ op: 'update', table: 'tasks', set: { title: { $context: 'title' } }, where: { eq: ['tasks.id', { $context: 'id' }] } });
+  const forCompany = MutationDefinitionSchema.parse({
+    op: 'insert',
+    table: 'tasks',
+    values: { deal_id: { $lookup: { from: 'companies', field: 'id', where: { eq: ['companies.name', { $context: 'company' }] } } } },
+  });
+
+  it('says nothing of writes that fit', () => {
+    expect(mutationMisfits([upsertTask, retitle, forCompany].flat(), schema)).toEqual([]);
+    expect(mutationMisfits(byId, schema)).toEqual([]);
+  });
+
+  it('says what the column gate would refuse: a written column, the WHERE, a $lookup, a table', () => {
+    expect(mutationMisfits(retitle, without('tasks', 'title'))).toEqual(['Unknown column "tasks.title".']);
+    expect(mutationMisfits(retitle, without('tasks', 'id'))).toEqual(['"tasks.id" in the WHERE is not a column of "tasks".']);
+    expect(mutationMisfits(forCompany, without('companies', 'name'))).toEqual(['"companies.name" in a $lookup is not a column of "companies".']);
+    expect(mutationMisfits(byId, { entities: [] })).toEqual(['Unknown table "tasks".']);
+  });
+
+  it('says when a later statement of a batch reads a column the earlier one does not return', () => {
+    const batch = MutationDefinitionSchema.parse([
+      { op: 'insert', table: 'companies', values: { name: { $context: 'name' } } },
+      { op: 'insert', table: 'tasks', values: { deal_id: { $returned: 'companies.id' }, title: { $context: 'title' } } },
+    ]);
+    expect(mutationMisfits(batch, schema)).toEqual([]);
+    expect(mutationMisfits(batch, without('companies', 'id'))).toEqual(['Unknown column "companies.id" in $returned.']);
+  });
+
+  it('asks an upsert as both statements it can become', () => {
+    // the key is in the update's WHERE only; the insert-only column in the insert only
+    expect(mutationMisfits(upsertTask, without('tasks', 'id'))).toEqual(['"tasks.id" in the WHERE is not a column of "tasks".']);
+    expect(mutationMisfits(upsertTask, without('tasks', 'deal_id'))).toEqual(['Unknown column "tasks.deal_id".']);
   });
 });
 

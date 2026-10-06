@@ -503,6 +503,32 @@ const desugarMutation = (m: Mutation, context: Record<string, unknown>): CoreMut
   return rewrite === undefined ? (m as CoreMutation) : rewrite(m, context);
 };
 
+// ─── Ask, without running ──────────────────────────────────────
+// Why a stored write does not fit a schema: one sentence for each refusal of
+// the two column gates above (what a statement writes, and what it reads from
+// an earlier one), none when it fits. Nothing runs. An upsert is asked as both
+// statements it can become. Scope is not applied — what a policy stamps or
+// bounds is checked where the principal is known.
+export const mutationMisfits = (def: MutationDefinition, schema: DatabaseSchema): string[] => {
+  const reasons: string[] = [];
+  const list = Array.isArray(def) ? def : [def];
+  for (const [at, entry] of list.entries()) {
+    const asked = [
+      // keyed, an upsert is an update; unkeyed, an insert
+      ...(entry.op === 'upsert' ? [{ [entry.key]: 0 }, {}] : [{}]).map((context) => () => assertWritableColumns(desugarMutation(entry, context), schema)),
+      () => assertReturnedColumns(returnedIn(list, at).refs, schema),
+    ];
+    for (const ask of asked) {
+      try {
+        ask();
+      } catch (error) {
+        reasons.push(error instanceof Error ? error.message : String(error));
+      }
+    }
+  }
+  return reasons;
+};
+
 // ─── Execute ───────────────────────────────────────────────────
 export type MutationContext = {
   context: Record<string, unknown>; // dynamic values for `$context` refs (the caller's data)

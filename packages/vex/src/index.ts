@@ -59,7 +59,7 @@ export type { LiveRowsConfig, LiveRowsStats } from './engine/live.js';
 // The write pipeline: a closed grammar, engine-applied scope, and replay-only
 // execution — mutations are `kind: 'mutation'` cache entries invoked by
 // fingerprint; there is no generation path (dev-authored seeds only).
-export { MutationSchema, MutationDefinitionSchema, executeMutation, executeWrites, collectMutationContext, collectQueryContext, mutationEffect, requiredContextKeys, lintMutation } from './mutations/index.js';
+export { MutationSchema, MutationDefinitionSchema, executeMutation, executeWrites, mutationMisfits, collectMutationContext, collectQueryContext, mutationEffect, requiredContextKeys, lintMutation } from './mutations/index.js';
 export type { Mutation, MutationDefinition, CoreMutation, ResolvedMutation, ResolvedOnConflict, MutationValue, LookupValue, ReturnedRef, ItemRef, MutationClient, MutationTx, MutationContext, ContextField, ContextSignature, MutationEffect, WriteResult } from './mutations/index.js';
 
 // ─── Utils ───────────────────────────────────────────────────
