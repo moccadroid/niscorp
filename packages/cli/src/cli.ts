@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { build, check, dev, exportSite, start } from './commands';
+import { build, check, dev, exportSite, migrate, start } from './commands';
 import type { CommandOptions } from './commands';
 
 // ═══════════════════════════════════════════════════════════════
@@ -13,12 +13,14 @@ const USAGE = `nisc — the command for a nisc application
   nisc export              build, then write every path as a file (the site as a folder)
   nisc start               serve the built app, each path's first screen drawn
   nisc check               the app's check suite
+  nisc migrate             apply the tables' pending migrations, if the app's entries fit the result
 
   --root <dir>             the app's root (default: here) — where nisc.config.ts is
   --out <dir>              export: where the files go (default: out)
   --allow-live             export: write even though some path wants a server behind it
   --port <n>               dev, start: the port (start: $PORT, then 8787)
   --skip-bundle            build, export: the terminal is already built
+  --check                  migrate: do all of it, then roll it back
 
 An app says in nisc.config.ts how it boots and how one of its screens is drawn.
 Behind moss (boot + draw): which paths exist and what each needs is read off the
@@ -53,6 +55,10 @@ const main = async (): Promise<number> => {
     return new Promise<number>(() => undefined);
   }
   if (command === 'check') return check(options);
+  if (command === 'migrate') {
+    await migrate({ ...options, dryRun: args.includes('--check') });
+    return 0;
+  }
   if (command === 'build') {
     return (await build(options)).ok ? 0 : 1;
   }

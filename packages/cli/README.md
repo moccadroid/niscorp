@@ -15,6 +15,7 @@ nisc build     # bundle the app, draw every path, and check what was drawn
 nisc export    # build, then write every path as a file — the site as a folder
 nisc start     # serve the built app, each path's first screen drawn
 nisc check     # the app's check suite
+nisc migrate   # apply the tables' pending migrations, if the app's entries fit the result
 ```
 
 An app is one of two things, and the command runs both. **Behind moss**, the
@@ -63,6 +64,7 @@ page in the manifest), and what each one needs once it has been drawn.
 | `dist?` | where the bundler writes the terminal (default `dist`) |
 | `stylesheet?` | where the built page's stylesheet goes: `'page'` (the default — written into `index.html`, see `nisc build`) or `'file'` (left as the bundler linked it) |
 | `checks?` | the check suite `nisc check` runs (default `src/dev/all-checks.ts`) |
+| `app?`, `runtime?` | what `nisc migrate` needs: the manifest, and a function that opens the environment it runs on (`NiscRuntime`, plus `close` if there is something to let go of) |
 | `tokenKey?` | the wire's token key, when it is not `nisc.token` |
 | `dev?` | what only `nisc dev` uses: `dev.signIn(server, who)` mints a token for `/dev/as/<who>` (`null`: nobody of that name) |
 
@@ -336,6 +338,41 @@ server. An app with its own shell is a vite app and nothing more.
 The app's check suite (`src/dev/all-checks.ts`, or `checks` in the config), run
 with the app's own `tsx`. Its exit code is the suite's.
 
+## `nisc migrate`
+
+For an app behind moss whose config hands over `app` and `runtime`. It is the
+step a deployment runs before the new version starts, when its runtime says
+`migrations: 'verify'`.
+
+In one transaction it applies every pending table migration — moss's, and the
+app's own (`runtime.tables`) — then checks that every entry of the manifest
+fits the schema as it would stand. It checks when nothing was pending too, so a
+release that changes an entry and no table is checked. If an entry does not
+fit, nothing is applied, and the command names the entry and why and exits 1:
+the migration never ran, so it is corrected where it is written.
+
+```
+nisc: applied 1
+  acme.app/3  notes lose their stars
+nisc: this run removes notes.stars
+```
+
+A run that lands says what it took away (tables and columns removed, column
+types changed). An entry that already did not fit before the run, and is
+already seeded as it is, is listed and does not refuse the run.
+
+`--check` does all of it and rolls it back. It takes the locks the real run
+will take, for as long.
+
+`runtime` only opens the environment. It migrates nothing and seeds nothing:
+tables it changes itself are changed before the step can check them, and
+`--check` would then change the database. Every table an entry reads or writes
+comes from a sequence in the run — the app's own go in `runtime.tables`, and so
+does tide's (`TIDE_SEQUENCE`) when the app keeps tide's tables.
+
+It checks entries. It does not see SQL written by hand, and it does not know
+what a value means.
+
 ## Options
 
 | | |
@@ -344,6 +381,7 @@ with the app's own `tsx`. Its exit code is the suite's.
 | `--out <dir>` | `export`: where the files go (default `out`) |
 | `--allow-live` | `export`: write even though some path wants a server |
 | `--skip-bundle` | `build`, `export`: the terminal is already built — it is neither bundled nor has its stylesheet written into its page |
+| `--check` | `migrate`: do all of it, then roll it back |
 | `--port <n>` | `dev`, `start`: the port (`start`: `$PORT`, then 8787) |
 
 ## License

@@ -24,6 +24,8 @@ import { writeStylesheetIntoPage } from './stylesheet';
 //   start   serve the built terminal from the app's own process, pages drawn —
 //           compressed, and with what a browser may keep said (./site)
 //   check   the app's check suite
+//   migrate apply the tables' pending migrations, if the app's entries fit what
+//           they leave
 //
 // Nothing here knows an app. How it boots and how a screen is drawn come from
 // its nisc.config.ts. An app behind moss hands over its server, and which paths
@@ -44,6 +46,8 @@ export type CommandOptions = {
   port?: number;
   // build/export: skip the bundler (the terminal is already built)
   skipBundle?: boolean;
+  // migrate: do all of it, then roll it back
+  dryRun?: boolean;
   print?: (line: string) => void;
 };
 
@@ -241,6 +245,32 @@ export const start = async (options: CommandOptions): Promise<{ url: string; clo
       await booted.close?.();
     },
   };
+};
+
+// The tables, moved — by moss (`migrateTables`), which refuses a run that would
+// leave an entry of the manifest not fitting. A refusal is thrown with its
+// reasons, and nothing was applied. What a run that lands took away is said.
+export const migrate = async (options: CommandOptions): Promise<void> => {
+  const project = await loadProject(options.root);
+  if (isShellProject(project) || project.app === undefined || project.runtime === undefined) {
+    throw new Error('nisc: `nisc migrate` needs `app` and `runtime` in nisc.config.ts — the manifest, and the environment it runs on.');
+  }
+  const { migrateTables } = await import('@niscorp/moss');
+  const print = say(options);
+  const isDryRun = options.dryRun === true;
+  const runtime = await project.runtime();
+  try {
+    const report = await migrateTables(runtime, project.app, isDryRun ? { dryRun: true } : {});
+    if (report.applied.length === 0) print('nisc: nothing to migrate');
+    else print(isDryRun ? `nisc: would apply ${report.applied.length} — rolled back, nothing changed` : `nisc: applied ${report.applied.length}`);
+    for (const migration of report.applied) print(`  ${migration.ref}  ${migration.description}`);
+    if (report.removed.length > 0) print(`nisc: this run removes ${report.removed.join(', ')}`);
+    if (report.retyped.length > 0) print(`nisc: this run changes the type of ${report.retyped.join(', ')}`);
+    if (report.alreadyBroken.length > 0) print('nisc: not fitting before this run either, and seeded as they are — said, not refused:');
+    for (const entry of report.alreadyBroken) print(`  ${entry}`);
+  } finally {
+    await runtime.close?.();
+  }
 };
 
 // The two that hand over to a tool of the app's own and stay out of the way.

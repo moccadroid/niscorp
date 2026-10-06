@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { DocumentConfig, MossServer } from '@niscorp/moss';
+import type { DocumentConfig, MossServer, NiscApp, NiscRuntime } from '@niscorp/moss';
 import type { Shell } from '@niscorp/nova';
 
 // ═══════════════════════════════════════════════════════════════
@@ -66,6 +66,13 @@ export type NiscMossProject = Common & {
   // Routes of the app's own that a served site needs before the catch-all — a
   // sign-in handoff, a webhook. `nisc start` registers them first.
   routes?: (server: MossServer) => void | Promise<void>;
+  // What only `nisc migrate` uses: the manifest, and the environment it runs
+  // on — opened by the command, and let go by it (`close`). The step applies
+  // the tables' pending migrations and checks the manifest's entries against
+  // what they leave; it stands no server up. `runtime` opens and nothing
+  // else: tables it migrated itself are changed before the step can check them.
+  app?: NiscApp;
+  runtime?: () => Promise<NiscRuntime & { close?: () => void | Promise<void> }>;
   // What only `nisc dev` uses.
   dev?: {
     // A signed-in URL in development: `/dev/as/<who>` stores the token this
