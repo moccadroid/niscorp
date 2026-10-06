@@ -232,12 +232,15 @@ export const todosOpen: SeedEntry = {
     fields: [{ field: 'todos.id', as: 'todo_id' }, 'todos.title', 'todos.due_date'],
     filter: { eq: ['todos.done', false] },
     sort: [{ field: 'todos.due_date', dir: 'asc' }],
+    limit: 200,                                         // how many rows this list is for — state it on every list
   },
   mapping: { /* Prism over { result }: the rows (array shape) or the one row (object shape); omit when the DSL already aliases to the shape */ },
 };
 ```
 
+- **Every list states its `limit`.** A seeded entry reads at most the `limit` it states, and the engine does not lower that number unless the deployment tells it to. A list that states none gets the engine's default of 100 and no more — when exactly that many come back, the reply's `meta.warnings` and the server console say the list may have been cut. That line means the entry is missing a `limit`; write one.
 - **Writes are mutation entries in the same store.** A `SeedMutation`: a statement in the closed mutation grammar in place of a query DSL, the same wire shape (`{ fingerprint, context }`). Mutations are replay-only forever — never generated; `lintMutation` runs at seed and throws on a failing statement, and context signatures are derived for discovery.
+- **A parent and its children are one batch.** An array of statements runs in one transaction, and a later statement reads the row an earlier one wrote: `{ $returned: 'orders.id' }` is the id the database just generated for the `orders` insert earlier in the same batch, so a generated id reaches the rows that point at it without leaving the server, and the write is all or nothing. The statement it names must write exactly one row, or the whole batch is refused. The reply is every statement's rows in order — and exactly one row comes back as that row, not an array of one.
 - **Under moss (the D1 default), hand the entries to `defineApp({ entries })`.** The server derives the data layer: boots the engine, prewarms protected, serves locked replay-only endpoints, and compiles each principal's `ScopePolicy` from the charter's `data` section. The app never touches an engine.
 - **A client-degrade app boots its own engine** — database adapter + cache backend + `ScopePolicy` — `introspect()` once at startup, memoized behind a single accessor. Prewarm at boot through the cache backend's own `set()`: key = the entry's `fingerprint`, `prismIr` = `await compile(mapping ?? { $ref: '$.result' })` (`@niscorp/prism`), plus the shape, the schema fingerprint, and `protected: true` — a seeded entry can never be replaced by a stray request. Seed the identity IR for mapping-less entries explicitly — a NULL IR falls through to the LLM mapper. Throw on duplicate names while seeding.
 - **The fingerprint is the cache key.** Every entry replays as `{ fingerprint, context }` — no shape, no intent on the wire. Id fields still follow `<entity>_id` (self-describing rows); never a shared `{ value, label }`.
