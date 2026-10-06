@@ -18,6 +18,6 @@ An `insert` or `insertEach` may set the same column in `values` and in `onConfli
 
 An entry that puts different things in one column in the two places has its signature read `values` first, then `onConflict.set`. Its keys can come in another order than before, and a key used in both is listed with the column and type of its place in `values`.
 
-Nothing else moves. An entry whose `values` and `onConflict.set` share no column, or put the same thing in every column they share (the create-or-fetch touch, `set: { email: { $context: 'email' } }`), lists and requires what it did, in the same order. `update`, `delete`, `upsert` and `mutationEffect` are unchanged.
+Nothing else moves. An entry whose `values` and `onConflict.set` share no column, or put the same thing in every column they share (the create-or-fetch touch, `set: { email: { $context: 'email' } }`), lists and requires what it did, in the same order. `update`, `delete` and `mutationEffect` are unchanged.
 
 **What to change:** nothing, unless an entry sets a column in `values` from a `$context` key, sets the same column in `onConflict.set` from anything else, and some caller leaves that key out. That call wrote a NULL and is now answered 400. Send the key — `null` to write NULL on purpose; only an absent key is refused — or, if the column was never meant to be set on insert, take it out of `values`.

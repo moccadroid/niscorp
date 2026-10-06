@@ -108,28 +108,33 @@ const columnsOf = (m: Mutation): Record<string, unknown> =>
         ? { ...m.columns, ...(m.insert ?? {}) }
         : {};
 
-// Every value a statement sets, with its column. An insert's `values` and its
-// `onConflict.set` are read position by position, NOT merged by column name as
-// `columnsOf` merges them: the two may set one column from different context
-// keys, and each binds a parameter of its own — a key lost in the merge is not
-// in the signature, not required, and bound as NULL.
-const positionsSetBy = (m: Mutation): [column: string, value: unknown][] =>
-  m.op === 'insert' || m.op === 'insertEach'
-    ? [...Object.entries(m.values), ...Object.entries(m.onConflict?.set ?? {})]
-    : Object.entries(columnsOf(m));
+// Every value a statement sets, position by position, with its column. NOT
+// `columnsOf`: that merges an insert's `values` with its `onConflict.set`, and
+// an upsert's `columns` with its `insert`, by column name — and what one half
+// puts in a column goes unseen behind the other: a `$context` key not listed
+// and not required, a `$returned` not checked.
+type SetPosition = { column: string; value: unknown; insertOnly: boolean };
+
+const positionsSetBy = (m: Mutation): SetPosition[] => {
+  const positions = (cols: Record<string, unknown> | undefined, insertOnly = false): SetPosition[] =>
+    Object.entries(cols ?? {}).map(([column, value]) => ({ column, value, insertOnly }));
+  if (m.op === 'insert' || m.op === 'insertEach') return [...positions(m.values), ...positions(m.onConflict?.set)];
+  if (m.op === 'update') return positions(m.set);
+  if (m.op === 'upsert') return [...positions(m.columns), ...positions(m.insert, true)];
+  return [];
+};
 
 export const collectMutationContext = (def: MutationDefinition, schema?: DatabaseSchema): ContextSignature => {
   const sig: ContextSignature = {};
   const list = Array.isArray(def) ? def : [def];
   for (const m of list) {
-    for (const [col, v] of positionsSetBy(m)) {
+    for (const { column: col, value: v, insertOnly } of positionsSetBy(m)) {
       if (isLookupRef(v)) {
         // The lookup's WHERE binds context like any filter does.
         walkFilter(v.$lookup.where, schema, sig);
         continue;
       }
       if (!isContextRef(v)) continue;
-      const insertOnly = m.op === 'upsert' && m.insert !== undefined && col in m.insert;
       addField(sig, v.$context, { ...columnInfo(`${m.table}.${col}`, schema), ...(insertOnly ? { note: 'insert only' } : {}) });
     }
     if (m.op === 'update' || m.op === 'delete') walkFilter(m.where, schema, sig);
@@ -177,7 +182,7 @@ export const mutationEffect = (def: MutationDefinition): MutationEffect[] => {
 // insert branch, so requirement is computed after desugaring).
 export const requiredContextKeys = (m: CoreMutation): string[] => {
   const keys = new Set<string>();
-  for (const [, v] of positionsSetBy(m)) {
+  for (const { value: v } of positionsSetBy(m)) {
     if (isContextRef(v)) keys.add(v.$context);
     else if (isLookupRef(v)) {
       const sub: ContextSignature = {};
@@ -219,18 +224,6 @@ const findOptional = (value: unknown): boolean => {
 // to return several rows or, on a conflict, none.
 export type ReturnedSource = { statement: number; table: string; column: string };
 
-// Every value a statement sets, position by position. NOT `columnsOf`: that
-// merges an insert's `values` with its `onConflict.set` by column name, and a
-// reference in one would go unseen behind the same column in the other.
-const valuesSetBy = (m: Mutation): unknown[] =>
-  m.op === 'insert' || m.op === 'insertEach'
-    ? [...Object.values(m.values), ...Object.values(m.onConflict?.set ?? {})]
-    : m.op === 'update'
-      ? Object.values(m.set)
-      : m.op === 'upsert'
-        ? [...Object.values(m.columns), ...Object.values(m.insert ?? {})]
-        : [];
-
 const isReturnedRef = (v: unknown): v is { $returned: string } =>
   v !== null && typeof v === 'object' && !Array.isArray(v) && '$returned' in v && typeof v.$returned === 'string';
 
@@ -241,7 +234,7 @@ export const returnedIn = (list: readonly Mutation[], at: number): { refs: Map<s
   if (m === undefined) return { refs, issues };
   // A reference a statement uses for several columns is judged once.
   const judged = new Set<string>();
-  for (const v of valuesSetBy(m)) {
+  for (const { value: v } of positionsSetBy(m)) {
     if (!isReturnedRef(v) || judged.has(v.$returned)) continue;
     judged.add(v.$returned);
     const dot = v.$returned.indexOf('.');

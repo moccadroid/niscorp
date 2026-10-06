@@ -56,3 +56,24 @@ describe('an insert whose onConflict.set sets a column its values set too', () =
     expect(Object.keys(collectMutationContext(def, schema)).sort()).toEqual(['email', 'name', 'newName']);
   });
 });
+
+// The same two-positions rule for an upsert: `columns` binds when it updates,
+// `insert` when it creates. What it REQUIRES was always right — that is
+// computed per branch — but the signature it is listed with read the two
+// merged, and the key the update needs was missing from it.
+describe('an upsert whose insert sets a column its columns set too', () => {
+  it('lists the key each half binds, and only the insert half as insert only', () => {
+    const sig = collectMutationContext(
+      { op: 'upsert', table: 'people', key: 'id', columns: { name: { $context: 'name' } }, insert: { email: { $context: 'email' }, name: { $context: 'firstName' } } },
+      schema,
+    );
+    expect(Object.keys(sig).sort()).toEqual(['email', 'firstName', 'id', 'name']);
+    expect(sig['name']).toEqual({ type: 'string', column: 'people.name' });
+    expect(sig['firstName']).toEqual({ type: 'string', column: 'people.name', note: 'insert only' });
+  });
+
+  it('does not call a key insert only when the update binds it too', () => {
+    const sig = collectMutationContext({ op: 'upsert', table: 'people', key: 'id', columns: { name: { $context: 'name' } }, insert: { name: { $context: 'name' } } }, schema);
+    expect(sig['name']).toEqual({ type: 'string', column: 'people.name' });
+  });
+});
