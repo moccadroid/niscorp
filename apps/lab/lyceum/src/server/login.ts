@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
-import { mintSession } from '@niscorp/moss';
+import { mintSession, sessionCookies } from '@niscorp/moss';
 import type { MossServer } from '@niscorp/moss';
 import { lecternGrant, loginRedeem } from '@lyceum/app/vex/login.entries';
 
@@ -29,13 +29,15 @@ const DESK_TTL_MS = 30 * 60 * 1000;
 export const LINK_TTL_MS = 15 * 60 * 1000;
 const RedeemedSchema = z.union([z.object({ principal: z.string() }), z.array(z.object({ principal: z.string() }))]);
 
-// Into a seat (src/main.ts), then into the app. The session is the whole
-// payload; the terminal decides nothing about it.
-const handOff = (seat: string, session: string): Response =>
-  new Response(
-    `<!doctype html><script>localStorage.setItem(${JSON.stringify(`nisc.token.${seat}`)},${JSON.stringify(session)});location.replace(${JSON.stringify(`/?seat=${seat}`)})</script>`,
-    { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } },
-  );
+// Into a seat (src/main.ts), then into the app. The session goes into the
+// browser's own cookie for that seat, which no script can read — set by this
+// answer, so the page it sends the device to is signed in and was never handed
+// anything. The terminal decides nothing about it.
+const handOff = (request: Request, seat: string, session: string, lastsMs: number): Response => {
+  const headers = new Headers({ location: `/?seat=${seat}` });
+  for (const cookie of sessionCookies(request, session, { key: `nisc.token.${seat}`, lastsMs })) headers.append('set-cookie', cookie);
+  return new Response(null, { status: 302, headers });
+};
 
 export const mountLogin = (server: MossServer, pool: Parameters<typeof mintSession>[0]): void => {
   server.get('/login', async (c) => {
@@ -45,14 +47,14 @@ export const mountLogin = (server: MossServer, pool: Parameters<typeof mintSessi
     );
     const principal = redeemed.success ? (Array.isArray(redeemed.data) ? redeemed.data[0]?.principal : redeemed.data.principal) : undefined;
     if (principal === undefined) return c.text('This sign-in link has been used or has expired. Ask for a new one.');
-    return handOff(principal, await mintSession(pool, principal, SESSION_TTL_MS));
+    return handOff(c.req.raw, principal, await mintSession(pool, principal, SESSION_TTL_MS), SESSION_TTL_MS);
   });
 
-  server.get('/speaker', async () => {
+  server.get('/speaker', async (c) => {
     const principal = `lectern_${randomBytes(8).toString('hex')}`;
     await server.executeAs('gatekeeper', lecternGrant.fingerprint, { principal });
-    return handOff('lectern', await mintSession(pool, principal, DESK_TTL_MS));
+    return handOff(c.req.raw, 'lectern', await mintSession(pool, principal, DESK_TTL_MS), DESK_TTL_MS);
   });
 
-  server.get('/stage', async () => handOff('stage', await mintSession(pool, 'stage', SESSION_TTL_MS)));
+  server.get('/stage', async (c) => handOff(c.req.raw, 'stage', await mintSession(pool, 'stage', SESSION_TTL_MS), SESSION_TTL_MS));
 };

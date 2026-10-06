@@ -11,9 +11,9 @@ import { atriumSlotWrapper } from '@atrium/ui/slot-wrapper';
 // things only atrium knows — the kit that draws it, and what the kit would
 // have put on <html>.
 //
-// Who is asking comes off the cookie copy of the session token the wire keeps
-// (src/main.tsx, `browserEnv({ cookie: true })`). It is read to draw this page
-// and for nothing else: every other surface still wants the token itself.
+// Who is asking comes off the session cookie the browser keeps — moss writes
+// it, no script can read it, and its name ends with the port the page is on,
+// which is why the host is passed along.
 //
 // The dev server (vite.config.ts) and `nisc start` draw with the same
 // description; a page that cannot be drawn goes out as index.html, undrawn.
@@ -51,5 +51,5 @@ export const drawing = {
   },
 };
 
-export const renderPage = (config: { server: MossServer; template: string; path: string; cookie: string | null }): Promise<DrawnDocument> =>
-  renderDocument({ ...drawing, server: config.server, template: config.template, request: { path: config.path, cookie: config.cookie } });
+export const renderPage = (config: { server: MossServer; template: string; path: string; cookie: string | null; host?: string | null }): Promise<DrawnDocument> =>
+  renderDocument({ ...drawing, server: config.server, template: config.template, request: { path: config.path, cookie: config.cookie, host: config.host ?? null } });

@@ -2,6 +2,7 @@ import { headOf, placeHead } from '@niscorp/nova/document';
 import type { ScreenHead } from '@niscorp/nova/document';
 import type { ShellSnapshot } from './shells';
 import type { MossServer } from './server';
+import { DEFAULT_TOKEN_KEY, sessionTokenOf, tokenFromCookie } from './session-cookie';
 
 // ═══════════════════════════════════════════════════════════════
 // The document — what a page request is answered with when the server draws
@@ -38,26 +39,9 @@ import type { MossServer } from './server';
 // The element id the terminal looks for — the same constant ../client reads by.
 export const SNAPSHOT_ELEMENT_ID = 'nisc-snapshot';
 
-const DEFAULT_TOKEN_KEY = 'nisc.token';
 const DEFAULT_ROOT = '<div id="root"></div>';
 
-// The session token, out of a `Cookie` header. The name is the wire's token key
-// (`browserEnv({ tokenKey, cookie: true })` writes the copy this reads).
-export const tokenFromCookie = (header: string | null | undefined, tokenKey = DEFAULT_TOKEN_KEY): string | null => {
-  if (header === undefined || header === null) return null;
-  const wanted = encodeURIComponent(tokenKey);
-  for (const part of header.split(';')) {
-    const at = part.indexOf('=');
-    if (at < 0 || part.slice(0, at).trim() !== wanted) continue;
-    try {
-      const value = decodeURIComponent(part.slice(at + 1).trim());
-      return value === '' ? null : value;
-    } catch {
-      return null;
-    }
-  }
-  return null;
-};
+export { tokenFromCookie };
 
 // The snapshot, as an element to put in the page. A tree carries what people
 // typed (a name, a note), and it sits inside a <script>: every `<` is written
@@ -87,8 +71,10 @@ export type DocumentConfig = {
   // root (`root`, default `<div id="root"></div>`) exactly once — that is where
   // the screen goes.
   template: string;
-  // What the request named and carried.
-  request: { path: string; cookie?: string | null };
+  // What the request named and carried. `host` is its `Host` header: the
+  // session cookie's name ends with the port a page is on (session-cookie.ts),
+  // so without it a page on a port is drawn for nobody.
+  request: { path: string; cookie?: string | null; host?: string | null };
   // A terminal that draws to a string: the app's kit, bound to one of moss's
   // server targets (`renderSnapshot` from ./terminal/react/server, /vue/server,
   // /dom/server).
@@ -101,7 +87,7 @@ export type DocumentConfig = {
   // path's document says its own canonical address. Without it, where a
   // document lives is left as the template says.
   site?: string;
-  // The wire's token key (and so the cookie's name). Default `nisc.token`.
+  // The wire's token key, which the session cookie is named by. Default `nisc.token`.
   tokenKey?: string;
   // How long the screen may take to settle before it is drawn as it stands.
   waitMs?: number;
@@ -135,9 +121,13 @@ export const renderDocument = async (config: DocumentConfig): Promise<DrawnDocum
   if (!template.includes(root)) return undrawn;
 
   try {
-    const token = tokenFromCookie(request.cookie, tokenKey);
-    // A token that no longer resolves is nobody: the page is drawn for nobody,
-    // and the dead copy is taken back so the next request does not carry it. A
+    // The session the browser holds (session-cookie.ts). A page request does
+    // not say how it arrived, so the name only this host can have set is read
+    // before the plain one.
+    const token = sessionTokenOf(request.cookie, { port: /:(\d+)$/.exec(request.host ?? '')?.[1] ?? '' }, tokenKey)?.token ?? null;
+    // A token that no longer resolves is nobody: the page is drawn for nobody.
+    // Nothing is written here — the upgrade is where a browser's cookie is set
+    // and taken back (socket.ts), and one writer cannot disagree with itself. A
     // verifier that THROWS is a fault, not a sign-out — the page goes out
     // undrawn and the socket, which asks again, is where it is settled.
     const principal = token === null ? null : await server.principalOf(token);
@@ -165,10 +155,7 @@ export const renderDocument = async (config: DocumentConfig): Promise<DrawnDocum
     return {
       html,
       ...(head !== undefined ? { head } : {}),
-      headers: {
-        ...documentHeaders(principal),
-        ...(token !== null && principal === null ? { 'set-cookie': `${encodeURIComponent(tokenKey)}=; Path=/; Max-Age=0; SameSite=Lax` } : {}),
-      },
+      headers: documentHeaders(principal),
       drawn: true,
       principal,
       ...(route !== undefined ? { page: route.name } : {}),

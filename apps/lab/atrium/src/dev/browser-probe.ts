@@ -24,6 +24,7 @@ import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { mintToken, userByUsername } from '@atrium/server/users';
 import { mountSite } from '@niscorp/moss/node';
+import { sessionCookies } from '@niscorp/moss';
 import { drawing } from '@atrium/server/document';
 import { check, integrations, report, server } from './world';
 
@@ -32,13 +33,14 @@ const dist = resolve(dirname(fileURLToPath(import.meta.url)), '../../dist');
 if (!existsSync(CHROME)) throw new Error(`browser-probe: no Chrome at ${CHROME} — set CHROME to a Chromium binary`);
 if (!existsSync(join(dist, 'index.html'))) throw new Error('browser-probe: no built terminal — run `pnpm --filter atrium build` first');
 
-// The probe's own way in: the token where the wire keeps it and in the cookie
-// copy, then on to the page — what the dev server's `/dev/as/<name>` does.
+// The probe's own way in: the session into the browser's own cookie, which no
+// script can read, then on to the page — what the dev server's
+// `/dev/as/<name>` does.
 server.get('/__as/:who', (c) => {
   const token = mintToken(c.req.param('who'));
-  const to = c.req.query('to') ?? '/';
   if (token === null) return c.text('no such person', 404);
-  return c.html(`<script>localStorage.setItem('nisc.token',${JSON.stringify(token)});document.cookie='nisc.token='+encodeURIComponent(${JSON.stringify(token)})+'; Path=/; SameSite=Lax';location.replace(${JSON.stringify(to)})</script>`);
+  for (const cookie of sessionCookies(c.req.raw, token)) c.header('set-cookie', cookie, { append: true });
+  return c.redirect(c.req.query('to') ?? '/');
 });
 mountSite(server, { dist, ...drawing });
 const httpServer = serve({ fetch: server.fetch, port: 0 });

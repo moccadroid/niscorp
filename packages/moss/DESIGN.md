@@ -138,8 +138,50 @@ The authority channel. Transport-blind: the protocol speaks through a
 four-function `Connection` seam (`send`/`close`/`onMessage`/`onClose`, and what
 the upgrade request offered), and the RFC 6455 plumbing lives with each
 runtime's entry (`ws` on Node in `./node`, Bun-native later). Who a terminal is
-is decided on that request, from a header — a subprotocol it offers beside
-`nisc` — and never from its address, which every proxy on the way logs. One connection per client carries every canvas — ten open
+is decided on that request, from its headers — a session cookie its browser
+sent, or a token it offers as a subprotocol beside `nisc` — and never from its
+address, which every proxy on the way logs.
+
+### Where a browser keeps its session
+
+A terminal served by the app it talks to does not hold its session. Its browser
+does, in a cookie no script can read, and sends it by itself with the two
+requests that need to know who is asking: the page, and the upgrade that opens
+the socket. A token in the page — in storage, in a cookie script can read — is
+there for anything else that runs in the page to take; one the page never has
+cannot be taken from it.
+
+- **The answer to the upgrade is where the cookie is written.** A cookie is set
+  by an HTTP response and by nothing else, and the upgrade is the one request
+  every terminal already makes. So who is asking is decided *before* the
+  request is answered, and the answer carries the cookie. A token the page
+  offers — one an earlier build left in storage, one it was just handed at
+  sign-in — is moved there, and the terminal lets go of it. Nobody, holding
+  nothing, is written nothing.
+- **Only for the app's own page.** A browser sends a cookie with any page's
+  request to this host, a stranger's included, and the socket is the whole
+  app. So the cookie is read and written only when the request's `Origin` is
+  the host it was addressed to (or one `runtime.origins` lists, behind a proxy
+  that rewrites `Host`). From anywhere else a terminal is who the token it
+  offers says, or nobody.
+- **No route answers to it.** The HTTP surfaces read `Authorization` and
+  nothing else, so no request another site can make a browser send does
+  anything as the person. A page request does read it — every site may link to
+  a page, and none can read the answer.
+- **Its name is the terminal's token key**, so several people can be signed in
+  on one origin, each in a seat. It ends with the port when the page is on
+  one: a browser keeps cookies by host, not by port, and two apps on localhost
+  would sign each other out. Over https it is `__Host-` prefixed and `Secure`,
+  which a browser lets nothing but this host set.
+- **What the page sees is a flag** (`<name>.held=1`), with no secret in it: how
+  a terminal knows to let go of a token it was holding, and that a page drawn
+  for somebody was drawn for it.
+- **Signing out says so.** moss revokes its own credential, and a cookie that
+  no longer resolves is taken back on the next upgrade. An app's own provider's
+  token may go on resolving, so a terminal that was signed out says it is
+  leaving, and the cookie is taken back whatever it holds.
+- **Any other terminal holds its own token** — a process, a page served from
+  somewhere else, a browser that refuses cookies — and offers it, as before. One connection per client carries every canvas — ten open
 canvases are ten canvas ids on one pipe.
 
 **Down:** `hello` (the resolved catalog on connect, and the protocol the server speaks — the terminal names its own on the upgrade), `catalog` (declared for
@@ -396,11 +438,11 @@ Six things had to be true, and each is a small, separate decision:
   `initializing`" is the shell saying its first screen is complete — a signal
   that was always there. The wait is bounded (300 ms by default): a document
   must not hang on a slow integration, and a skeleton is a legitimate screen.
-- **Who is asking comes off a cookie**, because a page request carries nothing
-  else. The wire keeps a copy of the session token there (`browserEnv`'s
-  `cookie`), and it is read for exactly one thing — choosing whose screen to
-  draw. Every other surface still wants the token itself, so the copy opens no
-  door: a cross-site request that carried it could draw a page it cannot read.
+- **Who is asking comes off the browser's session cookie**, because a page
+  request carries nothing else (*Where a browser keeps its session*). It is
+  read here and never written: the upgrade is where it is set and taken back,
+  and one writer cannot disagree with itself. A cross-site request that carried
+  it could draw a page it cannot read.
 - **An anonymous page and its socket are two shells that must name their
   instances alike.** A principal's page is drawn from their durable shell and
   the socket attaches to that same shell — same ids, nothing to arrange. Nobody
@@ -606,11 +648,10 @@ On the record, so nothing reads as finished that isn't:
   drawn for nobody (a file, on a static host) connects, and is served a page
   shell for as long as it stays — even when that page turns out not to be live
   for them either. Closing such a connection once its frames are sent is unbuilt.
-- **A stricter cookie.** The cookie is a copy of the token, readable by the
-  page's script like the token itself. An `HttpOnly` one — with the socket
-  reading it at the upgrade, the token out of the URL and out of script — needs
-  login to finish over HTTP (a socket message cannot set a cookie) and an Origin
-  check on the upgrade that does not exist today.
+- **A sign-in over the socket that hands the page nothing.** `session.grant`
+  still sends the terminal its token, which it offers on the next upgrade and
+  then lets go of — so for that one moment the page holds it. A sign-in the app
+  answers over HTTP does not have the moment at all (`sessionCookies`).
 
 ## Boundaries
 

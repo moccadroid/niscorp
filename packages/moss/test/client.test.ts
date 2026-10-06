@@ -564,6 +564,59 @@ describe('browserEnv — the browser host', () => {
     expect(e.tokens.load()).toBeNull();
     e.tokens.save('t');
     e.tokens.clear();
+    expect(e.tokens.held?.()).toBe(false);
+  });
+
+  // The session a browser keeps is in a cookie this page cannot read; the flag
+  // beside it is all the page sees, and it is named for the page's own port.
+  describe('what the page can see of a session its browser keeps', () => {
+    const d = globalThis as unknown as { document?: unknown };
+    let visible = '';
+    let written: string[] = [];
+    beforeEach(() => {
+      visible = '';
+      written = [];
+      d.document = {
+        get cookie(): string {
+          return visible;
+        },
+        set cookie(value: string) {
+          written.push(value);
+        },
+      };
+    });
+    afterEach(() => {
+      delete d.document;
+    });
+
+    it('`held` follows the flag for this key on this port, and no other', () => {
+      g.window = { localStorage: storage, location: { protocol: 'http:', host: 'localhost:5173', port: '5173' } };
+      const e = browserEnv();
+      expect(e.tokens.held?.()).toBe(false);
+      visible = 'theme=dark; nisc.token.3000.held=1; nisc.token.speaker.5173.held=1';
+      expect(e.tokens.held?.()).toBe(false);
+      expect(browserEnv({ tokenKey: 'nisc.token.speaker' }).tokens.held?.()).toBe(true);
+      visible = 'nisc.token.5173.held=1';
+      expect(e.tokens.held?.()).toBe(true);
+    });
+
+    it('a seat names itself; the default one does not', () => {
+      g.window = { localStorage: storage, location: { protocol: 'https:', host: 'app.example', port: '' } };
+      expect(browserEnv().tokens.key).toBeUndefined();
+      expect(browserEnv({ tokenKey: 'nisc.token.speaker' }).tokens.key).toBe('nisc.token.speaker');
+    });
+
+    it('writes the token to no cookie — `cookie: true` no longer keeps a copy script can read', () => {
+      g.window = { localStorage: storage, location: { protocol: 'https:', host: 'app.example', port: '' } };
+      const e = browserEnv({ cookie: true });
+      e.tokens.save('tok');
+      e.tokens.load();
+      expect(written).toEqual([]);
+      // letting go removes the copy an earlier build left, with what is stored
+      e.tokens.clear();
+      expect(storage.getItem('nisc.token')).toBeNull();
+      expect(written).toEqual(['nisc.token=; Path=/; Max-Age=0; SameSite=Lax; Secure']);
+    });
   });
 });
 
@@ -602,5 +655,106 @@ describe('the wire — protocol', () => {
     expect(wire.status()).toBe('incompatible');
     vi.advanceTimersByTime(120_000);
     expect(FakeSocket.instances).toHaveLength(1);
+  });
+});
+
+// A host whose browser may keep the session itself (a cookie the page cannot
+// read, written by the server's answer to the upgrade). `kept` stands for that
+// cookie here; `held` is all the wire ever asks of it.
+describe('the wire — on a host whose browser keeps the session', () => {
+  let kept = false;
+  const host = (key?: string): WireEnv => {
+    const plain = env();
+    return { ...plain, tokens: { ...plain.tokens, held: () => kept, ...(key !== undefined ? { key } : {}) } };
+  };
+  const hello = { type: 'hello', protocol: PROTOCOL, principal: 'usr_1', catalog: { actions: [], hash: 'h' } };
+  beforeEach(() => {
+    kept = false;
+  });
+
+  it('a token left in storage is offered once, and let go of when the browser holds the session', () => {
+    storage.setItem('nisc.token', 'tok-1');
+    createWire({ url: URL, env: host() });
+    expect(upgrade(FakeSocket.last()).token).toBe('tok-1');
+    kept = true; // the answer to that upgrade wrote the cookie
+    FakeSocket.last().open();
+    FakeSocket.last().emit(hello);
+    expect(storage.getItem('nisc.token')).toBeNull();
+    // and it is not offered again: the browser sends the cookie by itself
+    FakeSocket.last().serverClose(1006);
+    vi.advanceTimersByTime(60_000);
+    expect(FakeSocket.instances).toHaveLength(2);
+    expect(upgrade(FakeSocket.last()).token).toBeNull();
+  });
+
+  it('a token it is handed at sign-in is offered, and never stored', () => {
+    createWire({ url: URL, env: host() });
+    FakeSocket.last().open();
+    FakeSocket.last().emit({ type: 'session', token: 'granted-1' });
+    expect(upgrade(FakeSocket.last()).token).toBe('granted-1');
+    expect(storage.getItem('nisc.token')).toBeNull();
+    kept = true;
+    FakeSocket.last().open();
+    FakeSocket.last().emit(hello);
+    expect(storage.getItem('nisc.token')).toBeNull();
+    FakeSocket.last().serverClose(1006);
+    vi.advanceTimersByTime(60_000);
+    expect(upgrade(FakeSocket.last()).token).toBeNull();
+  });
+
+  it('…unless the browser does not keep it (another origin, cookies refused): then it is stored, as it always was', () => {
+    createWire({ url: URL, env: host() });
+    FakeSocket.last().open();
+    FakeSocket.last().emit({ type: 'session', token: 'granted-1' });
+    FakeSocket.last().open();
+    FakeSocket.last().emit(hello);
+    expect(storage.getItem('nisc.token')).toBe('granted-1');
+    FakeSocket.last().serverClose(1006);
+    vi.advanceTimersByTime(60_000);
+    expect(upgrade(FakeSocket.last()).token).toBe('granted-1');
+  });
+
+  // The browser may hold a token that still resolves (an app's own provider's
+  // is not moss's to revoke), so a terminal that was signed out says so — on
+  // every upgrade until the server has heard it.
+  it('signed out, it says it is leaving until an upgrade is answered', () => {
+    kept = true;
+    createWire({ url: URL, env: host() });
+    FakeSocket.last().open();
+    FakeSocket.last().emit(hello);
+    expect(FakeSocket.last().url).not.toContain('leave');
+    FakeSocket.last().serverClose(CLOSE_SIGNED_OUT);
+    expect(FakeSocket.last().url).toContain('leave=1');
+    FakeSocket.last().serverClose(1006); // dropped before it was answered
+    vi.advanceTimersByTime(60_000);
+    expect(FakeSocket.last().url).toContain('leave=1');
+    FakeSocket.last().open();
+    FakeSocket.last().emit({ ...hello, principal: null });
+    FakeSocket.last().serverClose(1006);
+    vi.advanceTimersByTime(60_000);
+    expect(FakeSocket.last().url).not.toContain('leave');
+  });
+
+  it('a token that was refused is dropped without leaving: whatever the browser holds still speaks', () => {
+    storage.setItem('nisc.token', 'stale');
+    createWire({ url: URL, env: host() });
+    FakeSocket.last().serverClose(CLOSE_INVALID_TOKEN);
+    expect(storage.getItem('nisc.token')).toBeNull();
+    expect(upgrade(FakeSocket.last()).token).toBeNull();
+    expect(FakeSocket.last().url).not.toContain('leave');
+  });
+
+  it('a seat names itself in the address, so the server reads that seat’s cookie', () => {
+    createWire({ url: URL, env: host('nisc.token.speaker') });
+    expect(new globalThis.URL(FakeSocket.last().url).searchParams.get('key')).toBe('nisc.token.speaker');
+    createWire({ url: URL, env: host() });
+    expect(FakeSocket.last().url).not.toContain('key=');
+  });
+
+  it('starts from a page drawn for somebody when the browser holds the session, though the page holds no token', () => {
+    const drawn = { frame: [{ type: 'text' as const, value: 'her home' }], trees: {}, principal: true };
+    expect(createWire({ url: URL, env: host(), initial: drawn }).snapshot().frame).toEqual([]);
+    kept = true;
+    expect(createWire({ url: URL, env: host(), initial: drawn }).snapshot().frame).toEqual(drawn.frame);
   });
 });

@@ -43,6 +43,7 @@ export type { Generation } from './generation';
 export type { IdentityRecord, IdentityReport, IdentityCache, IdentityCacheContext } from './identity';
 export type { ShellHost, ShellSession, ShellReport, ShellSnapshot, ShellOpening } from './shells';
 export { tokenFromCookie, embedSnapshot, documentHeaders, renderDocument, exportDocuments, SNAPSHOT_ELEMENT_ID } from './document';
+export { sessionCookies } from './session-cookie';
 export type { DocumentConfig, DrawnDocument, ExportedDocument } from './document';
 export { shellNeedOf } from './liveness';
 export type { ShellNeed } from './liveness';

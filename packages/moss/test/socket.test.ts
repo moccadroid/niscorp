@@ -9,12 +9,21 @@ import type { ShellHost, ShellSession } from '../src/shells';
 class FakeConnection implements Connection {
   sent: ServerMessage[] = [];
   closed?: { code?: number; reason?: string };
-  upgrade?: { offered: string[] };
+  upgrade?: NonNullable<Connection['upgrade']>;
+  // what the upgrade was answered with, when the transport left the answering to moss
+  answered?: readonly string[];
+  // the order things happened in: 'answer', then each frame's type
+  order: string[] = [];
   // the terminal behind this connection holds a token, and offered it on the upgrade
-  offering(token: string): this { this.upgrade = { offered: offerToken(token) }; return this; }
+  offering(token: string): this { this.upgrade = { ...this.upgrade, offered: offerToken(token) }; return this; }
+  // the upgrade came from a browser: where its page is, where it was addressed, the cookies it carried
+  from(page: { origin: string | null; host: string; cookie?: string }): this {
+    this.upgrade = { offered: offerToken(null), ...this.upgrade, origin: page.origin, host: page.host, cookie: page.cookie ?? null, answer: (cookies) => { this.answered = cookies; this.order.push('answer'); } };
+    return this;
+  }
   private onMsg?: (t: string) => void;
   private onCls?: () => void;
-  send(text: string): void { this.sent.push(JSON.parse(text) as ServerMessage); }
+  send(text: string): void { this.sent.push(JSON.parse(text) as ServerMessage); this.order.push((JSON.parse(text) as ServerMessage).type); }
   close(code?: number, reason?: string): void { this.closed = { code, reason }; this.onCls?.(); }
   onMessage(fn: (t: string) => void): void { this.onMsg = fn; }
   onClose(fn: () => void): void { this.onCls = fn; }
@@ -533,5 +542,144 @@ describe('socket — a refused session is one terminal, not the server', () => {
     const next = new FakeConnection();
     await accept(SOCKET, next);
     expect(next.first('hello')?.principal).toBeNull();
+  });
+});
+
+// A terminal served by the app it talks to does not hold its session: its
+// browser does, in a cookie the page cannot read, and sends it with the
+// upgrade. The answer to the upgrade is where that cookie is written.
+describe('socket — a browser on the app’s own page', () => {
+  const HERE = { origin: 'https://app.example.com', host: 'app.example.com' };
+
+  it('is who the cookie its browser sent says, and nothing new is written', async () => {
+    const conn = new FakeConnection().from({ ...HERE, cookie: 'theme=dark; __Host-nisc.token=good' });
+    await createSocket(ctxWith())(SOCKET, conn);
+    expect(conn.first('hello')?.principal).toBe('usr_1');
+    expect(conn.answered).toBeUndefined();
+  });
+
+  it.each([
+    ['another port on the same host', { origin: 'https://app.example.com:8443', host: 'app.example.com' }],
+    ['a sibling subdomain', { origin: 'https://evil.example.com', host: 'app.example.com' }],
+    ['another site', { origin: 'https://example.org', host: 'app.example.com' }],
+    ['an opaque origin', { origin: 'null', host: 'app.example.com' }],
+    ['a request that names no origin', { origin: null, host: 'app.example.com' }],
+  ])('the same cookie sent with a page from %s is nobody, and nothing is written', async (_label, page) => {
+    const session = vi.fn(() => 'usr_1');
+    const conn = new FakeConnection().from({ ...page, cookie: '__Host-nisc.token=good; nisc.token=good; __Host-nisc.token.8443=good' });
+    await createSocket(ctxWith({ session }))(SOCKET, conn);
+    expect(conn.first('hello')?.principal).toBeNull();
+    expect(session).not.toHaveBeenCalled();
+    expect(conn.answered).toBeUndefined();
+  });
+
+  it('a token the page offers is moved into the cookie by the answer — before anything is said', async () => {
+    const conn = new FakeConnection().from(HERE).offering('good');
+    await createSocket(ctxWith())(SOCKET, conn);
+    expect(conn.first('hello')?.principal).toBe('usr_1');
+    expect(conn.answered).toEqual(['__Host-nisc.token=good; HttpOnly; Path=/; SameSite=Lax; Secure', 'nisc.token.held=1; Path=/; SameSite=Lax; Secure']);
+    expect(conn.order[0]).toBe('answer');
+  });
+
+  // Over plain http on the default port, the script-readable copy an earlier
+  // build kept has the very name of this cookie. The browser sends it, the
+  // page offers the same token from storage — and the answer replaces the copy
+  // with one script cannot read.
+  it('a token the page offers is written even when the browser sent the same one', async () => {
+    const conn = new FakeConnection().from({ origin: 'http://intranet.example', host: 'intranet.example', cookie: 'nisc.token=good' }).offering('good');
+    await createSocket(ctxWith())(SOCKET, conn);
+    expect(conn.first('hello')?.principal).toBe('usr_1');
+    expect(conn.answered).toEqual(['nisc.token=good; HttpOnly; Path=/; SameSite=Lax', 'nisc.token.held=1; Path=/; SameSite=Lax']);
+  });
+
+  it('…and the browser is told to keep it for as long as it resolves, when the credential knows', async () => {
+    const conn = new FakeConnection().from(HERE).offering('good');
+    await createSocket(ctxWith({ sessionLastsMs: () => 90_500 }))(SOCKET, conn);
+    expect(conn.answered?.every((cookie) => cookie.endsWith('; Max-Age=90'))).toBe(true);
+  });
+
+  it('a token offered from another origin is who the terminal is, and no cookie is written', async () => {
+    const conn = new FakeConnection().from({ origin: 'https://console.example.org', host: 'app.example.com' }).offering('good');
+    await createSocket(ctxWith())(SOCKET, conn);
+    expect(conn.first('hello')?.principal).toBe('usr_1');
+    expect(conn.answered).toBeUndefined();
+  });
+
+  it('a cookie that no longer resolves is nobody — served, not refused — and is taken back', async () => {
+    const conn = new FakeConnection().from({ ...HERE, cookie: '__Host-nisc.token=stale' });
+    await createSocket(ctxWith())(SOCKET, conn);
+    expect(conn.first('hello')?.principal).toBeNull();
+    expect(conn.closed).toBeUndefined();
+    expect(conn.answered).toEqual(['__Host-nisc.token=; HttpOnly; Path=/; SameSite=Lax; Secure; Max-Age=0', 'nisc.token.held=; Path=/; SameSite=Lax; Secure; Max-Age=0']);
+  });
+
+  // A sign-out under an app's own provider leaves a token that still resolves
+  // in the browser; the terminal says it was signed out, and it is taken back.
+  it('a terminal that says it is leaving is nobody whatever its browser holds, and the cookie is taken back', async () => {
+    const session = vi.fn(() => 'usr_1');
+    const conn = new FakeConnection().from({ ...HERE, cookie: '__Host-nisc.token=good' });
+    await createSocket(ctxWith({ session }))(`${SOCKET}&leave=1`, conn);
+    expect(conn.first('hello')?.principal).toBeNull();
+    expect(session).not.toHaveBeenCalled();
+    expect(conn.answered?.[0]).toContain('Max-Age=0');
+  });
+
+  it('nobody, holding nothing: no cookie is written for them', async () => {
+    const conn = new FakeConnection().from(HERE);
+    await createSocket(ctxWith())(SOCKET, conn);
+    expect(conn.first('hello')?.principal).toBeNull();
+    expect(conn.answered).toBeUndefined();
+  });
+
+  it('each seat is a cookie of its own', async () => {
+    const seat = `${SOCKET}&key=nisc.token.speaker`;
+    const other = new FakeConnection().from({ ...HERE, cookie: '__Host-nisc.token=good' });
+    await createSocket(ctxWith())(seat, other);
+    expect(other.first('hello')?.principal).toBeNull();
+    const mine = new FakeConnection().from({ ...HERE, cookie: '__Host-nisc.token.speaker=good' });
+    await createSocket(ctxWith())(seat, mine);
+    expect(mine.first('hello')?.principal).toBe('usr_1');
+    const signingIn = new FakeConnection().from(HERE).offering('good');
+    await createSocket(ctxWith())(seat, signingIn);
+    expect(signingIn.answered?.map((cookie) => cookie.split('=')[0])).toEqual(['__Host-nisc.token.speaker', 'nisc.token.speaker.held']);
+  });
+
+  // A browser keeps cookies by host and not by port, so a page on a port names
+  // it — or two apps on localhost would sign each other out.
+  it('on a port, over plain http: the name ends with the port, and another app’s cookie is neither read nor touched', async () => {
+    const local = { origin: 'http://localhost:5173', host: 'localhost:5173' };
+    const signingIn = new FakeConnection().from(local).offering('good');
+    await createSocket(ctxWith())(SOCKET, signingIn);
+    expect(signingIn.answered).toEqual(['nisc.token.5173=good; HttpOnly; Path=/; SameSite=Lax', 'nisc.token.5173.held=1; Path=/; SameSite=Lax']);
+    const back = new FakeConnection().from({ ...local, cookie: 'nisc.token.5173=good' });
+    await createSocket(ctxWith())(SOCKET, back);
+    expect(back.first('hello')?.principal).toBe('usr_1');
+    const session = vi.fn(() => 'usr_1');
+    const others = new FakeConnection().from({ ...local, cookie: 'nisc.token.3000=good; nisc.token=good' });
+    await createSocket(ctxWith({ session }))(SOCKET, others);
+    expect(others.first('hello')?.principal).toBeNull();
+    expect(session).not.toHaveBeenCalled();
+    expect(others.answered).toBeUndefined();
+  });
+
+  it('behind a proxy that rewrites Host, the deployment lists where the app is served — and only there', async () => {
+    const proxied = { host: 'moss:8787', cookie: '__Host-nisc.token=good' };
+    const listed = new FakeConnection().from({ ...proxied, origin: 'https://app.example.com' });
+    await createSocket(ctxWith({ origins: ['https://app.example.com'] }))(SOCKET, listed);
+    expect(listed.first('hello')?.principal).toBe('usr_1');
+    const unlisted = new FakeConnection().from({ ...proxied, origin: 'https://evil.example.com' });
+    await createSocket(ctxWith({ origins: ['https://app.example.com'] }))(SOCKET, unlisted);
+    expect(unlisted.first('hello')?.principal).toBeNull();
+  });
+
+  it('a transport that had already answered the upgrade: the cookie is read, and nothing can be written', async () => {
+    const conn = new FakeConnection().from({ ...HERE, cookie: '__Host-nisc.token=good' });
+    delete conn.upgrade?.answer;
+    await createSocket(ctxWith())(SOCKET, conn);
+    expect(conn.first('hello')?.principal).toBe('usr_1');
+    const offering = new FakeConnection().from(HERE).offering('good');
+    delete offering.upgrade?.answer;
+    await createSocket(ctxWith())(SOCKET, offering);
+    expect(offering.first('hello')?.principal).toBe('usr_1');
   });
 });

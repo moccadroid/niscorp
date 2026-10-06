@@ -1,5 +1,6 @@
 import { describe, it, expect, afterAll, vi } from 'vitest';
 import { createServer as createHttp } from 'node:http';
+import { connect as connectTcp } from 'node:net';
 import type { Server } from 'node:http';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -144,12 +145,12 @@ describe('the ws transport', () => {
 describe('the ws transport — the upgrade says who is asking', () => {
   // the real protocol layer behind the real transport; what it was asked, and
   // every request line it was reached by (what an access log would hold)
-  const serving = async (): Promise<{ url: string; requestLines: string[]; asked: string[]; served: (string | null)[] }> => {
+  const serving = async (decidingTakesMs = 0): Promise<{ url: string; requestLines: string[]; asked: string[]; served: (string | null)[] }> => {
     const requestLines: string[] = [];
     const asked: string[] = [];
     const served: (string | null)[] = [];
     const accept = createSocket({
-      session: (token) => (asked.push(token), token === 'tok/with+symbols=' ? 'usr_1' : null),
+      session: async (token) => (asked.push(token), await new Promise((later) => setTimeout(later, decidingTakesMs)), token === 'tok/with+symbols=' ? 'usr_1' : null),
       catalog: (principal) => (served.push(principal), { ids: [], hash: 'h' }),
       revalidateMs: 0,
     });
@@ -194,5 +195,62 @@ describe('the ws transport — the upgrade says who is asking', () => {
       socket.once('error', (error) => resolve(error.message));
     });
     expect(await alone).toMatch(/no subprotocol/i);
+  });
+
+  // The answer to the upgrade is the one moment a browser's cookie can be
+  // written; what a real handshake carries back is the only proof it was.
+  it('a token offered from the app’s own page comes back as a cookie on the 101, and that cookie alone signs the next upgrade in', async () => {
+    const { url, served } = await serving();
+    const origin = url.replace('ws://', 'http://').replace('/socket', '');
+    const port = new URL(origin).port;
+    const answeredWith = (headers: Record<string, string>, offered: string[]): Promise<string[]> =>
+      new Promise((resolve, reject) => {
+        const socket = new WebSocket(`${url}?protocol=${PROTOCOL}`, offered, { headers });
+        socket.once('upgrade', (response) => resolve(response.headers['set-cookie'] ?? []));
+        socket.once('error', reject);
+        socket.once('open', () => socket.close());
+      });
+    const written = await answeredWith({ origin }, offerToken('tok/with+symbols='));
+    expect(written).toEqual([`nisc.token.${port}=tok%2Fwith%2Bsymbols%3D; HttpOnly; Path=/; SameSite=Lax`, `nisc.token.${port}.held=1; Path=/; SameSite=Lax`]);
+    // what a browser would send back: the pairs, and nothing offered
+    const nothingNew = await answeredWith({ origin, cookie: written.map((cookie) => cookie.split(';')[0]).join('; ') }, offerToken(null));
+    await vi.waitFor(() => expect(served).toEqual(['usr_1', 'usr_1']));
+    expect(nothingNew).toEqual([]);
+  });
+
+  // Until moss has decided, the request is not answered and the raw socket is
+  // nobody's to listen to: a peer that resets it then must be that request's
+  // alone, not an 'error' thrown out of Node.
+  it('a peer that is gone before it is answered takes nothing down, and leaves nothing attached', async () => {
+    const { url, asked, served } = await serving(80);
+    const { hostname, port } = new URL(url);
+    const peer = connectTcp(Number(port), hostname);
+    await new Promise<void>((connected) => peer.once('connect', () => connected()));
+    // it offers a token, so who it is takes the verifier's 80 ms to decide — and it is gone before that
+    peer.write(`GET /socket?protocol=${PROTOCOL} HTTP/1.1\r\nHost: ${hostname}:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Protocol: ${offerToken('tok/with+symbols=').join(', ')}\r\n\r\n`);
+    await vi.waitFor(() => expect(asked).toHaveLength(1));
+    peer.resetAndDestroy();
+    await new Promise((decided) => setTimeout(decided, 250));
+    expect(served).toEqual(['usr_1']); // decided after it had gone, and said to nobody
+    const next = await opened(`${url}?protocol=${PROTOCOL}`);
+    await vi.waitFor(() => expect(served).toEqual(['usr_1', null]));
+    next.close();
+  });
+
+  it('a request the library will not upgrade is refused by it, and the next terminal is served', async () => {
+    const { url, served } = await serving();
+    const { hostname, port } = new URL(url);
+    const answer = await new Promise<string>((resolve) => {
+      const peer = connectTcp(Number(port), hostname);
+      let heard = '';
+      peer.on('data', (chunk) => void (heard += String(chunk)));
+      peer.on('close', () => resolve(heard));
+      peer.on('error', () => resolve(heard));
+      peer.once('connect', () => peer.write(`GET /socket?protocol=${PROTOCOL} HTTP/1.1\r\nHost: ${hostname}:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: short\r\nSec-WebSocket-Version: 13\r\n\r\n`));
+    });
+    expect(answer).toMatch(/^HTTP\/1\.1 400/);
+    const next = await opened(`${url}?protocol=${PROTOCOL}`);
+    await vi.waitFor(() => expect(served).toContain(null));
+    next.close();
   });
 });

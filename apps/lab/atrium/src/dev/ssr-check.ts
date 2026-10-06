@@ -77,7 +77,7 @@ check('a terminal holding no token does not start from somebody’s page (it is 
 // ── 6. a dead cookie ──
 const dead = await renderPage({ server, template: TEMPLATE, path: '/', cookie: 'nisc.token=not-a-token' });
 check('a dead cookie is the lock screen', snapshotIn(dead.html).principal === false && snapshotIn(dead.html).seed !== undefined && !dead.html.includes('A word from the desk'));
-check('…and the cookie is taken back', /Max-Age=0/.test(dead.headers['set-cookie'] ?? ''));
+check('…and a page request writes no cookie: the upgrade is where one is set and taken back', dead.headers['set-cookie'] === undefined);
 
 // ── 7. the snapshot cannot break out of its element ──
 const hostile = embedSnapshot({ frame: [{ type: 'text', value: '</script><script>alert(1)</script>\u2028' }], trees: {}, settled: true, live: false, why: [], drawnWith: [] }, null);

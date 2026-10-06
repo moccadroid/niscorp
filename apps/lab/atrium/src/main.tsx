@@ -23,7 +23,7 @@ if (root === null) throw new Error('No root element');
 // there. `cookie` keeps a copy of the session token where a page request can
 // carry it — which is how the server knows whose screen to draw next time.
 const drawn = readDocumentSnapshot();
-const wire = createWire({ env: browserEnv({ cookie: true }), ...(drawn !== undefined ? { initial: drawn } : {}) });
+const wire = createWire({ env: browserEnv(), ...(drawn !== undefined ? { initial: drawn } : {}) });
 const terminal = mountTerminal({
   targets: {
     react: reactTarget({ root, registry: buildRegistry(), slotWrapper: atriumSlotWrapper }),

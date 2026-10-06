@@ -23,15 +23,14 @@ try {
   const url = new URL(window.location.href);
   const offered = url.searchParams.get('login');
   if (offered !== null && offered !== '') {
-    const answer = await fetch('/api/auth/redeem', {
+    // Nothing comes back to keep: the answer puts the session in the browser's
+    // own cookie, which this page cannot read, and the socket below is opened
+    // with it.
+    await fetch('/api/auth/redeem', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ nonce: offered }),
     });
-    if (answer.ok) {
-      const { token } = (await answer.json()) as { token?: string };
-      if (typeof token === 'string') window.localStorage.setItem('nisc.token', token);
-    }
     // Stripped whether or not it worked: a spent nonce is worth nothing, and a
     // refused one is worth less. Leaving it would re-POST on every reload.
     url.searchParams.delete('login');
@@ -56,7 +55,7 @@ const terminal = mountTerminal({
   },
   swapKey: 'ctrl+shift+y',
   resetKey: 'ctrl+shift+u',
-  wire: createWire({ env: browserEnv({ cookie: true }), ...(drawn !== undefined ? { initial: drawn } : {}) }),
+  wire: createWire({ env: browserEnv(), ...(drawn !== undefined ? { initial: drawn } : {}) }),
 });
 
 Object.assign(window, { swapTerminal: terminal.swap, resetShell: terminal.reset, backTerminal: terminal.back });

@@ -504,11 +504,13 @@ const page = await renderDocument({
 ```
 
 - **Which shell**: the page `server.page(path)` names, else the app's.
-- **For whom**: the principal behind the cookie named by the wire's token key
-  (`tokenKey`, default `nisc.token`), or nobody. A cookie that no longer
-  resolves is nobody, and the response takes it back (`Set-Cookie`, `Max-Age=0`).
-  A verifier that *throws* is a fault, not a sign-out: the page goes out
-  undrawn and the cookie stays.
+- **For whom**: the principal behind the browser's session cookie for the
+  wire's token key (`tokenKey`, default `nisc.token`), or nobody. The cookie's
+  name ends with the port a page is on, so `request.host` (the `Host` header)
+  is how a page on a port finds it; `mountSite` and the vite plugin pass it.
+  A cookie that no longer resolves is nobody. Nothing is written here — the
+  upgrade is where the cookie is set and taken back. A verifier that *throws*
+  is a fault, not a sign-out: the page goes out undrawn.
 - **`draw`** is a terminal that draws to a string — the app's kit bound to
   `renderSnapshot` from `terminal/react/server`, `terminal/vue/server` or
   `terminal/dom/server`. It may be async.
@@ -573,6 +575,28 @@ page. `embedSnapshot` writes the snapshot as a
 `<script type="application/json" id="nisc-snapshot">` element with every `<`
 (and U+2028/2029) escaped: a tree carries what people typed, and nothing in it
 can close the element or open another.
+
+#### `sessionCookies(page, token, options?)`
+
+The `Set-Cookie` values that keep `token` in the browser of the page at this
+origin — or, for `null`, take it back. For a sign-in the app answers over HTTP
+(a link redeemed, a provider's callback): set them on the response, and the
+page that follows is signed in having never held the token.
+
+```typescript
+server.get('/login', async (c) => {
+  const token = await mintSession(pool, principal, TTL_MS);
+  for (const cookie of sessionCookies(c.req.raw, token, { lastsMs: TTL_MS })) c.header('set-cookie', cookie, { append: true });
+  return c.redirect('/');
+});
+```
+
+`page` is the request (its `Origin`, else where it was addressed and the
+`X-Forwarded-Proto` it arrived with) or the page's origin as a string.
+`options.key` is the seat (the terminal's `tokenKey`; default `nisc.token`);
+`options.lastsMs` is how long the browser keeps it — left out, until the
+browser closes. A sign-in made over the socket (`session.grant`) needs none of
+this: the answer to the terminal's next upgrade writes the same cookie.
 
 #### `createPageRouter(pages): PageRouter`
 
@@ -863,6 +887,19 @@ measures the end.
   transport hands the offer over as `connection.upgrade.offered`
   (`Sec-WebSocket-Protocol`, split); one that leaves it out serves every
   terminal as nobody. `attachSocket` does it.
+- **A browser on the app's own page** is who its session cookie says
+  ([`sessionCookies`](#sessioncookiespage-token-options)). The cookie is read
+  only when the upgrade's `Origin` is the host it was addressed to, or one
+  `runtime.origins` lists. A token such a page offers is who it is and is
+  moved into the cookie by the answer to the upgrade; one that no longer
+  resolves is nobody (served, not refused) and is taken back. `?key=` names
+  which of the browser's sessions the terminal is — a seat; the cookie is named
+  by it. `?leave=1` is a terminal that was signed out: it is nobody whatever
+  its browser holds, and the cookie is taken back. A transport passes what the
+  request carried as `connection.upgrade` — `{ offered, origin, host, cookie }`
+  — and, when it has not answered the request yet, `answer(cookies)`: moss
+  calls it once who is asking is decided, with the `Set-Cookie` values to
+  answer with. A transport without `answer` reads cookies and writes none.
 - **Protocol version.** `PROTOCOL` is the wire protocol this server speaks and
   `PROTOCOL_MIN` the oldest it still serves. A terminal names its protocol on
   the upgrade (`?protocol=N`); one that names none speaks `1`, which is every
@@ -1018,8 +1055,8 @@ Requires the optional `vite` peer.
   - `options.app(load): Promise<DevApp>` — stand the app up. `load` is vite's
     `ssrLoadModule`. `DevApp = { server, close?, draw?, htmlAttributes?,
     site?, tokenKey?, signIn? }`; absent `draw`, pages go out undrawn.
-  - `signIn(who)` enables `/dev/as/<who>`: it stores the returned token (and
-    its cookie copy) and goes to `/`. `null` is nobody of that name.
+  - `signIn(who)` enables `/dev/as/<who>`: it puts the returned token in the
+    browser's session cookie and goes to `/`. `null` is nobody of that name.
   - `watch?: RegExp` (default: `src/app`, `src/server`, `src/db`, `src/ui` and
     the nisc config), `index?` (default `index.html`), `owned?` (default
     `MOSS_PATHS`), `label?` (default `moss`).
@@ -1031,21 +1068,25 @@ Requires the optional `vite` peer.
   host-shaped comes in as a `WireEnv`. `delta` (default `false`) advertises
   that this terminal can rebuild frame deltas; the snapshot it produces is
   identical either way. See [Wire size](#wire-size).
-- `WireEnv` — the host seam: `{ tokens: { load, save, clear },
+- `WireEnv` — the host seam: `{ tokens: { load, save, clear, held?, key? },
   socket({ url, offered }), defaultUrl() }`. The socket API is WHATWG-standard
   in every host (browser, Node ≥22, Bun); an env only constructs it —
   `new WebSocket(url, offered)`. What is offered is who the terminal is, so an
-  env that drops it connects as nobody.
-- `browserEnv({ tokenKey?, cookie? }?): WireEnv` — the default host: token in
-  localStorage (`nisc.token`), url derived from `window.location`, the
-  page's WebSocket. `cookie: true` keeps a **copy** of the token in a cookie of
-  the same name (`Path=/; SameSite=Lax`, `Secure` on https), written and
-  cleared with the stored one and levelled with it on every load — so a token
-  put in localStorage by something else (a sign-in handoff page) reaches the
-  cookie on the first load after it. A page request carries cookies and nothing
-  else; this is what lets a server draw the page for whoever is asking. The
-  cookie is only ever read to draw a page — every other surface still wants the
-  token itself — so it adds no way in.
+  env that drops it connects as nobody. `held()` is for a host whose browser
+  may keep the session itself: asked after an upgrade is answered, `true`
+  makes the wire let go of the token it offered, `false` makes it store it. A
+  host without `held` stores a token as soon as it is handed one. `key` names
+  the terminal's seat in the socket's address.
+- `browserEnv({ tokenKey?, cookie? }?): WireEnv` — the default host: url
+  derived from `window.location`, the page's WebSocket, and the session
+  wherever the page can have it kept. Served by the app it talks to, the page
+  does not keep it: the browser does, in a cookie the page cannot read, and
+  `held` reads the flag beside it. Anywhere else — another origin, a browser
+  that refuses cookies — the token is in localStorage under `tokenKey`
+  (default `nisc.token`). `tokenKey` is also the seat, and the cookie's name.
+  `cookie` is accepted and does nothing: it kept a script-readable copy of the
+  token for the server to draw the page from, and the page is now drawn from
+  the browser's own cookie.
 - `readDocumentSnapshot(doc?): DocumentSnapshot | undefined` — the snapshot a
   server-drawn page carries (`{ frame, trees, principal, seed?, path?, live? }`),
   or `undefined` for a page that carries none. Never throws. `principal` is a
@@ -1103,7 +1144,7 @@ outage ago.
 
 ```typescript
 import { createWire } from '@niscorp/moss/client';
-const wire = createWire();                 // browser host; token from localStorage
+const wire = createWire();                 // browser host; the session is the browser's to keep
 wire.subscribe(() => render(wire.snapshot()));
 wire.dispatch('main', { type: 'ui:click', ref: 'save' });
 ```

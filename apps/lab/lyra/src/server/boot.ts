@@ -1,4 +1,4 @@
-import { createServer, createTideDriver, mintDevToken } from '@niscorp/moss';
+import { createServer, createTideDriver, mintDevToken, sessionCookies } from '@niscorp/moss';
 import { redeemLink } from './links';
 import { unsubscribe } from './unsubscribe';
 import { readMailEvent } from './mail/send';
@@ -153,7 +153,10 @@ export const boot = async (): Promise<{ server: MossServer; runtime: DevRuntime;
     // three it was is not the caller's business, and answering differently
     // would make this a place to test nonces against.
     if (personId === null) return c.json({ message: 'That sign-in link has expired or has already been used.' }, 401);
-    return c.json({ token: mintDevToken(personId) });
+    // The session goes into the browser's own cookie, which no script can read
+    // — set by this answer. The page that asked is handed nothing.
+    for (const cookie of sessionCookies(c.req.raw, mintDevToken(personId))) c.header('set-cookie', cookie, { append: true });
+    return c.body(null, 204);
   });
   built = server;
 

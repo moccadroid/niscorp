@@ -40,9 +40,17 @@ const main = async (): Promise<void> => {
   const address = httpServer.address();
   if (address === null || typeof address === 'string') throw new Error('no port');
   const http = `http://127.0.0.1:${address.port}`;
-  const get = async (path: string): Promise<{ status: number; text: string }> => {
-    const res = await fetch(`${http}${path}`);
-    return { status: res.status, text: await res.text() };
+  type Answer = { status: number; text: string; location: string | null; cookies: string[] };
+  const get = async (path: string): Promise<Answer> => {
+    const res = await fetch(`${http}${path}`, { redirect: 'manual' });
+    return { status: res.status, text: await res.text(), location: res.headers.get('location'), cookies: res.headers.getSetCookie() };
+  };
+  // The session a sign-in answer put in a seat: in that seat's cookie, which no
+  // script can read, on the way to the seat — and nowhere in what the page was sent.
+  const seated = (answer: Answer, seat: string): string | undefined => {
+    const cookie = answer.cookies.find((line) => line.startsWith(`nisc.token.${seat}.${new URL(http).port}=`));
+    if (cookie === undefined || !cookie.includes('; HttpOnly') || answer.location !== `/?seat=${seat}` || answer.text.includes('st_')) return undefined;
+    return decodeURIComponent(cookie.slice(cookie.indexOf('=') + 1, cookie.indexOf(';')));
   };
 
   // ── the terminal: files, and the one page for everything else ──
@@ -66,8 +74,8 @@ const main = async (): Promise<void> => {
 
   const token = await mint('speaker', 60_000);
   const first = await get(`/login?token=${token}`);
-  const session = /"(st_[^"]+)"/.exec(first.text)?.[1];
-  check('the link signs the device in, into the speaker\'s own seat', session !== undefined && first.text.includes('nisc.token.speaker') && first.text.includes('/?seat=speaker'));
+  const session = seated(first, 'speaker');
+  check('the link signs the device in, into the speaker\'s own seat — a cookie no script can read, and nothing handed to the page', session !== undefined);
   check('the link is used up on the first click', (await get(`/login?token=${token}`)).text.includes('used or has expired'));
   const stored = await runtime.db.query<{ n: number }>('SELECT count(*)::int AS n FROM login_links');
   check('nothing of it is left in the database', stored.rows[0]?.n === 0);
@@ -82,9 +90,9 @@ const main = async (): Promise<void> => {
 
   // ── the speaker asks by email, at a desk only /speaker opens ──
   const deskPage = await get('/speaker');
-  const deskSession = /"(st_[^"]+)"/.exec(deskPage.text)?.[1];
-  check('/speaker hands the device a session of its own, in the desk\'s seat', deskSession !== undefined && deskPage.text.includes('nisc.token.lectern') && deskPage.text.includes('/?seat=lectern'));
-  const otherDesk = /"(st_[^"]+)"/.exec((await get('/speaker')).text)?.[1];
+  const deskSession = seated(deskPage, 'lectern');
+  check('/speaker hands the device a session of its own, in the desk\'s seat', deskSession !== undefined);
+  const otherDesk = seated(await get('/speaker'), 'lectern');
   const desk = await connect(`ws://127.0.0.1:${address.port}`, deskSession);
   const deskHello = await desk.hello();
   const otherHello = await (await connect(`ws://127.0.0.1:${address.port}`, otherDesk)).hello();
@@ -111,13 +119,13 @@ const main = async (): Promise<void> => {
   check('the speaker\'s address, in any case, is mailed one link to the public address', desk.showsNow('main', 'on its way') && outbox.length === 1 && mailed?.to === 'speaker@lyceum.test' && (mailed?.text.includes('https://lyceum.test/login?token=') ?? false));
   desk.close();
   const redeemedMail = await get(`/login?token=${mailedToken ?? ''}`);
-  check('the mailed link signs the device in as the speaker', redeemedMail.text.includes('nisc.token.speaker') && redeemedMail.text.includes('/?seat=speaker'));
+  check('the mailed link signs the device in as the speaker', seated(redeemedMail, 'speaker') !== undefined);
   check('the mailed link works once', (await get(`/login?token=${mailedToken ?? ''}`)).text.includes('used or has expired'));
 
   // ── the stage: no secret, and nothing it could do with one ──
   const stagePage = await get('/stage');
-  const stageSession = /"(st_[^"]+)"/.exec(stagePage.text)?.[1];
-  check('/stage signs the device in as the stage, into its own seat', stageSession !== undefined && stagePage.text.includes('nisc.token.stage') && stagePage.text.includes('/?seat=stage'));
+  const stageSession = seated(stagePage, 'stage');
+  check('/stage signs the device in as the stage, into its own seat', stageSession !== undefined);
   const stage = await connect(`ws://127.0.0.1:${address.port}`, stageSession);
   const stageHello = await stage.hello();
   check('the stage session is the stage, without the controller', stageHello.principal === 'stage' && !stageHello.catalog.actions.some((id) => id.startsWith('speaker.')));

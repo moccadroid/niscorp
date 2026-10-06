@@ -3,7 +3,7 @@
 import { defineConfig, type Plugin, type ViteDevServer } from 'vite';
 import { getRequestListener } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
-import { mintSession } from '@niscorp/moss';
+import { mintSession, sessionCookies } from '@niscorp/moss';
 import type { Connection } from '@niscorp/moss';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -156,9 +156,13 @@ const appServer = (): Plugin => ({
           }
           const token = await mintSession(booted.runtime.pool, who, SESSION_TTL_MS);
           // Into the principal's own SEAT (src/main.ts), so the stage, the
-          // speaker and any number of members can share one browser.
-          res.setHeader('content-type', 'text/html');
-          res.end(`<script>localStorage.setItem(${JSON.stringify(`nisc.token.${who}`)},${JSON.stringify(token)});location.replace(${JSON.stringify(`/?seat=${who}`)})</script>`);
+          // speaker and any number of members can share one browser — as the
+          // real sign-ins do it (src/server/login.ts): the seat's cookie, set
+          // by this answer.
+          res.statusCode = 302;
+          res.setHeader('set-cookie', sessionCookies(`http://${req.headers.host ?? 'localhost'}`, token, { key: `nisc.token.${who}`, lastsMs: SESSION_TTL_MS }));
+          res.setHeader('location', `/?seat=${who}`);
+          res.end();
         })
         .catch(() => {
           res.statusCode = 500;

@@ -2,6 +2,7 @@ import { defineConfig, type Plugin, type ViteDevServer } from 'vite';
 import react from '@vitejs/plugin-react';
 import { getRequestListener } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
+import { sessionCookies } from '@niscorp/moss';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { readFile } from 'node:fs/promises';
@@ -110,15 +111,17 @@ const appServer = (): Plugin => ({
         .then(async () => {
           const users = (await viteServer.ssrLoadModule('/src/server/users.ts')) as { mintToken: (u: string) => string | null };
           const token = users.mintToken(who);
-          res.setHeader('content-type', 'text/html');
-          // The token goes where the wire keeps it AND into the cookie copy the
-          // page is drawn by (src/server/document.ts) — so the redirect below
-          // already arrives as this person, not as nobody.
-          res.end(
-            token === null
-              ? `<p>no such person: ${who}</p>`
-              : `<script>localStorage.setItem('nisc.token',${JSON.stringify(token)});document.cookie='nisc.token='+encodeURIComponent(${JSON.stringify(token)})+'; Path=/; SameSite=Lax';location.replace('/')</script>`,
-          );
+          if (token === null) {
+            res.setHeader('content-type', 'text/html');
+            res.end(`<p>no such person: ${who}</p>`);
+            return;
+          }
+          // Into the browser's own cookie, which no script can read — set by
+          // this answer, so the redirect already arrives as this person.
+          res.statusCode = 302;
+          res.setHeader('set-cookie', sessionCookies(`http://${req.headers.host ?? 'localhost'}`, token));
+          res.setHeader('location', '/');
+          res.end();
         })
         .catch(() => {
           res.statusCode = 500;
@@ -150,9 +153,9 @@ const appServer = (): Plugin => ({
           }
           const template = await viteServer.transformIndexHtml(req.url ?? '/', await readFile(resolve(here, 'index.html'), 'utf8'));
           const mod = (await viteServer.ssrLoadModule('/src/server/document.ts')) as {
-            renderPage: (config: { server: BootedServer; template: string; path: string; cookie: string | null }) => Promise<{ html: string; headers: Record<string, string> }>;
+            renderPage: (config: { server: BootedServer; template: string; path: string; cookie: string | null; host: string | null }) => Promise<{ html: string; headers: Record<string, string> }>;
           };
-          const page = await mod.renderPage({ server, template, path: path === '/index.html' ? '/' : path, cookie: req.headers.cookie ?? null });
+          const page = await mod.renderPage({ server, template, path: path === '/index.html' ? '/' : path, cookie: req.headers.cookie ?? null, host: req.headers.host ?? null });
           res.statusCode = 200;
           res.setHeader('content-type', 'text/html; charset=utf-8');
           for (const [name, value] of Object.entries(page.headers)) res.setHeader(name, value);

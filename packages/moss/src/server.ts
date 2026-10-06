@@ -16,7 +16,7 @@ import type { VerifyReport } from '@niscorp/charter';
 import { auditClosure } from './closure';
 import type { NiscApp } from './app';
 import type { NiscRuntime } from './runtime';
-import { sessionVerifierOf } from './sessions';
+import { sessionRemainingMs, sessionVerifierOf } from './sessions';
 import { createDataLayer } from './data';
 import { tableSequencesOf } from './migrate';
 import { mintWrites } from './tide';
@@ -1523,6 +1523,8 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     page: pageAt,
     ...(runtime.sessionRevalidateMs !== undefined ? { revalidateMs: runtime.sessionRevalidateMs } : {}),
     ...(runtime.telemetry !== undefined ? { telemetry: runtime.telemetry } : {}),
+    ...(runtime.origins !== undefined ? { origins: runtime.origins } : {}),
+    ...(runtime.session === 'sessions' ? { sessionLastsMs: (token: string) => sessionRemainingMs(runtime.pool, token) } : {}),
   });
 
   return Object.assign(server, {

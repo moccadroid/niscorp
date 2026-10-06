@@ -40,12 +40,16 @@ try {
   check('…kept apart on the cookie', page.headers.get('vary') === 'Cookie');
 
   // ── 2. the dev sign-in ──
-  const handoff = await (await fetch(`${base}/dev/as/amara`)).text();
-  const token = /localStorage\.setItem\('nisc\.token',"([^"]+)"\)/.exec(handoff)?.[1];
-  check('the dev sign-in hands the token to the wire and to the cookie', token !== undefined && handoff.includes("document.cookie='nisc.token='"));
+  const handoff = await fetch(`${base}/dev/as/amara`, { redirect: 'manual' });
+  // what a browser would send back: the pairs the answer set
+  const hersCookie = handoff.headers.getSetCookie().map((line) => line.split(';')[0]).join('; ');
+  check(
+    'the dev sign-in puts the session in the browser’s own cookie, which no script can read, and hands the page nothing',
+    handoff.status === 302 && handoff.headers.getSetCookie().some((line) => line.startsWith(`nisc.token.${new URL(base).port}=`) && line.includes('; HttpOnly')) && (await handoff.text()) === '',
+  );
 
   // ── 3. somebody asking, through vite ──
-  const hers = await fetch(`${base}/`, { headers: { cookie: `nisc.token=${encodeURIComponent(token ?? '')}` } });
+  const hers = await fetch(`${base}/`, { headers: { cookie: hersCookie } });
   const herHtml = await hers.text();
   check('`/` with that cookie is her screen', herHtml.includes('A word from the desk') && !html.includes('A word from the desk'));
   check('…which nothing may keep', hers.headers.get('cache-control') === 'private, no-store');
@@ -60,7 +64,7 @@ try {
   const about = await fetch(`${base}/about`);
   const aboutHtml = await about.text();
   check('`/about` in dev is drawn by its page, and is still a vite page', aboutHtml.includes('A guest-and-staff platform for hotels') && aboutHtml.includes('/@vite/client') && aboutHtml.includes('"live":false'));
-  const hersAbout = await (await fetch(`${base}/about`, { headers: { cookie: `nisc.token=${encodeURIComponent(token ?? '')}` } })).text();
+  const hersAbout = await (await fetch(`${base}/about`, { headers: { cookie: hersCookie } })).text();
   check('…with her cookie it names her, and without it names nobody', hersAbout.includes('Signed in as') && !aboutHtml.includes('Signed in as'));
   const asset = await fetch(`${base}/src/ui/css/theme.css`);
   check('a path that is nobody’s page is still vite’s to answer', asset.ok && !(await asset.text()).includes('nisc-snapshot'));

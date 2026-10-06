@@ -152,12 +152,37 @@ describe('renderDocument', () => {
     expect(server.shells?.list()).toEqual([]);
   });
 
-  it('a dead cookie is nobody, and is taken back', async () => {
+  // The upgrade is where a browser's cookie is written and taken back; a page
+  // request only reads it.
+  it('a dead cookie is nobody, and nothing is written here', async () => {
     const page = await renderDocument({ server: serverOf(), template: TEMPLATE, request: { path: '/docs/intro', cookie: 'nisc.token=stale' }, draw });
     expect(page.principal).toBeNull();
     expect(page.html).not.toContain('Max');
-    expect(page.headers['set-cookie']).toContain('Max-Age=0');
+    expect(page.headers['set-cookie']).toBeUndefined();
     expect(page.headers['cache-control']).toBe('no-cache');
+  });
+
+  // A page request does not say whether it arrived over https. The name only
+  // this host can have set is read first — wherever a plain one sits in the
+  // header, which a sibling subdomain can put there.
+  it.each([
+    ['listed first', 'nisc.token=planted; __Host-nisc.token=good'],
+    ['listed after', '__Host-nisc.token=good; nisc.token=planted'],
+  ])('a plain-named cookie %s does not decide who the page is drawn for', async (_label, cookie) => {
+    const page = await renderDocument({ server: serverOf(), template: TEMPLATE, request: { path: '/docs/intro', cookie }, draw });
+    expect(page.principal).toBe('usr_max');
+  });
+
+  it('a page on a port is drawn for the session kept for that port, and for no other app’s on the same host', async () => {
+    const request = { path: '/docs/intro', cookie: 'nisc.token.5173=good; nisc.token.3000=other; nisc.token=another' };
+    expect((await renderDocument({ server: serverOf(), template: TEMPLATE, request: { ...request, host: 'localhost:5173' }, draw })).principal).toBe('usr_max');
+    expect((await renderDocument({ server: serverOf(), template: TEMPLATE, request: { ...request, host: 'localhost:8080' }, draw })).principal).toBeNull();
+  });
+
+  it('a seat’s page is drawn from that seat’s cookie', async () => {
+    const page = await renderDocument({ server: serverOf(), template: TEMPLATE, request: { path: '/docs/intro', cookie: '__Host-nisc.token.speaker=good' }, tokenKey: 'nisc.token.speaker', draw });
+    expect(page.principal).toBe('usr_max');
+    expect((await renderDocument({ server: serverOf(), template: TEMPLATE, request: { path: '/docs/intro', cookie: '__Host-nisc.token.speaker=good' }, draw })).principal).toBeNull();
   });
 
   it('what the kit would have put on <html> is in the markup, escaped', async () => {

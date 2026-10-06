@@ -86,6 +86,14 @@ export const sessionOf = async (pool: PgPool, token: string): Promise<string | n
   return typeof principal === 'string' ? principal : null;
 };
 
+// How much longer a session resolves — how long a browser is told to keep the
+// cookie that carries it.
+export const sessionRemainingMs = async (pool: PgPool, token: string): Promise<number | null> => {
+  const res = await pool.query('SELECT extract(epoch from expires_at - now()) * 1000 AS remaining FROM sessions WHERE token_hash = $1 AND expires_at > now()', [hashSessionToken(token)]);
+  const remaining = Number(res.rows[0]?.['remaining']);
+  return res.rows.length > 0 && Number.isFinite(remaining) ? remaining : null;
+};
+
 export const revokeSession = async (pool: PgPool, token: string): Promise<void> => {
   await pool.query('DELETE FROM sessions WHERE token_hash = $1', [hashSessionToken(token)]);
 };

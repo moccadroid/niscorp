@@ -83,7 +83,7 @@ server.get('*', async (c) => {
 ```typescript
 // the browser's entry
 const drawn = readDocumentSnapshot();
-createWire({ env: browserEnv({ cookie: true }), ...(drawn ? { initial: drawn } : {}) });
+createWire({ env: browserEnv(), ...(drawn ? { initial: drawn } : {}) });
 ```
 
 Who may keep the page follows from who asked: drawn for nobody it is the same

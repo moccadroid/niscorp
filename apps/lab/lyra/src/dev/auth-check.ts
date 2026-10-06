@@ -26,8 +26,9 @@ const redeem = async (nonce: string): Promise<{ status: number; token: string }>
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ nonce }),
   });
-  const body = (await response.json().catch(() => ({}))) as { token?: string };
-  return { status: response.status, token: String(body.token ?? '') };
+  // the session is in the cookie the answer sets, which no script can read; the page is handed nothing
+  const cookie = response.headers.getSetCookie().find((line) => line.startsWith('nisc.token=') && line.includes('; HttpOnly'));
+  return { status: response.status, token: (await response.text()) === '' && cookie !== undefined ? decodeURIComponent(cookie.slice(cookie.indexOf('=') + 1, cookie.indexOf(';'))) : '' };
 };
 
 // ── asking for one ───────────────────────────────────────────
@@ -66,7 +67,7 @@ ok('the address resolves to somebody', person !== undefined, LENA);
 
 const nonce = await mintLink(server.executeAs, person ?? '', now);
 const first = await redeem(nonce);
-ok('a fresh link is traded for a session', first.status === 200 && first.token !== '', `${first.status}`);
+ok('a fresh link is traded for a session', first.status === 204 && first.token !== '', `${first.status}`);
 
 const second = await redeem(nonce);
 ok('...and spending it again is refused', second.status === 401, `${second.status} — DELETE ... RETURNING, so reading it and using it up are one statement`);

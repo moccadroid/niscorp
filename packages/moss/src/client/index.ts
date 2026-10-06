@@ -2,6 +2,7 @@ import type { NovaEvent, RenderNode } from '@niscorp/nova';
 import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SIGNED_OUT, PROTOCOL, PROTOCOL_MIN, offerToken } from '../socket';
 import { applyDelta, frameHash } from '../delta';
 import type { DeltaOp } from '../delta';
+import { heldCookieName } from '../session-cookie';
 
 // ═══════════════════════════════════════════════════════════════
 // The wire — moss's protocol client, the other end of ../socket. Plain
@@ -25,6 +26,15 @@ export type WireTokenStore = {
   load: () => string | null;
   save: (token: string) => void;
   clear: () => void;
+  // A host whose BROWSER may keep the session itself, in a cookie the page
+  // cannot read (../session-cookie.ts): whether it does, right now. Asked
+  // after an upgrade is answered — if it does, the wire lets go of the token
+  // it offered and nothing is stored; if not, the token is stored as ever. A
+  // host without this (a process) always keeps its own.
+  held?: () => boolean;
+  // Which of the browser's sessions this terminal is, when not the default one
+  // — a seat. Named in the socket's address; it is the cookie's name.
+  key?: string;
 };
 
 // The host seam: what the wire would otherwise take from globals.
@@ -165,39 +175,29 @@ type ClientMessage =
 
 const EMPTY: WireSnapshot = { frame: [], trees: new Map() };
 
-// The browser host: token in localStorage, url derived from location, the
-// page's WebSocket. The try/catches keep a storage-less context (private
-// mode, sandboxed iframe) alive — the session just lives for this page only.
+// The browser host: url derived from location, the page's WebSocket, and the
+// session wherever this page can have it kept.
 //
-// `cookie: true` keeps a COPY of the token in a cookie of the same name, written
-// and cleared with the stored one. A page request carries cookies and nothing
-// else, so this is what lets a server render the document for whoever is asking.
-// The cookie is only ever read to render a page: every other surface still wants
-// the token itself (offered with the socket, a Bearer header), so it adds no way in.
+// SERVED BY THE APP IT TALKS TO, the page does not keep it: the browser does,
+// in a cookie the page cannot read, which the server writes in its answer to
+// the upgrade (../session-cookie.ts). `held` is all the page sees of it. A
+// token this page is handed is offered once and let go of; nothing is stored.
+//
+// ANYWHERE ELSE — another origin, a browser that refuses cookies — the token
+// is in localStorage, as it always was. The try/catches keep a storage-less
+// context (private mode, sandboxed iframe) alive: the session then lives for
+// this page only.
+//
+// `cookie` did one thing — keep a script-readable copy of the token for the
+// server to draw the page from — and is no longer needed: the page is drawn
+// from the browser's own cookie. It is accepted and does nothing.
 export const browserEnv = (config: { tokenKey?: string; cookie?: boolean } = {}): WireEnv => {
   const tokenKey = config.tokenKey ?? 'nisc.token';
-  const mirror = (token: string | null): void => {
-    if (config.cookie !== true) return;
-    try {
-      const secure = window.location.protocol === 'https:' ? '; Secure' : '';
-      document.cookie =
-        token === null
-          ? `${encodeURIComponent(tokenKey)}=; Path=/; Max-Age=0; SameSite=Lax${secure}`
-          : `${encodeURIComponent(tokenKey)}=${encodeURIComponent(token)}; Path=/; SameSite=Lax${secure}`;
-    } catch {
-      /* no document, or cookies refused — the page is simply rendered for nobody */
-    }
-  };
   return {
     tokens: {
       load: () => {
         try {
-          const token = window.localStorage.getItem(tokenKey);
-          // Level the copy with the stored one — a token put there by something
-          // other than this wire (a sign-in handoff page) reaches the cookie on
-          // the first load after it, and a token that is gone takes its copy along.
-          mirror(token);
-          return token;
+          return window.localStorage.getItem(tokenKey);
         } catch {
           return null;
         }
@@ -208,7 +208,6 @@ export const browserEnv = (config: { tokenKey?: string; cookie?: boolean } = {})
         } catch {
           /* storage unavailable — the session lives for this page only */
         }
-        mirror(token);
       },
       clear: () => {
         try {
@@ -216,8 +215,21 @@ export const browserEnv = (config: { tokenKey?: string; cookie?: boolean } = {})
         } catch {
           /* nothing stored, nothing to clear */
         }
-        mirror(null);
+        // the copy an earlier build kept beside it, where script could read it
+        try {
+          document.cookie = `${encodeURIComponent(tokenKey)}=; Path=/; Max-Age=0; SameSite=Lax${window.location.protocol === 'https:' ? '; Secure' : ''}`;
+        } catch {
+          /* no document, or cookies refused */
+        }
       },
+      held: () => {
+        try {
+          return document.cookie.split('; ').includes(`${heldCookieName(tokenKey, window.location.port)}=1`);
+        } catch {
+          return false;
+        }
+      },
+      ...(config.tokenKey !== undefined ? { key: tokenKey } : {}),
     },
     socket: ({ url, offered }) => new WebSocket(url, offered),
     defaultUrl: () => {
@@ -232,9 +244,9 @@ export const createWire = (config: WireConfig = {}): Wire => {
 
   let token = env.tokens.load();
   // The page's own snapshot, when it was rendered for who this terminal is —
-  // signed in and holding a token, or neither. Anything else is somebody else's
-  // screen and is not started from.
-  const initial = config.initial !== undefined && config.initial.principal === (token !== null) ? config.initial : undefined;
+  // signed in (holding a token, or its browser a session), or neither.
+  // Anything else is somebody else's screen and is not started from.
+  const initial = config.initial !== undefined && config.initial.principal === (token !== null || env.tokens.held?.() === true) ? config.initial : undefined;
   let snapshot: WireSnapshot = initial === undefined ? EMPTY : { frame: initial.frame, trees: new Map(Object.entries(initial.trees)) };
   // Named on the FIRST connect only: it belongs to the page's own shell, and a
   // later connect (a retry, another principal) is not that shell.
@@ -243,6 +255,9 @@ export const createWire = (config: WireConfig = {}): Wire => {
   let status: WireStatus = 'connecting';
   // Set by a protocol mismatch in either direction; ends the reconnect loop.
   let incompatible = false;
+  // Signed out, and not yet heard by the server: the next upgrade says so,
+  // because what the browser holds may be a token that still resolves.
+  let leaving = false;
   let socket: WebSocket | null = null;
   let retry: ReturnType<typeof setTimeout> | undefined;
   // Consecutive failed connects — resets to 0 the moment one opens. Drives the
@@ -287,6 +302,8 @@ export const createWire = (config: WireConfig = {}): Wire => {
     // The address says nothing about who this is — it is what every proxy on
     // the way writes down. The token is offered with the socket, below.
     const params: string[] = [`protocol=${PROTOCOL}`];
+    if (env.tokens.key !== undefined) params.push(`key=${encodeURIComponent(env.tokens.key)}`);
+    if (leaving) params.push('leave=1');
     if (config.delta === true) params.push('delta=1');
     if (seed !== undefined) params.push(`seed=${encodeURIComponent(seed)}`);
     seed = undefined;
@@ -359,8 +376,20 @@ export const createWire = (config: WireConfig = {}): Wire => {
         console.error(`[moss/wire] the server speaks protocol ${data.protocol ?? 1}; this terminal needs ${PROTOCOL_MIN}–${PROTOCOL}. The server has not been updated yet.`);
         incompatible = true;
         ws.close();
-      } else if (data.type !== 'hello' && data.type !== 'catalog') {
-        // hello/catalog are known and deliberately ignored (the terminal is
+      } else if (data.type === 'hello') {
+        // The upgrade has been answered, so a browser that keeps the session
+        // itself now does: the token this terminal offered is let go of, and
+        // the page holds it no longer. One that does not (another origin,
+        // cookies refused) leaves it with the terminal, stored as it always was.
+        leaving = false;
+        if (token !== null && env.tokens.held !== undefined) {
+          if (env.tokens.held()) {
+            env.tokens.clear();
+            token = null;
+          } else env.tokens.save(token);
+        }
+      } else if (data.type !== 'catalog') {
+        // catalog is known and deliberately ignored (the terminal is
         // grant-blind — it renders what it is served, never what it may do);
         // anything else is protocol drift worth a shout.
         console.warn(`[moss/wire] unhandled server message: ${data.type}`);
@@ -380,6 +409,7 @@ export const createWire = (config: WireConfig = {}): Wire => {
       }
       setStatus('closed');
       if (e.code === CLOSE_SIGNED_OUT || e.code === CLOSE_INVALID_TOKEN) {
+        leaving = e.code === CLOSE_SIGNED_OUT;
         become(null);
         return;
       }
@@ -399,10 +429,12 @@ export const createWire = (config: WireConfig = {}): Wire => {
   };
 
   // A different principal — possibly none — is a different application:
-  // store the token, blank the screen, reconnect.
+  // store the token, blank the screen, reconnect. A host whose browser may
+  // keep the session stores nothing yet: the token is offered, and what
+  // becomes of it is settled when the upgrade is answered (`hello`, above).
   const become = (next: string | null): void => {
     if (next === null) env.tokens.clear();
-    else env.tokens.save(next);
+    else if (env.tokens.held === undefined) env.tokens.save(next);
     token = next;
     clearTimeout(retry);
     attempts = 0; // a new principal is a fresh session — start backoff clean

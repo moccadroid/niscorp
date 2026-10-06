@@ -3,6 +3,7 @@ import { extname, join, relative } from 'node:path';
 import { serve as listen } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { WebSocketServer } from 'ws';
+import type { WebSocket as ServerSocket } from 'ws';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { createServer } from './server';
@@ -57,40 +58,74 @@ export const attachSocket = (
     // other entry is its token (socket.ts), which is not said back.
     handleProtocols: (offered) => (offered.has(SUBPROTOCOL) ? SUBPROTOCOL : false),
   });
+  // The cookies moss answers an upgrade with ride the 101 itself.
+  const answers = new WeakMap<IncomingMessage, readonly string[]>();
+  wss.on('headers', (headers, req) => {
+    for (const cookie of answers.get(req) ?? []) headers.push(`Set-Cookie: ${cookie}`);
+  });
   httpServer.on('upgrade', (req, socket, head) => {
     const url = req.url ?? '/';
     // Not ours: leave it for whichever other listener owns it (vite's HMR
     // upgrade rides the same server in dev).
     if (new URL(url, 'http://nisc.local').pathname !== path) return;
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      // `ws` reports what it refuses from a client — a malformed frame, a
-      // message over its size limit — as an 'error' on that connection, having
-      // already closed it with the status that says why (1002, 1009). An
-      // 'error' nobody listens for is thrown by Node, out of the socket's own
-      // data handler where nothing can catch it: one bad frame from one
-      // client took the process, and every session on it, down. Heard here it
-      // is that connection's alone, and the close it already got is the answer.
-      ws.on('error', (error) => {
-        console.warn(`[moss/node] a connection was closed on what it sent: ${error.message}`);
+    // THE REQUEST IS ANSWERED ONCE MOSS HAS DECIDED WHO IS ASKING, because the
+    // answer is the one thing that can write a browser's session cookie
+    // (session-cookie.ts). Until then the raw socket is nobody's to listen to,
+    // and a peer that resets it would be an 'error' thrown out of Node — the
+    // whole process. Heard here, it is that request's alone.
+    socket.on('error', () => {});
+    let ws: ServerSocket | undefined;
+    let answered = false;
+    // The first use of the connection answers the request, with the cookies
+    // moss gave if it gave any. A request `ws` will not upgrade (a bad key, a
+    // peer already gone) leaves no websocket: nothing is sent to it, and it is
+    // closed already.
+    const answer = (cookies: readonly string[] = []): ServerSocket | undefined => {
+      if (answered) return ws;
+      answered = true;
+      answers.set(req, cookies);
+      wss.handleUpgrade(req, socket, head, (opened) => {
+        ws = opened;
+        // `ws` reports what it refuses from a client — a malformed frame, a
+        // message over its size limit — as an 'error' on that connection, having
+        // already closed it with the status that says why (1002, 1009). An
+        // 'error' nobody listens for is thrown by Node, out of the socket's own
+        // data handler where nothing can catch it: one bad frame from one
+        // client took the process, and every session on it, down. Heard here it
+        // is that connection's alone, and the close it already got is the answer.
+        opened.on('error', (error) => {
+          console.warn(`[moss/node] a connection was closed on what it sent: ${error.message}`);
+        });
       });
-      // accept promises to handle its own failures (see socket.ts). This is
-      // the floor under that promise: an await added there without a guard
-      // degrades to one logged close here instead of an unhandled rejection
-      // taking every session on the box down with it.
-      accept(url, {
-        send: (text) => ws.send(text),
-        close: (code, reason) => ws.close(code, reason),
-        onMessage: (fn) => ws.on('message', (data) => fn(String(data))),
-        onClose: (fn) => ws.on('close', () => fn()),
-        upgrade: { offered: String(req.headers['sec-websocket-protocol'] ?? '').split(',').map((entry) => entry.trim()) },
-      }).catch((error: unknown) => {
-        console.error('[moss/node] a connection escaped accept:', error);
-        try {
-          ws.close(1011, 'accept failed');
-        } catch {
-          // already gone
-        }
-      });
+      return ws;
+    };
+    // accept promises to handle its own failures (see socket.ts). This is
+    // the floor under that promise: an await added there without a guard
+    // degrades to one logged close here instead of an unhandled rejection
+    // taking every session on the box down with it.
+    accept(url, {
+      send: (text) => void answer()?.send(text),
+      close: (code, reason) => void answer()?.close(code, reason),
+      onMessage: (fn) => void answer()?.on('message', (data) => fn(String(data))),
+      onClose: (fn) => {
+        const opened = answer();
+        if (opened === undefined) queueMicrotask(fn);
+        else opened.on('close', () => fn());
+      },
+      upgrade: {
+        offered: String(req.headers['sec-websocket-protocol'] ?? '').split(',').map((entry) => entry.trim()),
+        origin: req.headers.origin ?? null,
+        host: req.headers.host ?? null,
+        cookie: req.headers.cookie ?? null,
+        answer: (cookies) => void answer(cookies),
+      },
+    }).catch((error: unknown) => {
+      console.error('[moss/node] a connection escaped accept:', error);
+      try {
+        answer()?.close(1011, 'accept failed');
+      } catch {
+        // already gone
+      }
     });
   });
 };
@@ -139,7 +174,7 @@ export const mountSite = (server: MossServer, config: SiteConfig): void => {
       ...drawing,
       server,
       template,
-      request: { path: c.req.path === '/index.html' ? '/' : c.req.path, cookie: c.req.header('cookie') ?? null },
+      request: { path: c.req.path === '/index.html' ? '/' : c.req.path, cookie: c.req.header('cookie') ?? null, host: c.req.header('host') ?? null },
     });
     return c.html(page.html, 200, page.headers);
   });

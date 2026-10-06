@@ -5,6 +5,7 @@ import type { DeltaOp } from './delta';
 import type { ShellHost } from './shells';
 import { emitterOf, spanClock } from './telemetry';
 import type { Telemetry } from './telemetry';
+import { DEFAULT_TOKEN_KEY, isOwnOrigin, sessionCookies, sessionTokenOf } from './session-cookie';
 
 // ═══════════════════════════════════════════════════════════════
 // The socket — the authority channel (DESIGN.md § The socket), protocol layer.
@@ -39,9 +40,23 @@ export type Connection = {
   onMessage: (fn: (text: string) => void) => void;
   onClose: (fn: () => void) => void;
   // The upgrade request, as far as it says who is asking: the subprotocols it
-  // offered (`Sec-WebSocket-Protocol`, split). A transport that leaves this
-  // out serves every terminal as nobody.
-  upgrade?: { offered: readonly string[] };
+  // offered (`Sec-WebSocket-Protocol`, split), and — for a browser's session
+  // (session-cookie.ts) — where the page is, where the request was addressed,
+  // and the cookies it carried. A transport that leaves this out serves every
+  // terminal as nobody.
+  //
+  // `answer`: a transport that has NOT answered the request yet says so by
+  // giving this, and is called once who is asking is decided — with the
+  // `Set-Cookie` values to answer with, the one moment a cookie can be
+  // written. Without it nothing is written, and a browser's terminal goes on
+  // holding its own token.
+  upgrade?: {
+    offered: readonly string[];
+    origin?: string | null;
+    host?: string | null;
+    cookie?: string | null;
+    answer?: (cookies: readonly string[]) => void;
+  };
 };
 
 // ── The envelope ──
@@ -173,6 +188,13 @@ export type SocketContext = {
   // connection admitted or refused, and a `socket.close` span carrying the
   // whole connection's lifetime. See telemetry.ts.
   telemetry?: Telemetry;
+  // Origins that are this app's own page beside the host a request is
+  // addressed to (`runtime.origins`) — a proxy that rewrites `Host`.
+  origins?: readonly string[];
+  // How much longer a token resolves, when the credential knows — how long a
+  // browser is told to keep the cookie that carries it. Unknown: until the
+  // browser closes.
+  sessionLastsMs?: (token: string) => number | null | Promise<number | null>;
 };
 
 // ── Revalidation ──
@@ -302,18 +324,42 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
       connection.close(CLOSE_PROTOCOL_MISMATCH, 'protocol mismatch');
       return;
     }
-    const token = offeredToken(connection.upgrade?.offered);
-    let principal: string | null = null;
-    if (token !== null) {
-      principal = await ctx.session(token);
-      if (principal === null) {
-        if (emit !== undefined && upClock !== undefined) {
-          emit({ name: 'socket.upgrade', startUnixNano: upClock.startUnixNano, endUnixNano: upClock.endUnixNano(), status: 'refused', attributes: { hasPrincipal: false } });
-        }
-        send({ type: 'error', code: 'invalid_token', message: 'The session token did not resolve to a principal.' });
-        connection.close(CLOSE_INVALID_TOKEN, 'invalid token');
-        return;
+    const upgrade = connection.upgrade;
+    const offered = offeredToken(upgrade?.offered);
+    // THE APP'S OWN PAGE does not hold its session: its browser does, in a
+    // cookie the page cannot read (session-cookie.ts), and sent it with this
+    // request. From any other origin the cookie is not looked at — a browser
+    // sends it with a stranger's page all the same. `key` is which of the
+    // browser's sessions this terminal is (a seat); a name, not a secret.
+    const key = /^[\w.-]{1,64}$/.test(params.get('key') ?? '') ? (params.get('key') as string) : DEFAULT_TOKEN_KEY;
+    const page = upgrade !== undefined && isOwnOrigin(upgrade.origin, upgrade.host, ctx.origins) ? new URL(upgrade.origin) : undefined;
+    const held = page === undefined ? null : sessionTokenOf(upgrade?.cookie, { port: page.port, secure: page.protocol === 'https:' }, key);
+    // A token the terminal offers comes first. `leave`: it was signed out, and
+    // says so because what its browser holds may be a token that still
+    // resolves — an app's own provider's is not moss's to revoke.
+    let token = offered ?? (params.get('leave') === '1' ? null : (held?.token ?? null));
+    let principal = token === null ? null : await ctx.session(token);
+    if (offered !== null && principal === null) {
+      if (emit !== undefined && upClock !== undefined) {
+        emit({ name: 'socket.upgrade', startUnixNano: upClock.startUnixNano, endUnixNano: upClock.endUnixNano(), status: 'refused', attributes: { hasPrincipal: false } });
       }
+      send({ type: 'error', code: 'invalid_token', message: 'The session token did not resolve to a principal.' });
+      connection.close(CLOSE_INVALID_TOKEN, 'invalid token');
+      return;
+    }
+    // What the browser held and no longer resolves is nobody — not a refusal:
+    // the page cannot read it to drop it, so a 4401 would be one it could
+    // never stop getting.
+    if (principal === null) token = null;
+    // THE ANSWER makes the browser hold who this turned out to be. A token the
+    // page offered — left in storage by an earlier build, or just handed to it
+    // at sign-in — is moved into the cookie, and that was the last time the
+    // page held it; a session that ended is taken back. An offered token is
+    // written even when the browser sent the same one: over plain http on the
+    // default port the copy an earlier build kept, readable by script, has
+    // this cookie's name.
+    if (page !== undefined && (offered !== null || (held?.token ?? null) !== token)) {
+      upgrade?.answer?.(token === null ? (held?.clear ?? []) : sessionCookies(page.origin, token, { key, lastsMs: (await ctx.sessionLastsMs?.(token)) ?? null }));
     }
 
     // Remembered WITH its credential — revalidation has to re-ask the same

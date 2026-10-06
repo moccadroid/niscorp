@@ -36,6 +36,11 @@ export type NiscRuntime = {
   //                the boot says so out loud. Harnesses and demo floors.
   //   a function — the app's own identity provider.
   session: SessionVerifier | 'sessions' | 'dev-open';
+  // The origins that are this app's own page, beside the host a request is
+  // addressed to — for a proxy that rewrites `Host`. A browser's session
+  // cookie is read and written for the app's own page only
+  // (session-cookie.ts).
+  origins?: readonly string[];
   // The tables moss, vex and a chosen credential own go through ONE ledgered
   // run at boot (strata), before introspection. 'apply' (default): run what is
   // pending, once, recorded. 'verify': refuse to boot if anything is pending —

@@ -5,6 +5,7 @@ import { getRequestListener } from '@hono/node-server';
 import { renderDocument } from './document';
 import type { DocumentConfig } from './document';
 import { attachSocket, MOSS_PATHS } from './node';
+import { sessionCookies } from './session-cookie';
 import type { MossServer } from './server';
 
 // ═══════════════════════════════════════════════════════════════
@@ -41,10 +42,10 @@ export type DevApp = {
   htmlAttributes?: DocumentConfig['htmlAttributes'];
   site?: DocumentConfig['site'];
   tokenKey?: string;
-  // A dev-only signed-in URL: `/dev/as/<who>` stores the token this returns —
-  // where the wire keeps it and in the cookie copy a page is drawn by — and
-  // goes to `/`. `null` is nobody of that name. It lives in vite's middleware
-  // and nowhere else, so it cannot ship.
+  // A dev-only signed-in URL: `/dev/as/<who>` puts the token this returns in
+  // the browser's own session cookie (session-cookie.ts) — as a sign-in the
+  // app answers over HTTP would — and goes to `/`. `null` is nobody of that
+  // name. It lives in vite's middleware and nowhere else, so it cannot ship.
   signIn?: (who: string) => string | null | Promise<string | null>;
 };
 
@@ -141,13 +142,16 @@ export const mossDev = (options: MossDevOptions): Plugin => ({
               return;
             }
             const token = await app.signIn(decodeURIComponent(who));
-            const key = JSON.stringify(app.tokenKey ?? 'nisc.token');
-            res.setHeader('content-type', 'text/html; charset=utf-8');
-            res.end(
-              token === null
-                ? `<p>nobody called ${who.replace(/[<&"]/g, '')}</p>`
-                : `<script>localStorage.setItem(${key},${JSON.stringify(token)});document.cookie=encodeURIComponent(${key})+'='+encodeURIComponent(${JSON.stringify(token)})+'; Path=/; SameSite=Lax';location.replace('/')</script>`,
-            );
+            if (token === null) {
+              res.setHeader('content-type', 'text/html; charset=utf-8');
+              res.end(`<p>nobody called ${who.replace(/[<&"]/g, '')}</p>`);
+              return;
+            }
+            const scheme = (req.socket as { encrypted?: boolean }).encrypted === true ? 'https' : 'http';
+            res.statusCode = 302;
+            res.setHeader('set-cookie', sessionCookies(`${scheme}://${req.headers.host ?? 'localhost'}`, token, app.tokenKey !== undefined ? { key: app.tokenKey } : {}));
+            res.setHeader('location', '/');
+            res.end();
           })
           .catch(() => {
             res.statusCode = 500;
@@ -178,7 +182,7 @@ export const mossDev = (options: MossDevOptions): Plugin => ({
           const page = await renderDocument({
             server: app.server,
             template,
-            request: { path: path === '/index.html' ? '/' : path, cookie: req.headers.cookie ?? null },
+            request: { path: path === '/index.html' ? '/' : path, cookie: req.headers.cookie ?? null, host: req.headers.host ?? null },
             draw: app.draw,
             ...(app.htmlAttributes !== undefined ? { htmlAttributes: app.htmlAttributes } : {}),
             ...(app.site !== undefined ? { site: app.site } : {}),

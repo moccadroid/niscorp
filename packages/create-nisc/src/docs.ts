@@ -64,7 +64,7 @@ const d2 = (posture: Posture): string =>
 
 const d5 = (posture: Posture): string =>
   posture === 'moss'
-    ? `| D5 Routing | derived · **partly open** | The first screen is drawn on the server and adopted by the terminal — it costs nothing while nobody can sign in. Open: once sign-in exists, the wire keeps a cookie copy of the session token so a page can be drawn for the person asking (AGENTS.md rule 12), and a page drawn for somebody is theirs alone (\`private, no-store\`). Open: which paths are **pages** rather than the app, and whether the app's shell state syncs to the address bar. |`
+    ? `| D5 Routing | derived · **partly open** | The first screen is drawn on the server and adopted by the terminal — it costs nothing while nobody can sign in. Open: once sign-in exists, the browser keeps the session in a cookie no script can read, and the page is drawn for whoever it says (AGENTS.md rule 12) — a page drawn for somebody is theirs alone (\`private, no-store\`). Open: which paths are **pages** rather than the app, and whether the app's shell state syncs to the address bar. |`
     : `| D5 Routing | derived · **partly open** | The first screen is drawn at build (\`nisc export\`) — one file per path, the screen as nobody in particular sees it — and the page's own shell picks it up. Open: which paths exist beyond \`/\`, and whether shell state syncs to the address bar. |`;
 
 export const planDoc = (facts: Facts): string => `# PLAN — ${facts.name}
