@@ -8,6 +8,7 @@ export default defineConfig({
     'examples/index': 'src/examples/index.ts',
   },
   format: ['esm', 'cjs'],
+  splitting: true, // cjs too: entries share chunks, so a class exists once, not once per entry
   dts: true,
   sourcemap: true,
   clean: true,
