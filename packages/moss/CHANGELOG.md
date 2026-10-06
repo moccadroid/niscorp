@@ -1,5 +1,107 @@
 # @niscorp/moss
 
+## 0.3.3
+
+### Patch Changes
+
+- 78a563f: A page served by its app no longer holds its session: the browser does, in a cookie no script can read.
+
+  A session token in a page — in `localStorage`, or in the script-readable cookie copy `browserEnv({ cookie: true })` kept — is there for anything else that runs in that page to take. Now the server writes the session into a cookie the page cannot read (`HttpOnly`, `SameSite=Lax`; `__Host-` prefixed and `Secure` over https) in its answer to the socket's upgrade, and the browser sends it by itself with the two requests that need to know who is asking: the page, and the upgrade. After a reload the page holds nothing.
+
+  **The setup this stops working for:** code that read the session token out of the page. `localStorage['nisc.token']` is empty once the browser holds the session, and the cookie copy is no longer written, so anything that took the token from there — to call a route with `Authorization: Bearer`, say — finds nothing. No route answers to the new cookie, on purpose: a browser sends a cookie with requests another site makes it send. And `renderDocument` no longer answers a cookie that does not resolve with a `Set-Cookie` that takes it back; the upgrade is the one place the cookie is written.
+
+  What happens, and to whom:
+  - **Only the app's own page.** The cookie is read and written when the upgrade's `Origin` is the host it was addressed to, or one listed in the new `runtime.origins` (for a proxy that rewrites `Host`). A page on another origin — which a browser sends the cookie with all the same — is nobody. A terminal that is not a page of its app (a process on `nodeEnv`, a page served from somewhere else, a browser that refuses cookies) holds its own token and offers it, exactly as before.
+  - **Nobody is signed out by the update.** A token an earlier build left in storage is offered once, moved into the cookie by the answer, and removed from storage along with the old copy.
+  - **Seats.** The cookie is named by the terminal's `tokenKey`, so several people can be signed in on one origin as before; the terminal names its key in the socket's address (`?key=`), and `renderDocument`'s `tokenKey` reads the same one. The name ends with the port when the page is on one — a browser keeps cookies by host, not port, and two apps on localhost would otherwise sign each other out — so `renderDocument` takes `request.host`; `mountSite` and the vite plugin pass it.
+  - **Signing out.** A cookie that no longer resolves is taken back on the next upgrade. Under an app's own identity provider the token may go on resolving, so a terminal that was signed out says so (`?leave=1`) and the cookie is taken back whatever it holds.
+  - **A sign-in the app answers over HTTP** (a link redeemed, a provider's callback) sets the cookie itself: `sessionCookies(request, token, { key?, lastsMs? })`, exported from the package root, returns the `Set-Cookie` values. The page that follows is signed in and was never handed the token. The vite plugin's `/dev/as/<who>` does this now.
+  - **A transport of your own** passes what the request carried — `connection.upgrade = { offered, origin, host, cookie }` — and, to let the cookie be written, leaves the request unanswered until the connection is first used, answering then with the cookies moss named through `upgrade.answer(cookies)` (moss names them before it uses the connection, and names none when there are none to write). One that has already answered reads the cookie and writes none. `attachSocket` does both.
+  - **A `WireEnv` of your own** is unchanged: without `tokens.held` a terminal stores its token as it always did.
+
+  **What to change:** nothing in an app that uses `createWire` with `browserEnv()` and serves with `serve`, `nisc start`, the vite plugin or `attachSocket`. `browserEnv({ cookie: true })` still compiles and the option now does nothing; drop it when convenient. A sign-in page that writes the token to `localStorage` keeps working (the token is moved on the next upgrade), and is better replaced by `sessionCookies` on the response. Behind a proxy that rewrites `Host`, list the app's origin in `runtime.origins` — until then every page looks like one served from somewhere else, so the app works as it did before this change, each terminal holding its own token, and moss says so once in the log. An app that draws its own pages passes `request.host` to `renderDocument`; behind a proxy that rewrites `Host` to an upstream on another port, `site` is where the port is taken from.
+
+- 51dc5ce: DESIGN says what a rebuilt shell holds. "Durability" named a projection as the durable thing, and moss has built none ("Deliberately unbuilt" lists it). It now says the database is the durable thing: a shell is rebuilt on the next connection from definitions and whatever the app reads from rows as it builds, and evicting an idle shell, restarting the process and `reset` each cost what was only in the shell — the screens someone had opened, and what they had typed. Two source comments now say the same. No code changed.
+
+  **What to change:** nothing.
+
+- da42472: With `shellFrameDelta` on, a canvas whose frame is over 64 KB is sent whole, and no longer compared.
+
+  Encoding a delta costs the server in proportion to the size of the two frames, not of the change, and it does the work on the thread every session shares. Nothing bounded it. Measured on the encoder alone: a 0.3 MB frame held the thread 65 ms for one changed letter, a 2.7 MB frame over a second, and at 20 MB it ran for eight seconds, took a gigabyte and failed — after which the frame was sent whole anyway. Every session on the process waited each time. A large frame needs nothing unusual: a long table, or one long value in a bound field, which any terminal can send. Now a change is sent whole, with no encode, when the frame the terminals hold or the frame replacing it is longer than 64 KB — where an in-place change measured about 7 ms.
+
+  Nothing moves with `shellFrameDelta` off (the default), for a terminal that did not ask for deltas, or on a canvas whose frames are at most 64 KB: those are byte for byte what they were. The rendered tree is the same in every case.
+
+  **What to change:** nothing. With deltas on, a change to a canvas over 64 KB now costs that canvas's whole frame on the wire — what a terminal that never asked for deltas is sent — where it had cost a delta, after the encode.
+
+- a91b5db: `migrateTables`: the step that changes the tables, and checks the app's entries against what it leaves before it commits. `runtime.tables` hands it the app's own.
+
+  A deployment whose runtime says `migrations: 'verify'` refuses to start with anything pending, and moss had nothing to run first. An app's own tables were outside that run, so `'verify'` did not cover them.
+
+  `runtime.tables` takes the app's own table sequences (and another owner's the app keeps — tide's `TIDE_SEQUENCE`). They join moss's one ledgered run, after moss's own. A runtime that hands tables over does not also migrate them itself.
+
+  `migrateTables(runtime, app, { dryRun? })` applies everything pending in that run and, before it may commit, checks every entry of the manifest against the schema as it would stand: a read is resolved, a write is put to the gates it passes before it runs (vex's `mutationMisfits`). An entry that does not fit refuses the run — strata's `DOES_NOT_FIT`, each reason as `fingerprint: why` — and nothing is applied. It checks when nothing was pending too, so a release that changes an entry and no table is checked.
+
+  One kind of entry is listed and not refused: one that already did not fit before the run and that the database already holds seeded exactly as it is. A new or changed entry gets no such pass. The report also says which tables and columns a run removed and which column types it changed.
+
+  It sees entries and nothing else: not SQL written by hand, not a column a scope rule stamps, not what a value means.
+
+  **What to change:** nothing. A boot applies and verifies exactly what it did: a runtime without `tables` runs the same sequences in the same order.
+
+- 812c464: `runtime.vexConfig` hands the query engine its settings.
+
+  Moss built the vex engine with no `config`, so a deployment ran on vex's defaults — 100 rows for a list that states no limit, 1000 at most, a ten-second read timeout — and had no way to change one.
+
+  `NiscRuntime` takes an optional `vexConfig`, passed to `createQueryEngine` as its `config` unread: `defaultLimit`, `maxLimit`, `capAuthored`, `statementTimeoutMs` and the rest of `QueryEngineConfig['config']`. Unset, the engine is built exactly as before.
+
+  **What to change:** nothing. Set `vexConfig` in your runtime to change one of the engine's numbers — for example `vexConfig: { capAuthored: true }` to keep seeded entries under `maxLimit`.
+
+- 770f754: A frame the websocket transport refuses closes that connection; it no longer ends the process.
+
+  `attachSocket` listened for a connection's messages and its close, and not for its errors. `ws` reports what it refuses from a client — a malformed frame, text that is not UTF-8, a message over its size limit — as an `error` on that connection, and Node throws an `error` nobody listens for. So one such frame, from any client that could open the socket, signed in or not, ended the server process and every session on it. The transport now listens: `ws` has already closed the connection with the status that says why (1002, 1007, 1009), one line is logged (`[moss/node] a connection was closed on what it sent: …`), and nothing else is touched. Every host that calls `attachSocket` gets it — `serve`, `nisc start`, the vite plugin, an app's own listener.
+
+  **What to change:** nothing. An app this had happened to was not running. A process-level `uncaughtException` handler that was catching these no longer hears them.
+
+- 61a4060: A sign-in made over the socket no longer hands the page its token. It reaches the page sealed, and only that browser can open it.
+
+  `session.grant(token)` happens on a socket, and a socket cannot write a cookie — so the token has to travel through the page to the terminal's next upgrade, where the session cookie is written. It used to travel as itself, which for that moment put it where any script in the page could take it. Now it travels encrypted with a key the browser holds in a second cookie no script can read (the _seal_), given by the answer to the browser's first upgrade. The page hands the sealed sign-in back and cannot open it; neither can anybody it is shown to, on this machine or another — without that browser's seal it opens nothing, and after a minute it opens nothing at all.
+
+  **The setup this stops working for:** none that worked. What is new for a browser: a terminal on `browserEnv()` now names `sealed=1` in the socket's address, and a browser that opens a socket to its app is given one more cookie — `nisc.seal` (`__Http-nisc.seal` over https): `HttpOnly`, `SameSite=Lax`, sent with the socket's path and no other, kept until the browser closes. It is given whether or not anybody signs in. It is a key, not a name: it is not stored or looked up on the server, and no page request carries it, so a page drawn for nobody stays cacheable for everybody.
+  - **Any credential, any number of processes.** Nothing is kept on the server between the sign-in and the upgrade that completes it, so it does not matter which process answers either, and the token can be moss's own or an app's provider's.
+  - **Terminals that keep their own token are handed it as before:** a process on `nodeEnv`, a page served from another origin, a `WireEnv` without `tokens.held`, a transport that cannot answer an upgrade late. `{ type: 'session', token }` is unchanged for them.
+  - **A browser that does not keep the seal** — it sends none back with the sealed sign-in — is told (`seal_not_kept`); its terminal stops asking, and the next sign-in reaches it as a token. That costs such a browser one failed sign-in.
+  - **A terminal written by hand** that wants sealed sign-ins: `?sealed=1` on the address from the app's own origin; a `{ type: 'session', sealed }` message is offered back with `offerToken(null, sealed)`.
+
+  The seal's name over https is what keeps a script from supplying it: the seal is given after the page's script has started, and a script already running then could otherwise set one of its own first and open the sign-in that follows. `__Http-` is a name a browser lets only an HTTP answer set. Not closed: a browser that does not know that prefix treats it as any other name; and a server on a sibling subdomain can still set one, which with a script in the page as well is the same opening.
+
+  **What to change:** nothing.
+
+- 8012cd8: A message a terminal sends over the socket is at most 256 KB; a host that takes larger ones says so with `attachSocket`'s new `maxMessageBytes`.
+
+  **The setup this stops working for:** an app whose terminal sends a message over 256 KB — in practice a file put into a model value as base64 (a picked picture is megabytes). That message now closes the connection with `1009` and what it carried does not arrive; the terminal reconnects as after any other close, and a signed-in person's shell is as it was. To keep the old behaviour, a host that calls `attachSocket` passes the size it takes: `attachSocket(httpServer, server.socket, '/socket', { maxMessageBytes: 100 * 1024 * 1024 })` is what `ws` did before. `serve()`, `nisc start` and the vite plugin take the default and cannot raise it; an app on one of those that needs more attaches the socket itself. Better than raising it, and what `AGENTS.md` rule 9a says: a file never goes over the socket — the picker sends it to a route the app mounts, and the event carries what the route answered.
+
+  Why there is a limit. `attachSocket` created its `WebSocketServer` with no `maxPayload`, so the limit was `ws`'s own 100 MiB. Whatever a message carries, the server keeps — the value in the shell, and again in the last frame it sent — and sends back down in every later frame of that canvas. So the limit is what one connection, signed in or not, can make the process hold and re-send. Measured per open connection: 0.2 MB with nothing sent, 1.5 MB after a 256 KB value, 3.3 MB after 1 MiB, 48 MB after 16 MiB. Compression does not bound it — a 64 MB message of one repeated letter is 60 KB on the wire — so the count is of the message once inflated. What a terminal legitimately sends is an event: a press, a typed value, a row handed back. A few KB.
+
+  **What to change:** nothing, unless a terminal of yours sends more than 256 KB in one message — then one of the two things above. A typed value still has about 250,000 characters of room.
+
+- 10875eb: A terminal's session token no longer rides the socket's address. It is offered in a header of the same request, and a token in the address is not read.
+
+  **The setup this stops working for:** a terminal and a server that are not the same version. The wire protocol is now 2 and the server speaks nothing older, so a terminal built before this is refused with `client_too_old` and a `4426` close — the existing "reload to get the current build" path — and a terminal built after it is refused by an older server with `server_too_old`. An app's terminal and server are one package and deploy together, so in practice this is a tab left open across the deploy: it reloads once. Three things written by hand also change:
+  - **A terminal written by hand** (`new WebSocket(`…/socket?token=…`)`, as a check or a script does) names the protocol and offers the token: `new WebSocket(`${base}/socket?protocol=${PROTOCOL}`, offerToken(token))`. `PROTOCOL` and `offerToken` are exported from `@niscorp/moss`; `offerToken(null)` is a terminal that is nobody.
+  - **A `WireEnv` of your own**: `socket` takes `{ url, offered }` where it took `url`, and constructs `new WebSocket(url, offered)`. One argument on purpose — an env that kept the old shape would have gone on compiling and connected everybody as nobody; this way it does not compile.
+  - **A transport of your own** (anything that is not `attachSocket`) hands over what the request offered: `connection.upgrade = { offered }`, the `Sec-WebSocket-Protocol` header split on commas, and answers the subprotocol `nisc`. Without it every terminal is served as nobody.
+
+  Why. The token rode the upgrade's query string, and an address is what every proxy, load balancer and access log between a browser and the app writes down. The request has one header every host lets a terminal set, a browser included: the subprotocols it offers. So the terminal offers `nisc`, and beside it its token, base64url (a subprotocol is an HTTP token; a session token need not be); the server answers `nisc` and never the other. Who a terminal is is still decided on the upgrade request, before anything is served, so there is no connection that is open and waiting to be told. A server that kept reading `?token=` for older terminals would have kept the address open for as long as anything used it, which is why protocol 1 is refused rather than served.
+
+  **What to change:** nothing in an app that uses `createWire` with `browserEnv()` or `nodeEnv()` and serves with `serve`, `nisc start`, the vite plugin or `attachSocket`. Otherwise one of the three above. Anything that read `?token=` off the socket's address — a proxy rule, a check — no longer finds it there.
+
+- fc50d20: `AGENTS.md` says where files go. Rule 9a: file pickers live in the kit; a file never goes over the socket; the app saves it wherever it wants. The review pass's "no `fetch` outside the endpoint layer" gains its one exception, to send a file. No code changed.
+
+  A picker that puts a file in its model value sends it over the socket as base64, and the tree brings it back on every render of that canvas. Measured against a moss server: one 15 MB file was 20 MB up and 100 MB down across five renders. Sent by the picker to a route the app mounts on its server, or to a system the app already has, the same file put nothing on the socket.
+
+  moss gains a test and nothing else: a route an app adds to the built server reads who is asking, as moss's own surfaces do.
+
+  **What to change:** nothing for the rule itself. But this release also limits a message a terminal sends to 256 KB (the moss entry on the socket's message limit), so a picker that emits a file's bytes as its model value now works only for a file under about 190 KB: send the file from the picker, as rule 9a says, or raise the limit where the app attaches the socket.
+
 ## 0.3.2
 
 ### Patch Changes
