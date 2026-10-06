@@ -60,7 +60,7 @@ export type { LiveRowsConfig, LiveRowsStats } from './engine/live.js';
 // execution — mutations are `kind: 'mutation'` cache entries invoked by
 // fingerprint; there is no generation path (dev-authored seeds only).
 export { MutationSchema, MutationDefinitionSchema, executeMutation, executeWrites, collectMutationContext, collectQueryContext, mutationEffect, requiredContextKeys, lintMutation } from './mutations/index.js';
-export type { Mutation, MutationDefinition, CoreMutation, ResolvedMutation, ResolvedOnConflict, MutationValue, LookupValue, ItemRef, MutationClient, MutationTx, MutationContext, ContextField, ContextSignature, MutationEffect, WriteResult } from './mutations/index.js';
+export type { Mutation, MutationDefinition, CoreMutation, ResolvedMutation, ResolvedOnConflict, MutationValue, LookupValue, ReturnedRef, ItemRef, MutationClient, MutationTx, MutationContext, ContextField, ContextSignature, MutationEffect, WriteResult } from './mutations/index.js';
 
 // ─── Utils ───────────────────────────────────────────────────
 export { buildValidationContext, resolveParams } from './utils/context.js';

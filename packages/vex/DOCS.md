@@ -789,8 +789,9 @@ as a `kind: 'mutation'` entry under a named fingerprint (normally
 
 ### The grammar
 
-Five ops, closed and strict. Values are literals, `{ $context: "key" }`, or a
-`{ $lookup }` scalar subquery (below) — **never `$scope`** (identity is
+Five ops, closed and strict. Values are literals, `{ $context: "key" }`, a
+`{ $lookup }` scalar subquery, or — in a batch — a `{ $returned }` read of the
+row an earlier statement wrote (both below) — **never `$scope`** (identity is
 engine-injected, unforgeable) and never a field path. `update`/`delete`
 REQUIRE a `where` (a real vex `Filter`).
 
@@ -869,12 +870,72 @@ a unique key: more than one matching row is a runtime error (deliberately —
 silently picking an arbitrary row would be worse), and zero rows write NULL
 (the column's constraints decide whether that lands).
 
+### `$returned` — a value from the row an earlier statement wrote
+
+In a batch, a later statement may read a column of the one row an earlier
+statement wrote — how a child row gets the id the database generated for its
+parent, in the same transaction:
+
+```ts
+[
+  { op: 'insert', table: 'orders', values: { note: { $context: 'note' } } },
+  { op: 'insertEach', table: 'order_lines', items: { $context: 'lines' },
+    values: { order_id: { $returned: 'orders.id' }, sku: { $item: 'sku' }, qty: { $item: 'qty' } } },
+]
+```
+
+`{ $returned: 'table.column' }` names the earlier statement by the **table** it
+writes — an `insert`, `update`, `upsert` or `delete` (a delete returns the row
+it removed); `column` is a column of that table, including one the database
+generated. It goes in any value position, the same ones `$lookup` does (the
+`values`, `set` and `onConflict.set` of every op, an `upsert`'s
+`columns`/`insert` among them), and nowhere else: not in a `where`, not inside
+a `$lookup`, not as an `insertEach`'s `items`.
+
+Where `$lookup` reads a row that may honestly not exist (and writes NULL when
+it does not), `$returned` reads a row this batch claims to have written. So:
+
+- **Exactly one row, or nothing is written.** If the statement it names wrote
+  no row — its WHERE matched nothing, the scope boundary kept the row back, an
+  `upsert` updated a row that is not there — or wrote several, the batch fails
+  with `execution_error` (`details: { returned, rows }`) and the transaction
+  rolls back, earlier statements included.
+- **Refused before any request** by `lintMutation` (so by `seedCache`), and
+  again by the engine for a definition that was never seeded:
+  - no **earlier** statement of the batch writes that table (this covers a
+    reference pointing forwards, and one in a statement that is not in a batch);
+  - **two** earlier statements write it — a reference could not tell them apart;
+  - the statement it names is an `insertEach` (it writes a row per item);
+  - the statement it names is an `insert` whose `onConflict` has no `set` — on a
+    conflict that returns no row. Give it a `set` (the create-or-fetch idiom
+    above), and the reference holds on both paths.
+- **An unknown column** is `invalid_dsl`, checked against the introspected
+  schema before any SQL runs.
+
+The value never passes through the request: the engine binds it from the
+returned row between statements, and a context key spelled `orders.id` is not
+it. Scope is unchanged — every statement is scoped on its own, and a `set` rule
+on a column still wins over anything the author put there, a reference
+included.
+
+Two things to know when using it:
+
+- **It is for keys.** The value passes through the database driver on its way
+  from one statement to the next. An id, a number, text and json arrive as
+  they were; a timestamp read back as a JS `Date` keeps its milliseconds and
+  no more.
+- **The reply is the rows of every statement, in order, as for any batch** —
+  and a reply of exactly one row is that row, not an array of one. A parent
+  with two children answers `[parent, child, child]`; the same batch with an
+  empty `items` answers `parent`. A caller that needs the new id reads the
+  first row in both forms.
+
 ### `insertEach` — one statement for a caller-sized list
 
 `items` names a context key holding an array of objects; `{ $item: "key" }`
 values read from the current element (cast to the column's type from the
-schema); every other value — literal, `$context`, `$lookup`, engine-injected
-`$scope` — is constant across rows. Compiles to a single
+schema); every other value — literal, `$context`, `$lookup`, `$returned`,
+engine-injected `$scope` — is constant across rows. Compiles to a single
 `INSERT … SELECT … FROM jsonb_array_elements($items)`, so "one row per ticked
 weekday" is one authored statement, not a code loop:
 
@@ -941,8 +1002,12 @@ mutationEffect(def);                  // [{ op: 'update', table: 'tasks', column
 
 `lintMutation(def)` returns a list of issues (empty when clean). It flags an
 `update`/`delete` whose WHERE binds no `$context` — such a write is not
-caller-bounded (its only row limit is the scope policy) — and any statement
-containing an `optional` condition. `seedCache` runs it on every mutation entry
+caller-bounded (its only row limit is the scope policy) — any statement
+containing an `optional` condition, and a `$returned` whose table is not
+written by exactly one earlier statement, or is written by an `insertEach` or
+a do-nothing `insert` (the four cases under
+[`$returned`](#returned--a-value-from-the-row-an-earlier-statement-wrote)).
+How many rows that statement returns is known only when it runs. `seedCache` runs it on every mutation entry
 and throws on an issue, so an unkeyed write never ships: loud at boot, never at
 runtime.
 
@@ -1449,7 +1514,7 @@ handlers recognise both.
 | `missing_scope` | A `$scope` slot the host did not fill. The host's fault, not the request's: the HTTP handler answers 500 and keeps the key names in its log |
 | `scope_denied` | An entity is denied by the scope policy (`VexScopeError`) |
 | `missing_context` | A required context value was absent. Reads surface it softly via `meta.missingContext`; a WRITE hard-400s with the full derived signature in `details.expected` |
-| `execution_error` | Schema not loaded, or a database/runtime failure |
+| `execution_error` | Schema not loaded, or a database/runtime failure. Also a batch whose `$returned` found no row, or several, where it needs exactly one — `details: { returned, rows }`, nothing written |
 | `agent_failed` | Generation was needed and there is no `generateDsl` hook, or the reference agent's run failed |
 | `cache_miss` | A fingerprint was sent alone and nothing is stored under it |
 | `fingerprint_protected` | A protected entry was asked to change: a named-slot request that no longer matches its stored one |

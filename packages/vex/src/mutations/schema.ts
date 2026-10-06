@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { FilterSchema } from '../schemas/filter.schema.js';
+import { FieldPathSchema } from '../schemas/identifier.schema.js';
 import type { Filter } from '../schemas/filter.schema.js';
 import type { FieldOrValue } from '../schemas/value.schema.js';
 
@@ -34,11 +35,36 @@ const LookupSchema = z
   .strict()
   .describe('Scalar subquery: reads one value from another table at write time; read scope rules apply');
 
+// A value read from the row an EARLIER statement of the same batch wrote —
+// how a child row gets the id the database gave its parent. Where `$lookup`
+// re-finds a row by a key the caller knows, this needs no key: the engine
+// already holds the row, because every statement returns what it wrote.
+//
+// The engine binds it between statements (mutations/engine.ts): the value is
+// read from the row, never from the request, so a caller cannot supply or
+// replace it. It passes through the driver on the way — exact for a key; a
+// timestamp read back as a JS Date keeps its milliseconds and no more.
+//
+// A statement is named by the table it writes and nothing else: a batch in
+// which two earlier statements write that table has no one row to read, and
+// the lint refuses the reference (signature.ts).
+const ReturnedSchema = z
+  .object({
+    $returned: FieldPathSchema.describe(
+      '`table.column`: `table` is written by exactly one earlier statement of this batch; `column` is a column of that table, including one the database generated.',
+    ),
+  })
+  .strict()
+  .describe(
+    'A column of the one row an earlier statement of this batch (an insert, update, upsert or delete) returned — how a later row gets an id the database generated. That statement must return exactly one row; none (its `where` matched no row, or scope kept the row back) or several fails the whole batch and nothing is written. Allowed only as the value of a column a statement sets; never inside a `where`, a `$lookup` or `items`, and never naming an `insertEach` or an `insert` whose `onConflict` has no `set`.',
+  );
+
 // A value an AUTHORED mutation may set: a literal, a `{ $context }` ref to
-// the caller's runtime values, or a `{ $lookup }` scalar subquery. NOT
-// `$scope` — the engine injects it post-parse, so a stored or injected
-// mutation cannot place, omit, or redirect it. NOT a field path either — a
-// write sets values, it does not read columns.
+// the caller's runtime values, a `{ $lookup }` scalar subquery, or a
+// `{ $returned }` column of a row this batch already wrote. NOT `$scope` — the
+// engine injects it post-parse, so a stored or injected mutation cannot place,
+// omit, or redirect it. NOT a field path either — a write sets values, it does
+// not read columns.
 const ValueSchema = z.union([
   z.string(),
   z.number(),
@@ -46,6 +72,7 @@ const ValueSchema = z.union([
   z.null(),
   z.object({ $context: z.string() }).strict(),
   LookupSchema,
+  ReturnedSchema,
 ]);
 
 const Columns = z
@@ -80,7 +107,8 @@ const DeleteSchema = z.object({ op: z.literal('delete'), table: z.string(), wher
 // jsonb_array_elements($items)`. `items` names a context key holding an array
 // of objects; a `{ $item }` value reads a key from the current element (cast
 // to the column's type from the schema); every other value (literal,
-// `$context`, `$lookup`, engine-injected `$scope`) is constant across rows.
+// `$context`, `$lookup`, `$returned`, engine-injected `$scope`) is constant
+// across rows.
 // This is how "one template row per ticked weekday" stays a single authored
 // statement instead of a code loop.
 const ItemRefSchema = z
@@ -130,8 +158,9 @@ export type MutationDefinition = z.infer<typeof MutationDefinitionSchema>;
 
 // The value shapes as the ENGINE sees them (authored + injected).
 export type LookupValue = { $lookup: { from: string; field: string; where: Filter } };
+export type ReturnedRef = { $returned: string };
 export type ItemRef = { $item: string };
-export type MutationValue = FieldOrValue | LookupValue;
+export type MutationValue = FieldOrValue | LookupValue | ReturnedRef;
 
 // After scopeMutation the engine may have injected `{ $scope }` refs that the
 // authored grammar forbids — so the resolved form's columns widen to the full

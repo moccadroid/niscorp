@@ -201,9 +201,65 @@ const findOptional = (value: unknown): boolean => {
   return Object.values(value).some(findOptional);
 };
 
+// ─── `$returned` — which earlier statement a reference reads ───
+// Decided from the statement list alone, so the seed lint and the engine share
+// one rule and cannot drift: a reference names a table, and exactly one EARLIER
+// statement of the batch must write it. The row count is the engine's to check
+// when the value is bound; what is refused here is a reference that could
+// never hold — nothing earlier to read, two candidates, or a statement built
+// to return several rows or, on a conflict, none.
+export type ReturnedSource = { statement: number; table: string; column: string };
+
+// Every value a statement sets, position by position. NOT `columnsOf`: that
+// merges an insert's `values` with its `onConflict.set` by column name, and a
+// reference in one would go unseen behind the same column in the other.
+const valuesSetBy = (m: Mutation): unknown[] =>
+  m.op === 'insert' || m.op === 'insertEach'
+    ? [...Object.values(m.values), ...Object.values(m.onConflict?.set ?? {})]
+    : m.op === 'update'
+      ? Object.values(m.set)
+      : m.op === 'upsert'
+        ? [...Object.values(m.columns), ...Object.values(m.insert ?? {})]
+        : [];
+
+const isReturnedRef = (v: unknown): v is { $returned: string } =>
+  v !== null && typeof v === 'object' && !Array.isArray(v) && '$returned' in v && typeof v.$returned === 'string';
+
+export const returnedIn = (list: readonly Mutation[], at: number): { refs: Map<string, ReturnedSource>; issues: string[] } => {
+  const refs = new Map<string, ReturnedSource>();
+  const issues: string[] = [];
+  const m = list[at];
+  if (m === undefined) return { refs, issues };
+  // A reference a statement uses for several columns is judged once.
+  const judged = new Set<string>();
+  for (const v of valuesSetBy(m)) {
+    if (!isReturnedRef(v) || judged.has(v.$returned)) continue;
+    judged.add(v.$returned);
+    const dot = v.$returned.indexOf('.');
+    const table = v.$returned.slice(0, dot);
+    const column = v.$returned.slice(dot + 1);
+    const reads = `${m.op} on "${m.table}" reads "${v.$returned}"`;
+    const earlier = list.flatMap((s, i) => (i < at && s.table === table ? [{ s, i }] : []));
+    const source = earlier[0];
+    if (source === undefined) {
+      issues.push(`${reads}, and no earlier statement writes "${table}" — put the statement that writes it before this one, in the same batch`);
+    } else if (earlier.length > 1) {
+      issues.push(`${reads}, and ${earlier.length} earlier statements write "${table}" — a reference cannot tell them apart`);
+    } else if (source.s.op === 'insertEach') {
+      issues.push(`${reads} from an insertEach, which writes a row per element — there is no one row to read`);
+    } else if (source.s.op === 'insert' && source.s.onConflict !== undefined && source.s.onConflict.set === undefined) {
+      issues.push(`${reads} from an insert that does nothing on conflict, which then returns no row — give its onConflict a \`set\``);
+    } else {
+      refs.set(v.$returned, { statement: source.i, table, column });
+    }
+  }
+  return { refs, issues };
+};
+
 export const lintMutation = (def: MutationDefinition): string[] => {
   const issues: string[] = [];
   const list = Array.isArray(def) ? def : [def];
+  list.forEach((_m, at) => issues.push(...returnedIn(list, at).issues));
   for (const m of list) {
     if (findOptional(m)) {
       issues.push(`${m.op} on "${m.table}" contains an optional condition — a write's bounds cannot depend on what the caller chose to send`);

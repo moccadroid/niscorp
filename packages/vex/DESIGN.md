@@ -376,6 +376,37 @@ values bind as SQL parameters exactly like reads) → execute. Batches run in
 one transaction; the client is structural (`MutationClient` — PGlite, a pg
 wrapper, a test double), so the core imports no driver.
 
+**A batch that uses what it wrote (`$returned`).** `{ $returned: 'table.column' }`
+in a later statement reads the one row an earlier statement of the same batch
+wrote — the create-a-parent-then-its-children case, where the parent's id is
+the database's to generate and no natural key exists to `$lookup` it by. Three
+decisions shape it:
+
+- *Named by table, nothing else.* A statement has no name of its own, and
+  giving it one (`as`) would be a second vocabulary inside the batch. A
+  reference names the table an earlier statement writes; if two earlier
+  statements write that table the lint refuses the reference, because nothing
+  could say which was meant.
+- *Bound between statements, not compiled into one.* The statements stay the
+  separate, sequential statements they were: each compiles to an ordinary
+  parameter where the reference sits, and the engine fills that parameter from
+  the earlier statement's `RETURNING` row before running it. Folding the batch
+  into one statement of CTEs was tried and dropped — every CTE in a statement
+  sees the same snapshot, so a `$lookup` could no longer read a row an earlier
+  statement of the batch had inserted, which a batch can do today.
+- *Exactly one row, or the batch fails.* A `$lookup` that finds nothing writes
+  NULL, because the row it reads may honestly not exist. A reference reads a
+  row the batch claims to have written; when the scope boundary or a WHERE
+  left that statement with no row, writing NULL (or skipping the child) would
+  commit half of what the author described. So it throws inside the
+  transaction and everything rolls back. What can be known without running —
+  no earlier writer, two of them, an `insertEach`, a do-nothing `onConflict` —
+  is refused at seed by `lintMutation`.
+
+Scope is untouched by it: each statement is scoped on its own exactly as
+before, and the value a reference carries comes from a row that statement was
+already allowed to write.
+
 **Derived context signatures** close the discoverability loop for both
 kinds: a `$context` ref sits at a position whose column the schema types, so
 "what do I pass this fingerprint" is computed from the stored def — never
@@ -831,9 +862,16 @@ byte for byte, so nothing a cache already holds under one has moved.
 - Dynamic mutation generation — icebox, on purpose. If it ever returns, it
   feeds the existing pipeline (author → validate → seed) behind an effect
   contract and an approval step; nothing shipped today gets replaced.
-- Mutation transactions with cross-statement refs (`$returned.id` — the
-  create-parent-then-children case). Batches are atomic today but cannot
-  reference earlier statements' results.
+- ~~Mutation transactions with cross-statement refs~~ — built: see
+  **A batch that uses what it wrote (`$returned`)** under Mutations.
+- A reply shape for writes. A mutation still answers with the rows its
+  statements returned (one row as that row, several as an array); choosing
+  what of a batch the caller is handed — a mapping over the writes — is not
+  built.
+- Engine-derived paging (a cursor the engine mints from a query's sort).
+  Considered with the limit work and left out: an author can already page
+  with a `$context` bound in the filter, and a second way to do it was not
+  earned.
 - MySQL / SQLite adapters — the interface is ready; implementation on demand.
 - Multi-level field paths — addable in the resolver without DSL changes.
 - ~~Intent-aware positive caching~~ — superseded: collisions did bite, and the

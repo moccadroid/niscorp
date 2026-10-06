@@ -11,8 +11,9 @@ import { isFieldPathShape } from '../schemas/identifier.schema.js';
 import { resolveParams } from '../utils/context.js';
 import { requireScope } from '../engine/executor.js';
 import { MutationDefinitionSchema } from './schema.js';
-import type { Mutation, MutationDefinition, CoreMutation, ResolvedMutation, ResolvedOnConflict, MutationValue, LookupValue, ItemRef } from './schema.js';
-import { collectMutationContext, requiredContextKeys } from './signature.js';
+import type { Mutation, MutationDefinition, CoreMutation, ResolvedMutation, ResolvedOnConflict, MutationValue, LookupValue, ReturnedRef, ItemRef } from './schema.js';
+import { collectMutationContext, requiredContextKeys, returnedIn } from './signature.js';
+import type { ReturnedSource } from './signature.js';
 
 // ═══════════════════════════════════════════════════════════════
 // Mutation engine — the write pipeline. Validate (closed grammar, bounded
@@ -37,6 +38,8 @@ const isLookup = (v: unknown): v is LookupValue =>
   v !== null && typeof v === 'object' && !Array.isArray(v) && '$lookup' in v;
 const isItemRef = (v: unknown): v is ItemRef =>
   v !== null && typeof v === 'object' && !Array.isArray(v) && '$item' in v;
+const isReturned = (v: unknown): v is ReturnedRef =>
+  v !== null && typeof v === 'object' && !Array.isArray(v) && '$returned' in v;
 
 const collectLookups = (m: ResolvedMutation): LookupValue['$lookup'][] => {
   const out: LookupValue['$lookup'][] = [];
@@ -161,6 +164,17 @@ const assertWritableColumns = (m: ResolvedMutation, schema: DatabaseSchema): voi
     }
     assertConflictTarget(m.table, m.onConflict.target, entity);
     if (m.onConflict.where !== undefined) assertFilterColumns(m.onConflict.where, m.table, schema, 'onConflict');
+  }
+};
+
+// A `$returned` reads a real column of the table the earlier statement writes,
+// or fails closed before any SQL runs — the same refusal a misauthored `$lookup`
+// gets. (That table itself was already checked: it is another statement's.)
+const assertReturnedColumns = (refs: ReadonlyMap<string, ReturnedSource>, schema: DatabaseSchema): void => {
+  for (const [ref, source] of refs) {
+    if (findEntity(source.table, schema)?.fields.some((f) => f.name === source.column) !== true) {
+      throw new VexError('invalid_dsl', `Unknown column "${ref}" in $returned.`);
+    }
   }
 };
 
@@ -344,13 +358,18 @@ const scopeMutation = (m: CoreMutation, policy: ScopePolicy): ResolvedMutation =
 // can't know it's a column). A single-table write has no resolver to build
 // the alias map, so we seed it ourselves — identity-mapping each `where`
 // field path to itself, which a single-table UPDATE/DELETE qualifies fine.
-type Compiled = { sql: string; slots: ParamSlot[] };
+//
+// `returned` records which slots are NOT the caller's to fill: slot index →
+// the `table.column` an earlier statement's row supplies (see compileValue).
+type Compiled = { sql: string; slots: ParamSlot[]; returned: ReadonlyMap<number, string> };
+type WriteContext = CompilationContext & { returned: Map<number, string> };
 
-const newCtx = (): CompilationContext => ({
+const newCtx = (): WriteContext => ({
   resolvedPaths: new Map(),
   aliasMap: new Map(),
   paramSlots: [],
   paramCounter: { value: 0 },
+  returned: new Map(),
 });
 
 // Every column the filter names maps to itself — a single-table statement
@@ -363,29 +382,42 @@ const indexFilterFields = (filter: Filter, aliasMap: Map<string, string>): void 
 // A value that may be a `$lookup` compiles to a scalar subquery INLINE, into
 // the parent's own parameter counter and slot list — the same no-renumbering
 // rule EXISTS follows on the read side.
-const compileValue = (v: MutationValue, ctx: CompilationContext): string => {
+//
+// A `$returned` compiles to an ordinary parameter — the statement text is the
+// one a `$context` value would give. What differs is who fills it: the slot is
+// recorded in `ctx.returned`, and the run loop binds it from the earlier
+// statement's row AFTER the caller's values are resolved, so nothing a request
+// sends can stand in for it. The slot's own key is never read.
+const compileValue = (v: MutationValue, ctx: WriteContext): string => {
   if (isLookup(v)) {
     indexFilterFields(v.$lookup.where, ctx.aliasMap);
     const where = compileFilter(v.$lookup.where, ctx);
     return `(SELECT ${v.$lookup.field} FROM ${v.$lookup.from} WHERE ${where})`;
   }
+  if (isReturned(v)) {
+    ctx.paramCounter.value += 1;
+    ctx.returned.set(ctx.paramSlots.length, v.$returned);
+    ctx.paramSlots.push({ key: v.$returned, kind: 'context', type: 'string' });
+    return `$${ctx.paramCounter.value}`;
+  }
   return compileFieldOrValue(v, ctx);
 };
 
-// A value written into a json/jsonb column: the slot its context value binds
-// through is marked, so the array or object goes over the wire as JSON text.
-const compileColumnValue = (table: string, column: string, v: MutationValue, ctx: CompilationContext, schema: DatabaseSchema): string => {
+// A value written into a json/jsonb column: the slot its value binds through
+// is marked, so the array or object goes over the wire as JSON text — the
+// caller's, or one read back from an earlier statement's row.
+const compileColumnValue = (table: string, column: string, v: MutationValue, ctx: WriteContext, schema: DatabaseSchema): string => {
   const before = ctx.paramSlots.length;
   const sql = compileValue(v, ctx);
   const json = findEntity(table, schema)?.fields.find((f) => f.name === column)?.normalizedType === 'json';
-  if (json && typeof v === 'object' && v !== null && '$context' in v) {
+  if (json && typeof v === 'object' && v !== null && ('$context' in v || '$returned' in v)) {
     const slot = ctx.paramSlots[before];
     if (slot !== undefined) ctx.paramSlots[before] = { ...slot, encode: 'json' };
   }
   return sql;
 };
 
-const compileConflict = (m: { table: string; onConflict?: ResolvedOnConflict }, ctx: CompilationContext, schema: DatabaseSchema): string => {
+const compileConflict = (m: { table: string; onConflict?: ResolvedOnConflict }, ctx: WriteContext, schema: DatabaseSchema): string => {
   const c = m.onConflict;
   if (c === undefined) return '';
   if (c.set === undefined) return ` ON CONFLICT (${c.target.join(', ')}) DO NOTHING`;
@@ -415,7 +447,7 @@ const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema): Compiled 
     const entries = Object.entries(m.values);
     const cols = entries.map(([c]) => c);
     const vals = entries.map(([c, v]) => compileColumnValue(m.table, c, v, ctx, schema));
-    return { sql: `INSERT INTO ${m.table} (${cols.join(', ')}) VALUES (${vals.join(', ')})${compileConflict(m, ctx, schema)} RETURNING *`, slots: ctx.paramSlots };
+    return { sql: `INSERT INTO ${m.table} (${cols.join(', ')}) VALUES (${vals.join(', ')})${compileConflict(m, ctx, schema)} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
   }
   if (m.op === 'insertEach') {
     const entity = findEntity(m.table, schema);
@@ -429,7 +461,10 @@ const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema): Compiled 
         const raw = `(item.value->>${quoteLiteral(v.$item)})`;
         return cast === undefined ? raw : `${raw}::${cast}`;
       }
-      return compileValue(v, ctx);
+      // A reference headed for a json column binds as JSON text here as it
+      // does in a plain insert. (A `$context` constant on this path is not
+      // marked, and never was.)
+      return isReturned(v) ? compileColumnValue(m.table, col, v, ctx, schema) : compileValue(v, ctx);
     });
     ctx.paramCounter.value += 1;
     ctx.paramSlots.push({ key: m.items.$context, kind: 'context', type: 'json' });
@@ -437,17 +472,18 @@ const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema): Compiled 
     return {
       sql: `INSERT INTO ${m.table} (${cols.join(', ')}) SELECT ${exprs.join(', ')} FROM ${source}${compileConflict(m, ctx, schema)} RETURNING *`,
       slots: ctx.paramSlots,
+      returned: ctx.returned,
     };
   }
   if (m.op === 'update') {
     const sets = Object.entries(m.set).map(([c, v]) => `${c} = ${compileColumnValue(m.table, c, v, ctx, schema)}`);
     indexFilterFields(m.where, ctx.aliasMap);
     const where = compileFilter(m.where, ctx);
-    return { sql: `UPDATE ${m.table} SET ${sets.join(', ')} WHERE ${where} RETURNING *`, slots: ctx.paramSlots };
+    return { sql: `UPDATE ${m.table} SET ${sets.join(', ')} WHERE ${where} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
   }
   indexFilterFields(m.where, ctx.aliasMap);
   const where = compileFilter(m.where, ctx);
-  return { sql: `DELETE FROM ${m.table} WHERE ${where} RETURNING *`, slots: ctx.paramSlots };
+  return { sql: `DELETE FROM ${m.table} WHERE ${where} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
 };
 
 // ─── Desugar (sugar → core) ────────────────────────────────────
@@ -485,8 +521,8 @@ export type WriteResult = { table: string; op: 'insert' | 'update' | 'delete'; r
 export const executeWrites = async (client: MutationClient, def: MutationDefinition, mctx: MutationContext): Promise<WriteResult[]> => {
   const parsed = MutationDefinitionSchema.parse(def);
   const entries = Array.isArray(parsed) ? parsed : [parsed];
-  const compiled = entries.map((entry) => {
-    const core = desugarMutation(entry, mctx.context);
+  const cores = entries.map((entry) => desugarMutation(entry, mctx.context));
+  const compiled = cores.map((core, at) => {
     // A write never executes with holes: every `$context` the (desugared)
     // statement binds must be present. The error teaches the WHOLE contract.
     const missing = requiredContextKeys(core).filter((k) => mctx.context[k] === undefined);
@@ -495,19 +531,59 @@ export const executeWrites = async (client: MutationClient, def: MutationDefinit
         expected: collectMutationContext(parsed, mctx.schema),
       });
     }
+    // The seed lint refuses these too, but a definition can reach here without
+    // ever being seeded (`executeMutation` called directly) — so the rule runs
+    // again, against the statements as they will actually execute.
+    const returned = returnedIn(cores, at);
+    if (returned.issues.length > 0) throw new VexError('invalid_dsl', `${returned.issues.join('; ')}.`);
     const m = scopeMutation(core, mctx.policy);
     assertWritableColumns(m, mctx.schema);
+    assertReturnedColumns(returned.refs, mctx.schema);
     const statement = compileMutation(m, mctx.schema);
     // A `set` rule with no value would STAMP NULL — an insert owned by nobody,
     // written anyway. Every scope slot is filled or nothing runs.
     requireScope({ paramSlots: statement.slots }, mctx.scope);
-    return { ...statement, table: m.table, op: (m.op === 'insertEach' ? 'insert' : m.op) as WriteResult['op'] };
+    // Every reference slot is bound from a row or the batch does not run. A
+    // slot left unbound would be filled from the caller's context like any
+    // other parameter — the one thing a reference must never be.
+    const reads = [...statement.returned].map(([slot, ref]) => {
+      const source = returned.refs.get(ref);
+      if (source === undefined) throw new VexError('invalid_dsl', `"${ref}" names no earlier statement of the batch.`);
+      return { slot, ref, source };
+    });
+    return { ...statement, reads, table: m.table, op: (m.op === 'insertEach' ? 'insert' : m.op) as WriteResult['op'] };
   });
 
   const runAll = async (q: MutationTx): Promise<WriteResult[]> => {
     const results: WriteResult[] = [];
     for (const c of compiled) {
       const params = await resolveParams(c.slots, mctx.context, mctx.scope);
+      // THE ROW AN EARLIER STATEMENT WROTE, bound over whatever sat in the slot.
+      // Exactly one row or nothing runs further: this throws inside the
+      // batch's transaction, so a reference to a write that did not happen —
+      // a WHERE that matched nothing, a row the scope boundary kept back, an
+      // insert a trigger skipped — undoes the statements before it too. Not
+      // NULL, which is what a `$lookup` writes for no row: a lookup reads a
+      // row that may honestly not exist, a reference reads one this batch
+      // claims to have written.
+      for (const read of c.reads) {
+        const rows = results[read.source.statement]?.rows ?? [];
+        const row = rows[0];
+        if (rows.length !== 1 || row === undefined) {
+          throw new VexError(
+            'execution_error',
+            `"${read.ref}" needs exactly one row from statement ${read.source.statement + 1} of the batch, which wrote ${rows.length}. Nothing was written.`,
+            { returned: read.ref, rows: rows.length },
+          );
+        }
+        // The column is in the schema, so it is in the row — unless the client
+        // hands rows back under other keys. Then there is no value to read,
+        // and binding `undefined` would write NULL without a word.
+        if (!(read.source.column in row)) {
+          throw new VexError('execution_error', `"${read.ref}": the row statement ${read.source.statement + 1} returned has no "${read.source.column}" key. Nothing was written.`, { returned: read.ref });
+        }
+        params[read.slot] = row[read.source.column];
+      }
       // A `json` slot (insertEach items) is bound as a JSON string — drivers
       // would otherwise turn a JS array into a postgres ARRAY literal, which
       // `::jsonb` refuses. Anything but an array fails loudly here.
