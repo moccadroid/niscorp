@@ -1,5 +1,6 @@
 import type { Context, Next } from 'hono';
 import type { MutationClient, PgPool, CacheBackend, QueryEngineConfig } from '@niscorp/vex';
+import type { Sequence } from '@niscorp/strata';
 import type { Telemetry } from './telemetry';
 import type { Fabric } from './fabric';
 
@@ -41,6 +42,12 @@ export type NiscRuntime = {
   // for a deployment whose migrations are a deploy step, not a side effect of
   // starting a process. Either way an edited or too-new ledger refuses.
   migrations?: 'apply' | 'verify';
+  // THE APP'S OWN TABLES, as strata sequences. They join that same run, after
+  // the engine's: one transaction, one lock, one `migrations` posture — so
+  // 'verify' covers them, and the step that migrates (`migrateTables`) checks
+  // the app's entries against what THEY leave. Absent, the app migrates its own
+  // tables itself, as before.
+  tables?: readonly Sequence[];
   // How long a durable server shell may sit with no terminal attached before
   // it is disposed (default: 30 minutes; `0` disables the sweep). An
   // environment knob rather than a manifest one, because it trades memory

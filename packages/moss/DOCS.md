@@ -225,6 +225,7 @@ type NiscRuntime = {
   vexConfig?: QueryEngineConfig['config'];  // the query engine's settings (limits, read timeout); default vex's own
   session: SessionVerifier | 'sessions' | 'dev-open';  // REQUIRED — no default
   migrations?: 'apply' | 'verify'; // the boot's ledgered run; default 'apply'
+  tables?: readonly Sequence[];    // the app's own table sequences, in that same run
   shellIdleMs?: number;            // idle shell eviction; default 30 min, `0` disables
   endpointTimeoutMs?: number;      // a server shell's endpoint call; default nova's, 30s
   sessionRevalidateMs?: number;    // live-socket re-verify; default 60s, `0` disables
@@ -271,6 +272,38 @@ runtime picks the posture: `'apply'` (default) runs what is pending; `'verify'`
 refuses to boot if anything is, for a deployment that migrates as a deploy step.
 `initIntegrations` and `initSessions` remain for hosts that are not moss's
 server, and go through the same ledger.
+
+`tables` on the runtime hands over the app's own table sequences. They join
+that run after moss's — one transaction, one lock, one posture, so `'verify'`
+covers them. Absent, the app migrates its own tables itself, as before. Another
+owner's tables the app keeps go in the same list (`TIDE_SEQUENCE`), and a
+runtime that hands tables over does not also migrate them itself.
+
+#### `migrateTables(runtime, app, { dryRun? }): Promise<TablesReport>`
+
+The step that changes tables, for a deployment that migrates before it starts
+(`nisc migrate` calls it). It applies everything pending in the one run,
+whatever `runtime.migrations` says, and before the run may commit it asks
+whether `app`'s entries fit what it leaves: every read is resolved against the
+schema as the transaction sees it, every write is put to the gate vex puts it
+to before it runs (`mutationMisfits`: its table, the columns it writes, its
+WHERE, its lookups, its conflict target, what it reads from an earlier
+statement). An entry that does not fit refuses the run — strata's
+`DOES_NOT_FIT`, each
+reason as `fingerprint: why` — and nothing was applied. It asks on every run,
+so a release that changes an entry and no table is checked too.
+
+One kind of entry is said and not refused: one that already did not fit before
+the run and that the database already holds seeded exactly as it is. That is an
+old fault, not this run's. A new or changed entry gets no such pass.
+
+`TablesReport` is strata's `{ applied, plan }` plus `removed` (tables and
+columns the run takes away), `retyped` (columns whose type it changes, as
+`table.column (was → now)`) and `alreadyBroken`. `dryRun` does all of it and
+rolls it back.
+
+It sees entries and nothing else: not SQL written by hand, not a column a scope
+rule stamps, not what a value means.
 
 **Documents are read in this code's grammars.** Stored integration actions
 carry a `grammar` stamp (`INTEGRATION_ACTIONS_STORE`). At boot, after the

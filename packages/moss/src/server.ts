@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { Hono } from 'hono';
 import { vex, VEX_LIVE_ENV } from '@niscorp/vex/hono';
 import { createWireFollower } from './follow';
-import { handleQuery, createPostgresCache } from '@niscorp/vex';
+import { handleQuery } from '@niscorp/vex';
 import { migrate, upgradeStore } from '@niscorp/strata/postgres';
 import { createGrammarUpgrader } from './grammar';
 import { scopeProfiles } from '@niscorp/vex';
@@ -16,8 +16,9 @@ import type { VerifyReport } from '@niscorp/charter';
 import { auditClosure } from './closure';
 import type { NiscApp } from './app';
 import type { NiscRuntime } from './runtime';
-import { SESSIONS_SEQUENCE, sessionVerifierOf } from './sessions';
+import { sessionVerifierOf } from './sessions';
 import { createDataLayer } from './data';
+import { tableSequencesOf } from './migrate';
 import { mintWrites } from './tide';
 import { memoKey, memoKeyOf, resolveCatalogForRoles, resolvePolicyAtReachForRoles, resolvePolicyForRoles, resolveVariantsForRoles, verifyVariants, wearableOf } from './principal';
 import type { Catalog } from './principal';
@@ -29,7 +30,6 @@ import {
   contractAsMarkdown,
   copyPress,
   describePlacements,
-  MOSS_SEQUENCE,
   INTEGRATION_ACTIONS_STORE,
   integrationByKey,
   listIntegrations,
@@ -275,12 +275,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // cache's — in one transaction, recorded, refused if the ledger was edited
   // or written by newer code. The data layer's `cache.init()` below then finds
   // its sequence already applied.
-  const cacheSequence = (runtime.cache ?? createPostgresCache({ pool: runtime.pool })).sequence;
-  await migrate(
-    runtime.pool,
-    [MOSS_SEQUENCE, ...(runtime.session === 'sessions' ? [SESSIONS_SEQUENCE] : []), ...(cacheSequence === undefined ? [] : [cacheSequence])],
-    { mode: runtime.migrations ?? 'apply' },
-  );
+  await migrate(runtime.pool, tableSequencesOf(runtime), { mode: runtime.migrations ?? 'apply' });
   // THE DOCUMENTS IN THOSE TABLES, brought to this code's grammars — nova's,
   // Prism's and the app's own (grammar.ts). Rows carry the stamp they were
   // written at; what they have not seen runs now, once, and they are written

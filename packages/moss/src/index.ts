@@ -26,6 +26,8 @@ export type { Assertion, AssertionSigner } from './assert';
 export { resolveRoles, resolvePolicy, resolvePolicyAtReach, resolveCatalog, resolveVariants, resolveCatalogForRoles, resolveVariantsForRoles, resolvePolicyForRoles, verifyVariants, wearableOf, memoKeyOf } from './principal';
 export type { Catalog } from './principal';
 export { createDataLayer } from './data';
+export { migrateTables } from './migrate';
+export type { TablesReport } from './migrate';
 export { createTideStore, TIDE_DDL, TIDE_SEQUENCE, TIDE_TABLES, mintWrites } from './tide';
 export type { TideStoreOptions } from './tide';
 export { createTideDriver } from './driver';
