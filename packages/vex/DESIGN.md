@@ -188,6 +188,31 @@ extra filter clauses.
   omitted so the runtime can return a valid-but-empty response instead of
   failing.
 
+**The limit, and whose number it is.** Every query compiles with a `LIMIT`. A
+query that states none is given `defaultLimit`; one that states more than
+`maxLimit` is clamped to it — unless its author seeded it. `maxLimit` exists
+for the query nobody reviewed: a generated one must not be able to ask for the
+table. Applied to a number a developer wrote into a seeded entry it did
+something else: it replaced that number with a smaller one, and the reply did
+not say so. So the clamp reads provenance off the stored entry: `protected`
+with no `requestHash` is what `seedCache` writes, and what a host writes when
+it stores an entry through the cache backend itself. No request can produce it
+(a generated entry always carries the hash of the request it was born from,
+and the one field a wire call can change on a stored entry is `protected`),
+and an entry that has it runs with its stated limit. It records who put the
+entry there, not whether a person read it: a host that stores a query it did
+not write has vouched for it. `config.capAuthored` puts the
+clamp back for a host that wants one ceiling over everything.
+
+What is left is the case nothing can decide for the author: a list that states
+no limit. Returning every row is not offered: nothing would bound the read,
+and an unbounded read of a large table is the failure `defaultLimit` is there
+to stop. So the default
+stays, and the engine stops being silent about it: when the `LIMIT` was its own
+number and exactly that many rows came back for a list, the reply's
+`meta.warnings` says the list may have been cut (and the console, once per
+named entry). No extra row is fetched to make it certain; the line says "may".
+
 ### Adapters
 
 `DatabaseAdapter` is the whole database boundary: `introspect`, `compile`

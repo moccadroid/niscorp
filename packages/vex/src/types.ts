@@ -82,6 +82,11 @@ export type QueryEngineConfig = {
     maxNestingDepth?: number;
     defaultLimit?: number;
     maxLimit?: number;
+    // `maxLimit` is a guard on a query nobody reviewed — one generated for a
+    // request. An entry the host stored itself (seeded) states its own limit,
+    // and that limit is honoured past `maxLimit`. `true` clamps those entries
+    // as well.
+    capAuthored?: boolean;
     rejectCartesianProducts?: boolean;
     warnUnindexedFilters?: boolean;
     rejectUnindexedFilters?: boolean;

@@ -165,6 +165,7 @@ type QueryEngineConfig = {
     maxNestingDepth?: number;               // default: 2
     defaultLimit?: number;                   // default: 100
     maxLimit?: number;                        // default: 1000
+    capAuthored?: boolean;                    // default: false — true holds seeded entries to maxLimit too
     rejectCartesianProducts?: boolean;       // default: true
     warnUnindexedFilters?: boolean;          // default: true
     rejectUnindexedFilters?: boolean;        // default: false
@@ -190,8 +191,10 @@ type QueryEngineConfig = {
   throws `execution_error` if a rule names a column the database does not have.
 - **`rows`** sizes the reactive rows cache — see
   [Reactive reads](#reactive-reads-refresh).
-- `defaultLimit` is applied when a DSL omits `limit`; `maxLimit` clamps any
-  larger value.
+- `defaultLimit` is applied when a DSL omits `limit`. `maxLimit` clamps a larger
+  `limit` on a query nobody reviewed — one generated for a request. An entry
+  the host stored itself — **seeded** — runs with the `limit` it states, past
+  `maxLimit`; `capAuthored: true` clamps those as well. See [Limit](#limit).
 - **`embed`** turns text into a vector for `semantic` filters, at parameter-
   binding time. It's an injected provider (wire it to Signal) — *not* a database
   concern, so it lives on the engine, not the adapter (the adapter only emits the
@@ -299,7 +302,8 @@ type QueryResponse = {
       absent?: true;                      // optional, and not supplied this run (so: no type)
     }>;
     timing?: { agentMs?: number; executionMs: number; mappingMs?: number };
-    warnings?: string[];                  // analyzer warnings, if any
+    warnings?: string[];                  // analyzer warnings, and the line that says the
+                                          // engine's own limit may have cut a list (see Limit)
     missingContext?: string[];            // present when REQUIRED keys were not supplied;
                                           // optional keys never appear here
   };
@@ -379,6 +383,53 @@ type Query = {
 type Source   = string | { as: string; query: Query };  // entity name or subquery
 type FieldRef = string | { field: string; as: string }; // bare column, or aliased output key
 ```
+
+### Limit
+
+Every query runs with a `LIMIT`. Whose number it is depends on who wrote the
+query:
+
+| The query | States no `limit` | States one |
+|---|---|---|
+| **seeded** — stored by the host itself | `defaultLimit` (100) | that number, whatever `maxLimit` is |
+| **generated** for a request | `defaultLimit` (100) | that number, at most `maxLimit` (1000) |
+
+`maxLimit` guards against a query nobody reviewed asking for the table. A
+number a developer wrote into a seeded entry is a reviewed decision, and it is
+honoured: a seeded entry that states `limit: 5000` reads up to 5000 rows. Set
+`config.capAuthored: true` to hold seeded entries to `maxLimit` as well.
+
+"Seeded" is not something a request can claim. It is read off the stored
+entry: protected, and carrying no request hash. That is what `seedCache`
+writes, and what a host writes when it stores an entry through the cache
+backend itself (`cache.set(key, { …, protected: true })`). No request can
+produce it: a generated entry always carries the hash of the request it was
+born from, and protecting one afterwards does not remove it. One consequence:
+a generated entry that was protected and is then seeded with the *identical*
+definition keeps its hash — `seedCache` leaves a row that already matches
+alone — and stays clamped, with the warning below, until it is unprotected or
+deleted and seeded again.
+
+`compile(dsl)` takes a bare query with no stored entry behind it, and clamps.
+`test(dsl)` runs with a limit of 5, as it always has.
+
+**When the engine's number may have ended a list, the reply says so.** If the
+`LIMIT` was the engine's — the default a query was given, or the maximum it was
+clamped to — and exactly that many rows came back for a list, `meta.warnings`
+carries a line:
+
+```
+This list states no limit, so it ran with the engine's defaultLimit of 100, and exactly 100 rows came back — it may have been cut. State a `limit`.
+This query asks for 5000 rows, the engine's maxLimit is 1000, and exactly 1000 came back — the list may have been cut. Raise `maxLimit` to read more.
+```
+
+It is "may": no extra row is fetched to find out, so a list of exactly that
+many rows is told the same. A list that ended on a `limit` its author stated
+is never told anything, and neither is a single-row answer (a shape that is
+not an array). For a request that named a fingerprint the same line is also
+written once per fingerprint to `console.warn` — a host that hands callers
+`result` without `meta` would otherwise show it to no one. The fix is in the
+entry: state the `limit` the list should have.
 
 ### Fields
 
@@ -1184,6 +1235,9 @@ await seedCache(engine.cache, [ordersRecent, taskSetDone]);
   (`{ $ref: '$.result' }`) is stored, so a replay never falls through to
   `mapToShape`.
 - A mutation is linted (`lintMutation`); a failing statement throws.
+- A read's `limit` is the author's: a seeded entry runs with the number it
+  states even past `maxLimit` (see [Limit](#limit)). One that states none gets
+  `defaultLimit` like any other query — state a `limit` on every list.
 - It is idempotent against a durable cache: a stored row that already matches
   its authored definition is left alone; anything else at that fingerprint
   converges to the authored definition, protected.

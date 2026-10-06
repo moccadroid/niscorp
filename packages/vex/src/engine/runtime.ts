@@ -57,6 +57,9 @@ export const applySortContext = (dsl: Query, context: Record<string, unknown>): 
 type PipelineResult = {
   compiled: CompiledQuery;
   warnings: string[];
+  // Set when the LIMIT in `compiled` is the engine's number rather than the
+  // query's own: the default it was given, or the maximum it was clamped to.
+  engineLimit?: number;
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -80,6 +83,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
   const maxNestingDepth = engineConfig.config?.maxNestingDepth ?? DEFAULT_MAX_NESTING_DEPTH;
   const defaultLimit = engineConfig.config?.defaultLimit ?? DEFAULT_LIMIT;
   const maxLimit = engineConfig.config?.maxLimit ?? DEFAULT_MAX_LIMIT;
+  const capAuthored = engineConfig.config?.capAuthored ?? false;
   const rejectCartesianProducts = engineConfig.config?.rejectCartesianProducts ?? true;
   const warnUnindexedFilters = engineConfig.config?.warnUnindexedFilters ?? true;
   const rejectUnindexedFilters = engineConfig.config?.rejectUnindexedFilters ?? false;
@@ -183,15 +187,24 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
   // refusal (`requireScope`), not a pass. Omitting the values used to switch
   // the whole policy off — table access included — so a call that forgot to
   // say who it was for read as everybody.
-  const runPipeline = (dsl: Query, policyOverride?: ScopePolicy): PipelineResult => {
+  //
+  // THE LIMIT, AND WHOSE NUMBER IT IS. Every query runs with one. A query that
+  // states none is given `defaultLimit`. One that states more than `maxLimit`
+  // is clamped to it — unless its author SEEDED it: `maxLimit` is a guard on a
+  // query nobody reviewed, and clamping a seeded entry replaces the number its
+  // author chose with a smaller one, in a reply that does not say so.
+  // `capAuthored` puts the clamp back on seeded entries too.
+  const runPipeline = (dsl: Query, policyOverride?: ScopePolicy, seeded = false): PipelineResult => {
     const schema = ensureSchema();
 
-    // Apply limit constraints
     let processedDsl = dsl;
+    let engineLimit: number | undefined;
     if (processedDsl.limit === undefined) {
       processedDsl = { ...processedDsl, limit: defaultLimit };
-    } else if (processedDsl.limit > maxLimit) {
+      engineLimit = defaultLimit;
+    } else if (processedDsl.limit > maxLimit && (capAuthored || !seeded)) {
       processedDsl = { ...processedDsl, limit: maxLimit };
+      engineLimit = maxLimit;
     }
 
     // Discover entities
@@ -225,7 +238,33 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     // Compile
     const compiled = adapter.compile(resolved);
 
-    return { compiled, warnings: analysis.warnings };
+    return { compiled, warnings: analysis.warnings, ...(engineLimit !== undefined ? { engineLimit } : {}) };
+  };
+
+  // ── when the engine's number may have ended a list ──
+  //
+  // A list that comes back with exactly as many rows as a limit its author
+  // never chose has probably been cut, and until this said so nothing did: the
+  // reply looked complete. It is "may": no extra row is fetched to find out,
+  // so a list of exactly that many rows is told the same thing. Only for a
+  // list — a single-row answer uses the first row and cannot be cut.
+  //
+  // Said in the reply, and once per named entry on the console: a host that
+  // hands its callers `result` without `meta` would otherwise show it to no one.
+  const cutSaid = new Set<string>();
+
+  const cutNote = (engineLimit: number | undefined, stated: number | undefined, rowCount: number, shape: unknown, fingerprint: string | undefined): string | undefined => {
+    if (engineLimit === undefined || rowCount !== engineLimit) return undefined;
+    if (shape !== undefined && !Array.isArray(shape)) return undefined;
+    const note =
+      stated === undefined
+        ? `This list states no limit, so it ran with the engine's defaultLimit of ${engineLimit}, and exactly ${engineLimit} rows came back — it may have been cut. State a \`limit\`.`
+        : `This query asks for ${stated} rows, the engine's maxLimit is ${engineLimit}, and exactly ${engineLimit} came back — the list may have been cut. Raise \`maxLimit\` to read more.`;
+    if (fingerprint !== undefined && !cutSaid.has(fingerprint)) {
+      cutSaid.add(fingerprint);
+      console.warn(`[vex] "${fingerprint}": ${note}`);
+    }
+    return note;
   };
 
   // ─── Compile ───────────────────────────────────────────────
@@ -273,6 +312,13 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     // fingerprint-only replays (the request carries no shape then).
     shape?: unknown;
     refresh?: Refresh;
+    // The entry was put there by the host: protected, and carrying no request
+    // hash. That is what `seedCache` writes, and what a host writes when it
+    // stores an entry through the cache backend itself. No request can produce
+    // it — a generated entry always carries the hash of the request it was
+    // born from, and the one field a wire call can change on a stored entry is
+    // `protected`.
+    seeded?: boolean;
     hit: boolean;
     // A named slot existed but its stored request differed — this run
     // regenerates and REPLACES it.
@@ -323,6 +369,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
           ...(entry.intent !== undefined ? { intent: entry.intent } : {}),
           ...(entry.shape !== undefined ? { shape: entry.shape } : {}),
           ...(entry.refresh !== undefined ? { refresh: entry.refresh } : {}),
+          seeded: entry.protected === true && entry.requestHash === undefined,
           hit: true,
           replaced: false,
         };
@@ -431,7 +478,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
 
   // ─── Execute SQL + map to shape ────────────────────────────
 
-  type MapResult = { result: JsonValue; executionMs: number; mappingMs?: number; mappedIr?: CompiledIr };
+  type MapResult = { result: JsonValue; rowCount: number; executionMs: number; mappingMs?: number; mappedIr?: CompiledIr };
 
   // Prism runs ONCE and its output IS the result. The shape decides the
   // envelope: an ARRAY shape maps over the whole row set (`$.result` is the
@@ -503,7 +550,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       if (mappingMs !== undefined) emit({ type: 'query.mapped', mappingMs });
     }
 
-    return { result, executionMs, mappingMs, mappedIr };
+    return { result, rowCount: rows.length, executionMs, mappingMs, mappedIr };
   };
 
   // ─── Execute ───────────────────────────────────────────────
@@ -571,7 +618,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     // shape, so one stored artifact answers every combination of keys.
     const presence = presenceOf(validRequest.context);
     const shaped = pruneOptional(applySortContext(dsl, validRequest.context), presence);
-    const { compiled, warnings } = runPipeline(shaped, activePolicy);
+    const { compiled, warnings, engineLimit } = runPipeline(shaped, activePolicy, cached.seeded === true);
     noteVariant(cached.fingerprint, presenceSignature(dsl, presence), warnings);
     emit({ type: 'query.sql', sql: compiled.sql, warnings });
 
@@ -621,14 +668,20 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       const executionMs = Date.now() - execStart;
       emit({ type: 'query.rows', count: rows.length, executionMs });
       const result = shapeRows(rows);
-      const meta = {
-        cache: {
-          hit: cached.hit,
-          fingerprint: cached.fingerprint,
-          intent: cached.intent ?? validRequest.intent,
-        },
-        context: buildContextContract(compiled, optionalKeysOf(dsl)),
-        warnings: warnings.length > 0 ? warnings : undefined,
+      // Per answer: a followed list that grows to the engine's limit says so
+      // then, and one that shrinks below it stops saying so.
+      const metaOf = (rowCount: number): Omit<QueryResponse['meta'], 'timing'> => {
+        const cut = cutNote(engineLimit, shaped.limit, rowCount, shape, validRequest.fingerprint);
+        const said = cut === undefined ? warnings : [...warnings, cut];
+        return {
+          cache: {
+            hit: cached.hit,
+            fingerprint: cached.fingerprint,
+            intent: cached.intent ?? validRequest.intent,
+          },
+          context: buildContextContract(compiled, optionalKeysOf(dsl)),
+          warnings: said.length > 0 ? said : undefined,
+        };
       };
       const { signal, onChange } = options ?? {};
       if (signal !== undefined && onChange !== undefined) {
@@ -639,16 +692,18 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
             const nextHash = canonicalHash(nextResult);
             if (nextHash === lastHash) return;
             lastHash = nextHash;
-            onChange({ result: nextResult, meta });
+            onChange({ result: nextResult, meta: metaOf(next.length) });
           },
         }, signal);
       }
       emit({ type: 'query.done', totalMs: Date.now() - t0 });
-      return { result, meta: { ...meta, timing: { executionMs } } };
+      return { result, meta: { ...metaOf(rows.length), timing: { executionMs } } };
     }
-    const { result, executionMs, mappingMs, mappedIr } = await executeAndMap(
+    const { result, rowCount, executionMs, mappingMs, mappedIr } = await executeAndMap(
       compiled, effectiveRequest, cached.cachedIr, context, scope,
     );
+    const cut = cutNote(engineLimit, shaped.limit, rowCount, effectiveRequest.shape, validRequest.fingerprint);
+    const said = cut === undefined ? warnings : [...warnings, cut];
 
     // Store the artifact under its fingerprint. Runtime writes are never
     // protected — that bit belongs to seeds and explicit PATCHes only.
@@ -685,7 +740,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
           executionMs,
           ...(mappingMs !== undefined ? { mappingMs } : {}),
         },
-        warnings: warnings.length > 0 ? warnings : undefined,
+        warnings: said.length > 0 ? said : undefined,
       },
     };
   };
