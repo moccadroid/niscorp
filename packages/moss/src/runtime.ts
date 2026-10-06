@@ -1,5 +1,5 @@
 import type { Context, Next } from 'hono';
-import type { MutationClient, PgPool, CacheBackend } from '@niscorp/vex';
+import type { MutationClient, PgPool, CacheBackend, QueryEngineConfig } from '@niscorp/vex';
 import type { Telemetry } from './telemetry';
 import type { Fabric } from './fabric';
 
@@ -19,6 +19,13 @@ export type NiscRuntime = {
   pool: PgPool;
   db: MutationClient;
   cache?: CacheBackend;
+  // THE QUERY ENGINE'S OWN SETTINGS, handed to vex as its `config` and not read
+  // here: how many rows a query that states no limit gets, the most a
+  // generated one may ask for, how long a read may run. Here rather than on
+  // the manifest for the reason every knob below is: these are decisions about
+  // a deployment's database, not something an application is written against.
+  // Unset, the engine runs on its defaults.
+  vexConfig?: QueryEngineConfig['config'];
   // WHO A TOKEN IS. Required, deliberately — every other door in moss fails
   // closed, and this is the one where forgetting a field used to open it for
   // everyone. Three answers:

@@ -24,7 +24,7 @@ export const createDataLayer = async (runtime: NiscRuntime, entries: readonly (S
   // The authored API surface lands as protected rows; a db that already
   // carries them is left untouched (idempotent).
   await seedCache(cache, entries);
-  const engine = createQueryEngine({ adapter, cache });
+  const engine = createQueryEngine({ adapter, cache, ...(runtime.vexConfig !== undefined ? { config: runtime.vexConfig } : {}) });
   const schema = await engine.introspect();
 
   // THE ENGINE'S OWN TABLES ARE ORDINARY TABLES, and it is worth saying why

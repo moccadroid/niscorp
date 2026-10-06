@@ -222,6 +222,7 @@ type NiscRuntime = {
   pool: PgPool;                    // SQL
   db: MutationClient;              // writes
   cache?: CacheBackend;            // defaults to vex's postgres cache on `pool`
+  vexConfig?: QueryEngineConfig['config'];  // the query engine's settings (limits, read timeout); default vex's own
   session: SessionVerifier | 'sessions' | 'dev-open';  // REQUIRED — no default
   migrations?: 'apply' | 'verify'; // the boot's ledgered run; default 'apply'
   shellIdleMs?: number;            // idle shell eviction; default 30 min, `0` disables
