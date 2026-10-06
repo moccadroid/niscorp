@@ -502,7 +502,16 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
         // ephemeral and dies on detach.
         grant: (token) => {
           const message = JSON.stringify({ type: 'session', token } satisfies ServerMessage);
-          for (const connection of liveRef?.connections ?? []) connection.send(message);
+          for (const connection of liveRef?.connections ?? []) {
+            if (connection.seal === undefined) connection.send(message);
+            // its browser keeps the session: sealed, so the page that carries it back cannot open it (socket.ts)
+            else {
+              void connection.seal(token).then(
+                (sealed) => connection.send(JSON.stringify({ type: 'session', sealed } satisfies ServerMessage)),
+                (error: unknown) => console.error('[moss] a sign-in could not be sealed, and was not handed over:', error),
+              );
+            }
+          }
         },
         // REVOKE: forget the credential, close every terminal SIGNED_OUT,
         // evict the durable shell. Under moss's own credential the rows go

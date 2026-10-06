@@ -258,6 +258,12 @@ export const createWire = (config: WireConfig = {}): Wire => {
   // Signed out, and not yet heard by the server: the next upgrade says so,
   // because what the browser holds may be a token that still resolves.
   let leaving = false;
+  // A sign-in handed to this terminal SEALED: its browser keeps the session,
+  // so the page is given something it can carry to the next upgrade and cannot
+  // open. Offered until an upgrade is answered. `unsealed`: this browser turned
+  // out not to keep the cookie that opens one, so the terminal stops asking.
+  let sealed: string | null = null;
+  let unsealed = false;
   let socket: WebSocket | null = null;
   let retry: ReturnType<typeof setTimeout> | undefined;
   // Consecutive failed connects — resets to 0 the moment one opens. Drives the
@@ -304,11 +310,12 @@ export const createWire = (config: WireConfig = {}): Wire => {
     const params: string[] = [`protocol=${PROTOCOL}`];
     if (env.tokens.key !== undefined) params.push(`key=${encodeURIComponent(env.tokens.key)}`);
     if (leaving) params.push('leave=1');
+    if (env.tokens.held !== undefined && !unsealed) params.push('sealed=1');
     if (config.delta === true) params.push('delta=1');
     if (seed !== undefined) params.push(`seed=${encodeURIComponent(seed)}`);
     seed = undefined;
     if (path !== undefined) params.push(`path=${encodeURIComponent(path)}`);
-    const ws = env.socket({ url: `${url()}?${params.join('&')}`, offered: offerToken(token) });
+    const ws = env.socket({ url: `${url()}?${params.join('&')}`, offered: offerToken(token, sealed) });
     socket = ws;
     // A connection that opens is a healthy connection: forget the backoff.
     ws.onopen = () => {
@@ -325,6 +332,7 @@ export const createWire = (config: WireConfig = {}): Wire => {
         hash?: number;
         protocol?: number;
         token?: string;
+        sealed?: string;
         code?: string;
         message?: string;
       };
@@ -361,7 +369,12 @@ export const createWire = (config: WireConfig = {}): Wire => {
       } else if (data.type === 'session' && typeof data.token === 'string') {
         // Login redeemed server-side: become that principal.
         become(data.token);
+      } else if (data.type === 'session' && typeof data.sealed === 'string') {
+        // The same, for a terminal whose browser keeps the session: nothing
+        // this page can read — it is carried to the next upgrade as it is.
+        become(null, data.sealed);
       } else if (data.type === 'error') {
+        if (data.code === 'seal_not_kept') unsealed = true;
         // Diagnostics, not authority — surfaced, never swallowed: a wire that
         // silently stops updating is the worst thing to debug. `invalid_token`
         // arrives here too, from the server's revalidation pass, and it is
@@ -382,6 +395,7 @@ export const createWire = (config: WireConfig = {}): Wire => {
         // the page holds it no longer. One that does not (another origin,
         // cookies refused) leaves it with the terminal, stored as it always was.
         leaving = false;
+        sealed = null;
         if (token !== null && env.tokens.held !== undefined) {
           if (env.tokens.held()) {
             env.tokens.clear();
@@ -432,8 +446,9 @@ export const createWire = (config: WireConfig = {}): Wire => {
   // store the token, blank the screen, reconnect. A host whose browser may
   // keep the session stores nothing yet: the token is offered, and what
   // becomes of it is settled when the upgrade is answered (`hello`, above).
-  const become = (next: string | null): void => {
-    if (next === null) env.tokens.clear();
+  const become = (next: string | null, handedSealed: string | null = null): void => {
+    if (handedSealed !== null) sealed = handedSealed;
+    else if (next === null) env.tokens.clear();
     else if (env.tokens.held === undefined) env.tokens.save(next);
     token = next;
     clearTimeout(retry);

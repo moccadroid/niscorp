@@ -218,6 +218,22 @@ describe('the ws transport — the upgrade says who is asking', () => {
     expect(nothingNew).toEqual([]);
   });
 
+  it('a terminal that asks to be handed sign-ins sealed is given its seal on the 101 — once', async () => {
+    const { url } = await serving();
+    const origin = url.replace('ws://', 'http://').replace('/socket', '');
+    const answeredWith = (headers: Record<string, string>): Promise<string[]> =>
+      new Promise((resolve, reject) => {
+        const socket = new WebSocket(`${url}?protocol=${PROTOCOL}&sealed=1`, offerToken(null), { headers });
+        socket.once('upgrade', (response) => resolve(response.headers['set-cookie'] ?? []));
+        socket.once('error', reject);
+        socket.once('open', () => socket.close());
+      });
+    const first = await answeredWith({ origin });
+    expect(first).toHaveLength(1);
+    expect(first[0]).toMatch(/^nisc\.seal=[\w-]{43}; HttpOnly; Path=\/socket; SameSite=Lax$/);
+    expect(await answeredWith({ origin, cookie: first[0]?.split(';')[0] ?? '' })).toEqual([]);
+  });
+
   // Until moss has decided, the request is not answered and the raw socket is
   // nobody's to listen to: a peer that resets it then must be that request's
   // alone, not an 'error' thrown out of Node.

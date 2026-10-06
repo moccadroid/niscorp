@@ -11,7 +11,7 @@ import type { NiscRuntime } from '../src/runtime';
 import { attachSocket } from '../src/node';
 import { mintSession, sessionOf } from '../src/sessions';
 import { renderDocument } from '../src/document';
-import { isOwnOrigin, sessionCookies } from '../src/session-cookie';
+import { isOwnOrigin, openSealed, sealSession, sessionCookies } from '../src/session-cookie';
 import { offerToken, PROTOCOL } from '../src/socket';
 import { browserEnv, createWire } from '../src/client';
 import type { Wire } from '../src/client';
@@ -77,11 +77,13 @@ beforeAll(async () => {
 // not touch, storage, and a `WebSocket` that sends what a browser sends and
 // keeps what the answer to its upgrade sets.
 type Jar = Map<string, { value: string; attributes: string[] }>;
-const browser = (at = base): { jar: Jar; storage: Map<string, string>; addresses: string[]; offers: string[][]; cookieHeader: () => string } => {
+const browser = (at = base, refuses: (name: string) => boolean = () => false): { jar: Jar; storage: Map<string, string>; addresses: string[]; offers: string[][]; handed: string[]; cookieHeader: () => string } => {
   const jar: Jar = new Map();
   const storage = new Map<string, string>();
   const addresses: string[] = [];
   const offers: string[][] = [];
+  // every frame the page's sockets were sent: all its script could have read off them
+  const handed: string[] = [];
   const take = (setCookie: string, fromScript: boolean): void => {
     const [pair = '', ...attributes] = setCookie.split(';').map((part) => part.trim());
     const name = pair.slice(0, pair.indexOf('='));
@@ -89,7 +91,7 @@ const browser = (at = base): { jar: Jar; storage: Map<string, string>; addresses
     // script can neither set a cookie it could not read, nor replace one
     if (fromScript && (attributes.includes('HttpOnly') || jar.get(name)?.attributes.includes('HttpOnly') === true)) return;
     if (value === '' || attributes.includes('Max-Age=0')) jar.delete(name);
-    else jar.set(name, { value, attributes });
+    else if (!refuses(name)) jar.set(name, { value, attributes });
   };
   const cookieHeader = (): string => [...jar].map(([name, cookie]) => `${name}=${cookie.value}`).join('; ');
   vi.stubGlobal('window', {
@@ -111,9 +113,10 @@ const browser = (at = base): { jar: Jar; storage: Map<string, string>; addresses
     socket.on('upgrade', (answer) => {
       for (const setCookie of answer.headers['set-cookie'] ?? []) take(setCookie, false);
     });
+    socket.on('message', (data) => void handed.push(String(data)));
     return socket;
   });
-  return { jar, storage, addresses, offers, cookieHeader };
+  return { jar, storage, addresses, offers, handed, cookieHeader };
 };
 
 const wires: Wire[] = [];
@@ -146,6 +149,14 @@ describe('a browser on the app’s own page', () => {
     // all script can see of it: a flag, with no secret in it
     expect(document.cookie).toBe(`nisc.token.${port}.held=1`);
     for (const address of page.addresses) expect(address).not.toMatch(/st_|token=/);
+    // THE PAGE WAS NEVER HANDED THE TOKEN: the sign-in reached it sealed, and it offered that back as it was
+    const granted = page.handed.map((frame) => JSON.parse(frame) as Record<string, unknown>).find((frame) => frame['type'] === 'session');
+    expect(Object.keys(granted ?? {})).toEqual(['type', 'sealed']);
+    expect(page.handed.join('')).not.toContain('st_');
+    expect(page.offers.flat().some((entry) => entry.startsWith('nisc.token.'))).toBe(false);
+    expect(page.offers.flat()).toContain(`nisc.sealed.${String(granted?.['sealed'])}`);
+    // …sealed with a key in a cookie script cannot read, which rides the socket's path and no other
+    expect(page.jar.get('nisc.seal')?.attributes).toEqual(expect.arrayContaining(['HttpOnly', 'Path=/socket', 'SameSite=Lax']));
 
     // a reload: a new page, holding nothing, offering nothing — and signed in
     first.dispose();
@@ -173,7 +184,7 @@ describe('a browser on the app’s own page', () => {
     const held = decodeURIComponent(page.jar.get(`nisc.token.${port}`)?.value ?? '');
     wire.dispatch('main', { type: 'ui:click', ref: 'leave' });
     await until(() => shows(wire, 'enter'), 'the lock screen');
-    expect(page.jar.size).toBe(0);
+    expect([...page.jar.keys()]).toEqual(['nisc.seal']); // a key, and nothing it opens
     expect(await sessionOf(pool, held)).toBeNull();
     wire.dispose();
     const reloaded = load();
@@ -203,6 +214,69 @@ describe('a browser on the app’s own page', () => {
     expect(drawn.principal).toBe('ada');
     expect(drawn.headers['cache-control']).toBe('private, no-store');
     expect(drawn.headers['set-cookie']).toBeUndefined();
+  });
+
+  // What the page was handed at sign-in, in somebody else's hands: without
+  // this browser's seal it opens nothing, wherever it is offered from.
+  it('what the page was handed at sign-in signs nobody else in', async () => {
+    const page = browser();
+    const lockScreen = load();
+    await until(() => shows(lockScreen, 'enter'), 'the lock screen');
+    // the sign-in is taken off the socket before the page can offer it back
+    const taken = new Promise<string>((resolve) => {
+      const watch = setInterval(() => {
+        const granted = page.handed.map((frame) => JSON.parse(frame) as { type: string; sealed?: string }).find((frame) => frame.type === 'session');
+        if (granted?.sealed !== undefined) (clearInterval(watch), resolve(granted.sealed));
+      }, 5);
+    });
+    lockScreen.dispatch('main', { type: 'ui:click', ref: 'enter', payload: 'ada' });
+    const sealed = await taken;
+    const elsewhere = (headers: Record<string, string>): Promise<{ principal: unknown; errors: string[] }> =>
+      new Promise((resolve) => {
+        const errors: string[] = [];
+        const socket = new Ws(`${base.replace('http', 'ws')}/socket?protocol=${PROTOCOL}&sealed=1`, offerToken(null, sealed), { headers });
+        socket.on('message', (data) => {
+          const frame = JSON.parse(String(data)) as { type: string; principal?: unknown; code?: string };
+          if (frame.type === 'error') errors.push(frame.code ?? '');
+          if (frame.type === 'hello') setTimeout(() => (resolve({ principal: frame.principal, errors }), socket.close()), 50);
+        });
+      });
+    // another machine, saying the origin the app expects, holding no seal
+    expect(await elsewhere({ origin: base })).toEqual({ principal: null, errors: ['seal_not_kept'] });
+    // another browser, with a seal of its own
+    expect(await elsewhere({ origin: base, cookie: 'nisc.seal=c29tZWJvZHktZWxzZXMtc2VhbA' })).toEqual({ principal: null, errors: [] });
+    // and from another origin, nothing is opened whatever is sent
+    expect(await elsewhere({ origin: 'http://127.0.0.1:1', cookie: page.cookieHeader() })).toEqual({ principal: null, errors: [] });
+  });
+
+  // A browser that does not keep the seal could never open a sealed sign-in.
+  // It finds out once, and is handed the next one as a token.
+  it('a browser that does not keep the seal: one sign-in comes to nothing, and the next one signs in', async () => {
+    const quiet = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const page = browser(base, (name) => name === 'nisc.seal');
+    const wire = load();
+    await until(() => shows(wire, 'enter'), 'the lock screen');
+    wire.dispatch('main', { type: 'ui:click', ref: 'enter', payload: 'ada' });
+    await until(() => page.handed.some((frame) => frame.includes('seal_not_kept')), 'being told');
+    await until(() => shows(wire, 'enter'), 'the lock screen again');
+    wire.dispatch('main', { type: 'ui:click', ref: 'enter', payload: 'ada' });
+    await until(() => shows(wire, 'leave'), 'her home');
+    expect(await sessionOf(pool, decodeURIComponent(page.jar.get(`nisc.token.${port}`)?.value ?? ''))).toBe('ada');
+    // it stopped asking: the address it came back on names no `sealed`
+    expect(page.addresses[page.addresses.length - 1]).not.toContain('sealed');
+    quiet.mockRestore();
+  });
+
+  it('a terminal that is not a page of the app is handed the token itself, as it always was', async () => {
+    const frames: Record<string, unknown>[] = [];
+    const socket = new Ws(`${base.replace('http', 'ws')}/socket?protocol=${PROTOCOL}`, offerToken(null));
+    socket.on('message', (data) => void frames.push(JSON.parse(String(data)) as Record<string, unknown>));
+    await until(() => frames.some((frame) => frame['type'] === 'render'), 'the lock screen');
+    socket.send(JSON.stringify({ type: 'event', canvas: 'main', event: { type: 'ui:click', ref: 'enter', payload: 'ada' } }));
+    await until(() => frames.some((frame) => frame['type'] === 'session'), 'the sign-in');
+    const granted = frames.find((frame) => frame['type'] === 'session');
+    expect(await sessionOf(pool, String(granted?.['token']))).toBe('ada');
+    socket.close();
   });
 
   it('a page on another origin, sent with everything her browser holds, is nobody', async () => {
@@ -236,7 +310,9 @@ describe('under an app’s own identity provider', () => {
     wire.dispatch('main', { type: 'ui:click', ref: 'leave' });
     await until(() => shows(wire, 'enter'), 'the lock screen');
     expect(await own.principalOf('idp.ada')).toBe('ada');
-    expect(page.jar.size).toBe(0);
+    expect([...page.jar.keys()]).toEqual(['nisc.seal']);
+    // and the provider's token never reached the page either
+    expect(page.handed.join('')).not.toContain('idp.ada');
     wire.dispose();
     const reloaded = load();
     await until(() => shows(reloaded, 'enter'), 'still the lock screen');
@@ -287,5 +363,32 @@ describe('isOwnOrigin', () => {
     ['…nor the same host over another scheme', 'http://app.example.com', 'moss:8787', ['https://app.example.com'], false],
   ] as const)('%s', (_label, origin, host, listed, own) => {
     expect(isOwnOrigin(origin, host, listed)).toBe(own);
+  });
+});
+
+describe('the seal', () => {
+  it('opens what was sealed with it, and nothing else does', async () => {
+    const sealed = await sealSession('this-browsers-seal', 'st_abc');
+    expect(sealed).toMatch(/^[\w-]+$/); // a legal subprotocol, as it has to be offered
+    expect(sealed).not.toContain('st_abc');
+    expect(await openSealed('this-browsers-seal', sealed)).toBe('st_abc');
+    expect(await openSealed('another-browsers-seal', sealed)).toBeNull();
+  });
+
+  it('a sealed sign-in that was altered, or is not one, opens nothing', async () => {
+    const sealed = await sealSession('seal', 'st_abc');
+    const altered = `${sealed.slice(0, -2)}${sealed.endsWith('AA') ? 'BB' : 'AA'}`;
+    expect(await openSealed('seal', altered)).toBeNull();
+    expect(await openSealed('seal', 'not-sealed-at-all')).toBeNull();
+    expect(await openSealed('seal', '')).toBeNull();
+  });
+
+  it('is good for as long as it takes to come back, and no longer', async () => {
+    expect(await openSealed('seal', await sealSession('seal', 'st_abc', 1_000))).toBe('st_abc');
+    expect(await openSealed('seal', await sealSession('seal', 'st_abc', -1))).toBeNull();
+  });
+
+  it('two sealings of one token are not the same bytes', async () => {
+    expect(await sealSession('seal', 'st_abc')).not.toBe(await sealSession('seal', 'st_abc'));
   });
 });

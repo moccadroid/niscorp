@@ -3,6 +3,7 @@ import { DefinitionValidationError } from '@niscorp/nova';
 import { createSocket, CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, CLOSE_SHELL_FAILED, CLOSE_PROTOCOL_MISMATCH, PROTOCOL, PROTOCOL_MIN, offerToken } from '../src/socket';
 import type { Connection, ServerMessage, SocketContext } from '../src/socket';
 import type { ShellHost, ShellSession } from '../src/shells';
+import { sealSession } from '../src/session-cookie';
 
 // A fake transport — the four-function Connection seam, capturing everything
 // so the protocol can be driven headlessly (no websocket).
@@ -10,6 +11,7 @@ class FakeConnection implements Connection {
   sent: ServerMessage[] = [];
   closed?: { code?: number; reason?: string };
   upgrade?: NonNullable<Connection['upgrade']>;
+  seal?: (token: string) => Promise<string>;
   // what the upgrade was answered with, when the transport left the answering to moss
   answered?: readonly string[];
   // the order things happened in: 'answer', then each frame's type
@@ -681,5 +683,83 @@ describe('socket — a browser on the app’s own page', () => {
     delete offering.upgrade?.answer;
     await createSocket(ctxWith())(SOCKET, offering);
     expect(offering.first('hello')?.principal).toBe('usr_1');
+  });
+});
+
+// A sign-in made over the socket has to reach the browser's cookie through the
+// page. It goes sealed with a key in a second cookie the page cannot read.
+describe('socket — a sign-in handed over sealed', () => {
+  const HERE = { origin: 'https://app.example.com', host: 'app.example.com' };
+  const ASKING = `${SOCKET}&sealed=1`;
+  const offeringSealed = (conn: FakeConnection, sealed: string): FakeConnection => {
+    conn.upgrade = { ...conn.upgrade, offered: offerToken(null, sealed) };
+    return conn;
+  };
+
+  it('a terminal whose browser can keep a session is given a seal by the answer to its first upgrade — for the socket’s path only', async () => {
+    const conn = new FakeConnection().from(HERE);
+    await createSocket(ctxWith())(ASKING, conn);
+    expect(conn.first('hello')?.principal).toBeNull();
+    expect(conn.answered).toHaveLength(1);
+    expect(conn.answered?.[0]).toMatch(/^__Secure-nisc\.seal=[\w-]{43}; HttpOnly; Path=\/socket; SameSite=Lax; Secure$/);
+    // and a sign-in on this connection is sealed with it
+    const seal = conn.answered?.[0]?.split(';')[0]?.split('=')[1] ?? '';
+    const sealed = await conn.seal?.('good');
+    const back = offeringSealed(new FakeConnection().from({ ...HERE, cookie: `__Secure-nisc.seal=${seal}` }), sealed ?? '');
+    await createSocket(ctxWith())(ASKING, back);
+    expect(back.first('hello')?.principal).toBe('usr_1');
+  });
+
+  it('a browser that sent its seal keeps it: no two upgrades disagree about the key', async () => {
+    const conn = new FakeConnection().from({ ...HERE, cookie: '__Secure-nisc.seal=the-seal-it-has' });
+    await createSocket(ctxWith())(ASKING, conn);
+    expect(conn.answered).toBeUndefined();
+    expect(await conn.seal?.('good')).toBeDefined();
+  });
+
+  it('a sealed sign-in offered back with the seal it was sealed with is who the terminal is, and is moved into the cookie', async () => {
+    const conn = offeringSealed(new FakeConnection().from({ ...HERE, cookie: '__Secure-nisc.seal=the-seal' }), await sealSession('the-seal', 'good'));
+    await createSocket(ctxWith())(ASKING, conn);
+    expect(conn.first('hello')?.principal).toBe('usr_1');
+    expect(conn.answered).toEqual(['__Host-nisc.token=good; HttpOnly; Path=/; SameSite=Lax; Secure', 'nisc.token.held=1; Path=/; SameSite=Lax; Secure']);
+  });
+
+  it.each([
+    ['a browser with another seal', async () => ({ cookie: '__Secure-nisc.seal=another', sealed: await sealSession('the-seal', 'good') })],
+    ['too late', async () => ({ cookie: '__Secure-nisc.seal=the-seal', sealed: await sealSession('the-seal', 'good', -1) })],
+    ['with something that is not a sealed sign-in', async () => ({ cookie: '__Secure-nisc.seal=the-seal', sealed: 'bm90LXNlYWxlZA' })],
+  ])('offered back by %s, it opens nothing: nobody, and the verifier is never asked', async (_label, given) => {
+    const { cookie, sealed } = await given();
+    const session = vi.fn(() => 'usr_1');
+    const conn = offeringSealed(new FakeConnection().from({ ...HERE, cookie }), sealed);
+    await createSocket(ctxWith({ session }))(ASKING, conn);
+    expect(conn.first('hello')?.principal).toBeNull();
+    expect(session).not.toHaveBeenCalled();
+    expect(conn.first('error')).toBeUndefined();
+  });
+
+  // A browser that does not keep the seal could never sign in this way: it is
+  // told, so its terminal stops asking and is handed the next one as a token.
+  it('offered back by a browser that sent no seal: nobody, and the terminal is told its browser does not keep one', async () => {
+    const conn = offeringSealed(new FakeConnection().from(HERE), await sealSession('the-seal', 'good'));
+    await createSocket(ctxWith())(ASKING, conn);
+    expect(conn.first('hello')?.principal).toBeNull();
+    expect(conn.first('error')?.code).toBe('seal_not_kept');
+    expect(conn.closed).toBeUndefined();
+    // and it is given no other seal: a sign-in on this very connection is handed over as its token
+    expect(conn.answered).toBeUndefined();
+    expect(conn.seal).toBeUndefined();
+  });
+
+  it.each([
+    ['a terminal that did not ask', SOCKET, HERE, true],
+    ['a page on another origin', ASKING, { origin: 'https://evil.example.com', host: 'app.example.com' }, true],
+    ['a transport that had already answered, so no seal can be given', ASKING, HERE, false],
+  ])('%s is given no seal, and handed a sign-in as its token', async (_label, address, page, canAnswer) => {
+    const conn = new FakeConnection().from(page);
+    if (!canAnswer) delete conn.upgrade?.answer;
+    await createSocket(ctxWith())(address, conn);
+    expect(conn.answered).toBeUndefined();
+    expect(conn.seal).toBeUndefined();
   });
 });

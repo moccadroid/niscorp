@@ -76,11 +76,12 @@ export const attachSocket = (
     socket.on('error', () => {});
     let ws: ServerSocket | undefined;
     let answered = false;
-    // The first use of the connection answers the request, with the cookies
-    // moss gave if it gave any. A request `ws` will not upgrade (a bad key, a
-    // peer already gone) leaves no websocket: nothing is sent to it, and it is
-    // closed already.
-    const answer = (cookies: readonly string[] = []): ServerSocket | undefined => {
+    // The first use of the connection answers the request — when it always
+    // was answered, as the first frame goes out — with the cookies moss has
+    // said by then. A request `ws` will not upgrade (a bad key, a peer already
+    // gone) leaves no websocket: nothing is sent to it, and it is closed already.
+    let cookies: readonly string[] = [];
+    const answer = (): ServerSocket | undefined => {
       if (answered) return ws;
       answered = true;
       answers.set(req, cookies);
@@ -117,7 +118,7 @@ export const attachSocket = (
         origin: req.headers.origin ?? null,
         host: req.headers.host ?? null,
         cookie: req.headers.cookie ?? null,
-        answer: (cookies) => void answer(cookies),
+        answer: (given) => void (cookies = given),
       },
     }).catch((error: unknown) => {
       console.error('[moss/node] a connection escaped accept:', error);

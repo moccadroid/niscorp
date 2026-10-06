@@ -757,4 +757,45 @@ describe('the wire — on a host whose browser keeps the session', () => {
     kept = true;
     expect(createWire({ url: URL, env: host(), initial: drawn }).snapshot().frame).toEqual(drawn.frame);
   });
+
+  // Handed a sign-in sealed, the page holds nothing it can read: it offers it
+  // back on the next upgrade, where its browser's own cookie opens it.
+  it('a sign-in handed to it sealed is offered back as it is — no token, nothing stored — until an upgrade is answered', () => {
+    createWire({ url: URL, env: host() });
+    expect(FakeSocket.last().url).toContain('sealed=1');
+    FakeSocket.last().open();
+    FakeSocket.last().emit({ type: 'session', sealed: 'c2VhbGVk' });
+    expect(FakeSocket.instances).toHaveLength(2);
+    expect(FakeSocket.last().offered).toEqual(['nisc', 'nisc.sealed.c2VhbGVk']);
+    expect(upgrade(FakeSocket.last()).token).toBeNull();
+    expect(storage.getItem('nisc.token')).toBeNull();
+    // dropped before it was answered: offered again
+    FakeSocket.last().serverClose(1006);
+    vi.advanceTimersByTime(60_000);
+    expect(FakeSocket.last().offered).toEqual(['nisc', 'nisc.sealed.c2VhbGVk']);
+    kept = true;
+    FakeSocket.last().open();
+    FakeSocket.last().emit(hello);
+    FakeSocket.last().serverClose(1006);
+    vi.advanceTimersByTime(60_000);
+    expect(FakeSocket.last().offered).toEqual(['nisc']);
+    expect(storage.getItem('nisc.token')).toBeNull();
+  });
+
+  it('a host that keeps its own token does not ask to be handed one sealed', () => {
+    createWire({ url: URL, env: env() });
+    expect(FakeSocket.last().url).not.toContain('sealed');
+  });
+
+  it('told its browser does not keep the seal, it stops asking — and the next sign-in reaches it as a token', () => {
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    createWire({ url: URL, env: host() });
+    FakeSocket.last().open();
+    FakeSocket.last().emit({ type: 'error', code: 'seal_not_kept', message: 'not kept' });
+    FakeSocket.last().emit({ ...hello, principal: null });
+    FakeSocket.last().serverClose(1006);
+    vi.advanceTimersByTime(60_000);
+    expect(FakeSocket.last().url).not.toContain('sealed');
+    expect(warned).toHaveBeenCalled();
+  });
 });

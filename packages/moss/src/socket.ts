@@ -5,7 +5,7 @@ import type { DeltaOp } from './delta';
 import type { ShellHost } from './shells';
 import { emitterOf, spanClock } from './telemetry';
 import type { Telemetry } from './telemetry';
-import { DEFAULT_TOKEN_KEY, isOwnOrigin, sessionCookies, sessionTokenOf } from './session-cookie';
+import { DEFAULT_TOKEN_KEY, isOwnOrigin, newSeal, openSealed, sealCookie, sealOf, sealSession, sessionCookies, sessionTokenOf } from './session-cookie';
 
 // ═══════════════════════════════════════════════════════════════
 // The socket — the authority channel (DESIGN.md § The socket), protocol layer.
@@ -46,10 +46,11 @@ export type Connection = {
   // terminal as nobody.
   //
   // `answer`: a transport that has NOT answered the request yet says so by
-  // giving this, and is called once who is asking is decided — with the
-  // `Set-Cookie` values to answer with, the one moment a cookie can be
-  // written. Without it nothing is written, and a browser's terminal goes on
-  // holding its own token.
+  // giving this, and is told — once who is asking is decided, before anything
+  // is sent — the `Set-Cookie` values its answer is to carry: the one moment a
+  // cookie can be written. It answers when the connection is first used.
+  // Without it nothing is written, and a browser's terminal goes on holding
+  // its own token.
   upgrade?: {
     offered: readonly string[];
     origin?: string | null;
@@ -57,6 +58,11 @@ export type Connection = {
     cookie?: string | null;
     answer?: (cookies: readonly string[]) => void;
   };
+  // Set here, not by a transport: how this connection's terminal is handed a
+  // session when its browser holds a seal (session-cookie.ts) — sealed, so the
+  // page carries it to the next upgrade and cannot open it. Absent, a session
+  // is handed over as its token.
+  seal?: (token: string) => Promise<string>;
 };
 
 // ── The envelope ──
@@ -78,7 +84,11 @@ export type ServerMessage =
   | { type: 'render-delta'; canvas: string; ops: DeltaOp[]; hash: number }
   // session GRANT (login succeeded server-side): store the token and
   // reconnect authenticated — the twin of the 4403 SIGNED_OUT revoke
+  // A sign-in: the terminal comes back as that principal. As the token, for a
+  // terminal that keeps its own; SEALED, for one whose browser keeps the
+  // session — it offers it on its next upgrade, where its browser's seal opens it.
   | { type: 'session'; token: string }
+  | { type: 'session'; sealed: string }
   | { type: 'error'; code: string; message: string; canvas?: string };
 
 export type ClientMessage =
@@ -133,11 +143,14 @@ export const PROTOCOL_MIN = 2;
 // connection is ever open and waiting to be told who it is.
 export const SUBPROTOCOL = 'nisc';
 const TOKEN_OFFER = 'nisc.token.';
+const SEALED_OFFER = 'nisc.sealed.';
 
-export const offerToken = (token: string | null): string[] => {
-  if (token === null) return [SUBPROTOCOL];
+// `sealed`: a sign-in the terminal was handed sealed, offered back as it is.
+export const offerToken = (token: string | null, sealed: string | null = null): string[] => {
+  const offer = sealed === null ? [SUBPROTOCOL] : [SUBPROTOCOL, `${SEALED_OFFER}${sealed}`];
+  if (token === null) return offer;
   const bytes = String.fromCharCode(...new TextEncoder().encode(token));
-  return [SUBPROTOCOL, `${TOKEN_OFFER}${btoa(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`];
+  return [...offer, `${TOKEN_OFFER}${btoa(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`];
 };
 
 export const offeredToken = (offered: readonly string[] = []): string | null => {
@@ -325,7 +338,6 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
       return;
     }
     const upgrade = connection.upgrade;
-    const offered = offeredToken(upgrade?.offered);
     // THE APP'S OWN PAGE does not hold its session: its browser does, in a
     // cookie the page cannot read (session-cookie.ts), and sent it with this
     // request. From any other origin the cookie is not looked at — a browser
@@ -333,7 +345,21 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
     // browser's sessions this terminal is (a seat); a name, not a secret.
     const key = /^[\w.-]{1,64}$/.test(params.get('key') ?? '') ? (params.get('key') as string) : DEFAULT_TOKEN_KEY;
     const page = upgrade !== undefined && isOwnOrigin(upgrade.origin, upgrade.host, ctx.origins) ? new URL(upgrade.origin) : undefined;
-    const held = page === undefined ? null : sessionTokenOf(upgrade?.cookie, { port: page.port, secure: page.protocol === 'https:' }, key);
+    const secure = page?.protocol === 'https:';
+    const held = page === undefined ? null : sessionTokenOf(upgrade?.cookie, { port: page.port, secure }, key);
+    // A SIGN-IN OVER THE SOCKET REACHES THAT COOKIE SEALED. A terminal whose
+    // browser can keep a session says so (`sealed=1`), and its browser is given
+    // a seal — a key in a second cookie no script can read — by the answer to
+    // its first upgrade. A sign-in is then handed to the page sealed with it;
+    // the page offers it back here, and only this browser's seal opens it.
+    const sealing = page !== undefined && params.get('sealed') === '1';
+    const hadSeal = sealing ? sealOf(upgrade?.cookie, secure) : null;
+    const sealedOffer = upgrade?.offered.find((entry) => entry.startsWith(SEALED_OFFER))?.slice(SEALED_OFFER.length) ?? null;
+    // A sealed sign-in that came back with no seal to open it: this browser
+    // does not keep the cookie, and is not handed another sign-in that way.
+    const sealLost = sealing && sealedOffer !== null && hadSeal === null;
+    const seal = !sealing || sealLost ? null : (hadSeal ?? (upgrade?.answer === undefined ? null : newSeal()));
+    const offered = offeredToken(upgrade?.offered) ?? (sealedOffer === null || hadSeal === null ? null : await openSealed(hadSeal, sealedOffer));
     // A token the terminal offers comes first. `leave`: it was signed out, and
     // says so because what its browser holds may be a token that still
     // resolves — an app's own provider's is not moss's to revoke.
@@ -358,8 +384,16 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
     // written even when the browser sent the same one: over plain http on the
     // default port the copy an earlier build kept, readable by script, has
     // this cookie's name.
-    if (page !== undefined && (offered !== null || (held?.token ?? null) !== token)) {
-      upgrade?.answer?.(token === null ? (held?.clear ?? []) : sessionCookies(page.origin, token, { key, lastsMs: (await ctx.sessionLastsMs?.(token)) ?? null }));
+    const answered = [
+      ...(page === undefined || (offered === null && (held?.token ?? null) === token) ? [] : token === null ? (held?.clear ?? []) : sessionCookies(page.origin, token, { key, lastsMs: (await ctx.sessionLastsMs?.(token)) ?? null })),
+      ...(seal !== null && hadSeal === null ? [sealCookie(seal, { secure, path: new URL(url, 'http://nisc.local').pathname })] : []),
+    ];
+    if (answered.length > 0) upgrade?.answer?.(answered);
+    if (seal !== null) connection.seal = (granted) => sealSession(seal, granted);
+    // The terminal is told, and stops asking to be handed sign-ins sealed —
+    // the next one reaches it as a token, on this connection already.
+    if (sealLost) {
+      send({ type: 'error', code: 'seal_not_kept', message: 'This browser did not keep the cookie a sealed sign-in is opened with. Sign in again: it will be handed over as a token.' });
     }
 
     // Remembered WITH its credential — revalidation has to re-ask the same

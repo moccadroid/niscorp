@@ -877,7 +877,8 @@ measures the end.
   failing definitions, then the close. The refusal is that terminal's alone,
   and reconnecting later is reasonable.
 - `error` codes: `invalid_token`, `session_failed`, `client_too_old`,
-  `server_too_old`, `no_shell` (the app serves no shell), `invalid_message`.
+  `server_too_old`, `no_shell` (the app serves no shell), `invalid_message`,
+  `seal_not_kept` (a sealed sign-in came back with no seal to open it).
 - **Who a terminal is** is decided on the upgrade request, from a header of
   it — never from its address, which is what every proxy on the way writes
   into its log. A terminal offers the subprotocol `nisc`, and beside it its
@@ -900,6 +901,19 @@ measures the end.
   — and, when it has not answered the request yet, `answer(cookies)`: moss
   calls it once who is asking is decided, with the `Set-Cookie` values to
   answer with. A transport without `answer` reads cookies and writes none.
+- **A sign-in is handed to such a page sealed.** A terminal whose browser can
+  keep a session says so (`?sealed=1`; `browserEnv` does), and the answer to
+  its first upgrade gives the browser a *seal*: a key in a second cookie no
+  script can read, sent only with the socket's path. `session.grant(token)`
+  then reaches that terminal as `{ type: 'session', sealed }` — the token,
+  encrypted with the seal and good for a minute — which it offers back on its
+  next upgrade (`offerToken(null, sealed)`); the browser's seal opens it there
+  and the session cookie is written. Offered with another seal, altered, or
+  late, it opens nothing and the terminal is nobody. A browser that sent no
+  seal to open it with does not keep cookies: the terminal is told
+  (`seal_not_kept`), stops asking, and is handed the next sign-in as a token.
+  Any other terminal — a process, a page on another origin — is handed
+  `{ type: 'session', token }`, as before.
 - **Protocol version.** `PROTOCOL` is the wire protocol this server speaks and
   `PROTOCOL_MIN` the oldest it still serves. A terminal names its protocol on
   the upgrade (`?protocol=N`); one that names none speaks `1`, which is every
@@ -1075,8 +1089,9 @@ Requires the optional `vite` peer.
   env that drops it connects as nobody. `held()` is for a host whose browser
   may keep the session itself: asked after an upgrade is answered, `true`
   makes the wire let go of the token it offered, `false` makes it store it. A
-  host without `held` stores a token as soon as it is handed one. `key` names
-  the terminal's seat in the socket's address.
+  host with `held` also asks to be handed sign-ins sealed. A host without it
+  stores a token as soon as it is handed one. `key` names the terminal's seat
+  in the socket's address.
 - `browserEnv({ tokenKey?, cookie? }?): WireEnv` — the default host: url
   derived from `window.location`, the page's WebSocket, and the session
   wherever the page can have it kept. Served by the app it talks to, the page

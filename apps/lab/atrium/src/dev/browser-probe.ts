@@ -44,14 +44,19 @@ server.get('/__as/:who', (c) => {
 });
 mountSite(server, { dist, ...drawing });
 const httpServer = serve({ fetch: server.fetch, port: 0 });
-// Every socket a browser opens, by its url — what "it opened none" is held by.
+// Every socket a browser opens, by its url — what "it opened none" is held by —
+// and whose shells had a terminal once the server had served it. Read as the
+// socket is accepted, not watched for: under a virtual clock a browser is gone
+// some fifteen milliseconds after it connects, which a poll mostly misses.
 const upgrades: string[] = [];
+const seated: string[][] = [];
 attachSocket(
   httpServer,
   Object.assign(
     async (url: string, connection: Parameters<typeof server.socket>[1]): Promise<void> => {
       upgrades.push(url);
-      return server.socket(url, connection);
+      await server.socket(url, connection);
+      seated.push((server.shells?.list() ?? []).filter((shell) => shell.connections > 0).map((shell) => String(shell.principal)));
     },
     { stop: () => server.socket.stop() },
   ),
@@ -62,14 +67,11 @@ const base = `http://localhost:${(httpServer.address() as AddressInfo).port}`;
 type Visit = { dom: string; console: string[]; attached: boolean; sockets: string[] };
 
 // One page load in a fresh profile. `watch`: a principal whose shell should gain
-// a terminal while the browser is up.
+// a terminal from it.
 const visit = async (path: string, watch?: string): Promise<Visit> => {
   const profile = await mkdtemp(join(tmpdir(), 'atrium-chrome-'));
-  let attached = false;
   const before = upgrades.length;
-  const poll = setInterval(() => {
-    if (watch !== undefined && (server.shells?.list() ?? []).some((shell) => shell.principal === watch && shell.connections > 0)) attached = true;
-  }, 25);
+  const seatedBefore = seated.length;
   try {
     const args = ['--headless', '--disable-gpu', '--no-first-run', '--no-default-browser-check', `--user-data-dir=${profile}`, '--enable-logging=stderr', '--v=0', '--virtual-time-budget=6000', '--dump-dom', `${base}${path}`];
     // The callback form: the page's markup on stdout, the browser's log on stderr.
@@ -78,9 +80,8 @@ const visit = async (path: string, watch?: string): Promise<Visit> => {
     const { dom, log } = await new Promise<{ dom: string; log: string }>((done) => {
       execFile(CHROME, args, { timeout: 40_000, killSignal: 'SIGKILL', maxBuffer: 64 * 1024 * 1024 }, (_error, stdout, stderr) => done({ dom: String(stdout), log: String(stderr) }));
     });
-    return { dom, console: log.split('\n').filter((line) => line.includes('CONSOLE')), attached, sockets: upgrades.slice(before) };
+    return { dom, console: log.split('\n').filter((line) => line.includes('CONSOLE')), attached: watch !== undefined && seated.slice(seatedBefore).some((principals) => principals.includes(watch)), sockets: upgrades.slice(before) };
   } finally {
-    clearInterval(poll);
     await rm(profile, { recursive: true, force: true });
   }
 };

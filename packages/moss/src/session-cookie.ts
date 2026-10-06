@@ -101,3 +101,51 @@ export const sessionTokenOf = (
   }
   return null;
 };
+
+// ═══════════════════════════════════════════════════════════════
+// THE SEAL — how a sign-in made over the socket reaches that cookie.
+//
+// Only an HTTP answer can write a cookie, and a sign-in over the socket is not
+// one: the token has to travel through the page to the next upgrade. It
+// travels SEALED — encrypted with a key the page's browser holds in a second
+// cookie no script can read, set by the answer to its first upgrade. The page
+// can hand it back and cannot open it; neither can anybody it is shown to, on
+// this machine or another. It is good for a minute.
+//
+// The seal rides only the socket's own path: no page request carries it, so a
+// page drawn for nobody is still the same for everybody. It lasts until the
+// browser closes, and is never stored or looked up here — a key, not a name.
+//
+// WebCrypto, so this is the same on every runtime and nothing here is Node's.
+// ═══════════════════════════════════════════════════════════════
+
+const SEALED_FOR_MS = 60_000;
+const sealName = (secure: boolean): string => `${secure ? '__Secure-' : ''}nisc.seal`;
+const toBase64Url = (bytes: Uint8Array): string => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const fromBase64Url = (text: string): Uint8Array<ArrayBuffer> => Uint8Array.from(atob(text.replace(/-/g, '+').replace(/_/g, '/')), (char) => char.charCodeAt(0));
+const keyOf = async (seal: string): Promise<CryptoKey> => crypto.subtle.importKey('raw', await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seal)), 'AES-GCM', false, ['encrypt', 'decrypt']);
+
+export const newSeal = (): string => toBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+
+// The seal a browser sent with an upgrade, and the `Set-Cookie` value that
+// gives it one: for the socket's own `path` only, unreadable to script.
+export const sealOf = (cookies: string | null | undefined, secure: boolean): string | null => tokenFromCookie(cookies, sealName(secure));
+export const sealCookie = (seal: string, where: { secure: boolean; path: string }): string => `${sealName(where.secure)}=${seal}; HttpOnly; Path=${where.path}; SameSite=Lax${where.secure ? '; Secure' : ''}`;
+
+export const sealSession = async (seal: string, token: string, forMs = SEALED_FOR_MS): Promise<string> => {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const sealed = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await keyOf(seal), new TextEncoder().encode(JSON.stringify({ token, until: Date.now() + forMs })));
+  return toBase64Url(new Uint8Array([...iv, ...new Uint8Array(sealed)]));
+};
+
+// The token in a sealed sign-in — or null: not sealed with this seal, altered, or too old.
+export const openSealed = async (seal: string, sealed: string): Promise<string | null> => {
+  try {
+    const bytes = fromBase64Url(sealed);
+    const opened = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes.slice(0, 12) }, await keyOf(seal), bytes.slice(12));
+    const { token, until } = JSON.parse(new TextDecoder().decode(opened)) as { token?: unknown; until?: unknown };
+    return typeof token === 'string' && typeof until === 'number' && until > Date.now() ? token : null;
+  } catch {
+    return null;
+  }
+};
