@@ -1,6 +1,6 @@
 # Building an application on nisc
 
-> **Reading this from `node_modules/@niscorp/nisc/`?** It is the rulebook for the nisc version installed beside it, shipped with it. Where it names a path in the nisc repository, look here instead: `packages/<name>/README.md` and `DESIGN.md` are `node_modules/@niscorp/<name>/`; `/STYLE_GUIDE.md` is beside this file; the lab apps it holds up as examples (`apps/lab/atrium`, `mythos`, …) and `docs/` are at [github.com/moccadroid/niscorp](https://github.com/moccadroid/niscorp). An app made by `npm create nisc` points its own `AGENTS.md` here.
+> **Reading this from `node_modules/@niscorp/nisc/`?** It is the rulebook for the nisc version installed beside it, shipped with it. Where it names a path in the nisc repository, look here instead: `packages/<name>/README.md` and `DESIGN.md` are `node_modules/@niscorp/<name>/`; `/STYLE_GUIDE.md` is beside this file; the lab apps it holds up as examples (`apps/lab/lyceum`, …) and `docs/` are at [github.com/moccadroid/niscorp](https://github.com/moccadroid/niscorp). An app made by `npm create nisc` points its own `AGENTS.md` here.
 
 > **Changing nisc itself — a package, not an app built on it?** The `@niscorp` packages are live on npm and may be in use by third parties. No change may break an app that works today, and a breaking change is never yours to decide: it is a last resort that needs the maintainer's explicit approval *before* it is written. Read `/STYLE_GUIDE.md`, "The packages are live", first.
 
@@ -258,6 +258,7 @@ Stack-independent conventions:
 - **One form action per entity, create and edit.** Loaded bare it creates; loaded with the record's raw fields seeded it edits. Keep raw values (numbers, ISO dates, ids) alongside `*_display` strings so forms round-trip.
 - **Interaction = `ref` + trigger.** Layout nodes carry `ref`; triggers catch `{ event, ref }` and run steps. Event payloads flow via `@event.payload`; no callbacks in props.
 - **A composed surface is rows, not a layout.** Where several things coexist — a home, a launcher strip, an agent's column — use a `list` canvas seeded by `seeds` from resolved rows, and let each action render itself. Which surfaces land where is the *row's* business (its canvas), not a second authored list. Whether an action can appear that way is read off its own contract — an action that declares a collapse key in its `input` can render small, so a surface that ships one joins the composition the moment its rows land, with no registry to update.
+- **What should still be there is a row, not a screen.** A server shell is memory: a deploy, a restart or an idle spell replaces it with one built from the manifest and whatever the app reads from rows as it builds — `inputs`, `seeds`, an action's mount hook. So what a person should find again is a row, and an action that shows nothing keeps a canvas on it: its mount reads the row and `replace`s or `reconcile`s the canvas (lyceum's `stage.deck` keeps the stage on the slide its `deck` row names). A screen a person opened that no row describes — a sheet, a record pushed over a list — is gone after a rebuild, with whatever was typed into it. Shell state is the truth of what is on screen now (rule 4); it is not kept.
 - **Seeds choose their clock.** A seed pins a fixed reference date or shifts with the wall clock — per what the seed is for: a regression fixture pins, a demo that must look alive today shifts. Either way the app compares against injected context (`$.today`, per request under moss) — never a wall-clock read inside a transform, query, or layout.
 - **The app is a manifest; only degrade shells are factories.** Under moss the app is `defineApp({...})` and the server builds one durable shell per principal — dev checks boot the same manifest with a dev runtime. A client-degrade app builds its shell as `createAppShell(deps)` with everything environmental injected, so checks construct the real app with real deps and nothing leaks between runs.
 
@@ -354,7 +355,7 @@ never needed still moved a boundary while it stood there.
 
 ## Layout of an app
 
-One arrangement — atrium's, the exemplar (`apps/lab/atrium`; relay is the older sibling and still worth reading for the surfaces it targets). `app/` holds **artifacts only**: every file there is pure, schema-valid JSON authored in TS (a check enforces it). Code lives outside `app/` — the environment in `db/`, helpers in `lib/`, the server glue and fns in `server/`, the component kit in `ui/`.
+One arrangement. `app/` holds **artifacts only**: every file there is pure, schema-valid JSON authored in TS (a check enforces it). Code lives outside `app/` — the environment in `db/`, helpers in `lib/`, the server glue and fns in `server/`, the component kit in `ui/`.
 
 Three naming rules make the tree legible, and they're the same rules the artifact library will type its rows by:
 
@@ -403,6 +404,8 @@ strata.lock.json           which grammar version the source is written in (rule 
                            moved only by `pnpm strata verify`
 ```
 
+Apps to read: lyceum (`apps/lab/lyceum`) for a moss server app; nisc-website and moccadroid-website for an app with its own shell. atrium, lyra and relay are older: read one for a surface it targets, not as a model.
+
 Why the split: the manifest's data fields are on their way to becoming library rows (deploy = a write, not a rebuild), so keeping them pure and schema-valid now — with `db/` and `lib/` code held firmly outside `app/` — is what makes the tree row-ready. A client-degrade app replaces `server/` with whatever serves its endpoints (per D2) and boots its shell factory from the entry point.
 
 `ui/` is the app's renderer kit, and which renderer is a choice: a React or DOM terminal in a browser, a tty or ink one in a console. The core is surface-blind, so the kit is the only place that isn't — an app targeting two surfaces ships two kits against one registry contract, and nothing above `ui/` changes.
@@ -423,7 +426,7 @@ What changes is only who assembles and serves:
 
 Say this out loud in the interview, because it is the part a user cannot infer: **in a degrade app the charter is not enforcement.** Ring 1 still decides what exists in the shell, and that is honest UI, but the data is in the browser and the policy is in the browser with it. Nothing here is a security boundary. An app that needs one needs a server (D1) — offer that rather than a scope rule that looks like a lock.
 
-`fable` and `mythos` are the reference degrade apps. Both predate the `app/`-is-artifacts-only tree above and are arranged differently (`nova/`, `api/`, `vex/`, `boot.ts`) — read them for the boot and engine wiring, not for the layout.
+`fable` and `mythos` predate the `app/`-is-artifacts-only tree above and are arranged differently (`nova/`, `api/`, `vex/`, `boot.ts`) — read them for the boot and engine wiring, not for the layout.
 
 ## Order of work
 
