@@ -13,7 +13,7 @@ import type { ContextSignature, MutationEffect } from './mutations/signature.js'
 import type { CacheEntry } from './cache/cache.types.js';
 import type { QueryResponse } from './schemas/request.schema.js';
 import type { Query } from './schemas/query.schema.js';
-import { VexError } from './errors.js';
+import { isVexError } from './errors.js';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { canReadTable } from './scope/apply.js';
 
@@ -558,11 +558,11 @@ const runQuery = async (
     // The host did not say who is asking. That is the server's fault, not the
     // request's, and the names of the missing keys are the host's business —
     // they go to the log, not over the wire.
-    if (err instanceof VexError && err.code === 'missing_scope') {
+    if (isVexError(err) && err.code === 'missing_scope') {
       console.error('[vex] refused a statement the host did not scope:', err.message);
       return { status: 500, body: { error: 'missing_scope', message: 'The server did not supply the scope this request needs.' } };
     }
-    if (err instanceof VexError) {
+    if (isVexError(err)) {
       const status = err.code === 'fingerprint_protected' ? 409 : err.code === 'cache_miss' ? 404 : 400;
       return {
         status,

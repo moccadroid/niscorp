@@ -25,7 +25,7 @@ import { createLiveRows } from './live.js';
 import type { RowsSource } from './live.js';
 import type { Refresh } from '../cache/cache.types.js';
 import type { Row } from '../adapters/adapter.types.js';
-import { VexError } from '../errors.js';
+import { VexError, isVexError } from '../errors.js';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import type { CompiledIr, JsonObject, JsonValue } from '@niscorp/prism';
 import { execute as executePrism } from '@niscorp/prism';
@@ -395,7 +395,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       } catch (err) {
         // Cache a negative result so a known-impossible request doesn't
         // re-run the agent. TTL'd — a schema change may make it possible.
-        if (err instanceof VexError && err.code === 'unsatisfiable') {
+        if (isVexError(err) && err.code === 'unsatisfiable') {
           const now = Date.now();
           await cache.set(negKey, {
             kind: 'unsatisfiable',

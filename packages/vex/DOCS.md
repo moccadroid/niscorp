@@ -1434,6 +1434,12 @@ try {
 }
 ```
 
+Under `require`, each entry point carries its own copy of the class. An error the
+engine itself throws is an `instanceof` the `VexError` exported beside it; one made
+by a hook from `@niscorp/vex/agent` (`agent_failed`, `unsatisfiable`) is not — it
+has the same `name`, `code` and `message`, so read `err.code` there. The framework
+handlers recognise both.
+
 `VexError.code` is one of:
 
 | Code | Meaning |
