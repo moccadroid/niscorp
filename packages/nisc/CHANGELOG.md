@@ -1,5 +1,69 @@
 # @niscorp/nisc
 
+## 0.3.3
+
+### Patch Changes
+
+- 78a563f: A new app's terminal entry is `browserEnv()`, and AGENTS.md rule 12 says where a session is kept: in the browser's own cookie, which no script can read — not in `localStorage`, and not in a cookie copy.
+
+  The rule used to tell an app that draws its pages on the server to keep a script-readable copy of the session token in a cookie (`browserEnv({ cookie: true })`) and to have every sign-in handoff store that copy too. moss now keeps the session itself, where the page cannot reach it, so the rule says the opposite: nothing in an app stores a token, and a sign-in the app answers over HTTP sets the session cookie on its response (`sessionCookies(request, token)`) and hands the page nothing. D5 and check 6d follow.
+
+  **What to change:** nothing in an app that exists — `browserEnv({ cookie: true })` still compiles, and the option does nothing now.
+
+- 9a30cfc: `AGENTS.md` no longer calls one lab app the exemplar. "Layout of an app" describes one arrangement and then says which apps to read: lyceum for a moss server app, nisc-website and moccadroid-website for an app with its own shell; atrium, lyra and relay are older, and are read for a surface they target, not as a model. `fable` and `mythos` are no longer called the reference degrade apps. And a working pattern says what a rebuilt server shell holds: what the app reads from rows as it builds — `inputs`, `seeds`, an action's mount hook — and nothing else, so a screen a person opened that no row describes is gone after a deploy, a restart or an idle spell.
+
+  **What to change:** nothing.
+
+- fc50d20: `AGENTS.md` says where files go. Rule 9a: file pickers live in the kit; a file never goes over the socket; the app saves it wherever it wants. The review pass's "no `fetch` outside the endpoint layer" gains its one exception, to send a file. No code changed.
+
+  A picker that puts a file in its model value sends it over the socket as base64, and the tree brings it back on every render of that canvas. Measured against a moss server: one 15 MB file was 20 MB up and 100 MB down across five renders. Sent by the picker to a route the app mounts on its server, or to a system the app already has, the same file put nothing on the socket.
+
+  moss gains a test and nothing else: a route an app adds to the built server reads who is asking, as moss's own surfaces do.
+
+  **What to change:** nothing for the rule itself. But this release also limits a message a terminal sends to 256 KB (the moss entry on the socket's message limit), so a picker that emits a file's bytes as its model value now works only for a file under about 190 KB: send the file from the picker, as rule 9a says, or raise the limit where the app attaches the socket.
+
+- 64d3765: AGENTS.md: `nisc migrate`, where an app deployed with it puts its tables, and where the rows it needs to start are written.
+
+  The toolbox row for `cli` names the command. Rule 17 gains two sentences. An app deployed with `nisc migrate` hands its `<app>.app` sequence to moss (`runtime.tables`, with `TIDE_SEQUENCE` when it keeps tide's tables), and the function that opens its runtime migrates and seeds nothing: what it changes itself is changed before the step can check it. And rows an app needs in order to start are written by a migration step, in the same transaction as its tables; a seed that runs at start is for development and demos.
+
+  **What to change:** nothing.
+
+- 9311312: AGENTS.md: every list states its `limit`, and a parent and its children are one batch.
+
+  The worked `todos/open` entry stated no `limit`, so the guide's own example was a list the engine would stop at 100 rows. It states one now, and "Using Vex" says why: a seeded entry reads at most the `limit` it states, and a list without one gets the default.
+
+  "Using Vex" also gains the batch form for a write that creates a parent and its children: `{ $returned: 'table.column' }` reads the row an earlier statement of the same batch wrote, and the bullet says what the reply of such a batch looks like.
+
+  **What to change:** nothing.
+
+- Updated dependencies [7f8d202]
+- Updated dependencies [8abbb96]
+- Updated dependencies [78a563f]
+- Updated dependencies [51dc5ce]
+- Updated dependencies [da42472]
+- Updated dependencies [a91b5db]
+- Updated dependencies [812c464]
+- Updated dependencies [770f754]
+- Updated dependencies [61a4060]
+- Updated dependencies [8012cd8]
+- Updated dependencies [10875eb]
+- Updated dependencies [fc50d20]
+- Updated dependencies [2b5fd83]
+- Updated dependencies [1e5ad2d]
+- Updated dependencies [2011951]
+- Updated dependencies [2c57a38]
+- Updated dependencies [2d20daf]
+- Updated dependencies [b711c38]
+- Updated dependencies [3d8518c]
+- Updated dependencies [b711c38]
+- Updated dependencies [1903342]
+  - @niscorp/nova@0.2.2
+  - @niscorp/prism@0.2.2
+  - @niscorp/strata@0.1.4
+  - @niscorp/cli@0.3.2
+  - @niscorp/moss@0.3.3
+  - @niscorp/vex@0.2.3
+
 ## 0.3.2
 
 ### Patch Changes

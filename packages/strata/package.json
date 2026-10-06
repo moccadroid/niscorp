@@ -1,6 +1,6 @@
 {
   "name": "@niscorp/strata",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Migrations for nisc \u2014 one ledger for the tables a database holds and the documents stored in them, applied in order, recorded once, refused when edited.",
   "license": "Apache-2.0",
   "repository": {
