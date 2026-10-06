@@ -1337,7 +1337,11 @@ other than `GET`/`POST`/`PATCH`/`DELETE` answers 405.
   `fingerprint_protected`, a write with missing context → 400
   `missing_context` with the full derived signature in `details.expected`,
   other `VexError`s (including `locked` and `scope_denied`) → 400 with
-  `{ error, message, details }`. A reach the host cannot serve for this
+  `{ error, message, details }`. A body that is not JSON → 400
+  `invalid_request` (`Body must be JSON`): the Hono adapter parses the body
+  itself and never reads the content type, so JSON sent as `text/plain` is
+  read; the Express adapter is handed `req.body` as the host's parser left
+  it. A reach the host cannot serve for this
   principal → 403 `scope_denied`. 500s are the host's faults: `missing_scope`
   (key names stay in the log), an entry demanding a reach with no
   `policyForReach`, a mutation fingerprint on a handler with no `mutations`
@@ -1346,7 +1350,9 @@ other than `GET`/`POST`/`PATCH`/`DELETE` answers 405.
   **`DELETE`** with `{ fingerprint }` → evict (a protected entry, read or mutation,
   is refused with 409 `fingerprint_protected`). Both are refused with 403 `locked` on a
   locked endpoint and answer 404 `cache_miss` for an unknown fingerprint.
-  Fingerprints ride the body — names contain `/`.
+  Fingerprints ride the body — names contain `/` — and a body that is not
+  JSON, or carries no fingerprint, is a 400 `invalid_request` before anything
+  else is checked.
 
 Under the hood all of these call the framework-agnostic `handleDiscovery` /
 `handleQuery` / `handleFingerprintPatch` / `handleFingerprintDelete` from

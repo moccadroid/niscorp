@@ -63,8 +63,29 @@ const fingerprintFromBody = (body: unknown): string | undefined => {
   return typeof fp === 'string' && fp.length > 0 ? fp : undefined;
 };
 
+// A body that is not JSON is the request's mistake, not the server's: it is
+// answered 400 in the surface's own error shape instead of thrown out of the
+// route. The content type is never read: JSON sent as text/plain (what `fetch`
+// sends for a string body) parses as it always has.
+const NOT_JSON = { error: 'invalid_request', message: 'Body must be JSON' };
+
 export const vex = <E extends Env = Env>(config: VexHonoConfig<E>): Hono<E> => {
   const app = new Hono<E>();
+  // The body is read through hono's own `c.req.json()`, as it always was — so
+  // a host middleware that read it first still shares hono's cache with this
+  // adapter (before hono 4.2 that cache was kept per reader; reading the body
+  // any other way here answered 500 to a valid request behind one). Only the
+  // parse failing is caught: a body that cannot be read at all — consumed
+  // outside hono, a stream that broke — is still a fault and still throws.
+  const jsonBodyOf = async (c: Context<E>): Promise<{ parsed: true; body: unknown } | { parsed: false }> => {
+    try {
+      const body: unknown = await c.req.json();
+      return { parsed: true, body };
+    } catch (err) {
+      if (err instanceof SyntaxError) return { parsed: false };
+      throw err;
+    }
+  };
   // The per-request policy (when configured) overrides everything policy-
   // shaped: reads (scopePolicy), writes (mutations.policy) and discovery.
   const requestConfig = async (c: Context<E>) => {
@@ -102,13 +123,16 @@ export const vex = <E extends Env = Env>(config: VexHonoConfig<E>): Hono<E> => {
 
   app.post('/', async (c) => {
     const scope = config.getScope ? await config.getScope(c) : {};
-    const body: unknown = await c.req.json();
-    const result = await handleQuery(await requestConfig(c), body, scope, liveOf(c.env));
+    const read = await jsonBodyOf(c);
+    if (!read.parsed) return c.json(NOT_JSON, 400);
+    const result = await handleQuery(await requestConfig(c), read.body, scope, liveOf(c.env));
     return c.json(result.body, result.status as 200);
   });
 
   app.patch('/', async (c) => {
-    const body: unknown = await c.req.json();
+    const read = await jsonBodyOf(c);
+    if (!read.parsed) return c.json(NOT_JSON, 400);
+    const body = read.body;
     const fingerprint = fingerprintFromBody(body);
     if (fingerprint === undefined) {
       return c.json({ error: 'invalid_request', message: 'Body must include { fingerprint }' }, 400);
@@ -121,8 +145,9 @@ export const vex = <E extends Env = Env>(config: VexHonoConfig<E>): Hono<E> => {
   });
 
   app.delete('/', async (c) => {
-    const body: unknown = await c.req.json();
-    const fingerprint = fingerprintFromBody(body);
+    const read = await jsonBodyOf(c);
+    if (!read.parsed) return c.json(NOT_JSON, 400);
+    const fingerprint = fingerprintFromBody(read.body);
     if (fingerprint === undefined) {
       return c.json({ error: 'invalid_request', message: 'Body must include { fingerprint }' }, 400);
     }

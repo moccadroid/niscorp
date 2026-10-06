@@ -136,6 +136,140 @@ describe('hono adapter', () => {
     });
   });
 
+  // A body that is not JSON used to throw out of the route: hono answered 500
+  // "Internal Server Error" in plain text for what is the request's mistake.
+  describe('a body that is not JSON', () => {
+    const notJson = { error: 'invalid_request', message: 'Body must be JSON' };
+    const form = (): FormData => {
+      const data = new FormData();
+      data.append('fingerprint', 'nope/nothing');
+      return data;
+    };
+    const bodies: Array<[string, () => RequestInit]> = [
+      ['text', () => ({ headers: { 'Content-Type': 'text/plain' }, body: 'not json' })],
+      ['a multipart form', () => ({ body: form() })],
+      ['a urlencoded form', () => ({ headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'fingerprint=nope' })],
+      ['truncated JSON', () => ({ headers: { 'Content-Type': 'application/json' }, body: '{"fingerprint":' })],
+      ['nothing', () => ({})],
+    ];
+
+    for (const method of ['POST', 'PATCH', 'DELETE']) {
+      for (const [label, init] of bodies) {
+        it(`${method} with ${label} is a 400 invalid_request`, async () => {
+          const res = await app.request('/api/vex', { method, ...init() });
+          expect(res.status).toBe(400);
+          expect(res.headers.get('content-type')).toContain('application/json');
+          expect(await res.json()).toEqual(notJson);
+        });
+      }
+    }
+
+    it('is answered the same on a locked endpoint', async () => {
+      const lockedApp = new Hono();
+      lockedApp.route('/api/vex', vex({ engine, locked: true }));
+      for (const method of ['POST', 'PATCH', 'DELETE']) {
+        const res = await lockedApp.request('/api/vex', { method, headers: { 'Content-Type': 'text/plain' }, body: 'not json' });
+        expect(res.status).toBe(400);
+        expect(await res.json()).toEqual(notJson);
+      }
+    });
+
+    it('never reaches the host error handler, and the execution observer hears nothing', async () => {
+      const failures: unknown[] = [];
+      const executed: string[] = [];
+      let scopeCalls = 0;
+      const host = new Hono();
+      host.onError((err, c) => {
+        failures.push(err);
+        return c.text('host', 500);
+      });
+      host.route(
+        '/api/vex',
+        vex({
+          engine,
+          getScope: () => {
+            scopeCalls += 1;
+            return {};
+          },
+          onExecute: (record) => void executed.push(record.status),
+        }),
+      );
+
+      const res = await host.request('/api/vex', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: 'not json' });
+      expect(res.status).toBe(400);
+      expect(failures).toEqual([]);
+      expect(executed).toEqual([]);
+      // The scope is still resolved before the body is read, as it was.
+      expect(scopeCalls).toBe(1);
+    });
+
+    // The body is read through hono's own `req.json()`, as it always was, so a
+    // middleware that read it first shares hono's cache with the adapter. Before
+    // hono 4.2 that cache was kept per reader: an adapter reading the body any
+    // other way answered 500 to a VALID request behind such a middleware. The
+    // hono installed here shares its cache either way, so this holds the reader
+    // itself: `req.text()` is not the adapter's to call.
+    it('a body a host middleware read through hono first is still read', async () => {
+      const host = new Hono();
+      host.use('*', async (c, next) => {
+        await c.req.json().catch(() => undefined);
+        c.req.text = () => Promise.reject(new Error('the adapter read the body as text'));
+        await next();
+      });
+      host.route('/api/vex', vex({ engine }));
+
+      for (const method of ['POST', 'PATCH', 'DELETE']) {
+        const good = await host.request('/api/vex', {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fingerprint: 'nope/nothing' }),
+        });
+        expect(good.status).toBe(404);
+        const bad = await host.request('/api/vex', { method, headers: { 'Content-Type': 'text/plain' }, body: 'not json' });
+        expect(bad.status).toBe(400);
+        expect(await bad.json()).toEqual(notJson);
+      }
+    });
+
+    // The content type is never read — `fetch` sends a string body as text/plain.
+    it('JSON sent as text/plain, or with no content type, is still read', async () => {
+      for (const headers of [{ 'Content-Type': 'text/plain' }, undefined]) {
+        const res = await app.request('/api/vex', {
+          method: 'POST',
+          ...(headers !== undefined ? { headers } : {}),
+          body: JSON.stringify({ fingerprint: 'nope/nothing' }),
+        });
+        expect(res.status).toBe(404);
+        const body = await res.json() as Record<string, unknown>;
+        expect(body['error']).toBe('cache_miss');
+      }
+    });
+
+    // Only the parse is caught: a body that cannot be READ is the host's fault,
+    // and still reaches the host as one.
+    it('a body the host already consumed is still a fault', async () => {
+      const failures: unknown[] = [];
+      const host = new Hono();
+      host.onError((err, c) => {
+        failures.push(err);
+        return c.text('host', 500);
+      });
+      host.use('*', async (c, next) => {
+        await c.req.raw.text();
+        await next();
+      });
+      host.route('/api/vex', vex({ engine }));
+
+      const res = await host.request('/api/vex', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fingerprint: 'nope/nothing' }),
+      });
+      expect(res.status).toBe(500);
+      expect(failures).toHaveLength(1);
+    });
+  });
+
   describe('scope', () => {
     it('calls getScope with hono context', async () => {
       let scopeCalled = false;
