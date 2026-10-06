@@ -42,7 +42,7 @@ import { revokeAllFor } from './sessions';
 // terminal simply receives a fresh frame. `list` is the truthful roster
 // that makes an operator able to find the shell to reset; the idle sweep is
 // the same disposal on a timer, and safe for the reason DESIGN.md gives —
-// the projection is the durable thing, a shell is a warm cache.
+// the database is the durable thing, a shell is a warm cache.
 // ═══════════════════════════════════════════════════════════════
 
 // WHO A SHELL IS BEING BUILT FOR, resolved ONCE.
@@ -928,11 +928,11 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
 
   // ── the idle sweep ──
   // A durable shell with nothing attached for `idleMs` is disposed. Safe by
-  // the same argument that makes a process restart safe (DESIGN.md § Server
-  // shells, Lifetime): the
-  // projection is durable, a shell is a warm cache, and the next connection
-  // rebuilds it from definitions. The clock is the IDLE one — a shell somebody
-  // is looking at is never collected, however old.
+  // the same argument that makes a process restart safe (DESIGN.md § The
+  // socket, Durability): the
+  // database is durable, a shell is a warm cache, and the next connection
+  // rebuilds it from definitions and rows. The clock is the IDLE one — a shell
+  // somebody is looking at is never collected, however old.
   const idleMs = ctx.idleMs ?? DEFAULT_IDLE_MS;
 
   const sweep = (): void => {

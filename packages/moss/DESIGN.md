@@ -163,11 +163,12 @@ Operational shape, all falling out of "the message is state, not history":
   same rule holds before the first connect: nothing is sent on a socket that is
   not open and nothing is held for when it is. A server-drawn page (below) is on
   screen before its socket, so a press in that moment is dropped.
-- **Durability.** The projection (once built) is the durable thing; the shell is
-  a warm cache rebuilt from definitions + projection. Evicting an idle shell and
-  restarting the process are both safe — shells rehydrate on the next connection.
-  This is why an idle sweep can exist at all, and why `reset` costs nothing but
-  the screen someone was on.
+- **Durability.** The database is the durable thing; a shell is a warm cache,
+  rebuilt on the next connection from definitions and whatever the app reads
+  from rows as it builds. Evicting an idle shell, restarting the process and
+  `reset` cost the same and nothing more: what was only in the shell — the
+  screens someone had opened, and what they had typed. This is why an idle
+  sweep can exist at all.
 - **Recovery.** `reset` (up) throws a session's shell away and serves its
   replacement. It names no canvas, because it is the recovery for a session
   whose canvases are the broken thing; it is protocol-level, so no action
