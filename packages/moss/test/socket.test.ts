@@ -701,33 +701,47 @@ describe('socket — a sign-in handed over sealed', () => {
     await createSocket(ctxWith())(ASKING, conn);
     expect(conn.first('hello')?.principal).toBeNull();
     expect(conn.answered).toHaveLength(1);
-    expect(conn.answered?.[0]).toMatch(/^__Secure-nisc\.seal=[\w-]{43}; HttpOnly; Path=\/socket; SameSite=Lax; Secure$/);
+    expect(conn.answered?.[0]).toMatch(/^__Http-nisc\.seal=[\w-]{43}; HttpOnly; Path=\/socket; SameSite=Lax; Secure$/);
     // and a sign-in on this connection is sealed with it
     const seal = conn.answered?.[0]?.split(';')[0]?.split('=')[1] ?? '';
     const sealed = await conn.seal?.('good');
-    const back = offeringSealed(new FakeConnection().from({ ...HERE, cookie: `__Secure-nisc.seal=${seal}` }), sealed ?? '');
+    const back = offeringSealed(new FakeConnection().from({ ...HERE, cookie: `__Http-nisc.seal=${seal}` }), sealed ?? '');
     await createSocket(ctxWith())(ASKING, back);
     expect(back.first('hello')?.principal).toBe('usr_1');
   });
 
+  // A request shows a cookie's name and value and nothing of who set it. So
+  // over https the seal is read under the one name a browser lets no script
+  // set: a seal under any other name is not this browser's key, whoever put it there.
+  it('a seal under a name a script could have set is not read, and the browser is given its own', async () => {
+    const conn = new FakeConnection().from({ ...HERE, cookie: 'nisc.seal=PLANTED; __Secure-nisc.seal=PLANTED' });
+    await createSocket(ctxWith())(ASKING, conn);
+    expect(conn.answered).toHaveLength(1);
+    expect(conn.answered?.[0]).toMatch(/^__Http-nisc\.seal=[\w-]{43}; HttpOnly; /);
+    const sealedForThisBrowser = (await conn.seal?.('good')) ?? '';
+    const planter = offeringSealed(new FakeConnection().from({ ...HERE, cookie: '__Http-nisc.seal=PLANTED' }), sealedForThisBrowser);
+    await createSocket(ctxWith())(ASKING, planter);
+    expect(planter.first('hello')?.principal).toBeNull();
+  });
+
   it('a browser that sent its seal keeps it: no two upgrades disagree about the key', async () => {
-    const conn = new FakeConnection().from({ ...HERE, cookie: '__Secure-nisc.seal=the-seal-it-has' });
+    const conn = new FakeConnection().from({ ...HERE, cookie: '__Http-nisc.seal=the-seal-it-has' });
     await createSocket(ctxWith())(ASKING, conn);
     expect(conn.answered).toBeUndefined();
     expect(await conn.seal?.('good')).toBeDefined();
   });
 
   it('a sealed sign-in offered back with the seal it was sealed with is who the terminal is, and is moved into the cookie', async () => {
-    const conn = offeringSealed(new FakeConnection().from({ ...HERE, cookie: '__Secure-nisc.seal=the-seal' }), await sealSession('the-seal', 'good'));
+    const conn = offeringSealed(new FakeConnection().from({ ...HERE, cookie: '__Http-nisc.seal=the-seal' }), await sealSession('the-seal', 'good'));
     await createSocket(ctxWith())(ASKING, conn);
     expect(conn.first('hello')?.principal).toBe('usr_1');
     expect(conn.answered).toEqual(['__Host-nisc.token=good; HttpOnly; Path=/; SameSite=Lax; Secure', 'nisc.token.held=1; Path=/; SameSite=Lax; Secure']);
   });
 
   it.each([
-    ['a browser with another seal', async () => ({ cookie: '__Secure-nisc.seal=another', sealed: await sealSession('the-seal', 'good') })],
-    ['too late', async () => ({ cookie: '__Secure-nisc.seal=the-seal', sealed: await sealSession('the-seal', 'good', -1) })],
-    ['with something that is not a sealed sign-in', async () => ({ cookie: '__Secure-nisc.seal=the-seal', sealed: 'bm90LXNlYWxlZA' })],
+    ['a browser with another seal', async () => ({ cookie: '__Http-nisc.seal=another', sealed: await sealSession('the-seal', 'good') })],
+    ['too late', async () => ({ cookie: '__Http-nisc.seal=the-seal', sealed: await sealSession('the-seal', 'good', -1) })],
+    ['with something that is not a sealed sign-in', async () => ({ cookie: '__Http-nisc.seal=the-seal', sealed: 'bm90LXNlYWxlZA' })],
   ])('offered back by %s, it opens nothing: nobody, and the verifier is never asked', async (_label, given) => {
     const { cookie, sealed } = await given();
     const session = vi.fn(() => 'usr_1');

@@ -116,11 +116,18 @@ export const sessionTokenOf = (
 // page drawn for nobody is still the same for everybody. It lasts until the
 // browser closes, and is never stored or looked up here — a key, not a name.
 //
+// ITS NAME IS WHAT KEEPS A SCRIPT FROM SUPPLYING IT. A request shows a cookie's
+// name and value and nothing of who set it, so a seal a script planted before
+// the browser's first upgrade would look like one given here — and the script
+// would hold the key. Over https the seal is `__Http-` prefixed: a name a
+// browser lets only an HTTP answer set, never script. A browser that does not
+// know the prefix treats it as any other name, and is where that is still open.
+//
 // WebCrypto, so this is the same on every runtime and nothing here is Node's.
 // ═══════════════════════════════════════════════════════════════
 
 const SEALED_FOR_MS = 60_000;
-const sealName = (secure: boolean): string => `${secure ? '__Secure-' : ''}nisc.seal`;
+const sealName = (secure: boolean): string => `${secure ? '__Http-' : ''}nisc.seal`;
 const toBase64Url = (bytes: Uint8Array): string => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const fromBase64Url = (text: string): Uint8Array<ArrayBuffer> => Uint8Array.from(atob(text.replace(/-/g, '+').replace(/_/g, '/')), (char) => char.charCodeAt(0));
 const keyOf = async (seal: string): Promise<CryptoKey> => crypto.subtle.importKey('raw', await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seal)), 'AES-GCM', false, ['encrypt', 'decrypt']);

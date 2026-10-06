@@ -908,7 +908,8 @@ measures the end.
 - **A sign-in is handed to such a page sealed.** A terminal whose browser can
   keep a session says so (`?sealed=1`; `browserEnv` does), and the answer to
   its first upgrade gives the browser a *seal*: a key in a second cookie no
-  script can read, sent only with the socket's path. `session.grant(token)`
+  script can read — or, over https, set (`__Http-nisc.seal`; `nisc.seal` over
+  plain http) — sent only with the socket's path. `session.grant(token)`
   then reaches that terminal as `{ type: 'session', sealed }` — the token,
   encrypted with the seal and good for a minute — which it offers back on its
   next upgrade (`offerToken(null, sealed)`); the browser's seal opens it there

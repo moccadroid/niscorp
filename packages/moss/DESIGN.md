@@ -212,8 +212,9 @@ cannot be taken from it.
 - **A sign-in over the socket reaches it sealed.** `session.grant` happens on a
   socket, which cannot write a cookie; the token has to travel through the
   page to the next upgrade. It travels encrypted with a key the browser holds
-  in a second cookie no script can read — the *seal*, given by the answer to
-  the browser's first upgrade. The page can hand a sealed sign-in back and
+  in a second cookie no script can read or set — the *seal*, given by the
+  answer to the browser's first upgrade under a name (`__Http-`) a browser
+  lets only an HTTP answer set. The page can hand a sealed sign-in back and
   cannot open it, and neither can anybody it is shown to: without that
   browser's seal it opens nothing. Nothing is kept here between the two
   requests, so it works whichever process answers the second, and it works
@@ -658,12 +659,16 @@ On the record, so nothing reads as finished that isn't:
   drawn for nobody (a file, on a static host) connects, and is served a page
   shell for as long as it stays — even when that page turns out not to be live
   for them either. Closing such a connection once its frames are sent is unbuilt.
-- **A seal given with the page.** The seal is given by the answer to a
-  browser's first upgrade, which is after the page's script has started. A
-  script already running in the page then — one that could as well read what is
-  typed into it — can set a seal of its own first, and open the sign-in that
-  follows. Giving the seal with the page itself would close that for every
-  page moss serves, and would put a cookie on a request that today carries none.
+- **A seal no script can supply, in every browser.** The seal is given by the
+  answer to a browser's first upgrade, after the page's script has started; a
+  script already running then could set one of its own first, and open the
+  sign-in that follows. Its `__Http-` name is what stops that — a browser lets
+  only an HTTP answer set it — and a browser that does not know the prefix
+  does not stop it. Nor does the name stop a *server* on a sibling subdomain
+  from setting one; with a script in the page as well, that is the same
+  opening. `__Host-Http-` would close it, and would put the seal on every page
+  request, ending the sharing of pages drawn for nobody. Over plain http there
+  is no such name, and nothing on the way is private either.
 
 ## Boundaries
 
