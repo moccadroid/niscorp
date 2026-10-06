@@ -782,6 +782,22 @@ describe('the wire — on a host whose browser keeps the session', () => {
     expect(storage.getItem('nisc.token')).toBeNull();
   });
 
+  // What a sealed sign-in opened to may be refused — a session revoked in that
+  // second, a token its provider will not have. Offered again it would be
+  // refused again, at once, for the whole minute it stays good.
+  it('a sealed sign-in that is refused is not offered again', () => {
+    createWire({ url: URL, env: host() });
+    FakeSocket.last().open();
+    FakeSocket.last().emit({ type: 'session', sealed: 'c2VhbGVk' });
+    expect(FakeSocket.last().offered).toEqual(['nisc', 'nisc.sealed.c2VhbGVk']);
+    FakeSocket.last().serverClose(CLOSE_INVALID_TOKEN);
+    expect(FakeSocket.last().offered).toEqual(['nisc']);
+    const sockets = FakeSocket.instances.length;
+    FakeSocket.last().open();
+    FakeSocket.last().emit({ ...hello, principal: null });
+    expect(FakeSocket.instances).toHaveLength(sockets);
+  });
+
   it('a host that keeps its own token does not ask to be handed one sealed', () => {
     createWire({ url: URL, env: env() });
     expect(FakeSocket.last().url).not.toContain('sealed');

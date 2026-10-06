@@ -279,6 +279,17 @@ describe('a browser on the app’s own page', () => {
     socket.close();
   });
 
+  // A browser sends a cookie with requests another site makes it send. So the
+  // HTTP surfaces do not read it at all: who is asking them is `Authorization`.
+  it('no route answers to the cookie, even from the app’s own page', async () => {
+    const page = browser();
+    await signIn(load(), 'ada');
+    const asked = await fetch(`${base}/catalog`, { headers: { origin: base, cookie: page.cookieHeader() } });
+    expect(((await asked.json()) as { principal: unknown }).principal).toBeNull();
+    const withToken = await fetch(`${base}/catalog`, { headers: { authorization: `Bearer ${decodeURIComponent(page.jar.get(`nisc.token.${port}`)?.value ?? '')}` } });
+    expect(((await withToken.json()) as { principal: unknown }).principal).toBe('ada');
+  });
+
   it('a page on another origin, sent with everything her browser holds, is nobody', async () => {
     const page = browser();
     await signIn(load(), 'ada');

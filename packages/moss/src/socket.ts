@@ -46,9 +46,10 @@ export type Connection = {
   // terminal as nobody.
   //
   // `answer`: a transport that has NOT answered the request yet says so by
-  // giving this, and is told — once who is asking is decided, before anything
-  // is sent — the `Set-Cookie` values its answer is to carry: the one moment a
-  // cookie can be written. It answers when the connection is first used.
+  // giving this, and is told — once who is asking is decided, before the
+  // connection is used at all — the `Set-Cookie` values its answer is to
+  // carry: the one moment a cookie can be written. It answers when the
+  // connection is first used.
   // Without it nothing is written, and a browser's terminal goes on holding
   // its own token.
   upgrade?: {
@@ -248,6 +249,7 @@ const parse = (text: string): Record<string, unknown> | null => {
 
 export const createSocket = (ctx: SocketContext): SocketAccept => {
   const emit = emitterOf(ctx.telemetry);
+  let saidNotOwn = false;
   // Every live connection, with the credential it authenticated under (null =
   // anonymous, which has nothing that can expire). One structure: the future
   // catalog-push fan-out wants the keys, revalidation wants the values.
@@ -353,6 +355,14 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
     // its first upgrade. A sign-in is then handed to the page sealed with it;
     // the page offers it back here, and only this browser's seal opens it.
     const sealing = page !== undefined && params.get('sealed') === '1';
+    // A browser terminal that is not on the app's own page works as it always
+    // did, holding its own token — which is right for a page served from
+    // somewhere else, and is what a proxy that rewrites `Host` looks like too.
+    // Said once: nothing else would tell a deployment it is in the second case.
+    if (page === undefined && params.get('sealed') === '1' && typeof upgrade?.origin === 'string' && !saidNotOwn) {
+      saidNotOwn = true;
+      console.warn(`[moss] a terminal on ${upgrade.origin} holds its own session token: this server was addressed as ${upgrade.host ?? 'nothing'}, so that is not the app’s own page. If the app is served there, behind a proxy that rewrites Host, list it in runtime.origins.`);
+    }
     const hadSeal = sealing ? sealOf(upgrade?.cookie, secure) : null;
     const sealedOffer = upgrade?.offered.find((entry) => entry.startsWith(SEALED_OFFER))?.slice(SEALED_OFFER.length) ?? null;
     // A sealed sign-in that came back with no seal to open it: this browser

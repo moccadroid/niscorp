@@ -123,8 +123,11 @@ export const renderDocument = async (config: DocumentConfig): Promise<DrawnDocum
   try {
     // The session the browser holds (session-cookie.ts). A page request does
     // not say how it arrived, so the name only this host can have set is read
-    // before the plain one.
-    const token = sessionTokenOf(request.cookie, { port: /:(\d+)$/.exec(request.host ?? '')?.[1] ?? '' }, tokenKey)?.token ?? null;
+    // before the plain one. Its name ends with the port the page is on: the
+    // one the request was addressed to, and — behind a proxy that rewrote
+    // `Host` to its own upstream — the one the site says it is served at.
+    const ports = [/:(\d+)$/.exec(request.host ?? '')?.[1] ?? '', ...(config.site !== undefined && URL.canParse(config.site) ? [new URL(config.site).port] : [])];
+    const token = ports.map((port) => sessionTokenOf(request.cookie, { port }, tokenKey)?.token ?? null).find((found) => found !== null) ?? null;
     // A token that no longer resolves is nobody: the page is drawn for nobody.
     // Nothing is written here — the upgrade is where a browser's cookie is set
     // and taken back (socket.ts), and one writer cannot disagree with itself. A

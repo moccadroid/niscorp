@@ -179,6 +179,17 @@ describe('renderDocument', () => {
     expect((await renderDocument({ server: serverOf(), template: TEMPLATE, request: { ...request, host: 'localhost:8080' }, draw })).principal).toBeNull();
   });
 
+  // A proxy that rewrites `Host` to its upstream (nginx does, told nothing)
+  // hides the port the browser is on; the site's own address still says it.
+  it('behind a proxy that rewrote Host, the page is found on the port its site is served at', async () => {
+    const request = { path: '/docs/intro', cookie: '__Host-nisc.token=good', host: '127.0.0.1:8787' };
+    expect((await renderDocument({ server: serverOf(), template: TEMPLATE, request, draw })).principal).toBeNull();
+    expect((await renderDocument({ server: serverOf(), template: TEMPLATE, request, site: 'https://example.com', draw })).principal).toBe('usr_max');
+    // and in dev, where the site names production: the port the request came to still comes first
+    const dev = { path: '/docs/intro', cookie: 'nisc.token.5173=good', host: 'localhost:5173' };
+    expect((await renderDocument({ server: serverOf(), template: TEMPLATE, request: dev, site: 'https://example.com', draw })).principal).toBe('usr_max');
+  });
+
   it('a seat’s page is drawn from that seat’s cookie', async () => {
     const page = await renderDocument({ server: serverOf(), template: TEMPLATE, request: { path: '/docs/intro', cookie: '__Host-nisc.token.speaker=good' }, tokenKey: 'nisc.token.speaker', draw });
     expect(page.principal).toBe('usr_max');

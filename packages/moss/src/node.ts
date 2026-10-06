@@ -76,10 +76,11 @@ export const attachSocket = (
     socket.on('error', () => {});
     let ws: ServerSocket | undefined;
     let answered = false;
-    // The first use of the connection answers the request — when it always
-    // was answered, as the first frame goes out — with the cookies moss has
-    // said by then. A request `ws` will not upgrade (a bad key, a peer already
-    // gone) leaves no websocket: nothing is sent to it, and it is closed already.
+    // The first use of the connection answers the request, with the cookies
+    // moss has named by then — which is as soon as it has decided who is
+    // asking, or is refusing the terminal outright. A request `ws` will not
+    // upgrade (a bad key, a peer already gone) leaves no websocket: nothing is
+    // sent to it, and it is closed already.
     let cookies: readonly string[] = [];
     const answer = (): ServerSocket | undefined => {
       if (answered) return ws;

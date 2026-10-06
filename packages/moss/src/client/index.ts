@@ -447,8 +447,11 @@ export const createWire = (config: WireConfig = {}): Wire => {
   // keep the session stores nothing yet: the token is offered, and what
   // becomes of it is settled when the upgrade is answered (`hello`, above).
   const become = (next: string | null, handedSealed: string | null = null): void => {
-    if (handedSealed !== null) sealed = handedSealed;
-    else if (next === null) env.tokens.clear();
+    // whatever was being offered sealed is over: taken, or refused
+    sealed = handedSealed;
+    if (handedSealed !== null) {
+      /* nothing this page can read, so nothing to store */
+    } else if (next === null) env.tokens.clear();
     else if (env.tokens.held === undefined) env.tokens.save(next);
     token = next;
     clearTimeout(retry);

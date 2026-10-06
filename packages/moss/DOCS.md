@@ -508,6 +508,8 @@ const page = await renderDocument({
   wire's token key (`tokenKey`, default `nisc.token`), or nobody. The cookie's
   name ends with the port a page is on, so `request.host` (the `Host` header)
   is how a page on a port finds it; `mountSite` and the vite plugin pass it.
+  Behind a proxy that rewrites `Host` to its upstream, the port `site` names
+  is tried too.
   A cookie that no longer resolves is nobody. Nothing is written here — the
   upgrade is where the cookie is set and taken back. A verifier that *throws*
   is a fault, not a sign-out: the page goes out undrawn.
@@ -891,7 +893,9 @@ measures the end.
 - **A browser on the app's own page** is who its session cookie says
   ([`sessionCookies`](#sessioncookiespage-token-options)). The cookie is read
   only when the upgrade's `Origin` is the host it was addressed to, or one
-  `runtime.origins` lists. A token such a page offers is who it is and is
+  `runtime.origins` lists. (Behind a proxy that rewrites `Host` and with
+  nothing listed, no page is the app's own: terminals hold their own tokens,
+  as before, and moss says so once in the log.) A token such a page offers is who it is and is
   moved into the cookie by the answer to the upgrade; one that no longer
   resolves is nobody (served, not refused) and is taken back. `?key=` names
   which of the browser's sessions the terminal is — a seat; the cookie is named

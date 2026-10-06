@@ -751,15 +751,34 @@ describe('socket — a sign-in handed over sealed', () => {
     expect(conn.seal).toBeUndefined();
   });
 
+  // Behind a proxy that rewrites `Host`, every page of the app looks like a
+  // page from somewhere else: it works, on its own token, and nothing else
+  // would say the session is not being kept by the browser.
+  it('a browser terminal that is not on the app’s own page is said so, once', async () => {
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const accept = createSocket(ctxWith());
+    const proxied = { origin: 'https://app.example.com', host: '127.0.0.1:8787' };
+    await accept(ASKING, new FakeConnection().from(proxied));
+    await accept(ASKING, new FakeConnection().from(proxied));
+    expect(warned).toHaveBeenCalledTimes(1);
+    expect(String(warned.mock.calls[0]?.[0])).toContain('runtime.origins');
+    // a terminal that keeps its own token by design (a process) is not what this is about
+    await createSocket(ctxWith())(SOCKET, new FakeConnection().from(proxied));
+    expect(warned).toHaveBeenCalledTimes(1);
+    warned.mockRestore();
+  });
+
   it.each([
     ['a terminal that did not ask', SOCKET, HERE, true],
     ['a page on another origin', ASKING, { origin: 'https://evil.example.com', host: 'app.example.com' }, true],
     ['a transport that had already answered, so no seal can be given', ASKING, HERE, false],
   ])('%s is given no seal, and handed a sign-in as its token', async (_label, address, page, canAnswer) => {
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const conn = new FakeConnection().from(page);
     if (!canAnswer) delete conn.upgrade?.answer;
     await createSocket(ctxWith())(address, conn);
     expect(conn.answered).toBeUndefined();
     expect(conn.seal).toBeUndefined();
+    warned.mockRestore();
   });
 });
