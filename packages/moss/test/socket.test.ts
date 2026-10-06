@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DefinitionValidationError } from '@niscorp/nova';
-import { createSocket, CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, CLOSE_SHELL_FAILED, CLOSE_PROTOCOL_MISMATCH, PROTOCOL, PROTOCOL_MIN } from '../src/socket';
+import { createSocket, CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, CLOSE_SHELL_FAILED, CLOSE_PROTOCOL_MISMATCH, PROTOCOL, PROTOCOL_MIN, offerToken } from '../src/socket';
 import type { Connection, ServerMessage, SocketContext } from '../src/socket';
 import type { ShellHost, ShellSession } from '../src/shells';
 
@@ -9,6 +9,9 @@ import type { ShellHost, ShellSession } from '../src/shells';
 class FakeConnection implements Connection {
   sent: ServerMessage[] = [];
   closed?: { code?: number; reason?: string };
+  upgrade?: { offered: string[] };
+  // the terminal behind this connection holds a token, and offered it on the upgrade
+  offering(token: string): this { this.upgrade = { offered: offerToken(token) }; return this; }
   private onMsg?: (t: string) => void;
   private onCls?: () => void;
   send(text: string): void { this.sent.push(JSON.parse(text) as ServerMessage); }
@@ -22,6 +25,9 @@ class FakeConnection implements Connection {
 }
 
 const CATALOG = { ids: ['home', 'crm.deals'], hash: 'abc123' };
+
+// The address of a current terminal: the protocol it speaks, and nothing about who it is.
+const SOCKET = `/socket?protocol=${PROTOCOL}`;
 
 // A recording shell session — proves the socket routes into the host.
 const recordingSession = (): ShellSession & { calls: string[] } => {
@@ -70,7 +76,7 @@ describe('socket — the authority channel', () => {
   it('anonymous (no token) gets hello with a null principal', async () => {
     const accept = createSocket(ctxWith());
     const conn = new FakeConnection();
-    await accept('/socket', conn);
+    await accept(SOCKET, conn);
     const hello = conn.first('hello');
     expect(hello?.principal).toBeNull();
     expect(hello?.catalog.actions).toEqual(CATALOG.ids);
@@ -79,7 +85,7 @@ describe('socket — the authority channel', () => {
   it('a valid token resolves the principal and its catalog', async () => {
     const accept = createSocket(ctxWith());
     const conn = new FakeConnection();
-    await accept('/socket?token=good', conn);
+    await accept(SOCKET, conn.offering('good'));
     const hello = conn.first('hello');
     expect(hello?.principal).toBe('usr_1');
     expect(hello?.catalog.hash).toBe('abc123');
@@ -93,13 +99,53 @@ describe('socket — the authority channel', () => {
     expect(conn.first('hello')?.protocol).toBe(PROTOCOL);
   });
 
-  it('a terminal that names no protocol speaks 1 — every terminal built before the question', async () => {
+  it('a terminal that names no protocol speaks 1 — every terminal built before the question — and is told to reload', async () => {
     const accept = createSocket(ctxWith());
     const conn = new FakeConnection();
     await accept('/socket', conn);
-    expect(PROTOCOL_MIN).toBeLessThanOrEqual(1);
-    expect(conn.first('hello')).toBeDefined();
-    expect(conn.closed).toBeUndefined();
+    expect(conn.first('error')?.code).toBe('client_too_old');
+    expect(conn.closed?.code).toBe(CLOSE_PROTOCOL_MISMATCH);
+    expect(conn.first('hello')).toBeUndefined();
+  });
+
+  // The address is what every proxy on the way writes into its log, so it is
+  // not where a terminal says who it is — and a server that still read it
+  // there would keep that open for whoever went on using it.
+  it('a token in the address is not who the terminal is', async () => {
+    const accept = createSocket(ctxWith());
+    const conn = new FakeConnection();
+    await accept(`${SOCKET}&token=good`, conn);
+    expect(conn.first('hello')?.principal).toBeNull();
+  });
+
+  it.each([
+    ['moss’s own', 'st_Zm9v-YmFy_QQ'],
+    ['a provider’s, with dots, padding and symbols', 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZGEifQ==.a+b/c=d'],
+    ['not ASCII at all', 'ключ-🔑'],
+  ])('the token a terminal offers arrives as it was held: %s', async (_label, held) => {
+    const asked: string[] = [];
+    const accept = createSocket(ctxWith({ session: (token) => (asked.push(token), 'usr_1') }));
+    const conn = new FakeConnection().offering(held);
+    // what is offered is a legal subprotocol, whatever the token is made of
+    expect(conn.upgrade?.offered.every((entry) => /^[\w.-]+$/.test(entry))).toBe(true);
+    await accept(SOCKET, conn);
+    expect(asked).toEqual([held]);
+    expect(conn.first('hello')?.principal).toBe('usr_1');
+  });
+
+  it.each([
+    ['a transport that says nothing of the upgrade', undefined],
+    ['an offer of `nisc` alone', { offered: ['nisc'] }],
+    ['an offer that is not a token', { offered: ['nisc', 'nisc.token.%%%'] }],
+    ['an offer of an empty token', { offered: ['nisc', 'nisc.token.'] }],
+  ])('%s is nobody, and the verifier is never asked', async (_label, upgrade) => {
+    const session = vi.fn(() => 'usr_1');
+    const accept = createSocket(ctxWith({ session }));
+    const conn = new FakeConnection();
+    if (upgrade !== undefined) conn.upgrade = upgrade;
+    await accept(SOCKET, conn);
+    expect(conn.first('hello')?.principal).toBeNull();
+    expect(session).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -110,7 +156,7 @@ describe('socket — the authority channel', () => {
     const session = recordingSession();
     const accept = createSocket(ctxWith({ shells: hostFor(session) }));
     const conn = new FakeConnection();
-    await accept(`/socket?protocol=${spoken}&token=good`, conn);
+    await accept(`/socket?protocol=${spoken}`, conn.offering('good'));
     expect(conn.first('error')?.code).toBe(code);
     expect(conn.closed?.code).toBe(CLOSE_PROTOCOL_MISMATCH);
     expect(conn.first('hello')).toBeUndefined();
@@ -120,7 +166,7 @@ describe('socket — the authority channel', () => {
   it('an invalid token is refused: error then close 4401', async () => {
     const accept = createSocket(ctxWith());
     const conn = new FakeConnection();
-    await accept('/socket?token=bad', conn);
+    await accept(SOCKET, conn.offering('bad'));
     expect(conn.first('error')?.code).toBe('invalid_token');
     expect(conn.closed?.code).toBe(CLOSE_INVALID_TOKEN);
     expect(conn.first('hello')).toBeUndefined();
@@ -131,7 +177,7 @@ describe('socket — the authority channel', () => {
     const shells = hostFor(session);
     const accept = createSocket(ctxWith({ shells }));
     const conn = new FakeConnection();
-    await accept('/socket?token=good', conn);
+    await accept(SOCKET, conn.offering('good'));
     expect(session.calls).toContain('attach');
     conn.close();
     expect(session.calls).toContain('detach');
@@ -142,7 +188,7 @@ describe('socket — the authority channel', () => {
     const shells = hostFor(session);
     const accept = createSocket(ctxWith({ shells }));
     const conn = new FakeConnection();
-    await accept('/socket?token=good', conn);
+    await accept(SOCKET, conn.offering('good'));
     conn.emit({ type: 'event', canvas: 'main', event: { type: 'ui:click', ref: 'x' } });
     expect(session.calls).toContain('dispatch:main:ui:click');
   });
@@ -152,7 +198,7 @@ describe('socket — the authority channel', () => {
     const shells = hostFor(session);
     const accept = createSocket(ctxWith({ shells }));
     const conn = new FakeConnection();
-    await accept('/socket?token=good', conn);
+    await accept(SOCKET, conn.offering('good'));
     conn.emit({ type: 'publish', channel: 'refresh' });
     expect(session.calls).toContain('publish:refresh');
   });
@@ -162,7 +208,7 @@ describe('socket — the authority channel', () => {
     const shells = hostFor(session);
     const accept = createSocket(ctxWith({ shells }));
     const conn = new FakeConnection();
-    await accept('/socket?token=good', conn);
+    await accept(SOCKET, conn.offering('good'));
     conn.sent.length = 0;
     conn.emit({ type: 'nonsense' });
     expect(conn.first('error')?.code).toBe('invalid_message');
@@ -171,7 +217,7 @@ describe('socket — the authority channel', () => {
   it('without a shell host an event is answered no_shell', async () => {
     const accept = createSocket(ctxWith()); // no shells
     const conn = new FakeConnection();
-    await accept('/socket?token=good', conn);
+    await accept(SOCKET, conn.offering('good'));
     conn.sent.length = 0;
     conn.emit({ type: 'event', canvas: 'main', event: { type: 'ui:click' } });
     expect(conn.first('error')?.code).toBe('no_shell');
@@ -184,7 +230,7 @@ describe('socket — the authority channel', () => {
     const shells = hostFor(session);
     const accept = createSocket(ctxWith({ shells }));
     const conn = new FakeConnection();
-    await accept('/socket?token=good', conn);
+    await accept(SOCKET, conn.offering('good'));
     conn.sent.length = 0;
     conn.emit({ type: 'reset' });
     expect(session.calls).toContain('reset');
@@ -195,7 +241,7 @@ describe('socket — the authority channel', () => {
   it('a reset without a shell host is answered no_shell, not silence', async () => {
     const accept = createSocket(ctxWith()); // no shells
     const conn = new FakeConnection();
-    await accept('/socket?token=good', conn);
+    await accept(SOCKET, conn.offering('good'));
     conn.sent.length = 0;
     conn.emit({ type: 'reset' });
     expect(conn.first('error')?.code).toBe('no_shell');
@@ -206,7 +252,7 @@ describe('socket — the authority channel', () => {
     const session = recordingSession();
     const accept = createSocket(ctxWith({ shells: hostFor(session) }));
     const conn = new FakeConnection();
-    await accept('/socket?token=good', conn);
+    await accept(SOCKET, conn.offering('good'));
     conn.sent.length = 0;
     conn.emit({ type: 'back' });
     expect(session.calls).toContain('back');
@@ -217,7 +263,7 @@ describe('socket — the authority channel', () => {
   it('a back without a shell host is answered no_shell, not invalid_message', async () => {
     const accept = createSocket(ctxWith()); // no shells
     const conn = new FakeConnection();
-    await accept('/socket?token=good', conn);
+    await accept(SOCKET, conn.offering('good'));
     conn.sent.length = 0;
     conn.emit({ type: 'back' });
     expect(conn.first('error')?.code).toBe('no_shell');
@@ -228,7 +274,7 @@ describe('socket — the authority channel', () => {
     const session = recordingSession();
     const accept = createSocket(ctxWith({ shells: hostFor(session) }));
     const conn = new FakeConnection();
-    await accept('/socket?token=good', conn);
+    await accept(SOCKET, conn.offering('good'));
     conn.sent.length = 0;
     conn.emit({ type: 'resync' });
     expect(session.calls).toContain('resync');
@@ -239,21 +285,21 @@ describe('socket — the authority channel', () => {
   it('a resync without a shell host is answered no_shell', async () => {
     const accept = createSocket(ctxWith());
     const conn = new FakeConnection();
-    await accept('/socket?token=good', conn);
+    await accept(SOCKET, conn.offering('good'));
     conn.sent.length = 0;
     conn.emit({ type: 'resync' });
     expect(conn.first('error')?.code).toBe('no_shell');
   });
 
-  // The delta capability is negotiated on the upgrade url, beside the token —
+  // The delta capability is negotiated on the upgrade url —
   // a terminal that says nothing is a terminal that gets whole frames.
   it('?delta=1 attaches delta-capable; its absence does not', async () => {
     const asked = recordingSession();
-    await createSocket(ctxWith({ shells: hostFor(asked) }))('/socket?token=good&delta=1', new FakeConnection());
+    await createSocket(ctxWith({ shells: hostFor(asked) }))(`${SOCKET}&delta=1`, new FakeConnection().offering('good'));
     expect(asked.calls).toContain('attach:delta');
 
     const silent = recordingSession();
-    await createSocket(ctxWith({ shells: hostFor(silent) }))('/socket?token=good', new FakeConnection());
+    await createSocket(ctxWith({ shells: hostFor(silent) }))(SOCKET, new FakeConnection().offering('good'));
     expect(silent.calls).toContain('attach');
     expect(silent.calls).not.toContain('attach:delta');
   });
@@ -292,7 +338,7 @@ describe('socket — revalidating a live connection', () => {
       const auth = expiring();
       const accept = createSocket(ctxWith({ session: auth.verify, revalidateMs: 1000 }));
       const conn = new FakeConnection();
-      await accept('/socket?token=good', conn);
+      await accept(SOCKET, conn.offering('good'));
       expect(conn.first('hello')?.principal).toBe('usr_1');
 
       // Still valid: many passes, no interference.
@@ -317,7 +363,7 @@ describe('socket — revalidating a live connection', () => {
       let who = 'usr_1';
       const accept = createSocket(ctxWith({ session: () => who, revalidateMs: 1000 }));
       const conn = new FakeConnection();
-      await accept('/socket?token=good', conn);
+      await accept(SOCKET, conn.offering('good'));
       who = 'usr_2';
       await vi.advanceTimersByTimeAsync(1000);
       expect(conn.closed?.code).toBe(CLOSE_INVALID_TOKEN);
@@ -341,7 +387,7 @@ describe('socket — revalidating a live connection', () => {
         }),
       );
       const conn = new FakeConnection();
-      await accept('/socket?token=good', conn);
+      await accept(SOCKET, conn.offering('good'));
 
       down = true;
       await vi.advanceTimersByTimeAsync(5000);
@@ -364,7 +410,7 @@ describe('socket — revalidating a live connection', () => {
       const auth = expiring();
       const accept = createSocket(ctxWith({ session: auth.verify, revalidateMs: 1000 }));
       const conn = new FakeConnection();
-      await accept('/socket', conn); // no token
+      await accept(SOCKET, conn); // no token
       const before = auth.asked();
       await vi.advanceTimersByTimeAsync(10_000);
       expect(auth.asked()).toBe(before);
@@ -381,7 +427,7 @@ describe('socket — revalidating a live connection', () => {
       const auth = expiring();
       const accept = createSocket(ctxWith({ session: auth.verify, revalidateMs: 1000 }));
       const conn = new FakeConnection();
-      await accept('/socket?token=good', conn);
+      await accept(SOCKET, conn.offering('good'));
       conn.close();
       const before = auth.asked();
       await vi.advanceTimersByTimeAsync(10_000);
@@ -398,7 +444,7 @@ describe('socket — revalidating a live connection', () => {
       const auth = expiring();
       const accept = createSocket(ctxWith({ session: auth.verify, revalidateMs: 0 }));
       const conn = new FakeConnection();
-      await accept('/socket?token=good', conn);
+      await accept(SOCKET, conn.offering('good'));
       auth.expire();
       await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
       expect(conn.closed).toBeUndefined();
@@ -415,7 +461,7 @@ describe('socket — revalidating a live connection', () => {
       const session = recordingSession();
       const accept = createSocket(ctxWith({ session: auth.verify, shells: hostFor(session), revalidateMs: 1000 }));
       const conn = new FakeConnection();
-      await accept('/socket?token=good', conn);
+      await accept(SOCKET, conn.offering('good'));
       expect(session.calls).toContain('attach');
 
       auth.expire();
@@ -455,7 +501,7 @@ describe('socket — a refused session is one terminal, not the server', () => {
     const accept = createSocket(ctxWith({ shells }));
 
     const refused = new FakeConnection();
-    await expect(accept('/socket?token=good', refused)).resolves.toBeUndefined();
+    await expect(accept(SOCKET, refused.offering('good'))).resolves.toBeUndefined();
     const error = refused.first('error');
     expect(error?.code).toBe('session_failed');
     expect(error?.message).toContain('crm.deals');
@@ -464,7 +510,7 @@ describe('socket — a refused session is one terminal, not the server', () => {
 
     // The server still answers: an anonymous terminal gets its whole session.
     const next = new FakeConnection();
-    await accept('/socket', next);
+    await accept(SOCKET, next);
     expect(next.first('hello')?.principal).toBeNull();
     expect(session.calls).toContain('attach');
     expect(next.closed).toBeUndefined();
@@ -479,13 +525,13 @@ describe('socket — a refused session is one terminal, not the server', () => {
       }),
     );
     const conn = new FakeConnection();
-    await expect(accept('/socket?token=good', conn)).resolves.toBeUndefined();
+    await expect(accept(SOCKET, conn.offering('good'))).resolves.toBeUndefined();
     expect(conn.first('error')?.code).toBe('session_failed');
     expect(conn.closed?.code).toBe(CLOSE_SHELL_FAILED);
 
     // Anonymous never asks the verifier — the same server still answers it.
     const next = new FakeConnection();
-    await accept('/socket', next);
+    await accept(SOCKET, next);
     expect(next.first('hello')?.principal).toBeNull();
   });
 });

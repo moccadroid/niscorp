@@ -854,17 +854,28 @@ measures the end.
   and reconnecting later is reasonable.
 - `error` codes: `invalid_token`, `session_failed`, `client_too_old`,
   `server_too_old`, `no_shell` (the app serves no shell), `invalid_message`.
+- **Who a terminal is** is decided on the upgrade request, from a header of
+  it — never from its address, which is what every proxy on the way writes
+  into its log. A terminal offers the subprotocol `nisc`, and beside it its
+  token when it holds one: `offerToken(token | null)` returns the list to
+  construct the socket with (`new WebSocket(url, offerToken(token))`), and the
+  server answers `nisc`. A token in the address (`?token=`) is not read. A
+  transport hands the offer over as `connection.upgrade.offered`
+  (`Sec-WebSocket-Protocol`, split); one that leaves it out serves every
+  terminal as nobody. `attachSocket` does it.
 - **Protocol version.** `PROTOCOL` is the wire protocol this server speaks and
   `PROTOCOL_MIN` the oldest it still serves. A terminal names its protocol on
-  the upgrade (`?protocol=N`, beside the token); one that names none speaks `1`,
-  which is every terminal built before the question existed. Outside the range
-  the connection is refused before anything is served: an `error` frame
-  (`client_too_old` or `server_too_old`) and a `4426` close. `hello` carries
-  `protocol`, so a terminal can refuse a server older than it can speak to.
-  Bump `PROTOCOL` when a message changes shape; raise `PROTOCOL_MIN` only when
-  the server stops speaking an old one. Both are `1` today. `PROTOCOL`,
-  `PROTOCOL_MIN` and `CLOSE_PROTOCOL_MISMATCH` are defined in `src/socket.ts`
-  and are not re-exported from the package root.
+  the upgrade (`?protocol=N`); one that names none speaks `1`, which is every
+  terminal built before the question existed. Outside the range the connection
+  is refused before anything is served: an `error` frame (`client_too_old` or
+  `server_too_old`) and a `4426` close. `hello` carries `protocol`, so a
+  terminal can refuse a server older than it can speak to. Bump `PROTOCOL` when
+  a message changes shape; raise `PROTOCOL_MIN` only when the server stops
+  speaking an old one. Both are `2` today: at `1` the token rode the address,
+  and a server that went on reading it there would keep that open. `PROTOCOL`
+  and `offerToken` are exported from the package root, for a terminal written
+  by hand; `PROTOCOL_MIN` and `CLOSE_PROTOCOL_MISMATCH` are defined in
+  `src/socket.ts` and are not.
 - **`?path=`** — the path the terminal is on. A path that leads to a page is
   served that page's shell, built for this connection alone and seeded with the
   path's parameters; any other path (and no path) is the app's shell. A
@@ -1020,9 +1031,11 @@ Requires the optional `vite` peer.
   host-shaped comes in as a `WireEnv`. `delta` (default `false`) advertises
   that this terminal can rebuild frame deltas; the snapshot it produces is
   identical either way. See [Wire size](#wire-size).
-- `WireEnv` — the host seam: `{ tokens: { load, save, clear }, socket(url),
-  defaultUrl() }`. The socket API is WHATWG-standard in every host (browser,
-  Node ≥22, Bun); an env only constructs it.
+- `WireEnv` — the host seam: `{ tokens: { load, save, clear },
+  socket({ url, offered }), defaultUrl() }`. The socket API is WHATWG-standard
+  in every host (browser, Node ≥22, Bun); an env only constructs it —
+  `new WebSocket(url, offered)`. What is offered is who the terminal is, so an
+  env that drops it connects as nobody.
 - `browserEnv({ tokenKey?, cookie? }?): WireEnv` — the default host: token in
   localStorage (`nisc.token`), url derived from `window.location`, the
   page's WebSocket. `cookie: true` keeps a **copy** of the token in a cookie of

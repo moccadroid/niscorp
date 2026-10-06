@@ -100,7 +100,8 @@ try {
   check('signed in: the page is her screen', hers.dom.includes('A word from the desk'));
   check('…with the palette on <html>', /<html[^>]* data-accent="/.test(hers.dom));
   check(`…adopted with nothing said about a mismatch or an error (${said(hers, COMPLAINT).length})`, said(hers, COMPLAINT).length === 0);
-  check('…and that browser opened a socket onto her shell, carrying her token', hers.attached && hers.sockets.some((url) => url.includes('token=')));
+  // attached to HER shell is the proof it connected as her; an address is what a proxy logs, and her token is in none
+  check('…and that browser opened a socket onto her shell, with her token in no address', hers.attached && hers.sockets.length > 0 && hers.sockets.every((url) => !url.includes('token')));
 
   // ── a page: drawn, adopted, and no socket asked for ──
   const about = await visit('/about');

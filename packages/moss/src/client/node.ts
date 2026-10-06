@@ -42,7 +42,7 @@ export const nodeEnv = (config: { url: string; tokenFile?: string }): WireEnv =>
         }
       },
     },
-    socket: (url) => new WebSocket(url),
+    socket: ({ url, offered }) => new WebSocket(url, offered),
     defaultUrl: () => config.url,
   };
 };

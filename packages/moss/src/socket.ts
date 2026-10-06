@@ -31,12 +31,17 @@ import type { Telemetry } from './telemetry';
 // ═══════════════════════════════════════════════════════════════
 
 // The transport seam — what a runtime's websocket must provide. Four
-// functions; everything above them is identical on every runtime.
+// functions, and what the request that opened the connection offered;
+// everything above them is identical on every runtime.
 export type Connection = {
   send: (text: string) => void;
   close: (code?: number, reason?: string) => void;
   onMessage: (fn: (text: string) => void) => void;
   onClose: (fn: () => void) => void;
+  // The upgrade request, as far as it says who is asking: the subprotocols it
+  // offered (`Sec-WebSocket-Protocol`, split). A transport that leaves this
+  // out serves every terminal as nobody.
+  upgrade?: { offered: readonly string[] };
 };
 
 // ── The envelope ──
@@ -91,14 +96,45 @@ export type ClientMessage =
   | { type: 'reset' };
 
 // The wire protocol this server speaks, and the oldest a terminal may speak to
-// it. A terminal says which it speaks on the upgrade (`?protocol=N`, beside the
-// token — known before the first frame is sent); one that says nothing speaks 1,
-// which is every terminal built before the question existed. Outside the range
-// the connection is refused with a sentence and CLOSE_PROTOCOL_MISMATCH, never
+// it. A terminal says which it speaks on the upgrade (`?protocol=N` — known
+// before the first frame is sent); one that says nothing speaks 1, which is
+// every terminal built before the question existed. Outside the range the
+// connection is refused with a sentence and CLOSE_PROTOCOL_MISMATCH, never
 // served frames it would misread. Bump PROTOCOL when a message changes shape;
 // raise PROTOCOL_MIN only when the server stops speaking an old one.
-export const PROTOCOL = 1;
-export const PROTOCOL_MIN = 1;
+//
+// 2: the token left the address. A terminal at 1 put it in `?token=`, and an
+// address is what every proxy on the way writes into its log. A server that
+// went on reading it there would keep that open for as long as anything used
+// it, so 1 is no longer spoken: a terminal built before is told to reload.
+export const PROTOCOL = 2;
+export const PROTOCOL_MIN = 2;
+
+// WHO A TERMINAL IS rides the upgrade request, in the one header every host
+// lets a terminal set, a browser included: the subprotocols it offers. It
+// offers `nisc`, and beside it its token when it holds one — base64url,
+// because a subprotocol is an HTTP token and a session token need not be. The
+// server answers `nisc`, never the other. Decided on the request, so no
+// connection is ever open and waiting to be told who it is.
+export const SUBPROTOCOL = 'nisc';
+const TOKEN_OFFER = 'nisc.token.';
+
+export const offerToken = (token: string | null): string[] => {
+  if (token === null) return [SUBPROTOCOL];
+  const bytes = String.fromCharCode(...new TextEncoder().encode(token));
+  return [SUBPROTOCOL, `${TOKEN_OFFER}${btoa(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`];
+};
+
+export const offeredToken = (offered: readonly string[] = []): string | null => {
+  const offer = offered.find((entry) => entry.startsWith(TOKEN_OFFER));
+  if (offer === undefined) return null;
+  try {
+    const bytes = atob(offer.slice(TOKEN_OFFER.length).replace(/-/g, '+').replace(/_/g, '/'));
+    return new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(bytes, (char) => char.charCodeAt(0))) || null;
+  } catch {
+    return null;
+  }
+};
 
 // Application close code: the token did not resolve to a principal.
 export const CLOSE_INVALID_TOKEN = 4401;
@@ -266,9 +302,9 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
       connection.close(CLOSE_PROTOCOL_MISMATCH, 'protocol mismatch');
       return;
     }
-    const token = params.get('token');
+    const token = offeredToken(connection.upgrade?.offered);
     let principal: string | null = null;
-    if (token !== null && token !== '') {
+    if (token !== null) {
       principal = await ctx.session(token);
       if (principal === null) {
         if (emit !== undefined && upClock !== undefined) {

@@ -1,9 +1,15 @@
 import { describe, it, expect, afterAll, vi } from 'vitest';
 import { createServer as createHttp } from 'node:http';
 import type { Server } from 'node:http';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { WebSocket } from 'ws';
 import { attachSocket } from '../src/node';
+import { createSocket, offerToken, PROTOCOL } from '../src/socket';
 import type { SocketAccept } from '../src/socket';
+import { createWire } from '../src/client';
+import { nodeEnv } from '../src/client/node';
 
 // ═══════════════════════════════════════════════════════════════
 // The `ws` half of the transport seam, over a REAL websocket. Everything above
@@ -130,5 +136,63 @@ describe('the ws transport', () => {
     const client = await opened(await listening({ maxMessageBytes: 4 * LIMIT }));
     expect(await answered(client, 'a'.repeat(LIMIT + 1))).toBe(String(LIMIT + 1));
     client.close();
+  });
+});
+
+// Who a terminal is rides the upgrade request — a header of it, not its
+// address. Only a real handshake shows what the two ends put on the wire.
+describe('the ws transport — the upgrade says who is asking', () => {
+  // the real protocol layer behind the real transport; what it was asked, and
+  // every request line it was reached by (what an access log would hold)
+  const serving = async (): Promise<{ url: string; requestLines: string[]; asked: string[]; served: (string | null)[] }> => {
+    const requestLines: string[] = [];
+    const asked: string[] = [];
+    const served: (string | null)[] = [];
+    const accept = createSocket({
+      session: (token) => (asked.push(token), token === 'tok/with+symbols=' ? 'usr_1' : null),
+      catalog: (principal) => (served.push(principal), { ids: [], hash: 'h' }),
+      revalidateMs: 0,
+    });
+    const httpServer = createHttp((_req, res) => res.end('ok'));
+    httpServer.on('upgrade', (req) => void requestLines.push(`${req.method} ${req.url}`));
+    attachSocket(httpServer, accept);
+    await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve));
+    servers.push(httpServer);
+    const address = httpServer.address();
+    if (address === null || typeof address === 'string') throw new Error('no port');
+    return { url: `ws://127.0.0.1:${address.port}/socket`, requestLines, asked, served };
+  };
+
+  it('a terminal holding a token is served as its principal, and the token is in no request line', async () => {
+    const { url, requestLines, asked, served } = await serving();
+    const tokenFile = join(mkdtempSync(join(tmpdir(), 'moss-upgrade-')), 'token');
+    writeFileSync(tokenFile, 'tok/with+symbols=\n');
+    const wire = createWire({ env: nodeEnv({ url, tokenFile }) });
+    try {
+      await vi.waitFor(() => expect(served).toEqual(['usr_1']));
+      expect(asked).toEqual(['tok/with+symbols=']);
+      expect(requestLines).toEqual([`GET /socket?protocol=${PROTOCOL}`]);
+    } finally {
+      wire.dispose();
+    }
+  });
+
+  it('the server answers `nisc`, and never says the token back', async () => {
+    const { url } = await serving();
+    const offer = offerToken('tok/with+symbols=');
+    const client = await new Promise<WebSocket>((resolve, reject) => {
+      const socket = new WebSocket(`${url}?protocol=${PROTOCOL}`, offer);
+      socket.once('open', () => resolve(socket));
+      socket.once('error', reject);
+    });
+    expect(client.protocol).toBe('nisc');
+    client.close();
+    // a client that offers its token and not `nisc` is answered with nothing to agree on
+    const alone = new Promise<string>((resolve) => {
+      const socket = new WebSocket(`${url}?protocol=${PROTOCOL}`, offer.slice(1));
+      socket.once('open', () => resolve(`opened as ${socket.protocol}`));
+      socket.once('error', (error) => resolve(error.message));
+    });
+    expect(await alone).toMatch(/no subprotocol/i);
   });
 });

@@ -7,7 +7,7 @@
 // surfaces under the session's token — same wire, same enforcement.
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
-import { CLOSE_SIGNED_OUT } from '@niscorp/moss';
+import { CLOSE_SIGNED_OUT, offerToken, PROTOCOL } from '@niscorp/moss';
 import type { ServerMessage } from '@niscorp/moss';
 import type { RenderNode } from '@niscorp/nova';
 import { boot } from '../server/boot';
@@ -30,7 +30,7 @@ type Client = {
 // (frames stream as data loads; the latest is the current truth).
 const connect = (base: string, token?: string): Promise<Client> =>
   new Promise((resolve, reject) => {
-    const ws = new WebSocket(`${base}/socket${token !== undefined ? `?token=${encodeURIComponent(token)}` : ''}`);
+    const ws = new WebSocket(`${base}/socket?protocol=${PROTOCOL}`, offerToken(token ?? null));
     const last = new Map<string, string>();
     let closeCode: number | null = null;
     let shellFrame = '';

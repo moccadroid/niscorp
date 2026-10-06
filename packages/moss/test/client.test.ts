@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createWire, browserEnv } from '../src/client';
 import type { WireEnv } from '../src/client';
-import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SIGNED_OUT, PROTOCOL } from '../src/socket';
+import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SIGNED_OUT, PROTOCOL, offeredToken } from '../src/socket';
 import { encodeDelta, frameHash } from '../src/delta';
 
 // ═══════════════════════════════════════════════════════════════
@@ -22,13 +22,15 @@ class FakeSocket {
     return s;
   }
   url: string;
+  offered: string[];
   sent: string[] = [];
   closed = false;
   onopen: (() => void) | null = null;
   onmessage: ((e: { data: string }) => void) | null = null;
   onclose: ((e: { code: number }) => void) | null = null;
-  constructor(url: string) {
-    this.url = url;
+  constructor(upgrade: { url: string; offered: string[] }) {
+    this.url = upgrade.url;
+    this.offered = upgrade.offered;
     FakeSocket.instances.push(this);
   }
   send(text: string): void {
@@ -71,7 +73,7 @@ const env = (tokenKey = 'nisc.token'): WireEnv => ({
     save: (token) => storage.setItem(tokenKey, token),
     clear: () => storage.removeItem(tokenKey),
   },
-  socket: (url) => new FakeSocket(url) as unknown as WebSocket,
+  socket: (upgrade) => new FakeSocket(upgrade) as unknown as WebSocket,
   defaultUrl: () => 'ws://default.local/socket',
 });
 
@@ -88,36 +90,52 @@ afterEach(() => {
 
 const URL = 'ws://test/socket';
 
-// What an upgrade url says: where it goes and which credential it carries.
-// The wire adds capability params (protocol, delta) beside the token; the
-// assertions below are about the TARGET and the TOKEN, so they read those.
-const upgrade = (url: string): { target: string; token: string | null } => {
-  const parsed = new globalThis.URL(url);
-  return { target: `${parsed.protocol}//${parsed.host}${parsed.pathname}`, token: parsed.searchParams.get('token') };
+// What an upgrade says: where it goes (the url, less the capability params the
+// wire adds — protocol, delta) and which credential it carries (the token the
+// socket was constructed offering). The assertions below read those two.
+const upgrade = (socket: FakeSocket): { target: string; token: string | null } => {
+  const parsed = new globalThis.URL(socket.url);
+  return { target: `${parsed.protocol}//${parsed.host}${parsed.pathname}`, token: offeredToken(socket.offered) };
 };
 
 describe('the wire — connect + snapshot', () => {
   it('connects immediately, anonymous when the token slot is empty', () => {
     createWire({ url: URL, env: env() });
     expect(FakeSocket.instances).toHaveLength(1);
-    expect(upgrade(FakeSocket.last().url)).toEqual({ target: URL, token: null }); // no ?token
+    expect(upgrade(FakeSocket.last())).toEqual({ target: URL, token: null }); // no ?token
   });
 
   it('falls back to the env defaultUrl when no url is configured', () => {
     createWire({ env: env() });
-    expect(upgrade(FakeSocket.last().url).target).toBe('ws://default.local/socket');
+    expect(upgrade(FakeSocket.last()).target).toBe('ws://default.local/socket');
   });
 
   it('rides the stored token up on connect', () => {
     storage.setItem('nisc.token', 'tok-1');
     createWire({ url: URL, env: env() });
-    expect(FakeSocket.last().url).toContain('?token=tok-1');
+    expect(upgrade(FakeSocket.last()).token).toBe('tok-1');
+  });
+
+  // An address is what a proxy logs. Through a first connect, a sign-in, a
+  // dropped connection and a reset, the token is in none of them.
+  it('no address it ever connects to carries the token', () => {
+    storage.setItem('nisc.token', 'tok-1');
+    const wire = createWire({ url: URL, env: env() });
+    FakeSocket.last().open();
+    FakeSocket.last().emit({ type: 'session', token: 'tok-2' });
+    FakeSocket.last().open();
+    FakeSocket.last().serverClose(1006);
+    vi.advanceTimersByTime(60_000);
+    wire.reset();
+    expect(FakeSocket.instances.length).toBeGreaterThanOrEqual(3);
+    expect(FakeSocket.instances.map((socket) => upgrade(socket).token)).toContain('tok-2');
+    for (const socket of FakeSocket.instances) expect(socket.url).not.toMatch(/tok-|token/);
   });
 
   it('honours a custom token slot', () => {
     storage.setItem('my.key', 'tok-2');
     createWire({ url: URL, env: env('my.key') });
-    expect(FakeSocket.last().url).toContain('token=tok-2');
+    expect(upgrade(FakeSocket.last()).token).toBe('tok-2');
   });
 
   it('frame and render messages accumulate into the snapshot, notifying subscribers', () => {
@@ -215,7 +233,7 @@ describe('the wire — reset', () => {
     // re-sends the current trees, so jumping the queue costs nothing — and the
     // token rides up, because this is a recovery, not a sign-out.
     expect(FakeSocket.instances).toHaveLength(2);
-    expect(FakeSocket.last().url).toContain('token=tok');
+    expect(upgrade(FakeSocket.last()).token).toBe('tok');
     expect(wire.status()).toBe('connecting');
   });
 
@@ -273,7 +291,7 @@ describe('the wire — session lifecycle (become)', () => {
     expect(storage.getItem('nisc.token')).toBe('granted-1');
     expect(first.closed).toBe(true);
     expect(FakeSocket.instances).toHaveLength(2);
-    expect(FakeSocket.last().url).toContain('token=granted-1');
+    expect(upgrade(FakeSocket.last()).token).toBe('granted-1');
     // a different principal is a different application — the snapshot is blanked
     expect(wire.snapshot().frame).toEqual([]);
     expect(wire.snapshot().trees.size).toBe(0);
@@ -282,13 +300,13 @@ describe('the wire — session lifecycle (become)', () => {
   it('SIGNED_OUT (4403) clears the token and reconnects anonymous', () => {
     storage.setItem('nisc.token', 'tok');
     createWire({ url: URL, env: env() });
-    expect(FakeSocket.last().url).toContain('token=tok');
+    expect(upgrade(FakeSocket.last()).token).toBe('tok');
 
     FakeSocket.last().serverClose(CLOSE_SIGNED_OUT);
 
     expect(storage.getItem('nisc.token')).toBeNull();
     expect(FakeSocket.instances).toHaveLength(2);
-    expect(upgrade(FakeSocket.last().url)).toEqual({ target: URL, token: null }); // anonymous now
+    expect(upgrade(FakeSocket.last())).toEqual({ target: URL, token: null }); // anonymous now
   });
 
   it('INVALID_TOKEN (4401) drops the stale token and reconnects anonymous — never loops on it', () => {
@@ -300,11 +318,11 @@ describe('the wire — session lifecycle (become)', () => {
     // recovered to anonymous at once, not via a backoff retry with the bad token
     expect(storage.getItem('nisc.token')).toBeNull();
     expect(FakeSocket.instances).toHaveLength(2);
-    expect(upgrade(FakeSocket.last().url)).toEqual({ target: URL, token: null });
+    expect(upgrade(FakeSocket.last())).toEqual({ target: URL, token: null });
 
     // and no scheduled retry ever re-sends the stale token, however long we wait
     vi.advanceTimersByTime(120_000);
-    const staleSockets = FakeSocket.instances.filter((s) => s.url.includes('stale'));
+    const staleSockets = FakeSocket.instances.filter((s) => upgrade(s).token === 'stale');
     expect(staleSockets).toHaveLength(1); // only the very first connect, and never again
   });
 });
@@ -421,7 +439,7 @@ describe('the wire — frame deltas', () => {
 
     storage.setItem('nisc.token', 'tok-1');
     createWire({ url: URL, env: env(), delta: true });
-    expect(FakeSocket.last().url).toContain('token=tok-1');
+    expect(upgrade(FakeSocket.last()).token).toBe('tok-1');
     expect(FakeSocket.last().url).toContain('delta=1');
   });
 

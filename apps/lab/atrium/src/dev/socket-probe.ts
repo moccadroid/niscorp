@@ -1,7 +1,9 @@
 // Probe the RUNNING dev server's socket the way a browser terminal does:
 // connect anonymous, print what arrives. If no frame lands, the white screen
 // is the wire; if frames land, the crash is in a React component.
-const ws = new WebSocket('ws://localhost:5175/socket');
+import { offerToken, PROTOCOL } from '@niscorp/moss';
+
+const ws = new WebSocket(`ws://localhost:5175/socket?protocol=${PROTOCOL}`, offerToken(null));
 const seen: string[] = [];
 
 ws.addEventListener('open', () => console.log('socket OPEN'));

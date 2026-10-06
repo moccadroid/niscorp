@@ -135,9 +135,11 @@ compiles it.
 ## The socket
 
 The authority channel. Transport-blind: the protocol speaks through a
-four-function `Connection` seam (`send`/`close`/`onMessage`/`onClose`), and the
-RFC 6455 plumbing lives with each runtime's entry (`ws` on Node in `./node`,
-Bun-native later). One connection per client carries every canvas — ten open
+four-function `Connection` seam (`send`/`close`/`onMessage`/`onClose`, and what
+the upgrade request offered), and the RFC 6455 plumbing lives with each
+runtime's entry (`ws` on Node in `./node`, Bun-native later). Who a terminal is
+is decided on that request, from a header — a subprotocol it offers beside
+`nisc` — and never from its address, which every proxy on the way logs. One connection per client carries every canvas — ten open
 canvases are ten canvas ids on one pipe.
 
 **Down:** `hello` (the resolved catalog on connect, and the protocol the server speaks — the terminal names its own on the upgrade), `catalog` (declared for

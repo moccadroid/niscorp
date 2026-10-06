@@ -84,8 +84,8 @@ type Tally = { render: number; delta: number; bytes: number };
 const countingEnv = (url: string, tally: Tally): WireEnv => ({
   tokens: { load: () => 'tok', save: () => {}, clear: () => {} },
   defaultUrl: () => url,
-  socket: (target) => {
-    const ws = new WebSocket(target);
+  socket: ({ url: target, offered }) => {
+    const ws = new WebSocket(target, offered);
     ws.addEventListener('message', (event) => {
       const text = String((event as MessageEvent).data);
       tally.bytes += text.length;

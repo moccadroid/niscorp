@@ -9,6 +9,7 @@ import { createServer } from './server';
 import type { MossServer } from './server';
 import type { NiscApp } from './app';
 import type { NiscRuntime } from './runtime';
+import { SUBPROTOCOL } from './socket';
 import type { SocketAccept } from './socket';
 import { renderDocument } from './document';
 import type { DocumentConfig } from './document';
@@ -48,7 +49,14 @@ export const attachSocket = (
   path = '/socket',
   options?: { compression?: boolean | Record<string, unknown>; maxMessageBytes?: number },
 ): void => {
-  const wss = new WebSocketServer({ noServer: true, perMessageDeflate: options?.compression ?? true, maxPayload: options?.maxMessageBytes ?? MAX_MESSAGE_BYTES });
+  const wss = new WebSocketServer({
+    noServer: true,
+    perMessageDeflate: options?.compression ?? true,
+    maxPayload: options?.maxMessageBytes ?? MAX_MESSAGE_BYTES,
+    // Of what a terminal offers, `nisc` is answered and nothing else: the
+    // other entry is its token (socket.ts), which is not said back.
+    handleProtocols: (offered) => (offered.has(SUBPROTOCOL) ? SUBPROTOCOL : false),
+  });
   httpServer.on('upgrade', (req, socket, head) => {
     const url = req.url ?? '/';
     // Not ours: leave it for whichever other listener owns it (vite's HMR
@@ -74,6 +82,7 @@ export const attachSocket = (
         close: (code, reason) => ws.close(code, reason),
         onMessage: (fn) => ws.on('message', (data) => fn(String(data))),
         onClose: (fn) => ws.on('close', () => fn()),
+        upgrade: { offered: String(req.headers['sec-websocket-protocol'] ?? '').split(',').map((entry) => entry.trim()) },
       }).catch((error: unknown) => {
         console.error('[moss/node] a connection escaped accept:', error);
         try {

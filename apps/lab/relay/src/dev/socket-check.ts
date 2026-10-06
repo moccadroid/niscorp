@@ -7,7 +7,7 @@
 // frames only; host-check owns the canvas streams.
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
-import { CLOSE_INVALID_TOKEN } from '@niscorp/moss';
+import { CLOSE_INVALID_TOKEN, offerToken, PROTOCOL } from '@niscorp/moss';
 import type { ServerMessage } from '@niscorp/moss';
 import { boot } from '../server/boot';
 import { mintToken } from '../server/users';
@@ -25,7 +25,7 @@ const connect = (base: string, token?: string): Promise<{
   close: () => void;
 }> =>
   new Promise((resolve, reject) => {
-    const ws = new WebSocket(`${base}/socket${token !== undefined ? `?token=${encodeURIComponent(token)}` : ''}`);
+    const ws = new WebSocket(`${base}/socket?protocol=${PROTOCOL}`, offerToken(token ?? null));
     const frames: Frame[] = [];
     const waiters: ((f: Frame) => void)[] = [];
     let closeCode: number | undefined;

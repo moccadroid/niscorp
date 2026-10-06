@@ -19,7 +19,7 @@ import { createShellHost, instrumentFunctions } from '../src/shells';
 import type { ShellHostContext } from '../src/shells';
 import { callIntegrationWith, initIntegrations } from '../src/integrations';
 import { createAssertionSigner } from '../src/assert';
-import { createSocket } from '../src/socket';
+import { createSocket, PROTOCOL, offerToken } from '../src/socket';
 import type { Connection, ServerMessage, SocketContext } from '../src/socket';
 import type { NiscApp } from '../src/app';
 import type { TelemetrySpan } from '../src/telemetry';
@@ -207,7 +207,7 @@ describe('socket telemetry', () => {
     const { spans, telemetry } = capture();
     const accept = createSocket(ctxWith(telemetry));
     const conn = fakeConnection();
-    await accept('/socket?token=good', conn);
+    await accept(`/socket?protocol=${PROTOCOL}`, { ...conn, upgrade: { offered: offerToken('good') } });
     const upgrade = spans.find((s) => s.name === 'socket.upgrade');
     expect(upgrade).toMatchObject({ status: 'ok', attributes: { hasPrincipal: true } });
     conn.close();
@@ -218,7 +218,7 @@ describe('socket telemetry', () => {
 
   it('an invalid token is a refused upgrade and no admission', async () => {
     const { spans, telemetry } = capture();
-    await createSocket(ctxWith(telemetry))('/socket?token=bad', fakeConnection());
+    await createSocket(ctxWith(telemetry))(`/socket?protocol=${PROTOCOL}`, { ...fakeConnection(), upgrade: { offered: offerToken('bad') } });
     expect(spans.filter((s) => s.name === 'socket.upgrade')).toHaveLength(1);
     expect(spans[0]).toMatchObject({ name: 'socket.upgrade', status: 'refused', attributes: { hasPrincipal: false } });
     expect(spans.some((s) => s.name === 'socket.close')).toBe(false);
@@ -226,7 +226,7 @@ describe('socket telemetry', () => {
 
   it('anonymous is admitted, hasPrincipal false', async () => {
     const { spans, telemetry } = capture();
-    await createSocket(ctxWith(telemetry))('/socket', fakeConnection());
+    await createSocket(ctxWith(telemetry))(`/socket?protocol=${PROTOCOL}`, fakeConnection());
     expect(spans.find((s) => s.name === 'socket.upgrade')?.attributes['hasPrincipal']).toBe(false);
   });
 });

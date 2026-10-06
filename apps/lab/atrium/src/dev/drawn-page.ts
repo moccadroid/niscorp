@@ -59,7 +59,7 @@ export const openPage = async (html: string, token: string | null): Promise<Open
     env: {
       tokens: { load: () => stored.get('nisc.token') ?? null, save: (next) => void stored.set('nisc.token', next), clear: () => void stored.delete('nisc.token') },
       // A socket that is CONNECTING and stays there.
-      socket: (url) => {
+      socket: ({ url }) => {
         sockets.push(url);
         const never: Pick<WebSocket, 'send' | 'close' | 'onopen' | 'onmessage' | 'onclose'> = { send: (text) => void sent.push(String(text)), close: () => undefined, onopen: null, onmessage: null, onclose: null };
         return never as WebSocket;

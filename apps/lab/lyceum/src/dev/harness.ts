@@ -2,7 +2,7 @@
 // boot, reading trees as a terminal would. Shared so each check says only
 // what it asserts.
 import { z } from 'zod';
-import { mintSession } from '@niscorp/moss';
+import { mintSession, offerToken, PROTOCOL } from '@niscorp/moss';
 import type { MossServer } from '@niscorp/moss';
 import type { PgPool } from '@niscorp/vex';
 import { assistantGive, EVERYBODY } from '@lyceum/app/vex/grant.entries';
@@ -115,7 +115,7 @@ const instanceShowing = (nodes: unknown, text: string): string | undefined => {
 
 export const connect = (base: string, token?: string): Promise<Terminal> =>
   new Promise((resolveTerminal, reject) => {
-    const socket = new WebSocket(`${base}/socket${token === undefined ? '' : `?token=${encodeURIComponent(token)}`}`);
+    const socket = new WebSocket(`${base}/socket?protocol=${PROTOCOL}`, offerToken(token ?? null));
     const trees = new Map<string, string>();
     let hello: z.infer<typeof HelloSchema> | undefined;
     const sessions: string[] = [];

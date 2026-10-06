@@ -14,7 +14,7 @@
 //   5. a press before the socket is open is dropped, not thrown and not queued
 //   6. a dead cookie is the lock screen, and the cookie is taken back
 //   7. nothing in a tree can break out of the element the snapshot rides in
-import { embedSnapshot } from '@niscorp/moss';
+import { embedSnapshot, PROTOCOL } from '@niscorp/moss';
 import type { RenderNode } from '@niscorp/nova';
 import { mintToken } from '@atrium/server/users';
 import { renderPage } from '@atrium/server/document';
@@ -38,7 +38,7 @@ check('…and names the page’s seed on the socket', anonymousSnapshot.seed !==
   // The socket, for real: what the server sends a connection that names that seed.
   const frames: string[] = [];
   let closed: (() => void) | undefined;
-  await server.socket(`/socket?protocol=1&seed=${anonymousSnapshot.seed ?? ''}`, { send: (text) => void frames.push(text), close: () => undefined, onMessage: () => undefined, onClose: (fn) => void (closed = fn) });
+  await server.socket(`/socket?protocol=${PROTOCOL}&seed=${anonymousSnapshot.seed ?? ''}`, { send: (text) => void frames.push(text), close: () => undefined, onMessage: () => undefined, onClose: (fn) => void (closed = fn) });
   await sleep(150);
   const renders = frames.map((text) => JSON.parse(text) as { type: string; canvas?: string; tree?: RenderNode[] }).filter((message) => message.type === 'render');
   const same = renders.length > 0 && renders.every((message) => JSON.stringify(message.tree) === JSON.stringify(anonymousSnapshot.trees[message.canvas ?? '']));

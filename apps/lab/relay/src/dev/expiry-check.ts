@@ -26,7 +26,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve } from '@hono/node-server';
-import { createServer, devSession, CLOSE_INVALID_TOKEN } from '@niscorp/moss';
+import { createServer, devSession, CLOSE_INVALID_TOKEN, offerToken, PROTOCOL } from '@niscorp/moss';
 import { attachSocket } from '@niscorp/moss/node';
 import { createWire } from '@niscorp/moss/client';
 import { nodeEnv } from '@niscorp/moss/client/node';
@@ -57,7 +57,7 @@ type Client = {
 
 const connect = (base: string, token?: string): Promise<Client> =>
   new Promise((resolve, reject) => {
-    const ws = new WebSocket(`${base}/socket${token === undefined ? '' : `?token=${encodeURIComponent(token)}`}`);
+    const ws = new WebSocket(`${base}/socket?protocol=${PROTOCOL}`, offerToken(token ?? null));
     const last = new Map<string, string>();
     let closeCode: number | null = null;
     let errorCode: string | null = null;

@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import type { CortexEvent } from '@niscorp/cortex';
 import { createServer as createHttpServer } from 'node:http';
 import { attachSocket } from '@niscorp/moss/node';
+import { offerToken, PROTOCOL } from '@niscorp/moss';
 import { shell, runtime, server } from './check-shell';
 import { mintToken } from '../server/users';
 import { rayAgent } from '@relay/server/functions/ray/agent';
@@ -77,7 +78,7 @@ const main = async (): Promise<void> => {
       });
     });
     const token = mintToken('alex') ?? '';
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/socket?token=${encodeURIComponent(token)}`);
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/socket?protocol=${PROTOCOL}`, offerToken(token));
     ws.addEventListener('message', (event: MessageEvent) => {
       frames++;
       bytes += typeof event.data === 'string' ? event.data.length : 0;

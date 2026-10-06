@@ -1,5 +1,5 @@
 import type { NovaEvent, RenderNode } from '@niscorp/nova';
-import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SIGNED_OUT, PROTOCOL, PROTOCOL_MIN } from '../socket';
+import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SIGNED_OUT, PROTOCOL, PROTOCOL_MIN, offerToken } from '../socket';
 import { applyDelta, frameHash } from '../delta';
 import type { DeltaOp } from '../delta';
 
@@ -30,8 +30,10 @@ export type WireTokenStore = {
 // The host seam: what the wire would otherwise take from globals.
 export type WireEnv = {
   tokens: WireTokenStore;
-  // construct a socket for this url — `new WebSocket(url)` in every host
-  socket: (url: string) => WebSocket;
+  // Construct a socket for this url, offering these subprotocols —
+  // `new WebSocket(url, offered)` in every host. What is offered is who the
+  // terminal is (socket.ts): a host that drops it connects as nobody.
+  socket: (upgrade: { url: string; offered: string[] }) => WebSocket;
   // the socket url when `config.url` is absent
   defaultUrl: () => string;
 };
@@ -171,7 +173,7 @@ const EMPTY: WireSnapshot = { frame: [], trees: new Map() };
 // and cleared with the stored one. A page request carries cookies and nothing
 // else, so this is what lets a server render the document for whoever is asking.
 // The cookie is only ever read to render a page: every other surface still wants
-// the token itself (the socket's URL, a Bearer header), so it adds no way in.
+// the token itself (offered with the socket, a Bearer header), so it adds no way in.
 export const browserEnv = (config: { tokenKey?: string; cookie?: boolean } = {}): WireEnv => {
   const tokenKey = config.tokenKey ?? 'nisc.token';
   const mirror = (token: string | null): void => {
@@ -217,7 +219,7 @@ export const browserEnv = (config: { tokenKey?: string; cookie?: boolean } = {})
         mirror(null);
       },
     },
-    socket: (url) => new WebSocket(url),
+    socket: ({ url, offered }) => new WebSocket(url, offered),
     defaultUrl: () => {
       const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
       return `${scheme}://${window.location.host}/socket`;
@@ -282,14 +284,14 @@ export const createWire = (config: WireConfig = {}): Wire => {
     if (disposed) return;
     setStatus('connecting');
     bases.clear();
-    const params: string[] = [];
-    if (token !== null) params.push(`token=${encodeURIComponent(token)}`);
-    params.push(`protocol=${PROTOCOL}`);
+    // The address says nothing about who this is — it is what every proxy on
+    // the way writes down. The token is offered with the socket, below.
+    const params: string[] = [`protocol=${PROTOCOL}`];
     if (config.delta === true) params.push('delta=1');
     if (seed !== undefined) params.push(`seed=${encodeURIComponent(seed)}`);
     seed = undefined;
     if (path !== undefined) params.push(`path=${encodeURIComponent(path)}`);
-    const ws = env.socket(`${url()}${params.length > 0 ? `?${params.join('&')}` : ''}`);
+    const ws = env.socket({ url: `${url()}?${params.join('&')}`, offered: offerToken(token) });
     socket = ws;
     // A connection that opens is a healthy connection: forget the backoff.
     ws.onopen = () => {

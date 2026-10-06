@@ -48,7 +48,7 @@ const connectionEnv = (url: string): WireEnv => {
         token = null;
       },
     },
-    socket: (socketUrl) => new WebSocket(socketUrl),
+    socket: ({ url: socketUrl, offered }) => new WebSocket(socketUrl, offered),
     defaultUrl: () => url,
   };
 };
