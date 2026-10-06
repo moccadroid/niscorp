@@ -26,6 +26,18 @@ type Upgradeable = {
   on: (event: 'upgrade', handler: (req: IncomingMessage, socket: Duplex, head: Buffer) => void) => unknown;
 };
 
+// THE LARGEST MESSAGE A CONNECTION MAY SEND, in bytes, unless the host says
+// otherwise (`options.maxMessageBytes`). Told nothing, `ws` takes 100 MiB — and
+// what a terminal sends is an event: a press, a typed value, one row handed
+// back. A few KB. Whatever a message carries, the server then keeps (the value
+// in the shell, and again in the last frame it sent) and sends back down in
+// every later frame of that canvas, so this is what ONE connection, signed in
+// or not, can make the process hold and re-send: about 1.5 MB at this limit,
+// 48 MB for a 16 MiB value. Compression is no bound — 64 MB of one letter is
+// 60 KB on the wire — so the count is of the message once inflated. A message
+// over it closes that connection with 1009, and nothing else.
+const MAX_MESSAGE_BYTES = 256 * 1024;
+
 // The `ws` half of the transport seam: RFC 6455 stays library-handled
 // (permessage-deflate on by default — see `runtime.socketCompression`); the
 // protocol above the seam is nisc's own (../socket.ts) and identical on every
@@ -34,9 +46,9 @@ export const attachSocket = (
   httpServer: Upgradeable,
   accept: SocketAccept,
   path = '/socket',
-  options?: { compression?: boolean | Record<string, unknown> },
+  options?: { compression?: boolean | Record<string, unknown>; maxMessageBytes?: number },
 ): void => {
-  const wss = new WebSocketServer({ noServer: true, perMessageDeflate: options?.compression ?? true });
+  const wss = new WebSocketServer({ noServer: true, perMessageDeflate: options?.compression ?? true, maxPayload: options?.maxMessageBytes ?? MAX_MESSAGE_BYTES });
   httpServer.on('upgrade', (req, socket, head) => {
     const url = req.url ?? '/';
     // Not ours: leave it for whichever other listener owns it (vite's HMR

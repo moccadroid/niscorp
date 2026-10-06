@@ -778,6 +778,18 @@ measures the end.
 - `Connection` — the transport seam: `{ send, close, onMessage, onClose }`.
 - `ServerMessage` — `hello | catalog | frame | render | render-delta | session | error`.
 - `ClientMessage` — `event | publish | resync | reset | back | popTo`.
+- **A message a terminal sends is at most 256 KB**, counted as it is once
+  inflated. One over that closes the connection with `1009` — the transport's
+  own close, not one of moss's — and what it carried did not arrive: the
+  terminal reconnects as after any other close, and a signed-in person's shell
+  is as it was. The limit is the Node transport's (`attachSocket`'s
+  `maxMessageBytes`, below), and it is a bound on memory, not on speed: the
+  server keeps what a message carried — the value in the shell, and again in
+  the last frame it sent — and sends it back down in every later frame of that
+  canvas. An event is a press, a typed value, a row handed back. A file never
+  goes over the socket (AGENTS.md rule 9a): the picker sends it to a route the
+  app mounts, or to a system the app already has, and the event carries what
+  came back.
 - `render-delta` is only ever sent to a connection that advertised `?delta=1`
   on the upgrade, and only when the server is configured for it. Everything
   else is served whole frames, unchanged. See [Wire size](#wire-size).
@@ -913,10 +925,16 @@ Correctness, which matters more than the saving:
   in one process. `port` defaults to 8787.
 - `attachSocket(httpServer, accept, path?, options?)` — embed the socket on an
   existing server (raw `ws`, `noServer`, path-matched — coexists with vite
-  HMR). `path` defaults to `/socket`. `options = { compression? }` is the same
-  value as `runtime.socketCompression` and defaults to `true`; `serve()` passes
-  the runtime's through for you, so only a host running its own listener (a
-  vite plugin, a dev check) ever needs it.
+  HMR). `path` defaults to `/socket`. `options = { compression?,
+  maxMessageBytes? }`. `compression` is the same value as
+  `runtime.socketCompression` and defaults to `true`; `serve()` passes the
+  runtime's through for you, so only a host running its own listener (a vite
+  plugin, a dev check) ever needs it. `maxMessageBytes` is the largest message
+  a connection may send, in bytes, and defaults to 256 KB (`256 * 1024`); a
+  message over it closes that connection with `1009`. It is handed to `ws` as
+  `maxPayload`, whose own default was 100 MiB. Only a host that calls
+  `attachSocket` itself can raise it: `serve()`, `nisc start` and the dev
+  plugin take the default.
 - A frame the transport refuses — malformed, not UTF-8, over the limit — ends
   that connection (`1002`, `1007`, `1009`) and logs one line; no other
   connection is touched.

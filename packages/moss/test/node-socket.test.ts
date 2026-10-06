@@ -45,6 +45,9 @@ const answered = (client: WebSocket, text: string): Promise<string> => {
   return answer;
 };
 
+// The limit a connection is held to when the host says nothing.
+const LIMIT = 256 * 1024;
+
 afterAll(() => {
   for (const server of servers) server.close();
 });
@@ -81,5 +84,51 @@ describe('the ws transport', () => {
       process.off('uncaughtException', onEscape);
       warned.mockRestore();
     }
+  });
+
+  // What a message carries the server keeps and sends back in every later
+  // frame, so a connection is held to 256 KB a message unless the host says
+  // otherwise. Told nothing, `ws` took 100 MiB.
+  it('a message of 256 KB arrives; one byte more closes that connection with 1009, and nothing else', async () => {
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const url = await listening();
+      const bystander = await opened(url);
+      const client = await opened(url);
+
+      expect(await answered(client, 'a'.repeat(LIMIT))).toBe(String(LIMIT));
+
+      const closed = new Promise<number>((resolve) => client.once('close', (code) => resolve(code)));
+      client.send('a'.repeat(LIMIT + 1));
+      expect(await closed).toBe(1009);
+      expect(await answered(bystander, 'still here')).toBe('10');
+      bystander.close();
+    } finally {
+      warned.mockRestore();
+    }
+  });
+
+  // The limit is on the message, not on what crossed the wire: 8 MB of one
+  // letter is a few KB compressed, and is refused all the same.
+  it('a message that is small on the wire and large once inflated is refused', async () => {
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const client = await opened(await listening());
+      expect(client.extensions).toContain('permessage-deflate');
+      const wire = (client as unknown as { _socket: { bytesWritten: number } })._socket;
+      const before = wire.bytesWritten;
+      const closed = new Promise<number>((resolve) => client.once('close', (code) => resolve(code)));
+      client.send('a'.repeat(8 * 1024 * 1024));
+      expect(await closed).toBe(1009);
+      expect(wire.bytesWritten - before).toBeLessThan(LIMIT);
+    } finally {
+      warned.mockRestore();
+    }
+  });
+
+  it('a host that takes larger messages says so: maxMessageBytes', async () => {
+    const client = await opened(await listening({ maxMessageBytes: 4 * LIMIT }));
+    expect(await answered(client, 'a'.repeat(LIMIT + 1))).toBe(String(LIMIT + 1));
+    client.close();
   });
 });

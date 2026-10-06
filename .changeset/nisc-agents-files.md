@@ -9,4 +9,4 @@ A picker that puts a file in its model value sends it over the socket as base64,
 
 moss gains a test and nothing else: a route an app adds to the built server reads who is asking, as moss's own surfaces do.
 
-**What to change:** nothing. A picker that emits a file's bytes as its model value keeps working; rule 9a says to send the file from the picker instead.
+**What to change:** nothing for the rule itself. But this release also limits a message a terminal sends to 256 KB (the moss entry on the socket's message limit), so a picker that emits a file's bytes as its model value now works only for a file under about 190 KB: send the file from the picker, as rule 9a says, or raise the limit where the app attaches the socket.

@@ -158,7 +158,7 @@ never in moss core.
 
 - **`/catalog`** — the application, resolved for you (granted action ids + a version token).
 - **`/api/vex`, `/api/<resource>/vex`** — reads and writes, locked (replay-only), scoped per principal. The model never writes SQL; the policy it can't see enforces access.
-- **the socket** — the authority channel: the served frame and per-canvas `RenderNode` trees down, `NovaEvent`s up. Session lifecycle (sign-in grant, sign-out revoke) rides it. Two optional reductions sit under it, both invisible to an app: `permessage-deflate` (on by default) and frame deltas (`shellFrameDelta`, off) — a changed canvas sent as a checksummed delta against the frame the terminal already holds, 1–4% of the frame on an in-place change. See [DOCS.md § Wire size](DOCS.md#wire-size).
+- **the socket** — the authority channel: the served frame and per-canvas `RenderNode` trees down, `NovaEvent`s up (a message a terminal sends is at most 256 KB). Session lifecycle (sign-in grant, sign-out revoke) rides it. Two optional reductions sit under it, both invisible to an app: `permessage-deflate` (on by default) and frame deltas (`shellFrameDelta`, off) — a changed canvas sent as a checksummed delta against the frame the terminal already holds, 1–4% of the frame on an in-place change. See [DOCS.md § Wire size](DOCS.md#wire-size).
 
 ## Tables and documents, versioned
 
