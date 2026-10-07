@@ -36,7 +36,7 @@ export const VEX_SLIDES: readonly Slide[] = [
     slideId: 'slide.writer',
     title: 'Watch it write one.',
     tools: ['tools.ask'],
-    notes: ['[ask: who has asked the most questions?]', 'shown: the tables I may read + one line about me', 'a test fails → the engine’s own message → fixed', 'finishes only with a draft that passed', 'stored under a name: replayed from now on'],
+    notes: ['[ask: Who joined last?]', 'a question about the room: the stage replays it on the next slide', 'shown: the tables I may read + one line about me', 'a test fails → the engine’s own message → fixed', 'finishes only with a draft that passed', 'stored under a name: replayed from now on'],
   },
   {
     slideId: 'slide.name',

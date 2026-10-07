@@ -165,7 +165,7 @@ const fakeQuerier = (tracer: Tracer): Querier => ({
     tracer.step(intent, await tested(caller, MISTAKEN));
     const passing = await tested(caller, dsl);
     tracer.step(intent, passing);
-    tracer.written(intent, dsl, passing.ink === 'live' ? passing.text.slice(passing.text.lastIndexOf('\n') + 1) : '');
+    tracer.written(intent, dsl, passing.lang === 'sql' ? passing.answer : '');
     return dsl;
   },
   // Vex's own mapper, with a model that is never there: rows that fit their

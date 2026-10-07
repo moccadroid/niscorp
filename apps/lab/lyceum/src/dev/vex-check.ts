@@ -58,9 +58,9 @@ const main = async (): Promise<void> => {
 
   // ── the slides that read the code ──
   await go('slide.request');
-  check('the request slide shows the intent, and holds the shape back', (await stage.shows('main', 'who has asked the most questions?')) && stage.showsNow('main', '"area":"shape","mark":"hatch"'));
+  check('the request slide shows the intent as the JSON it is, and holds the shape back', (await stage.shows('main', 'Who joined last?')) && stage.showsNow('main', '"area":"shape","mark":"hatch"'));
   speaker.click('tools', 'more');
-  check('…then the router’s own counts shape', await stage.shows('main', '[{\\"group\\":\\"\\",\\"count\\":0}]'));
+  check('…then the router’s own counts shape, as the JSON it is', (await stage.shows('main', '\\"count\\": 0')) && stage.showsNow('main', '\\"group\\": \\"\\"'));
   speaker.click('tools', 'more');
   check('…then that this is the whole request', await stage.shows('main', 'Nobody wrote a query. Nobody wrote an endpoint.'));
   await go('slide.document');
@@ -108,9 +108,9 @@ const main = async (): Promise<void> => {
   speaker.click('tools', 'ask');
   check('the answer opens over the controller as the query it is, written just now', (await speaker.shows('overlay', '"value":"Query"')) && (await speaker.shows('overlay', 'a model wrote this one')));
   check('the stage shows the question', await stage.shows('main', 'How many people are in the room?'));
-  check('...what the model was shown: the tables this caller may read, and the line about them', (await stage.shows('main', 'The tables this caller may read: ')) && stage.showsNow('main', 'members') && stage.showsNow('main', 'identified by server-side scope values'));
-  check('...a draft that failed, with the engine’s own message', (await stage.shows('main', 'members.nothing')) && stage.showsNow('main', '"ink":"alert"'));
-  check('...a draft that ran, with the statement it compiled', (await stage.shows('main', 'runs · ')) && stage.showsNow('main', 'SELECT') && stage.showsNow('main', '"ink":"live"'));
+  check('...what the model was shown: the tables this caller may read, as the request JSON', (await stage.shows('main', 'The tables this caller may read')) && stage.showsNow('main', 'members') && stage.showsNow('main', '\\"intent\\": \\"How many people are in the room?\\"'));
+  check('...a draft that failed, with the engine’s own message, flagged', (await stage.shows('main', 'members.nothing')) && stage.showsNow('main', '"flag":"alert"'));
+  check('...a draft that ran, with the statement it compiled, flagged', (await stage.shows('main', 'runs · ')) && stage.showsNow('main', 'SELECT') && stage.showsNow('main', '"flag":"live"'));
   check('...and how it ended: written, and stored under its name', (await stage.shows('main', 'written · ')) && (await stage.shows('main', 'Stored under fp_')));
   const recorded = await runtime.db.query<{ how: string; fingerprint: string | null; member_id: string }>('SELECT how, fingerprint, member_id FROM queries ORDER BY run_at');
   check('the question is recorded as the speaker’s, generated, with a fingerprint', recorded.rows[0]?.how === 'generated' && (recorded.rows[0]?.fingerprint ?? '') !== '' && recorded.rows[0]?.member_id === 'speaker');

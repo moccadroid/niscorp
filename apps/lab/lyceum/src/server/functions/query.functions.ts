@@ -5,6 +5,7 @@ import { QuerySchema } from '@niscorp/vex';
 import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
 import { memberSearch } from '@lyceum/app/vex/member.entries';
 import { routeQuery } from '../assistant/vex-query';
+import { foldStatement } from '../generation';
 import { queryEngineFor } from '../querying';
 import type { Querier } from '../querying';
 
@@ -64,17 +65,19 @@ export const queryFunctions = (session: FunctionSession, querier: Querier): Reco
     const answered = await engine.execute({ fingerprint: memberSearch.fingerprint, context }, { scope: { userId: session.principal ?? '' }, scopePolicy: session.policy });
     return {
       sent: JSON.stringify({ fingerprint: memberSearch.fingerprint, context }, null, 2),
-      sql: engine.compile(memberSearch.dsl).sql,
+      sql: foldStatement(engine.compile(memberSearch.dsl).sql),
       rows: RowsSchema.parse(answered.result ?? []),
       missing: (answered.meta.missingContext ?? []).join(', '),
-      contract: JSON.stringify(answered.meta.context),
+      contract: JSON.stringify(answered.meta.context, null, 2),
     };
   },
 
+  // The statement, folded at its clauses so it fits a column; the lines that
+  // join are marked — the engine wrote them, the document did not.
   'room.compile': async (input) => {
     const { dsl } = CompileSchema.parse(input);
     const engine = await queryEngineFor(session.runtime, querier);
-    const { sql } = engine.compile(QuerySchema.parse(dsl));
+    const sql = foldStatement(engine.compile(QuerySchema.parse(dsl)).sql);
     return { sql, marked: sql.split('\n').flatMap((line, index) => (/\bJOIN\b/.test(line) ? [index + 1] : [])) };
   },
 

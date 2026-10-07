@@ -16,6 +16,8 @@ No package changed for any of it. Every mechanism is lyceum's own, against `@nis
 - **The search reads the engine directly** (`room.search`): the governed wire hands an action the result and drops the meta, and the slide shows `missingContext`. The stage draws the search tool's data through the mirror, which now mirrors a list of the speaker's actions (`speaker.mirror`, channel `speaker-mirror`).
 - **`ask-check` became `vex-check`**: one check drives the whole vex talk's live beats.
 - **`pnpm rehearse` exists and has run only as a dry run** with no model (six phones, every question generated, about 170 ms each). The live rehearsal, against Groq's limit, is still owed before a date.
+- **The slides were re-set in nisc.dev's reading grammar** after the first cut broke on 16:9 (`TALK.md` §15, "The reading grammar"): `lyceum.kit` 13 adds `Sheet scale: 'page'`, `Text size`, `Exhibit`, `Pair`, `Stack` and `Stats`, drawn by all five kits; highlight.js colours the documents.
+- **The talk's question is "Who joined last?"**, measured 3/3 live; the questions over `queries` are refused for want of a foreign key, and one over `questions` cannot be replayed by the stage. A tally that showed zeros on the fingerprint slide was that replay failing and stopping the mount; the tally reads first now.
 
 ---
 

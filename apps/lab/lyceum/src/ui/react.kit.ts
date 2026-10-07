@@ -9,11 +9,13 @@ import {
 import { useNovaDispatch } from '@niscorp/nova/adapters/react';
 import type { NovaComponent, NovaComponentProps } from '@niscorp/nova/adapters/react';
 import type { KitOf } from './kit.props';
-import { ALIGNS, INKS, LEVELS, MARKS, SIGILS, oneOf, records } from './kit';
+import { ALIGNS, GAPS, INKS, LANGS, LEVELS, MARKS, PANES, SCALES, SIGILS, SIZES, SPLITS, oneOf, records } from './kit';
 import {
   SIGIL_SHAPES,
   areaOf,
+  codeLines,
   flowDelays,
+  numbers,
   instantOf,
   narrowOf,
   qrOf,
@@ -97,6 +99,7 @@ const Sheet: NovaComponent = (props: Props) => {
         ...placed,
         className: 'sheet',
         'data-size': size,
+        ...data('scale', oneOf(props['scale'], SCALES)),
         ...(narrow === undefined ? {} : { 'data-narrow': '' }),
       },
       props.children,
@@ -138,8 +141,36 @@ const Text: NovaComponent = (props: Props) =>
       ...usePlaced(props),
       className: 'text',
       ...data('tone', oneOf(props['tone'], ['muted'] as const)),
+      ...data('size', oneOf(props['size'], SIZES)),
     },
     props.children,
+  );
+
+// The reading grammar, as the DOM kit draws it (./kit.ts).
+const Exhibit: NovaComponent = (props: Props) =>
+  h(
+    'figure',
+    { ...usePlaced(props), className: 'exhibit', ...data('lang', oneOf(props['lang'], LANGS)), ...data('tone', oneOf(props['tone'], PANES)), ...data('flag', oneOf(props['flag'], INKS)) },
+    h('figcaption', null, text(props['label']) ?? ''),
+    h(
+      'pre',
+      null,
+      codeLines(text(props['text']) ?? '', oneOf(props['lang'], LANGS), numbers(props['marked'])).map((line, i) =>
+        h('span', { key: i, ...(line.marked ? { 'data-marked': '' } : {}), dangerouslySetInnerHTML: { __html: line.html } }),
+      ),
+    ),
+  );
+
+const Pair: NovaComponent = (props: Props) => h('div', { ...usePlaced(props), className: 'pair', ...data('split', oneOf(props['split'], SPLITS)) }, props.children);
+
+const Stack: NovaComponent = (props: Props) =>
+  h('div', { ...usePlaced(props), className: 'stack', ...data('gap', oneOf(props['gap'], GAPS)), ...data('scroll', oneOf(props['scroll'], ['y'] as const)) }, props.children);
+
+const Stats: NovaComponent = (props: Props) =>
+  h(
+    'div',
+    { ...usePlaced(props), className: 'stats' },
+    records(props['items']).map((item, i) => h('div', { key: i, ...data('ink', oneOf(item['ink'], INKS)) }, h('b', null, text(item['value']) ?? '—'), h('span', null, text(item['label']) ?? ''))),
   );
 
 const Figure: NovaComponent = (props: Props) =>
@@ -449,4 +480,8 @@ export const REACT_KIT: KitOf<NovaComponent> = {
   Look,
   Xray,
   Menu,
+  Exhibit,
+  Pair,
+  Stack,
+  Stats,
 };

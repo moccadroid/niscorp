@@ -94,5 +94,11 @@ export const LYCEUM_KIT: Sequence = {
       description: 'Menu: an icon that opens a list of things to press',
       steps: [],
     },
+    {
+      // A MARKER: the reading grammar — a scale, a prop and four components
+      // added, for the slides that are read rather than glanced at.
+      description: 'The reading scale: Sheet scale page, Text size; Exhibit (a document set out to be read), Pair, Stack, Stats',
+      steps: [],
+    },
   ],
 };

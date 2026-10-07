@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { DomComponent } from '@niscorp/nova/adapters/dom';
-import { ALIGNS, INKS, LEVELS, LOOKS, MARKS, SIGILS } from './kit';
+import { ALIGNS, GAPS, INKS, LANGS, LEVELS, LOOKS, MARKS, PANES, SCALES, SIGILS, SIZES, SPLITS } from './kit';
 
 // ═══════════════════════════════════════════════════════════════
 // WHAT A LAYOUT MAY SAY TO EACH KIT COMPONENT — the kit's grammar (strata's
@@ -33,13 +33,23 @@ export const KIT_PROPS = z
           .object({ areas: z.array(z.string()), rows: z.array(z.union([z.number(), z.literal('auto')])), cols: z.array(z.number()) })
           .partial({ rows: true, cols: true })
           .strict(),
+        scale: z.enum(SCALES).describe('The reading scale: sizes fixed in rem with a measure, for a slide that is read'),
       })
       .partial()
       .strict(),
     Cell: z.object({ area, ink, mark, align: z.enum(ALIGNS), pad: z.literal('none'), scroll: z.enum(['y', 'end']) }).partial().strict(),
     Label: z.object({}).strict(),
     Headline: z.object({ level: z.enum(LEVELS) }).partial().strict(),
-    Text: z.object({ tone: z.literal('muted') }).partial().strict(),
+    Text: z.object({ tone: z.literal('muted'), size: z.enum(SIZES) }).partial().strict(),
+    // The reading grammar: a document set out to be read, two things side by
+    // side, things one under another, a row of figures.
+    Exhibit: z
+      .object({ area, label, text: z.string(), lang: z.enum(LANGS), tone: z.enum(PANES), flag: ink, marked: z.array(z.number()) })
+      .partial()
+      .strict(),
+    Pair: z.object({ area, split: z.enum(SPLITS) }).partial().strict(),
+    Stack: z.object({ area, gap: z.enum(GAPS), scroll: z.literal('y') }).partial().strict(),
+    Stats: z.object({ area, items: z.array(z.object({ label, value: z.union([z.string(), z.number()]), ink }).partial({ ink: true }).strict()) }).partial().strict(),
     Figure: z.object({ label, value: z.union([z.string(), z.number()]) }).partial().strict(),
     Countdown: z.object({ label, to: z.string().describe('The instant counted down to') }).partial().strict(),
     Code: z.object({ text: z.string(), marked: z.array(z.number()) }).partial().strict(),

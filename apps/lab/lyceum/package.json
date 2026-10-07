@@ -30,6 +30,7 @@
     "@niscorp/strata": "workspace:^",
     "@niscorp/tide": "workspace:^",
     "@niscorp/vex": "workspace:^",
+    "highlight.js": "^11.12.0",
     "ink": "^7.1.1",
     "pg": "^8.16.3",
     "react": "^19.2.4",

@@ -75,6 +75,12 @@ export const TEXT_KIT: KitOf<TtyComponent> = {
   Look: () => block(),
   Xray: () => block(),
   Menu: ({ children }) => block(...lines(children)),
+  // The reading grammar: a document is its caption and its lines; what stands
+  // side by side or one under another reads in order; a row of figures is a line.
+  Exhibit: ({ props }) => block(text(props['label']) ?? '', ...(text(props['text']) ?? '').split('\n')),
+  Pair: ({ children }) => block(...lines(children)),
+  Stack: ({ children }) => block(...lines(children)),
+  Stats: ({ props }) => block(records(props['items']).map((item) => `${text(item['label']) ?? ''}: ${text(item['value']) ?? '—'}`).join(' · ')),
 };
 
 const registry = createComponentRegistry<TtyComponent>();

@@ -1,17 +1,51 @@
 import { encode } from 'uqr';
+import hljs from 'highlight.js/lib/core';
+import json from 'highlight.js/lib/languages/json';
+import sql from 'highlight.js/lib/languages/sql';
+import typescript from 'highlight.js/lib/languages/typescript';
 
 // ═══════════════════════════════════════════════════════════════
 // WHAT EVERY BROWSER KIT WORKS OUT THE SAME WAY — the geometry a component
-// turns into CSS itself, the countdown's arithmetic, the shapes, the QR code.
-// Pure: strings and numbers in, strings and numbers out. The DOM kit (./kit.ts),
-// the React kit (./react.kit.ts) and the Vue kit (./vue.kit.ts) build their
-// elements from these, so the three draw the same thing from the same tree.
+// turns into CSS itself, the countdown's arithmetic, the shapes, the QR code,
+// the lines of a document set in colour. Pure: strings and numbers in, strings
+// and numbers out. The DOM kit (./kit.ts), the React kit (./react.kit.ts) and
+// the Vue kit (./vue.kit.ts) build their elements from these, so the three draw
+// the same thing from the same tree.
 // ═══════════════════════════════════════════════════════════════
 
 export const AREA = /^[a-z][a-z0-9-]*$/;
 
 export const text = (value: unknown): string | undefined =>
   typeof value === 'string' ? value : typeof value === 'number' ? String(value) : undefined;
+
+export const numbers = (value: unknown): number[] =>
+  Array.isArray(value) ? value.filter((n): n is number => typeof n === 'number') : [];
+
+// ── code, set in colour ──
+// The languages a document on a slide is written in. A line of one is set in
+// colour by highlight.js — keywords, strings, numbers, comments, nothing else
+// — and the kits put its markup where the line goes. Line by line, so a
+// layout can mark the lines that matter (a token across lines loses its
+// colour at the break, which a document on a slide does not have). Without a
+// language the text is set as it is.
+hljs.registerLanguage('json', json);
+hljs.registerLanguage('sql', sql);
+hljs.registerLanguage('ts', typescript);
+export const LANGS = ['json', 'sql', 'ts'] as const;
+export type Lang = (typeof LANGS)[number];
+
+const escaped = (line: string): string => line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+export type CodeLine = { text: string; html: string; marked: boolean };
+export const codeLines = (source: string, lang: Lang | undefined, marked: readonly number[]): CodeLine[] =>
+  source.split('\n').map((raw, i) => {
+    const line = raw === '' ? ' ' : raw;
+    return {
+      text: line,
+      html: lang === undefined ? escaped(line) : hljs.highlight(line, { language: lang, ignoreIllegals: true }).value,
+      marked: marked.includes(i + 1),
+    };
+  });
 
 export const weight = (value: unknown): number | undefined =>
   typeof value === 'number' && value > 0 && value <= 100 ? value : undefined;

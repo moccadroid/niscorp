@@ -6,7 +6,7 @@ import { createComponentRegistry } from '@niscorp/nova';
 import type { ComponentRegistry } from '@niscorp/nova';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { KitOf } from './kit.props';
-import { INKS, LEVELS, MARKS, SIGILS, oneOf, records, text } from './kit';
+import { INKS, LEVELS, MARKS, SIGILS, numbers, oneOf, records, text } from './kit';
 
 // ═══════════════════════════════════════════════════════════════
 // THE TERMINAL KIT — the same grammar (./kit.props.ts) painted in a terminal,
@@ -225,7 +225,24 @@ const Xray: NovaComponent = () => null;
 // No dropdown in a terminal: the entries are simply there.
 const Menu: NovaComponent = ({ children }) => h(Box, { flexDirection: 'column' }, children);
 
-export const INK_KIT: KitOf<NovaComponent> = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look, Xray, Menu };
+// The reading grammar, in a terminal: a document is its caption and its lines
+// (the lines that matter inverse; no colour), two things side by side stand
+// one under the other, a row of figures is one line.
+const Exhibit: NovaComponent = ({ ...props }) => {
+  const marked = new Set(numbers(props['marked']));
+  return h(
+    Box,
+    { flexDirection: 'column' },
+    h(InkText, { dimColor: true }, text(props['label']) ?? ''),
+    ...(text(props['text']) ?? '').split('\n').map((line, i) => h(InkText, { key: i, inverse: marked.has(i + 1) }, line === '' ? ' ' : line)),
+  );
+};
+const Pair: NovaComponent = ({ children }) => h(Box, { flexDirection: 'column', gap: 1 }, children);
+const Stack: NovaComponent = ({ children }) => h(Box, { flexDirection: 'column', gap: 1 }, children);
+const Stats: NovaComponent = ({ ...props }) =>
+  h(Box, { gap: 2 }, ...records(props['items']).map((item, i) => h(InkText, { key: i }, `${text(item['value']) ?? '—'} ${text(item['label']) ?? ''}`)));
+
+export const INK_KIT: KitOf<NovaComponent> = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look, Xray, Menu, Exhibit, Pair, Stack, Stats };
 
 // The terminal's registry: this kit, assembled once. moss's ink target adds
 // the wire-backed slots (ActionSlot, CanvasSlot) itself.

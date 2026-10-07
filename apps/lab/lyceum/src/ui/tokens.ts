@@ -127,7 +127,7 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 
 /* ── cell: a place in the grid, and its ink ── */
 /* defaults first, so an ink always out-ranks them */
-.${ROOT_CLASS} :where(.cell, .bar > span, .action, .flow-lane) { --bg: var(--paper); --fg: var(--ink); }
+.${ROOT_CLASS} :where(.cell, .bar > span, .action, .flow-lane, .stats > div) { --bg: var(--paper); --fg: var(--ink); }
 .${ROOT_CLASS} :where(.columns-fill) { --bg: var(--ink); --fg: var(--paper); }
 .${ROOT_CLASS} [data-ink="ink"] { --bg: var(--ink); --fg: var(--paper); }
 .${ROOT_CLASS} [data-ink="signal"] { --bg: var(--signal); --fg: var(--paper); }
@@ -368,4 +368,82 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(16px, cal
 .${ROOT_CLASS}[data-xray] [data-action] [data-action] [data-action] [data-action] > .xray-tag { right: auto; left: 0; }
 /* over the screen, the corner at the top is the sheet's Close: the tag goes to the bottom */
 .${ROOT_CLASS}[data-xray] [data-canvas="overlay"] [data-action] > .xray-tag { top: auto; bottom: 0; }
+
+/* ═══ THE READING GRAMMAR — nisc.dev's, on the stage ═══
+   A sheet at the page scale is a slide that is READ, not glanced at: every
+   size inside is fixed in rem (the rem follows the screen, above) and every
+   run of words has a measure, so nothing grows with its neighbour and a
+   headline never takes the sheet. Code lives in an EXHIBIT — a captioned pane,
+   set in colour — and never in a cell beside prose. */
+.${ROOT_CLASS} .sheet[data-scale="page"] .cell { padding: 1.3rem 1.5rem; gap: .9rem; }
+.${ROOT_CLASS} .sheet[data-scale="page"] .label { font-size: .78rem; }
+.${ROOT_CLASS} .sheet[data-scale="page"] .headline { letter-spacing: -.015em; }
+.${ROOT_CLASS} .sheet[data-scale="page"] .headline[data-level="display"] { font-size: 3.4rem; line-height: .93; max-width: 14em; }
+.${ROOT_CLASS} .sheet[data-scale="page"] .headline[data-level="title"] { font-size: 2.2rem; line-height: .96; max-width: 18em; }
+.${ROOT_CLASS} .sheet[data-scale="page"] .headline[data-level="name"] { font-size: 1.35rem; line-height: 1.1; max-width: 26em; }
+.${ROOT_CLASS} .sheet[data-scale="page"] .text { font-size: 1.12rem; line-height: 1.45; max-width: 32em; }
+.${ROOT_CLASS} .sheet[data-scale="page"] .text[data-size="lede"] { font-size: 1.3rem; line-height: 1.4; max-width: 29em; }
+.${ROOT_CLASS} .sheet[data-scale="page"] .text[data-size="small"] { font-size: .95rem; line-height: 1.4; }
+.${ROOT_CLASS} .sheet[data-scale="page"] .text[data-size="fine"] { font: 400 .78rem/1.4 var(--mono); max-width: none; }
+.${ROOT_CLASS} .sheet[data-scale="page"] .figure > .value { font-size: 3rem; }
+.${ROOT_CLASS} .sheet[data-scale="page"] .code { font-size: .85rem; }
+.${ROOT_CLASS} .sheet[data-scale="page"] .rows > div > span { font-size: 1rem; }
+.${ROOT_CLASS} .sheet[data-scale="page"] .rows[data-head] > div:first-child > span { font-size: .72rem; }
+/* a stack or a pair inside a cell takes what the cell leaves it */
+.${ROOT_CLASS} .cell > .stack, .${ROOT_CLASS} .cell > .pair { flex: 1 1 auto; min-height: 0; }
+
+/* ── exhibit: one document, set out to be read ── */
+.${ROOT_CLASS} .exhibit { margin: 0; display: grid; gap: .5rem; align-content: start; min-width: 0; max-width: 100%; }
+.${ROOT_CLASS} .exhibit > figcaption { font: 400 .74rem/1.4 var(--mono); letter-spacing: .06em; text-transform: uppercase; width: fit-content; }
+.${ROOT_CLASS} .exhibit > pre {
+  margin: 0; min-width: 0; font: 400 .85rem/1.55 var(--mono); white-space: pre; overflow: auto;
+  border: var(--rule) solid var(--ink); background: var(--paper); color: var(--ink); padding: .9rem 1.1rem; box-shadow: 8px 8px 0 var(--ink);
+}
+.${ROOT_CLASS} .exhibit > pre > span { display: block; }
+/* a document that is words, not code (no language said), wraps its lines */
+.${ROOT_CLASS} .exhibit:not([data-lang]) > pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.${ROOT_CLASS} .exhibit[data-tone="ink"] > pre { background: #111; color: #e9e6dc; }
+/* on a dark cell the frame and the shadow are paper, so the pane still stands off it */
+.${ROOT_CLASS} [data-ink="ink"] .exhibit > pre, .${ROOT_CLASS} [data-ink="signal"] .exhibit > pre { border-color: var(--paper); box-shadow: 8px 8px 0 var(--paper); }
+/* the lines that matter */
+.${ROOT_CLASS} .exhibit > pre > span[data-marked] { background: var(--highlight); color: var(--ink); margin: 0 -.5em; padding: 0 .5em; }
+.${ROOT_CLASS} .exhibit > pre > span[data-marked] * { color: inherit; }
+/* a flagged exhibit: its caption wears the ink — orange is a draft that failed, green one that ran */
+.${ROOT_CLASS} .exhibit[data-flag] > figcaption { padding: .25em .55em; background: var(--flag-bg); color: var(--flag-fg); }
+.${ROOT_CLASS} .exhibit[data-flag="alert"] { --flag-bg: var(--alert); --flag-fg: var(--ink); }
+.${ROOT_CLASS} .exhibit[data-flag="live"] { --flag-bg: var(--live); --flag-fg: var(--ink); }
+.${ROOT_CLASS} .exhibit[data-flag="signal"] { --flag-bg: var(--signal); --flag-fg: var(--paper); }
+.${ROOT_CLASS} .exhibit[data-flag="highlight"] { --flag-bg: var(--highlight); --flag-fg: var(--ink); }
+.${ROOT_CLASS} .exhibit[data-flag="ink"] { --flag-bg: var(--ink); --flag-fg: var(--paper); }
+.${ROOT_CLASS} .exhibit[data-flag="paper"] { --flag-bg: var(--paper); --flag-fg: var(--ink); }
+/* code in colour: keywords, strings, numbers, comments, nothing else — on paper, and on ink */
+.${ROOT_CLASS} .exhibit > pre .hljs-comment { color: #6b6a63; }
+.${ROOT_CLASS} .exhibit > pre .hljs-keyword, .${ROOT_CLASS} .exhibit > pre .hljs-built_in { color: var(--signal); }
+.${ROOT_CLASS} .exhibit > pre .hljs-string { color: #0a7a3a; }
+.${ROOT_CLASS} .exhibit > pre .hljs-number, .${ROOT_CLASS} .exhibit > pre .hljs-literal { color: #c2410c; }
+.${ROOT_CLASS} .exhibit > pre .hljs-attr, .${ROOT_CLASS} .exhibit > pre .hljs-property, .${ROOT_CLASS} .exhibit > pre .hljs-title { color: var(--ink); font-weight: 700; }
+.${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-comment { color: #8a8780; }
+.${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-keyword, .${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-built_in { color: #8fa8ff; }
+.${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-string { color: #5fe08a; }
+.${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-number, .${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-literal { color: #ff9b70; }
+.${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-attr, .${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-property, .${ROOT_CLASS} .exhibit[data-tone="ink"] > pre .hljs-title { color: #fff; font-weight: 400; }
+
+/* ── pair: two things side by side; one under the other where there is no room ── */
+.${ROOT_CLASS} .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; align-items: start; min-width: 0; }
+.${ROOT_CLASS} .pair[data-split="narrow-wide"] { grid-template-columns: 1fr 1.25fr; }
+.${ROOT_CLASS} .pair[data-split="wide-narrow"] { grid-template-columns: 1.25fr 1fr; }
+.${ROOT_CLASS} .pair > * { min-width: 0; }
+@media (max-width: 760px) { .${ROOT_CLASS} .pair { grid-template-columns: 1fr; } }
+
+/* ── stack: things one under another ── */
+.${ROOT_CLASS} .stack { display: grid; gap: 1.2rem; align-content: start; min-width: 0; }
+.${ROOT_CLASS} .stack[data-gap="tight"] { gap: .6rem; }
+.${ROOT_CLASS} .stack[data-scroll="y"] { overflow-y: auto; min-height: 0; overscroll-behavior: contain; padding: 1.3rem 1.5rem; }
+.${ROOT_CLASS} .stack > * { min-width: 0; }
+
+/* ── stats: a row of figures, each with what it counts ── */
+.${ROOT_CLASS} .stats { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: var(--rule); background: var(--ink); border: var(--rule) solid var(--ink); }
+.${ROOT_CLASS} .stats > div { background: var(--bg); color: var(--fg); padding: .9rem 1rem; display: grid; gap: .35rem; align-content: start; }
+.${ROOT_CLASS} .stats b { font: 900 2.4rem/1 var(--display); font-variant-numeric: tabular-nums; }
+.${ROOT_CLASS} .stats span { font: 700 .7rem/1.2 var(--display); letter-spacing: .06em; text-transform: uppercase; }
 `;

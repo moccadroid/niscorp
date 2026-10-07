@@ -71,7 +71,16 @@ const COUNTS = QUERY_SHAPES.find((shape) => shape.kind === 'counts')?.shape ?? n
 export const requestSlide: ActionDefinition = {
   id: 'slide.request',
   title: 'The question, and the shape of the answer.',
-  data: { kicker: 'The request', title: 'The question, and the shape of the answer.', intent: '"who has asked the most questions?"', shape: JSON.stringify(COUNTS), step: { step: 0 } },
+  data: {
+    kicker: 'The request',
+    title: 'The question, and the shape of the answer.',
+    // The question the speaker asks on the writer slide: about the room, over
+    // members alone — the writer gets it every time (TALK.md §15, "Measured"),
+    // and the stage may replay it (slide.name).
+    intentJson: JSON.stringify({ intent: 'Who joined last?' }, null, 2),
+    shapeJson: JSON.stringify({ shape: COUNTS }, null, 2),
+    step: { step: 0 },
+  },
   layout: requestLayout,
   endpoints: { step: stepRead },
   lifecycle: { mount: [{ call: 'step' }] },
@@ -143,7 +152,7 @@ export const toolsSlide = still('slide.tools', 'Six tools. None takes SQL.', too
 // server keeps of the speaker's newest generation (server/generation), read
 // on mount and again whenever the server says it changed. Nothing on it can
 // be pressed; the question is asked on the controller (tools.ask).
-const NO_TRACE = { principal: '', intent: '', shape: '', shapeKind: '', shown: { tables: '', caller: '' }, steps: [], outcome: { kind: 'none', text: 'Nothing asked yet.', fingerprint: '', sql: '' }, ms: 0 };
+const NO_TRACE = { principal: '', intent: '', shape: '', shapeKind: '', request: '', shown: { tables: '', caller: '' }, steps: [], outcome: { kind: 'none', label: 'Nothing asked yet.', text: '', lang: '', sql: '', fingerprint: '', sent: '' }, ms: 0 };
 export const writerSlide: ActionDefinition = {
   id: 'slide.writer',
   title: 'Watch it write one.',
@@ -155,7 +164,8 @@ export const writerSlide: ActionDefinition = {
 };
 
 // The speaker's stored query, replayed as the stage — its own rows — and the
-// room's tally, live.
+// room's tally, live. The tally is read first: a replay the stage's policy
+// refuses (a query over a table the stage may not read) must not stop it.
 const followTrace = [{ call: 'generation', onSuccess: [{ call: 'replay' }] }];
 export const nameSlide: ActionDefinition = {
   id: 'slide.name',
@@ -167,7 +177,7 @@ export const nameSlide: ActionDefinition = {
     replay: { url: '/api/vex', method: 'POST', request: { fingerprint: { $ref: '$.trace.outcome.fingerprint' }, context: {} }, target: 'replayed', errorTarget: 'replayError' },
     tally: { url: '/api/vex', method: 'POST', request: { fingerprint: queriesTally.fingerprint, context: {} }, target: 'tally' },
   },
-  lifecycle: { mount: [...followTrace, { call: 'tally' }] },
+  lifecycle: { mount: [{ call: 'tally' }, ...followTrace] },
   triggers: [{ message: 'generation-changed', do: followTrace }],
 };
 
@@ -194,7 +204,7 @@ export const lockedSlide: ActionDefinition = {
     entries: ENTRIES.length,
     reads: ENTRIES.filter((entry) => 'dsl' in entry).length,
     writes: ENTRIES.filter((entry) => 'mutation' in entry).length,
-    request: `POST /api/vex\n${JSON.stringify({ intent: PROBE.intent, shape: PROBE.shape }, null, 2)}`,
+    request: JSON.stringify({ intent: PROBE.intent, shape: PROBE.shape }, null, 2),
     probe: null,
     locked: { message: '' },
     ops: code('insert', 'insertEach', 'update', 'upsert', 'delete'),

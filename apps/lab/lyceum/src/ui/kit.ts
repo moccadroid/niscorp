@@ -1,8 +1,8 @@
 import type { DomComponent } from '@niscorp/nova/adapters/dom';
 import type { Kit } from './kit.props';
-import { areaOf, SIGIL_SHAPES, flowDelays, instantOf, narrowOf, qrOf, remaining, sheetStyle, templateOf, text, weight } from './kit.shape';
+import { areaOf, codeLines, LANGS, numbers, SIGIL_SHAPES, flowDelays, instantOf, narrowOf, qrOf, remaining, sheetStyle, templateOf, text, weight } from './kit.shape';
 
-export { text } from './kit.shape';
+export { codeLines, LANGS, numbers, text } from './kit.shape';
 
 // ═══════════════════════════════════════════════════════════════
 // LYCEUM'S KIT — the only renderer code in the app (AGENTS.md, layout of an
@@ -27,6 +27,15 @@ export const LEVELS = ['display', 'title', 'name'] as const;
 // The renderers a screen can be drawn by (./target.ts): nova's DOM adapter with
 // this kit, React with ./react.kit.ts, Vue with ./vue.kit.ts. One look.
 export const LOOKS = ['dom', 'react', 'vue'] as const;
+// THE READING GRAMMAR (nisc.dev's, on the stage): what a slide that is read
+// rather than glanced at is set in — a sheet at the page scale, text in sizes,
+// a document in an exhibit, two things side by side, things one under another,
+// a row of figures.
+export const SCALES = ['page'] as const;
+export const SIZES = ['body', 'lede', 'small', 'fine'] as const;
+export const PANES = ['paper', 'ink'] as const;
+export const SPLITS = ['even', 'narrow-wide', 'wide-narrow'] as const;
+export const GAPS = ['normal', 'tight'] as const;
 
 export const oneOf = <T extends string>(value: unknown, options: readonly T[]): T | undefined =>
   options.find((option) => option === value);
@@ -63,10 +72,14 @@ export const Page: DomComponent = ({ children }) => el('div', 'page', children);
 //        tall as its content (a strip).
 // narrow: { areas, rows?, cols? } — the arrangement on a phone-width screen,
 //        in the same words. A cell whose area it leaves out is not shown there.
+// scale: 'page' — the reading scale: every size inside fixed in rem with a
+//        measure, so nothing grows with its neighbour (./tokens.ts); the
+//        default grows with the cell, for a poster read from the back row.
 export const Sheet: DomComponent = ({ props, children, dependsOnChildren }) => {
   const node = el('div', 'sheet', children);
   const size = oneOf(props['size'], ['fill', 'auto'] as const) ?? 'auto';
   setData(node, 'size', size);
+  setData(node, 'scale', oneOf(props['scale'], SCALES));
   const narrow = narrowOf(props['narrow'], size);
   for (const [key, value] of Object.entries(sheetStyle(templateOf(props['areas'], props['rows'], props['cols'], size), narrow, size))) {
     if (key.startsWith('--')) node.style.setProperty(key, value);
@@ -119,9 +132,71 @@ export const Headline: DomComponent = ({ props, children }) => {
 };
 
 // ── Text — sentences ────────────────────────────────────────────
+// tone ('muted'); size (body | lede | small | fine — at the page scale).
 export const Text: DomComponent = ({ props, children }) => {
   const node = el('p', 'text', children);
   setData(node, 'tone', oneOf(props['tone'], ['muted'] as const));
+  setData(node, 'size', oneOf(props['size'], SIZES));
+  return node;
+};
+
+// ── Exhibit — one document, set out to be read ──────────────────
+// label: what it is (a file, "the statement", "sent"); text: the document;
+// lang (json | sql | ts): set in colour; tone (paper | ink): the pane; flag
+// (an ink): the caption wears it — orange for a draft that failed, green for
+// one that ran; marked: 1-based lines to mark. Code lives here and nowhere
+// beside prose.
+export const Exhibit: DomComponent = ({ props }) => {
+  const caption = el('figcaption', '');
+  caption.textContent = text(props['label']) ?? '';
+  const lines = codeLines(text(props['text']) ?? '', oneOf(props['lang'], LANGS), numbers(props['marked'])).map((line) => {
+    const node = el('span', '');
+    node.innerHTML = line.html;
+    if (line.marked) node.setAttribute('data-marked', '');
+    return node;
+  });
+  const node = el('figure', 'exhibit', [caption, el('pre', '', lines)]);
+  placeIn(node, props['area']);
+  // Said, so the look can wrap a document that is words rather than code.
+  setData(node, 'lang', oneOf(props['lang'], LANGS));
+  setData(node, 'tone', oneOf(props['tone'], PANES));
+  setData(node, 'flag', oneOf(props['flag'], INKS));
+  return node;
+};
+
+// ── Pair — two things side by side ──────────────────────────────
+// split: even | narrow-wide | wide-narrow. One under the other where there is no room.
+export const Pair: DomComponent = ({ props, children }) => {
+  const node = el('div', 'pair', children);
+  placeIn(node, props['area']);
+  setData(node, 'split', oneOf(props['split'], SPLITS));
+  return node;
+};
+
+// ── Stack — things one under another ────────────────────────────
+// gap: normal | tight; scroll: 'y' — a stack that may outgrow its place scrolls inside it.
+export const Stack: DomComponent = ({ props, children }) => {
+  const node = el('div', 'stack', children);
+  placeIn(node, props['area']);
+  setData(node, 'gap', oneOf(props['gap'], GAPS));
+  setData(node, 'scroll', oneOf(props['scroll'], ['y'] as const));
+  return node;
+};
+
+// ── Stats — a row of figures, each with what it counts ──────────
+// items: [{ label, value, ink? }].
+export const Stats: DomComponent = ({ props }) => {
+  const items = records(props['items']).map((item) => {
+    const value = el('b', '');
+    value.textContent = text(item['value']) ?? '—';
+    const label = el('span', '');
+    label.textContent = text(item['label']) ?? '';
+    const node = el('div', '', [value, label]);
+    setData(node, 'ink', oneOf(item['ink'], INKS));
+    return node;
+  });
+  const node = el('div', 'stats', items);
+  placeIn(node, props['area']);
   return node;
 };
 
@@ -453,4 +528,4 @@ export const Xray: DomComponent = () => el('span', 'look');
 
 // THIS KIT, whole — typed against the grammar, so a component the grammar
 // names and the kit lacks does not compile.
-export const POSTER_KIT: Kit = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look, Xray, Menu };
+export const POSTER_KIT: Kit = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look, Xray, Menu, Exhibit, Pair, Stack, Stats };
