@@ -14,7 +14,7 @@
 npm create nisc
 ```
 
-[The whole app](#the-whole-app) · [What you stop writing](#what-you-stop-writing) · [Built for the agent](#built-for-the-agent-that-builds-it) · [Packages](#packages) · [Built with it](#built-with-it) · [Showroom](#showroom) · [Working on Nisc](#working-on-nisc)
+[The whole app](#the-whole-app) · [What you stop writing](#what-you-stop-writing) · [Built for the agent](#built-for-the-agent-that-builds-it) · [Packages](#packages) · [Built with it](#built-with-it) · [Guides and examples](#guides-and-examples) · [Working on Nisc](#working-on-nisc)
 
 ---
 
@@ -198,15 +198,15 @@ The reference apps in [`apps/lab`](apps/lab), each built by the rulebook and eac
 | [**relay**](apps/lab/relay) | A CRM that runs in a browser, a tty, an Ink TUI and a browser extension. | One app, every terminal. |
 | [**mythos**](apps/lab/mythos), [**fable**](apps/lab/fable) | Apps with no server: the shell, the database and the endpoints all live in the page. | The same artifacts with nothing behind them. Mythos is exported as a folder: every path a file, its first screen already in it. |
 
-## Showroom
+## Guides and examples
 
-**→ [moccadroid.github.io/niscorp](https://moccadroid.github.io/niscorp/) — every library, live in your browser. No install.**
+**→ [nisc.dev/elop](https://nisc.dev/elop) — package guides, references and browser examples, on the released packages. No install.**
 
-Stories render beside their JSON definitions, runtime data and error states. Vex runs against a real Postgres compiled to WebAssembly, so intent → query → SQL, vector search and scope policies all work end to end with no backend — the canned stories with no key at all, an intent of your own with a model key of yours.
+A guide is read once, in order. A reference is where you look things up, and its examples run in the page against the package version the site has installed. No page calls a model: where one would answer, the pages use labelled, handwritten responses. Moss is the app server and the site has no server, so its pages show outputs captured when the site was built.
 
-```bash
-pnpm --filter showroom dev
-```
+The framework overview is at [nisc.dev](https://nisc.dev).
+
+Questions about using Nisc? Email Max at [max.a.uhlig@gmail.com](mailto:max.a.uhlig@gmail.com). Report bugs through [GitHub Issues](https://github.com/moccadroid/niscorp/issues).
 
 ## Principles
 
