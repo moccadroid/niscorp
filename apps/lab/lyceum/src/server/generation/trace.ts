@@ -31,6 +31,9 @@ export type Trace = {
   principal: string;
   intent: string;
   shape: string;
+  // Which authored shape the answer takes (app/vex/query.shapes.ts) — how a
+  // replay of it is drawn.
+  shapeKind: string;
   shown: { tables: string; caller: string };
   steps: Step[];
   outcome: Outcome;
@@ -41,6 +44,7 @@ export const EMPTY_TRACE: Trace = {
   principal: '',
   intent: '',
   shape: '',
+  shapeKind: '',
   shown: { tables: '', caller: '' },
   steps: [],
   outcome: { kind: 'none', text: 'Nothing asked yet.', fingerprint: '', sql: '' },
@@ -79,9 +83,9 @@ export type Tracer = {
   step: (intent: string, step: Omit<Step, 'n'>) => void;
   // The writer finished with this document; `sql` is the last passing test's.
   written: (intent: string, dsl: unknown, sql: string) => void;
-  // The engine stored it under this name.
-  completed: (intent: string, fingerprint: string) => void;
-  replayed: (intent: string, principal: string, fingerprint: string) => void;
+  // The engine stored it under this name, answering in this shape.
+  completed: (intent: string, fingerprint: string, shapeKind: string) => void;
+  replayed: (intent: string, principal: string, fingerprint: string, shapeKind: string) => void;
   refused: (intent: string, reason: string) => void;
   latest: (principal: string) => Trace | undefined;
   onChange: (listener: () => void) => void;
@@ -127,15 +131,17 @@ export const createTracer = (): Tracer => {
       touch(intent, (trace) => {
         trace.outcome = { kind: 'written', text: JSON.stringify(dsl, null, 2), fingerprint: '', sql };
       }),
-    completed: (intent, fingerprint) => {
+    completed: (intent, fingerprint, shapeKind) => {
       touch(intent, (trace) => {
         trace.outcome.fingerprint = fingerprint;
+        trace.shapeKind = shapeKind;
       });
       settle(intent, () => false);
     },
-    replayed: (intent, principal, fingerprint) => {
+    replayed: (intent, principal, fingerprint, shapeKind) => {
       touch(intent, (trace) => {
         if (trace.principal !== principal) return;
+        trace.shapeKind = shapeKind;
         trace.outcome = { kind: 'replayed', text: 'Asked before: the stored query, replayed. No model ran.', fingerprint, sql: '' };
       });
       settle(intent, (trace) => trace.principal !== principal);

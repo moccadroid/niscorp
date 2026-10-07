@@ -61,7 +61,7 @@ export const routeQuery = async (session: FunctionSession, querier: Querier, sta
 
   if ('replay' in route) {
     await record(route.replay.shape, 'replayed', route.replay.fingerprint);
-    querier.trace.replayed(request, principal, route.replay.fingerprint);
+    querier.trace.replayed(request, principal, route.replay.fingerprint, route.replay.shape);
     return { fingerprint: route.replay.fingerprint, kind: route.replay.shape, how: 'replayed' };
   }
 
@@ -75,7 +75,7 @@ export const routeQuery = async (session: FunctionSession, querier: Querier, sta
     const fingerprint = answered.meta.cache.fingerprint;
     if (fingerprint === undefined) throw new Error('the query was answered but not stored');
     await record(shape.kind, 'generated', fingerprint);
-    querier.trace.completed(request, fingerprint);
+    querier.trace.completed(request, fingerprint, shape.kind);
     return { fingerprint, kind: shape.kind, how: 'generated' };
   } catch (error) {
     // Refused — by the model (it cannot be answered from what this person

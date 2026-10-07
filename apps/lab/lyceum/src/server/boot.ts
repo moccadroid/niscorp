@@ -6,7 +6,7 @@ import { lyceumIdentity } from './identity';
 import { lyceumReactions } from './reactions';
 import { doorFunctions } from './functions/door.functions';
 import { roomFunctions } from './functions/room.functions';
-import { mirrorAssistant } from './mirroring';
+import { mirrorSpeaker } from './mirroring';
 import { createCensus } from './census';
 import { assistantFunctions } from './functions/assistant.functions';
 import { lecternFunctions } from './functions/lectern.functions';
@@ -100,8 +100,8 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
     speakerEmail: options.speakerEmail ?? process.env['LYCEUM_SPEAKER_EMAIL'] ?? '',
     send: options.send ?? createMailer(process.env, publicUrl),
   };
-  // The speaker's assistant, mirrored on the stage (./mirroring.ts).
-  const mirror = mirrorAssistant(() => server());
+  // The speaker's assistant and search, mirrored on the stage (./mirroring.ts).
+  const mirror = mirrorSpeaker(() => server());
   let timingUp: Timing | undefined;
   const timing = (): Timing => {
     if (timingUp === undefined) throw new Error('lyceum: the timers are not up yet');

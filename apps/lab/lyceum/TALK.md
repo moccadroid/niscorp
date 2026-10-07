@@ -1,8 +1,8 @@
 # The talk — everything agreed so far
 
-The working record for the nisc talk that lyceum runs. It holds what we agreed, what is built, what is not, and the ideas we discussed and kept, parked or dropped. The deck itself is data in `src/db/seed.ts` (`SLIDES`: order, controller tools, speaker notes) and `src/app/actions/slide/`; this file is the reasoning behind it. Updated 2026-09-30.
+The working record for the talks that lyceum runs. It holds what we agreed, what is built, what is not, and the ideas we discussed and kept, parked or dropped. The decks themselves are data — `src/db/talks.ts` lists the talks, `src/db/deck.ts` the nisc deck and `src/db/vex.deck.ts` the vex deck (order, controller tools, speaker notes) — and the slides are `src/app/actions/slide/`; this file is the reasoning behind them. Updated 2026-10-07.
 
-**Read §14 first.** Sections 1–13 are the record as it was written; §14 lists what the app changed under them on 2026-09-30 (names instead of ID cards, the phone as a list, Acme as the Q&A, one decider for routing and moderation). Where they disagree, §14 and the code win.
+**Read §14 and §15 first.** Sections 1–13 are the record as it was written; §14 lists what the app changed under them on 2026-09-30 (names instead of ID cards, the phone as a list, Acme as the Q&A, one decider for routing and moderation); §15 what changed on 2026-10-07 (the room gives more than one talk; the vex talk). Where they disagree, §14, §15 and the code win.
 
 ---
 
@@ -533,6 +533,43 @@ The app changed under the record above. Nothing in §1–13 is rewritten; this i
 **Still not built** (unchanged from §6 and §10): the projector's terminal view (slide 11, `tools.renderers`), the order form (slide 26, `tools.order`). Each would now be an action given by a grant and a new place on the phone's list in `server/phone.ts`; the cues' "on their main screen" means that list.
 
 **§10, updated:** `PLAN.md` was rewritten in place the same day. `model-check`'s room was rewritten the same day (chosen names and the queries they ran) and runs again; `MEASURED.md`'s Qwen and ID-card numbers are for the retired feature.
+
+## 15. 2026-10-07: talks, and the vex talk
+
+The room can give more than one talk, and the second one is twenty minutes on Vex alone, told the way the essay "Six tools and no SQL" tells it. Each line is true of the code on the branch this landed on. No package changed for any of it.
+
+**Talks are rows.** A `talks` table, and a `talk_id` on `slides` and on the deck row (migration 21). The slide id stays the key: a slide is an action, and an action is in one talk, so what the vex talk shares with the nisc talk — the way in, the register, the close — are actions of its own over the same layouts (`slide.sixtools`, `slide.joined`, `slide.folder`). Positions are unique within a talk. The deck's reads walk the talk that is on (a one-row subquery beside every slide row; the Prism mapping keeps that talk's rows). `deck/go` names a talk and a position — Next and Back keep their arithmetic, which the Prism slide shows — and `deck/show` derives the talk from the slide it names, so a timer's write keeps talk and slide consistent. The controller's menu has a Talks sheet beside Reset; picking a talk is `deck/go` to its first slide; the head says which talk is on. The picker re-reads the deck before a pick, so a press the moment it opens still names the right talk. Reset keeps the talk and goes to its first slide. The clock reads slides, for the lookup its write makes. The data: `db/talks.ts`, `db/deck.ts`, `db/vex.deck.ts`.
+
+**The vex talk's deck** (12 slides, `db/vex.deck.ts`; the slides `app/actions/slide/vex.actions.ts`):
+
+| # | Slide id | On the stage | Controller | Live |
+|---|---|---|---|---|
+| 1 | `slide.sixtools` | "Vex — Six tools and no SQL." QR and the address | — | |
+| 2 | `slide.joined` | Everyone who has joined | — | live |
+| 3 | `slide.sql` | "I write SQL. Somebody has to read it." The speaker's own SELECT, and the two things that happen to it | — | |
+| 4 | `slide.request` | "The question, and the shape of the answer." The intent; the router's own `counts` shape; "nobody wrote a query, nobody wrote an endpoint" | step (3 parts) | |
+| 5 | `slide.document` | "A document in a fixed grammar. Not a statement." `questions/every` as written, beside the statement the engine compiles for it on mount, the JOIN marked | — | live |
+| 6 | `slide.shown` | "Three things. Never the database." The tables a member may read (off the charter); three of the grammar's own descriptions (off the DSL's JSON schema); the caller line, as vex's agent is told it (off the behaviors) | step (3 parts) | live |
+| 7 | `slide.tools` | "Six tools. None takes SQL." The agent's tools, from its own tool list | — | |
+| 8 | `slide.writer` | "Watch it write one." The speaker's question as the engine saw it: what the model was shown, each tool call, each test with the engine's answer, the document, the statement, the fingerprint | `tools.ask` | live |
+| 9 | `slide.name` | "Stored under a name. Replayed by anyone." The speaker's query replayed as the stage; the tally of replayed, generated, refused | `tools.asker` | live |
+| 10 | `slide.value` | "A value in the request is a parameter." The speaker's search, mirrored: the request, the statement with `$1`, the rows; sent without `q`: empty, and the key it missed with its contract | `tools.search` | live |
+| 11 | `slide.locked` | "Seeded, locked, nothing generated." This app's entries counted from the code (63 when written: 32 reads, 31 writes); a request to generate, refused by the locked endpoint, live; the write grammar's five operations | — | live |
+| 12 | `slide.folder` | "It's all in one folder." | — | |
+
+**The writer, watched — with no change to vex** (`server/generation/`). Vex's own generation hook runs its query agent and keeps the run to itself; lyceum's hook is the same forty lines — vex's agent, tools and caller line, imported from `@niscorp/vex/agent` — with a listener on the run. Each tool call and what came back, each `testQuery` with the draft, the statement it compiled under the caller's policy, the errors or the rows, the document that passed and the name it was stored under go into a trace keyed by the asker, expected inside their session before the engine runs (`routeQuery`). The stage's writer slide reads the speaker's newest trace through `room.generation`, told that it changed by a channel with no payload (`generation-changed`), the way the assistant is mirrored. The deterministic writer (`LYCEUM_QUERY=fake`) tests its drafts through the engine too, a column that does not exist first, so the checks see the engine's real messages.
+
+**The ask.** A question in words, from a screen: on the controller as a tool (`tools.ask`), on the phones as `ask.records`, given to everybody by `tools.asker` (role `asker`, one `everybody` grant row, like the assistant). Both call `query.ask`, which is the one route a request takes (`routeQuery`); the answer opens over the screen as `query.result`. The speaker may query and open a result now (`query.*`, `queries.read`, `queries.write.insert`).
+
+**The search** (`members/search`, `q` bound as `$1`). `tools.search` on the controller; `room.search` runs the entry through lyceum's own engine under the caller's policy, because the governed wire hands an action the result and not the meta, and the slide shows the key a request missed. The stage draws the tool's data, mirrored from the speaker's shell: `server/mirroring.ts` mirrors a list of the speaker's actions now (the assistant and the search), the function is `speaker.mirror` by action id, the channel `speaker-mirror`.
+
+**Slides that read the code**: the shape is the router's (`QUERY_SHAPES`); the document is a stored entry as written and its statement is compiled on mount (`room.compile`); the tables are the charter's member reads; the grammar lines are the DSL JSON schema's own descriptions (`room.grammar`, following `$ref`s); the caller line is `describeCaller` over the behaviors; the tools are `createQueryTools`; the entry count is `ENTRIES.length`; the refusal is the locked endpoint's own; the five write operations are asserted against `MutationSchema` in `vex-check`.
+
+**Checks.** `deck-check` walks both talks and loads the second from the Talks sheet (187 assertions). `vex-check` (39) drives the vex talk's live beats end to end: the slides that read the code, the ask on the controller watched on the stage, a phone's replay, the fingerprint slide's replay and tally, a refusal, the search with and without its value. The suite is 18 checks. `pnpm rehearse` (`src/dev/rehearse.ts`) is the full-room rehearsal from PLAN.md: N headless phones join, are given the ask and each asks inside a minute, reporting replayed / generated / refused and the times; it has run as a dry run with no model, and NOT yet live.
+
+**Said, not shown.** Prism: lyceum's four shapes are flat, so the mapping agent never runs in the room; the second document is said on the document slide. The caller's rule in the statement: the document slide compiles without a policy (the join beat); the rule shows in the statement a test compiled on the writer slide, under the speaker's own policy.
+
+**Dangers.** The rate limit: a room asking at once is as many generations as the router does not route to replays — rehearse live before a date. Single-flight: two people with the same intent at once share one run; the stage follows the speaker's. The stage's rights: the speaker's question on the writer slide should be about the room, not about the asker, or the stage's replay answers nothing. Timers across talks: `deck/show` follows the slide's talk; a vex talk starts from a reset. `queries` is readable by every member — what makes a paraphrase replay someone else's query, and means every member can read every intent typed. The Q&A integration is not on the vex talk's phones.
 
 ## Appendix — in your own words
 

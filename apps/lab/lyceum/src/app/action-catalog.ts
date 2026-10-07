@@ -24,6 +24,7 @@ import { signinAction } from './actions/lectern/signin.action';
 import { SLIDE_ACTIONS } from './actions/slide/slide.actions';
 import { askerTool, assistantTool, xrayTool } from './actions/tools/give.actions';
 import { askRecordsAction, askTool } from './actions/ask/ask.actions';
+import { searchTool } from './actions/tools/search.action';
 import { xrayDocumentAction } from './actions/xray/document.action';
 import { xraySwitchAction } from './actions/xray/switch.action';
 import { CUE_TOOLS } from './actions/tools/cue.actions';
@@ -55,6 +56,7 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     askerTool,
     askTool,
     askRecordsAction,
+    searchTool,
     xrayDocumentAction,
     xraySwitchAction,
     integrationsTool,

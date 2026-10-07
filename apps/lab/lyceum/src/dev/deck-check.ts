@@ -58,6 +58,7 @@ const main = async (): Promise<void> => {
     'tools.assistant': 'The assistant — on everybody’s phone',
     'tools.asker': 'The ask — on everybody’s phone',
     'tools.ask': 'Ask the records — the room watches it answered',
+    'tools.search': 'Search the room — a value in the request',
     'tools.step': 'This slide, in steps',
     ...Object.fromEntries(CUE_TOOLS.map((cue) => [cue.id, cue.title])),
   };

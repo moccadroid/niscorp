@@ -103,6 +103,23 @@ export const nameRefuse: SeedMutation = {
   },
 };
 
+// A VALUE IN THE REQUEST: members whose name contains the text sent as `q`,
+// bound as a parameter — the vex talk's values slide (slide.value). `%` is
+// the wildcard; the search tool wraps what the speaker typed in it. Sent
+// without `q`, it answers empty and names the key it missed.
+export const memberSearch: SeedEntry = {
+  fingerprint: 'members/search',
+  intent: 'Members whose name contains the search text',
+  shape: [{ name: '' }],
+  dsl: {
+    from: ['members'],
+    fields: ['members.name'],
+    filter: { ilike: ['members.name', { $context: 'q' }] },
+    sort: [{ field: 'members.name', dir: 'asc' }],
+    limit: 20,
+  },
+};
+
 export const MEMBER_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [
   identityMember,
   identityGrants,
@@ -110,6 +127,7 @@ export const MEMBER_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [
   memberMe,
   memberRegister,
   memberCounts,
+  memberSearch,
   memberJoin,
   nameRefuse,
 ];
