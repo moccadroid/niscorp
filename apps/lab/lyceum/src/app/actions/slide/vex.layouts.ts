@@ -83,18 +83,19 @@ export const documentLayout: LayoutNode = sheet(['head head', 'doc statement'], 
 ]);
 
 // WHAT THE MODEL IS SHOWN, in steps: the tables this caller may read, the
-// grammar's fields, one line about the caller.
-export const shownLayout: LayoutNode = sheet(['head head head', 'tables grammar caller'], [0.85, 0.85, 1.3], ['auto', 1], [
+// grammar's fields, the caller's columns and the name their value goes by.
+// Three documents of the same kind, so three panes of the same kind.
+export const shownLayout: LayoutNode = sheet(['head head head', 'tables grammar caller'], [1, 1, 1], ['auto', 1], [
   head(),
   cell('tables', [exhibit('1 · Tables this caller may read', '$.tables'), text('A table they may not read is not in the schema. Asking about it gets “not found”.')]),
   {
     if: shown(1),
-    then: cell('grammar', [exhibit('2 · The grammar’s fields', '$.grammar.text', { tone: 'ink' }), text('The instructions are on the fields — {{$.grammar.rules}} of them. Nothing else explains the grammar to the model.')]),
+    then: cell('grammar', [exhibit('2 · The grammar’s fields', '$.grammar.text'), text('The instructions are on the fields — {{$.grammar.rules}} of them. Nothing else explains the grammar to the model.')]),
     else: cell('grammar', [], { mark: 'hatch' }),
   },
   {
     if: shown(2),
-    then: cell('caller', [exhibit('3 · One line about the caller', '$.caller'), text('A column, and the name its value goes by. Never the value.')], { ink: 'highlight' }),
+    then: cell('caller', [exhibit('3 · The caller’s columns', '$.caller', { lang: 'json' }), text('A column, and the name its value goes by. Never the value.')], { ink: 'highlight' }),
     else: cell('caller', [], { mark: 'hatch' }),
   },
 ]);
@@ -212,7 +213,7 @@ export const valueLayout: LayoutNode = sheet(['head head', 'sent statement', 'ro
 // THIS APP: seeded, locked, nothing generated — the entry count, a request that
 // asks the locked endpoint to generate and what it answers, and the write
 // grammar's five operations.
-export const lockedLayout: LayoutNode = sheet(['head head', 'counts counts', 'locked ops'], [1.2, 1], ['auto', 'auto', 1], [
+export const lockedLayout: LayoutNode = sheet(['head head', 'counts counts', 'locked ops', 'answer ops'], [1.2, 1], ['auto', 'auto', 1, 'auto'], [
   head(),
   cell(
     'counts',
@@ -230,10 +231,8 @@ export const lockedLayout: LayoutNode = sheet(['head head', 'counts counts', 'lo
     ],
     { pad: 'none' },
   ),
-  cell(
-    'locked',
-    [exhibit('POST /api/vex — a request with intent and shape', '$.request', { lang: 'json' }), { if: '$.locked.message', then: exhibit('The answer', '$.locked.message', { flag: 'alert' }), else: text('Asking…') }],
-    { ink: 'ink', align: 'middle' },
-  ),
+  cell('locked', [exhibit('POST /api/vex — a request with intent and shape', '$.request', { lang: 'json' })], { ink: 'ink', align: 'middle' }),
+  // The endpoint's answer is a sentence, so it is set as one, in the refusal's ink.
+  { if: '$.locked.message', then: cell('answer', [label('The answer'), text('{{$.locked.message}}')], { ink: 'alert' }), else: cell('answer', [label('Asking…')]) },
   cell('ops', [exhibit('Writes: five operations, never generated', '$.ops'), text('A model may fill one in and hand it to a person as a form. The person presses the button.')], { ink: 'highlight', align: 'middle' }),
 ]);

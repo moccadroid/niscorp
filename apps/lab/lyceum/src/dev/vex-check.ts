@@ -70,7 +70,7 @@ const main = async (): Promise<void> => {
   speaker.click('tools', 'more');
   check('…then the grammar’s fields, and how many instructions they carry', (await stage.shows('main', '2 · The grammar')) && stage.showsNow('main', 'from\\nfields') && stage.showsNow('main', ' of them. Nothing else') && !stage.showsNow('main', '— 0 of them'));
   speaker.click('tools', 'more');
-  check('…then the line about the caller: a column and a name, no value', (await stage.shows('main', 'members.member_id is the caller')) && stage.showsNow('main', '$scope') && !stage.showsNow('main', '"userId": "'));
+  check('…then the caller’s columns, each with the name its value goes by, no value', (await stage.shows('main', 'members.member_id\\n')) && stage.showsNow('main', '{ \\"$scope\\": \\"userId\\" }') && !stage.showsNow('main', '"userId": "'));
   await go('slide.tools');
   check('the tools slide lists the six, from the agent’s own tool list', (await stage.shows('main', 'getSchema')) && ['getSampleRows', 'getDistinctValues', 'describeField', 'testQuery', 'cannotSatisfy'].every((tool) => stage.showsNow('main', tool)));
   await go('slide.locked');

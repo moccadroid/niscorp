@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import type { ScopeBinding } from '@niscorp/vex';
-import { createQueryTools, describeCaller } from '@niscorp/vex/agent';
+import { createQueryTools } from '@niscorp/vex/agent';
 import { stageRegisterAction } from '@lyceum/app/actions/stage/register.action';
 import { searchTool } from '@lyceum/app/actions/tools/search.action';
 import { CHARTER } from '@lyceum/app/charter/charter';
@@ -111,8 +111,8 @@ export const documentSlide: ActionDefinition = {
 
 // What a member's generation is shown, read off the charter and the behaviors:
 // the tables a member may read; the grammar's fields and how many instructions
-// they carry (`room.grammar`); the line about the caller, as vex's agent is
-// told it.
+// they carry (`room.grammar`); the caller's bound columns, as vex's agent is
+// told them.
 const MEMBER_ROLE = CHARTER.member;
 const MEMBER_SELECTION = MEMBER_ROLE === undefined || Array.isArray(MEMBER_ROLE) ? undefined : MEMBER_ROLE.data;
 const MEMBER_DATA: readonly string[] = Array.isArray(MEMBER_SELECTION) ? MEMBER_SELECTION : (MEMBER_SELECTION?.allow ?? []);
@@ -136,13 +136,10 @@ export const shownSlide: ActionDefinition = {
     title: 'Three things. Never the database.',
     tables: MEMBER_TABLES.join('\n'),
     grammar: { text: '', fields: 0, rules: 0 },
-    // The agent's own lines, one per bound column; each folded before its
-    // JSON so the column holds it.
-    caller: describeCaller(memberBindings)
-      .split('\n')
-      .filter((line) => line.startsWith('- '))
-      .map((line) => line.replace(' { ', '\n    { '))
-      .join('\n'),
+    // The bindings the agent is told about (`describeCaller` puts them in a
+    // sentence): each bound column, and under it the token that stands for
+    // the caller's value in a filter — the code, without the sentence.
+    caller: memberBindings.map((binding) => `${binding.entity}.${binding.field}\n  { "$scope": "${binding.key}" }`).join('\n'),
     step: { step: 0 },
   },
   layout: shownLayout,
