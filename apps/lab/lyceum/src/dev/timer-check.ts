@@ -183,7 +183,7 @@ const main = async (): Promise<void> => {
 
   // ── 7. a timer is held to the deck as it stands, not as the source had it ──
   // A slide cut from the deck: the saved timer naming it is not loaded.
-  await db.query("UPDATE deck SET slide_id = (SELECT slide_id FROM slides ORDER BY position LIMIT 1) WHERE deck_id = 'talk'");
+  await db.query("UPDATE deck SET slide_id = (SELECT slide_id FROM slides WHERE talk_id = deck.talk_id ORDER BY position LIMIT 1) WHERE deck_id = 'talk'");
   await db.query('DELETE FROM slide_notes WHERE slide_id = $1', [closing?.slideId ?? '']);
   await db.query('DELETE FROM slide_tools WHERE slide_id = $1', [closing?.slideId ?? '']);
   await db.query('DELETE FROM slides WHERE slide_id = $1', [closing?.slideId ?? '']);

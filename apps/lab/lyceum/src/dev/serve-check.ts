@@ -146,9 +146,9 @@ const main = async (): Promise<void> => {
   // The stage is open to anyone because it can change nothing.
   // Control first: the same write as the speaker lands, so the refusal
   // below is the stage's policy, not a malformed request.
-  check('the speaker can move the deck', (await replay(session ?? '', deckGo.fingerprint, { deck: DECK_ID, position: 2 })) === 200);
+  check('the speaker can move the deck', (await replay(session ?? '', deckGo.fingerprint, { deck: DECK_ID, talk: 'nisc', position: 2 })) === 200);
   const stageWrites = [
-    await replay(stageSession ?? '', deckGo.fingerprint, { deck: DECK_ID, position: 1 }),
+    await replay(stageSession ?? '', deckGo.fingerprint, { deck: DECK_ID, talk: 'nisc', position: 1 }),
     await replay(stageSession ?? '', questionJudge.fingerprint, { questionId: 'anything', text: 'Forged', appropriate: true, score: 1 }),
   ];
   check('a stage session cannot move the deck or judge anybody\'s question', stageWrites.every((status) => status !== 200));

@@ -1,6 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
-import { assistantGive, assistantGiven, assistantTake, EVERYBODY, xrayGive, xrayGiven, xrayTake } from '@lyceum/app/vex/grant.entries';
+import { askerGive, askerGiven, askerTake, assistantGive, assistantGiven, assistantTake, EVERYBODY, xrayGive, xrayGiven, xrayTake } from '@lyceum/app/vex/grant.entries';
 
 // A CONTROLLER TOOL THAT GIVES EVERYBODY SOMETHING, or takes it back — the
 // X-ray and the assistant are both this. Giving writes ONE grant row, for
@@ -49,4 +49,13 @@ export const assistantTool = giveTool({
   kicker: 'The assistant — on everybody’s phone',
   give: 'Give everybody the assistant',
   entries: { given: assistantGiven, give: assistantGive, take: assistantTake },
+});
+
+// The ask (app/actions/ask/): a question about the room, in words, on every phone.
+export const askerTool = giveTool({
+  id: 'tools.asker',
+  title: 'The ask',
+  kicker: 'The ask — on everybody’s phone',
+  give: 'Give everybody the ask',
+  entries: { given: askerGiven, give: askerGive, take: askerTake },
 });

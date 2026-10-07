@@ -5,7 +5,8 @@ import type { Charter } from '@niscorp/charter';
 // rows into these roles.
 
 const MEMBERS_READ = ['members.read'];
-const DECK_READS = ['deck.read', 'slides.read'];
+// The deck: which talk is on, its slides, and the talks there are.
+const DECK_READS = ['deck.read', 'slides.read', 'talks.read'];
 // Which renderer draws each surface: every screen reads its own row, the
 // door's too (server/renderers.ts).
 const LOOK = ['renderers.read'];
@@ -47,7 +48,10 @@ export const CHARTER: Charter = {
   // — a member reaches their own. Every other table reads at its default.
   // …and any integration's screen for the speaker (`ext.speaker.*`): The QA Company's
   // list of every question, on the controller once installed and approved.
-  speaker: { scoping: 'room', actions: ['speaker.*', 'tools.*', 'assistant.*', 'ext.speaker.*'], data: [...MEMBERS_READ, ...DECK_READS, ...LOOK, 'renderers.write.update', 'grants.read', 'grants.write.insert', 'grants.write.delete', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'timers.read', 'timers.write.insert', 'questions.read', 'question_verdicts.read', ...CONVERSING, ...RESETTING] },
+  // …and the speaker asks the records in words too (tools.ask), recorded as
+  // theirs like anybody's, the answer opening over the controller as the
+  // query it is (`query.result`).
+  speaker: { scoping: 'room', actions: ['speaker.*', 'tools.*', 'assistant.*', 'query.*', 'ext.speaker.*'], data: [...MEMBERS_READ, ...DECK_READS, ...LOOK, ...QUERYING, 'renderers.write.update', 'grants.read', 'grants.write.insert', 'grants.write.delete', 'slide_notes.read', 'slide_tools.read', 'deck.write.update', 'timers.read', 'timers.write.insert', 'questions.read', 'question_verdicts.read', ...CONVERSING, ...RESETTING] },
   // The stage also reads the moderator's verdicts at the `stage` reach —
   // only those that say fit to show, whatever it asks for (vex/behaviors.ts) —
   // for an integration's screen on the projector (`ext.stage.*`): The QA Company's, on
@@ -63,6 +67,10 @@ export const CHARTER: Charter = {
   // The assistant, on a phone: given during the talk, the same way. (What it
   // may read and write is the member's already — it acts as them.)
   assistant: { actions: ['assistant.*'] },
+
+  // The ask, on a phone: a question about the room in words, given the same
+  // way (app/actions/ask/). What a query may reach is the member's already.
+  asker: { actions: ['ask.*'] },
 
   // The button: an action three people are given, and the one write it makes.
   // Nobody else has either — not the action on their screen, not the write in
@@ -87,8 +95,9 @@ export const CHARTER: Charter = {
   // The talk's clock: a principal that is not a person, which a saved timer
   // runs as (server/timing.ts). It can put a slide on screen and nothing else —
   // whatever a model wrote into a timer, this is all it can reach. (`notify`
-  // writes nothing: it shows a message in a live shell, server-side.)
-  clock: { data: ['deck.write.update'] },
+  // writes nothing: it shows a message in a live shell, server-side.) It reads
+  // slides for one thing: the write looks up which talk the slide is in.
+  clock: { data: ['deck.write.update', 'slides.read'] },
 
   // ── machinery: roles nobody wears, each granted exactly its job ──
   // Reads who somebody is, for the identity seam.
@@ -97,22 +106,21 @@ export const CHARTER: Charter = {
   // and gives a device at /speaker its sign-in desk (a `lectern` grant).
   gatekeeper: { data: ['login_links.write.insert', 'login_links.write.delete', 'grants.write.insert'] },
   // Reads the saved timers at boot, to load them into tide — and the deck, to
-  // hold each to a slide that still exists.
-  scheduler: { data: ['timers.read', 'slides.read'] },
+  // hold each to a slide of the talk that is on.
+  scheduler: { data: ['timers.read', 'slides.read', 'deck.read'] },
 };
+
+// What a member can be given on stage, in any combination: the X-ray, the
+// assistant, the ask, the button.
+const GIVEN = ['xray', 'assistant', 'asker', 'button'];
+const combinations = (roles: readonly string[]): string[][] => roles.reduce<string[][]>((sets, role) => [...sets, ...sets.map((set) => [...set, role])], [[]]);
 
 // The role combinations a principal can resolve to — declared, because roles
 // come from rows and there is no static assignment map to derive them from.
 export const WEARABLE: readonly (readonly string[])[] = [
   ['public'],
-  ['member'],
-  ['member', 'xray'],
-  ['member', 'assistant'],
-  ['member', 'button'],
-  ['member', 'xray', 'assistant'],
-  ['member', 'xray', 'button'],
-  ['member', 'assistant', 'button'],
-  ['member', 'xray', 'assistant', 'button'],
+  // A member, with any of what can be given.
+  ...combinations(GIVEN).map((given) => ['member', ...given]),
   ['speaker'],
   ['stage'],
   ['kit'],

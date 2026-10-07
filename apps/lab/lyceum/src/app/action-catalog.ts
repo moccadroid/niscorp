@@ -9,6 +9,7 @@ import { notesAction } from './actions/speaker/notes.action';
 import { controlsAction } from './actions/speaker/controls.action';
 import { speakerDeckAction } from './actions/speaker/deck.action';
 import { slidesAction } from './actions/speaker/slides.action';
+import { talksAction } from './actions/speaker/talks.action';
 import { notificationAction } from './actions/speaker/notification.action';
 import { resetAction } from './actions/speaker/reset.action';
 import { timersAction } from './actions/speaker/timers.action';
@@ -21,7 +22,8 @@ import { stripAction } from './actions/stage/strip.action';
 import { sinkAction } from './actions/kit/sink.action';
 import { signinAction } from './actions/lectern/signin.action';
 import { SLIDE_ACTIONS } from './actions/slide/slide.actions';
-import { assistantTool, xrayTool } from './actions/tools/give.actions';
+import { askerTool, assistantTool, xrayTool } from './actions/tools/give.actions';
+import { askRecordsAction, askTool } from './actions/ask/ask.actions';
 import { xrayDocumentAction } from './actions/xray/document.action';
 import { xraySwitchAction } from './actions/xray/switch.action';
 import { CUE_TOOLS } from './actions/tools/cue.actions';
@@ -43,12 +45,16 @@ export const ACTIONS: Record<string, ActionDefinition> = Object.fromEntries(
     controlsAction,
     speakerDeckAction,
     slidesAction,
+    talksAction,
     notificationAction,
     resetAction,
     timersAction,
     lookTool,
     xrayTool,
     assistantTool,
+    askerTool,
+    askTool,
+    askRecordsAction,
     xrayDocumentAction,
     xraySwitchAction,
     integrationsTool,

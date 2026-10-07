@@ -3,12 +3,14 @@ import { OPENING_SLIDES } from './opening.actions';
 import { LATER_SLIDES } from './later.actions';
 import { SAFETY_SLIDES } from './safety.actions';
 import { MOSS_SLIDES } from './moss.actions';
+import { VEX_SLIDE_ACTIONS } from './vex.actions';
 import { censusLayout } from './slide.layouts';
 
-// THE SLIDES. Each is an action only the stage is granted; the deck (`slides`
-// rows) decides which is on screen and in what order, and which tool the
-// speaker's controller shows alongside. The opening is ./opening.actions.ts;
-// the census, which the server counts, is here.
+// THE SLIDES. Each is an action only the stage is granted; the decks (`slides`
+// rows, one talk each) decide which is on screen and in what order, and which
+// tool the speaker's controller shows alongside. The nisc talk's opening is
+// ./opening.actions.ts; the census, which the server counts, is here; the vex
+// talk's slides are ./vex.actions.ts.
 
 // The app's size, counted from its own source by the server as the slide
 // mounts — never typed in, so never stale.
@@ -26,4 +28,4 @@ export const censusSlide: ActionDefinition = {
   triggers: [],
 };
 
-export const SLIDE_ACTIONS: readonly ActionDefinition[] = [...OPENING_SLIDES, censusSlide, ...SAFETY_SLIDES, ...MOSS_SLIDES, ...LATER_SLIDES];
+export const SLIDE_ACTIONS: readonly ActionDefinition[] = [...OPENING_SLIDES, censusSlide, ...SAFETY_SLIDES, ...MOSS_SLIDES, ...LATER_SLIDES, ...VEX_SLIDE_ACTIONS];

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { FunctionSession, MossServer } from '@niscorp/moss';
 import type { FunctionHandler } from '@niscorp/nova';
-import { TALK_DECK, deckGo } from '@lyceum/app/vex/deck.entries';
+import { TALK_DECK, deckGo, deckTalk } from '@lyceum/app/vex/deck.entries';
 import { EVERYBODY } from '@lyceum/app/vex/grant.entries';
 import { memberRegister } from '@lyceum/app/vex/member.entries';
 import { setRenderer } from '@lyceum/app/vex/renderer.entries';
@@ -39,7 +39,9 @@ export const resetFunctions = (session: FunctionSession, server: () => MossServe
     await vex(resetTimers.fingerprint, { savedBy: 'speaker' });
     await vex(resetRefused.fingerprint, { refused: RefusedSchema.parse(await vex(refusedAll.fingerprint)).map((row) => row.refused_id) });
     for (const surface of SURFACES) await vex(setRenderer.fingerprint, { surface, renderer: 'dom' });
-    await vex(deckGo.fingerprint, { deck: TALK_DECK, position: 0 });
+    // The deck goes to the first slide of the talk that is on; the talk stays.
+    const talk = z.object({ talk_id: z.string() }).parse(await vex(deckTalk.fingerprint));
+    await vex(deckGo.fingerprint, { deck: TALK_DECK, talk: talk.talk_id, position: 0 });
     await removeVendor(server(), operatorKey);
     // The saved timers are gone from the table; unload them from tide too.
     await timing().reload();

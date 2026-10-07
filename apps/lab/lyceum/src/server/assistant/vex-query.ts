@@ -5,18 +5,21 @@ import { queryEngineFor } from '../querying';
 import type { Querier, Known } from '../querying';
 import { vexOver } from '../vex-over';
 
-// THE ASSISTANT'S VEX QUERY. Vex is not something anybody talks to: a query is
-// an INTENT and a SHAPE. The assistant hands over the intent; this decides the
-// rest — two things that cannot be data (PLAN.md, "Vex is never hidden behind
-// a function"): a model's CHOICE (has a stored query already answered this
-// intent, and what shape is the answer — Jev) and a new query's GENERATION
-// (vex's agents, which moss's locked endpoints refuse by design).
+// A REQUEST IN WORDS, ROUTED TO A VEX QUERY. Vex is not something anybody
+// talks to: a query is an INTENT and a SHAPE. The assistant, or the ask on a
+// screen, hands over the intent; this decides the rest — two things that
+// cannot be data (PLAN.md, "Vex is never hidden behind a function"): a model's
+// CHOICE (has a stored query already answered this intent, and what shape is
+// the answer — Jev) and a new query's GENERATION (vex's agents, which moss's
+// locked endpoints refuse by design).
 //
 // It never answers. It returns the fingerprint the result replays by; the
 // result the person sees is replayed through vex itself, as them
 // (`query.result`) — the same way whether the query is a minute old or was
 // written for somebody else. Everything that touches data does so as the
-// caller, over their own wire, and is recorded as theirs.
+// caller, over their own wire, and is recorded as theirs. The run is theirs
+// too: the trace the stage draws is expected here, in their session, before
+// the engine runs (../generation).
 
 const KnownSchema = z.array(z.object({ request: z.string(), fingerprint: z.string(), shape: z.string() }));
 const MAX_INTENT = 200;
@@ -51,11 +54,14 @@ export const routeQuery = async (session: FunctionSession, querier: Querier, sta
   const record = (shape: string, how: 'replayed' | 'generated' | 'refused', fingerprint: string | null): Promise<unknown> =>
     vex(queryRecord.fingerprint, { request, shape, how, fingerprint });
 
+  const principal = session.principal ?? '';
+  querier.trace.expect(request, principal);
   const known: Known[] = KnownSchema.parse(await vex(queriesKnown.fingerprint));
   const route = await querier.route(request, known);
 
   if ('replay' in route) {
     await record(route.replay.shape, 'replayed', route.replay.fingerprint);
+    querier.trace.replayed(request, principal, route.replay.fingerprint);
     return { fingerprint: route.replay.fingerprint, kind: route.replay.shape, how: 'replayed' };
   }
 
@@ -69,12 +75,15 @@ export const routeQuery = async (session: FunctionSession, querier: Querier, sta
     const fingerprint = answered.meta.cache.fingerprint;
     if (fingerprint === undefined) throw new Error('the query was answered but not stored');
     await record(shape.kind, 'generated', fingerprint);
+    querier.trace.completed(request, fingerprint);
     return { fingerprint, kind: shape.kind, how: 'generated' };
   } catch (error) {
     // Refused — by the model (it cannot be answered from what this person
     // may read) or by the engine (what it wrote reaches past their policy).
     // Recorded, and said plainly.
     await record(shape.kind, 'refused', null);
-    throw new Error(refusalOf(error));
+    const why = refusalOf(error);
+    querier.trace.refused(request, why);
+    throw new Error(why);
   }
 };

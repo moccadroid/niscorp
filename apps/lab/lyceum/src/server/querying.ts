@@ -1,6 +1,6 @@
 import { createMemoryCache, createPostgresAdapter, createQueryEngine } from '@niscorp/vex';
-import type { GenerateDsl, MapToShape, Query, QueryEngine } from '@niscorp/vex';
-import { createQueryDsl, createShapeMapper } from '@niscorp/vex/agent';
+import type { GenerateDsl, GenerationCaller, MapToShape, Query, QueryEngine } from '@niscorp/vex';
+import { createShapeMapper, describeCaller } from '@niscorp/vex/agent';
 import type { SignalClient } from '@niscorp/cortex';
 import { createSignal } from '@niscorp/signal';
 import type { ChoiceQuestion } from '@niscorp/signal';
@@ -8,6 +8,8 @@ import type { NiscRuntime } from '@niscorp/moss';
 import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
 import { BEHAVIORS } from '@lyceum/app/vex/behaviors';
 import { createDecider } from './decider';
+import { testStep, watchedQueryDsl } from './generation';
+import type { Tracer } from './generation';
 import type { QueryShape } from '@lyceum/app/vex/query.shapes';
 
 // WHO TURNS A REQUEST IN WORDS INTO A VEX QUERY — the two model seams.
@@ -22,13 +24,16 @@ import type { QueryShape } from '@lyceum/app/vex/query.shapes';
 //               mapped by prism's mapping agent, on gpt-oss-120b at `low`
 //               (PLAN.md, "Measured"). It runs under the ASKER's policy: the
 //               model is handed only the tables they may read, and whatever it
-//               writes is compiled under the same policy.
+//               writes is compiled under the same policy. The run is WATCHED
+//               (./generation): every tool call and test goes into a trace the
+//               stage draws.
 //
 //   LYCEUM_QUERY=live   the above; needs GROQ_API_KEY
 //   LYCEUM_QUERY=fake   deterministic stand-ins for both — what the checks use,
 //                     and a talk with no network. The fake generator writes
-//                     real DSL, so the engine, the cache, the policy and the
-//                     replay path are the real ones.
+//                     real DSL and tests it through the engine like the real
+//                     one, so the engine, the cache, the policy, the replay
+//                     path and the trace are the real ones.
 //
 // Unset, it is `live` when there is a Groq key and `fake` when there is not.
 
@@ -37,6 +42,8 @@ export type Route = { replay: Known } | { generate: QueryShape };
 
 export type Querier = {
   kind: 'live' | 'fake';
+  // What the stage watches (./generation).
+  trace: Tracer;
   route: (request: string, known: readonly Known[]) => Promise<Route>;
   generateDsl: GenerateDsl;
   mapToShape: MapToShape;
@@ -51,7 +58,7 @@ const KNOWN_LIMIT = 200;
 
 // ── live ──
 
-const liveQuerier = (env: Record<string, string | undefined>): Querier => {
+const liveQuerier = (env: Record<string, string | undefined>, tracer: Tracer): Querier => {
   const llm = createSignal('groq', { options: { reasoningEffort: 'low' } }).model('openai/gpt-oss-120b');
   // The one decider (./decider.ts): the router is one of its questions.
   const decider = createDecider(env);
@@ -59,6 +66,7 @@ const liveQuerier = (env: Record<string, string | undefined>): Querier => {
 
   return {
     kind: 'live',
+    trace: tracer,
     // Jev's words below say "question": they are the measured contract (48/48,
     // MEASURED.md) — renaming them is a re-measurement, not a tidy-up.
     route: async (question, known) => {
@@ -93,7 +101,7 @@ const liveQuerier = (env: Record<string, string | undefined>): Querier => {
       const wanted = shapeOf(pick('shape'));
       return match !== undefined && match.shape === wanted.kind ? { replay: match } : { generate: wanted };
     },
-    generateDsl: createQueryDsl({ llm, queryJsonSchema: dslSchema }),
+    generateDsl: watchedQueryDsl({ llm, dslSchema, tracer }),
     mapToShape: createShapeMapper(llm),
   };
 };
@@ -120,22 +128,45 @@ const FAKE_DSL: Record<string, Query> = {
   list: { from: ['members'], fields: [{ field: 'members.name', as: 'label' }, { field: 'members.joined_at', as: 'detail' }], sort: [{ field: 'members.joined_at', dir: 'asc' }] },
   forbidden: { from: ['login_links'], fields: ['login_links.principal'] },
 };
+// A first draft that names a column the table does not have — so the trace
+// carries the engine's own message about it, as a real run's would.
+const MISTAKEN: Query = { from: ['members'], fields: ['members.nothing'] };
+
+// A draft, tested the way the real writer's tool tests it: through the
+// caller's own door into the engine, five rows at most.
+const tested = async (caller: GenerationCaller, draft: Query): Promise<ReturnType<typeof testStep>> => {
+  const at = Date.now();
+  try {
+    const { rows, sql } = await caller.read({ ...draft, limit: 5 });
+    return testStep(draft, { sql, errors: [], rows: rows.length }, Date.now() - at);
+  } catch (error) {
+    return testStep(draft, { sql: '', errors: [error instanceof Error ? error.message : String(error)], rows: 0 }, Date.now() - at);
+  }
+};
 
 const refuse = (): never => {
   throw new Error('lyceum: the fake query router calls no model');
 };
 const NO_MODEL: SignalClient = { step: refuse, stepStream: refuse, count: refuse, describe: refuse };
 
-const fakeQuerier = (): Querier => ({
+const fakeQuerier = (tracer: Tracer): Querier => ({
   kind: 'fake',
+  trace: tracer,
   route: async (request, known) => {
     const earlier = known.find((entry) => normalise(entry.request) === normalise(request));
     return earlier !== undefined ? { replay: earlier } : { generate: shapeOf(fakeKind(request)) };
   },
-  generateDsl: async (request) => {
+  // No model: a wrong draft first, then the one the request gets — each tested
+  // through the engine, so the trace shows what a real run shows.
+  generateDsl: async (request, schema, caller) => {
     const intent = request.intent ?? '';
-    if (/login|sign in|password/i.test(intent)) return FAKE_DSL['forbidden'] ?? FAKE_DSL['list'] ?? { from: ['members'] };
-    return FAKE_DSL[fakeKind(intent)] ?? { from: ['members'] };
+    tracer.started(intent, { tables: schema.entities.map((entity) => entity.name).join(', '), caller: describeCaller(caller.bindings) }, request.shape);
+    const dsl = (/login|sign in|password/i.test(intent) ? FAKE_DSL['forbidden'] : FAKE_DSL[fakeKind(intent)]) ?? { from: ['members'] };
+    tracer.step(intent, await tested(caller, MISTAKEN));
+    const passing = await tested(caller, dsl);
+    tracer.step(intent, passing);
+    tracer.written(intent, dsl, passing.ink === 'live' ? passing.text.slice(passing.text.lastIndexOf('\n') + 1) : '');
+    return dsl;
   },
   // Vex's own mapper, with a model that is never there: rows that fit their
   // shape get the identity, anything else fails — which the fake's queries,
@@ -143,12 +174,12 @@ const fakeQuerier = (): Querier => ({
   mapToShape: createShapeMapper(NO_MODEL),
 });
 
-export const createQuerier = (env: Record<string, string | undefined>): Querier => {
+export const createQuerier = (env: Record<string, string | undefined>, tracer: Tracer): Querier => {
   const chosen = env['LYCEUM_QUERY'];
   const hasKey = (env['GROQ_API_KEY'] ?? '') !== '';
-  if (chosen === 'fake' || (chosen !== 'live' && !hasKey)) return fakeQuerier();
+  if (chosen === 'fake' || (chosen !== 'live' && !hasKey)) return fakeQuerier(tracer);
   if (!hasKey) throw new Error('lyceum: LYCEUM_QUERY=live needs GROQ_API_KEY in apps/lab/lyceum/.env.');
-  return liveQuerier(env);
+  return liveQuerier(env, tracer);
 };
 
 // THE GENERATIVE ENGINE: the same database and the same CACHE as moss's own

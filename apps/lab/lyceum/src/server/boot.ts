@@ -25,6 +25,8 @@ import { createTimerWriter, startTiming, talkZone } from './timing';
 import { createOrchestrator } from './assistant/orchestrator';
 import type { Timing } from './timing';
 import { createQuerier } from './querying';
+import { createTracer, GENERATION_CHANNEL, generationFunctions } from './generation';
+import { queryFunctions } from './functions/query.functions';
 import { devRuntime } from './runtime';
 import { createModerator, startModeration } from './moderation';
 import type { DevRuntime, LyceumRuntime } from './runtime';
@@ -75,8 +77,15 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
   // names at the door, questions as they arrive.
   const moderation = startModeration(server, runtime.pool, createModerator(process.env));
   // Who routes requests to queries and writes new ones — Jev and gpt-oss-120b with
-  // keys, the deterministic fake without (./querying.ts).
-  const querier = createQuerier(process.env);
+  // keys, the deterministic fake without (./querying.ts) — and the trace of
+  // each query being written, which the stage watches (./generation): told
+  // that it changed by a channel with no payload, the writer slide reads again.
+  const tracer = createTracer();
+  const querier = createQuerier(process.env, tracer);
+  tracer.onChange(() => {
+    // Nothing is written before the server is up, so this never runs before it.
+    server().shells?.deliver('stage', GENERATION_CHANNEL);
+  });
   // Who writes the speaker's timers — the reflex agent with a key, the
   // deterministic fake without (./timing.ts) — and where the talk's clocks are.
   const timerWriter = createTimerWriter(process.env);
@@ -107,7 +116,7 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
   const renderers = followRenderers();
   const app = buildLyceum({
     identity: lyceumIdentity,
-    functions: (session) => ({ ...doorFunctions(session, server, moderation), ...roomFunctions(session, publicUrl, options.sshAddress ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail), ...xrayFunctions(session), ...buttonFunctions(session, server), ...mirror.functions(session), ...resetFunctions(session, server, operatorKey, timing), ...integrationFunctions(session, server, operatorKey, vendor) }),
+    functions: (session) => ({ ...doorFunctions(session, server, moderation), ...roomFunctions(session, publicUrl, options.sshAddress ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail), ...xrayFunctions(session), ...buttonFunctions(session, server), ...mirror.functions(session), ...resetFunctions(session, server, operatorKey, timing), ...integrationFunctions(session, server, operatorKey, vendor), ...generationFunctions(session, tracer), ...queryFunctions(session, querier) }),
     reactions: [...lyceumReactions(server, moderation), renderers.reaction],
     inputs: phoneInputs(runtime.pool),
     seeds: attachedSeeds(runtime.pool),

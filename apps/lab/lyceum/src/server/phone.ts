@@ -8,6 +8,7 @@ import { attachedTo } from './attached';
 // rebuilds the shell, and the list with it. Ring 1 decides; this only reads it.
 //
 //   the assistant            once the speaker gave it
+//   the ask                  once the speaker gave it (the vex talk)
 //   attached to the phone    every integration screen installed, approved and
 //                            attached to `member.phone` (The QA Company's Q&A)
 //   the button               for the three the speaker gave it to
@@ -16,6 +17,7 @@ export const phoneInputs = (pool: PgPool): NonNullable<ShellManifest['inputs']> 
   if (!actions.includes('member.phone')) return {};
   const onThePhone = [
     ...actions.filter((action) => action === 'assistant.thread'),
+    ...actions.filter((action) => action === 'ask.records'),
     ...(await attachedTo(pool, 'member.phone', actions)),
     ...actions.filter((action) => action === 'button.press'),
     ...actions.filter((action) => action === 'xray.switch'),

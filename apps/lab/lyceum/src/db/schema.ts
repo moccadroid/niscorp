@@ -344,6 +344,30 @@ const DECK_STEP = `
   ALTER TABLE deck ADD COLUMN step INTEGER NOT NULL DEFAULT 0;
 `;
 
+// Migration 21: TALKS. The room can give more than one talk: each is a row,
+// and the deck row says which is on. A slide belongs to one talk (its id stays
+// the key: a slide is an action, and an action is in one talk), and positions
+// are unique within a talk, not across them. Every slide there is belongs to
+// the talk there was; the seed converges the titles. No default after that: a
+// slide and the deck say which talk they are in.
+const TALKS = /* sql */ `
+  CREATE TABLE talks (
+    talk_id  TEXT PRIMARY KEY,
+    position INT  NOT NULL UNIQUE,
+    title    TEXT NOT NULL
+  );
+  INSERT INTO talks (talk_id, position, title) VALUES ('nisc', 0, 'nisc');
+  ALTER TABLE slides ADD COLUMN talk_id TEXT NOT NULL DEFAULT 'nisc' REFERENCES talks (talk_id);
+  ALTER TABLE slides ALTER COLUMN talk_id DROP DEFAULT;
+  ALTER TABLE slides DROP CONSTRAINT slides_position_key;
+  ALTER TABLE slides ADD CONSTRAINT slides_talk_position_unique UNIQUE (talk_id, position);
+  ALTER TABLE deck ADD COLUMN talk_id TEXT NOT NULL DEFAULT 'nisc' REFERENCES talks (talk_id);
+  ALTER TABLE deck ALTER COLUMN talk_id DROP DEFAULT;
+  COMMENT ON TABLE talks IS 'The talks this room can give, one row each, in order. The deck row says which is on.';
+  COMMENT ON TABLE slides IS 'The slides of every talk, each in order within its talk.';
+  COMMENT ON TABLE deck IS 'Which talk is on, and which of its slides is on the projector now.';
+`;
+
 export const LYCEUM_SEQUENCE: Sequence = {
   id: 'lyceum.app',
   migrations: [
@@ -367,6 +391,7 @@ export const LYCEUM_SEQUENCE: Sequence = {
     { description: 'A slide in steps: the deck row says how far the slide on screen has been revealed', steps: sqlSteps(DECK_STEP) },
     { description: 'The questions table says how questions arrive without naming a vendor', steps: sqlSteps(QUESTIONS_THROUGH) },
     { description: 'A slide says how many parts it is shown in', steps: sqlSteps(SLIDE_PARTS) },
+    { description: 'Talks: the room can give more than one; a slide belongs to one, and the deck row says which is on', steps: sqlSteps(TALKS) },
   ],
 };
 

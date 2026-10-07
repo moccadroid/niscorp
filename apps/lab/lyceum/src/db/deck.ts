@@ -1,4 +1,6 @@
-// THE DECK — data, and nothing else: the slides in order, each with the tools
+import type { Slide } from './talks';
+
+// THE NISC DECK — data, and nothing else: the slides in order, each with the tools
 // the controller shows beside it and the speaker's notes. db/seed.ts writes it
 // to the database on every boot; the census counts this file as data
 // (server/census.ts).
@@ -9,7 +11,7 @@
 // provisional: the talk's text is written with the story.
 // `parts`: a slide shown in steps says how many (the controller's step tool
 // stops at the last); left out, it is one.
-export const SLIDES: readonly { slideId: string; title: string; tools: readonly string[]; notes: readonly string[]; parts?: number }[] = [
+export const SLIDES: readonly Slide[] = [
   // ── the opening: where it started, the problem, our answer, and Nova ──
   { slideId: 'slide.title', title: 'nisc', tools: [], notes: ['[join: scan the code or type the address]', 'this talk is an app, running now, on one server', 'stage + my controller + your phones = one app', 'laptops: open the address, devtools open', 'terminal: the SSH command works too', 'join: pick a name or type one'] },
   { slideId: 'stage.register', title: 'Everyone who has joined', tools: [], notes: ['each name = a row in the database', 'names you typed: a model checked them first', '[wait until most people are in]'] },

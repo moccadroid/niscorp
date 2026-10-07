@@ -5,6 +5,7 @@ import { createQueryDsl, createShapeMapper } from '@niscorp/vex/agent';
 import { createSignal } from '@niscorp/signal';
 import { devRuntime } from '@lyceum/server/runtime';
 import { createQuerier } from '@lyceum/server/querying';
+import { createTracer } from '@lyceum/server/generation';
 import { BEHAVIORS } from '@lyceum/app/vex/behaviors';
 import { SLIDES } from '@lyceum/db/seed';
 import { anchorTimer, createTimerWriter, proposable } from '@lyceum/server/timing';
@@ -239,7 +240,7 @@ const ROUTES: readonly { question: string; replays?: string; shape?: string }[] 
 ];
 
 const measureRoutes = async (): Promise<void> => {
-  const querier = createQuerier({ ...process.env, LYCEUM_QUERY: 'live' });
+  const querier = createQuerier({ ...process.env, LYCEUM_QUERY: 'live' }, createTracer());
   const decider = (process.env['TYPESAFE_API_KEY'] ?? '') !== '' ? 'Jev (typesafe)' : `${MODEL}, emulating decide()`;
   let passed = 0;
   let total = 0;
