@@ -25,7 +25,7 @@ export const watchedQueryDsl = ({ llm, dslSchema, tracer }: { llm: SignalClient;
   return async (request, schema, caller) => {
     const intent = request.intent ?? '';
     const callerLine = describeCaller(caller.bindings);
-    tracer.started(intent, { tables: schema.entities.map((entity) => entity.name).join(', '), caller: callerLine }, request.shape);
+    tracer.started(intent, request.shape);
 
     const tools = createQueryTools({ getSchema: () => schema, read: caller.read });
     // The statement the last passing test compiled: the one the document became.

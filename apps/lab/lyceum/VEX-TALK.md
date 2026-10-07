@@ -17,7 +17,8 @@ No package changed for any of it. Every mechanism is lyceum's own, against `@nis
 - **`ask-check` became `vex-check`**: one check drives the whole vex talk's live beats.
 - **`pnpm rehearse` exists and has run only as a dry run** with no model (six phones, every question generated, about 170 ms each). The live rehearsal, against Groq's limit, is still owed before a date.
 - **The slides were re-set in nisc.dev's reading grammar** after the first cut broke on 16:9 (`TALK.md` §15, "The reading grammar"): `lyceum.kit` 13 adds `Sheet scale: 'page'`, `Text size`, `Exhibit`, `Pair`, `Stack` and `Stats`, drawn by all five kits; highlight.js colours the documents.
-- **The talk's question is "Who joined last?"**, measured 3/3 live; the questions over `queries` are refused for want of a foreign key, and one over `questions` cannot be replayed by the stage. A tally that showed zeros on the fingerprint slide was that replay failing and stopping the mount; the tally reads first now.
+- **The slides were then rebuilt as slides, not pages** (`TALK.md` §15, "Slides, not pages"): one claim, one picture, a line or two of words; the tools by name, the grammar's fields, the writer one step at a time; the stage's rem follows the screen's height, a weighted row never grows past the screen, the strip never shrinks.
+- **The talk's question is "Who were the last three to join?"**, measured 3/3 live (and "Who joined last?" 3/3 before it; the list question makes the router's `people` shape make sense on the request slide); the questions over `queries` are refused for want of a foreign key, and one over `questions` cannot be replayed by the stage. A tally that showed zeros on the fingerprint slide was that replay failing and stopping the mount; the tally reads first now.
 
 ---
 

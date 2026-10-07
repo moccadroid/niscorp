@@ -23,32 +23,21 @@ import type { Querier } from '../querying';
 //                 directly, under the caller's policy, like a generation does.
 //   room.compile  the statement the engine compiles for a document, for the
 //                 slide that puts the two side by side.
-//   room.grammar  what the grammar says about itself: the descriptions the
-//                 model reads, off the real schema.
+//   room.grammar  the grammar's fields, and how many instructions its
+//                 descriptions carry, off the real schema.
 const AskSchema = z.object({ intent: z.string().trim().min(1, 'Type a question first.') });
 const SearchSchema = z.object({ q: z.string().default(''), bare: z.boolean().default(false) });
 const CompileSchema = z.object({ dsl: z.unknown() });
 const RowsSchema = z.array(z.object({ name: z.string() }));
-// The DSL's JSON schema names a reused definition by reference; a field's
-// description is on whichever of the two carries it.
-const DescribedSchema = z.object({ description: z.string().optional(), $ref: z.string().optional() }).loose();
-const DslJsonSchema = z.object({ properties: z.record(z.string(), DescribedSchema), definitions: z.record(z.string(), DescribedSchema).optional() });
-const descriptionOf = (schema: z.infer<typeof DslJsonSchema>, key: string): string | undefined => {
-  const field = schema.properties[key];
-  if (field === undefined) return undefined;
-  const referenced = field.$ref === undefined ? undefined : schema.definitions?.[field.$ref.replace('#/definitions/', '')];
-  return field.description ?? referenced?.description;
+// The DSL's JSON schema: its top-level properties are the grammar's fields,
+// and every `description` in it, at any depth, is an instruction the model is
+// told to follow — there is no other text about the grammar.
+const DslJsonSchema = z.object({ properties: z.record(z.string(), z.unknown()) });
+const countRules = (node: unknown): number => {
+  if (typeof node !== 'object' || node === null) return 0;
+  if (Array.isArray(node)) return node.reduce<number>((sum, item) => sum + countRules(item), 0);
+  return Object.entries(node).reduce((sum, [key, value]) => sum + (key === 'description' && typeof value === 'string' ? 1 : countRules(value)), 0);
 };
-
-// A long line folded at words, so it fits a slide's column.
-const fold = (text: string, width: number): string =>
-  text
-    .split(/\s+/)
-    .reduce<string[]>((lines, word) => {
-      const last = lines.at(-1);
-      return last !== undefined && `${last} ${word}`.length <= width ? [...lines.slice(0, -1), `${last} ${word}`] : [...lines, word];
-    }, [])
-    .join('\n');
 
 export const queryFunctions = (session: FunctionSession, querier: Querier): Record<string, FunctionHandler> => ({
   'query.ask': async (input) => {
@@ -83,11 +72,8 @@ export const queryFunctions = (session: FunctionSession, querier: Querier): Reco
 
   'room.grammar': async () => {
     const engine = await queryEngineFor(session.runtime, querier);
-    const schema = DslJsonSchema.parse(engine.getDslSchema());
-    const lines = ['from', 'fields', 'filter'].flatMap((key) => {
-      const says = descriptionOf(schema, key);
-      return says === undefined ? [] : [fold(`${key} · ${says}`, 58)];
-    });
-    return { text: lines.join('\n\n') };
+    const schema = engine.getDslSchema();
+    const fields = Object.keys(DslJsonSchema.parse(schema).properties);
+    return { text: fields.join('\n'), fields: fields.length, rules: countRules(schema) };
   },
 });

@@ -27,7 +27,7 @@ import type { Terminal } from './harness';
 // router has replays to find.
 const QUESTIONS = [
   'How many people are in the room?',
-  'Who joined last?',
+  'Who were the last three to join?',
   'Who has asked the most questions?',
   'How many questions have been asked?',
   'How many queries were replayed, generated and refused?',

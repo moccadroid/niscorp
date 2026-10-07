@@ -1,6 +1,6 @@
 import { createMemoryCache, createPostgresAdapter, createQueryEngine } from '@niscorp/vex';
 import type { GenerateDsl, GenerationCaller, MapToShape, Query, QueryEngine } from '@niscorp/vex';
-import { createShapeMapper, describeCaller } from '@niscorp/vex/agent';
+import { createShapeMapper } from '@niscorp/vex/agent';
 import type { SignalClient } from '@niscorp/cortex';
 import { createSignal } from '@niscorp/signal';
 import type { ChoiceQuestion } from '@niscorp/signal';
@@ -131,6 +131,8 @@ const FAKE_DSL: Record<string, Query> = {
 // A first draft that names a column the table does not have — so the trace
 // carries the engine's own message about it, as a real run's would.
 const MISTAKEN: Query = { from: ['members'], fields: ['members.nothing'] };
+// How long the stand-in waits between its drafts: a model's pace, roughly.
+const FAKE_PACE_MS = 500;
 
 // A draft, tested the way the real writer's tool tests it: through the
 // caller's own door into the engine, five rows at most.
@@ -158,11 +160,14 @@ const fakeQuerier = (tracer: Tracer): Querier => ({
   },
   // No model: a wrong draft first, then the one the request gets — each tested
   // through the engine, so the trace shows what a real run shows.
-  generateDsl: async (request, schema, caller) => {
+  generateDsl: async (request, _schema, caller) => {
     const intent = request.intent ?? '';
-    tracer.started(intent, { tables: schema.entities.map((entity) => entity.name).join(', '), caller: describeCaller(caller.bindings) }, request.shape);
+    tracer.started(intent, request.shape);
     const dsl = (/login|sign in|password/i.test(intent) ? FAKE_DSL['forbidden'] : FAKE_DSL[fakeKind(intent)]) ?? { from: ['members'] };
     tracer.step(intent, await tested(caller, MISTAKEN));
+    // A model takes its time between drafts; the stage shows one step at a
+    // time, so the stand-in keeps a model's pace and the failed draft is seen.
+    await new Promise((resolve) => setTimeout(resolve, FAKE_PACE_MS));
     const passing = await tested(caller, dsl);
     tracer.step(intent, passing);
     tracer.written(intent, dsl, passing.lang === 'sql' ? passing.answer : '');

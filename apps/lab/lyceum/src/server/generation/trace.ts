@@ -1,10 +1,12 @@
 // WATCHING A QUERY BEING WRITTEN — lyceum's own record of one generation, in
-// lyceum's words, for the stage to draw: what the model was shown, each thing
-// it did (a look at the data, a test of a draft and what the engine answered),
+// lyceum's words, for the stage to draw: the request, each thing the writer
+// did (a look at the data, a test of a draft and what the engine answered),
 // and how it ended (the document that passed and the name it was stored under,
 // a replay with no model, or a refusal). Every string is ready to print, and
 // every document is set out as one: a draft, an answer, a statement each an
-// exhibit of its own on the slide (app/actions/slide/vex.layouts.ts).
+// exhibit of its own on the slide (app/actions/slide/vex.layouts.ts). What
+// the model is shown has a slide of its own, read off the charter.
+import { compactJson } from '@lyceum/app/actions/slide/compact';
 //
 // A trace belongs to the person who asked. `expect` is called before the
 // engine runs, inside their session, so the run is attributed to them without
@@ -51,7 +53,6 @@ export type Trace = {
   shapeKind: string;
   // The request as the engine was handed it: intent and shape, JSON.
   request: string;
-  shown: { tables: string; caller: string };
   steps: Step[];
   outcome: Outcome;
   ms: number;
@@ -63,7 +64,6 @@ export const EMPTY_TRACE: Trace = {
   shape: '',
   shapeKind: '',
   request: '',
-  shown: { tables: '', caller: '' },
   steps: [],
   outcome: { kind: 'none', label: 'Nothing asked yet.', text: '', lang: '', sql: '', fingerprint: '', sent: '' },
   ms: 0,
@@ -89,25 +89,6 @@ const short = (value: unknown): string => {
 };
 export const summary = (result: unknown): string => short(result);
 
-// JSON set out to be read on a slide: pretty-printed, but a list or an object
-// short enough to take in at a glance stays on one line, so a draft is a
-// dozen lines rather than forty.
-const GLANCE = 52;
-export const compactJson = (value: unknown): string => {
-  let out = JSON.stringify(value, null, 2) ?? '';
-  for (let pass = 0; pass < 8; pass += 1) {
-    const next = out.replace(/([[{])\n\s+([^[\]{}\n]*(?:\n\s+[^[\]{}\n]*)*)\n\s*([\]}])/g, (whole: string, open: string, body: string, close: string) => {
-      const flat = body
-        .split('\n')
-        .map((line) => line.trim())
-        .join(' ');
-      return flat.length <= GLANCE ? `${open} ${flat} ${close}` : whole;
-    });
-    if (next === out) break;
-    out = next;
-  }
-  return out;
-};
 
 type Told = Omit<Step, 'n' | 'label'>;
 
@@ -140,7 +121,8 @@ export const testStep = (draft: unknown, answer: { sql: string; errors: readonly
 export type Tracer = {
   // Somebody asked, in their own session: the run that follows is theirs.
   expect: (intent: string, principal: string) => void;
-  started: (intent: string, shown: Trace['shown'], shape: unknown) => void;
+  // The engine is running it: the request is whole now, intent and shape.
+  started: (intent: string, shape: unknown) => void;
   step: (intent: string, step: Told) => void;
   // The writer finished with this document; `sql` is the last passing test's.
   written: (intent: string, dsl: unknown, sql: string) => void;
@@ -152,7 +134,10 @@ export type Tracer = {
   onChange: (listener: () => void) => void;
 };
 
-const sentFor = (fingerprint: string): string => JSON.stringify({ fingerprint, context: {} }, null, 2);
+// The request and the replay are each set on a line where the pane is wide
+// enough — the writer slide gives them the width.
+const WIDE_PANE = 80;
+const sentFor = (fingerprint: string): string => compactJson({ fingerprint, context: {} }, WIDE_PANE);
 
 export const createTracer = (): Tracer => {
   // The runs still being written, by intent; the newest trace of each person.
@@ -182,8 +167,7 @@ export const createTracer = (): Tracer => {
         ...EMPTY_TRACE,
         principal,
         intent,
-        request: compactJson({ intent }),
-        shown: { ...EMPTY_TRACE.shown },
+        request: compactJson({ intent }, WIDE_PANE),
         steps: [],
         outcome: { kind: 'writing', label: 'Writing…', text: '', lang: '', sql: '', fingerprint: '', sent: '' },
       };
@@ -192,11 +176,10 @@ export const createTracer = (): Tracer => {
       latest.set(principal, trace);
       changed();
     },
-    started: (intent, shown, shape) =>
+    started: (intent, shape) =>
       touch(intent, (trace) => {
-        trace.shown = shown;
         trace.shape = JSON.stringify(shape);
-        trace.request = compactJson({ intent, shape });
+        trace.request = compactJson({ intent, shape }, WIDE_PANE);
       }),
     step: (intent, told) =>
       touch(intent, (trace) => {

@@ -83,6 +83,7 @@ const ALL_QUESTIONS: readonly { intent: string; shape: ShapeName; refuse?: true;
   { intent: 'Who has asked the most questions?', shape: 'counts' },
   { intent: 'How many questions have been asked?', shape: 'number' },
   { intent: 'Who joined last?', shape: 'people' },
+  { intent: 'Who were the last three to join?', shape: 'people' },
 ];
 // LYCEUM_ONLY=<n>: just that question.
 const only = process.env['LYCEUM_ONLY'];

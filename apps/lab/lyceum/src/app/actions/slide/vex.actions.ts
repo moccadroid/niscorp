@@ -13,6 +13,7 @@ import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
 import { ENTRIES } from '@lyceum/app/vex';
 import { openingTitleLayout } from './opening.layouts';
 import { endSlide } from './later.actions';
+import { compactJson } from './compact';
 import { documentLayout, lockedLayout, nameLayout, requestLayout, shownLayout, sqlLayout, toolsLayout, valueLayout, writerLayout } from './vex.layouts';
 
 // THE VEX TALK'S SLIDES (db/vex.deck.ts): twenty minutes on one package, told
@@ -59,26 +60,28 @@ export const sqlSlide = still('slide.sql', 'I write SQL. Somebody has to read it
   kicker: 'The problem',
   sql: code('SELECT m.name, COUNT(*) AS asked', 'FROM members m', 'JOIN questions q ON q.member_id = m.member_id', 'GROUP BY m.name', 'ORDER BY asked DESC', 'LIMIT 20'),
   outcomes: [
-    { n: '1', what: 'A person reads it. They need to know SQL at least as well as the model to catch what it got wrong.' },
-    { n: '2', what: 'A person runs it and looks at the rows. That checks the cases they thought of.' },
-    { n: '—', what: 'Either way a program is handed to a person. Nobody hands the model the connection.' },
+    { area: 'one', ink: 'paper', label: '1 · A person reads it', what: 'They need to know SQL at least as well as the model to catch what it got wrong.' },
+    { area: 'two', ink: 'paper', label: '2 · A person runs it', what: 'They look at the rows. That checks the cases they thought of.' },
+    { area: 'either', ink: 'signal', label: 'Either way', what: 'A program is handed to a person. Nobody hands the model the connection.' },
   ],
 });
 
-// The request the speaker will ask on the writer slide, and the shape the
-// router answers it in — the router's own (vex/query.shapes.ts).
-const COUNTS = QUERY_SHAPES.find((shape) => shape.kind === 'counts')?.shape ?? null;
+// The question the speaker asks on the writer slide, and the shape the router
+// answers it in — the router's own (vex/query.shapes.ts): a list of people,
+// for a question that asks for several. About the room, over members alone —
+// the writer gets it every time (TALK.md §15, "Measured"), and the stage may
+// replay it (slide.name). The same words are in the notes (db/vex.deck.ts)
+// and in the rehearsal (dev/rehearse.ts).
+const QUESTION = 'Who were the last three to join?';
+const PEOPLE = QUERY_SHAPES.find((shape) => shape.kind === 'people')?.shape ?? null;
 export const requestSlide: ActionDefinition = {
   id: 'slide.request',
   title: 'The question, and the shape of the answer.',
   data: {
     kicker: 'The request',
     title: 'The question, and the shape of the answer.',
-    // The question the speaker asks on the writer slide: about the room, over
-    // members alone — the writer gets it every time (TALK.md §15, "Measured"),
-    // and the stage may replay it (slide.name).
-    intentJson: JSON.stringify({ intent: 'Who joined last?' }, null, 2),
-    shapeJson: JSON.stringify({ shape: COUNTS }, null, 2),
+    intentJson: JSON.stringify({ intent: QUESTION }, null, 2),
+    shapeJson: JSON.stringify({ shape: PEOPLE }, null, 2),
     step: { step: 0 },
   },
   layout: requestLayout,
@@ -96,7 +99,7 @@ export const documentSlide: ActionDefinition = {
     kicker: 'What the model writes',
     title: 'A document in a fixed grammar. Not a statement.',
     file: 'question.entries.ts — questions/every, as written',
-    code: JSON.stringify(questionsEvery.dsl, null, 2),
+    code: compactJson(questionsEvery.dsl),
     dsl: questionsEvery.dsl,
     compiled: { sql: '', marked: [] },
   },
@@ -107,8 +110,9 @@ export const documentSlide: ActionDefinition = {
 };
 
 // What a member's generation is shown, read off the charter and the behaviors:
-// the tables a member may read; the grammar's own words (`room.grammar`); the
-// line about the caller, as vex's agent is told it.
+// the tables a member may read; the grammar's fields and how many instructions
+// they carry (`room.grammar`); the line about the caller, as vex's agent is
+// told it.
 const MEMBER_ROLE = CHARTER.member;
 const MEMBER_SELECTION = MEMBER_ROLE === undefined || Array.isArray(MEMBER_ROLE) ? undefined : MEMBER_ROLE.data;
 const MEMBER_DATA: readonly string[] = Array.isArray(MEMBER_SELECTION) ? MEMBER_SELECTION : (MEMBER_SELECTION?.allow ?? []);
@@ -131,10 +135,13 @@ export const shownSlide: ActionDefinition = {
     kicker: 'What the model is shown',
     title: 'Three things. Never the database.',
     tables: MEMBER_TABLES.join('\n'),
-    grammar: { text: '' },
+    grammar: { text: '', fields: 0, rules: 0 },
+    // The agent's own lines, one per bound column; each folded before its
+    // JSON so the column holds it.
     caller: describeCaller(memberBindings)
       .split('\n')
       .filter((line) => line.startsWith('- '))
+      .map((line) => line.replace(' { ', '\n    { '))
       .join('\n'),
     step: { step: 0 },
   },
@@ -144,19 +151,21 @@ export const shownSlide: ActionDefinition = {
   triggers: [],
 };
 
-// The agent's tools, as it is handed them.
-const TOOLS = createQueryTools({ getSchema: () => undefined, read: async () => ({ rows: [], sql: '', warnings: [] }) }).map((tool) => ({ name: tool.toolId, description: tool.config.description }));
+// The agent's tools, by name, as it is handed them. What each does is said.
+const TOOLS = createQueryTools({ getSchema: () => undefined, read: async () => ({ rows: [], sql: '', warnings: [] }) })
+  .map((tool) => tool.toolId)
+  .join('\n');
 export const toolsSlide = still('slide.tools', 'Six tools. None takes SQL.', toolsLayout, { kicker: 'The tools', tools: TOOLS });
 
 // The speaker's question, as the engine sees it being answered: the trace the
 // server keeps of the speaker's newest generation (server/generation), read
 // on mount and again whenever the server says it changed. Nothing on it can
 // be pressed; the question is asked on the controller (tools.ask).
-const NO_TRACE = { principal: '', intent: '', shape: '', shapeKind: '', request: '', shown: { tables: '', caller: '' }, steps: [], outcome: { kind: 'none', label: 'Nothing asked yet.', text: '', lang: '', sql: '', fingerprint: '', sent: '' }, ms: 0 };
+const NO_TRACE = { principal: '', intent: '', shape: '', shapeKind: '', request: '', steps: [], outcome: { kind: 'none', label: 'Nothing asked yet.', text: '', lang: '', sql: '', fingerprint: '', sent: '' }, ms: 0 };
 export const writerSlide: ActionDefinition = {
   id: 'slide.writer',
   title: 'Watch it write one.',
-  data: { kicker: 'Live · the speaker’s question, as the engine sees it', title: 'Watch it write one.', trace: NO_TRACE },
+  data: { kicker: 'Live · as the engine sees it', title: 'Watch it write one.', trace: NO_TRACE },
   layout: writerLayout,
   endpoints: { generation: { fn: 'room.generation', target: 'trace' } },
   lifecycle: { mount: [{ call: 'generation' }] },
@@ -194,7 +203,7 @@ export const valueSlide: ActionDefinition = {
 
 // This app's own entries, counted; a request that asks the locked endpoint to
 // generate, and what it answers; the write grammar's operations.
-const PROBE = { intent: 'who joined last?', shape: [{ name: '' }], context: {} };
+const PROBE = { intent: QUESTION, shape: PEOPLE, context: {} };
 export const lockedSlide: ActionDefinition = {
   id: 'slide.locked',
   title: 'Seeded, locked, nothing generated.',
@@ -204,7 +213,7 @@ export const lockedSlide: ActionDefinition = {
     entries: ENTRIES.length,
     reads: ENTRIES.filter((entry) => 'dsl' in entry).length,
     writes: ENTRIES.filter((entry) => 'mutation' in entry).length,
-    request: JSON.stringify({ intent: PROBE.intent, shape: PROBE.shape }, null, 2),
+    request: compactJson({ intent: PROBE.intent, shape: PROBE.shape }),
     probe: null,
     locked: { message: '' },
     ops: code('insert', 'insertEach', 'update', 'upsert', 'delete'),

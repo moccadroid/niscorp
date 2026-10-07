@@ -78,9 +78,12 @@ export const templateOf = (
       .map((_, i) => {
         const row = declared[i];
         if (row === 'auto') return 'auto';
+        // A weighted row takes its share and no more: content taller than the
+        // share clips inside its cell, and the sheet keeps the height it was
+        // given — a slide never grows past the screen and pushes the strip off.
         const w = weight(row);
-        if (w !== undefined) return `${w}fr`;
-        return size === 'fill' && i === rows.length - 1 ? '1fr' : 'auto';
+        if (w !== undefined) return `minmax(0, ${w}fr)`;
+        return size === 'fill' && i === rows.length - 1 ? 'minmax(0, 1fr)' : 'auto';
       })
       .join(' '),
     names: new Set(rows.flat()),

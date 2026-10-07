@@ -1,12 +1,14 @@
 import type { LayoutNode } from '@niscorp/nova';
 import { answerLayout } from '@lyceum/app/actions/shared/answer.layouts';
 
-// THE VEX TALK'S LAYOUTS — each designed for its one claim and its one picture,
-// in the READING GRAMMAR (ui/tokens.ts, "the reading grammar"): every sheet at
-// the page scale, so sizes are fixed and nothing grows with its neighbour; a
-// document only ever in an Exhibit, captioned and set in colour, never in a
-// cell beside prose; two documents side by side in a Pair; a row of figures in
-// Stats. The way in, the register and the close reuse the nisc talk's layouts.
+// THE VEX TALK'S LAYOUTS — slides, read from a 16:9 screen: one claim across
+// the top, one picture under it, in the READING GRAMMAR (ui/tokens.ts): the
+// sheet at the page scale, a document only ever in an Exhibit, two side by
+// side in a Pair. The screen holds about forty lines of the body size and
+// nothing scrolls or clips, so a slide's budget is one exhibit of a dozen
+// lines, or two of six, and a line or two of words beside them. What is
+// argued is said: it is in the notes (db/vex.deck.ts). The way in, the
+// register and the close reuse the nisc talk's layouts.
 
 const sheet = (areas: string[], cols: number[], rows: (number | 'auto')[], children: LayoutNode[]): LayoutNode => ({
   component: 'Sheet',
@@ -19,145 +21,138 @@ const cell = (area: string, children: LayoutNode[], props: Record<string, unknow
   children,
 });
 const label = (words: string): LayoutNode => ({ component: 'Label', children: words });
-const text = (words: string, size?: 'lede' | 'small' | 'fine'): LayoutNode => ({ component: 'Text', ...(size === undefined ? {} : { props: { size } }), children: words });
+const text = (words: string): LayoutNode => ({ component: 'Text', children: words });
 const muted = (words: string): LayoutNode => ({ component: 'Text', props: { tone: 'muted' }, children: words });
 const headline = (level: 'display' | 'title' | 'name', words: string): LayoutNode => ({ component: 'Headline', props: { level }, children: words });
-const exhibit = (caption: string, textAt: string, props: Record<string, unknown> = {}): LayoutNode => ({ component: 'Exhibit', props: { label: caption, text: textAt, ...props } });
-const pair = (children: LayoutNode[], split?: 'narrow-wide' | 'wide-narrow'): LayoutNode => ({ component: 'Pair', ...(split === undefined ? {} : { props: { split } }), children });
-// The kicker and the claim, across the top of every slide.
-const head = (): LayoutNode[] => [cell('kick', [label('{{$.kicker}}')]), cell('head', [headline('display', '{{$.title}}')])];
+const exhibit = (caption: unknown, textAt: unknown, props: Record<string, unknown> = {}): LayoutNode => ({ component: 'Exhibit', props: { label: caption, text: textAt, ...props } });
+const pair = (children: LayoutNode[]): LayoutNode => ({ component: 'Pair', children });
+// The kicker and the claim, together across the top of every slide.
+const head = (): LayoutNode => cell('head', [label('{{$.kicker}}'), headline('display', '{{$.title}}')]);
 // A slide shown in steps: the deck row's step (vex/deck.entries.ts) says how far.
 const shown = (step: number): unknown => ({ $prism: { $gte: [{ $ref: '$.step.step' }, step] } });
 
 // THE PROBLEM. The statement a model writes when asked for a query, and the
 // two things that can happen to it — both need a person.
-export const sqlLayout: LayoutNode = sheet(['kick kick', 'head head', 'sql outcomes'], [1.3, 1], ['auto', 'auto', 1], [
-  ...head(),
+export const sqlLayout: LayoutNode = sheet(['head head', 'sql outcomes'], [1.3, 1], ['auto', 1], [
+  head(),
   cell('sql', [exhibit('What a model writes when you ask it for a query', '$.sql', { lang: 'sql', tone: 'ink' })], { align: 'middle' }),
-  cell('outcomes', [{ component: 'Stack', props: { gap: 'tight' }, children: [{ for: '$.outcomes', as: 'outcome', key: 'n', do: text('{{$outcome.n}}  {{$outcome.what}}') }] }], { align: 'middle' }),
+  cell(
+    'outcomes',
+    [
+      {
+        component: 'Sheet',
+        props: { size: 'fill', areas: ['one', 'two', 'either'], rows: ['auto', 'auto', 1] },
+        children: [
+          {
+            for: '$.outcomes',
+            as: 'outcome',
+            key: 'area',
+            do: { component: 'Cell', props: { area: '$outcome.area', ink: '$outcome.ink' }, children: [label('{{$outcome.label}}'), text('{{$outcome.what}}')] },
+          },
+        ],
+      },
+    ],
+    { pad: 'none' },
+  ),
 ]);
 
 // THE REQUEST, in steps: the intent; the shape, an example of the answer; and
-// that this is all of it. Both halves of the request as the JSON they are.
-export const requestLayout: LayoutNode = sheet(['kick kick', 'head head', 'intent shape', 'said said'], [1, 1], ['auto', 'auto', 1, 'auto'], [
-  ...head(),
-  cell('intent', [exhibit('The request · what the caller wants to know', '$.intentJson', { lang: 'json' }), text('In words. Only the one who writes the query reads it.')], { align: 'middle' }),
+// that this is all of it. Both halves as the JSON they are.
+export const requestLayout: LayoutNode = sheet(['head head', 'intent shape', 'said said'], [1, 1], ['auto', 1, 'auto'], [
+  head(),
+  cell('intent', [exhibit('The request · what the caller wants to know', '$.intentJson', { lang: 'json' }), text('In words. Only the one who writes the query reads them.')], { align: 'middle' }),
   {
     if: shown(1),
     then: cell('shape', [exhibit('The request · an example of the answer', '$.shapeJson', { lang: 'json' }), text('"" means a string, 0 a number. A list of one means a list.')], { ink: 'highlight', align: 'middle' }),
     else: cell('shape', [], { mark: 'hatch' }),
   },
-  { if: shown(2), then: cell('said', [headline('name', 'That is the whole request. Nobody wrote a query. Nobody wrote an endpoint.')], { ink: 'signal' }) },
+  { if: shown(2), then: cell('said', [headline('name', 'The whole request. No query written. No endpoint written.')], { ink: 'signal' }) },
 ]);
 
 // WHAT THE MODEL WRITES: one of this app's own stored documents, as written,
 // beside the statement the engine compiles for it now — the join it never
 // wrote marked.
-export const documentLayout: LayoutNode = sheet(['kick kick', 'head head', 'docs docs'], [1, 1], ['auto', 'auto', 1], [
-  ...head(),
+export const documentLayout: LayoutNode = sheet(['head head', 'doc statement'], [1.15, 1], ['auto', 1], [
+  head(),
+  cell('doc', [exhibit('$.file', '$.code', { lang: 'json', tone: 'ink' })], { align: 'middle' }),
   cell(
-    'docs',
-    [
-      pair([
-        exhibit('$.file', '$.code', { lang: 'json', tone: 'ink' }),
-        { component: 'Stack', children: [exhibit('The statement the engine compiles for it, now', '$.compiled.sql', { lang: 'sql', marked: '$.compiled.marked' }), text('The join came from the schema: the engine read the foreign key when it started. Nobody wrote it.'), text('A rule in the charter adds the caller’s own rows on every run. You will see it in the statement a test compiles, two slides on.')] },
-      ]),
-    ],
+    'statement',
+    [exhibit('The statement the engine compiles for it, now', '$.compiled.sql', { lang: 'sql', marked: '$.compiled.marked' }), text('The join is the schema’s: the engine read the foreign key when it started. Nobody wrote it.')],
     { align: 'middle' },
   ),
 ]);
 
 // WHAT THE MODEL IS SHOWN, in steps: the tables this caller may read, the
-// grammar with its own instructions, one line about the caller.
-export const shownLayout: LayoutNode = sheet(['kick kick kick', 'head head head', 'schema grammar caller'], [1, 1.4, 1], ['auto', 'auto', 1], [
-  ...head(),
-  cell('schema', [exhibit('1 · The tables this caller may read', '$.tables'), text('A table they may not read is not in the schema. Asking about it gets "not found", the same answer a misspelled table gets.')]),
+// grammar's fields, one line about the caller.
+export const shownLayout: LayoutNode = sheet(['head head head', 'tables grammar caller'], [0.85, 0.85, 1.3], ['auto', 1], [
+  head(),
+  cell('tables', [exhibit('1 · Tables this caller may read', '$.tables'), text('A table they may not read is not in the schema. Asking about it gets “not found”.')]),
   {
     if: shown(1),
-    then: cell('grammar', [exhibit('2 · The grammar, with its own instructions', '$.grammar.text', { tone: 'ink' }), text('The field descriptions are the rules. There is no separate text that explains the grammar to the model.')]),
+    then: cell('grammar', [exhibit('2 · The grammar’s fields', '$.grammar.text', { tone: 'ink' }), text('The instructions are on the fields — {{$.grammar.rules}} of them. Nothing else explains the grammar to the model.')]),
     else: cell('grammar', [], { mark: 'hatch' }),
   },
   {
     if: shown(2),
-    then: cell('caller', [exhibit('3 · One line about the caller', '$.caller'), text('Which column identifies the caller, and the name the value goes by. Never the value itself.')], { ink: 'highlight' }),
+    then: cell('caller', [exhibit('3 · One line about the caller', '$.caller'), text('A column, and the name its value goes by. Never the value.')], { ink: 'highlight' }),
     else: cell('caller', [], { mark: 'hatch' }),
   },
 ]);
 
-// SIX TOOLS, as the agent is handed them: their names and what each says it does.
-export const toolsLayout: LayoutNode = sheet(['kick', 'head', 'tools', 'said'], [1], ['auto', 'auto', 1, 'auto'], [
-  ...head(),
-  cell(
-    'tools',
-    [
-      {
-        component: 'Rows',
-        props: {
-          rows: '$.tools',
-          rowKey: 'name',
-          columns: [
-            { label: 'Tool', key: 'name', kind: 'mono', w: 1 },
-            { label: 'What it says it does', key: 'description', w: 3 },
-          ],
-        },
-      },
-    ],
-    { pad: 'none' },
-  ),
-  cell('said', [headline('name', 'Every tool that touches data runs through the engine as the caller. There is no way to ask it to run something as nobody.')], { ink: 'signal' }),
+// SIX TOOLS, by name, as the agent is handed them — and the one thing true of all of them.
+export const toolsLayout: LayoutNode = sheet(['head head', 'tools said'], [1, 1.2], ['auto', 1], [
+  head(),
+  cell('tools', [exhibit('The agent’s tools, as it is handed them', '$.tools', { tone: 'ink' })], { align: 'middle' }),
+  cell('said', [headline('title', 'Every tool runs through the engine as the caller.'), text('There is no way to ask it to run something as nobody.')], { ink: 'signal', align: 'middle' }),
 ]);
 
-// WATCH IT WRITE ONE. The speaker's question as the engine saw it: the
-// request; what the model was shown; each thing it did, as a pair of exhibits
-// — what it sent, and what came back, the answer flagged orange when a draft
-// failed and green when it ran, in the engine's own words; and how it ended:
-// the document that passed beside the statement it compiled under the
-// caller's policy, and the name it is stored under. Live: the trace changes
-// under the slide as the writer works.
-const step: LayoutNode = pair([
-  exhibit('$step.label', '$step.draft', { lang: 'json' }),
-  exhibit('$step.said', '$step.answer', { lang: '$step.lang', flag: '$step.ink' }),
-]);
+// WATCH IT WRITE ONE. The speaker's question as the engine sees it being
+// answered, live: the request; the newest thing the writer did, as a pair of
+// exhibits — what it sent, and what came back, flagged orange for a draft that
+// failed and green for one that ran, in the engine's own words; and how it
+// ended. One step at a time: the trace changes under the slide as the writer
+// works, and the room watches a draft fail and the next one pass.
+const latest = (key: string): unknown => ({ $prism: { $get: { from: { $ref: '$.trace.steps' }, path: [{ $sub: [{ $length: { $ref: '$.trace.steps' } }, 1] }, key], fallback: { $const: '' } } } });
+const stepped = { $prism: { $gt: [{ $length: { $ref: '$.trace.steps' } }, 0] } };
+const replayed = { $eq: ['$.trace.outcome.kind', 'replayed'] };
+const ended = (): LayoutNode => label('{{$.trace.outcome.kind}} · {{$.trace.ms}} ms');
 
-export const writerLayout: LayoutNode = sheet(['kick kick', 'head shown', 'steps steps', 'out out'], [1, 1], ['auto', 'auto', 1, 'auto'], [
-  cell('kick', [label('{{$.kicker}}')]),
-  cell('head', [headline('title', '{{$.title}}'), exhibit('The request', '$.trace.request', { lang: 'json' })]),
-  // What the model was shown has its own slide; here, the one thing that is
-  // this caller's: the tables they may read.
-  cell(
-    'shown',
-    [
-      label('What the model was shown'),
-      // A replay shows the model nothing: there is no line to fill in.
-      { if: '$.trace.shown.tables', then: text('The tables this caller may read: {{$.trace.shown.tables}}.', 'small'), else: text('Nothing: a question asked before replays its stored query, and no model runs.', 'small') },
-      text('The grammar, with its own instructions, and one line about the caller — the slide before this one.', 'small'),
-    ],
-    { ink: 'highlight' },
-  ),
-  cell('steps', [{ component: 'Stack', props: { scroll: 'y' }, children: [{ for: '$.trace.steps', as: 'step', key: 'n', do: step }] }], { pad: 'none' }),
-  // How it ended. The document that passed is the last green draft above; what
-  // is new here is the statement it compiled, or the reason it was refused.
-  cell(
-    'out',
-    [
-      pair([
-        { component: 'Stack', props: { gap: 'tight' }, children: [label('{{$.trace.outcome.kind}} · {{$.trace.ms}} ms'), text('{{$.trace.outcome.label}}'), { if: '$.trace.outcome.fingerprint', then: headline('name', 'Stored under {{$.trace.outcome.fingerprint}} — replayed from now on, with no model.') }] },
-        {
-          if: '$.trace.outcome.sql',
-          then: exhibit('The statement it compiled, under this caller’s policy', '$.trace.outcome.sql', { lang: 'sql', tone: 'ink' }),
-          else: { if: '$.trace.outcome.text', then: exhibit('Why', '$.trace.outcome.text', { tone: 'ink', flag: 'alert' }) },
-        },
-      ]),
-    ],
-    { ink: 'signal' },
-  ),
+export const writerLayout: LayoutNode = sheet(['head request', 'step step', 'out out'], [0.75, 1.65], ['auto', 1, 'auto'], [
+  head(),
+  {
+    if: '$.trace.request',
+    then: cell('request', [exhibit('The request, as the engine was handed it', '$.trace.request', { lang: 'json' })], { align: 'middle' }),
+    else: cell('request', [muted('Asked on the controller. The room watches it answered here.')], { mark: 'hatch', align: 'middle' }),
+  },
+  {
+    if: stepped,
+    then: cell('step', [pair([exhibit(latest('label'), latest('draft'), { lang: 'json' }), exhibit(latest('said'), latest('answer'), { lang: latest('lang'), flag: latest('ink') })])]),
+    else: {
+      if: replayed,
+      then: cell('step', [muted('No model ran: a question asked before replays the query it stored.')], { align: 'middle' }),
+      else: cell('step', [muted('{{$.trace.outcome.label}}')], { mark: 'hatch', align: 'middle' }),
+    },
+  },
+  {
+    if: '$.trace.outcome.fingerprint',
+    then: {
+      if: replayed,
+      then: cell('out', [ended(), headline('name', 'Asked before. Stored under {{$.trace.outcome.fingerprint}}. Replayed. No model ran.')], { ink: 'signal' }),
+      else: cell('out', [ended(), headline('name', 'Stored under {{$.trace.outcome.fingerprint}}. Replayed from now on. No model.')], { ink: 'signal' }),
+    },
+    else: {
+      if: { $eq: ['$.trace.outcome.kind', 'refused'] },
+      then: cell('out', [ended(), text('{{$.trace.outcome.text}}')], { ink: 'alert' }),
+      else: cell('out', [label('{{$.trace.outcome.label}}')]),
+    },
+  },
 ]);
 
 // STORED UNDER A NAME. The speaker's query from the writer slide, replayed as
-// the stage — its own rows — beside the claim about everybody's phone, and
-// the room's tally underneath, live.
-export const nameLayout: LayoutNode = sheet(['kick kick', 'head head', 'stage phone', 'tally tally'], [1, 1], ['auto', 'auto', 1, 'auto'], [
-  ...head(),
+// the stage — its own rows — beside the claim about everybody's phone, and the
+// room's tally underneath, live.
+export const nameLayout: LayoutNode = sheet(['head head', 'stage phone', 'tally tally'], [1.1, 1], ['auto', 1, 'auto'], [
+  head(),
   cell(
     'stage',
     [
@@ -177,16 +172,7 @@ export const nameLayout: LayoutNode = sheet(['kick kick', 'head head', 'stage ph
     ],
     { ink: 'ink' },
   ),
-  cell(
-    'phone',
-    [
-      label('On your phone: the same name'),
-      headline('name', 'Same document. Your rows.'),
-      text('The rule is applied on every run, after the document is read and before the statement is built.'),
-      text('Ask the same in your own words: no model runs for a question asked before.'),
-    ],
-    { ink: 'highlight' },
-  ),
+  cell('phone', [label('On your phone: the same name'), headline('title', 'Same document. Your rows.'), text('Ask it in your own words. A question asked before replays, and no model runs.')], { ink: 'highlight' }),
   cell(
     'tally',
     [
@@ -208,17 +194,17 @@ export const nameLayout: LayoutNode = sheet(['kick kick', 'head head', 'stage ph
 // A VALUE IN THE REQUEST. The speaker's search, mirrored from the controller:
 // the request as sent, the statement with the value bound as $1, the rows —
 // or, sent without the value, an empty answer and the key it missed.
-export const valueLayout: LayoutNode = sheet(['kick kick', 'head head', 'sent statement', 'rows rows'], [1, 1.2], ['auto', 'auto', 'auto', 1], [
-  ...head(),
-  cell('sent', [exhibit('Sent', '$.tool.searched.sent', { lang: 'json', tone: 'ink' })]),
-  cell('statement', [exhibit('The statement — the value bound as $1, never in its text', '$.tool.searched.sql', { lang: 'sql' })]),
+export const valueLayout: LayoutNode = sheet(['head head', 'sent statement', 'rows rows'], [1, 1.2], ['auto', 'auto', 1], [
+  head(),
+  { if: '$.tool.searched.sent', then: cell('sent', [exhibit('Sent', '$.tool.searched.sent', { lang: 'json', tone: 'ink' })]), else: cell('sent', [muted('Searched from the controller: the request, the statement and the rows show here.')]) },
+  { if: '$.tool.searched.sent', then: cell('statement', [exhibit('The statement — the value bound as $1, never in its text', '$.tool.searched.sql', { lang: 'sql' })]), else: cell('statement', [], { mark: 'hatch' }) },
   {
     if: '$.tool.searched.missing',
-    then: cell('rows', [headline('name', 'Empty. Missing: {{$.tool.searched.missing}}'), exhibit('The contract the request missed', '$.tool.searched.contract', { lang: 'json' }), text('An empty list and a note naming the key. A caller learns the contract from the first attempt.')], { ink: 'highlight' }),
+    then: cell('rows', [headline('name', 'Empty. Missing: {{$.tool.searched.missing}}'), exhibit('The contract the request missed', '$.tool.searched.contract', { lang: 'json' }), text('An empty list and the key it missed. A caller learns the contract from the first attempt.')], { ink: 'highlight' }),
     else: {
       if: '$.tool.searched.sent',
       then: cell('rows', [{ component: 'Rows', props: { rows: '$.tool.searched.rows', rowKey: 'name', empty: 'Nobody matches.', columns: [{ label: 'Name', key: 'name', w: 1 }] } }], { pad: 'none' }),
-      else: cell('rows', [muted('Searched from the controller: the request, the statement and the rows show here.')], { mark: 'hatch' }),
+      else: cell('rows', [], { mark: 'hatch' }),
     },
   },
 ]);
@@ -226,8 +212,8 @@ export const valueLayout: LayoutNode = sheet(['kick kick', 'head head', 'sent st
 // THIS APP: seeded, locked, nothing generated — the entry count, a request that
 // asks the locked endpoint to generate and what it answers, and the write
 // grammar's five operations.
-export const lockedLayout: LayoutNode = sheet(['kick kick', 'head head', 'counts counts', 'locked ops'], [1.2, 1], ['auto', 'auto', 'auto', 1], [
-  ...head(),
+export const lockedLayout: LayoutNode = sheet(['head head', 'counts counts', 'locked ops'], [1.2, 1], ['auto', 'auto', 1], [
+  head(),
   cell(
     'counts',
     [
@@ -246,11 +232,8 @@ export const lockedLayout: LayoutNode = sheet(['kick kick', 'head head', 'counts
   ),
   cell(
     'locked',
-    [
-      exhibit('POST /api/vex — a request with intent and shape', '$.request', { lang: 'json' }),
-      { if: '$.locked.message', then: exhibit('The answer', '$.locked.message', { flag: 'alert' }), else: text('Asking…') },
-    ],
-    { ink: 'ink' },
+    [exhibit('POST /api/vex — a request with intent and shape', '$.request', { lang: 'json' }), { if: '$.locked.message', then: exhibit('The answer', '$.locked.message', { flag: 'alert' }), else: text('Asking…') }],
+    { ink: 'ink', align: 'middle' },
   ),
-  cell('ops', [exhibit('Writes: five operations, never generated', '$.ops'), text('A model may fill one in and hand it to a person as a form. The person presses the button.')], { ink: 'highlight' }),
+  cell('ops', [exhibit('Writes: five operations, never generated', '$.ops'), text('A model may fill one in and hand it to a person as a form. The person presses the button.')], { ink: 'highlight', align: 'middle' }),
 ]);
