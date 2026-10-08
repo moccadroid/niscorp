@@ -41,7 +41,7 @@ const shown = (step: number): unknown => ({ $prism: { $gte: [{ $ref: '$.step.ste
 // two things that can happen to it — both need a person.
 export const sqlLayout: LayoutNode = sheet(['head head', 'sql outcomes'], [1.3, 1], ['auto', 1], [
   head(),
-  cell('sql', [exhibit('What a model writes when you ask it for a query', '$.sql', { lang: 'sql', tone: 'ink' })], { align: 'middle' }),
+  cell('sql', [exhibit('SQL', '$.sql', { lang: 'sql', tone: 'ink' })], { align: 'middle' }),
   cell(
     'outcomes',
     [
@@ -66,10 +66,10 @@ export const sqlLayout: LayoutNode = sheet(['head head', 'sql outcomes'], [1.3, 
 // that this is all of it. Both halves as the JSON they are.
 export const requestLayout: LayoutNode = sheet(['head head', 'intent shape', 'said said'], [1, 1], ['auto', 1, 'auto'], [
   head(),
-  cell('intent', [exhibit('The request · what the caller wants to know', '$.intentJson', { lang: 'json' })], { align: 'middle' }),
+  cell('intent', [exhibit('Intent', '$.intentJson', { lang: 'json' })], { align: 'middle' }),
   {
     if: shown(1),
-    then: cell('shape', [exhibit('The request · an example of the answer', '$.shapeJson', { lang: 'json' })], { ink: 'highlight', align: 'middle' }),
+    then: cell('shape', [exhibit('Shape', '$.shapeJson', { lang: 'json' })], { ink: 'highlight', align: 'middle' }),
     else: cell('shape', [], { mark: 'hatch' }),
   },
   { if: shown(2), then: cell('said', [headline('name', 'The whole request. No query written. No endpoint written.')], { ink: 'signal' }) },
@@ -83,7 +83,7 @@ export const documentLayout: LayoutNode = sheet(['head head', 'doc statement'], 
   cell('doc', [exhibit('$.file', '$.code', { lang: 'json', tone: 'ink' })], { align: 'middle' }),
   cell(
     'statement',
-    [exhibit('The statement it compiles to · the join is the schema’s', '$.compiled.sql', { lang: 'sql', marked: '$.compiled.marked' })],
+    [exhibit('Statement', '$.compiled.sql', { lang: 'sql', marked: '$.compiled.marked' })],
     { align: 'middle' },
   ),
 ]);
@@ -93,7 +93,7 @@ export const documentLayout: LayoutNode = sheet(['head head', 'doc statement'], 
 // Three documents of the same kind, so three panes of the same kind.
 export const shownLayout: LayoutNode = sheet(['head head head', 'tables grammar caller'], [1, 1, 1], ['auto', 1], [
   head(),
-  cell('tables', [exhibit('1 · Tables the caller may read', '$.tables')]),
+  cell('tables', [exhibit('1 · Readable tables', '$.tables')]),
   {
     if: shown(1),
     then: cell('grammar', [exhibit('2 · Grammar fields · {{$.grammar.rules}} rules', '$.grammar.text')]),
@@ -101,7 +101,7 @@ export const shownLayout: LayoutNode = sheet(['head head head', 'tables grammar 
   },
   {
     if: shown(2),
-    then: cell('caller', [exhibit('3 · Caller’s columns · no value', '$.caller', { lang: 'json' })], { ink: 'highlight' }),
+    then: cell('caller', [exhibit('3 · Caller’s columns', '$.caller', { lang: 'json' })], { ink: 'highlight' }),
     else: cell('caller', [], { mark: 'hatch' }),
   },
 ]);
@@ -109,7 +109,7 @@ export const shownLayout: LayoutNode = sheet(['head head head', 'tables grammar 
 // SIX TOOLS, by name, as the agent is handed them — and the one thing true of all of them.
 export const toolsLayout: LayoutNode = sheet(['head head', 'tools said'], [1, 1.2], ['auto', 1], [
   head(),
-  cell('tools', [exhibit('The agent’s tools, as it is handed them', '$.tools', { tone: 'ink' })], { align: 'middle' }),
+  cell('tools', [exhibit('Query agent · tools', '$.tools', { tone: 'ink' })], { align: 'middle' }),
   cell('said', [headline('title', 'Every tool runs through the engine as the caller.'), text('There is no way to ask it to run something as nobody.')], { ink: 'signal', align: 'middle' }),
 ]);
 
@@ -169,7 +169,7 @@ export const nameLayout: LayoutNode = sheet(['head head', 'stage phone', 'tally 
   cell(
     'stage',
     [
-      label('On the stage, replayed as the stage'),
+      label('Stage'),
       {
         if: '$.trace.outcome.fingerprint',
         then: {
@@ -185,7 +185,7 @@ export const nameLayout: LayoutNode = sheet(['head head', 'stage phone', 'tally 
     ],
     { ink: 'ink' },
   ),
-  cell('phone', [label('On your phone: the same name'), headline('title', 'Same document. Your rows.'), text('Ask it in your own words. A question asked before replays, and no model runs.')], { ink: 'highlight' }),
+  cell('phone', [label('Phone'), headline('title', 'Same document. Your rows.'), text('Ask it in your own words. A question asked before replays, and no model runs.')], { ink: 'highlight' }),
   cell(
     'tally',
     [
@@ -210,10 +210,10 @@ export const nameLayout: LayoutNode = sheet(['head head', 'stage phone', 'tally 
 export const valueLayout: LayoutNode = sheet(['head head', 'sent statement', 'rows rows'], [1, 1.2], ['auto', 'auto', 1], [
   head(),
   { if: '$.tool.searched.sent', then: cell('sent', [exhibit('Sent', '$.tool.searched.sent', { lang: 'json', tone: 'ink' })]), else: cell('sent', [muted('Searched from the controller: the request, the statement and the rows show here.')]) },
-  { if: '$.tool.searched.sent', then: cell('statement', [exhibit('The statement — the value bound as $1, never in its text', '$.tool.searched.sql', { lang: 'sql' })]), else: cell('statement', [], { mark: 'hatch' }) },
+  { if: '$.tool.searched.sent', then: cell('statement', [exhibit('Statement', '$.tool.searched.sql', { lang: 'sql' })]), else: cell('statement', [], { mark: 'hatch' }) },
   {
     if: '$.tool.searched.missing',
-    then: cell('rows', [headline('name', 'Empty. Missing: {{$.tool.searched.missing}}'), exhibit('The contract the request missed', '$.tool.searched.contract', { lang: 'json' })], { ink: 'highlight' }),
+    then: cell('rows', [headline('name', 'Empty. Missing: {{$.tool.searched.missing}}'), exhibit('Contract', '$.tool.searched.contract', { lang: 'json' })], { ink: 'highlight' }),
     else: {
       if: '$.tool.searched.sent',
       then: cell('rows', [{ component: 'Rows', props: { rows: '$.tool.searched.rows', rowKey: 'name', empty: 'Nobody matches.', columns: [{ label: 'Name', key: 'name', w: 1 }] } }], { pad: 'none' }),
@@ -243,8 +243,8 @@ export const lockedLayout: LayoutNode = sheet(['head head', 'counts counts', 'lo
     ],
     { pad: 'none' },
   ),
-  cell('locked', [exhibit('POST /api/vex — a request with intent and shape', '$.request', { lang: 'json' })], { ink: 'ink', align: 'middle' }),
+  cell('locked', [exhibit('POST /api/vex', '$.request', { lang: 'json' })], { ink: 'ink', align: 'middle' }),
   // The endpoint's answer is a sentence, so it is set as one, in the refusal's ink.
-  { if: '$.locked.message', then: cell('answer', [label('The answer'), text('{{$.locked.message}}')], { ink: 'alert' }), else: cell('answer', [label('Asking…')]) },
-  cell('ops', [exhibit('Writes: five operations, never generated', '$.ops')], { ink: 'highlight', align: 'middle' }),
+  { if: '$.locked.message', then: cell('answer', [label('Response'), text('{{$.locked.message}}')], { ink: 'alert' }), else: cell('answer', [label('Asking…')]) },
+  cell('ops', [exhibit('Write operations', '$.ops')], { ink: 'highlight', align: 'middle' }),
 ]);

@@ -81,8 +81,8 @@ export const requestSlide: ActionDefinition = {
   data: {
     kicker: 'The request',
     title: 'The question, and the shape of the answer.',
-    intentJson: JSON.stringify({ intent: QUESTION }, null, 2),
-    shapeJson: JSON.stringify({ shape: PEOPLE }, null, 2),
+    intentJson: compactJson({ intent: QUESTION }),
+    shapeJson: compactJson({ shape: PEOPLE }),
     step: { step: 0 },
   },
   layout: requestLayout,
@@ -99,7 +99,7 @@ export const documentSlide: ActionDefinition = {
   data: {
     kicker: 'What the model writes',
     title: 'A document in a fixed grammar. Not a statement.',
-    file: 'question.entries.ts — questions/every, as written',
+    file: 'questions/every · document',
     code: compactJson(questionsEvery.dsl),
     dsl: questionsEvery.dsl,
     compiled: { sql: '', marked: [] },
