@@ -391,8 +391,8 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(14px, min
    headline never takes the sheet. Code lives in an EXHIBIT — a captioned pane,
    set in colour — and never in a cell beside prose. */
 /* the dense scale is the reading scale drawn a size down: everything on the
-   sheet together, so it keeps its proportions and holds a fifth more */
-.${ROOT_CLASS} .sheet[data-scale="dense"] { zoom: .82; }
+   sheet together, so it keeps its proportions and holds a third more */
+.${ROOT_CLASS} .sheet[data-scale="dense"] { zoom: .76; }
 .${ROOT_CLASS} .sheet[data-scale] .cell { padding: 1.2rem 1.5rem; gap: .8rem; }
 .${ROOT_CLASS} .sheet[data-scale] .label { font-size: .78rem; }
 .${ROOT_CLASS} .sheet[data-scale] .headline { letter-spacing: -.015em; }

@@ -1,13 +1,12 @@
 import { createMemoryCache, createPostgresAdapter, createQueryEngine } from '@niscorp/vex';
 import type { GenerateDsl, GenerationCaller, MapToShape, Query, QueryEngine } from '@niscorp/vex';
-import type { SignalClient } from '@niscorp/cortex';
 import { createSignal } from '@niscorp/signal';
 import type { ChoiceQuestion } from '@niscorp/signal';
 import type { NiscRuntime } from '@niscorp/moss';
 import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
 import { BEHAVIORS } from '@lyceum/app/vex/behaviors';
 import { createDecider } from './decider';
-import { testCall, watchedQueryDsl, watchedShapeMapper } from './generation';
+import { agentMapping, testCall, watchedQueryDsl, watchedShapeMapper } from './generation';
 import type { Call, Tracer } from './generation';
 import type { QueryShape } from '@lyceum/app/vex/query.shapes';
 
@@ -107,7 +106,7 @@ const liveQuerier = (env: Record<string, string | undefined>, tracer: Tracer): Q
       return match !== undefined && match.shape === wanted.kind ? { replay: match, decided } : { generate: wanted, decided };
     },
     generateDsl: watchedQueryDsl({ llm, dslSchema, tracer }),
-    mapToShape: watchedShapeMapper({ llm, tracer }),
+    mapToShape: watchedShapeMapper({ write: agentMapping(llm), tracer }),
   };
 };
 
@@ -119,6 +118,7 @@ const fakeKind = (request: string): string => {
   const q = normalise(request);
   if (/\b(each|per|by)\b/.test(q)) return 'counts';
   if (/^how (many|much)\b/.test(q)) return 'number';
+  if (/^when\b/.test(q)) return 'timeline';
   if (/^who\b/.test(q)) return 'people';
   return 'list';
 };
@@ -131,8 +131,15 @@ const FAKE_DSL: Record<string, Query> = {
   counts: { from: ['members'], fields: [{ field: 'members.name', as: 'group' }], aggregate: { count: { count: '*' } }, groupBy: ['members.name'], sort: [{ field: 'members.name', dir: 'asc' }] },
   people: { from: ['members'], fields: ['members.name'], sort: [{ field: 'members.joined_at', dir: 'asc' }] },
   list: { from: ['members'], fields: [{ field: 'members.name', as: 'label' }, { field: 'members.joined_at', as: 'detail' }], sort: [{ field: 'members.joined_at', dir: 'asc' }] },
+  // Flat rows, as any query returns them: not the timeline's nested shape, so
+  // the mapping has to be written.
+  timeline: { from: ['members'], fields: ['members.name', 'members.joined_at'], sort: [{ field: 'members.joined_at', dir: 'desc' }] },
   forbidden: { from: ['login_links'], fields: ['login_links.principal'] },
 };
+// The mapping the stand-in writes for the timeline's rows — what the mapping
+// agent writes for them (measured, MEASURED.md), as a document.
+const item = (key: string): unknown => ({ $get: { from: { $var: 'item' }, path: [key] } });
+const FAKE_MAPPING = { $map: { over: { $ref: '$.result' }, as: 'item', body: { who: { name: item('name') }, at: item('joined_at') } } };
 // A first draft that names a column the table does not have — so the trace
 // carries the engine's own message about it, as a real run's would.
 const MISTAKEN: Query = { from: ['members'], fields: ['members.nothing'] };
@@ -150,11 +157,6 @@ const tested = async (caller: GenerationCaller, draft: Query): Promise<Call> => 
     return testCall(draft, { errors: [error instanceof Error ? error.message : String(error)], rows: 0 });
   }
 };
-
-const refuse = (): never => {
-  throw new Error('lyceum: the fake query router calls no model');
-};
-const NO_MODEL: SignalClient = { step: refuse, stepStream: refuse, count: refuse, describe: refuse };
 
 const fakeQuerier = (tracer: Tracer): Querier => ({
   kind: 'fake',
@@ -178,10 +180,16 @@ const fakeQuerier = (tracer: Tracer): Querier => ({
     tracer.written(intent, Date.now() - began);
     return dsl;
   },
-  // The watched mapper, with a model that is never there: rows that fit their
-  // shape get the identity, anything else fails — which the fake's queries,
-  // aliased to their shapes, never do.
-  mapToShape: watchedShapeMapper({ llm: NO_MODEL, tracer }),
+  // The watched mapper, with a stand-in for the mapping agent: rows that fit
+  // their shape get the identity; the timeline's never do, and get the one
+  // mapping there is for them, at a model's pace.
+  mapToShape: watchedShapeMapper({
+    write: async () => {
+      await new Promise((resolve) => setTimeout(resolve, FAKE_PACE_MS));
+      return FAKE_MAPPING;
+    },
+    tracer,
+  }),
 });
 
 export const createQuerier = (env: Record<string, string | undefined>, tracer: Tracer): Querier => {

@@ -160,7 +160,7 @@ export const toolsSlide = still('slide.tools', 'Six tools. None takes SQL.', too
 // on mount and again whenever the server says it changed. Nothing on it can
 // be pressed; the question is asked on the controller (tools.ask).
 // Until the server's trace arrives on mount (it carries the whole picture, unlit).
-const NO_TRACE = { principal: '', intent: '', shapeKind: '', pipeline: { steps: [], detour: { from: 0, to: 1, off: true, steps: [] }, legend: [] }, idle: { steps: [], detour: { from: 0, to: 1, off: true, steps: [] }, legend: [] }, shape: { caption: '', text: '' }, rows: [], calls: [], log: { caption: '', text: '', marked: [] }, document: { caption: '', text: '', lang: '', flag: 'highlight' }, outcome: { kind: 'none', title: 'Nothing asked yet.', said: '', fingerprint: '', sent: '' }, ms: 0 };
+const NO_TRACE = { principal: '', intent: '', shapeKind: '', pipeline: { steps: [], detour: { from: 0, to: 1, off: true, steps: [] }, legend: [] }, idle: { steps: [], detour: { from: 0, to: 1, off: true, steps: [] }, legend: [] }, shape: { caption: '', text: '' }, rows: [], calls: [], log: { caption: '', text: '', marked: [] }, document: { caption: '', text: '', lang: '', flag: 'highlight' }, mapping: { caption: '', text: '' }, outcome: { kind: 'none', title: 'Nothing asked yet.', said: '', fingerprint: '', sent: '' }, ms: 0 };
 export const writerSlide: ActionDefinition = {
   id: 'slide.writer',
   title: 'Watch it write one.',

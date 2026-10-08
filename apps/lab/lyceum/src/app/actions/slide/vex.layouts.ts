@@ -121,9 +121,11 @@ export const toolsLayout: LayoutNode = sheet(['head head', 'tools said'], [1, 1.
 //     engine, the answer, and under Jev the one detour, walked only when
 //     nothing stored matched and a query had to be written — what was walked
 //     is lit, what did not happen is not;
-//   · the one document there is to read, under it the agent's calls, a line
-//     each, newest first, and beside them the ANSWER, as rows,
-//     with how it ended under them.
+//   · what was written, and what it gave: the one document there is to read
+//     with the query agent's calls under it, a line each, newest first; the
+//     MAPPING stored with it — the identity when the rows already fit the
+//     shape, what the mapping agent wrote when they did not; and the ANSWER,
+//     as rows, with how it ended under them.
 // While a new question is being typed over an old run, the picture is unlit
 // and the old shape, document and answer are gone: they were another
 // question's.
@@ -133,7 +135,7 @@ const typing = { $prism: { $and: [{ $neq: [typed, { $const: '' }] }, { $neq: [ty
 const whenAsked = (then: LayoutNode, otherwise: LayoutNode): LayoutNode => ({ if: typing, then: otherwise, else: then });
 const picture = (key: 'steps' | 'detour'): unknown => ({ $if: typing, $then: `$.trace.idle.${key}`, $else: `$.trace.pipeline.${key}` });
 
-export const writerLayout: LayoutNode = dense(['intent shape', 'picture picture', 'document answer'], [1.5, 1], ['auto', 'auto', 1], [
+export const writerLayout: LayoutNode = dense(['intent intent shape shape', 'picture picture picture picture', 'document mapping mapping answer'], [1.26, 0.6, 0.4, 1.05], ['auto', 'auto', 1], [
   {
     if: '$.tool.intent',
     then: cell('intent', [label('Intent'), headline('title', '{{$.tool.intent}}')]),
@@ -145,6 +147,7 @@ export const writerLayout: LayoutNode = dense(['intent shape', 'picture picture'
     { if: '$.trace.document.text', then: cell('document', [tight([exhibit('$.trace.document.caption', '$.trace.document.text', { lang: '$.trace.document.lang', flag: '$.trace.document.flag' }), { if: '$.trace.log.text', then: exhibit('$.trace.log.caption', '$.trace.log.text', { marked: '$.trace.log.marked' }) }])]), else: cell('document', [], { mark: 'hatch' }) },
     cell('document', [], { mark: 'hatch' }),
   ),
+  whenAsked({ if: '$.trace.mapping.text', then: cell('mapping', [exhibit('$.trace.mapping.caption', '$.trace.mapping.text', { lang: 'json' })]), else: cell('mapping', [], { mark: 'hatch' }) }, cell('mapping', [], { mark: 'hatch' })),
   whenAsked(
     // The answer, as rows, and under it how it ended: how long in all, and
     // which models ran. A refusal is the engine's or the agent's own words.

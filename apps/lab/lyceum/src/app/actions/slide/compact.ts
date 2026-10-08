@@ -2,7 +2,9 @@
 // stays on one line, spaced — `{ "name": "" }`, `[ "questions", "members" ]`
 // — and one that does not opens over indented lines, each of them held to the
 // same measure; so a document is a dozen lines rather than forty and fits its
-// pane. The words are the document's; only the whitespace is chosen. Used for
+// pane. An object with one key that does not fit keeps its key on the opening
+// line — `{ "$map": {` … `} }` — so a document of wrappers (a mapping) is not
+// a staircase. The words are the document's; only the whitespace is chosen. Used for
 // the documents the slides show as written (vex.actions.ts) and for the
 // drafts a trace keeps (server/generation/trace.ts). `glance` is how long a
 // line may be: the default fits half a slide; a pane with the width asks for more.
@@ -25,7 +27,13 @@ const lay = (value: unknown, depth: number, used: number, glance: number): strin
   const pad = INDENT.repeat(depth + 1);
   const close = INDENT.repeat(depth);
   if (Array.isArray(value)) return `[\n${value.map((item) => pad + lay(item, depth + 1, pad.length, glance)).join(',\n')}\n${close}]`;
-  const lines = Object.entries(value).map(([key, item]) => {
+  const entries = Object.entries(value);
+  const only = entries.length === 1 ? entries[0] : undefined;
+  if (only !== undefined && typeof only[1] === 'object' && only[1] !== null) {
+    const lead = `{ ${JSON.stringify(only[0])}: `;
+    return `${lead}${lay(only[1], depth, used + lead.length, glance)} }`;
+  }
+  const lines = entries.map(([key, item]) => {
     const lead = `${pad}${JSON.stringify(key)}: `;
     return lead + lay(item, depth + 1, lead.length, glance);
   });

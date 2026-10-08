@@ -69,7 +69,7 @@ export const routeQuery = async (session: FunctionSession, querier: Querier, sta
   const show = async (fingerprint: string, rows: unknown, engineMs: number | undefined): Promise<void> => {
     const stored = await session.runtime.cache?.get(fingerprint);
     if (stored?.kind !== 'ok') return;
-    querier.trace.answered(principal, request, { document: stored.dsl, rows, engineMs });
+    querier.trace.answered(principal, request, { document: stored.dsl, mapping: stored.prismIr?.core, rows, engineMs });
   };
 
   if ('replay' in route) {

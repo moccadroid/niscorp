@@ -15,7 +15,9 @@
 //     rows with the stored mapping — on every run, a replay included.
 //   · The detour is the writing: the query agent tests drafts until one runs;
 //     the mapping is the identity when the rows already fit the shape, and
-//     otherwise written by Prism's mapping agent.
+//     otherwise written by the mapping agent.
+//   · The mapping the slide shows is the stored one, read back from the stored
+//     query — the same on the run that wrote it and on every replay.
 //
 // A trace belongs to the person who asked. `expect` is called before the
 // engine runs, inside their session, so the run is attributed to them without
@@ -78,6 +80,9 @@ export type Trace = {
   // engine's message about a draft it refused, or the stored query a replay
   // ran. Empty when there is none to show.
   document: { caption: string; text: string; lang: 'json' | ''; flag: 'live' | 'alert' | 'highlight' };
+  // The stored query's other half: the mapping that puts its rows in the
+  // shape. Empty until the query is stored.
+  mapping: { caption: string; text: string };
   // Every call the query agent made, one line each, in order — the whole
   // run, to be read back — and what the slide shows of it: the newest few,
   // newest first, the ones that ran marked.
@@ -99,6 +104,8 @@ type Known = {
   calls: Call[];
   mapping: { byAgent: boolean; ms: number } | undefined;
   stored: unknown;
+  // The stored mapping, as the stored query holds it.
+  mapped: unknown;
   answered: string;
   refusal: string;
 };
@@ -111,8 +118,9 @@ const NO_PIPELINE: Pipeline = { steps: [], detour: { from: 0, to: 1, label: '', 
 const NO_LOG: Trace['log'] = { caption: '', text: '', marked: [] };
 // How many of the agent's calls the slide lists, and how long a line of it is.
 const LOG_SHOWN = 8;
-const LOG_LINE = 44;
+const LOG_LINE = 28;
 const NO_DOCUMENT: Trace['document'] = { caption: '', text: '', lang: '', flag: 'highlight' };
+const NO_MAPPING: Trace['mapping'] = { caption: '', text: '' };
 const NO_OUTCOME: Outcome = { kind: 'none', title: 'Nothing asked yet.', said: '', fingerprint: '', sent: '' };
 
 // A statement folded at its clauses, and a long select list one column per
@@ -148,8 +156,10 @@ export const testCall = (draft: unknown, answer: { errors: readonly string[]; ro
   return { what: 'testQuery', failed, sent: draft, said: failed ? answer.errors.join('\n') : '', how: failed ? 'failed' : `ran · ${counted(answer.rows, 'row', 'rows')} · limit 5` };
 };
 
-// A document sits in the wider half of the slide's last row.
-const DOCUMENT_LINE = 62;
+// A document sits in the widest of the three columns of the slide's last row,
+// the mapping in the one beside it.
+const DOCUMENT_LINE = 53;
+const MAPPING_LINE = 40;
 // How many rows of an answer the stage shows.
 const ANSWER_ROWS = 5;
 // The first and the last of a fingerprint, so it fits a step.
@@ -200,8 +210,8 @@ const drawn = (trace: Trace, known: Known): void => {
       steps: [
         { label: 'Query agent', value: writing ? agentSaid : '', note: writing ? took(known.agentMs) : '', ink: agentRefused ? 'alert' : 'signal', off: !writing },
         {
-          label: 'Mapping',
-          value: known.mapping === undefined ? '' : known.mapping.byAgent ? 'Prism agent' : 'rows fit the shape',
+          label: 'Mapping agent',
+          value: known.mapping === undefined ? '' : known.mapping.byAgent ? 'mapping written' : 'rows fit the shape',
           note: known.mapping?.byAgent === true ? took(known.mapping.ms) : '',
           ink: known.mapping?.byAgent === true ? 'signal' : 'highlight',
           off: known.mapping === undefined,
@@ -236,19 +246,21 @@ const drawn = (trace: Trace, known: Known): void => {
           ? { caption: `Query agent · testQuery #${tests.length} · refused`, text: drafted.said, lang: '', flag: 'alert' }
           : { caption: `Query agent · testQuery #${tests.length} · ${drafted.how}`, text: compactJson(drafted.sent, DOCUMENT_LINE), lang: 'json', flag: 'live' };
 
+  trace.mapping = known.mapped === undefined ? NO_MAPPING : { caption: replayed ? 'Stored mapping' : 'Mapping', text: compactJson(known.mapped, MAPPING_LINE) };
+
   // Which models ran: Jev always; the query agent when a query was written;
-  // Prism's agent when it wrote the mapping.
-  const models = ['Jev', ...(writing ? ['query agent'] : []), ...(known.mapping?.byAgent === true ? ['Prism agent'] : [])];
+  // the mapping agent when it wrote the mapping.
+  const models = ['Jev', ...(writing ? ['query agent'] : []), ...(known.mapping?.byAgent === true ? ['mapping agent'] : [])];
   const ran = routed ? ` ${counted(models.length, 'model ran', 'models ran')}: ${models.join(', ')}.` : '';
   const ended = refused || ((replayed || kind === 'written') && stored);
   trace.outcome.title = kind === 'none' ? NO_OUTCOME.title : refused ? 'Refused' : !ended ? 'Writing…' : replayed ? 'Replayed' : 'Written';
   trace.outcome.said = !ended ? '' : refused ? `${known.refusal.replace(/[.]$/, "")}. ${trace.ms} ms in all.${ran}` : `${trace.ms} ms in all.${ran}`;
 };
 
-const nothingKnown = (): Known => ({ rows: undefined, jev: undefined, agentMs: undefined, engineMs: undefined, agent: false, calls: [], mapping: undefined, stored: undefined, answered: '', refusal: '' });
+const nothingKnown = (): Known => ({ rows: undefined, jev: undefined, agentMs: undefined, engineMs: undefined, agent: false, calls: [], mapping: undefined, stored: undefined, mapped: undefined, answered: '', refusal: '' });
 
 export const EMPTY_TRACE: Trace = (() => {
-  const trace: Trace = { principal: '', intent: '', shapeKind: '', pipeline: NO_PIPELINE, idle: NO_PIPELINE, shape: { caption: '', text: '' }, rows: [], document: NO_DOCUMENT, calls: [], log: NO_LOG, outcome: { ...NO_OUTCOME }, ms: 0 };
+  const trace: Trace = { principal: '', intent: '', shapeKind: '', pipeline: NO_PIPELINE, idle: NO_PIPELINE, shape: { caption: '', text: '' }, rows: [], document: NO_DOCUMENT, mapping: NO_MAPPING, calls: [], log: NO_LOG, outcome: { ...NO_OUTCOME }, ms: 0 };
   drawn(trace, nothingKnown());
   trace.idle = trace.pipeline;
   return trace;
@@ -266,7 +278,7 @@ export type Tracer = {
   writing: (intent: string) => void;
   called: (intent: string, call: Call) => void;
   // The rows were put in the shape: already in it (the identity, no model), or
-  // by a mapping Prism's agent wrote.
+  // by a mapping the mapping agent wrote.
   mapped: (mapping: { byAgent: boolean; ms: number }) => void;
   // The agent finished, after this long: its last draft is the document.
   written: (intent: string, ms: number) => void;
@@ -276,7 +288,7 @@ export type Tracer = {
   refused: (intent: string, reason: string) => void;
   // It has answered — a new query and a replayed one alike: the rows it gave
   // the person who asked, and the stored document that ran.
-  answered: (principal: string, intent: string, stored: { document: unknown; rows: unknown; engineMs: number | undefined }) => void;
+  answered: (principal: string, intent: string, stored: { document: unknown; mapping: unknown; rows: unknown; engineMs: number | undefined }) => void;
   latest: (principal: string) => Trace | undefined;
   onChange: (listener: () => void) => void;
 };
@@ -384,6 +396,7 @@ export const createTracer = (): Tracer => {
     answered: (principal, intent, stored) =>
       theirs(principal, intent, (_trace, known) => {
         known.stored = stored.document;
+        known.mapped = stored.mapping;
         known.rows = stored.rows;
         known.engineMs = stored.engineMs;
         known.answered = Array.isArray(stored.rows) ? counted(stored.rows.length, 'row', 'rows') : '1 value';

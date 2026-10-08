@@ -4,8 +4,11 @@
 // with. How each is SHOWN is the layouts' business
 // (actions/shared/answer.layouts.ts), by its `kind`.
 //
-// Flat, every one: a flat shape whose keys are single columns comes back from
-// the query already in shape, and vex skips the mapping model for it.
+// Flat, all but the last: a flat shape whose keys are single columns comes
+// back from the query already in shape, and vex skips the mapping agent for
+// it. A query returns flat rows, so the nested one is never what comes back:
+// the mapping agent writes a mapping for it, once, and it is stored with the
+// query.
 
 export type QueryShape = {
   kind: string;
@@ -33,5 +36,10 @@ export const QUERY_SHAPES: readonly QueryShape[] = [
     kind: 'people',
     description: 'People in the audience — who they are, by the names they chose.',
     shape: [{ name: '' }],
+  },
+  {
+    kind: 'timeline',
+    description: 'People with a time each — who did something and when: when each one joined, when each one asked.',
+    shape: [{ who: { name: '' }, at: '' }],
   },
 ];

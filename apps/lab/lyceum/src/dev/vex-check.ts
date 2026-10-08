@@ -119,7 +119,8 @@ const main = async (): Promise<void> => {
   check('...so the detour is walked: the query agent, and a draft the engine refused, with the engine’s own message', (await stage.shows('main', '"label":"Query agent","value":"testQuery ×1 · 1 refused"')) && stage.showsNow('main', 'Query agent · testQuery #1 · refused') && stage.showsNow('main', '"flag":"alert"'));
   check('...then the draft that ran, said to be a test with a limit of five', (await stage.shows('main', '"value":"testQuery ×2 · 1 refused"')) && stage.showsNow('main', 'Query agent · testQuery #2 · ran · ') && stage.showsNow('main', ' · limit 5') && stage.showsNow('main', '"flag":"live"'));
   check('...and both calls are listed, a line each, the newest first: the one that ran over the one refused, with the engine’s words', stage.showsNow('main', 'Query agent · 2 calls') && /#2\s+testQuery\s+ran · [^"]*\\n#1\s+testQuery\s+refused · /.test(stage.textOf('main')));
-  check('...the mapping: the rows fit the shape, so no model', await stage.shows('main', '"label":"Mapping","value":"rows fit the shape","note":"","ink":"highlight","off":false'));
+  check('...the mapping: the rows fit the shape, so the mapping agent did not run', await stage.shows('main', '"label":"Mapping agent","value":"rows fit the shape","note":"","ink":"highlight","off":false'));
+  check('...and the mapping stored with the query is the identity', await stage.shows('main', '{ \\"$ref\\": \\"$.result\\" }'));
   check('...it is stored, new, and the engine answers', (await stage.shows('main', ' · new","note":"","ink":"highlight","off":false')) && stage.showsNow('main', '"label":"Engine","value":"compile · run · map"') && stage.showsNow('main', '"label":"Answer","value":"1 value","note":"","ink":"live","off":false'));
   check('...and the answer is on the stage, in its shape', await stage.shows('main', '"name":"Figure"'));
   check('...and how it ended: written, and which models ran', await stage.shows('main', ' 2 models ran: Jev, query agent.'));
@@ -163,8 +164,25 @@ const main = async (): Promise<void> => {
   speaker.click('tools', 'ask');
   check('asked again, the stage says it was replayed, and that one model ran', (await stage.shows('main', 'Replayed · ')) && stage.showsNow('main', ' 1 model ran: Jev.'));
   check('...Jev found a match', stage.showsNow('main', '"label":"Jev","value":"match · number"'));
-  check('...the detour was not walked: no query agent, no mapping written', stage.showsNow('main', '"label":"Query agent","value":"","note":"","ink":"signal","off":true') && stage.showsNow('main', '"label":"Mapping","value":"","note":"","ink":"highlight","off":true'));
+  check('...the detour was not walked: no query agent, no mapping written', stage.showsNow('main', '"label":"Query agent","value":"","note":"","ink":"signal","off":true') && stage.showsNow('main', '"label":"Mapping agent","value":"","note":"","ink":"highlight","off":true'));
   check('...the stored query that ran is the document, and the engine answered', (await stage.shows('main', `Stored query · ${fingerprint}`)) && stage.showsNow('main', '"label":"Engine","value":"compile · run · map"'));
+
+  // ── a shape no rows come back in: the mapping agent writes the mapping ──
+  speaker.click('overlay', 'close');
+  await waitUntil(() => !speaker.showsNow('overlay', '"value":"Query"'));
+  speaker.type('tools', 'intent', 'When did everybody join?');
+  await pause();
+  speaker.click('tools', 'ask');
+  check('a question about who and when: the shape picked is the nested one', (await stage.shows('main', 'Shape · timeline')) && stage.showsNow('main', '[ { \\"who\\": { \\"name\\": \\"\\" }, \\"at\\": \\"\\" } ]'));
+  check('...the query’s rows are flat, so the mapping agent writes the mapping', await stage.shows('main', '"label":"Mapping agent","value":"mapping written"'));
+  check('...and the mapping, read back from the stored query, is on the stage', (await stage.shows('main', ':"Mapping"')) && stage.showsNow('main', '\\"$map\\"') && stage.showsNow('main', '\\"joined_at\\"'));
+  check('...three models ran, and the answer is in the nested shape, a name and a time a row', (await stage.shows('main', ' 3 models ran: Jev, query agent, mapping agent.')) && stage.showsNow('main', '"label":"When"'));
+  speaker.click('overlay', 'close');
+  await waitUntil(() => !speaker.showsNow('overlay', '"value":"Query"'));
+  speaker.type('tools', 'intent', 'When did everybody join?');
+  await pause();
+  speaker.click('tools', 'ask');
+  check('asked again: replayed, the stored mapping on the stage, and the mapping agent did not run', (await stage.shows('main', ' 1 model ran: Jev.')) && stage.showsNow('main', ':"Stored mapping"') && stage.showsNow('main', '\\"$map\\"') && stage.showsNow('main', '"label":"Mapping agent","value":"","note":"","ink":"highlight","off":true'));
 
   // ── a question past the caller's clearance ──
   speaker.click('overlay', 'close');

@@ -243,6 +243,11 @@ const ROUTES: readonly { question: string; replays?: string; shape?: string }[] 
   { question: 'List every refused request and why', shape: 'list' },
   { question: 'Whose name is an animal that swims?', shape: 'people' },
   { question: 'How long ago did the last person arrive?', shape: 'number' },
+  // the nested shape (a name and a time a row) — and the questions beside it that are not
+  { question: 'When did each person join?', shape: 'timeline' },
+  { question: 'When did the last three join?', shape: 'timeline' },
+  { question: 'Who were the last three to join?', shape: 'people' },
+  { question: 'Who joined last?', shape: 'people' },
 ];
 
 const measureRoutes = async (): Promise<void> => {
