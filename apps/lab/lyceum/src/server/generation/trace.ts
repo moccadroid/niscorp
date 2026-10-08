@@ -163,8 +163,8 @@ const drawn = (trace: Trace, known: Known): void => {
 
   trace.pipeline = {
     steps: [
-      { label: 'Request', value: trace.intent, note: '', ink: 'highlight', off: false },
-      { label: 'Jev', value: known.jev === undefined ? 'picking…' : `${known.jev.matched ? 'match' : 'no match'} · ${known.jev.shape}`, note: took(known.jev?.ms), ink: 'signal', off: trace.intent === '' },
+      { label: 'Request', value: trace.intent, note: '', ink: 'highlight', off: trace.intent === '' },
+      { label: 'Jev', value: known.jev === undefined ? (trace.intent === '' ? '' : 'picking…') : `${known.jev.matched ? 'match' : 'no match'} · ${known.jev.shape}`, note: took(known.jev?.ms), ink: 'signal', off: trace.intent === '' },
       { label: 'Stored query', value: refusedBefore ? 'refused before' : stored ? `${brief(trace.outcome.fingerprint)}${replayed ? '' : ' · new'}` : '', note: '', ink: refusedBefore ? 'alert' : 'highlight', off: !stored && !refusedBefore },
       { label: 'Engine', value: 'compile · run · map', note: took(known.engineMs), ink: 'highlight', off: !answered },
       { label: 'Answer', value: known.answered, note: '', ink: 'live', off: !answered },
