@@ -36,7 +36,7 @@ export const VEX_SLIDES: readonly Slide[] = [
     slideId: 'slide.writer',
     title: 'Watch it write one.',
     tools: ['tools.ask'],
-    notes: ['[ask: Who were the last three to join?]', 'a question about the room: the stage replays it on the next slide', 'shown: the tables I may read + one line about me', 'a test fails → the engine’s own message → fixed', 'finishes only with a draft that passed', 'stored under a name: replayed from now on', '[ask: When did the last three join?] → nested shape → the mapping agent writes the mapping', 'ask it again: stored mapping, one model'],
+    notes: ['[ask: Who were the last three to join?]', 'a question about the room: the stage replays it on the next slide', 'shown: the tables I may read + one line about me', 'a test fails → the engine’s own message → fixed', 'finishes only with a draft that passed', 'stored under a name: replayed from now on', '[Shape · timeline] → [ask the same again] → same words, another shape: a new stored query, and the mapping agent writes the mapping', 'ask it again: stored mapping, one model'],
   },
   {
     slideId: 'slide.name',

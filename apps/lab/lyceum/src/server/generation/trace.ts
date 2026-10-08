@@ -7,9 +7,11 @@
 // time; what was walked is lit, what did not happen is not.
 //
 // What is true, and what the picture says:
-//   · Jev is a model and runs on every request. It is handed the words of the
-//     requests already answered and picks the one that asks the same, or none
-//     — and the answer's shape. It never looks at a query or a mapping.
+//   · Jev is a model. It is handed the words of the requests already answered
+//     and picks the one that asks the same, or none — and the answer's shape,
+//     unless the request carries its shape. It never looks at a query or a
+//     mapping. With a shape given and nothing stored in it, there is nothing
+//     to pick and Jev is not asked.
 //   · A stored query is a document and a mapping, written once, together.
 //   · The engine compiles the document, runs it as the caller, and maps the
 //     rows with the stored mapping — on every run, a replay included.
@@ -74,6 +76,8 @@ export type Trace = {
   idle: Pipeline;
   // The shape Jev picked, as the request carries it (JSON), and its name.
   shape: { caption: string; text: string };
+  // The shape the request was given, by name; empty when Jev picked it.
+  given: string;
   // What came back, for the person who asked: the first rows, or the one value.
   rows: unknown;
   // The one document the slide shows: the draft the agent is testing, the
@@ -94,7 +98,7 @@ export type Trace = {
 
 // What the trace knows, from which everything drawn is worked out.
 type Known = {
-  jev: { matched: boolean; shape: string; ms: number } | undefined;
+  jev: { matched: boolean; shape: string; ms: number; given: boolean; asked: boolean } | undefined;
   rows: unknown;
   // How long the query agent took to write, and the engine to run, in ms.
   agentMs: number | undefined;
@@ -193,7 +197,15 @@ const drawn = (trace: Trace, known: Known): void => {
 
   trace.pipeline = {
     steps: [
-      { label: 'Jev', value: known.jev === undefined ? (trace.intent === '' ? '' : 'picking…') : `${known.jev.matched ? 'match' : 'no match'} · ${known.jev.shape}`, note: took(known.jev?.ms), ink: 'signal', off: trace.intent === '' },
+      {
+        label: 'Jev',
+        // What it picked: a stored query or none, and the shape — unless the
+        // shape was given; and nothing at all when it was not asked.
+        value: known.jev === undefined ? (trace.intent === '' ? '' : 'picking…') : !known.jev.asked ? 'not asked' : `${known.jev.matched ? 'match' : 'no match'}${known.jev.given ? '' : ` · ${known.jev.shape}`}`,
+        note: known.jev?.asked === false ? '' : took(known.jev?.ms),
+        ink: known.jev?.asked === false ? 'highlight' : 'signal',
+        off: trace.intent === '',
+      },
       { label: 'Stored query', value: refusedBefore ? 'refused before' : stored ? `${brief(trace.outcome.fingerprint)}${replayed ? '' : ' · new'}` : '', note: '', ink: refusedBefore ? 'alert' : 'highlight', off: !stored && !refusedBefore },
       { label: 'Engine', value: 'compile · run · map', note: took(known.engineMs), ink: 'highlight', off: !answered },
       { label: 'Answer', value: known.answered, note: '', ink: 'live', off: !answered },
@@ -248,9 +260,9 @@ const drawn = (trace: Trace, known: Known): void => {
 
   trace.mapping = known.mapped === undefined ? NO_MAPPING : { caption: replayed ? 'Stored mapping' : 'Mapping', text: compactJson(known.mapped, MAPPING_LINE) };
 
-  // Which models ran: Jev always; the query agent when a query was written;
+  // Which models ran: Jev when it was asked; the query agent when a query was written;
   // the mapping agent when it wrote the mapping.
-  const models = ['Jev', ...(writing ? ['query agent'] : []), ...(known.mapping?.byAgent === true ? ['mapping agent'] : [])];
+  const models = [...(known.jev?.asked === false ? [] : ['Jev']), ...(writing ? ['query agent'] : []), ...(known.mapping?.byAgent === true ? ['mapping agent'] : [])];
   const ran = routed ? ` ${counted(models.length, 'model ran', 'models ran')}: ${models.join(', ')}.` : '';
   const ended = refused || ((replayed || kind === 'written') && stored);
   trace.outcome.title = kind === 'none' ? NO_OUTCOME.title : refused ? 'Refused' : !ended ? 'Writing…' : replayed ? 'Replayed' : 'Written';
@@ -260,7 +272,7 @@ const drawn = (trace: Trace, known: Known): void => {
 const nothingKnown = (): Known => ({ rows: undefined, jev: undefined, agentMs: undefined, engineMs: undefined, agent: false, calls: [], mapping: undefined, stored: undefined, mapped: undefined, answered: '', refusal: '' });
 
 export const EMPTY_TRACE: Trace = (() => {
-  const trace: Trace = { principal: '', intent: '', shapeKind: '', pipeline: NO_PIPELINE, idle: NO_PIPELINE, shape: { caption: '', text: '' }, rows: [], document: NO_DOCUMENT, mapping: NO_MAPPING, calls: [], log: NO_LOG, outcome: { ...NO_OUTCOME }, ms: 0 };
+  const trace: Trace = { principal: '', intent: '', shapeKind: '', pipeline: NO_PIPELINE, idle: NO_PIPELINE, shape: { caption: '', text: '' }, given: '', rows: [], document: NO_DOCUMENT, mapping: NO_MAPPING, calls: [], log: NO_LOG, outcome: { ...NO_OUTCOME }, ms: 0 };
   drawn(trace, nothingKnown());
   trace.idle = trace.pipeline;
   return trace;
@@ -271,7 +283,7 @@ export type Tracer = {
   expect: (intent: string, principal: string) => void;
   // Jev picked: a request already answered that asks the same, or none — and
   // the answer's shape.
-  routed: (principal: string, intent: string, decided: { fingerprint: string | null; shape: string }, shape: unknown, ms: number) => void;
+  routed: (principal: string, intent: string, decided: { fingerprint: string | null; shape: string; given: boolean; asked: boolean }, shape: unknown, ms: number) => void;
   // Run the engine for this request: what its hooks record is this request's.
   during: <T>(intent: string, run: () => Promise<T>) => Promise<T>;
   // The query agent was started, and made a call.
@@ -345,8 +357,9 @@ export const createTracer = (): Tracer => {
     },
     routed: (principal, intent, decided, shape, ms) =>
       theirs(principal, intent, (trace, known) => {
-        trace.shape = { caption: `Shape · ${decided.shape}`, text: compactJson(shape, DOCUMENT_LINE) };
-        known.jev = { matched: decided.fingerprint !== null, shape: decided.shape, ms };
+        trace.shape = { caption: `Shape · ${decided.shape}${decided.given ? ' · given' : ''}`, text: compactJson(shape, DOCUMENT_LINE) };
+        trace.given = decided.given ? decided.shape : '';
+        known.jev = { matched: decided.fingerprint !== null, shape: decided.shape, ms, given: decided.given, asked: decided.asked };
       }),
     during: (intent, run) => running.run(intent, run),
     writing: (intent) =>

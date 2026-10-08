@@ -167,22 +167,36 @@ const main = async (): Promise<void> => {
   check('...the detour was not walked: no query agent, no mapping written', stage.showsNow('main', '"label":"Query agent","value":"","note":"","ink":"signal","off":true') && stage.showsNow('main', '"label":"Mapping agent","value":"","note":"","ink":"highlight","off":true'));
   check('...the stored query that ran is the document, and the engine answered', (await stage.shows('main', `Stored query · ${fingerprint}`)) && stage.showsNow('main', '"label":"Engine","value":"compile · run · map"'));
 
-  // ── a shape no rows come back in: the mapping agent writes the mapping ──
+  // ── the same words with the shape given: another stored query, and the mapping agent writes the mapping ──
   speaker.click('overlay', 'close');
   await waitUntil(() => !speaker.showsNow('overlay', '"value":"Query"'));
-  speaker.type('tools', 'intent', 'When did everybody join?');
+  check('the speaker’s ask can give the shape; Jev’s pick is on until it does', (await speaker.shows('tools', '"label":"Shape · Jev picks"')) && speaker.showsNow('tools', '"ink":"highlight","label":"Shape · Jev picks"') && speaker.showsNow('tools', '"ink":"paper","label":"Shape · timeline"'));
+  speaker.click('tools', 'shapeGiven');
+  check('...given, the nested shape is the one that is on', await speaker.shows('tools', '"ink":"highlight","label":"Shape · timeline"'));
+  speaker.type('tools', 'intent', 'How many people are in the room? ');
+  check('...and it is on the stage before the ask is sent', (await stage.shows('main', 'Shape · timeline · given')) && stage.showsNow('main', '[ { \\"who\\": { \\"name\\": \\"\\" }, \\"at\\": \\"\\" } ]'));
   await pause();
   speaker.click('tools', 'ask');
-  check('a question about who and when: the shape picked is the nested one', (await stage.shows('main', 'Shape · timeline')) && stage.showsNow('main', '[ { \\"who\\": { \\"name\\": \\"\\" }, \\"at\\": \\"\\" } ]'));
+  check('asked: Jev is asked only for a stored query, and finds none in that shape', await stage.shows('main', '"label":"Jev","value":"no match","note"'));
   check('...the query’s rows are flat, so the mapping agent writes the mapping', await stage.shows('main', '"label":"Mapping agent","value":"mapping written"'));
   check('...and the mapping, read back from the stored query, is on the stage', (await stage.shows('main', ':"Mapping"')) && stage.showsNow('main', '\\"$map\\"') && stage.showsNow('main', '\\"joined_at\\"'));
   check('...three models ran, and the answer is in the nested shape, a name and a time a row', (await stage.shows('main', ' 3 models ran: Jev, query agent, mapping agent.')) && stage.showsNow('main', '"label":"When"'));
+  const both = await runtime.db.query<{ fingerprint: string | null; shape: string }>("SELECT fingerprint, shape FROM queries WHERE how = 'generated' ORDER BY run_at");
+  check('...the same words in another shape are another stored query', both.rows.length === 2 && both.rows[1]?.shape === 'timeline' && both.rows[1]?.fingerprint !== both.rows[0]?.fingerprint);
   speaker.click('overlay', 'close');
   await waitUntil(() => !speaker.showsNow('overlay', '"value":"Query"'));
-  speaker.type('tools', 'intent', 'When did everybody join?');
+  speaker.type('tools', 'intent', 'How many people are in the room?');
   await pause();
   speaker.click('tools', 'ask');
   check('asked again: replayed, the stored mapping on the stage, and the mapping agent did not run', (await stage.shows('main', ' 1 model ran: Jev.')) && stage.showsNow('main', ':"Stored mapping"') && stage.showsNow('main', '\\"$map\\"') && stage.showsNow('main', '"label":"Mapping agent","value":"","note":"","ink":"highlight","off":true'));
+  speaker.click('overlay', 'close');
+  await waitUntil(() => !speaker.showsNow('overlay', '"value":"Query"'));
+  speaker.click('tools', 'shapeJev');
+  await speaker.shows('tools', '"ink":"highlight","label":"Shape · Jev picks"');
+  speaker.type('tools', 'intent', 'How many people are in the room? ');
+  await pause();
+  speaker.click('tools', 'ask');
+  check('back on Jev’s pick, the same words replay the first query, in its shape', (await stage.shows('main', '"label":"Jev","value":"match · number"')) && stage.showsNow('main', `Stored query · ${fingerprint}`));
 
   // ── a question past the caller's clearance ──
   speaker.click('overlay', 'close');

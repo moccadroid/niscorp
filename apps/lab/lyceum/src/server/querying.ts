@@ -3,7 +3,7 @@ import type { GenerateDsl, GenerationCaller, MapToShape, Query, QueryEngine } fr
 import { createSignal } from '@niscorp/signal';
 import type { ChoiceQuestion } from '@niscorp/signal';
 import type { NiscRuntime } from '@niscorp/moss';
-import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
+import { ALL_SHAPES, QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
 import { BEHAVIORS } from '@lyceum/app/vex/behaviors';
 import { createDecider } from './decider';
 import { agentMapping, testCall, watchedQueryDsl, watchedShapeMapper } from './generation';
@@ -15,7 +15,9 @@ import type { QueryShape } from '@lyceum/app/vex/query.shapes';
 //   ROUTING   — a CHOICE, never writing: has an earlier request already asked
 //               for the same thing (then its query is replayed), and which of
 //               the authored shapes (../app/vex/query.shapes.ts) does the
-//               answer take. Jev (TypeSafe, `decide()`) with TYPESAFE_API_KEY;
+//               answer take — unless the request carries its shape, and
+//               then only the first is asked, of the stored queries in that
+//               shape. Jev (TypeSafe, `decide()`) with TYPESAFE_API_KEY;
 //               without it, gpt-oss-120b answers the same choices by
 //               emulation (uncalibrated picks).
 //   GENERATION — a new request's query, written by vex's query agent and
@@ -36,18 +38,20 @@ import type { QueryShape } from '@lyceum/app/vex/query.shapes';
 // Unset, it is `live` when there is a Groq key and `fake` when there is not.
 
 export type Known = { request: string; fingerprint: string; shape: string };
-// What Jev picked, as it picked it: one of the stored queries — its
-// fingerprint and the intent it was stored for — or none, and the shape. The
-// route follows from the two: a replay only when the stored query's shape is
-// the shape picked.
-export type Decided = { fingerprint: string | null; intent: string | null; shape: string };
+// What was decided: the stored query that answers — its fingerprint and the
+// intent it was stored for — or none, and the shape. A stored query answers
+// only in its own shape: one Jev picks in another shape counts as none.
+// `given`: the request carried the shape, Jev did not pick it. `asked`: Jev
+// was asked anything at all — not when the shape is given and nothing is
+// stored in it.
+export type Decided = { fingerprint: string | null; intent: string | null; shape: string; given: boolean; asked: boolean };
 export type Route = ({ replay: Known } | { generate: QueryShape }) & { decided: Decided };
 
 export type Querier = {
   kind: 'live' | 'fake';
   // What the stage watches (./generation).
   trace: Tracer;
-  route: (request: string, known: readonly Known[]) => Promise<Route>;
+  route: (request: string, known: readonly Known[], given?: QueryShape) => Promise<Route>;
   generateDsl: GenerateDsl;
   mapToShape: MapToShape;
 };
@@ -72,8 +76,9 @@ const liveQuerier = (env: Record<string, string | undefined>, tracer: Tracer): Q
     trace: tracer,
     // Jev's words below say "question": they are the measured contract (48/48,
     // MEASURED.md) — renaming them is a re-measurement, not a tidy-up.
-    route: async (question, known) => {
-      const candidates = known.slice(0, KNOWN_LIMIT);
+    route: async (question, known, given) => {
+      // A given shape: only what is stored in that shape can answer.
+      const candidates = (given === undefined ? known : known.filter((entry) => entry.shape === given.kind)).slice(0, KNOWN_LIMIT);
       const byKey = new Map(candidates.map((entry, index) => [`q${index}`, entry]));
       // The earlier questions are FACTS, so they go in the state; the options
       // only name them. Written into the options' own text instead, Jev read
@@ -90,8 +95,9 @@ const liveQuerier = (env: Record<string, string | undefined>, tracer: Tracer): Q
         criteria: Object.fromEntries(QUERY_SHAPES.map((entry) => [entry.kind, entry.description])),
       };
       const earlier = Object.fromEntries(candidates.map((entry, index) => [`q${index}`, entry.request]));
-      const result = await decider.decide({ state: { question, earlier }, questions: candidates.length === 0 ? { shape } : { same, shape } });
-      const decisions: Record<string, unknown> = result.decisions;
+      const questions: Record<string, ChoiceQuestion> = { ...(candidates.length === 0 ? {} : { same }), ...(given === undefined ? { shape } : {}) };
+      const asked = Object.keys(questions).length > 0;
+      const decisions: Record<string, unknown> = asked ? (await decider.decide({ state: { question, earlier }, questions })).decisions : {};
       const pick = (name: string): string => {
         const decision = decisions[name];
         return typeof decision === 'object' && decision !== null && 'choice' in decision && typeof decision.choice === 'string' ? decision.choice : '';
@@ -100,10 +106,15 @@ const liveQuerier = (env: Record<string, string | undefined>, tracer: Tracer): Q
       // only if this question wants that shape too. "How many people are in
       // Archive?" matched "…in each department?" at 0.73 — the counts contain
       // Archive's — but it wants one number, not a count per group.
-      const match = byKey.get(pick('same'));
-      const wanted = shapeOf(pick('shape'));
-      const decided: Decided = { fingerprint: match?.fingerprint ?? null, intent: match?.request ?? null, shape: wanted.kind };
-      return match !== undefined && match.shape === wanted.kind ? { replay: match, decided } : { generate: wanted, decided };
+      const picked = byKey.get(pick('same'));
+      const wanted = given ?? shapeOf(pick('shape'));
+      // The same words can be stored in two shapes: the one in the wanted
+      // shape answers. A pick in another shape answers nothing — there is no
+      // stored query for this request, and that is what is decided.
+      const match = picked === undefined || picked.shape === wanted.kind ? picked : candidates.find((entry) => entry.request === picked.request && entry.shape === wanted.kind);
+      const usable = match?.shape === wanted.kind ? match : undefined;
+      const decided: Decided = { fingerprint: usable?.fingerprint ?? null, intent: usable?.request ?? null, shape: wanted.kind, given: given !== undefined, asked };
+      return usable !== undefined ? { replay: usable, decided } : { generate: wanted, decided };
     },
     generateDsl: watchedQueryDsl({ llm, dslSchema, tracer }),
     mapToShape: watchedShapeMapper({ write: agentMapping(llm), tracer }),
@@ -118,7 +129,6 @@ const fakeKind = (request: string): string => {
   const q = normalise(request);
   if (/\b(each|per|by)\b/.test(q)) return 'counts';
   if (/^how (many|much)\b/.test(q)) return 'number';
-  if (/^when\b/.test(q)) return 'timeline';
   if (/^who\b/.test(q)) return 'people';
   return 'list';
 };
@@ -161,10 +171,11 @@ const tested = async (caller: GenerationCaller, draft: Query): Promise<Call> => 
 const fakeQuerier = (tracer: Tracer): Querier => ({
   kind: 'fake',
   trace: tracer,
-  route: async (request, known) => {
-    const earlier = known.find((entry) => normalise(entry.request) === normalise(request));
-    const wanted = shapeOf(fakeKind(request));
-    return earlier !== undefined ? { replay: earlier, decided: { fingerprint: earlier.fingerprint, intent: earlier.request, shape: earlier.shape } } : { generate: wanted, decided: { fingerprint: null, intent: null, shape: wanted.kind } };
+  route: async (request, known, given) => {
+    const wanted = given ?? shapeOf(fakeKind(request));
+    const earlier = known.find((entry) => normalise(entry.request) === normalise(request) && entry.shape === wanted.kind);
+    const how = { shape: wanted.kind, given: given !== undefined, asked: true };
+    return earlier !== undefined ? { replay: earlier, decided: { fingerprint: earlier.fingerprint, intent: earlier.request, ...how } } : { generate: wanted, decided: { fingerprint: null, intent: null, ...how } };
   },
   // No model: a wrong draft first, then the one the request gets — each tested
   // through the engine, so the trace shows what a real run shows.
@@ -172,7 +183,9 @@ const fakeQuerier = (tracer: Tracer): Querier => ({
     const intent = request.intent ?? '';
     tracer.writing(intent);
     const began = Date.now();
-    const dsl = (/login|sign in|password/i.test(intent) ? FAKE_DSL['forbidden'] : FAKE_DSL[fakeKind(intent)]) ?? { from: ['members'] };
+    // Written to the shape the request carries, as a real writer does.
+    const kind = ALL_SHAPES.find((entry) => JSON.stringify(entry.shape) === JSON.stringify(request.shape))?.kind ?? fakeKind(intent);
+    const dsl = (/login|sign in|password/i.test(intent) ? FAKE_DSL['forbidden'] : FAKE_DSL[kind]) ?? { from: ['members'] };
     tracer.called(intent, await tested(caller, MISTAKEN));
     // A model takes its time between drafts, and so does the stand-in.
     await new Promise((resolve) => setTimeout(resolve, FAKE_PACE_MS));

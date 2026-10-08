@@ -116,7 +116,8 @@ export const toolsLayout: LayoutNode = sheet(['head head', 'tools said'], [1, 1.
 // WATCH IT WRITE ONE. A request is an intent and a shape, and the slide reads
 // top to bottom as one being answered:
 //   · the INTENT, large, as the speaker types it on the controller (the ask is
-//     mirrored, server/mirroring.ts), and beside it the SHAPE Jev picked;
+//     mirrored, server/mirroring.ts), and beside it the SHAPE — the one Jev
+//     picked, or the one the speaker gave, there from the moment it is given;
 //   · the pipeline (server/generation/trace.ts): Jev, the stored query, the
 //     engine, the answer, and under Jev the one detour, walked only when
 //     nothing stored matched and a query had to be written — what was walked
@@ -126,12 +127,14 @@ export const toolsLayout: LayoutNode = sheet(['head head', 'tools said'], [1, 1.
 //     MAPPING stored with it — the identity when the rows already fit the
 //     shape, what the mapping agent wrote when they did not; and the ANSWER,
 //     as rows, with how it ended under them.
-// While a new question is being typed over an old run, the picture is unlit
-// and the old shape, document and answer are gone: they were another
-// question's.
+// While a new question is being put over an old run — other words typed, or
+// another shape given — the picture is unlit and the old shape, document and
+// answer are gone: they were another question's.
 const tight = (children: LayoutNode[]): LayoutNode => ({ component: 'Stack', props: { gap: 'tight' }, children });
 const typed = { $trim: { $ref: '$.tool.intent' } };
-const typing = { $prism: { $and: [{ $neq: [typed, { $const: '' }] }, { $neq: [typed, { $ref: '$.trace.intent' }] }] } };
+// A new question is being put: other words than the run on the slide, or the
+// same words with another shape.
+const typing = { $prism: { $and: [{ $neq: [typed, { $const: '' }] }, { $or: [{ $neq: [typed, { $ref: '$.trace.intent' }] }, { $neq: [{ $ref: '$.tool.shape' }, { $ref: '$.trace.given' }] }] }] } };
 const whenAsked = (then: LayoutNode, otherwise: LayoutNode): LayoutNode => ({ if: typing, then: otherwise, else: then });
 const picture = (key: 'steps' | 'detour'): unknown => ({ $if: typing, $then: `$.trace.idle.${key}`, $else: `$.trace.pipeline.${key}` });
 
@@ -141,7 +144,7 @@ export const writerLayout: LayoutNode = dense(['intent intent shape shape', 'pic
     then: cell('intent', [label('Intent'), headline('title', '{{$.tool.intent}}')]),
     else: { if: '$.trace.intent', then: cell('intent', [label('Intent'), headline('title', '{{$.trace.intent}}')]), else: cell('intent', [headline('title', '{{$.title}}')], { align: 'middle' }) },
   },
-  whenAsked({ if: '$.trace.shape.text', then: cell('shape', [exhibit('$.trace.shape.caption', '$.trace.shape.text', { lang: 'json' })], { ink: 'highlight' }), else: cell('shape', [], { mark: 'hatch' }) }, cell('shape', [], { mark: 'hatch' })),
+  whenAsked({ if: '$.trace.shape.text', then: cell('shape', [exhibit('$.trace.shape.caption', '$.trace.shape.text', { lang: 'json' })], { ink: 'highlight' }), else: cell('shape', [], { mark: 'hatch' }) }, { if: '$.tool.shapeText', then: cell('shape', [exhibit('Shape · {{$.tool.shape}} · given', '$.tool.shapeText', { lang: 'json' })], { ink: 'highlight' }), else: cell('shape', [], { mark: 'hatch' }) }),
   cell('picture', [{ component: 'Pipeline', props: { steps: picture('steps'), detour: picture('detour'), legend: '$.trace.pipeline.legend' } }]),
   whenAsked(
     { if: '$.trace.document.text', then: cell('document', [tight([exhibit('$.trace.document.caption', '$.trace.document.text', { lang: '$.trace.document.lang', flag: '$.trace.document.flag' }), { if: '$.trace.log.text', then: exhibit('$.trace.log.caption', '$.trace.log.text', { marked: '$.trace.log.marked' }) }])]), else: cell('document', [], { mark: 'hatch' }) },

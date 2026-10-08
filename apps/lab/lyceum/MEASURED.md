@@ -370,4 +370,7 @@ column 9/10, under 1.2 s.
 
 Jev with five shapes (`LYCEUM_PART=route`, 3 runs of 20 probes, four of them about the
 new shape): 54/60 — five provider errors (HTTP 5xx, the provider was overloaded) and one
-missed replay; no wrong shape. The four timeline/people probes: 12/12.
+missed replay; no wrong shape. The four timeline/people probes: 12/12. **Not what
+shipped:** the same day the nested shape was taken out of Jev's options and is only ever
+given with the request (the speaker's ask), so Jev picks from four shapes, as measured
+before, and the four extra probes were removed again.

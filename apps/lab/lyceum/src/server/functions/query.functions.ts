@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { FunctionSession } from '@niscorp/moss';
 import type { FunctionHandler } from '@niscorp/nova';
 import { QuerySchema } from '@niscorp/vex';
-import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
+import { shapeOfKind } from '@lyceum/app/vex/query.shapes';
 import { memberSearch } from '@lyceum/app/vex/member.entries';
 import { routeQuery } from '../assistant/vex-query';
 import { foldStatement } from '../generation';
@@ -16,6 +16,8 @@ import type { Querier } from '../querying';
 //                 a request in words takes (../assistant/vex-query.ts), as the
 //                 caller, recorded as theirs. What comes back is the query to
 //                 replay, which the screen opens as the person (`query.result`).
+//                 An ask may carry its shape, by name; then Jev is not
+//                 asked for one.
 //   room.search   a stored query that takes a value, run as the caller with
 //                 the value or on purpose without it, and answered with the
 //                 engine's own meta — which the governed wire leaves out, so
@@ -25,7 +27,7 @@ import type { Querier } from '../querying';
 //                 slide that puts the two side by side.
 //   room.grammar  the grammar's fields, and how many instructions its
 //                 descriptions carry, off the real schema.
-const AskSchema = z.object({ intent: z.string().trim().min(1, 'Type a question first.') });
+const AskSchema = z.object({ intent: z.string().trim().min(1, 'Type a question first.'), shape: z.string().default('') });
 const SearchSchema = z.object({ q: z.string().default(''), bare: z.boolean().default(false) });
 const CompileSchema = z.object({ dsl: z.unknown() });
 const RowsSchema = z.array(z.object({ name: z.string() }));
@@ -41,9 +43,12 @@ const countRules = (node: unknown): number => {
 
 export const queryFunctions = (session: FunctionSession, querier: Querier): Record<string, FunctionHandler> => ({
   'query.ask': async (input) => {
-    const { intent } = AskSchema.parse(input);
-    const routed = await routeQuery(session, querier, intent);
-    const shape = QUERY_SHAPES.find((entry) => entry.kind === routed.kind)?.shape ?? null;
+    const asked = AskSchema.parse(input);
+    const { intent } = asked;
+    const given = asked.shape === '' ? undefined : shapeOfKind(asked.shape);
+    if (asked.shape !== '' && given === undefined) throw new Error(`There is no shape named "${asked.shape}".`);
+    const routed = await routeQuery(session, querier, intent, given);
+    const shape = shapeOfKind(routed.kind)?.shape ?? null;
     return { intent, shape: JSON.stringify(shape), routed };
   },
 

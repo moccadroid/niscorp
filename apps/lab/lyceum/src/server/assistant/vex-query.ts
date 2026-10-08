@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import type { FunctionSession } from '@niscorp/moss';
 import { queryRecord, queriesKnown } from '@lyceum/app/vex/query.entries';
-import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
+import { shapeOfKind } from '@lyceum/app/vex/query.shapes';
+import type { QueryShape } from '@lyceum/app/vex/query.shapes';
 import { queryEngineFor } from '../querying';
 import type { Querier, Known } from '../querying';
 import { vexOver } from '../vex-over';
@@ -47,8 +48,9 @@ export type Routed = { fingerprint: string; kind: string; how: 'replayed' | 'gen
 
 // ONE INTENT, ROUTED TO A QUERY — as the caller, recorded as theirs: an
 // earlier intent's stored query, or a new one written under their policy, or
-// refused, in words.
-export const routeQuery = async (session: FunctionSession, querier: Querier, stated: string): Promise<Routed> => {
+// refused, in words. `given` is the shape the request carries, when it does:
+// Jev is then asked only whether a stored query already answers it.
+export const routeQuery = async (session: FunctionSession, querier: Querier, stated: string, given?: QueryShape): Promise<Routed> => {
   const request = stated.trim().slice(0, MAX_INTENT);
   if (request === '') throw new Error('A query needs an intent.');
   const vex = vexOver(session.wire);
@@ -59,8 +61,8 @@ export const routeQuery = async (session: FunctionSession, querier: Querier, sta
   querier.trace.expect(request, principal);
   const known: Known[] = KnownSchema.parse(await vex(queriesKnown.fingerprint));
   const asked = Date.now();
-  const route = await querier.route(request, known);
-  querier.trace.routed(principal, request, route.decided, QUERY_SHAPES.find((entry) => entry.kind === route.decided.shape)?.shape ?? null, Date.now() - asked);
+  const route = await querier.route(request, known, given);
+  querier.trace.routed(principal, request, route.decided, shapeOfKind(route.decided.shape)?.shape ?? null, Date.now() - asked);
 
   // What the stage shows of the query that answered — a new one and a replayed
   // one alike: the caller's rows, and the document as it is stored.
