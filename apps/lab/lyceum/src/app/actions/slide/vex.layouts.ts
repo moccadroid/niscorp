@@ -118,12 +118,12 @@ const stepped = { $prism: { $gt: [{ $length: { $ref: '$.trace.steps' } }, 0] } }
 const replayed = { $eq: ['$.trace.outcome.kind', 'replayed'] };
 const ended = (): LayoutNode => label('{{$.trace.outcome.kind}} · {{$.trace.ms}} ms');
 
-export const writerLayout: LayoutNode = sheet(['head request', 'step step', 'out out'], [0.75, 1.65], ['auto', 1, 'auto'], [
+export const writerLayout: LayoutNode = sheet(['head request', 'step step', 'out out'], [0.6, 1.8], ['auto', 1, 'auto'], [
   head(),
   {
     if: '$.trace.request',
-    // The request; then, once the router has chosen, what it chose — which
-    // earlier request this one is the same as, and the answer's shape.
+    // The request; then what Jev picked from the stored queries — a
+    // fingerprint and its intent, or none — and the answer's shape.
     then: cell('request', [exhibit('The request', '$.trace.request', { lang: 'json' }), { if: '$.trace.router', then: exhibit('$.trace.routed', '$.trace.router', { lang: 'json', flag: 'highlight' }) }], { align: 'middle' }),
     else: cell('request', [muted('Asked on the controller. The room watches it answered here.')], { mark: 'hatch', align: 'middle' }),
   },

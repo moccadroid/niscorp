@@ -111,7 +111,7 @@ const main = async (): Promise<void> => {
   // model's pace between drafts); the controller's answer is read after.
   check('the stage shows the question', await stage.shows('main', 'How many people are in the room?'));
   check('...the request as the engine was handed it, intent and shape, as JSON', (await stage.shows('main', '\\"intent\\": \\"How many people are in the room?\\"')) && (await stage.shows('main', '\\"shape\\"')));
-  check('...what the router decided: nothing earlier asks the same, and the shape', (await stage.shows('main', 'The router · 0 earlier requests')) && stage.showsNow('main', '\\"same\\": null') && stage.showsNow('main', '\\"shape\\": \\"number\\"'));
+  check('...what Jev picked: no stored query, and the shape', (await stage.shows('main', 'Jev · picked from 0 stored queries')) && stage.showsNow('main', '\\"fingerprint\\": null') && stage.showsNow('main', '\\"shape\\": \\"number\\"'));
   check('...a draft that failed, with the engine’s own message, flagged', (await stage.shows('main', 'members.nothing')) && stage.showsNow('main', '"flag":"alert"'));
   check('...then the query that answers: the stored document, the statement it compiles to with its own limit, and the answer', (await stage.shows('main', 'The stored document')) && stage.showsNow('main', 'The statement it compiles to') && stage.showsNow('main', 'SELECT') && !stage.showsNow('main', 'LIMIT 5') && stage.showsNow('main', 'The answer') && stage.showsNow('main', '"flag":"live"'));
   check('...and how it ended: written, and stored under its name', (await stage.shows('main', 'Written in ')) && (await stage.shows('main', 'Stored under fp_')));
@@ -153,7 +153,7 @@ const main = async (): Promise<void> => {
   await pause();
   speaker.click('tools', 'ask');
   check('asked again, the stage says it was replayed, with no model', (await stage.shows('main', 'Replayed in ')) && stage.showsNow('main', 'No model ran.'));
-  check('...and the earlier request the router took it to be the same as', stage.showsNow('main', '\\"same\\": \\"How many people are in the room?\\"'));
+  check('...and the stored query Jev picked, by fingerprint and intent', stage.showsNow('main', '\\"intent\\": \\"How many people are in the room?\\"') && stage.showsNow('main', `\\"fingerprint\\": \\"${recorded.rows[0]?.fingerprint ?? '\u0000'}\\"`));
   check('...and shows what was replayed: the same document, statement and answer, and the request with its shape', (await stage.shows('main', 'The stored document')) && stage.showsNow('main', 'The statement it compiles to') && stage.showsNow('main', 'The answer') && stage.showsNow('main', '\\"shape\\"'));
 
   // ── a question past the caller's clearance ──

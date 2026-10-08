@@ -58,8 +58,8 @@ export type Trace = {
   shapeKind: string;
   // The request as the engine was handed it: intent and shape, JSON.
   request: string;
-  // What the router decided before anything was written or replayed (JSON),
-  // and the caption over it: how many earlier requests it was handed.
+  // What Jev picked before anything was written or replayed (JSON), and the
+  // caption over it: how many stored queries it picked from.
   router: string;
   routed: string;
   steps: Step[];
@@ -141,9 +141,9 @@ export type Tracer = {
   completed: (intent: string, fingerprint: string, shapeKind: string) => void;
   replayed: (intent: string, principal: string, fingerprint: string, shapeKind: string) => void;
   refused: (intent: string, reason: string) => void;
-  // The router chose: whether an earlier request asks the same, and the
+  // Jev picked: a stored query (fingerprint and intent) or none, and the
   // answer's shape. From here the request is whole, intent and shape.
-  routed: (principal: string, intent: string, decided: { same: string | null; shape: string }, earlier: number, shape: unknown) => void;
+  routed: (principal: string, intent: string, decided: { fingerprint: string | null; intent: string | null; shape: string }, stored: number, shape: unknown) => void;
   // The query that answers is known, and has answered — a new one and a
   // replayed one alike: the stored document, the statement it compiles to, the
   // rows it gave the person who asked, and the shape they came in.
@@ -237,11 +237,11 @@ export const createTracer = (): Tracer => {
       });
       settle(intent, () => false);
     },
-    routed: (principal, intent, decided, earlier, shape) => {
+    routed: (principal, intent, decided, stored, shape) => {
       const trace = latest.get(principal);
       if (trace === undefined || trace.intent !== intent) return;
       trace.router = compactJson(decided, WIDE_PANE);
-      trace.routed = `The router · ${earlier} earlier ${earlier === 1 ? 'request' : 'requests'} · it chooses, it never writes`;
+      trace.routed = `Jev · picked from ${stored} stored ${stored === 1 ? 'query' : 'queries'}`;
       trace.request = compactJson({ intent, shape }, WIDE_PANE);
       changed();
     },

@@ -162,7 +162,7 @@ const NO_TRACE = { principal: '', intent: '', shape: '', shapeKind: '', request:
 export const writerSlide: ActionDefinition = {
   id: 'slide.writer',
   title: 'Watch it write one.',
-  data: { kicker: 'Live · as the engine sees it', title: 'Watch it write one.', trace: NO_TRACE },
+  data: { kicker: 'Live', title: 'Watch it write one.', trace: NO_TRACE },
   layout: writerLayout,
   endpoints: { generation: { fn: 'room.generation', target: 'trace' } },
   lifecycle: { mount: [{ call: 'generation' }] },
