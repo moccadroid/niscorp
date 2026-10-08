@@ -724,7 +724,7 @@ const ir = await compile(config, { name: 'user-transform', version: '1.0.0' });
 // - Tables (all JSONPaths and string literals for cache priming)
 
 const result1 = execute(ir, source1); // No validation, no desugaring
-const result2 = execute(ir, source2); // 2-5x faster than evaluate()
+const result2 = execute(ir, source2); // Each op's handler already attached
 ```
 
 The IR is JSON-serializable — store it in a database, cache in Redis, send over a wire.

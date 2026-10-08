@@ -56,7 +56,7 @@ evaluateSafe(config, source, limits?) → { ok: true, data } | { ok: false, erro
 // The same, in the shape a host's transform seam takes
 prismTransform(config: unknown, source: unknown) → unknown
 
-// Compile once, execute many (2-5x faster for repeated configs)
+// Compile once, execute many: no check, no desugar, each op's handler already attached
 compile(config, options?) → Promise<CompiledIr>
 execute(ir, source, limits?) → JsonValue
 

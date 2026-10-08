@@ -116,7 +116,7 @@ type CompiledIr = {
 };
 ```
 
-`execute()` skips validation and desugaring — it primes the JSONPath cache from `tables.paths` and evaluates `core` directly. This is 2-5x faster than `evaluate()` for repeated configs.
+`execute()` skips validation and desugaring — it primes the JSONPath cache from `tables.paths` and evaluates `core` directly. How much that saves over `evaluate()` depends on the config: `pnpm bench` runs five against each other (`test/optimize.bench.ts`), from under 2x for a short map to over 50x where the constants fold.
 
 The fingerprint enables cache invalidation: store IRs by name, check the fingerprint to know if the config changed.
 
@@ -242,3 +242,5 @@ and a mapping over a thousand rows would otherwise build a thousand of them.
 9. **`$case` uses `{ branches, else }`.** Clearer than a flat array mixing `{when,then}` and `{else}` objects. Simpler Zod schema.
 
 10. **`compile()` is async.** Uses `crypto.subtle.digest` for SHA256, which is async in all runtimes. `evaluate()` stays sync because it doesn't need the fingerprint.
+
+11. **The node union is tried by key before it is walked.** zod tries a union's 76 members in order, and a plain object is the last. One `$` key and nothing else can only be that op, and no `$` key can only be a template, so that member is tried first and a valid config never walks the union. An invalid one is walked as before, from the top, so a refusal is the union's own. The union stays a union: the JSON Schema, the profiles and loom read it as one.
