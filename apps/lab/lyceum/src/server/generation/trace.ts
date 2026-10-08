@@ -37,8 +37,13 @@ export type Outcome = {
   // The document that passed (JSON), or the reason it was refused (words).
   text: string;
   lang: 'json' | '';
-  // The statement the last passing test compiled, under the caller's policy.
+  // The statement the stored document compiles to — its own limit, not a
+  // test's (a test runs a draft with a limit of five).
   sql: string;
+  // What it answered, for the person who asked: their rows, as JSON, and the
+  // caption over them ("The answer · 3 rows").
+  answer: string;
+  answered: string;
   fingerprint: string;
   // The request that replays it, as a screen sends it.
   sent: string;
@@ -65,7 +70,7 @@ export const EMPTY_TRACE: Trace = {
   shapeKind: '',
   request: '',
   steps: [],
-  outcome: { kind: 'none', label: 'Nothing asked yet.', text: '', lang: '', sql: '', fingerprint: '', sent: '' },
+  outcome: { kind: 'none', label: 'Nothing asked yet.', text: '', lang: '', sql: '', answer: '', answered: '', fingerprint: '', sent: '' },
   ms: 0,
 };
 
@@ -111,7 +116,7 @@ export const testStep = (draft: unknown, answer: { sql: string; errors: readonly
     what: 'testQuery',
     ink: failed ? 'alert' : 'live',
     draft: compactJson(draft),
-    said: failed ? `failed · ${ms} ms` : `runs · ${answer.rows} ${answer.rows === 1 ? 'row' : 'rows'} · ${ms} ms`,
+    said: failed ? `failed · ${ms} ms` : `test · limit 5 · ${answer.rows} ${answer.rows === 1 ? 'row' : 'rows'} · ${ms} ms`,
     answer: failed ? answer.errors.join('\n') : foldStatement(answer.sql),
     lang: failed ? '' : 'sql',
     ms,
@@ -130,6 +135,10 @@ export type Tracer = {
   completed: (intent: string, fingerprint: string, shapeKind: string) => void;
   replayed: (intent: string, principal: string, fingerprint: string, shapeKind: string) => void;
   refused: (intent: string, reason: string) => void;
+  // The query that answers is known, and has answered — a new one and a
+  // replayed one alike: the stored document, the statement it compiles to, the
+  // rows it gave the person who asked, and the shape they came in.
+  answered: (principal: string, intent: string, stored: { document: unknown; statement: string; rows: unknown; shape: unknown }) => void;
   latest: (principal: string) => Trace | undefined;
   onChange: (listener: () => void) => void;
 };
@@ -137,6 +146,8 @@ export type Tracer = {
 // The request and the replay are each set on a line where the pane is wide
 // enough — the writer slide gives them the width.
 const WIDE_PANE = 80;
+// How many rows of an answer the stage shows.
+const ANSWER_ROWS = 6;
 const sentFor = (fingerprint: string): string => compactJson({ fingerprint, context: {} }, WIDE_PANE);
 
 export const createTracer = (): Tracer => {
@@ -169,7 +180,7 @@ export const createTracer = (): Tracer => {
         intent,
         request: compactJson({ intent }, WIDE_PANE),
         steps: [],
-        outcome: { kind: 'writing', label: 'Writing…', text: '', lang: '', sql: '', fingerprint: '', sent: '' },
+        outcome: { kind: 'writing', label: 'Writing…', text: '', lang: '', sql: '', answer: '', answered: '', fingerprint: '', sent: '' },
       };
       since.set(trace, Date.now());
       open.set(intent, [...(open.get(intent) ?? []), trace]);
@@ -188,7 +199,7 @@ export const createTracer = (): Tracer => {
       }),
     written: (intent, dsl, sql) =>
       touch(intent, (trace) => {
-        trace.outcome = { kind: 'written', label: 'Finished with exactly the draft that passed: nothing is edited after the test.', text: compactJson(dsl), lang: 'json', sql: foldStatement(sql), fingerprint: '', sent: '' };
+        trace.outcome = { kind: 'written', label: 'Finished with exactly the draft that passed: nothing is edited after the test.', text: compactJson(dsl), lang: 'json', sql: foldStatement(sql), answer: '', answered: '', fingerprint: '', sent: '' };
       }),
     completed: (intent, fingerprint, shapeKind) => {
       touch(intent, (trace) => {
@@ -202,15 +213,28 @@ export const createTracer = (): Tracer => {
       touch(intent, (trace) => {
         if (trace.principal !== principal) return;
         trace.shapeKind = shapeKind;
-        trace.outcome = { kind: 'replayed', label: 'Asked before: the stored query, replayed. No model ran.', text: '', lang: '', sql: '', fingerprint, sent: sentFor(fingerprint) };
+        trace.outcome = { kind: 'replayed', label: 'Asked before: the stored query, replayed. No model ran.', text: '', lang: '', sql: '', answer: '', answered: '', fingerprint, sent: sentFor(fingerprint) };
       });
       settle(intent, (trace) => trace.principal !== principal);
     },
     refused: (intent, reason) => {
       touch(intent, (trace) => {
-        if (trace.outcome.kind !== 'refused') trace.outcome = { kind: 'refused', label: 'Refused', text: reason, lang: '', sql: '', fingerprint: '', sent: '' };
+        if (trace.outcome.kind !== 'refused') trace.outcome = { kind: 'refused', label: 'Refused', text: reason, lang: '', sql: '', answer: '', answered: '', fingerprint: '', sent: '' };
       });
       settle(intent, () => false);
+    },
+    answered: (principal, intent, stored) => {
+      const trace = latest.get(principal);
+      if (trace === undefined || trace.intent !== intent) return;
+      const listed = Array.isArray(stored.rows);
+      const rows: unknown[] = Array.isArray(stored.rows) ? stored.rows : [stored.rows];
+      trace.request = compactJson({ intent, shape: stored.shape }, WIDE_PANE);
+      trace.outcome.text = compactJson(stored.document);
+      trace.outcome.lang = 'json';
+      trace.outcome.sql = foldStatement(stored.statement);
+      trace.outcome.answer = compactJson(listed ? rows.slice(0, ANSWER_ROWS) : stored.rows);
+      trace.outcome.answered = !listed ? 'The answer' : `The answer · ${rows.length} ${rows.length === 1 ? 'row' : 'rows'}${rows.length > ANSWER_ROWS ? ` · the first ${ANSWER_ROWS}` : ''}`;
+      changed();
     },
     latest: (principal) => latest.get(principal),
     onChange: (listener) => {

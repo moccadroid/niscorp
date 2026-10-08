@@ -60,10 +60,10 @@ export const sqlLayout: LayoutNode = sheet(['head head', 'sql outcomes'], [1.3, 
 // that this is all of it. Both halves as the JSON they are.
 export const requestLayout: LayoutNode = sheet(['head head', 'intent shape', 'said said'], [1, 1], ['auto', 1, 'auto'], [
   head(),
-  cell('intent', [exhibit('The request · what the caller wants to know', '$.intentJson', { lang: 'json' }), text('In words. Only the one who writes the query reads them.')], { align: 'middle' }),
+  cell('intent', [exhibit('The request · what the caller wants to know', '$.intentJson', { lang: 'json' })], { align: 'middle' }),
   {
     if: shown(1),
-    then: cell('shape', [exhibit('The request · an example of the answer', '$.shapeJson', { lang: 'json' }), text('"" means a string, 0 a number. A list of one means a list.')], { ink: 'highlight', align: 'middle' }),
+    then: cell('shape', [exhibit('The request · an example of the answer', '$.shapeJson', { lang: 'json' })], { ink: 'highlight', align: 'middle' }),
     else: cell('shape', [], { mark: 'hatch' }),
   },
   { if: shown(2), then: cell('said', [headline('name', 'The whole request. No query written. No endpoint written.')], { ink: 'signal' }) },
@@ -77,7 +77,7 @@ export const documentLayout: LayoutNode = sheet(['head head', 'doc statement'], 
   cell('doc', [exhibit('$.file', '$.code', { lang: 'json', tone: 'ink' })], { align: 'middle' }),
   cell(
     'statement',
-    [exhibit('The statement the engine compiles for it, now', '$.compiled.sql', { lang: 'sql', marked: '$.compiled.marked' }), text('The join is the schema’s: the engine read the foreign key when it started. Nobody wrote it.')],
+    [exhibit('The statement it compiles to · the join is the schema’s', '$.compiled.sql', { lang: 'sql', marked: '$.compiled.marked' })],
     { align: 'middle' },
   ),
 ]);
@@ -87,15 +87,15 @@ export const documentLayout: LayoutNode = sheet(['head head', 'doc statement'], 
 // Three documents of the same kind, so three panes of the same kind.
 export const shownLayout: LayoutNode = sheet(['head head head', 'tables grammar caller'], [1, 1, 1], ['auto', 1], [
   head(),
-  cell('tables', [exhibit('1 · Tables this caller may read', '$.tables'), text('A table they may not read is not in the schema. Asking about it gets “not found”.')]),
+  cell('tables', [exhibit('1 · Tables the caller may read', '$.tables')]),
   {
     if: shown(1),
-    then: cell('grammar', [exhibit('2 · The grammar’s fields', '$.grammar.text'), text('The instructions are on the fields — {{$.grammar.rules}} of them. Nothing else explains the grammar to the model.')]),
+    then: cell('grammar', [exhibit('2 · Grammar fields · {{$.grammar.rules}} rules', '$.grammar.text')]),
     else: cell('grammar', [], { mark: 'hatch' }),
   },
   {
     if: shown(2),
-    then: cell('caller', [exhibit('3 · The caller’s columns', '$.caller', { lang: 'json' }), text('A column, and the name its value goes by. Never the value.')], { ink: 'highlight' }),
+    then: cell('caller', [exhibit('3 · Caller’s columns · no value', '$.caller', { lang: 'json' })], { ink: 'highlight' }),
     else: cell('caller', [], { mark: 'hatch' }),
   },
 ]);
@@ -126,11 +126,17 @@ export const writerLayout: LayoutNode = sheet(['head request', 'step step', 'out
     else: cell('request', [muted('Asked on the controller. The room watches it answered here.')], { mark: 'hatch', align: 'middle' }),
   },
   {
-    if: stepped,
-    then: cell('step', [pair([exhibit(latest('label'), latest('draft'), { lang: 'json' }), exhibit(latest('said'), latest('answer'), { lang: latest('lang'), flag: latest('ink') })])]),
+    // Answered — written just now, or replayed: the same three documents.
+    if: '$.trace.outcome.answered',
+    then: cell('step', [
+      pair([
+        exhibit('The stored document', '$.trace.outcome.text', { lang: 'json' }),
+        { component: 'Stack', children: [exhibit('The statement it compiles to', '$.trace.outcome.sql', { lang: 'sql' }), exhibit('$.trace.outcome.answered', '$.trace.outcome.answer', { lang: 'json', flag: 'live' })] },
+      ]),
+    ]),
     else: {
-      if: replayed,
-      then: cell('step', [muted('No model ran: a question asked before replays the query it stored.')], { align: 'middle' }),
+      if: stepped,
+      then: cell('step', [pair([exhibit(latest('label'), latest('draft'), { lang: 'json' }), exhibit(latest('said'), latest('answer'), { lang: latest('lang'), flag: latest('ink') })])]),
       else: cell('step', [muted('{{$.trace.outcome.label}}')], { mark: 'hatch', align: 'middle' }),
     },
   },
@@ -201,7 +207,7 @@ export const valueLayout: LayoutNode = sheet(['head head', 'sent statement', 'ro
   { if: '$.tool.searched.sent', then: cell('statement', [exhibit('The statement — the value bound as $1, never in its text', '$.tool.searched.sql', { lang: 'sql' })]), else: cell('statement', [], { mark: 'hatch' }) },
   {
     if: '$.tool.searched.missing',
-    then: cell('rows', [headline('name', 'Empty. Missing: {{$.tool.searched.missing}}'), exhibit('The contract the request missed', '$.tool.searched.contract', { lang: 'json' }), text('An empty list and the key it missed. A caller learns the contract from the first attempt.')], { ink: 'highlight' }),
+    then: cell('rows', [headline('name', 'Empty. Missing: {{$.tool.searched.missing}}'), exhibit('The contract the request missed', '$.tool.searched.contract', { lang: 'json' })], { ink: 'highlight' }),
     else: {
       if: '$.tool.searched.sent',
       then: cell('rows', [{ component: 'Rows', props: { rows: '$.tool.searched.rows', rowKey: 'name', empty: 'Nobody matches.', columns: [{ label: 'Name', key: 'name', w: 1 }] } }], { pad: 'none' }),
@@ -234,5 +240,5 @@ export const lockedLayout: LayoutNode = sheet(['head head', 'counts counts', 'lo
   cell('locked', [exhibit('POST /api/vex — a request with intent and shape', '$.request', { lang: 'json' })], { ink: 'ink', align: 'middle' }),
   // The endpoint's answer is a sentence, so it is set as one, in the refusal's ink.
   { if: '$.locked.message', then: cell('answer', [label('The answer'), text('{{$.locked.message}}')], { ink: 'alert' }), else: cell('answer', [label('Asking…')]) },
-  cell('ops', [exhibit('Writes: five operations, never generated', '$.ops'), text('A model may fill one in and hand it to a person as a form. The person presses the button.')], { ink: 'highlight', align: 'middle' }),
+  cell('ops', [exhibit('Writes: five operations, never generated', '$.ops')], { ink: 'highlight', align: 'middle' }),
 ]);

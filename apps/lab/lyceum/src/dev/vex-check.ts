@@ -68,7 +68,7 @@ const main = async (): Promise<void> => {
   await go('slide.shown');
   check('the shown slide lists the tables a member may read', (await stage.shows('main', 'members\\nqueries\\nquestions')) || stage.showsNow('main', 'members\\n'));
   speaker.click('tools', 'more');
-  check('…then the grammar’s fields, and how many instructions they carry', (await stage.shows('main', '2 · The grammar')) && stage.showsNow('main', 'from\\nfields') && stage.showsNow('main', ' of them. Nothing else') && !stage.showsNow('main', '— 0 of them'));
+  check('…then the grammar’s fields, and how many instructions they carry', (await stage.shows('main', '2 · Grammar fields')) && stage.showsNow('main', 'from\\nfields') && stage.showsNow('main', ' rules') && !stage.showsNow('main', '· 0 rules'));
   speaker.click('tools', 'more');
   check('…then the caller’s columns, each with the name its value goes by, no value', (await stage.shows('main', 'members.member_id\\n')) && stage.showsNow('main', '{ \\"$scope\\": \\"userId\\" }') && !stage.showsNow('main', '"userId": "'));
   await go('slide.tools');
@@ -112,7 +112,7 @@ const main = async (): Promise<void> => {
   check('the stage shows the question', await stage.shows('main', 'How many people are in the room?'));
   check('...the request as the engine was handed it, intent and shape, as JSON', (await stage.shows('main', '\\"intent\\": \\"How many people are in the room?\\"')) && (await stage.shows('main', '\\"shape\\"')));
   check('...a draft that failed, with the engine’s own message, flagged', (await stage.shows('main', 'members.nothing')) && stage.showsNow('main', '"flag":"alert"'));
-  check('...a draft that ran, with the statement it compiled, flagged', (await stage.shows('main', 'runs · ')) && stage.showsNow('main', 'SELECT') && stage.showsNow('main', '"flag":"live"'));
+  check('...then the query that answers: the stored document, the statement it compiles to with its own limit, and the answer', (await stage.shows('main', 'The stored document')) && stage.showsNow('main', 'The statement it compiles to') && stage.showsNow('main', 'SELECT') && !stage.showsNow('main', 'LIMIT 5') && stage.showsNow('main', 'The answer') && stage.showsNow('main', '"flag":"live"'));
   check('...and how it ended: written, and stored under its name', (await stage.shows('main', 'written · ')) && (await stage.shows('main', 'Stored under fp_')));
   check('the answer opens over the controller as the query it is, written just now', (await speaker.shows('overlay', '"value":"Query"')) && (await speaker.shows('overlay', 'a model wrote this one')));
   const recorded = await runtime.db.query<{ how: string; fingerprint: string | null; member_id: string }>('SELECT how, fingerprint, member_id FROM queries ORDER BY run_at');
@@ -152,6 +152,7 @@ const main = async (): Promise<void> => {
   await pause();
   speaker.click('tools', 'ask');
   check('asked again, the stage says it was replayed, with no model', (await stage.shows('main', 'replayed · ')) && stage.showsNow('main', 'No model ran.'));
+  check('...and shows what was replayed: the same document, statement and answer, and the request with its shape', (await stage.shows('main', 'The stored document')) && stage.showsNow('main', 'The statement it compiles to') && stage.showsNow('main', 'The answer') && stage.showsNow('main', '\\"shape\\"'));
 
   // ── a question past the caller's clearance ──
   speaker.click('overlay', 'close');

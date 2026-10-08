@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { FunctionSession } from '@niscorp/moss';
 import { queryRecord, queriesKnown } from '@lyceum/app/vex/query.entries';
+import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
 import { queryEngineFor } from '../querying';
 import type { Querier, Known } from '../querying';
 import { vexOver } from '../vex-over';
@@ -59,23 +60,33 @@ export const routeQuery = async (session: FunctionSession, querier: Querier, sta
   const known: Known[] = KnownSchema.parse(await vex(queriesKnown.fingerprint));
   const route = await querier.route(request, known);
 
+  // What the stage shows of the query that answered — a new one and a replayed
+  // one alike: the document as it is stored, the statement that document
+  // compiles to (its own limit, not a test's), and the caller's rows.
+  const engine = await queryEngineFor(session.runtime, querier);
+  const caller = { scope: { userId: session.principal }, scopePolicy: session.policy };
+  const show = async (fingerprint: string, kind: string, rows: unknown): Promise<void> => {
+    const stored = await session.runtime.cache?.get(fingerprint);
+    if (stored?.kind !== 'ok') return;
+    querier.trace.answered(principal, request, { document: stored.dsl, statement: engine.compile(stored.dsl).sql, rows, shape: QUERY_SHAPES.find((entry) => entry.kind === kind)?.shape ?? null });
+  };
+
   if ('replay' in route) {
     await record(route.replay.shape, 'replayed', route.replay.fingerprint);
     querier.trace.replayed(request, principal, route.replay.fingerprint, route.replay.shape);
+    const replayed = await engine.execute({ fingerprint: route.replay.fingerprint, context: {} }, caller);
+    await show(route.replay.fingerprint, route.replay.shape, replayed.result);
     return { fingerprint: route.replay.fingerprint, kind: route.replay.shape, how: 'replayed' };
   }
 
   const shape = route.generate;
   try {
-    const engine = await queryEngineFor(session.runtime, querier);
-    const answered = await engine.execute(
-      { intent: request, shape: shape.shape, context: {} },
-      { scope: { userId: session.principal }, scopePolicy: session.policy },
-    );
+    const answered = await engine.execute({ intent: request, shape: shape.shape, context: {} }, caller);
     const fingerprint = answered.meta.cache.fingerprint;
     if (fingerprint === undefined) throw new Error('the query was answered but not stored');
     await record(shape.kind, 'generated', fingerprint);
     querier.trace.completed(request, fingerprint, shape.kind);
+    await show(fingerprint, shape.kind, answered.result);
     return { fingerprint, kind: shape.kind, how: 'generated' };
   } catch (error) {
     // Refused — by the model (it cannot be answered from what this person
