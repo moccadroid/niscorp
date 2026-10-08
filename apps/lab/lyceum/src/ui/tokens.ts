@@ -390,22 +390,25 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(14px, min
    run of words has a measure, so nothing grows with its neighbour and a
    headline never takes the sheet. Code lives in an EXHIBIT — a captioned pane,
    set in colour — and never in a cell beside prose. */
-.${ROOT_CLASS} .sheet[data-scale="page"] .cell { padding: 1.2rem 1.5rem; gap: .8rem; }
-.${ROOT_CLASS} .sheet[data-scale="page"] .label { font-size: .78rem; }
-.${ROOT_CLASS} .sheet[data-scale="page"] .headline { letter-spacing: -.015em; }
+/* the dense scale is the reading scale drawn a size down: everything on the
+   sheet together, so it keeps its proportions and holds a fifth more */
+.${ROOT_CLASS} .sheet[data-scale="dense"] { zoom: .82; }
+.${ROOT_CLASS} .sheet[data-scale] .cell { padding: 1.2rem 1.5rem; gap: .8rem; }
+.${ROOT_CLASS} .sheet[data-scale] .label { font-size: .78rem; }
+.${ROOT_CLASS} .sheet[data-scale] .headline { letter-spacing: -.015em; }
 /* a slide's claim is a sentence, set at nisc.dev's heading size, not its
    hero's; it runs the width of its cell — two lines at most on a 16:9 screen */
-.${ROOT_CLASS} .sheet[data-scale="page"] .headline[data-level="display"] { font-size: 2.4rem; line-height: .98; }
-.${ROOT_CLASS} .sheet[data-scale="page"] .headline[data-level="title"] { font-size: 1.8rem; line-height: 1.02; max-width: 20em; }
-.${ROOT_CLASS} .sheet[data-scale="page"] .headline[data-level="name"] { font-size: 1.25rem; line-height: 1.15; }
-.${ROOT_CLASS} .sheet[data-scale="page"] .text { font-size: 1.1rem; line-height: 1.4; max-width: 32em; }
-.${ROOT_CLASS} .sheet[data-scale="page"] .text[data-size="lede"] { font-size: 1.3rem; line-height: 1.4; max-width: 29em; }
-.${ROOT_CLASS} .sheet[data-scale="page"] .text[data-size="small"] { font-size: .95rem; line-height: 1.4; }
-.${ROOT_CLASS} .sheet[data-scale="page"] .text[data-size="fine"] { font: 400 .78rem/1.4 var(--mono); max-width: none; }
-.${ROOT_CLASS} .sheet[data-scale="page"] .figure > .value { font-size: 3rem; }
-.${ROOT_CLASS} .sheet[data-scale="page"] .code { font-size: .85rem; }
-.${ROOT_CLASS} .sheet[data-scale="page"] .rows > div > span { font-size: 1rem; }
-.${ROOT_CLASS} .sheet[data-scale="page"] .rows[data-head] > div:first-child > span { font-size: .72rem; }
+.${ROOT_CLASS} .sheet[data-scale] .headline[data-level="display"] { font-size: 2.4rem; line-height: .98; }
+.${ROOT_CLASS} .sheet[data-scale] .headline[data-level="title"] { font-size: 1.8rem; line-height: 1.02; max-width: 20em; }
+.${ROOT_CLASS} .sheet[data-scale] .headline[data-level="name"] { font-size: 1.25rem; line-height: 1.15; }
+.${ROOT_CLASS} .sheet[data-scale] .text { font-size: 1.1rem; line-height: 1.4; max-width: 32em; }
+.${ROOT_CLASS} .sheet[data-scale] .text[data-size="lede"] { font-size: 1.3rem; line-height: 1.4; max-width: 29em; }
+.${ROOT_CLASS} .sheet[data-scale] .text[data-size="small"] { font-size: .95rem; line-height: 1.4; }
+.${ROOT_CLASS} .sheet[data-scale] .text[data-size="fine"] { font: 400 .78rem/1.4 var(--mono); max-width: none; }
+.${ROOT_CLASS} .sheet[data-scale] .figure > .value { font-size: 3rem; }
+.${ROOT_CLASS} .sheet[data-scale] .code { font-size: .85rem; }
+.${ROOT_CLASS} .sheet[data-scale] .rows > div > span { font-size: 1rem; }
+.${ROOT_CLASS} .sheet[data-scale] .rows[data-head] > div:first-child > span { font-size: .72rem; }
 /* a stack or a pair inside a cell takes what the cell leaves it */
 .${ROOT_CLASS} .cell > .stack, .${ROOT_CLASS} .cell > .pair { flex: 1 1 auto; min-height: 0; }
 

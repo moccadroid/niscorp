@@ -15,6 +15,12 @@ const sheet = (areas: string[], cols: number[], rows: (number | 'auto')[], child
   props: { size: 'fill', scale: 'page', areas, cols, rows },
   children,
 });
+// The densest slide: the same grammar, a size down.
+const dense = (areas: string[], cols: number[], rows: (number | 'auto')[], children: LayoutNode[]): LayoutNode => ({
+  component: 'Sheet',
+  props: { size: 'fill', scale: 'dense', areas, cols, rows },
+  children,
+});
 const cell = (area: string, children: LayoutNode[], props: Record<string, unknown> = {}): LayoutNode => ({
   component: 'Cell',
   props: { area, ...props },
@@ -115,17 +121,19 @@ export const toolsLayout: LayoutNode = sheet(['head head', 'tools said'], [1, 1.
 //     engine, the answer, and under Jev the one detour, walked only when
 //     nothing stored matched and a query had to be written — what was walked
 //     is lit, what did not happen is not;
-//   · the one document there is to read, and beside it the ANSWER, as rows,
+//   · the one document there is to read, under it the agent's calls, a line
+//     each, newest first, and beside them the ANSWER, as rows,
 //     with how it ended under them.
 // While a new question is being typed over an old run, the picture is unlit
 // and the old shape, document and answer are gone: they were another
 // question's.
+const tight = (children: LayoutNode[]): LayoutNode => ({ component: 'Stack', props: { gap: 'tight' }, children });
 const typed = { $trim: { $ref: '$.tool.intent' } };
 const typing = { $prism: { $and: [{ $neq: [typed, { $const: '' }] }, { $neq: [typed, { $ref: '$.trace.intent' }] }] } };
 const whenAsked = (then: LayoutNode, otherwise: LayoutNode): LayoutNode => ({ if: typing, then: otherwise, else: then });
 const picture = (key: 'steps' | 'detour'): unknown => ({ $if: typing, $then: `$.trace.idle.${key}`, $else: `$.trace.pipeline.${key}` });
 
-export const writerLayout: LayoutNode = sheet(['intent shape', 'picture picture', 'document answer'], [1.5, 1], ['auto', 'auto', 1], [
+export const writerLayout: LayoutNode = dense(['intent shape', 'picture picture', 'document answer'], [1.5, 1], ['auto', 'auto', 1], [
   {
     if: '$.tool.intent',
     then: cell('intent', [label('Intent'), headline('title', '{{$.tool.intent}}')]),
@@ -134,7 +142,7 @@ export const writerLayout: LayoutNode = sheet(['intent shape', 'picture picture'
   whenAsked({ if: '$.trace.shape.text', then: cell('shape', [exhibit('$.trace.shape.caption', '$.trace.shape.text', { lang: 'json' })], { ink: 'highlight' }), else: cell('shape', [], { mark: 'hatch' }) }, cell('shape', [], { mark: 'hatch' })),
   cell('picture', [{ component: 'Pipeline', props: { steps: picture('steps'), detour: picture('detour'), legend: '$.trace.pipeline.legend' } }]),
   whenAsked(
-    { if: '$.trace.document.text', then: cell('document', [exhibit('$.trace.document.caption', '$.trace.document.text', { lang: '$.trace.document.lang', flag: '$.trace.document.flag' })]), else: cell('document', [], { mark: 'hatch' }) },
+    { if: '$.trace.document.text', then: cell('document', [tight([exhibit('$.trace.document.caption', '$.trace.document.text', { lang: '$.trace.document.lang', flag: '$.trace.document.flag' }), { if: '$.trace.log.text', then: exhibit('$.trace.log.caption', '$.trace.log.text', { marked: '$.trace.log.marked' }) }])]), else: cell('document', [], { mark: 'hatch' }) },
     cell('document', [], { mark: 'hatch' }),
   ),
   whenAsked(

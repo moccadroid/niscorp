@@ -31,7 +31,9 @@ export const LOOKS = ['dom', 'react', 'vue'] as const;
 // rather than glanced at is set in — a sheet at the page scale, text in sizes,
 // a document in an exhibit, two things side by side, things one under another,
 // a row of figures.
-export const SCALES = ['page'] as const;
+// page: the reading scale; dense: the same, a size down — a slide with a
+// picture, two documents and an answer on it.
+export const SCALES = ['page', 'dense'] as const;
 export const SIZES = ['body', 'lede', 'small', 'fine'] as const;
 export const PANES = ['paper', 'ink'] as const;
 export const SPLITS = ['even', 'narrow-wide', 'wide-narrow'] as const;

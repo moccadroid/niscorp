@@ -110,5 +110,10 @@ export const LYCEUM_KIT: Sequence = {
       description: 'Pipeline: a step’s note — set apart in its corner, how long it took',
       steps: [],
     },
+    {
+      // A MARKER: a value added to a closed set.
+      description: 'Sheet: scale dense — the reading scale a size down, for a slide that holds more',
+      steps: [],
+    },
   ],
 };

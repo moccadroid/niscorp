@@ -78,6 +78,11 @@ export type Trace = {
   // engine's message about a draft it refused, or the stored query a replay
   // ran. Empty when there is none to show.
   document: { caption: string; text: string; lang: 'json' | ''; flag: 'live' | 'alert' | 'highlight' };
+  // Every call the query agent made, one line each, in order — the whole
+  // run, to be read back — and what the slide shows of it: the newest few,
+  // newest first, the ones that ran marked.
+  calls: string[];
+  log: { caption: string; text: string; marked: number[] };
   outcome: Outcome;
   ms: number;
 };
@@ -103,6 +108,10 @@ const LEGEND: Pipeline['legend'] = [
   { label: 'No model', ink: 'highlight' },
 ];
 const NO_PIPELINE: Pipeline = { steps: [], detour: { from: 0, to: 1, label: '', enter: '', leave: '', direct: '', off: true, steps: [] }, legend: LEGEND };
+const NO_LOG: Trace['log'] = { caption: '', text: '', marked: [] };
+// How many of the agent's calls the slide lists, and how long a line of it is.
+const LOG_SHOWN = 8;
+const LOG_LINE = 44;
 const NO_DOCUMENT: Trace['document'] = { caption: '', text: '', lang: '', flag: 'highlight' };
 const NO_OUTCOME: Outcome = { kind: 'none', title: 'Nothing asked yet.', said: '', fingerprint: '', sent: '' };
 
@@ -161,7 +170,8 @@ const drawn = (trace: Trace, known: Known): void => {
   const answered = known.answered !== '';
   const tests = known.calls.filter((call) => call.what === 'testQuery');
   const refusals = tests.filter((call) => call.failed).length;
-  const looks = known.calls.length - tests.length;
+  // The other tools it called, by name: getSchema ×2.
+  const others = [...new Set(known.calls.filter((call) => call.what !== 'testQuery').map((call) => call.what))].map((tool) => `${tool} ×${known.calls.filter((call) => call.what === tool).length}`);
   // The agent gave up, or the engine refused what it wrote.
   const agentRefused = refused && writing;
   const agentSaid =
@@ -169,7 +179,7 @@ const drawn = (trace: Trace, known: Known): void => {
       ? agentRefused
         ? 'cannotSatisfy'
         : 'working…'
-      : [`testQuery ×${tests.length}`, ...(refusals === 0 ? [] : [`${refusals} refused`]), ...(looks === 0 ? [] : [counted(looks, 'look', 'looks')])].join(' · ');
+      : [`testQuery ×${tests.length}`, ...(refusals === 0 ? [] : [`${refusals} refused`]), ...others].join(' · ');
 
   trace.pipeline = {
     steps: [
@@ -203,17 +213,28 @@ const drawn = (trace: Trace, known: Known): void => {
 
   trace.rows = Array.isArray(known.rows) ? known.rows.slice(0, ANSWER_ROWS) : (known.rows ?? []);
 
+  // The run, a line a call: its number, the tool, and what came back — the
+  // engine's own first line for a draft it refused.
+  const lines = known.calls.map((call, index) => {
+    const said = call.said.split('\n')[0] ?? '';
+    const result = call.what !== 'testQuery' ? call.how : call.failed ? `refused · ${said}` : call.how;
+    return `#${String(index + 1).padEnd(3)} ${call.what.padEnd(18)} ${result.length > LOG_LINE ? `${result.slice(0, LOG_LINE)}…` : result}`;
+  });
+  const newest = lines.map((line, index) => ({ line, ran: known.calls[index]?.what === 'testQuery' && known.calls[index]?.failed === false })).slice(-LOG_SHOWN).reverse();
+  trace.calls = lines;
+  trace.log = writing && lines.length > 0 ? { caption: `Query agent · ${counted(lines.length, 'call', 'calls')}`, text: newest.map((each) => each.line).join('\n'), marked: newest.flatMap((each, index) => (each.ran ? [index + 1] : [])) } : NO_LOG;
+
   // The one document: what a replay ran; else the newest draft, or the
   // engine's message about it.
-  const newest = tests.at(-1);
+  const drafted = tests.at(-1);
   trace.document =
     replayed && known.stored !== undefined
       ? { caption: `Stored query · ${trace.outcome.fingerprint}`, text: compactJson(known.stored, DOCUMENT_LINE), lang: 'json', flag: 'highlight' }
-      : newest === undefined
+      : drafted === undefined
         ? NO_DOCUMENT
-        : newest.failed
-          ? { caption: `Query agent · testQuery #${tests.length} · refused`, text: newest.said, lang: '', flag: 'alert' }
-          : { caption: `Query agent · testQuery #${tests.length} · ${newest.how}`, text: compactJson(newest.sent, DOCUMENT_LINE), lang: 'json', flag: 'live' };
+        : drafted.failed
+          ? { caption: `Query agent · testQuery #${tests.length} · refused`, text: drafted.said, lang: '', flag: 'alert' }
+          : { caption: `Query agent · testQuery #${tests.length} · ${drafted.how}`, text: compactJson(drafted.sent, DOCUMENT_LINE), lang: 'json', flag: 'live' };
 
   // Which models ran: Jev always; the query agent when a query was written;
   // Prism's agent when it wrote the mapping.
@@ -227,7 +248,7 @@ const drawn = (trace: Trace, known: Known): void => {
 const nothingKnown = (): Known => ({ rows: undefined, jev: undefined, agentMs: undefined, engineMs: undefined, agent: false, calls: [], mapping: undefined, stored: undefined, answered: '', refusal: '' });
 
 export const EMPTY_TRACE: Trace = (() => {
-  const trace: Trace = { principal: '', intent: '', shapeKind: '', pipeline: NO_PIPELINE, idle: NO_PIPELINE, shape: { caption: '', text: '' }, rows: [], document: NO_DOCUMENT, outcome: { ...NO_OUTCOME }, ms: 0 };
+  const trace: Trace = { principal: '', intent: '', shapeKind: '', pipeline: NO_PIPELINE, idle: NO_PIPELINE, shape: { caption: '', text: '' }, rows: [], document: NO_DOCUMENT, calls: [], log: NO_LOG, outcome: { ...NO_OUTCOME }, ms: 0 };
   drawn(trace, nothingKnown());
   trace.idle = trace.pipeline;
   return trace;
