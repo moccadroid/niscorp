@@ -28,7 +28,7 @@ const BootModuleSchema = z.object({ boot: z.custom<(db: PGlite, options: { publi
 const RuntimeModuleSchema = z.object({ openDevDatabase: z.custom<() => PGlite>((value) => typeof value === 'function') });
 const LoginModuleSchema = z.object({ mountLogin: z.custom<typeof mountLoginType>((value) => typeof value === 'function') });
 // The slide on screen, as deck/current answers it: where it is, and how many.
-const DeckSchema = z.object({ result: z.object({ position: z.number(), count: z.number() }) }).transform((body) => body.result);
+const DeckSchema = z.object({ result: z.object({ talk_id: z.string(), position: z.number(), count: z.number() }) }).transform((body) => body.result);
 
 type Running = { listener: ReturnType<typeof getRequestListener>; booted: Booted };
 
@@ -190,7 +190,8 @@ const appServer = (): Plugin => ({
             (await booted.server.request('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify({ fingerprint, context }) })).json();
           const deck = DeckSchema.parse(await vex('deck/current', {}));
           const position = Math.max(0, Math.min(deck.count - 1, deck.position + (way === 'next' ? 1 : -1)));
-          await vex('deck/go', { deck: 'talk', position });
+          // The talk that is on: a position is a place in it (vex/deck.entries.ts).
+          await vex('deck/go', { deck: 'talk', talk: deck.talk_id, position });
           res.statusCode = 204;
           res.end();
         })
