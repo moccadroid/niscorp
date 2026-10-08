@@ -25,7 +25,7 @@ const text = (words: string): LayoutNode => ({ component: 'Text', children: word
 const muted = (words: string): LayoutNode => ({ component: 'Text', props: { tone: 'muted' }, children: words });
 const headline = (level: 'display' | 'title' | 'name', words: string): LayoutNode => ({ component: 'Headline', props: { level }, children: words });
 const exhibit = (caption: unknown, textAt: unknown, props: Record<string, unknown> = {}): LayoutNode => ({ component: 'Exhibit', props: { label: caption, text: textAt, ...props } });
-const pair = (children: LayoutNode[]): LayoutNode => ({ component: 'Pair', children });
+const pair = (children: LayoutNode[], split?: 'wide-narrow'): LayoutNode => ({ component: 'Pair', ...(split === undefined ? {} : { props: { split } }), children });
 // The kicker and the claim, together across the top of every slide.
 const head = (): LayoutNode => cell('head', [label('{{$.kicker}}'), headline('display', '{{$.title}}')]);
 // A slide shown in steps: the deck row's step (vex/deck.entries.ts) says how far.
@@ -122,7 +122,9 @@ export const writerLayout: LayoutNode = sheet(['head request', 'step step', 'out
   head(),
   {
     if: '$.trace.request',
-    then: cell('request', [exhibit('The request, as the engine was handed it', '$.trace.request', { lang: 'json' })], { align: 'middle' }),
+    // The request; then, once the router has chosen, what it chose — which
+    // earlier request this one is the same as, and the answer's shape.
+    then: cell('request', [exhibit('The request', '$.trace.request', { lang: 'json' }), { if: '$.trace.router', then: exhibit('$.trace.routed', '$.trace.router', { lang: 'json', flag: 'highlight' }) }], { align: 'middle' }),
     else: cell('request', [muted('Asked on the controller. The room watches it answered here.')], { mark: 'hatch', align: 'middle' }),
   },
   {
@@ -132,11 +134,11 @@ export const writerLayout: LayoutNode = sheet(['head request', 'step step', 'out
       pair([
         exhibit('The stored document', '$.trace.outcome.text', { lang: 'json' }),
         { component: 'Stack', children: [exhibit('The statement it compiles to', '$.trace.outcome.sql', { lang: 'sql' }), exhibit('$.trace.outcome.answered', '$.trace.outcome.answer', { lang: 'json', flag: 'live' })] },
-      ]),
+      ], 'wide-narrow'),
     ]),
     else: {
       if: stepped,
-      then: cell('step', [pair([exhibit(latest('label'), latest('draft'), { lang: 'json' }), exhibit(latest('said'), latest('answer'), { lang: latest('lang'), flag: latest('ink') })])]),
+      then: cell('step', [pair([exhibit(latest('label'), latest('draft'), { lang: 'json' }), exhibit(latest('said'), latest('answer'), { lang: latest('lang'), flag: latest('ink') })], 'wide-narrow')]),
       else: cell('step', [muted('{{$.trace.outcome.label}}')], { mark: 'hatch', align: 'middle' }),
     },
   },
@@ -144,8 +146,8 @@ export const writerLayout: LayoutNode = sheet(['head request', 'step step', 'out
     if: '$.trace.outcome.fingerprint',
     then: {
       if: replayed,
-      then: cell('out', [ended(), headline('name', 'Asked before. Stored under {{$.trace.outcome.fingerprint}}. Replayed. No model ran.')], { ink: 'signal' }),
-      else: cell('out', [ended(), headline('name', 'Stored under {{$.trace.outcome.fingerprint}}. Replayed from now on. No model.')], { ink: 'signal' }),
+      then: cell('out', [headline('name', 'Replayed in {{$.trace.ms}} ms: {{$.trace.outcome.fingerprint}}. No model ran.')], { ink: 'signal' }),
+      else: cell('out', [headline('name', 'Written in {{$.trace.ms}} ms. Stored under {{$.trace.outcome.fingerprint}}. Replayed from now on.')], { ink: 'signal' }),
     },
     else: {
       if: { $eq: ['$.trace.outcome.kind', 'refused'] },

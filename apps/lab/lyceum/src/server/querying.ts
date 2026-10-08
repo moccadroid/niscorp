@@ -38,7 +38,12 @@ import type { QueryShape } from '@lyceum/app/vex/query.shapes';
 // Unset, it is `live` when there is a Groq key and `fake` when there is not.
 
 export type Known = { request: string; fingerprint: string; shape: string };
-export type Route = { replay: Known } | { generate: QueryShape };
+// What the router decided, as it decided it: the earlier request it took this
+// one to be the same as (its words, or none), and the shape it picked. The
+// route follows from the two — a replay only when the earlier one's stored
+// shape is the shape picked.
+export type Decided = { same: string | null; shape: string };
+export type Route = ({ replay: Known } | { generate: QueryShape }) & { decided: Decided };
 
 export type Querier = {
   kind: 'live' | 'fake';
@@ -99,7 +104,8 @@ const liveQuerier = (env: Record<string, string | undefined>, tracer: Tracer): Q
       // Archive's — but it wants one number, not a count per group.
       const match = byKey.get(pick('same'));
       const wanted = shapeOf(pick('shape'));
-      return match !== undefined && match.shape === wanted.kind ? { replay: match } : { generate: wanted };
+      const decided: Decided = { same: match?.request ?? null, shape: wanted.kind };
+      return match !== undefined && match.shape === wanted.kind ? { replay: match, decided } : { generate: wanted, decided };
     },
     generateDsl: watchedQueryDsl({ llm, dslSchema, tracer }),
     mapToShape: createShapeMapper(llm),
@@ -156,7 +162,8 @@ const fakeQuerier = (tracer: Tracer): Querier => ({
   trace: tracer,
   route: async (request, known) => {
     const earlier = known.find((entry) => normalise(entry.request) === normalise(request));
-    return earlier !== undefined ? { replay: earlier } : { generate: shapeOf(fakeKind(request)) };
+    const wanted = shapeOf(fakeKind(request));
+    return earlier !== undefined ? { replay: earlier, decided: { same: earlier.request, shape: earlier.shape } } : { generate: wanted, decided: { same: null, shape: wanted.kind } };
   },
   // No model: a wrong draft first, then the one the request gets — each tested
   // through the engine, so the trace shows what a real run shows.

@@ -111,9 +111,10 @@ const main = async (): Promise<void> => {
   // model's pace between drafts); the controller's answer is read after.
   check('the stage shows the question', await stage.shows('main', 'How many people are in the room?'));
   check('...the request as the engine was handed it, intent and shape, as JSON', (await stage.shows('main', '\\"intent\\": \\"How many people are in the room?\\"')) && (await stage.shows('main', '\\"shape\\"')));
+  check('...what the router decided: nothing earlier asks the same, and the shape', (await stage.shows('main', 'The router · 0 earlier requests')) && stage.showsNow('main', '\\"same\\": null') && stage.showsNow('main', '\\"shape\\": \\"number\\"'));
   check('...a draft that failed, with the engine’s own message, flagged', (await stage.shows('main', 'members.nothing')) && stage.showsNow('main', '"flag":"alert"'));
   check('...then the query that answers: the stored document, the statement it compiles to with its own limit, and the answer', (await stage.shows('main', 'The stored document')) && stage.showsNow('main', 'The statement it compiles to') && stage.showsNow('main', 'SELECT') && !stage.showsNow('main', 'LIMIT 5') && stage.showsNow('main', 'The answer') && stage.showsNow('main', '"flag":"live"'));
-  check('...and how it ended: written, and stored under its name', (await stage.shows('main', 'written · ')) && (await stage.shows('main', 'Stored under fp_')));
+  check('...and how it ended: written, and stored under its name', (await stage.shows('main', 'Written in ')) && (await stage.shows('main', 'Stored under fp_')));
   check('the answer opens over the controller as the query it is, written just now', (await speaker.shows('overlay', '"value":"Query"')) && (await speaker.shows('overlay', 'a model wrote this one')));
   const recorded = await runtime.db.query<{ how: string; fingerprint: string | null; member_id: string }>('SELECT how, fingerprint, member_id FROM queries ORDER BY run_at');
   check('the question is recorded as the speaker’s, generated, with a fingerprint', recorded.rows[0]?.how === 'generated' && (recorded.rows[0]?.fingerprint ?? '') !== '' && recorded.rows[0]?.member_id === 'speaker');
@@ -137,7 +138,7 @@ const main = async (): Promise<void> => {
   check('the same question from a phone opens the same query, replayed', (await phone.shows('overlay', '"value":"Query"')) && (await phone.shows('overlay', 'Replayed:')));
   const again = await runtime.db.query<{ how: string; fingerprint: string | null; member_id: string }>('SELECT how, fingerprint, member_id FROM queries ORDER BY run_at');
   check('...recorded as theirs, replayed, by the same fingerprint', again.rows[1]?.how === 'replayed' && again.rows[1]?.fingerprint === recorded.rows[0]?.fingerprint && again.rows[1]?.member_id === hello.principal);
-  check('...and the stage still shows the speaker’s run, not the phone’s', stage.showsNow('main', 'written · '));
+  check('...and the stage still shows the speaker’s run, not the phone’s', stage.showsNow('main', 'Written in '));
 
   // ── the fingerprint slide: the speaker's query replayed as the stage, and the tally ──
   await go('slide.name');
@@ -151,7 +152,8 @@ const main = async (): Promise<void> => {
   speaker.type('tools', 'intent', 'How many people are in the room?');
   await pause();
   speaker.click('tools', 'ask');
-  check('asked again, the stage says it was replayed, with no model', (await stage.shows('main', 'replayed · ')) && stage.showsNow('main', 'No model ran.'));
+  check('asked again, the stage says it was replayed, with no model', (await stage.shows('main', 'Replayed in ')) && stage.showsNow('main', 'No model ran.'));
+  check('...and the earlier request the router took it to be the same as', stage.showsNow('main', '\\"same\\": \\"How many people are in the room?\\"'));
   check('...and shows what was replayed: the same document, statement and answer, and the request with its shape', (await stage.shows('main', 'The stored document')) && stage.showsNow('main', 'The statement it compiles to') && stage.showsNow('main', 'The answer') && stage.showsNow('main', '\\"shape\\"'));
 
   // ── a question past the caller's clearance ──
