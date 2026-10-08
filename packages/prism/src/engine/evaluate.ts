@@ -238,19 +238,27 @@ const evaluateUnbudgeted = (node: unknown, context: EvalContext): JsonValue => {
 // Public Entry Points
 // ═══════════════════════════════════════════════════════════
 
-export const evaluate = (config: Config, source: JsonValue, limits?: Partial<Limits>): JsonValue => {
+export const refuseDeep = (config: unknown): void => {
   if (exceedsDepth(config)) throw new PrismError('Invalid config', ErrorCode.SCHEMA, { details: { issues: [{ path: 'root', message: depthRefusal() }] } });
+};
+
+// One evaluation of a tree that is already checked and desugared. `kept` says
+// the tree outlives this call (see EvalContext).
+export const run = (tree: unknown, source: JsonValue, limits?: Partial<Limits>, kept?: boolean): JsonValue => {
+  const budget = createBudget(limits);
+  const result = evaluateNode(tree, kept === true ? { source, vars: {}, budget, kept } : { source, vars: {}, budget });
+  measure(result, budget);
+  return result;
+};
+
+export const evaluate = (config: Config, source: JsonValue, limits?: Partial<Limits>): JsonValue => {
+  refuseDeep(config);
   const parsed = ConfigSchema.safeParse(config);
   if (!parsed.success) {
     const issues = explainIssues(parsed.error.issues).map((i) => ({ path: i.path.join('.') || 'root', message: i.message }));
     throw new PrismError('Invalid config', ErrorCode.SCHEMA, { details: { issues } });
   }
-
-  const desugared = desugar(parsed.data);
-  const budget = createBudget(limits);
-  const result = evaluateNode(desugared, { source, vars: {}, budget });
-  measure(result, budget);
-  return result;
+  return run(desugar(parsed.data), source, limits);
 };
 
 export const evaluateSafe = (config: Config, source: JsonValue, limits?: Partial<Limits>): Result<JsonValue> => {

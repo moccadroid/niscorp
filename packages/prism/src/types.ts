@@ -21,6 +21,10 @@ export type EvalContext = {
   // What this evaluation may still cost (engine/budget.ts). Ops extend a
   // context by spreading it, so every nested evaluation spends the same one.
   readonly budget?: Budget;
+  // The tree being evaluated is kept and run again (engine/transform.ts), so
+  // a `$const` is handed out as a copy: a caller that changes a result must
+  // not change the next one.
+  readonly kept?: boolean;
 };
 
 // ═══════════════════════════════════════════════════════════

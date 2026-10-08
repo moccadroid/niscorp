@@ -748,11 +748,14 @@ const tide = createTide({ store, transform: prismTransform, effects });
 
 - **The config** is parsed against `ConfigSchema` where it comes in — once for
   each config object, so a config a host keeps and passes again is not parsed
-  again.
+  again: a later call only evaluates. It is kept by the object, so a config
+  changed in place after its first call is not read again; pass a new object.
+  A config that is a new object on every call is parsed on every call.
 - **The source** must be plain JSON: `null`, strings, booleans, finite numbers,
   and arrays and objects of those. One that holds `undefined`, a function or a
   non-finite number is refused — `The source of a transform must be plain JSON.`
-- **The result** is what `evaluate` answers.
+- **The result** is what `evaluate` answers, and the caller's to change: a
+  `$const` in a kept config is handed out as a copy.
 
 `evaluate` itself is typed for a `JsonValue` source and checks none, so it does
 not fit a seam that hands over `unknown`. `@niscorp/prism/migrations` exports the

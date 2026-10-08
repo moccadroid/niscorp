@@ -21,8 +21,16 @@ export const opRef = (node: RefNode, context: EvalContext, _evaluate: EvaluateFn
   return resolved;
 };
 
-export const opConst = (node: ConstNode, _context: EvalContext, _evaluate: EvaluateFn): JsonValue =>
-  node.$const as JsonValue;
+const copyOf = (value: JsonValue): JsonValue => {
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map(copyOf);
+  const copy: Record<string, JsonValue> = {};
+  for (const [key, inner] of Object.entries(value)) copy[key] = copyOf(inner);
+  return copy;
+};
+
+export const opConst = (node: ConstNode, context: EvalContext, _evaluate: EvaluateFn): JsonValue =>
+  context.kept === true ? copyOf(node.$const as JsonValue) : (node.$const as JsonValue);
 
 export const opVar = (node: VarNode, context: EvalContext, _evaluate: EvaluateFn): JsonValue => {
   const value = context.vars[node.$var];

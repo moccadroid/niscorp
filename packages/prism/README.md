@@ -82,8 +82,10 @@ createUpgrader(grammars, { transform: prismTransform });     // @niscorp/strata
 ```
 
 Both sides arrive untyped, so both are checked: the config is parsed against
-`ConfigSchema` (once for each config object), and the source must be plain JSON
-— a source holding `undefined`, a function or a non-finite number is refused.
+`ConfigSchema` (once for each config object: a later call with the same object
+only evaluates, and a config changed in place after its first call is not read
+again), and the source must be plain JSON — a source holding `undefined`, a
+function or a non-finite number is refused.
 `evaluate` is typed for a `JsonValue` and checks no source, which is why it
 cannot be handed to a seam as it is. A host that adds values of its own to the
 source first (the app's "today", the session's principal) wraps it.
