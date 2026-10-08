@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { FunctionSession, MossServer, NiscApp } from '@niscorp/moss';
 import type { FunctionHandler } from '@niscorp/nova';
 import { assistantAction } from '@lyceum/app/actions/assistant/assistant.action';
+import { askTool } from '@lyceum/app/actions/ask/ask.actions';
 import { searchTool } from '@lyceum/app/actions/tools/search.action';
 
 // THE SPEAKER'S SCREEN, MIRRORED ON THE STAGE — so the room watches the
@@ -16,7 +17,7 @@ import { searchTool } from '@lyceum/app/actions/tools/search.action';
 //
 // The stage only looks. Nothing here lets it press: the mirror is a copy of
 // data, the writes are still the speaker's own.
-const MIRRORED = [assistantAction, searchTool];
+const MIRRORED = [assistantAction, searchTool, askTool];
 export const MIRROR_CHANNEL = 'speaker-mirror';
 
 const WhichSchema = z.object({ action: z.string() });

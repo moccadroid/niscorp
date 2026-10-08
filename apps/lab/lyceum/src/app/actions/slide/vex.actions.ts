@@ -3,6 +3,7 @@ import type { ActionDefinition } from '@niscorp/nova';
 import type { ScopeBinding } from '@niscorp/vex';
 import { createQueryTools } from '@niscorp/vex/agent';
 import { stageRegisterAction } from '@lyceum/app/actions/stage/register.action';
+import { askTool } from '@lyceum/app/actions/ask/ask.actions';
 import { searchTool } from '@lyceum/app/actions/tools/search.action';
 import { CHARTER } from '@lyceum/app/charter/charter';
 import { BEHAVIORS } from '@lyceum/app/vex/behaviors';
@@ -159,15 +160,18 @@ export const toolsSlide = still('slide.tools', 'Six tools. None takes SQL.', too
 // on mount and again whenever the server says it changed. Nothing on it can
 // be pressed; the question is asked on the controller (tools.ask).
 // Until the server's trace arrives on mount (it carries the whole picture, unlit).
-const NO_TRACE = { principal: '', intent: '', shapeKind: '', pipeline: { steps: [], detour: { from: 1, to: 2, off: true, steps: [] }, legend: [] }, document: { caption: '', text: '', lang: '', flag: 'highlight' }, outcome: { kind: 'none', title: 'Nothing asked yet.', said: '', fingerprint: '', sent: '' }, ms: 0 };
+const NO_TRACE = { principal: '', intent: '', shapeKind: '', pipeline: { steps: [], detour: { from: 0, to: 1, off: true, steps: [] }, legend: [] }, idle: { steps: [], detour: { from: 0, to: 1, off: true, steps: [] }, legend: [] }, shape: { caption: '', text: '' }, rows: [], document: { caption: '', text: '', lang: '', flag: 'highlight' }, outcome: { kind: 'none', title: 'Nothing asked yet.', said: '', fingerprint: '', sent: '' }, ms: 0 };
 export const writerSlide: ActionDefinition = {
   id: 'slide.writer',
   title: 'Watch it write one.',
-  data: { kicker: 'Live', title: 'Watch it write one.', trace: NO_TRACE },
+  data: { kicker: 'Live', title: 'Watch it write one.', trace: NO_TRACE, action: askTool.id, tool: { ...askTool.data } },
   layout: writerLayout,
-  endpoints: { generation: { fn: 'room.generation', target: 'trace' } },
-  lifecycle: { mount: [{ call: 'generation' }] },
-  triggers: [{ message: 'generation-changed', do: [{ call: 'generation' }] }],
+  endpoints: { generation: { fn: 'room.generation', target: 'trace' }, mirror: { fn: 'speaker.mirror', target: 'tool' } },
+  lifecycle: { mount: [{ call: 'generation' }, { call: 'mirror' }] },
+  triggers: [
+    { message: 'generation-changed', do: [{ call: 'generation' }] },
+    { message: 'speaker-mirror', do: [{ call: 'mirror' }] },
+  ],
 };
 
 // The speaker's stored query, replayed as the stage — its own rows — and the

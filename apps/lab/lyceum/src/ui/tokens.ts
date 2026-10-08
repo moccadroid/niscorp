@@ -471,7 +471,7 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(14px, min
    A step is a box wearing its ink; a link is a rule with a head; what did not
    happen stays where it is, faded — the picture is the same every time and
    only what is lit changes. */
-.${ROOT_CLASS} .pipeline { display: grid; grid-template-rows: auto 1.9rem auto; align-items: stretch; min-width: 0; }
+.${ROOT_CLASS} .pipeline { display: grid; grid-template-rows: auto 1.6rem auto; align-items: stretch; min-width: 0; }
 .${ROOT_CLASS} .pipeline-step { background: var(--bg); color: var(--fg); border: var(--rule) solid var(--ink); padding: .5rem .8rem .6rem; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .25rem .6rem; align-content: start; min-width: 0; }
 .${ROOT_CLASS} .pipeline-step > b { font: 900 .82rem/1.1 var(--display); letter-spacing: .04em; text-transform: uppercase; }
 /* a value is a line; a longer one — somebody's question — takes a second and stops there */

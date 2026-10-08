@@ -200,8 +200,10 @@ export const pipelineOf = (props: Record<string, unknown>): PipelineShape => {
   const steps = rowsOf(props['steps']).map(stepOf);
   const raw = props['detour'];
   const given = typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? (raw as Record<string, unknown>) : undefined;
-  const from = weight(given?.['from']);
-  const to = weight(given?.['to']);
+  // A place in the line, counted from 0 — the first step is one.
+  const place = (value: unknown): number | undefined => (typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined);
+  const from = place(given?.['from']);
+  const to = place(given?.['to']);
   const inner = rowsOf(given?.['steps']).map(stepOf);
   const off = given?.['off'] === true;
   const detour =

@@ -107,24 +107,50 @@ export const toolsLayout: LayoutNode = sheet(['head head', 'tools said'], [1, 1.
   cell('said', [headline('title', 'Every tool runs through the engine as the caller.'), text('There is no way to ask it to run something as nobody.')], { ink: 'signal', align: 'middle' }),
 ]);
 
-// WATCH IT WRITE ONE. The speaker's question, as it is answered, as a picture
-// (server/generation/trace.ts): the line every request walks — the request,
-// Jev, the stored query, the engine, the answer — and under it the one detour,
-// walked only when nothing stored matched and a query had to be written. What
-// was walked is lit and what did not happen is not, so a replay and a new
-// query are two different pictures. Under the picture, the one document there
-// is to read — the draft the agent is testing, or the stored query a replay
-// ran — and how it ended, with the models that ran.
-export const writerLayout: LayoutNode = sheet(['head', 'picture', 'document', 'out'], [1], ['auto', 'auto', 1, 'auto'], [
-  // The claim alone: the picture needs the room a kicker would take.
-  cell('head', [headline('title', '{{$.title}}')]),
-  cell('picture', [{ component: 'Pipeline', props: { steps: '$.trace.pipeline.steps', detour: '$.trace.pipeline.detour', legend: '$.trace.pipeline.legend' } }]),
-  { if: '$.trace.document.text', then: cell('document', [exhibit('$.trace.document.caption', '$.trace.document.text', { lang: '$.trace.document.lang', flag: '$.trace.document.flag' })]), else: cell('document', [], { mark: 'hatch' }) },
+// WATCH IT WRITE ONE. A request is an intent and a shape, and the slide reads
+// top to bottom as one being answered:
+//   · the INTENT, large, as the speaker types it on the controller (the ask is
+//     mirrored, server/mirroring.ts), and beside it the SHAPE Jev picked;
+//   · the pipeline (server/generation/trace.ts): Jev, the stored query, the
+//     engine, the answer, and under Jev the one detour, walked only when
+//     nothing stored matched and a query had to be written — what was walked
+//     is lit, what did not happen is not;
+//   · the one document there is to read, and beside it the ANSWER, as rows,
+//     with how it ended under them.
+// While a new question is being typed over an old run, the picture is unlit
+// and the old shape, document and answer are gone: they were another
+// question's.
+const typed = { $trim: { $ref: '$.tool.intent' } };
+const typing = { $prism: { $and: [{ $neq: [typed, { $const: '' }] }, { $neq: [typed, { $ref: '$.trace.intent' }] }] } };
+const whenAsked = (then: LayoutNode, otherwise: LayoutNode): LayoutNode => ({ if: typing, then: otherwise, else: then });
+const picture = (key: 'steps' | 'detour'): unknown => ({ $if: typing, $then: `$.trace.idle.${key}`, $else: `$.trace.pipeline.${key}` });
+
+export const writerLayout: LayoutNode = sheet(['intent shape', 'picture picture', 'document answer'], [1.5, 1], ['auto', 'auto', 1], [
   {
-    if: { $eq: ['$.trace.outcome.kind', 'refused'] },
-    then: cell('out', [text('{{$.trace.outcome.title}} · {{$.trace.outcome.said}}')], { ink: 'alert' }),
-    else: { if: '$.trace.outcome.said', then: cell('out', [text('{{$.trace.outcome.title}} · {{$.trace.outcome.said}}')]), else: cell('out', [label('{{$.trace.outcome.title}}')]) },
+    if: '$.tool.intent',
+    then: cell('intent', [label('Intent'), headline('title', '{{$.tool.intent}}')]),
+    else: { if: '$.trace.intent', then: cell('intent', [label('Intent'), headline('title', '{{$.trace.intent}}')]), else: cell('intent', [headline('title', '{{$.title}}')], { align: 'middle' }) },
   },
+  whenAsked({ if: '$.trace.shape.text', then: cell('shape', [exhibit('$.trace.shape.caption', '$.trace.shape.text', { lang: 'json' })], { ink: 'highlight' }), else: cell('shape', [], { mark: 'hatch' }) }, cell('shape', [], { mark: 'hatch' })),
+  cell('picture', [{ component: 'Pipeline', props: { steps: picture('steps'), detour: picture('detour'), legend: '$.trace.pipeline.legend' } }]),
+  whenAsked(
+    { if: '$.trace.document.text', then: cell('document', [exhibit('$.trace.document.caption', '$.trace.document.text', { lang: '$.trace.document.lang', flag: '$.trace.document.flag' })]), else: cell('document', [], { mark: 'hatch' }) },
+    cell('document', [], { mark: 'hatch' }),
+  ),
+  whenAsked(
+    // The answer, as rows, and under it how it ended: how long in all, and
+    // which models ran. A refusal is the engine's or the agent's own words.
+    {
+      if: { $eq: ['$.trace.outcome.kind', 'refused'] },
+      then: cell('answer', [label('{{$.trace.outcome.title}}'), text('{{$.trace.outcome.said}}')], { ink: 'alert' }),
+      else: {
+        if: '$.trace.outcome.said',
+        then: cell('answer', [answerLayout({ kind: '$.trace.shapeKind', how: '$.trace.outcome.kind', rows: '$.trace.rows' })[0] ?? muted(''), muted('{{$.trace.outcome.title}} · {{$.trace.outcome.said}}')], { align: 'between' }),
+        else: cell('answer', [label('{{$.trace.outcome.title}}')], { mark: 'hatch' }),
+      },
+    },
+    cell('answer', [label('Typing…')], { mark: 'hatch' }),
+  ),
 ]);
 
 // STORED UNDER A NAME. The speaker's query from the writer slide, replayed as

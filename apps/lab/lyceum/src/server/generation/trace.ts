@@ -67,6 +67,13 @@ export type Trace = {
   // replay of it is drawn.
   shapeKind: string;
   pipeline: Pipeline;
+  // The same picture with nothing lit — what the slide shows while a new
+  // question is being typed over an old run.
+  idle: Pipeline;
+  // The shape Jev picked, as the request carries it (JSON), and its name.
+  shape: { caption: string; text: string };
+  // What came back, for the person who asked: the first rows, or the one value.
+  rows: unknown;
   // The one document the slide shows: the draft the agent is testing, the
   // engine's message about a draft it refused, or the stored query a replay
   // ran. Empty when there is none to show.
@@ -78,6 +85,7 @@ export type Trace = {
 // What the trace knows, from which everything drawn is worked out.
 type Known = {
   jev: { matched: boolean; shape: string; ms: number } | undefined;
+  rows: unknown;
   // How long the query agent took to write, and the engine to run, in ms.
   agentMs: number | undefined;
   engineMs: number | undefined;
@@ -94,6 +102,7 @@ const LEGEND: Pipeline['legend'] = [
   { label: 'A model ran', ink: 'signal' },
   { label: 'No model', ink: 'highlight' },
 ];
+const NO_PIPELINE: Pipeline = { steps: [], detour: { from: 0, to: 1, label: '', enter: '', leave: '', direct: '', off: true, steps: [] }, legend: LEGEND };
 const NO_DOCUMENT: Trace['document'] = { caption: '', text: '', lang: '', flag: 'highlight' };
 const NO_OUTCOME: Outcome = { kind: 'none', title: 'Nothing asked yet.', said: '', fingerprint: '', sent: '' };
 
@@ -130,9 +139,10 @@ export const testCall = (draft: unknown, answer: { errors: readonly string[]; ro
   return { what: 'testQuery', failed, sent: draft, said: failed ? answer.errors.join('\n') : '', how: failed ? 'failed' : `ran · ${counted(answer.rows, 'row', 'rows')} · limit 5` };
 };
 
-// A document sits across the slide: a hundred characters a line, so a query
-// is a handful of lines.
-const DOCUMENT_LINE = 100;
+// A document sits in the wider half of the slide's last row.
+const DOCUMENT_LINE = 62;
+// How many rows of an answer the stage shows.
+const ANSWER_ROWS = 5;
 // The first and the last of a fingerprint, so it fits a step.
 const brief = (fingerprint: string): string => (fingerprint.length <= 14 ? fingerprint : `${fingerprint.slice(0, 7)}…${fingerprint.slice(-4)}`);
 
@@ -163,15 +173,14 @@ const drawn = (trace: Trace, known: Known): void => {
 
   trace.pipeline = {
     steps: [
-      { label: 'Request', value: trace.intent, note: '', ink: 'highlight', off: trace.intent === '' },
       { label: 'Jev', value: known.jev === undefined ? (trace.intent === '' ? '' : 'picking…') : `${known.jev.matched ? 'match' : 'no match'} · ${known.jev.shape}`, note: took(known.jev?.ms), ink: 'signal', off: trace.intent === '' },
       { label: 'Stored query', value: refusedBefore ? 'refused before' : stored ? `${brief(trace.outcome.fingerprint)}${replayed ? '' : ' · new'}` : '', note: '', ink: refusedBefore ? 'alert' : 'highlight', off: !stored && !refusedBefore },
       { label: 'Engine', value: 'compile · run · map', note: took(known.engineMs), ink: 'highlight', off: !answered },
       { label: 'Answer', value: known.answered, note: '', ink: 'live', off: !answered },
     ],
     detour: {
-      from: 1,
-      to: 2,
+      from: 0,
+      to: 1,
       label: 'Only when nothing stored matches: write one',
       enter: 'no match',
       leave: 'document + mapping',
@@ -191,6 +200,8 @@ const drawn = (trace: Trace, known: Known): void => {
     },
     legend: LEGEND,
   };
+
+  trace.rows = Array.isArray(known.rows) ? known.rows.slice(0, ANSWER_ROWS) : (known.rows ?? []);
 
   // The one document: what a replay ran; else the newest draft, or the
   // engine's message about it.
@@ -213,11 +224,12 @@ const drawn = (trace: Trace, known: Known): void => {
   trace.outcome.said = !ended ? '' : refused ? `${known.refusal.replace(/[.]$/, "")}. ${trace.ms} ms in all.${ran}` : `${trace.ms} ms in all.${ran}`;
 };
 
-const nothingKnown = (): Known => ({ jev: undefined, agentMs: undefined, engineMs: undefined, agent: false, calls: [], mapping: undefined, stored: undefined, answered: '', refusal: '' });
+const nothingKnown = (): Known => ({ rows: undefined, jev: undefined, agentMs: undefined, engineMs: undefined, agent: false, calls: [], mapping: undefined, stored: undefined, answered: '', refusal: '' });
 
 export const EMPTY_TRACE: Trace = (() => {
-  const trace: Trace = { principal: '', intent: '', shapeKind: '', pipeline: { steps: [], detour: { from: 1, to: 2, label: '', enter: '', leave: '', direct: '', off: true, steps: [] }, legend: LEGEND }, document: NO_DOCUMENT, outcome: { ...NO_OUTCOME }, ms: 0 };
+  const trace: Trace = { principal: '', intent: '', shapeKind: '', pipeline: NO_PIPELINE, idle: NO_PIPELINE, shape: { caption: '', text: '' }, rows: [], document: NO_DOCUMENT, outcome: { ...NO_OUTCOME }, ms: 0 };
   drawn(trace, nothingKnown());
+  trace.idle = trace.pipeline;
   return trace;
 })();
 
@@ -226,7 +238,7 @@ export type Tracer = {
   expect: (intent: string, principal: string) => void;
   // Jev picked: a request already answered that asks the same, or none — and
   // the answer's shape.
-  routed: (principal: string, intent: string, decided: { fingerprint: string | null; shape: string }, ms: number) => void;
+  routed: (principal: string, intent: string, decided: { fingerprint: string | null; shape: string }, shape: unknown, ms: number) => void;
   // Run the engine for this request: what its hooks record is this request's.
   during: <T>(intent: string, run: () => Promise<T>) => Promise<T>;
   // The query agent was started, and made a call.
@@ -298,8 +310,9 @@ export const createTracer = (): Tracer => {
       change(trace, () => undefined);
       told();
     },
-    routed: (principal, intent, decided, ms) =>
-      theirs(principal, intent, (_trace, known) => {
+    routed: (principal, intent, decided, shape, ms) =>
+      theirs(principal, intent, (trace, known) => {
+        trace.shape = { caption: `Shape · ${decided.shape} · picked by Jev`, text: compactJson(shape, DOCUMENT_LINE) };
         known.jev = { matched: decided.fingerprint !== null, shape: decided.shape, ms };
       }),
     during: (intent, run) => running.run(intent, run),
@@ -350,6 +363,7 @@ export const createTracer = (): Tracer => {
     answered: (principal, intent, stored) =>
       theirs(principal, intent, (_trace, known) => {
         known.stored = stored.document;
+        known.rows = stored.rows;
         known.engineMs = stored.engineMs;
         known.answered = Array.isArray(stored.rows) ? counted(stored.rows.length, 'row', 'rows') : '1 value';
       }),
