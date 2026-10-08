@@ -168,6 +168,7 @@ const fakeQuerier = (tracer: Tracer): Querier => ({
   // through the engine, so the trace shows what a real run shows.
   generateDsl: async (request, _schema, caller) => {
     const intent = request.intent ?? '';
+    tracer.writing(intent);
     const dsl = (/login|sign in|password/i.test(intent) ? FAKE_DSL['forbidden'] : FAKE_DSL[fakeKind(intent)]) ?? { from: ['members'] };
     tracer.called(intent, await tested(caller, MISTAKEN));
     // A model takes its time between drafts, and so does the stand-in.

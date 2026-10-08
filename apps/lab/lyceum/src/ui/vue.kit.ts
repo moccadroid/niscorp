@@ -32,7 +32,10 @@ import {
   templateOf,
   text,
   weight,
+  pipelineColumns,
+  pipelineOf,
 } from './kit.shape';
+import type { PipelineStep } from './kit.shape';
 
 // ═══════════════════════════════════════════════════════════════
 // THE POSTER KIT IN VUE — the React kit's twin (./react.kit.ts): the same
@@ -222,6 +225,34 @@ const Stats = functional((props, _children, place) =>
     records(props['items']).map((item, i) => h('div', { key: i, ...data('ink', oneOf(item['ink'], INKS)) }, [h('b', text(item['value']) ?? '—'), h('span', text(item['label']) ?? '')])),
   ),
 );
+
+// A line of steps and one detour under it, as in the DOM kit.
+const Pipeline = functional((props, _children, place) => {
+  const shape = pipelineOf(props);
+  const off = (is: boolean): Record<string, string> => (is ? { 'data-off': '' } : {});
+  const at = (column: string, row: number): { style: Record<string, string> } => ({ style: { gridColumn: column, gridRow: String(row) } });
+  const step = (item: PipelineStep, key: string, placing: Record<string, unknown> = {}): VNode =>
+    h('div', { key, ...placing, class: 'pipeline-step', ...data('ink', oneOf(item.ink, INKS)), ...off(item.off) }, [h('b', item.label), h('span', item.value)]);
+  const link = (name: string, said: string, isOff: boolean, key: string, placing: Record<string, unknown> = {}): VNode => h('div', { key, ...placing, class: name, ...off(isOff) }, [h('span', said)]);
+  const detour = shape.detour;
+  return h('div', { ...place({ gridTemplateColumns: pipelineColumns(shape.steps.length) }), class: 'pipeline' }, [
+    ...shape.steps.flatMap((item, index) => {
+      const next = shape.links[index];
+      return [step(item, `s${index}`, at(String(index * 2 + 1), 1)), ...(next === undefined ? [] : [link('pipeline-link', next.label, next.off, `l${index}`, at(String(index * 2 + 2), 1))])];
+    }),
+    ...(detour === undefined
+      ? []
+      : [
+          link('pipeline-enter', detour.enter, detour.off, 'enter', at(String(detour.from * 2 + 1), 2)),
+          link('pipeline-leave', detour.leave, !detour.back, 'leave', at(String(detour.to * 2 + 1), 2)),
+          h('div', { key: 'detour', ...at(`${detour.from * 2 + 1} / ${detour.to * 2 + 2}`, 3), class: 'pipeline-detour', ...off(detour.off) }, [
+            h('span', { class: 'pipeline-said' }, detour.label),
+            h('div', { class: 'pipeline-inner' }, detour.steps.flatMap((item, index) => [...(index === 0 ? [] : [link('pipeline-link', '', item.off, `dl${index}`)]), step(item, `ds${index}`)])),
+          ]),
+        ]),
+    ...(shape.legend.length === 0 ? [] : [h('div', { key: 'legend', ...at(`${(detour?.to ?? 0) * 2 + 3} / -1`, 3), class: 'pipeline-legend' }, shape.legend.map((item, index) => h('span', { key: index, ...data('ink', oneOf(item.ink, INKS)) }, item.label)))]),
+  ]);
+});
 
 const Figure = functional((props, _children, place) =>
   h('div', { ...place(), class: 'figure' }, [
@@ -551,6 +582,7 @@ export const VUE_KIT: KitOf<NovaComponent> = {
   Pair,
   Stack,
   Stats,
+  Pipeline,
 };
 
 // moss's Vue target, with this kit. As with React (./target.ts), the DOM

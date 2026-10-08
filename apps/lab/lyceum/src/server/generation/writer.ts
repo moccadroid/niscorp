@@ -25,6 +25,7 @@ export const watchedQueryDsl = ({ llm, dslSchema, tracer }: { llm: SignalClient;
   return async (request, schema, caller) => {
     const intent = request.intent ?? '';
     const callerLine = describeCaller(caller.bindings);
+    tracer.writing(intent);
 
     const tools = createQueryTools({ getSchema: () => schema, read: caller.read });
     let unsatisfiable: string | undefined;

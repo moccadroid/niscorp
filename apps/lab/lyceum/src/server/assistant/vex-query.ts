@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import type { FunctionSession } from '@niscorp/moss';
 import { queryRecord, queriesKnown } from '@lyceum/app/vex/query.entries';
-import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
 import { queryEngineFor } from '../querying';
 import type { Querier, Known } from '../querying';
 import { vexOver } from '../vex-over';
@@ -59,7 +58,7 @@ export const routeQuery = async (session: FunctionSession, querier: Querier, sta
   querier.trace.expect(request, principal);
   const known: Known[] = KnownSchema.parse(await vex(queriesKnown.fingerprint));
   const route = await querier.route(request, known);
-  querier.trace.routed(principal, request, route.decided, known.length, QUERY_SHAPES.find((entry) => entry.kind === route.decided.shape)?.shape ?? null);
+  querier.trace.routed(principal, request, route.decided);
 
   // What the stage shows of the query that answered — a new one and a replayed
   // one alike: the caller's rows, and the document as it is stored.

@@ -136,7 +136,7 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(14px, min
 
 /* ── cell: a place in the grid, and its ink ── */
 /* defaults first, so an ink always out-ranks them */
-.${ROOT_CLASS} :where(.cell, .bar > span, .action, .flow-lane, .stats > div) { --bg: var(--paper); --fg: var(--ink); }
+.${ROOT_CLASS} :where(.cell, .bar > span, .action, .flow-lane, .stats > div, .pipeline-step, .pipeline-legend > span) { --bg: var(--paper); --fg: var(--ink); }
 .${ROOT_CLASS} :where(.columns-fill) { --bg: var(--ink); --fg: var(--paper); }
 .${ROOT_CLASS} [data-ink="ink"] { --bg: var(--ink); --fg: var(--paper); }
 .${ROOT_CLASS} [data-ink="signal"] { --bg: var(--signal); --fg: var(--paper); }
@@ -466,4 +466,36 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(14px, min
 .${ROOT_CLASS} .stats > div { background: var(--bg); color: var(--fg); padding: .9rem 1rem; display: grid; gap: .35rem; align-content: start; }
 .${ROOT_CLASS} .stats b { font: 900 2.4rem/1 var(--display); font-variant-numeric: tabular-nums; }
 .${ROOT_CLASS} .stats span { font: 700 .7rem/1.2 var(--display); letter-spacing: .06em; text-transform: uppercase; }
+
+/* ── pipeline: a line of steps that always run, and one detour under it ──
+   A step is a box wearing its ink; a link is a rule with a head; what did not
+   happen stays where it is, faded — the picture is the same every time and
+   only what is lit changes. */
+.${ROOT_CLASS} .pipeline { display: grid; grid-template-rows: auto 1.9rem auto; align-items: stretch; min-width: 0; }
+.${ROOT_CLASS} .pipeline-step { background: var(--bg); color: var(--fg); border: var(--rule) solid var(--ink); padding: .5rem .8rem .6rem; display: grid; gap: .25rem; align-content: start; min-width: 0; }
+.${ROOT_CLASS} .pipeline-step > b { font: 900 .82rem/1.1 var(--display); letter-spacing: .04em; text-transform: uppercase; }
+/* a value is a line; a longer one — somebody's question — takes a second and stops there */
+.${ROOT_CLASS} .pipeline-step > span { font: 400 .8rem/1.3 var(--mono); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.${ROOT_CLASS} .pipeline [data-off] { opacity: .22; }
+.${ROOT_CLASS} .pipeline-step[data-off] { background: var(--paper); color: var(--ink); }
+/* a link: a rule from one step to the next, its head at the far end */
+.${ROOT_CLASS} .pipeline-link { align-self: center; position: relative; height: var(--rule); background: var(--ink); min-width: 1.6rem; margin-right: .5rem; }
+.${ROOT_CLASS} .pipeline-link::after { content: ''; position: absolute; right: -.5rem; top: 50%; translate: 0 -50%; border: .38rem solid transparent; border-left-color: var(--ink); border-right: 0; }
+.${ROOT_CLASS} .pipeline-link > span { position: absolute; left: 0; right: 0; bottom: .35rem; text-align: center; font: 400 .7rem/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+/* the way down into the detour and the way back up: rules with heads, each said beside it */
+.${ROOT_CLASS} .pipeline-enter, .${ROOT_CLASS} .pipeline-leave { position: relative; align-self: stretch; margin-left: 1.6rem; border-left: var(--rule) solid var(--ink); }
+.${ROOT_CLASS} .pipeline-enter { margin-bottom: .5rem; }
+.${ROOT_CLASS} .pipeline-leave { margin-top: .5rem; }
+.${ROOT_CLASS} .pipeline-enter::after { content: ''; position: absolute; left: calc(var(--rule) / -2); bottom: -.5rem; translate: -50% 0; border: .38rem solid transparent; border-top-color: var(--ink); border-bottom: 0; }
+.${ROOT_CLASS} .pipeline-leave::after { content: ''; position: absolute; left: calc(var(--rule) / -2); top: -.5rem; translate: -50% 0; border: .38rem solid transparent; border-bottom-color: var(--ink); border-top: 0; }
+.${ROOT_CLASS} .pipeline-enter > span, .${ROOT_CLASS} .pipeline-leave > span { position: absolute; left: .6rem; top: 50%; translate: 0 -50%; font: 400 .7rem/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+/* the detour: its steps in a dashed box, said along its top */
+.${ROOT_CLASS} .pipeline-detour { border: 2px dashed var(--ink); padding: .45rem .7rem .7rem; display: grid; gap: .4rem; min-width: 0; }
+.${ROOT_CLASS} .pipeline-detour[data-off] { opacity: 1; border-color: color-mix(in srgb, var(--ink) 22%, transparent); }
+.${ROOT_CLASS} .pipeline-detour[data-off] > .pipeline-said { opacity: .22; }
+.${ROOT_CLASS} .pipeline-said { font: 400 .7rem/1.2 var(--mono); letter-spacing: .04em; text-transform: uppercase; }
+.${ROOT_CLASS} .pipeline-inner { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr) 3rem minmax(0, 1fr); align-items: center; }
+.${ROOT_CLASS} .pipeline-legend { align-self: center; justify-self: end; display: grid; gap: .45rem; padding-left: 1rem; }
+.${ROOT_CLASS} .pipeline-legend > span { display: flex; align-items: center; gap: .5rem; font: 400 .7rem/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.${ROOT_CLASS} .pipeline-legend > span::before { content: ''; width: .9rem; height: .9rem; flex: none; background: var(--bg); border: 2px solid var(--ink); }
 `;

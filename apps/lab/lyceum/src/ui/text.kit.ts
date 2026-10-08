@@ -5,6 +5,7 @@ import type { TtyBlock, TtyComponent } from '@niscorp/nova/adapters/tty';
 import { ActionSlot } from '@niscorp/nova/adapters/tty/components';
 import type { KitOf } from './kit.props';
 import { SIGILS, oneOf, records, text } from './kit';
+import { pipelineOf, pipelineText } from './kit.shape';
 
 // ═══════════════════════════════════════════════════════════════
 // THE TEXT KIT — lyceum's grammar (./kit.props.ts) drawn as plain lines: what
@@ -80,6 +81,7 @@ export const TEXT_KIT: KitOf<TtyComponent> = {
   Exhibit: ({ props }) => block(text(props['label']) ?? '', ...(text(props['text']) ?? '').split('\n')),
   Pair: ({ children }) => block(...lines(children)),
   Stack: ({ children }) => block(...lines(children)),
+  Pipeline: ({ props }) => block(...pipelineText(pipelineOf(props))),
   Stats: ({ props }) => block(records(props['items']).map((item) => `${text(item['label']) ?? ''}: ${text(item['value']) ?? '—'}`).join(' · ')),
 };
 

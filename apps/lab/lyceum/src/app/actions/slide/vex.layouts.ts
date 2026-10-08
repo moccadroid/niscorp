@@ -107,51 +107,23 @@ export const toolsLayout: LayoutNode = sheet(['head head', 'tools said'], [1, 1.
   cell('said', [headline('title', 'Every tool runs through the engine as the caller.'), text('There is no way to ask it to run something as nobody.')], { ink: 'signal', align: 'middle' }),
 ]);
 
-// WATCH IT WRITE ONE. The speaker's question, as it is answered: every step
-// that happened, in order, and each stays on the slide (server/generation).
-// Left, what is one line each: the request; what Jev picked; what happened to
-// the rows on the way to the shape — nothing, or Prism's mapping agent; the
-// answer. Right, the query agent's calls, the newest in full — a draft the
-// engine refused in orange with the engine's words, one that ran in green. A
-// replay has no calls and no mapping, because neither happened: the stored
-// query that ran is on the right instead.
-const replayed = { $eq: ['$.trace.outcome.kind', 'replayed'] };
-const tight = (children: LayoutNode[]): LayoutNode => ({ component: 'Stack', props: { gap: 'tight' }, children });
-
-export const writerLayout: LayoutNode = sheet(['head', 'run', 'out'], [1], ['auto', 1, 'auto'], [
-  head(),
+// WATCH IT WRITE ONE. The speaker's question, as it is answered, as a picture
+// (server/generation/trace.ts): the line every request walks — the request,
+// Jev, the stored query, the engine, the answer — and under it the one detour,
+// walked only when nothing stored matched and a query had to be written. What
+// was walked is lit and what did not happen is not, so a replay and a new
+// query are two different pictures. Under the picture, the one document there
+// is to read — the draft the agent is testing, or the stored query a replay
+// ran — and how it ended, with the models that ran.
+export const writerLayout: LayoutNode = sheet(['head', 'picture', 'document', 'out'], [1], ['auto', 'auto', 1, 'auto'], [
+  // The claim alone: the picture needs the room a kicker would take.
+  cell('head', [headline('title', '{{$.title}}')]),
+  cell('picture', [{ component: 'Pipeline', props: { steps: '$.trace.pipeline.steps', detour: '$.trace.pipeline.detour', legend: '$.trace.pipeline.legend' } }]),
+  { if: '$.trace.document.text', then: cell('document', [exhibit('$.trace.document.caption', '$.trace.document.text', { lang: '$.trace.document.lang', flag: '$.trace.document.flag' })]), else: cell('document', [], { mark: 'hatch' }) },
   {
-    if: '$.trace.request',
-    then: cell('run', [
-      pair(
-        [
-          tight([
-            exhibit('Request', '$.trace.request', { lang: 'json' }),
-            { if: '$.trace.jev.text', then: exhibit('$.trace.jev.caption', '$.trace.jev.text', { lang: 'json', flag: 'highlight' }) },
-            { if: '$.trace.mapping.text', then: exhibit('$.trace.mapping.caption', '$.trace.mapping.text', { lang: 'json', flag: 'highlight' }), else: { if: '$.trace.mapping.caption', then: label('{{$.trace.mapping.caption}}') } },
-            { if: '$.trace.outcome.answered', then: exhibit('$.trace.outcome.answered', '$.trace.outcome.answer', { lang: 'json', flag: 'live' }) },
-          ]),
-          tight([
-            { if: '$.trace.outcome.document', then: exhibit('Stored query · replayed', '$.trace.outcome.document', { lang: 'json', flag: 'live' }) },
-            { for: '$.trace.panes', as: 'pane', key: 'key', do: exhibit('$pane.caption', '$pane.text', { lang: '$pane.lang', flag: '$pane.flag' }) },
-          ]),
-        ],
-      ),
-    ]),
-    else: cell('run', [muted('Asked on the controller.')], { mark: 'hatch', align: 'middle' }),
-  },
-  {
-    if: '$.trace.outcome.fingerprint',
-    then: {
-      if: replayed,
-      then: cell('out', [headline('name', 'Replayed in {{$.trace.ms}} ms: {{$.trace.outcome.fingerprint}}. No model ran.')], { ink: 'signal' }),
-      else: cell('out', [headline('name', 'Written in {{$.trace.ms}} ms. Stored: {{$.trace.outcome.fingerprint}}.')], { ink: 'signal' }),
-    },
-    else: {
-      if: { $eq: ['$.trace.outcome.kind', 'refused'] },
-      then: cell('out', [label('Refused · {{$.trace.ms}} ms'), text('{{$.trace.outcome.label}}')], { ink: 'alert' }),
-      else: cell('out', [label('{{$.trace.outcome.label}}')]),
-    },
+    if: { $eq: ['$.trace.outcome.kind', 'refused'] },
+    then: cell('out', [headline('name', '{{$.trace.outcome.said}}')], { ink: 'alert' }),
+    else: { if: '$.trace.outcome.fingerprint', then: cell('out', [headline('name', '{{$.trace.outcome.said}}')], { ink: 'signal' }), else: cell('out', [label('{{$.trace.outcome.said}}')]) },
   },
 ]);
 

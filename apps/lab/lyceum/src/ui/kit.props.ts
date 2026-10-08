@@ -19,6 +19,7 @@ const area = z.string().describe('A grid area name from the enclosing Sheet');
 const ink = z.enum(INKS);
 const mark = z.enum(MARKS);
 const label = z.string();
+const pipelineStep = z.object({ label, value: z.string(), ink, off: z.boolean() }).partial({ ink: true, off: true }).strict();
 
 export const KIT_PROPS = z
   .object({
@@ -87,6 +88,27 @@ export const KIT_PROPS = z
     Look: z.object({ look: z.enum(LOOKS) }).partial().strict(),
     Xray: z.object({ on: z.boolean() }).partial().strict(),
     Menu: z.object({ area, label }).partial().strict(),
+    Pipeline: z
+      .object({
+        area,
+        steps: z.array(pipelineStep).describe('What always runs, in order; a step that did not happen is off'),
+        detour: z
+          .object({
+            from: z.number().describe('The step the detour leaves the line at, from 0'),
+            to: z.number().describe('The step it comes back at'),
+            label,
+            enter: z.string().describe('What the way in is called'),
+            leave: z.string().describe('What the way back is called'),
+            direct: z.string().describe('What the link it stands in for is called'),
+            off: z.boolean(),
+            steps: z.array(pipelineStep),
+          })
+          .partial({ label: true, enter: true, leave: true, direct: true, off: true })
+          .strict(),
+        legend: z.array(z.object({ label, ink }).partial({ ink: true }).strict()),
+      })
+      .partial()
+      .strict(),
   })
   .strict()
   .describe('The props each lyceum kit component accepts, by component name');

@@ -24,7 +24,10 @@ import {
   templateOf,
   text,
   weight,
+  pipelineColumns,
+  pipelineOf,
 } from './kit.shape';
+import type { PipelineStep } from './kit.shape';
 
 // ═══════════════════════════════════════════════════════════════
 // THE POSTER KIT IN REACT — the same grammar (./kit.props.ts) as ./kit.ts, the
@@ -172,6 +175,41 @@ const Stats: NovaComponent = (props: Props) =>
     { ...usePlaced(props), className: 'stats' },
     records(props['items']).map((item, i) => h('div', { key: i, ...data('ink', oneOf(item['ink'], INKS)) }, h('b', null, text(item['value']) ?? '—'), h('span', null, text(item['label']) ?? ''))),
   );
+
+// A line of steps and one detour under it, as in the DOM kit.
+const Pipeline: NovaComponent = (props: Props) => {
+  const placed = usePlaced(props, { gridTemplateColumns: pipelineColumns(pipelineOf(props).steps.length) });
+  const shape = pipelineOf(props);
+  const off = (is: boolean): Record<string, string> => (is ? { 'data-off': '' } : {});
+  const at = (column: string, row: number): { style: Record<string, string> } => ({ style: { gridColumn: column, gridRow: String(row) } });
+  const step = (item: PipelineStep, key: string, place: Record<string, unknown> = {}): ReturnType<typeof h> =>
+    h('div', { key, ...place, className: 'pipeline-step', ...data('ink', oneOf(item.ink, INKS)), ...off(item.off) }, h('b', null, item.label), h('span', null, item.value));
+  const link = (className: string, said: string, isOff: boolean, key: string, place: Record<string, unknown> = {}): ReturnType<typeof h> => h('div', { key, ...place, className, ...off(isOff) }, h('span', null, said));
+  const detour = shape.detour;
+  return h(
+    'div',
+    { ...placed, className: 'pipeline' },
+    shape.steps.flatMap((item, index) => {
+      const next = shape.links[index];
+      return [step(item, `s${index}`, at(String(index * 2 + 1), 1)), ...(next === undefined ? [] : [link('pipeline-link', next.label, next.off, `l${index}`, at(String(index * 2 + 2), 1))])];
+    }),
+    detour === undefined
+      ? null
+      : [
+          link('pipeline-enter', detour.enter, detour.off, 'enter', at(String(detour.from * 2 + 1), 2)),
+          link('pipeline-leave', detour.leave, !detour.back, 'leave', at(String(detour.to * 2 + 1), 2)),
+          h(
+            'div',
+            { key: 'detour', ...at(`${detour.from * 2 + 1} / ${detour.to * 2 + 2}`, 3), className: 'pipeline-detour', ...off(detour.off) },
+            h('span', { className: 'pipeline-said' }, detour.label),
+            h('div', { className: 'pipeline-inner' }, detour.steps.flatMap((item, index) => [...(index === 0 ? [] : [link('pipeline-link', '', item.off, `dl${index}`)]), step(item, `ds${index}`)])),
+          ),
+        ],
+    shape.legend.length === 0
+      ? null
+      : h('div', { ...at(`${(detour?.to ?? 0) * 2 + 3} / -1`, 3), className: 'pipeline-legend' }, shape.legend.map((item, index) => h('span', { key: index, ...data('ink', oneOf(item.ink, INKS)) }, item.label))),
+  );
+};
 
 const Figure: NovaComponent = (props: Props) =>
   h(
@@ -484,4 +522,5 @@ export const REACT_KIT: KitOf<NovaComponent> = {
   Pair,
   Stack,
   Stats,
+  Pipeline,
 };

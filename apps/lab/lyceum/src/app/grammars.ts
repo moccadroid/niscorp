@@ -100,5 +100,10 @@ export const LYCEUM_KIT: Sequence = {
       description: 'The reading scale: Sheet scale page, Text size; Exhibit (a document set out to be read), Pair, Stack, Stats',
       steps: [],
     },
+    {
+      // A MARKER: a component added.
+      description: 'Pipeline: a line of steps that always run, and one detour under it that runs only sometimes',
+      steps: [],
+    },
   ],
 };

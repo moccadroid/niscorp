@@ -11,8 +11,8 @@ import type { Tracer } from './trace';
 // the rows are already the shape and, when they are not, runs Prism's mapping
 // agent — and keeps which it was to itself. This is the same hook — the same
 // test for a fit, the same agent, the same envelope — that also tells the
-// trace what happened: the identity with no model, or the mapping the agent
-// wrote, as it wrote it. Nothing about how rows are mapped changes.
+// trace which it was: the identity with no model, or a mapping the agent
+// wrote. Nothing about how rows are mapped changes.
 
 // The identity mapping over the envelope — what a fitting row set replays as.
 const IDENTITY = { $ref: '$.result' };
@@ -24,7 +24,7 @@ export const watchedShapeMapper = ({ llm, tracer }: { llm: SignalClient; tracer:
     const envelope = { result: single ? (rows[0] ?? null) : rows } as unknown as JsonObject;
 
     if (rowsFitShape(rows, shape)) {
-      tracer.mapped({ byAgent: false, config: IDENTITY, ms: 0 });
+      tracer.mapped({ byAgent: false, ms: 0 });
       const ir = await compile(IDENTITY);
       return { ir, transformed: execute(ir, envelope) };
     }
@@ -32,7 +32,7 @@ export const watchedShapeMapper = ({ llm, tracer }: { llm: SignalClient; tracer:
     const at = Date.now();
     const result = await mappingAgent.run({ sampleInput: envelope, targetShape: shape }, { llm }).result;
     if (!result.ok) throw new VexError('agent_failed', `${result.error.code}: ${result.error.message}`);
-    tracer.mapped({ byAgent: true, config: result.output.data, ms: Date.now() - at });
+    tracer.mapped({ byAgent: true, ms: Date.now() - at });
 
     const ir = await compile(result.output.data);
     return { ir, transformed: execute(ir, envelope) };

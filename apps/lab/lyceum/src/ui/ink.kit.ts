@@ -7,6 +7,7 @@ import type { ComponentRegistry } from '@niscorp/nova';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { KitOf } from './kit.props';
 import { INKS, LEVELS, MARKS, SIGILS, numbers, oneOf, records, text } from './kit';
+import { pipelineOf, pipelineText } from './kit.shape';
 
 // ═══════════════════════════════════════════════════════════════
 // THE TERMINAL KIT — the same grammar (./kit.props.ts) painted in a terminal,
@@ -241,8 +242,9 @@ const Pair: NovaComponent = ({ children }) => h(Box, { flexDirection: 'column', 
 const Stack: NovaComponent = ({ children }) => h(Box, { flexDirection: 'column', gap: 1 }, children);
 const Stats: NovaComponent = ({ ...props }) =>
   h(Box, { gap: 2 }, ...records(props['items']).map((item, i) => h(InkText, { key: i }, `${text(item['value']) ?? '—'} ${text(item['label']) ?? ''}`)));
+const Pipeline: NovaComponent = ({ ...props }) => h(Box, { flexDirection: 'column' }, ...pipelineText(pipelineOf(props)).map((line, i) => h(InkText, { key: i }, line)));
 
-export const INK_KIT: KitOf<NovaComponent> = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look, Xray, Menu, Exhibit, Pair, Stack, Stats };
+export const INK_KIT: KitOf<NovaComponent> = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look, Xray, Menu, Exhibit, Pair, Stack, Stats, Pipeline };
 
 // The terminal's registry: this kit, assembled once. moss's ink target adds
 // the wire-backed slots (ActionSlot, CanvasSlot) itself.

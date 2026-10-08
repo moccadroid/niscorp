@@ -9,7 +9,7 @@ import type { Tracer } from './trace';
 // channel with no payload — the same way the speaker's assistant is mirrored
 // (../mirroring.ts). The stage only looks.
 export { createTracer, EMPTY_TRACE, foldStatement, lookCall, summary, testCall } from './trace';
-export type { Call, Outcome, Pane, Trace, Tracer } from './trace';
+export type { Call, Outcome, Pipeline, Step, Trace, Tracer } from './trace';
 export { watchedShapeMapper } from './mapper';
 export { watchedQueryDsl } from './writer';
 

@@ -1,6 +1,6 @@
 import type { DomComponent } from '@niscorp/nova/adapters/dom';
 import type { Kit } from './kit.props';
-import { areaOf, codeLines, LANGS, numbers, SIGIL_SHAPES, flowDelays, instantOf, narrowOf, qrOf, remaining, sheetStyle, templateOf, text, weight } from './kit.shape';
+import { areaOf, codeLines, LANGS, numbers, pipelineColumns, pipelineOf, SIGIL_SHAPES, flowDelays, instantOf, narrowOf, qrOf, remaining, sheetStyle, templateOf, text, weight } from './kit.shape';
 
 export { codeLines, LANGS, numbers, text } from './kit.shape';
 
@@ -196,6 +196,69 @@ export const Stats: DomComponent = ({ props }) => {
     return node;
   });
   const node = el('div', 'stats', items);
+  placeIn(node, props['area']);
+  return node;
+};
+
+// ── Pipeline — a line of steps, and one detour under it ─────────
+// steps: [{ label, value, ink?, off? }] — what always runs, in order; a step
+// that did not happen is `off`. detour: { from, to, label, enter, leave,
+// direct, off, steps } — what runs only sometimes, leaving the line at step
+// `from` and coming back at step `to`; `direct` names the link it stands in
+// for. legend: [{ label, ink? }] — what the inks mean.
+const pipelineStep = (step: { label: string; value: string; ink: string | undefined; off: boolean }): HTMLElement => {
+  const label = el('b', '');
+  label.textContent = step.label;
+  const value = el('span', '');
+  value.textContent = step.value;
+  const node = el('div', 'pipeline-step', [label, value]);
+  setData(node, 'ink', oneOf(step.ink, INKS));
+  if (step.off) node.setAttribute('data-off', '');
+  return node;
+};
+const pipelineLink = (className: string, said: string, off: boolean): HTMLElement => {
+  const label = el('span', '');
+  label.textContent = said;
+  const node = el('div', className, [label]);
+  if (off) node.setAttribute('data-off', '');
+  return node;
+};
+export const Pipeline: DomComponent = ({ props }) => {
+  const shape = pipelineOf(props);
+  const at = (node: HTMLElement, column: string, row: number): HTMLElement => {
+    node.style.gridColumn = column;
+    node.style.gridRow = String(row);
+    return node;
+  };
+  const line = shape.steps.flatMap((step, index) => {
+    const link = shape.links[index];
+    return [at(pipelineStep(step), String(index * 2 + 1), 1), ...(link === undefined ? [] : [at(pipelineLink('pipeline-link', link.label, link.off), String(index * 2 + 2), 1)])];
+  });
+  const detour = shape.detour;
+  const under =
+    detour === undefined
+      ? []
+      : [
+          at(pipelineLink('pipeline-enter', detour.enter, detour.off), String(detour.from * 2 + 1), 2),
+          at(pipelineLink('pipeline-leave', detour.leave, !detour.back), String(detour.to * 2 + 1), 2),
+          (() => {
+            const label = el('span', 'pipeline-said');
+            label.textContent = detour.label;
+            const inner = el('div', 'pipeline-inner', detour.steps.flatMap((step, index) => [...(index === 0 ? [] : [pipelineLink('pipeline-link', '', step.off)]), pipelineStep(step)]));
+            const box = at(el('div', 'pipeline-detour', [label, inner]), `${detour.from * 2 + 1} / ${detour.to * 2 + 2}`, 3);
+            if (detour.off) box.setAttribute('data-off', '');
+            return box;
+          })(),
+        ];
+  const legend = shape.legend.map((item) => {
+    const node = el('span', '');
+    node.textContent = item.label;
+    setData(node, 'ink', oneOf(item.ink, INKS));
+    return node;
+  });
+  const key = at(el('div', 'pipeline-legend', legend), `${(detour?.to ?? 0) * 2 + 3} / -1`, 3);
+  const node = el('div', 'pipeline', [...line, ...under, ...(legend.length === 0 ? [] : [key])]);
+  node.style.gridTemplateColumns = pipelineColumns(shape.steps.length);
   placeIn(node, props['area']);
   return node;
 };
@@ -528,4 +591,4 @@ export const Xray: DomComponent = () => el('span', 'look');
 
 // THIS KIT, whole — typed against the grammar, so a component the grammar
 // names and the kit lacks does not compile.
-export const POSTER_KIT: Kit = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look, Xray, Menu, Exhibit, Pair, Stack, Stats };
+export const POSTER_KIT: Kit = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look, Xray, Menu, Exhibit, Pair, Stack, Stats, Pipeline };
