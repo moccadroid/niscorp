@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { compile, execute, evaluate } from '../src';
+import { compile, execute, evaluate, prismTransform, type JsonObject } from '../src';
 
 // ═══════════════════════════════════════════════════════════
 // Optimizer tests — verify that compile() actually does the
@@ -195,4 +195,29 @@ describe('execute — an IR read back from storage', () => {
     const source = { items: [{ name: 'a', n: 3 }, { name: 'b', n: 9 }] };
     expect(execute(await stored(config), source)).toEqual(execute(await compile(config), source));
   });
+});
+
+// A `$with` binding and a `$renameKeys` map are keyed by NAMES, and a name may
+// be an op's. The optimizer read such a record as that op.
+describe('optimize — a name that is also an op', () => {
+  const stored = async (config: unknown): Promise<Awaited<ReturnType<typeof compile>>> =>
+    JSON.parse(JSON.stringify(await compile(config)));
+
+  const cases: { name: string; config: unknown; source: JsonObject; expected: unknown }[] = [
+    { name: 'a binding called $upper', config: { $with: { let: { $upper: 'x' }, value: { $var: '$upper' } } }, source: {}, expected: 'x' },
+    { name: 'a binding called $ref, holding a number', config: { $with: { let: { $ref: 2 }, value: { $var: '$ref' } } }, source: {}, expected: 2 },
+    { name: 'a binding called $ref, holding a ref', config: { $with: { let: { $ref: { $ref: '$.a' } }, value: { $var: '$ref' } } }, source: { a: 7 }, expected: 7 },
+    { name: 'a key called $upper, renamed', config: { $renameKeys: { from: { $ref: '$' }, map: { $upper: 'x' } } }, source: { $upper: 1, b: 2 }, expected: { x: 1, b: 2 } },
+    { name: 'a key called $type, renamed', config: { $renameKeys: { from: { $ref: '$' }, map: { $type: 'kind' } } }, source: { $type: 'a' }, expected: { kind: 'a' } },
+  ];
+
+  for (const c of cases) {
+    it(`${c.name}: execute, a stored IR and prismTransform answer as evaluate does`, async () => {
+      expect(evaluate(c.config, c.source)).toEqual(c.expected);
+      expect(execute(await compile(c.config), c.source)).toEqual(c.expected);
+      expect(execute(await stored(c.config), c.source)).toEqual(c.expected);
+      expect(prismTransform(c.config, c.source)).toEqual(c.expected);
+      expect(prismTransform(c.config, c.source)).toEqual(c.expected);
+    });
+  }
 });

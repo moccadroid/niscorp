@@ -254,10 +254,24 @@ const optimizeNode = (
   // Recursively optimize all values first (post-order — children optimized
   // before parents). After this, every op subtree is already folded if
   // possible, so the parent can check isFoldableLiteral on its children.
-  const keys = Object.keys(node);
-  const optimized: Record<string, unknown> = {};
-  for (const key of keys) {
-    optimized[key] = optimizeNode(node[key], stats, evaluate);
+  const optimizeValues = (record: Record<string, unknown>): Record<string, unknown> => {
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(record)) out[key] = optimizeNode(record[key], stats, evaluate);
+    return out;
+  };
+
+  // Two ops hold a record keyed by NAMES, and a name may be an op's: a `$with`
+  // binding called `$upper`, a `$renameKeys` map that renames a key called
+  // `$type`. The record is not a node. Read as one, `let: { $upper: 'x' }`
+  // was folded to `{ $const: 'X' }` — the variable gone — and `let: { $ref: 2 }`
+  // threw from the path parser; evaluate() never did either.
+  let optimized: Record<string, unknown>;
+  if (isWithNode(node)) {
+    optimized = { $with: { let: optimizeValues(node.$with.let), value: optimizeNode(node.$with.value, stats, evaluate) } };
+  } else if (isRenameKeysNode(node)) {
+    optimized = { $renameKeys: { ...node.$renameKeys, from: optimizeNode(node.$renameKeys.from, stats, evaluate) } };
+  } else {
+    optimized = optimizeValues(node);
   }
 
   // 1. RefsInlined — $ref nodes get parsed segments attached.
@@ -358,7 +372,13 @@ const annotateNode = (node: unknown): void => {
   }
   if (!isPlainObject(node)) return;
 
-  if (!isConstNode(node)) {
+  // A record keyed by names is not a node (see optimizeNode).
+  if (isWithNode(node)) {
+    for (const value of Object.values(node.$with.let)) annotateNode(value);
+    annotateNode(node.$with.value);
+  } else if (isRenameKeysNode(node)) {
+    annotateNode(node.$renameKeys.from);
+  } else if (!isConstNode(node)) {
     for (const value of Object.values(node)) annotateNode(value);
   }
 
