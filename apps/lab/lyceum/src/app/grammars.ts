@@ -105,5 +105,10 @@ export const LYCEUM_KIT: Sequence = {
       description: 'Pipeline: a line of steps that always run, and one detour under it that runs only sometimes',
       steps: [],
     },
+    {
+      // A MARKER: a prop added.
+      description: 'Pipeline: a step’s note — set apart in its corner, how long it took',
+      steps: [],
+    },
   ],
 };

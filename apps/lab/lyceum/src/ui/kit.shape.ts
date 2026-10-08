@@ -186,7 +186,7 @@ export const flowDelays = (now: number): string[] => {
 // with whether it was walked, the detour with where it leaves the line and
 // where it comes back. The link the detour stands in for is walked only when
 // the detour was not.
-export type PipelineStep = { label: string; value: string; ink: string | undefined; off: boolean };
+export type PipelineStep = { label: string; value: string; note: string; ink: string | undefined; off: boolean };
 export type PipelineShape = {
   steps: PipelineStep[];
   links: { off: boolean; label: string }[];
@@ -195,7 +195,7 @@ export type PipelineShape = {
 };
 const rowsOf = (value: unknown): Record<string, unknown>[] =>
   Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null && !Array.isArray(item)) : [];
-const stepOf = (item: Record<string, unknown>): PipelineStep => ({ label: text(item['label']) ?? '', value: text(item['value']) ?? '', ink: text(item['ink']), off: item['off'] === true });
+const stepOf = (item: Record<string, unknown>): PipelineStep => ({ label: text(item['label']) ?? '', value: text(item['value']) ?? '', note: text(item['note']) ?? '', ink: text(item['ink']), off: item['off'] === true });
 export const pipelineOf = (props: Record<string, unknown>): PipelineShape => {
   const steps = rowsOf(props['steps']).map(stepOf);
   const raw = props['detour'];
@@ -217,6 +217,6 @@ export const pipelineOf = (props: Record<string, unknown>): PipelineShape => {
 // The grid a pipeline is drawn on: a column a step, a narrow one a link.
 export const pipelineColumns = (count: number): string => Array.from({ length: Math.max(count, 1) }, () => 'minmax(0, 1fr)').join(' 3rem ');
 export const pipelineText = (shape: PipelineShape): string[] => {
-  const said = (step: PipelineStep): string => `${step.label}: ${step.off ? 'not run' : step.value}`;
+  const said = (step: PipelineStep): string => `${step.label}: ${step.off ? 'not run' : [step.value, step.note].filter((part) => part !== '').join(', ')}`;
   return [shape.steps.map(said).join(' → '), ...(shape.detour === undefined || shape.detour.off ? [] : [`${shape.detour.label} — ${shape.detour.steps.map(said).join(' → ')}`])];
 };

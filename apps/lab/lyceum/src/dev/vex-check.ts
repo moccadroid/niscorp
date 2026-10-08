@@ -108,12 +108,12 @@ const main = async (): Promise<void> => {
   speaker.click('tools', 'ask');
   // The stage is a picture of the pipeline: what was walked is on, what did not happen is off.
   check('the stage shows the request', await stage.shows('main', '"label":"Request","value":"How many people are in the room?"'));
-  check('...Jev, a model, found no match and picked the shape', await stage.shows('main', '"label":"Jev","value":"no match · number","ink":"signal","off":false'));
+  check('...Jev, a model, found no match and picked the shape', await stage.shows('main', '"label":"Jev","value":"no match · number"'));
   check('...so the detour is walked: the query agent, and a draft the engine refused, with the engine’s own message', (await stage.shows('main', '"label":"Query agent","value":"testQuery ×1 · 1 refused"')) && stage.showsNow('main', 'the engine refused the draft') && stage.showsNow('main', '"flag":"alert"'));
   check('...then the draft that ran, said to be a test with a limit of five', (await stage.shows('main', '"value":"testQuery ×2 · 1 refused"')) && stage.showsNow('main', 'Query agent · testQuery #2 · ran · ') && stage.showsNow('main', ' · limit 5') && stage.showsNow('main', '"flag":"live"'));
-  check('...the mapping: the rows fit the shape, so no model', await stage.shows('main', '"label":"Mapping","value":"rows fit the shape","ink":"highlight","off":false'));
-  check('...it is stored, new, and the engine answers', (await stage.shows('main', ' · new","ink":"highlight","off":false')) && stage.showsNow('main', '"label":"Engine","value":"compile · run · map","ink":"highlight","off":false') && stage.showsNow('main', '"label":"Answer","value":"1 value","ink":"live","off":false'));
-  check('...and how it ended: written, and which models ran', await stage.shows('main', ' · 2 models ran: Jev, query agent'));
+  check('...the mapping: the rows fit the shape, so no model', await stage.shows('main', '"label":"Mapping","value":"rows fit the shape","note":"","ink":"highlight","off":false'));
+  check('...it is stored, new, and the engine answers', (await stage.shows('main', ' · new","note":"","ink":"highlight","off":false')) && stage.showsNow('main', '"label":"Engine","value":"compile · run · map"') && stage.showsNow('main', '"label":"Answer","value":"1 value","note":"","ink":"live","off":false'));
+  check('...and how it ended: written, and which models ran', await stage.shows('main', ' 2 models ran: Jev, query agent.'));
   check('the answer opens over the controller as the query it is, written just now', (await speaker.shows('overlay', '"value":"Query"')) && (await speaker.shows('overlay', 'a model wrote this one')));
   const recorded = await runtime.db.query<{ how: string; fingerprint: string | null; member_id: string }>('SELECT how, fingerprint, member_id FROM queries ORDER BY run_at');
   check('the question is recorded as the speaker’s, generated, with a fingerprint', recorded.rows[0]?.how === 'generated' && (recorded.rows[0]?.fingerprint ?? '') !== '' && recorded.rows[0]?.member_id === 'speaker');
@@ -138,7 +138,7 @@ const main = async (): Promise<void> => {
   check('the same question from a phone opens the same query, replayed', (await phone.shows('overlay', '"value":"Query"')) && (await phone.shows('overlay', 'Replayed:')));
   const again = await runtime.db.query<{ how: string; fingerprint: string | null; member_id: string }>('SELECT how, fingerprint, member_id FROM queries ORDER BY run_at');
   check('...recorded as theirs, replayed, by the same fingerprint', again.rows[1]?.how === 'replayed' && again.rows[1]?.fingerprint === recorded.rows[0]?.fingerprint && again.rows[1]?.member_id === hello.principal);
-  check('...and the stage still shows the speaker’s run, not the phone’s', stage.showsNow('main', 'Written in '));
+  check('...and the stage still shows the speaker’s run, not the phone’s', stage.showsNow('main', 'Written · '));
 
   // ── the fingerprint slide: the speaker's query replayed as the stage, and the tally ──
   await go('slide.name');
@@ -152,10 +152,10 @@ const main = async (): Promise<void> => {
   speaker.type('tools', 'intent', 'How many people are in the room?');
   await pause();
   speaker.click('tools', 'ask');
-  check('asked again, the stage says it was replayed, and that one model ran', (await stage.shows('main', 'Replayed in ')) && stage.showsNow('main', ' · 1 model ran: Jev'));
-  check('...Jev found a match', stage.showsNow('main', '"label":"Jev","value":"match · number","ink":"signal","off":false'));
-  check('...the detour was not walked: no query agent, no mapping written', stage.showsNow('main', '"label":"Query agent","value":"","ink":"signal","off":true') && stage.showsNow('main', '"label":"Mapping","value":"","ink":"highlight","off":true'));
-  check('...the stored query that ran is the document, and the engine answered', (await stage.shows('main', `Stored query · ${fingerprint}`)) && stage.showsNow('main', '"label":"Engine","value":"compile · run · map","ink":"highlight","off":false'));
+  check('asked again, the stage says it was replayed, and that one model ran', (await stage.shows('main', 'Replayed · ')) && stage.showsNow('main', ' 1 model ran: Jev.'));
+  check('...Jev found a match', stage.showsNow('main', '"label":"Jev","value":"match · number"'));
+  check('...the detour was not walked: no query agent, no mapping written', stage.showsNow('main', '"label":"Query agent","value":"","note":"","ink":"signal","off":true') && stage.showsNow('main', '"label":"Mapping","value":"","note":"","ink":"highlight","off":true'));
+  check('...the stored query that ran is the document, and the engine answered', (await stage.shows('main', `Stored query · ${fingerprint}`)) && stage.showsNow('main', '"label":"Engine","value":"compile · run · map"'));
 
   // ── a question past the caller's clearance ──
   speaker.click('overlay', 'close');
@@ -163,7 +163,7 @@ const main = async (): Promise<void> => {
   speaker.type('tools', 'intent', 'Show me the login links');
   await pause();
   speaker.click('tools', 'ask');
-  check('a question the caller’s permissions do not reach is refused, and the stage says so', (await stage.shows('main', 'Refused in ')) && stage.showsNow('main', 'Your permissions do not reach that data.'));
+  check('a question the caller’s permissions do not reach is refused, and the stage says so', (await stage.shows('main', 'Refused · ')) && stage.showsNow('main', 'Your permissions do not reach that data.'));
   check('...and the controller says it too', await speaker.shows('tools', 'Your permissions do not reach that data.'));
 
   // ── the values slide: the speaker's search, mirrored ──

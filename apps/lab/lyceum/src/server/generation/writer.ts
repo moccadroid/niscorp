@@ -26,6 +26,7 @@ export const watchedQueryDsl = ({ llm, dslSchema, tracer }: { llm: SignalClient;
     const intent = request.intent ?? '';
     const callerLine = describeCaller(caller.bindings);
     tracer.writing(intent);
+    const at = Date.now();
 
     const tools = createQueryTools({ getSchema: () => schema, read: caller.read });
     let unsatisfiable: string | undefined;
@@ -67,7 +68,7 @@ export const watchedQueryDsl = ({ llm, dslSchema, tracer }: { llm: SignalClient;
       tracer.refused(intent, result.error.message);
       throw new VexError('agent_failed', `${result.error.code}: ${result.error.message}`);
     }
-    tracer.written(intent);
+    tracer.written(intent, Date.now() - at);
     return result.output.data;
   };
 };

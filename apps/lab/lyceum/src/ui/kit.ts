@@ -201,17 +201,20 @@ export const Stats: DomComponent = ({ props }) => {
 };
 
 // ── Pipeline — a line of steps, and one detour under it ─────────
-// steps: [{ label, value, ink?, off? }] — what always runs, in order; a step
-// that did not happen is `off`. detour: { from, to, label, enter, leave,
+// steps: [{ label, value, note?, ink?, off? }] — what always runs, in order; a
+// step that did not happen is `off`; `note` is set apart in its corner (how
+// long it took). detour: { from, to, label, enter, leave,
 // direct, off, steps } — what runs only sometimes, leaving the line at step
 // `from` and coming back at step `to`; `direct` names the link it stands in
 // for. legend: [{ label, ink? }] — what the inks mean.
-const pipelineStep = (step: { label: string; value: string; ink: string | undefined; off: boolean }): HTMLElement => {
+const pipelineStep = (step: { label: string; value: string; note: string; ink: string | undefined; off: boolean }): HTMLElement => {
   const label = el('b', '');
   label.textContent = step.label;
+  const note = el('i', '');
+  note.textContent = step.note;
   const value = el('span', '');
   value.textContent = step.value;
-  const node = el('div', 'pipeline-step', [label, value]);
+  const node = el('div', 'pipeline-step', [label, note, value]);
   setData(node, 'ink', oneOf(step.ink, INKS));
   if (step.off) node.setAttribute('data-off', '');
   return node;

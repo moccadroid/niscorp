@@ -19,7 +19,7 @@ const area = z.string().describe('A grid area name from the enclosing Sheet');
 const ink = z.enum(INKS);
 const mark = z.enum(MARKS);
 const label = z.string();
-const pipelineStep = z.object({ label, value: z.string(), ink, off: z.boolean() }).partial({ ink: true, off: true }).strict();
+const pipelineStep = z.object({ label, value: z.string(), note: z.string().describe('Set apart in the step’s corner: how long it took'), ink, off: z.boolean() }).partial({ note: true, ink: true, off: true }).strict();
 
 export const KIT_PROPS = z
   .object({

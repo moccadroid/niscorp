@@ -122,8 +122,8 @@ export const writerLayout: LayoutNode = sheet(['head', 'picture', 'document', 'o
   { if: '$.trace.document.text', then: cell('document', [exhibit('$.trace.document.caption', '$.trace.document.text', { lang: '$.trace.document.lang', flag: '$.trace.document.flag' })]), else: cell('document', [], { mark: 'hatch' }) },
   {
     if: { $eq: ['$.trace.outcome.kind', 'refused'] },
-    then: cell('out', [headline('name', '{{$.trace.outcome.said}}')], { ink: 'alert' }),
-    else: { if: '$.trace.outcome.fingerprint', then: cell('out', [headline('name', '{{$.trace.outcome.said}}')], { ink: 'signal' }), else: cell('out', [label('{{$.trace.outcome.said}}')]) },
+    then: cell('out', [text('{{$.trace.outcome.title}} · {{$.trace.outcome.said}}')], { ink: 'alert' }),
+    else: { if: '$.trace.outcome.said', then: cell('out', [text('{{$.trace.outcome.title}} · {{$.trace.outcome.said}}')]), else: cell('out', [label('{{$.trace.outcome.title}}')]) },
   },
 ]);
 

@@ -183,7 +183,7 @@ const Pipeline: NovaComponent = (props: Props) => {
   const off = (is: boolean): Record<string, string> => (is ? { 'data-off': '' } : {});
   const at = (column: string, row: number): { style: Record<string, string> } => ({ style: { gridColumn: column, gridRow: String(row) } });
   const step = (item: PipelineStep, key: string, place: Record<string, unknown> = {}): ReturnType<typeof h> =>
-    h('div', { key, ...place, className: 'pipeline-step', ...data('ink', oneOf(item.ink, INKS)), ...off(item.off) }, h('b', null, item.label), h('span', null, item.value));
+    h('div', { key, ...place, className: 'pipeline-step', ...data('ink', oneOf(item.ink, INKS)), ...off(item.off) }, h('b', null, item.label), h('i', null, item.note), h('span', null, item.value));
   const link = (className: string, said: string, isOff: boolean, key: string, place: Record<string, unknown> = {}): ReturnType<typeof h> => h('div', { key, ...place, className, ...off(isOff) }, h('span', null, said));
   const detour = shape.detour;
   return h(

@@ -232,7 +232,7 @@ const Pipeline = functional((props, _children, place) => {
   const off = (is: boolean): Record<string, string> => (is ? { 'data-off': '' } : {});
   const at = (column: string, row: number): { style: Record<string, string> } => ({ style: { gridColumn: column, gridRow: String(row) } });
   const step = (item: PipelineStep, key: string, placing: Record<string, unknown> = {}): VNode =>
-    h('div', { key, ...placing, class: 'pipeline-step', ...data('ink', oneOf(item.ink, INKS)), ...off(item.off) }, [h('b', item.label), h('span', item.value)]);
+    h('div', { key, ...placing, class: 'pipeline-step', ...data('ink', oneOf(item.ink, INKS)), ...off(item.off) }, [h('b', item.label), h('i', item.note), h('span', item.value)]);
   const link = (name: string, said: string, isOff: boolean, key: string, placing: Record<string, unknown> = {}): VNode => h('div', { key, ...placing, class: name, ...off(isOff) }, [h('span', said)]);
   const detour = shape.detour;
   return h('div', { ...place({ gridTemplateColumns: pipelineColumns(shape.steps.length) }), class: 'pipeline' }, [

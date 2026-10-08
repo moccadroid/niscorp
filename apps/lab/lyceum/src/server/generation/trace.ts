@@ -29,7 +29,7 @@ import { compactJson } from '@lyceum/app/actions/slide/compact';
 // The inks a step wears: a model ran (signal), no model (highlight), the
 // answer (live), refused (alert).
 type Ink = 'signal' | 'highlight' | 'live' | 'alert';
-export type Step = { label: string; value: string; ink: Ink; off: boolean };
+export type Step = { label: string; value: string; note: string; ink: Ink; off: boolean };
 export type Pipeline = {
   steps: Step[];
   detour: { from: number; to: number; label: string; enter: string; leave: string; direct: string; off: boolean; steps: Step[] };
@@ -51,8 +51,9 @@ export type Call = {
 
 export type Outcome = {
   kind: 'none' | 'writing' | 'written' | 'replayed' | 'refused';
-  // The one line under the picture: how it ended, how long it took, and which
-  // models ran. "Nothing asked yet." before anything is.
+  // Under the picture: how it ended ("Replayed"), and in a sentence how long
+  // it took in all and which models ran. "Nothing asked yet." before anything is.
+  title: string;
   said: string;
   fingerprint: string;
   // The request that replays it, as a screen sends it.
@@ -76,7 +77,10 @@ export type Trace = {
 
 // What the trace knows, from which everything drawn is worked out.
 type Known = {
-  jev: { matched: boolean; shape: string } | undefined;
+  jev: { matched: boolean; shape: string; ms: number } | undefined;
+  // How long the query agent took to write, and the engine to run, in ms.
+  agentMs: number | undefined;
+  engineMs: number | undefined;
   // The query agent was started: a refusal with no agent is one stored before.
   agent: boolean;
   calls: Call[];
@@ -91,7 +95,7 @@ const LEGEND: Pipeline['legend'] = [
   { label: 'No model', ink: 'highlight' },
 ];
 const NO_DOCUMENT: Trace['document'] = { caption: '', text: '', lang: '', flag: 'highlight' };
-const NO_OUTCOME: Outcome = { kind: 'none', said: 'Nothing asked yet.', fingerprint: '', sent: '' };
+const NO_OUTCOME: Outcome = { kind: 'none', title: 'Nothing asked yet.', said: '', fingerprint: '', sent: '' };
 
 // A statement folded at its clauses, and a long select list one column per
 // line, so the engine's own text fits a column: the words are the engine's,
@@ -113,6 +117,7 @@ export const summary = (result: unknown): string => {
 };
 
 const counted = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`;
+const took = (ms: number | undefined): string => (ms === undefined ? '' : `${ms} ms`);
 
 // A look at the data: the tool, what it was asked, what came back.
 export const lookCall = (tool: string, args: unknown, result: string, ms: number): Call => ({ what: tool, failed: false, sent: args, said: result, how: `${ms} ms` });
@@ -158,11 +163,11 @@ const drawn = (trace: Trace, known: Known): void => {
 
   trace.pipeline = {
     steps: [
-      { label: 'Request', value: trace.intent, ink: 'highlight', off: false },
-      { label: 'Jev', value: known.jev === undefined ? 'picking…' : `${known.jev.matched ? 'match' : 'no match'} · ${known.jev.shape}`, ink: 'signal', off: trace.intent === '' },
-      { label: 'Stored query', value: refusedBefore ? 'refused before' : stored ? `${brief(trace.outcome.fingerprint)}${replayed ? '' : ' · new'}` : '', ink: refusedBefore ? 'alert' : 'highlight', off: !stored && !refusedBefore },
-      { label: 'Engine', value: 'compile · run · map', ink: 'highlight', off: !answered },
-      { label: 'Answer', value: known.answered, ink: 'live', off: !answered },
+      { label: 'Request', value: trace.intent, note: '', ink: 'highlight', off: false },
+      { label: 'Jev', value: known.jev === undefined ? 'picking…' : `${known.jev.matched ? 'match' : 'no match'} · ${known.jev.shape}`, note: took(known.jev?.ms), ink: 'signal', off: trace.intent === '' },
+      { label: 'Stored query', value: refusedBefore ? 'refused before' : stored ? `${brief(trace.outcome.fingerprint)}${replayed ? '' : ' · new'}` : '', note: '', ink: refusedBefore ? 'alert' : 'highlight', off: !stored && !refusedBefore },
+      { label: 'Engine', value: 'compile · run · map', note: took(known.engineMs), ink: 'highlight', off: !answered },
+      { label: 'Answer', value: known.answered, note: '', ink: 'live', off: !answered },
     ],
     detour: {
       from: 1,
@@ -174,10 +179,11 @@ const drawn = (trace: Trace, known: Known): void => {
       direct: refusedBefore ? 'same request' : 'match',
       off: !writing,
       steps: [
-        { label: 'Query agent', value: writing ? agentSaid : '', ink: agentRefused ? 'alert' : 'signal', off: !writing },
+        { label: 'Query agent', value: writing ? agentSaid : '', note: writing ? took(known.agentMs) : '', ink: agentRefused ? 'alert' : 'signal', off: !writing },
         {
           label: 'Mapping',
-          value: known.mapping === undefined ? '' : known.mapping.byAgent ? `Prism agent · ${known.mapping.ms} ms` : 'rows fit the shape',
+          value: known.mapping === undefined ? '' : known.mapping.byAgent ? 'Prism agent' : 'rows fit the shape',
+          note: known.mapping?.byAgent === true ? took(known.mapping.ms) : '',
           ink: known.mapping?.byAgent === true ? 'signal' : 'highlight',
           off: known.mapping === undefined,
         },
@@ -201,20 +207,13 @@ const drawn = (trace: Trace, known: Known): void => {
   // Which models ran: Jev always; the query agent when a query was written;
   // Prism's agent when it wrote the mapping.
   const models = ['Jev', ...(writing ? ['query agent'] : []), ...(known.mapping?.byAgent === true ? ['Prism agent'] : [])];
-  const ran = routed ? ` · ${counted(models.length, 'model ran', 'models ran')}: ${models.join(', ')}` : '';
-  trace.outcome.said =
-    kind === 'none'
-      ? NO_OUTCOME.said
-      : refused
-        ? `Refused in ${trace.ms} ms · ${known.refusal}`
-        : replayed && stored
-          ? `Replayed in ${trace.ms} ms${ran}`
-          : kind === 'written' && stored
-            ? `Written in ${trace.ms} ms${ran}`
-            : 'Writing…';
+  const ran = routed ? ` ${counted(models.length, 'model ran', 'models ran')}: ${models.join(', ')}.` : '';
+  const ended = refused || ((replayed || kind === 'written') && stored);
+  trace.outcome.title = kind === 'none' ? NO_OUTCOME.title : refused ? 'Refused' : !ended ? 'Writing…' : replayed ? 'Replayed' : 'Written';
+  trace.outcome.said = !ended ? '' : refused ? `${known.refusal.replace(/[.]$/, "")}. ${trace.ms} ms in all.${ran}` : `${trace.ms} ms in all.${ran}`;
 };
 
-const nothingKnown = (): Known => ({ jev: undefined, agent: false, calls: [], mapping: undefined, stored: undefined, answered: '', refusal: '' });
+const nothingKnown = (): Known => ({ jev: undefined, agentMs: undefined, engineMs: undefined, agent: false, calls: [], mapping: undefined, stored: undefined, answered: '', refusal: '' });
 
 export const EMPTY_TRACE: Trace = (() => {
   const trace: Trace = { principal: '', intent: '', shapeKind: '', pipeline: { steps: [], detour: { from: 1, to: 2, label: '', enter: '', leave: '', direct: '', off: true, steps: [] }, legend: LEGEND }, document: NO_DOCUMENT, outcome: { ...NO_OUTCOME }, ms: 0 };
@@ -227,7 +226,7 @@ export type Tracer = {
   expect: (intent: string, principal: string) => void;
   // Jev picked: a request already answered that asks the same, or none — and
   // the answer's shape.
-  routed: (principal: string, intent: string, decided: { fingerprint: string | null; shape: string }) => void;
+  routed: (principal: string, intent: string, decided: { fingerprint: string | null; shape: string }, ms: number) => void;
   // Run the engine for this request: what its hooks record is this request's.
   during: <T>(intent: string, run: () => Promise<T>) => Promise<T>;
   // The query agent was started, and made a call.
@@ -236,15 +235,15 @@ export type Tracer = {
   // The rows were put in the shape: already in it (the identity, no model), or
   // by a mapping Prism's agent wrote.
   mapped: (mapping: { byAgent: boolean; ms: number }) => void;
-  // The agent finished: its last draft is the document.
-  written: (intent: string) => void;
+  // The agent finished, after this long: its last draft is the document.
+  written: (intent: string, ms: number) => void;
   // The engine stored it under this name, answering in this shape.
   completed: (intent: string, fingerprint: string, shapeKind: string) => void;
   replayed: (intent: string, principal: string, fingerprint: string, shapeKind: string) => void;
   refused: (intent: string, reason: string) => void;
   // It has answered — a new query and a replayed one alike: the rows it gave
   // the person who asked, and the stored document that ran.
-  answered: (principal: string, intent: string, stored: { document: unknown; rows: unknown }) => void;
+  answered: (principal: string, intent: string, stored: { document: unknown; rows: unknown; engineMs: number | undefined }) => void;
   latest: (principal: string) => Trace | undefined;
   onChange: (listener: () => void) => void;
 };
@@ -299,9 +298,9 @@ export const createTracer = (): Tracer => {
       change(trace, () => undefined);
       told();
     },
-    routed: (principal, intent, decided) =>
+    routed: (principal, intent, decided, ms) =>
       theirs(principal, intent, (_trace, known) => {
-        known.jev = { matched: decided.fingerprint !== null, shape: decided.shape };
+        known.jev = { matched: decided.fingerprint !== null, shape: decided.shape, ms };
       }),
     during: (intent, run) => running.run(intent, run),
     writing: (intent) =>
@@ -319,8 +318,9 @@ export const createTracer = (): Tracer => {
         known.mapping = mapping;
       });
     },
-    written: (intent) =>
-      touch(intent, (trace) => {
+    written: (intent, ms) =>
+      touch(intent, (trace, known) => {
+        known.agentMs = ms;
         trace.outcome.kind = 'written';
       }),
     completed: (intent, fingerprint, shapeKind) => {
@@ -350,6 +350,7 @@ export const createTracer = (): Tracer => {
     answered: (principal, intent, stored) =>
       theirs(principal, intent, (_trace, known) => {
         known.stored = stored.document;
+        known.engineMs = stored.engineMs;
         known.answered = Array.isArray(stored.rows) ? counted(stored.rows.length, 'row', 'rows') : '1 value';
       }),
     latest: (principal) => latest.get(principal),

@@ -169,12 +169,13 @@ const fakeQuerier = (tracer: Tracer): Querier => ({
   generateDsl: async (request, _schema, caller) => {
     const intent = request.intent ?? '';
     tracer.writing(intent);
+    const began = Date.now();
     const dsl = (/login|sign in|password/i.test(intent) ? FAKE_DSL['forbidden'] : FAKE_DSL[fakeKind(intent)]) ?? { from: ['members'] };
     tracer.called(intent, await tested(caller, MISTAKEN));
     // A model takes its time between drafts, and so does the stand-in.
     await new Promise((resolve) => setTimeout(resolve, FAKE_PACE_MS));
     tracer.called(intent, await tested(caller, dsl));
-    tracer.written(intent);
+    tracer.written(intent, Date.now() - began);
     return dsl;
   },
   // The watched mapper, with a model that is never there: rows that fit their

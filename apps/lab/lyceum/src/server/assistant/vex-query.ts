@@ -57,24 +57,25 @@ export const routeQuery = async (session: FunctionSession, querier: Querier, sta
   const principal = session.principal ?? '';
   querier.trace.expect(request, principal);
   const known: Known[] = KnownSchema.parse(await vex(queriesKnown.fingerprint));
+  const asked = Date.now();
   const route = await querier.route(request, known);
-  querier.trace.routed(principal, request, route.decided);
+  querier.trace.routed(principal, request, route.decided, Date.now() - asked);
 
   // What the stage shows of the query that answered — a new one and a replayed
   // one alike: the caller's rows, and the document as it is stored.
   const engine = await queryEngineFor(session.runtime, querier);
   const caller = { scope: { userId: session.principal }, scopePolicy: session.policy };
-  const show = async (fingerprint: string, rows: unknown): Promise<void> => {
+  const show = async (fingerprint: string, rows: unknown, engineMs: number | undefined): Promise<void> => {
     const stored = await session.runtime.cache?.get(fingerprint);
     if (stored?.kind !== 'ok') return;
-    querier.trace.answered(principal, request, { document: stored.dsl, rows });
+    querier.trace.answered(principal, request, { document: stored.dsl, rows, engineMs });
   };
 
   if ('replay' in route) {
     await record(route.replay.shape, 'replayed', route.replay.fingerprint);
     querier.trace.replayed(request, principal, route.replay.fingerprint, route.replay.shape);
     const replayed = await engine.execute({ fingerprint: route.replay.fingerprint, context: {} }, caller);
-    await show(route.replay.fingerprint, replayed.result);
+    await show(route.replay.fingerprint, replayed.result, replayed.meta.timing?.executionMs);
     return { fingerprint: route.replay.fingerprint, kind: route.replay.shape, how: 'replayed' };
   }
 
@@ -86,7 +87,7 @@ export const routeQuery = async (session: FunctionSession, querier: Querier, sta
     if (fingerprint === undefined) throw new Error('the query was answered but not stored');
     await record(shape.kind, 'generated', fingerprint);
     querier.trace.completed(request, fingerprint, shape.kind);
-    await show(fingerprint, answered.result);
+    await show(fingerprint, answered.result, answered.meta.timing?.executionMs);
     return { fingerprint, kind: shape.kind, how: 'generated' };
   } catch (error) {
     // Refused — by the model (it cannot be answered from what this person

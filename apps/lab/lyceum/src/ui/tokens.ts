@@ -472,10 +472,12 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(14px, min
    happen stays where it is, faded — the picture is the same every time and
    only what is lit changes. */
 .${ROOT_CLASS} .pipeline { display: grid; grid-template-rows: auto 1.9rem auto; align-items: stretch; min-width: 0; }
-.${ROOT_CLASS} .pipeline-step { background: var(--bg); color: var(--fg); border: var(--rule) solid var(--ink); padding: .5rem .8rem .6rem; display: grid; gap: .25rem; align-content: start; min-width: 0; }
+.${ROOT_CLASS} .pipeline-step { background: var(--bg); color: var(--fg); border: var(--rule) solid var(--ink); padding: .5rem .8rem .6rem; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .25rem .6rem; align-content: start; min-width: 0; }
 .${ROOT_CLASS} .pipeline-step > b { font: 900 .82rem/1.1 var(--display); letter-spacing: .04em; text-transform: uppercase; }
 /* a value is a line; a longer one — somebody's question — takes a second and stops there */
-.${ROOT_CLASS} .pipeline-step > span { font: 400 .8rem/1.3 var(--mono); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+/* how long the step took: in its corner, in figures that do not jump as they change */
+.${ROOT_CLASS} .pipeline-step > i { font: 700 .8rem/1.1 var(--mono); font-style: normal; font-variant-numeric: tabular-nums; white-space: nowrap; align-self: center; }
+.${ROOT_CLASS} .pipeline-step > span { grid-column: 1 / -1; font: 400 .8rem/1.3 var(--mono); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .${ROOT_CLASS} .pipeline [data-off] { opacity: .22; }
 .${ROOT_CLASS} .pipeline-step[data-off] { background: var(--paper); color: var(--ink); }
 /* a link: a rule from one step to the next, its head at the far end */
