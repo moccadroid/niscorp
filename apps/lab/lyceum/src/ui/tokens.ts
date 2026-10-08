@@ -318,6 +318,12 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(14px, min
 }
 .${ROOT_CLASS} .menu-icon::-webkit-details-marker { display: none; }
 .${ROOT_CLASS} .menu[open] > .menu-icon { background-color: var(--highlight); }
+/* an open menu hangs below its own cell, over what is under it: the cell and the
+   canvas that hold it stop clipping while it is open — the wipe a cell arrives
+   with too, which leaves its clip on the cell (above, "a slide arriving") —
+   and the cell stands over its neighbours */
+.${ROOT_CLASS} .cell:has(.menu[open]), .${ROOT_CLASS} .cell:has(.menu[open]) > [data-canvas] { overflow: visible; }
+.${ROOT_CLASS} .cell:has(.menu[open]) { position: relative; z-index: 20; animation: none !important; }
 .${ROOT_CLASS} .menu-items {
   position: absolute; top: 100%; right: 0; z-index: 20; min-width: 14rem;
   display: flex; flex-direction: column; gap: var(--rule); background: var(--ink); border: var(--rule) solid var(--ink);
