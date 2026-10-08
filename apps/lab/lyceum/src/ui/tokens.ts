@@ -419,6 +419,8 @@ html:has(.page > [data-canvas="strip"]:not(:empty)) { font-size: clamp(14px, min
 .${ROOT_CLASS} .exhibit[data-tone="ink"] { gap: 0; }
 .${ROOT_CLASS} .exhibit[data-tone="ink"] > figcaption { justify-self: start; background: #111; color: #e9e6dc; border: var(--rule) solid var(--ink); border-bottom: 0; padding: .45rem .7rem .35rem; }
 .${ROOT_CLASS} .exhibit[data-tone="ink"] > pre { background: #111; color: #e9e6dc; }
+/* a document set in colour: its names are white, as on nisc.dev (its exhibit-ink pre code rule) */
+.${ROOT_CLASS} .exhibit[data-tone="ink"][data-lang] > pre { color: #fff; }
 .${ROOT_CLASS} [data-ink="ink"] .exhibit[data-tone="ink"] > figcaption, .${ROOT_CLASS} [data-ink="signal"] .exhibit[data-tone="ink"] > figcaption { border-color: var(--paper); }
 /* the lines that matter */
 .${ROOT_CLASS} .exhibit > pre > span[data-marked] { background: var(--highlight); color: var(--ink); margin: 0 -.5em; padding: 0 .5em; }
