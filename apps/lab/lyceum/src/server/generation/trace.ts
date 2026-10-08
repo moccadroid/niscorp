@@ -181,7 +181,7 @@ const drawn = (trace: Trace, known: Known): void => {
     detour: {
       from: 0,
       to: 1,
-      label: 'Only when nothing stored matches: write one',
+      label: '',
       enter: 'no match',
       leave: 'document + mapping',
       // A refusal stored for these very words is found by the engine, not by Jev.
@@ -212,7 +212,7 @@ const drawn = (trace: Trace, known: Known): void => {
       : newest === undefined
         ? NO_DOCUMENT
         : newest.failed
-          ? { caption: `Query agent · testQuery #${tests.length} · the engine refused the draft`, text: newest.said, lang: '', flag: 'alert' }
+          ? { caption: `Query agent · testQuery #${tests.length} · refused`, text: newest.said, lang: '', flag: 'alert' }
           : { caption: `Query agent · testQuery #${tests.length} · ${newest.how}`, text: compactJson(newest.sent, DOCUMENT_LINE), lang: 'json', flag: 'live' };
 
   // Which models ran: Jev always; the query agent when a query was written;
@@ -312,7 +312,7 @@ export const createTracer = (): Tracer => {
     },
     routed: (principal, intent, decided, shape, ms) =>
       theirs(principal, intent, (trace, known) => {
-        trace.shape = { caption: `Shape · ${decided.shape} · picked by Jev`, text: compactJson(shape, DOCUMENT_LINE) };
+        trace.shape = { caption: `Shape · ${decided.shape}`, text: compactJson(shape, DOCUMENT_LINE) };
         known.jev = { matched: decided.fingerprint !== null, shape: decided.shape, ms };
       }),
     during: (intent, run) => running.run(intent, run),

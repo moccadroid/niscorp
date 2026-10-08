@@ -111,12 +111,12 @@ const main = async (): Promise<void> => {
   speaker.click('tools', 'ask');
   // The stage is a picture of the pipeline: what was walked is on, what did not happen is off.
   check('the stage shows the intent, large, as the speaker typed it', (await stage.shows('main', '"value":"Intent"')) && stage.showsNow('main', '"value":"How many people are in the room?"'));
-  check('...and beside it the shape Jev picked, as the request carries it', (await stage.shows('main', 'Shape · number · picked by Jev')) && stage.showsNow('main', '{ \\"value\\": 0 }'));
+  check('...and beside it the shape Jev picked, as the request carries it', (await stage.shows('main', 'Shape · number')) && stage.showsNow('main', '{ \\"value\\": 0 }'));
   check('...Jev, a model, found no match and picked the shape', await stage.shows('main', '"label":"Jev","value":"no match · number"'));
   // The kit draws from the trace's own picture: a detour that leaves the line at its first step is one.
   const drawn = pipelineOf({ ...EMPTY_TRACE.pipeline });
   check('...and the kit draws the picture whole: four steps, three links, and the detour from the first of them', drawn.steps.length === 4 && drawn.links.length === 3 && drawn.detour?.from === 0 && drawn.detour.steps.length === 2);
-  check('...so the detour is walked: the query agent, and a draft the engine refused, with the engine’s own message', (await stage.shows('main', '"label":"Query agent","value":"testQuery ×1 · 1 refused"')) && stage.showsNow('main', 'the engine refused the draft') && stage.showsNow('main', '"flag":"alert"'));
+  check('...so the detour is walked: the query agent, and a draft the engine refused, with the engine’s own message', (await stage.shows('main', '"label":"Query agent","value":"testQuery ×1 · 1 refused"')) && stage.showsNow('main', 'Query agent · testQuery #1 · refused') && stage.showsNow('main', '"flag":"alert"'));
   check('...then the draft that ran, said to be a test with a limit of five', (await stage.shows('main', '"value":"testQuery ×2 · 1 refused"')) && stage.showsNow('main', 'Query agent · testQuery #2 · ran · ') && stage.showsNow('main', ' · limit 5') && stage.showsNow('main', '"flag":"live"'));
   check('...the mapping: the rows fit the shape, so no model', await stage.shows('main', '"label":"Mapping","value":"rows fit the shape","note":"","ink":"highlight","off":false'));
   check('...it is stored, new, and the engine answers', (await stage.shows('main', ' · new","note":"","ink":"highlight","off":false')) && stage.showsNow('main', '"label":"Engine","value":"compile · run · map"') && stage.showsNow('main', '"label":"Answer","value":"1 value","note":"","ink":"live","off":false'));
