@@ -3,7 +3,7 @@ import type { CortexEvent, RunHandle, SignalClient } from '@niscorp/cortex';
 import { VexError } from '@niscorp/vex';
 import type { GenerateDsl, Query } from '@niscorp/vex';
 import { createQueryTools, describeCaller, vexQueryDslAgent } from '@niscorp/vex/agent';
-import { lookStep, summary, testStep } from './trace';
+import { lookCall, summary, testCall } from './trace';
 import type { Tracer } from './trace';
 
 // THE QUERY WRITER, WATCHED. Vex's own generation hook runs its query agent
@@ -25,11 +25,8 @@ export const watchedQueryDsl = ({ llm, dslSchema, tracer }: { llm: SignalClient;
   return async (request, schema, caller) => {
     const intent = request.intent ?? '';
     const callerLine = describeCaller(caller.bindings);
-    tracer.started(intent, request.shape);
 
     const tools = createQueryTools({ getSchema: () => schema, read: caller.read });
-    // The statement the last passing test compiled: the one the document became.
-    let passed = '';
     let unsatisfiable: string | undefined;
     let run: RunHandle<Query> | undefined;
     run = vexQueryDslAgent.run(
@@ -50,13 +47,12 @@ export const watchedQueryDsl = ({ llm, dslSchema, tracer }: { llm: SignalClient;
           if (seen.kind === 'result' && seen.toolId === 'testQuery') {
             const answer = TestAnswerSchema.safeParse(seen.result);
             if (answer.success) {
-              if (answer.data.errors.length === 0) passed = answer.data.sql;
-              tracer.step(intent, testStep(seen.args, { sql: answer.data.sql, errors: answer.data.errors, rows: answer.data.rows.length }, ms));
+              tracer.called(intent, testCall(seen.args, { errors: answer.data.errors, rows: answer.data.rows.length }));
               return;
             }
           }
           const result = seen.kind === 'result' ? summary(seen.result) : seen.kind === 'error' ? seen.error : seen.kind === 'denied' ? seen.reason : 'unknown tool';
-          tracer.step(intent, lookStep(seen.toolId, seen.args, result, ms));
+          tracer.called(intent, lookCall(seen.toolId, seen.args, result, ms));
         },
       },
     );
@@ -70,7 +66,7 @@ export const watchedQueryDsl = ({ llm, dslSchema, tracer }: { llm: SignalClient;
       tracer.refused(intent, result.error.message);
       throw new VexError('agent_failed', `${result.error.code}: ${result.error.message}`);
     }
-    tracer.written(intent, result.output.data, passed);
+    tracer.written(intent);
     return result.output.data;
   };
 };

@@ -107,51 +107,49 @@ export const toolsLayout: LayoutNode = sheet(['head head', 'tools said'], [1, 1.
   cell('said', [headline('title', 'Every tool runs through the engine as the caller.'), text('There is no way to ask it to run something as nobody.')], { ink: 'signal', align: 'middle' }),
 ]);
 
-// WATCH IT WRITE ONE. The speaker's question as the engine sees it being
-// answered, live: the request; the newest thing the writer did, as a pair of
-// exhibits — what it sent, and what came back, flagged orange for a draft that
-// failed and green for one that ran, in the engine's own words; and how it
-// ended. One step at a time: the trace changes under the slide as the writer
-// works, and the room watches a draft fail and the next one pass.
-const latest = (key: string): unknown => ({ $prism: { $get: { from: { $ref: '$.trace.steps' }, path: [{ $sub: [{ $length: { $ref: '$.trace.steps' } }, 1] }, key], fallback: { $const: '' } } } });
-const stepped = { $prism: { $gt: [{ $length: { $ref: '$.trace.steps' } }, 0] } };
+// WATCH IT WRITE ONE. The speaker's question, as it is answered: every step
+// that happened, in order, and each stays on the slide (server/generation).
+// Left, what is one line each: the request; what Jev picked; what happened to
+// the rows on the way to the shape — nothing, or Prism's mapping agent; the
+// answer. Right, the query agent's calls, the newest in full — a draft the
+// engine refused in orange with the engine's words, one that ran in green. A
+// replay has no calls and no mapping, because neither happened: the stored
+// query that ran is on the right instead.
 const replayed = { $eq: ['$.trace.outcome.kind', 'replayed'] };
-const ended = (): LayoutNode => label('{{$.trace.outcome.kind}} · {{$.trace.ms}} ms');
+const tight = (children: LayoutNode[]): LayoutNode => ({ component: 'Stack', props: { gap: 'tight' }, children });
 
-export const writerLayout: LayoutNode = sheet(['head request', 'step step', 'out out'], [0.6, 1.8], ['auto', 1, 'auto'], [
+export const writerLayout: LayoutNode = sheet(['head', 'run', 'out'], [1], ['auto', 1, 'auto'], [
   head(),
   {
     if: '$.trace.request',
-    // The request; then what Jev picked from the stored queries — a
-    // fingerprint and its intent, or none — and the answer's shape.
-    then: cell('request', [exhibit('The request', '$.trace.request', { lang: 'json' }), { if: '$.trace.router', then: exhibit('$.trace.routed', '$.trace.router', { lang: 'json', flag: 'highlight' }) }], { align: 'middle' }),
-    else: cell('request', [muted('Asked on the controller. The room watches it answered here.')], { mark: 'hatch', align: 'middle' }),
-  },
-  {
-    // Answered — written just now, or replayed: the same three documents.
-    if: '$.trace.outcome.answered',
-    then: cell('step', [
-      pair([
-        exhibit('The stored document', '$.trace.outcome.text', { lang: 'json' }),
-        { component: 'Stack', children: [exhibit('The statement it compiles to', '$.trace.outcome.sql', { lang: 'sql' }), exhibit('$.trace.outcome.answered', '$.trace.outcome.answer', { lang: 'json', flag: 'live' })] },
-      ], 'wide-narrow'),
+    then: cell('run', [
+      pair(
+        [
+          tight([
+            exhibit('Request', '$.trace.request', { lang: 'json' }),
+            { if: '$.trace.jev.text', then: exhibit('$.trace.jev.caption', '$.trace.jev.text', { lang: 'json', flag: 'highlight' }) },
+            { if: '$.trace.mapping.text', then: exhibit('$.trace.mapping.caption', '$.trace.mapping.text', { lang: 'json', flag: 'highlight' }), else: { if: '$.trace.mapping.caption', then: label('{{$.trace.mapping.caption}}') } },
+            { if: '$.trace.outcome.answered', then: exhibit('$.trace.outcome.answered', '$.trace.outcome.answer', { lang: 'json', flag: 'live' }) },
+          ]),
+          tight([
+            { if: '$.trace.outcome.document', then: exhibit('Stored query · replayed', '$.trace.outcome.document', { lang: 'json', flag: 'live' }) },
+            { for: '$.trace.panes', as: 'pane', key: 'key', do: exhibit('$pane.caption', '$pane.text', { lang: '$pane.lang', flag: '$pane.flag' }) },
+          ]),
+        ],
+      ),
     ]),
-    else: {
-      if: stepped,
-      then: cell('step', [pair([exhibit(latest('label'), latest('draft'), { lang: 'json' }), exhibit(latest('said'), latest('answer'), { lang: latest('lang'), flag: latest('ink') })], 'wide-narrow')]),
-      else: cell('step', [muted('{{$.trace.outcome.label}}')], { mark: 'hatch', align: 'middle' }),
-    },
+    else: cell('run', [muted('Asked on the controller.')], { mark: 'hatch', align: 'middle' }),
   },
   {
     if: '$.trace.outcome.fingerprint',
     then: {
       if: replayed,
       then: cell('out', [headline('name', 'Replayed in {{$.trace.ms}} ms: {{$.trace.outcome.fingerprint}}. No model ran.')], { ink: 'signal' }),
-      else: cell('out', [headline('name', 'Written in {{$.trace.ms}} ms. Stored under {{$.trace.outcome.fingerprint}}. Replayed from now on.')], { ink: 'signal' }),
+      else: cell('out', [headline('name', 'Written in {{$.trace.ms}} ms. Stored: {{$.trace.outcome.fingerprint}}.')], { ink: 'signal' }),
     },
     else: {
       if: { $eq: ['$.trace.outcome.kind', 'refused'] },
-      then: cell('out', [ended(), text('{{$.trace.outcome.text}}')], { ink: 'alert' }),
+      then: cell('out', [label('Refused · {{$.trace.ms}} ms'), text('{{$.trace.outcome.label}}')], { ink: 'alert' }),
       else: cell('out', [label('{{$.trace.outcome.label}}')]),
     },
   },

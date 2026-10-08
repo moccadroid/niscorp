@@ -1,47 +1,48 @@
-// WATCHING A QUERY BEING WRITTEN — lyceum's own record of one generation, in
-// lyceum's words, for the stage to draw: the request, each thing the writer
-// did (a look at the data, a test of a draft and what the engine answered),
-// and how it ended (the document that passed and the name it was stored under,
-// a replay with no model, or a refusal). Every string is ready to print, and
-// every document is set out as one: a draft, an answer, a statement each an
-// exhibit of its own on the slide (app/actions/slide/vex.layouts.ts). What
-// the model is shown has a slide of its own, read off the charter.
-import { compactJson } from '@lyceum/app/actions/slide/compact';
+// ONE REQUEST, AS IT WAS ANSWERED — lyceum's own record of what happened to a
+// question in words, in the order it happened, for the stage to draw
+// (app/actions/slide/vex.layouts.ts): the request; what Jev picked; every call
+// vex's query agent made, with the draft it tested and what the engine said;
+// what happened to the rows on the way to the shape — nothing, or Prism's
+// mapping agent; the answer; the name it is stored under. A replay is the same
+// record with the two model steps absent, because they did not happen.
+//
+// Every string is ready to print. What the slide draws is a list of PANES — a
+// caption, a document, how it is flagged — so the slide arranges and nothing
+// on it decides what a step looks like.
 //
 // A trace belongs to the person who asked. `expect` is called before the
 // engine runs, inside their session, so the run is attributed to them without
 // the writer knowing who they are; the engine collapses identical requests
-// into one run, so a run is found by its intent.
+// into one run, so a run is found by its intent. The mapping hook is not
+// handed the request it maps for, so the engine is run inside `during`, which
+// says whose it is (an async context).
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { compactJson } from '@lyceum/app/actions/slide/compact';
 
-export type Step = {
-  n: number;
-  // The tool the writer called, and the exhibit's caption: "2 · testQuery".
+export type Pane = { key: string; caption: string; text: string; lang: 'json' | 'sql' | ''; flag: 'alert' | 'live' | 'highlight' | 'paper' };
+
+// One call the query agent made: the tool, what it sent, and what came back.
+export type Call = {
   what: string;
-  label: string;
-  // How the answer is flagged: a test that failed (alert), one that ran (live), a look (paper).
-  ink: 'alert' | 'live' | 'paper';
-  // What the writer sent: a draft, or a tool's arguments. JSON.
-  draft: string;
-  // What came back — the statement a draft compiled to, the engine's error, or
-  // a look's result — and the caption over it: "runs · 5 rows · 31 ms".
+  // A test the engine refused; its own message is `said`.
+  failed: boolean;
+  sent: unknown;
+  // What came back, in words: the engine's errors, or a look's result. Empty
+  // for a test that ran — its draft is what there is to see.
   said: string;
-  answer: string;
-  lang: 'sql' | '';
-  ms: number;
+  // "ran · 1 row · limit 5", "failed", "4 ms".
+  how: string;
 };
 
 export type Outcome = {
   kind: 'none' | 'writing' | 'written' | 'replayed' | 'refused';
-  // The caption over `text`.
+  // "Nothing asked yet.", "Writing…", or why it was refused.
   label: string;
-  // The document that passed (JSON), or the reason it was refused (words).
-  text: string;
-  lang: 'json' | '';
-  // The statement the stored document compiles to — its own limit, not a
-  // test's (a test runs a draft with a limit of five).
-  sql: string;
+  // The stored document a replay ran (JSON); empty otherwise — a new query's
+  // document is the agent's last draft, among its calls.
+  document: string;
   // What it answered, for the person who asked: their rows, as JSON, and the
-  // caption over them ("The answer · 3 rows").
+  // caption over them ("Answer · 3 rows").
   answer: string;
   answered: string;
   fingerprint: string;
@@ -52,31 +53,37 @@ export type Outcome = {
 export type Trace = {
   principal: string;
   intent: string;
-  shape: string;
   // Which authored shape the answer takes (app/vex/query.shapes.ts) — how a
   // replay of it is drawn.
   shapeKind: string;
   // The request as the engine was handed it: intent and shape, JSON.
   request: string;
-  // What Jev picked before anything was written or replayed (JSON), and the
-  // caption over it: how many stored queries it picked from.
-  router: string;
-  routed: string;
-  steps: Step[];
+  // What Jev was asked and what it picked; empty until it has.
+  jev: { caption: string; text: string };
+  // The query agent's calls: all of them, and the panes the slide shows of
+  // them — the newest few, the newest in full.
+  calls: Call[];
+  panes: Pane[];
+  // What happened to the rows on the way to the shape; empty until it has, and
+  // on a replay. `text` is the mapping Prism's agent wrote — empty when the
+  // rows were already the shape and nothing was written.
+  mapping: { caption: string; text: string };
   outcome: Outcome;
   ms: number;
 };
 
+const NO_OUTCOME: Outcome = { kind: 'none', label: 'Nothing asked yet.', document: '', answer: '', answered: '', fingerprint: '', sent: '' };
+
 export const EMPTY_TRACE: Trace = {
   principal: '',
   intent: '',
-  shape: '',
   shapeKind: '',
   request: '',
-  router: '',
-  routed: '',
-  steps: [],
-  outcome: { kind: 'none', label: 'Nothing asked yet.', text: '', lang: '', sql: '', answer: '', answered: '', fingerprint: '', sent: '' },
+  jev: { caption: '', text: '' },
+  calls: [],
+  panes: [],
+  mapping: { caption: '', text: '' },
+  outcome: NO_OUTCOME,
   ms: 0,
 };
 
@@ -94,81 +101,85 @@ export const foldStatement = (sql: string): string => {
 };
 
 const SHORT = 240;
-const short = (value: unknown): string => {
-  const text = JSON.stringify(value) ?? '';
+export const summary = (result: unknown): string => {
+  const text = JSON.stringify(result) ?? '';
   return text.length > SHORT ? `${text.slice(0, SHORT)}…` : text;
 };
-export const summary = (result: unknown): string => short(result);
 
-
-type Told = Omit<Step, 'n' | 'label'>;
+const rowsSaid = (rows: number): string => `${rows} ${rows === 1 ? 'row' : 'rows'}`;
 
 // A look at the data: the tool, what it was asked, what came back.
-export const lookStep = (tool: string, args: unknown, result: string, ms: number): Told => ({
-  what: tool,
-  ink: 'paper',
-  draft: compactJson(args, DOCUMENT_PANE),
-  said: `${ms} ms`,
-  answer: result,
-  lang: '',
-  ms,
-});
+export const lookCall = (tool: string, args: unknown, result: string, ms: number): Call => ({ what: tool, failed: false, sent: args, said: result, how: `${ms} ms` });
 
-// A test of a draft: the draft, and the engine's answer — its errors, or that
-// it runs, with the statement it compiled.
-export const testStep = (draft: unknown, answer: { sql: string; errors: readonly string[]; rows: number }, ms: number): Told => {
+// A test of a draft. The agent's tool runs every draft with a limit of five
+// (vex's `testQuery`), whatever the draft's own limit — said, so a test's rows
+// are not taken for the answer's.
+export const testCall = (draft: unknown, answer: { errors: readonly string[]; rows: number }): Call => {
   const failed = answer.errors.length > 0;
-  return {
-    what: 'testQuery',
-    ink: failed ? 'alert' : 'live',
-    draft: compactJson(draft, DOCUMENT_PANE),
-    said: failed ? `failed · ${ms} ms` : `test · limit 5 · ${answer.rows} ${answer.rows === 1 ? 'row' : 'rows'} · ${ms} ms`,
-    answer: failed ? answer.errors.join('\n') : foldStatement(answer.sql),
-    lang: failed ? '' : 'sql',
-    ms,
-  };
+  return { what: 'testQuery', failed, sent: draft, said: failed ? answer.errors.join('\n') : '', how: failed ? 'failed' : `ran · ${rowsSaid(answer.rows)} · limit 5` };
 };
+
+// The request, Jev's pick and the mapping are each ONE line, which the pane
+// wraps where it must. A draft sits in half the slide.
+const LINE = 400;
+const DRAFT_PANE = 52;
+// How many of the agent's calls the slide shows: the newest, with the newest
+// in full; the caption says which call each is, so a run of seven reads as
+// #5, #6, #7.
+const CALLS_SHOWN = 3;
+// How many rows of an answer the stage shows.
+const ANSWER_ROWS = 6;
+
+const panesOf = (calls: readonly Call[]): Pane[] =>
+  calls.flatMap((call, index): Pane[] => {
+    if (index < calls.length - CALLS_SHOWN) return [];
+    const newest = index === calls.length - 1;
+    const name = `Query agent · ${call.what} #${index + 1}`;
+    const key = `call-${index + 1}`;
+    if (call.what !== 'testQuery') return [{ key, caption: `${name} · ${call.how}`, text: call.said, lang: '', flag: 'paper' }];
+    const draft = newest ? compactJson(call.sent, DRAFT_PANE) : compactJson(call.sent, LINE);
+    if (!call.failed) return [{ key, caption: `${name} · ${call.how}`, text: draft, lang: 'json', flag: 'live' }];
+    // A draft the engine refused: the newest with the draft over the engine's
+    // own message, an earlier one as the message alone.
+    const refusal: Pane = { key: `${key}-said`, caption: newest ? call.how : `${name} · ${call.how}`, text: call.said, lang: '', flag: 'alert' };
+    return newest ? [{ key, caption: name, text: draft, lang: 'json', flag: 'paper' }, refusal] : [refusal];
+  });
 
 export type Tracer = {
   // Somebody asked, in their own session: the run that follows is theirs.
   expect: (intent: string, principal: string) => void;
-  // The engine is running it: the request is whole now, intent and shape.
-  started: (intent: string, shape: unknown) => void;
-  step: (intent: string, step: Told) => void;
-  // The writer finished with this document; `sql` is the last passing test's.
-  written: (intent: string, dsl: unknown, sql: string) => void;
+  // Jev picked. With no query stored it was asked one thing, the shape; with
+  // some, also which of them asks the same — a fingerprint and the intent it
+  // was stored for, or none. From here the request is whole, intent and shape.
+  routed: (principal: string, intent: string, decided: { fingerprint: string | null; intent: string | null; shape: string }, stored: number, shape: unknown) => void;
+  // Run the engine for this request: what its hooks record is this request's.
+  during: <T>(intent: string, run: () => Promise<T>) => Promise<T>;
+  // The query agent made a call.
+  called: (intent: string, call: Call) => void;
+  // The rows were put in the shape: already in it (the identity, no model), or
+  // by the mapping Prism's agent wrote — as it wrote it.
+  mapped: (mapping: { byAgent: boolean; config: unknown; ms: number }) => void;
+  // The agent finished: its last draft is the document.
+  written: (intent: string) => void;
   // The engine stored it under this name, answering in this shape.
   completed: (intent: string, fingerprint: string, shapeKind: string) => void;
   replayed: (intent: string, principal: string, fingerprint: string, shapeKind: string) => void;
   refused: (intent: string, reason: string) => void;
-  // Jev picked: a stored query (fingerprint and intent) or none, and the
-  // answer's shape. From here the request is whole, intent and shape.
-  routed: (principal: string, intent: string, decided: { fingerprint: string | null; intent: string | null; shape: string }, stored: number, shape: unknown) => void;
-  // The query that answers is known, and has answered — a new one and a
-  // replayed one alike: the stored document, the statement it compiles to, the
-  // rows it gave the person who asked, and the shape they came in.
-  answered: (principal: string, intent: string, stored: { document: unknown; statement: string; rows: unknown; shape: unknown }) => void;
+  // It has answered — a new query and a replayed one alike: the rows it gave
+  // the person who asked, and, for a replay, the stored document that ran.
+  answered: (principal: string, intent: string, stored: { document: unknown; rows: unknown }) => void;
   latest: (principal: string) => Trace | undefined;
   onChange: (listener: () => void) => void;
 };
 
-// The request, the router's choice and the replay are each ONE line, which the
-// pane wraps where it must: folded over four lines, a long question took the
-// room the result needs.
-
-const WIDE_PANE = 400;
-// A draft and a stored document sit in the wider column of the slide's pair:
-// sixty characters a line, so a short list of fields or of sorts stays on one.
-const DOCUMENT_PANE = 60;
-// How many rows of an answer the stage shows.
-const ANSWER_ROWS = 6;
-const sentFor = (fingerprint: string): string => compactJson({ fingerprint, context: {} }, WIDE_PANE);
+const sentFor = (fingerprint: string): string => compactJson({ fingerprint, context: {} }, LINE);
 
 export const createTracer = (): Tracer => {
   // The runs still being written, by intent; the newest trace of each person.
   const open = new Map<string, Trace[]>();
   const latest = new Map<string, Trace>();
   const since = new WeakMap<Trace, number>();
+  const running = new AsyncLocalStorage<string>();
   const listeners = new Set<() => void>();
   const changed = (): void => listeners.forEach((listener) => listener());
 
@@ -185,35 +196,46 @@ export const createTracer = (): Tracer => {
     if (left.length === 0) open.delete(intent);
     else open.set(intent, left);
   };
+  const theirs = (principal: string, intent: string): Trace | undefined => {
+    const trace = latest.get(principal);
+    return trace !== undefined && trace.intent === intent ? trace : undefined;
+  };
 
   return {
     expect: (intent, principal) => {
-      const trace: Trace = {
-        ...EMPTY_TRACE,
-        principal,
-        intent,
-        request: compactJson({ intent }, WIDE_PANE),
-        steps: [],
-        outcome: { kind: 'writing', label: 'Writing…', text: '', lang: '', sql: '', answer: '', answered: '', fingerprint: '', sent: '' },
-      };
+      const trace: Trace = { ...EMPTY_TRACE, principal, intent, request: compactJson({ intent }, LINE), calls: [], panes: [], outcome: { ...NO_OUTCOME, kind: 'writing', label: 'Writing…' } };
       since.set(trace, Date.now());
       open.set(intent, [...(open.get(intent) ?? []), trace]);
       latest.set(principal, trace);
       changed();
     },
-    started: (intent, shape) =>
+    routed: (principal, intent, decided, stored, shape) => {
+      const trace = theirs(principal, intent);
+      if (trace === undefined) return;
+      trace.jev =
+        stored === 0
+          ? { caption: 'Jev · the shape · no stored query to pick from', text: compactJson({ shape: decided.shape }, LINE) }
+          : { caption: `Jev · picked from ${stored} stored ${stored === 1 ? 'query' : 'queries'}`, text: compactJson(decided, LINE) };
+      trace.request = compactJson({ intent, shape }, LINE);
+      changed();
+    },
+    during: (intent, run) => running.run(intent, run),
+    called: (intent, call) =>
       touch(intent, (trace) => {
-        trace.shape = JSON.stringify(shape);
-        trace.request = compactJson({ intent, shape }, WIDE_PANE);
+        trace.calls.push(call);
+        trace.panes = panesOf(trace.calls);
       }),
-    step: (intent, told) =>
+    mapped: ({ byAgent, config, ms }) => {
+      const intent = running.getStore();
+      if (intent === undefined) return;
       touch(intent, (trace) => {
-        const n = trace.steps.length + 1;
-        trace.steps.push({ n, label: `${n} · ${told.what}`, ...told });
-      }),
-    written: (intent, dsl, sql) =>
+        // The identity is not a document anybody wrote: said, with nothing under it.
+        trace.mapping = byAgent ? { caption: `Prism mapping agent · ${ms} ms`, text: compactJson(config, LINE) } : { caption: 'Mapping · rows already in the shape · no model ran', text: '' };
+      });
+    },
+    written: (intent) =>
       touch(intent, (trace) => {
-        trace.outcome = { kind: 'written', label: 'Finished with exactly the draft that passed: nothing is edited after the test.', text: compactJson(dsl, DOCUMENT_PANE), lang: 'json', sql: foldStatement(sql), answer: '', answered: '', fingerprint: '', sent: '' };
+        trace.outcome = { ...trace.outcome, kind: 'written', label: '' };
       }),
     completed: (intent, fingerprint, shapeKind) => {
       touch(intent, (trace) => {
@@ -227,35 +249,24 @@ export const createTracer = (): Tracer => {
       touch(intent, (trace) => {
         if (trace.principal !== principal) return;
         trace.shapeKind = shapeKind;
-        trace.outcome = { kind: 'replayed', label: 'Asked before: the stored query, replayed. No model ran.', text: '', lang: '', sql: '', answer: '', answered: '', fingerprint, sent: sentFor(fingerprint) };
+        trace.outcome = { ...NO_OUTCOME, kind: 'replayed', label: '', fingerprint, sent: sentFor(fingerprint) };
       });
       settle(intent, (trace) => trace.principal !== principal);
     },
     refused: (intent, reason) => {
       touch(intent, (trace) => {
-        if (trace.outcome.kind !== 'refused') trace.outcome = { kind: 'refused', label: 'Refused', text: reason, lang: '', sql: '', answer: '', answered: '', fingerprint: '', sent: '' };
+        if (trace.outcome.kind !== 'refused') trace.outcome = { ...NO_OUTCOME, kind: 'refused', label: reason };
       });
       settle(intent, () => false);
     },
-    routed: (principal, intent, decided, stored, shape) => {
-      const trace = latest.get(principal);
-      if (trace === undefined || trace.intent !== intent) return;
-      trace.router = compactJson(decided, WIDE_PANE);
-      trace.routed = `Jev · picked from ${stored} stored ${stored === 1 ? 'query' : 'queries'}`;
-      trace.request = compactJson({ intent, shape }, WIDE_PANE);
-      changed();
-    },
     answered: (principal, intent, stored) => {
-      const trace = latest.get(principal);
-      if (trace === undefined || trace.intent !== intent) return;
+      const trace = theirs(principal, intent);
+      if (trace === undefined) return;
       const listed = Array.isArray(stored.rows);
       const rows: unknown[] = Array.isArray(stored.rows) ? stored.rows : [stored.rows];
-      trace.request = compactJson({ intent, shape: stored.shape }, WIDE_PANE);
-      trace.outcome.text = compactJson(stored.document, DOCUMENT_PANE);
-      trace.outcome.lang = 'json';
-      trace.outcome.sql = foldStatement(stored.statement);
-      trace.outcome.answer = compactJson(listed ? rows.slice(0, ANSWER_ROWS) : stored.rows);
-      trace.outcome.answered = !listed ? 'The answer' : `The answer · ${rows.length} ${rows.length === 1 ? 'row' : 'rows'}${rows.length > ANSWER_ROWS ? ` · the first ${ANSWER_ROWS}` : ''}`;
+      if (trace.outcome.kind === 'replayed') trace.outcome.document = compactJson(stored.document, DRAFT_PANE);
+      trace.outcome.answer = compactJson(listed ? rows.slice(0, ANSWER_ROWS) : stored.rows, LINE);
+      trace.outcome.answered = !listed ? 'Answer' : `Answer · ${rowsSaid(rows.length)}${rows.length > ANSWER_ROWS ? ` · the first ${ANSWER_ROWS}` : ''}`;
       changed();
     },
     latest: (principal) => latest.get(principal),

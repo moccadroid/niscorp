@@ -1,6 +1,5 @@
 import { createMemoryCache, createPostgresAdapter, createQueryEngine } from '@niscorp/vex';
 import type { GenerateDsl, GenerationCaller, MapToShape, Query, QueryEngine } from '@niscorp/vex';
-import { createShapeMapper } from '@niscorp/vex/agent';
 import type { SignalClient } from '@niscorp/cortex';
 import { createSignal } from '@niscorp/signal';
 import type { ChoiceQuestion } from '@niscorp/signal';
@@ -8,8 +7,8 @@ import type { NiscRuntime } from '@niscorp/moss';
 import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
 import { BEHAVIORS } from '@lyceum/app/vex/behaviors';
 import { createDecider } from './decider';
-import { testStep, watchedQueryDsl } from './generation';
-import type { Tracer } from './generation';
+import { testCall, watchedQueryDsl, watchedShapeMapper } from './generation';
+import type { Call, Tracer } from './generation';
 import type { QueryShape } from '@lyceum/app/vex/query.shapes';
 
 // WHO TURNS A REQUEST IN WORDS INTO A VEX QUERY — the two model seams.
@@ -108,7 +107,7 @@ const liveQuerier = (env: Record<string, string | undefined>, tracer: Tracer): Q
       return match !== undefined && match.shape === wanted.kind ? { replay: match, decided } : { generate: wanted, decided };
     },
     generateDsl: watchedQueryDsl({ llm, dslSchema, tracer }),
-    mapToShape: createShapeMapper(llm),
+    mapToShape: watchedShapeMapper({ llm, tracer }),
   };
 };
 
@@ -142,13 +141,13 @@ const FAKE_PACE_MS = 500;
 
 // A draft, tested the way the real writer's tool tests it: through the
 // caller's own door into the engine, five rows at most.
-const tested = async (caller: GenerationCaller, draft: Query): Promise<ReturnType<typeof testStep>> => {
+const tested = async (caller: GenerationCaller, draft: Query): Promise<Call> => {
   const at = Date.now();
   try {
-    const { rows, sql } = await caller.read({ ...draft, limit: 5 });
-    return testStep(draft, { sql, errors: [], rows: rows.length }, Date.now() - at);
+    const { rows } = await caller.read({ ...draft, limit: 5 });
+    return testCall(draft, { errors: [], rows: rows.length });
   } catch (error) {
-    return testStep(draft, { sql: '', errors: [error instanceof Error ? error.message : String(error)], rows: 0 }, Date.now() - at);
+    return testCall(draft, { errors: [error instanceof Error ? error.message : String(error)], rows: 0 });
   }
 };
 
@@ -169,21 +168,18 @@ const fakeQuerier = (tracer: Tracer): Querier => ({
   // through the engine, so the trace shows what a real run shows.
   generateDsl: async (request, _schema, caller) => {
     const intent = request.intent ?? '';
-    tracer.started(intent, request.shape);
     const dsl = (/login|sign in|password/i.test(intent) ? FAKE_DSL['forbidden'] : FAKE_DSL[fakeKind(intent)]) ?? { from: ['members'] };
-    tracer.step(intent, await tested(caller, MISTAKEN));
-    // A model takes its time between drafts; the stage shows one step at a
-    // time, so the stand-in keeps a model's pace and the failed draft is seen.
+    tracer.called(intent, await tested(caller, MISTAKEN));
+    // A model takes its time between drafts, and so does the stand-in.
     await new Promise((resolve) => setTimeout(resolve, FAKE_PACE_MS));
-    const passing = await tested(caller, dsl);
-    tracer.step(intent, passing);
-    tracer.written(intent, dsl, passing.lang === 'sql' ? passing.answer : '');
+    tracer.called(intent, await tested(caller, dsl));
+    tracer.written(intent);
     return dsl;
   },
-  // Vex's own mapper, with a model that is never there: rows that fit their
+  // The watched mapper, with a model that is never there: rows that fit their
   // shape get the identity, anything else fails — which the fake's queries,
   // aliased to their shapes, never do.
-  mapToShape: createShapeMapper(NO_MODEL),
+  mapToShape: watchedShapeMapper({ llm: NO_MODEL, tracer }),
 });
 
 export const createQuerier = (env: Record<string, string | undefined>, tracer: Tracer): Querier => {

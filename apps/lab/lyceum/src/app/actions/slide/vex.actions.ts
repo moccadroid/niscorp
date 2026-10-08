@@ -158,7 +158,7 @@ export const toolsSlide = still('slide.tools', 'Six tools. None takes SQL.', too
 // server keeps of the speaker's newest generation (server/generation), read
 // on mount and again whenever the server says it changed. Nothing on it can
 // be pressed; the question is asked on the controller (tools.ask).
-const NO_TRACE = { principal: '', intent: '', shape: '', shapeKind: '', request: '', router: '', routed: '', steps: [], outcome: { kind: 'none', label: 'Nothing asked yet.', text: '', lang: '', sql: '', answer: '', answered: '', fingerprint: '', sent: '' }, ms: 0 };
+const NO_TRACE = { principal: '', intent: '', shapeKind: '', request: '', jev: { caption: '', text: '' }, calls: [], panes: [], mapping: { caption: '', text: '' }, outcome: { kind: 'none', label: 'Nothing asked yet.', document: '', answer: '', answered: '', fingerprint: '', sent: '' }, ms: 0 };
 export const writerSlide: ActionDefinition = {
   id: 'slide.writer',
   title: 'Watch it write one.',

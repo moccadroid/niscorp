@@ -8,8 +8,9 @@ import type { Tracer } from './trace';
 // speaker's newest one through `room.generation`, told that it changed by a
 // channel with no payload — the same way the speaker's assistant is mirrored
 // (../mirroring.ts). The stage only looks.
-export { createTracer, EMPTY_TRACE, foldStatement, lookStep, summary, testStep } from './trace';
-export type { Outcome, Step, Trace, Tracer } from './trace';
+export { createTracer, EMPTY_TRACE, foldStatement, lookCall, summary, testCall } from './trace';
+export type { Call, Outcome, Pane, Trace, Tracer } from './trace';
+export { watchedShapeMapper } from './mapper';
 export { watchedQueryDsl } from './writer';
 
 // Delivered to the stage's shell whenever a trace changes; the writer slide
