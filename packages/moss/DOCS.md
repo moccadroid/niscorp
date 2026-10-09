@@ -875,9 +875,10 @@ measures the end.
 - `CLOSE_INVALID_TOKEN = 4401`, `CLOSE_SIGNED_OUT = 4403`,
   `CLOSE_SHELL_FAILED = 4500`, `CLOSE_PROTOCOL_MISMATCH = 4426`. `4500` means
   the server could not open a session for this connection (commonly a
-  definition failing validation): a `session_failed` error frame naming the
-  failing definitions, then the close. The refusal is that terminal's alone,
-  and reconnecting later is reasonable.
+  definition failing validation): a `session_failed` error frame, then the
+  close. The frame names the failing definitions when that is the cause; of any
+  other cause it says nothing, and the error is in the server's log. The
+  refusal is that terminal's alone, and reconnecting later is reasonable.
 - `error` codes: `invalid_token`, `session_failed`, `client_too_old`,
   `server_too_old`, `no_shell` (the app serves no shell), `invalid_message`
   (what was sent is not JSON, not one of the messages above, or one of them

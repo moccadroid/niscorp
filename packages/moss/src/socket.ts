@@ -204,9 +204,17 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
         error instanceof DefinitionValidationError
           ? ((error.context as { failures?: { id: string }[] } | undefined)?.failures ?? []).map((f) => f.id)
           : [];
-      const detail = failures.length > 0 ? `${String(error instanceof Error ? error.message : error)}: ${failures.join(', ')}` : String(error);
+      // The error is the server's — it can name a host, a table, a user — and
+      // whoever is on this connection has not been shown to be anybody. So it
+      // is logged above and none of its text is sent. Definitions that failed
+      // validation are the exception, by id: the app's own artifacts, and what
+      // a developer in the middle of an edit is looking for.
+      const refusal =
+        error instanceof DefinitionValidationError && failures.length > 0
+          ? `This session could not be opened — ${error.message}: ${failures.join(', ')}.`
+          : "This session could not be opened. Why is in the server's log, not here.";
       try {
-        send({ type: 'error', code: 'session_failed', message: `This session could not be opened — ${detail}. The refusal is this terminal's alone; the server is up.` });
+        send({ type: 'error', code: 'session_failed', message: `${refusal} The refusal is this terminal's alone; the server is up.` });
         connection.close(CLOSE_SHELL_FAILED, 'session failed');
       } catch {
         // The transport is already gone — there is nobody left to tell.

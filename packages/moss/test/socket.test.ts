@@ -606,6 +606,35 @@ describe('socket — a refused session is one terminal, not the server', () => {
   });
 });
 
+// What a refused terminal reads is that it was refused. The error that refused
+// it is the server's: it can name a host, a table, a user, a file. Whoever is
+// on the other end of a socket has not yet been shown to be anybody, so it is
+// logged here and none of its text is sent. The one thing a refusal does say
+// is which definitions failed validation, which is the app's own artifacts by
+// id and what a developer mid-edit is looking for.
+describe('socket — a refusal does not carry the error that caused it', () => {
+  const INTERNAL = 'connect ECONNREFUSED 10.1.2.3:5432 — password authentication failed for user "moss_rw"';
+
+  it.each([
+    ['the verifier throwing an Error', (): SocketContext => ctxWith({ session: () => { throw new Error(INTERNAL); } })],
+    ['the verifier throwing something that is not an Error', (): SocketContext => ctxWith({ session: () => { throw INTERNAL; } })],
+    ['the catalog throwing', (): SocketContext => ctxWith({ catalog: () => { throw new Error(INTERNAL); } })],
+    ['the shell build throwing', (): SocketContext => ctxWith({ shells: { ...hostFor(recordingSession()), session: async () => { throw new Error(INTERNAL); } } })],
+  ])('%s: the terminal reads a refusal and nothing of why; the log has it', async (_label, context) => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const conn = new FakeConnection();
+    await expect(createSocket(context())(SOCKET, conn.offering('good'))).resolves.toBeUndefined();
+
+    const refusal = conn.sent.filter((message) => message.type === 'error');
+    expect(refusal.map((message) => message.code)).toEqual(['session_failed']);
+    for (const part of ['ECONNREFUSED', '10.1.2.3', '5432', 'moss_rw', 'password']) expect(JSON.stringify(conn.sent)).not.toContain(part);
+    expect(conn.closed?.code).toBe(CLOSE_SHELL_FAILED);
+    expect(conn.closed?.reason ?? '').not.toContain('ECONNREFUSED');
+    expect(JSON.stringify(logged.mock.calls.map((call) => call.map((part) => (part instanceof Error ? part.message : part))))).toContain('ECONNREFUSED 10.1.2.3:5432');
+    logged.mockRestore();
+  });
+});
+
 // The same holds once a session is open. A transport calls the message handler
 // from its own listener (on Node, ws's `message` event), and a throw there is
 // an uncaught exception: one shell failing on one message, and the process
