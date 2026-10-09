@@ -268,7 +268,7 @@ Two reductions are available, and they are deliberately separate things:
   constant.
 - **Frame deltas** (`shellFrameDelta`, **off** by default) describe a changed
   canvas against the frame the connection already holds, as copy runs plus
-  literal inserts (`src/delta.ts` — an encoder and a decoder, both readable in
+  literal inserts (`src/protocol/delta.ts` — an encoder and a decoder, both readable in
   full, no dependency). Measured on Lyra: an in-place change (a keystroke
   filtering a list, one row's badge flipping) falls to **1–4%** of the frame; a
   navigation, where the tree is genuinely different, lands near **80%** and is

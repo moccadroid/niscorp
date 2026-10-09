@@ -40,7 +40,8 @@ type Shape = {
 const PACKAGES: Readonly<Record<string, Shape>> = {
   moss: {
     modules: {
-      client: [],
+      protocol: [],
+      client: ['protocol'],
       terminal: ['client'],
     },
     flat: [
@@ -48,7 +49,6 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       'assert.ts',
       'closure.ts',
       'data.ts',
-      'delta.ts',
       'document.ts',
       'driver.ts',
       'fabric.ts',

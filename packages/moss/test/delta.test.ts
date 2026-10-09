@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { encodeDelta, applyDelta, frameHash } from '../src/delta';
+import { encodeDelta, applyDelta, frameHash } from '../src/protocol';
 
 // A frame is a serialized `render` message: long, repetitive, and mostly
 // unchanged between sends. These build that shape rather than testing on toy

@@ -10,9 +10,9 @@ import type { FunctionSession, NiscApp, ShellManifest } from './app';
 import type { ShellNeed } from './liveness';
 import type { NiscRuntime } from './runtime';
 import type { Catalog } from './principal';
-import { CLOSE_SIGNED_OUT } from './socket';
-import type { Connection, ServerMessage } from './socket';
-import { encodeDelta, frameHash } from './delta';
+import type { Connection } from './socket';
+import { CLOSE_SIGNED_OUT, encodeDelta, frameHash } from './protocol';
+import type { ServerMessage } from './protocol';
 import { revokeAllFor } from './sessions';
 
 // ═══════════════════════════════════════════════════════════════

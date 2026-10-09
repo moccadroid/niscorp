@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DefinitionValidationError } from '@niscorp/nova';
-import { createSocket, CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, CLOSE_SHELL_FAILED, CLOSE_PROTOCOL_MISMATCH, PROTOCOL, PROTOCOL_MIN, offerToken } from '../src/socket';
-import type { Connection, ServerMessage, SocketContext } from '../src/socket';
+import { createSocket } from '../src/socket';
+import type { Connection, SocketContext } from '../src/socket';
+import { CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, CLOSE_SHELL_FAILED, CLOSE_PROTOCOL_MISMATCH, PROTOCOL, PROTOCOL_MIN, offerToken } from '../src/protocol';
+import type { ServerMessage } from '../src/protocol';
 import type { ShellHost, ShellSession } from '../src/shells';
 import { sealSession } from '../src/session-cookie';
 

@@ -1,11 +1,10 @@
 import type { NovaEvent, RenderNode } from '@niscorp/nova';
-import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SIGNED_OUT, PROTOCOL, PROTOCOL_MIN, offerToken } from '../socket';
-import { applyDelta, frameHash } from '../delta';
-import type { DeltaOp } from '../delta';
-import { heldCookieName } from '../session-cookie';
+import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SIGNED_OUT, DEFAULT_TOKEN_KEY, PROTOCOL, PROTOCOL_MIN, applyDelta, frameHash, heldCookieName, offerToken } from '../protocol';
+import type { DeltaOp } from '../protocol';
 
 // ═══════════════════════════════════════════════════════════════
-// The wire — moss's protocol client, the other end of ../socket. Plain
+// The wire — moss's protocol client, the other end of ../socket; what the
+// two agree on is ../protocol, and that is all of moss this imports. Plain
 // code: a token slot, a websocket with reconnect, and session lifecycle —
 // a `session` message (login redeemed server-side) stores the token and
 // reconnects authenticated; a 4403 close clears it and reconnects
@@ -42,7 +41,7 @@ export type WireEnv = {
   tokens: WireTokenStore;
   // Construct a socket for this url, offering these subprotocols —
   // `new WebSocket(url, offered)` in every host. What is offered is who the
-  // terminal is (socket.ts): a host that drops it connects as nobody.
+  // terminal is (../protocol): a host that drops it connects as nobody.
   socket: (upgrade: { url: string; offered: string[] }) => WebSocket;
   // the socket url when `config.url` is absent
   defaultUrl: () => string;
@@ -134,7 +133,7 @@ export type WireSnapshot = {
 // a terminal that renders nothing on a dead socket is indistinguishable from
 // a working terminal rendering an empty app, so the state must be readable.
 // `incompatible`: this terminal and the server speak protocols the other
-// cannot (see PROTOCOL in ../socket). Terminal state — the wire stops retrying,
+// cannot (see PROTOCOL in ../protocol). Terminal state — the wire stops retrying,
 // because every retry would speak the same protocol again.
 // `static`: the page was drawn on the server and nothing on it can still
 // happen, so no socket was opened. Not a fault and not a wait — `reset` (or a
@@ -192,7 +191,7 @@ const EMPTY: WireSnapshot = { frame: [], trees: new Map() };
 // server to draw the page from — and is no longer needed: the page is drawn
 // from the browser's own cookie. It is accepted and does nothing.
 export const browserEnv = (config: { tokenKey?: string; cookie?: boolean } = {}): WireEnv => {
-  const tokenKey = config.tokenKey ?? 'nisc.token';
+  const tokenKey = config.tokenKey ?? DEFAULT_TOKEN_KEY;
   return {
     tokens: {
       load: () => {

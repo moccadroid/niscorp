@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createWire, browserEnv } from '../src/client';
 import type { WireEnv } from '../src/client';
-import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SIGNED_OUT, PROTOCOL, offeredToken } from '../src/socket';
-import { encodeDelta, frameHash } from '../src/delta';
+import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SIGNED_OUT, PROTOCOL, encodeDelta, frameHash, offeredToken } from '../src/protocol';
 
 // ═══════════════════════════════════════════════════════════════
 // The wire — driven headlessly, the way socket.test.ts drives the server:

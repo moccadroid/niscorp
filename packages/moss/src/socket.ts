@@ -1,11 +1,12 @@
 import { DefinitionValidationError } from '@niscorp/nova';
 import type { RenderNode } from '@niscorp/nova';
 import type { Catalog } from './principal';
-import type { DeltaOp } from './delta';
+import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SHELL_FAILED, DEFAULT_TOKEN_KEY, PROTOCOL, PROTOCOL_MIN, offeredSealed, offeredToken } from './protocol';
+import type { ServerMessage } from './protocol';
 import type { ShellHost } from './shells';
 import { emitterOf, spanClock } from './telemetry';
 import type { Telemetry } from './telemetry';
-import { DEFAULT_TOKEN_KEY, isOwnOrigin, newSeal, openSealed, sealCookie, sealOf, sealSession, sessionCookies, sessionTokenOf } from './session-cookie';
+import { isOwnOrigin, newSeal, openSealed, sealCookie, sealOf, sealSession, sessionCookies, sessionTokenOf } from './session-cookie';
 
 // ═══════════════════════════════════════════════════════════════
 // The socket — the authority channel (DESIGN.md § The socket), protocol layer.
@@ -65,123 +66,6 @@ export type Connection = {
   // is handed over as its token.
   seal?: (token: string) => Promise<string>;
 };
-
-// ── The envelope ──
-export type ServerMessage =
-  | { type: 'hello'; protocol: number; principal: string | null; catalog: { actions: readonly string[]; hash: string } }
-  | { type: 'catalog'; actions: readonly string[]; hash: string }
-  // the shell's canvas ARRANGEMENT — a rendered layout whose CanvasSlot
-  // markers the terminal resolves against its per-canvas trees
-  | { type: 'frame'; tree: RenderNode[] }
-  | { type: 'render'; canvas: string; tree: RenderNode[] }
-  // The same render, as a DELTA against the last frame this connection was
-  // sent for this canvas. Only ever sent to a terminal that asked for deltas
-  // (`?delta=1` on the upgrade) and only when a previous frame exists, so a
-  // terminal that does not understand this never receives one.
-  //
-  // `hash` is over the rebuilt message text: a terminal that applies the ops
-  // and does not land on it has diverged, and asks for a whole frame instead
-  // of rendering something the server never meant.
-  | { type: 'render-delta'; canvas: string; ops: DeltaOp[]; hash: number }
-  // session GRANT (login succeeded server-side): store the token and
-  // reconnect authenticated — the twin of the 4403 SIGNED_OUT revoke
-  // A sign-in: the terminal comes back as that principal. As the token, for a
-  // terminal that keeps its own; SEALED, for one whose browser keeps the
-  // session — it offers it on its next upgrade, where its browser's seal opens it.
-  | { type: 'session'; token: string }
-  | { type: 'session'; sealed: string }
-  | { type: 'error'; code: string; message: string; canvas?: string };
-
-export type ClientMessage =
-  | { type: 'event'; canvas: string; event: Record<string, unknown> }
-  | { type: 'publish'; channel: string; payload?: unknown }
-  // RESYNC: this terminal's frame for a canvas is not what the server thinks
-  // it is — a delta failed its checksum, or arrived with no base to apply it
-  // to. Answered with whole frames, which is the state both ends can always
-  // agree on. Distinct from `reset`: the SHELL is fine, only this connection's
-  // copy of it drifted, so nothing is torn down.
-  | { type: 'resync' }
-  // BACK: undo this session's last navigation. It names no canvas for the same
-  // reason `reset` does not — back is one gesture over the whole shell, and the
-  // terminal that sends it has no idea which canvas moved last (it is served
-  // trees, not stacks). Protocol-level, so a browser's back button, a TUI's
-  // Escape and a REPL word are the same message on one wire, and the app has to
-  // author nothing to receive it.
-  | { type: 'back' }
-  // POP TO: jump straight to an ancestor already on a canvas's stack. Back
-  // undoes ONE navigation; a breadcrumb that names a screen three levels down
-  // is one intention, not three gestures. Sending three `back`s instead raced
-  // the browser's own history repair and dropped presses — the shell can walk
-  // its own stack atomically, so it should be asked to.
-  | { type: 'popTo'; canvas: string; instance: string }
-  // RESET: throw this session's shell away and serve its replacement. The one
-  // message that names no canvas, deliberately — it is the recovery for a
-  // shell whose canvases are the broken thing, so it must not have to travel
-  // through one. Protocol-level, not app-level: no action declares it, no
-  // charter grants it, and it reaches a terminal whose every surface is dead.
-  | { type: 'reset' };
-
-// The wire protocol this server speaks, and the oldest a terminal may speak to
-// it. A terminal says which it speaks on the upgrade (`?protocol=N` — known
-// before the first frame is sent); one that says nothing speaks 1, which is
-// every terminal built before the question existed. Outside the range the
-// connection is refused with a sentence and CLOSE_PROTOCOL_MISMATCH, never
-// served frames it would misread. Bump PROTOCOL when a message changes shape;
-// raise PROTOCOL_MIN only when the server stops speaking an old one.
-//
-// 2: the token left the address. A terminal at 1 put it in `?token=`, and an
-// address is what every proxy on the way writes into its log. A server that
-// went on reading it there would keep that open for as long as anything used
-// it, so 1 is no longer spoken: a terminal built before is told to reload.
-export const PROTOCOL = 2;
-export const PROTOCOL_MIN = 2;
-
-// WHO A TERMINAL IS rides the upgrade request, in the one header every host
-// lets a terminal set, a browser included: the subprotocols it offers. It
-// offers `nisc`, and beside it its token when it holds one — base64url,
-// because a subprotocol is an HTTP token and a session token need not be. The
-// server answers `nisc`, never the other. Decided on the request, so no
-// connection is ever open and waiting to be told who it is.
-export const SUBPROTOCOL = 'nisc';
-const TOKEN_OFFER = 'nisc.token.';
-const SEALED_OFFER = 'nisc.sealed.';
-
-// `sealed`: a sign-in the terminal was handed sealed, offered back as it is.
-export const offerToken = (token: string | null, sealed: string | null = null): string[] => {
-  const offer = sealed === null ? [SUBPROTOCOL] : [SUBPROTOCOL, `${SEALED_OFFER}${sealed}`];
-  if (token === null) return offer;
-  const bytes = String.fromCharCode(...new TextEncoder().encode(token));
-  return [...offer, `${TOKEN_OFFER}${btoa(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`];
-};
-
-export const offeredToken = (offered: readonly string[] = []): string | null => {
-  const offer = offered.find((entry) => entry.startsWith(TOKEN_OFFER));
-  if (offer === undefined) return null;
-  try {
-    const bytes = atob(offer.slice(TOKEN_OFFER.length).replace(/-/g, '+').replace(/_/g, '/'));
-    return new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(bytes, (char) => char.charCodeAt(0))) || null;
-  } catch {
-    return null;
-  }
-};
-
-// Application close code: the token did not resolve to a principal.
-export const CLOSE_INVALID_TOKEN = 4401;
-// Application close code: the session ended (sign-out, from any of the
-// principal's terminals) — the terminal clears its token instead of
-// reconnecting.
-export const CLOSE_SIGNED_OUT = 4403;
-// Application close code: the server could not open a session for THIS
-// connection — commonest cause: a definition failing validation reached the
-// live catalog (a dev edit mid-reload). The refusal is this terminal's alone;
-// the process and every other session stay up, and reconnecting later is
-// reasonable — the next build is attempted fresh.
-export const CLOSE_SHELL_FAILED = 4500;
-// Application close code: terminal and server speak protocols the other cannot
-// (see PROTOCOL). Not a retry: reconnecting speaks the same protocol again. A
-// browser terminal needs a reload to fetch the current build; the preceding
-// `error` says which side is behind (`client_too_old` / `server_too_old`).
-export const CLOSE_PROTOCOL_MISMATCH = 4426;
 
 export type SocketContext = {
   session: (token: string) => string | null | Promise<string | null>;
@@ -364,7 +248,7 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
       console.warn(`[moss] a terminal on ${upgrade.origin} holds its own session token: this server was addressed as ${upgrade.host ?? 'nothing'}, so that is not the app’s own page. If the app is served there, behind a proxy that rewrites Host, list it in runtime.origins.`);
     }
     const hadSeal = sealing ? sealOf(upgrade?.cookie, secure) : null;
-    const sealedOffer = upgrade?.offered.find((entry) => entry.startsWith(SEALED_OFFER))?.slice(SEALED_OFFER.length) ?? null;
+    const sealedOffer = offeredSealed(upgrade?.offered);
     // A sealed sign-in that came back with no seal to open it: this browser
     // does not keep the cookie, and is not handed another sign-in that way.
     const sealLost = sealing && sealedOffer !== null && hadSeal === null;

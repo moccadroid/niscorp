@@ -2,7 +2,8 @@ import { headOf, placeHead } from '@niscorp/nova/document';
 import type { ScreenHead } from '@niscorp/nova/document';
 import type { ShellSnapshot } from './shells';
 import type { MossServer } from './server';
-import { DEFAULT_TOKEN_KEY, sessionTokenOf, tokenFromCookie } from './session-cookie';
+import { DEFAULT_TOKEN_KEY } from './protocol';
+import { sessionTokenOf, tokenFromCookie } from './session-cookie';
 
 // ═══════════════════════════════════════════════════════════════
 // The document — what a page request is answered with when the server draws

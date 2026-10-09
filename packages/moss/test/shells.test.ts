@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { applyDelta, frameHash } from '../src/delta';
-import type { DeltaOp } from '../src/delta';
+import { applyDelta, frameHash } from '../src/protocol';
+import type { DeltaOp } from '../src/protocol';
 import { createShellHost } from '../src/shells';
 import type { ShellHostContext } from '../src/shells';
 import type { NiscApp } from '../src/app';

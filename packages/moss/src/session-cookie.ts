@@ -1,3 +1,5 @@
+import { DEFAULT_TOKEN_KEY, sessionNameOf } from './protocol';
+
 // ═══════════════════════════════════════════════════════════════
 // A BROWSER'S SESSION, KEPT WHERE ITS PAGE CANNOT READ IT.
 //
@@ -26,8 +28,6 @@
 // with all the same.
 // ═══════════════════════════════════════════════════════════════
 
-export const DEFAULT_TOKEN_KEY = 'nisc.token';
-
 // The token under one name in a `Cookie` header.
 export const tokenFromCookie = (header: string | null | undefined, name = DEFAULT_TOKEN_KEY): string | null => {
   if (header === undefined || header === null) return null;
@@ -54,13 +54,8 @@ export const isOwnOrigin = (origin: string | null | undefined, host: string | nu
   return asked.host === host?.toLowerCase() || listed.some((entry) => URL.canParse(entry) && new URL(entry).origin === asked.origin);
 };
 
-const nameOf = (key: string, port: string): string => `${key}${port === '' ? '' : `.${port}`}`;
-
-// The flag's name, as a terminal on `port` reads it out of `document.cookie`.
-export const heldCookieName = (key = DEFAULT_TOKEN_KEY, port = ''): string => encodeURIComponent(`${nameOf(key, port)}.held`);
-
 const cookiesAt = (where: { port: string; secure: boolean }, key: string, token: string | null, lastsMs?: number | null): string[] => {
-  const name = encodeURIComponent(nameOf(key, where.port));
+  const name = encodeURIComponent(sessionNameOf(key, where.port));
   const life = token === null ? '; Max-Age=0' : typeof lastsMs === 'number' ? `; Max-Age=${Math.max(0, Math.floor(lastsMs / 1000))}` : '';
   const kept = `Path=/; SameSite=Lax${where.secure ? '; Secure' : ''}${life}`;
   return [`${where.secure ? '__Host-' : ''}${name}=${encodeURIComponent(token ?? '')}; HttpOnly; ${kept}`, `${name}.held=${token === null ? '' : '1'}; ${kept}`];
@@ -94,7 +89,7 @@ export const sessionTokenOf = (
   where: { port: string; secure?: boolean },
   key = DEFAULT_TOKEN_KEY,
 ): { token: string; clear: string[] } | null => {
-  const name = nameOf(key, where.port);
+  const name = sessionNameOf(key, where.port);
   for (const secure of where.secure === undefined ? [true, false] : [where.secure]) {
     const token = tokenFromCookie(cookies, `${secure ? '__Host-' : ''}${name}`);
     if (token !== null) return { token, clear: cookiesAt({ port: where.port, secure }, key, null) };

@@ -11,7 +11,8 @@ import { createShellHost } from '../src/shells';
 import type { ShellHostContext } from '../src/shells';
 import { renderDocument } from '../src/document';
 import { isOwnOrigin, openSealed, sealSession, sessionCookies } from '../src/session-cookie';
-import { createSocket, offerToken, PROTOCOL } from '../src/socket';
+import { createSocket } from '../src/socket';
+import { offerToken, PROTOCOL } from '../src/protocol';
 import { browserEnv, createWire } from '../src/client';
 import type { Wire } from '../src/client';
 

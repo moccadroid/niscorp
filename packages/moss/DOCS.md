@@ -931,7 +931,7 @@ measures the end.
   and a server that went on reading it there would keep that open. `PROTOCOL`
   and `offerToken` are exported from the package root, for a terminal written
   by hand; `PROTOCOL_MIN` and `CLOSE_PROTOCOL_MISMATCH` are defined in
-  `src/socket.ts` and are not.
+  `src/protocol/connection.ts` and are not.
 - **`?path=`** — the path the terminal is on. A path that leads to a page is
   served that page's shell, built for this connection alone and seeded with the
   path's parameters; any other path (and no path) is the app's shell. A
@@ -1014,7 +1014,7 @@ Correctness, which matters more than the saving:
 - Bases are dropped on every reconnect: attaching is served whole frames, so a
   base carried across a reconnect is one the server never assumed.
 - A `reset` carries the capability across to the replacement shell.
-- `src/delta.ts` is the whole implementation — `encodeDelta`, `applyDelta`,
+- `src/protocol/delta.ts` is the whole implementation — `encodeDelta`, `applyDelta`,
   `frameHash` — with no dependency, small enough to read in full. A delta layer
   that cannot be audited is a desync you cannot diagnose.
 

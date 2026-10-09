@@ -10,7 +10,7 @@ import { createServer } from './server';
 import type { MossServer } from './server';
 import type { NiscApp } from './app';
 import type { NiscRuntime } from './runtime';
-import { SUBPROTOCOL } from './socket';
+import { SUBPROTOCOL } from './protocol';
 import type { SocketAccept } from './socket';
 import { renderDocument } from './document';
 import type { DocumentConfig } from './document';
