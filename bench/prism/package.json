@@ -1,0 +1,34 @@
+{
+  "name": "prism-bench",
+  "private": true,
+  "type": "module",
+  "description": "Prism against the libraries it is compared with: one set of tasks, one answer each, every library held to it.",
+  "scripts": {
+    "check": "node harness/check.mjs",
+    "bench": "node harness/run.mjs",
+    "report": "node harness/report.mjs",
+    "sizes": "node harness/sizes.mjs"
+  },
+  "dependencies": {
+    "@jmespath-community/jmespath": "1.3.0",
+    "@jsonquerylang/jsonquery": "5.1.1",
+    "@marcbachmann/cel-js": "8.0.0",
+    "@niscorp/strata": "0.1.4",
+    "dayjs": "1.11.23",
+    "esbuild": "0.28.2",
+    "groq-js": "2.0.0",
+    "jmespath": "0.16.0",
+    "jora": "1.0.0-beta.16",
+    "jq-wasm": "3.0.0-jq-1.8.2",
+    "json-e": "4.8.4",
+    "json-logic-engine": "5.0.7",
+    "json-logic-js": "2.0.5",
+    "jsonata": "2.2.2",
+    "lodash": "4.18.1",
+    "mingo": "7.2.4",
+    "mitata": "1.0.34",
+    "prism-published": "npm:@niscorp/prism@0.2.2",
+    "tinybench": "6.2.1",
+    "zod": "4.6.5"
+  }
+}

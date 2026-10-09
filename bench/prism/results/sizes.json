@@ -1,0 +1,93 @@
+[
+  {
+    "name": "Prism: evaluate",
+    "minified": 509562,
+    "gzip": 110575,
+    "note": "checks the config: includes zod"
+  },
+  {
+    "name": "Prism: prismTransform",
+    "minified": 511981,
+    "gzip": 111289,
+    "note": "includes zod"
+  },
+  {
+    "name": "Prism: execute only",
+    "minified": 508288,
+    "gzip": 110252,
+    "note": "runs an IR compiled elsewhere"
+  },
+  {
+    "name": "Prism: everything",
+    "minified": 517191,
+    "gzip": 113089,
+    "note": "includes zod"
+  },
+  {
+    "name": "JSONata",
+    "minified": 83061,
+    "gzip": 26321
+  },
+  {
+    "name": "JsonLogic (json-logic-js)",
+    "minified": 5553,
+    "gzip": 1864
+  },
+  {
+    "name": "JsonLogic (json-logic-engine)",
+    "minified": 37763,
+    "gzip": 9882
+  },
+  {
+    "name": "JSON Query",
+    "minified": 7175,
+    "gzip": 3060
+  },
+  {
+    "name": "JSON Query, JSON form only",
+    "minified": 7164,
+    "gzip": 3053
+  },
+  {
+    "name": "mingo",
+    "minified": 84919,
+    "gzip": 30331,
+    "note": "the default entry, every operator"
+  },
+  {
+    "name": "JMESPath (jmespath)",
+    "minified": 22516,
+    "gzip": 6399
+  },
+  {
+    "name": "JMESPath (community)",
+    "minified": 33211,
+    "gzip": 9495
+  },
+  {
+    "name": "json-e",
+    "minified": 26003,
+    "gzip": 8802
+  },
+  {
+    "name": "GROQ (groq-js)",
+    "minified": 61993,
+    "gzip": 16795
+  },
+  {
+    "name": "CEL (@marcbachmann/cel-js)",
+    "minified": 85403,
+    "gzip": 24939
+  },
+  {
+    "name": "jora",
+    "minified": 55682,
+    "gzip": 19818
+  },
+  {
+    "name": "lodash",
+    "minified": 73839,
+    "gzip": 26812,
+    "note": "the whole of lodash, as `import _ from \"lodash\"` brings it"
+  }
+]
