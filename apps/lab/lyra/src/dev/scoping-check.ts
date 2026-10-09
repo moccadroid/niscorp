@@ -1,7 +1,6 @@
 // Run: pnpm --filter lyra exec tsx src/dev/scoping-check.ts
 import { CAST } from '@lyra/db/seed';
-import { resolvePolicyForRoles } from '@niscorp/moss';
-import { app, asPrincipal, ok, report, runtime, server } from './world';
+import { asPrincipal, ok, report, runtime, server } from './world';
 
 const count = async (sql: string): Promise<number> => Number((await runtime.db.query<{ n: string }>(sql)).rows[0]?.n ?? -1);
 
@@ -37,13 +36,14 @@ const leaked = await count(
 ok('...with no Lumen row among them', leaked === 0, 'the personal rule ANDs onto the tenant rule, it does not replace it');
 
 // ── reach itself, read off the compiled policy ───────────────
-const BOOKING_GRANTS = ['bookings.read', 'bookings.write.insert', 'bookings.write.update'];
 
-// Compiled from the ROLES the identity seam resolves — the same path the
-// request takes. There is no assignment map to read them out of any more.
+// The policy the server compiles for the ROLES the identity seam resolves —
+// the same path the request takes, over the tables the database has. There is
+// no assignment map to read them out of any more, and no grant list written
+// down here that could disagree with the schema.
 const rulesFor = async (personId: string, phase: 'read'): Promise<number> => {
   const { roles } = await server.identity(personId);
-  const entity = resolvePolicyForRoles(app, BOOKING_GRANTS, roles).entities['bookings'];
+  const entity = server.policyForRoles(roles).entities['bookings'];
   return entity === undefined || 'public' in entity || 'deny' in entity ? -1 : (entity[phase] ?? []).length;
 };
 
