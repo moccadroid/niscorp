@@ -9,7 +9,7 @@ import type { PgPool } from '@niscorp/vex';
 //
 // This server already answers "who is calling" three ways: an integration
 // presents a 256-bit key stored hashed (../integrations.ts), a deployment signs
-// 30-second assertions with ed25519 (../assert.ts) — and until this file, a
+// 30-second assertions with ed25519 (../integrations, credentials.ts) — and until this file, a
 // person presented a JSON field anybody could author. Nothing about a person
 // makes the weaker answer appropriate; this is the same credential the
 // integration key is, one table over:
@@ -54,7 +54,7 @@ export const SESSIONS_SEQUENCE: Sequence = {
       steps: [
         {
           kind: 'sql',
-          // THE HASH, NEVER THE TOKEN (see the header, and ../assert.ts for the rule).
+          // THE HASH, NEVER THE TOKEN (see the header, and ../integrations, credentials.ts for the rule).
           sql: `CREATE TABLE IF NOT EXISTS sessions (
       token_hash text PRIMARY KEY,
       principal  text NOT NULL,

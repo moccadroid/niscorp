@@ -18,7 +18,7 @@ import { vexRecordToSpan } from '../src/data/span';
 import { createShellHost, instrumentFunctions } from '../src/shells';
 import type { ShellHostContext } from '../src/shells';
 import { callIntegrationWith, initIntegrations } from '../src/integrations';
-import { createAssertionSigner } from '../src/assert';
+import { createAssertionSigner } from '../src/integrations';
 import { createSocket } from '../src/socket';
 import type { Connection, SocketContext } from '../src/socket';
 import { PROTOCOL, offerToken } from '../src/protocol';

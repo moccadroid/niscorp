@@ -20,7 +20,7 @@ export { MOSS_SEQUENCE } from './data';
 export { integrationOfAction, integrationByKey, listAttachments, listPlacements } from './integrations';
 export type { StorePress } from './manifest';
 export type { CallIntegration } from './integrations';
-export { createAssertionSigner } from './assert';
+export { createAssertionSigner } from './integrations';
 export { resolveRoles, memoKeyOf } from './identity';
 export { resolvePolicy } from './data';
 export { resolveVariants, verifyApp } from './manifest';

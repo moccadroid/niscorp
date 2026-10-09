@@ -160,7 +160,7 @@ export type NiscRuntime = {
   telemetry?: Telemetry;
 
   // A FIXED SEED FOR THE ASSERTION SIGNING KEYPAIR — dev only, and off by
-  // default (../assert.ts). Without it the keypair regenerates every boot, which
+  // default (../integrations, credentials.ts). Without it the keypair regenerates every boot, which
   // on an in-memory database means an integration's held public key goes stale
   // on every restart and it starts refusing calls. Setting it makes the public
   // half stable, so a separate service's environment stays valid across

@@ -35,7 +35,7 @@ import {
   StandingRowSchema,
 } from './integrations';
 import type { CallIntegration } from './integrations';
-import { createAssertionSigner, hashIntegrationKey, mintIntegrationKey } from './assert';
+import { createAssertionSigner, hashIntegrationKey, mintIntegrationKey } from './integrations';
 import { createSocket, DEFAULT_REVALIDATE_MS } from './socket';
 import type { SocketAccept } from './socket';
 import { createShellHost } from './shells';

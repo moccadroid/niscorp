@@ -50,15 +50,14 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       identity: ['runtime', 'protocol'],
       manifest: ['runtime', 'identity'],
       data: ['runtime', 'identity', 'manifest'],
+      integrations: ['runtime', 'manifest', 'data'],
       client: ['protocol'],
       terminal: ['client'],
     },
     flat: [
-      'assert.ts',
       'document.ts',
       'driver.ts',
       'fabric.ts',
-      'integrations.ts',
       'liveness.ts',
       'node.ts',
       'pages.ts',
@@ -68,7 +67,7 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       'tide.ts',
       'vite.ts',
     ],
-    finished: ['runtime', 'protocol', 'identity', 'manifest', 'data', 'client', 'terminal'],
+    finished: ['runtime', 'protocol', 'identity', 'manifest', 'data', 'integrations', 'client', 'terminal'],
   },
 };
 

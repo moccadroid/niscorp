@@ -5,7 +5,7 @@ import { createPglitePool } from '@niscorp/vex/pglite';
 import { runIntake, reachOf, copyPress, callIntegrationWith, initIntegrations, listIntegrations, intakeContextOf } from '../src/integrations';
 import type { IntakeContext, Bundle } from '../src/integrations';
 import type { NiscApp, StorePress } from '../src/manifest';
-import { createAssertionSigner, verifyAssertion } from '../src/assert';
+import { createAssertionSigner, verifyAssertion } from '../src/integrations';
 
 // The listing's long form travels WITH the bundle (story, highlights, press),
 // and press is the one field that moves bytes: copied at intake, never
