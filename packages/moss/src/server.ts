@@ -13,7 +13,7 @@ import { createRunningManifest, receiveManifest, refusalOf } from './manifest';
 import type { Catalog, ManifestReport, NiscApp } from './manifest';
 import type { NiscRuntime } from './runtime';
 import { createIdentity, sessionRemainingMs, sessionVerifierOf } from './identity';
-import { createDataLayer, createGrammarUpgrader, createWireFollower, resolvePolicyAtReachForRoles, resolvePolicyForRoles, tableSequencesOf } from './data';
+import { createDataLayer, createGrammarUpgrader, createWireFollower, INTEGRATION_ACTIONS_STORE, resolvePolicyAtReachForRoles, resolvePolicyForRoles, tableSequencesOf } from './data';
 import { mintWrites } from './tide';
 import type { ActionDefinition } from '@niscorp/nova';
 import {
@@ -22,7 +22,6 @@ import {
   contractAsMarkdown,
   copyPress,
   describePlacements,
-  INTEGRATION_ACTIONS_STORE,
   integrationByKey,
   filterInstalled,
   listIntegrations,

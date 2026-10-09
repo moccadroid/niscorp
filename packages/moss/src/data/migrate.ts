@@ -5,8 +5,8 @@ import type { MigrateReport } from '@niscorp/strata/postgres';
 import type { Sequence } from '@niscorp/strata';
 import type { NiscApp } from '../manifest';
 import type { NiscRuntime } from '../runtime';
-import { MOSS_SEQUENCE } from '../integrations';
 import { SESSIONS_SEQUENCE } from '../identity';
+import { MOSS_SEQUENCE } from './tables';
 
 // ═══════════════════════════════════════════════════════════════
 // THE STEP THAT CHANGES TABLES — one strata run over every owner's sequence,

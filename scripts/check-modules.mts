@@ -68,7 +68,7 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       'tide.ts',
       'vite.ts',
     ],
-    finished: ['runtime', 'protocol', 'identity', 'manifest', 'client', 'terminal'],
+    finished: ['runtime', 'protocol', 'identity', 'manifest', 'data', 'client', 'terminal'],
   },
 };
 

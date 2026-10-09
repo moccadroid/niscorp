@@ -3,7 +3,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import { checksumOf, type Sequence } from '@niscorp/strata';
 import { readLedger } from '@niscorp/strata/postgres';
-import { MOSS_SEQUENCE } from '../src/integrations';
+import { MOSS_SEQUENCE } from '../src/data';
 import { SESSIONS_SEQUENCE } from '../src/identity';
 import { TIDE_SEQUENCE } from '../src/tide';
 import { createServer } from '../src/server';
