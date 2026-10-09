@@ -8,9 +8,16 @@ import { createServer } from '../src/server';
 // THE REPORT BOOT VERIFIED, HANDED BACK. `createServer` refuses on the report's
 // errors and reads nothing else of it, so the warnings (an action no role
 // grants, an allow that matches nothing) and each role's closure issues were
-// computed on every boot and every refresh and then dropped. A host that
+// computed on every boot and every change and then dropped. A host that
 // wanted them had to run `verifyCharter` again, over a data universe it built
 // by hand. `charterReport()` is the one the server itself verified.
+//
+// And it answers for WHAT IS IN FORCE. What the app consists of changes through
+// one door, `replaceActions`, which verifies before it switches: a set the app
+// could not be served with is refused, and the report, the actions and what
+// each principal holds stay as they were. `verifyActions` is that door's dry
+// run. The charter is not something that changes after the hand-over at all;
+// the last case is what a boot says to one that does not hold.
 
 const home: ActionDefinition = {
   id: 'home',
@@ -18,12 +25,15 @@ const home: ActionDefinition = {
 };
 const panel: ActionDefinition = { id: 'admin.panel' };
 const stray: ActionDefinition = { id: 'stray' };
+const daily: ActionDefinition = { id: 'reports.daily' };
+
+// `reports.*` matches nothing (a dead allow); `stray` is granted by nobody
+// (an orphan); `public` holds `home` but not the action it pushes.
+const charter = { public: ['home', 'reports.*'], admin: ['home', 'admin.panel'] };
 
 const manifest = () =>
   defineApp({
-    // `reports.*` matches nothing (a dead allow); `stray` is granted by nobody
-    // (an orphan); `public` holds `home` but not the action it pushes.
-    charter: { public: ['home', 'reports.*'], admin: ['home', 'admin.panel'] },
+    charter,
     assignments: { usr_admin: ['admin'] },
     actions: { home, 'admin.panel': panel, stray },
   });
@@ -45,6 +55,11 @@ const boot = async (app: ReturnType<typeof manifest>) => {
   return quietly(() => createServer(app, { pool, db: pool, session: 'dev-open' }));
 };
 
+// An id that is a namespace of another is something the charter engine
+// refuses: a set that ships `home.sub` beside the app's `home` is a set the
+// app could not be served with.
+const unservable: Record<string, ActionDefinition> = { 'home.sub': { id: 'home.sub' } };
+
 describe('charterReport — the report the server booted on', () => {
   it('carries the warnings and the closure issues boot does not refuse on', async () => {
     const server = await boot(manifest());
@@ -58,29 +73,53 @@ describe('charterReport — the report the server booted on', () => {
     server.close();
   });
 
-  it('is replaced by a refresh that passes', async () => {
-    const app = manifest();
-    const server = await boot(app);
-    expect(server.charterReport().warnings.some((warning) => warning.rule === 'orphan')).toBe(true);
+  it('is replaced by a change that passes, with the actions in force and what each principal holds', async () => {
+    const server = await boot(manifest());
+    const booted = server.charterReport();
+    expect(booted.warnings.some((warning) => warning.rule === 'dead-allow')).toBe(true);
+    expect((await server.catalogOf(null)).ids).toEqual(['home']);
 
-    app.actions = { home, 'admin.panel': panel };
-    server.refresh();
+    // The set gives `reports.*` something to match: the allow is no longer dead.
+    server.replaceActions('reports', { [daily.id]: daily });
 
-    expect(server.charterReport().warnings.map((warning) => warning.rule)).toEqual(['dead-allow']);
+    expect(server.charterReport()).not.toBe(booted);
+    expect(server.charterReport().warnings.map((warning) => warning.rule)).toEqual(['orphan']);
+    expect(Object.keys(server.actions())).toEqual(['home', 'admin.panel', 'stray', 'reports.daily']);
+    expect((await server.catalogOf(null)).ids).toEqual(['home', 'reports.daily']);
+    expect((await server.catalogOf('usr_admin')).ids).toEqual(['admin.panel', 'home']);
+    expect(server.catalogForRoles(['public', 'admin']).ids).toEqual(['admin.panel', 'home', 'reports.daily']);
     server.close();
   });
 
-  it('a refresh that is refused leaves the report the server is still serving on', async () => {
-    const app = manifest();
-    const server = await boot(app);
+  it('a set the app could not be served with is refused, and what is in force is unchanged', async () => {
+    const server = await boot(manifest());
+    server.replaceActions('reports', { [daily.id]: daily });
     const served = server.charterReport();
+    const inForce = server.actions();
+    const held = await server.catalogOf(null);
 
-    // A deny that matches nothing is an error: the refresh throws, and the old
-    // resolution — with the report it was verified by — keeps serving.
-    app.charter = { ...app.charter, admin: { allow: ['home', 'admin.panel'], deny: ['hmoe'] } };
-    expect(() => server.refresh()).toThrow(/dead-deny/);
+    // The dry run says why, and that another set would be taken.
+    const dry = server.verifyActions('reports', unservable);
+    expect(dry.errors.map((error) => error.check)).toEqual(['charter']);
+    expect(dry.errors[0]?.detail).toMatch(/^leaves-only: id "home" is a namespace of "home.sub"/);
+    expect(server.verifyActions('reports', {}).errors).toEqual([]);
 
+    // The door refuses with the same finding.
+    expect(() => server.replaceActions('reports', unservable)).toThrow(/^Refresh refused — charter incoherent over the new artifacts:\n {2}leaves-only: id "home" is a namespace of "home.sub"/);
+
+    // Neither changed anything: the report is the one the server is still
+    // serving on, and the set it tried to replace is still in force.
     expect(server.charterReport()).toBe(served);
+    expect(server.actions()).toBe(inForce);
+    expect(Object.keys(server.actions())).toEqual(['home', 'admin.panel', 'stray', 'reports.daily']);
+    expect(await server.catalogOf(null)).toBe(held);
     server.close();
+  });
+
+  it('a charter that does not hold is refused by the boot it is handed to', async () => {
+    // A deny that matches nothing is an error. A manifest is not edited after
+    // it is handed over, so the only moment a charter can be refused is this one.
+    const incoherent = defineApp({ ...manifest(), charter: { ...charter, admin: { allow: ['home', 'admin.panel'], deny: ['hmoe'] } } });
+    await expect(boot(incoherent)).rejects.toThrow(/^Charter is incoherent — refusing to serve:\n {2}dead-deny: role "admin" denies "hmoe"/);
   });
 });
