@@ -221,6 +221,23 @@ describe('what a set of roles holds', () => {
     expect(manifest.catalogFor(['member'], ['belts'])).toBe(manifest.catalogFor(['member'], ['belts']));
     expect(manifest.catalogFor(['member', 'public'], undefined)).toBe(manifest.catalogFor(['public', 'member'], undefined));
   });
+
+  it('with no filter every granted action is there; one said later narrows what is answered next', () => {
+    const manifest = createRunningManifest({ shipped: shippedApp(), grants: scopeGrants(['deals']) });
+    manifest.replace('bundles', { [desk.id]: desk, [pay.id]: pay });
+    const everything = manifest.catalogFor(['member'], ['belts']);
+    expect(everything.ids).toEqual([desk.id, pay.id, 'home', 'panel']);
+
+    manifest.narrowCatalogs(installedOnly);
+
+    // What was remembered was made without the filter, so it is not kept.
+    expect(manifest.catalogFor(['member'], ['belts'])).not.toBe(everything);
+    expect(manifest.catalogFor(['member'], ['belts']).ids).toEqual([desk.id, 'home', 'panel']);
+    expect(manifest.catalogFor(['member'], undefined).ids).toEqual([desk.id, pay.id, 'home', 'panel']);
+    // A second rule is applied to what the first kept.
+    manifest.narrowCatalogs((ids) => ids.filter((id) => id !== 'panel'));
+    expect(manifest.catalogFor(['member'], ['belts']).ids).toEqual([desk.id, 'home']);
+  });
 });
 
 describe('what the app shipped, and a set that was taken', () => {
@@ -373,6 +390,36 @@ describe('watch — the pointer the other processes poll', () => {
       // ...and a quiet interval is not a move.
       await aMoment();
       expect(told).toHaveBeenCalledTimes(1);
+    } finally {
+      manifest.stop();
+    }
+  });
+
+  it('a set named after the manifest stands is read again the same way, and has its place from when it was named', async () => {
+    const { pool, poke, moves } = pointerPool();
+    const rows: { now: Record<string, ActionDefinition> } = { now: { [desk.id]: desk } };
+    const manifest = running(shippedApp(), { pointer: { pool, everyMs: 1 } });
+    try {
+      const told = vi.fn();
+      manifest.onChange(told);
+      manifest.loadFrom('integrations', async () => rows.now);
+      // Naming it switched nothing: it is empty until it is replaced.
+      expect(Object.keys(manifest.actions())).toEqual(['home', 'panel']);
+      expect(told).not.toHaveBeenCalled();
+
+      manifest.replace('bundles', { [pay.id]: pay });
+      manifest.replace('integrations', rows.now);
+      manifest.watch();
+      await aMoment();
+
+      rows.now = { [desk.id]: desk, [grades.id]: grades };
+      poke();
+      await aMoment();
+
+      // Before `bundles`, which was replaced first and named second.
+      expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id, grades.id, pay.id]);
+      expect(told).toHaveBeenCalledTimes(3);
+      expect(moves()).toBe(0);
     } finally {
       manifest.stop();
     }

@@ -32,6 +32,9 @@ import type { ManifestCandidate, ManifestReport, ShippedManifest } from './verif
 
 type Actions = Readonly<Record<string, ActionDefinition>>;
 
+// How a set that lives in rows is read.
+export type ActionLoader = () => Promise<Record<string, ActionDefinition>>;
+
 export type RunningManifestConfig = {
   // WHAT THE APP SHIPPED: the seven fields of its manifest a verification
   // reads. Read and never written. A server hands over the app's own record,
@@ -42,11 +45,13 @@ export type RunningManifestConfig = {
   grants: readonly string[];
   // Which of a set of roles' actions are there for an install list. A function,
   // because this module does not know what an integration is (./roles.ts).
-  installedOnly: InstalledOnly;
+  // Absent: every granted action is there, whatever is installed, until
+  // somebody says otherwise (`narrowCatalogs`).
+  installedOnly?: InstalledOnly;
   // The named sets that live in rows, each with how it is read again when
   // another process says something changed. A set with no loader is whatever
   // it was last replaced with.
-  loaders?: Readonly<Record<string, () => Promise<Record<string, ActionDefinition>>>>;
+  loaders?: Readonly<Record<string, ActionLoader>>;
   // The generation pointer (./generation.ts): where it is kept and how often
   // it is read, once `watch` is called. Absent: this manifest tells no other
   // process that it changed, and hears from none.
@@ -87,6 +92,16 @@ export type RunningManifest = {
   // Told once each time the manifest is switched, after what was derived from
   // the old one is dropped. Returns the way to stop being told.
   onChange: (listener: () => void) => () => void;
+  // A SET THAT LIVES IN ROWS, NAMED AFTER THE MANIFEST STANDS: how it is read
+  // again when another process says something changed. What the config's
+  // `loaders` say, said later, by whoever starts once the manifest is there (a
+  // feature). The set takes its place among the sets when it is named, empty
+  // until it is replaced, so nothing is switched and nobody is told.
+  loadFrom: (source: string, load: ActionLoader) => void;
+  // ONE MORE RULE FOR WHICH GRANTED ACTIONS ARE THERE FOR AN INSTALL LIST, laid
+  // after the ones already said. What was remembered for each set of roles is
+  // dropped, so the next answer is made with it.
+  narrowCatalogs: (filter: InstalledOnly) => void;
   // What a set of roles holds, remembered until the next switch (./roles.ts).
   catalogFor: (roles: readonly string[], installed: readonly string[] | undefined) => Catalog;
   variantsFor: (roles: readonly string[]) => ReadonlyMap<string, LayoutNode>;
@@ -117,7 +132,8 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   // A set with a loader has its place from the start, so the order does not
   // depend on which change happened to come first.
   const own: Actions = shipped.actions;
-  let sets: ReadonlyMap<string, Actions> = new Map(Object.keys(config.loaders ?? {}).map((source) => [source, {}]));
+  const loaders = new Map(Object.entries(config.loaders ?? {}));
+  let sets: ReadonlyMap<string, Actions> = new Map([...loaders.keys()].map((source) => [source, {}]));
   let inForce = laidOver(own, sets);
 
   // REFUSE TO START INCOHERENT. What is only said is said first, here and at no
@@ -127,9 +143,12 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   const refused = refusalOf(report, 'boot');
   if (refused !== undefined) throw new Error(refused);
 
+  // The rules for what is there for an install list, each applied to what the
+  // one before it kept.
+  const narrowings: InstalledOnly[] = config.installedOnly === undefined ? [] : [config.installedOnly];
   const holdings = createRoleHoldings({
     manifest: () => ({ charter: shipped.charter, actions: inForce, layouts: shipped.layouts }),
-    installedOnly: config.installedOnly,
+    installedOnly: (ids, installed) => narrowings.reduce((kept, narrow) => narrow(kept, installed), ids),
   });
   const listeners = new Set<() => void>();
   let pointer: Generation | undefined;
@@ -157,7 +176,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   // What this process does about a change somebody else already announced.
   const reload = async (): Promise<void> => {
     const read: [string, Actions][] = [];
-    for (const [source, load] of Object.entries(config.loaders ?? {})) read.push([source, await load()]);
+    for (const [source, load] of loaders) read.push([source, await load()]);
     take(new Map(read), false);
   };
 
@@ -179,6 +198,14 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       return () => {
         listeners.delete(listener);
       };
+    },
+    loadFrom: (source, load) => {
+      loaders.set(source, load);
+      if (!sets.has(source)) sets = new Map([...sets, [source, {}]]);
+    },
+    narrowCatalogs: (filter) => {
+      narrowings.push(filter);
+      holdings.drop();
     },
     catalogFor: holdings.catalogFor,
     variantsFor: holdings.variantsFor,
