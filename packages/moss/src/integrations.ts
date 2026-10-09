@@ -593,33 +593,68 @@ const upgradeBundle = (payload: unknown, upgrader: Upgrader | undefined): { ok: 
   }
 };
 
-export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult => {
-  // Before anything reads it — the upgrader walks it and the schema recurses
-  // on it, and either overflows the stack on a deep enough payload.
-  if (exceedsDepth(payload)) return { ok: false, reasons: [depthRefusal()] };
-  const upgraded = upgradeBundle(payload, ctx.upgrader);
-  if (!upgraded.ok) return upgraded;
-  const parsed = BundleSchema.safeParse(upgraded.payload);
-  if (!parsed.success) {
-    return { ok: false, reasons: parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`) };
-  }
-  const bundle = parsed.data;
+// Each check below reads the bundle the schema already read and answers the
+// reasons it finds, in order. `runIntake` at the foot runs them in the order
+// the reasons have always been said in.
+
+// A layout, held to what the kit has (../manifest, layout.ts), with each misfit
+// said under the name of the thing the layout belongs to. Used for an action's
+// layout and for section and block fragments alike: a fragment is a layout
+// over `$.content` and earns the same refusal at the same moment.
+const layoutReasons = (layout: unknown, label: string, ctx: IntakeContext): string[] => layoutMisfits(layout, ctx.components).map((misfit) => `${label}: ${misfit}`);
+
+// ── it reaches two places and no others ──
+const endpointReasons = (id: string, action: ActionDefinition, ctx: IntakeContext): string[] => {
   const reasons: string[] = [];
-
-  // Validate a layout the way an action's own layout is validated: the
-  // component name against what the app can render, and each prop against the
-  // component's strict schema (a deferred binding/directive value has its key
-  // checked and its value skipped). Reused for section and block fragments — a
-  // fragment is a layout over `$.content` and earns the same refusal at the
-  // same moment as an action layout.
-  const validateLayout = (node: unknown, label: string): void => {
-    for (const misfit of layoutMisfits(node, ctx.components)) reasons.push(`${label}: ${misfit}`);
-  };
-
-  if (bundle.integration !== ctx.integrationId) {
-    reasons.push(`bundle says it is "${bundle.integration}" but was fetched as "${ctx.integrationId}"`);
+  for (const [name, endpoint] of Object.entries(action.endpoints ?? {})) {
+    if ('fn' in endpoint) {
+      // `fn:` runs IN the app's process, next to the session's shell. An
+      // integration cannot ship code that runs here — that is the whole
+      // point of it being a separate service.
+      reasons.push(`action ${id}: endpoint "${name}" uses fn:, which runs in this app's process`);
+      continue;
+    }
+    const url = endpoint.url;
+    const own = `/integrations/${ctx.integrationId}/`;
+    // The one HOST surface an action may name without a fingerprint: asking
+    // for a frame grant. It reads nothing and writes nothing — it hands back
+    // a URL the integration's own page is served at — so there is no fingerprint for
+    // it to name, and the alternative is every integration inventing its own way to
+    // reach a door that already exists.
+    if (url === FRAME_GRANT_URL) continue;
+    if (url.startsWith(own)) {
+      // `/hook/` IS RESERVED. It is the one path on this server that requires
+      // no principal (the webhook door) — a vendor calling in has
+      // no session and could not have one. An action endpoint declared there
+      // would be a screen's call riding the unauthenticated door, which is
+      // how a door meant for one thing becomes a way around everything else.
+      if (url.startsWith(`${own}hook/`)) {
+        reasons.push(`action ${id}: endpoint "${name}" is under /hook/, which is the unauthenticated webhook path`);
+      }
+      // `/frame/` is where a grant is REDEEMED — a browser GET carrying a
+      // token instead of a session. An action endpoint there would be a
+      // screen's call spending a credential meant for a document.
+      if (url.startsWith(`${own}frame/`)) {
+        reasons.push(`action ${id}: endpoint "${name}" is under /frame/, which redeems frame grants`);
+      }
+      continue;
+    }
+    if (!url.startsWith('/api/')) {
+      reasons.push(`action ${id}: endpoint "${name}" calls "${url}" — only ${own}* or /api/*/vex`);
+      continue;
+    }
+    const fingerprint = isRecord(endpoint.request) ? endpoint.request['fingerprint'] : undefined;
+    if (typeof fingerprint !== 'string') {
+      reasons.push(`action ${id}: endpoint "${name}" calls the app without naming a fingerprint`);
+    } else if (!ctx.fingerprints.has(fingerprint)) {
+      reasons.push(`action ${id}: endpoint "${name}" calls "${fingerprint}", which this app does not serve`);
+    }
   }
+  return reasons;
+};
 
+const actionReasons = (bundle: Bundle, ctx: IntakeContext): string[] => {
+  const reasons: string[] = [];
   for (const [id, action] of Object.entries(bundle.actions)) {
     // ── the namespace ──
     //
@@ -637,79 +672,30 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
 
     // ── the layout composes what the kit has, and sets props the kit knows ──
     //
-    // The name is the floor: a component the terminal cannot render shows
-    // nothing, and at the moment somebody opens the screen rather than the moment
-    // it arrived. When the app carried a props schema for the component, the
-    // props are checked too — an unknown prop (`Choice` has no `submitRef`) is
-    // the failure that installs cleanly and does nothing under a customer's
-    // finger, and a strict schema is exactly what refuses it. A prop whose value
-    // is deferred (a binding or directive) has its KEY checked and its value
-    // skipped. Only authored layouts reach here — a served or flattened tree is
-    // never validated against an authoring schema (ADAPTER.md).
-    validateLayout(action.layout, `action ${id}`);
-
-    // ── it reaches two places and no others ──
-    for (const [name, endpoint] of Object.entries(action.endpoints ?? {})) {
-      if ('fn' in endpoint) {
-        // `fn:` runs IN the app's process, next to the session's shell. An
-        // integration cannot ship code that runs here — that is the whole
-        // point of it being a separate service.
-        reasons.push(`action ${id}: endpoint "${name}" uses fn:, which runs in this app's process`);
-        continue;
-      }
-      const url = endpoint.url;
-      const own = `/integrations/${ctx.integrationId}/`;
-      // The one HOST surface an action may name without a fingerprint: asking
-      // for a frame grant. It reads nothing and writes nothing — it hands back
-      // a URL the integration's own page is served at — so there is no fingerprint for
-      // it to name, and the alternative is every integration inventing its own way to
-      // reach a door that already exists.
-      if (url === FRAME_GRANT_URL) continue;
-      if (url.startsWith(own)) {
-        // `/hook/` IS RESERVED. It is the one path on this server that requires
-        // no principal (server.ts, the webhook door) — a vendor calling in has
-        // no session and could not have one. An action endpoint declared there
-        // would be a screen's call riding the unauthenticated door, which is
-        // how a door meant for one thing becomes a way around everything else.
-        if (url.startsWith(`${own}hook/`)) {
-          reasons.push(`action ${id}: endpoint "${name}" is under /hook/, which is the unauthenticated webhook path`);
-        }
-        // `/frame/` is where a grant is REDEEMED — a browser GET carrying a
-        // token instead of a session. An action endpoint there would be a
-        // screen's call spending a credential meant for a document.
-        if (url.startsWith(`${own}frame/`)) {
-          reasons.push(`action ${id}: endpoint "${name}" is under /frame/, which redeems frame grants`);
-        }
-        continue;
-      }
-      if (!url.startsWith('/api/')) {
-        reasons.push(`action ${id}: endpoint "${name}" calls "${url}" — only ${own}* or /api/*/vex`);
-        continue;
-      }
-      const fingerprint = isRecord(endpoint.request) ? endpoint.request['fingerprint'] : undefined;
-      if (typeof fingerprint !== 'string') {
-        reasons.push(`action ${id}: endpoint "${name}" calls the app without naming a fingerprint`);
-      } else if (!ctx.fingerprints.has(fingerprint)) {
-        reasons.push(`action ${id}: endpoint "${name}" calls "${fingerprint}", which this app does not serve`);
-      }
-    }
+    // A prop whose value is deferred (a binding or directive) has its KEY
+    // checked and its value skipped.
+    reasons.push(...layoutReasons(action.layout, `action ${id}`, ctx));
+    reasons.push(...endpointReasons(id, action, ctx));
   }
+  return reasons;
+};
 
-  // ── no chain of steps that never ends ──
-  //
-  // A trigger that re-emits its own channel is valid data, and nova stops it
-  // at its budget when it runs — but a bundle is a stranger's code path into
-  // every principal's shell, so a loop is refused here rather than run. Walked
-  // with the host's actions, since a loop can close through the host's
-  // triggers; a loop the host has on its own is the host's to answer (boot
-  // names it) and does not refuse somebody else's bundle.
-  for (const chain of endlessChains({ ...(ctx.hostActions ?? {}), ...bundle.actions })) {
-    if (chain.through.some((actionId) => bundle.actions[actionId] !== undefined)) {
-      reasons.push(`a chain of steps that never ends: ${chain.path}`);
-    }
-  }
+// ── no chain of steps that never ends ──
+//
+// A trigger that re-emits its own channel is valid data, and nova stops it
+// at its budget when it runs — but a bundle is a stranger's code path into
+// every principal's shell, so a loop is refused here rather than run. Walked
+// with the host's actions, since a loop can close through the host's
+// triggers; a loop the host has on its own is the host's to answer (boot
+// names it) and does not refuse somebody else's bundle.
+const chainReasons = (bundle: Bundle, ctx: IntakeContext): string[] =>
+  endlessChains({ ...(ctx.hostActions ?? {}), ...bundle.actions })
+    .filter((chain) => chain.through.some((actionId) => bundle.actions[actionId] !== undefined))
+    .map((chain) => `a chain of steps that never ends: ${chain.path}`);
 
-  // ── the bindings point at things that exist, on both ends ────
+// ── the bindings point at things that exist, on both ends ────
+const bindingReasons = (bundle: Bundle, ctx: IntakeContext): string[] => {
+  const reasons: string[] = [];
   for (const [actionId, binding] of Object.entries(bundle.attachments)) {
     const host = typeof binding === 'string' ? binding : binding.to;
     const preview = typeof binding === 'string' ? '' : binding.preview;
@@ -766,12 +752,42 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
   if (bundle.settings !== '' && bundle.actions[bundle.settings] === undefined) {
     reasons.push(`settings: "${bundle.settings}" is not an action in this bundle`);
   }
+  return reasons;
+};
 
-  // ── WHAT AN ADD-ON LETS A PERSON EDIT ────────────────────────
-  //
-  // Cross-references the host holds or the bundle itself declares — the same
-  // posture as every check above. Shape is the schema's; these are the things
-  // only the surrounding bundle and the host can know are wrong.
+// One document's section types: none declared twice, each field's key once, a
+// `pick` with something to pick from, no `list` (that is a block's), and a
+// fragment that composes what the kit has.
+const sectionTypeReasons = (doc: DocumentDeclaration, ctx: IntakeContext): string[] => {
+  const reasons: string[] = [];
+  const seenType = new Set<string>();
+  for (const section of doc.registry) {
+    if (seenType.has(section.type)) reasons.push(`document "${doc.id}": section type "${section.type}" declared twice`);
+    seenType.add(section.type);
+    const seenKey = new Set<string>();
+    for (const field of section.fields) {
+      if (seenKey.has(field.key)) reasons.push(`document "${doc.id}" section "${section.type}": field key "${field.key}" declared twice`);
+      seenKey.add(field.key);
+      if (field.kind === 'pick' && field.options.length < 2) {
+        reasons.push(`document "${doc.id}" section "${section.type}": pick field "${field.key}" needs at least two options`);
+      }
+      if (field.kind === 'list') {
+        reasons.push(`document "${doc.id}" section "${section.type}": a list field is only allowed inside an assistant block`);
+      }
+    }
+    reasons.push(...layoutReasons(section.fragment, `document "${doc.id}" section "${section.type}" fragment`, ctx));
+  }
+  return reasons;
+};
+
+// ── WHAT AN ADD-ON LETS A PERSON EDIT ────────────────────────
+//
+// Cross-references the host holds or the bundle itself declares — the same
+// posture as every check above. Shape is the schema's; these are the things
+// only the surrounding bundle and the host can know are wrong.
+const documentReasons = (bundle: Bundle, ctx: IntakeContext): string[] => {
+  const reasons: string[] = [];
+  const ownPrefix = `/integrations/${ctx.integrationId}/`;
   const ownActions = new Set(Object.keys(bundle.actions));
   const ownCapabilities = new Set(bundle.capabilities.map((c) => c.id));
   const hostRegions = ctx.regions ?? new Set<string>();
@@ -795,25 +811,9 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
     for (const check of doc.checks) {
       if (!hostChecks.has(check)) reasons.push(`document "${doc.id}": check "${check}" is not one the host offers`);
     }
-    const registryTypes = new Set(doc.registry.map((s) => s.type));
-    const seenType = new Set<string>();
-    for (const section of doc.registry) {
-      if (seenType.has(section.type)) reasons.push(`document "${doc.id}": section type "${section.type}" declared twice`);
-      seenType.add(section.type);
-      const seenKey = new Set<string>();
-      for (const field of section.fields) {
-        if (seenKey.has(field.key)) reasons.push(`document "${doc.id}" section "${section.type}": field key "${field.key}" declared twice`);
-        seenKey.add(field.key);
-        if (field.kind === 'pick' && field.options.length < 2) {
-          reasons.push(`document "${doc.id}" section "${section.type}": pick field "${field.key}" needs at least two options`);
-        }
-        if (field.kind === 'list') {
-          reasons.push(`document "${doc.id}" section "${section.type}": a list field is only allowed inside an assistant block`);
-        }
-      }
-      validateLayout(section.fragment, `document "${doc.id}" section "${section.type}" fragment`);
-    }
+    reasons.push(...sectionTypeReasons(doc, ctx));
     if ('fixed' in doc.sections) {
+      const registryTypes = new Set(doc.registry.map((s) => s.type));
       const siblingIds = new Set(doc.sections.fixed.map((f) => f.id));
       for (const f of doc.sections.fixed) {
         if (!registryTypes.has(f.type)) reasons.push(`document "${doc.id}": fixed section "${f.id}" has type "${f.type}", which is not in the registry`);
@@ -823,8 +823,35 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
       }
     }
   }
+  return reasons;
+};
 
-  // ── WHAT AN ADD-ON'S ASSISTANT KNOWS ─────────────────────────
+// One assistant's block types: none declared twice, each field's key once, a
+// `pick` with something to pick from, and a fragment that composes what the
+// kit has. A `list` field IS allowed in a block — this is the one place it is.
+const blockReasons = (assistant: AssistantDeclaration, ctx: IntakeContext): string[] => {
+  const reasons: string[] = [];
+  const seenBlock = new Set<string>();
+  for (const block of assistant.blocks) {
+    if (seenBlock.has(block.type)) reasons.push(`assistant "${assistant.id}": block type "${block.type}" declared twice`);
+    seenBlock.add(block.type);
+    const seenKey = new Set<string>();
+    for (const field of block.fields) {
+      if (seenKey.has(field.key)) reasons.push(`assistant "${assistant.id}" block "${block.type}": field key "${field.key}" declared twice`);
+      seenKey.add(field.key);
+      if (field.kind === 'pick' && field.options.length < 2) {
+        reasons.push(`assistant "${assistant.id}" block "${block.type}": pick field "${field.key}" needs at least two options`);
+      }
+    }
+    reasons.push(...layoutReasons(block.fragment, `assistant "${assistant.id}" block "${block.type}" fragment`, ctx));
+  }
+  return reasons;
+};
+
+// ── WHAT AN ADD-ON'S ASSISTANT KNOWS ─────────────────────────
+const assistantReasons = (bundle: Bundle, ctx: IntakeContext): string[] => {
+  const reasons: string[] = [];
+  const ownActions = new Set(Object.keys(bundle.actions));
   const documentIds = new Set(bundle.documents.map((d) => d.id));
   const hostTools = ctx.tools ?? new Set<string>();
   const seenAssistant = new Set<string>();
@@ -850,23 +877,30 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
     for (const tool of assistant.tools) {
       if (!hostTools.has(tool)) reasons.push(`assistant "${assistant.id}": tool "${tool}" is not one the host offers`);
     }
-    const seenBlock = new Set<string>();
-    for (const block of assistant.blocks) {
-      if (seenBlock.has(block.type)) reasons.push(`assistant "${assistant.id}": block type "${block.type}" declared twice`);
-      seenBlock.add(block.type);
-      const seenKey = new Set<string>();
-      for (const field of block.fields) {
-        if (seenKey.has(field.key)) reasons.push(`assistant "${assistant.id}" block "${block.type}": field key "${field.key}" declared twice`);
-        seenKey.add(field.key);
-        // A `list` field IS allowed in a block — this is the one place it is.
-        if (field.kind === 'pick' && field.options.length < 2) {
-          reasons.push(`assistant "${assistant.id}" block "${block.type}": pick field "${field.key}" needs at least two options`);
-        }
-      }
-      validateLayout(block.fragment, `assistant "${assistant.id}" block "${block.type}" fragment`);
-    }
+    reasons.push(...blockReasons(assistant, ctx));
   }
+  return reasons;
+};
 
+export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult => {
+  // Before anything reads it — the upgrader walks it and the schema recurses
+  // on it, and either overflows the stack on a deep enough payload.
+  if (exceedsDepth(payload)) return { ok: false, reasons: [depthRefusal()] };
+  const upgraded = upgradeBundle(payload, ctx.upgrader);
+  if (!upgraded.ok) return upgraded;
+  const parsed = BundleSchema.safeParse(upgraded.payload);
+  if (!parsed.success) {
+    return { ok: false, reasons: parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`) };
+  }
+  const bundle = parsed.data;
+  const reasons = [
+    ...(bundle.integration === ctx.integrationId ? [] : [`bundle says it is "${bundle.integration}" but was fetched as "${ctx.integrationId}"`]),
+    ...actionReasons(bundle, ctx),
+    ...chainReasons(bundle, ctx),
+    ...bindingReasons(bundle, ctx),
+    ...documentReasons(bundle, ctx),
+    ...assistantReasons(bundle, ctx),
+  ];
   return reasons.length > 0 ? { ok: false, reasons } : { ok: true, bundle };
 };
 
