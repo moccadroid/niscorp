@@ -1,6 +1,7 @@
 import {
   isSumNode, isAvgNode, isCountNode, isMinNode, isMaxNode,
   isPluckNode, isTakeNode, isDropNode, isMatchNode, isFlatMapNode,
+  isConstNode, isWithNode, isRenameKeysNode,
   isJsonObject,
 } from '../schemas/guards';
 import {
@@ -12,6 +13,19 @@ export const desugar = (node: unknown): unknown => {
   if (node === null || node === undefined) return node;
   if (typeof node !== 'object') return node;
   if (Array.isArray(node)) return node.map(desugar);
+
+  // What is not a node is not rewritten. Three places hold a `$` key that is a
+  // NAME or DATA, and a sugar op's name among them was read as that op:
+  // `{ $const: { total: { $sum: 1 } } }` answered a `$reduce` where it should
+  // answer the literal, and a `$with` binding called `$sum` lost its variable.
+  // A `$with` first: its record of bindings may itself hold one called `$const`.
+  if (isWithNode(node)) {
+    const bindings: Record<string, unknown> = {};
+    for (const [name, expr] of Object.entries(node.$with.let)) bindings[name] = desugar(expr);
+    return { $with: { let: bindings, value: desugar(node.$with.value) } };
+  }
+  if (isRenameKeysNode(node)) return { $renameKeys: { ...node.$renameKeys, from: desugar(node.$renameKeys.from) } };
+  if (isConstNode(node)) return node;
 
   // Sugar ops
   if (isSumNode(node)) return rewriteSum(node, desugar);

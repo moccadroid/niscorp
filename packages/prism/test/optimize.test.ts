@@ -197,9 +197,10 @@ describe('execute — an IR read back from storage', () => {
   });
 });
 
-// A `$with` binding and a `$renameKeys` map are keyed by NAMES, and a name may
-// be an op's. The optimizer read such a record as that op.
-describe('optimize — a name that is also an op', () => {
+// A `$with` binding and a `$renameKeys` map are keyed by NAMES, and a `$const`
+// holds DATA; a `$` key among them may be an op's name. The optimizer read such
+// a record as that op, and the desugar step read a sugar op's name as sugar.
+describe('a name or a constant that looks like an op', () => {
   const stored = async (config: unknown): Promise<Awaited<ReturnType<typeof compile>>> =>
     JSON.parse(JSON.stringify(await compile(config)));
 
@@ -209,6 +210,16 @@ describe('optimize — a name that is also an op', () => {
     { name: 'a binding called $ref, holding a ref', config: { $with: { let: { $ref: { $ref: '$.a' } }, value: { $var: '$ref' } } }, source: { a: 7 }, expected: 7 },
     { name: 'a key called $upper, renamed', config: { $renameKeys: { from: { $ref: '$' }, map: { $upper: 'x' } } }, source: { $upper: 1, b: 2 }, expected: { x: 1, b: 2 } },
     { name: 'a key called $type, renamed', config: { $renameKeys: { from: { $ref: '$' }, map: { $type: 'kind' } } }, source: { $type: 'a' }, expected: { kind: 'a' } },
+    // The sugar ops' names: the desugar step read these as sugar, in evaluate too.
+    { name: 'a binding called $sum', config: { $with: { let: { $sum: [1, 2] }, value: { $var: '$sum' } } }, source: {}, expected: [1, 2] },
+    { name: 'a binding called $const, whose value is sugar', config: { $with: { let: { $const: { $sum: { over: [1, 2] } } }, value: { $var: '$const' } } }, source: {}, expected: 3 },
+    { name: 'a key called $count, renamed', config: { $renameKeys: { from: { $ref: '$' }, map: { $count: 'n' } } }, source: { $count: 1 }, expected: { n: 1 } },
+    { name: 'sugar where a $renameKeys reads from', config: { $renameKeys: { from: { total: { $sum: { over: { $ref: '$.xs' } } } }, map: { total: 'sum' } } }, source: { xs: [1, 2, 3] }, expected: { sum: 6 } },
+    // A $const is data, returned as it is written.
+    { name: 'a constant with a $sum key', config: { $const: { total: { $sum: 1 } } }, source: {}, expected: { total: { $sum: 1 } } },
+    { name: 'a constant that is a pipeline of $match and $count', config: { $const: [{ $match: { status: 'A' } }, { $count: 'n' }] }, source: {}, expected: [{ $match: { status: 'A' } }, { $count: 'n' }] },
+    { name: 'a constant that is a Prism config', config: { $const: { $sum: { over: { $ref: '$.xs' } } } }, source: { xs: [1] }, expected: { $sum: { over: { $ref: '$.xs' } } } },
+    { name: 'a constant with $take, $min and $max keys', config: { dose: { $const: { $take: 'two tablets', $min: 3, $max: 9 } } }, source: {}, expected: { dose: { $take: 'two tablets', $min: 3, $max: 9 } } },
   ];
 
   for (const c of cases) {
