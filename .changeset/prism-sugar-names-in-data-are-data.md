@@ -8,7 +8,7 @@ Before a config runs, the sugar ops (`$sum`, `$avg`, `$count`, `$min`, `$max`, `
 
 ```ts
 { $const: { total: { $sum: 1 } } }
-// answered { total: { $reduce: { … } } }, from evaluate, execute and prismTransform alike
+// answered { total: { $reduce: { … } } }, from evaluate and from execute alike
 
 { $with: { let: { $sum: [1, 2] }, value: { $var: '$sum' } } }
 // "Variable not found: __acc" — the binding called $sum was rewritten as a sum
