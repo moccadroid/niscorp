@@ -13,6 +13,10 @@
 // `data` grants over that set, with the app's row behaviors: compiled once for
 // each set of roles and kept until the manifest changes.
 //
+// THE ROUTES (./routes.ts) are the locked vex surfaces a request reads and
+// writes through, with who the request is said by the caller. A WRITE they
+// serve is offered to whoever subscribes (./writes.ts).
+//
 // A SEEDED ENTRY RUN AS A CHARTER ROLE (./execute-as.ts) is how machinery
 // with no principal reads and writes: in process, replay only, under that
 // role's policy. Every execution is reported as a span (./span.ts).
@@ -40,4 +44,8 @@ export type { TablesReport } from './migrate';
 export { INTEGRATION_ACTIONS_STORE, MOSS_SEQUENCE } from './tables';
 export { createPolicies, resolvePolicy, resolvePolicyAtReachForRoles, resolvePolicyForRoles } from './policy';
 export type { Policies } from './policy';
+export { createVexRoutes } from './routes';
+export type { VexRoutesConfig } from './routes';
 export { vexRecordToSpan } from './span';
+export { createWriteLane } from './writes';
+export type { ChainHints, WriteLane, WriteListener } from './writes';
