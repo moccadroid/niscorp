@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createWire, browserEnv } from '../src/client';
 import type { WireEnv } from '../src/client';
-import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SIGNED_OUT, PROTOCOL, encodeDelta, frameHash, offeredToken } from '../src/protocol';
+import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SIGNED_OUT, ClientMessageSchema, PROTOCOL, encodeDelta, frameHash, offeredToken } from '../src/protocol';
 
 // ═══════════════════════════════════════════════════════════════
 // The wire — driven headlessly, the way socket.test.ts drives the server:
@@ -32,7 +32,10 @@ class FakeSocket {
     this.offered = upgrade.offered;
     FakeSocket.instances.push(this);
   }
+  // Whatever the wire sends, in any test here, is something the server reads:
+  // the schema it is held to is the one the server parses with.
   send(text: string): void {
+    ClientMessageSchema.parse(JSON.parse(text));
     this.sent.push(text);
   }
   close(): void {

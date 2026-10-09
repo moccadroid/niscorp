@@ -1,8 +1,8 @@
 import { DefinitionValidationError } from '@niscorp/nova';
 import type { RenderNode } from '@niscorp/nova';
 import type { Catalog } from './principal';
-import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SHELL_FAILED, DEFAULT_TOKEN_KEY, PROTOCOL, PROTOCOL_MIN, offeredSealed, offeredToken } from './protocol';
-import type { ServerMessage } from './protocol';
+import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SHELL_FAILED, ClientMessageSchema, DEFAULT_TOKEN_KEY, PROTOCOL, PROTOCOL_MIN, offeredSealed, offeredToken } from './protocol';
+import type { ClientMessage, ServerMessage } from './protocol';
 import type { ShellHost } from './shells';
 import { emitterOf, spanClock } from './telemetry';
 import type { Telemetry } from './telemetry';
@@ -122,14 +122,21 @@ export const DEFAULT_REVALIDATE_MS = 60 * 1000;
 // unref'd, so a plain process needn't call it.
 export type SocketAccept = ((url: string, connection: Connection) => Promise<void>) & { stop: () => void };
 
-const parse = (text: string): Record<string, unknown> | null => {
+// What a terminal sent, read as the protocol says it — or undefined: text that
+// is not JSON, JSON that is not one of the protocol's messages, or one of them
+// with a field it does not have.
+const messageOf = (text: string): ClientMessage | undefined => {
   try {
-    const value: unknown = JSON.parse(text);
-    return value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+    const read = ClientMessageSchema.safeParse(JSON.parse(text));
+    return read.success ? read.data : undefined;
   } catch {
-    return null;
+    return undefined;
   }
 };
+
+// The one answer to all three: what a message is, which is true whatever was
+// sent, rather than a guess at what the sender meant.
+const INVALID_MESSAGE = `Not a message of protocol ${PROTOCOL}: it must be JSON, name a type a terminal sends, and carry that type's fields and no others.`;
 
 export const createSocket = (ctx: SocketContext): SocketAccept => {
   const emit = emitterOf(ctx.telemetry);
@@ -346,70 +353,41 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
     }
 
     connection.onMessage((text) => {
-      const message = parse(text);
-      // Reset first, and answered on its own terms: a wedged session is
-      // exactly the one whose other paths cannot be trusted to run.
-      if (message !== null && message['type'] === 'reset') {
-        if (session === undefined) {
-          send({ type: 'error', code: 'no_shell', message: 'This app serves no shell.' });
-          return;
-        }
-        session.reset();
+      const message = messageOf(text);
+      if (message === undefined) {
+        send({ type: 'error', code: 'invalid_message', message: INVALID_MESSAGE });
         return;
       }
-      // Resync before the ordinary paths, for the reason reset is: a terminal
-      // asking for this has already decided it cannot trust what it is holding.
-      if (message !== null && message['type'] === 'resync') {
-        if (session === undefined) {
-          send({ type: 'error', code: 'no_shell', message: 'This app serves no shell.' });
-          return;
-        }
-        session.resync(connection);
-        return;
-      }
-      if (message !== null && message['type'] === 'back') {
-        if (session === undefined) {
-          send({ type: 'error', code: 'no_shell', message: 'This app serves no shell.' });
-          return;
-        }
-        session.back();
-        return;
-      }
-      if (
-        message !== null &&
-        message['type'] === 'popTo' &&
-        typeof message['canvas'] === 'string' &&
-        typeof message['instance'] === 'string'
-      ) {
-        if (session === undefined) {
-          send({ type: 'error', code: 'no_shell', message: 'This app serves no shell.' });
-          return;
-        }
-        session.popTo(message['canvas'], message['instance']);
-        return;
-      }
-      if (message !== null && message['type'] === 'publish' && typeof message['channel'] === 'string') {
-        if (session === undefined) {
-          send({ type: 'error', code: 'no_shell', message: 'This app serves no shell.' });
-          return;
-        }
-        session.publish(message['channel'], message['payload']);
-        return;
-      }
-      if (message === null || message['type'] !== 'event' || typeof message['canvas'] !== 'string') {
-        send({ type: 'error', code: 'invalid_message', message: 'Messages are JSON { type: "event", canvas, event }.' });
-        return;
-      }
+      // An app that declares no shell has nothing to route to, and says so
+      // rather than dropping what it was sent. An event names the canvas it
+      // came from, so the answer names it too.
       if (session === undefined) {
-        send({ type: 'error', code: 'no_shell', message: 'This app serves no shell.', canvas: message['canvas'] });
+        send({ type: 'error', code: 'no_shell', message: 'This app serves no shell.', ...(message.type === 'event' ? { canvas: message.canvas } : {}) });
         return;
       }
-      const event = message['event'];
-      if (event === null || typeof event !== 'object' || Array.isArray(event)) {
-        send({ type: 'error', code: 'invalid_message', message: 'The event field must be a NovaEvent object.', canvas: message['canvas'] });
-        return;
+      switch (message.type) {
+        case 'reset':
+          session.reset();
+          return;
+        case 'resync':
+          session.resync(connection);
+          return;
+        case 'back':
+          session.back();
+          return;
+        case 'popTo':
+          session.popTo(message.canvas, message.instance);
+          return;
+        case 'publish':
+          session.publish(message.channel, message.payload);
+          return;
+        case 'event':
+          session.dispatch(message.canvas, message.event);
+          return;
+        default:
+          // A message the protocol gains and this does not route fails to compile.
+          message satisfies never;
       }
-      session.dispatch(message['canvas'], event as Record<string, unknown>);
     });
   };
 

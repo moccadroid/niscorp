@@ -25,5 +25,6 @@ export {
 } from './connection';
 export { encodeDelta, applyDelta, frameHash } from './delta';
 export type { DeltaOp } from './delta';
+export { ClientMessageSchema } from './messages';
 export type { ClientMessage, ServerMessage } from './messages';
 export { DEFAULT_TOKEN_KEY, heldCookieName, sessionNameOf } from './session-name';

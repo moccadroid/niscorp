@@ -32,6 +32,8 @@ class FakeConnection implements Connection {
   onMessage(fn: (t: string) => void): void { this.onMsg = fn; }
   onClose(fn: () => void): void { this.onCls = fn; }
   emit(msg: unknown): void { this.onMsg?.(JSON.stringify(msg)); }
+  // text as it came off the transport, which need not be JSON at all
+  emitText(text: string): void { this.onMsg?.(text); }
   first<T extends ServerMessage['type']>(type: T): Extract<ServerMessage, { type: T }> | undefined {
     return this.sent.find((m) => m.type === type) as Extract<ServerMessage, { type: T }> | undefined;
   }
@@ -225,6 +227,59 @@ describe('socket — the authority channel', () => {
     conn.sent.length = 0;
     conn.emit({ type: 'nonsense' });
     expect(conn.first('error')?.code).toBe('invalid_message');
+  });
+
+  // What a terminal sends is read as the protocol says it, whole, before any
+  // of it is acted on. A message with a field too many used to be routed: the
+  // fields the checks looked at were right, and the rest was never looked at.
+  it.each([
+    ['text that is not JSON', '{"type":"back"'],
+    ['JSON that is not an object', '"back"'],
+    ['a list', '[{"type":"back"}]'],
+    ['a message of no type', '{"canvas":"main"}'],
+    ['a back with a field back does not have', '{"type":"back","canvas":"main"}'],
+    ['a reset with a field reset does not have', '{"type":"reset","hard":true}'],
+    ['a resync with a field resync does not have', '{"type":"resync","canvas":"main"}'],
+    ['a publish whose channel is not text', '{"type":"publish","channel":7}'],
+    ['a publish with a field publish does not have', '{"type":"publish","channel":"refresh","to":"usr_2"}'],
+    ['a popTo that names no instance', '{"type":"popTo","canvas":"main"}'],
+    ['a popTo with a field popTo does not have', '{"type":"popTo","canvas":"main","instance":"a1","then":"reset"}'],
+    ['an event that names no canvas', '{"type":"event","event":{"type":"ui:click"}}'],
+    ['an event whose event is a list', '{"type":"event","canvas":"main","event":[]}'],
+    ['an event whose event is nothing', '{"type":"event","canvas":"main","event":null}'],
+    ['an event with a field event does not have', '{"type":"event","canvas":"main","event":{"type":"ui:click"},"as":"usr_2"}'],
+  ])('%s is answered invalid_message, and none of it reaches the shell', async (_label, text) => {
+    const session = recordingSession();
+    const accept = createSocket(ctxWith({ shells: hostFor(session) }));
+    const conn = new FakeConnection();
+    await accept(SOCKET, conn.offering('good'));
+    conn.sent.length = 0;
+    session.calls.length = 0;
+    expect(() => conn.emitText(text)).not.toThrow();
+    expect(conn.sent.map((message) => (message.type === 'error' ? message.code : message.type))).toEqual(['invalid_message']);
+    expect(session.calls).toEqual([]);
+    expect(conn.closed).toBeUndefined();
+  });
+
+  it('a popTo routes to the session, naming the canvas and the instance', async () => {
+    const session = recordingSession();
+    const accept = createSocket(ctxWith({ shells: hostFor(session) }));
+    const conn = new FakeConnection();
+    await accept(SOCKET, conn.offering('good'));
+    conn.emit({ type: 'popTo', canvas: 'main', instance: 'a1' });
+    expect(session.calls).toContain('popTo:main:a1');
+  });
+
+  it('a publish carries its payload, whatever that is', async () => {
+    const published: unknown[] = [];
+    const session = { ...recordingSession(), publish: (_channel: string, payload?: unknown) => void published.push(payload) };
+    const accept = createSocket(ctxWith({ shells: hostFor(session) }));
+    const conn = new FakeConnection();
+    await accept(SOCKET, conn.offering('good'));
+    conn.emit({ type: 'publish', channel: 'sel', payload: { id: 7 } });
+    conn.emit({ type: 'publish', channel: 'sel', payload: null });
+    conn.emit({ type: 'publish', channel: 'sel' });
+    expect(published).toEqual([{ id: 7 }, null, undefined]);
   });
 
   it('without a shell host an event is answered no_shell', async () => {

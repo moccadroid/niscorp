@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { RenderNode } from '@niscorp/nova';
 import type { DeltaOp } from './delta';
 
@@ -28,31 +29,39 @@ export type ServerMessage =
   | { type: 'session'; sealed: string }
   | { type: 'error'; code: string; message: string; canvas?: string };
 
-export type ClientMessage =
-  | { type: 'event'; canvas: string; event: Record<string, unknown> }
-  | { type: 'publish'; channel: string; payload?: unknown }
+// What a terminal sends. External input, so every shape is exact: a field the
+// protocol does not name is a message this server does not read, and is
+// refused rather than half-taken. A shape changes by PROTOCOL moving
+// (./connection.ts), never by one end guessing at the other.
+export const ClientMessageSchema = z.discriminatedUnion('type', [
+  // What an event IS belongs to nova: the shell it is dispatched into reads
+  // it. Here it is held to being an object, and to the canvas it came from.
+  z.strictObject({ type: z.literal('event'), canvas: z.string(), event: z.record(z.string(), z.unknown()) }),
+  z.strictObject({ type: z.literal('publish'), channel: z.string(), payload: z.unknown().optional() }),
   // RESYNC: this terminal's frame for a canvas is not what the server thinks
   // it is — a delta failed its checksum, or arrived with no base to apply it
   // to. Answered with whole frames, which is the state both ends can always
   // agree on. Distinct from `reset`: the SHELL is fine, only this connection's
   // copy of it drifted, so nothing is torn down.
-  | { type: 'resync' }
+  z.strictObject({ type: z.literal('resync') }),
   // BACK: undo this session's last navigation. It names no canvas for the same
   // reason `reset` does not — back is one gesture over the whole shell, and the
   // terminal that sends it has no idea which canvas moved last (it is served
   // trees, not stacks). Protocol-level, so a browser's back button, a TUI's
   // Escape and a REPL word are the same message on one wire, and the app has to
   // author nothing to receive it.
-  | { type: 'back' }
+  z.strictObject({ type: z.literal('back') }),
   // POP TO: jump straight to an ancestor already on a canvas's stack. Back
   // undoes ONE navigation; a breadcrumb that names a screen three levels down
   // is one intention, not three gestures. Sending three `back`s instead raced
   // the browser's own history repair and dropped presses — the shell can walk
   // its own stack atomically, so it should be asked to.
-  | { type: 'popTo'; canvas: string; instance: string }
+  z.strictObject({ type: z.literal('popTo'), canvas: z.string(), instance: z.string() }),
   // RESET: throw this session's shell away and serve its replacement. The one
   // message that names no canvas, deliberately — it is the recovery for a
   // shell whose canvases are the broken thing, so it must not have to travel
   // through one. Protocol-level, not app-level: no action declares it, no
   // charter grants it, and it reaches a terminal whose every surface is dead.
-  | { type: 'reset' };
+  z.strictObject({ type: z.literal('reset') }),
+]);
+export type ClientMessage = z.infer<typeof ClientMessageSchema>;
