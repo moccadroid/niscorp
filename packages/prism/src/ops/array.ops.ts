@@ -92,6 +92,15 @@ const sortKey = (key: JsonValue): JsonValue => {
   return key;
 };
 
+// Every key has a place. compare() answers only for two numbers or two
+// strings, and "no answer" was read as "equal": an item whose key was null, a
+// boolean, or a string among numbers was equal to everything, which is not an
+// order — where it landed depended on what it happened to be compared with.
+// So: numbers, then strings, then false and true; `desc` turns that around;
+// and an item with no key (null) is last whichever way the sort runs.
+const NULL_KIND = 3;
+const kindOf = (key: JsonValue): number => (key === null ? NULL_KIND : typeof key === 'number' ? 0 : typeof key === 'string' ? 1 : 2);
+
 export const opSortBy = (node: SortByNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const { over, as, by, dir = 'asc' } = node.$sortBy;
   const input = requireArray(evaluate(over, context), '$sortBy.over');
@@ -102,8 +111,10 @@ export const opSortBy = (node: SortByNode, context: EvalContext, evaluate: Evalu
   }));
 
   keyed.sort((a, b) => {
-    const cmp = compare(a.key, b.key);
-    if (cmp === undefined) return 0;
+    const kindA = kindOf(a.key);
+    const kindB = kindOf(b.key);
+    if (kindA === NULL_KIND || kindB === NULL_KIND) return kindA - kindB;
+    const cmp = kindA !== kindB ? kindA - kindB : (compare(a.key, b.key) ?? Number(a.key) - Number(b.key));
     return dir === 'desc' ? -cmp : cmp;
   });
 

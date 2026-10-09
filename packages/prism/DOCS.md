@@ -218,7 +218,7 @@ Source: `{ "tags": ["a", "b", "a", "c", "b"] }` → `["a", "b", "c"]`
 }
 ```
 
-`dir` defaults to `"asc"`. A sort key is a number or a string. A key that is a list or an object is refused (`E_TYPE`): to sort by two keys, sort by the second and then by the first — the sort keeps the order of equal items.
+`dir` defaults to `"asc"`. A sort key is a number or a string. Where the keys are of more than one kind, numbers come first, then strings, then `false` and `true`, and `"desc"` turns that around; an item whose key is `null` is last in both directions. Items with equal keys keep the order they came in. A key that is a list or an object is refused (`E_TYPE`): to sort by two keys, sort by the second and then by the first — the sort keeps the order of equal items.
 
 ---
 

@@ -136,6 +136,33 @@ describe('$sortBy', () => {
       expect.objectContaining({ code: 'E_TYPE', message: expect.stringContaining('$sortBy.by answered an object') }),
     );
   });
+  // A key that is null, a boolean, or a string among numbers used to compare
+  // as equal to everything, so such an item landed wherever the sort left it.
+  describe('keys of more than one kind', () => {
+    const sorted = (rows: unknown[], dir?: 'asc' | 'desc'): unknown =>
+      evaluate({ $pluck: { over: { $sortBy: { over: { $ref: '$' }, as: 'row', by: { $get: { from: { $var: 'row' }, path: ['k'] } }, ...(dir ? { dir } : {}) } }, key: 'id' } }, rows as never);
+
+    it('an item with no key is last, whichever way the sort runs', () => {
+      const rows = [{ id: 'a', k: 3 }, { id: 'none', k: null }, { id: 'b', k: 1 }, { id: 'c', k: 2 }];
+      expect(sorted(rows)).toEqual(['b', 'c', 'a', 'none']);
+      expect(sorted(rows, 'desc')).toEqual(['a', 'c', 'b', 'none']);
+    });
+    it('false comes before true', () => {
+      const rows = [{ id: 'yes', k: true }, { id: 'no', k: false }, { id: 'yes2', k: true }, { id: 'no2', k: false }];
+      expect(sorted(rows)).toEqual(['no', 'no2', 'yes', 'yes2']);
+      expect(sorted(rows, 'desc')).toEqual(['yes', 'yes2', 'no', 'no2']);
+    });
+    it('numbers come before strings, and strings before booleans', () => {
+      const rows = [{ id: 't', k: true }, { id: 's', k: 'b' }, { id: 'n', k: 10 }, { id: 's0', k: 'a' }, { id: 'n0', k: 2 }, { id: 'none', k: null }];
+      expect(sorted(rows)).toEqual(['n0', 'n', 's0', 's', 't', 'none']);
+      expect(sorted(rows, 'desc')).toEqual(['t', 's', 's0', 'n', 'n0', 'none']);
+    });
+    it('is the same order however the list came', () => {
+      const rows = [{ id: 1, k: 5 }, { id: 2, k: null }, { id: 3, k: 1 }, { id: 4, k: null }, { id: 5, k: 3 }, { id: 6, k: 2 }, { id: 7, k: 4 }];
+      expect(sorted(rows)).toEqual([3, 6, 5, 7, 1, 2, 4]);
+      expect(sorted([...rows].reverse())).toEqual([3, 6, 5, 7, 1, 4, 2]);
+    });
+  });
   it('sorts by two keys as two sorts, the second key first', () => {
     const of = (key: string): unknown => ({ $get: { from: { $var: 'item' }, path: [key] } });
     const byPrice = { $sortBy: { over: { $ref: '$.items' }, as: 'item', by: of('price'), dir: 'desc' } };
