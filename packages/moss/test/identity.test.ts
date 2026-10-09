@@ -114,6 +114,22 @@ describe('identity cache', () => {
     cache.stop();
   });
 
+  // A ceiling with no room under it cannot be kept: making room for the first
+  // record evicted from an empty cache without end, so the first sign-in hung
+  // the process. It is refused where the cache is made, which is at boot.
+  it.each([0, -1])('refuses a ceiling of %s with a sentence, before anybody signs in', (max) => {
+    expect(() => createIdentityCache({ resolve: async (p) => recordFor(p), max, idleMs: 0 })).toThrow(/identityMax.*at least one/);
+  });
+
+  it('a ceiling of one holds one', async () => {
+    const cache = createIdentityCache({ resolve: async (p) => recordFor(p), max: 1, idleMs: 0 });
+    await cache.get('a');
+    await cache.get('b');
+    expect(cache.list().map((r) => r.principal)).toEqual(['b']);
+    expect(cache.meter().evicted).toBe(1);
+    cache.stop();
+  });
+
   it('re-resolving somebody already held evicts nobody', async () => {
     const cache = createIdentityCache({ resolve: async (p) => recordFor(p), max: 2, idleMs: 0 });
     await cache.get('a');

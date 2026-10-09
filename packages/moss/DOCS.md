@@ -229,7 +229,7 @@ type NiscRuntime = {
   shellIdleMs?: number;            // idle shell eviction; default 30 min, `0` disables
   endpointTimeoutMs?: number;      // a server shell's endpoint call; default nova's, 30s
   sessionRevalidateMs?: number;    // live-socket re-verify; default 60s, `0` disables
-  identityMax?: number;            // resident identity records; default 10,000
+  identityMax?: number;            // resident identity records; default 10,000; 0 or less refuses the boot
   identityIdleMs?: number;         // drop an unread identity record; default 30 min, `0` disables
   shellFrameDelta?: boolean;       // send changed canvases as deltas; default off
   socketCompression?: boolean | Record<string, unknown>;  // permessage-deflate; default on

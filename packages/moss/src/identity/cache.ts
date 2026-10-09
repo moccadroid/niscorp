@@ -81,7 +81,7 @@ export type IdentityCacheContext = {
   resolve: (principal: string) => Promise<IdentityRecord>;
   // Hard ceiling on resident records. Reaching it evicts the least recently
   // read, and increments the eviction meter so that pressure is visible before
-  // it is fatal.
+  // it is fatal. Zero or less is refused: there is no room to hold anybody.
   max?: number;
   // Drop a record nobody has read for this long. `0` disables the sweep.
   idleMs?: number;
@@ -202,6 +202,14 @@ const createHeldRecords = (max: number) => {
 
 export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache => {
   const max = ctx.max ?? DEFAULT_IDENTITY_MAX;
+  // A CEILING WITH NO ROOM UNDER IT CANNOT BE KEPT. Making room for a record
+  // evicts until the cache is under its ceiling, and an empty cache is never
+  // under zero: the first sign-in would spin there and take the process with
+  // it. Refused where the cache is made, which is at boot, with the name of
+  // the setting that carries the number.
+  if (max <= 0) {
+    throw new Error(`moss: \`runtime.identityMax\` is ${max}, and the identity cache needs room for at least one record. Give it 1 or more, or leave it unset for ${DEFAULT_IDENTITY_MAX}.`);
+  }
   const idleMs = ctx.idleMs ?? DEFAULT_IDENTITY_IDLE_MS;
   const revalidateMs = ctx.revalidateMs ?? 0;
   const now = ctx.now ?? Date.now;

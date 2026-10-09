@@ -43,3 +43,7 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 **An identity that is forgotten stays forgotten.**
 
 - `invalidateIdentity`, `invalidateTenant` and `refresh` forget what moss holds of a principal. A record that was being resolved while one of them ran used to be held when it landed, so a role change or an install made at that moment was not seen until the record expired by itself (`sessionRevalidateMs`). It is now handed to whoever was waiting for it and not held. An app has nothing to change.
+
+**`runtime.identityMax` of zero or less refuses the boot.**
+
+- With an `identity` seam declared, `identityMax: 0` (or less) used to boot and then hang the process on the first sign-in: making room in a cache that has none never ended. `createServer` now refuses it with a sentence that names the setting. Give it 1 or more, or leave it unset for the default of 10,000.
