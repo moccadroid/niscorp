@@ -17,7 +17,7 @@ import type { ExecuteRecord } from '@niscorp/vex';
 import { vexRecordToSpan } from '../src/data/span';
 import { createShellHost, instrumentFunctions } from '../src/shells';
 import type { ShellHostContext } from '../src/shells';
-import { callIntegrationWith, initIntegrations } from '../src/integrations';
+import { callIntegrationWith, createForwarder, findIntegration, initIntegrations } from '../src/integrations';
 import { createAssertionSigner } from '../src/integrations';
 import { createSocket } from '../src/socket';
 import type { Connection, SocketContext } from '../src/socket';
@@ -103,11 +103,13 @@ describe('integration.call', () => {
     await pool.query(`INSERT INTO integrations (id, url, status) VALUES ('acme', 'https://acme.example', $1)`, [over.status ?? 'approved']);
     const signer = createAssertionSigner();
     const call = callIntegrationWith({
-      pool,
-      installedFor: async () => ['acme'],
-      scopeValuesFor: async () => ({ studio_id: 's_1' }),
-      mint: signer.mint,
-      fetchImpl: (async () => new Response(JSON.stringify({ ok: true }), { status: 200 })) as unknown as typeof fetch,
+      forward: createForwarder({
+        find: (id) => findIntegration(pool, id),
+        who: async () => ({ roles: [], installed: ['acme'] }),
+        scopeOf: async () => ({ studio_id: 's_1' }),
+        mint: signer.mint,
+        fetch: (async () => new Response(JSON.stringify({ ok: true }), { status: 200 })) as unknown as typeof fetch,
+      }),
       ...(over.telemetry !== undefined ? { telemetry: over.telemetry } : {}),
     });
     return { call };

@@ -39,6 +39,8 @@ export { buildContract, contractAsMarkdown } from './contract';
 export type { Contract } from './contract';
 export { createAssertionSigner, hashIntegrationKey, mintIntegrationKey, verifyAssertion } from './credentials';
 export type { Assertion, AssertionSigner } from './credentials';
+export { createForwarder, relayed } from './forward';
+export type { Caller, Forward, ForwardDeps, Forwarded, Forwarder } from './forward';
 export { filterInstalled, integrationOfAction } from './installed';
 export { intakeContextOf, runIntake } from './intake';
 export type { IntakeContext, IntakeResult } from './intake';

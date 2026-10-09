@@ -1,7 +1,6 @@
-import type { PgPool } from '@niscorp/vex';
 import { emitterOf, spanClock } from '../runtime';
 import type { Telemetry } from '../runtime';
-import { findIntegration } from './registry';
+import type { Forwarder } from './forward';
 
 // ── the outbound act ─────────────────────────────────────────
 //
@@ -19,7 +18,7 @@ import { findIntegration } from './registry';
 //   and has no screen. Reach is derived from declared endpoints, so it could
 //   never admit an undeclared verb anyway; the integration gates the call
 //   itself, on the verified claims (principal and scope — there is no other
-//   field in the envelope; see assert.ts).
+//   field in the envelope; see ./credentials.ts).
 //
 //   THE PRINCIPAL IS THE PERSON WHO ACTED, so the owner who pressed erase is
 //   who the other ledger sees. A machinery principal would make every
@@ -44,22 +43,15 @@ export type CallIntegration = (
 ) => Promise<Response>;
 
 export const callIntegrationWith = (deps: {
-  pool: PgPool;
-  // The app's install answer for this principal's tenant — undefined means
-  // the app has no install seam, which admits (the proxy's rule, mirrored).
-  installedFor: (principal: string) => Promise<readonly string[] | undefined>;
-  // The same scope values the resolver gives vex for `$scope`; `init.scope`
-  // merges OVER them — extras the deployment explicitly vouches for.
-  scopeValuesFor: (principal: string) => Promise<Record<string, unknown>>;
-  mint: (claims: { integration: string; principal: string; scope: Record<string, unknown> }) => string;
-  fetchImpl?: typeof fetch;
+  // The one way out (./forward.ts): the two gates, the scope values with
+  // `init.scope` laid over them, and the assertion are its to do.
+  forward: Forwarder;
   // The deployment's telemetry sink, if any — one `integration.call` span per
   // outbound call, naming the add-on, the path, and the answer's status. The
   // operator surface's ad-hoc `watchCalls` tap is the proof this seam is the
   // right one; this generalises it.
   telemetry?: Telemetry;
 }): CallIntegration => {
-  const fetchImpl = deps.fetchImpl ?? fetch;
   const emit = emitterOf(deps.telemetry);
   return async (id, path, init) => {
     const clock = emit === undefined ? undefined : spanClock();
@@ -77,37 +69,32 @@ export const callIntegrationWith = (deps: {
       });
     };
 
-    const found = await findIntegration(deps.pool, id);
-    if (found === undefined) {
-      done('refused');
-      throw new Error(`moss: callIntegration("${id}"): no such integration.`);
-    }
-    if (found.status !== 'approved') {
-      done('refused');
-      throw new Error(`moss: callIntegration("${id}"): not approved (status "${found.status}").`);
-    }
-    const installed = await deps.installedFor(init.principal);
-    if (installed !== undefined && !installed.includes(id)) {
-      done('refused');
-      throw new Error(`moss: callIntegration("${id}"): not installed for "${init.principal}".`);
-    }
-    const scope = { ...(await deps.scopeValuesFor(init.principal)), ...(init.scope ?? {}) };
-    const target = `${found.url.replace(/\/$/, '')}/${path.replace(/^\/+/, '')}`;
-    let response: Response;
-    try {
-      response = await fetchImpl(target, {
+    const ended = await deps.forward({
+      integration: id,
+      principal: init.principal,
+      ...(init.scope === undefined ? {} : { scope: init.scope }),
+      path: path.replace(/^\/+/, ''),
+      request: (assertion) => ({
         method: init.method ?? 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${deps.mint({ integration: id, principal: init.principal, scope })}`,
-        },
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${assertion}` },
         ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
-      });
-    } catch (err) {
+      }),
+    });
+    if (ended.kind === 'unreachable') {
       done('error');
-      throw err;
+      throw ended.error;
     }
-    done(response.ok ? 'ok' : 'error', response.status);
-    return response;
+    if (ended.kind === 'refused') {
+      done('refused');
+      const why =
+        ended.why === 'unapproved'
+          ? `not approved (status "${ended.status}").`
+          : ended.why === 'uninstalled'
+            ? `not installed for "${init.principal}".`
+            : 'no such integration.';
+      throw new Error(`moss: callIntegration("${id}"): ${why}`);
+    }
+    done(ended.response.ok ? 'ok' : 'error', ended.response.status);
+    return ended.response;
   };
 };

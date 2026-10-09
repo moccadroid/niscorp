@@ -15,6 +15,8 @@ import type { ActionDefinition } from '@niscorp/nova';
 import {
   buildContract,
   callIntegrationWith,
+  createForwarder,
+  relayed,
   contractAsMarkdown,
   copyPress,
   describePlacements,
@@ -320,17 +322,17 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // credential rule this and the integration key both follow.
   const assertions = createAssertionSigner(runtime.signingSeed);
 
-  // The outbound act (integrations.ts, callIntegrationWith): the same row
-  // refusals and identity machinery the proxy uses, minus the request the
-  // proxy needs — because the signer never leaves this function, this is the
-  // one place the verb can be built.
-  const callIntegration = callIntegrationWith({
-    pool: runtime.pool,
-    installedFor: async (principal) => (await identity.resolve(principal)).installed,
-    scopeValuesFor: identity.scopeValuesFor,
+  // THE ONE WAY OUT to an integration's service (./integrations, forward.ts):
+  // found, approved, installed for whoever the call is for, and that said in
+  // an assertion. The four doors below and the outbound call all go through
+  // it.
+  const forward = createForwarder({
+    find: (id) => findIntegration(runtime.pool, id),
+    who: (principal) => identity.resolve(principal),
+    scopeOf: identity.scopeValuesFor,
     mint: assertions.mint,
-    ...(runtime.telemetry !== undefined ? { telemetry: runtime.telemetry } : {}),
   });
+  const callIntegration = callIntegrationWith({ forward, ...(runtime.telemetry !== undefined ? { telemetry: runtime.telemetry } : {}) });
 
   // ── The surfaces ──
   const server = new Hono<Env>();
@@ -762,27 +764,18 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     }
     // Re-checked at REDEEM, not just at mint: an uninstall between the two is
     // exactly the moment a stale tab must stop working.
-    const found = await findIntegration(runtime.pool, id);
-    if (found === undefined || found.status !== 'approved') return c.json({ message: 'Not found.' }, 404);
-    const installed = (await identity.resolve(grant.principal)).installed;
-    if (installed !== undefined && !installed.includes(id)) return c.json({ message: 'Not found.' }, 404);
-
-    const scope = await identity.scopeValuesFor(grant.principal);
-    const rest = grant.path.split('/').slice(3).join('/');
-    try {
-      const response = await fetch(`${found.url.replace(/\/$/, '')}/${rest}`, {
-        headers: { authorization: `Bearer ${assertions.mint({ integration: id, principal: grant.principal, scope })}` },
-      });
-      // THE INTEGRATION'S OWN CONTENT TYPE TRAVELS. A framed page is HTML; forcing
-      // `application/json` the way the proxy below used to would hand the
-      // browser a document it will not render.
-      return new Response(response.body, {
-        status: response.status,
-        headers: { 'content-type': response.headers.get('content-type') ?? 'text/html; charset=utf-8' },
-      });
-    } catch {
-      return c.json({ message: 'The integration is unreachable.' }, 502);
-    }
+    const ended = await forward({
+      integration: id,
+      principal: grant.principal,
+      path: grant.path.split('/').slice(3).join('/'),
+      request: (assertion) => ({ headers: { authorization: `Bearer ${assertion}` } }),
+    });
+    if (ended.kind === 'refused') return c.json({ message: 'Not found.' }, 404);
+    if (ended.kind === 'unreachable') return c.json({ message: 'The integration is unreachable.' }, 502);
+    // THE INTEGRATION'S OWN CONTENT TYPE TRAVELS. A framed page is HTML; forcing
+    // `application/json` the way the proxy below used to would hand the
+    // browser a document it will not render.
+    return relayed(ended.response, 'text/html; charset=utf-8');
   });
 
   // A FRAMED PAGE CALLING BACK ON ITS OWN GRANT.
@@ -809,49 +802,34 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     if (grant === undefined || grant.integration !== id || now >= grant.expires) return c.json({ message: 'Not found.' }, 404);
     if (!CALLBACK.test(call)) return c.json({ message: 'Not found.' }, 404);
 
-    const found = await findIntegration(runtime.pool, id);
-    if (found === undefined || found.status !== 'approved') return c.json({ message: 'Not found.' }, 404);
-    const installed = (await identity.resolve(grant.principal)).installed;
-    if (installed !== undefined && !installed.includes(id)) return c.json({ message: 'Not found.' }, 404);
-
     // Beside the page, never above it: the declared frame's own directory.
     const rest = grant.path.split('/').slice(3);
     rest.pop();
-    const target = [...rest, call].join('/');
-
-    const scope = await identity.scopeValuesFor(grant.principal);
-    try {
-      const response = await fetch(`${found.url.replace(/\/$/, '')}/${target}`, {
+    const ended = await forward({
+      integration: id,
+      principal: grant.principal,
+      path: [...rest, call].join('/'),
+      request: async (assertion) => ({
         method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${assertions.mint({ integration: id, principal: grant.principal, scope })}`,
-        },
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${assertion}` },
         body: await c.req.text(),
-      });
-      return new Response(response.body, {
-        status: response.status,
-        headers: {
-          'content-type': response.headers.get('content-type') ?? 'application/json',
-          // THE CALLER IS AN OPAQUE ORIGIN, and that is deliberate: the framed
-          // page is sandboxed WITHOUT `allow-same-origin` so it cannot reach
-          // this app's storage or session. The cost is that its `Origin` is
-          // literally `null`, and a browser refuses the response without a
-          // matching allowance — which is what a vendor's embedded component
-          // hits the moment it asks for a fresh session.
-          //
-          // CORS IS NOT THE FENCE HERE, so opening it costs nothing. The
-          // credential is the unguessable, short-lived, single-path grant in the
-          // URL; anybody holding it can call this from a server where CORS does
-          // not apply at all. Refusing the browser only breaks the one caller
-          // this route exists for.
-          'access-control-allow-origin': 'null',
-          vary: 'origin',
-        },
-      });
-    } catch {
-      return c.json({ message: 'The integration is unreachable.' }, 502);
-    }
+      }),
+    });
+    if (ended.kind === 'refused') return c.json({ message: 'Not found.' }, 404);
+    if (ended.kind === 'unreachable') return c.json({ message: 'The integration is unreachable.' }, 502);
+    // THE CALLER IS AN OPAQUE ORIGIN, and that is deliberate: the framed
+    // page is sandboxed WITHOUT `allow-same-origin` so it cannot reach
+    // this app's storage or session. The cost is that its `Origin` is
+    // literally `null`, and a browser refuses the response without a
+    // matching allowance — which is what a vendor's embedded component
+    // hits the moment it asks for a fresh session.
+    //
+    // CORS IS NOT THE FENCE HERE, so opening it costs nothing. The
+    // credential is the unguessable, short-lived, single-path grant in the
+    // URL; anybody holding it can call this from a server where CORS does
+    // not apply at all. Refusing the browser only breaks the one caller
+    // this route exists for.
+    return relayed(ended.response, 'application/json', { 'access-control-allow-origin': 'null', vary: 'origin' });
   });
 
   // ── THE WEBHOOK DOOR ─────────────────────────────────────────
@@ -892,15 +870,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
 
   server.post('/integrations/:id/hook/*', async (c) => {
     const id = c.req.param('id');
-    const found = await findIntegration(runtime.pool, id);
-    // 404 for "no such integration" AND for "not approved yet" — the same
-    // answer, so a stranger probing this learns nothing about which integrations a
-    // deployment is currently considering.
-    if (found === undefined || found.status !== 'approved') return c.json({ message: 'Not found.' }, 404);
-    if (!hookAllows(id, Date.now())) return c.json({ message: 'Too many.' }, 429);
-
     const here = new URL(c.req.url);
-    const rest = `${here.pathname.split('/').slice(3).join('/')}${here.search}`;
     // Every header the vendor set travels, because the signature is in one of
     // them and moss does not know which. `authorization` is dropped: this path
     // mints no identity, and a bearer arriving here must not read as one on the
@@ -908,21 +878,22 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     const headers = new Headers(c.req.raw.headers);
     headers.delete('authorization');
     headers.delete('host');
-    try {
-      const response = await fetch(`${found.url.replace(/\/$/, '')}/${rest}`, {
-        method: 'POST',
-        headers,
-        body: await c.req.arrayBuffer(),
-      });
-      return new Response(response.body, {
-        status: response.status,
-        headers: { 'content-type': response.headers.get('content-type') ?? 'application/json' },
-      });
-    } catch {
-      // A vendor reads 502 as "retry me", which is what we want: the delivery
-      // is not lost, it is deferred until the integration is back.
-      return c.json({ message: 'The integration is unreachable.' }, 502);
+    const ended = await forward({
+      integration: id,
+      admits: () => hookAllows(id, Date.now()),
+      path: `${here.pathname.split('/').slice(3).join('/')}${here.search}`,
+      request: async () => ({ method: 'POST', headers, body: await c.req.arrayBuffer() }),
+    });
+    if (ended.kind === 'refused') {
+      // 404 for "no such integration" AND for "not approved yet" — the same
+      // answer, so a stranger probing this learns nothing about which integrations a
+      // deployment is currently considering.
+      return ended.why === 'inadmissible' ? c.json({ message: 'Too many.' }, 429) : c.json({ message: 'Not found.' }, 404);
     }
+    // A vendor reads 502 as "retry me", which is what we want: the delivery
+    // is not lost, it is deferred until the integration is back.
+    if (ended.kind === 'unreachable') return c.json({ message: 'The integration is unreachable.' }, 502);
+    return relayed(ended.response, 'application/json');
   });
 
   // THE PROXY.
@@ -940,58 +911,45 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     const principal = c.get('principal');
     if (principal === null) return c.json({ message: 'Sign in first.' }, 401);
     const id = c.req.param('id');
-    const found = await findIntegration(runtime.pool, id);
-    if (found === undefined || found.status !== 'approved') return c.json({ message: 'No such integration.' }, 404);
-    const resolved = await identity.resolve(principal);
-    if (resolved.installed !== undefined && !resolved.installed.includes(id)) return c.json({ message: 'Not installed here.' }, 404);
-
-    // THE DECLARATION IS THE PERIMETER (integrations.ts, reachOf). Before this,
-    // being signed in at a studio that installed an integration was permission to call
-    // ANY path the integration's service happened to serve — its internals, its
-    // admin verbs, whatever it grew next release. Now it is permission to call
-    // the paths the integration declared, and nothing is forwarded for the rest.
-    //
-    // AND ONLY THE ONES THIS CALLER'S OWN SCREENS DECLARE. The path check alone
-    // was half the fence: reach is the union over every action in the bundle, so
-    // a member at a studio with payments installed reached the merchant
-    // onboarding endpoint — the charter's `ext.desk.*` fence decided which
-    // SCREENS rendered and nothing about which endpoints answered. The catalog
-    // is the same one the shell is built from, so a door and the screen that
-    // opens it can no longer disagree.
-    //
-    // Checked BEFORE the assertion is minted: an inadmissible path gets no
-    // credential, not even one that would have died at the other end. And 404
-    // rather than 403, like the branches above it — what somebody may not reach,
-    // they do not learn the existence of.
-    const held = new Set(catalog(resolved).ids);
-    if (!reachAdmits(found.reach, c.req.path, held)) return c.json({ message: 'No such integration.' }, 404);
-
-    const scope = await identity.scopeValuesFor(principal);
     // The QUERY TRAVELS. `c.req.path` drops it, so an endpoint declared with
     // `?view=summary` arrived at the integration without it — the integration answered a
     // different question than the screen asked, and nothing said so.
     const here = new URL(c.req.url);
-    const rest = `${here.pathname.split('/').slice(3).join('/')}${here.search}`;
-    const headers: Record<string, string> = {
-      'content-type': 'application/json',
-      authorization: `Bearer ${assertions.mint({ integration: id, principal, scope })}`,
-    };
-    try {
-      const response = await fetch(`${found.url.replace(/\/$/, '')}/${rest}`, {
+    const ended = await forward({
+      integration: id,
+      principal,
+      // THE DECLARATION IS THE PERIMETER (./integrations, reach.ts). Before this,
+      // being signed in at a studio that installed an integration was permission to call
+      // ANY path the integration's service happened to serve — its internals, its
+      // admin verbs, whatever it grew next release. Now it is permission to call
+      // the paths the integration declared, and nothing is forwarded for the rest.
+      //
+      // AND ONLY THE ONES THIS CALLER'S OWN SCREENS DECLARE. The path check alone
+      // was half the fence: reach is the union over every action in the bundle, so
+      // a member at a studio with payments installed reached the merchant
+      // onboarding endpoint — the charter's `ext.desk.*` fence decided which
+      // SCREENS rendered and nothing about which endpoints answered. The catalog
+      // is the same one the shell is built from, so a door and the screen that
+      // opens it can no longer disagree.
+      //
+      // Checked BEFORE the assertion is minted: an inadmissible path gets no
+      // credential, not even one that would have died at the other end.
+      admits: (found, caller) => reachAdmits(found.reach, c.req.path, new Set(running.catalogFor(caller.roles, caller.installed).ids)),
+      path: `${here.pathname.split('/').slice(3).join('/')}${here.search}`,
+      request: async (assertion) => ({
         method: c.req.method,
-        headers,
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${assertion}` },
         ...(c.req.method === 'GET' ? {} : { body: await c.req.text() }),
-      });
-      // What the integration answered WITH, not what we assumed it answered with.
-      return new Response(response.body, {
-        status: response.status,
-        headers: { 'content-type': response.headers.get('content-type') ?? 'application/json' },
-      });
-    } catch {
-      // An integration that is down is an ordinary condition: the action's
-      // onError shows the sentence and nothing is claimed.
-      return c.json({ message: 'The integration is unreachable.' }, 502);
-    }
+      }),
+    });
+    // 404 rather than 403 for every refusal: what somebody may not reach, they
+    // do not learn the existence of.
+    if (ended.kind === 'refused') return c.json({ message: ended.why === 'uninstalled' ? 'Not installed here.' : 'No such integration.' }, 404);
+    // An integration that is down is an ordinary condition: the action's
+    // onError shows the sentence and nothing is claimed.
+    if (ended.kind === 'unreachable') return c.json({ message: 'The integration is unreachable.' }, 502);
+    // What the integration answered WITH, not what we assumed it answered with.
+    return relayed(ended.response, 'application/json');
   });
 
   // The socket speaks for the same principals the HTTP surfaces serve —

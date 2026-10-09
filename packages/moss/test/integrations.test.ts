@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { z } from 'zod';
 import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
-import { runIntake, reachOf, copyPress, callIntegrationWith, initIntegrations, listIntegrations, intakeContextOf } from '../src/integrations';
+import { runIntake, reachOf, copyPress, callIntegrationWith, createForwarder, findIntegration, initIntegrations, listIntegrations, intakeContextOf } from '../src/integrations';
 import type { IntakeContext, Bundle } from '../src/integrations';
 import type { NiscApp, StorePress } from '../src/manifest';
 import { createAssertionSigner, verifyAssertion } from '../src/integrations';
@@ -693,11 +693,13 @@ describe('callIntegration', () => {
     const answered = new Response(JSON.stringify({ erased: true }), { status: 200 });
     const fetchImpl = vi.fn(async () => answered);
     const call = callIntegrationWith({
-      pool,
-      installedFor: async () => ('installed' in over ? over.installed : ['acme']),
-      scopeValuesFor: async () => ({ studio_id: 's_1', audience: 'owner' }),
-      mint: signer.mint,
-      fetchImpl: fetchImpl as unknown as typeof fetch,
+      forward: createForwarder({
+        find: (id) => findIntegration(pool, id),
+        who: async () => ({ roles: [], installed: 'installed' in over ? over.installed : ['acme'] }),
+        scopeOf: async () => ({ studio_id: 's_1', audience: 'owner' }),
+        mint: signer.mint,
+        fetch: fetchImpl as unknown as typeof fetch,
+      }),
     });
     return { call, fetchImpl, signer, answered };
   };
