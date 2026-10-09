@@ -28,3 +28,9 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 
 - A message the server reads and then throws on used to let the throw out into the transport's listener, where Node ends the process and every session with it. It is now logged, and the terminal is sent an `error` with the code `message_failed`; the connection stays open. An app has nothing to change.
 - A session the server could not open used to send the terminal the error's own text, which can name a host, a table or a database user. The `session_failed` error now says only that the session was refused, and the error is in the server's log. It still names the definitions that failed validation, when that is the cause. An app has nothing to change.
+
+**The record `identity.resolve` answers is read by a schema.**
+
+- `roles` is a list of strings, `scope` an object, `installed` (when there) a list of strings, `tag` (when there) a string. A record that does not fit is refused with a sentence that names the field, and nothing is held for that principal: a session token whose principal resolves to such a record gets 401 `no_identity`, as for any principal the app cannot resolve. It used to be carried on as it was, and failed later, somewhere else, or not at all.
+- What is inside `scope` is not looked at, and a field moss does not name stays on the record the `scope` hook is handed.
+- An app whose `resolve` returns an `IdentityRecord` has nothing to change.

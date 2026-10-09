@@ -164,3 +164,62 @@ describe('forgetting', () => {
     identity.stop();
   });
 });
+
+// The record is the app's own code answering, and everything after it is built
+// on its shape: the roles go to the charter, the installs filter a catalog, the
+// scope pins rows. So it is read by a schema where it arrives.
+describe('what the identity seam answers is parsed', () => {
+  // A seam written in JavaScript, or one that cast its way to the type, can
+  // answer anything: the type is only what it claimed.
+  const answering = (answered: unknown): NonNullable<IdentityConfig['seam']> => ({ resolve: async () => answered as IdentityRecord });
+
+  it.each([
+    ['nothing', undefined],
+    ['roles that are not a list', { roles: 'member', scope: {} }],
+    ['a role that is not a string', { roles: ['member', 7], scope: {} }],
+    ['no scope', { roles: ['member'] }],
+    ['a scope that is not an object', { roles: ['member'], scope: 'st_a' }],
+    ['installs that are not a list', { roles: ['member'], scope: {}, installed: 'mail' }],
+    ['a tag that is not a string', { roles: ['member'], scope: {}, tag: 7 }],
+  ])('refuses %s with a sentence, and holds nothing', async (_what, answered) => {
+    const identity = createIdentity({ seam: answering(answered), readAs: noRows, idleMs: 0 });
+    await expect(identity.resolve('p_ava')).rejects.toThrow(/identity\.resolve/);
+    expect(identity.roster?.meter().size).toBe(0);
+    identity.stop();
+  });
+
+  it('says which field, and nothing of what the record held', async () => {
+    const identity = createIdentity({ seam: answering({ roles: 's3cret-role', scope: { email: 'ava@s3cret.example' }, tag: 7 }), readAs: noRows, idleMs: 0 });
+    const refusal = await identity.resolve('p_ava').then(
+      () => '',
+      (error: unknown) => (error instanceof Error ? error.message : String(error)),
+    );
+    expect(refusal).toContain('roles');
+    expect(refusal).toContain('tag');
+    expect(refusal).not.toContain('s3cret');
+    identity.stop();
+  });
+
+  it('a refusal is not held: the next ask goes back to the seam', async () => {
+    let attempt = 0;
+    const identity = createIdentity({
+      seam: { resolve: async () => ((attempt += 1), attempt === 1 ? ({ roles: 'member' } as unknown as IdentityRecord) : { roles: ['member'], scope: {} }) },
+      readAs: noRows,
+      idleMs: 0,
+    });
+    await expect(identity.resolve('p_ava')).rejects.toThrow(/identity\.resolve/);
+    expect((await identity.resolve('p_ava')).roles).toEqual(['member']);
+    identity.stop();
+  });
+
+  it('leaves alone what it does not name: a field the app added still reaches its scope hook', async () => {
+    const identity = createIdentity({
+      seam: answering({ roles: ['member'], scope: { studioId: 'st_a' }, timezone: 'Europe/Vienna' }),
+      scope: (_principal, record) => ({ timezone: record !== undefined && 'timezone' in record ? record.timezone : 'unknown' }),
+      readAs: noRows,
+      idleMs: 0,
+    });
+    expect(await identity.scopeValuesFor('p_ava')).toEqual({ userId: 'p_ava', studioId: 'st_a', timezone: 'Europe/Vienna' });
+    identity.stop();
+  });
+});

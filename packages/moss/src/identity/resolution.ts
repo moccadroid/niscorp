@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { createIdentityCache } from './cache';
 import type { IdentityCache } from './cache';
 import { memoKey } from './memo-key';
@@ -85,6 +86,29 @@ export type Identity = {
 export const assignedRoles = (assignments: Readonly<Record<string, readonly string[]>> | undefined, principal: string | null): readonly string[] =>
   principal === null ? ['public'] : (assignments?.[principal] ?? ['public']);
 
+// WHAT THE SEAM ANSWERED, read where it arrives. The record is the app's own
+// code speaking, and everything after it stands on its shape: the roles go to
+// the charter, the installs filter a catalog, the scope pins rows. So the four
+// fields moss names are held to their types here, once, and a record that does
+// not fit is refused as nobody rather than carried further.
+//
+// Loose on purpose. What is INSIDE `scope` is the app's and is never looked at,
+// and a field moss does not name is left on the record: the app's own scope
+// hook is handed the record back and may read it there.
+const IdentityRecordSchema = z.looseObject({
+  roles: z.array(z.string()),
+  scope: z.record(z.string(), z.unknown()),
+  installed: z.array(z.string()).optional(),
+  tag: z.string().optional(),
+});
+
+// Which field and what was expected there: never what the record held, which
+// is somebody's roles and tenant.
+const recordRefusal = (issues: readonly z.core.$ZodIssue[]): Error =>
+  new Error(
+    `moss: \`identity.resolve\` did not answer an identity record (${issues.map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`).join('; ')}). A record is { roles: string[], scope: {…}, installed?: string[], tag?: string }.`,
+  );
+
 // ONE RESOLUTION, TWO HALVES. The app's `resolve` answers what cannot be read
 // under any policy (roles, the tag, an actor's pre-auth scope). For the rest
 // it is lent `read`: a seeded entry, run by the caller's engine as the charter
@@ -99,7 +123,9 @@ const resolveThrough =
       if (role === undefined) throw new Error('moss: identity.read needs identity.as — name the charter role the reader executes as');
       return readAs(role, fingerprint, scope);
     };
-    return seam.resolve(principal, read);
+    const answered = IdentityRecordSchema.safeParse(await seam.resolve(principal, read));
+    if (!answered.success) throw recordRefusal(answered.error.issues);
+    return answered.data;
   };
 
 export const createIdentity = (config: IdentityConfig): Identity => {
