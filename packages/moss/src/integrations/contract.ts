@@ -1,8 +1,10 @@
+import { Hono } from 'hono';
 import { z } from 'zod';
+import type { Charter } from '@niscorp/charter';
 import { paletteEntryOf } from '@niscorp/nova';
 import type { ComponentMeta, LayoutPaletteEntry } from '@niscorp/nova';
 import { isRecord } from '@niscorp/nova/reflect';
-import type { NiscApp } from '../manifest';
+import type { FeatureEnv } from '../feature';
 
 // ── the contract an integration is built against ─────────────
 //
@@ -46,20 +48,30 @@ const componentMetaOf = (meta: unknown): ComponentMeta => {
   return read.success ? read.data : {};
 };
 
-export const buildContract = (app: NiscApp, integrationId: string): Contract => {
+// What the contract is made of: the kit's components and the charter, which
+// the server knows, and the seats and hubs the app named when it created the
+// feature.
+export type ContractHost = {
+  components: Readonly<Record<string, { meta?: unknown }>>;
+  charter: Charter;
+  attachable?: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  menuSlots?: readonly string[];
+};
+
+export const buildContract = (host: ContractHost, integrationId: string): Contract => {
   // Name + description + props schema per component, from the same converter the
   // layout agent's palette uses — the contract is that palette asked for a
   // person instead of an agent. Unfiltered on purpose: what intake will enforce
   // (the sibling props check) is the whole schema, so the docs must show the
   // whole schema, or an author reads one contract and is judged against another.
-  const registered = app.shell?.components ?? {};
+  const registered = host.components;
   const components = Object.keys(registered)
     .sort()
     .map((name) => paletteEntryOf(name, componentMetaOf(registered[name]?.meta)));
   // Every audience the charter has drawn an `ext.` fence for. An integration
   // may claim a namespace under these and nowhere else.
   const audiences = new Set<string>();
-  for (const def of Object.values(app.charter)) {
+  for (const def of Object.values(host.charter)) {
     if (def === undefined || Array.isArray(def)) continue;
     const selection = def.actions;
     const list = Array.isArray(selection) ? selection : (selection?.allow ?? []);
@@ -71,14 +83,14 @@ export const buildContract = (app: NiscApp, integrationId: string): Contract => 
   // Only the offered KEYS are advertised — the host's data paths are its
   // private wiring, not part of any contract an author builds against.
   const attachable: Record<string, readonly string[]> = {};
-  for (const [action, offers] of Object.entries(app.attachable ?? {})) attachable[action] = Object.keys(offers);
+  for (const [action, offers] of Object.entries(host.attachable ?? {})) attachable[action] = Object.keys(offers);
   return {
     components,
     audiences: [...audiences].sort(),
     namespace: `ext.<audience>.${integrationId}.<name>`,
     actionSchema: 'nova ActionDefinition',
     attachable,
-    menuSlots: [...(app.menuSlots ?? [])],
+    menuSlots: [...(host.menuSlots ?? [])],
   };
 };
 
@@ -170,3 +182,41 @@ export const contractAsMarkdown = (contract: Contract, fingerprints: readonly st
     `- tables. Bring your own storage; we hand you identifiers.`,
     ``,
   ].join('\n');
+
+// ── where the contract is served ─────────────────────────────
+
+export type ContractDeps = {
+  host: ContractHost;
+  // The fingerprints somebody may be told of.
+  fingerprintsFor: (principal: string | null) => Promise<readonly string[]>;
+  // The public half of the deployment's signing key (./credentials.ts).
+  verifyKey: string;
+};
+
+export const contractRoutes = (deps: ContractDeps): Hono<FeatureEnv> => {
+  const routes = new Hono<FeatureEnv>();
+
+  // Everything an integration is built against, in the two formats somebody
+  // might want. With no shared code an author cannot import a component name or
+  // a fingerprint constant — this is what replaces those imports.
+  routes.get('/api/integrations/contract', async (c) => {
+    const id = c.req.query('id') ?? '<your id>';
+    const contract = buildContract(deps.host, id);
+    const fingerprints = await deps.fingerprintsFor(c.get('principal'));
+    if (c.req.query('format') === 'md') {
+      return new Response(contractAsMarkdown(contract, fingerprints), {
+        headers: { 'content-type': 'text/markdown; charset=utf-8' },
+      });
+    }
+    return c.json({ ...contract, fingerprints, verifyKey: deps.verifyKey });
+  });
+
+  // The public half of the deployment's signing key — OPEN, because holding it
+  // only verifies. An integration reads it once (an env var an operator sets,
+  // or a fetch it caches) and every identity claim it will ever trust is
+  // checked against it. One key serves every integration; there is no
+  // per-integration outbound credential to store, paste, or rotate.
+  routes.get('/api/integrations/verify-key', (c) => c.json({ alg: 'ed25519', key: deps.verifyKey }));
+
+  return routes;
+};

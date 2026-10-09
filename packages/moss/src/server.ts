@@ -11,38 +11,10 @@ import { createIdentity, sessionRemainingMs, sessionVerifierOf } from './identit
 import { createData, createWireFollower } from './data';
 import type { ExecuteAs } from './data';
 import { mintWrites } from './tide';
-import type { ActionDefinition } from '@niscorp/nova';
-import {
-  buildContract,
-  callIntegrationWith,
-  createForwarder,
-  flooredWire,
-  relayed,
-  contractAsMarkdown,
-  copyPress,
-  describePlacements,
-  integrationByKey,
-  filterInstalled,
-  listIntegrations,
-  loadIntegrationActions,
-  frameAdmits,
-  reachAdmits,
-  reachDeclares,
-  runIntake,
-  intakeContextOf,
-  PathBodySchema,
-  RegisterBodySchema,
-  approveIntegration,
-  findIntegration,
-  keepKeyHash,
-  landBundle,
-  recordFailedImport,
-  removeIntegration,
-  setBackToPending,
-  standingOf,
-} from './integrations';
+import type { ActionDefinition, FetchFn } from '@niscorp/nova';
+import type { CredentialAnswer, Feature, FeatureSeams } from './feature';
+import { createIntegrations } from './integrations';
 import type { CallIntegration } from './integrations';
-import { createAssertionSigner, hashIntegrationKey, mintIntegrationKey } from './integrations';
 import { createSocket, DEFAULT_REVALIDATE_MS } from './socket';
 import type { SocketAccept } from './socket';
 import { createShellHost } from './shells';
@@ -269,23 +241,34 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     behaviors: app.behaviors,
     telemetry: runtime.telemetry,
   });
-  const grammars = data.grammars;
+
+  // THE FEATURES this server starts once its core stands. The integrations are
+  // still made here, from the nine fields of the manifest that configure them:
+  // that is the one place the core still names a feature.
+  const integrations = createIntegrations({
+    integrationActor: app.integrationActor,
+    attachable: app.attachable,
+    menuSlots: app.menuSlots,
+    assistantTools: app.assistantTools,
+    publishChecks: app.publishChecks,
+    editorRegions: app.editorRegions,
+    placementNames: app.placementNames,
+    storePress: app.storePress,
+  });
+  const features: readonly Feature[] = [integrations];
 
   // WHAT THE APP CONSISTS OF RIGHT NOW (./manifest): what it shipped, and the
-  // sets of actions that arrive while it runs — an approved integration's, read
-  // from rows here; an app's own, through `replaceActions`. Every surface below
+  // sets of actions that arrive while it runs — an app's own, through
+  // `replaceActions`; a feature's, through the seams below. Every surface
   // asks it which actions are in force and what a set of roles holds of them,
   // and it is the one place either changes.
   //
   // Creating it IS the boot check: an incoherent manifest refuses here, before
   // anything else stands (the charter with each role's closure audited, every
   // entry's reach, the layout variants).
-  const storedIntegrationActions = (): Promise<Record<string, ActionDefinition>> => loadIntegrationActions(runtime.pool, grammars);
   const running = createRunningManifest({
     shipped: app,
     grants: data.grants,
-    installedOnly: filterInstalled,
-    loaders: { integrations: storedIntegrationActions },
     // Polled on the clock a socket's credential is re-verified on. (The
     // pointer's table is part of MOSS_SEQUENCE, applied with the rest above.)
     pointer: { pool: runtime.pool, ...(runtime.sessionRevalidateMs !== undefined ? { everyMs: runtime.sessionRevalidateMs } : {}) },
@@ -308,32 +291,14 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     revalidateMs: runtime.sessionRevalidateMs ?? DEFAULT_REVALIDATE_MS,
   });
 
-  // Approved integrations' actions, read from rows and handed to the running
-  // manifest as its 'integrations' set. Called after an import, an approval
-  // and a removal: the set is verified with everything else, and only then do
-  // the memos drop and living shells adopt.
-  const reloadIntegrations = async (): Promise<void> => running.replace('integrations', await storedIntegrationActions());
-
   // What a resolved principal holds (the manifest keeps it by roles + installs).
   const catalog = (resolved: ResolvedIdentity): Catalog => running.catalogFor(resolved.roles, resolved.installed);
 
-  // THE DEPLOYMENT'S SIGNING IDENTITY — how an integration knows a call is
-  // ours. Generated at boot, never persisted; the public half is served below
-  // and verifying it is all anybody can do with it. See assert.ts for the
-  // credential rule this and the integration key both follow.
-  const assertions = createAssertionSigner(runtime.signingSeed);
-
-  // THE ONE WAY OUT to an integration's service (./integrations, forward.ts):
-  // found, approved, installed for whoever the call is for, and that said in
-  // an assertion. The four doors below and the outbound call all go through
-  // it.
-  const forward = createForwarder({
-    find: (id) => findIntegration(runtime.pool, id),
-    who: (principal) => identity.resolve(principal),
-    scopeOf: identity.scopeValuesFor,
-    mint: assertions.mint,
-  });
-  const callIntegration = callIntegrationWith({ forward, ...(runtime.telemetry !== undefined ? { telemetry: runtime.telemetry } : {}) });
+  // THE SEAMS A FEATURE REGISTERS THROUGH, read by the surfaces below each
+  // time they are asked: a credential of its own, by the prefix its tokens
+  // carry; and what is laid around the wire a session's screens call through.
+  const credentials: { prefix: string; principalOf: (token: string, request: Request) => Promise<CredentialAnswer> }[] = [];
+  const wireWraps: ((inner: FetchFn) => FetchFn)[] = [];
 
   // ── The surfaces ──
   const server = new Hono<Env>();
@@ -343,12 +308,10 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // error). Invalid token → 401 (an explicit reject beats a silent
   // downgrade to anonymous).
   //
-  // An INTEGRATION KEY is the second way in, routed by its prefix. It resolves
-  // through the integrations table (hash match, approved only) to a principal
-  // the APP names for whoever the key acts for — and from that line on nothing
-  // downstream can tell it from a person: same policy compilation, same scope
-  // values, same engine stamping its writes. Deleting the integration is what
-  // revokes it; there is no second mechanism to forget.
+  // A FEATURE'S OWN CREDENTIAL is the second way in, routed by its prefix (an
+  // integration's key). The feature says which principal the token stands
+  // for, or what to answer instead; the principal is resolved here like any
+  // other, and from that line on nothing downstream can tell it from a person.
   server.use('*', async (c, next) => {
     const header = c.req.header('Authorization');
     if (header === undefined) {
@@ -357,24 +320,12 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
       return next();
     }
     const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : header;
-    if (token.startsWith('ik_')) {
-      const integration = await integrationByKey(runtime.pool, token);
-      if (integration === undefined) {
-        return c.json({ error: 'invalid_key', message: 'The integration key did not resolve.' }, 401);
-      }
-      const actor = (await app.integrationActor?.(integration, c.req.header('x-nisc-acts-for') ?? '')) ?? null;
-      if (actor === null) {
-        return c.json({ error: 'no_actor', message: 'This integration has no actor there.' }, 403);
-      }
-      // The seam may now be PURE (composing the actor id from its parts) —
-      // whether the install is live is identity's question, so an actor that
-      // resolves to nobody is refused here, where null used to be.
-      const resolved = await identity.resolve(actor);
-      if (resolved.roles.length === 1 && resolved.roles[0] === 'public') {
-        return c.json({ error: 'no_actor', message: 'This integration has no actor there.' }, 403);
-      }
-      c.set('principal', actor);
-      c.set('resolved', resolved);
+    const credential = credentials.find(({ prefix }) => token.startsWith(prefix));
+    if (credential !== undefined) {
+      const answer = await credential.principalOf(token, c.req.raw);
+      if ('refused' in answer) return c.json({ error: answer.refused.error, message: answer.refused.message }, answer.refused.status);
+      c.set('principal', answer.principal);
+      c.set('resolved', await identity.resolve(answer.principal));
       return next();
     }
     const principal = await session(token);
@@ -473,18 +424,21 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     }),
   );
 
-  // ── INTEGRATIONS ─────────────────────────────────────────────
+  // ── THE OPERATOR PREFIX ──────────────────────────────────────
   //
-  // An integration announces; we fetch. There is no poll and no boot sweep:
-  // `POST /api/integrations` IS the announcement, it is idempotent, and
-  // re-importing after a deploy is the same call with the same body.
-  // (The tables were created before the data layer stood up — see the top of
-  // this function for why the order is load-bearing.)
+  // Keyed, principal-less, and 404 without — a stranger who finds the path
+  // gets the same answer as a stranger with a wrong key, which is nothing. The
+  // constant-time key check, plus the app's own gate over the whole prefix if
+  // it supplied one (runtime.operatorGate): see guardOperator. The server has
+  // no operator route of its own; a feature mounts its routes here, and the
+  // prefix is mounted once every feature has.
+  const operator = new Hono<Env>();
+  guardOperator(operator, { key: runtime.operatorKey ?? '', gate: runtime.operatorGate });
 
-  // Everything an integration is built against, in the two formats somebody
-  // might want. With no shared code an author cannot import a component name or
-  // a fingerprint constant — this is what replaces those imports.
-  const contractFingerprints = async (principal: string | null): Promise<string[]> => {
+  // The fingerprints somebody may be told of: every read and write the app
+  // serves. The policy of whoever asks is compiled on the way, so a principal
+  // the charter cannot resolve is refused here as it is on every other route.
+  const fingerprintsFor = async (principal: string | null): Promise<string[]> => {
     const discovery = await data.engine.cache.entries?.();
     if (discovery === undefined) return [];
     const compiled = data.policyOf(await identity.resolve(principal));
@@ -496,462 +450,39 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
       .filter(() => compiled !== undefined);
   };
 
-  server.get('/api/integrations/contract', async (c) => {
-    const id = c.req.query('id') ?? '<your id>';
-    const contract = buildContract(app, id);
-    const fingerprints = await contractFingerprints(c.get('principal'));
-    if (c.req.query('format') === 'md') {
-      return new Response(contractAsMarkdown(contract, fingerprints), {
-        headers: { 'content-type': 'text/markdown; charset=utf-8' },
-      });
-    }
-    return c.json({ ...contract, fingerprints, verifyKey: assertions.verifyKey });
-  });
-
-  // The public half of the deployment's signing key — OPEN, because holding it
-  // only verifies. An integration reads it once (an env var an operator sets,
-  // or a fetch it caches) and every identity claim it will ever trust is
-  // checked against it. One key serves every integration; there is no
-  // per-integration outbound credential to store, paste, or rotate.
-  server.get('/api/integrations/verify-key', (c) => c.json({ alg: 'ed25519', key: assertions.verifyKey }));
-
-  // ── THE OPERATOR SEAM ────────────────────────────────────────
-  //
-  // Everything that decides WHICH integrations this deployment trusts. Keyed,
-  // principal-less, and 404 without — a stranger who finds the path gets the
-  // same answer as a stranger with a wrong key, which is nothing.
-  //
-  // What is deliberately NOT here: installing one for a studio. That is a
-  // tenant decision made by somebody signed in, so it lives on the app's own
-  // surfaces under the charter, where it can be audited against a person.
-  const operator = new Hono<Env>();
-  // The constant-time key check, plus the app's own gate over the whole prefix
-  // if it supplied one (runtime.operatorGate). See guardOperator.
-  guardOperator(operator, { key: runtime.operatorKey ?? '', gate: runtime.operatorGate });
-
-  operator.get('/integrations', async (c) => c.json({ integrations: await listIntegrations(runtime.pool) }));
-
-  // Register / announce / re-import — one verb.
-  //
-  // THE ORDER HERE IS THE WHOLE SAFETY STORY. Intake validates the payload, the
-  // candidate action set is verified against the charter, and only then do rows
-  // land. A bundle that would make the manifest incoherent is refused with a
-  // sentence while the previous import keeps serving — because a bundle
-  // committed before that check would take the app down until somebody deleted
-  // rows by hand.
-  operator.post('/integrations', async (c) => {
-    const sent: unknown = await c.req.json().catch(() => ({}));
-    const { id, url } = RegisterBodySchema.parse(sent);
-    if (id === '' || url === '') return c.json({ message: 'Give an id and a url.' }, 400);
-
-    let payload: unknown;
-    try {
-      const response = await fetch(`${url.replace(/\/$/, '')}/bundle`);
-      if (!response.ok) throw new Error(String(response.status));
-      payload = await response.json();
-    } catch {
-      await recordFailedImport(runtime.pool, id, url, 'the service did not answer with a bundle');
-      return c.json({ message: 'The integration did not answer with a bundle.' }, 502);
-    }
-
-    const fingerprints = new Set((await data.engine.cache.keys?.()) ?? []);
-    const result = runIntake(payload, { ...intakeContextOf(app, id, fingerprints, grammars), hostActions: running.actions() });
-    if (!result.ok) {
-      await recordFailedImport(runtime.pool, id, url, result.reasons.join('; '));
-      return c.json({ message: 'Refused.', reasons: result.reasons }, 422);
-    }
-
-    // Press crosses HERE — after the gate, before the candidate below is
-    // verified — so a press refusal leaves the app exactly as it
-    // found it. Blobs written before a later refusal are orphans in the
-    // host's store, which is cheaper than any coherence they could buy.
-    const press = await copyPress(result.bundle, id, url, app.storePress);
-    if (!press.ok) {
-      await recordFailedImport(runtime.pool, id, url, press.reasons.join('; '));
-      return c.json({ message: 'Refused.', reasons: press.reasons }, 422);
-    }
-
-    // The candidate manifest, verified BEFORE anything is written.
-    const { approved: wasApproved, holdsKey } = await standingOf(runtime.pool, id);
-    if (wasApproved) {
-      // TRIED, NOT PUT IN. The bundle's actions over the actions in force are
-      // a candidate the running manifest verifies without switching to it, so
-      // a bundle that is refused never touched what is serving. (It used to be
-      // assigned into the live manifest and taken out again when the check
-      // threw: two drops of every memo and two moves of the pointer, to say
-      // no.) The reason reads as the thrown error did.
-      const refusal = refusalOf(running.verify({ ...running.actions(), ...result.bundle.actions }), 'refresh');
-      if (refusal !== undefined) return c.json({ message: 'Refused — the app would not serve this.', reasons: [`Error: ${refusal}`] }, 422);
-    }
-
-    await landBundle(runtime.pool, {
-      id,
-      url,
-      bundle: result.bundle,
-      adds: describePlacements(result.bundle, app.placementNames ?? {}),
-      press: press.urls,
-      stamp: grammars.stamp,
-    });
-
-    // MINTED ONCE, SHOWN ONCE. Registration is a GRANTING ceremony — the
-    // deployment issues the integration its identity, never the other way
-    // around — so the first registration answers with the key and the row
-    // keeps only the hash. A re-import repeats neither: the key is not stored,
-    // so there is nothing to repeat. Losing it is not recovery, it is removal
-    // and re-registration, which also re-fences everything the old key held.
-    const key = holdsKey ? undefined : mintIntegrationKey();
-    if (key !== undefined) {
-      await keepKeyHash(runtime.pool, id, hashIntegrationKey(key));
-    }
-
-    await reloadIntegrations();
-    const status = wasApproved ? 'approved' : 'pending';
-    return c.json({ id, status, actions: Object.keys(result.bundle.actions).length, ...(key === undefined ? {} : { key }) });
-  });
-
-  // APPROVAL IS WHERE THE GRANTS BECOME REAL.
-  //
-  // Registration only records what an integration ASKED for. Nothing it ships
-  // is served until somebody looks at the two lists side by side and says yes —
-  // which is what keeps "the charter denies what it does not know" true while
-  // still letting an integration name what it needs.
-  //
-  // Approving is also the moment its actions join the manifest, so this is the
-  // second place the candidate set is verified before anything is served.
-  operator.post('/integrations/:id/approve', async (c) => {
-    const id = c.req.param('id');
-    const requested = await approveIntegration(runtime.pool, id);
-    if (requested === undefined) return c.json({ message: 'No such integration.' }, 404);
-    try {
-      await reloadIntegrations();
-    } catch (err) {
-      await setBackToPending(runtime.pool, id, String(err));
-      await reloadIntegrations();
-      return c.json({ message: 'Refused — the app would not serve this.', reasons: [String(err)] }, 422);
-    }
-    return c.json({ id, status: 'approved', granted: requested });
-  });
-
-  // Uninstalling for good: the rows go, the actions leave the manifest, and a
-  // living shell adopts. What the integration stored stays with the integration
-  // — which is why reinstalling restores it.
-  operator.delete('/integrations/:id', async (c) => {
-    const id = c.req.param('id');
-    await removeIntegration(runtime.pool, id);
-    await reloadIntegrations();
-    return c.json({ id, removed: true });
-  });
-
-  // A LIVE CALL, because "the screen is empty" has three causes in three
-  // systems and an operator should not have to guess which. This says what the
-  // integration answered, right now, without a browser or a signed-in person.
-  //
-  // It probes what the integration DECLARED, plus `bundle` — which is the
-  // answer to "the screen is empty" most of the time and is open by design
-  // anyway. It used to take an operator-chosen arbitrary path, which made this
-  // a second door into the integration's service beside the proxy, and one that minted
-  // no assertion at all. An operator wanting a path the integration never declared is
-  // asking a question about somebody else's service, not about this one.
-  operator.post('/integrations/:id/probe', async (c) => {
-    const id = c.req.param('id');
-    const found = await findIntegration(runtime.pool, id);
-    if (found === undefined) return c.json({ message: 'No such integration.' }, 404);
-    const url = found.url;
-    const sent: unknown = await c.req.json().catch(() => ({}));
-    const path = PathBodySchema.parse(sent).path ?? 'bundle';
-    // The declaration holds lyra-side paths (`/integrations/<id>/roster`); a
-    // probe names the integration-side tail (`roster`), the same tail the proxy
-    // forwards. One spelling to compare, derived rather than stored twice.
-    if (path !== 'bundle' && !reachDeclares(found.reach, `/integrations/${id}/${path}`)) {
-      return c.json({ message: 'That path is not one this integration declared.' }, 404);
-    }
-    const started = Date.now();
-    try {
-      const response = await fetch(`${url.replace(/\/$/, '')}/${path}`);
-      const text = await response.text();
-      return c.json({ status: response.status, ms: Date.now() - started, body: text.slice(0, 2000) });
-    } catch (err) {
-      return c.json({ status: 0, ms: Date.now() - started, body: String(err) });
-    }
-  });
-
-  server.route('/operator', operator);
-
-  // ── THE FRAME SEAM ───────────────────────────────────────────
-  //
-  // Lyra validates every layout against a fixed component vocabulary and
-  // refuses a bundle naming anything else, which is what stops an untrusted
-  // integration rendering arbitrary UI. That holds until a vendor's own browser SDK is
-  // the only way to draw something — a payment onboarding form nobody else may
-  // collect the fields for. The alternative to this seam is the HOST importing
-  // that vendor's SDK, which is worse: it makes every app that ever installs
-  // the integration carry the dependency.
-  //
-  // So the integration serves a page and the host frames it, at the host's own origin.
-  //
-  // AN IFRAME CARRIES NO AUTHORIZATION HEADER. The session token lives in
-  // localStorage and `src=` is a plain browser GET, so the one thing every
-  // other surface here relies on is exactly what this path cannot have. The
-  // screen therefore asks for a GRANT over its own authenticated wire, and the
-  // iframe spends it.
-  //
-  // THE GRANT IS OPAQUE AND LOCAL — deliberately NOT a signed assertion. It
-  // travels in a URL, where things linger: history, logs, a Referer. Anything
-  // this deployment's key signs is something an integration accepts as identity, so a
-  // signed grant leaking from a URL bar would be an identity token leaking. A
-  // random string in a Map cannot be replayed as anything; it is redeemed here,
-  // and what crosses to the integration is a fresh assertion exactly like every other
-  // call. Held in memory for the same reason the signing keypair is: it lives
-  // two minutes, and a restart costs one reload.
-  //
-  // Reusable within its life rather than strictly once — a reload must not
-  // break the screen somebody is halfway through.
-  const grants = new Map<string, { integration: string; principal: string; path: string; expires: number }>();
-  // LONG ENOUGH TO FINISH THE FORM. Two minutes was the first guess and it is
-  // wrong for the thing this exists for: a payment onboarding form asks a
-  // business for its details, and somebody goes and finds a document. Re-minting
-  // mid-way is not an option either — the src changing remounts the frame and
-  // takes the half-filled form with it.
-  //
-  // It stays cheap to hold: opaque, single-principal, single-path, redeemable
-  // only at this origin, and gone on restart.
-  const GRANT_TTL_MS = 30 * 60_000;
-  const sweepGrants = (now: number): void => {
-    for (const [token, grant] of grants) if (now >= grant.expires) grants.delete(token);
+  // WHAT A FEATURE IS HANDED (./feature): each member one function or one
+  // narrow value of the module that owns it, and nothing of the manifest or
+  // the runtime beside what is named.
+  const seams: FeatureSeams = {
+    routes: (routes) => {
+      server.route('/', routes);
+    },
+    operatorRoutes: (routes) => {
+      operator.route('/', routes);
+    },
+    credential: (prefix, principalOf) => {
+      credentials.push({ prefix, principalOf });
+    },
+    who: identity.resolve,
+    scopeOf: identity.scopeValuesFor,
+    holds: (roles, installed) => running.catalogFor(roles, installed).ids,
+    actions: running.actions,
+    replaceActions: running.replace,
+    refusalOf: (actions) => refusalOf(running.verify(actions), 'refresh'),
+    loadActionsFrom: running.loadFrom,
+    narrowCatalogs: running.narrowCatalogs,
+    charter: app.charter,
+    components: app.shell?.components ?? {},
+    pool: runtime.pool,
+    grammars: data.grammars,
+    fingerprints: async () => (await data.engine.cache.keys?.()) ?? [],
+    fingerprintsFor,
+    telemetry: runtime.telemetry,
+    signingSeed: runtime.signingSeed,
+    wrapWire: (wrap) => {
+      wireWraps.push(wrap);
+    },
   };
-
-  server.post('/api/integrations/frame', async (c) => {
-    const principal = c.get('principal');
-    if (principal === null) return c.json({ message: 'Sign in first.' }, 401);
-    const sent: unknown = await c.req.json().catch(() => ({}));
-    const path = PathBodySchema.parse(sent).path ?? '';
-    const id = path.split('/')[2] ?? '';
-    const found = await findIntegration(runtime.pool, id);
-    if (found === undefined || found.status !== 'approved') return c.json({ message: 'No such integration.' }, 404);
-    const resolved = await identity.resolve(principal);
-    if (resolved.installed !== undefined && !resolved.installed.includes(id)) return c.json({ message: 'Not installed here.' }, 404);
-    // THE DECLARATION IS THE PERIMETER HERE TOO. A grant is only ever minted
-    // for a page the bundle named at intake, so a screen cannot frame a path
-    // the integration never published — including one it serves but did not declare.
-    //
-    // AND FOR THE SCREEN THAT OWNS IT. This door had the same hole the proxy
-    // did, and a worse one to have: `frames` was a bare list of paths with no
-    // owner at all, so the only questions askable were "signed in?" and
-    // "installed here?". A member of the gym passed both and could be served the
-    // page that mounts a payment provider's onboarding form against the
-    // studio's merchant account. The bundle names the owning action now, and a
-    // grant is minted only for somebody who holds it.
-    const held = new Set(catalog(resolved).ids);
-    if (!frameAdmits(found.frames, path, held)) return c.json({ message: 'No such frame.' }, 404);
-
-    const now = Date.now();
-    sweepGrants(now);
-    const token = randomBytes(24).toString('hex');
-    grants.set(token, { integration: id, principal, path, expires: now + GRANT_TTL_MS });
-    return c.json({ src: `/integrations/${id}/frame/${token}`, expiresIn: GRANT_TTL_MS });
-  });
-
-  // Redeeming: a document GET, no session, one token. Registered before the
-  // proxy so `/integrations/:id/*` does not match first and demand a principal.
-  server.get('/integrations/:id/frame/:token', async (c) => {
-    const id = c.req.param('id');
-    const now = Date.now();
-    sweepGrants(now);
-    const grant = grants.get(c.req.param('token'));
-    // One answer for expired, unknown, and minted-for-another-integration. A grant is
-    // a URL somebody may still have; what it opens is nothing.
-    if (grant === undefined || grant.integration !== id || now >= grant.expires) {
-      return c.json({ message: 'Not found.' }, 404);
-    }
-    // Re-checked at REDEEM, not just at mint: an uninstall between the two is
-    // exactly the moment a stale tab must stop working.
-    const ended = await forward({
-      integration: id,
-      principal: grant.principal,
-      path: grant.path.split('/').slice(3).join('/'),
-      request: (assertion) => ({ headers: { authorization: `Bearer ${assertion}` } }),
-    });
-    if (ended.kind === 'refused') return c.json({ message: 'Not found.' }, 404);
-    if (ended.kind === 'unreachable') return c.json({ message: 'The integration is unreachable.' }, 502);
-    // THE INTEGRATION'S OWN CONTENT TYPE TRAVELS. A framed page is HTML; forcing
-    // `application/json` the way the proxy below used to would hand the
-    // browser a document it will not render.
-    return relayed(ended.response, 'text/html; charset=utf-8');
-  });
-
-  // A FRAMED PAGE CALLING BACK ON ITS OWN GRANT.
-  //
-  // The page is sandboxed without `allow-same-origin` (lyra's Frame component),
-  // so it has an opaque origin and no session — it cannot call the proxy, and it
-  // has nothing to authenticate with but the grant it was opened by. Without
-  // this it is a dead-end document, which is not enough for the thing frames
-  // exist for: a vendor's embedded component asks the server for a fresh
-  // short-lived session while somebody is mid-form.
-  //
-  // BOUNDED TO ONE SEGMENT BESIDE THE DECLARED PAGE. `embed/onboarding` may call
-  // `embed/session` and nothing else — no slashes, no dots, no climbing. The
-  // grant already fixes which integration, which principal and which page; this fixes
-  // how far a page may reach from where it was let in.
-  const CALLBACK = /^[a-z0-9][a-z0-9-]*$/;
-
-  server.post('/integrations/:id/frame/:token/:call', async (c) => {
-    const id = c.req.param('id');
-    const call = c.req.param('call');
-    const now = Date.now();
-    sweepGrants(now);
-    const grant = grants.get(c.req.param('token'));
-    if (grant === undefined || grant.integration !== id || now >= grant.expires) return c.json({ message: 'Not found.' }, 404);
-    if (!CALLBACK.test(call)) return c.json({ message: 'Not found.' }, 404);
-
-    // Beside the page, never above it: the declared frame's own directory.
-    const rest = grant.path.split('/').slice(3);
-    rest.pop();
-    const ended = await forward({
-      integration: id,
-      principal: grant.principal,
-      path: [...rest, call].join('/'),
-      request: async (assertion) => ({
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${assertion}` },
-        body: await c.req.text(),
-      }),
-    });
-    if (ended.kind === 'refused') return c.json({ message: 'Not found.' }, 404);
-    if (ended.kind === 'unreachable') return c.json({ message: 'The integration is unreachable.' }, 502);
-    // THE CALLER IS AN OPAQUE ORIGIN, and that is deliberate: the framed
-    // page is sandboxed WITHOUT `allow-same-origin` so it cannot reach
-    // this app's storage or session. The cost is that its `Origin` is
-    // literally `null`, and a browser refuses the response without a
-    // matching allowance — which is what a vendor's embedded component
-    // hits the moment it asks for a fresh session.
-    //
-    // CORS IS NOT THE FENCE HERE, so opening it costs nothing. The
-    // credential is the unguessable, short-lived, single-path grant in the
-    // URL; anybody holding it can call this from a server where CORS does
-    // not apply at all. Refusing the browser only breaks the one caller
-    // this route exists for.
-    return relayed(ended.response, 'application/json', { 'access-control-allow-origin': 'null', vary: 'origin' });
-  });
-
-  // ── THE WEBHOOK DOOR ─────────────────────────────────────────
-  //
-  // The only unauthenticated surface on this server that DOES something, and it
-  // is narrow on purpose.
-  //
-  // A vendor calling in has no session and no key — it could not have one, since
-  // nobody is driving. So identity does not travel here at all: no principal is
-  // required and NO ASSERTION IS MINTED. The integration authenticates the
-  // caller itself, against the vendor's own signature, which is the only party
-  // that can vouch for a call moss cannot.
-  //
-  // THE BODY ARRIVES BYTE-IDENTICAL. A signature is computed over exact bytes,
-  // and a JSON round-trip through this process would re-order one key and break
-  // every verification downstream. Nothing on this path parses the body — it is
-  // read as an ArrayBuffer and handed on.
-  //
-  // Registered BEFORE the proxy below, because `server.all('/integrations/:id/*')`
-  // would otherwise match first and demand a principal.
-  //
-  // A DOOR WE DID NOT LOCK NEEDS A LIMIT. Every other surface is bounded by a
-  // credential; this one is bounded by the vendor behaving. In-process and per
-  // integration, so a deployment on two machines gets two ceilings — the honest
-  // cost of not putting a shared store behind this yet.
-  const hookHits = new Map<string, { count: number; resets: number }>();
-  const HOOK_LIMIT = 240;
-  const HOOK_WINDOW_MS = 60_000;
-  const hookAllows = (id: string, now: number): boolean => {
-    const seen = hookHits.get(id);
-    if (seen === undefined || now >= seen.resets) {
-      hookHits.set(id, { count: 1, resets: now + HOOK_WINDOW_MS });
-      return true;
-    }
-    seen.count += 1;
-    return seen.count <= HOOK_LIMIT;
-  };
-
-  server.post('/integrations/:id/hook/*', async (c) => {
-    const id = c.req.param('id');
-    const here = new URL(c.req.url);
-    // Every header the vendor set travels, because the signature is in one of
-    // them and moss does not know which. `authorization` is dropped: this path
-    // mints no identity, and a bearer arriving here must not read as one on the
-    // other side. `host` would name us rather than them.
-    const headers = new Headers(c.req.raw.headers);
-    headers.delete('authorization');
-    headers.delete('host');
-    const ended = await forward({
-      integration: id,
-      admits: () => hookAllows(id, Date.now()),
-      path: `${here.pathname.split('/').slice(3).join('/')}${here.search}`,
-      request: async () => ({ method: 'POST', headers, body: await c.req.arrayBuffer() }),
-    });
-    if (ended.kind === 'refused') {
-      // 404 for "no such integration" AND for "not approved yet" — the same
-      // answer, so a stranger probing this learns nothing about which integrations a
-      // deployment is currently considering.
-      return ended.why === 'inadmissible' ? c.json({ message: 'Too many.' }, 429) : c.json({ message: 'Not found.' }, 404);
-    }
-    // A vendor reads 502 as "retry me", which is what we want: the delivery
-    // is not lost, it is deferred until the integration is back.
-    if (ended.kind === 'unreachable') return c.json({ message: 'The integration is unreachable.' }, 502);
-    return relayed(ended.response, 'application/json');
-  });
-
-  // THE PROXY.
-  //
-  // Identity travels INSIDE a signed assertion, never as bare headers. The
-  // token carries the integration it is for, the principal, the same scope
-  // values the resolver gives vex for `$scope`, and an expiry seconds out —
-  // signed with the deployment's key, whose public half the integration holds.
-  // A claim outside a verified envelope is not refused over there; it simply
-  // is not identity, which is what makes the safe path the only path. The
-  // body stays caller-controlled and untrusted, exactly as a vex `$context`
-  // is: an integration reading `studio_id` from the body has reintroduced the
-  // hole whatever we sign.
-  server.all('/integrations/:id/*', async (c) => {
-    const principal = c.get('principal');
-    if (principal === null) return c.json({ message: 'Sign in first.' }, 401);
-    const id = c.req.param('id');
-    // The QUERY TRAVELS. `c.req.path` drops it, so an endpoint declared with
-    // `?view=summary` arrived at the integration without it — the integration answered a
-    // different question than the screen asked, and nothing said so.
-    const here = new URL(c.req.url);
-    const ended = await forward({
-      integration: id,
-      principal,
-      // THE DECLARATION IS THE PERIMETER (./integrations, reach.ts). Before this,
-      // being signed in at a studio that installed an integration was permission to call
-      // ANY path the integration's service happened to serve — its internals, its
-      // admin verbs, whatever it grew next release. Now it is permission to call
-      // the paths the integration declared, and nothing is forwarded for the rest.
-      //
-      // AND ONLY THE ONES THIS CALLER'S OWN SCREENS DECLARE. The path check alone
-      // was half the fence: reach is the union over every action in the bundle, so
-      // a member at a studio with payments installed reached the merchant
-      // onboarding endpoint — the charter's `ext.desk.*` fence decided which
-      // SCREENS rendered and nothing about which endpoints answered. The catalog
-      // is the same one the shell is built from, so a door and the screen that
-      // opens it can no longer disagree.
-      //
-      // Checked BEFORE the assertion is minted: an inadmissible path gets no
-      // credential, not even one that would have died at the other end.
-      admits: (found, caller) => reachAdmits(found.reach, c.req.path, new Set(running.catalogFor(caller.roles, caller.installed).ids)),
-      path: `${here.pathname.split('/').slice(3).join('/')}${here.search}`,
-      request: async (assertion) => ({
-        method: c.req.method,
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${assertion}` },
-        ...(c.req.method === 'GET' ? {} : { body: await c.req.text() }),
-      }),
-    });
-    // 404 rather than 403 for every refusal: what somebody may not reach, they
-    // do not learn the existence of.
-    if (ended.kind === 'refused') return c.json({ message: ended.why === 'uninstalled' ? 'Not installed here.' : 'No such integration.' }, 404);
-    // An integration that is down is an ordinary condition: the action's
-    // onError shows the sentence and nothing is claimed.
-    if (ended.kind === 'unreachable') return c.json({ message: 'The integration is unreachable.' }, 502);
-    // What the integration answered WITH, not what we assumed it answered with.
-    return relayed(ended.response, 'application/json');
-  });
 
   // The socket speaks for the same principals the HTTP surfaces serve —
   // one session verifier, one catalog resolution, one version token. When
@@ -985,7 +516,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
         catalogFor: running.catalogFor,
         variantsFor: running.variantsFor,
         runtime,
-        wrapWire: flooredWire,
+        wrapWire: (inner) => wireWraps.reduce((wire, wrap) => wrap(wire), inner),
         ...(runtime.shellIdleMs !== undefined ? { idleMs: runtime.shellIdleMs } : {}),
         ...(runtime.shellFrameDelta !== undefined ? { delta: runtime.shellFrameDelta } : {}),
         wire: (token) => async (url, init) => {
@@ -1086,19 +617,20 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     shells?.adopt();
   });
 
-  // WHATEVER WAS APPROVED BEFORE THIS PROCESS STARTED is part of the
-  // application, so it is folded in before anything is served — not on first
-  // request and not on a timer. And BEFORE the pointer is watched: a process
-  // that starts has changed nothing for the others, so its start moves nobody's
-  // pointer.
-  {
-    const stored = await storedIntegrationActions();
-    if (Object.keys(stored).length > 0) running.replace('integrations', stored);
-  }
+  // THE FEATURES, started once the core stands and before anything is
+  // served, in the order the app named them. Each mounts its routes,
+  // registers what it reads and loads what it keeps, through the seams and
+  // nothing else; one that throws refuses the boot. BEFORE the pointer is
+  // watched: a process that starts has changed nothing for the others, so a
+  // set of actions a feature hands over while it starts moves nobody's
+  // pointer. And before the operator prefix is mounted, because a prefix's
+  // routes are taken when it is mounted.
+  for (const feature of features) await feature.start(seams);
+  server.route('/operator', operator);
 
   // From here on a change moves the generation pointer, so every other process
   // drops what it derived within one poll; and a move one of them makes is
-  // answered here by reading the integration actions again. Only now, so a
+  // answered here by reading again every set a feature keeps in rows. Only now, so a
   // boot that refuses above leaves no timer polling behind it.
   running.watch();
 
@@ -1142,7 +674,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
       for (const host of pageHosts.values()) host.stop();
     },
     executeAs: data.executeAs,
-    callIntegration,
+    callIntegration: integrations.callIntegration,
     identity: async (principal: string | null) => {
       const resolved = await identity.resolve(principal);
       return { roles: resolved.roles, scope: resolved.scope, ...(resolved.installed !== undefined ? { installed: resolved.installed } : {}) };

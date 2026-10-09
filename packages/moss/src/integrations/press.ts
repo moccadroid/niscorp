@@ -22,6 +22,8 @@ import type { Bundle } from './bundle';
 // (integration, path): a re-import overwrites its own images rather than
 // accumulating copies.
 
+export type { StorePress };
+
 export type PressResult = { ok: true; urls: string[] } | { ok: false; reasons: string[] };
 
 // What kind of thing the service answered with, read off the header it sent:

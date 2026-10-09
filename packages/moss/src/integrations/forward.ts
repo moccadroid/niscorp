@@ -1,3 +1,4 @@
+import type { Whoever } from '../feature';
 import type { AssertionSigner } from './credentials';
 import type { FoundIntegration } from './registry';
 
@@ -18,14 +19,11 @@ import type { FoundIntegration } from './registry';
 // function answers which way it ended and words nothing.
 // ═══════════════════════════════════════════════════════════════
 
-// Who a call is made for, as far as a door needs to know: the roles a reach is
-// decided by, and the integrations live for their tenant (`undefined`: the app
-// keeps no install list, and every integration is live).
-export type Caller = { roles: readonly string[]; installed: readonly string[] | undefined };
-
 export type ForwardDeps = {
   find: (id: string) => Promise<FoundIntegration | undefined>;
-  who: (principal: string) => Promise<Caller>;
+  // Who a call is made for: the roles a reach is decided by, and the
+  // integrations live for their tenant.
+  who: (principal: string) => Promise<Whoever>;
   // The scope values a principal carries: the ones the engine pins rows by.
   scopeOf: (principal: string) => Promise<Record<string, unknown>>;
   mint: AssertionSigner['mint'];
@@ -48,7 +46,7 @@ type ForSomebody = Outbound & {
   // The door's own gate, asked once the integration is found, approved and
   // installed, and before anything is minted: a call it does not admit gets no
   // credential, not even one that would have died at the other end.
-  admits?: (found: FoundIntegration, caller: Caller) => boolean;
+  admits?: (found: FoundIntegration, caller: Whoever) => boolean;
   // The request, built once it is known that the call goes out. `assertion` is
   // the token the door sends as `authorization: Bearer …`.
   request: (assertion: string) => RequestInit | Promise<RequestInit>;

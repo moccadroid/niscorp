@@ -36,35 +36,17 @@ export type { AssistantDeclaration, Bundle, ConfigurationField, DocumentDeclarat
 export { callIntegrationWith } from './call';
 export type { CallIntegration } from './call';
 export { buildContract, contractAsMarkdown } from './contract';
-export type { Contract } from './contract';
+export type { Contract, ContractHost } from './contract';
 export { createAssertionSigner, hashIntegrationKey, mintIntegrationKey, verifyAssertion } from './credentials';
 export type { Assertion, AssertionSigner } from './credentials';
-export { flooredWire } from './floor';
-export { createForwarder, relayed } from './forward';
-export type { Caller, Forward, ForwardDeps, Forwarded, Forwarder } from './forward';
-export { filterInstalled, integrationOfAction } from './installed';
+export { createIntegrations } from './feature';
+export type { Integrations, IntegrationsConfig } from './feature';
+export { createForwarder } from './forward';
+export { integrationOfAction } from './installed';
 export { intakeContextOf, runIntake } from './intake';
-export type { IntakeContext, IntakeResult } from './intake';
-export { PathBodySchema, RegisterBodySchema } from './operator';
-export { describePlacements } from './placements';
+export type { HostVocabulary, IntakeContext, IntakeResult } from './intake';
 export { copyPress } from './press';
-export type { PressResult } from './press';
-export { FRAME_GRANT_URL, frameAdmits, reachAdmits, reachDeclares, reachOf } from './reach';
-export type { Reach } from './reach';
-export {
-  approveIntegration,
-  findIntegration,
-  initIntegrations,
-  integrationByKey,
-  keepKeyHash,
-  landBundle,
-  listAttachments,
-  listIntegrations,
-  listPlacements,
-  loadIntegrationActions,
-  recordFailedImport,
-  removeIntegration,
-  setBackToPending,
-  standingOf,
-} from './registry';
-export type { FoundIntegration, IntegrationRow, Landing } from './registry';
+export type { PressResult, StorePress } from './press';
+export { reachOf } from './reach';
+export { findIntegration, initIntegrations, integrationByKey, listAttachments, listIntegrations, listPlacements } from './registry';
+export type { IntegrationRow } from './registry';

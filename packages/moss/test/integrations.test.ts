@@ -3,8 +3,7 @@ import { z } from 'zod';
 import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import { runIntake, reachOf, copyPress, callIntegrationWith, createForwarder, findIntegration, initIntegrations, listIntegrations, intakeContextOf } from '../src/integrations';
-import type { IntakeContext, Bundle } from '../src/integrations';
-import type { NiscApp, StorePress } from '../src/manifest';
+import type { HostVocabulary, IntakeContext, Bundle, StorePress } from '../src/integrations';
 import { createAssertionSigner, verifyAssertion } from '../src/integrations';
 
 // The listing's long form travels WITH the bundle (story, highlights, press),
@@ -628,17 +627,19 @@ describe('assistants — what an add-on’s assistant knows', () => {
 });
 
 describe('intakeContextOf — the host vocabulary reaches intake', () => {
-  const app = {
-    shell: { components: { Text: {} } },
+  // What the host offers: the kit's components, as the server knows them, and
+  // the names the app gave when it created the feature.
+  const host: HostVocabulary = {
+    components: { Text: {} },
     attachable: { 'member.detail': { membership_id: '$.membershipId' } },
     menuSlots: ['people'],
     assistantTools: ['floors', 'derive'],
     publishChecks: ['readability'],
     editorRegions: ['host-stage'],
-  } as unknown as NiscApp;
+  };
 
   it('maps the manifest vocabulary into the intake context', () => {
-    const c = intakeContextOf(app, 'acme', new Set(['deals/table']));
+    const c = intakeContextOf(host, 'acme', new Set(['deals/table']));
     expect([...(c.tools ?? [])]).toEqual(['floors', 'derive']);
     expect([...(c.checks ?? [])]).toEqual(['readability']);
     expect([...(c.regions ?? [])]).toEqual(['host-stage']);
@@ -658,7 +659,7 @@ describe('intakeContextOf — the host vocabulary reaches intake', () => {
     const run = (tools: string[]) =>
       runIntake(
         { integration: 'acme', actions: {}, capabilities: [{ id: 'build', title: 'Build' }], documents: [doc()], assistants: [{ id: 'a', title: 'A', instructions: 'x', tools, applies: { document: 'd' } }] },
-        intakeContextOf(app, 'acme', new Set()),
+        intakeContextOf(host, 'acme', new Set()),
       );
     expect(run(['floors']).ok, 'a listed tool is admitted').toBe(true);
     const bad = run(['telepathy']);
@@ -670,7 +671,7 @@ describe('intakeContextOf — the host vocabulary reaches intake', () => {
     const run = (checks: string[]) =>
       runIntake(
         { integration: 'acme', actions: {}, capabilities: [{ id: 'build', title: 'Build' }], documents: [doc({ checks })] },
-        intakeContextOf(app, 'acme', new Set()),
+        intakeContextOf(host, 'acme', new Set()),
       );
     expect(run(['readability']).ok, 'a listed check is admitted').toBe(true);
     expect(run(['telekinesis']).ok).toBe(false);
