@@ -49,14 +49,19 @@ export type { PressResult } from './press';
 export { FRAME_GRANT_URL, frameAdmits, reachAdmits, reachDeclares, reachOf } from './reach';
 export type { Reach } from './reach';
 export {
-  FoundRowSchema,
-  RequestedRowSchema,
-  StandingRowSchema,
+  approveIntegration,
+  findIntegration,
   initIntegrations,
   integrationByKey,
+  keepKeyHash,
+  landBundle,
   listAttachments,
   listIntegrations,
   listPlacements,
   loadIntegrationActions,
+  recordFailedImport,
+  removeIntegration,
+  setBackToPending,
+  standingOf,
 } from './registry';
-export type { IntegrationRow } from './registry';
+export type { FoundIntegration, IntegrationRow, Landing } from './registry';

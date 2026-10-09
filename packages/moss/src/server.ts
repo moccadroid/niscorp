@@ -25,14 +25,18 @@ import {
   frameAdmits,
   reachAdmits,
   reachDeclares,
-  reachOf,
   runIntake,
   intakeContextOf,
-  FoundRowSchema,
   PathBodySchema,
   RegisterBodySchema,
-  RequestedRowSchema,
-  StandingRowSchema,
+  approveIntegration,
+  findIntegration,
+  keepKeyHash,
+  landBundle,
+  recordFailedImport,
+  removeIntegration,
+  setBackToPending,
+  standingOf,
 } from './integrations';
 import type { CallIntegration } from './integrations';
 import { createAssertionSigner, hashIntegrationKey, mintIntegrationKey } from './integrations';
@@ -543,22 +547,14 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
       if (!response.ok) throw new Error(String(response.status));
       payload = await response.json();
     } catch {
-      await runtime.pool.query(
-        `INSERT INTO integrations (id, url, last_error) VALUES ($1, $2, $3)
-         ON CONFLICT (id) DO UPDATE SET url = EXCLUDED.url, last_error = EXCLUDED.last_error`,
-        [id, url, 'the service did not answer with a bundle'],
-      );
+      await recordFailedImport(runtime.pool, id, url, 'the service did not answer with a bundle');
       return c.json({ message: 'The integration did not answer with a bundle.' }, 502);
     }
 
     const fingerprints = new Set((await data.engine.cache.keys?.()) ?? []);
     const result = runIntake(payload, { ...intakeContextOf(app, id, fingerprints, grammars), hostActions: running.actions() });
     if (!result.ok) {
-      await runtime.pool.query(
-        `INSERT INTO integrations (id, url, last_error) VALUES ($1, $2, $3)
-         ON CONFLICT (id) DO UPDATE SET url = EXCLUDED.url, last_error = EXCLUDED.last_error`,
-        [id, url, result.reasons.join('; ')],
-      );
+      await recordFailedImport(runtime.pool, id, url, result.reasons.join('; '));
       return c.json({ message: 'Refused.', reasons: result.reasons }, 422);
     }
 
@@ -568,19 +564,12 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     // host's store, which is cheaper than any coherence they could buy.
     const press = await copyPress(result.bundle, id, url, app.storePress);
     if (!press.ok) {
-      await runtime.pool.query(
-        `INSERT INTO integrations (id, url, last_error) VALUES ($1, $2, $3)
-         ON CONFLICT (id) DO UPDATE SET url = EXCLUDED.url, last_error = EXCLUDED.last_error`,
-        [id, url, press.reasons.join('; ')],
-      );
+      await recordFailedImport(runtime.pool, id, url, press.reasons.join('; '));
       return c.json({ message: 'Refused.', reasons: press.reasons }, 422);
     }
 
     // The candidate manifest, verified BEFORE anything is written.
-    const existing = await runtime.pool.query('SELECT status, key_hash FROM integrations WHERE id = $1', [id]);
-    const existingRow = StandingRowSchema.optional().parse(existing.rows[0]);
-    const wasApproved = existingRow?.status === 'approved';
-    const holdsKey = typeof existingRow?.key_hash === 'string' && existingRow.key_hash !== '';
+    const { approved: wasApproved, holdsKey } = await standingOf(runtime.pool, id);
     if (wasApproved) {
       // TRIED, NOT PUT IN. The bundle's actions over the actions in force are
       // a candidate the running manifest verifies without switching to it, so
@@ -592,76 +581,14 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
       if (refusal !== undefined) return c.json({ message: 'Refused — the app would not serve this.', reasons: [`Error: ${refusal}`] }, 422);
     }
 
-    await runtime.pool.query(
-      `INSERT INTO integrations (id, url, title, tagline, description, adds, settings_action, requested_actions, requested_data, reach, frames, phrasebook, story, highlights, press, offers, needs, capabilities, configuration, documents, assistants, last_import_at, last_error)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14::jsonb, $15::jsonb, $16::jsonb, $17::jsonb, $18::jsonb, $19::jsonb, $20::jsonb, $21::jsonb, now(), NULL)
-       ON CONFLICT (id) DO UPDATE SET url = EXCLUDED.url,
-         title = EXCLUDED.title, tagline = EXCLUDED.tagline, description = EXCLUDED.description,
-         adds = EXCLUDED.adds, settings_action = EXCLUDED.settings_action,
-         requested_actions = EXCLUDED.requested_actions,
-         requested_data = EXCLUDED.requested_data,
-         reach = EXCLUDED.reach, frames = EXCLUDED.frames,
-         phrasebook = EXCLUDED.phrasebook,
-         story = EXCLUDED.story, highlights = EXCLUDED.highlights, press = EXCLUDED.press,
-         offers = EXCLUDED.offers, needs = EXCLUDED.needs,
-         capabilities = EXCLUDED.capabilities,
-         configuration = EXCLUDED.configuration,
-         documents = EXCLUDED.documents,
-         assistants = EXCLUDED.assistants,
-         last_import_at = now(), last_error = NULL`,
-      [
-        id,
-        url,
-        result.bundle.meta.title,
-        result.bundle.meta.tagline,
-        result.bundle.meta.description,
-        describePlacements(result.bundle, app.placementNames ?? {}),
-        result.bundle.settings,
-        JSON.stringify(result.bundle.grants.actions),
-        JSON.stringify(result.bundle.grants.data),
-        // Re-derived on every import, so a screen an integration DROPPED takes its
-        // endpoint's reach with it. An allow-list that only ever grows is a
-        // list of everything the integration has ever been able to do.
-        JSON.stringify(reachOf(result.bundle, id)),
-        JSON.stringify(result.bundle.frames),
-        // The integration's own words, in the languages it speaks — stored beside
-        // its actions so the app's language pass can reach them, and
-        // re-imported whole like everything else about a bundle.
-        JSON.stringify(result.bundle.phrasebook),
-        JSON.stringify(result.bundle.meta.story),
-        JSON.stringify(result.bundle.meta.highlights),
-        // The urls the HOST answered with at copyPress — the declared paths
-        // died the moment the bytes crossed.
-        JSON.stringify(press.urls),
-        // What it tells and hears — carried, never read here; the host's bus
-        // is the consumer.
-        JSON.stringify(result.bundle.offers),
-        JSON.stringify(result.bundle.needs),
-        // The verbs it gates on — carried the same way; the host's role editor
-        // is the consumer.
-        JSON.stringify(result.bundle.capabilities),
-        // What a builder may set — carried the same way; the host's per-product
-        // settings form is the consumer, and the delivery is the assertion's.
-        JSON.stringify(result.bundle.configuration),
-        // What an add-on lets a person edit — carried the same way; the host's
-        // editor is the consumer.
-        JSON.stringify(result.bundle.documents),
-        // What an add-on's assistant knows — carried the same way; the host's
-        // assistant is the consumer.
-        JSON.stringify(result.bundle.assistants),
-      ],
-    );
-    await runtime.pool.query('DELETE FROM integration_actions WHERE integration_id = $1', [id]);
-    for (const [actionId, definition] of Object.entries(result.bundle.actions)) {
-      const binding = result.bundle.attachments[actionId];
-      const attachTo = binding === undefined ? '' : typeof binding === 'string' ? binding : binding.to;
-      const preview = binding === undefined || typeof binding === 'string' ? '' : binding.preview;
-      await runtime.pool.query(
-        // Stamped current: runIntake upgraded every definition to this code's grammars.
-        'INSERT INTO integration_actions (integration_id, action_id, definition, attach_to, preview, place_in, grammar) VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7::jsonb)',
-        [id, actionId, JSON.stringify(definition), attachTo, preview, result.bundle.placements[actionId] ?? '', JSON.stringify(grammars.stamp)],
-      );
-    }
+    await landBundle(runtime.pool, {
+      id,
+      url,
+      bundle: result.bundle,
+      adds: describePlacements(result.bundle, app.placementNames ?? {}),
+      press: press.urls,
+      stamp: grammars.stamp,
+    });
 
     // MINTED ONCE, SHOWN ONCE. Registration is a GRANTING ceremony — the
     // deployment issues the integration its identity, never the other way
@@ -671,7 +598,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     // and re-registration, which also re-fences everything the old key held.
     const key = holdsKey ? undefined : mintIntegrationKey();
     if (key !== undefined) {
-      await runtime.pool.query('UPDATE integrations SET key_hash = $2 WHERE id = $1', [id, hashIntegrationKey(key)]);
+      await keepKeyHash(runtime.pool, id, hashIntegrationKey(key));
     }
 
     await reloadIntegrations();
@@ -690,18 +617,12 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // second place the candidate set is verified before anything is served.
   operator.post('/integrations/:id/approve', async (c) => {
     const id = c.req.param('id');
-    const row = await runtime.pool.query('SELECT requested_data FROM integrations WHERE id = $1', [id]);
-    const asked = RequestedRowSchema.optional().parse(row.rows[0]);
-    if (asked === undefined) return c.json({ message: 'No such integration.' }, 404);
-    const requested = asked.requested_data;
-    await runtime.pool.query(
-      "UPDATE integrations SET status = 'approved', approved_data = $2::jsonb WHERE id = $1",
-      [id, JSON.stringify(requested)],
-    );
+    const requested = await approveIntegration(runtime.pool, id);
+    if (requested === undefined) return c.json({ message: 'No such integration.' }, 404);
     try {
       await reloadIntegrations();
     } catch (err) {
-      await runtime.pool.query("UPDATE integrations SET status = 'pending', last_error = $2 WHERE id = $1", [id, String(err)]);
+      await setBackToPending(runtime.pool, id, String(err));
       await reloadIntegrations();
       return c.json({ message: 'Refused — the app would not serve this.', reasons: [String(err)] }, 422);
     }
@@ -713,7 +634,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // — which is why reinstalling restores it.
   operator.delete('/integrations/:id', async (c) => {
     const id = c.req.param('id');
-    await runtime.pool.query('DELETE FROM integrations WHERE id = $1', [id]);
+    await removeIntegration(runtime.pool, id);
     await reloadIntegrations();
     return c.json({ id, removed: true });
   });
@@ -730,10 +651,9 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // asking a question about somebody else's service, not about this one.
   operator.post('/integrations/:id/probe', async (c) => {
     const id = c.req.param('id');
-    const row = await runtime.pool.query('SELECT url, reach FROM integrations WHERE id = $1', [id]);
-    const found = FoundRowSchema.optional().parse(row.rows[0]);
-    const url = found?.url;
-    if (found === undefined || url === undefined) return c.json({ message: 'No such integration.' }, 404);
+    const found = await findIntegration(runtime.pool, id);
+    if (found === undefined) return c.json({ message: 'No such integration.' }, 404);
+    const url = found.url;
     const sent: unknown = await c.req.json().catch(() => ({}));
     const path = PathBodySchema.parse(sent).path ?? 'bundle';
     // The declaration holds lyra-side paths (`/integrations/<id>/roster`); a
@@ -803,8 +723,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     const sent: unknown = await c.req.json().catch(() => ({}));
     const path = PathBodySchema.parse(sent).path ?? '';
     const id = path.split('/')[2] ?? '';
-    const row = await runtime.pool.query('SELECT status, frames FROM integrations WHERE id = $1', [id]);
-    const found = FoundRowSchema.optional().parse(row.rows[0]);
+    const found = await findIntegration(runtime.pool, id);
     if (found === undefined || found.status !== 'approved') return c.json({ message: 'No such integration.' }, 404);
     const resolved = await identity.resolve(principal);
     if (resolved.installed !== undefined && !resolved.installed.includes(id)) return c.json({ message: 'Not installed here.' }, 404);
@@ -843,8 +762,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     }
     // Re-checked at REDEEM, not just at mint: an uninstall between the two is
     // exactly the moment a stale tab must stop working.
-    const row = await runtime.pool.query('SELECT url, status FROM integrations WHERE id = $1', [id]);
-    const found = FoundRowSchema.optional().parse(row.rows[0]);
+    const found = await findIntegration(runtime.pool, id);
     if (found === undefined || found.status !== 'approved') return c.json({ message: 'Not found.' }, 404);
     const installed = (await identity.resolve(grant.principal)).installed;
     if (installed !== undefined && !installed.includes(id)) return c.json({ message: 'Not found.' }, 404);
@@ -852,7 +770,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     const scope = await identity.scopeValuesFor(grant.principal);
     const rest = grant.path.split('/').slice(3).join('/');
     try {
-      const response = await fetch(`${String(found.url).replace(/\/$/, '')}/${rest}`, {
+      const response = await fetch(`${found.url.replace(/\/$/, '')}/${rest}`, {
         headers: { authorization: `Bearer ${assertions.mint({ integration: id, principal: grant.principal, scope })}` },
       });
       // THE INTEGRATION'S OWN CONTENT TYPE TRAVELS. A framed page is HTML; forcing
@@ -891,8 +809,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     if (grant === undefined || grant.integration !== id || now >= grant.expires) return c.json({ message: 'Not found.' }, 404);
     if (!CALLBACK.test(call)) return c.json({ message: 'Not found.' }, 404);
 
-    const row = await runtime.pool.query('SELECT url, status FROM integrations WHERE id = $1', [id]);
-    const found = FoundRowSchema.optional().parse(row.rows[0]);
+    const found = await findIntegration(runtime.pool, id);
     if (found === undefined || found.status !== 'approved') return c.json({ message: 'Not found.' }, 404);
     const installed = (await identity.resolve(grant.principal)).installed;
     if (installed !== undefined && !installed.includes(id)) return c.json({ message: 'Not found.' }, 404);
@@ -904,7 +821,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
 
     const scope = await identity.scopeValuesFor(grant.principal);
     try {
-      const response = await fetch(`${String(found.url).replace(/\/$/, '')}/${target}`, {
+      const response = await fetch(`${found.url.replace(/\/$/, '')}/${target}`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -975,8 +892,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
 
   server.post('/integrations/:id/hook/*', async (c) => {
     const id = c.req.param('id');
-    const row = await runtime.pool.query('SELECT url, status FROM integrations WHERE id = $1', [id]);
-    const found = FoundRowSchema.optional().parse(row.rows[0]);
+    const found = await findIntegration(runtime.pool, id);
     // 404 for "no such integration" AND for "not approved yet" — the same
     // answer, so a stranger probing this learns nothing about which integrations a
     // deployment is currently considering.
@@ -993,7 +909,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     headers.delete('authorization');
     headers.delete('host');
     try {
-      const response = await fetch(`${String(found.url).replace(/\/$/, '')}/${rest}`, {
+      const response = await fetch(`${found.url.replace(/\/$/, '')}/${rest}`, {
         method: 'POST',
         headers,
         body: await c.req.arrayBuffer(),
@@ -1024,8 +940,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     const principal = c.get('principal');
     if (principal === null) return c.json({ message: 'Sign in first.' }, 401);
     const id = c.req.param('id');
-    const row = await runtime.pool.query('SELECT url, status, reach FROM integrations WHERE id = $1', [id]);
-    const found = FoundRowSchema.optional().parse(row.rows[0]);
+    const found = await findIntegration(runtime.pool, id);
     if (found === undefined || found.status !== 'approved') return c.json({ message: 'No such integration.' }, 404);
     const resolved = await identity.resolve(principal);
     if (resolved.installed !== undefined && !resolved.installed.includes(id)) return c.json({ message: 'Not installed here.' }, 404);
@@ -1062,7 +977,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
       authorization: `Bearer ${assertions.mint({ integration: id, principal, scope })}`,
     };
     try {
-      const response = await fetch(`${String(found.url).replace(/\/$/, '')}/${rest}`, {
+      const response = await fetch(`${found.url.replace(/\/$/, '')}/${rest}`, {
         method: c.req.method,
         headers,
         ...(c.req.method === 'GET' ? {} : { body: await c.req.text() }),

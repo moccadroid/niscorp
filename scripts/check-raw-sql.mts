@@ -117,9 +117,16 @@ type Entry = Found & { why: 'credential' | 'store' | 'debt' | 'tables'; note: st
 const LEDGER: Readonly<Record<string, Readonly<Record<string, Entry>>>> = {
   moss: {
     'identity/sessions.ts': { doors: 6, statements: 6, tables: 1, why: 'credential', note: 'the session credential: a token hash is looked up before anybody is signed in' },
-    'integrations/registry.ts': { doors: 5, statements: 5, tables: 0, why: 'debt', note: 'four reads of the integration tables; the fifth, the key-hash lookup, is a credential and stays' },
-    'integrations/call.ts': { doors: 1, statements: 1, tables: 0, why: 'debt', note: 'the outbound call looks its integration up by id' },
-    'server.ts': { doors: 18, statements: 18, tables: 0, why: 'debt', note: 'the operator routes, the frame routes, the webhook and the proxy read and write the integration tables' },
+    // Every statement on `integrations` and `integration_actions`, in one file.
+    // They were 24 across three: the lookup by id was written seven times and
+    // the failed-import upsert three, and each is here once. None went to vex.
+    'integrations/registry.ts': {
+      doors: 16,
+      statements: 16,
+      tables: 0,
+      why: 'debt',
+      note: 'the integration tables, read and written; one of the sixteen, the key-hash lookup, is a credential and stays',
+    },
     'manifest/generation.ts': { doors: 3, statements: 4, tables: 1, why: 'debt', note: 'the generation counter' },
     'tide.ts': { doors: 7, statements: 6, tables: 3, why: 'store', note: "tide's Postgres store; it belongs with tide" },
     'data/tables.ts': { doors: 0, statements: 0, tables: 15, why: 'tables', note: "moss's own table sequence, as it stood in integrations.ts: history, checksummed in every ledger" },

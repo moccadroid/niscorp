@@ -1,7 +1,7 @@
 import type { PgPool } from '@niscorp/vex';
 import { emitterOf, spanClock } from '../runtime';
 import type { Telemetry } from '../runtime';
-import { WhereItIsSchema } from './registry';
+import { findIntegration } from './registry';
 
 // ── the outbound act ─────────────────────────────────────────
 //
@@ -77,8 +77,7 @@ export const callIntegrationWith = (deps: {
       });
     };
 
-    const row = await deps.pool.query('SELECT url, status FROM integrations WHERE id = $1', [id]);
-    const found = WhereItIsSchema.optional().parse(row.rows[0]);
+    const found = await findIntegration(deps.pool, id);
     if (found === undefined) {
       done('refused');
       throw new Error(`moss: callIntegration("${id}"): no such integration.`);
