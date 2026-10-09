@@ -95,6 +95,38 @@ const evaluateUnbudgeted = (node: unknown, context: EvalContext): JsonValue => {
   if (isAttachedFn(attached)) return attached(obj, context, evaluateNode);
 
   // ───────────────────────────────────────────────────────
+  // Plain object — recursive template evaluation
+  //
+  // Before the ops, not after them: a template has no `$` key and every op
+  // guard below asks for one, so no node is both, and the order changes no
+  // answer. A template has no attached handler either (it is not an op), so
+  // placed last it fell through every guard on each evaluation — in a
+  // compiled tree too, and once for each row where it is a `$map` body.
+  // ───────────────────────────────────────────────────────
+  if (isPlainObject(obj)) {
+    const optionalFields = new Set<string>(
+      Array.isArray(obj[OPTIONAL_FIELDS_KEY]) ? (obj[OPTIONAL_FIELDS_KEY] as string[]) : [],
+    );
+    const result: Record<string, JsonValue> = {};
+
+    for (const [key, value] of Object.entries(obj)) {
+      if (key === OPTIONAL_FIELDS_KEY) continue;
+      const isOptional = optionalFields.has(key);
+
+      try {
+        const evaluated = evaluateNode(value, context);
+        if (isOptional && (evaluated === null || evaluated === undefined)) continue;
+        result[key] = evaluated;
+      } catch (error) {
+        if (isOptional && error instanceof PrismError && error.code === ErrorCode.MISSING_PATH) continue;
+        throw error;
+      }
+    }
+
+    return result;
+  }
+
+  // ───────────────────────────────────────────────────────
   // Core ops
   // ───────────────────────────────────────────────────────
   if (isRefNode(obj)) return opRef(obj, context, evaluateNode);
@@ -198,32 +230,6 @@ const evaluateUnbudgeted = (node: unknown, context: EvalContext): JsonValue => {
   if (isLocaleDateNode(obj)) return opLocaleDate(obj, context, evaluateNode);
   if (isLocaleMoneyNode(obj)) return opLocaleMoney(obj, context, evaluateNode);
   if (isLocaleNumberNode(obj)) return opLocaleNumber(obj, context, evaluateNode);
-
-  // ───────────────────────────────────────────────────────
-  // Plain object — recursive template evaluation
-  // ───────────────────────────────────────────────────────
-  if (isPlainObject(obj)) {
-    const optionalFields = new Set<string>(
-      Array.isArray(obj[OPTIONAL_FIELDS_KEY]) ? (obj[OPTIONAL_FIELDS_KEY] as string[]) : [],
-    );
-    const result: Record<string, JsonValue> = {};
-
-    for (const [key, value] of Object.entries(obj)) {
-      if (key === OPTIONAL_FIELDS_KEY) continue;
-      const isOptional = optionalFields.has(key);
-
-      try {
-        const evaluated = evaluateNode(value, context);
-        if (isOptional && (evaluated === null || evaluated === undefined)) continue;
-        result[key] = evaluated;
-      } catch (error) {
-        if (isOptional && error instanceof PrismError && error.code === ErrorCode.MISSING_PATH) continue;
-        throw error;
-      }
-    }
-
-    return result;
-  }
 
   // Unknown node shape — a `$` key no op answers to. The schema refuses these
   // (E_SCHEMA), so this is reached only by a tree that never went through it:
