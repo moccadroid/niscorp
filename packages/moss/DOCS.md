@@ -21,8 +21,9 @@ optional peers, needed only by the entry that names them. `hono`,
 #### `defineApp(app: NiscApp): NiscApp`
 
 Returns its argument: the one name an app file needs besides its artifacts.
-The manifest is read by a schema where it is handed over, in
-[`createServer`](#createserverapp-runtime-promisemossserver).
+The manifest is read by a schema, and then frozen, where it is handed over:
+in [`createServer`](#createserverapp-runtime-promisemossserver). Until then an
+app may go on assembling it.
 
 #### `NiscApp`
 
@@ -369,6 +370,21 @@ A code seam is held to being a function. A component's contract
 names. The charter and `behaviors` are held to being objects; the charter is
 verified by the check below and `behaviors` by vex when a policy is compiled.
 
+**Then it is frozen**, every level of it, in place. Once `createServer` has
+returned, an edit to the manifest throws a `TypeError` where it is written:
+`app.actions.x = …`, `delete app.actions.x`, `app.actions = …`,
+`app.charter.role = …`, `app.entries.push(…)`, a write to a definition, a
+layout node, a canvas, a variant. A function, and an instance of a class (a
+zod schema handed over as a component's `propsSchema`), is not frozen and not
+looked inside. An object the app shares between its manifest and its own code
+is frozen for both.
+
+What an app consists of changes in one way while a server runs: a set of
+actions is handed over with `server.replaceActions(source, actions)`, which
+verifies before it switches. A charter, a layout variant, an entry, a behavior
+and the shell do not change under a running server; they change in the manifest
+the next server is created with.
+
 What the server answers over HTTP:
 
 | Path | What |
@@ -407,23 +423,24 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   (its name, the `ShellHost` that draws it, the input its path carries), or
   `undefined` for a path that is the app's. The document route and the socket
   ask the same question here.
-- `refresh(): void` — something the server derived its answers from changed (a
-  role, an install, an artifact): run the check boot runs (the charter, every
-  entry's reach, the layout variants), drop every per-principal memo and
-  identity record, and have living shells adopt their re-resolved definitions
-  in place. Throws when the check refuses, and the old resolution keeps
-  serving. It also moves the generation pointer, so every other process on the
-  same database does the same within one poll. An app that edited `app.actions`
-  ships what that record holds when it calls this; `replaceActions` is the way
-  to hand over actions that are loaded from rows.
+- `refresh(): void` — something the server derived its answers from changed
+  where it cannot see (a role, an install): run the check boot runs over what
+  is in force (the charter, every entry's reach, the layout variants), drop
+  every per-principal memo and identity record, and have living shells adopt
+  their re-resolved definitions in place. It also moves the generation pointer,
+  so every other process on the same database does the same within one poll.
+  It ships nothing: the manifest that was handed over cannot be edited, and
+  `replaceActions` is how actions arrive.
 - `replaceActions(source, actions): void` — hand over a set of actions that
   arrived while the app runs (an app that loads actions from its own tables).
   `source` names the set: handing the same name over again puts the new set in
   place of the old, so an action it no longer names leaves. The actions in
   force are what the app shipped, then each set. What the app would then
-  consist of is verified first: refused, it throws with the sentence `refresh`
-  throws and nothing changed; accepted, it does what `refresh` does.
-  `'integrations'` is moss's own set, read from its integration tables.
+  consist of is verified first: refused, it throws (`Refresh refused — …`,
+  with what the check found) and nothing changed; accepted, it does what
+  `refresh` does, and the set is frozen as the manifest was, so a set is
+  changed by handing over another of the same name. `'integrations'` is moss's
+  own set, read from its integration tables.
 - `verifyActions(source, actions): ManifestReport` — the dry run of
   `replaceActions`: the same verification over the same candidate (the app's
   actions, then each set, with `actions` in place of the set called `source`),

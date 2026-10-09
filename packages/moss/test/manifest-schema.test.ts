@@ -1,16 +1,19 @@
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
-import type { PgPool } from '@niscorp/vex';
+import type { PgPool, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { receiveManifest } from '../src/manifest';
 import type { NiscApp } from '../src/manifest';
 import { manifestMisfits } from '../src/manifest/schema';
 import { createServer } from '../src/server';
 
-// THE MANIFEST IS READ BY A SCHEMA WHEN IT IS HANDED OVER. Every case but the
-// last is the schema alone, over a small object: no database and no server.
-// The last one calls `createServer`, because what it proves is about
-// `createServer`: that it refuses before it touches the database it was given.
-// That database is a pool that fails the test if it is asked anything.
+// THE MANIFEST IS READ BY A SCHEMA WHEN IT IS HANDED OVER, AND THEN FROZEN.
+// Every case but the last is the schema, or the hand-over, over a small object:
+// no database and no server. The last one calls `createServer`, because what
+// it proves is about `createServer`: that it refuses before it touches the
+// database it was given. That database is a pool that fails the test if it is
+// asked anything. (That an edit throws once `createServer` has RETURNED is
+// proved where a server is booted anyway: charter-report.test.ts.)
 
 const plain: LayoutNode = { component: 'Text', children: 'plain' };
 const home: ActionDefinition = { id: 'home', layout: plain, triggers: [{ event: 'ui:click', ref: 'open', do: [{ push: { action: 'panel' } }] }] };
@@ -152,6 +155,81 @@ describe('the manifest’s schema', () => {
     const misfits = manifestMisfits({ ...whole(), actions: { home: { id: 'home', layout: deep } } });
     expect(misfits).toHaveLength(1);
     expect(misfits[0]).toMatch(/^actions\.home: the document nests deeper than 256 levels/);
+  });
+});
+
+describe('the hand-over freezes what it read', () => {
+  it('every way of editing the manifest throws, at every depth', () => {
+    const entries: (SeedEntry | SeedMutation)[] = [{ fingerprint: 'deals/open', dsl: { from: ['deals'], fields: ['deals.id'] } }];
+    const layout: LayoutNode = { component: 'Stack', props: { gap: 2 }, children: [{ component: 'Text', children: 'one' }] };
+    const board: ActionDefinition = { id: 'board', layout, data: { rows: [] } };
+    const app: NiscApp = { ...whole(), actions: { board }, entries };
+
+    receiveManifest(app);
+
+    // A field of the manifest itself, put in place of what was handed over.
+    expect(() => {
+      app.actions = {};
+    }).toThrow(TypeError);
+    expect(() => {
+      app.charter = { public: [] };
+    }).toThrow(TypeError);
+    // A record it holds: one more, one fewer.
+    expect(() => {
+      app.actions['lobby'] = { id: 'lobby' };
+    }).toThrow(TypeError);
+    expect(() => {
+      delete app.actions['board'];
+    }).toThrow(TypeError);
+    expect(() => {
+      app.charter['member'] = ['board'];
+    }).toThrow(TypeError);
+    // A list it holds, through the reference the app kept.
+    expect(() => entries.push({ fingerprint: 'deals/all', dsl: { from: ['deals'], fields: ['deals.id'] } })).toThrow(TypeError);
+    // And all the way down: a definition, its data, a node of its layout.
+    expect(() => {
+      board.title = 'Board';
+    }).toThrow(TypeError);
+    expect(() => {
+      Object.assign(board.data ?? {}, { rows: [1] });
+    }).toThrow(TypeError);
+    expect(() => {
+      Object.assign(layout, { component: 'Row' });
+    }).toThrow(TypeError);
+    expect(Object.isFrozen(app.shell?.canvases[0])).toBe(true);
+    expect(Object.isFrozen(app.pages?.['about'])).toBe(true);
+
+    expect(app.actions).toEqual({ board: { id: 'board', layout: { component: 'Stack', props: { gap: 2 }, children: [{ component: 'Text', children: 'one' }] }, data: { rows: [] } } });
+    expect(entries).toHaveLength(1);
+  });
+
+  it('a seam and a kit’s own object are not frozen: they are code, with state of their own', () => {
+    // A kit hands a component's props over as a zod schema, and a zod schema
+    // writes onto itself as it is used: frozen, its first parse throws.
+    const propsSchema = z.object({ gap: z.number().optional() }).strict();
+    const inputs = (): Record<string, Record<string, unknown>> => ({});
+    const meta = { description: 'a stack', propsSchema };
+    const app: NiscApp = { ...whole(), shell: { canvases: [], components: { Stack: { meta } }, inputs } };
+
+    receiveManifest(app);
+
+    expect(Object.isFrozen(meta)).toBe(true);
+    expect(Object.isFrozen(propsSchema)).toBe(false);
+    expect(Object.isFrozen(inputs)).toBe(false);
+    expect(propsSchema.safeParse({ gap: 2 }).success).toBe(true);
+  });
+
+  it('a manifest that is refused is left as it was, and one that was taken may be handed over again', () => {
+    const refused: NiscApp = JSON.parse(JSON.stringify({ charter: {}, actions: { home: { id: 'home', tittle: 'Home' } } }));
+    expect(() => receiveManifest(refused)).toThrow(/^The manifest does not parse/);
+    expect(Object.isFrozen(refused)).toBe(false);
+    expect(Object.isFrozen(refused.actions)).toBe(false);
+
+    // Two servers over one manifest, or two manifests sharing a definition.
+    const app = whole();
+    receiveManifest(app);
+    expect(() => receiveManifest(app)).not.toThrow();
+    expect(() => receiveManifest({ ...whole(), actions: app.actions })).not.toThrow();
   });
 });
 

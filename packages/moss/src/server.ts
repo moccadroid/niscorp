@@ -95,18 +95,19 @@ export type MossServer = Hono<Env> & {
   // Every page the manifest declares, by name, with the path it is drawn at —
   // what a build walks to know which paths exist besides the app's own.
   pages: readonly { name: string; path: string }[];
-  // Something the server derived its answers from changed (a role, an install,
-  // an artifact): verify what the app consists of again, drop every
+  // Something the server derived its answers from changed where it cannot see
+  // (a role, an install): verify what is in force again, drop every
   // per-principal memo, and have living shells adopt their re-resolved
-  // definitions. Throws when the check boot runs refuses — a bad publish
-  // refuses, exactly like boot — and what was being served keeps being served.
+  // definitions. It ships nothing: what the app consists of changes through
+  // `replaceActions`, and the manifest it handed over cannot be edited.
   refresh: () => void;
   // HAND OVER A SET OF ACTIONS THAT ARRIVED WHILE THE APP RUNS — for an app
   // that loads actions from its own rows. `source` names the set: handing the
   // same name over again puts the new set in place of the old, so an action it
   // no longer names leaves. What the app would then consist of is verified
   // first. Refused, this throws with the sentence `refresh` throws and nothing
-  // changed; accepted, it does what `refresh` does. The actions in force are
+  // changed; accepted, it does what `refresh` does, and the set is frozen
+  // where it stands: to change it, hand over another. The actions in force are
   // what the app shipped, then each set. `'integrations'` is moss's own set,
   // read from its integration tables.
   replaceActions: (source: string, actions: Record<string, ActionDefinition>) => void;
@@ -251,9 +252,10 @@ export const vexRecordToSpan = (rec: ExecuteRecord): TelemetrySpan => ({
 });
 
 export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<MossServer> => {
-  // WHAT WAS HANDED OVER IS READ FIRST (./manifest, the hand-over): nothing
-  // below may meet a manifest no schema has read. One that does not parse
-  // refuses here, before a table is created or a row is read.
+  // WHAT WAS HANDED OVER IS READ FIRST, AND THEN FROZEN (./manifest, the
+  // hand-over): nothing below may meet a manifest no schema has read, and
+  // nothing after may write one. One that does not parse refuses here, before
+  // a table is created or a row is read.
   receiveManifest(app);
 
   // WHO A TOKEN IS, resolved before anything else boots: an unset verifier
@@ -300,10 +302,6 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // Creating it IS the boot check: an incoherent manifest refuses here, before
   // anything else stands (the charter with each role's closure audited, every
   // entry's reach, the layout variants).
-  //
-  // It is handed the app's own record, typed as the seven fields it reads,
-  // because for now an app may still edit that record and call `refresh`
-  // (manifest/running.ts, ShippedManifest).
   const storedIntegrationActions = (): Promise<Record<string, ActionDefinition>> => loadIntegrationActions(runtime.pool, grammars);
   const running = createRunningManifest({
     shipped: app,

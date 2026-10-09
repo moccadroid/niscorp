@@ -50,23 +50,27 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 
 **`refresh` runs the check boot runs.**
 
-- `refresh()` ran a shorter copy of the boot check: the charter and the layout variants. It is now the same verification, so a `refresh` also refuses when an entry declares a `reach` that no behavior offers, with the sentence `Refresh refused — entries declare a reach no table offers`. That can only happen to an app that changes `app.behaviors` after boot; no other app sees a difference.
-- The entries the server knows are the ones it booted with. One added to `app.entries` afterwards was never seeded, and is no longer looked up when a page asks whether it needs a shell.
+- `refresh()` ran a shorter copy of the boot check: the charter and the layout variants. It is now the same verification as boot's, entries' `reach` included. It verifies what is in force, and what is in force was verified when it was taken, so an app sees no difference.
+- The entries the server knows are the ones it booted with. One added to `app.entries` afterwards was never seeded; adding one now throws (the manifest is frozen, below).
 - A boot that is refused prints the chains of steps that never end before it throws. It printed them only when the charter had passed.
 
-**The manifest is read by a schema when it is handed over.**
+**The manifest is parsed and frozen when it is handed over.**
 
 - `createServer(app, runtime)` parses the manifest before anything else uses it, and a manifest that does not parse refuses the boot with `The manifest does not parse — refusing to serve:` and one line for each place that does not fit (`actions.home: Unrecognized key: "tittle"`, `shell.inputs: expected a function`). It used to be used as it stood: a definition nova refuses was found when a shell that holds it was built, for whoever connected first, and a seam that was not a function when it was first called.
 - An action, a fragment and a layout are read by nova's schemas, an entry's `dsl` and `mutation` by vex's, its `mapping` by Prism's, `grammars` by strata's. Every other data field is held to the shape `NiscApp` gives it, and a code seam to being a function.
 - A field the type does not have is refused, on the manifest itself, on the shell or a page, on a canvas, a layout variant, an entry, a reaction, `identity`, `facts` and `phraseKeys`. The compiler already refuses one written in place; one that arrived through a spread or a cast used to be carried and ignored. An app that kept something of its own there keeps it beside the manifest. A component's contract (`shell.components`) and a resource written as an object may still carry more than moss names.
-- An app whose manifest is typed as `NiscApp`, with no cast and no extra field on the way, has nothing to change.
+- An app whose manifest is typed as `NiscApp`, with no cast and no extra field on the way, has nothing to change for the parse.
+- Then `createServer` freezes the manifest, every level of it, in place. Once it has returned, an edit throws a `TypeError` where it is written: `app.actions.x = …`, `delete app.actions.x`, `app.actions = …`, `app.charter.role = …`, `app.entries.push(…)`, a write to a definition, a layout node, a canvas or a variant. A function and an instance of a class (a zod schema a kit handed over as a component's props) are not frozen and not looked inside. Before `createServer` is called nothing is frozen: `defineApp` returns its argument, and an app may go on assembling it.
+- An edit to the charter, the behaviors or the layout variants used to be half served: it reached whoever was resolved next and nobody already resolved, and no check had seen it until a `refresh`.
+- **What an app does instead.** Actions that arrive while it runs are handed over as a set: `server.replaceActions(source, actions)`, which verifies before it switches (below). A set that was taken is frozen the same way, so it is changed by handing over another of the same name. A charter, a layout variant, an entry, a behavior and the shell do not change while a server runs: they change in the manifest the next server is created with.
+- An object the app shares between its manifest and its own code is frozen for both: code that wrote to one writes to a copy of its own. The checks of the five lab apps (lyceum, lyra, atrium, relay, encore) ran against the frozen manifest and none of them hit one, in the app, in moss or in nova.
 
 **`server.replaceActions(source, actions)`: an app hands over the actions it loads from rows.**
 
 - New. An app that loads actions from its own tables hands them over: `server.replaceActions('bundles', actions)`. The name is the app's; handing the same name over again puts the new set in place of the old, so an action it no longer names leaves. The actions in force are what the app shipped, then each set. `'integrations'` is the name of moss's own set, read from its integration tables.
-- What the app would then consist of is verified first. Refused, the call throws with the sentence `refresh` throws and nothing changed: not the actions being served, not what any role holds. Accepted, it does what `refresh` does: memos are dropped, living shells adopt, and every other process follows within one poll.
-- Editing `app.actions` and calling `refresh()` still works: `refresh` ships what the record holds when it is called. Two things about it are different. An edit is served once a `refresh` has accepted it; a shell built between the edit and the `refresh` used to be built from it unverified. And an action an integration shipped is the integration's: taking it out of `app.actions` does not remove it.
-- With no integration approved and no set handed over, `app.actions` stays the record the app handed to `createServer`. Otherwise moss writes the actions in force to it, as a new object, each time they change.
+- What the app would then consist of is verified first. Refused, the call throws with the sentence `refresh` throws and nothing changed: not the actions being served, not what any role holds, not the record that was handed in. Accepted, it does what `refresh` does: memos are dropped, living shells adopt, and every other process follows within one poll; and the set is frozen.
+- Editing `app.actions` and calling `refresh()` is gone. The edit throws, and `refresh` ships nothing: it verifies what is in force again, drops what was derived from it and has living shells adopt, which is what a changed role or install needs.
+- `app.actions` is what the app shipped, and stays it. Moss wrote the integrations' actions into that record; it no longer does. Code that read them there reads `server.actions()`.
 
 **A server answers what somebody holds, which actions are in force, and whether a set would be taken.**
 
@@ -75,7 +79,7 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 
 **Five internals leave the main entry, each for the call that answers what it was used for.**
 
-- `resolveCatalog(app, principal)` → `(await server.catalogOf(principal)).ids`. The old one read `assignments` and nothing else, so with an `identity` seam it answered `public` for everybody; the server resolves who somebody is the way a request does, and answers from the actions in force.
+- `resolveCatalog(app, principal)` → `(await server.catalogOf(principal)).ids`. The old one read `assignments` and nothing else, so in an app that resolves people through `identity` it answered as `public` for everybody the assignments did not name; the server resolves who somebody is the way a request does, and answers from the actions in force.
 - `resolveCatalogForRoles(app, roles, installed)` → `server.catalogForRoles(roles, installed)`.
 - `auditClosure`, `wearableOf`, `verifyVariants`: the three pieces an app put together to run the boot check by hand → `server.charterReport()` for what a running server is serving, `server.verifyActions(source, actions)` for a set it has not taken, and `verifyApp(app, grants)` where there is no server (`report.charter` is what `verifyCharter` answered, closure issues included; `report.errors.filter((error) => error.check === 'variants')` is what `verifyVariants` returned).
 - Code running in a session that wants what its own caller holds asks `GET /catalog` over the session's wire, as before.

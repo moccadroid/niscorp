@@ -15,7 +15,8 @@ const desk: ActionDefinition = { id: 'ext.belts.desk' };
 const grades: ActionDefinition = { id: 'ext.belts.grades' };
 const pay: ActionDefinition = { id: 'ext.pay.checkout' };
 
-// A fresh record each time: the manifest writes `actions` on it.
+// What an app shipped, as a server hands it over: the seven fields a
+// verification reads. A fresh record each time, so no case reads another's.
 const shippedApp = (): ShippedManifest => ({
   charter: { public: ['home'], member: { actions: ['home', 'panel', 'ext.*'] } },
   assignments: { usr_1: ['member'] },
@@ -222,56 +223,79 @@ describe('what a set of roles holds', () => {
   });
 });
 
-describe('the app’s own record, while some code still reads it', () => {
-  it('is kept equal to the actions in force, and left alone when it already is', () => {
+describe('what the app shipped, and a set that was taken', () => {
+  it('the record the app shipped is read and never written', () => {
     const shipped = shippedApp();
     const handedOver = shipped.actions;
     const manifest = running(shipped);
 
-    // Nothing arrived: the record the app handed over is still its own.
+    manifest.replace('bundles', { [desk.id]: desk });
     manifest.refresh();
-    expect(shipped.actions).toBe(handedOver);
 
-    manifest.replace('bundles', { [desk.id]: desk });
-    expect(Object.keys(shipped.actions)).toEqual(['home', 'panel', desk.id]);
-    // A copy: the app editing its record does not edit what is in force.
-    expect(shipped.actions).not.toBe(manifest.actions());
-  });
-
-  it('refresh ships what the record holds now, and keeps what the sets put there', () => {
-    const shipped = shippedApp();
-    const manifest = running(shipped);
-    manifest.replace('bundles', { [desk.id]: desk });
-    const lobby: ActionDefinition = { id: 'lobby' };
-
-    // Edited in place: one added, one taken out. Not in force until it is said.
-    shipped.actions['lobby'] = lobby;
-    delete shipped.actions['panel'];
+    // What arrived is in force, and is not in the app's record: nothing writes
+    // the actions in force back into it.
     expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id]);
-    manifest.refresh();
-    expect(Object.keys(manifest.actions())).toEqual(['home', 'lobby', desk.id]);
-
-    // Replaced whole, naming nothing of the set: the set's action is the
-    // set's, and stays until the set is replaced.
-    shipped.actions = { home };
-    manifest.refresh();
-    expect(Object.keys(manifest.actions())).toEqual(['home', desk.id]);
-    manifest.replace('bundles', {});
-    expect(Object.keys(manifest.actions())).toEqual(['home']);
+    expect(shipped.actions).toBe(handedOver);
+    expect(Object.keys(shipped.actions)).toEqual(['home', 'panel']);
   });
 
-  it('a refresh that is refused leaves what was in force, and the report it was verified by', () => {
-    const shipped = shippedApp();
-    const manifest = running(shipped);
-    const inForce = manifest.actions();
+  it('refresh ships nothing: it verifies what is in force again, drops what was derived and tells whoever listens', () => {
+    const manifest = running(shippedApp());
+    manifest.replace('bundles', { [desk.id]: desk });
+    const told = vi.fn();
+    manifest.onChange(told);
+    const inForce = Object.keys(manifest.actions());
+    const held = manifest.catalogFor(['member'], undefined);
     const verifiedBy = manifest.report();
 
-    // A deny that matches nothing is an error.
-    shipped.charter = { ...shipped.charter, member: { allow: ['home', 'panel'], deny: ['hmoe'] } };
-    expect(() => manifest.refresh()).toThrow(/^Refresh refused — charter incoherent over the new artifacts:\n {2}dead-deny/);
+    manifest.refresh();
 
-    expect(manifest.actions()).toBe(inForce);
-    expect(manifest.report()).toBe(verifiedBy);
+    expect(Object.keys(manifest.actions())).toEqual(inForce);
+    expect(manifest.catalogFor(['member'], undefined)).not.toBe(held);
+    expect(manifest.catalogFor(['member'], undefined)).toEqual(held);
+    expect(manifest.report()).not.toBe(verifiedBy);
+    expect(manifest.report().errors).toEqual([]);
+    expect(told).toHaveBeenCalledTimes(1);
+  });
+
+  it('a set that is taken is frozen where it stands: it is replaced, not edited', () => {
+    const manifest = running(shippedApp());
+    const editable: ActionDefinition = { id: desk.id, title: 'Desk', data: { open: false } };
+    const set: Record<string, ActionDefinition> = { [desk.id]: editable };
+
+    manifest.replace('bundles', set);
+
+    // Every way of editing what was handed over throws, where it is written.
+    expect(() => {
+      set[grades.id] = grades;
+    }).toThrow(TypeError);
+    expect(() => {
+      delete set[desk.id];
+    }).toThrow(TypeError);
+    expect(() => {
+      editable.title = 'Front desk';
+    }).toThrow(TypeError);
+    expect(() => {
+      Object.assign(editable.data ?? {}, { open: true });
+    }).toThrow(TypeError);
+    expect(manifest.actions()[desk.id]).toEqual({ id: desk.id, title: 'Desk', data: { open: false } });
+
+    // The one way: hand over another.
+    manifest.replace('bundles', { [desk.id]: { ...editable, title: 'Front desk' } });
+    expect(manifest.actions()[desk.id]?.title).toBe('Front desk');
+  });
+
+  it('a set that is refused, or only tried, is left as the caller wrote it', () => {
+    const manifest = running(shippedApp());
+    const refused: Record<string, ActionDefinition> = { 'home.sub': { id: 'home.sub' } };
+    const tried: Record<string, ActionDefinition> = { [desk.id]: { id: desk.id } };
+
+    expect(() => manifest.replace('bundles', refused)).toThrow(/^Refresh refused/);
+    manifest.verifyReplace('bundles', tried);
+
+    expect(Object.isFrozen(refused)).toBe(false);
+    expect(Object.isFrozen(tried)).toBe(false);
+    expect(Object.isFrozen(tried[desk.id])).toBe(false);
   });
 });
 
@@ -342,7 +366,7 @@ describe('watch — the pointer the other processes poll', () => {
       // The set with a loader was read again; the one without is as it was.
       // Its place is its own from the start, whichever change came first.
       expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id, grades.id, pay.id]);
-      expect(Object.keys(shipped.actions)).toEqual(['home', 'panel', desk.id, grades.id, pay.id]);
+      expect(Object.keys(shipped.actions)).toEqual(['home', 'panel']);
       expect(told).toHaveBeenCalledTimes(1);
       expect(moves()).toBe(0);
 

@@ -122,4 +122,49 @@ describe('charterReport — the report the server booted on', () => {
     const incoherent = defineApp({ ...manifest(), charter: { ...charter, admin: { allow: ['home', 'admin.panel'], deny: ['hmoe'] } } });
     await expect(boot(incoherent)).rejects.toThrow(/^Charter is incoherent — refusing to serve:\n {2}dead-deny: role "admin" denies "hmoe"/);
   });
+
+  it('once createServer has returned, the manifest it was handed cannot be edited', async () => {
+    const app = manifest();
+    const server = await boot(app);
+    const served = server.charterReport();
+    const inForce = server.actions();
+
+    // What a `refresh` used to be asked to take: the charter and the actions,
+    // replaced or edited in place. Each throws where it is written.
+    expect(() => {
+      app.charter = { ...charter, admin: { allow: ['home', 'admin.panel'], deny: ['hmoe'] } };
+    }).toThrow(TypeError);
+    expect(() => {
+      app.charter['admin'] = ['home'];
+    }).toThrow(TypeError);
+    expect(() => {
+      app.actions = { home, 'admin.panel': panel };
+    }).toThrow(TypeError);
+    expect(() => {
+      app.actions[daily.id] = daily;
+    }).toThrow(TypeError);
+    expect(() => {
+      delete app.actions['stray'];
+    }).toThrow(TypeError);
+    expect(() => {
+      Object.assign(home, { title: 'Home' });
+    }).toThrow(TypeError);
+
+    // So a `refresh` finds what was verified, and nothing was served in between.
+    server.refresh();
+    expect(server.charterReport().warnings).toEqual(served.warnings);
+    expect(server.actions()).toEqual(inForce);
+    expect(Object.keys(app.actions)).toEqual(['home', 'admin.panel', 'stray']);
+
+    // A set that was taken is the manifest's too. The app changes one by
+    // handing over another.
+    const set: Record<string, ActionDefinition> = { [daily.id]: daily };
+    server.replaceActions('reports', set);
+    expect(() => {
+      delete set[daily.id];
+    }).toThrow(TypeError);
+    server.replaceActions('reports', {});
+    expect(Object.keys(server.actions())).toEqual(['home', 'admin.panel', 'stray']);
+    server.close();
+  });
 });

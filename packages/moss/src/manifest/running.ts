@@ -2,6 +2,7 @@ import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
 import type { PgPool, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { createGeneration } from './generation';
 import type { Generation } from './generation';
+import { freezeDeep } from './handover';
 import { createRoleHoldings } from './roles';
 import type { Catalog, InstalledOnly } from './roles';
 import { candidateOf, refusalOf, verifyManifest } from './verify';
@@ -23,22 +24,18 @@ import type { ManifestCandidate, ManifestReport, ShippedManifest } from './verif
 // One place, because every place that assigns the actions is a place that can
 // leave them as nobody verified them. And verified first, because trying a set
 // by serving it means taking it out again while requests are being answered.
+//
+// What the app shipped does not change: its manifest was frozen when it was
+// handed over (./handover.ts). A set is frozen the same way when it is taken,
+// so what is in force is what was verified, and stays it.
 // ═══════════════════════════════════════════════════════════════
 
 type Actions = Readonly<Record<string, ActionDefinition>>;
 
 export type RunningManifestConfig = {
-  // WHAT THE APP SHIPPED, as the app holds it. The record itself and not a copy
-  // of its values, for two reasons that the next phase removes together:
-  //
-  //   - an app may still edit its manifest and call `refresh`, so the charter,
-  //     the variants, the role combinations and the behaviors are read as they
-  //     stand at each verification;
-  //   - code that predates this module reads `app.actions` and expects the
-  //     integrations' actions in it, so `actions` is also WRITTEN (see `switchTo`).
-  //
-  // The entries are read once: they are seeded when the server boots, so one
-  // that arrives later was never served.
+  // WHAT THE APP SHIPPED: the seven fields of its manifest a verification
+  // reads. Read and never written. A server hands over the app's own record,
+  // which the hand-over has frozen.
   shipped: ShippedManifest;
   // every `<table>.<verb>` the database can carry: the universe the charter's
   // `data` section is verified over
@@ -73,10 +70,12 @@ export type RunningManifest = {
   // Put `actions` in place of the set called `source` (a set that was not there
   // arrives; an action the set no longer names leaves). Throws, with the
   // sentence `refresh` throws, when the app could not be served that way.
+  // Taken, the set is frozen where it stands, as the manifest was: what is in
+  // force is not edited, it is replaced.
   replace: (source: string, actions: Record<string, ActionDefinition>) => void;
-  // Something the manifest is verified against, or something derived from it,
-  // changed where this module cannot see: verify what is in force again and
-  // switch to it.
+  // Something derived from the manifest went stale where this module cannot
+  // see (a role moved, an install landed): verify what is in force again, drop
+  // what was derived from it and tell whoever listens.
   refresh: () => void;
   // START TELLING THE OTHER PROCESSES, AND HEARING THEM. From here on a switch
   // moves the pointer; and a move another process made is answered by reading
@@ -97,26 +96,8 @@ export type RunningManifest = {
   stop: () => void;
 };
 
-const sameActions = (a: Actions, b: Actions): boolean => {
-  const ids = Object.keys(a);
-  return ids.length === Object.keys(b).length && ids.every((id) => a[id] === b[id]);
-};
-
 const laidOver = (own: Actions, sets: ReadonlyMap<string, Actions>): Actions =>
   Object.freeze([...sets.values()].reduce<Record<string, ActionDefinition>>((all, set) => ({ ...all, ...set }), { ...own }));
-
-// WHAT THE APP SHIPS, after an edit the app made to its own record.
-//
-// `seen` is what that record held when this module last read or wrote it, so
-// the difference is the app's doing and nothing else's: an id it added or
-// changed is shipped, an id it took out is not. What a named set put there is
-// the set's, and stays until the set is replaced.
-const shippedNow = (own: Actions, seen: Actions, held: Actions): Actions => {
-  if (sameActions(held, seen)) return own;
-  const kept = Object.entries(own).filter(([id]) => Object.hasOwn(held, id));
-  const edited = Object.entries(held).filter(([id, definition]) => seen[id] !== definition);
-  return Object.fromEntries([...kept, ...edited]);
-};
 
 // A listener that throws must not stop the others being told, nor undo a
 // switch that has already happened.
@@ -130,16 +111,14 @@ const tell = (listener: () => void): void => {
 
 export const createRunningManifest = (config: RunningManifestConfig): RunningManifest => {
   const { shipped } = config;
-  const served = shipped.entries ?? [];
-  const candidate = (actions: Actions): ManifestCandidate => candidateOf({ ...shipped, entries: served }, actions, config.grants);
+  const candidate = (actions: Actions): ManifestCandidate => candidateOf(shipped, actions, config.grants);
 
   // What the app ships, and the named sets in the order they are laid over it.
   // A set with a loader has its place from the start, so the order does not
   // depend on which change happened to come first.
-  let own: Actions = { ...shipped.actions };
+  const own: Actions = shipped.actions;
   let sets: ReadonlyMap<string, Actions> = new Map(Object.keys(config.loaders ?? {}).map((source) => [source, {}]));
   let inForce = laidOver(own, sets);
-  let seen = inForce;
 
   // REFUSE TO START INCOHERENT. What is only said is said first, here and at no
   // later switch: a boot is when somebody reads the log.
@@ -155,25 +134,22 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   const listeners = new Set<() => void>();
   let pointer: Generation | undefined;
 
-  // THE ONE MOVE. The check comes before the first assignment, so a candidate
-  // that is refused leaves every piece as it was.
-  const switchTo = (next: { own: Actions; sets: ReadonlyMap<string, Actions> }, move: boolean): void => {
-    const actions = laidOver(next.own, next.sets);
+  // THE ONE MOVE: the sets that `arrived`, laid into the sets as they are now
+  // (one of a name that is there takes its place; a new one goes last). The
+  // check comes before the first assignment, so a candidate that is refused
+  // leaves every piece as it was, the caller's own record included.
+  const take = (arrived: ReadonlyMap<string, Actions>, move: boolean): void => {
+    const next = new Map([...sets, ...arrived]);
+    const actions = laidOver(own, next);
     const verified = verifyManifest(candidate(actions));
     const refusal = refusalOf(verified, 'refresh');
     if (refusal !== undefined) throw new Error(refusal);
-    own = next.own;
-    sets = next.sets;
+    // Taken: what arrived is part of the manifest now, and nobody's to write.
+    for (const set of arrived.values()) freezeDeep(set);
+    sets = next;
     inForce = actions;
     report = verified;
     holdings.drop();
-    // THE ONE REMAINING WRITER OF `app.actions`. Some exported functions and
-    // some apps still read that field and expect the actions in force in it, so
-    // it is kept equal to them — a copy, because the app may still edit its own
-    // record, and only when it differs, so an app with no named set keeps the
-    // record it handed over. The next phase removes this.
-    if (!sameActions(shipped.actions, inForce)) shipped.actions = { ...inForce };
-    seen = inForce;
     for (const listener of [...listeners]) tell(listener);
     if (move) pointer?.bump();
   };
@@ -182,20 +158,17 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   const reload = async (): Promise<void> => {
     const read: [string, Actions][] = [];
     for (const [source, load] of Object.entries(config.loaders ?? {})) read.push([source, await load()]);
-    // Laid into the sets as they are NOW, not as they were before the reads.
-    switchTo({ own, sets: new Map([...sets, ...read]) }, false);
+    take(new Map(read), false);
   };
 
   return {
     actions: () => inForce,
-    entries: new Map(served.map((entry) => [entry.fingerprint, entry])),
+    entries: new Map((shipped.entries ?? []).map((entry) => [entry.fingerprint, entry])),
     verify: (actions) => verifyManifest(candidate(actions)),
     verifyReplace: (source, actions) => verifyManifest(candidate(laidOver(own, new Map(sets).set(source, actions)))),
     report: () => report,
-    replace: (source, actions) => switchTo({ own, sets: new Map(sets).set(source, { ...actions }) }, true),
-    // An app may have edited its own record before saying so; what it holds
-    // now is what it ships.
-    refresh: () => switchTo({ own: shippedNow(own, seen, shipped.actions), sets }, true),
+    replace: (source, actions) => take(new Map([[source, actions]]), true),
+    refresh: () => take(new Map(), true),
     watch: () => {
       const where = config.pointer;
       if (pointer !== undefined || where === undefined) return;

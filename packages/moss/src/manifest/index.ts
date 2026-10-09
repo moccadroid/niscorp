@@ -7,7 +7,8 @@
 // WHAT AN APP HANDS OVER is a type (./app.ts): the charter, the actions, the
 // layout variants, the shell and the pages, and the seams an app fills in. It
 // is read by a schema when it is handed over (./handover.ts, ./schema.ts), and
-// a manifest that does not parse refuses the boot.
+// a manifest that does not parse refuses the boot. Then it is frozen: it is
+// not the app's to edit any more.
 //
 // WHAT IT CONSISTS OF RIGHT NOW has one owner (./running.ts): what was shipped
 // and the sets of actions that arrive while it runs, changed in one place and
