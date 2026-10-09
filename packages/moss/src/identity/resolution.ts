@@ -86,6 +86,15 @@ export type Identity = {
 export const assignedRoles = (assignments: Readonly<Record<string, readonly string[]>> | undefined, principal: string | null): readonly string[] =>
   principal === null ? ['public'] : (assignments?.[principal] ?? ['public']);
 
+// The same two answers asked of an app's manifest, for a tool that holds one
+// and no server. They read `assignments` and nothing else: an app that
+// resolves people through its identity seam is asked through the server.
+type Assigned = { assignments?: Readonly<Record<string, readonly string[]>> };
+
+export const resolveRoles = (app: Assigned, principal: string | null): readonly string[] => assignedRoles(app.assignments, principal);
+
+export const memoKeyOf = (app: Assigned, principal: string | null): string => memoKey(resolveRoles(app, principal), undefined);
+
 // WHAT THE SEAM ANSWERED, read where it arrives. The record is the app's own
 // code speaking, and everything after it stands on its shape: the roles go to
 // the charter, the installs filter a catalog, the scope pins rows. So the four

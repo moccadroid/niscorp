@@ -1,19 +1,15 @@
 import { createScopePolicy, mergeScopePolicies } from '@niscorp/vex';
 import type { ScopePolicy } from '@niscorp/vex';
 import { resolvePrincipal, resolveScoping } from '@niscorp/charter';
-import { assignedRoles, memoKey } from '../identity';
+import { assignedRoles } from '../identity';
 import type { NiscApp } from '../manifest';
 
 // ═══════════════════════════════════════════════════════════════
-// Per-principal resolution, the policy half: roles from the assignment
-// rows, and the compiled vex ScopePolicy. All pure; the server memoizes
-// (the documents are static per process). The granted action ids and the
-// layout variants a set of roles holds are ./manifest's.
+// THE POLICY A SET OF ROLES READS AND WRITES UNDER — the compiled vex
+// ScopePolicy. All pure; the server memoizes (the documents are static per
+// process). Who somebody is belongs to ../identity; the granted action ids
+// and the layout variants a set of roles holds are ../manifest's.
 // ═══════════════════════════════════════════════════════════════
-
-export const resolveRoles = (app: NiscApp, principal: string | null): readonly string[] => assignedRoles(app.assignments, principal);
-
-export const memoKeyOf = (app: NiscApp, principal: string | null): string => memoKey(resolveRoles(app, principal), undefined);
 
 // The compiled ScopePolicy this principal reads and writes under: their
 // resolved `data` grants × the app's row behaviors. An ungranted phase is
@@ -28,7 +24,7 @@ export const resolvePolicy = (app: NiscApp, grants: readonly string[], principal
   // studio-wide on the read they do as staff, their own rows on the write they
   // do as a member. Per role, each with its own scoping, and the union is what
   // they may do.
-  return resolvePolicyForRoles(app, grants, resolveRoles(app, principal));
+  return resolvePolicyForRoles(app, grants, assignedRoles(app.assignments, principal));
 };
 
 // THE SAME COMPILATION, given the roles directly — for a caller that has already
@@ -60,7 +56,7 @@ export const resolvePolicyAtReach = (
   grants: readonly string[],
   principal: string | null,
   reach: string,
-): ScopePolicy => resolvePolicyAtReachForRoles(app, grants, resolveRoles(app, principal), reach);
+): ScopePolicy => resolvePolicyAtReachForRoles(app, grants, assignedRoles(app.assignments, principal), reach);
 
 export const resolvePolicyAtReachForRoles = (
   app: NiscApp,

@@ -31,4 +31,4 @@ export { createGrammarUpgrader } from './grammar';
 export { migrateTables, tableSequencesOf } from './migrate';
 export type { TablesReport } from './migrate';
 export { INTEGRATION_ACTIONS_STORE, MOSS_SEQUENCE } from './tables';
-export { memoKeyOf, resolvePolicy, resolvePolicyAtReachForRoles, resolvePolicyForRoles, resolveRoles } from './policy';
+export { resolvePolicy, resolvePolicyAtReachForRoles, resolvePolicyForRoles } from './policy';

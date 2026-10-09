@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
-import { resolveRoles, resolvePolicy } from '../src/data';
+import { resolveRoles } from '../src/identity';
+import { resolvePolicy } from '../src/data';
 import { resolveVariants } from '../src/manifest';
 import type { NiscApp } from '../src/manifest';
 import { catalogFor } from '../src/manifest/roles';
