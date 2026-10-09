@@ -88,9 +88,10 @@ export const ReplaceNodeSchema = z
         value: z.lazy(node).describe('String to search in.'),
         search: z.string().describe('Substring to find.'),
         replacement: z.string().describe('Replacement string.'),
+        all: z.boolean().optional().describe('true replaces every occurrence. Default: only the first.'),
       })
       .strict(),
   })
   .strict()
-  .describe('Replace the first occurrence of a substring.');
+  .describe('Replace the first occurrence of a substring, or every occurrence with `all: true`.');
 export type ReplaceNode = z.infer<typeof ReplaceNodeSchema>;

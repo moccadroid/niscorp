@@ -82,7 +82,7 @@ describe('JSON Schema generation', () => {
     // Array
     '$map', '$filter', '$reduce', '$slice', '$flatten', '$unique', '$sortBy',
     // Math
-    '$add', '$sub', '$mul', '$div', '$round',
+    '$add', '$sub', '$mul', '$div', '$mod', '$round', '$toNumber',
     // String
     '$join', '$toString', '$interpolate', '$trim', '$lower', '$upper', '$split', '$replace',
     // Predicate

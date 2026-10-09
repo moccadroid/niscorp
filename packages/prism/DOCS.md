@@ -247,11 +247,28 @@ All math ops take a `[left, right]` pair. Both operands are evaluated and must b
 ```
 Throws `E_DIVISION_BY_ZERO` if the divisor is 0.
 
+### `$mod`
+```json
+{ "$mod": [{ "$ref": "$.row" }, 2] }
+```
+The remainder of the first number divided by the second. It takes the sign of the **second** number, so with a positive divisor `n` the answer is always from `0` up to `n` — `{ "$mod": [-1, 5] }` is `4`, where JavaScript's `%` gives `-1`. Throws `E_DIVISION_BY_ZERO` if the divisor is 0.
+
 ### `$round`
 ```json
 { "$round": { "value": { "$const": 3.14159 }, "digits": 2 } }
 ```
-Result: `3.14`. `digits` defaults to 0.
+Result: `3.14`. `digits` defaults to 0. `mode` is `"nearest"` unless given: `"floor"` rounds down (toward negative infinity) and `"ceil"` rounds up, at the same `digits`.
+
+```json
+{ "$round": { "value": { "$div": [{ "$ref": "$.minutes" }, 60] }, "mode": "floor" } }
+```
+
+### `$toNumber` — A number from text
+```json
+{ "$toNumber": { "value": { "$ref": "$.price" } } }
+{ "$toNumber": { "value": { "$ref": "$.discount" }, "fallback": 0 } }
+```
+A number is answered as it is. Text is read as a number when it is one written in digits, with spaces around it allowed: `"42"`, `"-3.5"`, `".5"`, `" 1e3 "`. Everything else — `""`, `"12 kg"`, `"1,234"`, `"0x10"`, `true`, `null`, a list — throws `E_TYPE`, or answers `fallback` where it is given. The other ops do not convert: `$add` on `"4"` is still an error.
 
 ---
 
@@ -314,10 +331,12 @@ Result: `"hello"`
 ```
 Result: `["a", "b", "c"]`
 
-### `$replace` — Replace first occurrence
+### `$replace` — Replace a substring
 ```json
 { "$replace": { "value": { "$ref": "$.text" }, "search": "world", "replacement": "there" } }
+{ "$replace": { "value": { "$ref": "$.phone" }, "search": " ", "replacement": "", "all": true } }
 ```
+The first occurrence of `search`, or every occurrence with `all: true`. `search` is plain text, not a pattern.
 
 ---
 

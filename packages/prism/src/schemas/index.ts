@@ -12,8 +12,8 @@ export { MapNodeSchema, FilterNodeSchema, ReduceNodeSchema, SliceNodeSchema, Fla
 export type { MapNode, FilterNode, ReduceNode, SliceNode, FlattenNode, UniqueNode, SortByNode } from './ops/array.schema';
 
 // Math op schemas + types
-export { AddNodeSchema, SubNodeSchema, MulNodeSchema, DivNodeSchema, RoundNodeSchema } from './ops/math.schema';
-export type { AddNode, SubNode, MulNode, DivNode, RoundNode } from './ops/math.schema';
+export { AddNodeSchema, SubNodeSchema, MulNodeSchema, DivNodeSchema, ModNodeSchema, RoundNodeSchema, ToNumberNodeSchema } from './ops/math.schema';
+export type { AddNode, SubNode, MulNode, DivNode, ModNode, RoundNode, ToNumberNode } from './ops/math.schema';
 
 // String op schemas + types
 export { FillNodeSchema, JoinNodeSchema, ToStringNodeSchema, InterpolateNodeSchema, TrimNodeSchema, LowerNodeSchema, UpperNodeSchema, SplitNodeSchema, ReplaceNodeSchema } from './ops/string.schema';

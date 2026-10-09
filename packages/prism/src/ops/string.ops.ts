@@ -82,5 +82,6 @@ export const opReplace = (node: ReplaceNode, context: EvalContext, evaluate: Eva
   const value = evaluate(node.$replace.value, context);
   if (typeof value !== 'string')
     throw new PrismError('Expected string for $replace', ErrorCode.TYPE, { op: '$replace' });
-  return value.replace(node.$replace.search, node.$replace.replacement);
+  const { search, replacement, all } = node.$replace;
+  return all === true ? value.replaceAll(search, replacement) : value.replace(search, replacement);
 };

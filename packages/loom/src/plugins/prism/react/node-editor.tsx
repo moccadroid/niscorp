@@ -28,7 +28,7 @@ const CATEGORY_ORDER = ['Value', 'Core', 'Array', 'Math', 'String', 'Predicate',
 const OP_CATEGORY: Record<string, string> = {
   $ref: 'Core', $const: 'Core', $var: 'Core', $get: 'Core', $with: 'Core',
   $map: 'Array', $filter: 'Array', $reduce: 'Array', $slice: 'Array', $flatten: 'Array', $unique: 'Array', $sortBy: 'Array',
-  $add: 'Math', $sub: 'Math', $mul: 'Math', $div: 'Math', $round: 'Math',
+  $add: 'Math', $sub: 'Math', $mul: 'Math', $div: 'Math', $mod: 'Math', $round: 'Math', $toNumber: 'Math',
   $join: 'String', $toString: 'String', $interpolate: 'String', $trim: 'String', $lower: 'String', $upper: 'String', $split: 'String', $replace: 'String',
   $eq: 'Predicate', $neq: 'Predicate', $gt: 'Predicate', $gte: 'Predicate', $lt: 'Predicate', $lte: 'Predicate', $empty: 'Predicate', $startsWith: 'Predicate', $endsWith: 'Predicate', $contains: 'Predicate',
   $not: 'Logic', $and: 'Logic', $or: 'Logic',

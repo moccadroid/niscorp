@@ -256,16 +256,42 @@ export const OPERATORS: readonly PrismExample[] = [
     expected: 12.5,
   },
   {
+    id: 'mod',
+    group: 'math',
+    title: '$mod',
+    description:
+      'The remainder of the first number divided by the second. It takes the sign of the second, so with a positive divisor it is never negative. Dividing by zero refuses with E_DIVISION_BY_ZERO.',
+    op: '$mod',
+    source: { row: 7, behind: -1 },
+    config: { stripe: { $mod: [{ $ref: '$.row' }, 2] }, slot: { $mod: [{ $ref: '$.behind' }, 5] } },
+    expected: { stripe: 1, slot: 4 },
+  },
+  {
     id: 'round',
     group: 'math',
     title: '$round',
-    description: 'Rounds a number to a number of digits. `digits` is 0 unless given.',
+    description:
+      'Rounds a number to a number of digits. `digits` is 0 unless given. `mode` rounds down with "floor" or up with "ceil" where it would round to the nearest.',
     op: '$round',
     source: { total: 100, guests: 7 },
     config: {
       $round: { value: { $div: [{ $ref: '$.total' }, { $ref: '$.guests' }] }, digits: 2 },
     },
     expected: 14.29,
+  },
+  {
+    id: 'to-number',
+    group: 'math',
+    title: '$toNumber',
+    description:
+      'A number from a number or from numeric text, as a form, a CSV or an API often sends it. Anything else refuses with E_TYPE, unless `fallback` says what to answer.',
+    op: '$toNumber',
+    source: { price: '38.50', qty: 2, discount: 'none' },
+    config: {
+      total: { $mul: [{ $toNumber: { value: { $ref: '$.price' } } }, { $toNumber: { value: { $ref: '$.qty' } } }] },
+      discount: { $toNumber: { value: { $ref: '$.discount' }, fallback: 0 } },
+    },
+    expected: { total: 77, discount: 0 },
   },
   {
     id: 'join',
@@ -374,7 +400,7 @@ export const OPERATORS: readonly PrismExample[] = [
     id: 'replace',
     group: 'strings',
     title: '$replace',
-    description: 'Swaps the first occurrence of `search` in a string for `replacement`.',
+    description: 'Swaps the first occurrence of `search` in a string for `replacement`, or every occurrence with `all: true`.',
     op: '$replace',
     source: { csv: 'apple,banana,cherry' },
     config: { $replace: { value: { $ref: '$.csv' }, search: 'banana', replacement: '***' } },

@@ -199,7 +199,7 @@ describe('validation errors say WHERE', () => {
 const EVERY_OP_EVER = [
   '$ref', '$const', '$var', '$get', '$with',
   '$map', '$filter', '$reduce', '$slice', '$flatten', '$unique', '$sortBy',
-  '$add', '$sub', '$mul', '$div', '$round',
+  '$add', '$sub', '$mul', '$div', '$mod', '$round', '$toNumber',
   '$fill', '$join', '$toString', '$interpolate', '$trim', '$lower', '$upper', '$split', '$replace',
   '$eq', '$neq', '$gt', '$gte', '$lt', '$lte', '$empty', '$startsWith', '$endsWith', '$contains',
   '$not', '$and', '$or',

@@ -4,7 +4,7 @@ import {
   isJsonObject,
   isRefNode, isConstNode, isVarNode, isGetNode, isWithNode,
   isMapNode, isFilterNode, isReduceNode, isSliceNode, isFlattenNode, isUniqueNode, isSortByNode,
-  isAddNode, isSubNode, isMulNode, isDivNode, isRoundNode,
+  isAddNode, isSubNode, isMulNode, isDivNode, isModNode, isRoundNode, isToNumberNode,
   isFillNode, isJoinNode, isToStringNode, isInterpolateNode, isTrimNode, isLowerNode, isUpperNode, isSplitNode, isReplaceNode,
   isEqNode, isNeqNode, isGtNode, isGteNode, isLtNode, isLteNode, isEmptyNode, isStartsWithNode, isEndsWithNode, isContainsNode,
   isNotNode, isAndNode, isOrNode,
@@ -17,7 +17,7 @@ import {
 
 import { opRef, opConst, opVar, opGet, opWith } from '../ops/core.ops';
 import { opMap, opFilter, opReduce, opSlice, opFlatten, opUnique, opSortBy } from '../ops/array.ops';
-import { opAdd, opSub, opMul, opDiv, opRound } from '../ops/math.ops';
+import { opAdd, opSub, opMul, opDiv, opMod, opRound, opToNumber } from '../ops/math.ops';
 import { opFill, opJoin, opToString, opInterpolate, opTrim, opLower, opUpper, opSplit, opReplace } from '../ops/string.ops';
 import { opEq, opNeq, opGt, opGte, opLt, opLte, opEmpty, opStartsWith, opEndsWith, opContains } from '../ops/predicate.ops';
 import { opNot, opAnd, opOr } from '../ops/logic.ops';
@@ -116,6 +116,8 @@ const resolveHandler = (node: Record<string, unknown>): OpHandler | undefined =>
   if (isMulNode(node)) return eraseOp(opMul);
   if (isDivNode(node)) return eraseOp(opDiv);
   if (isRoundNode(node)) return eraseOp(opRound);
+  if (isModNode(node)) return eraseOp(opMod);
+  if (isToNumberNode(node)) return eraseOp(opToNumber);
   // String ops
   if (isJoinNode(node)) return eraseOp(opJoin);
   if (isToStringNode(node)) return eraseOp(opToString);

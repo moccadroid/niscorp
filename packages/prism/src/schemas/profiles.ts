@@ -30,7 +30,7 @@ export const MAPPING_OPS: readonly OpKey[] = [
   // arrays
   '$map', '$filter', '$reduce', '$slice', '$unique', '$sortBy', '$take', '$pluck',
   // numbers and aggregates
-  '$add', '$sub', '$mul', '$div', '$round', '$sum', '$avg', '$count', '$min', '$max',
+  '$add', '$sub', '$mul', '$div', '$mod', '$round', '$toNumber', '$sum', '$avg', '$count', '$min', '$max',
   // strings
   '$join', '$toString', '$interpolate', '$trim', '$lower', '$upper', '$split',
   // conditions

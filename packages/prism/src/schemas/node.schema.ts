@@ -16,7 +16,7 @@ import {
   setNodeSchema as setArrayNode,
 } from './ops/array.schema';
 import {
-  AddNodeSchema, SubNodeSchema, MulNodeSchema, DivNodeSchema, RoundNodeSchema,
+  AddNodeSchema, SubNodeSchema, MulNodeSchema, DivNodeSchema, ModNodeSchema, RoundNodeSchema, ToNumberNodeSchema,
   setNodeSchema as setMathNode,
 } from './ops/math.schema';
 import {
@@ -69,7 +69,7 @@ import {
 export const OP_KEYS = [
   '$ref', '$const', '$var', '$get', '$with',
   '$map', '$filter', '$reduce', '$slice', '$flatten', '$unique', '$sortBy',
-  '$add', '$sub', '$mul', '$div', '$round',
+  '$add', '$sub', '$mul', '$div', '$mod', '$round', '$toNumber',
   '$fill', '$join', '$toString', '$interpolate', '$trim', '$lower', '$upper', '$split', '$replace',
   '$eq', '$neq', '$gt', '$gte', '$lt', '$lte', '$empty', '$startsWith', '$endsWith', '$contains',
   '$not', '$and', '$or',
@@ -224,7 +224,7 @@ export const NodeSchema: z.ZodType<unknown> = z.lazy(
       MapNodeSchema, FilterNodeSchema, ReduceNodeSchema, SliceNodeSchema,
       FlattenNodeSchema, UniqueNodeSchema, SortByNodeSchema,
       // Math
-      AddNodeSchema, SubNodeSchema, MulNodeSchema, DivNodeSchema, RoundNodeSchema,
+      AddNodeSchema, SubNodeSchema, MulNodeSchema, DivNodeSchema, ModNodeSchema, RoundNodeSchema, ToNumberNodeSchema,
       // String
       FillNodeSchema, JoinNodeSchema, ToStringNodeSchema, InterpolateNodeSchema, TrimNodeSchema,
       LowerNodeSchema, UpperNodeSchema, SplitNodeSchema, ReplaceNodeSchema,

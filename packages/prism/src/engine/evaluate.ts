@@ -15,7 +15,7 @@ import { createBudget, measure, measureString, spendStep, type Limits } from './
 import {
   isRefNode, isConstNode, isVarNode, isGetNode, isWithNode,
   isMapNode, isFilterNode, isReduceNode, isSliceNode, isFlattenNode, isUniqueNode, isSortByNode,
-  isAddNode, isSubNode, isMulNode, isDivNode, isRoundNode,
+  isAddNode, isSubNode, isMulNode, isDivNode, isModNode, isRoundNode, isToNumberNode,
   isFillNode, isJoinNode, isToStringNode, isInterpolateNode, isTrimNode, isLowerNode, isUpperNode, isSplitNode, isReplaceNode,
   isEqNode, isNeqNode, isGtNode, isGteNode, isLtNode, isLteNode, isEmptyNode, isStartsWithNode, isEndsWithNode, isContainsNode,
   isNotNode, isAndNode, isOrNode,
@@ -33,7 +33,7 @@ import {
 
 import { opRef, opConst, opVar, opGet, opWith } from '../ops/core.ops';
 import { opMap, opFilter, opReduce, opSlice, opFlatten, opUnique, opSortBy } from '../ops/array.ops';
-import { opAdd, opSub, opMul, opDiv, opRound } from '../ops/math.ops';
+import { opAdd, opSub, opMul, opDiv, opMod, opRound, opToNumber } from '../ops/math.ops';
 import { opFill, opJoin, opToString, opInterpolate, opTrim, opLower, opUpper, opSplit, opReplace } from '../ops/string.ops';
 import { opEq, opNeq, opGt, opGte, opLt, opLte, opEmpty, opStartsWith, opEndsWith, opContains } from '../ops/predicate.ops';
 import { opNot, opAnd, opOr } from '../ops/logic.ops';
@@ -160,6 +160,8 @@ const evaluateUnbudgeted = (node: unknown, context: EvalContext): JsonValue => {
   if (isMulNode(obj)) return opMul(obj, context, evaluateNode);
   if (isDivNode(obj)) return opDiv(obj, context, evaluateNode);
   if (isRoundNode(obj)) return opRound(obj, context, evaluateNode);
+  if (isModNode(obj)) return opMod(obj, context, evaluateNode);
+  if (isToNumberNode(obj)) return opToNumber(obj, context, evaluateNode);
 
   // ───────────────────────────────────────────────────────
   // String ops

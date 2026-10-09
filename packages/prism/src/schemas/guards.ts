@@ -2,7 +2,7 @@ import type { JsonObject, JsonValue } from '../types';
 import type { RefNode } from './ops/core.schema';
 import type { ConstNode, VarNode, GetNode, WithNode } from './ops/core.schema';
 import type { MapNode, FilterNode, ReduceNode, SliceNode, FlattenNode, UniqueNode, SortByNode } from './ops/array.schema';
-import type { AddNode, SubNode, MulNode, DivNode, RoundNode } from './ops/math.schema';
+import type { AddNode, SubNode, MulNode, DivNode, ModNode, RoundNode, ToNumberNode } from './ops/math.schema';
 import type { FillNode, JoinNode, ToStringNode, InterpolateNode, TrimNode, LowerNode, UpperNode, SplitNode, ReplaceNode } from './ops/string.schema';
 import type { EqNode, NeqNode, GtNode, GteNode, LtNode, LteNode, EmptyNode, StartsWithNode, EndsWithNode, ContainsNode } from './ops/predicate.schema';
 import type { NotNode, AndNode, OrNode } from './ops/logic.schema';
@@ -60,6 +60,8 @@ export const isSubNode = (v: unknown): v is SubNode => hasKey(v, '$sub');
 export const isMulNode = (v: unknown): v is MulNode => hasKey(v, '$mul');
 export const isDivNode = (v: unknown): v is DivNode => hasKey(v, '$div');
 export const isRoundNode = (v: unknown): v is RoundNode => hasKey(v, '$round');
+export const isModNode = (v: unknown): v is ModNode => hasKey(v, '$mod');
+export const isToNumberNode = (v: unknown): v is ToNumberNode => hasKey(v, '$toNumber');
 
 // ═══════════════════════════════════════════════════════════
 // String op guards

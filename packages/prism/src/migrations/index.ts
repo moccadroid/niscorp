@@ -41,6 +41,21 @@ export const PRISM_SEQUENCE: Sequence = {
         'A template key never starts with "$": a `$` name that is not an op is refused by the schema, where it was refused only once evaluated',
       steps: [],
     },
+    {
+      // A MARKER: three additions and one narrowing, and no stored config to
+      // rewrite. The additions — a reader at 2 must refuse a config that uses
+      // them. The narrowing is of `$ref`: a path with a wildcard, a filter, a
+      // slice, a negative index, a quoted key, empty brackets or `..` was
+      // accepted and read as "$" (the whole source); it is refused. It is not
+      // in the JSON Schema (the pattern is as it was; the parser decides), so
+      // the snapshot does not show it and this line is its record. No step
+      // rewrites one: it never answered what it asked for, so there is nothing
+      // to rewrite it to. Checked against the corpus: no captured config has one.
+      description:
+        '$mod and $toNumber; $round takes a mode (nearest, floor, ceil); $replace takes all; ' +
+        'a $ref path is keys and indexes only: any other JSONPath form is refused, where it was read as "$"',
+      steps: [],
+    },
   ],
 };
 

@@ -45,6 +45,25 @@ describe('$split', () => {
   it('splits string', () => expect(evaluate({ $split: { value: { $const: 'a,b,c' }, sep: ',' } }, source)).toEqual(['a', 'b', 'c']));
 });
 
+describe('$replace — all', () => {
+  const replace = (value: string, search: string, replacement: string, all?: boolean): unknown =>
+    evaluate({ $replace: { value: { $const: value }, search, replacement, ...(all === undefined ? {} : { all }) } }, source);
+
+  it('replaces only the first occurrence unless told', () => {
+    expect(replace('a-b-c', '-', '+')).toBe('a+b-c');
+    expect(replace('a-b-c', '-', '+', false)).toBe('a+b-c');
+  });
+  it('replaces every occurrence with all: true', () => {
+    expect(replace('a-b-c', '-', '+', true)).toBe('a+b+c');
+    expect(replace('+43 660 123 45', ' ', '', true)).toBe('+4366012345');
+    expect(replace('abc', 'x', 'y', true)).toBe('abc');
+  });
+  it('reads search as text, not as a pattern', () => {
+    expect(replace('a.b.c', '.', '-', true)).toBe('a-b-c');
+    expect(replace('1+1', '+', ' plus ', true)).toBe('1 plus 1');
+  });
+});
+
 describe('$replace', () => {
   it('replaces first occurrence', () => {
     expect(evaluate({ $replace: { value: { $const: 'hello world' }, search: 'world', replacement: 'there' } }, source)).toBe('hello there');
