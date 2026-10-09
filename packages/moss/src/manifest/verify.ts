@@ -109,6 +109,15 @@ export const verifyManifest = (candidate: ManifestCandidate): ManifestReport => 
   };
 };
 
+// THE CHECK BOOT RUNS, FOR AN APP THAT IS NOT BOOTED: a check, a build step.
+// `grants` is every `<table>.<verb>` the database can carry, which a server
+// reads off the database it is given and a caller without one names itself
+// (vex, `scopeGrants(tables)`). The report says what would refuse the boot
+// (`errors`), what a boot only says (`said`), and carries the charter engine's
+// own report whole (`charter`). A running server answers the same for what is
+// in force: `charterReport()`, and `verifyActions` for a set it has not taken.
+export const verifyApp = (app: ShippedManifest, grants: readonly string[]): ManifestReport => verifyManifest(candidateOf(app, app.actions, grants));
+
 // The sentence a refusal is thrown with, or undefined when nothing refuses.
 // One check's findings at a time, the first that failed: a manifest whose
 // charter does not resolve says nothing useful about its variants. Two

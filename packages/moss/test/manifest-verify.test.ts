@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
-import { refusalOf, verifyManifest } from '../src/manifest/verify';
-import type { ManifestCandidate } from '../src/manifest/verify';
+import { refusalOf, verifyApp, verifyManifest } from '../src/manifest/verify';
+import type { ManifestCandidate, ShippedManifest } from '../src/manifest/verify';
 
 // ONE VERIFICATION, for boot, for a change and for a bundle that wants in. It
 // reads a candidate as values, so every case here is a small object and
@@ -85,6 +85,45 @@ describe('verifyManifest — may this be served', () => {
     const report = verifyManifest({ ...coherent, charter: { ...coherent.charter, public: ['home', 'loop'] }, actions: { ...coherent.actions, loop } });
     expect(report.errors).toEqual([]);
     expect(report.said).toEqual(['a chain of steps that never ends: x —emit (loop)→ x — nova stops it at its budget when it runs (RUNAWAY_CHAIN)']);
+  });
+});
+
+describe('verifyApp — the check boot runs, for an app that is not booted', () => {
+  // What an app hands over, as the app writes it: the role combinations are
+  // in its assignments and the profiles in its behaviors, and the candidate is
+  // built from them.
+  const app: ShippedManifest = {
+    charter: { public: ['home'], admin: { actions: ['home', 'admin.panel'], data: ['deals.read'], layouts: ['home.*'] }, auditor: { actions: ['home'], layouts: ['home.wide'] } },
+    assignments: { usr_1: ['admin'], usr_2: ['auditor'] },
+    actions: { home, 'admin.panel': panel },
+    layouts: { 'home.dense': { action: 'home', layout: plain } },
+    behaviors: { deals: { own: { read: [{ match: 'owner_id', to: 'userId' }] }, default: {} } },
+    entries: [{ fingerprint: 'deals/mine', dsl: { from: ['deals'], fields: ['deals.id'] }, reach: 'own' }],
+  };
+  const grants = scopeGrants(['deals']);
+
+  it('answers what a boot of that app would: nothing refuses, and the charter report rides along', () => {
+    const report = verifyApp(app, grants);
+    expect(report.errors).toEqual([]);
+    expect(report.charter.perRole.map((entry) => entry.role)).toEqual(['public', 'admin', 'auditor']);
+    expect(report.charter.warnings.map((warning) => warning.rule)).toEqual(['dead-allow']);
+  });
+
+  it('refuses what a boot refuses, each under the check that found it', () => {
+    // A reach no behavior declares.
+    expect(verifyApp({ ...app, behaviors: {} }, grants).errors).toEqual([
+      { check: 'reach', detail: 'deals/mine declares reach "own"' },
+      { check: 'reach', detail: 'known profiles: (none)' },
+    ]);
+    // A deny over a table the database does not carry protects nothing.
+    const denies = { ...app, charter: { ...app.charter, auditor: { actions: ['home'], layouts: ['home.wide'], data: { allow: ['*.read'], deny: ['deals.read'] } } } };
+    expect(verifyApp(denies, grants).errors).toEqual([]);
+    expect(verifyApp(denies, scopeGrants(['leads'])).errors.map((error) => `${error.check} ${error.detail.split(':')[0]}`)).toEqual(['charter dead-deny']);
+    // Two variants of one action on somebody the assignments name: one role
+    // alone holds one each, the two together hold both.
+    const both = verifyApp({ ...app, layouts: { ...app.layouts, 'home.wide': { action: 'home', layout: plain } }, assignments: { usr_1: ['admin', 'auditor'] } }, grants);
+    expect(both.errors.map((error) => error.check)).toContain('variants');
+    expect(both.errors.find((error) => error.detail.includes('the combination [admin, auditor]'))?.detail).toContain('holds 2 variants of "home"');
   });
 });
 

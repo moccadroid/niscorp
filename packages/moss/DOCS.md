@@ -391,8 +391,9 @@ is the anonymous principal. There is no `/fns` surface.
 #### `MossServer`
 
 `Hono<Env> & { socket: SocketAccept; shells?: ShellHost; principalOf; page; pages;
-refresh; replaceActions; charterReport; invalidateIdentity; invalidateTenant;
-identity; executeAs; callIntegration; nudge; generation; close; identities? }`.
+refresh; replaceActions; verifyActions; actions; catalogOf; catalogForRoles;
+charterReport; invalidateIdentity; invalidateTenant; identity; executeAs;
+callIntegration; nudge; generation; close; identities? }`.
 It's a Hono app — mount it, extend it, or hand it to a listener.
 
 - `principalOf(token): Promise<string | null>` — the deployment's own session
@@ -423,6 +424,26 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   consist of is verified first: refused, it throws with the sentence `refresh`
   throws and nothing changed; accepted, it does what `refresh` does.
   `'integrations'` is moss's own set, read from its integration tables.
+- `verifyActions(source, actions): ManifestReport` — the dry run of
+  `replaceActions`: the same verification over the same candidate (the app's
+  actions, then each set, with `actions` in place of the set called `source`),
+  answered as a report. Nothing changes. `errors` is `{ check, detail }[]`,
+  `check` one of `'charter'`, `'reach'`, `'variants'`; empty means
+  `replaceActions` would accept the set. `said` is what a boot only says (a
+  chain of steps that never ends), and `charter` is the charter engine's whole
+  report for the candidate.
+- `actions(): Readonly<Record<string, ActionDefinition>>` — the actions in
+  force now, by id: what the app shipped, then each set handed over. To read;
+  a set changes through `replaceActions`.
+- `catalogOf(principal): Promise<Catalog>` — what a principal holds of the
+  actions in force: `{ ids, hash }`, the granted action ids sorted, with a
+  content-hash version token (equal hash, equal application). The principal is
+  resolved the way a request resolves it (the `identity` seam, or
+  `assignments`), so an integration's actions are there only where it is
+  installed. `null` is nobody signed in.
+- `catalogForRoles(roles, installed?): Catalog` — the same for a caller that
+  already knows the roles. `installed` is the integration ids live for them;
+  left out, every integration is live.
 - `charterReport(): VerifyReport` — the report `verifyCharter` gave this server:
   boot's, then that of each change that passed. `{ errors, warnings,
   perRole }`, over the universes boot resolved against. Boot and `refresh` read
@@ -813,6 +834,15 @@ measures the end.
   given roles rather than a principal, for a caller that already resolved who
   somebody is (the `identity` seam). `resolveRoles`, `resolveCatalog` and the
   other principal-taking forms read `assignments` only.
+- `verifyApp(app, grants): ManifestReport` — the check boot runs, for an app
+  that is not booted (a check, a build step): the charter with each role's
+  closure audited, every entry's reach, the layout variants. It reads `charter`,
+  `actions`, `layouts`, `wearable`, `assignments`, `entries` and `behaviors`
+  of what it is handed, so a check may hand it those alone. `grants` is every
+  `<table>.<verb>` the database can carry (vex's `scopeGrants(tables)`). The
+  report is `{ errors, said, charter }`, as `server.verifyActions` answers it;
+  a boot refuses on `errors`. A running server answers for what is in force
+  with `server.charterReport()`.
 - `wearableOf(app): readonly (readonly string[])[]` — the role combinations the
   app can produce: `app.wearable`, else derived from `assignments`, deduplicated.
 - `memoKeyOf(app, principal): string` — the key the per-principal memos depend

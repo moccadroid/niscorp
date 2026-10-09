@@ -22,6 +22,8 @@ export type { CallIntegration } from './integrations';
 export { createAssertionSigner } from './assert';
 export { resolveRoles, resolvePolicy, resolvePolicyForRoles, memoKeyOf } from './principal';
 export { resolveCatalog, resolveVariants, verifyVariants, wearableOf } from './manifest';
+export { verifyApp } from './manifest';
+export type { ManifestReport } from './manifest';
 export { createTideStore, TIDE_DDL, TIDE_SEQUENCE, TIDE_TABLES } from './tide';
 export { createTideDriver } from './driver';
 export type { TideDriver } from './driver';

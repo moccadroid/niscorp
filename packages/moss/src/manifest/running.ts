@@ -64,6 +64,10 @@ export type RunningManifest = {
   // Would the app serve THESE actions, everything else as it stands? Nothing
   // is switched: this is how a bundle is tried before any of it is written.
   verify: (actions: Actions) => ManifestReport;
+  // Would the app be served with `actions` in place of the set called `source`,
+  // everything else as it stands? What `replace` would be told, and nothing
+  // is switched: the set that is in force stays in force.
+  verifyReplace: (source: string, actions: Record<string, ActionDefinition>) => ManifestReport;
   // The report the manifest in force was verified by.
   report: () => ManifestReport;
   // Put `actions` in place of the set called `source` (a set that was not there
@@ -186,6 +190,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     actions: () => inForce,
     entries: new Map(served.map((entry) => [entry.fingerprint, entry])),
     verify: (actions) => verifyManifest(candidate(actions)),
+    verifyReplace: (source, actions) => verifyManifest(candidate(laidOver(own, new Map(sets).set(source, actions)))),
     report: () => report,
     replace: (source, actions) => switchTo({ own, sets: new Map(sets).set(source, { ...actions }) }, true),
     // An app may have edited its own record before saying so; what it holds

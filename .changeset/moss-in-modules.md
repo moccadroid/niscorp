@@ -10,7 +10,7 @@ BREAKING — approved by moccadroid, 2026-10-09: import only what `@niscorp/moss
 
 Moss had grown to twenty-eight files flat in `src/`, one of them a single function of 1,345 lines, and it exported 135 names of which 71 were imported by nothing outside the package. `docs/plans/moss-refactor.md` is the audit and the plan.
 
-**The main entry exports 65 names, not 135.**
+**The main entry exports 67 names, not 135.**
 
 - Gone, and never part of what an app calls: `createShellHost`, `createSocket`, `createDataLayer`, `createGeneration`, `createIdentityCache`, `wireFabric`, `runIntake`, `copyPress`, `callIntegrationWith`, `initIntegrations`, `listIntegrations`, `loadIntegrationActions`, `filterInstalled`, `buildContract`, `contractAsMarkdown`, `describePlacements`, `verifyAssertion`, `mintIntegrationKey`, `hashIntegrationKey`, `mintWrites`, `revokeSession`, `sessionVerifierOf`, `shellNeedOf`, `emitterOf`, `spanClock`, `resolvePolicyAtReach`, `resolveVariantsForRoles`, the constants `GENERATION_DDL`, `SESSIONS_SEQUENCE`, `SNAPSHOT_ELEMENT_ID`, `CLOSE_SHELL_FAILED`, `DEFAULT_GENERATION_POLL_MS`, `DEFAULT_IDENTITY_IDLE_MS`, `DEFAULT_IDENTITY_MAX`, `DEFAULT_IDLE_MS`, `DEFAULT_REVALIDATE_MS`, and the types that went with them.
 - An app that imported one of these was reaching into moss. Say which and why in an issue; the answer is a call that is meant to be public, not the name coming back.
@@ -67,6 +67,11 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 - What the app would then consist of is verified first. Refused, the call throws with the sentence `refresh` throws and nothing changed: not the actions being served, not what any role holds. Accepted, it does what `refresh` does: memos are dropped, living shells adopt, and every other process follows within one poll.
 - Editing `app.actions` and calling `refresh()` still works: `refresh` ships what the record holds when it is called. Two things about it are different. An edit is served once a `refresh` has accepted it; a shell built between the edit and the `refresh` used to be built from it unverified. And an action an integration shipped is the integration's: taking it out of `app.actions` does not remove it.
 - With no integration approved and no set handed over, `app.actions` stays the record the app handed to `createServer`. Otherwise moss writes the actions in force to it, as a new object, each time they change.
+
+**A server answers what somebody holds, which actions are in force, and whether a set would be taken.**
+
+- New on `MossServer`: `catalogOf(principal)` and `catalogForRoles(roles, installed?)` answer `{ ids, hash }` from the actions in force; `actions()` is the actions in force, by id; `verifyActions(source, actions)` is the dry run of `replaceActions`, answered as a report, changing nothing.
+- New in the main entry: `verifyApp(app, grants)`, the check boot runs for an app that is not booted, and the type of its report, `ManifestReport`.
 
 **A bundle the app would not serve is refused without being tried on the running app.**
 

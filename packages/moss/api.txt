@@ -10,6 +10,7 @@
 . IdentityRecord
 . LayoutVariant
 . MOSS_SEQUENCE
+. ManifestReport
 . MossServer
 . NiscApp
 . NiscRuntime
@@ -61,6 +62,7 @@
 . sessionCookies
 . sessionOf
 . tokenFromCookie
+. verifyApp
 . verifyVariants
 . wearableOf
 ./client DocumentSnapshot

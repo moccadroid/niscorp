@@ -167,6 +167,46 @@ describe('replace — a named set of actions that arrived while the app runs', (
   });
 });
 
+describe('verifyReplace — what `replace` would be told, with nothing switched', () => {
+  it('says why a set would be refused, and that another would be taken, and changes nothing', () => {
+    const manifest = running(shippedApp());
+    manifest.replace('bundles', { [desk.id]: desk });
+    const told = vi.fn();
+    manifest.onChange(told);
+    const inForce = manifest.actions();
+    const held = manifest.catalogFor(['member'], undefined);
+    const verifiedBy = manifest.report();
+
+    const refused = manifest.verifyReplace('bundles', unservable);
+    expect(refused.errors.map((error) => error.check)).toEqual(['charter']);
+    expect(refused.errors[0]?.detail).toMatch(/^leaves-only: id "home" is a namespace of "home.sub"/);
+    expect(manifest.verifyReplace('bundles', { [grades.id]: grades }).errors).toEqual([]);
+
+    expect(manifest.actions()).toBe(inForce);
+    expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id]);
+    expect(manifest.catalogFor(['member'], undefined)).toBe(held);
+    expect(manifest.report()).toBe(verifiedBy);
+    expect(told).not.toHaveBeenCalled();
+    // What it answered is what `replace` then does.
+    expect(() => manifest.replace('bundles', unservable)).toThrow(/^Refresh refused/);
+    expect(() => manifest.replace('bundles', { [grades.id]: grades })).not.toThrow();
+  });
+
+  it('tries the set IN PLACE of the one of that name: what the old set held is not part of the candidate', () => {
+    // `panel` pushes an action only the set in force ships, so the set that
+    // would replace it leaves a role pushing what it no longer holds.
+    const opens: ActionDefinition = { id: 'panel', triggers: [{ event: 'ui:click', ref: 'open', do: [{ push: { action: desk.id } }] }] };
+    const manifest = running({ ...shippedApp(), actions: { home, panel: opens } });
+    manifest.replace('bundles', { [desk.id]: desk });
+    const issuesOf = (report: ReturnType<typeof manifest.report>): string[] => report.charter.perRole.find((entry) => entry.role === 'member')?.issues ?? [];
+    expect(issuesOf(manifest.report())).toEqual([]);
+
+    expect(issuesOf(manifest.verifyReplace('bundles', { [grades.id]: grades })).join(' ')).toContain(desk.id);
+    // Another name is another set: the one in force stays in the candidate.
+    expect(issuesOf(manifest.verifyReplace('payments', { [pay.id]: pay }))).toEqual([]);
+  });
+});
+
 describe('what a set of roles holds', () => {
   it('is kept by roles and install list, through the filter it was handed', () => {
     const manifest = running(shippedApp());

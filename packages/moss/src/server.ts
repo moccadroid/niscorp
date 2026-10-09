@@ -12,7 +12,7 @@ import type { TelemetrySpan } from './runtime';
 import { wireFabric } from './fabric';
 import type { VerifyReport } from '@niscorp/charter';
 import { createRunningManifest, receiveManifest, refusalOf } from './manifest';
-import type { Catalog, NiscApp } from './manifest';
+import type { Catalog, ManifestReport, NiscApp } from './manifest';
 import type { NiscRuntime } from './runtime';
 import { createIdentity, sessionRemainingMs, sessionVerifierOf } from './identity';
 import { createDataLayer } from './data';
@@ -110,6 +110,23 @@ export type MossServer = Hono<Env> & {
   // what the app shipped, then each set. `'integrations'` is moss's own set,
   // read from its integration tables.
   replaceActions: (source: string, actions: Record<string, ActionDefinition>) => void;
+  // WOULD THAT SET BE TAKEN — the dry run of `replaceActions`: the same
+  // verification over the same candidate, answered as a report, and nothing is
+  // changed. `errors` empty: `replaceActions` would accept it. Otherwise each
+  // error names the check that refuses (`charter`, `reach`, `variants`) and why.
+  verifyActions: (source: string, actions: Record<string, ActionDefinition>) => ManifestReport;
+  // THE ACTIONS IN FORCE NOW, by id: what the app shipped, then each set that
+  // was handed over. To read, never to write: a set changes through
+  // `replaceActions`.
+  actions: () => Readonly<Record<string, ActionDefinition>>;
+  // WHAT SOMEBODY HOLDS of the actions in force: the granted ids, sorted, and
+  // the version token of that set (equal hash, equal application). `catalogOf`
+  // resolves who the principal is the way a request does (`null` is nobody
+  // signed in); `catalogForRoles` is for a caller that already knows the
+  // roles, with the integrations installed where they stand (`undefined`:
+  // every one is live).
+  catalogOf: (principal: string | null) => Promise<Catalog>;
+  catalogForRoles: (roles: readonly string[], installed?: readonly string[]) => Catalog;
   // THE REPORT THIS SERVER WAS VERIFIED BY — `verifyCharter`'s, from boot, then
   // from each change that passed. Boot and refresh read its `errors` and
   // nothing else, so the rest was computed and dropped: the warnings (an action
@@ -1353,6 +1370,10 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     ...(shells !== undefined ? { shells } : {}),
     refresh: running.refresh,
     replaceActions: running.replace,
+    verifyActions: running.verifyReplace,
+    actions: running.actions,
+    catalogOf: async (principal: string | null) => catalog(await identity.resolve(principal)),
+    catalogForRoles: (roles: readonly string[], installed?: readonly string[]) => running.catalogFor(roles, installed),
     charterReport: () => running.report().charter,
     generation: running.generation,
     // Every timer this server owns, stopped once. Absent pieces (an app with no
