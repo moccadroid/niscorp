@@ -90,7 +90,8 @@ export const assignedRoles = (assignments: Readonly<Record<string, readonly stri
 // code speaking, and everything after it stands on its shape: the roles go to
 // the charter, the installs filter a catalog, the scope pins rows. So the four
 // fields moss names are held to their types here, once, and a record that does
-// not fit is refused as nobody rather than carried further.
+// not fit is refused, by throwing, rather than carried further. Nobody is
+// served as `public` in its place.
 //
 // Loose on purpose. What is INSIDE `scope` is the app's and is never looked at,
 // and a field moss does not name is left on the record: the app's own scope
