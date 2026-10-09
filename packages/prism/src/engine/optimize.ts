@@ -92,6 +92,17 @@ const attachNonEnumerable = (target: Record<string, unknown>, key: string, value
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => isJsonObject(value);
 
+// A constant of a compiled tree is handed out by every execute of it, to
+// whoever called. Frozen, so that a caller cannot change what the next caller
+// is given: `result.tags.push(x)` on an answer that came from `{ $const: [] }`
+// used to put x into every later answer of that IR. Now it throws where it is
+// written. Scalars need nothing; a list or an object is frozen all the way down.
+const freezeConstant = (value: unknown): void => {
+  if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return;
+  Object.freeze(value);
+  for (const inner of Object.values(value)) freezeConstant(inner);
+};
+
 // Resolve an op handler for a node, or undefined if it's not a recognized op.
 // The returned handler is type-erased via `eraseOp` so all 50+ ops fit a
 // uniform OpHandler slot for attachment to the node.
@@ -237,6 +248,7 @@ const optimizeNode = (
   // evaluate() never did.
   if (isConstNode(node)) {
     const literal: Record<string, unknown> = { ...node };
+    freezeConstant(literal['$const']);
     attachNonEnumerable(literal, HANDLER_KEY, eraseOp(opConst));
     stats.handlersAttached += 1;
     return literal;
@@ -320,6 +332,7 @@ const optimizeNode = (
       try {
         const folded = handler(optimized, emptyCtx, evaluate);
         const replacement: Record<string, unknown> = { $const: folded };
+        freezeConstant(folded);
         attachNonEnumerable(replacement, HANDLER_KEY, eraseOp(opConst));
         stats.constantsFolded += 1;
         // Note: we DO NOT decrement refsInlined/handlersAttached for the
@@ -371,6 +384,10 @@ const annotateNode = (node: unknown): void => {
     annotateNode(node.$renameKeys.from);
   } else if (!isConstNode(node)) {
     for (const value of Object.values(node)) annotateNode(value);
+  } else {
+    // Read back from storage, a constant is a new object again: freeze it as
+    // compile did.
+    freezeConstant(node.$const);
   }
 
   if (isRefNode(node)) {

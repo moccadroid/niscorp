@@ -232,3 +232,52 @@ describe('a name or a constant that looks like an op', () => {
     });
   }
 });
+
+// Every execute of an IR hands out the IR's own constants. A caller that wrote
+// to one changed what every later caller was given.
+describe('a constant that a compiled config hands out', () => {
+  const stored = async (config: unknown): Promise<Awaited<ReturnType<typeof compile>>> =>
+    JSON.parse(JSON.stringify(await compile(config)));
+
+  // tags: a constant as written. parts and merged: constants the compiler folded.
+  const config = {
+    tags: { $coalesce: [{ $get: { from: { $ref: '$' }, path: ['tags'], fallback: null } }, { $const: [] }] },
+    parts: { $split: { value: 'a,b', sep: ',' } },
+    merged: { $merge: [{ $const: { n: { deep: [1] } } }, { $const: { m: 2 } }] },
+  };
+  const expected = { tags: [], parts: ['a', 'b'], merged: { n: { deep: [1] }, m: 2 } };
+  type Answer = { tags: string[]; parts: string[]; merged: { n: { deep: number[] }; m: number } };
+
+  for (const [name, make] of [['a fresh IR', compile], ['an IR read back from storage', stored]] as const) {
+    it(`${name}: writing to one throws, and the next answer is what it was`, async () => {
+      const ir = await make(config);
+      const first = execute(ir, {}) as Answer;
+      expect(first).toEqual(expected);
+      expect(() => first.tags.push('x')).toThrow(TypeError);
+      expect(() => first.parts.push('x')).toThrow(TypeError);
+      expect(() => { first.merged.m = 9; }).toThrow(TypeError);
+      expect(() => first.merged.n.deep.push(2)).toThrow(TypeError);
+      expect(execute(ir, {})).toEqual(expected);
+    });
+  }
+
+  it('what is built for each call is still the caller\'s to change', async () => {
+    const ir = await compile({ list: [{ $ref: '$.a' }], shape: { a: { $ref: '$.a' } }, mapped: { $map: { over: [1, 2], as: 'n', body: { $var: 'n' } } } });
+    const answer = execute(ir, { a: 1 }) as { list: number[]; shape: Record<string, number>; mapped: number[] };
+    answer.list.push(2);
+    answer.shape['b'] = 2;
+    answer.mapped.push(3);
+    expect(execute(ir, { a: 1 })).toEqual({ list: [1], shape: { a: 1 }, mapped: [1, 2] });
+  });
+
+  it('evaluate and prismTransform answer with constants the caller may change, as they did', () => {
+    const viaEvaluate = evaluate(config, {}) as Answer;
+    viaEvaluate.tags.push('x');
+    viaEvaluate.merged.n.deep.push(2);
+    expect(evaluate(config, {})).toEqual(expected);
+    const viaTransform = prismTransform(config, {}) as Answer;
+    viaTransform.tags.push('x');
+    viaTransform.merged.n.deep.push(2);
+    expect(prismTransform(config, {})).toEqual(expected);
+  });
+});

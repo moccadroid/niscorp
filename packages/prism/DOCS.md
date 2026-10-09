@@ -748,6 +748,8 @@ const result2 = execute(ir, source2); // Each op's handler already attached
 
 The IR is JSON-serializable — store it in a database, cache in Redis, send over a wire.
 
+**A constant in an answer is frozen.** Every `execute` of an IR hands out the IR's own constants: a `$const` that is a list or an object, and anything the compiler worked out ahead of time because it did not depend on the source (`{ "$split": { "value": "a,b", "sep": "," } }` is a constant list). They are frozen, all the way down, so one caller cannot change what the next is given: `answer.tags.push(x)` on a list that came from `{ "$const": [] }` throws a `TypeError`. To change an answer, copy the part first (`[...answer.tags, x]`). Everything built for the call — a template's object, a `$map`'s list — is the caller's own. `evaluate` and `prismTransform` do not freeze: what they answer may be changed.
+
 ## As a host's transform
 
 ```typescript
