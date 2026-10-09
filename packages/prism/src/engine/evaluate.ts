@@ -104,10 +104,16 @@ const evaluateUnbudgeted = (node: unknown, context: EvalContext): JsonValue => {
   // compiled tree too, and once for each row where it is a `$map` body.
   // ───────────────────────────────────────────────────────
   if (isPlainObject(obj)) {
+    const result: Record<string, JsonValue> = {};
+    // No `__optional`, as in nearly every template: no field to leave out and
+    // no missing path to forgive, so no set of names and nothing to catch.
+    if (!(OPTIONAL_FIELDS_KEY in obj)) {
+      for (const key of Object.keys(obj)) result[key] = evaluateNode(obj[key], context);
+      return result;
+    }
     const optionalFields = new Set<string>(
       Array.isArray(obj[OPTIONAL_FIELDS_KEY]) ? (obj[OPTIONAL_FIELDS_KEY] as string[]) : [],
     );
-    const result: Record<string, JsonValue> = {};
 
     for (const [key, value] of Object.entries(obj)) {
       if (key === OPTIONAL_FIELDS_KEY) continue;

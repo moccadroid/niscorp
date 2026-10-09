@@ -13,13 +13,12 @@ import { createBudget, measure, type Limits } from './budget';
 const hydrated = new WeakSet<object>();
 
 export const execute = (ir: CompiledIr, source: JsonObject, limits?: Partial<Limits>): JsonValue => {
-  // Prime the JSONPath cache with paths from compilation
-  if (ir.tables.paths.length > 0) {
-    primeJsonPathCache(ir.tables.paths);
-  }
-
+  // Once for each core, with its annotations: the path cache is the module's
+  // and keeps what it is given, so priming it again on every call only looked
+  // every path up again.
   const { core } = ir;
   if (typeof core === 'object' && core !== null && !hydrated.has(core)) {
+    if (ir.tables.paths.length > 0) primeJsonPathCache(ir.tables.paths);
     rehydrate(core);
     hydrated.add(core);
   }

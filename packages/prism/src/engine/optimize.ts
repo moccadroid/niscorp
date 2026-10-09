@@ -62,24 +62,13 @@ export const SEGMENTS_KEY = '__segments';
 // below only stores a handler AFTER its guard has matched the node, so the
 // runtime contract is sound — TypeScript just can't track it across the
 // property attachment boundary.
-//
-// Rather than wrap every op call in a per-op runtime guard (which would
-// defeat the optimization), we erase the input type via a generic adapter.
-// The adapter forwards the call without re-checking the node shape; the
-// guarantee is upheld by `resolveHandler` only ever attaching this op to
-// nodes that already passed its corresponding guard once.
 type OpHandler = (node: unknown, context: EvalContext, evaluate: EvaluateFn) => JsonValue;
 
-// Erase a typed op into the OpHandler shape. This function does no type
-// checking — it relies on the caller having narrowed the node already.
-const eraseOp = <T>(op: (n: T, c: EvalContext, e: EvaluateFn) => JsonValue): OpHandler =>
-  (node, context, evaluate) => {
-    // We forward `node` (typed `unknown`) to the typed op. TypeScript would
-    // reject this as a parameter mismatch; the call is sound because the
-    // caller guaranteed `node` is a `T` via a guard. We bridge the gap with
-    // `Function.prototype.call`, which accepts any args at the type level.
-    return op.call(undefined, node as T, context, evaluate);
-  };
+// A typed op as an OpHandler: the op itself, under the wider type. It used to
+// be a function around the op, which made every node of a compiled tree two
+// calls where one does. Nothing is checked here — `resolveHandler` only ever
+// attaches an op to a node that has passed that op's guard.
+const eraseOp = <T>(op: (n: T, c: EvalContext, e: EvaluateFn) => JsonValue): OpHandler => op as OpHandler;
 
 export type OptimizeStats = {
   refsInlined: number;
