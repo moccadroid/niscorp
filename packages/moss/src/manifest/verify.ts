@@ -84,6 +84,16 @@ const reachErrors = (entries: ManifestCandidate['entries'], profiles: ReadonlySe
   return unknown.length === 0 ? [] : [...unknown, `known profiles: ${[...profiles].join(', ') || '(none)'}`];
 };
 
+// A CHAIN OF STEPS THAT NEVER ENDS among a set of actions: a trigger that
+// re-emits its own channel, a mount that reloads itself, and every longer loop
+// through other actions. Each as the one line that names it, and the actions
+// its steps run through: whoever asks about somebody else's actions (a bundle,
+// laid over the host's) keeps the chains that run through those.
+export type EndlessChain = { path: string; through: readonly string[] };
+
+export const endlessChains = (actions: Readonly<Record<string, ActionDefinition>>): EndlessChain[] =>
+  chainCycles(actions).map((cycle) => ({ path: cycle.path, through: cycle.steps.map((step) => step.action) }));
+
 // The four things a boot refuses or says, over one candidate: the charter
 // engine verifies (nova auditing each role's closure over its effective
 // definitions, granted variants substituted; closure findings sit under
@@ -104,7 +114,7 @@ export const verifyManifest = (candidate: ManifestCandidate): ManifestReport => 
       ...found('reach', reachErrors(candidate.entries, candidate.profiles)),
       ...found('variants', verifyVariants(candidate)),
     ],
-    said: chainCycles(candidate.actions).map((cycle) => `a chain of steps that never ends: ${cycle.path} — nova stops it at its budget when it runs (RUNAWAY_CHAIN)`),
+    said: endlessChains(candidate.actions).map((chain) => `a chain of steps that never ends: ${chain.path} — nova stops it at its budget when it runs (RUNAWAY_CHAIN)`),
     charter,
   };
 };

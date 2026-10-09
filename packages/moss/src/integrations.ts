@@ -1,12 +1,12 @@
 import { migrate } from '@niscorp/strata/postgres';
 import { StrataError, depthRefusal, exceedsDepth, type Upgrader } from '@niscorp/strata';
 import { MOSS_SEQUENCE } from './data';
+import { endlessChains, layoutMisfits } from './manifest';
 import type { NiscApp, StorePress } from './manifest';
 import { z } from 'zod';
 import { ActionDefinitionSchema, LayoutNodeSchema, paletteEntryOf } from '@niscorp/nova';
 import type { ActionDefinition, ComponentMeta, LayoutPaletteEntry } from '@niscorp/nova';
-import { chainCycles, walkNodes, isRecord } from '@niscorp/nova/reflect';
-import { isBinding } from '@niscorp/nova/i18n';
+import { isRecord } from '@niscorp/nova/reflect';
 import type { PgPool } from '@niscorp/vex';
 import { hashIntegrationKey } from './assert';
 import { emitterOf, spanClock } from './runtime';
@@ -567,15 +567,6 @@ const AUDIENCE = /^[a-z][a-z0-9-]*$/;
 // of the same path is how a seam stops working for one caller.
 export const FRAME_GRANT_URL = '/api/integrations/frame';
 
-// A prop VALUE that resolves at RENDER time, so intake cannot know its type: a
-// binding string (`$.x`, `{{ }}`, `@scope` — nova's own isBinding), or a
-// directive object (`$if`, `$eq`, `$prism` — a record carrying a `$`-prefixed
-// key). Its KEY is still checked; only the value is skipped. Top-level by design
-// — a binding buried inside an otherwise-static object value is not unwound, the
-// same line the case draws.
-const isDeferred = (value: unknown): boolean =>
-  (typeof value === 'string' && isBinding(value)) || (isRecord(value) && Object.keys(value).some((key) => key.startsWith('$')));
-
 const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -622,33 +613,7 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
   // fragment is a layout over `$.content` and earns the same refusal at the
   // same moment as an action layout.
   const validateLayout = (node: unknown, label: string): void => {
-    const found = new Set<string>();
-    walkNodes(node, (record) => {
-      const name = record['component'];
-      if (typeof name !== 'string') return;
-      const spec = ctx.components.get(name);
-      if (spec === undefined) {
-        found.add(`${label}: layout uses "${name}", which this app has no component for`);
-        return;
-      }
-      const schema = spec.propsSchema;
-      const props = record['props'];
-      if (!(schema instanceof z.ZodObject) || !isRecord(props)) return; // name-only
-      const shape: Readonly<Record<string, z.core.$ZodType>> = schema.shape;
-      for (const [key, value] of Object.entries(props)) {
-        const prop = shape[key];
-        if (prop === undefined) {
-          found.add(`${label}: "${name}" has no prop "${key}"`);
-          continue;
-        }
-        if (isDeferred(value)) continue;
-        const check = z.safeParse(prop, value);
-        if (!check.success) {
-          found.add(`${label}: "${name}" prop "${key}" — ${check.error.issues[0]?.message ?? 'invalid'}`);
-        }
-      }
-    });
-    for (const reason of found) reasons.push(reason);
+    for (const misfit of layoutMisfits(node, ctx.components)) reasons.push(`${label}: ${misfit}`);
   };
 
   if (bundle.integration !== ctx.integrationId) {
@@ -738,9 +703,9 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
   // with the host's actions, since a loop can close through the host's
   // triggers; a loop the host has on its own is the host's to answer (boot
   // names it) and does not refuse somebody else's bundle.
-  for (const cycle of chainCycles({ ...(ctx.hostActions ?? {}), ...bundle.actions })) {
-    if (cycle.steps.some((step) => bundle.actions[step.action] !== undefined)) {
-      reasons.push(`a chain of steps that never ends: ${cycle.path}`);
+  for (const chain of endlessChains({ ...(ctx.hostActions ?? {}), ...bundle.actions })) {
+    if (chain.through.some((actionId) => bundle.actions[actionId] !== undefined)) {
+      reasons.push(`a chain of steps that never ends: ${chain.path}`);
     }
   }
 

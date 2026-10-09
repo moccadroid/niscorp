@@ -19,6 +19,10 @@
 // role's actions reach audited (./closure.ts), every entry's reach, the layout
 // variants.
 //
+// WHAT SOMEBODY ELSE WROTE is asked two more things before it is let in, by
+// whoever lets it in: whether a layout composes what the kit has
+// (./layout.ts), and which chains of steps never end (./verify.ts).
+//
 // WHAT A SET OF ROLES HOLDS of it (./roles.ts) is the charter applied: the
 // action ids granted, and the layout variant held of each, remembered until
 // the manifest changes.
@@ -46,9 +50,11 @@ export type {
 } from './app';
 export { GENERATION_DDL } from './generation';
 export { receiveManifest } from './handover';
+export { layoutMisfits } from './layout';
+export type { KitComponents } from './layout';
 export { resolveVariants } from './roles';
 export type { Catalog, InstalledOnly } from './roles';
 export { createRunningManifest } from './running';
-export type { RunningManifest, RunningManifestConfig } from './running';
-export { refusalOf, verifyApp } from './verify';
-export type { ManifestReport, ShippedManifest } from './verify';
+export type { ActionLoader, RunningManifest, RunningManifestConfig } from './running';
+export { endlessChains, refusalOf, verifyApp } from './verify';
+export type { EndlessChain, ManifestReport, ShippedManifest } from './verify';
