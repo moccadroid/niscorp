@@ -12,7 +12,7 @@ const layerWith = async (vexConfig?: { defaultLimit?: number; maxLimit?: number 
   const db = new PGlite();
   const pool = createPglitePool(db);
   await pool.query('CREATE TABLE members (id text PRIMARY KEY, name text)');
-  return createDataLayer({ pool, db: pool, cache: createMemoryCache(), session: 'dev-open', ...(vexConfig !== undefined ? { vexConfig } : {}) });
+  return createDataLayer({ pool, cache: createMemoryCache(), ...(vexConfig !== undefined ? { vexConfig } : {}) });
 };
 
 const members = { from: ['members'], fields: ['members.id'] };

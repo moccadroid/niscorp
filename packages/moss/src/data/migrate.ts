@@ -32,16 +32,27 @@ import { MOSS_SEQUENCE } from './tables';
 
 type Entry = SeedEntry | SeedMutation;
 
+// Whose tables a run covers, beside moss's own.
+export type TableOwners = {
+  pool: PgPool;
+  // The cache the deployment chose. Absent: vex's Postgres cache on the pool.
+  cache?: CacheBackend;
+  // The deployment keeps moss's own credential (`session: 'sessions'`).
+  storesSessions: boolean;
+  // The app's own tables (`runtime.tables`).
+  tables?: readonly Sequence[];
+};
+
 // Every table sequence a boot runs, in the order it runs them: moss's own, the
 // sessions table when the deployment chose moss's credential, the vex cache's,
-// then the app's own (`runtime.tables`).
-export const tableSequencesOf = (runtime: NiscRuntime): readonly Sequence[] => {
-  const cacheSequence = (runtime.cache ?? createPostgresCache({ pool: runtime.pool })).sequence;
+// then the app's own.
+export const tableSequencesOf = (owners: TableOwners): readonly Sequence[] => {
+  const cacheSequence = (owners.cache ?? createPostgresCache({ pool: owners.pool })).sequence;
   return [
     MOSS_SEQUENCE,
-    ...(runtime.session === 'sessions' ? [SESSIONS_SEQUENCE] : []),
+    ...(owners.storesSessions ? [SESSIONS_SEQUENCE] : []),
     ...(cacheSequence === undefined ? [] : [cacheSequence]),
-    ...(runtime.tables ?? []),
+    ...(owners.tables ?? []),
   ];
 };
 
@@ -131,7 +142,15 @@ export type TablesReport = MigrateReport & {
 // Apply every pending table migration — or, with `dryRun`, do all of it and roll
 // it back. Refuses (strata's DOES_NOT_FIT, naming each entry and why) when an
 // entry of `app` would not fit what the run leaves.
-export const migrateTables = async (runtime: NiscRuntime, app: NiscApp, options: { dryRun?: boolean } = {}): Promise<TablesReport> => {
+//
+// The step a deployment runs before it starts, so it is handed what a server
+// is handed: the runtime and the app. It reads the four fields of the one and
+// the entries of the other.
+export const migrateTables = async (
+  runtime: Pick<NiscRuntime, 'pool' | 'cache' | 'session' | 'tables'>,
+  app: Pick<NiscApp, 'entries'>,
+  options: { dryRun?: boolean } = {},
+): Promise<TablesReport> => {
   const entries = app.entries ?? [];
   const cache = runtime.cache ?? createPostgresCache({ pool: runtime.pool });
 
@@ -147,7 +166,8 @@ export const migrateTables = async (runtime: NiscRuntime, app: NiscApp, options:
   }
 
   let found: Pick<TablesReport, 'removed' | 'retyped' | 'alreadyBroken'> = { removed: [], retyped: [], alreadyBroken: [] };
-  const report = await migrate(runtime.pool, tableSequencesOf(runtime), {
+  const owners: TableOwners = { pool: runtime.pool, cache: runtime.cache, storesSessions: runtime.session === 'sessions', tables: runtime.tables };
+  const report = await migrate(runtime.pool, tableSequencesOf(owners), {
     ...(options.dryRun === true ? { dryRun: true } : {}),
     guard: async (tx) => {
       const after = await createPostgresAdapter({ pool: { query: oneAtATime((text, values) => tx.query(text, values)) } }).introspect();

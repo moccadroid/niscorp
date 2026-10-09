@@ -4,6 +4,7 @@
 // The third question moss asks of a request, once it knows who is calling and
 // what exists for them. Every read and every write of an app goes through vex,
 // under a policy compiled from the charter, and this is where that is set up.
+// `createData` (./data.ts) is the one object the server builds for all of it.
 //
 // THE ENGINE (./engine.ts) stands up from what is present: the seeded entries
 // are the whole surface, and what can be granted is the tables the database
@@ -33,19 +34,12 @@
 // of moss.
 // ═══════════════════════════════════════════════════════════════
 
-export { createDataLayer } from './engine';
-export type { DataLayer } from './engine';
-export { createExecuteAs } from './execute-as';
+export { createData } from './data';
+export type { Data, DataConfig, DataRoutesConfig } from './data';
 export type { ExecuteAs } from './execute-as';
 export { createWireFollower } from './follow';
-export { createGrammarUpgrader } from './grammar';
-export { migrateTables, tableSequencesOf } from './migrate';
+export { migrateTables } from './migrate';
 export type { TablesReport } from './migrate';
-export { INTEGRATION_ACTIONS_STORE, MOSS_SEQUENCE } from './tables';
-export { createPolicies, resolvePolicy, resolvePolicyAtReachForRoles, resolvePolicyForRoles } from './policy';
-export type { Policies } from './policy';
-export { createVexRoutes } from './routes';
-export type { VexRoutesConfig } from './routes';
-export { vexRecordToSpan } from './span';
-export { createWriteLane } from './writes';
-export type { ChainHints, WriteLane, WriteListener } from './writes';
+export { resolvePolicy, resolvePolicyForRoles } from './policy';
+export { MOSS_SEQUENCE } from './tables';
+export type { ChainHints, WriteListener } from './writes';

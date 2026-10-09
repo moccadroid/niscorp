@@ -1,29 +1,13 @@
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { Hono } from 'hono';
 import { VEX_LIVE_ENV } from '@niscorp/vex/hono';
-import { migrate, upgradeStore } from '@niscorp/strata/postgres';
-import type { ExecuteRecord } from '@niscorp/vex';
-import { emitterOf } from './runtime';
 import { wireFabric } from './fabric';
 import type { VerifyReport } from '@niscorp/charter';
 import { createRunningManifest, receiveManifest, refusalOf } from './manifest';
 import type { Catalog, ManifestReport, NiscApp } from './manifest';
 import type { NiscRuntime } from './runtime';
 import { createIdentity, sessionRemainingMs, sessionVerifierOf } from './identity';
-import {
-  createDataLayer,
-  createExecuteAs,
-  createGrammarUpgrader,
-  createPolicies,
-  createVexRoutes,
-  createWireFollower,
-  createWriteLane,
-  INTEGRATION_ACTIONS_STORE,
-  resolvePolicyAtReachForRoles,
-  resolvePolicyForRoles,
-  tableSequencesOf,
-  vexRecordToSpan,
-} from './data';
+import { createData, createWireFollower } from './data';
 import type { ExecuteAs } from './data';
 import { mintWrites } from './tide';
 import type { ActionDefinition } from '@niscorp/nova';
@@ -67,9 +51,9 @@ import type { ShellHost } from './shells';
 // server functions behind plain URLs — is still unbuilt.
 //
 // The app hands over its ARTIFACTS (manifest/app.ts) and an environment
-// (runtime/); everything mechanical is derived — the data layer
-// (data/), what the app consists of right now and what each set of roles
-// holds of it (manifest/), the policies (data/) — and the server
+// (runtime/); everything mechanical is derived — the data layer and the
+// policies (data/), what the app consists of right now and what each set of
+// roles holds of it (manifest/) — and the server
 // refuses to boot incoherent (DESIGN.md § Derivation over configuration:
 // coherence is refused, not documented).
 // ═══════════════════════════════════════════════════════════════
@@ -149,7 +133,7 @@ export type MossServer = Hono<Env> & {
   identity: (principal: string | null) => Promise<IdentityRecord>;
   // Execute a seeded entry as a declared charter role — for surfaces that have
   // no principal by nature. In-process, replay-only, charter-bounded; see
-  // `createExecuteAs` in ./data.
+  // ./data, execute-as.ts.
   executeAs: ExecuteAs;
   // Call an installed integration when nobody is driving — the outbound half
   // of `executeAs`. Resolves the row, refuses (throws) unless approved and
@@ -244,34 +228,28 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // app that never set the field). 'dev-open' announces itself on this line.
   const session = sessionVerifierOf(runtime);
 
-  // The deployment's one safe emitter, derived once — `undefined` when no sink
-  // is configured, which every emission site below guards on to build nothing.
-  // `vexOnExecute` is moss wiring vex's execution observer to it: vex reports a
-  // record, moss maps it to a span and emits. Passed to every vex mount and to
-  // `executeAs`, so one seam covers the request path and all machinery.
-  const emit = emitterOf(runtime.telemetry);
-  const vexOnExecute = emit === undefined ? undefined : (rec: ExecuteRecord) => emit(vexRecordToSpan(rec));
-
-  // THE INTEGRATIONS TABLES EXIST BEFORE INTROSPECTION. The data layer's
-  // introspected schema is the grant universe policies compile from — a table
-  // created after it is a table no grant can reach, silently: an app granting
-  // `integrations.read` compiled a policy that denied the very screen the
-  // grant existed for, and nothing said so until somebody opened it.
-  //
-  // ONE LEDGERED RUN (strata) for every owner's tables: moss's own, the
-  // sessions table when the deployment chose moss's credential, and the vex
-  // cache's — in one transaction, recorded, refused if the ledger was edited
-  // or written by newer code. The data layer's `cache.init()` below then finds
-  // its sequence already applied.
-  await migrate(runtime.pool, tableSequencesOf(runtime), { mode: runtime.migrations ?? 'apply' });
-  // THE DOCUMENTS IN THOSE TABLES, brought to this code's grammars — nova's,
-  // Prism's and the app's own (./data). Rows carry the stamp they were
-  // written at; what they have not seen runs now, once, and they are written
-  // back current. A row written by newer code refuses the boot, as a ledger
-  // written by newer code does.
-  const grammars = await createGrammarUpgrader(app);
-  await upgradeStore(runtime.pool, INTEGRATION_ACTIONS_STORE, grammars);
-  const data = await createDataLayer(runtime, app.entries ?? []);
+  // WHAT SOMEBODY MAY READ AND WRITE, for every surface below (./data). It runs
+  // the tables' one ledgered run, brings the documents stored in them to this
+  // code's grammars, and stands the engine up over what is there — in that
+  // order, because a table created after the engine has looked is a table no
+  // grant can reach. It is handed the database, the tables and the entries, the
+  // charter and the row behaviors, and where a span goes; who a request is, it
+  // is told for each request.
+  const data = await createData({
+    pool: runtime.pool,
+    db: runtime.db,
+    cache: runtime.cache,
+    vexConfig: runtime.vexConfig,
+    migrations: runtime.migrations,
+    storesSessions: runtime.session === 'sessions',
+    tables: runtime.tables,
+    grammars: app.grammars,
+    entries: app.entries,
+    charter: app.charter,
+    behaviors: app.behaviors,
+    telemetry: runtime.telemetry,
+  });
+  const grammars = data.grammars;
 
   // WHAT THE APP CONSISTS OF RIGHT NOW (./manifest): what it shipped, and the
   // sets of actions that arrive while it runs — an approved integration's, read
@@ -292,35 +270,23 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     // pointer's table is part of MOSS_SEQUENCE, applied with the rest above.)
     pointer: { pool: runtime.pool, ...(runtime.sessionRevalidateMs !== undefined ? { everyMs: runtime.sessionRevalidateMs } : {}) },
   });
-
-  // EXECUTE A SEEDED ENTRY AS A DECLARED CHARTER ROLE (./data, execute-as.ts):
-  // the one mechanism for every surface that has no principal by nature. The
-  // role's policy is compiled for each call, from the charter.
-  const executeAs = createExecuteAs({
-    engine: data.engine,
-    db: runtime.db,
-    policyFor: (roles) => resolvePolicyForRoles(app, data.grants, roles),
-    policyAtReach: (roles, reach) => resolvePolicyAtReachForRoles(app, data.grants, roles, reach),
-    ...(vexOnExecute !== undefined ? { onExecute: vexOnExecute } : {}),
-  });
+  // The policies were compiled from the manifest: they go when it changes.
+  // Handed over here, because the manifest could not be built before the
+  // grantable set was known.
+  data.dropOnChange(running.onChange);
 
   // WHO A PRINCIPAL IS, for every surface below (./identity). It is handed the
   // app's three seams and the limits, and reaches rows only through
-  // `executeAs` above: an identity entry is a seeded entry like any other.
+  // `executeAs`: an identity entry is a seeded entry like any other.
   const identity = createIdentity({
     seam: app.identity,
     assignments: app.assignments,
     scope: app.scope,
-    readAs: (role, fingerprint, scope) => executeAs(role, fingerprint, {}, scope),
+    readAs: (role, fingerprint, scope) => data.executeAs(role, fingerprint, {}, scope),
     max: runtime.identityMax,
     idleMs: runtime.identityIdleMs,
     revalidateMs: runtime.sessionRevalidateMs ?? DEFAULT_REVALIDATE_MS,
   });
-
-  // The policy a set of roles reads and writes under, compiled at first sight
-  // and kept (./data): by the role combination, and by each reach an entry
-  // demands of it.
-  const policies = createPolicies({ charter: app.charter, behaviors: app.behaviors, grants: data.grants });
 
   // Approved integrations' actions, read from rows and handed to the running
   // manifest as its 'integrations' set. Called after an import, an approval
@@ -415,8 +381,8 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   });
 
   // WHAT HEARS A WRITE. Vex reports each committed mutation once, with
-  // per-statement writes, and the write lane (./data) hands it to whoever
-  // subscribed, in this order of record:
+  // per-statement writes, and the data module hands it to whoever subscribed,
+  // in this order of record:
   //
   //   1. The FACT lane — rows ride here and into tide's ledger only,
   //      stamped with the identity the app derives from the write's
@@ -427,10 +393,9 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   //      under its own policy.
   //
   // Late-bound throughout: shells and tide stand up after the mounts.
-  const writes = createWriteLane();
   const facts = app.facts;
   if (facts !== undefined) {
-    writes.subscribe((event, hints) => {
+    data.onWrite((event, hints) => {
       const tide = facts.tide();
       const as = tide !== undefined ? facts.identity(event.scope) : undefined;
       if (tide === undefined || as === undefined) return;
@@ -442,7 +407,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   }
   const reactions = app.reactions;
   if (reactions !== undefined) {
-    writes.subscribe((event) => {
+    data.onWrite((event) => {
       const tools = {
         // Local delivery carries the payload — an optimisation for a
         // shell resident in THIS process. The cross-process nudge is
@@ -475,9 +440,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // come from the principal, never from the request.
   server.route(
     '/',
-    createVexRoutes<Env>({
-      engine: data.engine,
-      db: runtime.db,
+    data.routes<Env>({
       resources: app.resources,
       // `userId` is always the principal; the app's `scope` hook contributes
       // whatever else a principal is (a tenant, an org). Merged server-side,
@@ -486,10 +449,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
       // last and per request so a value derived from today's date cannot be
       // held for the life of a session that began yesterday.
       scope: (c) => identity.composeScope(c.get('principal'), c.get('resolved')),
-      policy: (c) => policies.of(c.get('resolved')),
-      policyAtReach: (c, reach) => policies.atReach(c.get('resolved'), reach),
-      ...(vexOnExecute !== undefined ? { onExecute: vexOnExecute } : {}),
-      writes,
+      caller: (c) => c.get('resolved'),
     }),
   );
 
@@ -507,7 +467,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   const contractFingerprints = async (principal: string | null): Promise<string[]> => {
     const discovery = await data.engine.cache.entries?.();
     if (discovery === undefined) return [];
-    const compiled = policies.of(await identity.resolve(principal));
+    const compiled = data.policyOf(await identity.resolve(principal));
     return discovery
       .filter(({ entry }) => entry.kind === 'ok' || entry.kind === 'mutation')
       .map(({ key }) => key)
@@ -1133,7 +1093,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
           // The record IS the install list now — resolved through the same
           // engine entries as everything else, revalidated on the identity
           // cache's own clock.
-          return { roles: resolved.roles, scope: resolved.scope, installed: resolved.installed, catalog: catalog(resolved), variants: running.variantsFor(resolved.roles), policy: policies.of(resolved) };
+          return { roles: resolved.roles, scope: resolved.scope, installed: resolved.installed, catalog: catalog(resolved), variants: running.variantsFor(resolved.roles), policy: data.policyOf(resolved) };
         },
         catalogFor: running.catalogFor,
         variantsFor: running.variantsFor,
@@ -1230,11 +1190,11 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   running.onChange(() => {
     // IDENTITY GOES WITH THEM. A change means something the resolutions were
     // derived FROM changed — an approval, a role, an artifact. Dropping the
-    // compiled policies while keeping the records they were compiled from is
-    // keeping the stale half: a promoted instructor would hold their old rung
-    // until the record expired on its own clock.
+    // compiled policies (the data module does, see above) while keeping the
+    // records they were compiled from is keeping the stale half: a promoted
+    // instructor would hold their old rung until the record expired on its own
+    // clock.
     identity.invalidateAll();
-    policies.drop();
     shells?.adopt();
   });
 
@@ -1292,7 +1252,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
       shells?.stop();
       for (const host of pageHosts.values()) host.stop();
     },
-    executeAs,
+    executeAs: data.executeAs,
     callIntegration,
     identity: async (principal: string | null) => {
       const resolved = await identity.resolve(principal);

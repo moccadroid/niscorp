@@ -1,6 +1,5 @@
 import { createPostgresAdapter, createPostgresCache, createQueryEngine, scopeGrants, seedCache } from '@niscorp/vex';
-import type { QueryEngine, DatabaseSchema, SeedEntry, SeedMutation } from '@niscorp/vex';
-import type { NiscRuntime } from '../runtime';
+import type { CacheBackend, DatabaseSchema, PgPool, QueryEngine, QueryEngineConfig, SeedEntry, SeedMutation } from '@niscorp/vex';
 
 // ═══════════════════════════════════════════════════════════════
 // The data layer stands up from what's present (DESIGN.md § Derivation
@@ -17,14 +16,24 @@ export type DataLayer = {
   grants: string[];
 };
 
-export const createDataLayer = async (runtime: NiscRuntime, entries: readonly (SeedEntry | SeedMutation)[] = []): Promise<DataLayer> => {
-  const adapter = createPostgresAdapter({ pool: runtime.pool });
-  const cache = runtime.cache ?? createPostgresCache({ pool: runtime.pool });
+export type DataLayerConfig = {
+  pool: PgPool;
+  // Absent: vex's Postgres cache on the pool.
+  cache?: CacheBackend;
+  // The engine's own settings, handed on and not read here.
+  vexConfig?: QueryEngineConfig['config'];
+  // The entries to seed.
+  entries?: readonly (SeedEntry | SeedMutation)[];
+};
+
+export const createDataLayer = async (config: DataLayerConfig): Promise<DataLayer> => {
+  const adapter = createPostgresAdapter({ pool: config.pool });
+  const cache = config.cache ?? createPostgresCache({ pool: config.pool });
   await cache.init?.();
   // The authored API surface lands as protected rows; a db that already
   // carries them is left untouched (idempotent).
-  await seedCache(cache, entries);
-  const engine = createQueryEngine({ adapter, cache, ...(runtime.vexConfig !== undefined ? { config: runtime.vexConfig } : {}) });
+  await seedCache(cache, config.entries ?? []);
+  const engine = createQueryEngine({ adapter, cache, ...(config.vexConfig !== undefined ? { config: config.vexConfig } : {}) });
   const schema = await engine.introspect();
 
   // THE ENGINE'S OWN TABLES ARE ORDINARY TABLES, and it is worth saying why

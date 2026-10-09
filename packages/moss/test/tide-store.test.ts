@@ -80,7 +80,7 @@ describe('the engine tables are not application data', () => {
     await createTideStore(pool).ready;
     await pool.query('CREATE TABLE IF NOT EXISTS members (id text PRIMARY KEY, name text)');
 
-    const layer = await createDataLayer({ pool, db: pool, session: 'dev-open' });
+    const layer = await createDataLayer({ pool });
 
     // An authored, scoped entry over the run ledger has to compile against a
     // table vex has heard of, so hiding them would close the door as well as
