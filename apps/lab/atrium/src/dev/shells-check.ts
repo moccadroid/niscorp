@@ -71,7 +71,7 @@ const main = async (): Promise<void> => {
 
   // ── ring 1: an action a principal lacks does not exist ──
   // Not hidden, not disabled — absent from the shell's own catalog.
-  const guestHolds = new Set(catalogFor('amara'));
+  const guestHolds = new Set(await catalogFor('amara'));
   const guestSees = (id: string): boolean => guestHolds.has(id);
   check('a guest holds no issue board', !guestSees('desk.issue.list'));
   check('a guest holds no deployment console', !guestSees('deploy.connectors'));
@@ -114,7 +114,8 @@ const main = async (): Promise<void> => {
   const amaraHome = amara.getState().canvases['home']?.stack ?? [];
   check(`Amara's home is a list of live cards (${amaraHome.length})`, amaraHome.length >= 4);
   check('...every one collapsed to its preview', amaraHome.every((i) => amara.getRuntime(i.id)?.getData()['expanded'] === false));
-  check('...all of them her own actions, none dark', amaraHome.every((i) => catalogFor('amara').includes(i.definitionId)));
+  const amaraHolds = await catalogFor('amara');
+  check('...all of them her own actions, none dark', amaraHome.every((i) => amaraHolds.includes(i.definitionId)));
   const inesHome = (ines.getState().canvases['home']?.stack ?? []).map((i) => i.definitionId);
   check("Inés's home carries the Mews cards instead", inesHome.includes('ext.guest.mews.spa') && inesHome.includes('ext.guest.mews.minibar') && !inesHome.includes('ext.guest.opera.wake'));
   check("Amara's carries Opera's", (amara.getState().canvases['home']?.stack ?? []).some((i) => i.definitionId === 'ext.guest.opera.wake'));

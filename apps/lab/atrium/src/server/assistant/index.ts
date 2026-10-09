@@ -5,7 +5,7 @@ import type { FunctionHandler } from '@niscorp/nova';
 import type { FunctionSession } from '@niscorp/moss';
 import { createLlmClient } from './llm';
 import { makeTools } from './tools';
-import { loadActions, grantedOf as grantedIds } from './knowledge';
+import { loadActions, grantedOver } from './knowledge';
 import { assistantSession, type Persona } from './session';
 import { chatPlacesFor, scopeOf, tuningFor } from './profiles';
 import { AnswerSchema, answerSchemaFor, apply, ASSISTANT, createLedger, type Answer } from './contract';
@@ -116,7 +116,7 @@ export const assistantFunctions = (session: FunctionSession): Record<string, Fun
     const places = chatPlacesFor(me.audience);
     // `places` filters the catalog too: a surface that belongs on a canvas this
     // caller cannot place onto is not an option they have.
-    const actions = await loadActions(session.wire, me.audience, me.propertyId, stayState, grantedIds(session.principal), places);
+    const actions = await loadActions(session.wire, me.audience, me.propertyId, stayState, await grantedOver(session.wire), places);
     const toolSession = { audience: me.audience, stayId: me.stayId ?? '', propertyId: me.propertyId, principal: session.principal };
 
     const handle = agentFor(persona, places).run(transcript, {
@@ -186,6 +186,3 @@ export const assistantFunctions = (session: FunctionSession): Record<string, Fun
   };
 };
 
-// Ring 1 lives in knowledge.ts — both the assistant and the desk's workspace
-// composition need it, and importing it from either would tie them together.
-export const grantedOf = (session: FunctionSession): readonly string[] => grantedIds(session.principal);

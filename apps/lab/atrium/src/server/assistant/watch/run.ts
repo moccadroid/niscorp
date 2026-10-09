@@ -1,7 +1,7 @@
 import { defineAgent, stepCount, duration } from '@niscorp/cortex';
 import type { FetchFn, Shell } from '@niscorp/nova';
 import { createLlmClient } from '../llm';
-import { loadActions, grantedOf } from '../knowledge';
+import { loadActions, grantedOver } from '../knowledge';
 import { makeTools } from '../tools';
 import { AnswerSchema, answerSchemaFor, apply, ASSISTANT, type Answer, type Ledger } from '../contract';
 import { refreshScreen, screenOf, voiceFor } from '../prompt';
@@ -101,7 +101,7 @@ export const runWatch = async (ctx: RunContext, trigger: Trigger): Promise<Autho
   const changes = trigger.kind === 'changed' ? trigger.changes : ['the user asked for help with what is on screen'];
   // The caller's resolved surface under their own ceiling. Stay state is 'any'
   // because crew are state-blind; widening past staff means resolving it here.
-  const actions = await loadActions(ctx.wire, ctx.audience, ctx.propertyId, 'any', grantedOf(ctx.principal), ctx.places);
+  const actions = await loadActions(ctx.wire, ctx.audience, ctx.propertyId, 'any', await grantedOver(ctx.wire), ctx.places);
   const owned = (instanceId: string): boolean => ctx.shell.originOf(instanceId) === ASSISTANT;
 
   const deps: WatchDeps = {

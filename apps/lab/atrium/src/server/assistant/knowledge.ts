@@ -1,5 +1,5 @@
+import { z } from 'zod';
 import type { ActionDefinition, FetchFn } from '@niscorp/nova';
-import { resolveCatalog } from '@niscorp/moss';
 import { resolvePrincipal } from '@niscorp/charter';
 import { TABLES } from '@atrium/db/schema';
 import { ENTRIES } from '@atrium/app/vex';
@@ -13,11 +13,19 @@ import { bundleState } from '@atrium/server/bundles';
 // this set: `ext.*` globs match nothing in the core catalog alone.
 export const definitionsNow = (): Record<string, ActionDefinition> => ({ ...CATALOG_DEFINITIONS, ...bundleState.actions });
 
-// Ring 1, from the same resolver moss uses: the principal's granted ids, the
-// ceiling nothing here can exceed. Resolved over `definitionsNow()` because a
-// glob only grants ids that exist in the universe it resolves against.
-export const grantedOf = (principal: string | null): readonly string[] =>
-  resolveCatalog({ charter: CHARTER, assignments: ASSIGNMENTS, actions: definitionsNow() }, principal).ids;
+// Ring 1, asked of the server that resolves it: the granted ids of whoever
+// this wire speaks for, the ceiling nothing here can exceed. `/catalog` answers
+// from the actions in force — core plus the bundles the server has taken — so
+// an `ext.*` glob grants what is being served and nothing a sync was refused.
+// A wire that cannot say holds nothing.
+const CatalogSchema = z.object({ actions: z.array(z.string()) });
+
+export const grantedOver = async (wire: FetchFn): Promise<readonly string[]> => {
+  const response = await wire('/catalog');
+  if (!response.ok) return [];
+  const catalog = CatalogSchema.safeParse(await response.json());
+  return catalog.success ? catalog.data.actions : [];
+};
 
 // ── ACTIONS: the nova actions this session may place or fill ──
 //

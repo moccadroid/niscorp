@@ -1,12 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
-import { verifyCharter } from '@niscorp/charter';
-import { auditClosure, wearableOf } from '@niscorp/moss';
-import { scopeGrants } from '@niscorp/vex';
 import type { MossServer, NiscApp, FunctionSession, ShellHost } from '@niscorp/moss';
 import { CHARTER, ASSIGNMENTS } from '@atrium/app/charter';
-import { TABLES } from '@atrium/db/schema';
 import { resolveStatements } from '@atrium/db/resolve';
-import { grantedOf } from '@atrium/server/assistant/knowledge';
 import { bundleState, lastSync, refreshServer, syncIntegrations } from '@atrium/server/bundles';
 import { userById } from '@atrium/server/users';
 import type { DevRuntime } from './runtime';
@@ -19,12 +14,12 @@ import type { DevRuntime } from './runtime';
 // against a header no browser of ours ever sends. A hotel cannot find this
 // surface by holding a better token, because a token is not what it wants.
 //
-// What it serves is the app's own in-memory truth — the artifacts moss builds
-// at boot and then keeps to itself. `verifyCharter` computes the full resolved
-// closure of every role on every boot and moss reads only its `errors`; the
-// catalog resolver answers for any principal and is only ever asked about the
-// caller. Both are already the answers "what can this actor reach" needs. They
-// were simply never surfaced.
+// What it serves is the app's own in-memory truth — what the running server
+// consists of and has verified. The charter report moss verified itself by
+// carries the resolved closure of every role, and boot reads only its `errors`;
+// the server answers what any principal holds and a request only ever asks
+// about its caller. Both are already the answers "what can this actor reach"
+// needs, and the server hands both out: `charterReport()`, `catalogOf()`.
 //
 // The line it does not cross: this serves ARTIFACTS and RESOLUTION, never
 // customer rows. It mounts no vex, holds no policy, and every SQL statement
@@ -119,44 +114,42 @@ export const registerShellSession = (session: FunctionSession): void => {
 // ─── the reads ───────────────────────────────────────────────
 
 // Every principal the charter knows, and what ring 1 resolves to for each.
-// `grantedOf` is the assistant's resolver, and it is the right one twice over:
-// it runs over core PLUS the synced bundles (a catalog that forgets the
+// `server.catalogOf` is the right resolver twice over: it answers from the
+// actions in force, core PLUS the synced bundles (a catalog that forgets the
 // bundles silently drops every ext.* surface), and it takes an arbitrary
 // principal rather than a session — which is the whole difference between a
 // tool that shows you your own application and one that shows you everyone's.
-const actors = (): unknown => ({
-  principals: Object.keys(ASSIGNMENTS).map((id) => {
-    const user = userById(id);
-    const actions = [...grantedOf(id)].sort();
-    return {
-      id,
-      username: user?.username ?? '',
-      name: user?.name ?? id,
-      audience: user?.audience ?? '',
-      property: user?.propertyName ?? '',
-      propertyId: user?.propertyId ?? '',
-      roles: [...(ASSIGNMENTS[id] ?? [])],
-      actions,
-      core: actions.filter((a) => !a.startsWith('ext.')).length,
-      ext: actions.filter((a) => a.startsWith('ext.')).length,
-    };
-  }),
+const actors = async (server: MossServer): Promise<unknown> => ({
+  principals: await Promise.all(
+    Object.keys(ASSIGNMENTS).map(async (id) => {
+      const user = userById(id);
+      const actions = (await server.catalogOf(id)).ids;
+      return {
+        id,
+        username: user?.username ?? '',
+        name: user?.name ?? id,
+        audience: user?.audience ?? '',
+        property: user?.propertyName ?? '',
+        propertyId: user?.propertyId ?? '',
+        roles: [...(ASSIGNMENTS[id] ?? [])],
+        actions,
+        core: actions.filter((a) => !a.startsWith('ext.')).length,
+        ext: actions.filter((a) => a.startsWith('ext.')).length,
+      };
+    }),
+  ),
   // Anonymous is a principal, not an absence — and what it resolves to is the
   // login page and nothing else. Worth seeing next to the others.
-  anonymous: { actions: [...grantedOf(null)].sort() },
+  anonymous: { actions: (await server.catalogOf(null)).ids },
 });
 
-// The charter as authored, beside what it compiles to. `perRole` is the
-// artifact moss computes on every boot and every refresh and then discards;
-// the warnings are the ones it never raises because they are not errors —
-// a dead allow, an action no role grants.
-const charterReport = (app: NiscApp): unknown => {
-  const report = verifyCharter(
-    app.charter,
-    { actions: Object.keys(app.actions), data: scopeGrants([...TABLES]), layouts: Object.keys(app.layouts ?? {}) },
-    wearableOf(app),
-    auditClosure(app.actions, app.layouts),
-  );
+// The charter as authored, beside what it compiles to: the report the running
+// server verified itself by, at boot and again at every change that passed.
+// `perRole` is each role's resolved closure; the warnings are the ones a boot
+// never raises because they are not errors — a dead allow, an action no role
+// grants.
+const charterReport = (server: MossServer): unknown => {
+  const report = server.charterReport();
   return {
     roles: report.perRole.map((role) => ({ role: role.role, actions: role.actions, data: role.data, issues: role.issues })),
     warnings: report.warnings.map((warning) => ({ rule: warning.rule, detail: warning.detail })),
@@ -166,11 +159,11 @@ const charterReport = (app: NiscApp): unknown => {
 
 // Every action the running server would serve to somebody, with where it came
 // from. `ext.` is the bundle namespace, so its source is a connector row.
-const actionsReport = async (app: NiscApp, runtime: DevRuntime): Promise<unknown> => {
+const actionsReport = async (server: MossServer, runtime: DevRuntime): Promise<unknown> => {
   const rows = await runtime.pool.query('SELECT id, connector_id, audience FROM bundle_actions', []);
   const source = new Map(rows.rows.map((row) => [String(row['id']), String(row['connector_id'])]));
   return {
-    actions: Object.entries(app.actions)
+    actions: Object.entries(server.actions())
       .map(([id, definition]) => {
         const input = (definition.input as { properties?: Record<string, unknown> } | undefined)?.properties ?? {};
         return {
@@ -282,14 +275,14 @@ const shapeKeys = (shape: unknown): string[] => {
 
 const CONTEXT_KEY = /"\$context":"(\w+)"/g;
 
-const entriesReport = async (app: NiscApp, runtime: DevRuntime): Promise<unknown> => {
+const entriesReport = async (app: NiscApp, server: MossServer, runtime: DevRuntime): Promise<unknown> => {
   const rows = await runtime.pool.query('SELECT fingerprint, connector_id FROM bundle_entries', []);
   const source = new Map(rows.rows.map((row) => [String(row['fingerprint']), String(row['connector_id'])]));
 
   // Who calls what. One walk over every endpoint of every action the server
   // would serve — core and shipped alike.
   const callers = new Map<string, { action: string; endpoint: string; url: string }[]>();
-  for (const [actionId, definition] of Object.entries(app.actions)) {
+  for (const [actionId, definition] of Object.entries(server.actions())) {
     for (const [name, endpoint] of Object.entries((definition.endpoints ?? {}) as Record<string, Record<string, unknown>>)) {
       const fingerprint = fingerprintOf(endpoint['request']);
       if (fingerprint === undefined) continue;
@@ -302,7 +295,7 @@ const entriesReport = async (app: NiscApp, runtime: DevRuntime): Promise<unknown
   // The manifest's entries plus the live bundle registry, deduped.
   //
   // Worth knowing why both: `app.entries` is fixed at build, and boot's refresh
-  // re-reads bundle ACTIONS into the running manifest but not bundle entries —
+  // hands bundle ACTIONS to the running server but not bundle entries —
   // it does not need to, because a sync seeds them straight into vex_cache and
   // the engine reads from there. Harmless for the app, and a hole for anything
   // trying to describe the API: on a fresh database the manifest array holds
@@ -451,8 +444,8 @@ const roster = (shells: ShellHost | undefined): unknown => {
 
 const startedAt = Date.now();
 
-const health = async (app: NiscApp, runtime: DevRuntime, shells: ShellHost | undefined): Promise<unknown> => {
-  const ids = Object.keys(app.actions);
+const health = async (server: MossServer, runtime: DevRuntime, shells: ShellHost | undefined): Promise<unknown> => {
+  const ids = Object.keys(server.actions());
   const entries = await runtime.pool.query('SELECT count(*)::int AS n FROM vex_cache', []);
   const living = shells?.list() ?? [];
   return {
@@ -493,9 +486,9 @@ export const mountOperator = (server: MossServer, runtime: DevRuntime, app: Nisc
     return next();
   });
 
-  server.get('/operator/actors', (c) => c.json(actors() as Record<string, unknown>));
-  server.get('/operator/charter', (c) => c.json(charterReport(app) as Record<string, unknown>));
-  server.get('/operator/actions', async (c) => c.json((await actionsReport(app, runtime)) as Record<string, unknown>));
+  server.get('/operator/actors', async (c) => c.json((await actors(server)) as Record<string, unknown>));
+  server.get('/operator/charter', (c) => c.json(charterReport(server) as Record<string, unknown>));
+  server.get('/operator/actions', async (c) => c.json((await actionsReport(server, runtime)) as Record<string, unknown>));
   server.get('/operator/surface', async (c) => c.json((await surfaceReport(runtime)) as Record<string, unknown>));
   server.get('/operator/config', async (c) => c.json((await configReport(runtime)) as Record<string, unknown>));
   // ONE action, whole — layout included. The list route above deliberately does
@@ -505,17 +498,17 @@ export const mountOperator = (server: MossServer, runtime: DevRuntime, app: Nisc
   // and renders it.
   server.get('/operator/action/:id', async (c) => {
     const id = c.req.param('id');
-    const definition = app.actions[id];
+    const definition = server.actions()[id];
     if (definition === undefined) return c.json({ message: 'No such action.' }, 404);
     const rows = await runtime.pool.query('SELECT connector_id FROM bundle_actions WHERE id = $1', [id]);
     return c.json({ id, source: String(rows.rows[0]?.['connector_id'] ?? 'core'), definition });
   });
 
-  server.get('/operator/entries', async (c) => c.json((await entriesReport(app, runtime)) as Record<string, unknown>));
+  server.get('/operator/entries', async (c) => c.json((await entriesReport(app, server, runtime)) as Record<string, unknown>));
   server.get('/operator/timeline', (c) => c.json(timelineReport() as Record<string, unknown>));
   server.get('/operator/runs', async (c) => c.json((await runsReport(runtime)) as Record<string, unknown>));
   server.get('/operator/roster', (c) => c.json(roster(server.shells) as Record<string, unknown>));
-  server.get('/operator/health', async (c) => c.json((await health(app, runtime, server.shells)) as Record<string, unknown>));
+  server.get('/operator/health', async (c) => c.json((await health(server, runtime, server.shells)) as Record<string, unknown>));
 
   // ─── the one write that touches a person's session ───────────
   //

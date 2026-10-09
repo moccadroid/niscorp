@@ -1,6 +1,5 @@
 import type { Shell } from '@niscorp/nova';
 import './no-llm'; // must run before boot loads .env — the suite is keyless by design
-import { resolveCatalog } from '@niscorp/moss';
 import { startIntegrationsService } from '@atrium/integrations/service';
 import { boot } from '@atrium/server/boot';
 import { mintToken, userByUsername } from '@atrium/server/users';
@@ -166,13 +165,13 @@ export const tap = (shell: Shell, canvas: string, ref: string, payload?: unknown
   shell.dispatch({ type, ref, ...(payload !== undefined ? { payload } : {}), ...(active !== undefined ? { origin: active.id } : {}) } as Parameters<Shell['dispatch']>[0]);
 };
 
-// Ring 1, from the horse's mouth: the action ids moss resolved for a principal.
-// A check must ask the same resolver the server asks — poking at the shell for a
-// definition proves nothing, because an ungranted action was never in it.
-export const catalogFor = (username: string): readonly string[] => {
+// Ring 1, from the horse's mouth: the action ids moss resolves for a principal.
+// A check must ask the server — poking at the shell for a definition proves
+// nothing, because an ungranted action was never in it.
+export const catalogFor = async (username: string): Promise<readonly string[]> => {
   const user = userByUsername(username);
   if (user === undefined) throw new Error(`world: unknown username "${username}"`);
-  return resolveCatalog(app, user.id).ids;
+  return (await server.catalogOf(user.id)).ids;
 };
 
 // A request to the real vex surface as a given principal — the same path a

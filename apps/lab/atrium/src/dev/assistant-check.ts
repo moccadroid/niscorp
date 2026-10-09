@@ -11,7 +11,7 @@ import type { FetchFn, Shell } from '@niscorp/nova';
 import { login, settle, mounted, tap, sql, server, check, report } from './world';
 import { mintToken } from '../server/users';
 import { makeTools } from '../server/assistant/tools';
-import { loadActions, queriesNow, grantedOf, definitionsNow, type AvailableAction } from '../server/assistant/knowledge';
+import { loadActions, queriesNow, grantedOver, definitionsNow, type AvailableAction } from '../server/assistant/knowledge';
 import { apply, createLedger, seedFor, type Session } from '../server/assistant/contract';
 import { mountInputKeys } from '@niscorp/nova/reflect';
 import { chatPlacesFor, profileOf } from '../server/assistant/profiles';
@@ -78,10 +78,13 @@ const main = async (): Promise<void> => {
   check('both pinned to the asker', turns.every((t) => t['user_id'] === 'gst_amara'));
 
   // ── knowledge cannot exceed the ceiling ──
-  const rosaActions = await loadActions(wireFor('rosa'), 'desk', 'prop_lumen', 'any', grantedOf('stf_rosa'));
-  const amaraActions = await loadActions(wireFor('amara'), 'guest', 'prop_lumen', 'in_house', grantedOf('gst_amara'));
+  // What the assistant is handed is what its own wire is answered; the
+  // ceiling it is held against is what the server says she holds.
+  const rosaActions = await loadActions(wireFor('rosa'), 'desk', 'prop_lumen', 'any', await grantedOver(wireFor('rosa')));
+  const amaraActions = await loadActions(wireFor('amara'), 'guest', 'prop_lumen', 'in_house', await grantedOver(wireFor('amara')));
+  const rosaHolds = (await server.catalogOf('stf_rosa')).ids;
   check(`rosa's ACTIONS resolve (${rosaActions.length})`, rosaActions.length > 0);
-  check('...all within her charter grants', rosaActions.every((a) => grantedOf('stf_rosa').includes(a.id)));
+  check('...all within her charter grants', rosaActions.every((a) => rosaHolds.includes(a.id)));
   check('...and no guest surface among them', !rosaActions.some((a) => a.id.startsWith('stay.')));
   check(`amara's ACTIONS resolve (${amaraActions.length})`, amaraActions.length > 0);
   check('...and no desk surface among them', !amaraActions.some((a) => a.id.startsWith('desk.')));

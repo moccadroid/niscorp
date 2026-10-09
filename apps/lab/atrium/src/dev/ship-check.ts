@@ -104,7 +104,7 @@ const main = async (): Promise<void> => {
   // And the desk gained its half of the same capability, in the same instant.
   await login('rosa');
   await settle();
-  check('the front desk holds the key tool in its charter', catalogFor('rosa').includes('desk.keys'));
+  check('the front desk holds the key tool in its charter', (await catalogFor('rosa')).includes('desk.keys'));
   const deskSurface = await sql(
     `SELECT ps.live FROM property_slots ps JOIN surface_slots s ON s.id = ps.slot_id
      WHERE ps.property_id = 'prop_lumen' AND s.id = 'ds_keys'`,
@@ -123,7 +123,7 @@ const main = async (): Promise<void> => {
     data: { stayId: '', propertyId: '', capability: '', sheetTitle: '' },
     layout: { component: 'Text', props: { serif: true, size: 'xl', align: 'center' }, children: 'Sleep well — the desk has the night watch.' },
   };
-  check('the action does not exist before the row does', !catalogFor('amara').includes('ext.guest.opera.goodnight'));
+  check('the action does not exist before the row does', !(await catalogFor('amara')).includes('ext.guest.opera.goodnight'));
   await sql(`INSERT INTO bundle_actions (id, connector_id, audience, definition) VALUES ($1, 'con_opera', 'guest', $2)`, [NOTE.id, JSON.stringify(NOTE)]);
   await sql(
     `INSERT INTO surface_slots (audience, id, action_id, title, blurb, icon, capability_id, stay_state, keywords, source, position)
@@ -132,7 +132,7 @@ const main = async (): Promise<void> => {
   for (const statement of resolveStatements('con_opera')) await sql(statement);
   await refreshServer(runtime);
 
-  check('after refresh, the charter covers the new id with no charter edit', catalogFor('amara').includes('ext.guest.opera.goodnight'));
+  check('after refresh, the charter covers the new id with no charter edit', (await catalogFor('amara')).includes('ext.guest.opera.goodnight'));
   amara.publish('capabilities-changed');
   await settle();
   const grown = slotIds(topData(amara, 'main'));
