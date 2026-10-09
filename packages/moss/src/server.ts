@@ -2,18 +2,28 @@ import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Hono } from 'hono';
 import { vex, VEX_LIVE_ENV } from '@niscorp/vex/hono';
-import { handleQuery } from '@niscorp/vex';
 import { migrate, upgradeStore } from '@niscorp/strata/postgres';
 import type { WriteEvent, ExecuteRecord } from '@niscorp/vex';
 import { emitterOf } from './runtime';
-import type { TelemetrySpan } from './runtime';
 import { wireFabric } from './fabric';
 import type { VerifyReport } from '@niscorp/charter';
 import { createRunningManifest, receiveManifest, refusalOf } from './manifest';
 import type { Catalog, ManifestReport, NiscApp } from './manifest';
 import type { NiscRuntime } from './runtime';
 import { createIdentity, sessionRemainingMs, sessionVerifierOf } from './identity';
-import { createDataLayer, createGrammarUpgrader, createPolicies, createWireFollower, INTEGRATION_ACTIONS_STORE, resolvePolicyAtReachForRoles, resolvePolicyForRoles, tableSequencesOf } from './data';
+import {
+  createDataLayer,
+  createExecuteAs,
+  createGrammarUpgrader,
+  createPolicies,
+  createWireFollower,
+  INTEGRATION_ACTIONS_STORE,
+  resolvePolicyAtReachForRoles,
+  resolvePolicyForRoles,
+  tableSequencesOf,
+  vexRecordToSpan,
+} from './data';
+import type { ExecuteAs } from './data';
 import { mintWrites } from './tide';
 import type { ActionDefinition } from '@niscorp/nova';
 import {
@@ -62,11 +72,6 @@ import type { ShellHost } from './shells';
 // refuses to boot incoherent (DESIGN.md § Derivation over configuration:
 // coherence is refused, not documented).
 // ═══════════════════════════════════════════════════════════════
-
-// The capability lent to no-principal machinery: execute a seeded entry as a
-// declared charter role. See `createServer` for the four bounds that make it
-// tighter than the raw SQL it replaces.
-export type ExecuteAs = (role: string, fingerprint: string, context: Record<string, unknown>, scope?: Record<string, unknown>) => Promise<unknown>;
 
 type Env = { Variables: { principal: string | null; resolved: ResolvedIdentity } };
 
@@ -142,8 +147,8 @@ export type MossServer = Hono<Env> & {
   // Not an enumerator: one principal in, one record out.
   identity: (principal: string | null) => Promise<IdentityRecord>;
   // Execute a seeded entry as a declared charter role — for surfaces that have
-  // no principal by nature. In-process, replay-only, charter-bounded; see the
-  // construction inside `createServer`.
+  // no principal by nature. In-process, replay-only, charter-bounded; see
+  // `createExecuteAs` in ./data.
   executeAs: ExecuteAs;
   // Call an installed integration when nobody is driving — the outbound half
   // of `executeAs`. Resolves the row, refuses (throws) unless approved and
@@ -225,27 +230,6 @@ export const guardOperator = (operator: Hono<Env>, opts: { key: string; gate?: N
   });
 };
 
-// A vex execution record → a telemetry span. The one place a vex fact becomes
-// a span: vex reports in its own vocabulary (handler.ts, ExecuteRecord) and
-// knows nothing of OTLP; moss decides what of it is safe to name. Principal
-// PRESENCE is derived from the composed scope's `userId` (moss's own
-// convention — machinery carries none), never the value itself; no other scope
-// value crosses into the span.
-export const vexRecordToSpan = (rec: ExecuteRecord): TelemetrySpan => ({
-  name: 'vex.execute',
-  startUnixNano: rec.startUnixNano,
-  endUnixNano: rec.endUnixNano,
-  status: rec.status,
-  attributes: {
-    op: rec.kind,
-    hasPrincipal: (rec.scope['userId'] ?? 'anonymous') !== 'anonymous',
-    ...(rec.fingerprint !== undefined ? { fingerprint: rec.fingerprint } : {}),
-    ...(rec.reach !== undefined ? { reach: rec.reach } : {}),
-    ...(rec.cacheHit !== undefined ? { cache: rec.cacheHit ? 'hit' : 'miss' } : {}),
-    ...(rec.rows !== undefined ? { rows: rec.rows } : {}),
-  },
-});
-
 export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<MossServer> => {
   // WHAT WAS HANDED OVER IS READ FIRST, AND THEN FROZEN (./manifest, the
   // hand-over): nothing below may meet a manifest no schema has read, and
@@ -308,42 +292,16 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     pointer: { pool: runtime.pool, ...(runtime.sessionRevalidateMs !== undefined ? { everyMs: runtime.sessionRevalidateMs } : {}) },
   });
 
-  // EXECUTE A SEEDED ENTRY AS A DECLARED CHARTER ROLE — the one mechanism for
-  // every surface that has no principal by nature: identity resolution, the
-  // sign-in credential, a mail provider's callback, the lab's picker.
-  //
-  // Strictly tighter than the raw SQL it replaces, on four counts: in-process
-  // only (never a route); locked to REPLAY (only seeded entries run — no
-  // caller-authored query); the policy is compiled from a charter role with
-  // declared grants and a declared reach, like any principal's; and the scope
-  // values are supplied by server code, never by a request. Widening what a
-  // machinery role can touch is a charter diff somebody reviews.
-  const executeAs = async (role: string, fingerprint: string, context: Record<string, unknown>, scope: Record<string, unknown> = {}): Promise<unknown> => {
-    const roles = [role];
-    const outcome = await handleQuery(
-      {
-        engine: data.engine,
-        locked: true,
-        scopePolicy: resolvePolicyForRoles(app, data.grants, roles),
-        policyForReach: (reach) => resolvePolicyAtReachForRoles(app, data.grants, roles, reach),
-        // Mutation replay under the same role policy — write gates and scope
-        // pins apply exactly as they would for a person.
-        mutations: { client: runtime.db, policy: resolvePolicyForRoles(app, data.grants, roles) },
-        // Machinery is observed too: a seeded entry run as a charter role is a
-        // vex execution, and its scope carries no principal, so it reports as
-        // `hasPrincipal: false` — which is the truth about it.
-        ...(vexOnExecute !== undefined ? { onExecute: vexOnExecute } : {}),
-      },
-      { fingerprint, context },
-      scope,
-    );
-    if (outcome.status !== 200) {
-      console.error(`[moss:executeAs] "${fingerprint}" as "${role}" refused (${outcome.status})`, outcome.body);
-      return undefined;
-    }
-    const body = outcome.body;
-    return body !== null && typeof body === 'object' && 'result' in body ? body.result : undefined;
-  };
+  // EXECUTE A SEEDED ENTRY AS A DECLARED CHARTER ROLE (./data, execute-as.ts):
+  // the one mechanism for every surface that has no principal by nature. The
+  // role's policy is compiled for each call, from the charter.
+  const executeAs = createExecuteAs({
+    engine: data.engine,
+    db: runtime.db,
+    policyFor: (roles) => resolvePolicyForRoles(app, data.grants, roles),
+    policyAtReach: (roles, reach) => resolvePolicyAtReachForRoles(app, data.grants, roles, reach),
+    ...(vexOnExecute !== undefined ? { onExecute: vexOnExecute } : {}),
+  });
 
   // WHO A PRINCIPAL IS, for every surface below (./identity). It is handed the
   // app's three seams and the limits, and reaches rows only through

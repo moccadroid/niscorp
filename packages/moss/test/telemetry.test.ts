@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import type { ExecuteRecord } from '@niscorp/vex';
-import { vexRecordToSpan } from '../src/server';
+import { vexRecordToSpan } from '../src/data/span';
 import { createShellHost, instrumentFunctions } from '../src/shells';
 import type { ShellHostContext } from '../src/shells';
 import { callIntegrationWith, initIntegrations } from '../src/integrations';

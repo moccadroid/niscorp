@@ -13,6 +13,10 @@
 // `data` grants over that set, with the app's row behaviors: compiled once for
 // each set of roles and kept until the manifest changes.
 //
+// A SEEDED ENTRY RUN AS A CHARTER ROLE (./execute-as.ts) is how machinery
+// with no principal reads and writes: in process, replay only, under that
+// role's policy. Every execution is reported as a span (./span.ts).
+//
 // A READ THAT KEEPS ANSWERING (./follow.ts) is the seam between a reactive
 // entry and the shell that asked for it over the in-process wire.
 //
@@ -27,6 +31,8 @@
 
 export { createDataLayer } from './engine';
 export type { DataLayer } from './engine';
+export { createExecuteAs } from './execute-as';
+export type { ExecuteAs } from './execute-as';
 export { createWireFollower } from './follow';
 export { createGrammarUpgrader } from './grammar';
 export { migrateTables, tableSequencesOf } from './migrate';
@@ -34,3 +40,4 @@ export type { TablesReport } from './migrate';
 export { INTEGRATION_ACTIONS_STORE, MOSS_SEQUENCE } from './tables';
 export { createPolicies, resolvePolicy, resolvePolicyAtReachForRoles, resolvePolicyForRoles } from './policy';
 export type { Policies } from './policy';
+export { vexRecordToSpan } from './span';
