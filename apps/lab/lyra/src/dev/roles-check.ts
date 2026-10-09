@@ -1,5 +1,4 @@
 // Run: pnpm --filter lyra exec tsx src/dev/roles-check.ts
-import { resolveCatalog } from '@niscorp/moss';
 import { CAST } from '@lyra/db/seed';
 import { app, asPrincipal, idFor, idsFor, login, ok, report, settle, treeOf } from './world';
 

@@ -10,7 +10,7 @@
 // tree differs, the artifacts lost something on the way through.
 //
 // Run: pnpm --filter lyra exec tsx src/dev/roundtrip-check.ts
-import { createServer, resolveCatalog } from '@niscorp/moss';
+import { createServer } from '@niscorp/moss';
 import type { ActionDefinition } from '@niscorp/nova';
 import { buildLyra } from '@lyra/app/app';
 import { COMPONENT_NAMES } from '@lyra/ui/registry';
@@ -99,8 +99,8 @@ const PRINCIPALS: [string, string | null][] = [
 
 for (const [who, email] of PRINCIPALS) {
   const id = email === null ? null : (idFor(email));
-  const original = resolveCatalog(app, id).ids;
-  const twinIds = resolveCatalog(twin, id).ids;
+  const original = (await server.catalogOf(id)).ids;
+  const twinIds = (await twinServer.catalogOf(id)).ids;
   ok(`a ${who} resolves the same catalog on both`, json([...original].sort()) === json([...twinIds].sort()), `${original.length} actions`);
 }
 

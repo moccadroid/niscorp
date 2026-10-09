@@ -1,5 +1,4 @@
 // Run: pnpm --filter lyra exec tsx src/dev/shell-check.ts
-import { resolveCatalog } from '@niscorp/moss';
 import { componentsOf } from '@niscorp/nova/reflect';
 import { CAST } from '@lyra/db/seed';
 import { AREAS } from '@lyra/app/nav/sections';

@@ -5,7 +5,6 @@ import type { Shell } from '@niscorp/nova';
 process.env['LYRA_DEV_LOGIN'] = 'on';
 
 import { boot, tideDriver } from '@lyra/server/boot';
-import { resolveCatalogForRoles } from '@niscorp/moss';
 
 const booted = await boot();
 
@@ -70,16 +69,13 @@ export const anonymous = async (): Promise<Shell> => {
 
 // THE CATALOG A PERSON HOLDS — resolved the way production resolves it.
 //
-// Checks used to call `resolveCatalog(app, id)`, which read roles out of the
-// assignment map. There is no map: roles come from the identity seam, one
-// principal at a time. So the harness asks the same seam the request path asks,
-// which is also the point — a check resolving by a route production does not
-// take is a check asserting about a deployment nobody runs.
-export const idsFor = async (email: string | null): Promise<readonly string[]> => {
-  if (email === null) return resolveCatalogForRoles(app, ['public'], undefined).ids;
-  const record = await server.identity(idFor(email));
-  return resolveCatalogForRoles(app, record.roles, record.installed).ids;
-};
+// Checks used to resolve a catalog from the manifest by hand, reading roles out
+// of the assignment map. There is no map: roles come from the identity seam,
+// one principal at a time. So the harness asks the server, which resolves who
+// somebody is the way the request path does and answers from the actions in
+// force. That is also the point: a check resolving by a route production does
+// not take is a check asserting about a deployment nobody runs.
+export const idsFor = async (email: string | null): Promise<readonly string[]> => (await server.catalogOf(email === null ? null : idFor(email))).ids;
 
 
 /** A session-authorized wire for checks — the same shape moss lends shells,

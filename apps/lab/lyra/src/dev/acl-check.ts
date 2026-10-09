@@ -1,5 +1,4 @@
 // Run: pnpm --filter lyra exec tsx src/dev/acl-check.ts
-import { resolveCatalog } from '@niscorp/moss';
 import { evaluate } from '@niscorp/prism';
 import { identityRoles } from '@lyra/app/vex/identity.entries';
 import { CAST } from '@lyra/db/seed';

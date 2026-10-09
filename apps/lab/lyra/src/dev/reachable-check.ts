@@ -1,5 +1,4 @@
 // Run: pnpm --filter lyra exec tsx src/dev/reachable-check.ts
-import { resolveCatalog } from '@niscorp/moss';
 import { mutationEffect } from '@niscorp/vex';
 import { ENTRIES, MUTATION_ENTRIES } from '@lyra/app/vex';
 import { areasFor } from '@lyra/app/nav/sections';

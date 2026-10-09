@@ -1,6 +1,5 @@
 // Run: pnpm --filter lyra exec tsx src/dev/integrations-check.ts
 import { OPERATOR_KEY } from './operator-key'; // FIRST — before the world boots; see that file
-import { resolveCatalog } from '@niscorp/moss';
 import { harvestDefinitions } from '@niscorp/nova/i18n';
 import type { ActionDefinition } from '@niscorp/nova';
 import { serve as listen } from '@hono/node-server';

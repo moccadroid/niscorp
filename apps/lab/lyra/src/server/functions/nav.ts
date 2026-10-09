@@ -1,6 +1,6 @@
 import { listAttachments, listPlacements } from '@niscorp/moss';
 import type { FunctionHandler } from '@niscorp/nova';
-import type { FunctionSession, NiscApp } from '@niscorp/moss';
+import type { FunctionSession, MossServer, NiscApp } from '@niscorp/moss';
 import type { PgPool } from '@niscorp/vex';
 import { contextFor } from '@lyra/app/nav/sections';
 import { bookOverWire } from '@lyra/app/app';
@@ -9,8 +9,12 @@ import { dayIn } from '../clock';
 
 export const navFunctions = (
   session: FunctionSession,
-  deps: { app: NiscApp; pool: PgPool },
+  deps: { app: NiscApp; server: () => MossServer; pool: PgPool },
 ): Record<string, FunctionHandler> => {
+  // An integration's screen is not part of what the app shipped: it is among
+  // the actions in force, which the server answers.
+  const titleOf = (actionId: string): string => deps.server().actions()[actionId]?.title ?? actionId;
+
   // LIVE, not the build-time snapshot. `session.actions` is what the shell was
   // BUILT with; an integration landing mid-session re-registers definitions without a
   // rebuild, and these two functions are exactly where the newly-granted ids
@@ -77,7 +81,7 @@ export const navFunctions = (
     const placements = await listPlacements(deps.pool);
     const placed = granted
       .filter((id) => placements[id] === context.areaId)
-      .map((id) => ({ action: id, label: deps.app.actions[id]?.title ?? id, icon: 'addons' }))
+      .map((id) => ({ action: id, label: titleOf(id), icon: 'addons' }))
       .sort((a, b) => a.label.localeCompare(b.label));
 
     const tabs = [...context.tabs, ...placed];
@@ -108,7 +112,7 @@ export const navFunctions = (
       attached
         .filter(({ actionId }) => granted.includes(actionId))
         .map(async ({ actionId, preview }) => {
-          const row: Record<string, unknown> = { action: actionId, label: deps.app.actions[actionId]?.title ?? actionId, bands: [], hint: '' };
+          const row: Record<string, unknown> = { action: actionId, label: titleOf(actionId), bands: [], hint: '' };
           if (preview === '') return row;
           try {
             const res = await session.wire(preview, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(offered) });

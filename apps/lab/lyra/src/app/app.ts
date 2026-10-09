@@ -391,7 +391,7 @@ export const buildLyra = (deps: ServerDeps): NiscApp => {
     // boot uses — injected, so a refresh cannot disagree with a restart. (Its
     // predecessor rebuilt from `[audience]` alone, and an instructor who also
     // trains lost their member role until the next boot.)
-    functions: (session) => ({ ...authFunctions(session, { runAs: (role, fingerprint, context, scope) => deps.server().executeAs(role, fingerprint, context, scope), now: () => Date.now(), base: () => process.env['LYRA_BASE'] ?? 'http://localhost:5180' }), ...worldFunctions(session, { app, server: deps.server }), ...automationFunctions(session, { tide: deps.tide, driver: deps.driver, server: deps.server }), ...navFunctions(session, { app, pool: deps.pool }), ...mailFunctions(session) }),
+    functions: (session) => ({ ...authFunctions(session, { runAs: (role, fingerprint, context, scope) => deps.server().executeAs(role, fingerprint, context, scope), now: () => Date.now(), base: () => process.env['LYRA_BASE'] ?? 'http://localhost:5180' }), ...worldFunctions(session, { app, server: deps.server }), ...automationFunctions(session, { tide: deps.tide, driver: deps.driver, server: deps.server }), ...navFunctions(session, { app, server: deps.server, pool: deps.pool }), ...mailFunctions(session) }),
 
     shell: {
       // Every canvas needs an explicit `actionLayout` with an `ActionSlot`: the

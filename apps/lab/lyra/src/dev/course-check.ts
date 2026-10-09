@@ -1,7 +1,6 @@
 // Run: pnpm --filter lyra exec tsx src/dev/course-check.ts
 import { CAST } from '@lyra/db/seed';
 import { areasFor } from '@lyra/app/nav/sections';
-import { resolveCatalog } from '@niscorp/moss';
 import { app, asPrincipal, idFor, idsFor, login, ok, report, runtime, settle, treeOf } from './world';
 
 
