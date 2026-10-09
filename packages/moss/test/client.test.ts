@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createWire, browserEnv } from '../src/client';
+import { createWire, browserEnv, readDocumentSnapshot } from '../src/client';
 import type { WireEnv } from '../src/client';
 import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SIGNED_OUT, ClientMessageSchema, PROTOCOL, encodeDelta, frameHash, offeredToken } from '../src/protocol';
 
@@ -389,6 +389,131 @@ describe('the wire — inbound diagnostics', () => {
     FakeSocket.last().emit({ type: 'wat' });
     expect(warn).toHaveBeenCalledOnce();
     expect(String(warn.mock.calls[0]?.[0])).toContain('wat');
+  });
+});
+
+// What the server sends is read as the protocol says it, whole, before any of
+// it reaches the screen. It used to be cast: a tree was whatever arrived under
+// `tree`, and the first thing to find out otherwise was the kit drawing it.
+describe('the wire — what the server sends is parsed', () => {
+  const row = { type: 'text', value: 'row' };
+  const shown = (): { wire: ReturnType<typeof createWire>; socket: FakeSocket; warn: ReturnType<typeof vi.spyOn> } => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const wire = createWire({ url: URL, env: env(), delta: true });
+    const socket = FakeSocket.last();
+    socket.open();
+    socket.emit({ type: 'frame', tree: [row] });
+    socket.emit({ type: 'render', canvas: 'main', tree: [row] });
+    return { wire, socket, warn };
+  };
+
+  it.each([
+    ['a render whose tree is not a list', { type: 'render', canvas: 'main', tree: 'rows' }],
+    ['a render with a node of no kind nova has', { type: 'render', canvas: 'main', tree: [{ type: 'table', rows: [] }] }],
+    ['a render with a broken node deep inside a good one', { type: 'render', canvas: 'main', tree: [{ type: 'component', name: 'Row', props: {}, children: [{ type: 'fragment', children: [{ type: 'text' }] }] }] }],
+    ['a render with a node carrying a field no node has', { type: 'render', canvas: 'main', tree: [{ type: 'text', value: 'a', ink: 'red' }] }],
+    ['a render that names no canvas', { type: 'render', tree: [row] }],
+    ['a render with a field render does not have', { type: 'render', canvas: 'main', tree: [row], also: 'aside' }],
+    ['a frame whose tree is not a tree', { type: 'frame', tree: [{ type: 'text', value: 7 }] }],
+  ])('%s is said and not put on the screen', (_label, message) => {
+    const { wire, socket, warn } = shown();
+    const held = wire.snapshot();
+    let ticks = 0;
+    wire.subscribe(() => (ticks += 1));
+    socket.emit(message);
+    expect(wire.snapshot()).toBe(held);
+    expect(ticks).toBe(0);
+    expect(warn).toHaveBeenCalledOnce();
+    expect(String(warn.mock.calls[0]?.[0])).toContain(message.type);
+    expect(wire.status()).toBe('open');
+  });
+
+  it('text that is not JSON is said and dropped, not thrown into the socket', () => {
+    const { wire, socket, warn } = shown();
+    const held = wire.snapshot();
+    expect(() => socket.onmessage?.({ data: '{"type":"render","canvas":"main"' })).not.toThrow();
+    expect(wire.snapshot()).toBe(held);
+    expect(warn).toHaveBeenCalledOnce();
+    expect(wire.status()).toBe('open');
+  });
+
+  // The text may carry a session token, and a console is read by more than the
+  // person sitting at it.
+  it('what it says of a message it cannot read is its type, never its text', () => {
+    const { socket, warn } = shown();
+    socket.emit({ type: 'session', token: 'st_SECRET', principal: 'usr_1' });
+    expect(warn).toHaveBeenCalledOnce();
+    expect(String(warn.mock.calls[0]?.[0])).toContain('session');
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('st_SECRET');
+    // and it did not sign in on it
+    expect(FakeSocket.instances).toHaveLength(1);
+  });
+
+  it.each([
+    ['names neither a token nor a sealed sign-in', { type: 'session' }],
+    ['carries a token that is not text', { type: 'session', token: 7 }],
+  ])('a session message that %s signs nobody in', (_label, message) => {
+    const { socket, warn } = shown();
+    socket.emit(message);
+    expect(FakeSocket.instances).toHaveLength(1);
+    expect(warn).toHaveBeenCalledOnce();
+  });
+
+  // The checksum proves the text is the server's. It does not prove the text
+  // is a frame, and a rebuilt one is held to the same schema as a whole one.
+  it('a delta that rebuilds, to the checksum, something that is not a render is not put on the screen: it asks for whole frames', () => {
+    const { wire, socket } = shown();
+    const held = wire.snapshot();
+    const base = JSON.stringify({ type: 'render', canvas: 'main', tree: [row] });
+    const next = JSON.stringify({ type: 'render', canvas: 'main', tree: [{ type: 'table', rows: [] }] });
+    socket.emit({ type: 'render-delta', canvas: 'main', ops: encodeDelta(base, next), hash: frameHash(next) });
+    expect(wire.snapshot()).toBe(held);
+    expect(socket.envelopes().filter((m) => m['type'] === 'resync')).toHaveLength(1);
+  });
+
+  it('a delta whose ops are not ops is not applied', () => {
+    const { wire, socket, warn } = shown();
+    const held = wire.snapshot();
+    socket.emit({ type: 'render-delta', canvas: 'main', ops: [[2, 'x'], 'copy'], hash: 1 });
+    expect(wire.snapshot()).toBe(held);
+    expect(warn).toHaveBeenCalledOnce();
+  });
+
+  it('a hello that names no protocol is a server from before the question: it speaks 1, and this terminal stops', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const wire = createWire({ url: URL, env: env() });
+    const socket = FakeSocket.last();
+    socket.open();
+    socket.emit({ type: 'hello', principal: null, catalog: { actions: [], hash: 'x' } });
+    expect(String(error.mock.calls[0]?.[0])).toContain('protocol 1');
+    socket.serverClose(1005);
+    expect(wire.status()).toBe('incompatible');
+  });
+});
+
+// The screen a drawn page carries is read by the same rule: whole, or the page
+// is one that was not drawn, and the terminal starts from nothing.
+describe('readDocumentSnapshot', () => {
+  const carrying = (snapshot: unknown): Pick<Document, 'getElementById'> => ({ getElementById: () => ({ textContent: typeof snapshot === 'string' ? snapshot : JSON.stringify(snapshot) }) as HTMLElement });
+  const drawn = { frame: [{ type: 'text', value: 'page' }], trees: { main: [{ type: 'component', name: 'Row', props: { gap: 8 }, children: [{ type: 'text', value: 'row' }], ref: 'r1' }] }, principal: false };
+
+  it('reads what the server wrote, with what it says about itself', () => {
+    expect(readDocumentSnapshot(carrying(drawn))).toEqual(drawn);
+    const whole = { ...drawn, seed: 'abcdef0123', path: '/docs/intro', live: false };
+    expect(readDocumentSnapshot(carrying(whole))).toEqual(whole);
+  });
+
+  it.each([
+    ['no snapshot at all', ''],
+    ['text that is not JSON', '{"frame":['],
+    ['a frame that is not a tree', { ...drawn, frame: [{ type: 'table' }] }],
+    ['a canvas whose tree is not a tree', { ...drawn, trees: { main: [{ type: 'text', value: 7 }] } }],
+    ['trees that are a list', { ...drawn, trees: [] }],
+    ['nothing said of who it was drawn for', { frame: drawn.frame, trees: drawn.trees }],
+    ['a seed that is not text', { ...drawn, seed: 7 }],
+    ['a field a snapshot does not have', { ...drawn, settled: true }],
+  ])('a page with %s is a page that was not drawn', (_label, snapshot) => {
+    expect(readDocumentSnapshot(carrying(snapshot))).toBeUndefined();
   });
 });
 

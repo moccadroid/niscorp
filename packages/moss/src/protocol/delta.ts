@@ -13,12 +13,9 @@
 //
 // No dependency, both directions in one file, and small enough to read in
 // full — a delta layer that cannot be audited is a desync you cannot diagnose.
+// What an op is, is said with the message that carries it (./messages.ts).
 
-/** A run copied from the base frame: offset, length. */
-type Copy = [0, number, number];
-/** Bytes that are not in the base at all. */
-type Insert = [1, string];
-export type DeltaOp = Copy | Insert;
+import type { DeltaOp } from './messages';
 
 // Matches shorter than this cost more to describe than to inline. 16 is a
 // compromise: low enough to catch a changed cell inside a row, high enough that

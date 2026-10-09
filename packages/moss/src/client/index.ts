@@ -1,6 +1,20 @@
 import type { NovaEvent, RenderNode } from '@niscorp/nova';
-import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SIGNED_OUT, DEFAULT_TOKEN_KEY, PROTOCOL, PROTOCOL_MIN, applyDelta, frameHash, heldCookieName, offerToken } from '../protocol';
-import type { DeltaOp } from '../protocol';
+import {
+  CLOSE_INVALID_TOKEN,
+  CLOSE_PROTOCOL_MISMATCH,
+  CLOSE_SIGNED_OUT,
+  DEFAULT_TOKEN_KEY,
+  DocumentSnapshotSchema,
+  PROTOCOL,
+  PROTOCOL_MIN,
+  SNAPSHOT_ELEMENT_ID,
+  ServerMessageSchema,
+  applyDelta,
+  frameHash,
+  heldCookieName,
+  offerToken,
+} from '../protocol';
+import type { ClientMessage, DeltaOp, DocumentSnapshot, ServerMessage } from '../protocol';
 
 // ═══════════════════════════════════════════════════════════════
 // The wire — moss's protocol client, the other end of ../socket; what the
@@ -73,27 +87,11 @@ export type WireConfig = {
   path?: string;
 };
 
-// What a server-rendered document carries beside its HTML.
-export type DocumentSnapshot = {
-  frame: RenderNode[];
-  trees: Record<string, RenderNode[]>;
-  // The id seed an anonymous page's shell was built under; named on the first
-  // connect so the socket's shell mints the same instance ids.
-  seed?: string;
-  // Whether the page was rendered for a signed-in principal. A page rendered
-  // for nobody is not this terminal's screen if it holds a token, and the other
-  // way round — the wire then starts empty rather than from the wrong screen.
-  principal: boolean;
-  // The path it was drawn for.
-  path?: string;
-  // False when nothing on the drawn screen can still happen: the trees are the
-  // whole of it, and the wire opens no socket at all (status `static`). Absent
-  // is live — a page that does not say is not concluded finished.
-  live?: boolean;
-};
-
-// The id of the element a document carries its snapshot in.
-export const SNAPSHOT_ELEMENT_ID = 'nisc-snapshot';
+// What a server-rendered document carries beside its HTML, and the id of the
+// element it rides in. The server writes both and this reads them, so they are
+// the protocol's.
+export { SNAPSHOT_ELEMENT_ID } from '../protocol';
+export type { DocumentSnapshot } from '../protocol';
 
 // Read the snapshot out of the page, if it has one. Never throws: a page
 // without one, or with one that does not parse, is a page that was not
@@ -102,18 +100,8 @@ export const readDocumentSnapshot = (doc: Pick<Document, 'getElementById'> = doc
   try {
     const text = doc.getElementById(SNAPSHOT_ELEMENT_ID)?.textContent;
     if (text === undefined || text === null || text === '') return undefined;
-    const parsed: unknown = JSON.parse(text);
-    if (parsed === null || typeof parsed !== 'object') return undefined;
-    const { frame, trees, seed, principal, path, live } = parsed as Record<string, unknown>;
-    if (!Array.isArray(frame) || trees === null || typeof trees !== 'object' || typeof principal !== 'boolean') return undefined;
-    return {
-      frame: frame as RenderNode[],
-      trees: trees as Record<string, RenderNode[]>,
-      principal,
-      ...(typeof seed === 'string' ? { seed } : {}),
-      ...(typeof path === 'string' ? { path } : {}),
-      ...(typeof live === 'boolean' ? { live } : {}),
-    };
+    const read = DocumentSnapshotSchema.safeParse(JSON.parse(text));
+    return read.success ? read.data : undefined;
   } catch {
     return undefined;
   }
@@ -164,15 +152,40 @@ export type Wire = {
   dispose: () => void;
 };
 
-type ClientMessage =
-  | { type: 'event'; canvas: string; event: Record<string, unknown> }
-  | { type: 'publish'; channel: string; payload?: unknown }
-  | { type: 'resync' }
-  | { type: 'reset' }
-  | { type: 'back' }
-  | { type: 'popTo'; canvas: string; instance: string };
-
 const EMPTY: WireSnapshot = { frame: [], trees: new Map() };
+
+// What the server sent, read as the protocol says it — or undefined, and said
+// so: a wire that silently stops updating is the worst thing to debug. Only
+// the message's type is named. Its text may carry a session token, and a
+// console is read by more than the person sitting at it.
+const messageOf = (text: string): ServerMessage | undefined => {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    console.warn('[moss/wire] unreadable server message: not JSON');
+    return undefined;
+  }
+  const read = ServerMessageSchema.safeParse(value);
+  if (read.success) return read.data;
+  const named = typeof value === 'object' && value !== null && 'type' in value && typeof value.type === 'string' ? value.type : 'of no type';
+  console.warn(`[moss/wire] unreadable server message: ${named}`);
+  return undefined;
+};
+
+// A delta, applied and proven: the text it rebuilds carries the server's own
+// checksum and is a render this terminal can read. Anything short of that is
+// undefined — never a thrown error, never a frame half applied.
+const rebuiltFrame = (base: string, ops: readonly DeltaOp[], hash: number): { text: string; tree: RenderNode[] } | undefined => {
+  try {
+    const text = applyDelta(base, ops);
+    if (frameHash(text) !== hash) return undefined;
+    const frame = ServerMessageSchema.safeParse(JSON.parse(text));
+    return frame.success && frame.data.type === 'render' ? { text, tree: frame.data.tree } : undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 // The browser host: url derived from location, the page's WebSocket, and the
 // session wherever this page can have it kept.
@@ -323,89 +336,82 @@ export const createWire = (config: WireConfig = {}): Wire => {
     };
     ws.onmessage = (e) => {
       const text = String(e.data);
-      const data = JSON.parse(text) as {
-        type: string;
-        canvas?: string;
-        tree?: RenderNode[];
-        ops?: DeltaOp[];
-        hash?: number;
-        protocol?: number;
-        token?: string;
-        sealed?: string;
-        code?: string;
-        message?: string;
-      };
-      if (data.type === 'render' && data.canvas !== undefined && data.tree !== undefined) {
-        if (config.delta === true) bases.set(data.canvas, text);
-        publishSnapshot({ ...snapshot, trees: new Map(snapshot.trees).set(data.canvas, data.tree) });
-      } else if (data.type === 'render-delta' && data.canvas !== undefined && data.ops !== undefined && data.hash !== undefined) {
-        // Rebuild, then PROVE it. Anything short of the server's own checksum
-        // and we would be rendering a frame nobody authored — so every failure
-        // here takes the one exit that always works: ask for whole frames.
-        // Never a thrown error and never a partial apply; a terminal that goes
-        // blank on a bad delta is worse than one that costs a round trip.
-        const base = bases.get(data.canvas);
-        let rebuilt: string | null = null;
-        if (base !== undefined) {
-          try {
-            const candidate = applyDelta(base, data.ops);
-            rebuilt = frameHash(candidate) === data.hash ? candidate : null;
-          } catch {
-            rebuilt = null;
+      const data = messageOf(text);
+      if (data === undefined) return;
+      switch (data.type) {
+        case 'render':
+          if (config.delta === true) bases.set(data.canvas, text);
+          publishSnapshot({ ...snapshot, trees: new Map(snapshot.trees).set(data.canvas, data.tree) });
+          return;
+        case 'render-delta': {
+          // Rebuild, then PROVE it. Anything short of the server's own checksum
+          // and we would be rendering a frame nobody authored — so every failure
+          // here takes the one exit that always works: ask for whole frames.
+          // Never a thrown error and never a partial apply; a terminal that goes
+          // blank on a bad delta is worse than one that costs a round trip.
+          const base = bases.get(data.canvas);
+          const rebuilt = base === undefined ? undefined : rebuiltFrame(base, data.ops, data.hash);
+          if (rebuilt === undefined) {
+            console.warn(`[moss/wire] canvas "${data.canvas}": delta did not rebuild the server's frame — resyncing.`);
+            bases.delete(data.canvas);
+            send({ type: 'resync' });
+            return;
           }
-        }
-        if (rebuilt === null) {
-          console.warn(`[moss/wire] canvas "${data.canvas}": delta did not rebuild the server's frame — resyncing.`);
-          bases.delete(data.canvas);
-          send({ type: 'resync' });
+          bases.set(data.canvas, rebuilt.text);
+          publishSnapshot({ ...snapshot, trees: new Map(snapshot.trees).set(data.canvas, rebuilt.tree) });
           return;
         }
-        const frame = JSON.parse(rebuilt) as { canvas: string; tree: RenderNode[] };
-        bases.set(data.canvas, rebuilt);
-        publishSnapshot({ ...snapshot, trees: new Map(snapshot.trees).set(data.canvas, frame.tree) });
-      } else if (data.type === 'frame' && data.tree !== undefined) {
-        publishSnapshot({ ...snapshot, frame: data.tree });
-      } else if (data.type === 'session' && typeof data.token === 'string') {
-        // Login redeemed server-side: become that principal.
-        become(data.token);
-      } else if (data.type === 'session' && typeof data.sealed === 'string') {
-        // The same, for a terminal whose browser keeps the session: nothing
-        // this page can read — it is carried to the next upgrade as it is.
-        become(null, data.sealed);
-      } else if (data.type === 'error') {
-        if (data.code === 'seal_not_kept') unsealed = true;
-        // Diagnostics, not authority — surfaced, never swallowed: a wire that
-        // silently stops updating is the worst thing to debug. `invalid_token`
-        // arrives here too, from the server's revalidation pass, and it is
-        // worth the line: the AUTHORITY is the 4401 close that follows (see
-        // onclose), and this is the breadcrumb saying the session expired
-        // rather than the network dropping.
-        console.warn(`[moss/wire] server error${data.code !== undefined ? ` (${data.code})` : ''}: ${data.message ?? ''}`);
-      } else if (data.type === 'hello' && (data.protocol ?? 1) < PROTOCOL_MIN) {
-        // The other half of the handshake: the server checked this terminal on
-        // the upgrade; this checks the server. One that predates the question
-        // sends no `protocol` and speaks 1.
-        console.error(`[moss/wire] the server speaks protocol ${data.protocol ?? 1}; this terminal needs ${PROTOCOL_MIN}–${PROTOCOL}. The server has not been updated yet.`);
-        incompatible = true;
-        ws.close();
-      } else if (data.type === 'hello') {
-        // The upgrade has been answered, so a browser that keeps the session
-        // itself now does: the token this terminal offered is let go of, and
-        // the page holds it no longer. One that does not (another origin,
-        // cookies refused) leaves it with the terminal, stored as it always was.
-        leaving = false;
-        sealed = null;
-        if (token !== null && env.tokens.held !== undefined) {
-          if (env.tokens.held()) {
-            env.tokens.clear();
-            token = null;
-          } else env.tokens.save(token);
-        }
-      } else if (data.type !== 'catalog') {
-        // catalog is known and deliberately ignored (the terminal is
-        // grant-blind — it renders what it is served, never what it may do);
-        // anything else is protocol drift worth a shout.
-        console.warn(`[moss/wire] unhandled server message: ${data.type}`);
+        case 'frame':
+          publishSnapshot({ ...snapshot, frame: data.tree });
+          return;
+        case 'session':
+          // Login redeemed server-side: become that principal. Handed over
+          // sealed, for a terminal whose browser keeps the session, it is
+          // nothing this page can read — it is carried to the next upgrade as
+          // it is.
+          if ('token' in data) become(data.token);
+          else become(null, data.sealed);
+          return;
+        case 'error':
+          if (data.code === 'seal_not_kept') unsealed = true;
+          // Diagnostics, not authority — surfaced, never swallowed: a wire that
+          // silently stops updating is the worst thing to debug. `invalid_token`
+          // arrives here too, from the server's revalidation pass, and it is
+          // worth the line: the AUTHORITY is the 4401 close that follows (see
+          // onclose), and this is the breadcrumb saying the session expired
+          // rather than the network dropping.
+          console.warn(`[moss/wire] server error (${data.code}): ${data.message}`);
+          return;
+        case 'hello':
+          // The other half of the handshake: the server checked this terminal on
+          // the upgrade; this checks the server. One that predates the question
+          // sends no `protocol`, which the protocol reads as 1.
+          if (data.protocol < PROTOCOL_MIN) {
+            console.error(`[moss/wire] the server speaks protocol ${data.protocol}; this terminal needs ${PROTOCOL_MIN}–${PROTOCOL}. The server has not been updated yet.`);
+            incompatible = true;
+            ws.close();
+            return;
+          }
+          // The upgrade has been answered, so a browser that keeps the session
+          // itself now does: the token this terminal offered is let go of, and
+          // the page holds it no longer. One that does not (another origin,
+          // cookies refused) leaves it with the terminal, stored as it always was.
+          leaving = false;
+          sealed = null;
+          if (token !== null && env.tokens.held !== undefined) {
+            if (env.tokens.held()) {
+              env.tokens.clear();
+              token = null;
+            } else env.tokens.save(token);
+          }
+          return;
+        case 'catalog':
+          // Known and deliberately ignored: the terminal is grant-blind — it
+          // renders what it is served, never what it may do.
+          return;
+        default:
+          // A message the protocol gains and this does not handle fails to compile.
+          data satisfies never;
       }
     };
     // The socket is ephemeral, the shell is durable: reconnect re-sends
@@ -477,7 +483,7 @@ export const createWire = (config: WireConfig = {}): Wire => {
     },
     snapshot: () => snapshot,
     status: () => status,
-    dispatch: (canvasId, event) => send({ type: 'event', canvas: canvasId, event: event as unknown as Record<string, unknown> }),
+    dispatch: (canvasId, event) => send({ type: 'event', canvas: canvasId, event }),
     publish: (channel, payload) => send(payload === undefined ? { type: 'publish', channel } : { type: 'publish', channel, payload }),
     // Only on an open socket, and deliberately not queued: a back pressed while
     // the connection is down is a gesture about a screen the person is no

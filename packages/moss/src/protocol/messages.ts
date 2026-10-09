@@ -1,16 +1,34 @@
 import { z } from 'zod';
-import type { RenderNode } from '@niscorp/nova';
-import type { DeltaOp } from './delta';
+import { RenderNodeSchema } from './tree';
 
 // The envelope: every message either end sends is JSON, and one of these.
+//
+// Each end parses what it is sent with the schema here, and its types are
+// inferred from the same schema, so there is one definition and neither end
+// can take a message in part. Every shape is exact: a field the protocol does
+// not name is a message that is not read. A shape changes by PROTOCOL moving
+// (./connection.ts), never by one end guessing at the other.
 
-export type ServerMessage =
-  | { type: 'hello'; protocol: number; principal: string | null; catalog: { actions: readonly string[]; hash: string } }
-  | { type: 'catalog'; actions: readonly string[]; hash: string }
+// One step of a frame delta (./delta.ts): a run copied from the base frame
+// (offset, length), or bytes that are not in the base at all.
+export const DeltaOpSchema = z.union([z.tuple([z.literal(0), z.number(), z.number()]), z.tuple([z.literal(1), z.string()])]);
+export type DeltaOp = z.infer<typeof DeltaOpSchema>;
+
+const catalogActions = z.array(z.string()).readonly();
+
+const ServerMessageByTypeSchema = z.discriminatedUnion('type', [
+  z.strictObject({
+    type: z.literal('hello'),
+    // A server built before the question existed sends none, and speaks 1.
+    protocol: z.number().default(1),
+    principal: z.string().nullable(),
+    catalog: z.strictObject({ actions: catalogActions, hash: z.string() }),
+  }),
+  z.strictObject({ type: z.literal('catalog'), actions: catalogActions, hash: z.string() }),
   // the shell's canvas ARRANGEMENT — a rendered layout whose CanvasSlot
   // markers the terminal resolves against its per-canvas trees
-  | { type: 'frame'; tree: RenderNode[] }
-  | { type: 'render'; canvas: string; tree: RenderNode[] }
+  z.strictObject({ type: z.literal('frame'), tree: z.array(RenderNodeSchema) }),
+  z.strictObject({ type: z.literal('render'), canvas: z.string(), tree: z.array(RenderNodeSchema) }),
   // The same render, as a DELTA against the last frame this connection was
   // sent for this canvas. Only ever sent to a terminal that asked for deltas
   // (`?delta=1` on the upgrade) and only when a previous frame exists, so a
@@ -19,20 +37,25 @@ export type ServerMessage =
   // `hash` is over the rebuilt message text: a terminal that applies the ops
   // and does not land on it has diverged, and asks for a whole frame instead
   // of rendering something the server never meant.
-  | { type: 'render-delta'; canvas: string; ops: DeltaOp[]; hash: number }
-  // session GRANT (login succeeded server-side): store the token and
-  // reconnect authenticated — the twin of the 4403 SIGNED_OUT revoke
-  // A sign-in: the terminal comes back as that principal. As the token, for a
-  // terminal that keeps its own; SEALED, for one whose browser keeps the
-  // session — it offers it on its next upgrade, where its browser's seal opens it.
-  | { type: 'session'; token: string }
-  | { type: 'session'; sealed: string }
-  | { type: 'error'; code: string; message: string; canvas?: string };
+  z.strictObject({ type: z.literal('render-delta'), canvas: z.string(), ops: z.array(DeltaOpSchema), hash: z.number() }),
+  z.strictObject({ type: z.literal('error'), code: z.string(), message: z.string(), canvas: z.string().optional() }),
+]);
 
-// What a terminal sends. External input, so every shape is exact: a field the
-// protocol does not name is a message this server does not read, and is
-// refused rather than half-taken. A shape changes by PROTOCOL moving
-// (./connection.ts), never by one end guessing at the other.
+// What the server sends. `session` is two shapes under one `type`, which a
+// union discriminated on `type` cannot hold as two members, so they sit
+// beside it.
+export const ServerMessageSchema = z.union([
+  ServerMessageByTypeSchema,
+  // session GRANT (login succeeded server-side): the terminal comes back as
+  // that principal — the twin of the 4403 SIGNED_OUT revoke. As the token, for
+  // a terminal that keeps its own; SEALED, for one whose browser keeps the
+  // session — it offers it on its next upgrade, where its browser's seal opens it.
+  z.strictObject({ type: z.literal('session'), token: z.string() }),
+  z.strictObject({ type: z.literal('session'), sealed: z.string() }),
+]);
+export type ServerMessage = z.infer<typeof ServerMessageSchema>;
+
+// What a terminal sends.
 export const ClientMessageSchema = z.discriminatedUnion('type', [
   // What an event IS belongs to nova: the shell it is dispatched into reads
   // it. Here it is held to being an object, and to the canvas it came from.

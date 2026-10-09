@@ -2,7 +2,8 @@ import { headOf, placeHead } from '@niscorp/nova/document';
 import type { ScreenHead } from '@niscorp/nova/document';
 import type { ShellSnapshot } from './shells';
 import type { MossServer } from './server';
-import { DEFAULT_TOKEN_KEY } from './protocol';
+import { DEFAULT_TOKEN_KEY, SNAPSHOT_ELEMENT_ID } from './protocol';
+import type { DocumentSnapshot } from './protocol';
 import { sessionTokenOf, tokenFromCookie } from './session-cookie';
 
 // ═══════════════════════════════════════════════════════════════
@@ -37,9 +38,6 @@ import { sessionTokenOf, tokenFromCookie } from './session-cookie';
 //   and the terminal paints it the way it did before any of this existed.
 // ═══════════════════════════════════════════════════════════════
 
-// The element id the terminal looks for — the same constant ../client reads by.
-export const SNAPSHOT_ELEMENT_ID = 'nisc-snapshot';
-
 const DEFAULT_ROOT = '<div id="root"></div>';
 
 export { tokenFromCookie };
@@ -50,7 +48,8 @@ export { tokenFromCookie };
 // U+2028/2029 go the same way — legal in JSON, line breaks to an HTML parser.
 export const embedSnapshot = (snapshot: ShellSnapshot, principal: string | null, path?: string): string => {
   const { frame, trees, seed, live } = snapshot;
-  const text = JSON.stringify({ frame, trees, principal: principal !== null, live, ...(seed !== undefined ? { seed } : {}), ...(path !== undefined ? { path } : {}) })
+  const carried: DocumentSnapshot = { frame, trees, principal: principal !== null, live, ...(seed !== undefined ? { seed } : {}), ...(path !== undefined ? { path } : {}) };
+  const text = JSON.stringify(carried)
     .replace(/</g, '\\u003c')
     .replace(/\u2028/g, '\\u2028')
     .replace(/\u2029/g, '\\u2029');

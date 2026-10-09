@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { DefinitionValidationError } from '@niscorp/nova';
 import { createSocket } from '../src/socket';
 import type { Connection, SocketContext } from '../src/socket';
-import { CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, CLOSE_SHELL_FAILED, CLOSE_PROTOCOL_MISMATCH, PROTOCOL, PROTOCOL_MIN, offerToken } from '../src/protocol';
+import { CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, CLOSE_SHELL_FAILED, CLOSE_PROTOCOL_MISMATCH, PROTOCOL, PROTOCOL_MIN, ServerMessageSchema, offerToken } from '../src/protocol';
 import type { ServerMessage } from '../src/protocol';
 import type { ShellHost, ShellSession } from '../src/shells';
 import { sealSession } from '../src/session-cookie';
@@ -27,7 +27,9 @@ class FakeConnection implements Connection {
   }
   private onMsg?: (t: string) => void;
   private onCls?: () => void;
-  send(text: string): void { this.sent.push(JSON.parse(text) as ServerMessage); this.order.push((JSON.parse(text) as ServerMessage).type); }
+  // Whatever the socket sends, in any test here, is something a terminal reads:
+  // the schema it is held to is the one the terminal parses with.
+  send(text: string): void { const message = ServerMessageSchema.parse(JSON.parse(text)); this.sent.push(message); this.order.push(message.type); }
   close(code?: number, reason?: string): void { this.closed = { code, reason }; this.onCls?.(); }
   onMessage(fn: (t: string) => void): void { this.onMsg = fn; }
   onClose(fn: () => void): void { this.onCls = fn; }
