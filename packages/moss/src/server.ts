@@ -16,6 +16,7 @@ import {
   buildContract,
   callIntegrationWith,
   createForwarder,
+  flooredWire,
   relayed,
   contractAsMarkdown,
   copyPress,
@@ -984,6 +985,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
         catalogFor: running.catalogFor,
         variantsFor: running.variantsFor,
         runtime,
+        wrapWire: flooredWire,
         ...(runtime.shellIdleMs !== undefined ? { idleMs: runtime.shellIdleMs } : {}),
         ...(runtime.shellFrameDelta !== undefined ? { delta: runtime.shellFrameDelta } : {}),
         wire: (token) => async (url, init) => {

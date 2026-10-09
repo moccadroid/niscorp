@@ -96,6 +96,12 @@ export type ShellHostContext = {
   variantsFor: (roles: readonly string[]) => ReadonlyMap<string, LayoutNode>;
   // The internal wire: the server's own fetch, authorized as the session.
   wire: (token: string | null) => FetchFn;
+  // LAID AROUND THE WIRE A SESSION'S SCREENS CALL THROUGH, by whoever has a
+  // reason to answer for a call that failed (an integration that is down gets
+  // a sentence under it; ./integrations, floor.ts). It wraps the wire the
+  // shell's endpoints and functions are handed, and not the one `inputs` and
+  // `phrases` read through. Absent: the wire as it is.
+  wrapWire?: (inner: FetchFn) => FetchFn;
   // The environment and the per-principal policy — what the manifest's
   // in-process functions close over (agents read data under the policy).
   runtime: NiscRuntime;
@@ -109,51 +115,6 @@ export type ShellHostContext = {
   // received, instead of whole. Default off; a connection is only ever sent one
   // if it asked at attach. See `runtime.shellFrameDelta` and DOCS.md.
   delta?: boolean;
-};
-
-// ── THE FLOOR UNDER A FAILING INTEGRATION ───────────────────────────
-//
-// A third-party service being down is the steady state of a marketplace, and
-// the screen in front of it belongs to a studio owner, not an operator. A
-// integration reply carrying no `message` falls through to the terminal's bare
-// `HTTP 500` — a status code in front of a customer. So the session's wire
-// puts a SENTENCE under every integration call: naming the integration, saying it
-// is the integration, saying the studio is otherwise fine. A reply that DOES carry
-// a message passes through untouched — the integration's own words always win —
-// and no other path pays anything.
-const INTEGRATION_PATH = /^\/integrations\/([a-z][a-z0-9-]*)\//;
-
-const flooredWire = (inner: FetchFn): FetchFn => async (url, init) => {
-  const integration = INTEGRATION_PATH.exec(url)?.[1];
-  if (integration === undefined) return inner(url, init);
-
-  const floor = (status: number): Awaited<ReturnType<FetchFn>> => {
-    const body = { message: `The ${integration} add-on is not answering right now. The rest of the studio is unaffected.` };
-    return { ok: false, status, json: async () => body, text: async () => JSON.stringify(body) };
-  };
-
-  let reply: Awaited<ReturnType<FetchFn>>;
-  try {
-    reply = await inner(url, init);
-  } catch {
-    return floor(502);
-  }
-  if (reply.ok) return reply;
-
-  try {
-    const body: unknown = await reply.json();
-    const message = (body as { message?: unknown } | null)?.message;
-    // The proxy's own generic phrase gets the same upgrade as silence — it
-    // knows no integration name; this seam does. The literal belongs to the proxy
-    // (server.ts) and the naming should move there with its next edit.
-    if (typeof message === 'string' && message !== 'The integration is unreachable.') {
-      // Re-serve the consumed body — `json()` reads once.
-      return { ok: false, status: reply.status, json: async () => body, text: async () => JSON.stringify(body) };
-    }
-  } catch {
-    // Unparseable is the same case as silent.
-  }
-  return floor(reply.status);
 };
 
 export type ShellSession = {
@@ -480,7 +441,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
       };
     });
 
-    const wire = flooredWire(ctx.wire(token));
+    const wire = ctx.wrapWire === undefined ? ctx.wire(token) : ctx.wrapWire(ctx.wire(token));
     const userId = principal ?? 'anonymous';
 
     const registry = createComponentRegistry();
