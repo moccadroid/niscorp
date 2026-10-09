@@ -4,8 +4,8 @@
 // relay's live universes, the compiled vex policies, and a clean verifier
 // report — printing the per-role closure. A viewer's dangling Edit targets
 // are EXPECTED findings (shown, not hidden), not failures.
-import { resolveRole, resolvePrincipal, verifyCharter } from '@niscorp/charter';
-import { auditClosure, verifyVariants, MOSS_SEQUENCE } from '@niscorp/moss';
+import { resolveRole, resolvePrincipal } from '@niscorp/charter';
+import { verifyApp, MOSS_SEQUENCE } from '@niscorp/moss';
 import { scopeGrants, createScopePolicy, createPostgresCache } from '@niscorp/vex';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import { migrate } from '@niscorp/strata/postgres';
@@ -101,13 +101,15 @@ checks.push(['viewer holds no variant — the floor is not an id (ring 2)', reso
 checks.push(['sales holds the full topbar (the write-path chrome rides with the write grants)', eq(resolvedLayouts('sales'), ['chrome.topbar.full'])]);
 checks.push(['admin inherits it through extends (variants compose like capabilities)', eq(resolvedLayouts('admin'), ['chrome.topbar.full'])]);
 checks.push(['member and public hold no variants', resolvedLayouts('member').length === 0 && resolvedLayouts('public').length === 0]);
+
+// ── relay's documents are coherent — the check a server boots on, run over
+//    the same four documents and the universe built above ──
+const verified = verifyApp({ charter: CHARTER, assignments: ASSIGNMENTS, actions: CATALOG_DEFINITIONS, layouts: LAYOUT_VARIANTS }, dataU);
 checks.push([
   'ring-2 documents are coherent (every variant reshapes a shipped action; one variant per action per wearer)',
-  verifyVariants({ charter: CHARTER, assignments: ASSIGNMENTS, actions: CATALOG_DEFINITIONS, layouts: LAYOUT_VARIANTS }).length === 0,
+  verified.errors.filter((error) => error.check === 'variants').length === 0,
 ]);
-
-// ── relay's charter is coherent — same verify the shell and server boot on ──
-const report = verifyCharter(CHARTER, { actions: ids, data: dataU, layouts: layoutU }, Object.values(ASSIGNMENTS), auditClosure(CATALOG_DEFINITIONS, LAYOUT_VARIANTS));
+const report = verified.charter;
 checks.push([`relay charter: zero errors (got ${report.errors.length})`, report.errors.length === 0]);
 checks.push([`relay charter: zero warnings (got ${report.warnings.length})`, report.warnings.length === 0]);
 

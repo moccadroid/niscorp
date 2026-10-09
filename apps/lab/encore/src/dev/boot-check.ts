@@ -6,13 +6,12 @@
 // malformed definition and a mutation entry that fails its lint, so reaching
 // the first line of `main` means all three held.
 import { verifyCharter } from '@niscorp/charter';
-import { resolveCatalog } from '@niscorp/moss';
 import { scopeGrants } from '@niscorp/vex';
 import { z } from 'zod';
 import { LIAISON_PRINCIPAL, OPERATOR_PRINCIPAL } from '@encore/app/charter/assignments';
 import { CANVAS_PLACEMENT } from '@encore/app/canvas-placement';
 import { inputContractOf } from '@encore/server/intent/input-contract';
-import { app, asPrincipal, check, login, mounted, report, runtime, settle } from './world';
+import { app, asPrincipal, check, login, mounted, report, runtime, server, settle } from './world';
 
 // Exactly these, no more and no fewer. Slice 1b added `assist` — the slow path's
 // one card — and the assertion grew with the manifest rather than loosening.
@@ -59,13 +58,13 @@ const main = async (): Promise<void> => {
   // proves the ref resolved is the Pack, which is nowhere in the frame's own layout.)
   check('the frame renders, with the room resolved through its layout ref', frame.includes('"name":"Pack"') && !frame.includes('"type":"error"'));
 
-  // ═══ 3. ring 1, from the resolver ════════════════════════
-  const operatorIds = resolveCatalog(app, OPERATOR_PRINCIPAL).ids;
-  const liaisonIds = resolveCatalog(app, LIAISON_PRINCIPAL).ids;
+  // ═══ 3. ring 1, from the server that resolves it ═════════
+  const operatorIds = (await server.catalogOf(OPERATOR_PRINCIPAL)).ids;
+  const liaisonIds = (await server.catalogOf(LIAISON_PRINCIPAL)).ids;
   check(`the operator holds every action the app ships (${operatorIds.length})`, operatorIds.length === Object.keys(app.actions).length);
   check('the liaison holds the line, and does NOT hold the slot swap', liaisonIds.includes('intent.line') && !liaisonIds.includes('slot.swap'));
   check(`...a narrow subset (${liaisonIds.join(', ')})`, liaisonIds.length < operatorIds.length && liaisonIds.every((id) => operatorIds.includes(id)));
-  check('an anonymous principal resolves to no application at all', resolveCatalog(app, null).ids.length === 0);
+  check('an anonymous principal resolves to no application at all', (await server.catalogOf(null)).ids.length === 0);
 
   // ═══ 4. the contracts the loop will read ═════════════════
   // Rule 14, checked: every declared input is a key of the action's data. A
