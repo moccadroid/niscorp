@@ -1,13 +1,11 @@
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
-import { scopeProfiles } from '@niscorp/vex';
 import type { PgPool, SeedEntry, SeedMutation } from '@niscorp/vex';
-import type { NiscApp } from './app';
 import { createGeneration } from './generation';
 import type { Generation } from './generation';
-import { createRoleHoldings, wearableOf } from './roles';
+import { createRoleHoldings } from './roles';
 import type { Catalog, InstalledOnly } from './roles';
-import { refusalOf, verifyManifest } from './verify';
-import type { ManifestCandidate, ManifestReport } from './verify';
+import { candidateOf, refusalOf, verifyManifest } from './verify';
+import type { ManifestCandidate, ManifestReport, ShippedManifest } from './verify';
 
 // ═══════════════════════════════════════════════════════════════
 // THE RUNNING MANIFEST — what the app consists of right now, with one writer.
@@ -29,20 +27,18 @@ import type { ManifestCandidate, ManifestReport } from './verify';
 
 type Actions = Readonly<Record<string, ActionDefinition>>;
 
-// WHAT THE APP SHIPPED, as the app holds it. The record itself and not a copy
-// of its values, for two reasons that the next phase removes together:
-//
-//   - an app may still edit its manifest and call `refresh`, so the charter,
-//     the variants, the role combinations and the behaviors are read as they
-//     stand at each verification;
-//   - code that predates this module reads `app.actions` and expects the
-//     integrations' actions in it, so `actions` is also WRITTEN (see `switchTo`).
-//
-// The entries are read once: they are seeded when the server boots, so one
-// that arrives later was never served.
-export type ShippedManifest = Pick<NiscApp, 'charter' | 'actions' | 'layouts' | 'wearable' | 'assignments' | 'entries' | 'behaviors'>;
-
 export type RunningManifestConfig = {
+  // WHAT THE APP SHIPPED, as the app holds it. The record itself and not a copy
+  // of its values, for two reasons that the next phase removes together:
+  //
+  //   - an app may still edit its manifest and call `refresh`, so the charter,
+  //     the variants, the role combinations and the behaviors are read as they
+  //     stand at each verification;
+  //   - code that predates this module reads `app.actions` and expects the
+  //     integrations' actions in it, so `actions` is also WRITTEN (see `switchTo`).
+  //
+  // The entries are read once: they are seeded when the server boots, so one
+  // that arrives later was never served.
   shipped: ShippedManifest;
   // every `<table>.<verb>` the database can carry: the universe the charter's
   // `data` section is verified over
@@ -131,15 +127,7 @@ const tell = (listener: () => void): void => {
 export const createRunningManifest = (config: RunningManifestConfig): RunningManifest => {
   const { shipped } = config;
   const served = shipped.entries ?? [];
-  const candidateOf = (actions: Actions): ManifestCandidate => ({
-    charter: shipped.charter,
-    actions,
-    layouts: shipped.layouts ?? {},
-    wearable: wearableOf(shipped),
-    grants: config.grants,
-    entries: served,
-    profiles: scopeProfiles(shipped.behaviors ?? {}),
-  });
+  const candidate = (actions: Actions): ManifestCandidate => candidateOf({ ...shipped, entries: served }, actions, config.grants);
 
   // What the app ships, and the named sets in the order they are laid over it.
   // A set with a loader has its place from the start, so the order does not
@@ -151,7 +139,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
 
   // REFUSE TO START INCOHERENT. What is only said is said first, here and at no
   // later switch: a boot is when somebody reads the log.
-  let report = verifyManifest(candidateOf(inForce));
+  let report = verifyManifest(candidate(inForce));
   for (const line of report.said) console.error(`[moss] ${line}`);
   const refused = refusalOf(report, 'boot');
   if (refused !== undefined) throw new Error(refused);
@@ -167,7 +155,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   // that is refused leaves every piece as it was.
   const switchTo = (next: { own: Actions; sets: ReadonlyMap<string, Actions> }, move: boolean): void => {
     const actions = laidOver(next.own, next.sets);
-    const verified = verifyManifest(candidateOf(actions));
+    const verified = verifyManifest(candidate(actions));
     const refusal = refusalOf(verified, 'refresh');
     if (refusal !== undefined) throw new Error(refusal);
     own = next.own;
@@ -197,7 +185,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   return {
     actions: () => inForce,
     entries: new Map(served.map((entry) => [entry.fingerprint, entry])),
-    verify: (actions) => verifyManifest(candidateOf(actions)),
+    verify: (actions) => verifyManifest(candidate(actions)),
     report: () => report,
     replace: (source, actions) => switchTo({ own, sets: new Map(sets).set(source, { ...actions }) }, true),
     // An app may have edited its own record before saying so; what it holds

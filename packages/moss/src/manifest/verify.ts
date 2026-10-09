@@ -2,6 +2,7 @@ import { resolvePrincipal, verifyCharter } from '@niscorp/charter';
 import type { Charter, VerifyReport } from '@niscorp/charter';
 import type { ActionDefinition } from '@niscorp/nova';
 import { chainCycles } from '@niscorp/nova/reflect';
+import { scopeProfiles } from '@niscorp/vex';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { LayoutVariant, NiscApp } from './app';
 import { auditClosure } from './closure';
@@ -38,6 +39,22 @@ export type ManifestCandidate = {
   entries: readonly (SeedEntry | SeedMutation)[];
   profiles: ReadonlySet<string>;
 };
+
+// WHAT A VERIFICATION READS OF WHAT AN APP SHIPPED: seven fields of its
+// manifest, and nothing of how it is served.
+export type ShippedManifest = Pick<NiscApp, 'charter' | 'actions' | 'layouts' | 'wearable' | 'assignments' | 'entries' | 'behaviors'>;
+
+// The candidate an app would be with `actions` in force: its own, or its own
+// with the sets that arrived while it runs laid over them.
+export const candidateOf = (shipped: ShippedManifest, actions: ManifestCandidate['actions'], grants: readonly string[]): ManifestCandidate => ({
+  charter: shipped.charter,
+  actions,
+  layouts: shipped.layouts ?? {},
+  wearable: wearableOf(shipped),
+  grants,
+  entries: shipped.entries ?? [],
+  profiles: scopeProfiles(shipped.behaviors ?? {}),
+});
 
 export type ManifestCheck = 'charter' | 'reach' | 'variants';
 
