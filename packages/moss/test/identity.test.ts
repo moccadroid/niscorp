@@ -269,3 +269,139 @@ describe('identity cache', () => {
     cache.stop();
   });
 });
+
+// AN INVALIDATION SAYS: whatever you know of this principal is stale. A resolve
+// that was already out when it was said read its rows BEFORE — a role changed,
+// an integration installed — so what it lands with is the stale answer, and
+// holding it undoes the invalidation for as long as the record lives.
+describe('identity cache — an invalidation while a resolve is out', () => {
+  // A seam whose answers the test lands when it chooses, in the order it chooses.
+  const seam = () => {
+    const out: Array<(record: IdentityRecord) => void> = [];
+    return {
+      resolve: (_principal: string): Promise<IdentityRecord> => new Promise<IdentityRecord>((land) => out.push(land)),
+      land: (call: number, record: IdentityRecord): void => out[call]?.(record),
+      calls: (): number => out.length,
+    };
+  };
+  const member: IdentityRecord = { roles: ['member'], scope: {} };
+  const manager: IdentityRecord = { roles: ['manager'], scope: {} };
+
+  it('is not undone when that resolve lands', async () => {
+    const app = seam();
+    const cache = createIdentityCache({ resolve: app.resolve, idleMs: 0 });
+
+    const asked = cache.get('p_tobias');
+    expect(cache.invalidate('p_tobias')).toBe(false); // nothing held yet: an answer
+    app.land(0, member);
+
+    // whoever was waiting is answered — they asked before it was said
+    expect((await asked).roles).toEqual(['member']);
+    // …and nothing is held, so the next ask goes back to the app
+    expect(cache.meter().size).toBe(0);
+    const again = cache.get('p_tobias');
+    expect(app.calls()).toBe(2);
+    app.land(1, manager);
+    expect((await again).roles).toEqual(['manager']);
+    expect(cache.meter().size).toBe(1);
+    cache.stop();
+  });
+
+  it('the answer read before does not replace the one read after', async () => {
+    const app = seam();
+    const cache = createIdentityCache({ resolve: app.resolve, idleMs: 0 });
+
+    const before = cache.get('p_tobias');
+    cache.invalidate('p_tobias');
+    const after = cache.get('p_tobias');
+    app.land(1, manager);
+    await after;
+    app.land(0, member); // the older read lands last
+    await before;
+
+    expect((await cache.get('p_tobias')).roles).toEqual(['manager']);
+    expect(app.calls()).toBe(2);
+    cache.stop();
+  });
+
+  it('the resolve started after it is still the one a burst shares', async () => {
+    const app = seam();
+    const cache = createIdentityCache({ resolve: app.resolve, idleMs: 0 });
+
+    const before = cache.get('p_tobias');
+    cache.invalidate('p_tobias');
+    const after = cache.get('p_tobias');
+    app.land(0, member);
+    await before;
+
+    // the older one landing must not take the newer one out of flight
+    const third = cache.get('p_tobias');
+    expect(app.calls()).toBe(2);
+    app.land(1, manager);
+    expect((await after).roles).toEqual(['manager']);
+    expect((await third).roles).toEqual(['manager']);
+    cache.stop();
+  });
+
+  it('holds for a record being revalidated: the re-read that was out is not kept', async () => {
+    let t = 1_000;
+    const app = seam();
+    const cache = createIdentityCache({ resolve: app.resolve, idleMs: 0, revalidateMs: 60_000, now: () => t });
+    const first = cache.get('p_tobias');
+    app.land(0, member);
+    await first;
+
+    t += 61_000;
+    const reread = cache.get('p_tobias');
+    expect(cache.invalidate('p_tobias')).toBe(true);
+    app.land(1, member);
+    await reread;
+    expect(cache.meter().size).toBe(0);
+    cache.stop();
+  });
+
+  it('holds for everybody at once', async () => {
+    const app = seam();
+    const cache = createIdentityCache({ resolve: app.resolve, idleMs: 0 });
+    const ava = cache.get('p_ava');
+    const omar = cache.get('p_omar');
+    cache.invalidateAll();
+    app.land(0, member);
+    app.land(1, member);
+    await Promise.all([ava, omar]);
+    expect(cache.meter().size).toBe(0);
+    cache.stop();
+  });
+
+  // Which tag somebody wears is not known until their record lands, so a tag
+  // forgotten while they were being resolved has to be remembered until then.
+  it('holds for a tag: somebody resolved for the first time who turns out to wear it is not kept', async () => {
+    const app = seam();
+    const cache = createIdentityCache({ resolve: app.resolve, idleMs: 0 });
+    const asked = cache.get('a_1');
+    expect(cache.invalidateTag('st_a')).toEqual([]); // nobody held wears it yet
+    app.land(0, { roles: ['member'], scope: {}, tag: 'st_a' });
+    await asked;
+    expect(cache.meter().size).toBe(0);
+
+    // …and once that resolve has landed, the tag is no longer held against anybody
+    const again = cache.get('a_1');
+    app.land(1, { roles: ['member'], scope: {}, tag: 'st_a' });
+    await again;
+    expect(cache.meter().size).toBe(1);
+    cache.stop();
+  });
+
+  it('…and somebody who turns out to wear another tag is kept: one tenant, not the deployment', async () => {
+    const app = seam();
+    const cache = createIdentityCache({ resolve: app.resolve, idleMs: 0 });
+    const asked = cache.get('b_1');
+    cache.invalidateTag('st_a');
+    app.land(0, { roles: ['member'], scope: {}, tag: 'st_b' });
+    await asked;
+    expect(cache.meter().size).toBe(1);
+    await cache.get('b_1');
+    expect(app.calls()).toBe(1);
+    cache.stop();
+  });
+});

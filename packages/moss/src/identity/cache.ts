@@ -212,7 +212,10 @@ export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache =>
   // ONCE. Without this the first request's latency is paid by every request
   // that arrives while it is outstanding, which is precisely the moment a
   // browser opens six connections at once.
-  const pending = new Map<string, Promise<IdentityRecord>>();
+  //
+  // Beside each resolve that is out: the tags forgotten while it was. Which tag
+  // somebody wears is not known until their record lands.
+  const pending = new Map<string, { work: Promise<IdentityRecord>; forgotten: Set<string> }>();
 
   let resolved = 0;
   let expired = 0;
@@ -230,19 +233,31 @@ export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache =>
     }
 
     const inFlight = pending.get(principal);
-    if (inFlight !== undefined) return inFlight;
+    if (inFlight !== undefined) return inFlight.work;
 
-    const work = ctx
+    // AN INVALIDATION WHILE THIS IS OUT WINS. It says that whatever is known of
+    // the principal is stale, and this resolve read its rows before it was
+    // said. Whoever is waiting is still answered: they asked before, too. But
+    // the record is HELD only if this is still the resolve that is out for the
+    // principal (an invalidation takes it off `pending`, and a later ask puts
+    // its own there) and it wears no tag forgotten meanwhile. Holding it would
+    // undo the invalidation for as long as the record lived.
+    const forgotten = new Set<string>();
+    const isStillOut = (): boolean => pending.get(principal)?.work === work;
+    const work: Promise<IdentityRecord> = ctx
       .resolve(principal)
       .then((record) => {
         resolved += 1;
-        held.remember(principal, record, now());
+        const wearsForgottenTag = record.tag !== undefined && forgotten.has(record.tag);
+        if (isStillOut() && !wearsForgottenTag) held.remember(principal, record, now());
         return record;
       })
       .finally(() => {
-        pending.delete(principal);
+        // Only its own place: a resolve started after an invalidation is the one
+        // a burst shares now, and this one landing must not take it out of flight.
+        if (isStillOut()) pending.delete(principal);
       });
-    pending.set(principal, work);
+    pending.set(principal, { work, forgotten });
     return work;
   };
 
@@ -264,6 +279,7 @@ export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache =>
     invalidateTag: (tag) => {
       const principals = held.forgetTag(tag);
       for (const principal of principals) pending.delete(principal);
+      for (const flight of pending.values()) flight.forgotten.add(tag);
       return principals;
     },
     list: held.list,
