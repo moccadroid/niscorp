@@ -28,8 +28,13 @@ import {
   reachOf,
   runIntake,
   intakeContextOf,
+  FoundRowSchema,
+  PathBodySchema,
+  RegisterBodySchema,
+  RequestedRowSchema,
+  StandingRowSchema,
 } from './integrations';
-import type { Reach, CallIntegration } from './integrations';
+import type { CallIntegration } from './integrations';
 import { createAssertionSigner, hashIntegrationKey, mintIntegrationKey } from './assert';
 import { createSocket, DEFAULT_REVALIDATE_MS } from './socket';
 import type { SocketAccept } from './socket';
@@ -528,9 +533,8 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // committed before that check would take the app down until somebody deleted
   // rows by hand.
   operator.post('/integrations', async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as { id?: unknown; url?: unknown };
-    const id = typeof body.id === 'string' ? body.id : '';
-    const url = typeof body.url === 'string' ? body.url : '';
+    const sent: unknown = await c.req.json().catch(() => ({}));
+    const { id, url } = RegisterBodySchema.parse(sent);
     if (id === '' || url === '') return c.json({ message: 'Give an id and a url.' }, 400);
 
     let payload: unknown;
@@ -574,8 +578,8 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
 
     // The candidate manifest, verified BEFORE anything is written.
     const existing = await runtime.pool.query('SELECT status, key_hash FROM integrations WHERE id = $1', [id]);
-    const existingRow = existing.rows[0] as { status?: unknown; key_hash?: unknown } | undefined;
-    const wasApproved = String(existingRow?.status ?? '') === 'approved';
+    const existingRow = StandingRowSchema.optional().parse(existing.rows[0]);
+    const wasApproved = existingRow?.status === 'approved';
     const holdsKey = typeof existingRow?.key_hash === 'string' && existingRow.key_hash !== '';
     if (wasApproved) {
       // TRIED, NOT PUT IN. The bundle's actions over the actions in force are
@@ -687,8 +691,9 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   operator.post('/integrations/:id/approve', async (c) => {
     const id = c.req.param('id');
     const row = await runtime.pool.query('SELECT requested_data FROM integrations WHERE id = $1', [id]);
-    if (row.rows[0] === undefined) return c.json({ message: 'No such integration.' }, 404);
-    const requested = ((row.rows[0] as { requested_data?: unknown }).requested_data ?? []) as string[];
+    const asked = RequestedRowSchema.optional().parse(row.rows[0]);
+    if (asked === undefined) return c.json({ message: 'No such integration.' }, 404);
+    const requested = asked.requested_data;
     await runtime.pool.query(
       "UPDATE integrations SET status = 'approved', approved_data = $2::jsonb WHERE id = $1",
       [id, JSON.stringify(requested)],
@@ -726,15 +731,15 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   operator.post('/integrations/:id/probe', async (c) => {
     const id = c.req.param('id');
     const row = await runtime.pool.query('SELECT url, reach FROM integrations WHERE id = $1', [id]);
-    const found = row.rows[0] as { url?: string; reach?: unknown } | undefined;
+    const found = FoundRowSchema.optional().parse(row.rows[0]);
     const url = found?.url;
-    if (url === undefined) return c.json({ message: 'No such integration.' }, 404);
-    const body = (await c.req.json().catch(() => ({}))) as { path?: unknown };
-    const path = typeof body.path === 'string' ? body.path : 'bundle';
+    if (found === undefined || url === undefined) return c.json({ message: 'No such integration.' }, 404);
+    const sent: unknown = await c.req.json().catch(() => ({}));
+    const path = PathBodySchema.parse(sent).path ?? 'bundle';
     // The declaration holds lyra-side paths (`/integrations/<id>/roster`); a
     // probe names the integration-side tail (`roster`), the same tail the proxy
     // forwards. One spelling to compare, derived rather than stored twice.
-    if (path !== 'bundle' && !reachDeclares((found?.reach ?? {}) as Reach, `/integrations/${id}/${path}`)) {
+    if (path !== 'bundle' && !reachDeclares(found.reach, `/integrations/${id}/${path}`)) {
       return c.json({ message: 'That path is not one this integration declared.' }, 404);
     }
     const started = Date.now();
@@ -795,11 +800,11 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   server.post('/api/integrations/frame', async (c) => {
     const principal = c.get('principal');
     if (principal === null) return c.json({ message: 'Sign in first.' }, 401);
-    const body = (await c.req.json().catch(() => ({}))) as { path?: unknown };
-    const path = typeof body.path === 'string' ? body.path : '';
+    const sent: unknown = await c.req.json().catch(() => ({}));
+    const path = PathBodySchema.parse(sent).path ?? '';
     const id = path.split('/')[2] ?? '';
     const row = await runtime.pool.query('SELECT status, frames FROM integrations WHERE id = $1', [id]);
-    const found = row.rows[0] as { status?: string; frames?: unknown } | undefined;
+    const found = FoundRowSchema.optional().parse(row.rows[0]);
     if (found === undefined || found.status !== 'approved') return c.json({ message: 'No such integration.' }, 404);
     const resolved = await identity.resolve(principal);
     if (resolved.installed !== undefined && !resolved.installed.includes(id)) return c.json({ message: 'Not installed here.' }, 404);
@@ -815,7 +820,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     // studio's merchant account. The bundle names the owning action now, and a
     // grant is minted only for somebody who holds it.
     const held = new Set(catalog(resolved).ids);
-    if (!frameAdmits((found.frames ?? {}) as Record<string, string>, path, held)) return c.json({ message: 'No such frame.' }, 404);
+    if (!frameAdmits(found.frames, path, held)) return c.json({ message: 'No such frame.' }, 404);
 
     const now = Date.now();
     sweepGrants(now);
@@ -839,7 +844,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     // Re-checked at REDEEM, not just at mint: an uninstall between the two is
     // exactly the moment a stale tab must stop working.
     const row = await runtime.pool.query('SELECT url, status FROM integrations WHERE id = $1', [id]);
-    const found = row.rows[0] as { url?: string; status?: string } | undefined;
+    const found = FoundRowSchema.optional().parse(row.rows[0]);
     if (found === undefined || found.status !== 'approved') return c.json({ message: 'Not found.' }, 404);
     const installed = (await identity.resolve(grant.principal)).installed;
     if (installed !== undefined && !installed.includes(id)) return c.json({ message: 'Not found.' }, 404);
@@ -887,7 +892,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     if (!CALLBACK.test(call)) return c.json({ message: 'Not found.' }, 404);
 
     const row = await runtime.pool.query('SELECT url, status FROM integrations WHERE id = $1', [id]);
-    const found = row.rows[0] as { url?: string; status?: string } | undefined;
+    const found = FoundRowSchema.optional().parse(row.rows[0]);
     if (found === undefined || found.status !== 'approved') return c.json({ message: 'Not found.' }, 404);
     const installed = (await identity.resolve(grant.principal)).installed;
     if (installed !== undefined && !installed.includes(id)) return c.json({ message: 'Not found.' }, 404);
@@ -971,7 +976,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   server.post('/integrations/:id/hook/*', async (c) => {
     const id = c.req.param('id');
     const row = await runtime.pool.query('SELECT url, status FROM integrations WHERE id = $1', [id]);
-    const found = row.rows[0] as { url?: string; status?: string } | undefined;
+    const found = FoundRowSchema.optional().parse(row.rows[0]);
     // 404 for "no such integration" AND for "not approved yet" — the same
     // answer, so a stranger probing this learns nothing about which integrations a
     // deployment is currently considering.
@@ -1020,7 +1025,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     if (principal === null) return c.json({ message: 'Sign in first.' }, 401);
     const id = c.req.param('id');
     const row = await runtime.pool.query('SELECT url, status, reach FROM integrations WHERE id = $1', [id]);
-    const found = row.rows[0] as { url?: string; status?: string; reach?: unknown } | undefined;
+    const found = FoundRowSchema.optional().parse(row.rows[0]);
     if (found === undefined || found.status !== 'approved') return c.json({ message: 'No such integration.' }, 404);
     const resolved = await identity.resolve(principal);
     if (resolved.installed !== undefined && !resolved.installed.includes(id)) return c.json({ message: 'Not installed here.' }, 404);
@@ -1044,7 +1049,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     // rather than 403, like the branches above it — what somebody may not reach,
     // they do not learn the existence of.
     const held = new Set(catalog(resolved).ids);
-    if (!reachAdmits((found.reach ?? {}) as Reach, c.req.path, held)) return c.json({ message: 'No such integration.' }, 404);
+    if (!reachAdmits(found.reach, c.req.path, held)) return c.json({ message: 'No such integration.' }, 404);
 
     const scope = await identity.scopeValuesFor(principal);
     // The QUERY TRAVELS. `c.req.path` drops it, so an endpoint declared with

@@ -46,28 +46,6 @@ import type { Telemetry } from './runtime';
 // kills every token it holds without storing any of them.
 // ═══════════════════════════════════════════════════════════════
 
-export type IntegrationRow = {
-  id: string;
-  url: string;
-  status: 'pending' | 'approved' | 'revoked';
-  title: string;
-  tagline: string;
-  adds: string;
-  settingsAction: string;
-  requestedActions: readonly string[];
-  requestedData: readonly string[];
-  approvedData: readonly string[];
-  offers: readonly string[];
-  needs: readonly string[];
-  capabilities: readonly { id: string; title: string }[];
-  configuration: readonly ConfigurationField[];
-  documents: readonly DocumentDeclaration[];
-  assistants: readonly AssistantDeclaration[];
-  lastImportAt: number | null;
-  lastError: string | null;
-  actionCount: number;
-};
-
 // What an integration publishes at `<url>/bundle`. Deliberately small — the
 // argument for every field it does NOT have is above. Four kinds of content,
 // each its own field: WORDS (meta — for the store card, validated against
@@ -475,9 +453,9 @@ export const reachOf = (bundle: Bundle, integrationId: string): Reach => {
     const held = (reach[key] ??= []);
     if (!held.includes(actionId)) held.push(actionId);
   };
-  for (const [actionId, raw] of Object.entries(bundle.actions)) {
-    for (const endpoint of Object.values((raw as ActionDefinition).endpoints ?? {})) {
-      admit((endpoint as { url?: string }).url ?? '', actionId);
+  for (const [actionId, action] of Object.entries(bundle.actions)) {
+    for (const endpoint of Object.values(action.endpoints ?? {})) {
+      admit('url' in endpoint ? endpoint.url : '', actionId);
     }
   }
   // A preview belongs to the action that rides the strip, so it inherits that
@@ -656,15 +634,16 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
       const schema = spec.propsSchema;
       const props = record['props'];
       if (!(schema instanceof z.ZodObject) || !isRecord(props)) return; // name-only
-      const shape = schema.shape as Record<string, z.ZodTypeAny>;
+      const shape: Readonly<Record<string, z.core.$ZodType>> = schema.shape;
       for (const [key, value] of Object.entries(props)) {
-        if (!(key in shape)) {
+        const prop = shape[key];
+        if (prop === undefined) {
           found.add(`${label}: "${name}" has no prop "${key}"`);
           continue;
         }
         if (isDeferred(value)) continue;
-        const check = shape[key]?.safeParse(value);
-        if (check !== undefined && !check.success) {
+        const check = z.safeParse(prop, value);
+        if (!check.success) {
           found.add(`${label}: "${name}" prop "${key}" — ${check.error.issues[0]?.message ?? 'invalid'}`);
         }
       }
@@ -676,8 +655,7 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
     reasons.push(`bundle says it is "${bundle.integration}" but was fetched as "${ctx.integrationId}"`);
   }
 
-  for (const [id, raw] of Object.entries(bundle.actions)) {
-    const action = raw as ActionDefinition;
+  for (const [id, action] of Object.entries(bundle.actions)) {
     // ── the namespace ──
     //
     // `ext.<audience>.<integration>.<name>`. The charter grants the GLOB, once
@@ -707,15 +685,14 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
 
     // ── it reaches two places and no others ──
     for (const [name, endpoint] of Object.entries(action.endpoints ?? {})) {
-      const ep = endpoint as { url?: string; fn?: string; request?: { fingerprint?: string } };
-      if (ep.fn !== undefined) {
+      if ('fn' in endpoint) {
         // `fn:` runs IN the app's process, next to the session's shell. An
         // integration cannot ship code that runs here — that is the whole
         // point of it being a separate service.
         reasons.push(`action ${id}: endpoint "${name}" uses fn:, which runs in this app's process`);
         continue;
       }
-      const url = ep.url ?? '';
+      const url = endpoint.url;
       const own = `/integrations/${ctx.integrationId}/`;
       // The one HOST surface an action may name without a fingerprint: asking
       // for a frame grant. It reads nothing and writes nothing — it hands back
@@ -744,7 +721,7 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
         reasons.push(`action ${id}: endpoint "${name}" calls "${url}" — only ${own}* or /api/*/vex`);
         continue;
       }
-      const fingerprint = ep.request?.fingerprint;
+      const fingerprint = isRecord(endpoint.request) ? endpoint.request['fingerprint'] : undefined;
       if (typeof fingerprint !== 'string') {
         reasons.push(`action ${id}: endpoint "${name}" calls the app without naming a fingerprint`);
       } else if (!ctx.fingerprints.has(fingerprint)) {
@@ -974,6 +951,13 @@ export const describePlacements = (bundle: Bundle, names: Readonly<Record<string
 
 export type PressResult = { ok: true; urls: string[] } | { ok: false; reasons: string[] };
 
+// What kind of thing the service answered with, read off the header it sent:
+// the media type alone, without its parameters. No header reads as nothing.
+const MediaTypeSchema = z
+  .string()
+  .nullable()
+  .transform((header) => (header ?? '').split(';')[0]?.trim() ?? '');
+
 export const copyPress = async (
   bundle: Bundle,
   integrationId: string,
@@ -993,7 +977,7 @@ export const copyPress = async (
     try {
       const response = await fetchImpl(`${serviceUrl.replace(/\/$/, '')}/${rest}`);
       if (!response.ok) return { ok: false, reasons: [`press "${path}": the service answered ${response.status}`] };
-      const contentType = (response.headers.get('content-type') ?? '').split(';')[0]?.trim() ?? '';
+      const contentType = MediaTypeSchema.parse(response.headers.get('content-type'));
       if (!contentType.startsWith('image/')) {
         return { ok: false, reasons: [`press "${path}": answered "${contentType === '' ? 'nothing' : contentType}", which is not an image`] };
       }
@@ -1081,14 +1065,14 @@ export const callIntegrationWith = (deps: {
     };
 
     const row = await deps.pool.query('SELECT url, status FROM integrations WHERE id = $1', [id]);
-    const found = row.rows[0] as { url?: string; status?: string } | undefined;
+    const found = WhereItIsSchema.optional().parse(row.rows[0]);
     if (found === undefined) {
       done('refused');
       throw new Error(`moss: callIntegration("${id}"): no such integration.`);
     }
     if (found.status !== 'approved') {
       done('refused');
-      throw new Error(`moss: callIntegration("${id}"): not approved (status "${String(found.status)}").`);
+      throw new Error(`moss: callIntegration("${id}"): not approved (status "${found.status}").`);
     }
     const installed = await deps.installedFor(init.principal);
     if (installed !== undefined && !installed.includes(id)) {
@@ -1096,7 +1080,7 @@ export const callIntegrationWith = (deps: {
       throw new Error(`moss: callIntegration("${id}"): not installed for "${init.principal}".`);
     }
     const scope = { ...(await deps.scopeValuesFor(init.principal)), ...(init.scope ?? {}) };
-    const target = `${String(found.url).replace(/\/$/, '')}/${path.replace(/^\/+/, '')}`;
+    const target = `${found.url.replace(/\/$/, '')}/${path.replace(/^\/+/, '')}`;
     let response: Response;
     try {
       response = await fetchImpl(target, {
@@ -1123,6 +1107,109 @@ export const initIntegrations = async (pool: PgPool): Promise<void> => {
   await migrate(pool, [MOSS_SEQUENCE]);
 };
 
+// ── a row, read where it leaves the database ─────────────────
+//
+// What a query answers is whatever the driver hands back, so each row is read
+// by a schema before anything is done with it. What a bundle declared (its
+// capabilities, its documents) is carried here and never read: each is held to
+// being a list of objects and no further, and one that is not reads as empty.
+const text = z
+  .string()
+  .nullish()
+  .transform((value) => value ?? '');
+const strings = z.array(z.string()).catch([]);
+const carried = z.array(z.record(z.string(), z.unknown())).catch([]);
+
+// Where an integration is and whether it has been approved.
+export const WhereItIsSchema = z.object({ url: z.string(), status: z.string() });
+
+// What the proxy may forward and which pages may be framed, as the row holds
+// them. A row from before either column held this shape admits nothing, which
+// is what an empty one says.
+const ReachSchema = z.record(z.string(), z.array(z.string())).catch({});
+const FramesSchema = z.record(z.string(), z.string()).catch({});
+
+// An integration as a route finds it by its id: the columns that route asked
+// for, each read as what it is. A column it did not ask for is absent.
+export const FoundRowSchema = z.object({ url: z.string().optional(), status: z.string().optional(), reach: ReachSchema, frames: FramesSchema });
+
+// How an integration stands when a bundle for it arrives again.
+export const StandingRowSchema = z.object({ status: z.string(), key_hash: z.string().nullish() });
+
+// What it asked to read and write, which an approval grants.
+export const RequestedRowSchema = z.object({ requested_data: strings });
+
+// ── what a route is sent ─────────────────────────────────────
+//
+// A body is whatever the caller wrote. Each route reads the fields it has a
+// use for; a body that is not an object, or a field that is not text, reads as
+// that field left out.
+export const RegisterBodySchema = z.looseObject({ id: z.string().catch(''), url: z.string().catch('') }).catch({ id: '', url: '' });
+export const PathBodySchema = z.looseObject({ path: z.string().optional().catch(undefined) }).catch({});
+
+const AttachmentRowSchema = z.object({ action_id: z.string(), preview: text });
+const PlacementRowSchema = z.object({ action_id: z.string(), place_in: z.string() });
+const KeyHolderRowSchema = z.object({ id: z.string() });
+
+const ListedRowSchema = z
+  .object({
+    id: z.string(),
+    url: z.string(),
+    status: z.string(),
+    title: text,
+    tagline: text,
+    adds: text,
+    settings_action: text,
+    requested_actions: strings,
+    requested_data: strings,
+    approved_data: strings,
+    offers: strings,
+    needs: strings,
+    capabilities: carried,
+    configuration: carried,
+    documents: carried,
+    assistants: carried,
+    // A TIMESTAMP IS NOT ALWAYS A DATE. Different drivers hand back a Date, an
+    // ISO string, or a number for the same column — PGlite returns a string
+    // here, so the Date-only branch this had made every row read 'never', on a
+    // field whose entire job is saying when it last worked.
+    last_import_at: z.unknown().transform((at) => (at instanceof Date ? at.getTime() : typeof at === 'string' || typeof at === 'number' ? new Date(at).getTime() : null)),
+    last_error: z.string().nullish(),
+    // A count is a bigint, which one driver hands back as a number and another
+    // as text.
+    action_count: z
+      .union([z.number(), z.string(), z.bigint()])
+      .nullish()
+      .transform((count) => Number(count ?? 0)),
+  })
+  .transform((row) => ({
+    id: row.id,
+    url: row.url,
+    status: row.status,
+    title: row.title,
+    tagline: row.tagline,
+    adds: row.adds,
+    settingsAction: row.settings_action,
+    requestedActions: row.requested_actions,
+    requestedData: row.requested_data,
+    approvedData: row.approved_data,
+    offers: row.offers,
+    needs: row.needs,
+    capabilities: row.capabilities,
+    configuration: row.configuration,
+    documents: row.documents,
+    assistants: row.assistants,
+    lastImportAt: row.last_import_at,
+    lastError: row.last_error ?? null,
+    actionCount: row.action_count,
+  }));
+
+// One integration as the operator's list shows it. `status` is what the row
+// says ('pending', 'approved'); the declarations are as they were imported.
+export type IntegrationRow = z.infer<typeof ListedRowSchema>;
+
+const StoredActionRowSchema = z.object({ action_id: z.string(), definition: z.unknown(), grammar: z.unknown() });
+
 // ── the bindings, read back for the host's derivations ───────
 //
 // Approved only, like everything else served from these tables. The app's own
@@ -1135,9 +1222,9 @@ export const listAttachments = async (pool: PgPool, hostAction: string): Promise
       WHERE i.status = 'approved' AND a.attach_to = $1 ORDER BY a.action_id`,
     [hostAction],
   );
-  return res.rows.map((r) => {
-    const row = r as { action_id: string; preview: string };
-    return { actionId: String(row.action_id), preview: String(row.preview ?? '') };
+  return res.rows.map((answered) => {
+    const row = AttachmentRowSchema.parse(answered);
+    return { actionId: row.action_id, preview: row.preview };
   });
 };
 
@@ -1147,9 +1234,9 @@ export const listPlacements = async (pool: PgPool): Promise<Record<string, strin
       WHERE i.status = 'approved' AND a.place_in <> ''`,
   );
   const out: Record<string, string> = {};
-  for (const r of res.rows) {
-    const row = r as { action_id: string; place_in: string };
-    out[String(row.action_id)] = String(row.place_in);
+  for (const answered of res.rows) {
+    const row = PlacementRowSchema.parse(answered);
+    out[row.action_id] = row.place_in;
   }
   return out;
 };
@@ -1162,8 +1249,7 @@ export const listPlacements = async (pool: PgPool): Promise<Record<string, strin
 // what makes removal kill the credential in the same act.
 export const integrationByKey = async (pool: PgPool, key: string): Promise<string | undefined> => {
   const res = await pool.query("SELECT id FROM integrations WHERE key_hash = $1 AND status = 'approved'", [hashIntegrationKey(key)]);
-  const id = (res.rows[0] as { id?: string } | undefined)?.id;
-  return id === undefined ? undefined : String(id);
+  return KeyHolderRowSchema.optional().parse(res.rows[0])?.id;
 };
 
 export const listIntegrations = async (pool: PgPool): Promise<IntegrationRow[]> => {
@@ -1175,35 +1261,7 @@ export const listIntegrations = async (pool: PgPool): Promise<IntegrationRow[]> 
            (SELECT count(*) FROM integration_actions a WHERE a.integration_id = i.id) AS action_count
       FROM integrations i ORDER BY i.id
   `);
-  return res.rows.map((r: unknown) => {
-    const row = r as Record<string, unknown>;
-    // A TIMESTAMP IS NOT ALWAYS A DATE. Different drivers hand back a Date, an
-    // ISO string, or a number for the same column — PGlite returns a string
-    // here, so the Date-only branch this had made every row read 'never', on a
-    // field whose entire job is saying when it last worked.
-    const at = row['last_import_at'];
-    return {
-      id: String(row['id']),
-      url: String(row['url']),
-      status: String(row['status']) as IntegrationRow['status'],
-      title: String(row['title'] ?? ''),
-      tagline: String(row['tagline'] ?? ''),
-      adds: String(row['adds'] ?? ''),
-      settingsAction: String(row['settings_action'] ?? ''),
-      requestedActions: (row['requested_actions'] ?? []) as string[],
-      requestedData: (row['requested_data'] ?? []) as string[],
-      approvedData: (row['approved_data'] ?? []) as string[],
-      offers: (row['offers'] ?? []) as string[],
-      needs: (row['needs'] ?? []) as string[],
-      capabilities: (row['capabilities'] ?? []) as { id: string; title: string }[],
-      configuration: (row['configuration'] ?? []) as ConfigurationField[],
-      documents: (row['documents'] ?? []) as DocumentDeclaration[],
-      assistants: (row['assistants'] ?? []) as AssistantDeclaration[],
-      lastImportAt: at instanceof Date ? at.getTime() : typeof at === 'string' || typeof at === 'number' ? new Date(at).getTime() : null,
-      lastError: (row['last_error'] as string | null) ?? null,
-      actionCount: Number(row['action_count'] ?? 0),
-    };
-  });
+  return res.rows.map((answered) => ListedRowSchema.parse(answered));
 };
 
 // Every approved integration's actions, as the manifest wants them.
@@ -1211,6 +1269,20 @@ export const listIntegrations = async (pool: PgPool): Promise<IntegrationRow[]> 
 // the table current (upgradeStore), but a row another process wrote since — one
 // running older code — is upgraded here. A row written by NEWER code is not
 // served: the action is left out with a sentence, never rendered half-read.
+// And what is served is an action: a stored definition is read by nova's
+// schema, and one it refuses is left out the same way.
+const storedAction = (id: string, definition: unknown): ActionDefinition | undefined => {
+  if (exceedsDepth(definition)) {
+    console.error(`[moss] integration action "${id}" is not served: ${depthRefusal()}`);
+    return undefined;
+  }
+  const read = ActionDefinitionSchema.safeParse(definition);
+  if (read.success) return read.data;
+  const first = read.error.issues[0];
+  console.error(`[moss] integration action "${id}" is not served: it is not an action nova reads (${first === undefined ? 'no reason given' : `${first.path.join('.') || '(root)'}: ${first.message}`})`);
+  return undefined;
+};
+
 export const loadIntegrationActions = async (pool: PgPool, upgrader?: Upgrader): Promise<Record<string, ActionDefinition>> => {
   const res = await pool.query(
     `SELECT a.action_id, a.definition, a.grammar FROM integration_actions a
@@ -1218,16 +1290,20 @@ export const loadIntegrationActions = async (pool: PgPool, upgrader?: Upgrader):
       WHERE i.status = 'approved'`,
   );
   const out: Record<string, ActionDefinition> = {};
-  for (const r of res.rows) {
-    const row = r as Record<string, unknown>;
-    const id = String(row['action_id']);
+  const keep = (id: string, definition: unknown): void => {
+    const action = storedAction(id, definition);
+    if (action !== undefined) out[id] = action;
+  };
+  for (const answered of res.rows) {
+    const row = StoredActionRowSchema.parse(answered);
+    const id = row.action_id;
     if (upgrader === undefined) {
-      out[id] = row['definition'] as ActionDefinition;
+      keep(id, row.definition);
       continue;
     }
-    const stamp = isPlainRecord(row['grammar']) ? Object.fromEntries(Object.entries(row['grammar']).map(([k, v]) => [k, Number(v)])) : {};
+    const stamp = isPlainRecord(row.grammar) ? Object.fromEntries(Object.entries(row.grammar).map(([k, v]) => [k, Number(v)])) : {};
     try {
-      out[id] = upgrader.upgrade(row['definition'], { kind: 'nisc.nova/action', stamp }).document as ActionDefinition;
+      keep(id, upgrader.upgrade(row.definition, { kind: 'nisc.nova/action', stamp }).document);
     } catch (error) {
       if (!(error instanceof StrataError)) throw error;
       console.error(`[moss] integration action "${id}" is not served: ${error.message.split('\n')[0] ?? error.code}`);
@@ -1277,6 +1353,28 @@ export type Contract = {
   menuSlots: readonly string[];
 };
 
+// A props schema the contract can show: it converts itself to JSON Schema
+// (Standard JSON Schema), whichever copy of zod the kit built it with. That is
+// all nova's palette asks of it, so it is all that is asked here.
+const convertsItself = (value: unknown): boolean => {
+  if (typeof value !== 'object' || value === null) return false;
+  const standard: unknown = Reflect.get(value, '~standard');
+  const converter: unknown = isRecord(standard) ? standard['jsonSchema'] : undefined;
+  return isRecord(converter) && typeof converter['output'] === 'function';
+};
+
+// What a kit said of one component, as nova's palette reads it. A props schema
+// that cannot be shown is left out, and the component is listed without it.
+const ComponentMetaSchema = z.object({
+  description: z.string().optional().catch(undefined),
+  propsSchema: z.custom<z.ZodType>(convertsItself).optional().catch(undefined),
+});
+
+const componentMetaOf = (meta: unknown): ComponentMeta => {
+  const read = ComponentMetaSchema.safeParse(meta ?? {});
+  return read.success ? read.data : {};
+};
+
 export const buildContract = (app: NiscApp, integrationId: string): Contract => {
   // Name + description + props schema per component, from the same converter the
   // layout agent's palette uses — the contract is that palette asked for a
@@ -1286,16 +1384,16 @@ export const buildContract = (app: NiscApp, integrationId: string): Contract => 
   const registered = app.shell?.components ?? {};
   const components = Object.keys(registered)
     .sort()
-    .map((name) => paletteEntryOf(name, (registered[name]?.meta ?? {}) as ComponentMeta));
+    .map((name) => paletteEntryOf(name, componentMetaOf(registered[name]?.meta)));
   // Every audience the charter has drawn an `ext.` fence for. An integration
   // may claim a namespace under these and nowhere else.
   const audiences = new Set<string>();
   for (const def of Object.values(app.charter)) {
     if (def === undefined || Array.isArray(def)) continue;
     const selection = def.actions;
-    const list = Array.isArray(selection) ? selection : ((selection as { allow?: string[] } | undefined)?.allow ?? []);
+    const list = Array.isArray(selection) ? selection : (selection?.allow ?? []);
     for (const entry of list) {
-      const parts = String(entry).split('.');
+      const parts = entry.split('.');
       if (parts[0] === 'ext' && parts[1] !== undefined && parts[1] !== '*') audiences.add(parts[1]);
     }
   }
@@ -1323,7 +1421,7 @@ const describeProp = (schema: Record<string, unknown>): string => {
   if (Array.isArray(enumValues)) return `one of: ${enumValues.map((v) => String(v)).join(', ')}`;
   const anyOf = schema['anyOf'];
   if (Array.isArray(anyOf)) {
-    const consts = anyOf.map((s) => (s as Record<string, unknown>)['const']).filter((v) => v !== undefined);
+    const consts = anyOf.map((option: unknown) => (isRecord(option) ? option['const'] : undefined)).filter((v) => v !== undefined);
     if (consts.length === anyOf.length && consts.length > 0) return `one of: ${consts.map((v) => String(v)).join(', ')}`;
   }
   const type = schema['type'];
@@ -1337,12 +1435,18 @@ const describeProp = (schema: Record<string, unknown>): string => {
 // One component: its name, its description, and — where it carried a schema — a
 // small table of props (name · type · required · meaning). A component with no
 // props renders as its name alone, which is what the whole list used to be.
+// The two parts of a component's JSON Schema the table is made of.
+const PropsTableSchema = z.looseObject({
+  properties: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+  required: z.array(z.string()).optional(),
+});
+
 const componentAsMarkdown = (component: LayoutPaletteEntry): string => {
   const head = component.description !== '' ? `**${component.name}** — ${component.description}` : `**${component.name}**`;
-  const schema = component.propsSchema as { properties?: Record<string, Record<string, unknown>>; required?: readonly string[] } | undefined;
-  const properties = schema?.properties;
+  const table = PropsTableSchema.safeParse(component.propsSchema);
+  const properties = table.success ? table.data.properties : undefined;
   if (properties === undefined || Object.keys(properties).length === 0) return head;
-  const required = new Set(schema?.required ?? []);
+  const required = new Set(table.success ? (table.data.required ?? []) : []);
   const rows = Object.entries(properties).map(
     ([prop, spec]) => `| ${prop} | ${describeProp(spec)} | ${required.has(prop) ? 'yes' : 'no'} | ${String(spec['description'] ?? '')} |`,
   );
