@@ -3,7 +3,7 @@ import type { ScopePolicy } from '@niscorp/vex';
 import { resolvePrincipal, resolveScoping } from '@niscorp/charter';
 import type { LayoutNode } from '@niscorp/nova';
 import { filterInstalled } from './integrations';
-import { memoKey } from './identity';
+import { assignedRoles, memoKey } from './identity';
 import type { NiscApp } from './app';
 
 // ═══════════════════════════════════════════════════════════════
@@ -13,8 +13,7 @@ import type { NiscApp } from './app';
 // pure; the server memoizes (the documents are static per process).
 // ═══════════════════════════════════════════════════════════════
 
-export const resolveRoles = (app: NiscApp, principal: string | null): readonly string[] =>
-  principal === null ? ['public'] : (app.assignments?.[principal] ?? ['public']);
+export const resolveRoles = (app: NiscApp, principal: string | null): readonly string[] => assignedRoles(app.assignments, principal);
 
 // The role combinations this application can produce — declared if the app says
 // so, derived from the assignment map if it does not. Deduplicated, because the

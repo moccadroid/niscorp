@@ -14,16 +14,18 @@
 //
 // A PRINCIPAL IS A RECORD (./record.ts): roles, scope values, the integrations
 // live for them. The app says which, and the answer is held, bounded, for as
-// long as a session's credential is trusted (./cache.ts).
+// long as a session's credential is trusted (./cache.ts). `createIdentity`
+// (./resolution.ts) is the one object the server builds for all of it.
 //
 // This module imports `runtime` and `protocol`, and nothing else of moss.
 // ═══════════════════════════════════════════════════════════════
 
-export { createIdentityCache } from './cache';
 export type { IdentityReport } from './cache';
 export { devSession, mintDevToken } from './dev-token';
 export { memoKey } from './memo-key';
 export type { IdentityRecord } from './record';
+export { assignedRoles, createIdentity } from './resolution';
+export type { Identity, IdentityConfig, IdentitySeam, ResolvedIdentity } from './resolution';
 export { newSeal, openSealed, sealCookie, sealOf, sealSession } from './seal';
 export { isOwnOrigin, sessionCookies, sessionTokenOf, tokenFromCookie } from './session-cookie';
 export { SESSIONS_SEQUENCE, initSessions, mintSession, revokeAllFor, sessionOf, sessionRemainingMs } from './sessions';

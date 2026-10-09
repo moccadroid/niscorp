@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createIdentityCache } from '../src/identity';
+import { createIdentityCache } from '../src/identity/cache';
 import type { IdentityRecord } from '../src/identity';
 
 // A controllable clock, so the sweep and the revalidation window are tested

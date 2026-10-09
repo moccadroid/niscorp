@@ -13,7 +13,7 @@ import type { FabricApply } from '../src/fabric';
 import type { Fabric, FabricMessage } from '../src/runtime';
 import { createShellHost } from '../src/shells';
 import type { ShellHost, ShellHostContext } from '../src/shells';
-import { createIdentityCache } from '../src/identity';
+import { createIdentityCache } from '../src/identity/cache';
 import type { NiscApp } from '../src/app';
 
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
