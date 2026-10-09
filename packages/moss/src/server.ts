@@ -1206,6 +1206,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   const entriesNow = (): ReadonlyMap<string, SeedEntry | SeedMutation> => new Map((app.entries ?? []).map((entry) => [entry.fingerprint, entry]));
   const shellContext: ShellHostContext = {
         app,
+        actions: () => app.actions,
         needOf: (definition) => shellNeedOf(definition, entriesNow()),
         // ONE resolution per shell build, awaited. This was four synchronous
         // questions, and every one of them was ultimately answered out of a

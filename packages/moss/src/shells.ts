@@ -68,6 +68,12 @@ export type ShellPrincipal = {
 
 export type ShellHostContext = {
   app: NiscApp;
+  // THE ACTIONS IN FORCE NOW (./manifest). Asked each time a shell is built
+  // and each time living shells adopt, because what the app consists of
+  // changes while a host stands: an approved integration's actions arrive
+  // after boot. Absent: what the app shipped, which is the whole of it for a
+  // host that stands by itself.
+  actions?: () => Readonly<Record<string, ActionDefinition>>;
   // WHICH SHELL THIS HOST BUILDS. Default: the app's own (`app.shell`). A PAGE
   // is the other answer — a manifest of its own, drawn per request.
   manifest?: ShellManifest;
@@ -241,8 +247,8 @@ export type ShellHost = {
   // disposed. Waits for the screen to settle — `seeds` pushed, no instance
   // still mounting — for at most `waitMs`, then serves what is there.
   snapshot: (token: string | null, principal: string | null, options?: { waitMs?: number; inputs?: ShellOpening['inputs'] }) => Promise<ShellSnapshot>;
-  // Artifacts changed (the app mutated its `actions`, the server dropped its
-  // memos): every LIVING durable shell adopts its freshly-resolved granted
+  // Artifacts changed (the actions in force are others now, the server dropped
+  // its memos): every LIVING durable shell adopts its freshly-resolved granted
   // definitions in place — nova's registerAction adds or replaces, mounted
   // instances keep their state, and new actions become pushable without a
   // rebuild. Ring 1 is re-applied per principal; ring 2 substitutes exactly
@@ -318,6 +324,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   if (manifest === undefined) throw new Error('createShellHost: the app manifest has no `shell`.');
   const shellManifest = manifest;
   const kept = ctx.kept ?? true;
+  const actionsNow = ctx.actions ?? ((): Readonly<Record<string, ActionDefinition>> => ctx.app.actions);
 
   // Every component NAME the app's layouts mention — nova's registry holds
   // opaque components (generic, unknown), so the server registers name-only
@@ -327,7 +334,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   // from default layouts, not the app's, so the walk can't find them — seed
   // them first.
   const componentNames = new Set<string>([CANVAS_SLOT_NAME, ACTION_SLOT_NAME]);
-  for (const source of [ctx.app.actions, ctx.app.layouts ?? {}, shellManifest.canvases, shellManifest.layout ?? {}, shellManifest.layoutStore ?? {}, shellManifest.fragments ?? {}]) {
+  for (const source of [actionsNow(), ctx.app.layouts ?? {}, shellManifest.canvases, shellManifest.layout ?? {}, shellManifest.layoutStore ?? {}, shellManifest.fragments ?? {}]) {
     for (const name of componentsOf(source)) componentNames.add(name);
   }
   // Declared contracts register even when no authored layout mentions them
@@ -605,7 +612,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
       // happens on the definition, before the shell exists, so everything
       // downstream (render, serialize, the wire) is already per-principal.
       actions: Object.fromEntries(
-        Object.entries(ctx.app.actions)
+        Object.entries(actionsNow())
           .filter(([id]) => granted.has(id))
           .map(([id, definition]) => {
             const layout = bindings.get(id);
@@ -1013,7 +1020,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
           cell.installed = who.installed;
           cell.hash = who.catalog.hash;
           const granted = new Set(who.catalog.ids);
-          for (const [id, definition] of Object.entries(ctx.app.actions)) {
+          for (const [id, definition] of Object.entries(actionsNow())) {
             if (!granted.has(id)) continue;
             const layout = who.variants.get(id);
             cell.live.shell.registerAction(layout === undefined ? definition : { ...definition, layout });
