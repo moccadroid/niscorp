@@ -8,7 +8,7 @@
 // Run: pnpm --filter lyra exec tsx --expose-gc src/dev/moss-bench.ts
 import type { Shell } from '@niscorp/nova';
 import { CAST } from '@lyra/db/seed';
-import { app, idFor, login, mintToken, runtime, server, settle } from './world';
+import { idFor, login, mintToken, runtime, server, settle } from './world';
 
 const KB = 1024;
 const bold = (s: string): string => `\x1b[1m${s}\x1b[0m`;
@@ -266,7 +266,7 @@ const wornPhrases = Object.keys(owner.shell.getPhrases() ?? {}).length;
 const mounted = (server.shells?.list() ?? []).find((live) => live.principal === idFor(CAST.lumen.owner));
 const mountedActions = (mounted?.canvases ?? []).reduce((n, canvas) => n + canvas.actions.length, 0);
 console.log(
-  `  ${'what one is made of'.padEnd(34)} ${dim(`${String(Object.keys(app.actions).length)} actions served · ${String(mountedActions)} mounted on ${String(mounted?.canvases.length ?? 0)} canvases · ${String(wornPhrases)} phrases worn`)}`,
+  `  ${'what one is made of'.padEnd(34)} ${dim(`${String(Object.keys(server.actions()).length)} actions served · ${String(mountedActions)} mounted on ${String(mounted?.canvases.length ?? 0)} canvases · ${String(wornPhrases)} phrases worn`)}`,
 );
 if (wornPhrases > 0) {
   // The book is SHARED across every shell of a language (app.ts), so it is a
