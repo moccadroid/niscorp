@@ -125,4 +125,21 @@ describe('$sortBy', () => {
     const result = evaluate(config, source) as any[];
     expect(result[0].name).toBe('Date');
   });
+  // A list has no order for compare(), so a sort by `[a, b]` handed the items
+  // back as they came. It says so, and says what to write.
+  it('refuses a key that is a list or an object, and says how to sort by two keys', () => {
+    const of = (key: string): unknown => ({ $get: { from: { $var: 'item' }, path: [key] } });
+    expect(() => evaluate({ $sortBy: { over: { $ref: '$.items' }, as: 'item', by: [of('category'), of('price')] } }, source)).toThrow(
+      expect.objectContaining({ code: 'E_TYPE', message: expect.stringContaining('$sortBy.by answered a list') }),
+    );
+    expect(() => evaluate({ $sortBy: { over: { $ref: '$.items' }, as: 'item', by: { $var: 'item' } } }, source)).toThrow(
+      expect.objectContaining({ code: 'E_TYPE', message: expect.stringContaining('$sortBy.by answered an object') }),
+    );
+  });
+  it('sorts by two keys as two sorts, the second key first', () => {
+    const of = (key: string): unknown => ({ $get: { from: { $var: 'item' }, path: [key] } });
+    const byPrice = { $sortBy: { over: { $ref: '$.items' }, as: 'item', by: of('price'), dir: 'desc' } };
+    const config = { $pluck: { over: { $sortBy: { over: byPrice, as: 'item', by: of('category') } }, key: 'name' } };
+    expect(evaluate(config, source)).toEqual(['Date', 'Apple', 'Banana', 'Carrot']);
+  });
 });

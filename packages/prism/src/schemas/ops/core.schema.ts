@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { JsonValueSchema } from '../json.schema';
+import { isReadablePath, pathRefusal } from '../../utils/jsonpath';
 
 // Forward reference — set by node.schema.ts after NodeSchema is created
 let _NodeSchema: z.ZodTypeAny = z.any();
@@ -18,6 +19,9 @@ export const RefNodeSchema = z
     $ref: z
       .string()
       .regex(/^\$(\..*)?$/)
+      // Said here and not in the pattern: the pattern is the published JSON
+      // Schema, and what the parser reads is the parser's to say.
+      .refine(isReadablePath, { error: (issue) => pathRefusal(String(issue.input)) })
       .describe('JSONPath from the source root: "$" is the whole source; "$.user.name", "$.items[0].sku" reach into it. Only reads from source data, not variables. For variables use $var, for navigating into variables use $get.'),
   })
   .strict()

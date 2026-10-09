@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluate, PrismError } from '../src';
+import { compile, evaluate, execute, prismTransform, PrismError, validate } from '../src';
 
 const source = {
   user: { id: 'u1', name: 'Alice', email: 'alice@example.com', age: 30 },
@@ -28,6 +28,34 @@ describe('$ref', () => {
   it('resolves array index', () => expect(evaluate({ $ref: '$.items[0].sku' }, source)).toBe('A1'));
   it('throws on missing path', () => {
     expect(() => evaluate({ $ref: '$.nonexistent' }, source)).toThrow(PrismError);
+  });
+  it('reads the whole source, a trailing dot and an index written any way a number is', () => {
+    expect(evaluate({ $ref: '$' }, source)).toEqual(source);
+    expect(evaluate({ $ref: '$.' }, source)).toEqual(source);
+    expect(evaluate({ $ref: '$.items[ 1 ].sku' }, source)).toBe('A2');
+  });
+});
+
+// A path is keys and indexes. The rest of JSONPath used to be read as `$`:
+// `$.items[*].sku` answered the whole source, and said nothing.
+describe('$ref — a path Prism does not read', () => {
+  const unread = ['$.items[*].sku', '$.items[?(@.price>10)]', '$.items[-1]', '$.items[0:2]', "$.user['name']", '$.items[]', '$.items[0', '$..sku', '$.user..name'];
+
+  for (const path of unread) {
+    it(`refuses ${path}`, async () => {
+      const refusal = { ok: false, issues: [{ path: ['at', '$ref'], message: expect.stringContaining(`Not a path Prism reads: "${path}"`) }] };
+      expect(validate({ at: { $ref: path } })).toEqual(refusal);
+      expect(() => evaluate({ at: { $ref: path } }, source)).toThrow(expect.objectContaining({ code: 'E_SCHEMA' }));
+      expect(() => prismTransform({ at: { $ref: path } }, source)).toThrow();
+      await expect(compile({ at: { $ref: path } })).rejects.toThrow(/Not a path Prism reads/);
+    });
+  }
+
+  it('an IR that holds one is refused when it runs, not read as the source', async () => {
+    const ir = JSON.parse(JSON.stringify(await compile({ at: { $ref: '$.items[0].sku' } })));
+    ir.core.at.$ref = '$.items[*].sku';
+    ir.tables.paths = ['$.items[*].sku'];
+    expect(() => execute(ir, source)).toThrow(/Not a path Prism reads/);
   });
 });
 

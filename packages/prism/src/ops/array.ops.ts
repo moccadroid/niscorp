@@ -79,13 +79,26 @@ export const opUnique = (node: UniqueNode, context: EvalContext, evaluate: Evalu
   return result;
 };
 
+// A list or an object has no order here: compare() answers nothing for one, so
+// a sort by `[a, b]` handed the list back as it came.
+const sortKey = (key: JsonValue): JsonValue => {
+  if (key !== null && typeof key === 'object') {
+    throw new PrismError(
+      `$sortBy.by answered ${Array.isArray(key) ? 'a list' : 'an object'}; a sort key is a string or a number. To sort by two keys, sort by the second and then by the first: the sort keeps the order of equal items.`,
+      ErrorCode.TYPE,
+      { op: '$sortBy' },
+    );
+  }
+  return key;
+};
+
 export const opSortBy = (node: SortByNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const { over, as, by, dir = 'asc' } = node.$sortBy;
   const input = requireArray(evaluate(over, context), '$sortBy.over');
 
   const keyed = input.map((item) => ({
     item,
-    key: evaluate(by, { ...context, vars: { ...context.vars, [as]: item } }),
+    key: sortKey(evaluate(by, { ...context, vars: { ...context.vars, [as]: item } })),
   }));
 
   keyed.sort((a, b) => {

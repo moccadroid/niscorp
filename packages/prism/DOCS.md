@@ -44,7 +44,7 @@ If `$.user.nickname` doesn't exist, the result is `{ "name": "Alice" }` — no e
 
 ### `$ref` — Read from source
 
-Resolves a JSONPath against the source data. Supports `.key` and `[index]` syntax.
+Resolves a path against the source data. A path is keys and indexes: `.key` and `[index]`. The rest of JSONPath — a wildcard `[*]`, a filter `[?(…)]`, a slice, a quoted key, `..` — is refused when the config is checked (`E_SCHEMA`, "Not a path Prism reads"); for every item of a list use `$map` or `$pluck`.
 
 ```json
 { "$ref": "$.user.name" }
@@ -218,7 +218,7 @@ Source: `{ "tags": ["a", "b", "a", "c", "b"] }` → `["a", "b", "c"]`
 }
 ```
 
-`dir` defaults to `"asc"`. Works with numbers and strings.
+`dir` defaults to `"asc"`. A sort key is a number or a string. A key that is a list or an object is refused (`E_TYPE`): to sort by two keys, sort by the second and then by the first — the sort keeps the order of equal items.
 
 ---
 

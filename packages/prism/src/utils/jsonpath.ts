@@ -1,5 +1,6 @@
 import type { JsonValue } from '../types';
 import { isJsonArray, isJsonObject } from '../schemas/guards';
+import { PrismError, ErrorCode } from '../errors';
 
 // ═══════════════════════════════════════════════════════════
 // Path Segment Types
@@ -12,6 +13,28 @@ export type JsonPathSegment =
 // ═══════════════════════════════════════════════════════════
 // Parser
 // ═══════════════════════════════════════════════════════════
+
+// A path is keys and indexes: `$.rows[0].sku`. Anything else JSONPath has — a
+// wildcard `[*]`, a filter `[?(…)]`, a slice, a quoted key, `..` — is refused.
+// The parser used to give up on those with no segments at all, which reads as
+// `$`: `$.rows[*].sku` answered the whole source.
+export const pathRefusal = (path: string): string =>
+  `Not a path Prism reads: "${path}". A path is keys and indexes only, as in $.rows[0].sku; for every item of a list use $map or $pluck.`;
+
+const refuse = (path: string): never => {
+  throw new PrismError(pathRefusal(path), ErrorCode.SCHEMA, { op: '$ref', path });
+};
+
+export const isReadablePath = (path: string): boolean => {
+  // Keys alone are always read; only a bracket or `..` can be refused.
+  if (!path.includes('[') && !path.includes('..')) return true;
+  try {
+    parseJsonPath(path);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 export const parseJsonPath = (path: string): JsonPathSegment[] => {
   if (!path.startsWith('$.')) return [];
@@ -31,6 +54,7 @@ export const parseJsonPath = (path: string): JsonPathSegment[] => {
     const char = path[cursor]!;
 
     if (char === '.') {
+      if (path[cursor - 1] === '.') refuse(path);
       pushKey();
       cursor++;
       continue;
@@ -44,10 +68,10 @@ export const parseJsonPath = (path: string): JsonPathSegment[] => {
         numBuf += path[cursor];
         cursor++;
       }
-      if (path[cursor] !== ']') return [];
+      if (path[cursor] !== ']') refuse(path);
       cursor++; // skip ']'
       const index = Number(numBuf);
-      if (!Number.isInteger(index) || index < 0) return [];
+      if (numBuf.trim() === '' || !Number.isInteger(index) || index < 0) refuse(path);
       segments.push({ type: 'index', index });
       continue;
     }
