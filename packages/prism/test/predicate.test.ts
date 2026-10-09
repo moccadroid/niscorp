@@ -8,6 +8,27 @@ describe('$eq / $neq', () => {
   it('unequal numbers', () => expect(evaluate({ $eq: [{ $const: 5 }, { $const: 6 }] }, source)).toBe(false));
   it('deep equal objects', () => expect(evaluate({ $eq: [{ $const: { a: 1 } }, { $const: { a: 1 } }] }, source)).toBe(true));
   it('neq', () => expect(evaluate({ $neq: [{ $const: 1 }, { $const: 2 }] }, source)).toBe(true));
+
+  // Equal is "the same JSON". Every pair here is answered as two JSON texts
+  // compared would answer it.
+  const pairs: [string, unknown, unknown][] = [
+    ['two equal strings', 'paid', 'paid'], ['two strings', 'paid', 'pending'], ['a number and its text', 1, '1'],
+    ['zero and minus zero', 0, -0], ['true and 1', true, 1], ['null and null', null, null], ['null and false', null, false],
+    ['null and an empty object', null, {}], ['an empty string and null', '', null], ['a string and an array of it', 'a', ['a']],
+    ['two equal arrays', [1, [2, 'x']], [1, [2, 'x']]], ['arrays in another order', [1, 2], [2, 1]],
+    ['an array and an object', [], {}], ['objects with the keys in another order', { a: 1, b: 2 }, { b: 2, a: 1 }],
+    ['objects nested alike', { a: { b: [null] } }, { a: { b: [null] } }],
+  ];
+  for (const [name, a, b] of pairs) {
+    it(`${name}: as their JSON texts compare`, () => {
+      const same = JSON.stringify(a) === JSON.stringify(b);
+      expect(evaluate({ $eq: [{ $const: a }, { $const: b }] }, source)).toBe(same);
+      expect(evaluate({ $neq: [{ $const: b }, { $const: a }] }, source)).toBe(!same);
+    });
+  }
+  it('a value read twice from the source is equal to itself', () => {
+    expect(evaluate({ $eq: [{ $ref: '$' }, { $ref: '$' }] }, source)).toBe(true);
+  });
 });
 
 describe('$gt / $gte / $lt / $lte', () => {
