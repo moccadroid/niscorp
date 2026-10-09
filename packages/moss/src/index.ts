@@ -22,7 +22,7 @@ export type { StorePress } from './manifest';
 export type { CallIntegration } from './integrations';
 export { createAssertionSigner } from './assert';
 export { resolveRoles, memoKeyOf } from './identity';
-export { resolvePolicy, resolvePolicyForRoles } from './data';
+export { resolvePolicy } from './data';
 export { resolveVariants, verifyApp } from './manifest';
 export type { ManifestReport } from './manifest';
 export { createTideStore, TIDE_DDL, TIDE_SEQUENCE, TIDE_TABLES } from './tide';

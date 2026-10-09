@@ -40,6 +40,6 @@ export type { ExecuteAs } from './execute-as';
 export { createWireFollower } from './follow';
 export { migrateTables } from './migrate';
 export type { TablesReport } from './migrate';
-export { resolvePolicy, resolvePolicyForRoles } from './policy';
+export { resolvePolicy } from './policy';
 export { MOSS_SEQUENCE } from './tables';
 export type { ChainHints, WriteListener } from './writes';

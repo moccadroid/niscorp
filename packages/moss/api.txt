@@ -52,7 +52,6 @@
 . offerToken
 . renderDocument
 . resolvePolicy
-. resolvePolicyForRoles
 . resolveRoles
 . resolveVariants
 . revokeAllFor

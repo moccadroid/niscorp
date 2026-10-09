@@ -846,16 +846,15 @@ measures the end.
   this principal reads and writes under. **One policy per role, merged** — a
   person may wear several (an instructor who also trains here), and reach belongs
   to the role rather than to the person. The merge is a union: broadest wins.
-- `resolvePolicyAtReach(app, grants, principal, reach): ScopePolicy` — the same
-  principal's grants recompiled under a named profile, for entries that declare
-  a `reach` (vex). Wired into the vex surfaces automatically; narrows rows,
-  never widens verbs.
+- An entry that declares a `reach` (vex) is served under the same roles'
+  grants recompiled at that named profile. The vex surfaces and `executeAs` do
+  it themselves; it narrows rows, never widens verbs.
 - `resolveVariants(app, principal): ReadonlyMap<string, LayoutNode>` — action id →
   the granted variant's layout (ring 2; empty map = every action serves its base).
-- `resolvePolicyForRoles(app, grants, roles)` — `resolvePolicy`, given roles
-  rather than a principal, for a caller that already resolved who somebody is
-  (the `identity` seam). `resolveRoles` and the other principal-taking forms
-  read `assignments` only.
+- What a set of roles may read and write is asked of the server, for a caller
+  that already resolved who somebody is (the `identity` seam):
+  `server.policyForRoles(roles)`. `resolveRoles`, `resolvePolicy` and
+  `resolveVariants` read `assignments` only.
 - What somebody holds is asked of the server, which answers from the actions
   in force: `server.catalogOf(principal)`, `server.catalogForRoles(roles,
   installed?)`.
@@ -871,8 +870,6 @@ measures the end.
   handed is not read by the manifest's schema and is not frozen.
 - `memoKeyOf(app, principal): string` — the key the per-principal memos depend
   on (roles + installed set), from `assignments` with no install list.
-- `createDataLayer(runtime, entries?): Promise<DataLayer>` — `{ engine, schema,
-  grants }`, stood up from what's present.
 - `createShellHost(ctx): ShellHost` — the durable per-principal shell host.
   `ctx.idleMs` bounds how long a shell may sit unattached (default
   `DEFAULT_IDLE_MS`, 30 minutes; `0` disables the sweep).
