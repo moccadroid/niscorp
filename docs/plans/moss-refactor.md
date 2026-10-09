@@ -1,9 +1,10 @@
 # Moss: the audit, and the refactor that follows from it
 
-**Status: Audit done (2026-10-09), refactor proposed. Nothing is built and no
-phase has a go. Decided: the public API may break and is to be refactored; an
-app editing the manifest it handed over is not kept working. Open: Part 8.
-Branch `worktree-moss-refactor`, base `9e88009` (moss 0.4.0).**
+**Status: Audit done (2026-10-09), refactor proposed. Built: the first gate,
+`check:raw-sql`, in `pnpm verify` and CI. No phase of the refactor has a go.
+Decided: the public API may break and is to be refactored; an app editing the
+manifest it handed over is not kept working. Open: Part 8. Branch
+`worktree-moss-refactor`, base `9e88009` (moss 0.4.0).**
 
 This replaces the first version of this file, which planned a tidy-up. The
 audit found that the problem is larger than structure.
@@ -50,7 +51,7 @@ So for a package the rules in `AGENTS.md`, `STYLE_GUIDE.md` and its own
 | Functions over 120 lines | ten (below) |
 | Type assertions (`as`, not `as const`) | about 110; the style guide allows none |
 | Files that import zod | one, `integrations.ts`; two schema parses in the package |
-| SQL statements outside vex | 39 that read or write rows (server 18, integrations 6, sessions 6, tide 6, generation 3), beside the DDL |
+| SQL statements outside vex | 40 that read or write rows (server 18, integrations 6, sessions 6, tide 6, generation 4), beside the DDL |
 | Tests | 43 files, 9,159 lines, 546 cases; 12 files start a database |
 
 The ten functions: `createServer` 1,345 lines; `createShellHost` 756 (its
@@ -77,10 +78,10 @@ What sits in the three largest files:
 
 ### 4.1 Rules moss sets and does not keep
 
-1. **"Reads are vex, writes are vex."** 39 statements go straight to the pool.
+1. **"Reads are vex, writes are vex."** 40 statements go straight to the pool.
    Two kinds have a reason: the credential lookups (a session token hash, an
    integration key hash), which run before a principal exists, and tide's own
-   store. The 24 on the integration tables and the 3 on the generation counter
+   store. The 24 on the integration tables and the 4 on the generation counter
    have none; `executeAs` was built for exactly those surfaces.
 2. **"Everything that crosses a boundary is parsed by a schema."** One boundary
    is: the integration bundle. These are not:
@@ -158,9 +159,31 @@ Read, not reproduced. Each needs a failing test before it is fixed.
 | 20 | `integrations.ts:299`, `1147` | An integration id has no character rule; `key_hash` has no unique constraint. |
 | 21 | `vite.ts:136–155` | The dev server signs anybody in as anybody, with no loopback check. |
 
-## 5. Modules
+## 5. The architecture
 
-A module is a directory under `src/` with an `index.ts`. The rules:
+### 5.1 The idea every module shares
+
+Moss answers five questions about one request, in this order, and each
+question has one owner:
+
+1. **Who is calling?** `identity`
+2. **What exists for them?** `manifest` (the artifactory grows here)
+3. **What may they read and write?** `data`
+4. **What are they looking at?** `shells`
+5. **How does it reach them?** `socket` for the live wire, `documents` for a
+   screen drawn into a page
+
+Under them sit `runtime`, which is what a deployment supplies, and `protocol`,
+which is what both ends of the wire agree on. Over them sits `server`, which
+only wires them together.
+
+A **feature** owns none of the five. It plugs into them through seams they
+offer and ships from its own entry point. Integrations and tide's hosting are
+features.
+
+### 5.2 What a module is
+
+A directory under `src/` with an `index.ts`. The rules:
 
 1. **One door.** Code outside a module imports `../<module>` and nothing
    deeper.
@@ -177,83 +200,139 @@ A module is a directory under `src/` with an `index.ts`. The rules:
 7. **Limits.** A function is at most 100 lines; a file at most 400 lines of
    code. Today ten functions and three files are over.
 
-The modules, in dependency order (each may import those above it):
+### 5.3 The modules
 
-| Module | Owns | Comes from |
+Nine in the core, in dependency order (each may import those above it):
+
+| Module | Its question | Comes from |
 |---|---|---|
-| `telemetry` | spans | `telemetry.ts` |
-| `storage` | moss's table sequences, `migrateTables`, the grammar upgrader | `migrate.ts`, `grammar.ts`, the sequence in `integrations.ts` |
-| `protocol` | what server and terminal both speak: message schemas, version numbers, close codes, the token offer, the delta codec | types and constants in `socket.ts`, `delta.ts`, the copy in `client/index.ts` |
-| `manifest` | the manifest's types and schema, the running manifest (single writer), verification | `app.ts`, `closure.ts`, `server.ts` 292–333 and 1445–1514, the checks inside `runIntake` |
-| `identity` | session verification, the credential store, the cookie and its seal, the identity cache | `sessions.ts`, `session-cookie.ts`, `identity.ts`, the dev verifier in `runtime.ts`, `server.ts` 403–478 |
-| `authorization` | the charter applied to a set of roles: catalog, layout variants, data policy, and their memo | `principal.ts`, `server.ts` 480–533 |
-| `data` | the vex engine, its routes, `executeAs`, the write lanes, reactive followers | `data.ts`, `follow.ts`, `server.ts` 376–401 and 633–714 |
-| `cluster` | the generation pointer, the fabric | `generation.ts`, `fabric.ts` |
-| `automation` | tide's store and driver, the write-to-fact bridge | `tide.ts`, `driver.ts` |
-| `integrations` | the bundle schema, intake, the registry, its routes, the forwarder, assertion signing, the contract | `integrations.ts`, `assert.ts`, `server.ts` 716–1328, `shells.ts` 119–152 |
-| `shells` | the shell host: lifecycle, build, snapshot, liveness | `shells.ts`, `liveness.ts` |
-| `documents` | drawn documents, pages, export | `document.ts`, `pages.ts` |
-| `socket` | the WebSocket endpoint | `createSocket` in `socket.ts` |
-| `server` | the composition root, authentication, the runtime type | the rest of `server.ts`, `runtime.ts` |
-| `node`, `vite` | the Node transport and static site; the dev plugin | `node.ts`, `vite.ts` |
-| `client`, `terminal` | the wire client and the targets; they import `protocol` and nothing else of moss | as today, deduplicated |
+| `runtime` | what the deployment supplies: the runtime type, the telemetry sink | `runtime.ts`, `telemetry.ts` |
+| `protocol` | what both ends agree on: message schemas, version numbers, close codes, the token offer, the delta codec | types and constants in `socket.ts`, `delta.ts`, the copy in `client/index.ts` |
+| `identity` | who is calling: session verification, the credential store, the cookie and its seal, the identity cache | `sessions.ts`, `session-cookie.ts`, `identity.ts`, the dev verifier, `server.ts` 403–478 |
+| `manifest` | what exists for them: the manifest's schema, the running manifest (single writer), verification, the catalog and layout variants a set of roles holds, the generation pointer | `app.ts`, `closure.ts`, `generation.ts`, the catalog half of `principal.ts`, `server.ts` 292–333 and 1445–1514 |
+| `data` | what they may read and write: the engine, the policy for a set of roles, the routes, `executeAs`, the write lanes, moss's tables and their migration | `data.ts`, `follow.ts`, `migrate.ts`, `grammar.ts`, the policy half of `principal.ts`, `server.ts` 376–401 and 633–714 |
+| `shells` | what they are looking at: a shell's lifecycle, its build, its snapshot, liveness | `shells.ts` without its streaming, `liveness.ts` |
+| `socket` | how it reaches them live: the handshake, message routing, frame streaming | `createSocket` in `socket.ts`, the streaming in `shells.ts` |
+| `documents` | how it reaches them as a page: drawn documents, pages, export | `document.ts`, `pages.ts` |
+| `server` | wiring: `createServer`, authentication, the fabric, the Node transport, the dev plugin | the rest of `server.ts`, `fabric.ts`, `node.ts`, `vite.ts` |
+
+Two features, each with its own entry point:
+
+| Feature | What it is | Comes from | Goes to |
+|---|---|---|---|
+| `integrations` | services that add screens: the bundle schema, intake, the registry, its routes, the forwarder, assertion signing | `integrations.ts`, `assert.ts`, `server.ts` 716–1328, `shells.ts` 119–152, nine fields of the manifest | `@niscorp/moss/integrations` |
+| tide's hosting | a Postgres store and a driver for tide | `tide.ts`, `driver.ts` | tide's own Postgres entry; moss keeps the write lane |
+
+And the terminal side, which imports `protocol` and nothing else of moss:
+`client`, `terminal`.
+
+Without the two features the core is about 7,550 of today's 10,554 lines, and
+tide stops being a peer every app must install.
+
+### 5.4 The seams a feature uses
+
+A feature never reaches into a module. It uses these, and if one is missing,
+adding it to its owner is the first change, on its own:
+
+- `manifest`: hand over a set of actions and take one back.
+- `data`: declare tables, declare entries of its own, hear a write.
+- `server`: mount routes behind the authentication every route gets.
+- `shells`: wrap the wire a shell calls through.
+
+### 5.5 How something new gets in
+
+1. Name the question it answers. It goes in that module.
+2. If it answers none, it is a feature: its own directory and entry point, on
+   the seams.
+3. If the seam it needs is missing, that seam is the first change.
+4. If it fits nowhere, the architecture is wrong. Say so and propose the
+   refactor before writing the feature.
+
+### 5.6 The review behind the map
+
+Quality is the code as it stands; fit is whether it belongs in a lean core.
+Both out of five.
+
+| Unit today | Lines | Quality | Fit | Verdict |
+|---|---|---|---|---|
+| App contract (`app.ts`) | 524, of which 127 code | 2 | 5 | Change: a schema, frozen on hand-over. Nine of its 29 fields exist to host integrations and leave with them; one is dead. |
+| Boot check (in `server.ts`, `closure.ts`, `principal.ts`) | about 150 | 3 | 5 | Merge into `manifest`. Sound, written twice, and it picks nova's findings by their wording. |
+| Charter resolution (`principal.ts` and the memo tables) | about 270 | 3 | 5 | Split: catalog and variants into `manifest`, policy into `data`. Small pure functions, each written twice, all taking `app`. |
+| Identity (`sessions.ts`, `session-cookie.ts`, `identity.ts`) | about 600 | 3 | 5 | Keep, as one module. Small files, recently hardened; one race; an unsigned dev verifier in the public API. |
+| Data (`data.ts`, the vex routes, `executeAs`, `follow.ts`) | about 350 | 3 | 5 | Keep. Thin and right, and buried inside `createServer`. |
+| Tables and migration (`migrate.ts`, `grammar.ts`) | 195 | 4 | 5 | Merge into `data`. No assertion, tested. |
+| Shell host (`shells.ts`, `liveness.ts`) | 1,141 | 2 | 5 | Keep; it is the heart. Split it, fix three races, and move frame streaming to `socket`. |
+| Socket (`socket.ts`) | 539 | 2 | 5 | Keep. Messages are unparsed, the handler has no error boundary, a closed socket can stay attached. |
+| Delta codec (`delta.ts`) | 110 | 4 | 5 | Becomes `protocol`, with the message schemas. |
+| Documents and pages (`document.ts`, `pages.ts`) | 303 | 4 | 4 | Keep, as one module. |
+| Generation and fabric (`generation.ts`, `fabric.ts`) | 225 | 3 | 4 | Dissolve: the generation pointer into `manifest`, the fabric into `server`. |
+| Runtime and telemetry (`runtime.ts`, `telemetry.ts`) | 274 | 4 | 5 | Merge into `runtime`; the dev verifier goes to `identity`. |
+| Server (`createServer`, `node.ts`, `vite.ts`) | 1,740 | 1 | 5 | Keep as the composition root and nothing else. One 1,345-line function today. |
+| Integrations (`integrations.ts`, `assert.ts`, 613 lines of `server.ts`) | about 2,270 | 1 | 2 | Move out of the core. The largest unit and the least structured: all the SQL with no reason, 28 assertions, ten jobs in one file, and a store listing and an editor vocabulary that belong to one app. |
+| Tide's hosting (`tide.ts`, `driver.ts`) | 728 | 3 | 1 | Move to tide. It works and is tested, and it is tide's storage. |
+| Wire client (`client/`) | 571 | 2 | 5 | Keep, on `protocol`. A 280-line function, unparsed messages, reconnect defects. |
+| Terminal and its five targets (`terminal/`) | 1,258 | 3 | 4 | Keep. Small files; slots, frames and snapshot adapters written two and three times; the ink target has no test. |
 
 ## 6. Gates
 
-All of these join `pnpm verify` and CI. A rule that is only written down is the
-failure this audit found.
+All of these are in `pnpm verify` and CI, or join them. A rule that is only
+written down is the failure this audit found.
 
+- **`check:raw-sql` — built (2026-10-09).** `scripts/check-raw-sql.mts`, ported
+  from lyra's `reads-are-vex-check`. It sweeps every package but vex and
+  strata. Each file that holds a door to the pool or a statement is in the
+  script's ledger with its exact numbers and its reason: credential, store or
+  debt. A file outside the ledger fails; a number that is off fails in either
+  direction. Today: 28 statements with no reason, 6 in tide's store, 6
+  credential. Run: green on this tree; red with a statement added to an
+  unlisted file, to a listed file, and with a stale number.
 - **`pnpm lint`**, which runs nowhere today. For each module, from the commit
   that creates it: no type assertion but `as const`, no non-null assertion, no
   `function` declaration, the two size limits, no import of another module's
   inner file, and for `client/` and `terminal/` no import of moss but
   `protocol`.
-- **`check:modules`**, a repo script like `check:fact-door`. The dependency
-  table has no cycle and matches the imports. Nothing sits flat in `src/`
-  except the files not yet moved, which the script lists; the list may only
-  get shorter.
-- **`check:sql`**. Every SQL statement in a package's source is counted per
-  file against a number in the script. A new statement fails until the number
-  is changed in a diff somebody reads. Moss's target: the credential lookups
-  and tide's store, nothing else.
+- **`check:modules`**. The dependency table has no cycle and matches the
+  imports. Nothing sits flat in `src/` except the files not yet moved, which
+  the script lists; the list may only get shorter.
 - **`check:api`**. Each package's exported names, per entry point, are a
   committed file. An export that is not in the file fails.
-- **`AGENTS.md`** gets a part for changing a package: the seven rules above,
-  and "a change that needs the inner files of two modules is a design error;
-  stop and say so".
+- **`AGENTS.md`** gets a part for changing a package: 5.2 and 5.5.
 
-The numbers the counting gates start from are today's (39 statements, 135
-names, 28 flat files, about 110 assertions). They may go down, never up.
+The numbers the counting gates start from are today's. They may go down, never
+up.
 
 ## 7. Build order
 
 Each phase is its own go and lands alone. A commit moves code or changes
 behaviour, never both. Every defect in 4.3 gets a failing test first.
 
-0. **The gates**, counting from today's numbers.
+0. **The gates.** `check:raw-sql` is built; `lint` joins `verify`;
+   `check:modules` and `check:api` are written.
 1. **Cut the public API**: the 71 names nobody imports.
 2. **`protocol`**: one set of message schemas, parsed on both sides; the client
    stops importing the server. Fixes 7, 8.
 3. **`manifest`**: the manifest is parsed and frozen when it is handed over, so
-   an edit to it throws; one verification used by boot, refresh and intake; a
-   single writer. Atrium moves to the method that replaces a set of actions.
+   an edit to it throws; one verification for boot, refresh and intake; a
+   single writer; the catalog and variants in one form. Atrium moves to the
+   seam that hands over a set of actions.
 4. **`identity`**. Fixes 13, 14.
-5. **`authorization`**: the resolvers in one form, with their memo.
-6. **`data`**: the engine, the routes, `executeAs`, the write lanes.
-7. **`integrations`**. First a probe: every one of its statements as a vex
-   entry, run by a private engine that no route serves. Vex's write grammar
-   has insert with conflict, upsert, update, delete, one insert per item of a
-   list, and batches in one transaction, which covers the shapes in the
-   registration route; this is read, not tried. Then one forwarder for frame,
-   webhook, proxy and outbound call, with a timeout. Fixes 1, 2, 10, 12, 20.
-8. **`shells`**: the narrow interface, the split, and defects 3, 4, 5.
-9. **`socket`, `documents`, `automation`, `cluster`, `storage`, `telemetry`**.
-   Fixes 6, 9, 15, 16, 17.
-10. **`server`** as the composition root; `FunctionSession` stops carrying the
-    runtime.
-11. **`client` and `terminal`**: one set of wire slots, one frame tree, a
+5. **`data`**: the engine, the policy, the routes, `executeAs`, the write
+   lanes, moss's tables.
+6. **`integrations`**, out of the core. First a probe: every one of its
+   statements as a vex entry, run by a private engine that no route serves.
+   Vex's write grammar has insert with conflict, upsert, update, delete, one
+   insert per item of a list, and batches in one transaction, which covers the
+   shapes in the registration route; this is read, not tried. Then one
+   forwarder for frame, webhook, proxy and outbound call, with a timeout.
+   Fixes 1, 2, 10, 12, 20.
+7. **`shells` and `socket`**: the narrow interface, the split, streaming moved
+   to the socket. Fixes 3, 4, 5, 6, 9.
+8. **`documents`, `runtime`, tide's hosting moved to tide.** Fixes 15, 16, 17.
+9. **`server`** as the composition root; `FunctionSession` stops carrying the
+   runtime.
+10. **`client` and `terminal`**: one set of wire slots, one frame tree, a
     status every target is told. Fixes 18, 19.
-12. **The documents**: `DESIGN.md` and `README.md` say what the code does; the
+11. **The documents**: `DESIGN.md` and `README.md` say what the code does; the
     last internals our apps import are removed.
 
 ## 8. Decisions
@@ -273,6 +352,9 @@ Open, each a breaking change for an app:
    is named as such at boot.
 3. **Tide's DDL split cannot be corrected for migrations that have run**; their
    checksums are in every ledger. It can only be corrected for new ones.
+
+4. **Integrations ships from `@niscorp/moss/integrations`** and tide's store
+   from tide. Lyra, lyceum and Midas change their imports.
 
 Not here: stopping the seeding of `vex_cache`. That belongs to the artifactory.
 

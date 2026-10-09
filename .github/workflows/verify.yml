@@ -92,6 +92,13 @@ jobs:
       - name: Check the tide fact door
         run: pnpm check:fact-door
 
+      # A package above the engines runs no SQL of its own: its reads and writes
+      # are vex, as an application's are. Every statement that exists today is
+      # counted per file in the script's ledger; a new one, or a number that no
+      # longer matches, fails. See scripts/check-raw-sql.mts.
+      - name: Check for SQL outside vex
+        run: pnpm check:raw-sql
+
       # Every package change on a PR carries a changeset — and no release breaks
       # an app: the packages are live on npm. A breaking bump (a major, or a
       # minor below 1.0) is refused unless its changeset carries the maintainer's
