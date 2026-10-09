@@ -881,8 +881,10 @@ measures the end.
 - `error` codes: `invalid_token`, `session_failed`, `client_too_old`,
   `server_too_old`, `no_shell` (the app serves no shell), `invalid_message`
   (what was sent is not JSON, not one of the messages above, or one of them
-  with a field it does not have: nothing of it is acted on), `seal_not_kept`
-  (a sealed sign-in came back with no seal to open it).
+  with a field it does not have: nothing of it is acted on), `message_failed`
+  (the server threw acting on a message it could read; why is in its log, and
+  the connection stays open), `seal_not_kept` (a sealed sign-in came back with
+  no seal to open it).
 - **Who a terminal is** is decided on the upgrade request, from a header of
   it — never from its address, which is what every proxy on the way writes
   into its log. A terminal offers the subprotocol `nisc`, and beside it its

@@ -606,6 +606,75 @@ describe('socket — a refused session is one terminal, not the server', () => {
   });
 });
 
+// The same holds once a session is open. A transport calls the message handler
+// from its own listener (on Node, ws's `message` event), and a throw there is
+// an uncaught exception: one shell failing on one message, and the process
+// every session lives in is gone. So the handler lets nothing out. What failed
+// is logged where somebody can read it, the terminal is told that its message
+// was not acted on and nothing of why, and the connection stays as it was.
+describe('socket — a message that cannot be acted on is one message, not the server', () => {
+  const INTERNAL = 'relation "deals" does not exist at 10.1.2.3:5432';
+  const failing = (): ShellSession & { calls: string[] } => {
+    const session = recordingSession();
+    const fail = (): never => {
+      throw new Error(INTERNAL);
+    };
+    return { ...session, dispatch: fail, publish: fail, popTo: fail, back: fail, reset: fail, resync: fail };
+  };
+
+  it.each([
+    ['an event', { type: 'event', canvas: 'main', event: { type: 'ui:click', ref: 'x' } }],
+    ['a publish', { type: 'publish', channel: 'refresh' }],
+    ['a popTo', { type: 'popTo', canvas: 'main', instance: 'a1' }],
+    ['a back', { type: 'back' }],
+    ['a reset', { type: 'reset' }],
+    ['a resync', { type: 'resync' }],
+  ])('%s the shell throws on is logged here and answered there, and thrown at nobody', async (_label, message) => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const accept = createSocket(ctxWith({ shells: hostFor(failing()) }));
+    const conn = new FakeConnection();
+    await accept(SOCKET, conn.offering('good'));
+    conn.sent.length = 0;
+
+    expect(() => conn.emit(message)).not.toThrow();
+
+    expect(conn.sent.map((sent) => (sent.type === 'error' ? sent.code : sent.type))).toEqual(['message_failed']);
+    expect(JSON.stringify(conn.sent)).not.toContain('deals');
+    expect(JSON.stringify(conn.sent)).not.toContain('10.1.2.3');
+    expect(logged.mock.calls.some((call) => call.some((part) => part instanceof Error && part.message === INTERNAL))).toBe(true);
+    expect(conn.closed).toBeUndefined();
+    logged.mockRestore();
+  });
+
+  it('the connection goes on being served: the next message is acted on', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const session = recordingSession();
+    const once = { ...session, back: (): boolean => { throw new Error(INTERNAL); } };
+    const accept = createSocket(ctxWith({ shells: hostFor(once) }));
+    const conn = new FakeConnection();
+    await accept(SOCKET, conn.offering('good'));
+    conn.emit({ type: 'back' });
+    conn.emit({ type: 'publish', channel: 'refresh' });
+    expect(session.calls).toContain('publish:refresh');
+    logged.mockRestore();
+  });
+
+  // The terminal may be gone by the time there is something to tell it. That
+  // is one more thing that must not leave the handler.
+  it('a transport that throws on the answer costs nothing either', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const accept = createSocket(ctxWith({ shells: hostFor(failing()) }));
+    const conn = new FakeConnection();
+    await accept(SOCKET, conn.offering('good'));
+    conn.send = () => {
+      throw new Error('the socket is not open');
+    };
+    expect(() => conn.emit({ type: 'back' })).not.toThrow();
+    expect(() => conn.emitText('not a message')).not.toThrow();
+    logged.mockRestore();
+  });
+});
+
 // A terminal served by the app it talks to does not hold its session: its
 // browser does, in a cookie the page cannot read, and sends it with the
 // upgrade. The answer to the upgrade is where that cookie is written.

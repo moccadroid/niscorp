@@ -352,7 +352,7 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
       emit({ name: 'socket.upgrade', startUnixNano: upClock.startUnixNano, endUnixNano: upClock.endUnixNano(), status: 'ok', attributes: { hasPrincipal: principal !== null } });
     }
 
-    connection.onMessage((text) => {
+    const act = (text: string): void => {
       const message = messageOf(text);
       if (message === undefined) {
         send({ type: 'error', code: 'invalid_message', message: INVALID_MESSAGE });
@@ -387,6 +387,25 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
         default:
           // A message the protocol gains and this does not route fails to compile.
           message satisfies never;
+      }
+    };
+
+    // NOTHING LEAVES THIS HANDLER, for the reason nothing leaves accept. A
+    // transport calls it from its own listener, where a throw is an uncaught
+    // exception and Node ends the process: one shell failing on one message,
+    // and every session on the box is gone. What failed is logged here. The
+    // terminal is told only that its message was not acted on — the error's
+    // own text is the server's — and the connection stays as it was.
+    connection.onMessage((text) => {
+      try {
+        act(text);
+      } catch (error) {
+        console.error('[moss/socket] a message could not be acted on:', error);
+        try {
+          send({ type: 'error', code: 'message_failed', message: 'The server could not act on that message. Why is in its log, not here. The connection is still open.' });
+        } catch {
+          // The transport is already gone — there is nobody left to tell.
+        }
       }
     });
   };
