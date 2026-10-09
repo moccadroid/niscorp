@@ -7,6 +7,7 @@ import { PrismError, ErrorCode } from '../errors';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { desugar } from '../sugar/desugar';
 import { createBudget, measure, measureString, spendStep, type Limits } from './budget';
+import { optimize } from './optimize';
 
 // ─────────────────────────────────────────────────────────
 // Guards (local imports to avoid barrel cycles)
@@ -252,32 +253,94 @@ const evaluateUnbudgeted = (node: unknown, context: EvalContext): JsonValue => {
 // Public Entry Points
 // ═══════════════════════════════════════════════════════════
 
-export const refuseDeep = (config: unknown): void => {
+// The source a config is evaluated against is JSON: null, strings, booleans,
+// finite numbers, and arrays and objects of those.
+const isJsonValue = (value: unknown): value is JsonValue => {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  if (typeof value !== 'object') return false;
+  // A plain object: a Date, a Map or an instance of a class has no fields to
+  // look at and would pass for `{}`.
+  const proto: unknown = Object.getPrototypeOf(value);
+  return (proto === Object.prototype || proto === null) && Object.values(value).every(isJsonValue);
+};
+
+// A config, checked: refused with the part that is wrong, or the tree to run.
+const checked = (config: unknown): unknown => {
   if (exceedsDepth(config)) throw new PrismError('Invalid config', ErrorCode.SCHEMA, { details: { issues: [{ path: 'root', message: depthRefusal() }] } });
-};
-
-// One evaluation of a tree that is already checked and desugared. `kept` says
-// the tree outlives this call (see EvalContext).
-export const run = (tree: unknown, source: JsonValue, limits?: Partial<Limits>, kept?: boolean): JsonValue => {
-  const budget = createBudget(limits);
-  const result = evaluateNode(tree, kept === true ? { source, vars: {}, budget, kept } : { source, vars: {}, budget });
-  measure(result, budget);
-  return result;
-};
-
-export const evaluate = (config: Config, source: JsonValue, limits?: Partial<Limits>): JsonValue => {
-  refuseDeep(config);
   const parsed = ConfigSchema.safeParse(config);
   if (!parsed.success) {
     const issues = explainIssues(parsed.error.issues).map((i) => ({ path: i.path.join('.') || 'root', message: i.message }));
     throw new PrismError('Invalid config', ErrorCode.SCHEMA, { details: { issues } });
   }
-  return run(desugar(parsed.data), source, limits);
+  return desugar(parsed.data);
 };
 
-export const evaluateSafe = (config: Config, source: JsonValue, limits?: Partial<Limits>): Result<JsonValue> => {
+// One evaluation of a tree that is already checked and desugared. `kept` says
+// the tree outlives this call (see EvalContext).
+const run = (tree: unknown, source: JsonValue, limits: Partial<Limits> | undefined, kept: boolean): JsonValue => {
+  const budget = createBudget(limits);
+  const result = evaluateNode(tree, kept ? { source, vars: {}, budget, kept } : { source, vars: {}, budget });
+  measure(result, budget);
+  return result;
+};
+
+export type EvaluateOptions = {
+  // What this evaluation may cost (./budget.ts). The defaults where not given.
+  limits?: Partial<Limits>;
+  // 'always': check the config on this call whatever was checked before, and
+  // check that the source is plain JSON. For writing a config, for tests and
+  // for tools. Without it a config object is checked the first time it is seen.
+  check?: 'always';
+};
+
+// What a config object was found to be: its tree, and whether the optimizer
+// has been over it. Held weakly, by the object.
+type Kept = { tree: unknown; optimized: boolean };
+const keptTrees = new WeakMap<object, Kept>();
+
+// ═══════════════════════════════════════════════════════════
+// evaluate — a config and a source in, the answer out.
+//
+// A config is checked the first time its object is seen and its tree is kept:
+// a host holds its configs and hands the same objects over again, on every
+// request, every fact, every row. The second time, the tree is optimized as
+// `compile` would (handlers attached, paths parsed, constants folded) and
+// from then on a call only evaluates. Not on the first: a config handed over
+// once — written inline, or read from a store for this call — would pay for
+// an optimization nothing uses.
+//
+// Kept by the OBJECT, so a config changed in place after its first call is
+// not read again; a new object is. `check: 'always'` keeps nothing and checks
+// everything, the source too.
+//
+// Both sides are `unknown`: this is the function a host's transform seam is
+// handed (nova's shell, tide's engine, strata's upgrader), and a seam hands
+// over whatever the host holds.
+// ═══════════════════════════════════════════════════════════
+
+export const evaluate = (config: Config, source: unknown, options?: EvaluateOptions): JsonValue => {
+  if (options?.check === 'always') {
+    if (!isJsonValue(source)) throw new PrismError('The source must be plain JSON.', ErrorCode.TYPE);
+    return run(checked(config), source, options.limits, false);
+  }
+  const input = source as JsonValue;
+  if (typeof config !== 'object' || config === null) return run(checked(config), input, options?.limits, false);
+  let kept = keptTrees.get(config);
+  if (kept === undefined) {
+    kept = { tree: checked(config), optimized: false };
+    keptTrees.set(config, kept);
+  } else if (!kept.optimized) {
+    kept.tree = optimize(kept.tree, evaluateNode).node;
+    kept.optimized = true;
+  }
+  return run(kept.tree, input, options?.limits, true);
+};
+
+export const evaluateSafe = (config: Config, source: unknown, options?: EvaluateOptions): Result<JsonValue> => {
   try {
-    return { ok: true, data: evaluate(config, source, limits) };
+    return { ok: true, data: evaluate(config, source, options) };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error : new Error(String(error)) };
   }

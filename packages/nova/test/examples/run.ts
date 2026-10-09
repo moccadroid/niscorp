@@ -1,4 +1,4 @@
-import { prismTransform } from '@niscorp/prism/migrations';
+import { evaluate } from '@niscorp/prism';
 import { createLayoutStore, createShell, shellIdle } from '../../src';
 import type { RenderNode, Shell } from '../../src';
 import type { NovaExample } from '../../src/examples';
@@ -44,7 +44,7 @@ export const shellOf = (example: NovaExample, asked: Asked[] = []): Shell => {
     registry: createPermissiveRegistry(),
     ...(example.phrases === undefined ? {} : { phrases: example.phrases }),
     ...(example.phraseKeys === undefined ? {} : { phraseKeys: example.phraseKeys }),
-    transform: prismTransform,
+    transform: evaluate,
     functions: Object.fromEntries(Object.entries(example.replies ?? {}).map(([name, reply]) => [name, async () => reply])),
     fetch: async (url, init) => {
       const method = init?.method ?? 'GET';

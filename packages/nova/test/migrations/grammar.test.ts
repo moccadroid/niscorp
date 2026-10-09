@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createUpgrader } from '@niscorp/strata';
-import { PRISM_SEQUENCE, prismTransform } from '@niscorp/prism/migrations';
+import { evaluate } from '@niscorp/prism';
+import { PRISM_SEQUENCE } from '@niscorp/prism/migrations';
 import { NOVA_SCHEMAS, NOVA_SEQUENCE } from '../../src/migrations';
 
 // ═══════════════════════════════════════════════════════════
@@ -13,7 +14,7 @@ import { NOVA_SCHEMAS, NOVA_SEQUENCE } from '../../src/migrations';
 // ═══════════════════════════════════════════════════════════
 
 const readerAt = (version: number) =>
-  createUpgrader([{ ...NOVA_SEQUENCE, migrations: NOVA_SEQUENCE.migrations.slice(0, version) }, PRISM_SEQUENCE], { transform: prismTransform });
+  createUpgrader([{ ...NOVA_SEQUENCE, migrations: NOVA_SEQUENCE.migrations.slice(0, version) }, PRISM_SEQUENCE], { transform: evaluate });
 
 const current = NOVA_SEQUENCE.migrations.length;
 

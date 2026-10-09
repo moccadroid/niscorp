@@ -49,14 +49,13 @@ const result = evaluate(
 ## API
 
 ```typescript
-// One-shot evaluation
-evaluate(config, source, limits?) → JsonValue
-evaluateSafe(config, source, limits?) → { ok: true, data } | { ok: false, error }
+// A config and a source in, the answer out. A config object is checked the first
+// time it is seen and only evaluated after that.
+evaluate(config, source, options?) → JsonValue
+evaluateSafe(config, source, options?) → { ok: true, data } | { ok: false, error }
+//   options: { limits?, check?: 'always' }   — 'always' checks everything on every call
 
-// The same, in the shape a host's transform seam takes
-prismTransform(config: unknown, source: unknown) → unknown
-
-// Compile once, execute many: no check, no desugar, each op's handler already attached
+// For a config that is stored: compile once, keep the IR, execute it
 compile(config, options?) → Promise<CompiledIr>
 execute(ir, source, limits?) → JsonValue
 
@@ -68,27 +67,40 @@ getNodeJsonSchema(target?) → object
 getConfigJsonSchema(target?) → object
 ```
 
-## As a host's transform
+## Which call
 
+**`evaluate(config, source)`** is the call for a config a program holds. The
+first time it is handed a config object it checks it against the schema, and
+refuses with the part that is wrong; the second time it prepares it as `compile`
+would; from then on a call only evaluates. So a host that keeps its configs and
+hands the same objects over on every request pays the check once. It is kept by
+the object: a config changed in place after its first call is not read again —
+hand over a new object.
+
+Both arguments are `unknown`, so it is also what a host's transform seam takes.
 nova's shell, tide's engine and strata's upgrader each run a config through a
-transform they are handed, `(config, source) => unknown`, and know nothing of
-Prism. `prismTransform` is Prism in that shape:
+function they are handed, `(config, source) => unknown`, and know nothing of
+Prism:
 
 ```typescript
-import { prismTransform } from '@niscorp/prism';
+import { evaluate } from '@niscorp/prism';
 
-createTide({ store, transform: prismTransform, effects });   // @niscorp/tide
-createUpgrader(grammars, { transform: prismTransform });     // @niscorp/strata
+createTide({ store, transform: evaluate, effects });   // @niscorp/tide
+createUpgrader(grammars, { transform: evaluate });     // @niscorp/strata
 ```
 
-Both sides arrive untyped, so both are checked: the config is parsed against
-`ConfigSchema` (once for each config object: a later call with the same object
-only evaluates, and a config changed in place after its first call is not read
-again), and the source must be plain JSON — a source holding `undefined`, a
-function or a non-finite number is refused.
-`evaluate` is typed for a `JsonValue` and checks no source, which is why it
-cannot be handed to a seam as it is. A host that adds values of its own to the
-source first (the app's "today", the session's principal) wraps it.
+A host that adds values of its own to the source first (the app's "today", the
+session's principal) wraps it: `(config, source) => evaluate(config, { ...source, today })`.
+
+**`evaluate(config, source, { check: 'always' })`** is for writing a config, for
+tests and for tools. It keeps nothing: the config is checked on every call, and
+so is the source, which must be plain JSON — one holding `undefined`, a
+function, a `Date` or a non-finite number is refused.
+
+**`compile` and `execute`** are for a config that is stored. The IR is JSON with
+a fingerprint: keep it beside what it belongs to, and `execute` runs it without
+checking anything again — in another process, on another day. It is the only
+form that does not need the config object to be the same one.
 
 ## Examples
 
@@ -130,9 +142,8 @@ rules) — see [DOCS.md § Transform Operations](./DOCS.md#transform-operations)
 They are what strata's document migrations are written in.
 
 **`@niscorp/prism/migrations`** publishes Prism's own grammar — `PRISM_SEQUENCE`
-(`nisc.prism`, kind `nisc.prism/config`), `PRISM_SCHEMAS` — and exports
-`prismTransform` as well, the evaluator a migration runs through (strata injects
-it): the same function as the main entry's.
+(`nisc.prism`, kind `nisc.prism/config`), `PRISM_SCHEMAS`. The evaluator a
+migration runs through is `evaluate`, from the main entry (strata injects it).
 
 **The op set only ever grows.** Configs are stored — endpoint requests, vex
 mappings, migrations — and a migration cannot be migrated by the language it is

@@ -181,7 +181,7 @@ works out EXACTLY what each must become, and holds the edit to it.
 ```ts
 // the app's src/dev/strata.ts — it lists its artifacts; strata does the rest
 import { runSourceUpgrade } from '@niscorp/strata/node';
-process.exit(await runSourceUpgrade({ root, grammars, transform: prismTransform, schemas, documents }, process.argv.slice(2)));
+process.exit(await runSourceUpgrade({ root, grammars, transform: evaluate, schemas, documents }, process.argv.slice(2)));
 ```
 
 ```bash

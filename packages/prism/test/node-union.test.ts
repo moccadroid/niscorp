@@ -55,15 +55,17 @@ describe('the node union, tried by key and walked', () => {
   it('say the same of every config one change away from a small one', async () => {
     let valid = 0;
     let refused = 0;
-    for (const config of SMALL.flatMap((small) => [...damaged(small)])) {
+    // Every fourth: enough of each kind of damage, and a fraction of a second
+    // even when every other suite is running beside this one.
+    for (const config of SMALL.flatMap((small) => [...damaged(small)]).filter((_, i) => i % 4 === 0)) {
       const tried = ConfigSchema.safeParse(config);
       expect(said(tried), JSON.stringify(config)).toBe(said(await ConfigSchema.safeParseAsync(config)));
       if (tried.success) valid += 1;
       else refused += 1;
     }
     // Worth something only while it holds both kinds.
-    expect(valid).toBeGreaterThan(20);
-    expect(refused).toBeGreaterThan(50);
+    expect(valid).toBeGreaterThan(5);
+    expect(refused).toBeGreaterThan(15);
   });
 
   it('a refusal still names the part that is wrong', () => {

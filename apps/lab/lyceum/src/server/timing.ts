@@ -3,7 +3,7 @@ import { anchorDraft, createTide, draftSchemaOf, occurrencesBetween, ReflexSchem
 import type { DraftChoice, Reflex, ReflexDraft, Tide } from '@niscorp/tide';
 import { createReflexAgent, effectProblem, isDraft, reflexConversation } from '@niscorp/tide/agent';
 import type { OfferedEffect, ReflexAnswer } from '@niscorp/tide/agent';
-import { ConfigSchema, evaluate } from '@niscorp/prism';
+import { evaluate } from '@niscorp/prism';
 import { createSignal } from '@niscorp/signal';
 import { createTideDriver, createTideStore, mintSession } from '@niscorp/moss';
 import type { MossServer, TideDriver } from '@niscorp/moss';
@@ -233,8 +233,8 @@ export const startTiming = async (server: MossServer, runtime: LyceumRuntime): P
   const tide = createTide({
     store: createTideStore(runtime.pool),
     storeUnwatchedWrites: false,
-    // Templates are Prism; both sides are parsed at the boundary.
-    transform: (config, source) => evaluate(ConfigSchema.parse(config), z.json().parse(source)),
+    // Templates are Prism: evaluate checks a template the first time it is handed it.
+    transform: evaluate,
     // A timer selects nothing: the clock firing is the whole unit.
     select: async () => {
       throw new Error('lyceum: a timer selects nothing');

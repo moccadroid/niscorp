@@ -616,14 +616,10 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
       ...(shellManifest.fragments !== undefined ? { fragments: shellManifest.fragments } : {}),
       // The same seam the client shell used: prism evaluates endpoint
       // request/response transforms; `$.userId` and `$.today` are ambient,
-      // never authorable by a request.
+      // never authorable by a request. The config is the action's own object
+      // on every call, so evaluate checks it once (the source is new each time).
       transform: (config, source) =>
-        evaluate(
-          config as Parameters<typeof evaluate>[0],
-          (source !== null && typeof source === 'object' && !Array.isArray(source)
-            ? { ...(source as Record<string, unknown>), userId, today: today() }
-            : source) as Parameters<typeof evaluate>[1],
-        ),
+        evaluate(config, source !== null && typeof source === 'object' && !Array.isArray(source) ? { ...source, userId, today: today() } : source),
       fetch: wire,
       functions,
       ...(ctx.runtime.endpointTimeoutMs === undefined ? {} : { endpointTimeoutMs: ctx.runtime.endpointTimeoutMs }),

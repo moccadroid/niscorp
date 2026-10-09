@@ -109,14 +109,14 @@ type CompiledIr = {
     stats: { nodeCount, opCount, maxDepth, optimizations };
   };
   tables: {
-    paths: string[];                    // JSONPaths for cache priming
+    paths: string[];                    // every `$ref` string in the tree, a constant's data included: a listing, not read by execute
     strings: string[];                  // String literals
   };
   core: unknown;                        // Desugared, optimized config
 };
 ```
 
-`execute()` skips validation and desugaring — it primes the JSONPath cache from `tables.paths` and evaluates `core` directly. How much that saves over `evaluate()` depends on the config: `pnpm bench` runs five against each other (`test/optimize.bench.ts`), from under 2x for a short map to over 50x where the constants fold.
+`execute()` skips validation and desugaring — it restores each node's handler and each `$ref`'s parsed path once per IR, and evaluates `core` directly. How much that saves over `evaluate()` depends on the config: `pnpm bench` runs five against each other (`test/optimize.bench.ts`), from under 2x for a short map to over 50x where the constants fold.
 
 The fingerprint enables cache invalidation: store IRs by name, check the fingerprint to know if the config changed.
 
@@ -168,8 +168,7 @@ src/
 │       ├── transform.schema.ts
 │       └── sugar.schema.ts
 ├── engine/
-│   ├── evaluate.ts                # Dispatcher + evaluate / evaluateSafe
-│   ├── transform.ts               # prismTransform — Prism in the shape a host's transform seam takes
+│   ├── evaluate.ts                # Dispatcher + evaluate / evaluateSafe (what a config object was found to be is kept here)
 │   ├── compile.ts                 # Config → CompiledIr
 │   ├── optimize.ts                # Compile-time passes (ref segments, handlers, constant folding)
 │   ├── budget.ts                  # Limits: steps, string length, result size
@@ -195,7 +194,7 @@ src/
 │   ├── index.ts
 │   └── mapping-agent.ts           # mappingAgent (Cortex agent definition)
 ├── migrations/
-│   └── index.ts                   # @niscorp/prism/migrations — PRISM_SEQUENCE, and prismTransform again
+│   └── index.ts                   # @niscorp/prism/migrations — PRISM_SEQUENCE, PRISM_SCHEMAS
 └── utils/
     ├── jsonpath.ts                # JSONPath parser + cache
     ├── compare.ts                 # Deep equality, ordered comparison
@@ -231,7 +230,7 @@ and a mapping over a thousand rows would otherwise build a thousand of them.
 
 4. **SHA256 fingerprint on IR.** Cache invalidation without version numbers. Same config = same fingerprint.
 
-5. **`evaluate` + `evaluateSafe`.** Throwing for trusted code, Result type for untrusted input. Different call sites have different needs.
+5. **`evaluate` + `evaluateSafe`.** Throwing for trusted code, Result type for untrusted input. Different call sites have different needs. Both keep what a config object was found to be, by the object: a host hands the same configs over on every request, and checking each again was the whole cost of a small transform. `check: 'always'` is the call that keeps nothing, for writing and testing a config. A separate function for the kept path (`prismTransform`) existed for a while and is gone: it was the one hosts were told to use and the one that reported worst.
 
 6. **Ops receive `evaluate` as a parameter.** Breaks the circular import between ops and the dispatcher. Also enables mock-based unit testing of individual ops.
 

@@ -740,7 +740,7 @@ const ir = await compile(config, { name: 'user-transform', version: '1.0.0' });
 // - Desugared config (sugar ops already resolved)
 // - SHA256 fingerprint (for cache invalidation)
 // - Stats (node count, op frequency, max depth, optimizations applied)
-// - Tables (all JSONPaths and string literals for cache priming)
+// - Tables (every $ref string and string literal in the tree)
 
 const result1 = execute(ir, source1); // No validation, no desugaring
 const result2 = execute(ir, source2); // Each op's handler already attached
@@ -748,44 +748,63 @@ const result2 = execute(ir, source2); // Each op's handler already attached
 
 The IR is JSON-serializable — store it in a database, cache in Redis, send over a wire.
 
-**A constant in an answer is frozen.** Every `execute` of an IR hands out the IR's own constants: a `$const` that is a list or an object, and anything the compiler worked out ahead of time because it did not depend on the source (`{ "$split": { "value": "a,b", "sep": "," } }` is a constant list). They are frozen, all the way down, so one caller cannot change what the next is given: `answer.tags.push(x)` on a list that came from `{ "$const": [] }` throws a `TypeError`. To change an answer, copy the part first (`[...answer.tags, x]`). Everything built for the call — a template's object, a `$map`'s list — is the caller's own. `evaluate` and `prismTransform` do not freeze: what they answer may be changed.
+**A constant in an answer is frozen.** Every `execute` of an IR hands out the IR's own constants: a `$const` that is a list or an object, and anything the compiler worked out ahead of time because it did not depend on the source (`{ "$split": { "value": "a,b", "sep": "," } }` is a constant list). They are frozen, all the way down, so one caller cannot change what the next is given: `answer.tags.push(x)` on a list that came from `{ "$const": [] }` throws a `TypeError`. To change an answer, copy the part first (`[...answer.tags, x]`). Everything built for the call — a template's object, a `$map`'s list — is the caller's own. `evaluate` does not freeze: what it answers may be changed.
 
-## As a host's transform
+## evaluate
 
 ```typescript
-prismTransform(config: unknown, source: unknown): unknown
+evaluate(config: unknown, source: unknown, options?: { limits?: Partial<Limits>; check?: 'always' }): JsonValue
+evaluateSafe(config, source, options?): { ok: true, data } | { ok: false, error }
 ```
 
-Prism in the shape a host's transform seam takes. nova's shell (`transform`),
+A config and a source in, the answer out.
+
+- **The config** is checked against the schema the first time its object is
+  handed over, and refused with a `PrismError` (`E_SCHEMA`) that names the part
+  that is wrong. Its tree is kept: the second call with the same object prepares
+  it as `compile` would (handlers attached, paths parsed, constants folded), and
+  every call after that only evaluates. It is kept by the object, so a config
+  changed in place after its first call is not read again — hand over a new
+  object. A config that is a new object on every call is checked on every call,
+  and is not prepared: that would cost more than it saves.
+- **The source** is taken as it is. Nothing checks it.
+- **The answer** is the caller's to change: a constant is handed out as a copy.
+
+It is the function a host's transform seam takes. nova's shell (`transform`),
 tide's engine (`transform`) and strata's upgrader (`{ transform }`) each run a
-config through a function they are handed and know nothing of Prism; this is the
-function to hand them.
+config through a function they are handed and know nothing of Prism:
 
 ```typescript
-import { prismTransform } from '@niscorp/prism';
+import { evaluate } from '@niscorp/prism';
 
-const tide = createTide({ store, transform: prismTransform, effects });
+const tide = createTide({ store, transform: evaluate, effects });
 ```
 
-- **The config** is parsed against `ConfigSchema` where it comes in — once for
-  each config object, so a config a host keeps and passes again is not parsed
-  again: a later call only evaluates. It is kept by the object, so a config
-  changed in place after its first call is not read again; pass a new object.
-  A config that is a new object on every call is parsed on every call.
-- **The source** must be plain JSON: `null`, strings, booleans, finite numbers,
-  and arrays and objects of those. One that holds `undefined`, a function or a
-  non-finite number is refused — `The source of a transform must be plain JSON.`
-- **The result** is what `evaluate` answers, and the caller's to change: a
-  `$const` in a kept config is handed out as a copy.
+### `check: 'always'`
 
-`evaluate` itself is typed for a `JsonValue` source and checks none, so it does
-not fit a seam that hands over `unknown`. `@niscorp/prism/migrations` exports the
-same function.
+```typescript
+evaluate(config, source, { check: 'always' })
+```
+
+For writing a config, for tests and for tools. Nothing is kept and nothing is
+taken on trust: the config is checked on this call whatever was checked before,
+and the source must be plain JSON — `null`, strings, booleans, finite numbers,
+and arrays and plain objects of those. One that holds `undefined`, a function,
+a `Date` or a non-finite number is refused: `E_TYPE`, "The source must be plain
+JSON."
+
+### Which call
+
+| You have | Call |
+|---|---|
+| a config your program holds, run again and again | `evaluate(config, source)` |
+| a config being written, a test, a tool | `evaluate(config, source, { check: 'always' })` |
+| a config that is stored, or that must run without its checks | `compile` once, `execute` the IR |
 
 ## Limits
 
-`evaluate`, `evaluateSafe` and `execute` take an optional third argument, a
-`Partial<Limits>`, merged over `DEFAULT_LIMITS`:
+`evaluate` and `evaluateSafe` take them as `options.limits`, `execute` as its
+third argument: a `Partial<Limits>`, merged over `DEFAULT_LIMITS`:
 
 | Limit | Default | Counts |
 |-------|---------|--------|

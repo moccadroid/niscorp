@@ -18,11 +18,11 @@ pnpm add @niscorp/prism @niscorp/strata
 
 ```typescript
 import { createTide, createMemoryStore } from '@niscorp/tide';
-import { prismTransform } from '@niscorp/prism';
+import { evaluate } from '@niscorp/prism';
 
 const tide = createTide({
   store: createMemoryStore(),
-  transform: prismTransform,
+  transform: evaluate,
   select: async (query) => db.rows(query),
   effects: {
     'mail.send': {

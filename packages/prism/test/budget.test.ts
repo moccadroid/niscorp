@@ -29,8 +29,8 @@ describe('the evaluation budget', () => {
   });
 
   it('takes limits', () => {
-    expect(() => evaluate(doubleString, items(4), { maxStringLength: 16 })).toThrow(/limit 16/);
-    expect(evaluate(doubleString, items(3), { maxStringLength: 16 })).toBe('ab'.repeat(8));
+    expect(() => evaluate(doubleString, items(4), { limits: { maxStringLength: 16 } })).toThrow(/limit 16/);
+    expect(evaluate(doubleString, items(3), { limits: { maxStringLength: 16 } })).toBe('ab'.repeat(8));
   });
 
   it('leaves an ordinary mapping alone — 1000 rows', async () => {

@@ -9,7 +9,8 @@ import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runSourceUpgrade } from '@niscorp/strata/node';
 import { NOVA_SEQUENCE, NOVA_SCHEMAS } from '@niscorp/nova/migrations';
-import { PRISM_SEQUENCE, PRISM_SCHEMAS, prismTransform } from '@niscorp/prism/migrations';
+import { evaluate } from '@niscorp/prism';
+import { PRISM_SEQUENCE, PRISM_SCHEMAS } from '@niscorp/prism/migrations';
 import { CATALOG_DEFINITIONS } from '@atrium/app/action-catalog';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
@@ -41,7 +42,7 @@ process.exit(
     {
       root,
       grammars: [NOVA_SEQUENCE, PRISM_SEQUENCE],
-      transform: prismTransform,
+      transform: evaluate,
       schemas: { ...NOVA_SCHEMAS, ...PRISM_SCHEMAS },
       documents,
     },

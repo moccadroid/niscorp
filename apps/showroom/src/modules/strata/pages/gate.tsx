@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState, type FC } from 'react';
 import { createUpgrader, type Sequence, type Upgrader } from '@niscorp/strata';
 import { checkCorpus, type CorpusDocument, type GrammarSchema } from '@niscorp/strata/check';
 import { NOVA_SCHEMAS, NOVA_SEQUENCE } from '@niscorp/nova/migrations';
-import { PRISM_SCHEMAS, PRISM_SEQUENCE, prismTransform } from '@niscorp/prism/migrations';
+import { evaluate } from '@niscorp/prism';
+import { PRISM_SCHEMAS, PRISM_SEQUENCE } from '@niscorp/prism/migrations';
 import { Btn, Callout, Chip, Code, Grid, INK, Lead, MONO, Mono, Page, Panel, stampText } from '@showroom/chrome/stage/ui';
 
 // ═══════════════════════════════════════════════════════════
@@ -124,14 +125,14 @@ const SCENARIOS: readonly Scenario[] = [
     label: '…with a migration that has a typo',
     what: 'A migration is appended — but it renames model to binding.',
     migration: renameModel('binding'),
-    build: async (base) => ({ upgrader: await createUpgrader([novaWith('binding'), PRISM_SEQUENCE], { transform: prismTransform }), schemas: proposed(base) }),
+    build: async (base) => ({ upgrader: await createUpgrader([novaWith('binding'), PRISM_SEQUENCE], { transform: evaluate }), schemas: proposed(base) }),
   },
   {
     id: 'right',
     label: '…with the right migration',
     what: 'One migration appended to nisc.nova: rename model to bind, on one layout node. strata walks every layout in every document.',
     migration: renameModel('bind'),
-    build: async (base) => ({ upgrader: await createUpgrader([novaWith('bind'), PRISM_SEQUENCE], { transform: prismTransform }), schemas: proposed(base) }),
+    build: async (base) => ({ upgrader: await createUpgrader([novaWith('bind'), PRISM_SEQUENCE], { transform: evaluate }), schemas: proposed(base) }),
   },
 ];
 
@@ -148,7 +149,7 @@ export const Gate: FC = () => {
 
   useEffect(() => {
     void (async () => {
-      setBase(await createUpgrader([NOVA_SEQUENCE, PRISM_SEQUENCE], { transform: prismTransform }));
+      setBase(await createUpgrader([NOVA_SEQUENCE, PRISM_SEQUENCE], { transform: evaluate }));
       setCorpus(await loadCorpus());
     })();
   }, []);

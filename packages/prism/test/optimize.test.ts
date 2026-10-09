@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { compile, execute, evaluate, prismTransform, type JsonObject } from '../src';
+import { compile, execute, evaluate, type JsonObject } from '../src';
 
 // ═══════════════════════════════════════════════════════════
 // Optimizer tests — verify that compile() actually does the
@@ -223,12 +223,11 @@ describe('a name or a constant that looks like an op', () => {
   ];
 
   for (const c of cases) {
-    it(`${c.name}: execute, a stored IR and prismTransform answer as evaluate does`, async () => {
-      expect(evaluate(c.config, c.source)).toEqual(c.expected);
+    it(`${c.name}: evaluate (checked each time, and kept), execute and a stored IR answer the same`, async () => {
+      expect(evaluate(c.config, c.source, { check: 'always' })).toEqual(c.expected);
+      for (const call of [1, 2, 3]) expect(evaluate(c.config, c.source), `kept, call ${call}`).toEqual(c.expected);
       expect(execute(await compile(c.config), c.source)).toEqual(c.expected);
       expect(execute(await stored(c.config), c.source)).toEqual(c.expected);
-      expect(prismTransform(c.config, c.source)).toEqual(c.expected);
-      expect(prismTransform(c.config, c.source)).toEqual(c.expected);
     });
   }
 });
@@ -270,14 +269,15 @@ describe('a constant that a compiled config hands out', () => {
     expect(execute(ir, { a: 1 })).toEqual({ list: [1], shape: { a: 1 }, mapped: [1, 2] });
   });
 
-  it('evaluate and prismTransform answer with constants the caller may change, as they did', () => {
-    const viaEvaluate = evaluate(config, {}) as Answer;
-    viaEvaluate.tags.push('x');
-    viaEvaluate.merged.n.deep.push(2);
-    expect(evaluate(config, {})).toEqual(expected);
-    const viaTransform = prismTransform(config, {}) as Answer;
-    viaTransform.tags.push('x');
-    viaTransform.merged.n.deep.push(2);
-    expect(prismTransform(config, {})).toEqual(expected);
+  it('evaluate answers with constants the caller may change, kept or not', () => {
+    for (const call of [1, 2, 3, 4]) {
+      const answer = evaluate(config, {}) as Answer;
+      expect(answer, `call ${call}`).toEqual(expected);
+      answer.tags.push('x');
+      answer.merged.n.deep.push(2);
+    }
+    const checked = evaluate(config, {}, { check: 'always' }) as Answer;
+    checked.tags.push('x');
+    expect(evaluate(config, {}, { check: 'always' })).toEqual(expected);
   });
 });

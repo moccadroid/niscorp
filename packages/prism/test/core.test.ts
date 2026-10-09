@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { compile, evaluate, execute, prismTransform, PrismError, validate } from '../src';
+import { compile, evaluate, execute, PrismError, validate } from '../src';
 
 const source = {
   user: { id: 'u1', name: 'Alice', email: 'alice@example.com', age: 30 },
@@ -46,7 +46,7 @@ describe('$ref — a path Prism does not read', () => {
       const refusal = { ok: false, issues: [{ path: ['at', '$ref'], message: expect.stringContaining(`Not a path Prism reads: "${path}"`) }] };
       expect(validate({ at: { $ref: path } })).toEqual(refusal);
       expect(() => evaluate({ at: { $ref: path } }, source)).toThrow(expect.objectContaining({ code: 'E_SCHEMA' }));
-      expect(() => prismTransform({ at: { $ref: path } }, source)).toThrow();
+      expect(() => evaluate({ at: { $ref: path } }, source, { check: 'always' })).toThrow(expect.objectContaining({ code: 'E_SCHEMA' }));
       await expect(compile({ at: { $ref: path } })).rejects.toThrow(/Not a path Prism reads/);
     });
   }

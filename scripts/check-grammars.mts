@@ -21,7 +21,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { NOVA_SEQUENCE, NOVA_SCHEMAS } from '../packages/nova/dist/migrations/index.js';
-import { PRISM_SEQUENCE, PRISM_SCHEMAS, prismTransform } from '../packages/prism/dist/migrations/index.js';
+import { evaluate } from '../packages/prism/dist/index.js';
+import { PRISM_SEQUENCE, PRISM_SCHEMAS } from '../packages/prism/dist/migrations/index.js';
 import { createUpgrader } from '../packages/strata/dist/index.js';
 import { snapshotOf, snapshotText, compareSnapshot, checkCorpus, type CorpusDocument, type Snapshot } from '../packages/strata/dist/check/index.js';
 
@@ -62,7 +63,7 @@ for (const app of existsSync(corpusDir) ? readdirSync(corpusDir) : []) {
     }
   }
 }
-const upgrader = await createUpgrader(GRAMMARS.map((g) => g.sequence), { transform: prismTransform });
+const upgrader = await createUpgrader(GRAMMARS.map((g) => g.sequence), { transform: evaluate });
 const report = await checkCorpus(upgrader, { ...NOVA_SCHEMAS, ...PRISM_SCHEMAS }, documents);
 line(
   report.failures.length === 0 && documents.length > 0,

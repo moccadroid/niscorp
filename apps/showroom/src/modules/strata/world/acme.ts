@@ -1,7 +1,8 @@
 import type { Sequence, Stamp, Upgrader } from '@niscorp/strata';
 import { createUpgrader } from '@niscorp/strata';
 import { NOVA_SEQUENCE } from '@niscorp/nova/migrations';
-import { PRISM_SEQUENCE, prismTransform } from '@niscorp/prism/migrations';
+import { evaluate } from '@niscorp/prism';
+import { PRISM_SEQUENCE } from '@niscorp/prism/migrations';
 
 // ═══════════════════════════════════════════════════════════
 // Acme Studio — the one app every strata page follows.
@@ -119,7 +120,7 @@ const upgraders = new Map<number, Promise<Upgrader>>();
 export const upgraderAt = (n: number): Promise<Upgrader> => {
   const known = upgraders.get(n);
   if (known !== undefined) return known;
-  const made = createUpgrader(grammarsAt(n), { transform: prismTransform });
+  const made = createUpgrader(grammarsAt(n), { transform: evaluate });
   upgraders.set(n, made);
   return made;
 };

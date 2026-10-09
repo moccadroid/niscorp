@@ -1,6 +1,7 @@
 import { createUpgrader, type Sequence, type Upgrader } from '@niscorp/strata';
 import { NOVA_SEQUENCE } from '@niscorp/nova/migrations';
-import { PRISM_SEQUENCE, prismTransform } from '@niscorp/prism/migrations';
+import { evaluate } from '@niscorp/prism';
+import { PRISM_SEQUENCE } from '@niscorp/prism/migrations';
 
 // ═══════════════════════════════════════════════════════════════
 // The grammars a moss deployment reads and writes documents in: nova's (its
@@ -23,4 +24,4 @@ export const grammarsOf = (app: { grammars?: readonly Sequence[] }): readonly Se
 ];
 
 export const createGrammarUpgrader = (app: { grammars?: readonly Sequence[] }): Promise<Upgrader> =>
-  createUpgrader(grammarsOf(app), { transform: prismTransform });
+  createUpgrader(grammarsOf(app), { transform: evaluate });

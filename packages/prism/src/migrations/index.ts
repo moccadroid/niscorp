@@ -62,10 +62,8 @@ export const PRISM_SEQUENCE: Sequence = {
 // ── the evaluator a migration runs through ──────────────────────
 //
 // strata runs a document step through an INJECTED transform, nova's socket
-// shape `(config, source) => unknown`. Prism in that shape is one function for
-// every host (engine/transform.ts) and the main entry exports it too; it is
-// kept here because this is where a migration's host has always found it.
-export { prismTransform } from '../engine/transform';
+// shape `(config, source) => unknown`. That is `evaluate`, from the main
+// entry: `createUpgrader(grammars, { transform: evaluate })`.
 
 // ── the schemas behind the kinds ────────────────────────────────
 //

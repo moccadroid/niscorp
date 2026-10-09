@@ -251,7 +251,7 @@ the reflex selects what changed. Mechanisms that already exist, and no table.
 A template is a transform-config slot inside a reflex — `effect.input`, `when`
 and `select.query`. Tide stores, diffs and hashes them but never interprets
 them: they go to the `transform` seam verbatim (under moss, Prism —
-`prismTransform` from `@niscorp/prism` fits the seam as it is).
+`evaluate` from `@niscorp/prism` fits the seam as it is).
 
 What tide puts in `$` itself is plain JSON: a fact carries no key for a value
 it was never given, in the memory store as in a database. What the host handed

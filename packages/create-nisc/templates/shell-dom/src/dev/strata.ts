@@ -8,7 +8,8 @@
 //   npm run strata verify      holds the edit to that JSON, then moves the lock
 import { fileURLToPath } from 'node:url';
 import { NOVA_SCHEMAS, NOVA_SEQUENCE } from '@niscorp/nova/migrations';
-import { PRISM_SCHEMAS, PRISM_SEQUENCE, prismTransform } from '@niscorp/prism/migrations';
+import { evaluate } from '@niscorp/prism';
+import { PRISM_SCHEMAS, PRISM_SEQUENCE } from '@niscorp/prism/migrations';
 import { runSourceUpgrade } from '@niscorp/strata/node';
 import { actions } from '../app/action-catalog';
 
@@ -19,7 +20,7 @@ process.exit(
     {
       root,
       grammars: [NOVA_SEQUENCE, PRISM_SEQUENCE],
-      transform: prismTransform,
+      transform: evaluate,
       schemas: { ...NOVA_SCHEMAS, ...PRISM_SCHEMAS },
       documents: async () => Object.values(actions).map((document) => ({ kind: 'nisc.nova/action', id: document.id, document })),
     },

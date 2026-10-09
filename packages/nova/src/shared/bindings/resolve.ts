@@ -158,7 +158,7 @@ const DIRECTIVES: Record<string, Directive> = {
   // rendered as garbage three screens later. Inside the wrapper, a bad node
   // resolves to undefined — absent, not wrong.
   $prism: (node, chain) => {
-    const result = evaluateSafe(node.$prism as never, (chain[0] ?? {}) as never);
+    const result = evaluateSafe(node.$prism, chain[0] ?? {});
     return result.ok ? result.data : undefined;
   },
 };
