@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import type { ActionDefinition } from '@niscorp/nova';
+import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { defineApp } from '../src/manifest';
 import { createServer } from '../src/server';
 
@@ -124,7 +125,8 @@ describe('charterReport — the report the server booted on', () => {
   });
 
   it('once createServer has returned, the manifest it was handed cannot be edited', async () => {
-    const app = manifest();
+    const entries: (SeedEntry | SeedMutation)[] = [];
+    const app = defineApp({ ...manifest(), entries });
     const server = await boot(app);
     const served = server.charterReport();
     const inForce = server.actions();
@@ -149,6 +151,8 @@ describe('charterReport — the report the server booted on', () => {
     expect(() => {
       Object.assign(home, { title: 'Home' });
     }).toThrow(TypeError);
+    // A list, through the reference the app kept.
+    expect(() => entries.push({ fingerprint: 'deals/open', dsl: { from: ['deals'], fields: ['deals.id'] } })).toThrow(TypeError);
 
     // So a `refresh` finds what was verified, and nothing was served in between.
     server.refresh();
