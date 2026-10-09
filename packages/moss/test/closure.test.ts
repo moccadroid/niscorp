@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { ActionDefinition } from '@niscorp/nova';
-import { auditClosure } from '../src/closure';
+import { auditClosure } from '../src/manifest';
 
 // The closure auditor — nova's action audit over a role's granted set,
 // keeping only the CROSS-ACTION break (a push to a target outside the

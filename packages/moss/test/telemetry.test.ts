@@ -23,7 +23,7 @@ import { createSocket } from '../src/socket';
 import type { Connection, SocketContext } from '../src/socket';
 import { PROTOCOL, offerToken } from '../src/protocol';
 import type { ServerMessage } from '../src/protocol';
-import type { NiscApp } from '../src/app';
+import type { NiscApp } from '../src/manifest';
 import type { TelemetrySpan } from '../src/runtime';
 import type { ScopePolicy } from '@niscorp/vex';
 

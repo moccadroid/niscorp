@@ -13,15 +13,14 @@ import type { TelemetrySpan } from './runtime';
 import { wireFabric } from './fabric';
 import { verifyCharter } from '@niscorp/charter';
 import type { VerifyReport } from '@niscorp/charter';
-import { auditClosure } from './closure';
-import type { NiscApp } from './app';
+import { auditClosure, createGeneration, resolveVariantsForRoles, verifyVariants, wearableOf } from './manifest';
+import type { Catalog, Generation, NiscApp } from './manifest';
 import type { NiscRuntime } from './runtime';
 import { createIdentity, memoKey, sessionRemainingMs, sessionVerifierOf } from './identity';
 import { createDataLayer } from './data';
 import { tableSequencesOf } from './migrate';
 import { mintWrites } from './tide';
-import { resolvePolicyAtReachForRoles, resolvePolicyForRoles, resolveVariantsForRoles, verifyVariants, wearableOf } from './principal';
-import type { Catalog } from './principal';
+import { resolvePolicyAtReachForRoles, resolvePolicyForRoles } from './principal';
 import type { LayoutNode } from '@niscorp/nova';
 import { chainCycles } from '@niscorp/nova/reflect';
 import {
@@ -50,8 +49,6 @@ import { createShellHost } from './shells';
 import type { ShellHostContext } from './shells';
 import { createPageRouter } from './pages';
 import { shellNeedOf } from './liveness';
-import { createGeneration } from './generation';
-import type { Generation } from './generation';
 import type { IdentityRecord, IdentityReport, ResolvedIdentity } from './identity';
 import type { ShellHost } from './shells';
 
@@ -66,9 +63,9 @@ import type { ShellHost } from './shells';
 // The socket stands beside them (socket.ts); `/fns` — side-effect-free
 // server functions behind plain URLs — is still unbuilt.
 //
-// The app hands over its ARTIFACTS (app.ts) and an environment
+// The app hands over its ARTIFACTS (manifest/app.ts) and an environment
 // (runtime/); everything mechanical is derived — the data layer
-// (data.ts), per-principal resolutions (principal.ts) — and the server
+// (data.ts), per-principal resolutions (manifest/roles.ts, principal.ts) — and the server
 // refuses to boot incoherent (DESIGN.md § Derivation over configuration:
 // coherence is refused, not documented).
 // ═══════════════════════════════════════════════════════════════
@@ -92,7 +89,7 @@ export type MossServer = Hono<Env> & {
   // way than a Bearer header (a page request carries a cookie): null is a
   // refusal, exactly as it is everywhere else.
   principalOf: (token: string) => Promise<string | null>;
-  // THE PAGE A PATH LEADS TO (app.ts § pages) — its name, the host that draws
+  // THE PAGE A PATH LEADS TO (manifest/app.ts § pages) — its name, the host that draws
   // it, and the input its path carries — or undefined for a path that is the
   // app's. The document route and the socket ask the same question here, so a
   // page is drawn and then served by one answer.
@@ -1299,7 +1296,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   const shells = app.shell !== undefined ? createShellHost(shellContext) : undefined;
 
   // PAGES: a host each, built from the page's own manifest and keeping nothing
-  // (app.ts § pages). The router refuses two pages that could answer one path,
+  // (manifest/app.ts § pages). The router refuses two pages that could answer one path,
   // here, at boot — like every other incoherence.
   const pageManifests = app.pages ?? {};
   const pageRouter = createPageRouter(pageManifests);
@@ -1321,7 +1318,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // `publishFabric` is a no-op and nothing is subscribed. `refresh` is
   // deliberately not here: it rides the generation pointer, which is persistent
   // and survives a restart, because the manifest it guards has no other heal
-  // clock (fabric.ts, generation.ts).
+  // clock (fabric.ts, manifest/generation.ts).
   const fabricOrigin = randomBytes(8).toString('hex');
   const applyInvalidateIdentity = (principal: string): boolean => {
     const held = identity.invalidate(principal);

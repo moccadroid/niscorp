@@ -1,4 +1,4 @@
-import type { PageManifest } from './app';
+import type { PageManifest } from './manifest';
 
 // ═══════════════════════════════════════════════════════════════
 // Which page a path leads to. A page's `path` is literal segments and `:name`

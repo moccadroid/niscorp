@@ -3,8 +3,8 @@ import { z } from 'zod';
 import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import { runIntake, reachOf, copyPress, callIntegrationWith, initIntegrations, listIntegrations, intakeContextOf } from '../src/integrations';
-import type { IntakeContext, Bundle, StorePress } from '../src/integrations';
-import type { NiscApp } from '../src/app';
+import type { IntakeContext, Bundle } from '../src/integrations';
+import type { NiscApp, StorePress } from '../src/manifest';
 import { createAssertionSigner, verifyAssertion } from '../src/assert';
 
 // The listing's long form travels WITH the bundle (story, highlights, press),

@@ -14,7 +14,7 @@ import type { Fabric, FabricMessage } from '../src/runtime';
 import { createShellHost } from '../src/shells';
 import type { ShellHost, ShellHostContext } from '../src/shells';
 import { createIdentityCache } from '../src/identity/cache';
-import type { NiscApp } from '../src/app';
+import type { NiscApp } from '../src/manifest';
 
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 const until = async (pred: () => boolean | Promise<boolean>, ms = 3000): Promise<void> => {

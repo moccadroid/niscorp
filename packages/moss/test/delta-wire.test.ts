@@ -6,7 +6,7 @@ import { createSocket } from '../src/socket';
 import { attachSocket } from '../src/node';
 import { createWire } from '../src/client';
 import type { WireEnv } from '../src/client';
-import type { NiscApp } from '../src/app';
+import type { NiscApp } from '../src/manifest';
 
 // ═══════════════════════════════════════════════════════════════
 // Frame deltas over a REAL websocket — `ws` on one end, the wire on the

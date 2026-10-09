@@ -7,7 +7,7 @@ import type { ActionDefinition } from '@niscorp/nova';
 import type { ScopePolicy } from '@niscorp/vex';
 import { createShellHost } from '../src/shells';
 import type { ShellHostContext, ShellSnapshot } from '../src/shells';
-import type { NiscApp, PageManifest } from '../src/app';
+import type { NiscApp, PageManifest } from '../src/manifest';
 import type { MossServer } from '../src/server';
 import { createPageRouter } from '../src/pages';
 import { shellNeedOf } from '../src/liveness';

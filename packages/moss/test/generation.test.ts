@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createGeneration } from '../src/generation';
+import { createGeneration } from '../src/manifest/generation';
 
 // A pool of exactly the shape this module uses, so the pointer is tested
 // without a database and without waiting on a real clock.

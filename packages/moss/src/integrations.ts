@@ -1,7 +1,8 @@
 import type { Sequence } from '@niscorp/strata';
 import { migrate, type DocumentStore } from '@niscorp/strata/postgres';
 import { StrataError, depthRefusal, exceedsDepth, type Upgrader } from '@niscorp/strata';
-import { GENERATION_DDL } from './generation';
+import { GENERATION_DDL, catalogFor } from './manifest';
+import type { Catalog, NiscApp, StorePress } from './manifest';
 import { z } from 'zod';
 import { ActionDefinitionSchema, LayoutNodeSchema, paletteEntryOf } from '@niscorp/nova';
 import type { ActionDefinition, ComponentMeta, LayoutPaletteEntry } from '@niscorp/nova';
@@ -9,9 +10,6 @@ import { chainCycles, walkNodes, isRecord } from '@niscorp/nova/reflect';
 import { isBinding } from '@niscorp/nova/i18n';
 import type { PgPool } from '@niscorp/vex';
 import { hashIntegrationKey } from './assert';
-import type { NiscApp } from './app';
-import { catalogFor } from './principal';
-import type { Catalog } from './principal';
 import { emitterOf, spanClock } from './runtime';
 import type { Telemetry } from './runtime';
 
@@ -972,8 +970,6 @@ export const describePlacements = (bundle: Bundle, names: Readonly<Record<string
 // The stored NAME is the path under the prefix, deterministic per
 // (integration, path): a re-import overwrites its own images rather than
 // accumulating copies.
-
-export type StorePress = (integrationId: string, name: string, bytes: Uint8Array, contentType: string) => Promise<string>;
 
 export type PressResult = { ok: true; urls: string[] } | { ok: false; reasons: string[] };
 

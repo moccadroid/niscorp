@@ -4,7 +4,7 @@ import { createServer as createHttp } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { WebSocket as Ws } from 'ws';
 import type { ScopePolicy } from '@niscorp/vex';
-import type { FunctionSession, NiscApp } from '../src/app';
+import type { FunctionSession, NiscApp } from '../src/manifest';
 import type { MossServer } from '../src/server';
 import { attachSocket } from '../src/node';
 import { createShellHost } from '../src/shells';

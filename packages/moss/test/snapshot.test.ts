@@ -3,7 +3,7 @@ import type { ActionDefinition } from '@niscorp/nova';
 import type { ScopePolicy } from '@niscorp/vex';
 import { createShellHost } from '../src/shells';
 import type { ShellHostContext } from '../src/shells';
-import type { NiscApp, PageManifest } from '../src/app';
+import type { NiscApp, PageManifest } from '../src/manifest';
 import type { Connection } from '../src/socket';
 import { shellNeedOf } from '../src/liveness';
 

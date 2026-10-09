@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import { buildContract, contractAsMarkdown } from '../src/integrations';
-import type { NiscApp } from '../src/app';
+import type { NiscApp } from '../src/manifest';
 
 // ═══════════════════════════════════════════════════════════════
 // The contract carries each component's SHAPE, not just its name. An add-on

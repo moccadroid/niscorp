@@ -11,7 +11,7 @@
 // waking a channel over there. This is the wire it travels.
 //
 // WHY THESE SIGNALS AND NOT `refresh`. `refresh` already crosses processes —
-// the generation counter (generation.ts) is a persistent, readable, always-on
+// the generation counter (manifest/generation.ts) is a persistent, readable, always-on
 // pointer, and a process converges by READING it, even after a restart. It has
 // to be, because the thing it guards — the loaded action set — has no other
 // heal clock: miss the signal and you serve the wrong manifest indefinitely.

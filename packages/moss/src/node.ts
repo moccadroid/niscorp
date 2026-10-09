@@ -8,7 +8,7 @@ import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { createServer } from './server';
 import type { MossServer } from './server';
-import type { NiscApp } from './app';
+import type { NiscApp } from './manifest';
 import type { NiscRuntime } from './runtime';
 import { SUBPROTOCOL } from './protocol';
 import type { SocketAccept } from './socket';

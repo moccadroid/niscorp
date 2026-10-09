@@ -3,8 +3,8 @@ import type { ScopeBehaviors, ScopePolicy, SeedEntry, SeedMutation } from '@nisc
 import type { Charter } from '@niscorp/charter';
 import type { ActionDefinition, ActionFragment, CanvasConfig, FetchFn, FunctionHandler, LayoutNode, Shell } from '@niscorp/nova';
 import type { PhraseKeys, Phrasebook } from '@niscorp/nova/i18n';
-import type { NiscRuntime } from './runtime';
-import type { IdentityRecord } from './identity';
+import type { NiscRuntime } from '../runtime';
+import type { IdentityRecord } from '../identity';
 
 // ═══════════════════════════════════════════════════════════════
 // The application, as data. Every field is an ARTIFACT — content someone
@@ -227,7 +227,7 @@ export type NiscApp = {
   // whole). Optional: a deployment without one refuses any bundle that
   // declares press, which is a sentence at import rather than a hole in a
   // listing.
-  storePress?: import('./integrations').StorePress;
+  storePress?: StorePress;
   // the prewarmed API surface — every read and write the app serves, as
   // authored entries; seeded into the cache at boot (idempotent, protected).
   // Optional because a database may already carry its vex_cache rows.
@@ -248,7 +248,7 @@ export type NiscApp = {
   // thing a path can lead to — a welcome, the docs, a published talk: a small
   // manifest of its own (a frame, canvases, what mounts on them), drawn for
   // whoever asks and then let go. Nothing stands behind it afterwards unless
-  // what mounted can still do something (./liveness), in which case the
+  // what mounted can still do something (../liveness), in which case the
   // terminal gets a shell for as long as its connection lasts.
   //
   // It is the SAME machinery with the keeping taken out: the same actions, the
@@ -343,6 +343,11 @@ export type NiscApp = {
     chain?: (scope: Record<string, unknown>, hints: { cause: string; depth: number }) => { cause: string; depth: number } | undefined;
   };
 };
+
+// Where a press image lands: the bytes of one image a bundle declared, in;
+// the URL the store serves it from, out (`NiscApp.storePress`). Throwing
+// refuses the bundle whole (../integrations.ts, copyPress).
+export type StorePress = (integrationId: string, name: string, bytes: Uint8Array, contentType: string) => Promise<string>;
 
 // The one verb the bridge needs. Both `Tide` and `TideDriver` satisfy it;
 // hand out the driver unless you have a reason to want facts that wait.

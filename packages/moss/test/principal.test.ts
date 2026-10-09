@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
-import { resolveRoles, resolvePolicy, resolveCatalog, resolveVariants, verifyVariants } from '../src/principal';
-import type { NiscApp } from '../src/app';
+import { resolveRoles, resolvePolicy } from '../src/principal';
+import { resolveCatalog, resolveVariants, verifyVariants } from '../src/manifest';
+import type { NiscApp } from '../src/manifest';
 
 // A minimal app — just enough charter/assignments/actions to exercise
 // per-principal resolution. No database, no shell.

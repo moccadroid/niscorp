@@ -6,7 +6,7 @@ import { sessionVerifierOf } from '../src/identity/verifier';
 import { mintDevToken } from '../src/identity';
 import { createShellHost } from '../src/shells';
 import type { ShellHostContext } from '../src/shells';
-import type { FunctionSession, NiscApp } from '../src/app';
+import type { FunctionSession, NiscApp } from '../src/manifest';
 import type { PgPool, ScopePolicy } from '@niscorp/vex';
 
 // THE TESTS NO APP CAN WRITE. An app's harness mints its own tokens, so every

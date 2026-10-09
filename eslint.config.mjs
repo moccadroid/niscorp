@@ -122,7 +122,7 @@ export default tseslint.config(
   // ── the packages ──
   //
   // Same held-state rule, minus the app-directory assumptions. moss holds
-  // caches on purpose now (identity.ts, generation.ts) — and holds them inside
+  // caches on purpose now (identity/cache.ts, manifest/generation.ts) — and holds them inside
   // closures, which is the point: state with an owner and a lifetime rather
   // than state at module scope.
   {

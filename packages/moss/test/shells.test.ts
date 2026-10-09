@@ -3,7 +3,7 @@ import { applyDelta, frameHash } from '../src/protocol';
 import type { DeltaOp } from '../src/protocol';
 import { createShellHost } from '../src/shells';
 import type { ShellHostContext } from '../src/shells';
-import type { NiscApp } from '../src/app';
+import type { NiscApp } from '../src/manifest';
 import type { Connection } from '../src/socket';
 import type { ScopePolicy } from '@niscorp/vex';
 

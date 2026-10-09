@@ -644,7 +644,7 @@ On the record, so nothing reads as finished that isn't:
   context management for models — one mechanism, two products.
 - **Scale-out** beyond sticky sessions pinned by session id. What crosses
   processes today is invalidation only: `refresh` moves a generation pointer
-  every process polls (`src/generation.ts`), and an optional fabric
+  every process polls (`src/manifest/generation.ts`), and an optional fabric
   (`runtime.fabric`, `src/fabric.ts`) carries identity invalidations and nudges.
   A shell is still resident in one process. A drawn document
   adds one requirement to stickiness: the page request and the socket should

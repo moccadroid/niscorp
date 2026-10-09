@@ -1,6 +1,6 @@
 import { DefinitionValidationError } from '@niscorp/nova';
 import type { RenderNode } from '@niscorp/nova';
-import type { Catalog } from './principal';
+import type { Catalog } from './manifest';
 import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SHELL_FAILED, ClientMessageSchema, DEFAULT_TOKEN_KEY, PROTOCOL, PROTOCOL_MIN, offeredSealed, offeredToken } from './protocol';
 import type { ClientMessage, ServerMessage } from './protocol';
 import type { ShellHost } from './shells';

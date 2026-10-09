@@ -34,7 +34,7 @@ export type ResolvedIdentity = {
   record?: IdentityRecord;
 };
 
-// The app's identity seam (`NiscApp.identity`; ../app.ts says what it is for).
+// The app's identity seam (`NiscApp.identity`; ../manifest/app.ts says what it is for).
 // `as` is the charter role the lent `read` executes as.
 export type IdentitySeam = {
   as?: string;

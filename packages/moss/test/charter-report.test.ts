@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import type { ActionDefinition } from '@niscorp/nova';
-import { defineApp } from '../src/app';
+import { defineApp } from '../src/manifest';
 import { createServer } from '../src/server';
 
 // THE REPORT BOOT VERIFIED, HANDED BACK. `createServer` refuses on the report's

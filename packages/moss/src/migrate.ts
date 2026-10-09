@@ -3,7 +3,7 @@ import type { CacheBackend, DatabaseSchema, PgPool, SeedEntry, SeedMutation } fr
 import { migrate } from '@niscorp/strata/postgres';
 import type { MigrateReport } from '@niscorp/strata/postgres';
 import type { Sequence } from '@niscorp/strata';
-import type { NiscApp } from './app';
+import type { NiscApp } from './manifest';
 import type { NiscRuntime } from './runtime';
 import { MOSS_SEQUENCE } from './integrations';
 import { SESSIONS_SEQUENCE } from './identity';

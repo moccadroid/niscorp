@@ -1,15 +1,15 @@
 // moss — the nisc app server. One module per concern:
 //
-//   app.ts        — the manifest: the application as authored artifacts
+//   manifest/     — the manifest: the application as authored artifacts, and what a set of roles holds of it
 //   runtime/      — the environment: database, cache, session
 //   data.ts       — the data layer, stood up from what's present
-//   principal.ts  — per-principal resolution: roles, policy, catalog
+//   principal.ts  — per-principal resolution: roles, policy
 //   shells.ts     — the shell host: durable per-principal server shells
 //   socket.ts     — the authority channel: envelope + protocol (transport-blind)
 //   server.ts     — boot refusal + the HTTP surfaces + the socket accept
 //   node.ts       — the Node listener + ws transport (./node subpath; Bun swaps this, never the app)
-export { defineApp } from './app';
-export type { NiscApp, ShellManifest, PageManifest, FunctionSession, LayoutVariant, RunRecord, RunTurn, RunSink } from './app';
+export { defineApp } from './manifest';
+export type { NiscApp, ShellManifest, PageManifest, FunctionSession, LayoutVariant, RunRecord, RunTurn, RunSink } from './manifest';
 export { mintDevToken } from './identity';
 export type { NiscRuntime } from './runtime';
 export type { Telemetry, TelemetrySpan } from './runtime';
@@ -17,13 +17,15 @@ export { initSessions, mintSession, sessionOf, revokeAllFor } from './identity';
 export { createServer } from './server';
 export type { MossServer, ExecuteAs } from './server';
 export { MOSS_SEQUENCE, integrationOfAction, integrationByKey, listAttachments, listPlacements, resolveCatalogForRoles } from './integrations';
-export type { StorePress, CallIntegration } from './integrations';
+export type { StorePress } from './manifest';
+export type { CallIntegration } from './integrations';
 export { createAssertionSigner } from './assert';
-export { resolveRoles, resolvePolicy, resolveCatalog, resolveVariants, resolvePolicyForRoles, verifyVariants, wearableOf, memoKeyOf } from './principal';
+export { resolveRoles, resolvePolicy, resolvePolicyForRoles, memoKeyOf } from './principal';
+export { resolveCatalog, resolveVariants, verifyVariants, wearableOf } from './manifest';
 export { createTideStore, TIDE_DDL, TIDE_SEQUENCE, TIDE_TABLES } from './tide';
 export { createTideDriver } from './driver';
 export type { TideDriver } from './driver';
-export { auditClosure } from './closure';
+export { auditClosure } from './manifest';
 export { CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, PROTOCOL, offerToken } from './protocol';
 export type { IdentityRecord } from './identity';
 export type { ShellHost, ShellSnapshot } from './shells';

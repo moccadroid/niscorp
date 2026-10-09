@@ -4,7 +4,7 @@ import type { FetchFn } from '@niscorp/nova';
 import { createWireFollower } from '../src/follow';
 import { createShellHost } from '../src/shells';
 import type { ShellHostContext } from '../src/shells';
-import type { NiscApp } from '../src/app';
+import type { NiscApp } from '../src/manifest';
 import type { Connection } from '../src/socket';
 
 // A shell's reactive read: vex calls the follower back, nova gets a later

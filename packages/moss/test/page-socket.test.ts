@@ -9,7 +9,7 @@ import type { Connection } from '../src/socket';
 import { createPageRouter } from '../src/pages';
 import { createWire } from '../src/client';
 import type { WireEnv } from '../src/client';
-import type { NiscApp, PageManifest } from '../src/app';
+import type { NiscApp, PageManifest } from '../src/manifest';
 
 // ═══════════════════════════════════════════════════════════════
 // A page's terminal, over the socket: the path it names decides which shell it

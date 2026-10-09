@@ -4,7 +4,7 @@ import { createPglitePool } from '@niscorp/vex/pglite';
 import { createMemoryCache, createPostgresCache, createTieredCache } from '@niscorp/vex';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Sequence } from '@niscorp/strata';
-import { defineApp } from '../src/app';
+import { defineApp } from '../src/manifest';
 import { createServer } from '../src/server';
 import { migrateTables } from '../src/migrate';
 import type { NiscRuntime } from '../src/runtime';
