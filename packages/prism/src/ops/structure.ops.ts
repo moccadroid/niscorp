@@ -2,6 +2,7 @@ import type { JsonValue, JsonObject, EvalContext, EvaluateFn } from '../types';
 import type { MergeNode, CoalesceNode, CaseNode, EntriesOfNode, KeyByNode, GroupByNode } from '../schemas';
 import { PrismError, ErrorCode } from '../errors';
 import { isJsonObject, isJsonArray } from '../schemas/guards';
+import { loopScope } from './scope';
 
 export const opMerge = (node: MergeNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const result: JsonObject = {};
@@ -44,8 +45,10 @@ export const opKeyBy = (node: KeyByNode, context: EvalContext, evaluate: Evaluat
   if (!isJsonArray(input))
     throw new PrismError('Expected array for $keyBy.over', ErrorCode.TYPE, { op: '$keyBy' });
   const result: JsonObject = {};
+  const { scope, vars } = loopScope(context);
   for (const item of input) {
-    const key = evaluate(keyExpr, { ...context, vars: { ...context.vars, [as]: item } });
+    vars[as] = item;
+    const key = evaluate(keyExpr, scope);
     result[String(key)] = item;
   }
   return result;
@@ -57,8 +60,10 @@ export const opGroupBy = (node: GroupByNode, context: EvalContext, evaluate: Eva
   if (!isJsonArray(input))
     throw new PrismError('Expected array for $groupBy.over', ErrorCode.TYPE, { op: '$groupBy' });
   const result: Record<string, JsonValue[]> = {};
+  const { scope, vars } = loopScope(context);
   for (const item of input) {
-    const key = String(evaluate(keyExpr, { ...context, vars: { ...context.vars, [as]: item } }));
+    vars[as] = item;
+    const key = String(evaluate(keyExpr, scope));
     if (!result[key]) result[key] = [];
     result[key]!.push(item);
   }

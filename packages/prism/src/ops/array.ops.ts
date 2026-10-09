@@ -4,6 +4,7 @@ import { PrismError, ErrorCode } from '../errors';
 import { isJsonArray } from '../schemas/guards';
 import { compare } from '../utils/compare';
 import { measure } from '../engine/budget';
+import { loopScope } from './scope';
 
 const requireArray = (value: JsonValue, op: string): JsonValue[] => {
   if (!isJsonArray(value))
@@ -15,8 +16,10 @@ export const opMap = (node: MapNode, context: EvalContext, evaluate: EvaluateFn)
   const { over, as, body } = node.$map;
   const input = requireArray(evaluate(over, context), '$map.over');
   const result: JsonValue[] = [];
+  const { scope, vars } = loopScope(context);
   for (const item of input) {
-    result.push(evaluate(body, { ...context, vars: { ...context.vars, [as]: item } }));
+    vars[as] = item;
+    result.push(evaluate(body, scope));
   }
   return result;
 };
@@ -25,8 +28,10 @@ export const opFilter = (node: FilterNode, context: EvalContext, evaluate: Evalu
   const { over, as, when } = node.$filter;
   const input = requireArray(evaluate(over, context), '$filter.over');
   const result: JsonValue[] = [];
+  const { scope, vars } = loopScope(context);
   for (const item of input) {
-    const condition = evaluate(when, { ...context, vars: { ...context.vars, [as]: item } });
+    vars[as] = item;
+    const condition = evaluate(when, scope);
     if (condition) result.push(item);
   }
   return result;
@@ -36,11 +41,11 @@ export const opReduce = (node: ReduceNode, context: EvalContext, evaluate: Evalu
   const { over, as, acc: accName = 'acc', init, body } = node.$reduce;
   const input = requireArray(evaluate(over, context), '$reduce.over');
   let accumulator = evaluate(init, context);
+  const { scope, vars } = loopScope(context);
   for (const item of input) {
-    accumulator = evaluate(body, {
-      ...context,
-      vars: { ...context.vars, [as]: item, [accName]: accumulator },
-    });
+    vars[as] = item;
+    vars[accName] = accumulator;
+    accumulator = evaluate(body, scope);
     // Fed back each item: the one place a value can double itself.
     measure(accumulator, context.budget);
   }
@@ -105,10 +110,11 @@ export const opSortBy = (node: SortByNode, context: EvalContext, evaluate: Evalu
   const { over, as, by, dir = 'asc' } = node.$sortBy;
   const input = requireArray(evaluate(over, context), '$sortBy.over');
 
-  const keyed = input.map((item) => ({
-    item,
-    key: sortKey(evaluate(by, { ...context, vars: { ...context.vars, [as]: item } })),
-  }));
+  const { scope, vars } = loopScope(context);
+  const keyed = input.map((item) => {
+    vars[as] = item;
+    return { item, key: sortKey(evaluate(by, scope)) };
+  });
 
   keyed.sort((a, b) => {
     const kindA = kindOf(a.key);

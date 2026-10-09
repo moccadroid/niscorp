@@ -170,3 +170,51 @@ describe('$sortBy', () => {
     expect(evaluate(config, source)).toEqual(['Date', 'Apple', 'Banana', 'Carrot']);
   });
 });
+
+// A loop sets its variable for each item in a scope of its own. What is
+// outside the loop, and what a loop inside it sets, do not meet.
+describe("a loop's variables", () => {
+  const of = (name: string, ...path: (string | number)[]): unknown => (path.length === 0 ? { $var: name } : { $get: { from: { $var: name }, path } });
+  const rows = { rows: [{ id: 1, tags: ['a', 'b'] }, { id: 2, tags: ['c'] }], limit: 1 };
+
+  it('a variable of the same name outside the loop is what it was after it', () => {
+    const config = { $with: { let: { x: 'outer' }, value: [{ $map: { over: { $ref: '$.rows' }, as: 'x', body: of('x', 'id') } }, of('x')] } };
+    expect(evaluate(config, rows)).toEqual([[1, 2], 'outer']);
+  });
+
+  it('a loop inside the body with the same name gives the outer item back when it is done', () => {
+    const config = { $map: { over: { $ref: '$.rows' }, as: 'x', body: [{ $map: { over: of('x', 'tags'), as: 'x', body: of('x') } }, of('x', 'id')] } };
+    expect(evaluate(config, rows)).toEqual([[['a', 'b'], 1], [['c'], 2]]);
+  });
+
+  it('each item is seen by the loops inside its body: filter, sort, group, key, reduce', () => {
+    const inner = { over: of('row', 'tags'), as: 'tag' };
+    const config = {
+      $map: {
+        over: { $ref: '$.rows' },
+        as: 'row',
+        body: {
+          id: of('row', 'id'),
+          kept: { $filter: { ...inner, when: { $neq: [of('tag'), 'b'] } } },
+          sorted: { $sortBy: { ...inner, by: of('tag'), dir: 'desc' } },
+          grouped: { $groupBy: { ...inner, key: of('row', 'id') } },
+          keyed: { $keyBy: { ...inner, key: of('tag') } },
+          joined: { $reduce: { ...inner, acc: 'text', init: { $toString: of('row', 'id') }, body: { $join: { parts: [of('text'), of('tag')], sep: '-' } } } },
+        },
+      },
+    };
+    expect(evaluate(config, rows)).toEqual([
+      { id: 1, kept: ['a'], sorted: ['b', 'a'], grouped: { 1: ['a', 'b'] }, keyed: { a: 'a', b: 'b' }, joined: '1-a-b' },
+      { id: 2, kept: ['c'], sorted: ['c'], grouped: { 2: ['c'] }, keyed: { c: 'c' }, joined: '2-c' },
+    ]);
+  });
+
+  it('a $reduce whose item and accumulator share a name reads the accumulator, as it did', () => {
+    expect(evaluate({ $reduce: { over: [1, 2, 3], as: 'n', acc: 'n', init: 10, body: { $add: [of('n'), 1] } } }, {})).toBe(13);
+  });
+
+  it('what a body answers is not changed by the items after it', () => {
+    const config = { $map: { over: { $ref: '$.rows' }, as: 'row', body: { $with: { let: { held: of('row') }, value: { row: of('held'), tags: of('held', 'tags') } } } } };
+    expect(evaluate(config, rows)).toEqual([{ row: rows.rows[0], tags: ['a', 'b'] }, { row: rows.rows[1], tags: ['c'] }]);
+  });
+});
