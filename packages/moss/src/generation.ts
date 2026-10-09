@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { PgPool } from '@niscorp/vex';
 
 // ═══════════════════════════════════════════════════════════════
@@ -48,6 +49,11 @@ export const GENERATION_DDL: readonly string[] = [
 
 export const DEFAULT_GENERATION_POLL_MS = 60 * 1000;
 
+// What the pointer's row holds. The database is outside this process, so the
+// row is parsed like anything else that arrives: a BIGINT is handed over as a
+// number or as the text of one.
+const PointerRowSchema = z.object({ n: z.coerce.number() });
+
 export const createGeneration = (
   pool: PgPool,
   ctx: { onMoved: () => void | Promise<void>; everyMs?: number },
@@ -66,8 +72,11 @@ export const createGeneration = (
     checking = true;
     try {
       const result = await pool.query('SELECT n FROM moss_generation WHERE id = 1');
-      const n = Number((result.rows[0] as { n?: unknown } | undefined)?.n ?? 0);
-      if (!Number.isFinite(n)) return;
+      // A pointer with no row reads as zero; one whose `n` is not a number is
+      // not a reading, and what was last seen stands.
+      const row = PointerRowSchema.safeParse(result.rows[0] ?? { n: 0 });
+      if (!row.success) return;
+      const n = row.data.n;
       const first = seen === -1;
       const moved = !first && n !== seen;
       seen = n;
@@ -95,7 +104,8 @@ export const createGeneration = (
           // Adopt our own bump immediately, so `seen` cannot lag behind a value
           // this process itself wrote and then "discover" it a minute later.
           const result = await pool.query('SELECT n FROM moss_generation WHERE id = 1');
-          seen = Number((result.rows[0] as { n?: unknown } | undefined)?.n ?? seen);
+          const row = PointerRowSchema.safeParse(result.rows[0]);
+          if (row.success) seen = row.data.n;
         })
         .catch((err: unknown) => console.error('[moss:generation] could not move the pointer', err));
     },
