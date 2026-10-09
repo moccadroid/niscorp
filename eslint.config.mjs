@@ -141,6 +141,42 @@ export default tseslint.config(
     },
   },
 
+  // ── moss's modules: the whole of rule 16, and a size ──
+  //
+  // The block above leaves `as` out because 132 of them existed and a rule
+  // that lands red is the thing to stop doing. A MODULE is new ground: code
+  // arrives in one of these directories by being moved there on purpose
+  // (docs/plans/moss-refactor.md, scripts/check-modules.mts), and it arrives
+  // clean. So from a module's first file: no type assertion but `as const` —
+  // what crosses a boundary is parsed, not cast — no non-null assertion, no
+  // `function` declaration, and no function or file that has stopped being one
+  // thing. `createServer` reached 1,345 lines with nothing counting.
+  {
+    files: ['packages/moss/src/*/**/*.ts', 'packages/moss/src/*/**/*.tsx'],
+    ignores: ['packages/moss/src/client/**', 'packages/moss/src/terminal/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'Program > VariableDeclaration[kind="let"]',
+          message: 'module-level `let` in a library is process-global state. Put it in the closure that owns it.',
+        },
+        { selector: 'TSEnumDeclaration', message: 'rule 16: no enum.' },
+        { selector: "ClassDeclaration:not([superClass.name='Error'])", message: 'rule 16: no class (an Error subclass is the one exception).' },
+        { selector: 'ExportDefaultDeclaration', message: 'rule 16: no default export.' },
+        {
+          selector: "TSAsExpression:not([typeAnnotation.type='TSTypeReference'][typeAnnotation.typeName.name='const'])",
+          message: 'rule 16: no type assertion. What comes from outside is parsed by a schema; what is inside is typed so it needs no cast.',
+        },
+        { selector: 'TSTypeAssertion', message: 'rule 16: no type assertion.' },
+        { selector: 'TSNonNullExpression', message: 'rule 16: no non-null assertion. Narrow it.' },
+        { selector: 'FunctionDeclaration', message: 'rule 16: no `function` declaration. An arrow function in a `const`.' },
+      ],
+      'max-lines-per-function': ['error', { max: 100, skipBlankLines: true, skipComments: true }],
+      'max-lines': ['error', { max: 400, skipBlankLines: true, skipComments: true }],
+    },
+  },
+
   // ── checks are held to the fences, not to rule 16 (D5) ──
   //
   // 95 of the tree's 132 type assertions live in `dev/`, and a check that pokes
