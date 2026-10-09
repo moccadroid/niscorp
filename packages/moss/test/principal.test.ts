@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
 import { resolveRoles, resolvePolicy } from '../src/principal';
-import { resolveCatalog, resolveVariants, verifyVariants } from '../src/manifest';
+import { resolveVariants } from '../src/manifest';
 import type { NiscApp } from '../src/manifest';
+import { catalogFor } from '../src/manifest/roles';
+import type { Catalog } from '../src/manifest/roles';
+import { verifyVariants } from '../src/manifest/verify';
 
 // A minimal app — just enough charter/assignments/actions to exercise
 // per-principal resolution. No database, no shell.
@@ -22,6 +25,10 @@ const app = {
 } as unknown as NiscApp;
 
 const grants = scopeGrants(['deals', 'contacts']);
+
+// What a principal holds by the assignments alone: its roles, then what those
+// roles are granted. No install list, so nothing is filtered.
+const resolveCatalog = (of: NiscApp, principal: string | null): Catalog => catalogFor(of, resolveRoles(of, principal), undefined, (ids) => ids);
 
 describe('principal — per-principal resolution', () => {
   it('an unassigned or anonymous principal wears public', () => {

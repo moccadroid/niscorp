@@ -43,12 +43,11 @@ export type {
   ShellManifest,
   StorePress,
 } from './app';
-export { auditClosure } from './closure';
 export { GENERATION_DDL } from './generation';
 export { receiveManifest } from './handover';
-export { catalogFor, resolveCatalog, resolveVariants, wearableOf } from './roles';
+export { resolveVariants } from './roles';
 export type { Catalog, InstalledOnly } from './roles';
 export { createRunningManifest } from './running';
 export type { RunningManifest, RunningManifestConfig } from './running';
-export { refusalOf, verifyApp, verifyVariants } from './verify';
+export { refusalOf, verifyApp } from './verify';
 export type { ManifestReport, ShippedManifest } from './verify';

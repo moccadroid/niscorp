@@ -10,7 +10,7 @@ BREAKING — approved by moccadroid, 2026-10-09: import only what `@niscorp/moss
 
 Moss had grown to twenty-eight files flat in `src/`, one of them a single function of 1,345 lines, and it exported 135 names of which 71 were imported by nothing outside the package. `docs/plans/moss-refactor.md` is the audit and the plan.
 
-**The main entry exports 67 names, not 135.**
+**The main entry exports 62 names, not 135.**
 
 - Gone, and never part of what an app calls: `createShellHost`, `createSocket`, `createDataLayer`, `createGeneration`, `createIdentityCache`, `wireFabric`, `runIntake`, `copyPress`, `callIntegrationWith`, `initIntegrations`, `listIntegrations`, `loadIntegrationActions`, `filterInstalled`, `buildContract`, `contractAsMarkdown`, `describePlacements`, `verifyAssertion`, `mintIntegrationKey`, `hashIntegrationKey`, `mintWrites`, `revokeSession`, `sessionVerifierOf`, `shellNeedOf`, `emitterOf`, `spanClock`, `resolvePolicyAtReach`, `resolveVariantsForRoles`, the constants `GENERATION_DDL`, `SESSIONS_SEQUENCE`, `SNAPSHOT_ELEMENT_ID`, `CLOSE_SHELL_FAILED`, `DEFAULT_GENERATION_POLL_MS`, `DEFAULT_IDENTITY_IDLE_MS`, `DEFAULT_IDENTITY_MAX`, `DEFAULT_IDLE_MS`, `DEFAULT_REVALIDATE_MS`, and the types that went with them.
 - An app that imported one of these was reaching into moss. Say which and why in an issue; the answer is a call that is meant to be public, not the name coming back.
@@ -72,6 +72,13 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 
 - New on `MossServer`: `catalogOf(principal)` and `catalogForRoles(roles, installed?)` answer `{ ids, hash }` from the actions in force; `actions()` is the actions in force, by id; `verifyActions(source, actions)` is the dry run of `replaceActions`, answered as a report, changing nothing.
 - New in the main entry: `verifyApp(app, grants)`, the check boot runs for an app that is not booted, and the type of its report, `ManifestReport`.
+
+**Five internals leave the main entry, each for the call that answers what it was used for.**
+
+- `resolveCatalog(app, principal)` → `(await server.catalogOf(principal)).ids`. The old one read `assignments` and nothing else, so with an `identity` seam it answered `public` for everybody; the server resolves who somebody is the way a request does, and answers from the actions in force.
+- `resolveCatalogForRoles(app, roles, installed)` → `server.catalogForRoles(roles, installed)`.
+- `auditClosure`, `wearableOf`, `verifyVariants`: the three pieces an app put together to run the boot check by hand → `server.charterReport()` for what a running server is serving, `server.verifyActions(source, actions)` for a set it has not taken, and `verifyApp(app, grants)` where there is no server (`report.charter` is what `verifyCharter` answered, closure issues included; `report.errors.filter((error) => error.check === 'variants')` is what `verifyVariants` returned).
+- Code running in a session that wants what its own caller holds asks `GET /catalog` over the session's wire, as before.
 
 **A bundle the app would not serve is refused without being tried on the running app.**
 

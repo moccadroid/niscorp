@@ -1,8 +1,8 @@
 import type { Sequence } from '@niscorp/strata';
 import { migrate, type DocumentStore } from '@niscorp/strata/postgres';
 import { StrataError, depthRefusal, exceedsDepth, type Upgrader } from '@niscorp/strata';
-import { GENERATION_DDL, catalogFor } from './manifest';
-import type { Catalog, NiscApp, StorePress } from './manifest';
+import { GENERATION_DDL } from './manifest';
+import type { NiscApp, StorePress } from './manifest';
 import { z } from 'zod';
 import { ActionDefinitionSchema, LayoutNodeSchema, paletteEntryOf } from '@niscorp/nova';
 import type { ActionDefinition, ComponentMeta, LayoutPaletteEntry } from '@niscorp/nova';
@@ -1390,14 +1390,6 @@ export const filterInstalled = (ids: readonly string[], installed: ReadonlySet<s
     return owner === undefined || installed.has(owner);
   });
 };
-
-// THE CATALOG A SET OF ROLES HOLDS WHERE THESE INTEGRATIONS ARE INSTALLED —
-// for a caller that has already resolved who somebody is (a check holding an
-// identity record). What a set of roles holds is the manifest's to answer; the
-// filter above is the one thing it is handed, and this is where the two meet
-// for a caller outside the server.
-export const resolveCatalogForRoles = (app: NiscApp, roles: readonly string[], installed: readonly string[] | undefined): Catalog =>
-  catalogFor(app, roles, installed, filterInstalled);
 
 // ── the contract an integration is built against ─────────────
 //

@@ -64,14 +64,10 @@ export const resolveVariantsForRoles = (app: Pick<NiscApp, 'charter' | 'layouts'
   return bindings;
 };
 
-// By the assignments alone there is no install list, so nothing is filtered.
-export const resolveCatalog = (app: NiscApp, principal: string | null): Catalog =>
-  catalogFor(app, assignedRoles(app.assignments, principal), undefined, (ids) => ids);
-
 // The principal's layout bindings — action id → the granted variant's
 // layout (ring 2). Grants come from the charter's `layouts` section over
 // the variant-id universe. Two granted variants of one action is
-// incoherence `verifyVariants` refused at boot, so resolution never picks.
+// incoherence the boot check refused (./verify.ts), so resolution never picks.
 export const resolveVariants = (app: NiscApp, principal: string | null): ReadonlyMap<string, LayoutNode> =>
   resolveVariantsForRoles(app, assignedRoles(app.assignments, principal));
 

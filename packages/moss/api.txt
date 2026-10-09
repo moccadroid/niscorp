@@ -31,7 +31,6 @@
 . Telemetry
 . TelemetrySpan
 . TideDriver
-. auditClosure
 . createAssertionSigner
 . createPageRouter
 . createServer
@@ -52,8 +51,6 @@
 . mintSession
 . offerToken
 . renderDocument
-. resolveCatalog
-. resolveCatalogForRoles
 . resolvePolicy
 . resolvePolicyForRoles
 . resolveRoles
@@ -63,8 +60,6 @@
 . sessionOf
 . tokenFromCookie
 . verifyApp
-. verifyVariants
-. wearableOf
 ./client DocumentSnapshot
 ./client SNAPSHOT_ELEMENT_ID
 ./client Wire

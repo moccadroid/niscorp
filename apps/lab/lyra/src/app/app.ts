@@ -177,7 +177,7 @@ const integrationRung = (actorId: string): string | undefined => {
 // population to learn a fact with nothing to do with how many people there are:
 // at hundreds of studios, six hundred thousand entries collapsing to four.
 //
-// SINGLE roles are deliberately absent. `verifyVariants` already iterates every
+// SINGLE roles are deliberately absent. The boot check already iterates every
 // role in the charter on its own, so listing them here would be noise that
 // drifts — an integration gaining a rung would have to be remembered in two places, and
 // the one that was forgotten would be this one.

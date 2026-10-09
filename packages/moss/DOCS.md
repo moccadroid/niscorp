@@ -70,7 +70,7 @@ Every field is an artifact (authored data) except the code seams — `scope`,
 - `assignments` is optional: an app that declares `identity` answers roles per
   principal and never builds the map. `wearable` declares the role
   combinations the boot gates check; absent, they are derived from
-  `assignments` (`wearableOf`).
+  `assignments`, one per distinct combination.
 - `scope(principal, identity?)` — what a principal is beyond its id (a tenant,
   an org). Moss always injects `{ userId }`; this contributes the rest, merged
   server-side and asked per request, so a value derived from the clock is
@@ -825,15 +825,15 @@ measures the end.
   principal's grants recompiled under a named profile, for entries that declare
   a `reach` (vex). Wired into the vex surfaces automatically; narrows rows,
   never widens verbs.
-- `resolveCatalog(app, principal): Catalog` — `{ ids, hash }`, granted action ids
-  sorted, with a content-hash version token (equal hash, equal application).
 - `resolveVariants(app, principal): ReadonlyMap<string, LayoutNode>` — action id →
   the granted variant's layout (ring 2; empty map = every action serves its base).
-- `resolveCatalogForRoles(app, roles, installed)`, `resolveVariantsForRoles(app,
-  roles)`, `resolvePolicyForRoles(app, grants, roles)` — the same resolutions,
-  given roles rather than a principal, for a caller that already resolved who
-  somebody is (the `identity` seam). `resolveRoles`, `resolveCatalog` and the
-  other principal-taking forms read `assignments` only.
+- `resolvePolicyForRoles(app, grants, roles)` — `resolvePolicy`, given roles
+  rather than a principal, for a caller that already resolved who somebody is
+  (the `identity` seam). `resolveRoles` and the other principal-taking forms
+  read `assignments` only.
+- What somebody holds is asked of the server, which answers from the actions
+  in force: `server.catalogOf(principal)`, `server.catalogForRoles(roles,
+  installed?)`.
 - `verifyApp(app, grants): ManifestReport` — the check boot runs, for an app
   that is not booted (a check, a build step): the charter with each role's
   closure audited, every entry's reach, the layout variants. It reads `charter`,
@@ -843,13 +843,8 @@ measures the end.
   report is `{ errors, said, charter }`, as `server.verifyActions` answers it;
   a boot refuses on `errors`. A running server answers for what is in force
   with `server.charterReport()`.
-- `wearableOf(app): readonly (readonly string[])[]` — the role combinations the
-  app can produce: `app.wearable`, else derived from `assignments`, deduplicated.
 - `memoKeyOf(app, principal): string` — the key the per-principal memos depend
   on (roles + installed set), from `assignments` with no install list.
-- `verifyVariants(app): string[]` — the ring-2 boot gate: every variant reshapes a
-  shipped action, and no wearable role combination is granted two variants of
-  one action. Non-empty = refuse to boot.
 - `createDataLayer(runtime, entries?): Promise<DataLayer>` — `{ engine, schema,
   grants }`, stood up from what's present.
 - `createShellHost(ctx): ShellHost` — the durable per-principal shell host.
@@ -877,9 +872,6 @@ measures the end.
   remote clients ride `attach`/`dispatch`. `shell` is a **getter** — `reset`
   replaces the shell under a session already held, so a snapshot of the field
   would go on addressing the disposed one.
-- `auditClosure(definitions, variants?): ClosureAuditor` — nova's action audit as
-  the charter's injected closure hook (cross-action wiring breaks only), over each
-  role's effective definitions (granted variants substituted).
 
 ### The socket protocol
 
