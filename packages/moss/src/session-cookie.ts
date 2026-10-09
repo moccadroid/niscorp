@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { DEFAULT_TOKEN_KEY, sessionNameOf } from './protocol';
 
 // ═══════════════════════════════════════════════════════════════
@@ -122,6 +123,9 @@ export const sessionTokenOf = (
 // ═══════════════════════════════════════════════════════════════
 
 const SEALED_FOR_MS = 60_000;
+// What is inside a sealed sign-in once it is opened: the token, and until when
+// it may be used.
+const SealedSchema = z.object({ token: z.string(), until: z.number() });
 const sealName = (secure: boolean): string => `${secure ? '__Http-' : ''}nisc.seal`;
 const toBase64Url = (bytes: Uint8Array): string => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const fromBase64Url = (text: string): Uint8Array<ArrayBuffer> => Uint8Array.from(atob(text.replace(/-/g, '+').replace(/_/g, '/')), (char) => char.charCodeAt(0));
@@ -145,8 +149,8 @@ export const openSealed = async (seal: string, sealed: string): Promise<string |
   try {
     const bytes = fromBase64Url(sealed);
     const opened = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes.slice(0, 12) }, await keyOf(seal), bytes.slice(12));
-    const { token, until } = JSON.parse(new TextDecoder().decode(opened)) as { token?: unknown; until?: unknown };
-    return typeof token === 'string' && typeof until === 'number' && until > Date.now() ? token : null;
+    const inside = SealedSchema.safeParse(JSON.parse(new TextDecoder().decode(opened)));
+    return inside.success && inside.data.until > Date.now() ? inside.data.token : null;
   } catch {
     return null;
   }

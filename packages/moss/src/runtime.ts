@@ -1,4 +1,5 @@
 import type { Context, Next } from 'hono';
+import { z } from 'zod';
 import type { MutationClient, PgPool, CacheBackend, QueryEngineConfig } from '@niscorp/vex';
 import type { Sequence } from '@niscorp/strata';
 import type { Telemetry } from './telemetry';
@@ -180,11 +181,14 @@ export const mintDevToken = (sub: string, claims: Record<string, unknown> = {}):
     .replace(/\//g, '_')
     .replace(/=+$/, '');
 
+// What a dev token is read for: its `sub`. Whatever else was minted into it
+// rides along unread.
+const DevTokenSchema = z.object({ sub: z.string() });
+
 export const devSession = (token: string): string | null => {
   try {
-    const parsed: unknown = JSON.parse(atob(token.replace(/-/g, '+').replace(/_/g, '/')));
-    const sub = (parsed as Record<string, unknown> | null)?.['sub'];
-    return typeof sub === 'string' ? sub : null;
+    const parsed = DevTokenSchema.safeParse(JSON.parse(atob(token.replace(/-/g, '+').replace(/_/g, '/'))));
+    return parsed.success ? parsed.data.sub : null;
   } catch {
     return null;
   }

@@ -1,4 +1,5 @@
 import { randomBytes, createHash } from 'node:crypto';
+import { z } from 'zod';
 import type { Sequence } from '@niscorp/strata';
 import { migrate } from '@niscorp/strata/postgres';
 import type { PgPool } from '@niscorp/vex';
@@ -34,6 +35,14 @@ import type { NiscRuntime, SessionVerifier } from './runtime';
 // ═══════════════════════════════════════════════════════════════
 
 const hashSessionToken = (token: string): string => createHash('sha256').update(token).digest('hex');
+
+// What the two lookups read off a row. The database is outside this process,
+// so a row is parsed like anything else that arrives: one that is not there,
+// or does not hold what was selected, is nobody.
+const PrincipalRowSchema = z.object({ principal: z.string() });
+// `extract(epoch from …) * 1000` is numeric, which a driver hands over as a
+// number or as the text of one.
+const RemainingRowSchema = z.object({ remaining: z.coerce.number() });
 
 // The sessions table, as a strata sequence. Its own sequence rather than part of
 // `nisc.moss` because it exists only for a deployment that chose moss's own
@@ -82,16 +91,16 @@ export const mintSession = async (pool: PgPool, principal: string, ttlMs: number
 
 export const sessionOf = async (pool: PgPool, token: string): Promise<string | null> => {
   const res = await pool.query('SELECT principal FROM sessions WHERE token_hash = $1 AND expires_at > now()', [hashSessionToken(token)]);
-  const principal = (res.rows[0] as { principal?: unknown } | undefined)?.principal;
-  return typeof principal === 'string' ? principal : null;
+  const row = PrincipalRowSchema.safeParse(res.rows[0]);
+  return row.success ? row.data.principal : null;
 };
 
 // How much longer a session resolves — how long a browser is told to keep the
 // cookie that carries it.
 export const sessionRemainingMs = async (pool: PgPool, token: string): Promise<number | null> => {
   const res = await pool.query('SELECT extract(epoch from expires_at - now()) * 1000 AS remaining FROM sessions WHERE token_hash = $1 AND expires_at > now()', [hashSessionToken(token)]);
-  const remaining = Number(res.rows[0]?.['remaining']);
-  return res.rows.length > 0 && Number.isFinite(remaining) ? remaining : null;
+  const row = RemainingRowSchema.safeParse(res.rows[0]);
+  return row.success ? row.data.remaining : null;
 };
 
 export const revokeSession = async (pool: PgPool, token: string): Promise<void> => {
@@ -107,7 +116,7 @@ export const revokeAllFor = async (pool: PgPool, principal: string): Promise<voi
 // and the sentence names the choices rather than assuming the reader has
 // the type open.
 export const sessionVerifierOf = (runtime: Pick<NiscRuntime, 'session' | 'pool'>): SessionVerifier => {
-  const chosen = runtime.session as NiscRuntime['session'] | undefined;
+  const chosen = runtime.session;
   if (chosen === undefined) {
     throw new Error(
       "moss: `runtime.session` is unset — authentication is the one door that must not default open. Choose: 'sessions' (moss's stored credential: mintSession/sessionOf/revokeSession), 'dev-open' (every token is trusted; development only), or your own verifier function.",
