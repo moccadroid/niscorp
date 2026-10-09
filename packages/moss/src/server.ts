@@ -669,7 +669,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     }
 
     const fingerprints = new Set((await data.engine.cache.keys?.()) ?? []);
-    const result = runIntake(payload, intakeContextOf(app, id, fingerprints, grammars));
+    const result = runIntake(payload, { ...intakeContextOf(app, id, fingerprints, grammars), hostActions: running.actions() });
     if (!result.ok) {
       await runtime.pool.query(
         `INSERT INTO integrations (id, url, last_error) VALUES ($1, $2, $3)

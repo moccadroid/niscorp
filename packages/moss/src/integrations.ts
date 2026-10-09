@@ -552,8 +552,10 @@ export type IntakeContext = {
   // upgraded from the bundle's `grammar` stamp BEFORE they are parsed — an
   // action in an older grammar would fail today's strict schema otherwise.
   upgrader?: Upgrader;
-  // The host's own actions — a bundle's triggers can close a loop through
-  // them (the host emits what the integration listens to, and back).
+  // The host's actions in force — a bundle's triggers can close a loop through
+  // them (the host emits what the integration listens to, and back). Not part
+  // of what the app shipped alone: the sets that arrived while it runs are
+  // host actions too, so whoever runs the intake asks the running manifest.
   hostActions?: Readonly<Record<string, ActionDefinition>>;
 };
 
@@ -563,6 +565,7 @@ export type IntakeContext = {
 // tools / publish checks / editor regions a `documents`/`assistants`
 // declaration is checked against. Pure over the app plus the fingerprints the
 // route reads from the engine, so it is testable without a running server.
+// The actions in force are not the manifest's to say (`hostActions` above).
 export const intakeContextOf = (
   app: NiscApp,
   integrationId: string,
@@ -578,7 +581,6 @@ export const intakeContextOf = (
   tools: new Set(app.assistantTools ?? []),
   checks: new Set(app.publishChecks ?? []),
   regions: new Set(app.editorRegions ?? []),
-  hostActions: app.actions,
 });
 
 const AUDIENCE = /^[a-z][a-z0-9-]*$/;
