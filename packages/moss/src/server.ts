@@ -11,18 +11,16 @@ import type { ScopePolicy, WriteEvent, ExecuteRecord, SeedEntry, SeedMutation } 
 import { emitterOf } from './runtime';
 import type { TelemetrySpan } from './runtime';
 import { wireFabric } from './fabric';
-import { verifyCharter } from '@niscorp/charter';
 import type { VerifyReport } from '@niscorp/charter';
-import { auditClosure, createGeneration, resolveVariantsForRoles, verifyVariants, wearableOf } from './manifest';
-import type { Catalog, Generation, NiscApp } from './manifest';
+import { createGeneration, refusalOf, resolveVariantsForRoles, verifyManifest, wearableOf } from './manifest';
+import type { Catalog, Generation, ManifestCandidate, NiscApp } from './manifest';
 import type { NiscRuntime } from './runtime';
 import { createIdentity, memoKey, sessionRemainingMs, sessionVerifierOf } from './identity';
 import { createDataLayer } from './data';
 import { tableSequencesOf } from './migrate';
 import { mintWrites } from './tide';
 import { resolvePolicyAtReachForRoles, resolvePolicyForRoles } from './principal';
-import type { LayoutNode } from '@niscorp/nova';
-import { chainCycles } from '@niscorp/nova/reflect';
+import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
 import {
   buildContract,
   callIntegrationWith,
@@ -261,52 +259,24 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   await upgradeStore(runtime.pool, INTEGRATION_ACTIONS_STORE, grammars);
   const data = await createDataLayer(runtime, app.entries ?? []);
 
-  // ── Refuse to start incoherent — the charter engine verifies,
-  // nova audits each role's closure (over effective definitions: granted
-  // variants substituted). Only the report's errors refuse: closure
-  // findings sit under perRole[].issues and are not read here.
-  const report = verifyCharter(
-    app.charter,
-    { actions: Object.keys(app.actions), data: data.grants, layouts: Object.keys(app.layouts ?? {}) },
-    wearableOf(app),
-    auditClosure(app.actions, app.layouts),
-  );
-  if (report.errors.length > 0) {
-    throw new Error(`Charter is incoherent — refusing to serve:\n${report.errors.map((e) => `  ${e.rule}: ${e.detail}`).join('\n')}`);
-  }
+  // ── Refuse to start incoherent (./manifest, verifyManifest): the charter
+  // with each role's closure audited, every entry's reach, the layout variants.
+  // What is only said — a chain of steps that never ends — is said first.
+  const candidateOf = (actions: Readonly<Record<string, ActionDefinition>>): ManifestCandidate => ({
+    charter: app.charter,
+    actions,
+    layouts: app.layouts ?? {},
+    wearable: wearableOf(app),
+    grants: data.grants,
+    entries: app.entries ?? [],
+    profiles: scopeProfiles(app.behaviors ?? {}),
+  });
+  const bootReport = verifyManifest(candidateOf(app.actions));
+  for (const line of bootReport.said) console.error(`[moss] ${line}`);
+  const bootRefusal = refusalOf(bootReport, 'boot');
+  if (bootRefusal !== undefined) throw new Error(bootRefusal);
   // Kept for `charterReport()`; a refresh that passes replaces it.
-  let verifiedReport: VerifyReport = report;
-  // CHAINS THAT NEVER END, said at boot. A trigger that re-emits its own
-  // channel (or a mount that reloads itself, …) is valid data; nova stops it
-  // at its budget when it runs, and this names it before anybody opens it.
-  // Said, not refused: the app still serves, as it would have before.
-  for (const cycle of chainCycles(app.actions)) {
-    console.error(`[moss] a chain of steps that never ends: ${cycle.path} — nova stops it at its budget when it runs (RUNAWAY_CHAIN)`);
-  }
-  // A DECLARED REACH HAS TO NAME A PROFILE THAT EXISTS.
-  //
-  // An entry's `reach` is a string, matched at request time against the profiles
-  // the behaviors declare. A typo fails CLOSED — an unknown profile denies every
-  // table — which is the right runtime posture and a terrible way to find out:
-  // the screen comes back empty or refused and nothing says why. Every other
-  // string in this file is checked against its universe at boot; so is this one.
-  const profiles = new Set(scopeProfiles(app.behaviors ?? {}));
-  const badReach = (app.entries ?? [])
-    .filter((e) => typeof (e as { reach?: unknown }).reach === 'string')
-    .filter((e) => !profiles.has((e as { reach: string }).reach))
-    .map((e) => `  ${e.fingerprint} declares reach "${(e as { reach: string }).reach}"`);
-  if (badReach.length > 0) {
-    throw new Error(
-      `Entries declare a reach no table offers — refusing to serve:\n${badReach.join('\n')}\n  known profiles: ${[...profiles].join(', ') || '(none)'}`,
-    );
-  }
-
-  // Ring-2 coherence: variants reference shipped actions, one variant per
-  // action per wearable combination. Same posture, second gate.
-  const variantErrors = verifyVariants(app);
-  if (variantErrors.length > 0) {
-    throw new Error(`Layout variants are incoherent — refusing to serve:\n${variantErrors.map((e) => `  ${e}`).join('\n')}`);
-  }
+  let verifiedReport: VerifyReport = bootReport.charter;
 
   // ── Per-principal resolutions, computed at first sight (login) and
   // memoized: the documents are static for the process.
@@ -1355,20 +1325,10 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // OBSERVES a move somebody else made. Bumping here would have every process
   // bump every other process forever.
   const refreshLocal = (): void => {
-    const nextReport = verifyCharter(
-      app.charter,
-      { actions: Object.keys(app.actions), data: data.grants, layouts: Object.keys(app.layouts ?? {}) },
-      wearableOf(app),
-      auditClosure(app.actions, app.layouts),
-    );
-    if (nextReport.errors.length > 0) {
-      throw new Error(`Refresh refused — charter incoherent over the new artifacts:\n${nextReport.errors.map((e) => `  ${e.rule}: ${e.detail}`).join('\n')}`);
-    }
-    const nextVariantErrors = verifyVariants(app);
-    if (nextVariantErrors.length > 0) {
-      throw new Error(`Refresh refused — layout variants incoherent:\n${nextVariantErrors.map((e) => `  ${e}`).join('\n')}`);
-    }
-    verifiedReport = nextReport;
+    const next = verifyManifest(candidateOf(app.actions));
+    const refusal = refusalOf(next, 'refresh');
+    if (refusal !== undefined) throw new Error(refusal);
+    verifiedReport = next.charter;
     // IDENTITY GOES WITH THEM. `refresh` exists because something the
     // resolutions were derived FROM changed — an approval, a role, an artifact.
     // Dropping the compiled policies while keeping the records they were

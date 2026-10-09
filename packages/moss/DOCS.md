@@ -386,11 +386,12 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   `undefined` for a path that is the app's. The document route and the socket
   ask the same question here.
 - `refresh(): void` — artifacts changed at runtime (actions loaded from rows):
-  re-run the boot gates, drop every per-principal memo and identity record,
-  and have living shells adopt their re-resolved definitions in place. Throws
-  on an incoherent charter or variant set, and the old resolution keeps
-  serving. It also moves the generation pointer, so every other process on the
-  same database does the same within one poll.
+  run the check boot runs (the charter, every entry's reach, the layout
+  variants), drop every per-principal memo and identity record, and have
+  living shells adopt their re-resolved definitions in place. Throws when the
+  check refuses, and the old resolution keeps serving. It also moves the
+  generation pointer, so every other process on the same database does the
+  same within one poll.
 - `charterReport(): VerifyReport` — the report `verifyCharter` gave this server:
   boot's, then that of each `refresh` that passed. `{ errors, warnings,
   perRole }`, over the universes boot resolved against. Boot and `refresh` read

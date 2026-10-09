@@ -8,9 +8,11 @@
 // layout variants, the shell and the pages, and the seams an app fills in.
 //
 // WHAT A SET OF ROLES HOLDS of it (./roles.ts) is the charter applied: the
-// action ids granted, and the layout variant held of each. ./verify.ts refuses
-// a set of variants no principal could be served, and ./closure.ts audits what
-// each role's actions reach.
+// action ids granted, and the layout variant held of each.
+//
+// WHETHER IT MAY BE SERVED is one verification (./verify.ts), asked at boot and
+// at every change: the charter, with what each role's actions reach audited
+// (./closure.ts), every entry's reach, the layout variants.
 //
 // WHEN IT CHANGES, every other process finds out by a pointer in the database
 // that each one polls (./generation.ts).
@@ -38,4 +40,5 @@ export { DEFAULT_GENERATION_POLL_MS, GENERATION_DDL, createGeneration } from './
 export type { Generation } from './generation';
 export { catalogFor, resolveCatalog, resolveVariants, resolveVariantsForRoles, wearableOf } from './roles';
 export type { Catalog, InstalledOnly } from './roles';
-export { verifyVariants } from './verify';
+export { refusalOf, verifyManifest, verifyVariants } from './verify';
+export type { ManifestCandidate, ManifestCheck, ManifestReport } from './verify';

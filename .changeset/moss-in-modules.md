@@ -47,3 +47,8 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 **`runtime.identityMax` of zero or less refuses the boot.**
 
 - With an `identity` seam declared, `identityMax: 0` (or less) used to boot and then hang the process on the first sign-in: making room in a cache that has none never ended. `createServer` now refuses it with a sentence that names the setting. Give it 1 or more, or leave it unset for the default of 10,000.
+
+**`refresh` runs the check boot runs.**
+
+- `refresh()` ran a shorter copy of the boot check: the charter and the layout variants. It is now the same verification, so a `refresh` also refuses when an entry declares a `reach` that no behavior offers, with the sentence `Refresh refused — entries declare a reach no table offers`. That can only happen to an app that changes `app.entries` or `app.behaviors` after boot; no other app sees a difference.
+- A boot that is refused prints the chains of steps that never end before it throws. It printed them only when the charter had passed.
