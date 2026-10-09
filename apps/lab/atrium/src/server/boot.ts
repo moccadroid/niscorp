@@ -23,8 +23,9 @@ import type { DevRuntime } from './runtime';
 // Order matters and tells the story:
 //   directory  — the seed's people, snapshotted for `inputs`/`scope`
 //   bundles    — the integrations' rows, read back into bundleState
-//   server     — verifies the whole (charter over core + bundle ids) or refuses
-//   refresh    — re-runs the middle two against the live server
+//   server     — verifies the core, then the whole once the bundles' actions
+//                are handed over (charter over core + bundle ids), or refuses
+//   refresh    — re-reads the bundles and hands their actions over again
 //   sync       — PULLS every connector's /bundle through intake; on a fresh
 //                database this is where the integrations arrive at all. A
 //                service that is down or refused just reports — the app boots
@@ -66,19 +67,21 @@ export const boot = async (): Promise<{
 
   const bundles = await loadBundles(runtime);
 
-  const app = buildAtrium(bundles.actions, bundles.entries);
+  const app = buildAtrium(bundles.entries);
   const server = await createServer(app, runtime);
+  // The bundles' actions come from rows, so they are not part of what the app
+  // ships: they are handed to the server as a set of their own, here and after
+  // every sync. moss verifies the whole (charter over core + bundle ids) before
+  // it serves any of it, and throws — which ends this boot — if it could not.
+  server.replaceActions('bundles', bundles.actions);
 
   registerRefresh(runtime, async () => {
-    // Re-read the rows into the SAME record the server resolves from — ext.*
-    // ids are the bundle namespace, so stale ones leave and new ones arrive —
-    // then moss re-verifies, drops its memos and walks the living shells.
+    // Re-read the rows and hand the set over again: an action the rows no
+    // longer hold leaves, a new one arrives. moss verifies the whole, then
+    // drops its memos and walks the living shells — or throws, and what was
+    // being served keeps being served.
     const fresh = await loadBundles(runtime);
-    for (const id of Object.keys(app.actions)) {
-      if (id.startsWith('ext.')) delete app.actions[id];
-    }
-    Object.assign(app.actions, fresh.actions);
-    server.refresh();
+    server.replaceActions('bundles', fresh.actions);
   });
 
   // The operator seam — key-gated, and 404 to the whole world when no key is

@@ -225,8 +225,8 @@ export const syncIntegrations = async (runtime: NiscRuntime, connectorId?: strin
 };
 
 // ─── the refresh seam ────────────────────────────────────────
-// boot() registers the whole reload: re-read the bundle rows into the running
-// manifest, then moss's refresh() (re-verify → drop memos → shells adopt).
+// boot() registers the whole reload: re-read the bundle rows, then hand their
+// actions to moss as the 'bundles' set (verify → drop memos → shells adopt).
 // Keyed by the RUNTIME it refreshes, not held in one module-level slot: a
 // process can boot more than one server (the checks do), and a refresh belongs
 // to the server standing over that database. Weakly held, so a runtime that is

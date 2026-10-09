@@ -1,6 +1,5 @@
 import { defineApp } from '@niscorp/moss';
 import type { NiscApp } from '@niscorp/moss';
-import type { ActionDefinition } from '@niscorp/nova';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { CHARTER, ASSIGNMENTS } from './charter';
 import { CATALOG_DEFINITIONS } from '@atrium/app/action-catalog';
@@ -14,6 +13,7 @@ import { landedFragment } from '@atrium/app/shell/fragments/landed.fragment';
 import { authFunctions } from '@atrium/server/functions/auth';
 import { connectorFunctions } from '@atrium/server/functions/connector';
 import { assistantFunctions, attachAssistant } from '@atrium/server/assistant';
+import { definitionsNow } from '@atrium/server/assistant/knowledge';
 import { recordRun } from '@atrium/server/assistant/runs';
 import { registerShellSession } from '@atrium/server/operator';
 import { userById, people, SIBLINGS } from '@atrium/server/users';
@@ -46,21 +46,21 @@ const ICONS: Record<string, string> = {
   vendor: 'plug',
 };
 
-// The manifest is a FUNCTION of the bundles because those come from ROWS:
-// boot reads bundle_actions and bundle_entries back from the database (the
-// discovery sync put them there) and hands both in. The app itself carries no
-// integration — everything ext.* arrived over the wire.
-export const buildAtrium = (bundleActions: Record<string, ActionDefinition>, bundleEntries: readonly (SeedEntry | SeedMutation)[]): NiscApp => {
-  // ONE record, shared by reference with the running server: boot's refresh
-  // mutates it in place after a sync, and the seeds hook below reads it — so
-  // a guest logging in right after a go-live seeds the actions that just
-  // landed, even though this function ran before they existed.
-  const actions: Record<string, ActionDefinition> = { ...CATALOG_DEFINITIONS, ...bundleActions };
-
+// The manifest is a FUNCTION of the bundles' entries because those come from
+// ROWS: boot reads bundle_entries back from the database (the discovery sync
+// put them there) and hands them in. The app itself carries no integration —
+// everything ext.* arrived over the wire.
+//
+// The bundles' ACTIONS are not shipped here. They come from rows too, and they
+// change while the app runs, so boot hands them to the server as a set of their
+// own (`server.replaceActions('bundles', …)`): at start, and again after every
+// sync. Shipping them here as well would put each one in the manifest twice,
+// and the copy shipped here would never leave.
+export const buildAtrium = (bundleEntries: readonly (SeedEntry | SeedMutation)[]): NiscApp => {
   return defineApp({
     charter: CHARTER,
     assignments: ASSIGNMENTS,
-    actions,
+    actions: { ...CATALOG_DEFINITIONS },
     entries: [...ENTRIES, ...MUTATION_ENTRIES, ...bundleEntries],
     behaviors: scopeBehaviors,
     resources: RESOURCES,
@@ -316,8 +316,12 @@ export const buildAtrium = (bundleActions: Record<string, ActionDefinition>, bun
           });
           return res.ok ? res.json() : null;
         };
+        // The definitions as they are NOW, the synced bundles' included: a
+        // guest logging in right after a go-live seeds the actions that just
+        // landed, even though this manifest was built before they existed.
+        const definitions = definitionsNow();
         const propsOf = (id: string): Record<string, unknown> => {
-          const input = actions[id]?.input;
+          const input = definitions[id]?.input;
           return (input as { properties?: Record<string, unknown> } | undefined)?.properties ?? {};
         };
 
