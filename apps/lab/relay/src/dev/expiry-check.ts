@@ -26,7 +26,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve } from '@hono/node-server';
-import { createServer, devSession, CLOSE_INVALID_TOKEN, offerToken, PROTOCOL } from '@niscorp/moss';
+import { createServer, CLOSE_INVALID_TOKEN, offerToken, PROTOCOL } from '@niscorp/moss';
 import { attachSocket } from '@niscorp/moss/node';
 import { createWire } from '@niscorp/moss/client';
 import { nodeEnv } from '@niscorp/moss/client/node';
@@ -34,7 +34,7 @@ import type { ServerMessage } from '@niscorp/moss';
 import type { RenderNode } from '@niscorp/nova';
 import { relay } from '../app/app';
 import { devRuntime } from '../server/runtime';
-import { mintToken } from '../server/users';
+import { mintToken, userByUsername } from '../server/users';
 
 const checks: [string, boolean][] = [];
 const until = (pred: () => boolean, why: string, ms = 15000): Promise<void> =>
@@ -82,12 +82,21 @@ const main = async (): Promise<void> => {
   const runtime = await devRuntime();
 
   // ── an app that gives its tokens a lifetime ────────────────
-  // The whole of what an application has to write. `devSession` still does the
-  // decoding; this adds the one thing a real verifier adds and the dev pair
-  // has never had — a token can STOP being valid. Nothing in moss learns what
+  // The whole of what an application has to write: a verifier that knows the
+  // tokens it issued, and can STOP honouring one — the thing the dev pair has
+  // never had. It decodes nothing: a token it did not issue is nobody's, so
+  // the check stands on no verifier but its own. Nothing in moss learns what
   // expiry means; it only learns to ask again.
+  const issued = new Map<string, string>();
   const dead = new Set<string>();
-  const session = (token: string): string | null => (dead.has(token) ? null : devSession(token));
+  const session = (token: string): string | null => (dead.has(token) ? null : (issued.get(token) ?? null));
+  const issue = (username: string): string => {
+    const user = userByUsername(username);
+    const token = mintToken(username);
+    if (user === undefined || token === null) throw new Error(`no user "${username}"`);
+    issued.set(token, user.id);
+    return token;
+  };
 
   // A quarter-second so the check runs at human speed. A deployment leaves
   // this at the 60s default; it is here because a check should not sleep for a
@@ -99,9 +108,8 @@ const main = async (): Promise<void> => {
   if (address === null || typeof address === 'string') throw new Error('no port');
   const base = `ws://127.0.0.1:${address.port}`;
 
-  const alexToken = mintToken('alex');
-  const jordanToken = mintToken('jordan');
-  if (alexToken === null || jordanToken === null) throw new Error('users missing');
+  const alexToken = issue('alex');
+  const jordanToken = issue('jordan');
 
   // ── a live connection, then a dead credential ──────────────
   const alex = await connect(base, alexToken);
@@ -138,8 +146,7 @@ const main = async (): Promise<void> => {
   // The real client wire, on the real transport. 4401 is a recovery and not a
   // retry: it drops the stored token and reconnects anonymous, so the person
   // lands on the served lock screen rather than watching a dead application.
-  const laterToken = mintToken('jordan');
-  if (laterToken === null) throw new Error('no jordan token');
+  const laterToken = issue('jordan');
   const tokenFile = join(mkdtempSync(join(tmpdir(), 'relay-expiry-')), 'token');
   writeFileSync(tokenFile, laterToken, 'utf8');
 

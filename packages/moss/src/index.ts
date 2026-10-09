@@ -10,7 +10,7 @@
 //   node.ts       — the Node listener + ws transport (./node subpath; Bun swaps this, never the app)
 export { defineApp } from './app';
 export type { NiscApp, ShellManifest, PageManifest, FunctionSession, LayoutVariant, RunRecord, RunTurn, RunSink } from './app';
-export { devSession, mintDevToken } from './identity';
+export { mintDevToken } from './identity';
 export type { NiscRuntime } from './runtime';
 export type { Telemetry, TelemetrySpan } from './runtime';
 export { initSessions, mintSession, sessionOf, revokeAllFor } from './identity';

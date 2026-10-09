@@ -37,7 +37,6 @@
 . createTideDriver
 . createTideStore
 . defineApp
-. devSession
 . documentHeaders
 . embedSnapshot
 . exportDocuments

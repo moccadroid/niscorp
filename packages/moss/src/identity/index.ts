@@ -21,7 +21,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 export type { IdentityReport } from './cache';
-export { devSession, mintDevToken } from './dev-token';
+export { mintDevToken } from './dev-token';
 export { memoKey } from './memo-key';
 export type { IdentityRecord } from './record';
 export { assignedRoles, createIdentity } from './resolution';

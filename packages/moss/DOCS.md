@@ -248,7 +248,10 @@ not default open, and it used to. Three answers: `'sessions'` uses moss's own
 stored credential (below); `'dev-open'` trusts every well-formed token and says
 so at boot — harnesses and demo floors; a function is the app's own identity
 provider — return `null` for a token that has expired or been revoked. moss
-never learns what expiry means — it only asks again, on both surfaces.
+never learns what expiry means — it only asks again, on both surfaces. A
+function is named at boot too, in one line (`[moss] session: a function the app
+supplied (…) decides who a token is.`): moss cannot tell an identity provider
+from a stub that trusts whatever it is shown, so the choice is in the log.
 
 #### `mintSession(pool, principal, ttlMs)` / `sessionOf(pool, token)` / `revokeSession(pool, token)` / `revokeAllFor(pool, principal)`
 
@@ -323,12 +326,13 @@ environment settings, not manifest ones — an operational decision about a
 deployment, never something an application is written against. See
 [Wire size](#wire-size).
 
-#### `mintDevToken(sub, claims?) : string` / `devSession(token) : string | null`
+#### `mintDevToken(sub, claims?) : string`
 
-The dev token pair — base64url JSON, `sub` is the principal, no signature and
-no expiry. Reachable only through `session: 'dev-open'`, never by default:
-anybody who can spell a principal's id can be them, which is a property a
-harness wants and a deployment must opt into out loud.
+Mints a dev token — base64url JSON, `sub` is the principal, no signature and
+no expiry. The verifier that trusts one is not exported: it is reachable only
+through `session: 'dev-open'`, never by default. Anybody who can spell a
+principal's id can be them, which is a property a harness wants and a
+deployment must opt into out loud.
 
 ### The server
 
