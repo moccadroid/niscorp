@@ -99,6 +99,23 @@ jobs:
       - name: Check for SQL outside vex
         run: pnpm check:raw-sql
 
+      # A package is made of modules: nothing new at the top of src/, a module is
+      # imported by its door, and it imports only the modules it declares. See
+      # scripts/check-modules.mts.
+      - name: Check the modules
+        run: pnpm check:modules
+
+      # A package's exported names are a file in the repository (api.txt), so a
+      # new export is a line in a diff rather than an accident. See
+      # scripts/check-api.mts.
+      - name: Check the public API
+        run: pnpm check:api
+
+      # The lint existed and nothing ran it. It holds the syntax the style guide
+      # bans and, for each module that has been moved, the stricter rules.
+      - name: Lint
+        run: pnpm lint
+
       # Every package change on a PR carries a changeset — and no release breaks
       # an app: the packages are live on npm. A breaking bump (a major, or a
       # minor below 1.0) is refused unless its changeset carries the maintainer's
