@@ -5,6 +5,7 @@ import { wireFabric } from './fabric';
 import type { VerifyReport } from '@niscorp/charter';
 import { createRunningManifest, receiveManifest, refusalOf } from './manifest';
 import type { Catalog, ManifestReport, NiscApp } from './manifest';
+import type { ScopePolicy } from '@niscorp/vex';
 import type { NiscRuntime } from './runtime';
 import { createIdentity, sessionRemainingMs, sessionVerifierOf } from './identity';
 import { createData, createWireFollower } from './data';
@@ -113,6 +114,13 @@ export type MossServer = Hono<Env> & {
   // every one is live).
   catalogOf: (principal: string | null) => Promise<Catalog>;
   catalogForRoles: (roles: readonly string[], installed?: readonly string[]) => Catalog;
+  // WHAT A SET OF ROLES MAY READ AND WRITE: the vex policy a request by
+  // somebody holding exactly these roles is served under, compiled from the
+  // charter and the row behaviors over every table the database has. One
+  // policy per role, merged. For a check or a tool that reads the rules: no
+  // query runs, and the answer is compiled for the asking, so it is the
+  // caller's own and not the one a request is served under.
+  policyForRoles: (roles: readonly string[]) => ScopePolicy;
   // THE REPORT THIS SERVER WAS VERIFIED BY — `verifyCharter`'s, from boot, then
   // from each change that passed. Boot and refresh read its `errors` and
   // nothing else, so the rest was computed and dropped: the warnings (an action
@@ -1240,6 +1248,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     actions: running.actions,
     catalogOf: async (principal: string | null) => catalog(await identity.resolve(principal)),
     catalogForRoles: (roles: readonly string[], installed?: readonly string[]) => running.catalogFor(roles, installed),
+    policyForRoles: data.policyForRoles,
     charterReport: () => running.report().charter,
     generation: running.generation,
     // Every timer this server owns, stopped once. Absent pieces (an app with no

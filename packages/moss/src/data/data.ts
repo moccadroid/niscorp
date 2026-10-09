@@ -84,6 +84,11 @@ export type Data = {
   // The policy somebody reads and writes under: compiled once for each set of
   // roles, and kept until the manifest changes.
   policyOf: (who: Caller) => ScopePolicy;
+  // What a set of roles may read and write, for a caller that holds roles and
+  // has resolved nobody: a check, a tool. Compiled for the asking and the
+  // caller's own, so nothing it does to the answer reaches a policy a request
+  // is served under.
+  policyForRoles: (roles: readonly string[]) => ScopePolicy;
   // Run a seeded entry as a charter role (./execute-as.ts).
   executeAs: ExecuteAs;
   // The vex surfaces, for the server to mount at its root (./routes.ts).
@@ -145,6 +150,7 @@ export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charte
     grants,
     grammars,
     policyOf: policies.of,
+    policyForRoles: (roles) => resolvePolicyForRoles(governed, grants, roles),
     // Compiled for each call: nothing keeps a machinery role's policy.
     executeAs: createExecuteAs({
       engine,

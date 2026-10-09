@@ -62,6 +62,19 @@ describe('the data module, over an engine', () => {
     expect(kept.entities['notes']).toMatchObject({ read: [] });
   });
 
+  it('answers what a set of roles may read and write, as a copy that is the caller\'s own', async () => {
+    const { data, post } = await world();
+    const asked = data.policyForRoles(['writer']);
+    expect(asked).toEqual(data.policyOf(who('writer')));
+    expect(asked.entities['notes']).toMatchObject({ read: [], insert: [] });
+    expect(data.policyForRoles(['public']).entities).toEqual({});
+    // Several roles are a union: what either may do.
+    expect(data.policyForRoles(['public', 'reader'])).toEqual(data.policyOf(who('reader')));
+    // Emptying the answer takes nothing from the writer the routes serve.
+    asked.entities = {};
+    expect(await post('writer', ADD)).toMatchObject({ result: { id: 7, body: 'written' } });
+  });
+
   it('drops what it compiled when the manifest says it changed, and at no other time', async () => {
     const { data } = await world();
     const listeners: (() => void)[] = [];

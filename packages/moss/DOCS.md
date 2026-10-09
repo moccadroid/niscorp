@@ -408,8 +408,8 @@ is the anonymous principal. There is no `/fns` surface.
 
 `Hono<Env> & { socket: SocketAccept; shells?: ShellHost; principalOf; page; pages;
 refresh; replaceActions; verifyActions; actions; catalogOf; catalogForRoles;
-charterReport; invalidateIdentity; invalidateTenant; identity; executeAs;
-callIntegration; nudge; generation; close; identities? }`.
+policyForRoles; charterReport; invalidateIdentity; invalidateTenant; identity;
+executeAs; callIntegration; nudge; generation; close; identities? }`.
 It's a Hono app — mount it, extend it, or hand it to a listener.
 
 - `principalOf(token): Promise<string | null>` — the deployment's own session
@@ -461,6 +461,14 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
 - `catalogForRoles(roles, installed?): Catalog` — the same for a caller that
   already knows the roles. `installed` is the integration ids live for them;
   left out, every integration is live.
+- `policyForRoles(roles): ScopePolicy` — what a set of roles may read and
+  write: the vex policy a request by somebody holding exactly these roles is
+  served under, compiled from the charter and `behaviors` over every table the
+  database has. **One policy per role, merged** — a person may wear several (an
+  instructor who also trains here), and reach belongs to the role rather than
+  to the person; the merge is a union, broadest wins. For a check or a tool
+  that reads the rules (`policy.entities['bookings']`): nothing is queried, and
+  the answer is compiled for the asking, so it is the caller's own.
 - `charterReport(): VerifyReport` — the report `verifyCharter` gave this server:
   boot's, then that of each change that passed. `{ errors, warnings,
   perRole }`, over the universes boot resolved against. Boot and `refresh` read
