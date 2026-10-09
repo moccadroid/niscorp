@@ -20,7 +20,7 @@ import { createIdentity, memoKey, sessionRemainingMs, sessionVerifierOf } from '
 import { createDataLayer } from './data';
 import { tableSequencesOf } from './migrate';
 import { mintWrites } from './tide';
-import { memoKeyOf, resolveCatalogForRoles, resolvePolicyAtReachForRoles, resolvePolicyForRoles, resolveVariantsForRoles, verifyVariants, wearableOf } from './principal';
+import { resolvePolicyAtReachForRoles, resolvePolicyForRoles, resolveVariantsForRoles, verifyVariants, wearableOf } from './principal';
 import type { Catalog } from './principal';
 import type { LayoutNode } from '@niscorp/nova';
 import { chainCycles } from '@niscorp/nova/reflect';
@@ -34,6 +34,7 @@ import {
   integrationByKey,
   listIntegrations,
   loadIntegrationActions,
+  resolveCatalogForRoles,
   frameAdmits,
   reachAdmits,
   reachDeclares,

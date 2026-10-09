@@ -2,7 +2,6 @@ import { createScopePolicy, mergeScopePolicies } from '@niscorp/vex';
 import type { ScopePolicy } from '@niscorp/vex';
 import { resolvePrincipal, resolveScoping } from '@niscorp/charter';
 import type { LayoutNode } from '@niscorp/nova';
-import { filterInstalled } from './integrations';
 import { assignedRoles, memoKey } from './identity';
 import type { NiscApp } from './app';
 
@@ -20,7 +19,7 @@ export const resolveRoles = (app: NiscApp, principal: string | null): readonly s
 // derived form yields one entry per PERSON and every consumer wants one entry
 // per COMBINATION: at Lyra's scale that is 600k entries collapsing to about a
 // dozen, and it is the same dozen either way.
-export const wearableOf = (app: NiscApp): readonly (readonly string[])[] => {
+export const wearableOf = (app: Pick<NiscApp, 'wearable' | 'assignments'>): readonly (readonly string[])[] => {
   const declared = app.wearable;
   const source = declared ?? Object.values(app.assignments ?? {});
   const seen = new Map<string, readonly string[]>();
@@ -89,19 +88,31 @@ export const resolvePolicyAtReachForRoles = (
 
 export type Catalog = { ids: readonly string[]; hash: string };
 
-// The application, resolved for one principal — granted action ids plus
+// Of a list of granted action ids, the ones that are there for an install
+// list: an action an integration ships exists only where that integration is
+// installed. `undefined` is "every one is live". Handed in, because what an
+// integration is, and which action belongs to which, is not known here
+// (../integrations.ts, filterInstalled).
+export type InstalledOnly = (ids: readonly string[], installed: ReadonlySet<string> | undefined) => readonly string[];
+
+// The application, resolved for a set of roles — granted action ids plus
 // the version token (equal hash, equal application; pushed over the
 // socket as the catalog-change signal).
-// THE SAME RESOLUTIONS, given roles rather than a principal — for callers that
-// have already resolved who somebody is. The principal was only ever a way to
-// reach `roles` (and, for the catalog, the tenant's install list).
-export const resolveCatalogForRoles = (app: NiscApp, roles: readonly string[], installed: readonly string[] | undefined): Catalog => {
+// GIVEN ROLES rather than a principal — for callers that have already resolved
+// who somebody is. The principal was only ever a way to reach `roles` (and,
+// for the catalog, the tenant's install list).
+export const catalogFor = (
+  app: Pick<NiscApp, 'charter' | 'actions'>,
+  roles: readonly string[],
+  installed: readonly string[] | undefined,
+  installedOnly: InstalledOnly,
+): Catalog => {
   const granted = [...resolvePrincipal(app.charter, Object.keys(app.actions), roles, 'actions')].sort();
-  const ids = [...filterInstalled(granted, installed === undefined ? undefined : new Set(installed))];
+  const ids = [...installedOnly(granted, installed === undefined ? undefined : new Set(installed))];
   return { ids, hash: versionToken(ids) };
 };
 
-export const resolveVariantsForRoles = (app: NiscApp, roles: readonly string[]): ReadonlyMap<string, LayoutNode> => {
+export const resolveVariantsForRoles = (app: Pick<NiscApp, 'charter' | 'layouts'>, roles: readonly string[]): ReadonlyMap<string, LayoutNode> => {
   const variants = app.layouts ?? {};
   const granted = resolvePrincipal(app.charter, Object.keys(variants), roles, 'layouts');
   const bindings = new Map<string, LayoutNode>();
@@ -112,29 +123,22 @@ export const resolveVariantsForRoles = (app: NiscApp, roles: readonly string[]):
   return bindings;
 };
 
+// By the assignments alone there is no install list, so nothing is filtered.
 export const resolveCatalog = (app: NiscApp, principal: string | null): Catalog =>
-  resolveCatalogForRoles(app, resolveRoles(app, principal), undefined);
+  catalogFor(app, resolveRoles(app, principal), undefined, (ids) => ids);
 
 // The principal's layout bindings — action id → the granted variant's
 // layout (ring 2). Grants come from the charter's `layouts` section over
 // the variant-id universe. Two granted variants of one action is
 // incoherence `verifyVariants` refused at boot, so resolution never picks.
-export const resolveVariants = (app: NiscApp, principal: string | null): ReadonlyMap<string, LayoutNode> => {
-  const variants = app.layouts ?? {};
-  const granted = resolvePrincipal(app.charter, Object.keys(variants), resolveRoles(app, principal), 'layouts');
-  const bindings = new Map<string, LayoutNode>();
-  for (const id of granted) {
-    const variant = variants[id];
-    if (variant !== undefined) bindings.set(variant.action, variant.layout);
-  }
-  return bindings;
-};
+export const resolveVariants = (app: NiscApp, principal: string | null): ReadonlyMap<string, LayoutNode> =>
+  resolveVariantsForRoles(app, resolveRoles(app, principal));
 
 // The boot-time coherence gate for ring 2 (server.ts throws on anything
 // returned): every variant reshapes a shipped action, and no wearable
 // combination the documents describe — each role alone, each assignment's
 // union, the anonymous principal — resolves to two variants of one action.
-export const verifyVariants = (app: NiscApp): string[] => {
+export const verifyVariants = (app: Pick<NiscApp, 'charter' | 'actions' | 'layouts' | 'wearable' | 'assignments'>): string[] => {
   const variants = app.layouts ?? {};
   const ids = Object.keys(variants);
   if (ids.length === 0) return [];
