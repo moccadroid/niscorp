@@ -45,12 +45,12 @@ Input Config (JSON)
 ```typescript
 type EvalContext = {
   source: JsonValue;                   // Root source data (immutable)
-  vars: Record<string, JsonValue>;     // Scoped variables (immutable)
+  vars: Record<string, JsonValue>;     // Scoped variables (a loop writes to its own copy only)
   budget?: Budget;                     // What this evaluation may still cost (engine/budget.ts)
 };
 ```
 
-Context is never mutated. Every scope change (loop variable, `$with` binding) creates a new context via spread. This means ops are pure — same input always produces same output.
+The context an op is given is never written to. A `$with` binding makes a new context via spread. A loop (`$map`, `$filter`, `$reduce`, `$sortBy`, `$groupBy`, `$keyBy`) makes one context of its own for the whole loop and sets its variable in that for each item (`ops/scope.ts`): a new one per item was a fifth of the time of a map over 10,000 rows. Nothing keeps a scope past the evaluation of one body, so ops are still pure — same input always produces same output.
 
 ---
 
