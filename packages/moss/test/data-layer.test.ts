@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import { createMemoryCache } from '@niscorp/vex';
-import { createDataLayer } from '../src/data';
+import { createDataLayer } from '../src/data/engine';
 
 // The engine's settings reach the engine. Moss built it with none, so a
 // deployment ran on vex's defaults — 100 rows for a query that states no

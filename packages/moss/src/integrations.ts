@@ -548,7 +548,7 @@ export type IntakeContext = {
   regions?: ReadonlySet<string>;
   tools?: ReadonlySet<string>;
   checks?: ReadonlySet<string>;
-  // The host's grammars (see grammar.ts). With it, a bundle's actions are
+  // The host's grammars (see ./data, grammar.ts). With it, a bundle's actions are
   // upgraded from the bundle's `grammar` stamp BEFORE they are parsed — an
   // action in an older grammar would fail today's strict schema otherwise.
   upgrader?: Upgrader;
@@ -1244,7 +1244,7 @@ export const MOSS_SEQUENCE: Sequence = {
 // The rows that hold documents: every integration action's definition is a
 // nova action, stamped with the grammars it was written in (`{}` — a row from
 // before stamps — reads as the start of every grammar). Brought current at boot
-// by strata's upgradeStore; see grammar.ts.
+// by strata's upgradeStore; see ./data, grammar.ts.
 export const INTEGRATION_ACTIONS_STORE: DocumentStore = {
   table: 'integration_actions',
   column: 'definition',

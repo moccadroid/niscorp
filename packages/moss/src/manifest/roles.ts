@@ -8,7 +8,7 @@ import type { NiscApp } from './app';
 // action ids a set of roles is granted (with the resolved set's version
 // token) and the layout variant it holds of each. Pure, every one; who
 // somebody is belongs to ../identity, and what they may read and write to
-// the policy functions (../principal.ts).
+// the policy functions (../data).
 // ═══════════════════════════════════════════════════════════════
 
 // The role combinations this application can produce — declared if the app says

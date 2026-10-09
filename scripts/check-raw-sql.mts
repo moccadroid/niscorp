@@ -121,7 +121,7 @@ const LEDGER: Readonly<Record<string, Readonly<Record<string, Entry>>>> = {
     'server.ts': { doors: 18, statements: 18, tables: 0, why: 'debt', note: 'the operator routes, the frame routes, the webhook and the proxy read and write the integration tables' },
     'manifest/generation.ts': { doors: 3, statements: 4, tables: 1, why: 'debt', note: 'the generation counter' },
     'tide.ts': { doors: 7, statements: 6, tables: 3, why: 'store', note: "tide's Postgres store; it belongs with tide" },
-    'migrate.ts': { doors: 1, statements: 0, tables: 0, why: 'tables', note: "hands the migration's own transaction to vex's adapter to read the schema" },
+    'data/migrate.ts': { doors: 1, statements: 0, tables: 0, why: 'tables', note: "hands the migration's own transaction to vex's adapter to read the schema" },
   },
 };
 

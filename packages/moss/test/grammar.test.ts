@@ -4,7 +4,7 @@ import { createPglitePool } from '@niscorp/vex/pglite';
 import type { Sequence } from '@niscorp/strata';
 import { createServer } from '../src/server';
 import { runIntake, type IntakeContext } from '../src/integrations';
-import { createGrammarUpgrader } from '../src/grammar';
+import { createGrammarUpgrader } from '../src/data/grammar';
 
 // ═══════════════════════════════════════════════════════════════
 // Documents in the grammar this code speaks — with a REAL migration: a Prism

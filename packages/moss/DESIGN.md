@@ -387,7 +387,7 @@ committed write to a table the query reads, it refetches (once for everybody
 who would get the same rows) and calls back with the caller's new answer if it
 changed (vex DESIGN.md, "Reactive reads").
 
-The wire is the whole seam (`src/follow.ts`). Toward vex it is a `VexLive` — a
+The wire is the whole seam (`src/data/follow.ts`). Toward vex it is a `VexLive` — a
 signal and a callback, carried in the in-process request's hono env, where no
 network request can put one. Toward nova it is the response's `onChange`, which
 nova applies through the endpoint's own `response` and `target`; the shell

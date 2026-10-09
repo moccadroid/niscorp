@@ -6,7 +6,7 @@ import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Sequence } from '@niscorp/strata';
 import { defineApp } from '../src/manifest';
 import { createServer } from '../src/server';
-import { migrateTables } from '../src/migrate';
+import { migrateTables } from '../src/data/migrate';
 import type { NiscRuntime } from '../src/runtime';
 
 // THE STEP, AND WHAT IT REFUSES. An app with one table, in the shapes a few

@@ -4,7 +4,7 @@ import { createPglitePool } from '@niscorp/vex/pglite';
 import type { PgPool } from '@niscorp/vex';
 import { STORE_CONTRACT } from '@niscorp/tide/testing';
 import { createTideStore, TIDE_TABLES } from '../src/tide';
-import { createDataLayer } from '../src/data';
+import { createDataLayer } from '../src/data/engine';
 
 // THE SAME CHECKS THE MEMORY STORE RUNS, against a real database.
 //

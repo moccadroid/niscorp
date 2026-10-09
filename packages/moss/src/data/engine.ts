@@ -1,6 +1,6 @@
 import { createPostgresAdapter, createPostgresCache, createQueryEngine, scopeGrants, seedCache } from '@niscorp/vex';
 import type { QueryEngine, DatabaseSchema, SeedEntry, SeedMutation } from '@niscorp/vex';
-import type { NiscRuntime } from './runtime';
+import type { NiscRuntime } from '../runtime';
 
 // ═══════════════════════════════════════════════════════════════
 // The data layer stands up from what's present (DESIGN.md § Derivation

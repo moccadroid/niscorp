@@ -1,4 +1,4 @@
-// THE MEMO KEY every per-principal resolution (../manifest, ../principal.ts) actually
+// THE MEMO KEY every per-principal resolution (../manifest, ../data) actually
 // depends on.
 //
 // `resolvePolicy`, `resolveVariants` and `resolvePolicyAtReach` read the

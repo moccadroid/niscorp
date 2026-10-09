@@ -1,8 +1,8 @@
 import { createScopePolicy, mergeScopePolicies } from '@niscorp/vex';
 import type { ScopePolicy } from '@niscorp/vex';
 import { resolvePrincipal, resolveScoping } from '@niscorp/charter';
-import { assignedRoles, memoKey } from './identity';
-import type { NiscApp } from './manifest';
+import { assignedRoles, memoKey } from '../identity';
+import type { NiscApp } from '../manifest';
 
 // ═══════════════════════════════════════════════════════════════
 // Per-principal resolution, the policy half: roles from the assignment

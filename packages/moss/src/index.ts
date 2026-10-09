@@ -2,8 +2,7 @@
 //
 //   manifest/     — the manifest: the application as authored artifacts, and what a set of roles holds of it
 //   runtime/      — the environment: database, cache, session
-//   data.ts       — the data layer, stood up from what's present
-//   principal.ts  — per-principal resolution: roles, policy
+//   data/         — what somebody may read and write: the engine, the policy for a set of roles, the tables
 //   shells.ts     — the shell host: durable per-principal server shells
 //   socket.ts     — the authority channel: envelope + protocol (transport-blind)
 //   server.ts     — boot refusal + the HTTP surfaces + the socket accept
@@ -20,7 +19,7 @@ export { MOSS_SEQUENCE, integrationOfAction, integrationByKey, listAttachments, 
 export type { StorePress } from './manifest';
 export type { CallIntegration } from './integrations';
 export { createAssertionSigner } from './assert';
-export { resolveRoles, resolvePolicy, resolvePolicyForRoles, memoKeyOf } from './principal';
+export { resolveRoles, resolvePolicy, resolvePolicyForRoles, memoKeyOf } from './data';
 export { resolveVariants, verifyApp } from './manifest';
 export type { ManifestReport } from './manifest';
 export { createTideStore, TIDE_DDL, TIDE_SEQUENCE, TIDE_TABLES } from './tide';
@@ -35,5 +34,5 @@ export type { DocumentConfig, DrawnDocument, ExportedDocument } from './document
 export { createPageRouter } from './pages';
 export type { Connection } from './socket';
 export type { ServerMessage } from './protocol';
-export { migrateTables } from './migrate';
-export type { TablesReport } from './migrate';
+export { migrateTables } from './data';
+export type { TablesReport } from './data';

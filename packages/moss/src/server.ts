@@ -2,10 +2,8 @@ import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Hono } from 'hono';
 import { vex, VEX_LIVE_ENV } from '@niscorp/vex/hono';
-import { createWireFollower } from './follow';
 import { handleQuery } from '@niscorp/vex';
 import { migrate, upgradeStore } from '@niscorp/strata/postgres';
-import { createGrammarUpgrader } from './grammar';
 import type { ScopePolicy, WriteEvent, ExecuteRecord } from '@niscorp/vex';
 import { emitterOf } from './runtime';
 import type { TelemetrySpan } from './runtime';
@@ -15,10 +13,8 @@ import { createRunningManifest, receiveManifest, refusalOf } from './manifest';
 import type { Catalog, ManifestReport, NiscApp } from './manifest';
 import type { NiscRuntime } from './runtime';
 import { createIdentity, sessionRemainingMs, sessionVerifierOf } from './identity';
-import { createDataLayer } from './data';
-import { tableSequencesOf } from './migrate';
+import { createDataLayer, createGrammarUpgrader, createWireFollower, resolvePolicyAtReachForRoles, resolvePolicyForRoles, tableSequencesOf } from './data';
 import { mintWrites } from './tide';
-import { resolvePolicyAtReachForRoles, resolvePolicyForRoles } from './principal';
 import type { ActionDefinition } from '@niscorp/nova';
 import {
   buildContract,
@@ -62,8 +58,8 @@ import type { ShellHost } from './shells';
 //
 // The app hands over its ARTIFACTS (manifest/app.ts) and an environment
 // (runtime/); everything mechanical is derived — the data layer
-// (data.ts), what the app consists of right now and what each set of roles
-// holds of it (manifest/), the policies (principal.ts) — and the server
+// (data/), what the app consists of right now and what each set of roles
+// holds of it (manifest/), the policies (data/) — and the server
 // refuses to boot incoherent (DESIGN.md § Derivation over configuration:
 // coherence is refused, not documented).
 // ═══════════════════════════════════════════════════════════════
@@ -285,7 +281,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // its sequence already applied.
   await migrate(runtime.pool, tableSequencesOf(runtime), { mode: runtime.migrations ?? 'apply' });
   // THE DOCUMENTS IN THOSE TABLES, brought to this code's grammars — nova's,
-  // Prism's and the app's own (grammar.ts). Rows carry the stamp they were
+  // Prism's and the app's own (./data). Rows carry the stamp they were
   // written at; what they have not seen runs now, once, and they are written
   // back current. A row written by newer code refuses the boot, as a ledger
   // written by newer code does.
@@ -1231,7 +1227,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
           const isVex = url.split('?')[0]?.endsWith('/vex') === true;
           // A vex read made for a caller that can be told when to stop — a
           // nova endpoint passes its instance's signal — may keep answering
-          // (`refresh: 'reactive'`; see ./follow.ts). The follower rides the
+          // (`refresh: 'reactive'`; see ./data, follow.ts). The follower rides the
           // in-process request's env, where no network request can put one.
           const follower = isVex && init?.signal !== undefined ? createWireFollower(init.signal) : undefined;
           const res = await server.request(
