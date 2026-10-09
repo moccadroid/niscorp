@@ -70,7 +70,7 @@ export const attachSocket = (
     if (new URL(url, 'http://nisc.local').pathname !== path) return;
     // THE REQUEST IS ANSWERED ONCE MOSS HAS DECIDED WHO IS ASKING, because the
     // answer is the one thing that can write a browser's session cookie
-    // (session-cookie.ts). Until then the raw socket is nobody's to listen to,
+    // (identity/session-cookie.ts). Until then the raw socket is nobody's to listen to,
     // and a peer that resets it would be an 'error' thrown out of Node — the
     // whole process. Heard here, it is that request's alone.
     socket.on('error', () => {});

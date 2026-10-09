@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
-import { initSessions, sessionOf } from '../src/sessions';
+import { initSessions, sessionOf } from '../src/identity';
 import { initIntegrations, integrationByKey } from '../src/integrations';
 
 // GOLDEN: credentials already in somebody's database.

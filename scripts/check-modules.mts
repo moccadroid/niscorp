@@ -46,6 +46,7 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
   moss: {
     modules: {
       protocol: [],
+      identity: ['protocol'],
       client: ['protocol'],
       terminal: ['client'],
     },
@@ -60,7 +61,6 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       'follow.ts',
       'generation.ts',
       'grammar.ts',
-      'identity.ts',
       'integrations.ts',
       'liveness.ts',
       'migrate.ts',
@@ -69,8 +69,6 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       'principal.ts',
       'runtime.ts',
       'server.ts',
-      'session-cookie.ts',
-      'sessions.ts',
       'shells.ts',
       'socket.ts',
       'telemetry.ts',

@@ -6,7 +6,7 @@ import type { Sequence } from '@niscorp/strata';
 import type { NiscApp } from './app';
 import type { NiscRuntime } from './runtime';
 import { MOSS_SEQUENCE } from './integrations';
-import { SESSIONS_SEQUENCE } from './sessions';
+import { SESSIONS_SEQUENCE } from './identity';
 
 // ═══════════════════════════════════════════════════════════════
 // THE STEP THAT CHANGES TABLES — one strata run over every owner's sequence,

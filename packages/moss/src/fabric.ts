@@ -36,7 +36,7 @@
 // channel to wake, and that shell re-reads under its own policy, exactly as an
 // in-process reaction's `deliver` does. Per-principal, not per-tenant,
 // deliberately: `deliver` is per-principal, and a by-tenant fan-out would need
-// a readable tag→principals index the identity cache refuses to be (identity.ts
+// a readable tag→principals index the identity cache refuses to be (identity/cache.ts
 // "no by-tenant lookup"). A shell lives in one process, so a nudge for a
 // principal resident elsewhere is a no-op here and lands there.
 export type FabricSignal =

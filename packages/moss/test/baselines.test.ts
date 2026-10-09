@@ -4,7 +4,7 @@ import { createPglitePool } from '@niscorp/vex/pglite';
 import { checksumOf, type Sequence } from '@niscorp/strata';
 import { readLedger } from '@niscorp/strata/postgres';
 import { MOSS_SEQUENCE } from '../src/integrations';
-import { SESSIONS_SEQUENCE } from '../src/sessions';
+import { SESSIONS_SEQUENCE } from '../src/identity';
 import { TIDE_SEQUENCE } from '../src/tide';
 import { createServer } from '../src/server';
 

@@ -6,7 +6,7 @@ import type { ClientMessage, ServerMessage } from './protocol';
 import type { ShellHost } from './shells';
 import { emitterOf, spanClock } from './telemetry';
 import type { Telemetry } from './telemetry';
-import { isOwnOrigin, newSeal, openSealed, sealCookie, sealOf, sealSession, sessionCookies, sessionTokenOf } from './session-cookie';
+import { isOwnOrigin, newSeal, openSealed, sealCookie, sealOf, sealSession, sessionCookies, sessionTokenOf } from './identity';
 
 // ═══════════════════════════════════════════════════════════════
 // The socket — the authority channel (DESIGN.md § The socket), protocol layer.
@@ -42,7 +42,7 @@ export type Connection = {
   onClose: (fn: () => void) => void;
   // The upgrade request, as far as it says who is asking: the subprotocols it
   // offered (`Sec-WebSocket-Protocol`, split), and — for a browser's session
-  // (session-cookie.ts) — where the page is, where the request was addressed,
+  // (identity/session-cookie.ts) — where the page is, where the request was addressed,
   // and the cookies it carried. A transport that leaves this out serves every
   // terminal as nobody.
   //
@@ -61,7 +61,7 @@ export type Connection = {
     answer?: (cookies: readonly string[]) => void;
   };
   // Set here, not by a transport: how this connection's terminal is handed a
-  // session when its browser holds a seal (session-cookie.ts) — sealed, so the
+  // session when its browser holds a seal (identity/seal.ts) — sealed, so the
   // page carries it to the next upgrade and cannot open it. Absent, a session
   // is handed over as its token.
   seal?: (token: string) => Promise<string>;
@@ -240,7 +240,7 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
     }
     const upgrade = connection.upgrade;
     // THE APP'S OWN PAGE does not hold its session: its browser does, in a
-    // cookie the page cannot read (session-cookie.ts), and sent it with this
+    // cookie the page cannot read (identity/session-cookie.ts), and sent it with this
     // request. From any other origin the cookie is not looked at — a browser
     // sends it with a stranger's page all the same. `key` is which of the
     // browser's sessions this terminal is (a seat); a name, not a secret.

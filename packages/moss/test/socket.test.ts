@@ -5,7 +5,7 @@ import type { Connection, SocketContext } from '../src/socket';
 import { CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, CLOSE_SHELL_FAILED, CLOSE_PROTOCOL_MISMATCH, PROTOCOL, PROTOCOL_MIN, ServerMessageSchema, offerToken } from '../src/protocol';
 import type { ServerMessage } from '../src/protocol';
 import type { ShellHost, ShellSession } from '../src/shells';
-import { sealSession } from '../src/session-cookie';
+import { sealSession } from '../src/identity';
 
 // A fake transport — the four-function Connection seam, capturing everything
 // so the protocol can be driven headlessly (no websocket).

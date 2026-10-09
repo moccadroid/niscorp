@@ -1,5 +1,4 @@
 import type { Context, Next } from 'hono';
-import { z } from 'zod';
 import type { MutationClient, PgPool, CacheBackend, QueryEngineConfig } from '@niscorp/vex';
 import type { Sequence } from '@niscorp/strata';
 import type { Telemetry } from './telemetry';
@@ -31,16 +30,16 @@ export type NiscRuntime = {
   // WHO A TOKEN IS. Required, deliberately — every other door in moss fails
   // closed, and this is the one where forgetting a field used to open it for
   // everyone. Three answers:
-  //   'sessions' — moss's own stored credential (sessions.ts): 256-bit token,
+  //   'sessions' — moss's own stored credential (identity/sessions.ts): 256-bit token,
   //                hashed at rest, expiring, revoked by deleting its row.
-  //   'dev-open' — the dev stub below: every well-formed token is trusted and
+  //   'dev-open' — the dev stub (identity/dev-token.ts): every well-formed token is trusted and
   //                the boot says so out loud. Harnesses and demo floors.
   //   a function — the app's own identity provider.
   session: SessionVerifier | 'sessions' | 'dev-open';
   // The origins that are this app's own page, beside the host a request is
   // addressed to — for a proxy that rewrites `Host`. A browser's session
   // cookie is read and written for the app's own page only
-  // (session-cookie.ts).
+  // (identity/session-cookie.ts).
   origins?: readonly string[];
   // The tables moss, vex and a chosen credential own go through ONE ledgered
   // run at boot (strata), before introspection. 'apply' (default): run what is
@@ -167,29 +166,4 @@ export type NiscRuntime = {
   // half stable, so a separate service's environment stays valid across
   // restarts. A deployment leaves this unset and keeps the ephemeral key.
   signingSeed?: string;
-};
-
-// The dev token pair — mint on the client stub, verify on the server;
-// base64url JSON, `sub` is the principal. No signature, no expiry: anybody
-// who can spell a principal's id can be them. Reachable ONLY through
-// `session: 'dev-open'`, which announces itself at boot — this used to be
-// the silent default, and one app ran production on it for its whole life
-// before a review noticed. Real credentials live in sessions.ts.
-export const mintDevToken = (sub: string, claims: Record<string, unknown> = {}): string =>
-  btoa(JSON.stringify({ sub, ...claims, iat: Date.now() }))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-
-// What a dev token is read for: its `sub`. Whatever else was minted into it
-// rides along unread.
-const DevTokenSchema = z.object({ sub: z.string() });
-
-export const devSession = (token: string): string | null => {
-  try {
-    const parsed = DevTokenSchema.safeParse(JSON.parse(atob(token.replace(/-/g, '+').replace(/_/g, '/'))));
-    return parsed.success ? parsed.data.sub : null;
-  } catch {
-    return null;
-  }
 };

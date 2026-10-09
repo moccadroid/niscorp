@@ -4,7 +4,7 @@ import type { ShellSnapshot } from './shells';
 import type { MossServer } from './server';
 import { DEFAULT_TOKEN_KEY, SNAPSHOT_ELEMENT_ID } from './protocol';
 import type { DocumentSnapshot } from './protocol';
-import { sessionTokenOf, tokenFromCookie } from './session-cookie';
+import { sessionTokenOf, tokenFromCookie } from './identity';
 
 // ═══════════════════════════════════════════════════════════════
 // The document — what a page request is answered with when the server draws
@@ -72,7 +72,7 @@ export type DocumentConfig = {
   // the screen goes.
   template: string;
   // What the request named and carried. `host` is its `Host` header: the
-  // session cookie's name ends with the port a page is on (session-cookie.ts),
+  // session cookie's name ends with the port a page is on (identity/session-cookie.ts),
   // so without it a page on a port is drawn for nobody.
   request: { path: string; cookie?: string | null; host?: string | null };
   // A terminal that draws to a string: the app's kit, bound to one of moss's
@@ -121,7 +121,7 @@ export const renderDocument = async (config: DocumentConfig): Promise<DrawnDocum
   if (!template.includes(root)) return undrawn;
 
   try {
-    // The session the browser holds (session-cookie.ts). A page request does
+    // The session the browser holds (identity/session-cookie.ts). A page request does
     // not say how it arrived, so the name only this host can have set is read
     // before the plain one. Its name ends with the port the page is on: the
     // one the request was addressed to, and — behind a proxy that rewrote

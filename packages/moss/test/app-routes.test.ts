@@ -3,7 +3,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import { defineApp } from '../src/app';
 import { createServer } from '../src/server';
-import { mintDevToken } from '../src/runtime';
+import { mintDevToken } from '../src/identity';
 
 // ═══════════════════════════════════════════════════════════════
 // A ROUTE THE APP ADDS KNOWS WHO IS ASKING. The server is a hono app, and an

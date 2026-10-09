@@ -10,10 +10,10 @@
 //   node.ts       — the Node listener + ws transport (./node subpath; Bun swaps this, never the app)
 export { defineApp } from './app';
 export type { NiscApp, ShellManifest, PageManifest, FunctionSession, LayoutVariant, RunRecord, RunTurn, RunSink } from './app';
-export { devSession, mintDevToken } from './runtime';
+export { devSession, mintDevToken } from './identity';
 export type { NiscRuntime } from './runtime';
 export type { Telemetry, TelemetrySpan } from './telemetry';
-export { initSessions, mintSession, sessionOf, revokeAllFor } from './sessions';
+export { initSessions, mintSession, sessionOf, revokeAllFor } from './identity';
 export { createServer } from './server';
 export type { MossServer, ExecuteAs } from './server';
 export { MOSS_SEQUENCE, integrationOfAction, integrationByKey, listAttachments, listPlacements } from './integrations';
@@ -28,7 +28,7 @@ export { CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, PROTOCOL, offerToken } from './p
 export type { IdentityRecord } from './identity';
 export type { ShellHost, ShellSnapshot } from './shells';
 export { tokenFromCookie, embedSnapshot, documentHeaders, renderDocument, exportDocuments } from './document';
-export { sessionCookies } from './session-cookie';
+export { sessionCookies } from './identity';
 export type { DocumentConfig, DrawnDocument, ExportedDocument } from './document';
 export { createPageRouter } from './pages';
 export type { Connection } from './socket';

@@ -34,37 +34,7 @@
 //     a tenant is and the boundary this whole design rests on is gone.
 // ═══════════════════════════════════════════════════════════════
 
-// What an application says a principal IS. Opaque: `roles` goes to charter,
-// `installed` is filtered against, `scope` is merged into vex's scope values
-// without moss ever looking inside it.
-export type IdentityRecord = {
-  // The rungs this principal wears. Charter compiles a policy from them.
-  roles: readonly string[];
-  // Everything else a principal is — a tenant, a region, a locale. Merged into
-  // the engine's scope values server-side and unforgeable by a request.
-  scope: Record<string, unknown>;
-  // Integration ids live for this principal's tenant. `undefined` means every
-  // registered integration is live, which is right for a single-tenant app and
-  // wrong the moment there are two.
-  installed?: readonly string[];
-  // WHAT THIS PRINCIPAL SHARES A FATE WITH — an opaque string the application
-  // chooses, and the only reason moss keeps a second map.
-  //
-  // This is NOT the secondary index invariant 2 bans, and the difference is the
-  // whole justification: `BY_EMAIL` was a way to FIND somebody, and a way to
-  // find somebody is a query planner. This supports exactly one operation —
-  // FORGET everyone wearing this tag — and no operation that returns a record.
-  // You cannot read anything through it, which is what invariant 1 is actually
-  // protecting.
-  //
-  // It exists because "a tenant-local write invalidates that tenant, not the
-  // deployment" is otherwise unachievable: dropping one tenant's records means
-  // naming them, and naming them without enumerating the population needs the
-  // application to have said, at resolve time, which ones go together. Moss
-  // never interprets the string — it is a tenant id here, and it could be an
-  // org, a region, or nothing at all.
-  tag?: string;
-};
+import type { IdentityRecord } from './record';
 
 // One resident identity, as an operator needs to see it: structural facts only.
 // Naming the principal is the application's job, and what the record CONTAINS
@@ -137,28 +107,27 @@ export const DEFAULT_IDENTITY_IDLE_MS = 30 * 60 * 1000;
 // closely and a long one doesn't cost a wakeup per minute.
 const SWEEP_EVERY_MS = 60 * 1000;
 
-export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache => {
-  const max = ctx.max ?? DEFAULT_IDENTITY_MAX;
-  const idleMs = ctx.idleMs ?? DEFAULT_IDENTITY_IDLE_MS;
-  const revalidateMs = ctx.revalidateMs ?? 0;
-  const now = ctx.now ?? Date.now;
+type Held = {
+  record: IdentityRecord;
+  since: number;
+  lastSeen: number;
+};
 
-  type Held = {
-    record: IdentityRecord;
-    since: number;
-    lastSeen: number;
-  };
-
+// WHAT IS HELD: the records, and which principals wear which tag. Apart from
+// the reading and re-resolving below, so that each is one thing.
+const createHeldRecords = (max: number) => {
   // Insertion order IS the eviction order, and a Map preserves it — so
   // "least recently read" is maintained by deleting and re-setting on every
   // read rather than by a second structure that could disagree with this one.
   const held = new Map<string, Held>();
 
   // tag -> the principals wearing it. Maintained beside `held` and never read
-  // out of: `invalidateTag` deletes through it and nothing else touches it.
+  // out of: `forgetTag` deletes through it and nothing else touches it.
   // Kept honest by pruning on every removal, so a tag whose last principal was
   // evicted does not linger as an empty set.
   const tagged = new Map<string, Set<string>>();
+
+  let evicted = 0;
 
   const untag = (principal: string, record: IdentityRecord): void => {
     const tag = record.tag;
@@ -176,16 +145,6 @@ export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache =>
     held.delete(principal);
     return true;
   };
-
-  // IN FLIGHT, so that a burst of requests for one principal at login resolves
-  // ONCE. Without this the first request's latency is paid by every request
-  // that arrives while it is outstanding, which is precisely the moment a
-  // browser opens six connections at once.
-  const pending = new Map<string, Promise<IdentityRecord>>();
-
-  let resolved = 0;
-  let evicted = 0;
-  let expired = 0;
 
   const evictOldest = (): void => {
     const oldest = held.keys().next();
@@ -207,16 +166,64 @@ export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache =>
     }
   };
 
+  return {
+    of: (principal: string): Held | undefined => held.get(principal),
+    // Re-set to move it to the young end of the eviction order.
+    seen: (principal: string, entry: Held, at: number): void => {
+      held.delete(principal);
+      entry.lastSeen = at;
+      held.set(principal, entry);
+    },
+    forget,
+    remember,
+    forgetAll: (): void => {
+      held.clear();
+      tagged.clear();
+    },
+    forgetTag: (tag: string): string[] => {
+      // Copied before iterating: `forget` mutates the set this is walking.
+      const principals = [...(tagged.get(tag) ?? [])];
+      for (const principal of principals) forget(principal);
+      return principals;
+    },
+    forgetIdle: (at: number, idleMs: number): void => {
+      for (const [principal, entry] of [...held]) {
+        if (at - entry.lastSeen >= idleMs) {
+          forget(principal);
+          evicted += 1;
+        }
+      }
+    },
+    list: (): IdentityReport[] => [...held].map(([principal, entry]) => ({ principal, since: entry.since, lastSeen: entry.lastSeen })),
+    size: (): number => held.size,
+    evicted: (): number => evicted,
+  };
+};
+
+export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache => {
+  const max = ctx.max ?? DEFAULT_IDENTITY_MAX;
+  const idleMs = ctx.idleMs ?? DEFAULT_IDENTITY_IDLE_MS;
+  const revalidateMs = ctx.revalidateMs ?? 0;
+  const now = ctx.now ?? Date.now;
+
+  const held = createHeldRecords(max);
+
+  // IN FLIGHT, so that a burst of requests for one principal at login resolves
+  // ONCE. Without this the first request's latency is paid by every request
+  // that arrives while it is outstanding, which is precisely the moment a
+  // browser opens six connections at once.
+  const pending = new Map<string, Promise<IdentityRecord>>();
+
+  let resolved = 0;
+  let expired = 0;
+
   const get = async (principal: string): Promise<IdentityRecord> => {
     const at = now();
-    const hit = held.get(principal);
+    const hit = held.of(principal);
     if (hit !== undefined) {
       const stale = revalidateMs > 0 && at - hit.since >= revalidateMs;
       if (!stale) {
-        // Re-set to move it to the young end of the eviction order.
-        held.delete(principal);
-        hit.lastSeen = at;
-        held.set(principal, hit);
+        held.seen(principal, hit, at);
         return hit.record;
       }
       expired += 1;
@@ -229,7 +236,7 @@ export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache =>
       .resolve(principal)
       .then((record) => {
         resolved += 1;
-        remember(principal, record, now());
+        held.remember(principal, record, now());
         return record;
       })
       .finally(() => {
@@ -241,41 +248,26 @@ export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache =>
 
   // The idle sweep. Unref'd: a warm cache with no reader must not be the reason
   // a process refuses to exit.
-  const sweep = idleMs > 0 ? setInterval(() => {
-    const at = now();
-    for (const [principal, entry] of [...held]) {
-      if (at - entry.lastSeen >= idleMs) {
-        forget(principal);
-        evicted += 1;
-      }
-    }
-  }, Math.min(SWEEP_EVERY_MS, idleMs)) : undefined;
+  const sweep = idleMs > 0 ? setInterval(() => held.forgetIdle(now(), idleMs), Math.min(SWEEP_EVERY_MS, idleMs)) : undefined;
   sweep?.unref?.();
 
   return {
     get,
     invalidate: (principal) => {
       pending.delete(principal);
-      return forget(principal);
+      return held.forget(principal);
     },
     invalidateAll: () => {
-      held.clear();
-      tagged.clear();
+      held.forgetAll();
       pending.clear();
     },
     invalidateTag: (tag) => {
-      const group = tagged.get(tag);
-      if (group === undefined) return [];
-      // Copied before iterating: `forget` mutates the set this is walking.
-      const principals = [...group];
-      for (const principal of principals) {
-        pending.delete(principal);
-        forget(principal);
-      }
+      const principals = held.forgetTag(tag);
+      for (const principal of principals) pending.delete(principal);
       return principals;
     },
-    list: () => [...held].map(([principal, entry]) => ({ principal, since: entry.since, lastSeen: entry.lastSeen })),
-    meter: () => ({ size: held.size, max, resolved, evicted, expired }),
+    list: held.list,
+    meter: () => ({ size: held.size(), max, resolved, evicted: held.evicted(), expired }),
     stop: () => {
       if (sweep !== undefined) clearInterval(sweep);
     },

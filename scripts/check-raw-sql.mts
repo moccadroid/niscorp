@@ -116,7 +116,7 @@ type Entry = Found & { why: 'credential' | 'store' | 'debt' | 'tables'; note: st
 
 const LEDGER: Readonly<Record<string, Readonly<Record<string, Entry>>>> = {
   moss: {
-    'sessions.ts': { doors: 6, statements: 6, tables: 1, why: 'credential', note: 'the session credential: a token hash is looked up before anybody is signed in' },
+    'identity/sessions.ts': { doors: 6, statements: 6, tables: 1, why: 'credential', note: 'the session credential: a token hash is looked up before anybody is signed in' },
     'integrations.ts': { doors: 6, statements: 6, tables: 15, why: 'debt', note: 'five reads of the integration tables; the sixth, the key-hash lookup, is a credential and stays' },
     'server.ts': { doors: 18, statements: 18, tables: 0, why: 'debt', note: 'the operator routes, the frame routes, the webhook and the proxy read and write the integration tables' },
     'generation.ts': { doors: 3, statements: 4, tables: 1, why: 'debt', note: 'the generation counter' },

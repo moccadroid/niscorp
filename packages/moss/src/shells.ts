@@ -13,7 +13,7 @@ import type { Catalog } from './principal';
 import type { Connection } from './socket';
 import { CLOSE_SIGNED_OUT, encodeDelta, frameHash } from './protocol';
 import type { ServerMessage } from './protocol';
-import { revokeAllFor } from './sessions';
+import { revokeAllFor } from './identity';
 
 // ═══════════════════════════════════════════════════════════════
 // The shell host (DESIGN.md § The shell runs on the server): the shell

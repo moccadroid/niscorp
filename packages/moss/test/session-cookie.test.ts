@@ -10,7 +10,7 @@ import { attachSocket } from '../src/node';
 import { createShellHost } from '../src/shells';
 import type { ShellHostContext } from '../src/shells';
 import { renderDocument } from '../src/document';
-import { isOwnOrigin, openSealed, sealSession, sessionCookies } from '../src/session-cookie';
+import { isOwnOrigin, openSealed, sealSession, sessionCookies } from '../src/identity';
 import { createSocket } from '../src/socket';
 import { offerToken, PROTOCOL } from '../src/protocol';
 import { browserEnv, createWire } from '../src/client';

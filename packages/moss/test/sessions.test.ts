@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
-import { initSessions, mintSession, sessionOf, sessionRemainingMs, revokeSession, revokeAllFor, sessionVerifierOf } from '../src/sessions';
-import { mintDevToken } from '../src/runtime';
+import { initSessions, mintSession, sessionOf, sessionRemainingMs, revokeSession, revokeAllFor } from '../src/identity/sessions';
+import { sessionVerifierOf } from '../src/identity/verifier';
+import { mintDevToken } from '../src/identity';
 import { createShellHost } from '../src/shells';
 import type { ShellHostContext } from '../src/shells';
 import type { FunctionSession, NiscApp } from '../src/app';

@@ -1,6 +1,6 @@
 // What a browser's session goes by. The server writes the cookies and a page
 // reads the one it may see, so both have to arrive at the same name
-// (../session-cookie.ts says what the cookies are for).
+// (../identity/session-cookie.ts says what the cookies are for).
 
 export const DEFAULT_TOKEN_KEY = 'nisc.token';
 

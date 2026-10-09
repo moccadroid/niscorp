@@ -40,7 +40,7 @@ export type WireTokenStore = {
   save: (token: string) => void;
   clear: () => void;
   // A host whose BROWSER may keep the session itself, in a cookie the page
-  // cannot read (../session-cookie.ts): whether it does, right now. Asked
+  // cannot read (../identity/session-cookie.ts): whether it does, right now. Asked
   // after an upgrade is answered — if it does, the wire lets go of the token
   // it offered and nothing is stored; if not, the token is stored as ever. A
   // host without this (a process) always keeps its own.
@@ -192,7 +192,7 @@ const rebuiltFrame = (base: string, ops: readonly DeltaOp[], hash: number): { te
 //
 // SERVED BY THE APP IT TALKS TO, the page does not keep it: the browser does,
 // in a cookie the page cannot read, which the server writes in its answer to
-// the upgrade (../session-cookie.ts). `held` is all the page sees of it. A
+// the upgrade (../identity/session-cookie.ts). `held` is all the page sees of it. A
 // token this page is handed is offered once and let go of; nothing is stored.
 //
 // ANYWHERE ELSE — another origin, a browser that refuses cookies — the token

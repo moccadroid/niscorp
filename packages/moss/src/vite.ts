@@ -5,7 +5,7 @@ import { getRequestListener } from '@hono/node-server';
 import { renderDocument } from './document';
 import type { DocumentConfig } from './document';
 import { attachSocket, MOSS_PATHS } from './node';
-import { sessionCookies } from './session-cookie';
+import { sessionCookies } from './identity';
 import type { MossServer } from './server';
 
 // ═══════════════════════════════════════════════════════════════
@@ -43,7 +43,7 @@ export type DevApp = {
   site?: DocumentConfig['site'];
   tokenKey?: string;
   // A dev-only signed-in URL: `/dev/as/<who>` puts the token this returns in
-  // the browser's own session cookie (session-cookie.ts) — as a sign-in the
+  // the browser's own session cookie (identity/session-cookie.ts) — as a sign-in the
   // app answers over HTTP would — and goes to `/`. `null` is nobody of that
   // name. It lives in vite's middleware and nowhere else, so it cannot ship.
   signIn?: (who: string) => string | null | Promise<string | null>;

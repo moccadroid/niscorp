@@ -97,7 +97,7 @@ export type NiscApp = {
   // question asked in a tense that permits the obvious answer — read the row.
   //
   // Moss OWNS the resulting cache: bounded, evicted, revalidated on
-  // `sessionRevalidateMs`, and enumerable only by an operator (see identity.ts,
+  // `sessionRevalidateMs`, and enumerable only by an operator (see identity/cache.ts,
   // and the invariants in docs/plans/lyra-identity.md Part 6). What it will
   // never do is look inside the record. `roles` goes to charter, `installed` is
   // filtered against, `scope` is merged into the engine's scope values — all
