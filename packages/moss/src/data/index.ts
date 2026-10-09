@@ -10,7 +10,8 @@
 // has.
 //
 // THE POLICY a set of roles reads and writes under (./policy.ts) is their
-// `data` grants over that set, with the app's row behaviors.
+// `data` grants over that set, with the app's row behaviors: compiled once for
+// each set of roles and kept until the manifest changes.
 //
 // A READ THAT KEEPS ANSWERING (./follow.ts) is the seam between a reactive
 // entry and the shell that asked for it over the in-process wire.
@@ -31,4 +32,5 @@ export { createGrammarUpgrader } from './grammar';
 export { migrateTables, tableSequencesOf } from './migrate';
 export type { TablesReport } from './migrate';
 export { INTEGRATION_ACTIONS_STORE, MOSS_SEQUENCE } from './tables';
-export { resolvePolicy, resolvePolicyAtReachForRoles, resolvePolicyForRoles } from './policy';
+export { createPolicies, resolvePolicy, resolvePolicyAtReachForRoles, resolvePolicyForRoles } from './policy';
+export type { Policies } from './policy';

@@ -2,19 +2,24 @@ import { createScopePolicy, mergeScopePolicies } from '@niscorp/vex';
 import type { ScopePolicy } from '@niscorp/vex';
 import { resolvePrincipal, resolveScoping } from '@niscorp/charter';
 import { assignedRoles } from '../identity';
+import type { ResolvedIdentity } from '../identity';
 import type { NiscApp } from '../manifest';
 
 // ═══════════════════════════════════════════════════════════════
 // THE POLICY A SET OF ROLES READS AND WRITES UNDER — the compiled vex
-// ScopePolicy. All pure; the server memoizes (the documents are static per
-// process). Who somebody is belongs to ../identity; the granted action ids
+// ScopePolicy. The compilations are pure; `createPolicies` below keeps what
+// they answer. Who somebody is belongs to ../identity; the granted action ids
 // and the layout variants a set of roles holds are ../manifest's.
 // ═══════════════════════════════════════════════════════════════
+
+// What a policy is compiled from, of the manifest: the charter and the row
+// behaviors. The two forms that take a principal read the assignments too.
+type Governed = Pick<NiscApp, 'charter' | 'behaviors'>;
 
 // The compiled ScopePolicy this principal reads and writes under: their
 // resolved `data` grants × the app's row behaviors. An ungranted phase is
 // absent, and vex's default-deny refuses it.
-export const resolvePolicy = (app: NiscApp, grants: readonly string[], principal: string | null): ScopePolicy => {
+export const resolvePolicy = (app: Governed & Pick<NiscApp, 'assignments'>, grants: readonly string[], principal: string | null): ScopePolicy => {
   // ONE POLICY PER ROLE, then merged — because a principal may hold several,
   // and reach belongs to the role rather than to the person.
   //
@@ -31,7 +36,7 @@ export const resolvePolicy = (app: NiscApp, grants: readonly string[], principal
 // resolved who somebody is and should not have to ask a second time. The
 // principal was only ever a way to reach `roles`; taking it as the argument is
 // what lets identity resolve once per session instead of once per request.
-export const resolvePolicyForRoles = (app: NiscApp, grants: readonly string[], roles: readonly string[]): ScopePolicy => {
+export const resolvePolicyForRoles = (app: Governed, grants: readonly string[], roles: readonly string[]): ScopePolicy => {
   const behaviors = app.behaviors ?? {};
   return mergeScopePolicies(
     roles.map((role) =>
@@ -52,15 +57,73 @@ export const resolvePolicyForRoles = (app: NiscApp, grants: readonly string[], r
 // verbs, so this can only narrow rows, never widen phases. A caller with no verb
 // for the table is still refused.
 export const resolvePolicyAtReach = (
-  app: NiscApp,
+  app: Governed & Pick<NiscApp, 'assignments'>,
   grants: readonly string[],
   principal: string | null,
   reach: string,
 ): ScopePolicy => resolvePolicyAtReachForRoles(app, grants, assignedRoles(app.assignments, principal), reach);
 
 export const resolvePolicyAtReachForRoles = (
-  app: NiscApp,
+  app: Governed,
   grants: readonly string[],
   roles: readonly string[],
   reach: string,
 ): ScopePolicy => createScopePolicy(resolvePrincipal(app.charter, grants, roles, 'data'), app.behaviors ?? {}, reach);
+
+// WHAT EACH SET OF ROLES MAY READ AND WRITE, REMEMBERED.
+//
+// Compiled at first sight and kept: the documents are static until the
+// manifest changes, and whoever owns these drops them then.
+export type Policies = {
+  // The policy somebody already resolved reads and writes under.
+  of: (who: Pick<ResolvedIdentity, 'key' | 'roles'>) => ScopePolicy;
+  // The same principal at a reach an ENTRY demands — same grants, narrower
+  // rows.
+  atReach: (who: Pick<ResolvedIdentity, 'key' | 'roles'>, reach: string) => ScopePolicy;
+  drop: () => void;
+};
+
+export const createPolicies = (config: {
+  // The charter and the row behaviors every policy is compiled from.
+  charter: NiscApp['charter'];
+  behaviors?: NiscApp['behaviors'];
+  // every `<table>.<verb>` the database can carry
+  grants: readonly string[];
+}): Policies => {
+  const { grants } = config;
+  const governed: Governed = { charter: config.charter, behaviors: config.behaviors };
+
+  // KEYED BY WHAT IT DEPENDS ON, not by who asked: a policy is a function of
+  // the role combination, so two people on the same rung share one compiled
+  // policy rather than holding a copy each.
+  const policies = new Map<string, ScopePolicy>();
+  // Memoized per (principal, reach) for the same reason the policy above is:
+  // the documents are static for the process.
+  const reachPolicies = new Map<string, ScopePolicy>();
+
+  return {
+    of: (who) => {
+      const hit = policies.get(who.key);
+      if (hit !== undefined) return hit;
+      const compiled = resolvePolicyForRoles(governed, grants, who.roles);
+      policies.set(who.key, compiled);
+      return compiled;
+    },
+    atReach: (who, reach) => {
+      const key = `${who.key}\u0000${reach}`;
+      const hit = reachPolicies.get(key);
+      if (hit !== undefined) return hit;
+      const compiled = resolvePolicyAtReachForRoles(governed, grants, who.roles, reach);
+      reachPolicies.set(key, compiled);
+      return compiled;
+    },
+    drop: () => {
+      policies.clear();
+      // `reachPolicies` too — it is compiled from the same grants as `policies`
+      // and went stale with it. Leaving it standing meant an approval or a role
+      // change was honoured at the caller's own reach and ignored at every reach
+      // an entry declared, for the life of the process.
+      reachPolicies.clear();
+    },
+  };
+};

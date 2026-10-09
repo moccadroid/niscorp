@@ -4,7 +4,7 @@ import { Hono } from 'hono';
 import { vex, VEX_LIVE_ENV } from '@niscorp/vex/hono';
 import { handleQuery } from '@niscorp/vex';
 import { migrate, upgradeStore } from '@niscorp/strata/postgres';
-import type { ScopePolicy, WriteEvent, ExecuteRecord } from '@niscorp/vex';
+import type { WriteEvent, ExecuteRecord } from '@niscorp/vex';
 import { emitterOf } from './runtime';
 import type { TelemetrySpan } from './runtime';
 import { wireFabric } from './fabric';
@@ -13,7 +13,7 @@ import { createRunningManifest, receiveManifest, refusalOf } from './manifest';
 import type { Catalog, ManifestReport, NiscApp } from './manifest';
 import type { NiscRuntime } from './runtime';
 import { createIdentity, sessionRemainingMs, sessionVerifierOf } from './identity';
-import { createDataLayer, createGrammarUpgrader, createWireFollower, INTEGRATION_ACTIONS_STORE, resolvePolicyAtReachForRoles, resolvePolicyForRoles, tableSequencesOf } from './data';
+import { createDataLayer, createGrammarUpgrader, createPolicies, createWireFollower, INTEGRATION_ACTIONS_STORE, resolvePolicyAtReachForRoles, resolvePolicyForRoles, tableSequencesOf } from './data';
 import { mintWrites } from './tide';
 import type { ActionDefinition } from '@niscorp/nova';
 import {
@@ -358,33 +358,10 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     revalidateMs: runtime.sessionRevalidateMs ?? DEFAULT_REVALIDATE_MS,
   });
 
-  // ── The policy a set of roles reads and writes under, compiled at first
-  // sight and kept: the documents are static until the manifest changes.
-  //
-  // KEYED BY WHAT IT DEPENDS ON, not by who asked: a policy is a function of
-  // the role combination, so two people on the same rung share one compiled
-  // policy rather than holding a copy each.
-  const policies = new Map<string, ScopePolicy>();
-  const policy = (resolved: ResolvedIdentity): ScopePolicy => {
-    const hit = policies.get(resolved.key);
-    if (hit !== undefined) return hit;
-    const compiled = resolvePolicyForRoles(app, data.grants, resolved.roles);
-    policies.set(resolved.key, compiled);
-    return compiled;
-  };
-
-  // The same principal at a reach an ENTRY demands — same grants, narrower
-  // rows. Memoized per (principal, reach) for the same reason the policy above
-  // is: the documents are static for the process.
-  const reachPolicies = new Map<string, ScopePolicy>();
-  const policyAtReach = (resolved: ResolvedIdentity, reach: string): ScopePolicy => {
-    const key = `${resolved.key}\u0000${reach}`;
-    const hit = reachPolicies.get(key);
-    if (hit !== undefined) return hit;
-    const compiled = resolvePolicyAtReachForRoles(app, data.grants, resolved.roles, reach);
-    reachPolicies.set(key, compiled);
-    return compiled;
-  };
+  // The policy a set of roles reads and writes under, compiled at first sight
+  // and kept (./data): by the role combination, and by each reach an entry
+  // demands of it.
+  const policies = createPolicies({ charter: app.charter, behaviors: app.behaviors, grants: data.grants });
 
   // Approved integrations' actions, read from rows and handed to the running
   // manifest as its 'integrations' set. Called after an import, an approval
@@ -509,9 +486,9 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
         // last and per request so a value derived from today's date cannot be
         // held for the life of a session that began yesterday.
         getScope: (c) => identity.composeScope(c.get('principal'), c.get('resolved')),
-        getPolicy: (c) => policy(c.get('resolved')),
+        getPolicy: (c) => policies.of(c.get('resolved')),
         // An entry that names a reach is served at it, not at the caller's own.
-        getPolicyForReach: (c, reach) => policyAtReach(c.get('resolved'), reach),
+        getPolicyForReach: (c, reach) => policies.atReach(c.get('resolved'), reach),
         // One span per read and write on this surface — the busiest emission
         // point, and the reason vex has an observer at all.
         ...(vexOnExecute !== undefined ? { onExecute: vexOnExecute } : {}),
@@ -589,7 +566,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   const contractFingerprints = async (principal: string | null): Promise<string[]> => {
     const discovery = await data.engine.cache.entries?.();
     if (discovery === undefined) return [];
-    const compiled = policy(await identity.resolve(principal));
+    const compiled = policies.of(await identity.resolve(principal));
     return discovery
       .filter(({ entry }) => entry.kind === 'ok' || entry.kind === 'mutation')
       .map(({ key }) => key)
@@ -1215,7 +1192,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
           // The record IS the install list now — resolved through the same
           // engine entries as everything else, revalidated on the identity
           // cache's own clock.
-          return { roles: resolved.roles, scope: resolved.scope, installed: resolved.installed, catalog: catalog(resolved), variants: running.variantsFor(resolved.roles), policy: policy(resolved) };
+          return { roles: resolved.roles, scope: resolved.scope, installed: resolved.installed, catalog: catalog(resolved), variants: running.variantsFor(resolved.roles), policy: policies.of(resolved) };
         },
         catalogFor: running.catalogFor,
         variantsFor: running.variantsFor,
@@ -1316,12 +1293,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     // keeping the stale half: a promoted instructor would hold their old rung
     // until the record expired on its own clock.
     identity.invalidateAll();
-    policies.clear();
-    // `reachPolicies` too — it is compiled from the same grants as `policies`
-    // and went stale with it. Leaving it standing meant an approval or a role
-    // change was honoured at the caller's own reach and ignored at every reach
-    // an entry declared, for the life of the process.
-    reachPolicies.clear();
+    policies.drop();
     shells?.adopt();
   });
 
