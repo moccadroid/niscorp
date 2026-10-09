@@ -1,8 +1,8 @@
 import { createShell, createComponentRegistry, createLayoutStore, canvasTreeOf, shellSettled, CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from '@niscorp/nova';
 import { componentsOf, snapshotShell } from '@niscorp/nova/reflect';
 import type { ActionDefinition, Shell, CanvasConfig, FetchFn, FunctionHandler, LayoutNode, RenderNode } from '@niscorp/nova';
-import { emitterOf, spanClock } from './telemetry';
-import type { Emit } from './telemetry';
+import { emitterOf, spanClock } from './runtime';
+import type { Emit } from './runtime';
 import { randomBytes } from 'node:crypto';
 import { evaluate } from '@niscorp/prism';
 import type { ScopePolicy } from '@niscorp/vex';

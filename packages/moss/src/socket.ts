@@ -4,8 +4,8 @@ import type { Catalog } from './principal';
 import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SHELL_FAILED, ClientMessageSchema, DEFAULT_TOKEN_KEY, PROTOCOL, PROTOCOL_MIN, offeredSealed, offeredToken } from './protocol';
 import type { ClientMessage, ServerMessage } from './protocol';
 import type { ShellHost } from './shells';
-import { emitterOf, spanClock } from './telemetry';
-import type { Telemetry } from './telemetry';
+import { emitterOf, spanClock } from './runtime';
+import type { Telemetry } from './runtime';
 import { isOwnOrigin, newSeal, openSealed, sealCookie, sealOf, sealSession, sessionCookies, sessionTokenOf } from './identity';
 
 // ═══════════════════════════════════════════════════════════════
@@ -84,7 +84,7 @@ export type SocketContext = {
   revalidateMs?: number;
   // The deployment's telemetry sink, if any — a `socket.upgrade` span per
   // connection admitted or refused, and a `socket.close` span carrying the
-  // whole connection's lifetime. See telemetry.ts.
+  // whole connection's lifetime. See runtime/telemetry.ts.
   telemetry?: Telemetry;
   // Origins that are this app's own page beside the host a request is
   // addressed to (`runtime.origins`) — a proxy that rewrites `Host`.

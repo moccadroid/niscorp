@@ -30,16 +30,16 @@ export type NiscRuntime = {
   // WHO A TOKEN IS. Required, deliberately — every other door in moss fails
   // closed, and this is the one where forgetting a field used to open it for
   // everyone. Three answers:
-  //   'sessions' — moss's own stored credential (identity/sessions.ts): 256-bit token,
+  //   'sessions' — moss's own stored credential (../identity/sessions.ts): 256-bit token,
   //                hashed at rest, expiring, revoked by deleting its row.
-  //   'dev-open' — the dev stub (identity/dev-token.ts): every well-formed token is trusted and
+  //   'dev-open' — the dev stub (../identity/dev-token.ts): every well-formed token is trusted and
   //                the boot says so out loud. Harnesses and demo floors.
   //   a function — the app's own identity provider.
   session: SessionVerifier | 'sessions' | 'dev-open';
   // The origins that are this app's own page, beside the host a request is
   // addressed to — for a proxy that rewrites `Host`. A browser's session
   // cookie is read and written for the app's own page only
-  // (identity/session-cookie.ts).
+  // (../identity/session-cookie.ts).
   origins?: readonly string[];
   // The tables moss, vex and a chosen credential own go through ONE ledgered
   // run at boot (strata), before introspection. 'apply' (default): run what is
@@ -141,7 +141,7 @@ export type NiscRuntime = {
   operatorGate?: (c: Context, next: Next) => Response | void | Promise<Response | void>;
 
   // THE CLUSTER FABRIC — how an invalidation or a nudge reaches a SECOND moss
-  // process (fabric.ts). Off by default, and needed only when a deployment
+  // process (../fabric.ts). Off by default, and needed only when a deployment
   // grows past one process per service: a role change in process A resets the
   // shell resident in B, a nudge in A wakes a channel subscriber in B. The seam
   // takes functions, not a connection — `LISTEN/NOTIFY` on the pool moss holds
@@ -153,14 +153,14 @@ export type NiscRuntime = {
   // WHERE STRUCTURED TELEMETRY GOES — the deployment's one observability sink,
   // and off by default. moss emits one span per vex execution, fn call,
   // integration call, shell build, and socket upgrade/close, each shaped for an
-  // OTLP backend to ingest without translation (telemetry.ts). Unset, no span
+  // OTLP backend to ingest without translation (./telemetry.ts). Unset, no span
   // is built and no hot path pays anything; set, the substrate wires it to a
   // ring buffer and/or an exporter. Operational, not application: a service is
   // observed by virtue of running moss, never by anything it authors.
   telemetry?: Telemetry;
 
   // A FIXED SEED FOR THE ASSERTION SIGNING KEYPAIR — dev only, and off by
-  // default (assert.ts). Without it the keypair regenerates every boot, which
+  // default (../assert.ts). Without it the keypair regenerates every boot, which
   // on an in-memory database means an integration's held public key goes stale
   // on every restart and it starts refusing calls. Setting it makes the public
   // half stable, so a separate service's environment stays valid across

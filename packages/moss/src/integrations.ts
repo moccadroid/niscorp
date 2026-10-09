@@ -10,8 +10,8 @@ import { isBinding } from '@niscorp/nova/i18n';
 import type { PgPool } from '@niscorp/vex';
 import { hashIntegrationKey } from './assert';
 import type { NiscApp } from './app';
-import { emitterOf, spanClock } from './telemetry';
-import type { Telemetry } from './telemetry';
+import { emitterOf, spanClock } from './runtime';
+import type { Telemetry } from './runtime';
 
 // ═══════════════════════════════════════════════════════════════
 // INTEGRATIONS — actions and layouts that arrive from somewhere else.

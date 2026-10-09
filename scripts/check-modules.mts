@@ -45,8 +45,9 @@ type Shape = {
 const PACKAGES: Readonly<Record<string, Shape>> = {
   moss: {
     modules: {
+      runtime: [],
       protocol: [],
-      identity: ['protocol'],
+      identity: ['runtime', 'protocol'],
       client: ['protocol'],
       terminal: ['client'],
     },
@@ -67,15 +68,13 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       'node.ts',
       'pages.ts',
       'principal.ts',
-      'runtime.ts',
       'server.ts',
       'shells.ts',
       'socket.ts',
-      'telemetry.ts',
       'tide.ts',
       'vite.ts',
     ],
-    finished: ['protocol', 'client', 'terminal'],
+    finished: ['runtime', 'protocol', 'identity', 'client', 'terminal'],
   },
 };
 

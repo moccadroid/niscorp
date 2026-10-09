@@ -8,7 +8,7 @@
 // in the service — the same argument the engine boundary makes for queries.
 //
 // The sink is a deployment decision, not an application one, so the hook lives
-// on the runtime (runtime.ts) beside the other operational knobs. Unset, no
+// on the runtime (./runtime.ts) beside the other operational knobs. Unset, no
 // span is ever built: every emission site guards on `emit !== undefined`, and
 // an optional call short-circuits its argument, so a hot path with no sink
 // allocates nothing.

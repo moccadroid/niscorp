@@ -1,7 +1,7 @@
 // moss — the nisc app server. One module per concern:
 //
 //   app.ts        — the manifest: the application as authored artifacts
-//   runtime.ts    — the environment: database, cache, session
+//   runtime/      — the environment: database, cache, session
 //   data.ts       — the data layer, stood up from what's present
 //   principal.ts  — per-principal resolution: roles, policy, catalog
 //   shells.ts     — the shell host: durable per-principal server shells
@@ -12,7 +12,7 @@ export { defineApp } from './app';
 export type { NiscApp, ShellManifest, PageManifest, FunctionSession, LayoutVariant, RunRecord, RunTurn, RunSink } from './app';
 export { devSession, mintDevToken } from './identity';
 export type { NiscRuntime } from './runtime';
-export type { Telemetry, TelemetrySpan } from './telemetry';
+export type { Telemetry, TelemetrySpan } from './runtime';
 export { initSessions, mintSession, sessionOf, revokeAllFor } from './identity';
 export { createServer } from './server';
 export type { MossServer, ExecuteAs } from './server';

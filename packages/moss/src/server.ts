@@ -8,8 +8,8 @@ import { migrate, upgradeStore } from '@niscorp/strata/postgres';
 import { createGrammarUpgrader } from './grammar';
 import { scopeProfiles } from '@niscorp/vex';
 import type { ScopePolicy, WriteEvent, ExecuteRecord, SeedEntry, SeedMutation } from '@niscorp/vex';
-import { emitterOf } from './telemetry';
-import type { TelemetrySpan } from './telemetry';
+import { emitterOf } from './runtime';
+import type { TelemetrySpan } from './runtime';
 import { wireFabric } from './fabric';
 import { verifyCharter } from '@niscorp/charter';
 import type { VerifyReport } from '@niscorp/charter';
@@ -68,7 +68,7 @@ import { resolveRoles } from './principal';
 // server functions behind plain URLs — is still unbuilt.
 //
 // The app hands over its ARTIFACTS (app.ts) and an environment
-// (runtime.ts); everything mechanical is derived — the data layer
+// (runtime/); everything mechanical is derived — the data layer
 // (data.ts), per-principal resolutions (principal.ts) — and the server
 // refuses to boot incoherent (DESIGN.md § Derivation over configuration:
 // coherence is refused, not documented).

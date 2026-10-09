@@ -9,7 +9,8 @@
 // real plumbing, not a mock of it.
 import { describe, it, expect } from 'vitest';
 import { wireFabric } from '../src/fabric';
-import type { Fabric, FabricMessage, FabricApply } from '../src/fabric';
+import type { FabricApply } from '../src/fabric';
+import type { Fabric, FabricMessage } from '../src/runtime';
 import { createShellHost } from '../src/shells';
 import type { ShellHost, ShellHostContext } from '../src/shells';
 import { createIdentityCache } from '../src/identity';
