@@ -1,5 +1,6 @@
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, randomBytes, sign as cryptoSign, verify as cryptoVerify } from 'node:crypto';
 import type { KeyObject } from 'node:crypto';
+import { z } from 'zod';
 
 // ═══════════════════════════════════════════════════════════════
 // THE CREDENTIAL RULE, in one module: the verifier mints, stores at most a
@@ -29,16 +30,21 @@ import type { KeyObject } from 'node:crypto';
 // lines and imports nothing of ours to do so.
 // ═══════════════════════════════════════════════════════════════
 
-export type Assertion = {
+// WHAT A TOKEN CARRIES, read by a schema where a token is verified: the bytes
+// came over a wire, and the signature says who wrote them, not what they hold.
+// A claim this does not name is left on the payload.
+const AssertionSchema = z.looseObject({
   // Which integration this token is FOR. A service hosting several bundles
   // must check it names the one being called — a token minted for `belts`
   // presented to `stripe` is somebody replaying credentials sideways.
-  integration: string;
-  principal: string;
-  scope: Record<string, unknown>;
-  iat: number;
-  exp: number;
-};
+  integration: z.string(),
+  principal: z.string(),
+  scope: z.record(z.string(), z.unknown()),
+  iat: z.number(),
+  exp: z.number(),
+});
+
+export type Assertion = z.infer<typeof AssertionSchema>;
 
 const b64url = (buffer: Buffer): string => buffer.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const fromB64url = (text: string): Buffer => Buffer.from(text.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
@@ -71,10 +77,10 @@ const signerFromSeed = (seed: Buffer): { publicKey: KeyObject; privateKey: KeyOb
   // constant DER prefix, so a deterministic key is that prefix plus the seed.
   const pkcs8 = Buffer.concat([Buffer.from('302e020100300506032b657004220420', 'hex'), seed.subarray(0, 32)]);
   const privateKey = createPrivateKey({ key: pkcs8, format: 'der', type: 'pkcs8' });
-  // node derives the public half from a private KeyObject at runtime; the type
-  // overloads do not advertise the KeyObject input, hence the cast.
-  const asInput = privateKey as unknown as Parameters<typeof createPublicKey>[0];
-  return { privateKey, publicKey: createPublicKey(asInput) };
+  // node derives the public half from a private key it is handed. It is handed
+  // the key as PEM because that is a form `createPublicKey` is typed to take;
+  // the key it answers is the same one.
+  return { privateKey, publicKey: createPublicKey(privateKey.export({ type: 'pkcs8', format: 'pem' })) };
 };
 
 export const createAssertionSigner = (seedB64?: string): AssertionSigner => {
@@ -104,10 +110,10 @@ export const verifyAssertion = (token: string, verifyKey: string, now: number = 
     const signature = fromB64url(token.slice(dot + 1));
     const key = createPublicKey({ key: fromB64url(verifyKey), format: 'der', type: 'spki' });
     if (!cryptoVerify(null, body, key, signature)) return undefined;
-    const parsed = JSON.parse(body.toString()) as Assertion;
-    if (typeof parsed.integration !== 'string' || typeof parsed.principal !== 'string') return undefined;
-    if (typeof parsed.exp !== 'number' || parsed.exp <= now) return undefined;
-    return parsed;
+    const payload: unknown = JSON.parse(body.toString());
+    const parsed = AssertionSchema.safeParse(payload);
+    if (!parsed.success || parsed.data.exp <= now) return undefined;
+    return parsed.data;
   } catch {
     return undefined;
   }
