@@ -19,7 +19,10 @@
 //      `modules` names, and the table has no cycle.
 //
 // A file still flat may be imported by anything while it exists; that is what
-// being in the middle of a move looks like.
+// being in the middle of a move looks like. A module named in `finished` is no
+// longer in the middle of it: everything it needs is a module, so a flat file
+// it imports fails. Without that, the terminal side could go back to importing
+// the server's files and rule 3 would not see it.
 //
 // A repo script, like check-fact-door. `pnpm check:modules`. Exits non-zero on
 // any failure.
@@ -35,6 +38,8 @@ type Shape = {
   modules: Readonly<Record<string, readonly string[]>>;
   // files still at the top of src/, on their way into a module
   flat: readonly string[];
+  // modules that import no flat file: all they need has been moved
+  finished: readonly string[];
 };
 
 const PACKAGES: Readonly<Record<string, Shape>> = {
@@ -72,6 +77,7 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       'tide.ts',
       'vite.ts',
     ],
+    finished: ['protocol', 'client', 'terminal'],
   },
 };
 
@@ -141,13 +147,17 @@ for (const [name, shape] of Object.entries(PACKAGES)) {
   ok(`${name}: every directory in src/ is a declared module`, undeclared.length === 0, undeclared.join(', '));
   const doorless = directories.filter((directory) => !existsSync(join(src, directory, 'index.ts')));
   ok(`${name}: every module has an index.ts`, doorless.length === 0, doorless.join(', '));
-  const unknown = Object.entries(shape.modules).flatMap(([module, needs]) => needs.filter((need) => shape.modules[need] === undefined).map((need) => `${module} names ${need}`));
+  const unknown = [
+    ...Object.entries(shape.modules).flatMap(([module, needs]) => needs.filter((need) => shape.modules[need] === undefined).map((need) => `${module} names ${need}`)),
+    ...shape.finished.filter((module) => shape.modules[module] === undefined).map((module) => `finished names ${module}`),
+  ];
   ok(`${name}: every dependency named is a module`, unknown.length === 0, unknown.join('; '));
   const cycle = cycleIn(shape.modules);
   ok(`${name}: the modules have no cycle`, cycle === undefined, cycle ?? `${Object.keys(shape.modules).length} modules`);
 
   const deep: string[] = [];
   const undeclaredUse: string[] = [];
+  const flatUse: string[] = [];
   for (const directory of directories) {
     const allowed = shape.modules[directory] ?? [];
     for (const file of filesIn(join(src, directory))) {
@@ -157,8 +167,12 @@ for (const [name, shape] of Object.entries(PACKAGES)) {
         const other = parts[0] ?? '';
         if (other === '' || other === '..' || other === directory) continue;
         const here = relative(src, file).split(sep).join('/');
-        // Still flat: importable by anything until it moves.
-        if (parts.length === 1 && !(existsSync(target) && statSync(target).isDirectory())) continue;
+        // Still flat: importable by anything until it moves — but not by a
+        // module that needs nothing flat any more.
+        if (parts.length === 1 && !(existsSync(target) && statSync(target).isDirectory())) {
+          if (shape.finished.includes(directory)) flatUse.push(`${here} imports ${other}`);
+          continue;
+        }
         if (!allowed.includes(other)) undeclaredUse.push(`${here} imports ${other}`);
         if (parts.length > 1 && !(parts.length === 2 && parts[1] === 'index')) deep.push(`${here} imports ${parts.join('/')}`);
       }
@@ -166,6 +180,7 @@ for (const [name, shape] of Object.entries(PACKAGES)) {
   }
   ok(`${name}: a module imports another by its door`, deep.length === 0, deep.slice(0, 6).join('; '));
   ok(`${name}: a module imports only the modules it declares`, undeclaredUse.length === 0, undeclaredUse.slice(0, 6).join('; '));
+  ok(`${name}: a finished module imports no file still flat`, flatUse.length === 0, flatUse.length === 0 ? shape.finished.join(', ') : flatUse.slice(0, 6).join('; '));
 }
 
 for (const line of lines) console.log(line);
