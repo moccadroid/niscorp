@@ -859,7 +859,8 @@ measures the end.
   `<table>.<verb>` the database can carry (vex's `scopeGrants(tables)`). The
   report is `{ errors, said, charter }`, as `server.verifyActions` answers it;
   a boot refuses on `errors`. A running server answers for what is in force
-  with `server.charterReport()`.
+  with `server.charterReport()`. It verifies and does nothing else: what it is
+  handed is not read by the manifest's schema and is not frozen.
 - `memoKeyOf(app, principal): string` — the key the per-principal memos depend
   on (roles + installed set), from `assignments` with no install list.
 - `createDataLayer(runtime, entries?): Promise<DataLayer>` — `{ engine, schema,

@@ -67,8 +67,9 @@ const CanvasSchema = z
   .strict();
 
 // A component's contract is the kit's own record (nova's `ComponentMeta`, with
-// whatever else the kit keeps beside it), so it is read loosely: the two
-// fields moss names are held to their types and the rest is left on it.
+// whatever else the kit keeps beside it), so it is read loosely: `description`
+// is held to being text, `propsSchema` is whatever the kit hands over (a zod
+// schema, a JSON Schema), and the rest is left on it.
 const ComponentContractSchema = z.looseObject({ meta: z.looseObject({ description: z.string().optional() }).optional() });
 
 const shell = {
