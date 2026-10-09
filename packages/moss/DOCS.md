@@ -20,8 +20,9 @@ optional peers, needed only by the entry that names them. `hono`,
 
 #### `defineApp(app: NiscApp): NiscApp`
 
-Identity today, a validation seam tomorrow. The one name an app file needs
-besides its artifacts.
+Returns its argument: the one name an app file needs besides its artifacts.
+The manifest is read by a schema where it is handed over, in
+[`createServer`](#createserverapp-runtime-promisemossserver).
 
 #### `NiscApp`
 
@@ -347,6 +348,26 @@ could answer one path. A broken closure is not among them: the closure audit's
 findings land in the report's `perRole[].issues`, which boot does not read. A
 role granted an action that pushes one it is not granted boots, and the press
 does nothing. Returns a Hono app extended with the `MossServer` members below.
+
+**The manifest is read first.** Before a table is created or a row is read,
+`createServer` parses the manifest with a schema, and a manifest that does not
+parse refuses the boot:
+
+```
+The manifest does not parse — refusing to serve:
+  actions.home: Unrecognized key: "tittle"
+  shell.inputs: expected a function
+```
+
+Each line is a place and what was expected there. An action, a fragment and a
+layout (a layout variant's, a canvas's, the frame's, the layout store's) are
+read by nova's schemas; an entry's `dsl` and `mutation` by vex's and its
+`mapping` by Prism's; `grammars` by strata's. Every other data field is held to
+the shape `NiscApp` gives it, and a field `NiscApp` does not have is refused.
+A code seam is held to being a function. A component's contract
+(`shell.components`) is the kit's own record and may carry more than moss
+names. The charter and `behaviors` are held to being objects; the charter is
+verified by the check below and `behaviors` by vex when a policy is compiled.
 
 What the server answers over HTTP:
 

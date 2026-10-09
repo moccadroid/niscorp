@@ -54,6 +54,13 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 - The entries the server knows are the ones it booted with. One added to `app.entries` afterwards was never seeded, and is no longer looked up when a page asks whether it needs a shell.
 - A boot that is refused prints the chains of steps that never end before it throws. It printed them only when the charter had passed.
 
+**The manifest is read by a schema when it is handed over.**
+
+- `createServer(app, runtime)` parses the manifest before anything else uses it, and a manifest that does not parse refuses the boot with `The manifest does not parse — refusing to serve:` and one line for each place that does not fit (`actions.home: Unrecognized key: "tittle"`, `shell.inputs: expected a function`). It used to be used as it stood: a definition nova refuses was found when a shell that holds it was built, for whoever connected first, and a seam that was not a function when it was first called.
+- An action, a fragment and a layout are read by nova's schemas, an entry's `dsl` and `mutation` by vex's, its `mapping` by Prism's, `grammars` by strata's. Every other data field is held to the shape `NiscApp` gives it, and a code seam to being a function.
+- A field the type does not have is refused, on the manifest itself, on the shell or a page, on a canvas, a layout variant, an entry, a reaction, `identity`, `facts` and `phraseKeys`. The compiler already refuses one written in place; one that arrived through a spread or a cast used to be carried and ignored. An app that kept something of its own there keeps it beside the manifest. A component's contract (`shell.components`) and a resource written as an object may still carry more than moss names.
+- An app whose manifest is typed as `NiscApp`, with no cast and no extra field on the way, has nothing to change.
+
 **`server.replaceActions(source, actions)`: an app hands over the actions it loads from rows.**
 
 - New. An app that loads actions from its own tables hands them over: `server.replaceActions('bundles', actions)`. The name is the app's; handing the same name over again puts the new set in place of the old, so an action it no longer names leaves. The actions in force are what the app shipped, then each set. `'integrations'` is the name of moss's own set, read from its integration tables.

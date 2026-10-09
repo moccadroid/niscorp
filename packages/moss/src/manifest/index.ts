@@ -5,7 +5,9 @@
 // what does the application consist of, and which part of it is theirs.
 //
 // WHAT AN APP HANDS OVER is a type (./app.ts): the charter, the actions, the
-// layout variants, the shell and the pages, and the seams an app fills in.
+// layout variants, the shell and the pages, and the seams an app fills in. It
+// is read by a schema when it is handed over (./handover.ts, ./schema.ts), and
+// a manifest that does not parse refuses the boot.
 //
 // WHAT IT CONSISTS OF RIGHT NOW has one owner (./running.ts): what was shipped
 // and the sets of actions that arrive while it runs, changed in one place and
@@ -43,6 +45,7 @@ export type {
 } from './app';
 export { auditClosure } from './closure';
 export { GENERATION_DDL } from './generation';
+export { receiveManifest } from './handover';
 export { catalogFor, resolveCatalog, resolveVariants, wearableOf } from './roles';
 export type { Catalog, InstalledOnly } from './roles';
 export { createRunningManifest } from './running';

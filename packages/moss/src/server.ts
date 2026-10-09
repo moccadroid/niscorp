@@ -11,7 +11,7 @@ import { emitterOf } from './runtime';
 import type { TelemetrySpan } from './runtime';
 import { wireFabric } from './fabric';
 import type { VerifyReport } from '@niscorp/charter';
-import { createRunningManifest, refusalOf } from './manifest';
+import { createRunningManifest, receiveManifest, refusalOf } from './manifest';
 import type { Catalog, NiscApp } from './manifest';
 import type { NiscRuntime } from './runtime';
 import { createIdentity, sessionRemainingMs, sessionVerifierOf } from './identity';
@@ -234,6 +234,11 @@ export const vexRecordToSpan = (rec: ExecuteRecord): TelemetrySpan => ({
 });
 
 export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<MossServer> => {
+  // WHAT WAS HANDED OVER IS READ FIRST (./manifest, the hand-over): nothing
+  // below may meet a manifest no schema has read. One that does not parse
+  // refuses here, before a table is created or a row is read.
+  receiveManifest(app);
+
   // WHO A TOKEN IS, resolved before anything else boots: an unset verifier
   // refuses HERE, with a sentence, instead of serving every forged principal
   // silently (which is what the old `?? devSession` default did, for every
