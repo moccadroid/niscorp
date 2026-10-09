@@ -1,6 +1,6 @@
 {
   "name": "@niscorp/prism",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Pure JSON transformation DSL with compilation and zero code execution",
   "license": "Apache-2.0",
   "type": "module",
