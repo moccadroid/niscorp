@@ -98,12 +98,6 @@ export const parseJsonPathCached = (path: string): JsonPathSegment[] => {
   return parsed;
 };
 
-export const primeJsonPathCache = (paths: string[]): void => {
-  for (const p of paths) {
-    if (!cache.has(p)) cache.set(p, parseJsonPath(p));
-  }
-};
-
 // ═══════════════════════════════════════════════════════════
 // Path Resolution
 // ═══════════════════════════════════════════════════════════

@@ -44,3 +44,22 @@ describe('compile + execute', () => {
     expect(ir1.meta.fingerprint).toBe(ir2.meta.fingerprint);
   });
 });
+
+// A `$ref` key in a constant's data, or as a binding's name, is not a path the
+// config reads. compile lists it in `tables.paths`; execute used to parse that
+// list, and refused the config for it.
+describe('execute — a $ref that is data, not a path', () => {
+  const stored = async (config: unknown): Promise<Awaited<ReturnType<typeof compile>>> =>
+    JSON.parse(JSON.stringify(await compile(config)));
+
+  const cases: [string, unknown, unknown][] = [
+    ['in a constant', { link: { $const: { $ref: '$.store.book[*].author' } } }, { link: { $ref: '$.store.book[*].author' } }],
+    ['as the name of a binding', { $with: { let: { $ref: '$..deep' }, value: { $var: '$ref' } } }, '$..deep'],
+  ];
+  for (const [name, config, expected] of cases) {
+    it(`${name}: a fresh IR and a stored one answer`, async () => {
+      expect(execute(await compile(config), {})).toEqual(expected);
+      expect(execute(await stored(config), {})).toEqual(expected);
+    });
+  }
+});

@@ -1,7 +1,6 @@
 import type { JsonValue, JsonObject, CompiledIr } from '../types';
 import { evaluateNode } from './evaluate';
 import { rehydrate } from './optimize';
-import { primeJsonPathCache } from '../utils/jsonpath';
 import { createBudget, measure, type Limits } from './budget';
 
 // Cores whose runtime annotations are known present. An IR fresh from
@@ -13,12 +12,13 @@ import { createBudget, measure, type Limits } from './budget';
 const hydrated = new WeakSet<object>();
 
 export const execute = (ir: CompiledIr, source: JsonObject, limits?: Partial<Limits>): JsonValue => {
-  // Once for each core, with its annotations: the path cache is the module's
-  // and keeps what it is given, so priming it again on every call only looked
-  // every path up again.
+  // `ir.tables.paths` is not read here. It used to prime the path cache, and
+  // rehydrate already puts each $ref's parsed path on the $ref itself. The
+  // table also lists what is not a path: compile gathers it from every object
+  // with a `$ref` key, a constant's data and a binding's name included, and
+  // parsing those refused a config that never reads them.
   const { core } = ir;
   if (typeof core === 'object' && core !== null && !hydrated.has(core)) {
-    if (ir.tables.paths.length > 0) primeJsonPathCache(ir.tables.paths);
     rehydrate(core);
     hydrated.add(core);
   }
