@@ -7,12 +7,18 @@
 // WHAT AN APP HANDS OVER is a type (./app.ts): the charter, the actions, the
 // layout variants, the shell and the pages, and the seams an app fills in.
 //
-// WHAT A SET OF ROLES HOLDS of it (./roles.ts) is the charter applied: the
-// action ids granted, and the layout variant held of each.
+// WHAT IT CONSISTS OF RIGHT NOW has one owner (./running.ts): what was shipped
+// and the sets of actions that arrive while it runs, changed in one place and
+// only to something that may be served.
 //
-// WHETHER IT MAY BE SERVED is one verification (./verify.ts), asked at boot and
-// at every change: the charter, with what each role's actions reach audited
-// (./closure.ts), every entry's reach, the layout variants.
+// WHETHER IT MAY BE SERVED is one verification (./verify.ts), asked at boot, at
+// every change and before a bundle is let in: the charter, with what each
+// role's actions reach audited (./closure.ts), every entry's reach, the layout
+// variants.
+//
+// WHAT A SET OF ROLES HOLDS of it (./roles.ts) is the charter applied: the
+// action ids granted, and the layout variant held of each, remembered until
+// the manifest changes.
 //
 // WHEN IT CHANGES, every other process finds out by a pointer in the database
 // that each one polls (./generation.ts).
@@ -36,9 +42,10 @@ export type {
   StorePress,
 } from './app';
 export { auditClosure } from './closure';
-export { DEFAULT_GENERATION_POLL_MS, GENERATION_DDL, createGeneration } from './generation';
-export type { Generation } from './generation';
-export { catalogFor, resolveCatalog, resolveVariants, resolveVariantsForRoles, wearableOf } from './roles';
+export { GENERATION_DDL } from './generation';
+export { catalogFor, resolveCatalog, resolveVariants, wearableOf } from './roles';
 export type { Catalog, InstalledOnly } from './roles';
-export { refusalOf, verifyManifest, verifyVariants } from './verify';
-export type { ManifestCandidate, ManifestCheck, ManifestReport } from './verify';
+export { createRunningManifest } from './running';
+export type { RunningManifest, RunningManifestConfig, ShippedManifest } from './running';
+export { refusalOf, verifyVariants } from './verify';
+export type { ManifestReport } from './verify';

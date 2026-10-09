@@ -1,6 +1,6 @@
 import { resolvePrincipal } from '@niscorp/charter';
 import type { LayoutNode } from '@niscorp/nova';
-import { assignedRoles } from '../identity';
+import { assignedRoles, memoKey } from '../identity';
 import type { NiscApp } from './app';
 
 // ═══════════════════════════════════════════════════════════════
@@ -74,6 +74,45 @@ export const resolveCatalog = (app: NiscApp, principal: string | null): Catalog 
 // incoherence `verifyVariants` refused at boot, so resolution never picks.
 export const resolveVariants = (app: NiscApp, principal: string | null): ReadonlyMap<string, LayoutNode> =>
   resolveVariantsForRoles(app, assignedRoles(app.assignments, principal));
+
+// WHAT EACH SET OF ROLES HOLDS, REMEMBERED.
+//
+// Both answers are a function of the manifest and of (roles + install list),
+// and of nothing about the person asking. So they are kept by that key — one
+// entry per combination, about ten in a real deployment, where a key per
+// principal was one per person — until the manifest changes. Whoever changes
+// the manifest drops them (./running.ts); nobody else has to remember to.
+export type RoleHoldings = {
+  catalogFor: (roles: readonly string[], installed: readonly string[] | undefined) => Catalog;
+  variantsFor: (roles: readonly string[]) => ReadonlyMap<string, LayoutNode>;
+  drop: () => void;
+};
+
+export const createRoleHoldings = (config: {
+  // The charter, the actions and the layout variants as they are now: read at
+  // each miss, never held, because they are what changes.
+  manifest: () => Pick<NiscApp, 'charter' | 'actions' | 'layouts'>;
+  installedOnly: InstalledOnly;
+}): RoleHoldings => {
+  const catalogs = new Map<string, Catalog>();
+  const variants = new Map<string, ReadonlyMap<string, LayoutNode>>();
+  const kept = <Held>(memo: Map<string, Held>, key: string, resolve: () => Held): Held => {
+    const hit = memo.get(key);
+    if (hit !== undefined) return hit;
+    const resolved = resolve();
+    memo.set(key, resolved);
+    return resolved;
+  };
+  return {
+    catalogFor: (roles, installed) => kept(catalogs, memoKey(roles, installed), () => catalogFor(config.manifest(), roles, installed, config.installedOnly)),
+    // Which variant is held does not depend on what is installed.
+    variantsFor: (roles) => kept(variants, memoKey(roles, undefined), () => resolveVariantsForRoles(config.manifest(), roles)),
+    drop: () => {
+      catalogs.clear();
+      variants.clear();
+    },
+  };
+};
 
 // A content hash of the resolved id set — identity, not cryptography
 // (FNV-1a, hex).

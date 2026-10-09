@@ -50,5 +50,18 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 
 **`refresh` runs the check boot runs.**
 
-- `refresh()` ran a shorter copy of the boot check: the charter and the layout variants. It is now the same verification, so a `refresh` also refuses when an entry declares a `reach` that no behavior offers, with the sentence `Refresh refused — entries declare a reach no table offers`. That can only happen to an app that changes `app.entries` or `app.behaviors` after boot; no other app sees a difference.
+- `refresh()` ran a shorter copy of the boot check: the charter and the layout variants. It is now the same verification, so a `refresh` also refuses when an entry declares a `reach` that no behavior offers, with the sentence `Refresh refused — entries declare a reach no table offers`. That can only happen to an app that changes `app.behaviors` after boot; no other app sees a difference.
+- The entries the server knows are the ones it booted with. One added to `app.entries` afterwards was never seeded, and is no longer looked up when a page asks whether it needs a shell.
 - A boot that is refused prints the chains of steps that never end before it throws. It printed them only when the charter had passed.
+
+**`server.replaceActions(source, actions)`: an app hands over the actions it loads from rows.**
+
+- New. An app that loads actions from its own tables hands them over: `server.replaceActions('bundles', actions)`. The name is the app's; handing the same name over again puts the new set in place of the old, so an action it no longer names leaves. The actions in force are what the app shipped, then each set. `'integrations'` is the name of moss's own set, read from its integration tables.
+- What the app would then consist of is verified first. Refused, the call throws with the sentence `refresh` throws and nothing changed: not the actions being served, not what any role holds. Accepted, it does what `refresh` does: memos are dropped, living shells adopt, and every other process follows within one poll.
+- Editing `app.actions` and calling `refresh()` still works: `refresh` ships what the record holds when it is called. Two things about it are different. An edit is served once a `refresh` has accepted it; a shell built between the edit and the `refresh` used to be built from it unverified. And an action an integration shipped is the integration's: taking it out of `app.actions` does not remove it.
+- With no integration approved and no set handed over, `app.actions` stays the record the app handed to `createServer`. Otherwise moss writes the actions in force to it, as a new object, each time they change.
+
+**A bundle the app would not serve is refused without being tried on the running app.**
+
+- Importing a bundle again for an approved integration (`POST /operator/integrations`) asks whether the app could be served with it. That was answered by putting the bundle's actions into the running manifest and taking them out again when the check threw, so a refusal dropped every identity record and every compiled policy twice and moved the generation pointer twice, in every process. The bundle is now verified as a candidate, and the running app is not touched. The answer is the same `422` with the same reason.
+- An import that is accepted moves the pointer once, not twice. An app has nothing to change.

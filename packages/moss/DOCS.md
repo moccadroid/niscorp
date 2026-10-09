@@ -370,8 +370,8 @@ is the anonymous principal. There is no `/fns` surface.
 #### `MossServer`
 
 `Hono<Env> & { socket: SocketAccept; shells?: ShellHost; principalOf; page; pages;
-refresh; charterReport; invalidateIdentity; invalidateTenant; identity; executeAs;
-callIntegration; nudge; generation; close; identities? }`.
+refresh; replaceActions; charterReport; invalidateIdentity; invalidateTenant;
+identity; executeAs; callIntegration; nudge; generation; close; identities? }`.
 It's a Hono app — mount it, extend it, or hand it to a listener.
 
 - `principalOf(token): Promise<string | null>` — the deployment's own session
@@ -385,15 +385,25 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   (its name, the `ShellHost` that draws it, the input its path carries), or
   `undefined` for a path that is the app's. The document route and the socket
   ask the same question here.
-- `refresh(): void` — artifacts changed at runtime (actions loaded from rows):
-  run the check boot runs (the charter, every entry's reach, the layout
-  variants), drop every per-principal memo and identity record, and have
-  living shells adopt their re-resolved definitions in place. Throws when the
-  check refuses, and the old resolution keeps serving. It also moves the
-  generation pointer, so every other process on the same database does the
-  same within one poll.
+- `refresh(): void` — something the server derived its answers from changed (a
+  role, an install, an artifact): run the check boot runs (the charter, every
+  entry's reach, the layout variants), drop every per-principal memo and
+  identity record, and have living shells adopt their re-resolved definitions
+  in place. Throws when the check refuses, and the old resolution keeps
+  serving. It also moves the generation pointer, so every other process on the
+  same database does the same within one poll. An app that edited `app.actions`
+  ships what that record holds when it calls this; `replaceActions` is the way
+  to hand over actions that are loaded from rows.
+- `replaceActions(source, actions): void` — hand over a set of actions that
+  arrived while the app runs (an app that loads actions from its own tables).
+  `source` names the set: handing the same name over again puts the new set in
+  place of the old, so an action it no longer names leaves. The actions in
+  force are what the app shipped, then each set. What the app would then
+  consist of is verified first: refused, it throws with the sentence `refresh`
+  throws and nothing changed; accepted, it does what `refresh` does.
+  `'integrations'` is moss's own set, read from its integration tables.
 - `charterReport(): VerifyReport` — the report `verifyCharter` gave this server:
-  boot's, then that of each `refresh` that passed. `{ errors, warnings,
+  boot's, then that of each change that passed. `{ errors, warnings,
   perRole }`, over the universes boot resolved against. Boot and `refresh` read
   `errors` alone and print nothing of the rest, so this is where a host reads
   it, to draw, log or hold a deploy on: `warnings` (an action no role grants, an

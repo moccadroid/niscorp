@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
-import { refusalOf, verifyManifest } from '../src/manifest';
-import type { ManifestCandidate } from '../src/manifest';
+import { refusalOf, verifyManifest } from '../src/manifest/verify';
+import type { ManifestCandidate } from '../src/manifest/verify';
 
 // ONE VERIFICATION, for boot, for a change and for a bundle that wants in. It
 // reads a candidate as values, so every case here is a small object and

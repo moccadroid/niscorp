@@ -6,21 +6,20 @@ import { createWireFollower } from './follow';
 import { handleQuery } from '@niscorp/vex';
 import { migrate, upgradeStore } from '@niscorp/strata/postgres';
 import { createGrammarUpgrader } from './grammar';
-import { scopeProfiles } from '@niscorp/vex';
-import type { ScopePolicy, WriteEvent, ExecuteRecord, SeedEntry, SeedMutation } from '@niscorp/vex';
+import type { ScopePolicy, WriteEvent, ExecuteRecord } from '@niscorp/vex';
 import { emitterOf } from './runtime';
 import type { TelemetrySpan } from './runtime';
 import { wireFabric } from './fabric';
 import type { VerifyReport } from '@niscorp/charter';
-import { createGeneration, refusalOf, resolveVariantsForRoles, verifyManifest, wearableOf } from './manifest';
-import type { Catalog, Generation, ManifestCandidate, NiscApp } from './manifest';
+import { createRunningManifest, refusalOf } from './manifest';
+import type { Catalog, NiscApp } from './manifest';
 import type { NiscRuntime } from './runtime';
-import { createIdentity, memoKey, sessionRemainingMs, sessionVerifierOf } from './identity';
+import { createIdentity, sessionRemainingMs, sessionVerifierOf } from './identity';
 import { createDataLayer } from './data';
 import { tableSequencesOf } from './migrate';
 import { mintWrites } from './tide';
 import { resolvePolicyAtReachForRoles, resolvePolicyForRoles } from './principal';
-import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
+import type { ActionDefinition } from '@niscorp/nova';
 import {
   buildContract,
   callIntegrationWith,
@@ -29,9 +28,9 @@ import {
   describePlacements,
   INTEGRATION_ACTIONS_STORE,
   integrationByKey,
+  filterInstalled,
   listIntegrations,
   loadIntegrationActions,
-  resolveCatalogForRoles,
   frameAdmits,
   reachAdmits,
   reachDeclares,
@@ -63,7 +62,8 @@ import type { ShellHost } from './shells';
 //
 // The app hands over its ARTIFACTS (manifest/app.ts) and an environment
 // (runtime/); everything mechanical is derived — the data layer
-// (data.ts), per-principal resolutions (manifest/roles.ts, principal.ts) — and the server
+// (data.ts), what the app consists of right now and what each set of roles
+// holds of it (manifest/), the policies (principal.ts) — and the server
 // refuses to boot incoherent (DESIGN.md § Derivation over configuration:
 // coherence is refused, not documented).
 // ═══════════════════════════════════════════════════════════════
@@ -95,13 +95,23 @@ export type MossServer = Hono<Env> & {
   // Every page the manifest declares, by name, with the path it is drawn at —
   // what a build walks to know which paths exist besides the app's own.
   pages: readonly { name: string; path: string }[];
-  // Artifacts changed at runtime (an app that loads actions from rows and just
-  // wrote new ones): re-verify coherence, drop every per-principal memo, and
-  // have living shells adopt their re-resolved definitions. Throws on an
-  // incoherent charter/variant set — a bad publish refuses, exactly like boot.
+  // Something the server derived its answers from changed (a role, an install,
+  // an artifact): verify what the app consists of again, drop every
+  // per-principal memo, and have living shells adopt their re-resolved
+  // definitions. Throws when the check boot runs refuses — a bad publish
+  // refuses, exactly like boot — and what was being served keeps being served.
   refresh: () => void;
+  // HAND OVER A SET OF ACTIONS THAT ARRIVED WHILE THE APP RUNS — for an app
+  // that loads actions from its own rows. `source` names the set: handing the
+  // same name over again puts the new set in place of the old, so an action it
+  // no longer names leaves. What the app would then consist of is verified
+  // first. Refused, this throws with the sentence `refresh` throws and nothing
+  // changed; accepted, it does what `refresh` does. The actions in force are
+  // what the app shipped, then each set. `'integrations'` is moss's own set,
+  // read from its integration tables.
+  replaceActions: (source: string, actions: Record<string, ActionDefinition>) => void;
   // THE REPORT THIS SERVER WAS VERIFIED BY — `verifyCharter`'s, from boot, then
-  // from each `refresh` that passed. Boot and refresh read its `errors` and
+  // from each change that passed. Boot and refresh read its `errors` and
   // nothing else, so the rest was computed and dropped: the warnings (an action
   // no role grants, an allow that matches nothing) and each role's closure
   // issues. Nothing here prints them; a host that wants them reads them — over
@@ -259,40 +269,29 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   await upgradeStore(runtime.pool, INTEGRATION_ACTIONS_STORE, grammars);
   const data = await createDataLayer(runtime, app.entries ?? []);
 
-  // ── Refuse to start incoherent (./manifest, verifyManifest): the charter
-  // with each role's closure audited, every entry's reach, the layout variants.
-  // What is only said — a chain of steps that never ends — is said first.
-  const candidateOf = (actions: Readonly<Record<string, ActionDefinition>>): ManifestCandidate => ({
-    charter: app.charter,
-    actions,
-    layouts: app.layouts ?? {},
-    wearable: wearableOf(app),
-    grants: data.grants,
-    entries: app.entries ?? [],
-    profiles: scopeProfiles(app.behaviors ?? {}),
-  });
-  const bootReport = verifyManifest(candidateOf(app.actions));
-  for (const line of bootReport.said) console.error(`[moss] ${line}`);
-  const bootRefusal = refusalOf(bootReport, 'boot');
-  if (bootRefusal !== undefined) throw new Error(bootRefusal);
-  // Kept for `charterReport()`; a refresh that passes replaces it.
-  let verifiedReport: VerifyReport = bootReport.charter;
-
-  // ── Per-principal resolutions, computed at first sight (login) and
-  // memoized: the documents are static for the process.
+  // WHAT THE APP CONSISTS OF RIGHT NOW (./manifest): what it shipped, and the
+  // sets of actions that arrive while it runs — an approved integration's, read
+  // from rows here; an app's own, through `replaceActions`. Every surface below
+  // asks it which actions are in force and what a set of roles holds of them,
+  // and it is the one place either changes.
   //
-  // KEYED BY WHAT THEY DEPEND ON, not by who asked. Every resolution here is a
-  // function of (role combination + installed set) - see `memoKeyOf` - so
-  // keying by principal stored one entry per PERSON for an answer that has
-  // about ten distinct values, in four maps nothing ever evicted. Two people on
-  // the same rung at the same tenant now share one compiled policy, which is
-  // what they always had; there are simply no longer two copies of it.
-  // THE GENERATION POINTER. Created before the memos it protects, polled on the
-  // same clock a socket credential is re-verified on, and moved by `refresh`.
-  // A process that observes a move re-reads the integration actions and drops
-  // every derivation, which is exactly what a restart used to be for.
-  // (Its table is part of MOSS_SEQUENCE, applied with the rest at the top.)
-  let generation: Generation | undefined;
+  // Creating it IS the boot check: an incoherent manifest refuses here, before
+  // anything else stands (the charter with each role's closure audited, every
+  // entry's reach, the layout variants).
+  //
+  // It is handed the app's own record, typed as the seven fields it reads,
+  // because for now an app may still edit that record and call `refresh`
+  // (manifest/running.ts, ShippedManifest).
+  const storedIntegrationActions = (): Promise<Record<string, ActionDefinition>> => loadIntegrationActions(runtime.pool, grammars);
+  const running = createRunningManifest({
+    shipped: app,
+    grants: data.grants,
+    installedOnly: filterInstalled,
+    loaders: { integrations: storedIntegrationActions },
+    // Polled on the clock a socket's credential is re-verified on. (The
+    // pointer's table is part of MOSS_SEQUENCE, applied with the rest above.)
+    pointer: { pool: runtime.pool, ...(runtime.sessionRevalidateMs !== undefined ? { everyMs: runtime.sessionRevalidateMs } : {}) },
+  });
 
   // EXECUTE A SEEDED ENTRY AS A DECLARED CHARTER ROLE — the one mechanism for
   // every surface that has no principal by nature: identity resolution, the
@@ -344,6 +343,12 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     revalidateMs: runtime.sessionRevalidateMs ?? DEFAULT_REVALIDATE_MS,
   });
 
+  // ── The policy a set of roles reads and writes under, compiled at first
+  // sight and kept: the documents are static until the manifest changes.
+  //
+  // KEYED BY WHAT IT DEPENDS ON, not by who asked: a policy is a function of
+  // the role combination, so two people on the same rung share one compiled
+  // policy rather than holding a copy each.
   const policies = new Map<string, ScopePolicy>();
   const policy = (resolved: ResolvedIdentity): ScopePolicy => {
     const hit = policies.get(resolved.key);
@@ -366,39 +371,14 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     return compiled;
   };
 
-  // Approved integrations' actions, folded into the running manifest. Called
-  // after an import and after an approval; `refresh()` is what makes living
-  // shells adopt.
-  const staticActions = { ...app.actions };
-  const reloadIntegrations = async (): Promise<void> => {
-    const fromRows = await loadIntegrationActions(runtime.pool, grammars);
-    app.actions = { ...staticActions, ...fromRows };
-    refresh();
-  };
+  // Approved integrations' actions, read from rows and handed to the running
+  // manifest as its 'integrations' set. Called after an import, an approval
+  // and a removal: the set is verified with everything else, and only then do
+  // the memos drop and living shells adopt.
+  const reloadIntegrations = async (): Promise<void> => running.replace('integrations', await storedIntegrationActions());
 
-  const catalogs = new Map<string, Catalog>();
-  const catalog = (resolved: ResolvedIdentity): Catalog => {
-    const hit = catalogs.get(resolved.key);
-    if (hit !== undefined) return hit;
-    const built = resolveCatalogForRoles(app, resolved.roles, resolved.installed);
-    catalogs.set(resolved.key, built);
-    return built;
-  };
-  const variantBindings = new Map<string, ReadonlyMap<string, LayoutNode>>();
-  const variants = (resolved: ResolvedIdentity): ReadonlyMap<string, LayoutNode> => {
-    const hit = variantBindings.get(resolved.key);
-    if (hit !== undefined) return hit;
-    const built = resolveVariantsForRoles(app, resolved.roles);
-    variantBindings.set(resolved.key, built);
-    return built;
-  };
-
-  // The same two, keyed by ROLES alone — what `adopt` needs. Adopting is for
-  // changed artifacts, not changed people, so a live shell's roles are still
-  // its roles and re-resolving the principal would be a round trip to learn
-  // what the shell already knows.
-  const asRoles = (roles: readonly string[], installed: readonly string[] | undefined): ResolvedIdentity => ({ roles, scope: {}, installed, key: memoKey(roles, installed) });
-
+  // What a resolved principal holds (the manifest keeps it by roles + installs).
+  const catalog = (resolved: ResolvedIdentity): Catalog => running.catalogFor(resolved.roles, resolved.installed);
 
   // THE DEPLOYMENT'S SIGNING IDENTITY — how an integration knows a call is
   // ours. Generated at boot, never persisted; the public half is served below
@@ -643,9 +623,9 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // THE ORDER HERE IS THE WHOLE SAFETY STORY. Intake validates the payload, the
   // candidate action set is verified against the charter, and only then do rows
   // land. A bundle that would make the manifest incoherent is refused with a
-  // sentence while the previous import keeps serving — because `refresh()`
-  // throws on an incoherent charter, and a bundle committed before that check
-  // would take the app down until somebody deleted rows by hand.
+  // sentence while the previous import keeps serving — because a bundle
+  // committed before that check would take the app down until somebody deleted
+  // rows by hand.
   operator.post('/integrations', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { id?: unknown; url?: unknown };
     const id = typeof body.id === 'string' ? body.id : '';
@@ -677,8 +657,8 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
       return c.json({ message: 'Refused.', reasons: result.reasons }, 422);
     }
 
-    // Press crosses HERE — after the gate, before the dry-run below touches
-    // the live manifest — so a press refusal leaves the app exactly as it
+    // Press crosses HERE — after the gate, before the candidate below is
+    // verified — so a press refusal leaves the app exactly as it
     // found it. Blobs written before a later refusal are orphans in the
     // host's store, which is cheaper than any coherence they could buy.
     const press = await copyPress(result.bundle, id, url, app.storePress);
@@ -697,15 +677,14 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     const wasApproved = String(existingRow?.status ?? '') === 'approved';
     const holdsKey = typeof existingRow?.key_hash === 'string' && existingRow.key_hash !== '';
     if (wasApproved) {
-      const restore = { ...app.actions };
-      app.actions = { ...app.actions, ...result.bundle.actions };
-      try {
-        refresh();
-      } catch (err) {
-        app.actions = restore;
-        refresh();
-        return c.json({ message: 'Refused — the app would not serve this.', reasons: [String(err)] }, 422);
-      }
+      // TRIED, NOT PUT IN. The bundle's actions over the actions in force are
+      // a candidate the running manifest verifies without switching to it, so
+      // a bundle that is refused never touched what is serving. (It used to be
+      // assigned into the live manifest and taken out again when the check
+      // threw: two drops of every memo and two moves of the pointer, to say
+      // no.) The reason reads as the thrown error did.
+      const refusal = refusalOf(running.verify({ ...running.actions(), ...result.bundle.actions }), 'refresh');
+      if (refusal !== undefined) return c.json({ message: 'Refused — the app would not serve this.', reasons: [`Error: ${refusal}`] }, 422);
     }
 
     await runtime.pool.query(
@@ -1203,11 +1182,10 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // ONE CONTEXT, for the app's host and for every page's: who a principal is,
   // the governed wire and the environment are the same wherever a shell is
   // built. What differs is the manifest it is built from and whether it is kept.
-  const entriesNow = (): ReadonlyMap<string, SeedEntry | SeedMutation> => new Map((app.entries ?? []).map((entry) => [entry.fingerprint, entry]));
   const shellContext: ShellHostContext = {
         app,
-        actions: () => app.actions,
-        needOf: (definition) => shellNeedOf(definition, entriesNow()),
+        actions: running.actions,
+        needOf: (definition) => shellNeedOf(definition, running.entries),
         // ONE resolution per shell build, awaited. This was four synchronous
         // questions, and every one of them was ultimately answered out of a
         // resident map of the population.
@@ -1222,10 +1200,10 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
           // The record IS the install list now — resolved through the same
           // engine entries as everything else, revalidated on the identity
           // cache's own clock.
-          return { roles: resolved.roles, scope: resolved.scope, installed: resolved.installed, catalog: catalog(resolved), variants: variants(resolved), policy: policy(resolved) };
+          return { roles: resolved.roles, scope: resolved.scope, installed: resolved.installed, catalog: catalog(resolved), variants: running.variantsFor(resolved.roles), policy: policy(resolved) };
         },
-        catalogFor: (roles, installed) => catalog(asRoles(roles, installed)),
-        variantsFor: (roles) => variants(asRoles(roles, undefined)),
+        catalogFor: running.catalogFor,
+        variantsFor: running.variantsFor,
         runtime,
         ...(runtime.shellIdleMs !== undefined ? { idleMs: runtime.shellIdleMs } : {}),
         ...(runtime.shellFrameDelta !== undefined ? { delta: runtime.shellFrameDelta } : {}),
@@ -1310,31 +1288,18 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     nudge: applyNudge,
   });
 
-  // Artifacts changed at runtime — an app that loads actions from rows and
-  // just wrote new ones. Same gates as boot (an incoherent publish REFUSES and
-  // the process keeps serving the old resolution), then the memos drop and
-  // living shells adopt their re-resolved definitions in place: no rebuild,
-  // no lost canvas state, new actions simply become pushable.
-  const refresh = (): void => {
-    refreshLocal();
-    // EVERY OTHER PROCESS TOO. `refresh` means rows changed under a derivation,
-    // and this process is not the only one holding derivations from them.
-    generation?.bump();
-  };
-
-  // The same drop, without moving the pointer -- what a process does when it
-  // OBSERVES a move somebody else made. Bumping here would have every process
-  // bump every other process forever.
-  const refreshLocal = (): void => {
-    const next = verifyManifest(candidateOf(app.actions));
-    const refusal = refusalOf(next, 'refresh');
-    if (refusal !== undefined) throw new Error(refusal);
-    verifiedReport = next.charter;
-    // IDENTITY GOES WITH THEM. `refresh` exists because something the
-    // resolutions were derived FROM changed — an approval, a role, an artifact.
-    // Dropping the compiled policies while keeping the records they were
-    // compiled from is keeping the stale half: a promoted instructor would hold
-    // their old rung until the record expired on its own clock.
+  // WHEN WHAT THE APP CONSISTS OF CHANGES — a set of actions replaced, a
+  // `refresh`, a move another process made — what this server derived from the
+  // old manifest goes with it, and living shells adopt their re-resolved
+  // definitions in place: no rebuild, no lost canvas state, new actions simply
+  // become pushable. The manifest has already dropped what each set of roles
+  // holds. A change that was refused never gets here.
+  running.onChange(() => {
+    // IDENTITY GOES WITH THEM. A change means something the resolutions were
+    // derived FROM changed — an approval, a role, an artifact. Dropping the
+    // compiled policies while keeping the records they were compiled from is
+    // keeping the stale half: a promoted instructor would hold their old rung
+    // until the record expired on its own clock.
     identity.invalidateAll();
     policies.clear();
     // `reachPolicies` too — it is compiled from the same grants as `policies`
@@ -1342,34 +1307,24 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     // change was honoured at the caller's own reach and ignored at every reach
     // an entry declared, for the life of the process.
     reachPolicies.clear();
-    catalogs.clear();
-    variantBindings.clear();
     shells?.adopt();
-  };
+  });
 
   // WHATEVER WAS APPROVED BEFORE THIS PROCESS STARTED is part of the
   // application, so it is folded in before anything is served — not on first
-  // request and not on a timer. It happens here rather than beside the routes
-  // because it calls `refresh`, which is declared below them.
+  // request and not on a timer. And BEFORE the pointer is watched: a process
+  // that starts has changed nothing for the others, so its start moves nobody's
+  // pointer.
   {
-    const fromRows = await loadIntegrationActions(runtime.pool, grammars);
-    if (Object.keys(fromRows).length > 0) {
-      app.actions = { ...staticActions, ...fromRows };
-      refresh();
-    }
+    const stored = await storedIntegrationActions();
+    if (Object.keys(stored).length > 0) running.replace('integrations', stored);
   }
 
-  generation = createGeneration(runtime.pool, {
-    ...(runtime.sessionRevalidateMs !== undefined ? { everyMs: runtime.sessionRevalidateMs } : {}),
-    onMoved: async () => {
-      // Somebody else wrote. Re-read what is loaded FROM rows (an approval lands
-      // as new actions), then drop every derivation without moving the pointer
-      // again.
-      const fromRows = await loadIntegrationActions(runtime.pool, grammars);
-      app.actions = { ...staticActions, ...fromRows };
-      refreshLocal();
-    },
-  });
+  // From here on a change moves the generation pointer, so every other process
+  // drops what it derived within one poll; and a move one of them makes is
+  // answered here by reading the integration actions again. Only now, so a
+  // boot that refuses above leaves no timer polling behind it.
+  running.watch();
 
   // Held in a local, not inlined below, because `close` has to reach its
   // `stop` — the socket's revalidation timer is one of the four this server
@@ -1391,14 +1346,15 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     page: pageAt,
     pages: Object.entries(pageManifests).map(([name, manifest]) => ({ name, path: manifest.path })),
     ...(shells !== undefined ? { shells } : {}),
-    refresh,
-    charterReport: () => verifiedReport,
-    generation: () => generation?.current() ?? -1,
+    refresh: running.refresh,
+    replaceActions: running.replace,
+    charterReport: () => running.report().charter,
+    generation: running.generation,
     // Every timer this server owns, stopped once. Absent pieces (an app with no
     // identity seam, no shells) simply have nothing to stop — the `?.` is the
     // whole guard. See the type above for why this is one call and not four.
     close: () => {
-      generation?.stop();
+      running.stop();
       identity.stop();
       socket.stop();
       shells?.stop();
