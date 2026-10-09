@@ -346,8 +346,8 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
       console.error(`[moss:executeAs] "${fingerprint}" as "${role}" refused (${outcome.status})`, outcome.body);
       return undefined;
     }
-    const body = outcome.body as Record<string, unknown>;
-    return 'result' in body ? body['result'] : undefined;
+    const body = outcome.body;
+    return body !== null && typeof body === 'object' && 'result' in body ? body.result : undefined;
   };
 
   // WHO A PRINCIPAL IS, for every surface below (./identity). It is handed the
