@@ -123,9 +123,16 @@ export const createGeneration = (pointer: Pointer, ctx: { onMoved: () => void | 
     for (let attempt = 0; attempt < MOVE_ATTEMPTS; attempt += 1) {
       const n = await pointer.read();
       if (await pointer.move(n)) {
-        // Adopt our own move immediately, so `seen` cannot lag behind a value
+        // OUR OWN MOVE IS SEEN AT ONCE, so `seen` cannot lag behind a value
         // this process itself wrote and then "discover" it a minute later.
-        seen = n + 1;
+        //
+        // BUT ONLY WHERE NOTHING ELSE IS WAITING TO BE FOLLOWED. If the counter
+        // was already past what this process had seen, another process moved
+        // it first, and what that one changed has not been read here. Counting
+        // our own number as seen would pass over it for good. So `seen` stays
+        // where it was, and the next look finds the counter ahead and follows:
+        // one reload for the two moves.
+        if (seen === n || seen === -1) seen = n + 1;
         return;
       }
     }

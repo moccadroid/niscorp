@@ -126,6 +126,32 @@ describe('generation pointer', () => {
     expect(errors.filter((line) => line.includes('could not read'))).toEqual([]);
   });
 
+  // SOMEBODY ELSE'S MOVE, PASSED OVER BY ITS OWN. Another process moved the
+  // pointer since this one last looked, and then this one moves it too. It
+  // counted the number its own move landed on as seen, and that number is past
+  // the other process's move: what that one changed was never read here.
+  it('its own bump does not pass over a move another process made first', async () => {
+    const pool = fakePool();
+    let moves = 0;
+    const gen = createGeneration(pool, { onMoved: () => void (moves += 1), everyMs: 30 });
+    await settle();
+
+    pool.poke(); // another process moved it, and no look has happened since
+    gen.bump();
+    await settle();
+    // Its own move landed, on top of the other's...
+    expect(pool.value()).toBe(2);
+    // ...and neither is counted as seen, because the first has not been followed.
+    expect(gen.current()).toBe(0);
+    expect(moves).toBe(0);
+
+    // The next look follows it, once.
+    await new Promise((r) => setTimeout(r, 80));
+    expect(moves).toBe(1);
+    expect(gen.current()).toBe(2);
+    gen.stop();
+  });
+
   it('stopping ends the polling', async () => {
     const pool = fakePool();
     let moves = 0;

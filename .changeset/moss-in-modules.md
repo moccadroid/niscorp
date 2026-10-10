@@ -307,6 +307,7 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 
 - When the generation pointer moves, a process reads again the sets of actions that live in rows. When that failed (the database out of reach for a moment, a set this process refuses), the move was counted as seen all the same: the process went on serving what it had until the pointer moved again, and its log said the pointer `could not be read`, which it had been.
 - A move is counted as seen once it has been followed. One that could not be is logged as that (`the generation pointer moved (3 → 4) and this process could not follow it`), and is tried again at the next poll (`sessionRevalidateMs`), and the one after, until it is. A process that can never follow says so at every poll.
+- A process that moves the pointer itself (a `refresh`, a set of actions replaced) counted the number its own move landed on as seen. When another process had moved the pointer first and no poll had come between, that number was past the other's move, and what the other one changed was never read here. Its own move is counted as seen only when nothing else is waiting to be followed; otherwise the next poll follows both.
 - `server.generation()` answers the last generation this process followed.
 - An app has nothing to change.
 
