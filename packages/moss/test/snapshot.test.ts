@@ -133,6 +133,18 @@ describe('snapshot — whether anything can still happen', () => {
     expect(snapshot.why).toEqual(['counter: a person can act on it']);
   });
 
+  // What an instance runs is its action WITH the fragments it was pushed with,
+  // and a fragment adds what can be pressed. So liveness is asked of what is
+  // mounted, where the two are composed, and not of the action as it is held:
+  // `words` by itself has nothing left to do.
+  it('what a fragment lays around an action counts: a sheet that can be closed is live', async () => {
+    const sheet = { kind: 'fragment' as const, id: 'sheet', layout: { component: 'Sheet', children: [{ slot: 'body' }, { component: 'Button', ref: 'close' }] }, data: { closes: 0 }, triggers: [{ event: 'ui:click', ref: 'close', do: [{ increment: 'closes' }] }] };
+    const shell = { canvases: [{ id: 'main', initial: { action: 'words', with: ['sheet'] } }], fragments: { sheet } };
+    const snapshot = await createShellHost(hostConfig(contextOf(appOf(shell)))).snapshot(null, null);
+    expect(snapshot.live).toBe(true);
+    expect(snapshot.why).toEqual(['words: a person can act on it']);
+  });
+
   it('the app’s shell is live for whoever is signed in, whatever is on it', async () => {
     const host = createShellHost(hostConfig(contextOf(appOf({ canvases: [{ id: 'main', initial: 'words' }] }))));
     expect((await host.snapshot('t', 'usr_1')).live).toBe(true);

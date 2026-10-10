@@ -15,7 +15,7 @@ const bold = (s: string): string => `\x1b[1m${s}\x1b[0m`;
 const dim = (s: string): string => `\x1b[2m${s}\x1b[0m`;
 
 // What moss actually puts on the wire for one canvas: the flattened tree,
-// wrapped in a render message. Mirrors `frame()` in moss/src/shells.ts.
+// wrapped in a render message. Mirrors `frame()` in moss/src/shells/stream.ts.
 const canvasBytes = (shell: Shell, canvas: string): number => {
   const tree = shell.flattenRenderTree(shell.getCanvasRenderTree(canvas));
   return JSON.stringify({ type: 'render', canvas, tree }).length;

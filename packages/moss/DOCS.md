@@ -455,8 +455,9 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
 - `refresh(): void` — something the server derived its answers from changed
   where it cannot see (a role, an install): run the check boot runs over what
   is in force (the charter, every entry's reach, the layout variants), drop
-  every per-principal memo and identity record, and have living shells adopt
-  their re-resolved definitions in place. It also moves the generation pointer,
+  every per-principal memo and identity record, and have every living shell
+  adopt: it is brought level with what its principal holds now, in place
+  (`ShellHost.adopt`, below). It also moves the generation pointer,
   so every other process on the same database does the same within one poll.
   It ships nothing: the manifest that was handed over cannot be edited, and
   `replaceActions` is how actions arrive.
@@ -907,14 +908,27 @@ measures the end.
   handed is not read by the manifest's schema and is not frozen.
 - `memoKeyOf(app, principal): string` — the key the per-principal memos depend
   on (roles + installed set), from `assignments` with no install list.
-- `createShellHost(ctx): ShellHost` — the durable per-principal shell host.
-  `ctx.idleMs` bounds how long a shell may sit unattached (default
-  `DEFAULT_IDLE_MS`, 30 minutes; `0` disables the sweep).
-- `ShellHost` — `{ session, snapshot, adopt, deliver, list, reset, stop }`.
+- `ShellHost` — `{ session, snapshot, adopt, deliver, list, reset, stop }`:
+  the durable per-principal shell host, as `server.shells` and
+  `server.page(path).host`. The server creates it (`src/shells/`,
+  `createShellHost(config)`; not exported). It is handed no manifest and no
+  runtime, but a typed object of what it needs: one function that answers what
+  a principal's shell is made of (who they are, the action definitions they
+  hold with their roles' layout variant in place, the canvases, the frame, the
+  layout store's seed, the fragments, the component names), the app's code a
+  shell calls (`inputs`, `seeds`, `phrases`, `functions`, `onSession`,
+  `runs`), the wire for a token, and its limits. A shell may sit unattached for
+  `runtime.shellIdleMs` (default 30 minutes; `0` disables the sweep).
   - `session(token, principal, options?)` — `options = { seed?, inputs? }`
     (`ShellOpening`); `snapshot` is described under [The document](#the-document).
-  - `adopt()` — every living durable shell re-registers its freshly resolved
-    granted definitions in place (what `server.refresh()` calls).
+    Two first arrivals for one principal in the same moment are handed one
+    shell: one is built.
+  - `adopt()` — every living durable shell is brought level with what its
+    principal holds now, in place (what `server.refresh()` and
+    `server.replaceActions()` cause). Definitions that arrived or changed are
+    registered and mounted instances keep their state; one that left, or is no
+    longer granted, is removed and its instances unmounted. A shell that
+    cannot adopt is logged and keeps what it held; the rest go on.
   - `deliver(principal, channel, payload?): boolean` — publish into one
     principal's living durable shell. `false` = they have no living shell;
     nothing is built.
@@ -923,7 +937,10 @@ measures the end.
     so moss enumerates it; an app keeping its own note beside it can only drift.
   - `reset(principal): boolean` — dispose that principal's shell and stand its
     replacement in the same slot, carrying the attached connections across.
-    `false` = they hold no shell, which is an answer, not an error.
+    `false` = they hold no shell, which is an answer, not an error. The
+    replacement is built from what the shell was opened with (for a page's,
+    the inputs of its path and its id seed), and a shell's resets run one
+    after another.
   - `stop()` — stop the idle sweep (the timer is unref'd, so a plain process
     needn't call it).
 - `ShellSession` — what `ShellHost.session(token, principal)` returns:
@@ -932,6 +949,13 @@ measures the end.
   remote clients ride `attach`/`dispatch`. `shell` is a **getter** — `reset`
   replaces the shell under a session already held, so a snapshot of the field
   would go on addressing the disposed one.
+  `dispatch(canvas, event)` holds what a terminal sent to the shell: the
+  canvas must be one the shell has, an `origin` the event names must be an
+  instance on that canvas (with none, the canvas's active instance is
+  stamped), and the event must parse as one of nova's (`NovaEventSchema`:
+  `ui:click`, `ui:submit`, `ui:input`, `ui:focus`, `ui:blur`, `ui:model`,
+  `ui:key`, `ui:drop`, with their fields and no others). One that fails any
+  of the three is dropped.
 
 ### The socket protocol
 
