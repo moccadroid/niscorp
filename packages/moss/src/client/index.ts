@@ -331,6 +331,9 @@ export const createWire = (config: WireConfig = {}): Wire => {
   const connect = (): void => {
     if (disposed) return;
     letGo();
+    // Whether the two ends can speak is found out per connection: the one
+    // being made may reach a server that has been updated since.
+    incompatible = false;
     setStatus('connecting');
     bases.clear();
     // The address says nothing about who this is — it is what every proxy on

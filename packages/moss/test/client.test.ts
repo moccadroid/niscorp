@@ -829,6 +829,29 @@ describe('the wire — protocol', () => {
     vi.advanceTimersByTime(120_000);
     expect(FakeSocket.instances).toHaveLength(1);
   });
+
+  // A server that was behind gets updated, and a reset is the way back to it.
+  // That the last one could not be spoken to says nothing about this one.
+  it('a reset out of incompatible that reaches a server it can speak to is a connection like any other: a drop is retried', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const hello = { type: 'hello', principal: null, catalog: { actions: [], hash: 'x' } };
+    const wire = createWire({ url: URL, env: env() });
+    FakeSocket.last().open();
+    FakeSocket.last().emit({ ...hello, protocol: 0 });
+    FakeSocket.last().serverClose(1005);
+    expect(wire.status()).toBe('incompatible');
+
+    wire.reset();
+    FakeSocket.last().open();
+    FakeSocket.last().emit({ ...hello, protocol: PROTOCOL });
+    expect(wire.status()).toBe('open');
+
+    FakeSocket.last().serverClose(1006);
+    expect(wire.status()).toBe('closed');
+    vi.advanceTimersByTime(60_000);
+    expect(FakeSocket.instances).toHaveLength(3);
+    expect(wire.status()).toBe('connecting');
+  });
 });
 
 // A host whose browser may keep the session itself (a cookie the page cannot

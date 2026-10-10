@@ -321,4 +321,5 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 **The wire holds one socket at a time.**
 
 - `wire.reset()` on a socket that is not open connects again. Pressed while a connect was still in flight (the reset key held down on a slow network, a reset straight after the page loads), the socket it was waiting on was left as it was, with the wire still listening to it. Both opened: two sockets wrote one snapshot, a sign-out or a drop heard on either was taken for the connection's, and the first to close scheduled a third. The wire lets go of the socket it had before it makes another: it is no longer listened to, and it is closed.
+- A wire whose status is `incompatible` stops retrying, and `reset()` is the way to try again once the server has been updated. A connection made that way kept the mark of the one before it: when it later dropped for any reason, the status read `incompatible` again and nothing retried. Whether the two ends can speak is found out for each connection now.
 - An app has nothing to change.
