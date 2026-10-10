@@ -47,7 +47,10 @@ export type DataConfig = {
   // The deployment keeps moss's own credential (`session: 'sessions'`), so its
   // table is one of the run's.
   storesSessions: boolean;
-  // The app's own tables (`runtime.tables`): after moss's, in the same run.
+  // The tables the app's features keep (./migrate.ts, `featureTablesOf`):
+  // after moss's and the cache's, in the same run.
+  featureTables?: readonly Sequence[];
+  // The app's own tables (`runtime.tables`): last, in the same run.
   tables?: readonly Sequence[];
   // The app's own grammars (`NiscApp.grammars`): after nova's and Prism's.
   grammars?: readonly Sequence[];

@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
 import type { Charter } from '@niscorp/charter';
 import type { ActionDefinition, FetchFn } from '@niscorp/nova';
-import type { Upgrader } from '@niscorp/strata';
+import type { Sequence, Upgrader } from '@niscorp/strata';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Telemetry } from '../runtime';
 
@@ -119,5 +119,12 @@ export type FeatureSeams = {
 export type Feature = {
   // What it is called, for whoever reads a refusal.
   name: string;
+  // THE TABLES IT KEEPS, as strata sequences of its own. Said here and not
+  // through a seam, because tables exist before anything starts: they go
+  // through the one ledgered run every owner's tables go through, after moss's
+  // and before the app's, so they are there when `start` is called. They are
+  // tables like any other from then on: the charter's `data` universe holds
+  // them, and the step that migrates before a deployment starts runs them.
+  tables?: readonly Sequence[];
   start: (seams: FeatureSeams) => void | Promise<void>;
 };

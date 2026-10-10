@@ -8,7 +8,7 @@ import type { Catalog, ManifestReport, NiscApp } from './manifest';
 import type { ScopePolicy } from '@niscorp/vex';
 import type { NiscRuntime } from './runtime';
 import { createIdentity, sessionRemainingMs, sessionVerifierOf } from './identity';
-import { createData, createWireFollower } from './data';
+import { createData, createWireFollower, featureTablesOf } from './data';
 import type { ExecuteAs } from './data';
 import { mintWrites } from './tide';
 import type { ActionDefinition, FetchFn } from '@niscorp/nova';
@@ -225,6 +225,8 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     vexConfig: runtime.vexConfig,
     migrations: runtime.migrations,
     storesSessions: runtime.session === 'sessions',
+    // The tables the features keep, so they are there before a feature starts.
+    featureTables: featureTablesOf(app),
     tables: runtime.tables,
     grammars: app.grammars,
     entries: app.entries,

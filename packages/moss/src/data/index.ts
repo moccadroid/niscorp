@@ -43,7 +43,7 @@ export type { Data, DataConfig, DataRoutesConfig } from './data';
 export type { ExecuteAs } from './execute-as';
 export type { OwnEntries, Replay } from './own-entries';
 export { createWireFollower } from './follow';
-export { migrateTables } from './migrate';
+export { featureTablesOf, migrateTables } from './migrate';
 export type { TablesReport } from './migrate';
 export { resolvePolicy } from './policy';
 export { MOSS_SEQUENCE } from './tables';

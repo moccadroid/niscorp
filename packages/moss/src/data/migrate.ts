@@ -39,19 +39,29 @@ export type TableOwners = {
   cache?: CacheBackend;
   // The deployment keeps moss's own credential (`session: 'sessions'`).
   storesSessions: boolean;
+  // The tables the app's features keep (`featureTablesOf`).
+  featureTables?: readonly Sequence[];
   // The app's own tables (`runtime.tables`).
   tables?: readonly Sequence[];
 };
 
+// The tables an app's features keep, in the order the app named the features.
+// One function, for the server and for the step that migrates before it
+// starts: the two must run the same sequences, or a boot that only verifies
+// (`migrations: 'verify'`) finds one pending that the step never applied.
+export const featureTablesOf = (app: Pick<NiscApp, 'features'>): readonly Sequence[] => (app.features ?? []).flatMap((feature) => feature.tables ?? []);
+
 // Every table sequence a boot runs, in the order it runs them: moss's own, the
 // sessions table when the deployment chose moss's credential, the vex cache's,
-// then the app's own.
+// the features' (a feature's table may point at one of moss's), then the
+// app's own.
 export const tableSequencesOf = (owners: TableOwners): readonly Sequence[] => {
   const cacheSequence = (owners.cache ?? createPostgresCache({ pool: owners.pool })).sequence;
   return [
     MOSS_SEQUENCE,
     ...(owners.storesSessions ? [SESSIONS_SEQUENCE] : []),
     ...(cacheSequence === undefined ? [] : [cacheSequence]),
+    ...(owners.featureTables ?? []),
     ...(owners.tables ?? []),
   ];
 };
@@ -144,11 +154,11 @@ export type TablesReport = MigrateReport & {
 // entry of `app` would not fit what the run leaves.
 //
 // The step a deployment runs before it starts, so it is handed what a server
-// is handed: the runtime and the app. It reads the four fields of the one and
-// the entries of the other.
+// is handed: the runtime and the app. It reads the four fields of the one, and
+// of the other the entries and the tables its features keep.
 export const migrateTables = async (
   runtime: Pick<NiscRuntime, 'pool' | 'cache' | 'session' | 'tables'>,
-  app: Pick<NiscApp, 'entries'>,
+  app: Pick<NiscApp, 'entries' | 'features'>,
   options: { dryRun?: boolean } = {},
 ): Promise<TablesReport> => {
   const entries = app.entries ?? [];
@@ -166,7 +176,7 @@ export const migrateTables = async (
   }
 
   let found: Pick<TablesReport, 'removed' | 'retyped' | 'alreadyBroken'> = { removed: [], retyped: [], alreadyBroken: [] };
-  const owners: TableOwners = { pool: runtime.pool, cache: runtime.cache, storesSessions: runtime.session === 'sessions', tables: runtime.tables };
+  const owners: TableOwners = { pool: runtime.pool, cache: runtime.cache, storesSessions: runtime.session === 'sessions', featureTables: featureTablesOf(app), tables: runtime.tables };
   const report = await migrate(runtime.pool, tableSequencesOf(owners), {
     ...(options.dryRun === true ? { dryRun: true } : {}),
     guard: async (tx) => {

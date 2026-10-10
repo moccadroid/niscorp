@@ -1,12 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
-import { scopeGrants } from '@niscorp/vex';
+import { createMemoryCache, scopeGrants } from '@niscorp/vex';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Charter } from '@niscorp/charter';
+import type { Sequence } from '@niscorp/strata';
 import { memoKey } from '../src/identity';
 import type { TelemetrySpan } from '../src/runtime';
 import { dataOver } from '../src/data/data';
 import { createGrammarUpgrader } from '../src/data/grammar';
+import { featureTablesOf, tableSequencesOf } from '../src/data/migrate';
 import { engineDouble } from './data-double';
 
 // WHAT SOMEBODY MAY READ AND WRITE, as the one object a server builds: the
@@ -214,5 +216,25 @@ describe("the data module — a feature's own entries", () => {
     const replay = await data.ownEntries(own);
     await replay('tags/all', {});
     expect(spans.map((span) => [span.name, span.status, span.attributes['fingerprint'], span.attributes['hasPrincipal']])).toEqual([['vex.execute', 'ok', 'tags/all', false]]);
+  });
+});
+
+// WHOSE TABLES ONE RUN COVERS (../src/data/migrate.ts). Nothing is run here:
+// the pool is never asked, and the cache keeps no table.
+describe('the data module — the tables a run covers', () => {
+  const sequence = (id: string): Sequence => ({ id, migrations: [{ description: `the tables of ${id}`, steps: [{ kind: 'sql', sql: `CREATE TABLE ${id.replace(/\W/g, '_')} (id text PRIMARY KEY)` }] }] });
+  const owners = { pool: { query: async () => ({ rows: [] }) }, cache: createMemoryCache(), storesSessions: false };
+
+  it("a feature's tables are run with the others: after moss's own, before the app's", () => {
+    const grants = sequence('feature.grants');
+    const notes = sequence('app.notes');
+    const features = [{ name: 'one', tables: [grants], start: () => undefined }, { name: 'none', start: () => undefined }];
+    expect(featureTablesOf({ features })).toEqual([grants]);
+    expect(tableSequencesOf({ ...owners, featureTables: featureTablesOf({ features }), tables: [notes] }).map((owned) => owned.id)).toEqual(['nisc.moss', 'feature.grants', 'app.notes']);
+  });
+
+  it('an app with no feature, or one that keeps no table, adds none', () => {
+    expect(featureTablesOf({})).toEqual([]);
+    expect(tableSequencesOf({ ...owners, storesSessions: true }).map((owned) => owned.id)).toEqual(['nisc.moss', 'nisc.moss.sessions']);
   });
 });
