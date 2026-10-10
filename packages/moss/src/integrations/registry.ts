@@ -160,6 +160,10 @@ export type Landing = {
   // The grammars the definitions are written in: this code's, since intake
   // upgraded every one of them.
   stamp: Upgrader['stamp'];
+  // The hash of the key the integration is issued with this import: all the
+  // row keeps of it (./credentials.ts). Absent: no key is issued, and what the
+  // row holds of one stays.
+  keyHash?: string;
 };
 
 // The row a bundle is kept as: each column under its own name, as the entry
@@ -206,17 +210,17 @@ const landedRow = ({ id, url, bundle, adds, press }: Landing): Record<string, un
   last_import_at: new Date().toISOString(),
 });
 
-// LAND A BUNDLE: the integration's row as the bundle says it is now, and its
-// actions in place of whatever it shipped before. Three kinds of statement
-// and no transaction around them, as it has always been.
+// LAND A BUNDLE: the integration's row as the bundle says it is now, its
+// actions in place of whatever it shipped before, and the hash of its key when
+// one is issued with the import. ONE BATCH, so one transaction (./entries.ts):
+// it lands whole, or what the import before it wrote is still there, whole.
+// They were separate statements, and one that failed part-way left a row that
+// said one thing over actions that said another, or over none.
 export const landBundle = async (replay: Replay, landing: Landing): Promise<void> => {
-  const { id, bundle } = landing;
-  await replay('integrations/land-row', landedRow(landing));
-  await replay('integrations/drop-actions', { id });
-  for (const [actionId, definition] of Object.entries(bundle.actions)) {
+  const { bundle } = landing;
+  const actions = Object.entries(bundle.actions).map(([actionId, definition]) => {
     const binding = bundle.attachments[actionId];
-    await replay('integrations/land-action', {
-      integration_id: id,
+    return {
       action_id: actionId,
       definition,
       attach_to: binding === undefined ? '' : typeof binding === 'string' ? binding : binding.to,
@@ -224,14 +228,11 @@ export const landBundle = async (replay: Replay, landing: Landing): Promise<void
       place_in: bundle.placements[actionId] ?? '',
       // Stamped current: intake upgraded every definition to this code's grammars.
       grammar: landing.stamp,
-    });
-  }
-};
-
-// The hash of the key an integration was issued: all the row keeps of it
-// (./credentials.ts).
-export const keepKeyHash = async (replay: Replay, id: string, keyHash: string): Promise<void> => {
-  await replay('integrations/keep-key-hash', { id, key_hash: keyHash });
+    };
+  });
+  const said = { ...landedRow(landing), actions };
+  if (landing.keyHash === undefined) await replay('integrations/land', said);
+  else await replay('integrations/land-and-keep-key', { ...said, key_hash: landing.keyHash });
 };
 
 // APPROVE: what it asked to read and write becomes what it is granted, and it

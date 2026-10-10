@@ -4,14 +4,16 @@ import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import type { PgPool } from '@niscorp/vex';
 import type { Replay } from '../src/data/own-entries';
-import { registryOver } from './registry-db';
+import { failingAt, registryOver } from './registry-db';
 import { runIntake, intakeContextOf } from '../src/integrations/intake';
 import { reachOf } from '../src/integrations/reach';
 import { copyPress } from '../src/integrations/press';
 import { callIntegrationWith } from '../src/integrations/call';
 import { createForwarder } from '../src/integrations/forward';
-import { findIntegration, listIntegrations } from '../src/integrations/registry';
+import { findIntegration, landBundle, listIntegrations } from '../src/integrations/registry';
+import type { Landing } from '../src/integrations/registry';
 import type { HostVocabulary, IntakeContext } from '../src/integrations/intake';
+import { BundleSchema } from '../src/integrations/bundle';
 import type { Bundle } from '../src/integrations/bundle';
 import type { StorePress } from '../src/integrations/press';
 import { createAssertionSigner, verifyAssertion } from '../src/integrations/credentials';
@@ -813,8 +815,9 @@ describe('the registry as vex entries — each statement, against a database', (
     last_import_at: '2026-10-10T08:00:00.000Z',
     ...over,
   });
+  // One action of a bundle, as the list a landing is handed carries it: the
+  // row it is kept as is this, with the integration's id.
   const action = (integration: string, name: string, over: Record<string, unknown> = {}): Record<string, unknown> => ({
-    integration_id: integration,
     action_id: `ext.desk.${integration}.${name}`,
     definition: { id: `ext.desk.${integration}.${name}`, title: name },
     attach_to: '',
@@ -823,6 +826,7 @@ describe('the registry as vex entries — each statement, against a database', (
     grammar: { 'nisc.nova': 3 },
     ...over,
   });
+  const actionsOf = (integration: string): Promise<Record<string, unknown>[]> => rows('SELECT * FROM integration_actions WHERE integration_id = $1 ORDER BY action_id', [integration]);
 
   it('1 · find: one integration by its id, and no row for an id that is not there', async () => {
     const reach = { '/integrations/found/roster': ['ext.desk.found.roster'] };
@@ -852,8 +856,10 @@ describe('the registry as vex entries — each statement, against a database', (
     expect(await replay('integrations/standing', { id: 'ghost' })).toEqual([]);
   });
 
-  it('4 · land the row: every column a bundle says, the instant it was handed, and no error', async () => {
-    await replay('integrations/land-row', landing('landed'));
+  // 4, 5, 6 and 7 were four statements, run one after the other. They are one
+  // batch now (the case after these holds that it lands whole or not at all).
+  it('4 · land a bundle: every column the bundle says, the instant it was handed, and no error', async () => {
+    await replay('integrations/land', { ...landing('landed'), actions: [] });
     const { id: _id, last_import_at: _at, ...said } = landing('landed');
     const [first] = await rows(`SELECT * FROM integrations WHERE id = 'landed'`);
     expect(first).toMatchObject({ ...said, id: 'landed', status: 'pending', key_hash: null, approved_data: [], last_error: null });
@@ -863,7 +869,7 @@ describe('the registry as vex entries — each statement, against a database', (
     // lands as an empty list), and what the bundle does not say stays.
     await pool.query(`UPDATE integrations SET status = 'approved', key_hash = 'h', approved_data = '["members.read"]'::jsonb, last_error = 'old' WHERE id = 'landed'`);
     const again = landing('landed', { title: 'Belts 2', requested_data: [], reach: {}, story: [], offers: [], capabilities: [], last_import_at: '2026-10-11T09:30:00.000Z' });
-    await replay('integrations/land-row', again);
+    await replay('integrations/land', { ...again, actions: [] });
     const [second] = await rows(`SELECT * FROM integrations WHERE id = 'landed'`);
     expect(second).toMatchObject({ title: 'Belts 2', requested_data: [], reach: {}, story: [], offers: [], capabilities: [], needs: ['booking'] });
     expect(second).toMatchObject({ status: 'approved', key_hash: 'h', approved_data: ['members.read'], last_error: null });
@@ -871,22 +877,31 @@ describe('the registry as vex entries — each statement, against a database', (
     expect(await rows(`SELECT count(*)::int AS n FROM integrations WHERE id = 'landed'`)).toEqual([{ n: 1 }]);
   });
 
-  it('5, 6 · land an action, and drop the actions of one integration and of no other', async () => {
-    await replay('integrations/land-row', landing('other'));
+  it('5, 6 · ...with its actions, in place of the ones it shipped before, and of no other integration’s', async () => {
     const riding = action('landed', 'roster', { attach_to: 'people.detail', preview: '/integrations/landed/preview' });
-    await replay('integrations/land-action', riding);
-    await replay('integrations/land-action', action('landed', 'board', { place_in: 'people.hub' }));
-    await replay('integrations/land-action', action('other', 'roster'));
-    expect(await rows(`SELECT * FROM integration_actions WHERE integration_id = 'landed' ORDER BY action_id`)).toEqual([action('landed', 'board', { place_in: 'people.hub' }), riding]);
+    const placed = action('landed', 'board', { place_in: 'people.hub' });
+    await replay('integrations/land', { ...landing('landed'), actions: [riding, placed] });
+    await replay('integrations/land', { ...landing('other'), actions: [action('other', 'roster')] });
+    expect(await actionsOf('landed')).toEqual([{ integration_id: 'landed', ...placed }, { integration_id: 'landed', ...riding }]);
 
-    await replay('integrations/drop-actions', { id: 'landed' });
-    expect(await rows(`SELECT integration_id, action_id FROM integration_actions WHERE integration_id IN ('landed', 'other')`)).toEqual([{ integration_id: 'other', action_id: 'ext.desk.other.roster' }]);
+    // The next import ships one action: the two before it leave.
+    await replay('integrations/land', { ...landing('landed'), actions: [action('landed', 'solo')] });
+    expect(await actionsOf('landed')).toEqual([{ integration_id: 'landed', ...action('landed', 'solo') }]);
+    // ...and one that ships none leaves none.
+    await replay('integrations/land', { ...landing('landed'), actions: [] });
+    expect(await actionsOf('landed')).toEqual([]);
+    expect(await actionsOf('other')).toEqual([{ integration_id: 'other', ...action('other', 'roster') }]);
   });
 
-  it('7 · keep the hash of the key an integration was issued', async () => {
-    await pool.query(`INSERT INTO integrations (id, url) VALUES ('issued', 'https://issued.example')`);
-    await replay('integrations/keep-key-hash', { id: 'issued', key_hash: 'deadbeef' });
+  it('7 · ...and with the hash of its key, on the import a key is issued with', async () => {
+    await replay('integrations/land-and-keep-key', { ...landing('issued'), key_hash: 'deadbeef', actions: [] });
     expect(await rows(`SELECT id, key_hash FROM integrations WHERE key_hash = 'deadbeef'`)).toEqual([{ id: 'issued', key_hash: 'deadbeef' }]);
+    // A row that is there with no key (an import that failed came first) is
+    // issued one the same way, with the actions the bundle ships.
+    await replay('integrations/record-failed-import', { id: 'late', url: 'https://late.example', last_error: 'Refused.' });
+    await replay('integrations/land-and-keep-key', { ...landing('late'), key_hash: 'cafe', actions: [action('late', 'roster')] });
+    expect(await rows(`SELECT key_hash, title, last_error FROM integrations WHERE id = 'late'`)).toEqual([{ key_hash: 'cafe', title: 'Belts', last_error: null }]);
+    expect(await actionsOf('late')).toEqual([{ integration_id: 'late', ...action('late', 'roster') }]);
   });
 
   it('8, 9 · approve: what was asked for is read, and written as what is granted', async () => {
@@ -916,20 +931,45 @@ describe('the registry as vex entries — each statement, against a database', (
     expect(await replay('integrations/remove', { id: 'ghost' })).toEqual([]);
   });
 
+  it('landing a bundle is all or nothing: a failure part-way leaves the rows of the import before it whole', async () => {
+    const bundleOf = (title: string, names: readonly string[]): Bundle =>
+      BundleSchema.parse({ integration: 'atomic', meta: { title }, actions: Object.fromEntries(names.map((name) => [`ext.desk.atomic.${name}`, { id: `ext.desk.atomic.${name}`, title: name }])) });
+    const landingOf = (bundle: Bundle): Landing => ({ id: 'atomic', url: 'https://atomic.example', bundle, adds: '', press: [], stamp: { 'nisc.nova': 3 } });
+    const held = async (): Promise<unknown> => ({
+      row: await rows(`SELECT * FROM integrations WHERE id = 'atomic'`),
+      actions: await rows(`SELECT * FROM integration_actions WHERE integration_id = 'atomic' ORDER BY action_id`),
+    });
+
+    await landBundle(replay, landingOf(bundleOf('First', ['one', 'two'])));
+    const before = await held();
+    expect(before).toMatchObject({ row: [{ title: 'First' }], actions: [{ action_id: 'ext.desk.atomic.one' }, { action_id: 'ext.desk.atomic.two' }] });
+
+    // The same database, through a client on which the statement that writes
+    // the actions fails: the row has been written and the old actions taken
+    // out by then.
+    const broken = await registryOver(pool, failingAt(pool, /^INSERT INTO integration_actions/));
+    await expect(landBundle(broken, landingOf(bundleOf('Second', ['three'])))).rejects.toThrow(/the database went away/);
+    expect(await held()).toEqual(before);
+
+    // ...and the same import lands whole on a client that works.
+    await landBundle(replay, landingOf(bundleOf('Second', ['three'])));
+    expect(await held()).toMatchObject({ row: [{ title: 'Second' }], actions: [{ action_id: 'ext.desk.atomic.three' }] });
+  });
+
   describe('the lists', () => {
     const start = { after_integration: '', after_action: '' };
 
     beforeAll(async () => {
       // Two approved integrations and one that is pending, each with actions.
+      const shipped: Record<string, Record<string, unknown>[]> = {
+        alpha: [action('alpha', 'roster', { attach_to: 'people.detail', preview: '/integrations/alpha/preview' }), action('alpha', 'board', { place_in: 'people.hub' })],
+        beta: [action('beta', 'strip', { attach_to: 'people.detail' }), action('beta', 'other', { attach_to: 'class.detail', place_in: 'schedule.hub' })],
+        gamma: [action('gamma', 'roster', { attach_to: 'people.detail', place_in: 'people.hub' })],
+      };
       for (const [id, status] of [['alpha', 'approved'], ['beta', 'approved'], ['gamma', 'pending']] as const) {
-        await replay('integrations/land-row', landing(id));
+        await replay('integrations/land', { ...landing(id), actions: shipped[id] ?? [] });
         await pool.query('UPDATE integrations SET status = $2 WHERE id = $1', [id, status]);
       }
-      await replay('integrations/land-action', action('alpha', 'roster', { attach_to: 'people.detail', preview: '/integrations/alpha/preview' }));
-      await replay('integrations/land-action', action('alpha', 'board', { place_in: 'people.hub' }));
-      await replay('integrations/land-action', action('beta', 'strip', { attach_to: 'people.detail' }));
-      await replay('integrations/land-action', action('beta', 'other', { attach_to: 'class.detail', place_in: 'schedule.hub' }));
-      await replay('integrations/land-action', action('gamma', 'roster', { attach_to: 'people.detail', place_in: 'people.hub' }));
     });
 
     it('12 · the actions of approved integrations that ride a host action', async () => {
@@ -981,10 +1021,10 @@ describe('the registry as vex entries — each statement, against a database', (
       // A page starts after the key it is handed.
       const later = z.array(z.object({ id: z.string() })).parse(await replay('integrations/list', { after: 'found' }));
       expect(later.map((row) => row.id)).toEqual(listed.map((row) => String(row['id'])).filter((id) => id > 'found'));
-      expect(await replay('integrations/action-counts', { after: 'alpha' })).toEqual([
-        { integration_id: 'beta', action_count: 2 },
-        { integration_id: 'gamma', action_count: 1 },
-      ]);
+      const countedLater = await replay('integrations/action-counts', { after: 'alpha' });
+      expect(countedLater).toEqual(await rows(`SELECT integration_id, count(*)::int AS action_count FROM integration_actions WHERE integration_id > 'alpha' GROUP BY integration_id ORDER BY integration_id`));
+      expect(countedLater).toContainEqual({ integration_id: 'beta', action_count: 2 });
+      expect(countedLater).not.toContainEqual(expect.objectContaining({ integration_id: 'alpha' }));
     });
 
     it('16 · the stored actions of every approved integration, and a page that starts after an action', async () => {

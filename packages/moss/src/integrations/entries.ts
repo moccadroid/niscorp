@@ -1,4 +1,4 @@
-import type { Filter, SeedEntry, SeedMutation } from '@niscorp/vex';
+import type { Filter, Mutation, SeedEntry, SeedMutation } from '@niscorp/vex';
 
 // ═══════════════════════════════════════════════════════════════
 // THE REGISTRY'S ENTRIES — every read and write on `integrations` and
@@ -82,9 +82,8 @@ const recordFailedImport: SeedMutation = {
   },
 };
 
-// What a bundle says of its integration, in the order the table names the
-// columns. The row is written whole on every import: on a row that is there,
-// each of these replaces what it held.
+// What a bundle says of its integration. The row is written whole on every
+// import: on a row that is there, each of these replaces what it held.
 const landed = {
   ...fromContext([
     'url',
@@ -112,28 +111,45 @@ const landed = {
   last_error: null,
 };
 
-const landRow: SeedMutation = {
-  fingerprint: 'integrations/land-row',
-  intent: 'The row of an integration as its bundle says it is now',
-  mutation: { op: 'insert', table: 'integrations', values: { ...fromContext(['id']), ...landed }, onConflict: { target: ['id'], set: landed } },
+// LANDING A BUNDLE IS ONE BATCH, and a batch is one transaction: the row as
+// the bundle says it is now, the actions it shipped before taken out, and one
+// row for each action it ships (`actions`, a list in the context: its id, its
+// definition, where it is attached and placed, the grammars it is written in).
+// A statement that fails takes the ones before it back, so a bundle lands
+// whole or the import before it stays whole.
+//
+// `more` is what one of the two landings writes beside what the bundle says.
+const landing = (more: Record<string, { $context: string }>): Mutation[] => [
+  { op: 'insert', table: 'integrations', values: { ...fromContext(['id']), ...more, ...landed }, onConflict: { target: ['id'], set: { ...more, ...landed } } },
+  { op: 'delete', table: 'integration_actions', where: { eq: ['integration_actions.integration_id', { $context: 'id' }] } },
+  {
+    op: 'insertEach',
+    table: 'integration_actions',
+    items: { $context: 'actions' },
+    values: {
+      integration_id: { $context: 'id' },
+      action_id: { $item: 'action_id' },
+      definition: { $item: 'definition' },
+      attach_to: { $item: 'attach_to' },
+      preview: { $item: 'preview' },
+      place_in: { $item: 'place_in' },
+      grammar: { $item: 'grammar' },
+    },
+  },
+];
+
+const land: SeedMutation = {
+  fingerprint: 'integrations/land',
+  intent: 'Land a bundle: the row of its integration as the bundle says it is now, and its actions in place of the ones before',
+  mutation: landing({}),
 };
 
-const dropActions: SeedMutation = {
-  fingerprint: 'integrations/drop-actions',
-  intent: 'Take out the actions an integration shipped before',
-  mutation: { op: 'delete', table: 'integration_actions', where: { eq: ['integration_actions.integration_id', { $context: 'id' }] } },
-};
-
-const landAction: SeedMutation = {
-  fingerprint: 'integrations/land-action',
-  intent: 'One action of a bundle, with where it is attached and placed, stamped with the grammars it is written in',
-  mutation: { op: 'insert', table: 'integration_actions', values: fromContext(['integration_id', 'action_id', 'definition', 'attach_to', 'preview', 'place_in', 'grammar']) },
-};
-
-const keepKeyHash: SeedMutation = {
-  fingerprint: 'integrations/keep-key-hash',
-  intent: 'Keep the hash of the key an integration was issued',
-  mutation: { op: 'update', table: 'integrations', set: fromContext(['key_hash']), where: byId },
+// The same, for the import a key is issued with: the hash of the key is on the
+// row in the transaction that lands the bundle, or neither is.
+const landAndKeepKey: SeedMutation = {
+  fingerprint: 'integrations/land-and-keep-key',
+  intent: 'Land a bundle, and keep the hash of the key its integration is issued with it',
+  mutation: landing(fromContext(['key_hash'])),
 };
 
 const approve: SeedMutation = {
@@ -246,10 +262,8 @@ export const REGISTRY_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [
   requested,
   byKey,
   recordFailedImport,
-  landRow,
-  dropActions,
-  landAction,
-  keepKeyHash,
+  land,
+  landAndKeepKey,
   approve,
   setBackToPending,
   remove,

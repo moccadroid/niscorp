@@ -11,7 +11,7 @@ import { describePlacements } from './placements';
 import { copyPress } from './press';
 import type { StorePress } from './press';
 import { reachDeclares } from './reach';
-import { approveIntegration, findIntegration, keepKeyHash, landBundle, listIntegrations, recordFailedImport, removeIntegration, setBackToPending, standingOf } from './registry';
+import { approveIntegration, findIntegration, landBundle, listIntegrations, recordFailedImport, removeIntegration, setBackToPending, standingOf } from './registry';
 
 // ═══════════════════════════════════════════════════════════════
 // THE OPERATOR SEAM — everything that decides WHICH integrations this
@@ -123,15 +123,6 @@ const register = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
       if (refusal !== undefined) return c.json({ message: 'Refused — the app would not serve this.', reasons: [`Error: ${refusal}`] }, 422);
     }
 
-    await landBundle(deps.replay, {
-      id,
-      url,
-      bundle: taken.bundle,
-      adds: describePlacements(taken.bundle, deps.placementNames),
-      press: taken.press,
-      stamp: deps.grammars.stamp,
-    });
-
     // MINTED ONCE, SHOWN ONCE. Registration is a GRANTING ceremony — the
     // deployment issues the integration its identity, never the other way
     // around — so the first registration answers with the key and the row
@@ -139,7 +130,17 @@ const register = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
     // so there is nothing to repeat. Losing it is not recovery, it is removal
     // and re-registration, which also re-fences everything the old key held.
     const key = holdsKey ? undefined : mintIntegrationKey();
-    if (key !== undefined) await keepKeyHash(deps.replay, id, hashIntegrationKey(key));
+
+    // The row, the actions and the hash of the key land together or not at all.
+    await landBundle(deps.replay, {
+      id,
+      url,
+      bundle: taken.bundle,
+      adds: describePlacements(taken.bundle, deps.placementNames),
+      press: taken.press,
+      stamp: deps.grammars.stamp,
+      ...(key === undefined ? {} : { keyHash: hashIntegrationKey(key) }),
+    });
 
     await deps.reload();
     const status = wasApproved ? 'approved' : 'pending';
