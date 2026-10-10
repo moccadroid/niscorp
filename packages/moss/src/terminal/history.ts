@@ -33,7 +33,9 @@ const SENTINEL = { nisc: 'terminal-back' } as const;
 // for it unconditionally.
 export const trapBack = (handler: () => void): BackTrapDisposer => {
   if (typeof window === 'undefined') return () => undefined;
-  const history = window.history as History | undefined;
+  // A window is not always a browser's: one stood up outside a browser may
+  // have no history at all, whatever the type says of it.
+  const history: History | undefined = window.history;
   if (history === undefined || typeof history.pushState !== 'function') return () => undefined;
 
   // The spare. `pushState` with no url keeps the current address, so this adds
