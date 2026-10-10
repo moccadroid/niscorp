@@ -4,6 +4,7 @@ import { sealSession } from '../identity';
 import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SHELL_FAILED, PROTOCOL } from '../protocol';
 import type { ServerMessage } from '../protocol';
 import { emitterOf, spanClock } from '../runtime';
+import type { Emit, TelemetrySpan } from '../runtime';
 import type { ShellSession } from '../shells';
 import type { SocketConfig } from './config';
 import type { Connection, SocketAccept } from './connection';
@@ -35,6 +36,17 @@ const refusalOf = (error: unknown): ServerMessage => {
       ? `This session could not be opened — ${error.message}: ${failures.join(', ')}.`
       : "This session could not be opened. Why is in the server's log, not here.";
   return { type: 'error', code: 'session_failed', message: `${refusal} The refusal is this terminal's alone; the server is up.` };
+};
+
+// THE SPANS OF ONE CONNECTION, on one clock stamped at the handshake: it
+// serves both the short `socket.upgrade` span and the whole-connection
+// `socket.close` span from the same origin. Undefined with no sink: then no
+// span is built.
+type Span = (name: 'socket.upgrade' | 'socket.close', status: TelemetrySpan['status'], hasPrincipal: boolean) => void;
+const spanOf = (emit: Emit | undefined): Span | undefined => {
+  if (emit === undefined) return undefined;
+  const clock = spanClock();
+  return (name, status, hasPrincipal) => emit({ name, startUnixNano: clock.startUnixNano, endUnixNano: clock.endUnixNano(), status, attributes: { hasPrincipal } });
 };
 
 // THE SESSION A CONNECTION IS ATTACHED TO, asked of the host its address
@@ -111,10 +123,17 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
   // refused terminal poisons nothing: the next connect builds fresh.
   const accept = async (url: string, connection: Connection): Promise<void> => {
     const send = (message: ServerMessage): void => connection.send(JSON.stringify(message));
+    const span = spanOf(emit);
+    // Who the handshake found, once it has: what a span of a session that
+    // then failed to open says of it.
+    const found = { principal: false };
     try {
-      await open(url, connection, send);
+      await open(url, connection, send, span, found);
     } catch (error) {
       console.error('[moss/socket] refused a session:', error);
+      // A fault, and counted as one. It used to leave no span at all: with the
+      // verifier down, upgrades did not turn into errors, they went missing.
+      span?.('socket.upgrade', 'error', found.principal);
       revalidation.release(connection);
       try {
         send(refusalOf(error));
@@ -125,10 +144,7 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
     }
   };
 
-  const open = async (url: string, connection: Connection, send: (message: ServerMessage) => void): Promise<void> => {
-    // One clock stamped at the handshake serves both the short `socket.upgrade`
-    // span and the whole-connection `socket.close` span from the same origin.
-    const upClock = emit === undefined ? undefined : spanClock();
+  const open = async (url: string, connection: Connection, send: (message: ServerMessage) => void, span: Span | undefined, found: { principal: boolean }): Promise<void> => {
     const params = parametersOf(url);
     const mismatch = protocolRefusal(params);
     if (mismatch !== undefined) {
@@ -138,14 +154,13 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
     }
     const asking = await whoIsAsking(url, connection.upgrade, config, notOwn);
     if (asking === 'invalid_token') {
-      if (emit !== undefined && upClock !== undefined) {
-        emit({ name: 'socket.upgrade', startUnixNano: upClock.startUnixNano, endUnixNano: upClock.endUnixNano(), status: 'refused', attributes: { hasPrincipal: false } });
-      }
+      span?.('socket.upgrade', 'refused', false);
       send({ type: 'error', code: 'invalid_token', message: 'The session token did not resolve to a principal.' });
       connection.close(CLOSE_INVALID_TOKEN, 'invalid token');
       return;
     }
     const { token, principal, seal } = asking;
+    found.principal = principal !== null;
     if (asking.cookies.length > 0) connection.upgrade?.answer?.(asking.cookies);
     if (seal !== null) connection.seal = (granted) => sealSession(seal, granted);
     // The terminal is told, and stops asking to be handed sign-ins sealed —
@@ -161,19 +176,14 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
     // The connection's whole life, closed by the same clock — how long
     // terminals stay, and under a principal or anonymous. Registered here so it
     // fires however the connection ends (graceful, expiry, transport drop).
-    if (emit !== undefined && upClock !== undefined) {
-      const hadPrincipal = principal !== null;
-      ending.then(() => emit({ name: 'socket.close', startUnixNano: upClock.startUnixNano, endUnixNano: upClock.endUnixNano(), status: 'ok', attributes: { hasPrincipal: hadPrincipal } }));
-    }
+    if (span !== undefined) ending.then(() => span('socket.close', 'ok', principal !== null));
 
     const session = await served(connection, send, ending, params, { token, principal });
 
     // Admitted: the handshake resolved a principal, said hello, and attached a
     // shell. The span measures that, not the connection's life (that is
     // `socket.close`).
-    if (emit !== undefined && upClock !== undefined) {
-      emit({ name: 'socket.upgrade', startUnixNano: upClock.startUnixNano, endUnixNano: upClock.endUnixNano(), status: 'ok', attributes: { hasPrincipal: principal !== null } });
-    }
+    span?.('socket.upgrade', 'ok', principal !== null);
 
     connection.onMessage(messageHandler(session, connection, send));
   };

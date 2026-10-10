@@ -868,7 +868,10 @@ lets them replay, as vex's discovery lists them.
 `TelemetrySpan` is `{ name, startUnixNano, endUnixNano, status: 'ok' | 'error' |
 'refused', attributes, traceId?, spanId?, parentSpanId? }`. Moss emits one per
 vex execution, fn call, integration call, shell build, and socket upgrade and
-close. `emitterOf(telemetry)` wraps a sink so a throwing one costs the caller
+close. A `socket.upgrade` is `ok` (admitted), `refused` (the token offered is
+nobody's) or `error` (the session could not be opened: the verifier threw,
+what somebody holds could not be asked, their shell could not be built).
+`emitterOf(telemetry)` wraps a sink so a throwing one costs the caller
 nothing (`undefined` when there is none); `spanClock()` stamps a start and
 measures the end.
 

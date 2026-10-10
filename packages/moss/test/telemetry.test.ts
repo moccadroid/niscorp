@@ -10,7 +10,7 @@
 //
 // And the two doctrines the case turns on: a throwing sink costs the request
 // nothing, and an unconfigured sink is asked for nothing.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { ExecuteRecord } from '@niscorp/vex';
 import { vexRecordToSpan } from '../src/data/span';
 import { createShellHost, instrumentFunctions } from '../src/shells';
@@ -222,6 +222,23 @@ describe('socket telemetry', () => {
     expect(spans.filter((s) => s.name === 'socket.upgrade')).toHaveLength(1);
     expect(spans[0]).toMatchObject({ name: 'socket.upgrade', status: 'refused', attributes: { hasPrincipal: false } });
     expect(spans.some((s) => s.name === 'socket.close')).toBe(false);
+  });
+
+  // A handshake that fails is refused to its terminal and logged. It left no
+  // span at all: with the verifier down, upgrades did not turn into errors on
+  // a dashboard, they stopped being counted.
+  it.each([
+    ['the verifier cannot be asked', { session: () => { throw new Error('the session store is unreachable'); } }, false],
+    ['what they hold cannot be asked', { catalog: () => { throw new Error('the database is down'); } }, true],
+    ['their shell cannot be built', { shells: { session: async () => { throw new Error('a definition failed'); } } }, true],
+  ] satisfies [string, Partial<SocketConfig>, boolean][])('a session that could not be opened because %s is an upgrade that failed', async (_label, failing, hasPrincipal) => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { spans, telemetry } = capture();
+    await createSocket({ ...ctxWith(telemetry), ...failing })(`/socket?protocol=${PROTOCOL}`, { ...fakeConnection(), upgrade: { offered: offerToken('good') } });
+    logged.mockRestore();
+    const upgrades = spans.filter((s) => s.name === 'socket.upgrade');
+    expect(upgrades).toHaveLength(1);
+    expect(upgrades[0]).toMatchObject({ status: 'error', attributes: { hasPrincipal } });
   });
 
   it('anonymous is admitted, hasPrincipal false', async () => {

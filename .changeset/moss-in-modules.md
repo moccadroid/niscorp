@@ -221,3 +221,8 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 - A verifier that throws leaves the connection open, as before. That it threw was dropped without a word; it is logged, once for a pass, with how many connections could not be asked about and the first error.
 - A connection whose transport throws when it is told its session expired stayed in the list, so every later pass threw at the same place: no connection after it was asked about again, and the throw was an unhandled rejection. It is forgotten first, closed even if it cannot be told, and what it threw is logged.
 - An app has nothing to change.
+
+**A session that could not be opened is a `socket.upgrade` span with the status `error`.**
+
+- A handshake that failed (the verifier threw, what somebody holds could not be asked, their shell could not be built) was refused to its terminal with `session_failed` and a `4500` close, and logged. It emitted no span: with the verifier down, upgrades did not turn into errors on whatever reads `runtime.telemetry`, they stopped being counted. It emits one `socket.upgrade` span now, `status: 'error'`, with `hasPrincipal` as far as the handshake got.
+- A sink that counts `socket.upgrade` spans by status gains a value. What the terminal is told has not changed.
