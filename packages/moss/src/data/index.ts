@@ -26,6 +26,10 @@
 // feature makes on the tables it keeps: seeded into a cache no route serves,
 // and replayed in process under a policy that admits those tables alone.
 //
+// AN INTENT ANSWERED BY A QUERY WRITTEN FOR IT (./intents.ts) is the one
+// place a query is written while the app runs: with the app's writers, under
+// the policy of whoever it is asked for, and kept where the routes replay.
+//
 // A READ THAT KEEPS ANSWERING (./follow.ts) is the seam between a reactive
 // entry and the shell that asked for it over the in-process wire.
 //
@@ -42,6 +46,7 @@ export { createData } from './data';
 export type { Data, DataConfig, DataRoutesConfig } from './data';
 export type { ExecuteAs } from './execute-as';
 export { createWireFollower } from './follow';
+export type { Intent, QueryWriters } from './intents';
 export { featureTablesOf, migrateTables } from './migrate';
 export type { TablesReport } from './migrate';
 export { resolvePolicy } from './policy';

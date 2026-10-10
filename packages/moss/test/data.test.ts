@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
+import { compile, execute } from '@niscorp/prism';
 import { createMemoryCache, scopeGrants } from '@niscorp/vex';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Charter } from '@niscorp/charter';
@@ -140,6 +141,30 @@ describe('the data module, over an engine', () => {
       ['vex.execute', 'ok', 'notes/all', false],
     ]);
   });
+  it('answers an intent with a query written under the policy of whoever it is asked for', async () => {
+    const { data } = await world();
+    const shown: string[][] = [];
+    const writers = {
+      generateDsl: async (_request: unknown, schema: { entities: { name: string }[] }) => {
+        shown.push(schema.entities.map((entity) => entity.name));
+        return { from: ['notes'], fields: ['notes.id', 'notes.body'] };
+      },
+      mapToShape: async (rows: Record<string, unknown>[]) => {
+        const ir = await compile({ $ref: '$.result' });
+        return { ir, transformed: execute(ir, { result: JSON.parse(JSON.stringify(rows)) }) };
+      },
+    };
+    const asked = { intent: 'every note', shape: [{ id: 0, body: '' }] };
+    const answered = await data.answerIntent(writers, asked, who('reader'), { userId: 'usr_1' });
+    expect(answered.result).toEqual([{ id: 1, body: 'first' }]);
+    // The owner's writer is shown both tables, the reader's only what a reader reads.
+    await data.answerIntent(writers, asked, who('owner'), { userId: 'usr_2' });
+    expect(shown).toEqual([['notes'], ['notes', 'tags']]);
+    // Somebody the charter grants nothing: the writer is shown no table, and
+    // what it writes all the same is refused.
+    await expect(data.answerIntent(writers, asked, who('public'), {})).rejects.toThrow();
+    expect(shown[2]).toEqual([]);
+  });
 });
 
 // A FEATURE'S OWN ENTRIES (../src/data/own-entries.ts): what a feature reads
@@ -236,6 +261,7 @@ describe('the data module — the fingerprints somebody may be told of', () => {
     await data.ownEntries({ entries: [TAGS, ADD_TAG], tables: ['tags'] });
     expect(await data.fingerprintsFor(who('owner'))).toEqual(['notes/add', 'notes/all', 'notes/mine']);
   });
+
 });
 
 // WHOSE TABLES ONE RUN COVERS (../src/data/migrate.ts). Nothing is run here:

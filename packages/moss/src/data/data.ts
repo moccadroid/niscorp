@@ -2,7 +2,7 @@ import type { Context, Env, Hono } from 'hono';
 import { migrate, upgradeStore } from '@niscorp/strata/postgres';
 import { handleDiscovery } from '@niscorp/vex';
 import type { Sequence, Upgrader } from '@niscorp/strata';
-import type { CacheBackend, DatabaseAdapter, ExecuteRecord, MutationClient, PgPool, QueryEngine, QueryEngineConfig, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
+import type { CacheBackend, DatabaseAdapter, ExecuteRecord, MutationClient, PgPool, QueryEngine, QueryEngineConfig, QueryResponse, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { ResolvedIdentity } from '../identity';
 import type { NiscApp, RunningManifest } from '../manifest';
 import { emitterOf } from '../runtime';
@@ -11,6 +11,8 @@ import { createDataLayer } from './engine';
 import { createExecuteAs } from './execute-as';
 import type { ExecuteAs } from './execute-as';
 import { createGrammarUpgrader } from './grammar';
+import { createIntentAnswers } from './intents';
+import type { AnswerIntent, Intent, QueryWriters } from './intents';
 import { tableSequencesOf } from './migrate';
 import { createOwnEntries } from './own-entries';
 import type { OwnEntries, Replay } from './own-entries';
@@ -103,6 +105,10 @@ export type Data = {
   fingerprintsFor: (who: Caller) => Promise<string[]>;
   // Run a seeded entry as a charter role (./execute-as.ts).
   executeAs: ExecuteAs;
+  // Answer an intent with a query written for it, as somebody already
+  // resolved: under their policy, with the scope values the server says they
+  // carry (./intents.ts). The one place a query is written; the routes replay.
+  answerIntent: (writers: QueryWriters, asked: Intent, who: Caller, scope: Record<string, unknown>) => Promise<QueryResponse>;
   // Take a feature's own entries, and answer how one is replayed
   // (./own-entries.ts). No route serves them.
   ownEntries: (own: OwnEntries) => Promise<Replay>;
@@ -149,7 +155,7 @@ const standUp = async (config: DataConfig): Promise<StoodUp> => {
 // EVERYTHING ELSE, over what stood up. Nothing here touches the database but
 // through the engine and the write client, which is why it is a function of
 // its own: it can be held against an engine with nothing behind it.
-export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charter' | 'behaviors' | 'telemetry'>): Data => {
+export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charter' | 'behaviors' | 'telemetry' | 'vexConfig'>): Data => {
   const { grammars, engine, grants } = stood;
   const governed = { charter: config.charter, behaviors: config.behaviors };
   const policies = createPolicies({ ...governed, grants });
@@ -160,6 +166,22 @@ export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charte
   const onExecute = emit === undefined ? undefined : (record: ExecuteRecord) => emit(vexRecordToSpan(record));
 
   const writes = createWriteLane();
+
+  // Stood up at the first asking: an app that writes no query pays for none.
+  let answers: AnswerIntent | undefined;
+  const answering = (): AnswerIntent => {
+    if (answers !== undefined) return answers;
+    const schema = engine.getSchema();
+    if (schema === undefined) throw new Error('moss: an intent was asked before the engine had read the database.');
+    answers = createIntentAnswers({
+      adapter: stood.adapter,
+      schema,
+      cache: engine.cache,
+      ...(config.behaviors !== undefined ? { behaviors: config.behaviors } : {}),
+      ...(config.vexConfig !== undefined ? { vexConfig: config.vexConfig } : {}),
+    });
+    return answers;
+  };
 
   return {
     engine,
@@ -180,6 +202,7 @@ export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charte
       policyAtReach: (roles, reach) => resolvePolicyAtReachForRoles(governed, grants, roles, reach),
       ...(onExecute !== undefined ? { onExecute } : {}),
     }),
+    answerIntent: async (writers, asked, who, scope) => answering()(writers, asked, { policy: policies.of(who), scope }),
     ownEntries: async (own) => {
       const schema = engine.getSchema();
       if (schema === undefined) throw new Error("moss: a feature's entries were handed over before the engine had read the database.");
