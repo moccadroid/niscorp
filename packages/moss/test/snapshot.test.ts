@@ -5,7 +5,7 @@ import { createShellHost } from '../src/shells';
 import type { ShellHostContext } from '../src/shells';
 import type { NiscApp, PageManifest } from '../src/manifest';
 import type { Connection } from '../src/socket';
-import { shellNeedOf } from '../src/liveness';
+import { shellNeedOf } from '../src/shells';
 
 // ═══════════════════════════════════════════════════════════════
 // The document's read (`snapshot`), and the two things built on it: an

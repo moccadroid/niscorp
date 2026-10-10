@@ -10,7 +10,7 @@ import type { ShellHostContext, ShellSnapshot } from '../src/shells';
 import type { NiscApp, PageManifest } from '../src/manifest';
 import type { MossServer } from '../src/server';
 import { createPageRouter } from '../src/pages';
-import { shellNeedOf } from '../src/liveness';
+import { shellNeedOf } from '../src/shells';
 import { mountSite } from '../src/node';
 
 // ═══════════════════════════════════════════════════════════════

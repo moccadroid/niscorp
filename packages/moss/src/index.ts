@@ -4,7 +4,7 @@
 //   runtime/      — the environment: database, cache, session
 //   data/         — what somebody may read and write: the engine, the policy for a set of roles, the tables
 //   feature/      — what a feature is, and the seams the server starts one with
-//   shells.ts     — the shell host: durable per-principal server shells
+//   shells/       — what somebody is looking at: the shell host, a shell's build, its stream, its snapshot
 //   socket.ts     — the authority channel: envelope + protocol (transport-blind)
 //   server.ts     — boot refusal + the HTTP surfaces + the socket accept
 //   node.ts       — the Node listener + ws transport (./node subpath; Bun swaps this, never the app)

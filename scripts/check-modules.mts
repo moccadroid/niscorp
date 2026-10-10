@@ -59,6 +59,9 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       identity: ['runtime', 'protocol'],
       manifest: ['identity', 'feature'],
       data: ['runtime', 'identity', 'manifest'],
+      // What somebody is looking at. Not `feature`: what a feature lays around
+      // a shell's wire reaches it as a function the server hands over.
+      shells: ['runtime', 'protocol', 'identity', 'manifest', 'data'],
       // Not `data`: what the feature reads and writes it hands over as entries
       // and replays through a seam, so it imports nothing of the data module.
       integrations: ['runtime', 'feature', 'manifest'],
@@ -69,16 +72,14 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       'document.ts',
       'driver.ts',
       'fabric.ts',
-      'liveness.ts',
       'node.ts',
       'pages.ts',
       'server.ts',
-      'shells.ts',
       'socket.ts',
       'tide.ts',
       'vite.ts',
     ],
-    finished: ['runtime', 'protocol', 'feature', 'identity', 'manifest', 'data', 'integrations', 'client', 'terminal'],
+    finished: ['runtime', 'protocol', 'feature', 'identity', 'manifest', 'data', 'shells', 'integrations', 'client', 'terminal'],
     features: ['integrations'],
   },
 };

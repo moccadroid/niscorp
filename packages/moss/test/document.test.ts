@@ -6,7 +6,7 @@ import type { ShellHostContext, ShellSnapshot } from '../src/shells';
 import type { NiscApp, PageManifest } from '../src/manifest';
 import type { MossServer } from '../src/server';
 import { createPageRouter } from '../src/pages';
-import { shellNeedOf } from '../src/liveness';
+import { shellNeedOf } from '../src/shells';
 import { documentHeaders, embedSnapshot, exportDocuments, renderDocument, tokenFromCookie } from '../src/document';
 import { readDocumentSnapshot } from '../src/client';
 

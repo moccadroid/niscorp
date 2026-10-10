@@ -18,7 +18,7 @@ import type { SocketAccept } from './socket';
 import { createShellHost } from './shells';
 import type { ShellHostContext } from './shells';
 import { createPageRouter } from './pages';
-import { shellNeedOf } from './liveness';
+import { shellNeedOf } from './shells';
 import type { IdentityRecord, IdentityReport, ResolvedIdentity } from './identity';
 import type { ShellHost } from './shells';
 

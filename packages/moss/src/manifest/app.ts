@@ -181,7 +181,7 @@ export type NiscApp = {
   // thing a path can lead to — a welcome, the docs, a published talk: a small
   // manifest of its own (a frame, canvases, what mounts on them), drawn for
   // whoever asks and then let go. Nothing stands behind it afterwards unless
-  // what mounted can still do something (../liveness), in which case the
+  // what mounted can still do something (../shells, liveness.ts), in which case the
   // terminal gets a shell for as long as its connection lasts.
   //
   // It is the SAME machinery with the keeping taken out: the same actions, the
