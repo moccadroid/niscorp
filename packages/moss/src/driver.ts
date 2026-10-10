@@ -63,6 +63,13 @@ const DEFAULT_JANITOR_MS = 300_000;
 // bug, not a workload) — generous enough that no real chain hits it.
 const MAX_STEPS_PER_DRAIN = 10_000;
 
+// LET THE PROCESS END WITH A TIMER STILL PENDING. Node's timers can be told so
+// (`unref`); a timer anywhere else is a number and holds nothing open. Asked of
+// the value and not of its type, so this file needs no runtime's types.
+const letProcessEnd = (timer: unknown): void => {
+  if (typeof timer === 'object' && timer !== null && 'unref' in timer && typeof timer.unref === 'function') timer.unref();
+};
+
 const progressOf = (report: AdvanceReport): number =>
   report.materialized +
   report.skippedOccurrences +
@@ -114,7 +121,7 @@ export const createTideDriver = (config: TideDriverConfig): TideDriver => {
     // waiting for reflexes to load, say). Retry on the janitor's beat, not
     // in a hot loop.
     timer = setTimeout(() => void wake(), delay > 0 ? delay : janitorMs);
-    timer.unref?.();
+    letProcessEnd(timer);
   };
 
   // A wake during a drain queues one more pass INSIDE the same cycle, and
@@ -148,7 +155,7 @@ export const createTideDriver = (config: TideDriverConfig): TideDriver => {
     }
     void wake();
   }, janitorMs);
-  janitor.unref?.();
+  letProcessEnd(janitor);
 
   return {
     ingest: async (fact, options) => {
