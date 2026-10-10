@@ -4,8 +4,9 @@ import type { NovaComponent } from '@niscorp/nova/adapters/vue';
 import type { ComponentRegistry } from '@niscorp/nova';
 import { drawnApi } from '../drawn';
 import type { DrawnSnapshot } from '../drawn';
-import { registerWireSlots, terminalFrame } from './index';
-import type { TerminalSlotWrapper } from './index';
+import { terminalFrame } from './frame';
+import { registerWireSlots } from './slots';
+import type { TerminalSlotWrapper } from './slots';
 
 // ═══════════════════════════════════════════════════════════
 // @niscorp/moss/terminal/vue/server — the Vue target, drawing to a string. The

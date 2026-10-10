@@ -1,14 +1,16 @@
 import { createContext, createElement, Fragment, useContext, type ComponentType, type FC, type ReactNode } from 'react';
 import { NovaRenderProvider, RenderTree } from '@niscorp/nova/adapters/react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
-import type { ComponentRegistry, NovaEvent } from '@niscorp/nova';
+import type { ComponentRegistry } from '@niscorp/nova';
 import type { TerminalApi } from '../index';
+import { actionSlotOf, canvasSlotOf, registerSlots } from '../slots';
 
 // ═══════════════════════════════════════════════════════════
-// The wire-backed structural slots, shared by every react-shaped render
-// target (terminal/react in the browser, terminal/ink in a TTY) — same seam,
-// different renderer. Split from the react target so the ink bundle never
-// drags react-dom.
+// The wire-backed structural slots as React components, shared by every
+// react-shaped render target (terminal/react in the browser, terminal/ink in a
+// TTY) — same seam, different renderer. What a slot IS — which tree it draws,
+// where its events go — is ../slots.ts, the same for every framework. Split
+// from the react target so the ink bundle never drags react-dom.
 // ═══════════════════════════════════════════════════════════
 
 export const TerminalApiContext = createContext<TerminalApi | undefined>(undefined);
@@ -26,13 +28,16 @@ export type TerminalSlotWrapperProps = {
 };
 export type TerminalSlotWrapper = FC<TerminalSlotWrapperProps>;
 
-// The host-specific leaf renderers a react-shaped target may thread through
-// to nova's provider (ink needs all three; the browser needs none).
-export type WireSlotOptions = {
-  slotWrapper?: TerminalSlotWrapper;
+// The host-specific leaf renderers a react-shaped target threads through to
+// nova's provider: ink needs all three, the browser none.
+export type LeafRenderers = {
   fallback?: NovaComponent;
   textWrapper?: ComponentType<{ children?: ReactNode }>;
   errorMarker?: ComponentType<{ code: string; message: string }>;
+};
+
+export type WireSlotOptions = LeafRenderers & {
+  slotWrapper?: TerminalSlotWrapper;
   // wraps each canvas's rendered tree with a host context (ink provides the
   // per-canvas marker resolver here); the browser omits it
   canvasProvider?: ComponentType<{ canvasId: string; children?: ReactNode }>;
@@ -41,39 +46,23 @@ export type WireSlotOptions = {
   instanceProvider?: ComponentType<{ canvasId: string; instanceId: string; children?: ReactNode }>;
 };
 
-// Register the wire-backed structural slots on a registry:
-//
-// - CanvasSlot: a served CanvasSlot marker in the frame resolves to that
-//   canvas's live tree, dispatching events tagged with the canvas (the
-//   server stamps origin). It overrides nova's shell-backed CanvasSlot,
-//   which the terminal has no shell for.
-// - ActionSlot: the per-instance boundary a served tree carries (identity in
-//   props, rendered content as children). With no wrapper it's transparent;
-//   with one, the wrapper decides everything. Keyed by instanceId so an
-//   instance swap REMOUNTS: no stale view state crossing instances.
+// Register the wire-backed structural slots on a registry (../slots.ts says
+// what each is). With no wrapper an ActionSlot is transparent; with one, the
+// wrapper decides everything. Keyed by instanceId so an instance swap
+// REMOUNTS: no stale view state crossing instances.
 export const registerWireSlots = (registry: ComponentRegistry<NovaComponent>, options: WireSlotOptions = {}): void => {
   const { slotWrapper, fallback, textWrapper, errorMarker, canvasProvider, instanceProvider } = options;
 
   const CanvasSlot: NovaComponent<{ canvasId?: string }> = ({ canvasId }: { canvasId?: string }) => {
-    const api = useContext(TerminalApiContext);
-    if (api === undefined || canvasId === undefined || canvasId === '') return null;
-    const tree = api.canvasTree(canvasId);
-    if (tree.length === 0) return null;
-    const body = createElement(RenderTree, { nodes: tree });
+    const slot = canvasSlotOf(useContext(TerminalApiContext), canvasId);
+    if (slot === undefined) return null;
+    const body = createElement(RenderTree, { nodes: slot.tree });
     return createElement(
       NovaRenderProvider,
-      {
-        registry,
-        dispatch: (event: NovaEvent) => api.dispatch(canvasId, event),
-        publish: (channel: string, payload?: unknown) => api.publish(channel, payload),
-        fallback,
-        textWrapper,
-        errorMarker,
-      },
-      canvasProvider === undefined ? body : createElement(canvasProvider, { canvasId }, body),
+      { registry, dispatch: slot.dispatch, publish: slot.publish, fallback, textWrapper, errorMarker },
+      canvasProvider === undefined ? body : createElement(canvasProvider, { canvasId: slot.canvasId }, body),
     );
   };
-  registry.register('CanvasSlot', CanvasSlot, { description: 'A canvas, live from the server.' });
 
   const ActionSlot: NovaComponent<{ instanceId?: string; canvasId?: string; definitionId?: string }> = ({
     instanceId,
@@ -81,26 +70,15 @@ export const registerWireSlots = (registry: ComponentRegistry<NovaComponent>, op
     definitionId,
     children,
   }: TerminalSlotWrapperProps) => {
-    const api = useContext(TerminalApiContext);
+    const slot = actionSlotOf(useContext(TerminalApiContext), canvasId, instanceId);
     const wrapped = slotWrapper === undefined ? createElement(Fragment, { key: instanceId }, children) : createElement(slotWrapper, { key: instanceId, instanceId, canvasId, definitionId }, children);
-    // Origin is decided HERE, where instance identity lives: a list canvas
-    // renders several live cards at once, and a click inside THIS boundary
-    // must reach THIS instance's triggers — the server's active-instance
-    // fallback only holds for card-deck canvases. Events that already carry
-    // an origin keep it.
-    if (api === undefined || instanceId === undefined || canvasId === undefined) return wrapped;
+    if (slot === undefined) return wrapped;
     return createElement(
       NovaRenderProvider,
-      {
-        registry,
-        dispatch: (event: NovaEvent) => api.dispatch(canvasId, event.origin === undefined ? { ...event, origin: instanceId } : event),
-        publish: (channel: string, payload?: unknown) => api.publish(channel, payload),
-        fallback,
-        textWrapper,
-        errorMarker,
-      },
-      instanceProvider === undefined ? wrapped : createElement(instanceProvider, { canvasId, instanceId }, wrapped),
+      { registry, dispatch: slot.dispatch, publish: slot.publish, fallback, textWrapper, errorMarker },
+      instanceProvider === undefined ? wrapped : createElement(instanceProvider, { canvasId: slot.canvasId, instanceId: slot.instanceId }, wrapped),
     );
   };
-  registry.register('ActionSlot', ActionSlot, { description: 'An action instance boundary from the server; the app slotWrapper wraps it.' });
+
+  registerSlots(registry, { canvas: CanvasSlot, action: ActionSlot });
 };
