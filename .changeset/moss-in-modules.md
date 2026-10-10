@@ -186,3 +186,22 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 
 - The socket holds `event` to being an object and no more; the shell it is dispatched into took whatever arrived. It is now parsed by nova's `NovaEventSchema` first: one of `ui:click`, `ui:submit`, `ui:input`, `ui:focus`, `ui:blur`, `ui:model`, `ui:key`, `ui:drop`, with `ref`, `payload`, `origin` (and `key` on `ui:key`) and no other field. One that does not parse is dropped, as an event naming an instance that is not on its canvas is.
 - A terminal built on `@niscorp/moss/client` and one of nova's adapters sends nothing else, and has nothing to change. A terminal written by hand that added a field of its own to an event, or sent a type nova does not define, used to have it dispatched; it sends nova's event.
+
+**A living shell holds what its principal holds now, and nothing that left.**
+
+- When what the app consists of changes (`replaceActions`, `refresh`, an integration approved or removed, a change another process made), every living shell adopts. It used to register what was held and never take anything away: an action that was removed, or that its principal was no longer granted, stayed mounted and pushable in every shell that had it, until that shell was rebuilt. It is now removed from the shell: its instances are unmounted, it leaves the history `back` walks, and a push of it fails as for any action the principal does not hold.
+- A shell whose principal could not be resolved during an adopt used to end the walk, and every shell after it kept the old application. It is logged and keeps what it held; the rest adopt.
+- A shell that was being built while the app changed adopts when its build lands. Two changes are adopted in the order they happened.
+- An action a living shell gains may mention a component no layout mentioned before: it is registered when the shell adopts. The component names a shell is built with are read off the actions in force each time they change, and were read once, when the server started.
+- An app has nothing to change. One that relied on a revoked screen staying open until the next sign-in no longer sees it.
+
+**One shell for a principal, and one reset of it at a time.**
+
+- Two first arrivals for one principal in the same moment (a drawn page's read and its socket, two tabs) each built a shell. The second took the first's place and the first was never disposed: its `functions` and `onSession` code ran for as long as the process did. One is built, and both are handed it. `functions` and `onSession` are called once for it.
+- Resets that overlapped (`server.invalidateIdentity` twice, or with a terminal's own `reset`) could leave every terminal attached to a shell that was no longer the principal's: nothing they pressed arrived. A shell's resets run in turn.
+- A page's shell that was reset lost the parameters of its path and the instance ids its page was drawn with. It is rebuilt with what it was opened with.
+- An app has nothing to change.
+
+**The canvases a shell has are the shell's.**
+
+- A canvas a shell gained while it ran (`shell.addCanvas`, or a push to a canvas its manifest does not list) was never sent to a terminal: the host walked the manifest's list. It is rendered, sent, attached to and read by a snapshot like the ones the shell was built with. A canvas that was removed is sent empty once, and no longer handed to a terminal that attaches later.

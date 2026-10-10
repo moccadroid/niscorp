@@ -106,12 +106,13 @@ export type ShellHost = {
   // disposed. Waits for the screen to settle — `seeds` pushed, no instance
   // still mounting — for at most `waitMs`, then serves what is there.
   snapshot: (token: string | null, principal: string | null, options?: { waitMs?: number; inputs?: ShellOpening['inputs'] }) => Promise<ShellSnapshot>;
-  // Artifacts changed (the actions in force are others now, the server dropped
-  // its memos): every LIVING durable shell adopts its freshly-resolved granted
-  // definitions in place — nova's registerAction adds or replaces, mounted
-  // instances keep their state, and new actions become pushable without a
-  // rebuild. Ring 1 is re-applied per principal; ring 2 substitutes exactly
-  // as at build.
+  // What the app consists of changed (the actions in force are others now, a
+  // role moved, an integration was installed or removed): every LIVING durable
+  // shell is brought level with what its principal holds now, in place.
+  // Definitions that arrived or changed are registered, mounted instances keep
+  // their state, and new actions become pushable without a rebuild. One that
+  // left, or is no longer granted, is removed: its instances are unmounted. A
+  // shell that cannot adopt is logged and keeps what it held; the rest go on.
   adopt: () => void;
   // Publish a message into one principal's LIVE durable shell — the push half
   // of the socket the shells already run. Whatever action is mounted and

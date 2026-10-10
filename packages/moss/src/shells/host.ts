@@ -89,63 +89,103 @@ const rosterOf = (durable: ReadonlyMap<string, Cell>): ShellReport[] => {
   return reports;
 };
 
+// ONE LIVING SHELL, BROUGHT LEVEL WITH WHAT ITS PRINCIPAL HOLDS NOW.
+//
 // ASKED AGAIN, not read off the cell. Adopting happens because something
 // the composition was made FROM changed, and the commonest such change is a
 // tenant installing an integration — so what a shell was born holding is
-// exactly the thing that must not be trusted here. Asynchronous and
-// unawaited: definitions landing a tick late simply register, which is the
-// same progressive path `seeds` already takes.
-const adoptAll = async (host: HostParts): Promise<void> => {
-  const { config, durable } = host;
-  for (const [, cell] of durable) {
-    if (cell.live.ended) continue;
-    const made = await config.composition(cell.principal);
-    for (const definition of Object.values(made.actions)) cell.live.shell.registerAction(definition);
+// exactly the thing that must not be trusted here.
+//
+// In place: nova's registerAction adds or replaces and mounted instances keep
+// their state, so nobody loses what they were in the middle of. And both
+// ways. An action that is gone (an integration uninstalled, a set replaced)
+// or is no longer granted is REMOVED: nova unmounts its instances and forgets
+// it, so it is neither on screen nor pushable. It used to stay in every shell
+// that had it, for as long as the shell lived.
+const adoptInto = async (host: HostParts, cell: Cell): Promise<void> => {
+  if (cell.live.ended) return;
+  const made = await host.config.composition(cell.principal);
+  // Read after the answer: a reset may have put another shell in the cell
+  // while it was asked for.
+  const live = cell.live;
+  if (live.ended) return;
+  // A definition that arrived may mention a component nothing mentioned
+  // when the shell was built.
+  for (const [name, contract] of Object.entries(made.components)) {
+    if (!live.shell.registry.has(name)) live.shell.registry.register(name, contract);
   }
+  for (const id of live.held) if (!Object.hasOwn(made.actions, id)) live.shell.removeAction(id);
+  for (const definition of Object.values(made.actions)) live.shell.registerAction(definition);
+  live.held = new Set(Object.keys(made.actions));
+};
+
+// Every living shell, and each one whose build was under way when this was
+// asked: it was built from what its principal held before the change.
+// Asynchronous and unawaited: definitions landing a tick late simply
+// register, which is the same progressive path `seeds` already takes. One
+// at a time, so a change does not resolve every principal at once.
+//
+// A SHELL THAT CANNOT ADOPT IS SAID, AND THE REST GO ON. One throw (a
+// principal that no longer resolves) used to end the walk, and every
+// principal after it kept the old application until something else changed.
+const adoptAll = async (host: HostParts, underWay: readonly Promise<Cell>[]): Promise<void> => {
+  const adopting = async (cell: Cell): Promise<void> => {
+    try {
+      await adoptInto(host, cell);
+    } catch (error) {
+      console.error(`[moss/shells] the shell of ${cell.principal ?? 'nobody'} could not adopt what changed, and keeps what it held:`, error);
+    }
+  };
+  for (const cell of [...host.durable.values()]) await adopting(cell);
+  for (const build of underWay) {
+    // A build that fails is its caller's to hear of; there is nothing to adopt.
+    const cell = await build.catch(() => undefined);
+    if (cell !== undefined) await adopting(cell);
+  }
+};
+
+// Dispose a shell and stand its replacement in the same cell, carrying the
+// attached connections across. Everything a shell is derived from — the
+// catalog, the variants, `inputs`, `seeds` — is re-read by the build, so what
+// comes back is the screen boot would have served this principal now. The
+// terminals are not told anything: they receive a frame and current trees,
+// the same two messages a reconnect brings.
+// ASYNC, and its callers deliberately do not await it. `reset` answers "did
+// they hold a shell", which is knowable at once; the replacement lands a tick
+// later and every attached terminal receives a fresh frame when it does —
+// exactly as `seeds` already behaves. A reset that blocked its caller on a
+// round trip would make a role change slower than the write that caused it.
+const replaceShell = async (host: HostParts, cell: Cell): Promise<void> => {
+  // Signed out, swept, or left by its last terminal since the reset was
+  // asked for: there is nobody to rebuild it for.
+  if (cell.live.ended) return;
+  // The replacement is built BEFORE the old one is torn down. The build runs
+  // app code — `inputs`, `functions`, `onSession` — and if that throws, a
+  // reset that had already disposed the old shell would leave the session
+  // holding nothing at all: strictly worse than the wedged shell it was
+  // called to fix. Built first, a failed reset changes nothing. It is built
+  // from everything the shell was opened with: the principal, the newest
+  // token, and the id seed and the inputs a page's path carried.
+  const next = await buildShell(host, cell.token, cell.principal, true, cell.opening?.seed, cell.opening?.inputs);
+  const old = cell.live;
+  // It ended while its replacement was built. The replacement is nobody's.
+  if (old.ended) {
+    next.ended = true;
+    next.shell.dispose();
+    return;
+  }
+  const carried = [...old.connections].map((connection) => ({ connection, wants: old.deltaReady.has(connection) }));
+  old.ended = true;
+  old.connections.clear();
+  old.shell.dispose();
+  cell.live = next;
+  for (const { connection, wants } of carried) attach(next, connection, host.delta && wants);
 };
 
 export const createShellHost = (config: ShellHostConfig): ShellHost => {
   const durable = new Map<string, Cell>();
   const host: HostParts = { config, emit: emitterOf(config.telemetry), kept: config.kept ?? true, delta: config.limits?.delta ?? false, durable };
-  const { kept, delta } = host;
-
-  // Dispose a shell and stand its replacement in the same cell, carrying the
-  // attached connections across. Everything a shell is derived from — the
-  // catalog, the variants, `inputs`, `seeds` — is re-read by the build, so what
-  // comes back is the screen boot would have served this principal now. The
-  // terminals are not told anything: they receive a frame and current trees,
-  // the same two messages a reconnect brings.
-  // ASYNC, and its callers deliberately do not await it. `reset` answers "did
-  // they hold a shell", which is knowable at once; the replacement lands a tick
-  // later and every attached terminal receives a fresh frame when it does —
-  // exactly as `seeds` already behaves. A reset that blocked its caller on a
-  // round trip would make a role change slower than the write that caused it.
-  const replace = async (cell: Cell): Promise<void> => {
-    // Signed out, swept, or left by its last terminal since the reset was
-    // asked for: there is nobody to rebuild it for.
-    if (cell.live.ended) return;
-    // The replacement is built BEFORE the old one is torn down. The build runs
-    // app code — `inputs`, `functions`, `onSession` — and if that throws, a
-    // reset that had already disposed the old shell would leave the session
-    // holding nothing at all: strictly worse than the wedged shell it was
-    // called to fix. Built first, a failed reset changes nothing. It is built
-    // from everything the shell was opened with: the principal, the newest
-    // token, and the id seed and the inputs a page's path carried.
-    const next = await buildShell(host, cell.token, cell.principal, true, cell.opening?.seed, cell.opening?.inputs);
-    const old = cell.live;
-    // It ended while its replacement was built. The replacement is nobody's.
-    if (old.ended) {
-      next.ended = true;
-      next.shell.dispose();
-      return;
-    }
-    const carried = [...old.connections].map((connection) => ({ connection, wants: old.deltaReady.has(connection) }));
-    old.ended = true;
-    old.connections.clear();
-    old.shell.dispose();
-    cell.live = next;
-    for (const { connection, wants } of carried) attach(next, connection, delta && wants);
-  };
+  const { kept } = host;
 
   // ONE RESET OF A CELL AT A TIME, each after the one before it. A reset
   // builds and then swaps, so two that overlapped each began from the shell
@@ -155,7 +195,7 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
   // that was asked for still happens, in turn: the second may be for a reason
   // that arrived after the first had read what it builds from.
   const rebuild = (cell: Cell): Promise<void> => {
-    const turn = (cell.resetting ?? Promise.resolve()).then(() => replace(cell));
+    const turn = (cell.resetting ?? Promise.resolve()).then(() => replaceShell(host, cell));
     // The next one waits for this one whether it lands or fails.
     cell.resetting = turn.catch(() => undefined);
     return turn;
@@ -191,6 +231,9 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
     return started;
   };
 
+  // The adopt that is under way, or the last one that ran (it never rejects).
+  let adopted: Promise<void> = Promise.resolve();
+
   const idleMs = config.limits?.idleMs ?? DEFAULT_IDLE_MS;
   let sweeper: ReturnType<typeof setInterval> | undefined;
   if (idleMs > 0 && Number.isFinite(idleMs)) {
@@ -225,7 +268,13 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
         live.shell.dispose();
       }
     },
-    adopt: () => void adoptAll(host).catch((err: unknown) => console.error('[moss/shells] adopt failed', err)),
+    // One adopt after another: a later change is adopted after an earlier
+    // one, however long each takes to be answered, so what a shell ends up
+    // holding is what the last change left its principal with.
+    adopt: () => {
+      const underWay = [...building.values()];
+      adopted = adopted.then(() => adoptAll(host, underWay));
+    },
     deliver: (principal, channel, payload) => {
       // Into the LIVE shell only. A principal with no durable shell hears
       // nothing and that is correct — this is push over shells that already

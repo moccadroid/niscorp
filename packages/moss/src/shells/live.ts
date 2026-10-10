@@ -9,6 +9,11 @@ import type { ShellConnection, ShellOpening } from './types';
 
 export type Live = {
   shell: Shell;
+  // The ids of the actions this host registered on the shell: what its
+  // principal held when it was built, or when it last adopted. An adopt
+  // removes the ones that left. What app code registered on the shell itself
+  // is not among them, and is not the host's to remove.
+  held: ReadonlySet<string>;
   connections: Set<ShellConnection>;
   // last frame per canvas — only changes are sent
   sent: Map<string, string>;

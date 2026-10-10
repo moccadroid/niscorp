@@ -1060,6 +1060,166 @@ describe('shells — a canvas placed by an action, not the frame', () => {
   });
 });
 
+// ═══════════════════════════════════════════════════════════════
+// ADOPT — what the app consists of changed while shells stand. Afterwards a
+// living shell holds exactly what its principal holds now. It used to add
+// and never take away: an action that was removed, or was no longer granted,
+// stayed mounted and pushable in every shell that had it.
+// ═══════════════════════════════════════════════════════════════
+
+describe('shells — adopt', () => {
+  const home = { id: 'home', data: {}, layout: { component: 'Text', children: 'home' } };
+  const extra = { id: 'extra', data: {}, layout: { component: 'Text', children: 'an extra screen' } };
+  const ledger = { id: 'ledger', data: {}, layout: { component: 'Ledger', children: 'a ledger' } };
+  const base = { ...app, actions: { home }, shell: { canvases: [{ id: 'main', initial: 'home' }] } } as unknown as NiscApp;
+
+  // A world whose actions in force, and what each principal holds of them, are
+  // the test's to change.
+  const world = (): { host: ReturnType<typeof createShellHost>; force: (actions: Record<string, unknown>) => void; hold: (principal: string, ids: string[] | Error) => void } => {
+    let inForce: Record<string, unknown> = { home, extra };
+    const held = new Map<string, string[] | Error>();
+    const host = createShellHost(
+      hostConfig({
+        ...ctx,
+        app: base,
+        actions: () => inForce as ReturnType<NonNullable<HostSetup['actions']>>,
+        resolve: async (principal) => {
+          const ids = held.get(principal ?? '') ?? Object.keys(inForce);
+          if (ids instanceof Error) throw ids;
+          return { roles: ['member'], scope: {}, catalog: { ids: ids.filter((id) => id in inForce) }, variants: new Map() };
+        },
+      }),
+    );
+    return { host, force: (actions) => void (inForce = actions), hold: (principal, ids) => void held.set(principal, ids) };
+  };
+  const mounted = (session: Awaited<ReturnType<ReturnType<typeof createShellHost>['session']>>): string[] => session.shell.getCanvasState('main').stack.map((item) => item.definitionId);
+  const settle = async (): Promise<void> => {
+    for (let i = 0; i < 4; i += 1) await tick();
+  };
+
+  it('an action that is no longer in force leaves a living shell: unmounted, and not pushable', async () => {
+    const { host, force } = world();
+    const session = await host.session('t', 'usr_1');
+    const connection = fakeConnection();
+    session.attach(connection);
+    session.shell.push('main', 'extra');
+    await settle();
+    expect(mounted(session)).toEqual(['home', 'extra']);
+
+    force({ home });
+    host.adopt();
+    await settle();
+
+    expect(mounted(session)).toEqual(['home']);
+    expect(() => session.shell.push('main', 'extra')).toThrow();
+    // And the terminal is served the canvas without it.
+    const served = JSON.stringify(connection.sent.filter((m) => m['type'] === 'render' && m['canvas'] === 'main').at(-1));
+    expect(served).toContain('home');
+    expect(served).not.toContain('an extra screen');
+  });
+
+  it('an action its principal is no longer granted leaves too, and stays for whoever still holds it', async () => {
+    const { host, hold } = world();
+    const revoked = await host.session('t', 'usr_1');
+    const kept = await host.session('t', 'usr_2');
+    revoked.shell.push('main', 'extra');
+    kept.shell.push('main', 'extra');
+    await settle();
+
+    hold('usr_1', ['home']);
+    host.adopt();
+    await settle();
+
+    expect(mounted(revoked)).toEqual(['home']);
+    expect(mounted(kept)).toEqual(['home', 'extra']);
+  });
+
+  it('an action that arrived becomes pushable, with a component nothing mentioned before', async () => {
+    const { host, force } = world();
+    const session = await host.session('t', 'usr_1');
+    const connection = fakeConnection();
+    session.attach(connection);
+    await settle();
+    expect(() => session.shell.push('main', 'ledger')).toThrow();
+
+    force({ home, extra, ledger });
+    host.adopt();
+    await settle();
+    session.shell.push('main', 'ledger');
+    await settle();
+
+    expect(mounted(session)).toEqual(['home', 'ledger']);
+    expect(JSON.stringify(connection.sent.at(-1))).toContain('a ledger');
+  });
+
+  it('a principal whose shell cannot adopt is said, and does not stop the rest', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { host, force, hold } = world();
+      const first = await host.session('t', 'usr_1');
+      const second = await host.session('t', 'usr_2');
+
+      hold('usr_1', new Error('this one cannot be resolved'));
+      force({ home, extra, ledger });
+      host.adopt();
+      await settle();
+
+      // The one that failed keeps what it held; the one after it adopted.
+      expect(() => first.shell.push('main', 'ledger')).toThrow();
+      second.shell.push('main', 'ledger');
+      expect(mounted(second)).toEqual(['home', 'ledger']);
+      expect(errors.mock.calls.some((call) => String(call[0]).includes('usr_1'))).toBe(true);
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
+  it('two changes are adopted in the order they happened, however long each answer takes', async () => {
+    // What usr_1 holds is answered by hand: the first adopt's answer is held
+    // back until the second adopt's has been given.
+    const answers: ((ids: string[]) => void)[] = [];
+    let byHand = false;
+    const host = createShellHost(
+      hostConfig({
+        ...ctx,
+        app: base,
+        actions: () => ({ home, extra }) as unknown as ReturnType<NonNullable<HostSetup['actions']>>,
+        resolve: async () => {
+          const ids = byHand ? await new Promise<string[]>((answer) => void answers.push(answer)) : ['home', 'extra'];
+          return { roles: ['member'], scope: {}, catalog: { ids }, variants: new Map() };
+        },
+      }),
+    );
+    const session = await host.session('t', 'usr_1');
+    byHand = true;
+
+    host.adopt(); // the earlier change: still holds both
+    host.adopt(); // the later one: `extra` was taken away
+    await settle();
+    // Answered out of order, if both were asked at once.
+    answers[1]?.(['home']);
+    await settle();
+    answers[0]?.(['home', 'extra']);
+    await settle();
+    answers[1]?.(['home']);
+    await settle();
+
+    expect(() => session.shell.push('main', 'extra')).toThrow();
+  });
+
+  it('a shell whose build was under way when the app changed adopts when it lands', async () => {
+    const { host, force } = world();
+    const arriving = host.session('t', 'usr_1');
+    force({ home, extra, ledger });
+    host.adopt();
+    const session = await arriving;
+    await settle();
+
+    session.shell.push('main', 'ledger');
+    expect(mounted(session)).toEqual(['home', 'ledger']);
+  });
+});
+
 describe('shells — the instance a click names', () => {
   // A list canvas: two live counters at once, the second one "active". A
   // terminal names the card a press came from; moss holds that name to the
