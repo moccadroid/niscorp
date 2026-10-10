@@ -8,16 +8,18 @@ import { CANVASES } from './shell/canvases';
 import { FRAME_STORE, frameLayout } from './shell/frame.layout';
 import { FRAGMENTS } from './shell/fragments/sheet.fragment';
 import { LYCEUM_KIT } from './grammars';
-import { ATTACHABLE } from './attachable';
 
 // The manifest. Artifacts are imported here; the code seams — who a principal
 // is, the server functions, the one signal that is not data (the deck moving
-// on), the phone's list derived from what a person is granted, and which
-// renderer draws each screen — are
+// on), the phone's list derived from what a person is granted, which
+// renderer draws each screen, and the features added to moss (integrations) — are
 // handed in by the server, which is the only place code
 // lives (PLAN.md, build rules). The room's reads are reactive; nothing else is
 // announced.
 export type LyceumSeams = {
+  // What is added to moss that is not its core: the integrations, created by
+  // the server with the seats this app offers (app/attachable.ts).
+  features: NonNullable<NiscApp['features']>;
   identity: NonNullable<NiscApp['identity']>;
   functions: NonNullable<NiscApp['functions']>;
   reactions: NonNullable<NiscApp['reactions']>;
@@ -37,7 +39,7 @@ export const buildLyceum = (seams: LyceumSeams): NiscApp =>
     entries: ENTRIES,
     behaviors: BEHAVIORS,
     grammars: [LYCEUM_KIT],
-    attachable: ATTACHABLE,
+    features: seams.features,
     identity: seams.identity,
     functions: seams.functions,
     reactions: seams.reactions,

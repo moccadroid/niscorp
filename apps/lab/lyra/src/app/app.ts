@@ -1,5 +1,6 @@
 import { defineApp } from '@niscorp/moss';
 import type { NiscApp } from '@niscorp/moss';
+import { createIntegrations } from '@niscorp/moss/integrations';
 import { CHARTER } from './charter/charter';
 import { AREAS, areasFor, landingFor } from './nav/sections';
 import { CATALOG_DEFINITIONS } from './action-catalog';
@@ -190,7 +191,38 @@ const integrationRung = (actorId: string): string | undefined => {
 const DUAL = ['owner', 'manager', 'instructor', 'desk'] as const;
 const WEARABLE: readonly (readonly string[])[] = DUAL.map((role) => [role, 'member']);
 
+// WHERE AN INTEGRATION'S PANEL MAY RIDE: host action → what it hands a rider,
+// as {offered key: the path it is read from on this app's own data}. Said to
+// the integrations feature below, and read by `nav.attachments`, which is the
+// implementation of the offer.
+const ATTACHABLE = { 'people.detail': { person_id: 'personId', person_name: 'member.person_name' } };
+
 export const buildLyra = (deps: ServerDeps): NiscApp => {
+  // INTEGRATIONS are a feature of moss, not part of its core: made here, with
+  // what this app says about them, and handed over in `features` below. The
+  // server starts it; the nav functions call it for what rides and what is
+  // placed.
+  //
+  // `installedIntegrations` is gone as a question: the install list lives on
+  // the identity record (`identity/installed`), resolved once per session
+  // through the engine, and moss's surfaces read the record.
+  const integrations = createIntegrations({
+    // The actor seam is PURE now — the id names both halves, so composing it
+    // reads nothing. Whether the install is live is identity's question:
+    // `identity/actor` answers it when the record resolves, and moss refuses
+    // the keyed call at the door when it answers nobody.
+    integrationActor: (integration, actsFor) => (integration === '' || actsFor === '' ? null : `ig_${integration}@${actsFor}`),
+    attachable: ATTACHABLE,
+    // An integration may place a screen into these and nowhere else — intake refuses a
+    // placement naming anything absent here. `hub.money` is offered because a
+    // payments integration has somewhere to belong that is not somebody's roster.
+    menuSlots: ['hub.people', 'hub.me', 'hub.money'],
+    // The same ids, in the words this studio's own navigation uses — so the
+    // approval card and the store tile say "under Money" rather than
+    // "under hub.money". Derived from the nav rather than typed twice.
+    placementNames: { ...Object.fromEntries(AREAS.map((area) => [area.id, area.label])), 'people.detail': 'a member’s record' },
+  });
+
   const app: NiscApp = defineApp({
     charter: CHARTER,
     // NO ASSIGNMENT MAP. `identity` below answers per principal, one row at a
@@ -204,25 +236,7 @@ export const buildLyra = (deps: ServerDeps): NiscApp => {
     behaviors: scopeBehaviors,
     resources: RESOURCES,
 
-    // `installedIntegrations` is gone as a question: the install list lives on
-    // the identity record (`identity/installed`), resolved once per session
-    // through the engine, and moss's surfaces read the record.
-    //
-    // The actor seam is PURE now — the id names both halves, so composing it
-    // reads nothing. Whether the install is live is identity's question:
-    // `identity/actor` answers it when the record resolves, and moss refuses
-    // the keyed call at the door when it answers nobody.
-    integrationActor: (integration, actsFor) => (integration === '' || actsFor === '' ? null : `ig_${integration}@${actsFor}`),
-
-    attachable: { 'people.detail': { person_id: 'personId', person_name: 'member.person_name' } },
-    // An integration may place a screen into these and nowhere else — intake refuses a
-    // placement naming anything absent here. `hub.money` is offered because a
-    // payments integration has somewhere to belong that is not somebody's roster.
-    menuSlots: ['hub.people', 'hub.me', 'hub.money'],
-    // The same ids, in the words this studio's own navigation uses — so the
-    // approval card and the store tile say "under Money" rather than
-    // "under hub.money". Derived from the nav rather than typed twice.
-    placementNames: { ...Object.fromEntries(AREAS.map((area) => [area.id, area.label])), 'people.detail': 'a member’s record' },
+    features: [integrations],
     // WHO SOMEBODY IS, resolved once per session and held by moss.
     //
     // Everything here is stable for as long as a session lasts: which studio,
@@ -391,7 +405,7 @@ export const buildLyra = (deps: ServerDeps): NiscApp => {
     // boot uses — injected, so a refresh cannot disagree with a restart. (Its
     // predecessor rebuilt from `[audience]` alone, and an instructor who also
     // trains lost their member role until the next boot.)
-    functions: (session) => ({ ...authFunctions(session, { runAs: (role, fingerprint, context, scope) => deps.server().executeAs(role, fingerprint, context, scope), now: () => Date.now(), base: () => process.env['LYRA_BASE'] ?? 'http://localhost:5180' }), ...worldFunctions(session, { app, server: deps.server }), ...automationFunctions(session, { tide: deps.tide, driver: deps.driver, server: deps.server }), ...navFunctions(session, { app, server: deps.server, pool: deps.pool }), ...mailFunctions(session) }),
+    functions: (session) => ({ ...authFunctions(session, { runAs: (role, fingerprint, context, scope) => deps.server().executeAs(role, fingerprint, context, scope), now: () => Date.now(), base: () => process.env['LYRA_BASE'] ?? 'http://localhost:5180' }), ...worldFunctions(session, { app, server: deps.server }), ...automationFunctions(session, { tide: deps.tide, driver: deps.driver, server: deps.server }), ...navFunctions(session, { server: deps.server, integrations, attachable: ATTACHABLE }), ...mailFunctions(session) }),
 
     shell: {
       // Every canvas needs an explicit `actionLayout` with an `ActionSlot`: the

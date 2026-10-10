@@ -1,7 +1,8 @@
 # Moss — API Reference
 
-Fourteen entry points: `@niscorp/moss` (the server), `@niscorp/moss/node` (the
+Fifteen entry points: `@niscorp/moss` (the server), `@niscorp/moss/node` (the
 Node listener and the built site), `@niscorp/moss/vite` (the dev plugin),
+`@niscorp/moss/integrations` (a feature: services that add screens),
 `@niscorp/moss/client` and `@niscorp/moss/client/node` (the wire and its Node
 host), `@niscorp/moss/terminal` (the terminal), and the render targets:
 `terminal/react`, `terminal/vue`, `terminal/dom` (each with a `/server` entry
@@ -50,22 +51,14 @@ type NiscApp = {
   runs?: RunSink;
   reactions?: readonly { table; op?; run }[];         // see "Reacting to writes"
   facts?: { tide; identity; chain? };                 // see "Reacting to writes"
-  // integrations (see "Integrations")
-  installedIntegrations?: (principal: string | null) => readonly string[] | Promise<readonly string[]>; // deprecated, never called
-  integrationActor?: (integration: string, actsFor: string) => string | null | Promise<string | null>;
-  attachable?: Record<string, Record<string, string>>;
-  menuSlots?: readonly string[];
-  assistantTools?: readonly string[];
-  publishChecks?: readonly string[];
-  editorRegions?: readonly string[];
-  placementNames?: Readonly<Record<string, string>>;
-  storePress?: StorePress;
+  // what is added to moss that is not its core (see "Features")
+  features?: readonly Feature[];
 };
 ```
 
 Every field is an artifact (authored data) except the code seams — `scope`,
 `identity`, `phrases`, `functions`, `onSession`, `runs`, a reaction's `run`,
-`facts`, and the integration hooks. Absent `shell`, the app serves data only
+`facts` — and `features`. Absent `shell`, the app serves data only
 (no server shells). Absent `functions`, `fn:` endpoints fail loudly.
 
 - `assignments` is optional: an app that declares `identity` answers roles per
@@ -392,24 +385,26 @@ What the server answers over HTTP:
 | `GET /catalog` | `{ principal, actions, hash }` — the application, resolved for the caller |
 | `/api/vex` | the vex surface over the full schema: locked (replay-only), scoped per principal |
 | `/api/<resource>/vex` | the same, over one of `app.resources`' entity subgraphs |
-| `/api/integrations/*` | `GET contract` (`?id=`, `?format=md`), `GET verify-key`, `POST frame` (mint a frame grant) |
-| `/integrations/:id/*` | the proxy to an approved integration, as the signed-in caller; plus `frame/:token` (and `frame/:token/:call`) and `hook/*`, which take no session |
-| `/operator/integrations` | list, register (`POST`), `:id/approve`, `:id/probe`, `DELETE :id` — keyed by `x-operator-key` |
+| `/operator/*` | nothing of the server's own; a feature's operator routes and the app's, behind `x-operator-key` and `runtime.operatorGate` |
+
+A feature the app names in `features` adds its own routes to these (see
+[`@niscorp/moss/integrations`](#niscorpmossintegrations) for the ones that
+feature serves).
 
 The socket is not a Hono route: `server.socket` is fed by the runtime's
 transport (`/socket` under `serve` and `attachSocket`). Every request is
 identified once, from `Authorization: Bearer <token>`: a session token goes
-through the `session` verifier (`401` when it does not resolve); a token with
-the `ik_` prefix is an integration key, resolved with `x-nisc-acts-for`
-through `app.integrationActor` (`401` unknown key, `403` no actor); no header
-is the anonymous principal. There is no `/fns` surface.
+through the `session` verifier (`401` when it does not resolve); a token
+whose prefix a feature registered is that feature's to read (the integrations
+read `ik_`, an integration key); no header is the anonymous principal. There
+is no `/fns` surface.
 
 #### `MossServer`
 
 `Hono<Env> & { socket: SocketAccept; shells?: ShellHost; principalOf; page; pages;
 refresh; replaceActions; verifyActions; actions; catalogOf; catalogForRoles;
 policyForRoles; charterReport; invalidateIdentity; invalidateTenant; identity;
-executeAs; callIntegration; nudge; generation; close; identities? }`.
+executeAs; nudge; generation; close; identities? }`.
 It's a Hono app — mount it, extend it, or hand it to a listener.
 
 - `principalOf(token): Promise<string | null>` — the deployment's own session
@@ -495,9 +490,6 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   seeded entry as a declared charter role, for surfaces with no principal by
   nature. In-process only, replay-only, policy compiled from that role, scope
   values supplied by server code.
-- `callIntegration(id, path, { principal, method?, body?, scope? }):
-  Promise<Response>` — call an installed integration when nobody is driving;
-  throws unless it is approved and installed for the principal's tenant.
 - `nudge(principal, channel): void` — publish, payload-less, onto one
   principal's living shell, in whichever process holds it (local `deliver`,
   then the fabric).
@@ -774,36 +766,27 @@ The Postgres store tide runs on, as a strata sequence (`TIDE_SEQUENCE`, tables
 `TIDE_TABLES`). Returns a tide `TideStore` plus `ready: Promise<void>`.
 `mintWrites` is the bridge the fact lane uses.
 
-### Integrations
+### Features
 
-A separate service registered with the deployment, whose actions join the
-manifest once an operator approves them. The HTTP surfaces are listed under
-[`createServer`](#createserverapp-runtime-promisemossserver); the operator seam
-exists only when `runtime.operatorKey` is set.
+A feature is something an app adds to moss that owns none of what the core
+answers (who is calling, what exists for them, what they may read and write,
+what they are looking at, how it reaches them). It ships from an entry point of
+its own, and the core never imports it.
 
-- Manifest hooks: `installedIntegrations(principal)` (deprecated and never called — the
-  install list moss filters by is `IdentityRecord.installed`; absent = all), `integrationActor(integration,
-  actsFor)` (the principal a keyed call acts as; `null` refuses), `attachable`
-  and `menuSlots` (where an integration's actions may appear), `assistantTools`,
-  `publishChecks`, `editorRegions` (the names a bundle's declarations may use),
-  `placementNames`, `storePress` (where a bundle's listing images land).
-- `runIntake(payload, ctx): IntakeResult` — validate a bundle:
-  `{ ok: true, bundle } | { ok: false, reasons }`.
-- `initIntegrations(pool)`, `MOSS_SEQUENCE`, `listIntegrations(pool)`,
-  `loadIntegrationActions(pool, upgrader?)`, `integrationByKey(pool, key)`,
-  `listAttachments(pool, hostAction)`, `listPlacements(pool)` — the stored rows.
-- `integrationOfAction(id)`, `filterInstalled(ids, installed)` — which
-  integration an action id belongs to, and the catalog filter.
-- `buildContract(app, integrationId)`, `contractAsMarkdown(contract,
-  fingerprints)` — what `/api/integrations/contract` serves.
-  `describePlacements(bundle, names?)` — the placement sentence stored with an
-  integration's row at registration.
-- `copyPress`, `callIntegrationWith` — the press copy at intake and the
-  machinery behind `server.callIntegration`.
-- `createAssertionSigner(seed?)`, `verifyAssertion(token, verifyKey, now?)` —
-  the ed25519 assertion the proxy signs and an integration verifies.
-  `mintIntegrationKey()` (`ik_…`) and `hashIntegrationKey(key)` — the
-  integration's own credential, stored hashed.
+- `Feature` — `{ name: string; start(seams: FeatureSeams): void | Promise<void> }`.
+  The app puts features in `NiscApp.features`. `createServer` starts each one,
+  in order, once its core stands and before anything is served; one that throws
+  refuses the boot.
+- `FeatureSeams` — everything of the core a feature may touch, each member one
+  function or one narrow value: `routes(hono)` and `operatorRoutes(hono)` (mount
+  behind the authentication, and behind the operator key); `credential(prefix,
+  principalOf)` (read a bearer token of the feature's own prefix); `who(principal)`
+  and `scopeOf(principal)`; `holds(roles, installed)`, `actions()`,
+  `replaceActions(source, actions)`, `refusalOf(actions)`,
+  `loadActionsFrom(source, load)`, `narrowCatalogs(filter)`, `charter`,
+  `components`; `pool`, `grammars`, `fingerprints()`, `fingerprintsFor(principal)`;
+  `telemetry`, `signingSeed`; `wrapWire(wrap)`. A route a feature mounts reads
+  who is calling as `c.get('principal')`.
 
 ### Many processes
 
@@ -1165,6 +1148,86 @@ Requires the optional `vite` peer.
   - `watch?: RegExp` (default: `src/app`, `src/server`, `src/db`, `src/ui` and
     the nisc config), `index?` (default `index.html`), `owned?` (default
     `MOSS_PATHS`), `label?` (default `moss`).
+
+## `@niscorp/moss/integrations`
+
+An integration is a separate service registered with the deployment, whose
+actions join the manifest once an operator approves them. It is a feature: an
+app that wants integrations creates it and names it in `features`.
+
+```typescript
+import { createIntegrations } from '@niscorp/moss/integrations';
+
+const integrations = createIntegrations({
+  integrationActor: (integration, actsFor) => `ig_${integration}@${actsFor}`,
+  attachable: { 'people.detail': { person_id: 'personId' } },
+  menuSlots: ['hub.people'],
+});
+const app = defineApp({ charter, actions, features: [integrations] });
+const server = await createServer(app, runtime);
+
+await integrations.listAttachments('people.detail');
+```
+
+#### `createIntegrations(config?: IntegrationsConfig): Integrations`
+
+`IntegrationsConfig`, every field optional:
+
+- `integrationActor(integration, actsFor): string | null | Promise<string | null>`
+  — the principal a call made with an integration's key acts as; `actsFor` is
+  the request's `x-nisc-acts-for`. `null`, or absent, refuses (`403`).
+- `attachable: Record<hostAction, Record<offeredKey, hostDataPath>>` and
+  `menuSlots: string[]` — where an integration's actions may appear. A bundle
+  that names anything else is refused at intake.
+- `assistantTools`, `publishChecks`, `editorRegions` — the names a bundle's
+  `assistants` and `documents` declarations may use.
+- `placementNames: Record<id, words>` — the host's words for its hubs and
+  screens, for the placement sentence stored with an integration.
+- `storePress(integrationId, name, bytes, contentType): Promise<string>`
+  (`StorePress`) — where a bundle's listing images land; it answers the URL
+  they are served from. Absent, a bundle that declares press is refused.
+
+`Integrations` is a `Feature` that also carries the calls an app makes. They
+work once a server has started the feature, and reject with a sentence before
+that:
+
+- `callIntegration(id, path, { principal, method?, body?, scope? }):
+  Promise<Response>` (`CallIntegration`) — call an installed integration when
+  nobody is driving; throws unless it is approved and installed for the
+  principal's tenant.
+- `listAttachments(hostAction): Promise<{ actionId, preview }[]>` — the approved
+  integrations' actions that ride a host action.
+- `listPlacements(): Promise<Record<actionId, hub>>` — the ones placed under a
+  menu hub.
+- `integrationByKey(key): Promise<string | undefined>` — the approved
+  integration a presented key belongs to.
+- `integrationOfAction(actionId): string | undefined` — which integration an
+  `ext.<audience>.<integration>.<name>` action belongs to. Also exported by
+  itself; it reads nothing and needs no server.
+
+Which integrations are live for a principal is `installed` on the record the
+app's `identity.resolve` answers; absent, every approved integration is live
+for everybody.
+
+What the feature serves once it is started:
+
+| Path | What |
+|---|---|
+| `/api/integrations/*` | `GET contract` (`?id=`, `?format=md`), `GET verify-key`, `POST frame` (mint a frame grant) |
+| `/integrations/:id/*` | the proxy to an approved integration, as the signed-in caller; plus `frame/:token` (and `frame/:token/:call`) and `hook/*`, which take no session |
+| `/operator/integrations` | list, register (`POST`), `:id/approve`, `:id/probe`, `DELETE :id` — keyed by `x-operator-key`, so only when `runtime.operatorKey` is set |
+
+A bearer token with the `ik_` prefix is an integration key: it is resolved to
+the integration it was issued to and, through `integrationActor`, to a
+principal (`401` unknown key, `403` no actor). Its tables are part of
+`MOSS_SEQUENCE` (`@niscorp/moss`), run by the server with the rest.
+
+#### `createAssertionSigner(seed?)`
+
+`{ verifyKey, mint(claims, ttlMs?) }` — the ed25519 assertion the feature signs
+every call to an integration with, for a check or a service in the same
+workspace that wants to mint or hold one. An integration verifies it against
+`GET /api/integrations/verify-key`.
 
 ## `@niscorp/moss/client`
 

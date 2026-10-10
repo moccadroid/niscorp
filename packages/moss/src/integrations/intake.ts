@@ -26,10 +26,10 @@ export type IntakeContext = {
   // Fingerprints the app serves. An action calling one that does not exist is a
   // typo now and a 404 in front of a customer later.
   fingerprints: ReadonlySet<string>;
-  // Host actions that accept attachments (`NiscApp.attachable`). An
+  // Host actions that accept attachments (`attachable`, ./feature.ts). An
   // integration cannot ride a screen that never offered a seat.
   attachable: ReadonlySet<string>;
-  // Menu hubs that accept placed screens (`NiscApp.menuSlots`). Who owns a
+  // Menu hubs that accept placed screens (`menuSlots`, ./feature.ts). Who owns a
   // menu is the host's question; this set is its answer.
   menuSlots: ReadonlySet<string>;
   // Region actions the host's editor offers a document (`bar`, `outline`,
@@ -41,7 +41,7 @@ export type IntakeContext = {
   regions?: ReadonlySet<string>;
   tools?: ReadonlySet<string>;
   checks?: ReadonlySet<string>;
-  // The host's grammars (see ./data, grammar.ts). With it, a bundle's actions are
+  // The host's grammars (../data, grammar.ts). With it, a bundle's actions are
   // upgraded from the bundle's `grammar` stamp BEFORE they are parsed — an
   // action in an older grammar would fail today's strict schema otherwise.
   upgrader?: Upgrader;

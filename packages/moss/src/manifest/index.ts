@@ -30,7 +30,8 @@
 // WHEN IT CHANGES, every other process finds out by a pointer in the database
 // that each one polls (./generation.ts).
 //
-// This module imports `runtime` and `identity`, and nothing else of moss.
+// This module imports `runtime`, `identity` and `feature` (for the type of
+// what `NiscApp.features` holds), and nothing else of moss.
 // ═══════════════════════════════════════════════════════════════
 
 export { defineApp } from './app';
@@ -46,7 +47,6 @@ export type {
   RunTurn,
   ShellCanvas,
   ShellManifest,
-  StorePress,
 } from './app';
 export { GENERATION_DDL } from './generation';
 export { receiveManifest } from './handover';

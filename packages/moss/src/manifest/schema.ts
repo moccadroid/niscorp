@@ -98,6 +98,11 @@ const ReadEntrySchema = z
   .strict();
 const WriteEntrySchema = z.object({ ...entry, mutation: document(MutationDefinitionSchema) }).strict();
 
+// A feature is the app's code: a name, and the function the server starts it
+// with. What else it carries is its own (the calls an app makes on it), so it
+// is read loosely and never looked inside.
+const FeatureSchema = z.looseObject({ name: z.string(), start: seam });
+
 const ReactionSchema = z.object({ table: z.string(), op: z.enum(['insert', 'update', 'delete']).optional(), run: seam }).strict();
 
 // EVERY FIELD OF `NiscApp`, AND NO OTHER: `satisfies` fails the build when the
@@ -114,15 +119,7 @@ const fields = {
   identity: z.object({ as: z.string().optional(), resolve: seam }).strict().optional(),
   phrases: seam.optional(),
   phraseKeys: z.object({ props: strings.optional(), suffixes: strings.optional(), text: z.boolean().optional() }).strict().optional(),
-  installedIntegrations: seam.optional(),
-  integrationActor: seam.optional(),
-  attachable: z.record(z.string(), z.record(z.string(), z.string())).optional(),
-  menuSlots: strings.optional(),
-  assistantTools: strings.optional(),
-  publishChecks: strings.optional(),
-  editorRegions: strings.optional(),
-  placementNames: z.record(z.string(), z.string()).optional(),
-  storePress: seam.optional(),
+  features: z.array(FeatureSchema).readonly().optional(),
   entries: z.array(z.union([ReadEntrySchema, WriteEntrySchema])).readonly().optional(),
   // A resource is a list of entities, or the app's own record carrying one.
   resources: z.record(z.string(), z.union([strings, z.looseObject({ entities: strings })])).optional(),

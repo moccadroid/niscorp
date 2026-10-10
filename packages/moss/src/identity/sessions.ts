@@ -8,7 +8,7 @@ import type { PgPool } from '@niscorp/vex';
 // SESSIONS — the human credential, at the standard the machine one set.
 //
 // This server already answers "who is calling" three ways: an integration
-// presents a 256-bit key stored hashed (../integrations.ts), a deployment signs
+// presents a 256-bit key stored hashed (../integrations, registry.ts), a deployment signs
 // 30-second assertions with ed25519 (../integrations, credentials.ts) — and until this file, a
 // person presented a JSON field anybody could author. Nothing about a person
 // makes the weaker answer appropriate; this is the same credential the

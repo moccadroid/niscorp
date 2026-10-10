@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import type { StorePress } from '../manifest';
 import type { Bundle } from './bundle';
 
 // ── press, copied at intake ──────────────────────────────────
@@ -8,7 +7,7 @@ import type { Bundle } from './bundle';
 // render time — a dead add-on degrades its screens (injection stays an
 // attempt), never its listing. So the bytes cross ONCE, here: each declared
 // path is fetched from the service through the same mapping the proxy uses,
-// handed to the host's seam (NiscApp.storePress), and the URL the host
+// handed to the host's seam (`storePress`, ./feature.ts), and the URL the host
 // answers with is what the row keeps.
 //
 // Refusal is whole-payload, like everything else at this gate: a dead path, a
@@ -22,7 +21,10 @@ import type { Bundle } from './bundle';
 // (integration, path): a re-import overwrites its own images rather than
 // accumulating copies.
 
-export type { StorePress };
+// Where a press image lands: the bytes of one image a bundle declared, in;
+// the URL the store serves it from, out (`storePress` in the feature's
+// configuration, ./feature.ts). Throwing refuses the bundle whole.
+export type StorePress = (integrationId: string, name: string, bytes: Uint8Array, contentType: string) => Promise<string>;
 
 export type PressResult = { ok: true; urls: string[] } | { ok: false; reasons: string[] };
 

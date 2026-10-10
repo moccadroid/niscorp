@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
-import { buildContract, contractAsMarkdown } from '../src/integrations';
-import type { ContractHost } from '../src/integrations';
+import { buildContract, contractAsMarkdown } from '../src/integrations/contract';
+import type { ContractHost } from '../src/integrations/contract';
 
 // ═══════════════════════════════════════════════════════════════
 // The contract carries each component's SHAPE, not just its name. An add-on

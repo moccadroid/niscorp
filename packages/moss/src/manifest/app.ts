@@ -4,6 +4,7 @@ import type { Charter } from '@niscorp/charter';
 import type { ActionDefinition, ActionFragment, CanvasConfig, FetchFn, FunctionHandler, LayoutNode, Shell } from '@niscorp/nova';
 import type { PhraseKeys, Phrasebook } from '@niscorp/nova/i18n';
 import type { NiscRuntime } from '../runtime';
+import type { Feature } from '../feature';
 import type { IdentityRecord } from '../identity';
 
 // ═══════════════════════════════════════════════════════════════
@@ -11,7 +12,8 @@ import type { IdentityRecord } from '../identity';
 // authored — never machinery: the server derives everything mechanical
 // from these plus a database (DESIGN.md § Derivation over
 // configuration). `assignments` stands in for the artifact library's
-// assignment table until that exists.
+// assignment table until that exists. The code an app supplies is the seams
+// (functions it fills in) and `features`.
 // ═══════════════════════════════════════════════════════════════
 
 // Ring 2, as data: a layout VARIANT reshapes ONE action's layout for the
@@ -152,82 +154,14 @@ export type NiscApp = {
   // convention (`status_display`) declares it once here. Absent = nova's
   // default prop set and no suffix rule.
   phraseKeys?: PhraseKeys;
-  /**
-   * @deprecated Never called. Which integrations are live for a principal's
-   * tenant is `installed` on the record `identity.resolve` returns; without
-   * `identity`, every registered integration is live for everybody. Kept on
-   * the type so a manifest that still names it compiles — and it stays: a
-   * manifest that works is not broken to tidy a type.
-   */
-  installedIntegrations?: (principal: string | null) => readonly string[] | Promise<readonly string[]>;
-  // WHO AN INTEGRATION IS when it acts and nobody is driving.
-  //
-  // A webhook lands, a nightly sync runs: the integration presents its minted
-  // key and names who it acts for (`x-nisc-acts-for` — a tenant in most apps,
-  // and opaque to moss for the same reason `scope` is). The app answers with a
-  // principal, and from there NOTHING is special: that principal's charter
-  // rung compiles its policy, `scope` gives it its values, and the engine
-  // stamps its writes — the integration is just another client of the same
-  // closed grammar.
-  //
-  // Returning null refuses: an integration the tenant has not installed, a
-  // tenant that does not exist, an app that has no actor for unattended work.
-  // Absent = integration keys resolve to nobody and every keyed call is 403.
-  // MAY BE ASYNC, and this is the first of the six per-principal seams to say
-  // so. A synchronous signature cannot perform I/O, so an app answering this
-  // question about rows had exactly one implementation available to it: hold
-  // the rows. That is how a resident copy of the database gets built by a type
-  // rather than by a decision (docs/plans/lyra-identity.md, Part 1).
-  //
-  // Nothing here needed it: moss resolves this inside async middleware, one
-  // call per keyed request, and has awaited the session verifier beside it
-  // since the beginning. A sync implementation still satisfies this — the
-  // widening is the point, not a migration.
-  integrationActor?: (integration: string, actsFor: string) => string | null | Promise<string | null>;
-  // WHERE AN INTEGRATION MAY APPEAR — the host's half of the placement
-  // contract, advertised on the discovery surface and enforced at intake.
-  //
-  // `attachable`: host action id → the offers, as {offered key: host data
-  // path} (a member detail offering `membership_id` from `$.membershipId`).
-  // Declaring an action here is declaring a seat. The KEYS are the contract —
-  // advertised on discovery, what a rider receives as input and what a
-  // preview call carries. The PATHS are the host's private wiring: how its
-  // own strip derivation and push trigger read those values off its data —
-  // a rider never sees them.
-  attachable?: Record<string, Record<string, string>>;
-  // `menuSlots`: hub action ids whose item lists accept placed integration
-  // screens. Who owns a menu is the host's question; this list is its answer,
-  // and intake refuses a placement outside it.
-  menuSlots?: readonly string[];
-  // THE VOCABULARY AN ADD-ON'S DECLARATIONS MAY NAME — the same posture as
-  // `menuSlots`: the host names what it offers, intake refuses anything outside
-  // it. Read into the intake context so a `documents`/`assistants` declaration
-  // fails at registration, not in front of a person, when it names one the host
-  // does not hold. moss carries the names; what a tool DOES, what a check
-  // MEANS, and which region an id draws are the host's, never moss's.
-  //
-  // `assistantTools`: the host's closed assistant tool set, an `assistants`
-  // declaration's `tools[]` is checked against it.
-  assistantTools?: readonly string[];
-  // `publishChecks`: the checks the host runs before publishing a document, a
-  // `documents` declaration's `checks[]` is checked against it.
-  publishChecks?: readonly string[];
-  // `editorRegions`: region action ids the host's editor offers a document
-  // beyond the bundle's own actions; a `documents` declaration's `regions`
-  // values are admitted if they are one of these OR one of the bundle's actions.
-  editorRegions?: readonly string[];
-  // WORDS FOR THE IDS ABOVE, for the one sentence a person reads before
-  // turning an integration on. Optional: without it the approval card and store tile
-  // print ids, which is honest and unhelpful.
-  placementNames?: Readonly<Record<string, string>>;
-  // WHERE PRESS IMAGES LAND. A bundle may declare listing images
-  // (meta.press); intake fetches the bytes once and hands them here, and the
-  // URL this answers with is what the store serves forever after — the host's
-  // blob store, its bounds, its refusals (throw, and the bundle is refused
-  // whole). Optional: a deployment without one refuses any bundle that
-  // declares press, which is a sentence at import rather than a hole in a
-  // listing.
-  storePress?: StorePress;
+  // WHAT THE APP ADDS TO MOSS THAT IS NOT ONE OF ITS FIVE QUESTIONS (../feature):
+  // integrations, say — `createIntegrations(...)` from
+  // `@niscorp/moss/integrations`. Each is an object the app creates and
+  // configures; the server starts them in this order once its core stands, and
+  // each reaches the core only through the seams it is handed. What a feature
+  // lets the app call afterwards, the app calls on the object it created.
+  // Absent: none. The core serves an app without any.
+  features?: readonly Feature[];
   // the prewarmed API surface — every read and write the app serves, as
   // authored entries; seeded into the cache at boot (idempotent, protected).
   // Optional because a database may already carry its vex_cache rows.
@@ -343,11 +277,6 @@ export type NiscApp = {
     chain?: (scope: Record<string, unknown>, hints: { cause: string; depth: number }) => { cause: string; depth: number } | undefined;
   };
 };
-
-// Where a press image lands: the bytes of one image a bundle declared, in;
-// the URL the store serves it from, out (`NiscApp.storePress`). Throwing
-// refuses the bundle whole (../integrations.ts, copyPress).
-export type StorePress = (integrationId: string, name: string, bytes: Uint8Array, contentType: string) => Promise<string>;
 
 // The one verb the bridge needs. Both `Tide` and `TideDriver` satisfy it;
 // hand out the driver unless you have a reason to want facts that wait.

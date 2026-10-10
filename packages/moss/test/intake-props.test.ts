@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
-import { runIntake } from '../src/integrations';
-import type { IntakeContext } from '../src/integrations';
+import { runIntake } from '../src/integrations/intake';
+import type { IntakeContext } from '../src/integrations/intake';
 
 // ═══════════════════════════════════════════════════════════════
 // Intake checks a layout's component NAMES and, when the app carried a props

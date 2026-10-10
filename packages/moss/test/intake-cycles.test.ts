@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { ActionDefinition } from '@niscorp/nova';
-import { runIntake } from '../src/integrations';
-import type { IntakeContext } from '../src/integrations';
+import { runIntake } from '../src/integrations/intake';
+import type { IntakeContext } from '../src/integrations/intake';
 
 // ═══════════════════════════════════════════════════════════════
 // A bundle whose steps can never end is refused at intake. nova stops such a

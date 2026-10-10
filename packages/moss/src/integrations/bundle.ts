@@ -300,7 +300,7 @@ export const BundleSchema = z
     grammar: z.record(z.string(), z.number().int().nonnegative()).optional(),
     actions: z.record(z.string(), ActionDefinitionSchema),
     // action id → HOST action it rides on (a panel on the member detail). The
-    // host must have declared itself attachable — see IntakeContext. The long
+    // host must have declared itself attachable — see IntakeContext (./intake.ts). The long
     // form adds a `preview`: an endpoint under the integration's own prefix that the
     // host calls with the offered identifiers while deriving its strip, and
     // that answers with display atoms — `bands` (colors) and `hint` (a line) —
@@ -315,7 +315,7 @@ export const BundleSchema = z
     // action id → the MENU HUB it lists under (a roster under People). The hub
     // must be one the host offers to integrations.
     placements: z.record(z.string(), z.string()).default({}),
-    // PAGES THE INTEGRATION SERVES AND THE HOST FRAMES. Lyra validates every layout
+    // PAGES THE INTEGRATION SERVES AND THE HOST FRAMES. A host validates every layout
     // against a fixed component vocabulary, so an integration cannot ship UI — which is
     // right until a vendor's own browser SDK is the only way to render
     // something (a payment onboarding form). The answer is not to teach the
@@ -323,7 +323,7 @@ export const BundleSchema = z
     // host to frame it, at its own origin, gated by exactly what every other
     // integration call is gated by.
     //
-    // Named lyra-side, like `preview`, and under the integration's own prefix. What is
+    // Named host-side, like `preview`, and under the integration's own prefix. What is
     // inside a frame the host does NOT validate — that is the real cost, and it
     // is why this is a declaration rather than an iframe a layout can conjure.
     //

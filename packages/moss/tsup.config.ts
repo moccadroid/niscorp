@@ -27,6 +27,9 @@ export default defineConfig([
     entry: {
       index: 'src/index.ts',
       node: 'src/node.ts',
+      // A feature, from an entry of its own: nothing the main entry reaches
+      // imports it (scripts/check-modules.mts).
+      integrations: 'src/integrations/index.ts',
       client: 'src/client/index.ts',
       'client/node': 'src/client/node.ts',
       'terminal/index': 'src/terminal/index.ts',

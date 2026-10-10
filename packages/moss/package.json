@@ -41,6 +41,16 @@
         "default": "./dist/node.cjs"
       }
     },
+    "./integrations": {
+      "import": {
+        "types": "./dist/integrations.d.ts",
+        "default": "./dist/integrations.js"
+      },
+      "require": {
+        "types": "./dist/integrations.d.cts",
+        "default": "./dist/integrations.cjs"
+      }
+    },
     "./client": {
       "import": {
         "types": "./dist/client.d.ts",

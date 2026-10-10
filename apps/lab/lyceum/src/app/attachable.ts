@@ -1,5 +1,6 @@
 // WHERE AN INTEGRATION'S SCREENS MAY GO — lyceum's half of the placement
-// contract (moss `attachable`). An integration's bundle says which of its
+// contract (`attachable`, said to moss's integrations when the server creates
+// them: server/boot.ts). An integration's bundle says which of its
 // actions rides which of these (`attachments`); intake refuses one that names
 // anything else. Each seat offers nothing to its riders: no keys.
 //

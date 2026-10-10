@@ -2,9 +2,16 @@ import { describe, it, expect, vi } from 'vitest';
 import { z } from 'zod';
 import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
-import { runIntake, reachOf, copyPress, callIntegrationWith, createForwarder, findIntegration, initIntegrations, listIntegrations, intakeContextOf } from '../src/integrations';
-import type { HostVocabulary, IntakeContext, Bundle, StorePress } from '../src/integrations';
-import { createAssertionSigner, verifyAssertion } from '../src/integrations';
+import { runIntake, intakeContextOf } from '../src/integrations/intake';
+import { reachOf } from '../src/integrations/reach';
+import { copyPress } from '../src/integrations/press';
+import { callIntegrationWith } from '../src/integrations/call';
+import { createForwarder } from '../src/integrations/forward';
+import { findIntegration, initIntegrations, listIntegrations } from '../src/integrations/registry';
+import type { HostVocabulary, IntakeContext } from '../src/integrations/intake';
+import type { Bundle } from '../src/integrations/bundle';
+import type { StorePress } from '../src/integrations/press';
+import { createAssertionSigner, verifyAssertion } from '../src/integrations/credentials';
 
 // The listing's long form travels WITH the bundle (story, highlights, press),
 // and press is the one field that moves bytes: copied at intake, never

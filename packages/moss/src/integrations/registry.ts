@@ -20,7 +20,7 @@ import { reachOf } from './reach';
 // is: the key lookup runs before there is a principal to run it as.
 // ═══════════════════════════════════════════════════════════════
 
-// The tables these rows live in are moss's own sequence (./data, tables.ts).
+// The tables these rows live in are moss's own sequence (../data, tables.ts).
 // Through the ledger, for a host that is not moss's server (which runs every
 // owner's sequence in one pass).
 export const initIntegrations = async (pool: PgPool): Promise<void> => {

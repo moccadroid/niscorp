@@ -1,5 +1,5 @@
 import type { ShellManifest } from '@niscorp/moss';
-import type { PgPool } from '@niscorp/vex';
+import type { Integrations } from '@niscorp/moss/integrations';
 import { attachedTo } from './attached';
 
 // THE PHONE'S LIST for one person, as boot data (`inputs`): the actions they
@@ -12,11 +12,11 @@ import { attachedTo } from './attached';
 //                            attached to `member.phone` (The QA Company's Q&A)
 //   the button               for the three the speaker gave it to
 //   the X-ray                once the speaker gave it
-export const phoneInputs = (pool: PgPool): NonNullable<ShellManifest['inputs']> => async ({ actions }): Promise<Record<string, Record<string, unknown>>> => {
+export const phoneInputs = (integrations: Integrations): NonNullable<ShellManifest['inputs']> => async ({ actions }): Promise<Record<string, Record<string, unknown>>> => {
   if (!actions.includes('member.phone')) return {};
   const onThePhone = [
     ...actions.filter((action) => action === 'assistant.thread'),
-    ...(await attachedTo(pool, 'member.phone', actions)),
+    ...(await attachedTo(integrations, 'member.phone', actions)),
     ...actions.filter((action) => action === 'button.press'),
     ...actions.filter((action) => action === 'xray.switch'),
   ];

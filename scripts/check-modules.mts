@@ -17,6 +17,12 @@
 //      never a file inside it.
 //   3. DECLARED DEPENDENCIES. A module imports only the modules its entry in
 //      `modules` names, and the table has no cycle.
+//   4. THE CORE DOES NOT IMPORT A FEATURE. A feature (`features`) is a module
+//      that owns none of the package's questions: it ships from an entry point
+//      of its own and reaches the core through seams it is handed. So no
+//      module that is not a feature names one in its dependencies, and no file
+//      at the top of `src/` imports one, `index.ts` included: what the main
+//      entry reaches would carry the feature with it.
 //
 // A file still flat may be imported by anything while it exists; that is what
 // being in the middle of a move looks like. A module named in `finished` is no
@@ -40,6 +46,8 @@ type Shape = {
   flat: readonly string[];
   // modules that import no flat file: all they need has been moved
   finished: readonly string[];
+  // modules the core must not import: each ships from its own entry point
+  features: readonly string[];
 };
 
 const PACKAGES: Readonly<Record<string, Shape>> = {
@@ -49,7 +57,7 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       protocol: [],
       feature: ['runtime'],
       identity: ['runtime', 'protocol'],
-      manifest: ['runtime', 'identity'],
+      manifest: ['runtime', 'identity', 'feature'],
       data: ['runtime', 'identity', 'manifest'],
       integrations: ['runtime', 'feature', 'manifest', 'data'],
       client: ['protocol'],
@@ -69,6 +77,7 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       'vite.ts',
     ],
     finished: ['runtime', 'protocol', 'feature', 'identity', 'manifest', 'data', 'integrations', 'client', 'terminal'],
+    features: ['integrations'],
   },
 };
 
@@ -141,6 +150,7 @@ for (const [name, shape] of Object.entries(PACKAGES)) {
   const unknown = [
     ...Object.entries(shape.modules).flatMap(([module, needs]) => needs.filter((need) => shape.modules[need] === undefined).map((need) => `${module} names ${need}`)),
     ...shape.finished.filter((module) => shape.modules[module] === undefined).map((module) => `finished names ${module}`),
+    ...shape.features.filter((module) => shape.modules[module] === undefined).map((module) => `features names ${module}`),
   ];
   ok(`${name}: every dependency named is a module`, unknown.length === 0, unknown.join('; '));
   const cycle = cycleIn(shape.modules);
@@ -172,6 +182,26 @@ for (const [name, shape] of Object.entries(PACKAGES)) {
   ok(`${name}: a module imports another by its door`, deep.length === 0, deep.slice(0, 6).join('; '));
   ok(`${name}: a module imports only the modules it declares`, undeclaredUse.length === 0, undeclaredUse.slice(0, 6).join('; '));
   ok(`${name}: a finished module imports no file still flat`, flatUse.length === 0, flatUse.length === 0 ? shape.finished.join(', ') : flatUse.slice(0, 6).join('; '));
+
+  // THE CORE DOES NOT IMPORT A FEATURE: not by a module's declared
+  // dependencies, and not from a file at the top of src/ (which may otherwise
+  // import anything while it waits to be moved).
+  const coreNames = Object.entries(shape.modules)
+    .filter(([module]) => !shape.features.includes(module))
+    .flatMap(([module, needs]) => needs.filter((need) => shape.features.includes(need)).map((need) => `${module} declares ${need}`));
+  const topUse: string[] = [];
+  for (const entry of top) {
+    if (!entry.isFile() || !/\.tsx?$/.test(entry.name)) continue;
+    for (const specifier of importsOf(readFileSync(join(src, entry.name), 'utf8'))) {
+      const module = relative(src, resolve(src, specifier)).split(sep)[0] ?? '';
+      if (shape.features.includes(module)) topUse.push(`${entry.name} imports ${specifier}`);
+    }
+  }
+  ok(
+    `${name}: the core does not import a feature`,
+    coreNames.length === 0 && topUse.length === 0,
+    coreNames.length === 0 && topUse.length === 0 ? shape.features.join(', ') : [...coreNames, ...topUse].slice(0, 6).join('; '),
+  );
 }
 
 for (const line of lines) console.log(line);

@@ -9,7 +9,7 @@ export const describePlacements = (bundle: Bundle, names: Readonly<Record<string
   // It is printed on the approval card and on the store tile — both read by
   // somebody deciding whether to turn an integration on — and `hub.money` told them
   // nothing they did not already have to guess. The host supplies the words for
-  // its own hubs and screens (`NiscApp.placementNames`); anything it has no word
+  // its own hubs and screens (`placementNames`, ./feature.ts); anything it has no word
   // for falls back to the id, which is honest rather than blank.
   const say = (id: string): string => names[id] ?? id;
   const parts: string[] = [];

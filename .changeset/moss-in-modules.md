@@ -10,10 +10,11 @@ BREAKING — approved by moccadroid, 2026-10-09: import only what `@niscorp/moss
 
 Moss had grown to twenty-eight files flat in `src/`, one of them a single function of 1,345 lines, and it exported 135 names of which 71 were imported by nothing outside the package. `docs/plans/moss-refactor.md` is the audit and the plan.
 
-**The main entry exports 61 names, not 135.**
+**The main entry exports 56 names, not 135.**
 
 - Gone, and never part of what an app calls: `createShellHost`, `createSocket`, `createDataLayer`, `createGeneration`, `createIdentityCache`, `wireFabric`, `runIntake`, `copyPress`, `callIntegrationWith`, `initIntegrations`, `listIntegrations`, `loadIntegrationActions`, `filterInstalled`, `buildContract`, `contractAsMarkdown`, `describePlacements`, `verifyAssertion`, `mintIntegrationKey`, `hashIntegrationKey`, `mintWrites`, `revokeSession`, `sessionVerifierOf`, `shellNeedOf`, `emitterOf`, `spanClock`, `resolvePolicyAtReach`, `resolveVariantsForRoles`, the constants `GENERATION_DDL`, `SESSIONS_SEQUENCE`, `SNAPSHOT_ELEMENT_ID`, `CLOSE_SHELL_FAILED`, `DEFAULT_GENERATION_POLL_MS`, `DEFAULT_IDENTITY_IDLE_MS`, `DEFAULT_IDENTITY_MAX`, `DEFAULT_IDLE_MS`, `DEFAULT_REVALIDATE_MS`, and the types that went with them.
 - An app that imported one of these was reaching into moss. Say which and why in an issue; the answer is a call that is meant to be public, not the name coming back.
+- Seven more names moved to `@niscorp/moss/integrations`, and two types arrived, `Feature` and `FeatureSeams`: see "Integrations are a feature" below.
 
 **A message on the socket is read whole, by a schema, or not at all.**
 
@@ -94,3 +95,32 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 
 - Importing a bundle again for an approved integration (`POST /operator/integrations`) asks whether the app could be served with it. That was answered by putting the bundle's actions into the running manifest and taking them out again when the check threw, so a refusal dropped every identity record and every compiled policy twice and moved the generation pointer twice, in every process. The bundle is now verified as a candidate, and the running app is not touched. The answer is the same `422` with the same reason.
 - An import that is accepted moves the pointer once, not twice. An app has nothing to change.
+
+**Integrations are a feature: `@niscorp/moss/integrations`, named in `features`.**
+
+- Integrations (services that add screens: registration and approval, the proxy, frames, webhooks, the integration key) are not part of moss's core any more. They ship from an entry point of their own, and an app that uses them creates the feature and names it in its manifest:
+
+  ```ts
+  import { createIntegrations } from '@niscorp/moss/integrations';
+
+  const integrations = createIntegrations({ integrationActor, attachable, menuSlots, placementNames, storePress });
+  const app = defineApp({ charter, actions, features: [integrations] });
+  ```
+
+- **Nine fields leave `NiscApp`.** Eight are the configuration of `createIntegrations`, under the names they had: `integrationActor`, `attachable`, `menuSlots`, `assistantTools`, `publishChecks`, `editorRegions`, `placementNames`, `storePress`. The ninth, `installedIntegrations`, was deprecated and never called, and is gone. A manifest that still names one of the nine is refused at boot, as any field the type does not have is: `(the manifest): Unrecognized key: "menuSlots"`.
+- `NiscApp.features?: readonly Feature[]` is new. The server starts each feature, in order, once its core stands and before anything is served.
+- **An app that does not name the feature has no integrations.** None of `/api/integrations/*`, `/integrations/:id/*` and `/operator/integrations` is served, an `ik_` key is answered `invalid_token`, and no integration's actions are loaded. The tables are still created; rows in them are not served.
+- **Each call that moved is on the object `createIntegrations` returned**, and takes no pool: it uses the one the server was given.
+  - `server.callIntegration(id, path, init)` → `integrations.callIntegration(id, path, init)`. `MossServer.callIntegration` is gone.
+  - `listAttachments(pool, hostAction)` → `integrations.listAttachments(hostAction)`.
+  - `listPlacements(pool)` → `integrations.listPlacements()`.
+  - `integrationByKey(pool, key)` → `integrations.integrationByKey(key)`.
+  - `integrationOfAction(id)` → the same function, imported from `@niscorp/moss/integrations`; also `integrations.integrationOfAction(id)`.
+
+  They work once `createServer` has answered. Before that the four that read rows reject with a sentence that says so.
+- **The import path that changed:** `createAssertionSigner`, `integrationOfAction` and the types `StorePress` and `CallIntegration` come from `@niscorp/moss/integrations`, not `@niscorp/moss`. New there: `createIntegrations` and the types `Integrations` and `IntegrationsConfig`.
+- An app that read one of the eight fields back off its own manifest (`app.attachable`) keeps the value where it creates the feature.
+- What a caller of the routes sees is what it saw, with these differences at the edges:
+  - A stored action definition that nova's schema refuses is left out of what is served, with a line in the log. It used to be served as it stood.
+  - A route body that is JSON and not an object (`null`) reads as an empty body. The route used to answer 500.
+  - A component whose `propsSchema` cannot convert itself to JSON Schema is listed in the contract by its name and description. The contract route used to answer 500.

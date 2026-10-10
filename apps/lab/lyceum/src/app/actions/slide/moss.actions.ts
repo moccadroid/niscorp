@@ -47,7 +47,7 @@ export const manifestSlide = still('slide.manifest', 'This is what Moss is given
     '  entries: ENTRIES,',
     '  behaviors: BEHAVIORS,',
     '  grammars: [LYCEUM_KIT],',
-    '  attachable: ATTACHABLE,',
+    '  features: seams.features,',
     '  identity: seams.identity,',
     '  …',
     '  shell: { canvases: CANVASES, … },',

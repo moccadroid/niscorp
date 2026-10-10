@@ -26,6 +26,7 @@ const ENTRIES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
     '.': 'src/index.ts',
     './node': 'src/node.ts',
     './vite': 'src/vite.ts',
+    './integrations': 'src/integrations/index.ts',
     './client': 'src/client/index.ts',
     './client/node': 'src/client/node.ts',
     './terminal': 'src/terminal/index.ts',

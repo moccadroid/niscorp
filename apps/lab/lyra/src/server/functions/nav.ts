@@ -1,7 +1,6 @@
-import { listAttachments, listPlacements } from '@niscorp/moss';
 import type { FunctionHandler } from '@niscorp/nova';
-import type { FunctionSession, MossServer, NiscApp } from '@niscorp/moss';
-import type { PgPool } from '@niscorp/vex';
+import type { FunctionSession, MossServer } from '@niscorp/moss';
+import type { Integrations } from '@niscorp/moss/integrations';
 import { contextFor } from '@lyra/app/nav/sections';
 import { bookOverWire } from '@lyra/app/app';
 import { greetingFrom } from '../phrases';
@@ -9,7 +8,10 @@ import { dayIn } from '../clock';
 
 export const navFunctions = (
   session: FunctionSession,
-  deps: { app: NiscApp; server: () => MossServer; pool: PgPool },
+  // `integrations` is the feature the app created (app/app.ts): what rides a
+  // host action and what is placed under a hub are asked of it. `attachable`
+  // is what each host action offers a rider, as the app said it there.
+  deps: { server: () => MossServer; integrations: Integrations; attachable: Readonly<Record<string, Readonly<Record<string, string>>>> },
 ): Record<string, FunctionHandler> => {
   // An integration's screen is not part of what the app shipped: it is among
   // the actions in force, which the server answers.
@@ -78,7 +80,7 @@ export const navFunctions = (
     const context = contextFor(action, granted);
     if (context.areaId === '') return { areaId: action, areaLabel: '', tabs: [], moreValue: '' };
 
-    const placements = await listPlacements(deps.pool);
+    const placements = await deps.integrations.listPlacements();
     const placed = granted
       .filter((id) => placements[id] === context.areaId)
       .map((id) => ({ action: id, label: titleOf(id), icon: 'addons' }))
@@ -100,9 +102,9 @@ export const navFunctions = (
     if (host === '') return [];
     // The session's own catalog — installs already filtered by the record.
     const granted = await grantedNow();
-    const attached = await listAttachments(deps.pool, host);
+    const attached = await deps.integrations.listAttachments(host);
 
-    const offers = deps.app.attachable?.[host] ?? {};
+    const offers = deps.attachable[host] ?? {};
     const offered: Record<string, unknown> = {};
     for (const [key, path] of Object.entries(offers)) {
       offered[key] = path.split('.').reduce<unknown>((at, segment) => (at !== null && typeof at === 'object' ? (at as Record<string, unknown>)[segment] : undefined), data);

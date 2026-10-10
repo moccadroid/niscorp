@@ -3,7 +3,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import type { Sequence } from '@niscorp/strata';
 import { createServer } from '../src/server';
-import { runIntake, type IntakeContext } from '../src/integrations';
+import { runIntake, type IntakeContext } from '../src/integrations/intake';
 import { createGrammarUpgrader } from '../src/data/grammar';
 
 // ═══════════════════════════════════════════════════════════════

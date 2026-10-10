@@ -47,15 +47,7 @@ const whole = (): NiscApp => ({
   identity: { as: 'identity', resolve: async () => ({ roles: ['member'], scope: {} }) },
   phrases: () => undefined,
   phraseKeys: { props: ['label'], suffixes: ['_display'], text: true },
-  installedIntegrations: () => [],
-  integrationActor: () => null,
-  attachable: { home: { deal_id: 'dealId' } },
-  menuSlots: ['home'],
-  assistantTools: ['search'],
-  publishChecks: ['links'],
-  editorRegions: ['panel'],
-  placementNames: { home: 'the home' },
-  storePress: async () => '/press/a.png',
+  features: [{ name: 'thing', start: () => undefined }],
   functions: () => ({}),
   onSession: () => undefined,
   runs: () => undefined,
@@ -107,17 +99,29 @@ describe('the manifest’s schema', () => {
     ]);
   });
 
+  it('holds a feature to a name and a function to start it with, and leaves what else it carries', () => {
+    const calls = { name: 'thing', start: async () => undefined, callThing: () => 'answered', held: { anything: 1 } };
+    expect(manifestMisfits({ ...whole(), features: [calls] })).toEqual([]);
+    expect(manifestMisfits({ ...whole(), features: [{ name: 'thing' }, { start: () => undefined }, 'thing'] })).toEqual([
+      'features.0.start: expected a function',
+      'features.1.name: Invalid input: expected string, received undefined',
+      'features.2: Invalid input: expected object, received string',
+    ]);
+    // A field that configured the integrations is not the manifest's any more.
+    expect(manifestMisfits({ ...whole(), menuSlots: ['home'] })).toEqual(['(the manifest): Unrecognized key: "menuSlots"']);
+  });
+
   it('holds a canvas, a page and the lists to their shapes', () => {
     const misfits = manifestMisfits({
       ...whole(),
       shell: { canvases: [{ id: 'main', mode: 'pile' }, { id: 'tray', initial: [{ input: {} }] }] },
       pages: { about: { canvases: [] } },
-      menuSlots: 'home',
+      features: 'thing',
       assignments: { usr_1: 'member' },
     });
     expect(misfits).toEqual([
       'assignments.usr_1: Invalid input: expected array, received string',
-      'menuSlots: Invalid input: expected array, received string',
+      'features: Invalid input: expected array, received string',
       'shell.canvases.0.mode: Invalid option: expected one of "stack"|"list"',
       'shell.canvases.1.initial.0.action: Invalid input: expected string, received undefined',
       'pages.about.path: Invalid input: expected string, received undefined',

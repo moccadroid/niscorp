@@ -143,6 +143,7 @@ never in moss core.
 
 - **`@niscorp/moss`** — the server: `defineApp`, `createServer`, the resolution and shell-host internals, the socket protocol types.
 - **`@niscorp/moss/node`** — the Node listener: `serve` + `attachSocket` (raw `ws`), and `mountSite(server, { dist, draw })` — the built terminal served by the same process, every page drawn. Bun swaps this file, never the app.
+- **`@niscorp/moss/integrations`** — a feature, not part of the core: `createIntegrations(config)` makes the object an app puts in its manifest's `features` to take in separate services that add screens (registration, approval, the proxy, frames, webhooks), and carries the calls the app makes on it afterwards.
 - **`@niscorp/moss/vite`** — `mossDev({ app })`: the app server inside vite's dev process — loaded through vite (an edit re-boots it), the socket attached once, pages drawn, moss's paths answered, a dev-only `/dev/as/<who>`. `nisc dev` adds it for an app behind moss; `vite` is an optional peer.
 - **`@niscorp/moss/client`** — the wire: `createWire()`, the app end of the socket. Plain TypeScript, zero React, zero globals — the host comes in as a `WireEnv` (default: `browserEnv()`, localStorage + location).
 - **`@niscorp/moss/client/node`** — the Node host env: `nodeEnv({ url, tokenFile? })` runs the same wire on a plain Node (or Bun) process — token in a file, the runtime's WHATWG WebSocket.

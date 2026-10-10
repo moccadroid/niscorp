@@ -1,7 +1,9 @@
 import type { PGlite } from '@electric-sql/pglite';
 import { createServer } from '@niscorp/moss';
 import type { MossServer, NiscApp } from '@niscorp/moss';
+import { createIntegrations } from '@niscorp/moss/integrations';
 import { buildLyceum } from '@lyceum/app/app';
+import { ATTACHABLE } from '@lyceum/app/attachable';
 import { lyceumIdentity } from './identity';
 import { lyceumReactions } from './reactions';
 import { doorFunctions } from './functions/door.functions';
@@ -105,12 +107,17 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
   const vendor = vendorAddresses(process.env);
 
   const renderers = followRenderers();
+  // Integrations are a feature added to moss: created here with the seats this
+  // app offers a bundle, handed over in the manifest, and asked afterwards
+  // which screens ride which seat (./attached.ts).
+  const integrations = createIntegrations({ attachable: ATTACHABLE });
   const app = buildLyceum({
+    features: [integrations],
     identity: lyceumIdentity,
     functions: (session) => ({ ...doorFunctions(session, server, moderation), ...roomFunctions(session, publicUrl, options.sshAddress ?? '', census), ...assistantFunctions(session, { querier, writer: timerWriter, orchestrator, tz, timing }), ...lecternFunctions(server, speakerMail), ...xrayFunctions(session), ...buttonFunctions(session, server), ...mirror.functions(session), ...resetFunctions(session, server, operatorKey, timing), ...integrationFunctions(session, server, operatorKey, vendor) }),
     reactions: [...lyceumReactions(server, moderation), renderers.reaction],
-    inputs: phoneInputs(runtime.pool),
-    seeds: attachedSeeds(runtime.pool),
+    inputs: phoneInputs(integrations),
+    seeds: attachedSeeds(integrations),
     onSession: (session) => {
       renderers.onSession(session);
       mirror.onSession(session);

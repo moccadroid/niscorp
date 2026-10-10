@@ -32,21 +32,16 @@
 // kills every token it holds without storing any of them.
 // ═══════════════════════════════════════════════════════════════
 
-export type { AssistantDeclaration, Bundle, ConfigurationField, DocumentDeclaration } from './bundle';
-export { callIntegrationWith } from './call';
+// THIS FILE IS AN ENTRY POINT: `@niscorp/moss/integrations`. What it exports
+// is what an app calls, and `packages/moss/api.txt` lists it. Everything else
+// in this directory is reached by the feature itself.
+//
+// This module imports `runtime`, `feature`, `manifest` and `data`. Nothing of
+// moss's core imports it: `pnpm check:modules` fails if something does.
+
 export type { CallIntegration } from './call';
-export { buildContract, contractAsMarkdown } from './contract';
-export type { Contract, ContractHost } from './contract';
-export { createAssertionSigner, hashIntegrationKey, mintIntegrationKey, verifyAssertion } from './credentials';
-export type { Assertion, AssertionSigner } from './credentials';
+export { createAssertionSigner } from './credentials';
 export { createIntegrations } from './feature';
 export type { Integrations, IntegrationsConfig } from './feature';
-export { createForwarder } from './forward';
 export { integrationOfAction } from './installed';
-export { intakeContextOf, runIntake } from './intake';
-export type { HostVocabulary, IntakeContext, IntakeResult } from './intake';
-export { copyPress } from './press';
-export type { PressResult, StorePress } from './press';
-export { reachOf } from './reach';
-export { findIntegration, initIntegrations, integrationByKey, listAttachments, listIntegrations, listPlacements } from './registry';
-export type { IntegrationRow } from './registry';
+export type { StorePress } from './press';

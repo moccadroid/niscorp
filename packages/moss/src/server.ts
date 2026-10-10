@@ -12,9 +12,7 @@ import { createData, createWireFollower } from './data';
 import type { ExecuteAs } from './data';
 import { mintWrites } from './tide';
 import type { ActionDefinition, FetchFn } from '@niscorp/nova';
-import type { CredentialAnswer, Feature, FeatureSeams } from './feature';
-import { createIntegrations } from './integrations';
-import type { CallIntegration } from './integrations';
+import type { CredentialAnswer, FeatureSeams } from './feature';
 import { createSocket, DEFAULT_REVALIDATE_MS } from './socket';
 import type { SocketAccept } from './socket';
 import { createShellHost } from './shells';
@@ -78,8 +76,9 @@ export type MossServer = Hono<Env> & {
   // first. Refused, this throws with the sentence `refresh` throws and nothing
   // changed; accepted, it does what `refresh` does, and the set is frozen
   // where it stands: to change it, hand over another. The actions in force are
-  // what the app shipped, then each set. `'integrations'` is moss's own set,
-  // read from its integration tables.
+  // what the app shipped, then each set. `'integrations'` is taken: the
+  // integrations feature hands the approved integrations' actions over under
+  // that name, read from its tables.
   replaceActions: (source: string, actions: Record<string, ActionDefinition>) => void;
   // WOULD THAT SET BE TAKEN — the dry run of `replaceActions`: the same
   // verification over the same candidate, answered as a report, and nothing is
@@ -127,14 +126,6 @@ export type MossServer = Hono<Env> & {
   // no principal by nature. In-process, replay-only, charter-bounded; see
   // ./data, execute-as.ts.
   executeAs: ExecuteAs;
-  // Call an installed integration when nobody is driving — the outbound half
-  // of `executeAs`. Resolves the row, refuses (throws) unless approved and
-  // installed for this principal's tenant, mints the assertion, returns what
-  // the integration answered — whatever it answered. Deliberately not gated
-  // by reach: a lifecycle verb is not an action and has no screen; the
-  // integration gates it itself, on the verified claims. The deployment's own
-  // act, not a screen's. See integrations.ts, callIntegrationWith.
-  callIntegration: CallIntegration;
   // FORGET ONE TENANT, not the deployment. The application tags each identity
   // record it resolves (`IdentityRecord.tag`); this drops every record wearing
   // one and answers how many it held. Moss never interprets the tag.
@@ -241,21 +232,6 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     behaviors: app.behaviors,
     telemetry: runtime.telemetry,
   });
-
-  // THE FEATURES this server starts once its core stands. The integrations are
-  // still made here, from the nine fields of the manifest that configure them:
-  // that is the one place the core still names a feature.
-  const integrations = createIntegrations({
-    integrationActor: app.integrationActor,
-    attachable: app.attachable,
-    menuSlots: app.menuSlots,
-    assistantTools: app.assistantTools,
-    publishChecks: app.publishChecks,
-    editorRegions: app.editorRegions,
-    placementNames: app.placementNames,
-    storePress: app.storePress,
-  });
-  const features: readonly Feature[] = [integrations];
 
   // WHAT THE APP CONSISTS OF RIGHT NOW (./manifest): what it shipped, and the
   // sets of actions that arrive while it runs — an app's own, through
@@ -618,14 +594,14 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   });
 
   // THE FEATURES, started once the core stands and before anything is
-  // served, in the order the app named them. Each mounts its routes,
+  // served, in the order the app named them (`NiscApp.features`). Each mounts its routes,
   // registers what it reads and loads what it keeps, through the seams and
   // nothing else; one that throws refuses the boot. BEFORE the pointer is
   // watched: a process that starts has changed nothing for the others, so a
   // set of actions a feature hands over while it starts moves nobody's
   // pointer. And before the operator prefix is mounted, because a prefix's
   // routes are taken when it is mounted.
-  for (const feature of features) await feature.start(seams);
+  for (const feature of app.features ?? []) await feature.start(seams);
   server.route('/operator', operator);
 
   // From here on a change moves the generation pointer, so every other process
@@ -674,7 +650,6 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
       for (const host of pageHosts.values()) host.stop();
     },
     executeAs: data.executeAs,
-    callIntegration: integrations.callIntegration,
     identity: async (principal: string | null) => {
       const resolved = await identity.resolve(principal);
       return { roles: resolved.roles, scope: resolved.scope, ...(resolved.installed !== undefined ? { installed: resolved.installed } : {}) };

@@ -1,5 +1,5 @@
 // Run: pnpm --filter lyra exec tsx src/dev/perimeter-check.ts
-import { createAssertionSigner } from '@niscorp/moss';
+import { createAssertionSigner } from '@niscorp/moss/integrations';
 import { startIntegrations } from '../../../lyra-integrations/src/serve';
 import { ok, report } from './world';
 

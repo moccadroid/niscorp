@@ -1,11 +1,12 @@
 . CLOSE_INVALID_TOKEN
 . CLOSE_SIGNED_OUT
-. CallIntegration
 . Connection
 . DocumentConfig
 . DrawnDocument
 . ExecuteAs
 . ExportedDocument
+. Feature
+. FeatureSeams
 . FunctionSession
 . IdentityRecord
 . LayoutVariant
@@ -23,7 +24,6 @@
 . ShellHost
 . ShellManifest
 . ShellSnapshot
-. StorePress
 . TIDE_DDL
 . TIDE_SEQUENCE
 . TIDE_TABLES
@@ -31,7 +31,6 @@
 . Telemetry
 . TelemetrySpan
 . TideDriver
-. createAssertionSigner
 . createPageRouter
 . createServer
 . createTideDriver
@@ -41,10 +40,6 @@
 . embedSnapshot
 . exportDocuments
 . initSessions
-. integrationByKey
-. integrationOfAction
-. listAttachments
-. listPlacements
 . memoKeyOf
 . migrateTables
 . mintDevToken
@@ -71,6 +66,13 @@
 ./client createWire
 ./client readDocumentSnapshot
 ./client/node nodeEnv
+./integrations CallIntegration
+./integrations Integrations
+./integrations IntegrationsConfig
+./integrations StorePress
+./integrations createAssertionSigner
+./integrations createIntegrations
+./integrations integrationOfAction
 ./node MOSS_PATHS
 ./node SiteConfig
 ./node attachSocket
