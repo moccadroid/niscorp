@@ -86,6 +86,30 @@ describe('verifyManifest — may this be served', () => {
     expect(report.errors).toEqual([]);
     expect(report.said).toEqual(['a chain of steps that never ends: x —emit (loop)→ x — nova stops it at its budget when it runs (RUNAWAY_CHAIN)']);
   });
+
+  // What a set of actions holds when it comes from rows or over a wire and no
+  // schema has read it: the compiler is told it is an action, and it is not.
+  const unread = (text: string): ActionDefinition => JSON.parse(text);
+
+  it('refuses a definition nova does not read, naming the action and what is wrong with it', () => {
+    const typo = unread('{"id":"admin.panel","tittle":"A typo"}');
+    const noTriggers = unread('{"id":"home","triggers":"none"}');
+    const report = verifyManifest({ ...coherent, actions: { home: noTriggers, 'admin.panel': typo } });
+    expect(report.errors.filter((error) => error.check === 'actions')).toEqual([
+      { check: 'actions', detail: expect.stringMatching(/^"home" is not an action nova reads: triggers: /) },
+      { check: 'actions', detail: '"admin.panel" is not an action nova reads: (root): Unrecognized key: "tittle"' },
+    ]);
+    // Found before the charter is asked about them, and said first.
+    expect(report.errors[0]?.check).toBe('actions');
+    expect(refusalOf(report, 'boot')).toMatch(/^Actions are not ones nova reads — refusing to serve:\n {2}"home" is not an action nova reads: triggers: /);
+    expect(refusalOf(report, 'refresh')).toMatch(/^Refresh refused — actions nova does not read:\n {2}"home" is not an action nova reads/);
+  });
+
+  it('a definition nested too deep to be read is refused the same way, and nothing throws', () => {
+    const deep = unread(`{"id":"home","layout":${'{"component":"Stack","children":['.repeat(5000)}"x"${']}'.repeat(5000)}}`);
+    const report = verifyManifest({ ...coherent, actions: { ...coherent.actions, home: deep } });
+    expect(report.errors[0]).toEqual({ check: 'actions', detail: expect.stringMatching(/^"home" is not an action nova reads: /) });
+  });
 });
 
 describe('verifyApp — the check boot runs, for an app that is not booted', () => {

@@ -1,7 +1,9 @@
 import { resolvePrincipal, verifyCharter } from '@niscorp/charter';
 import type { Charter, VerifyReport } from '@niscorp/charter';
+import { ActionDefinitionSchema } from '@niscorp/nova';
 import type { ActionDefinition } from '@niscorp/nova';
 import { chainCycles } from '@niscorp/nova/reflect';
+import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { scopeProfiles } from '@niscorp/vex';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { LayoutVariant, NiscApp } from './app';
@@ -56,7 +58,7 @@ export const candidateOf = (shipped: ShippedManifest, actions: ManifestCandidate
   profiles: scopeProfiles(shipped.behaviors ?? {}),
 });
 
-export type ManifestCheck = 'charter' | 'reach' | 'variants';
+export type ManifestCheck = 'actions' | 'charter' | 'reach' | 'variants';
 
 export type ManifestReport = {
   // WHAT REFUSES, one finding each, in the order the checks run. Empty: the
@@ -71,6 +73,27 @@ export type ManifestReport = {
   // refuse nothing, and a host that wants them reads them here.
   charter: VerifyReport;
 };
+
+// EVERY DEFINITION IS AN ACTION NOVA READS.
+//
+// What the app shipped was read by nova's schema when it was handed over
+// (./schema.ts). A set that arrives while the app runs was not: it comes from
+// rows, or over a wire, typed as actions by whoever handed it in. One that nova
+// refuses used to be taken, frozen and served, and was found when a shell that
+// holds it was built, for whoever connected first. So every definition of a
+// candidate is read here, where the question "may this be served" is asked,
+// and one that is not an action is the first thing that refuses.
+//
+// Asked how deep it nests before the schema reads it, as a manifest's
+// documents are: a recursive schema recurses on the call stack.
+const unreadActions = (actions: ManifestCandidate['actions']): { id: string; why: string }[] =>
+  Object.entries(actions).flatMap(([id, definition]) => {
+    if (exceedsDepth(definition)) return [{ id, why: depthRefusal() }];
+    const read = ActionDefinitionSchema.safeParse(definition);
+    if (read.success) return [];
+    const first = read.error.issues[0];
+    return [{ id, why: first === undefined ? 'no reason given' : `${first.path.join('.') || '(root)'}: ${first.message}` }];
+  });
 
 // A DECLARED REACH HAS TO NAME A PROFILE THAT EXISTS.
 //
@@ -94,27 +117,37 @@ export type EndlessChain = { path: string; through: readonly string[] };
 export const endlessChains = (actions: Readonly<Record<string, ActionDefinition>>): EndlessChain[] =>
   chainCycles(actions).map((cycle) => ({ path: cycle.path, through: cycle.steps.map((step) => step.action) }));
 
-// The four things a boot refuses or says, over one candidate: the charter
-// engine verifies (nova auditing each role's closure over its effective
-// definitions, granted variants substituted; closure findings sit under
-// `charter.perRole[].issues` and refuse nothing), every entry's reach names a
-// profile, the layout variants are coherent, and the chains that never end are
-// named.
+// The five things a boot refuses or says, over one candidate: every definition
+// is an action nova reads, the charter engine verifies (nova auditing each
+// role's closure over its effective definitions, granted variants substituted;
+// closure findings sit under `charter.perRole[].issues` and refuse nothing),
+// every entry's reach names a profile, the layout variants are coherent, and
+// the chains that never end are named.
+//
+// The checks after the first WALK the definitions, and a definition no schema
+// has read can throw out of a walk (one nested deep enough ends the stack). So
+// they are asked about the definitions that were read, and what was not read
+// is already a refusal.
 export const verifyManifest = (candidate: ManifestCandidate): ManifestReport => {
+  const unread = unreadActions(candidate.actions);
+  const refused = new Set(unread.map((action) => action.id));
+  const read: ManifestCandidate =
+    refused.size === 0 ? candidate : { ...candidate, actions: Object.fromEntries(Object.entries(candidate.actions).filter(([id]) => !refused.has(id))) };
   const charter = verifyCharter(
-    candidate.charter,
-    { actions: Object.keys(candidate.actions), data: candidate.grants, layouts: Object.keys(candidate.layouts) },
-    candidate.wearable,
-    auditClosure(candidate.actions, candidate.layouts),
+    read.charter,
+    { actions: Object.keys(read.actions), data: read.grants, layouts: Object.keys(read.layouts) },
+    read.wearable,
+    auditClosure(read.actions, read.layouts),
   );
   const found = (check: ManifestCheck, details: readonly string[]): ManifestReport['errors'] => details.map((detail) => ({ check, detail }));
   return {
     errors: [
+      ...found('actions', unread.map((action) => `"${action.id}" is not an action nova reads: ${action.why}`)),
       ...found('charter', charter.errors.map((error) => `${error.rule}: ${error.detail}`)),
-      ...found('reach', reachErrors(candidate.entries, candidate.profiles)),
-      ...found('variants', verifyVariants(candidate)),
+      ...found('reach', reachErrors(read.entries, read.profiles)),
+      ...found('variants', verifyVariants(read)),
     ],
-    said: endlessChains(candidate.actions).map((chain) => `a chain of steps that never ends: ${chain.path} — nova stops it at its budget when it runs (RUNAWAY_CHAIN)`),
+    said: endlessChains(read.actions).map((chain) => `a chain of steps that never ends: ${chain.path} — nova stops it at its budget when it runs (RUNAWAY_CHAIN)`),
     charter,
   };
 };
@@ -135,11 +168,13 @@ export const verifyApp = (app: ShippedManifest, grants: readonly string[]): Mani
 // and a change that is refused leaves what was being served.
 const HEADLINES = {
   boot: {
+    actions: 'Actions are not ones nova reads — refusing to serve:',
     charter: 'Charter is incoherent — refusing to serve:',
     reach: 'Entries declare a reach no table offers — refusing to serve:',
     variants: 'Layout variants are incoherent — refusing to serve:',
   },
   refresh: {
+    actions: 'Refresh refused — actions nova does not read:',
     charter: 'Refresh refused — charter incoherent over the new artifacts:',
     reach: 'Refresh refused — entries declare a reach no table offers:',
     variants: 'Refresh refused — layout variants incoherent:',

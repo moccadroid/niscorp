@@ -193,6 +193,19 @@ describe('verifyReplace — what `replace` would be told, with nothing switched'
     expect(() => manifest.replace('bundles', { [grades.id]: grades })).not.toThrow();
   });
 
+  it('a set holding a definition nova does not read is refused with a sentence, tried or handed over, and nothing is switched', () => {
+    const manifest = running(shippedApp());
+    // As it arrives from rows: the compiler is told it is an action.
+    const typo: Record<string, ActionDefinition> = { [desk.id]: JSON.parse('{"id":"ext.belts.desk","tittle":"A typo"}') };
+    const inForce = manifest.actions();
+
+    expect(manifest.verifyReplace('bundles', typo).errors).toEqual([{ check: 'actions', detail: '"ext.belts.desk" is not an action nova reads: (root): Unrecognized key: "tittle"' }]);
+    expect(() => manifest.replace('bundles', typo)).toThrow(/^Refresh refused — actions nova does not read:\n {2}"ext\.belts\.desk" is not an action nova reads: \(root\): Unrecognized key: "tittle"$/);
+    expect(manifest.actions()).toBe(inForce);
+    // Not frozen either: it was not taken.
+    expect(Object.isFrozen(typo)).toBe(false);
+  });
+
   it('tries the set IN PLACE of the one of that name: what the old set held is not part of the candidate', () => {
     // `panel` pushes an action only the set in force ships, so the set that
     // would replace it leaves a role pushing what it no longer holds.
