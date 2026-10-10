@@ -32,7 +32,9 @@ export type InkTargetConfig = {
   slotWrapper?: TerminalSlotWrapper;
   stdin?: NodeJS.ReadStream;
   stdout?: NodeJS.WriteStream;
-  // called when the ink app exits (Ctrl+C) — the host owns the wire/process
+  // Called when the terminal ends: the person left (Ctrl+C), or a component
+  // threw and ink ended the app. The host owns the wire and the process. Not
+  // called for a `destroy`, which is the host's own doing.
   onQuit?: () => void;
   // Route the process's console output above the frame (ink's patchConsole).
   // Default on — right for one terminal owning its process. A host rendering
@@ -89,12 +91,20 @@ export const inkTarget = (config: InkTargetConfig = {}): Target => (api) => {
     exitOnCtrlC: true,
     patchConsole: config.patchConsole ?? true,
   });
-  // A quit (Ctrl+C) is the person leaving, and the host's to hear: it owns the
-  // wire and the process. A destroy is the host's own doing (a swap, a
-  // connection it is closing), and it is not told of what it did itself.
+  // HOW THE INK APP ENDED is the host's to hear: it owns the wire and the
+  // process. A quit (Ctrl+C) is the person leaving. A component that threw is
+  // this terminal's end too: ink ends the app and says so by rejecting, and a
+  // rejection nobody handles ends the PROCESS, with every other terminal in it
+  // — so it is logged, and told to the host like a quit. A destroy is the
+  // host's own doing (a swap, a connection it is closing), and it is not told
+  // of what it did itself.
   let destroyed = false;
-  void instance.waitUntilExit().then(() => {
+  const ended = (): void => {
     if (!destroyed) config.onQuit?.();
+  };
+  void instance.waitUntilExit().then(ended, (error: unknown) => {
+    console.error('[moss/ink] the terminal ended on an error:', error);
+    ended();
   });
 
   // The conductor drives re-render: each `update` re-reads api.frame() and

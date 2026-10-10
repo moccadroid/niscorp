@@ -276,6 +276,28 @@ describe('the ink target — the focus ring and leaving', () => {
     expect(t.quit).not.toHaveBeenCalled();
   });
 
+  // ink ends its app when a component throws, and says so by rejecting. A
+  // terminal is one of many in a process that serves people over ssh: one
+  // person's broken screen is that terminal's end, told to the host like any
+  // other, and nobody else's.
+  it('a kit component that throws ends this terminal and tells the host, and rejects nothing into the process', async () => {
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    const said = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const registry = defaultRegistry();
+    registry.register('Broken', () => {
+      throw new Error('the kit broke');
+    });
+    const t = harness({ main: [component('Broken')] }, { registry });
+    await t.shows('the kit broke'); // ink's own account of it, on the screen it is leaving
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    process.off('unhandledRejection', unhandled);
+    expect(unhandled).not.toHaveBeenCalled();
+    expect(t.quit).toHaveBeenCalledOnce();
+    expect(said.mock.calls.flat().map(String).join(' ')).toContain('the kit broke');
+    said.mockRestore();
+  });
+
   it('destroy takes the screen down: a later update paints nothing', async () => {
     const t = harness({ main: [component('Text', {}, [text('one')])] });
     await t.shows('one');
