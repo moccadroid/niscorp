@@ -139,6 +139,69 @@ describe('shells — the shell host', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// ONE BUILD FOR A PRINCIPAL AT A TIME. Finding no shell, building one and
+// keeping it were a look, two awaits and a write: two arrivals in the same
+// moment (a page's read and its socket, two tabs) each found none and each
+// built one. The second took the first's place in the map, and the first
+// stood for ever with its functions and its session code running, held by
+// whoever had arrived first.
+// ═══════════════════════════════════════════════════════════════
+
+describe('shells — two first arrivals for one principal', () => {
+  const counted = (): { setup: HostSetup; built: () => number } => {
+    let built = 0;
+    const counting = {
+      ...app,
+      functions: () => {
+        built += 1;
+        return {};
+      },
+    } as unknown as NiscApp;
+    return { setup: { ...ctx, app: counting }, built: () => built };
+  };
+
+  it('one shell is built between them, and both are handed it', async () => {
+    const { setup, built } = counted();
+    const host = createShellHost(hostConfig(setup));
+    const [first, second, read] = await Promise.all([host.session('t', 'usr_1'), host.session('t', 'usr_1'), host.snapshot('t', 'usr_1')]);
+    expect(first.shell).toBe(second.shell);
+    expect(built()).toBe(1);
+    expect(host.list()).toHaveLength(1);
+    expect(read.trees['main']).toBeDefined();
+    // Whoever arrives next is handed the same one, with nothing built.
+    expect((await host.session('t', 'usr_1')).shell).toBe(first.shell);
+    expect(built()).toBe(1);
+  });
+
+  it('somebody else arriving in the same moment gets a shell of their own', async () => {
+    const { setup, built } = counted();
+    const host = createShellHost(hostConfig(setup));
+    const [mine, theirs] = await Promise.all([host.session('t', 'usr_1'), host.session('t', 'usr_2')]);
+    expect(mine.shell).not.toBe(theirs.shell);
+    expect(built()).toBe(2);
+  });
+
+  it('a build that fails is refused to both, keeps nothing, and the next arrival builds afresh', async () => {
+    let broken = true;
+    const host = createShellHost(
+      hostConfig({
+        ...ctx,
+        resolve: async (principal) => {
+          if (broken) throw new Error('nobody can be resolved right now');
+          return ctx.resolve(principal);
+        },
+      }),
+    );
+    const settled = await Promise.allSettled([host.session('t', 'usr_1'), host.session('t', 'usr_1')]);
+    expect(settled.map((outcome) => outcome.status)).toEqual(['rejected', 'rejected']);
+    expect(host.list()).toEqual([]);
+    broken = false;
+    expect((await host.session('t', 'usr_1')).shell.getState().canvases['main']?.active).toBeDefined();
+    expect(host.list()).toHaveLength(1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
 // WHAT APP CODE IS HANDED — the session `functions` and `onSession` close
 // over. It says who is calling and lends capabilities; it holds no key.
 // ═══════════════════════════════════════════════════════════════

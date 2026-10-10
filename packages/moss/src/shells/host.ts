@@ -136,15 +136,34 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
     for (const { connection, wants } of carried) attach(next, connection, delta && wants);
   };
 
-  const durableCell = async (token: string | null, principal: string): Promise<Cell> => {
+  // ONE BUILD FOR A PRINCIPAL AT A TIME. A build awaits (who they are, their
+  // inputs, their words), so two arrivals in one moment — a page's read and
+  // its socket, two tabs — would each find no shell and each build one. The
+  // second took the first's place in the map and the first stood for ever,
+  // held by whoever arrived first. So a build under way is kept by principal,
+  // and whoever arrives while it runs is handed its cell when it lands. One
+  // that fails is refused to all of them and keeps nothing: the next arrival
+  // builds afresh.
+  const building = new Map<string, Promise<Cell>>();
+  const durableCell = (token: string | null, principal: string): Promise<Cell> => {
+    // a rebuild should re-authorize as the newest session
+    const newest = (cell: Cell): Cell => {
+      cell.token = token;
+      return cell;
+    };
     const existing = durable.get(principal);
-    if (existing !== undefined) {
-      existing.token = token; // a rebuild should re-authorize as the newest session
-      return existing;
-    }
-    const cell: Cell = { live: await buildShell(host, token, principal), token, principal };
-    durable.set(principal, cell);
-    return cell;
+    if (existing !== undefined) return Promise.resolve(newest(existing));
+    const underWay = building.get(principal);
+    if (underWay !== undefined) return underWay.then(newest);
+    const started = buildShell(host, token, principal)
+      .then((live) => {
+        const cell: Cell = { live, token, principal };
+        durable.set(principal, cell);
+        return cell;
+      })
+      .finally(() => building.delete(principal));
+    building.set(principal, started);
+    return started;
   };
 
   const idleMs = config.limits?.idleMs ?? DEFAULT_IDLE_MS;
