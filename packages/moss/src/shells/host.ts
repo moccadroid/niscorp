@@ -18,11 +18,12 @@ import type { ShellHost, ShellReport } from './types';
 // mechanism). Anonymous connections get a throwaway shell, disposed with
 // the connection.
 //
-// The shell is built from the manifest's `shell` artifacts: canvases and
-// fragments are data; `inputs` is the app's one derivation hook (per-
-// principal boot input — nav flags, user chips). Everything else is
-// derived here: the granted action set from the catalog (an ungranted
-// initial simply doesn't mount — ring 1), ambient transform context from
+// The shell is built from what its principal's composition says (./config.ts):
+// canvases and fragments are data, and the actions they hold arrive already
+// granted, with their roles' layout variant in place. `inputs` is the app's
+// one derivation hook (per-principal boot input — nav flags, user chips).
+// What is derived here is small: an initial the principal does not hold
+// simply doesn't mount (ring 1), the ambient transform context comes from
 // the session, and every endpoint call rides the server's OWN surfaces
 // with the session's token — the server shell is just another
 // principal-bound client of the same wire, enforcement included.
