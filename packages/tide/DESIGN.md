@@ -77,7 +77,9 @@ of those properties. Tide exists so that piece never has to be written.
    the instant `nextDue(now)` names — a clock occurrence, a retry backoff, a lease
    lapse, a delayed fact. Tide tells the driver when it wants waking; the driver owns
    the timer. A slow janitor beat recovers what a crashed process left behind — it is
-   how work is FOUND, never how work moves. A dev check is its own driver, handing
+   how work is FOUND, never how work moves. `createTideDriver` is that driver,
+   shipped beside the engine for a host that does not write its own: the one piece
+   of the package that reads a clock to decide when the engine runs. A dev check is its own driver, handing
    `advance` a fake `now` and asserting on rows.
 
 7. **One effect per reflex, and effects are opaque named calls.** The effect
@@ -739,7 +741,7 @@ the argument that tide is a *nisc* library and not a scheduler with JSON config:
 
 | Seam | Contract | The host injects | Precedent |
 |---|---|---|---|
-| `store` | `TideStore` — six capabilities over four tables (below) | `createMemoryStore()` shipped; `createTideStore(pool)` from **moss** for persistence | vex's `CacheBackend` — structural, driver-free |
+| `store` | `TideStore` — six capabilities over four tables (below) | `createMemoryStore()`, or `createTideStore(pool)` from `@niscorp/tide/postgres` for persistence; or a store of the host's own | vex's `CacheBackend` — structural, driver-free |
 | `transform` | `(config, source) => value` | Prism's `evaluate`, or anything | **nova's exact socket** — nova doesn't know Prism; neither does tide |
 | `select` | `(query, ctx) => AsyncIterable<row>` — the query blob is opaque | vex replay under the actor's policy; or raw SQL; or an array | vex's `generateDsl` / `mapToShape` |
 | `effects` | `name → { run(input, ctx), writes?, preview? }` | vex mutation replays, fns, cortex agents; or plain functions | moss's `functions` seam |
@@ -750,7 +752,8 @@ in, **`advance({ now, limit })`** to run one committed increment, and
 **`nextDue(now)`** so the driver knows when next to wake.
 
 Dependencies: **`zod`**. Nothing else — the same bar charter clears. (The
-`/agent` entry imports `@niscorp/cortex`, an optional peer; the engine never does.)
+`/agent` entry imports `@niscorp/cortex`, and the `/postgres` entry
+`@niscorp/strata`: optional peers both, and the engine imports neither.)
 
 ### The store contract
 
@@ -785,8 +788,8 @@ implements.
 
 `STORE_CONTRACT`, exported from `@niscorp/tide/testing`, is the executable definition
 of everything above: a list of `{ name, run(store) }` checks that throw, with no test
-framework, so any runner can drive them. The memory store runs it; moss's SQL store
-runs the same list against a real database.
+framework, so any runner can drive them. The memory store runs it; the Postgres
+store runs the same list against a real database (`test/postgres-store.test.ts`).
 
 **⟲ This exists because of the store that was deleted.** `store/postgres.ts` was 700
 lines, had never been instantiated anywhere in this repo, and claimed in its own header
@@ -798,17 +801,23 @@ the retention horizon; three transactional methods that skipped the ready-guard 
 raised `undefined_table` *inside* a transaction. Every one was invisible. The lesson is
 not "write more tests" — it is that a contract nobody can execute is a comment.
 
+The store at that path today is not that one. It was written in moss against the
+contract, held to `STORE_CONTRACT` and to the engine's own scenarios on a real
+database, and moved here with those tests when it was plain that it is tide's storage
+and not a host's.
+
 ---
 
 ## Hosts
 
 ### Moss — the reference host
 
-Moss fills every seam, and now the last one:
+Moss fills every seam but the store, which is tide's own:
 
 | Tide seam | Moss fills it with |
 |---|---|
-| `store` | **`createTideStore(pool)`** — four tables beside `vex_cache`, `ON CONFLICT DO NOTHING` for `appendIfAbsent`, `FOR UPDATE SKIP LOCKED` for `claim`, CHECK constraints on every state column, and a foreign key that cascades work with its run |
+| `store` | **`createTideStore(pool)`** from `@niscorp/tide/postgres`, on the pool the app's runtime holds — four tables beside `vex_cache`, `ON CONFLICT DO NOTHING` for `appendIfAbsent`, `FOR UPDATE SKIP LOCKED` for `claim`, CHECK constraints on every state column, and a foreign key that cascades work with its run |
+| facts in | `createTideFacts` (`@niscorp/moss/tide`), a feature of moss: every write vex commits is minted as a `write` fact, stamped with the identity the write's own scope names |
 | `select` | vex replay **through the actor's own wire** — selection inherits replay-only, scoped, cached, inspectable; the tenant filter is in the SQL, engine-injected, unforgeable |
 | `effects` | every seeded vex **mutation** auto-registered under its fingerprint (with `writes` *derived* from `mutationEffect`) + the app's `effects(actor)` |
 | `transform` | prism — the same wiring the shell's transform socket already gets |
@@ -854,7 +863,7 @@ tide.load(reflexes, { at: Date.now() });
 app.post('/webhook/stripe', (req) => tide.ingest(toFact(req)));  // validate at the boundary first
 
 // The driver: wake on ingest, drain to quiescence, sleep until nextDue.
-// (Under moss this is `createTideDriver`; standalone it is these lines.)
+// (`createTideDriver` is these lines, written once, with the sleep and a janitor.)
 const drain = async () => { for (;;) { const r = await tide.advance({ now: Date.now() }); if (isQuiet(r)) break; } };
 ```
 
@@ -869,7 +878,8 @@ theirs to keep. `ctx.emit` is how a chain continues without a write choke point.
 
 ```
 src/
-  index.ts                 Public API barrel — createTide, schemas, the store contract
+  index.ts                 Public API barrel — createTide, schemas, the store contract, the driver
+  driver.ts                createTideDriver — wake on ingest, sleep until nextDue, a janitor
   testing.ts               STORE_CONTRACT — the executable definition of a store (the ./testing entry)
   tide.ts                  createTide: load, ingest, advance, nextDue, fire, retry, preview, ledger, sweep
   types.ts                 ledger rows, seam types, TideStore, UNIQUE_BY, reports
@@ -898,6 +908,7 @@ src/
 
   store/
     memory.ts              createMemoryStore — the reference implementation + snapshot()
+    postgres.ts            createTideStore, TIDE_SEQUENCE — the ./postgres entry; the only file that imports strata
 
   agent/
     reflex-agent.ts        createReflexAgent — the ./agent entry; the only file that imports cortex
@@ -909,7 +920,11 @@ test/
   durability.test.ts       one test per defect that reached the built engine
   load.test.ts             the load gate: validation, cycles, versioning
   preview.test.ts          dry run writes nothing and shows everything
-  store.test.ts            STORE_CONTRACT × every store
+  store.test.ts            STORE_CONTRACT × the memory store
+  postgres-store.test.ts   STORE_CONTRACT × the Postgres store, in two pool shapes; a serial group and two instances
+  postgres-engine.test.ts  the engine's scenarios on a real database
+  baselines.test.ts        the checksum of each migration of TIDE_SEQUENCE, pinned
+  driver.test.ts           the driver: stopping, and a wait longer than a timer holds
   anchor.test.ts           a draft's timer, anchored when it is saved
   agent.test.ts            the reflex agent — its answer schemas, effect check and conversation turns
   support.ts               shared fixtures
@@ -920,8 +935,12 @@ test/
 orchestrator. There is no `verbs.ts`: `fire` is four lines of sugar over `ingest`,
 and `retry` belongs beside the executor whose invariants it rewinds.
 
-There is no `store/postgres.ts`. **The moss integration lives in moss, not here — tide
-must never import a host**, and persistence is where that rule earns its keep.
+`store/postgres.ts` is here, and **tide still imports no host**. Persistence is where
+that rule earns its keep, and the store keeps it: the pool it runs on is a type it
+writes out itself (`TidePool`), the one package it imports is strata, for the ledger
+its tables are migrated through, and it sits on an entry point of its own so that
+nothing the engine's entry reaches imports even that. What stays in moss is what only
+a host can do: turning its own writes into facts.
 
 ---
 
@@ -1040,7 +1059,7 @@ The wishlist, answered — including its own open questions:
 | Per-tenant config, instant disarm, versioning across runs | reflexes are tenant rows; disarming is the host's row write + `load` (§ decision 11); content-hash versions (§ decision 14) |
 | Host-agnostic wake-up; serverless and local both | `advance({ now })` + `nextDue(now)`: the driver wakes on ingest and sleeps until the next due instant; its janitor beat is recovery, not pacing |
 | Deterministic headless checks | memory store + fake clock; no timers exist to wait on |
-| Durable across restarts | `createTideStore(pool)` in moss; the memory store remains the reference and the check harness |
+| Durable across restarts | `createTideStore(pool)`, `@niscorp/tide/postgres`; the memory store remains the reference and the check harness |
 | Wishlist: dependency between automations | run facts — `on: { fact: { run: 'A' } }` with `when` on the stats |
 | **Open: one library or two?** | one, standalone — "react to a change" is a fact reflex; same machine |
 | **Open: does the identity belong here?** | no — moss's `ActorContext`, consumed through an opaque seam |

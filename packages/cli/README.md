@@ -368,7 +368,8 @@ will take, for as long.
 tables it changes itself are changed before the step can check them, and
 `--check` would then change the database. Every table an entry reads or writes
 comes from a sequence in the run — the app's own go in `runtime.tables`, and so
-does tide's (`TIDE_SEQUENCE`) when the app keeps tide's tables.
+does tide's (`TIDE_SEQUENCE`, from `@niscorp/tide/postgres`) when the app keeps
+tide's tables.
 
 It checks entries. It does not see SQL written by hand, and it does not know
 what a value means.

@@ -9,10 +9,11 @@ Moss does not host code and guard it. It serves *existence*: a resolved catalog 
 ## Install
 
 ```bash
-pnpm add @niscorp/moss @niscorp/charter @niscorp/nova @niscorp/prism @niscorp/strata @niscorp/tide @niscorp/vex zod
+pnpm add @niscorp/moss @niscorp/charter @niscorp/nova @niscorp/prism @niscorp/strata @niscorp/vex zod
 # the nisc packages moss composes and zod are required peers — the app owns
 # the one copy of each. hono, the Node listener and ws come with moss as
 # regular dependencies. The optional peers, each needed by one subpath only:
+pnpm add @niscorp/tide     # ./tide (an app that runs tide)
 pnpm add react react-dom   # ./terminal/react (and its /server)
 pnpm add vue               # ./terminal/vue (and its /server)
 pnpm add ink react         # ./terminal/ink
@@ -144,6 +145,7 @@ never in moss core.
 - **`@niscorp/moss`** — the server: `defineApp`, `createServer`, the resolution and shell-host internals, the socket protocol types.
 - **`@niscorp/moss/node`** — the Node listener: `serve` + `attachSocket` (raw `ws`), and `mountSite(server, { dist, draw })` — the built terminal served by the same process, every page drawn. Bun swaps this file, never the app.
 - **`@niscorp/moss/integrations`** — a feature, not part of the core: `createIntegrations(config)` makes the object an app puts in its manifest's `features` to take in separate services that add screens (registration, approval, the proxy, frames, webhooks), and carries the calls the app makes on it afterwards.
+- **`@niscorp/moss/tide`** — a feature too: `createTideFacts({ tide, identity, chain })` mints each committed write into [tide](../tide/README.md) as a fact, for the identity the write's own scope names. It is what moss keeps of hosting tide: the Postgres store (`@niscorp/tide/postgres`) and the driver (`createTideDriver`) are tide's own, and `@niscorp/tide` is an optional peer.
 - **`@niscorp/moss/vite`** — `mossDev({ app })`: the app server inside vite's dev process — loaded through vite (an edit re-boots it), the socket attached once, pages drawn, moss's paths answered, a dev-only `/dev/as/<who>`. `nisc dev` adds it for an app behind moss; `vite` is an optional peer.
 - **`@niscorp/moss/client`** — the wire: `createWire()`, the app end of the socket. Plain TypeScript, zero React, zero globals — the host comes in as a `WireEnv` (default: `browserEnv()`, localStorage + location).
 - **`@niscorp/moss/client/node`** — the Node host env: `nodeEnv({ url, tokenFile? })` runs the same wire on a plain Node (or Bun) process — token in a file, the runtime's WHATWG WebSocket.
@@ -166,9 +168,11 @@ never in moss core.
 moss creates no table on its own: its tables (`MOSS_SEQUENCE`, plus
 `SESSIONS_SEQUENCE` when the runtime's `session` is `'sessions'`) and the vex
 cache's go through one [strata](../strata/README.md) ledger run at boot — once,
-recorded, refused if the ledger was edited or written by newer code. The tide
-store's tables (`TIDE_SEQUENCE`) go through the same ledger when
-`createTideStore(pool)` is called. `migrations: 'verify'` on the
+recorded, refused if the ledger was edited or written by newer code. Tide's
+tables are tide's (`TIDE_SEQUENCE`, from `@niscorp/tide/postgres`): they go
+through the same ledger when `createTideStore(pool)` is called, or in moss's
+own run when the app hands the sequence over in `runtime.tables`.
+`migrations: 'verify'` on the
 runtime refuses to boot with anything pending. Stored integration actions carry
 a grammar stamp and are upgraded at boot, at intake and on read — through
 nova's and Prism's grammars plus the app's own (`NiscApp.grammars`); a bundle or

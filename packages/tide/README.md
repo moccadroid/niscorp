@@ -48,7 +48,8 @@ await tide.load([
 
 // The HOST owns waking. Tide reads no clock — it advances one committed step
 // at a time and says when it next wants waking, and a driver does the rest:
-// drain on every ingest, then sleep until that instant.
+// drain on every ingest, then sleep until that instant. `createTideDriver`
+// is that driver, written once; these are the lines it is made of.
 const drain = async () => { for (;;) { const r = await tide.advance({ now: Date.now() }); if (quiet(r)) break; } };
 await drain();
 const at = await tide.nextDue(Date.now());   // undefined = nothing scheduled
@@ -104,6 +105,17 @@ Four tables, and only two of them grow with events:
 
 The port is six capabilities, not twenty-seven nouns: `transact`, `appendIfAbsent`, `claim`, `cas`, `query`, `remove`. `createMemoryStore()` is the reference implementation. `STORE_CONTRACT`, exported from `@niscorp/tide/testing`, is the same set of checks both it and any other store must pass — importable so a host's store is held to one definition rather than to two readings of a comment.
 
+**Durable: `@niscorp/tide/postgres`.** `createTideStore(pool)` is the same contract over Postgres, held to the same checks against a real database. It takes a pool described by a type of its own (`query`, `transaction`), so it imports no driver and no host, and it migrates its four tables through a [strata](../strata/README.md) ledger (`TIDE_SEQUENCE`). Strata is an optional peer, needed by this entry only.
+
+```typescript
+import { createTide, createTideDriver } from '@niscorp/tide';
+import { createTideStore } from '@niscorp/tide/postgres';
+
+const tide = createTide({ store: createTideStore(pool), transform, effects });
+const driver = createTideDriver({ tide });   // wakes on ingest, sleeps until nextDue
+await driver.ingest({ kind: 'signal', name: 'stripe', at: Date.now() });
+```
+
 ## The reflex agent — `@niscorp/tide/agent`
 
 A model can WRITE a reflex; it never runs one. `createReflexAgent({ effects, triggers, fields })` is a cortex agent handed what somebody wants automated, the local `now` and timezone, and what the host offers:
@@ -132,7 +144,7 @@ if (result.ok && isDraft(result.output.data)) {
 
 ## Hosts
 
-Tide imports no host. Under **moss** the seams are filled with vex (selection under the actor's scope policy, mutations auto-registered as effects), prism (transform), cortex agents (effects), moss's `ActorContext` (identity), and `createTideStore(pool)` from `@niscorp/moss` for persistence. In plain Node they are filled with raw SQL and plain functions. Nothing above the seam can tell the difference.
+Tide imports no host. Under **moss** the seams are filled with vex (selection under the actor's scope policy, mutations auto-registered as effects), prism (transform), cortex agents (effects) and moss's `ActorContext` (identity); persistence is tide's own `createTideStore(pool)` on the pool the app's runtime holds, and every committed write reaches tide as a fact through moss's `createTideFacts` feature (`@niscorp/moss/tide`). In plain Node the seams are filled with raw SQL and plain functions. Nothing above the seam can tell the difference.
 
 ## Documentation
 

@@ -339,7 +339,7 @@ for a feature that is gone.
 | `login_links` | one-time sign-in links (hashes only) |
 | `timers` | automations the speaker saved: each a tide reflex as a document, who saved it, when it fires |
 | `assistant_turns` | one row per assistant turn: the message, the reply, its proposals and what came of them — each person's own |
-| `tide_fact`, `tide_run`, `tide_work`, `tide_reflex_state` | tide's durable store (moss `TIDE_TABLES`), migrated with lyceum's before the server starts |
+| `tide_fact`, `tide_run`, `tide_work`, `tide_reflex_state` | tide's durable store (`TIDE_TABLES`, from `@niscorp/tide/postgres`), migrated with lyceum's before the server starts |
 
 ## Vex is never hidden behind a function
 

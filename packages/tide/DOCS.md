@@ -16,13 +16,16 @@ Every symbol the package exports, and what it promises. See [DESIGN.md](./DESIGN
 - [Events](#events)
 - [The seams](#the-seams)
 - [The store contract](#the-store-contract)
+- [The Postgres store](#the-postgres-store)
+- [The driver](#the-driver)
 - [Occurrence math](#occurrence-math)
 - [The reflex agent](#the-reflex-agent)
 - [Errors](#errors)
 
-Three entry points: `@niscorp/tide` (everything below unless it says otherwise),
-`@niscorp/tide/agent` and `@niscorp/tide/testing`. `zod` is the one required
-peer; `@niscorp/cortex` is an optional peer that only `/agent` imports.
+Four entry points: `@niscorp/tide` (everything below unless it says otherwise),
+`@niscorp/tide/agent`, `@niscorp/tide/testing` and `@niscorp/tide/postgres`.
+`zod` is the one required peer. Two peers are optional, each imported by one
+entry only: `@niscorp/cortex` by `/agent`, `@niscorp/strata` by `/postgres`.
 
 ---
 
@@ -605,8 +608,92 @@ for (const check of STORE_CONTRACT) it(check.name, () => check.run(makeStore()))
 It is exported rather than kept in `test/` because the contract is not tide's
 private business. The last SQL store in this package said in its own header that
 it was "held to the same tests" and had none; it diverged in eleven ways and
-every one of them was invisible. **Under moss**, `createTideStore(pool)` runs
-this same list against a real database.
+every one of them was invisible. Tide's own Postgres store (below) runs this
+same list against a real database, in two pool shapes.
+
+---
+
+## The Postgres store
+
+```typescript
+import { createTideStore, TIDE_SEQUENCE, TIDE_TABLES, TIDE_DDL } from '@niscorp/tide/postgres';
+import type { TidePool, TidePoolQuery, TideStoreOptions } from '@niscorp/tide/postgres';
+```
+
+An entry point of its own, so that the engine's entry imports nothing but zod.
+It imports `@niscorp/strata`, an optional peer: install it to use this entry.
+
+```typescript
+createTideStore(pool: TidePool, options?: TideStoreOptions): TideStore & { ready: Promise<void> }
+```
+
+A `TideStore` over four tables: `tide_fact`, `tide_run`, `tide_work`,
+`tide_reflex_state` (`TIDE_TABLES`). `appendIfAbsent` is `ON CONFLICT DO
+NOTHING` on the key `UNIQUE_BY` names; `claim` is one `UPDATE … FOR UPDATE SKIP
+LOCKED`; the state columns carry CHECK constraints; deleting a run cascades to
+its work.
+
+- **`pool`** is a `TidePool`: `{ query(text, values?), transaction?(fn) }`. It
+  is a type of the store's own, and structural: vex's `PgPool`, a PGlite behind
+  a shim, a `pg` pool that checks a client out for each transaction. `query`
+  and `transaction` are called on the object that has them. A pool with no
+  `transaction` cannot run tide: fan-out, attempt recording and a serial claim
+  are transactions, and each refuses with a sentence.
+- **`ready`** resolves when the tables are there. Every method awaits it. The
+  store migrates them itself, through a strata ledger, unless
+  `options.migrate` is `false`: then whoever owns the database's migrations has
+  run `TIDE_SEQUENCE` in a run of its own (under moss, `runtime.tables`).
+- **`TIDE_SEQUENCE`** is the tables as a strata sequence. Its id is
+  `nisc.moss.tide`: the store was in `@niscorp/moss` when the sequence was
+  named, and every ledger that has run it holds it under that name.
+  `TIDE_DDL` is the text of its first migration. Both are history: the tables
+  change by appending a migration, never by editing one.
+- **A row is read by a schema.** What comes back from the database is parsed,
+  one schema for each table: a row that does not fit throws where it is read,
+  naming the table and the field.
+- **A serial group is claimed by one instance at a time.** Asking whether a
+  group is held and claiming in it run in one transaction, behind an advisory
+  lock on the group (`pg_try_advisory_xact_lock`). An instance that does not
+  get the lock leaves the group to the one that has it.
+
+The engine's own writes go through the pool, not through a host's write path:
+an engine claiming its own task has no principal to run a policy for. The
+ledger READS are the host's, as ordinary queries over these tables.
+
+---
+
+## The driver
+
+```typescript
+import { createTideDriver } from '@niscorp/tide';
+import type { TideDriver, TideDriverConfig } from '@niscorp/tide';
+
+createTideDriver({ tide, now?, janitorMs?, retention? }): TideDriver
+```
+
+The engine reads no clock and paces nothing; this is the thing that does, for
+a host that does not write its own.
+
+- **Wake** — `ingest` and `fire` advance the engine immediately, to
+  quiescence: a chain advances one committed hop per step, so the driver
+  loops until a step reports nothing moved. `wake()` returns the promise of
+  that drain, so a "run it now" button can await a settled world.
+- **Sleep** — after quiescence, `tide.nextDue(now)` names the next instant
+  worth waking for and one timer sleeps until then, preempted by any ingest.
+  No beat, no polling for work. A wait longer than a timer can hold (2^31 − 1
+  ms, 24.8 days) is cut to that: the driver wakes, finds nothing, and waits
+  out the rest.
+- **Janitor** — a slow fallback wake plus the retention sweep. It finds
+  nothing when nothing is broken; it exists because a durable multi-worker
+  design needs the scan that notices work committed by a process that died
+  before its own wake ran. It is how work is *recovered*, never how it moves.
+
+A `TideDriver` is `{ ingest, fire, wake, stop }`. Hand a host's intake the
+driver, not the bare engine, so a fact wakes it instead of waiting for
+somebody's beat. `stop()` resolves once nothing the driver started still
+touches the store: await it before closing the database. `now` replaces the
+clock (`Date.now`); `janitorMs` defaults to 5 minutes; absent `retention`,
+nothing is swept. What it logs, it logs as `[tide:driver]`.
 
 ---
 

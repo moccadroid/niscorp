@@ -1,8 +1,9 @@
 # Moss — API Reference
 
-Fifteen entry points: `@niscorp/moss` (the server), `@niscorp/moss/node` (the
+Sixteen entry points: `@niscorp/moss` (the server), `@niscorp/moss/node` (the
 Node listener and the built site), `@niscorp/moss/vite` (the dev plugin),
 `@niscorp/moss/integrations` (a feature: services that add screens),
+`@niscorp/moss/tide` (a feature: a write minted into tide as a fact),
 `@niscorp/moss/client` and `@niscorp/moss/client/node` (the wire and its Node
 host), `@niscorp/moss/terminal` (the terminal), and the render targets:
 `terminal/react`, `terminal/vue`, `terminal/dom` (each with a `/server` entry
@@ -10,9 +11,10 @@ that draws to a string), `terminal/tty` and `terminal/ink`. The version is below
 the package is live on npm all the same: what is documented here keeps working
 from one release to the next, and what should go is deprecated, not removed.
 
-The nisc packages (`charter`, `nova`, `prism`, `strata`, `tide`, `vex`) and
-`zod` are required peers. `react`/`react-dom`, `vue`, `ink` and `vite` are
-optional peers, needed only by the entry that names them. `hono`,
+The nisc packages (`charter`, `nova`, `prism`, `strata`, `vex`) and
+`zod` are required peers. `react`/`react-dom`, `vue`, `ink`, `vite` and
+`@niscorp/tide` are optional peers, needed only by the entry that names them
+(tide: `@niscorp/moss/tide`). `hono`,
 `@hono/node-server` and `ws` are moss's own dependencies.
 
 ## `@niscorp/moss`
@@ -50,15 +52,14 @@ type NiscApp = {
   onSession?: (session: FunctionSession) => void;
   runs?: RunSink;
   reactions?: readonly { table; op?; run }[];         // see "Reacting to writes"
-  facts?: { tide; identity; chain? };                 // see "Reacting to writes"
   // what is added to moss that is not its core (see "Features")
   features?: readonly Feature[];
 };
 ```
 
 Every field is an artifact (authored data) except the code seams — `scope`,
-`identity`, `phrases`, `functions`, `onSession`, `runs`, a reaction's `run`,
-`facts` — and `features`. Absent `shell`, the app serves data only
+`identity`, `phrases`, `functions`, `onSession`, `runs`, a reaction's `run`
+— and `features`. Absent `shell`, the app serves data only
 (no server shells). Absent `functions`, `fn:` endpoints fail loudly.
 
 - `assignments` is optional: an app that declares `identity` answers roles per
@@ -319,8 +320,8 @@ its table (`SESSIONS_SEQUENCE`) rides `createServer` boot automatically under
 
 **Tables go through a ledger.** moss creates no table on its own: its tables are
 [strata](../strata/README.md) sequences — `MOSS_SEQUENCE` (integrations, their
-actions, the generation pointer), `SESSIONS_SEQUENCE`, `TIDE_SEQUENCE` for the
-tide store — and `createServer` applies them with the vex cache's sequence in
+actions, the generation pointer) and `SESSIONS_SEQUENCE` — and `createServer`
+applies them with the vex cache's sequence in
 one ledgered run before introspection: once, recorded in `strata_ledger`, and
 refused if the ledger was edited or written by newer code. `migrations` on the
 runtime picks the posture: `'apply'` (default) runs what is pending; `'verify'`
@@ -336,7 +337,8 @@ The run's order is: `MOSS_SEQUENCE`, `SESSIONS_SEQUENCE` under
 `tables` on the runtime hands over the app's own table sequences. They join
 that run last — one transaction, one lock, one posture, so `'verify'`
 covers them. Absent, the app migrates its own tables itself, as before. Another
-owner's tables the app keeps go in the same list (`TIDE_SEQUENCE`), and a
+owner's tables the app keeps go in the same list (tide's: `TIDE_SEQUENCE`,
+from `@niscorp/tide/postgres`), and a
 runtime that hands tables over does not also migrate them itself.
 
 #### `migrateTables(runtime, app, { dryRun? }): Promise<TablesReport>`
@@ -413,8 +415,9 @@ order: the manifest is read and frozen; who a token is is resolved
 the tables are migrated and the data module stands; the running manifest is
 created, which is the boot check; identity; the server's own routes (the
 authentication, `/catalog`, vex); the shell hosts, the app's and each page's;
-what crosses processes and what hears a write; the features, each started with
-the seams; the operator prefix; the generation pointer is watched; the socket.
+what crosses processes; the features, each started with the seams; the
+operator prefix; the app's reactions hear a write; the generation pointer is
+watched; the socket.
 A step that refuses is the boot's refusal.
 
 **The manifest is read first.** Before a table is created or a row is read,
@@ -779,11 +782,15 @@ tool that needs it without a server.
 ### Reacting to writes
 
 Vex is the choke point every application write passes through, so its write
-observer is where a host learns about all of them. Moss subscribes once and
-splits the news down two lanes with deliberately different privileges. The
-fact lane is told first, then the reactions, and each on its own: a lane that
-throws (an app's `facts.identity`, say) is logged, and the other still hears
-of that write. The write was committed before either is told.
+observer is where a host learns about all of them. Moss hears it once and
+offers each write down two lanes with deliberately different privileges: the
+app's reactions, which are part of the manifest and are handed no row, and a
+feature that asks to hear writes (`FeatureSeams.onWrite`), which is handed
+them. The one feature that does is the tide lane, `createTideFacts`. Features
+are told first, in the order the app named them, then the reactions, and each
+on its own: a listener that throws (an app's `identity`, say) is logged, and
+the others still hear of that write. The write was committed before any is
+told.
 
 #### `app.reactions` — the app's lane, row-less
 
@@ -815,15 +822,25 @@ A reaction naming a table nothing writes is not an error anywhere — it simply
 never fires. Derive the names from `mutationEffect` over your own entries and
 assert them in a check.
 
-#### `app.facts` — the tide lane, rows and all
+#### `createTideFacts` — the tide lane, rows and all
 
 ```ts
-facts: {
-  tide: () => driver,                                   // the waking intake
-  identity: (scope) => `automation@${scope['studioId']}`,
-  chain: (scope, hints) => (isRobot(scope) ? hints : undefined),
-}
+import { createTideFacts } from '@niscorp/moss/tide';
+
+features: [
+  createTideFacts({
+    tide: () => driver,                                   // the waking intake
+    identity: (scope) => `automation@${scope['studioId']}`,
+    chain: (scope, hints) => (isRobot(scope) ? hints : undefined),
+  }),
+]
 ```
+
+A feature, from an entry point of its own (`@niscorp/moss/tide`), and not a
+field of the manifest: an app that runs no tide names none, and moss's core
+imports nothing of tide. `@niscorp/tide` is an optional peer, installed by an
+app that names this feature. A manifest that still carries `facts`, where
+these three functions used to be, is refused at boot.
 
 Each committed row becomes one `{ kind: 'write', entity, op, row }` fact.
 Rows travel here because tide has the fence that makes it safe: `identity`
@@ -842,33 +859,20 @@ that is not negative: digits and nothing else. Anything else (an empty depth,
 `0x2`, `1e1`, `+2`, a number too large to be exact) is no position, and `chain`
 is not asked.
 
-#### `createTideDriver({ tide, janitorMs?, retention? }) : TideDriver`
+Hand `tide` the **driver** (`createTideDriver`, from `@niscorp/tide`), not
+bare tide, so a minted fact wakes the engine instead of waiting for somebody's
+beat. It is a getter because the driver stands up after the server does: while
+it answers `undefined`, nothing is minted.
 
-Tide reads no clocks and paces nothing; this is the thing that does.
+#### The driver and the store are tide's
 
-- **Wake** — `ingest` and `fire` advance the engine immediately, to
-  quiescence: a chain advances one committed hop per step, so the driver
-  loops until a step reports nothing moved. `wake()` returns the promise of
-  that drain, so a "run it now" button can await a settled world.
-- **Sleep** — after quiescence, `tide.nextDue(now)` names the next instant
-  worth waking for and one timer sleeps until exactly then, preempted by any
-  ingest. No beat, no polling for work.
-- **Janitor** — a slow fallback wake plus the retention sweep. It finds
-  nothing when nothing is broken; it exists because a durable multi-worker
-  design needs the scan that notices work committed by a process that died
-  before its own wake ran. It is how work is *recovered*, never how it moves.
-
-Hand `app.facts.tide` the **driver**, not bare tide, so a minted fact wakes
-the engine instead of waiting for somebody's beat. The driver is `{ ingest,
-fire, wake, stop }`; `stop()` resolves once nothing it started still touches
-the store. `config.now` replaces the clock; `janitorMs` defaults to 5 minutes;
-absent `retention`, nothing is swept.
-
-#### `createTideStore(pool, options?)` / `TIDE_SEQUENCE`
-
-The Postgres store tide runs on, as a strata sequence (`TIDE_SEQUENCE`, tables
-`TIDE_TABLES`). Returns a tide `TideStore` plus `ready: Promise<void>`.
-`mintWrites` is the bridge the fact lane uses.
+`createTideDriver` and the type `TideDriver` are exported by `@niscorp/tide`.
+`createTideStore(pool, options?)`, `TIDE_SEQUENCE`, `TIDE_TABLES` and
+`TIDE_DDL` are exported by `@niscorp/tide/postgres`. They were moss's, and do
+what they did: see tide's [DOCS.md](../tide/DOCS.md), "The driver" and "The
+Postgres store". `createTideStore(runtime.pool)` takes the pool the runtime
+holds, and its tables are ordinary tables to moss: introspected, grantable,
+and scoped by a behavior like any other.
 
 ### Features
 
@@ -885,7 +889,7 @@ its own, and the core never imports it.
   migrated in the one ledgered run, before the feature starts, and
   `migrateTables` runs them too.
 - `FeatureSeams` — everything of the core a feature may touch, each member one
-  function or one narrow value. Twenty members, and each is one a feature
+  function or one narrow value. Twenty-one members, and each is one a feature
   uses: one that stops being used is taken out. A route a feature mounts reads
   who is calling as `c.get('principal')`.
 
@@ -908,6 +912,7 @@ its own, and the core never imports it.
   | `grammars` | read a stored document in this code's grammars, and stamp one that is written |
   | `fingerprints()` | every fingerprint the app serves |
   | `fingerprintsFor(principal)` | the fingerprints that principal's own policy lets them replay |
+  | `onWrite(listener)` | hear every write the routes serve, once it is committed: what vex reports of it, and the place in a chain the request named; answers the way to stop hearing |
   | `telemetry` | where a span goes; absent, none is built |
   | `signingSeed` | the seed the deployment signs with (`runtime.signingSeed`) |
   | `wrapWire(wrap)` | lay a function around the wire a session's screens call through |
@@ -935,11 +940,17 @@ lets them replay, as vex's discovery lists them.
   each targets state that heals on its own clock. Unset, every path behaves as
   in one process. The wiring is `src/server/fabric.ts` and
   `src/server/signals.ts`; it is the server's own and is not exported.
-- `createGeneration(pool, { onMoved, everyMs? }): Generation` — the persistent
-  pointer `server.refresh()` moves (`moss_generation`, part of
-  `MOSS_SEQUENCE`). Each process polls it (`DEFAULT_GENERATION_POLL_MS`, 60s;
-  the server polls on `sessionRevalidateMs`) and drops its derivations when it
-  moves.
+- The generation pointer — the persistent counter `server.refresh()` and
+  `server.replaceActions()` move (`moss_generation`, one row, part of
+  `MOSS_SEQUENCE`). Each process polls it (on `sessionRevalidateMs`; 60s when
+  that is unset), and when it has moved reads again what it keeps from rows
+  and drops what it derived. The row is read and moved through vex, by two
+  entries of moss's own that no route serves (`src/data/pointer.ts`);
+  `src/manifest/generation.ts` holds the clock and no SQL. A move is a compare
+  and a set: the next number is written where the counter is still what was
+  read, and read again where it is not. A move a process could not follow is
+  logged as that and tried again at the next poll; `server.generation()` is
+  the last one it followed.
 - `createIdentityCache(ctx): IdentityCache` — the cache behind `app.identity`:
   `{ get, invalidate, invalidateAll, invalidateTag, list, meter, stop }`.
   Defaults `DEFAULT_IDENTITY_MAX` and `DEFAULT_IDENTITY_IDLE_MS`.
@@ -1472,6 +1483,29 @@ as it does for any batch an app writes.
 every call to an integration with, for a check or a service in the same
 workspace that wants to mint or hold one. An integration verifies it against
 `GET /api/integrations/verify-key`.
+
+## `@niscorp/moss/tide`
+
+A committed write, minted into [tide](../tide/README.md) as a fact. A feature:
+an app that runs tide creates it and names it in `features`. It is what moss
+keeps of hosting tide; the store and the driver are tide's own.
+
+```typescript
+import { createTideFacts } from '@niscorp/moss/tide';
+
+const app = defineApp({ charter, actions, features: [createTideFacts({ tide: () => driver, identity, chain })] });
+```
+
+- `createTideFacts(config: TideFactsConfig): Feature` — started by the server
+  with the seams, of which it uses one: `onWrite`. It keeps no table.
+- `TideFactsConfig` — `{ tide: () => FactIntake | undefined; identity: (scope)
+  => string | undefined; chain?: (scope, hints) => hints | undefined }`. What
+  each is asked, and when, is under [Reacting to writes](#reacting-to-writes).
+- `FactIntake` — `Pick<Tide, 'ingest'>`: the one verb the feature calls. A
+  `Tide` and a `TideDriver` are each one.
+
+`@niscorp/tide` is an optional peer of moss, and this entry is the only one
+that names it, as a type: an app that imports this entry has tide installed.
 
 ## `@niscorp/moss/client`
 

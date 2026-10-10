@@ -554,7 +554,7 @@ independently deployable endpoint under `/fns` — is specified and pending.
 
 Vex is the choke point every application write passes through, which makes its
 write observer the one place a host can learn about all of them. Moss
-subscribes once and splits the news two ways — and the split is a privilege
+hears it once and offers the news two ways — and the split is a privilege
 boundary, not a convenience.
 
 **The app lane carries no rows.** A declared reaction hears table, op, row
@@ -565,7 +565,10 @@ governed wire as everybody else. The alternative — handing rows to a callback
 — puts data in the one place this stack has no fence for, arbitrary imperative
 code, and `deliver` payloads are pings for exactly the same reason.
 
-**The tide lane carries rows, because tide has the fence.** A fact is stamped
+**The tide lane carries rows, because tide has the fence.** It is a feature
+(`createTideFacts`, `@niscorp/moss/tide`), not part of the core: it hears a
+write through the one seam a feature is handed for that, and an app that runs
+no tide names none. A fact is stamped
 with the identity derived from the *write's own* scope, and the matcher offers
 a fact only to reflexes running under that same identity. Tide is the one
 place a row travels without being read — no policy is consulted on the way —
@@ -582,7 +585,9 @@ assert them, the way an app already asserts its charter.
 
 **Pacing belongs to the host, not the engine.** Tide names the next instant it
 wants waking for; the driver owns the timer, wakes on every ingest, and drains
-to quiescence. The interval that used to stand in for this was both a latency
+to quiescence. The driver is tide's own (`createTideDriver`), as the Postgres
+store is (`@niscorp/tide/postgres`): both were moss's, and they are tide's
+pacing and tide's storage. The interval that used to stand in for this was both a latency
 floor and a throughput ceiling — a chain advanced one hop per beat — and the
 only periodic thing left is a janitor that finds nothing when nothing is
 broken.
@@ -644,7 +649,8 @@ On the record, so nothing reads as finished that isn't:
   context management for models — one mechanism, two products.
 - **Scale-out** beyond sticky sessions pinned by session id. What crosses
   processes today is invalidation only: `refresh` moves a generation pointer
-  every process polls (`src/manifest/generation.ts`), and an optional fabric
+  every process polls (`src/manifest/generation.ts` holds the clock; the row is
+  read and moved through vex, `src/data/pointer.ts`), and an optional fabric
   (`runtime.fabric`, `src/server/fabric.ts`) carries identity invalidations and nudges.
   A shell is still resident in one process. A drawn document
   adds one requirement to stickiness: the page request and the socket should
