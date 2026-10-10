@@ -875,15 +875,32 @@ its own, and the core never imports it.
   migrated in the one ledgered run, before the feature starts, and
   `migrateTables` runs them too.
 - `FeatureSeams` — everything of the core a feature may touch, each member one
-  function or one narrow value: `routes(hono)` and `operatorRoutes(hono)` (mount
-  behind the authentication, and behind the operator key); `credential(prefix,
-  principalOf)` (read a bearer token of the feature's own prefix); `who(principal)`
-  and `scopeOf(principal)`; `holds(roles, installed)`, `actions()`,
-  `replaceActions(source, actions)`, `refusalOf(actions)`,
-  `loadActionsFrom(source, load)`, `narrowCatalogs(filter)`, `charter`,
-  `components`; `ownEntries({ entries, tables })`, `grammars`, `fingerprints()`,
-  `fingerprintsFor(principal)`; `telemetry`, `signingSeed`; `wrapWire(wrap)`. A
-  route a feature mounts reads who is calling as `c.get('principal')`.
+  function or one narrow value. Twenty members, and each is one a feature
+  uses: one that stops being used is taken out. A route a feature mounts reads
+  who is calling as `c.get('principal')`.
+
+  | Member | What it is for |
+  |---|---|
+  | `routes(hono)` | mount routes at the server's root, behind the authentication every route gets |
+  | `operatorRoutes(hono)` | mount routes under `/operator`, behind the operator key and the app's gate |
+  | `credential(prefix, principalOf)` | read a bearer token that starts with the feature's own prefix, and say who it is |
+  | `who(principal)` | who a principal is: their roles, and the integrations live for them |
+  | `scopeOf(principal)` | the scope values a principal carries, which the engine pins rows by |
+  | `holds(roles, installed)` | the action ids a set of roles holds of the actions in force |
+  | `actions()` | the actions in force: what the app shipped, then each set handed over |
+  | `replaceActions(source, actions)` | put a set of actions in place of the one of that name; throws when the app could not be served so |
+  | `refusalOf(actions)` | the sentence the app would be refused with if exactly these were in force, or `undefined` |
+  | `loadActionsFrom(source, load)` | how a set kept in rows is read again when another process changed something |
+  | `narrowCatalogs(filter)` | one more rule for which granted actions are there for an install list |
+  | `charter` | the charter the app shipped: role names, and what each selects |
+  | `components` | the kit's component contracts by name: a description, and the props' schema |
+  | `ownEntries({ entries, tables })` | hand over the feature's own reads and writes, and get back how one is replayed |
+  | `grammars` | read a stored document in this code's grammars, and stamp one that is written |
+  | `fingerprints()` | every fingerprint the app serves |
+  | `fingerprintsFor(principal)` | the fingerprints that principal's own policy lets them replay |
+  | `telemetry` | where a span goes; absent, none is built |
+  | `signingSeed` | the seed the deployment signs with (`runtime.signingSeed`) |
+  | `wrapWire(wrap)` | lay a function around the wire a session's screens call through |
 
 A feature is handed no pool. What it reads and writes on its own tables it
 authors as vex entries, as an app does, and hands over with the tables they

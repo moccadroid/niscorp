@@ -17,6 +17,11 @@ import type { Telemetry } from '../runtime';
 // module's whole answer. A feature that needs something that is not here does
 // not reach for it: the seam is added to its owner first, on its own.
 //
+// TWENTY MEMBERS, AND EACH IS ONE A FEATURE USES (counted 2026-10-10 against
+// ../integrations, the one feature there is: none is unused). A member that
+// stops being used is taken out; one is not added for a feature that might
+// want it.
+//
 // The types are written out here rather than imported from their owners,
 // because the manifest names a feature (`NiscApp.features`) and so this module
 // sits beneath it. The server holds each member to its owner's type where it
@@ -58,6 +63,8 @@ export type FeatureSeams = {
   credential: (prefix: string, principalOf: (token: string, request: Request) => Promise<CredentialAnswer>) => void;
 
   // ── who is calling ──
+  // Who a principal is: the roles they wear, and the integrations live for
+  // them. `null` is nobody signed in.
   who: (principal: string | null) => Promise<Whoever>;
   // The scope values a principal carries: the ones the engine pins rows by.
   scopeOf: (principal: string) => Promise<Record<string, unknown>>;
