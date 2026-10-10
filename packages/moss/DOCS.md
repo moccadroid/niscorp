@@ -257,6 +257,7 @@ type NiscRuntime = {
   identityIdleMs?: number;         // drop an unread identity record; default 30 min, `0` disables
   shellFrameDelta?: boolean;       // send changed canvases as deltas; default off
   socketCompression?: boolean | Record<string, unknown>;  // permessage-deflate; default on
+  socketMaxMessageBytes?: number;  // the largest message a connection may send; default 256 KiB (read by `serve`)
   operatorKey?: string;            // enables `/operator/*`; absent, every route there is 404
   operatorGate?: (c: Context, next: Next) => Response | void | Promise<Response | void>;
   fabric?: Fabric;                 // cross-process invalidations and nudges; default off
@@ -1050,7 +1051,8 @@ measures the end.
   own close, not one of moss's — and what it carried did not arrive: the
   terminal reconnects as after any other close, and a signed-in person's shell
   is as it was. The limit is the Node transport's (`attachSocket`'s
-  `maxMessageBytes`, below), and it is a bound on memory, not on speed: the
+  `maxMessageBytes`, below; `runtime.socketMaxMessageBytes` under `serve`),
+  and it is a bound on memory, not on speed: the
   server keeps what a message carried — the value in the shell, and again in
   the last frame it sent — and sends it back down in every later frame of that
   canvas. An event is a press, a typed value, a row handed back. A file never
@@ -1240,19 +1242,26 @@ Correctness, which matters more than the saving:
 
 - `serve(app, runtime & { port? }): Promise<MossServer>` — boots and listens:
   `createServer` runs inside (boot refusal included), then HTTP + the socket
-  in one process. `port` defaults to 8787.
-- `attachSocket(httpServer, accept, path?, options?)` — embed the socket on an
-  existing server (raw `ws`, `noServer`, path-matched — coexists with vite
-  HMR). `path` defaults to `/socket`. `options = { compression?,
+  in one process. `port` defaults to 8787. It hands the transport
+  `runtime.socketCompression` and `runtime.socketMaxMessageBytes`. **`close()`
+  on the server it returns stops what `serve` started**: moss's own timers,
+  then every connection (closed `1001`), then the listener. `serve` hands back
+  neither the listener nor the transport, so that is the one way to stop them.
+- `attachSocket(httpServer, accept, path?, options?): { close }` — embed the
+  socket on an existing server (raw `ws`, `noServer`, path-matched — coexists
+  with vite HMR). `path` defaults to `/socket`. `options = { compression?,
   maxMessageBytes? }`. `compression` is the same value as
   `runtime.socketCompression` and defaults to `true`; `serve()` passes the
   runtime's through for you, so only a host running its own listener (a vite
   plugin, a dev check) ever needs it. `maxMessageBytes` is the largest message
   a connection may send, in bytes, and defaults to 256 KB (`256 * 1024`); a
   message over it closes that connection with `1009`. It is handed to `ws` as
-  `maxPayload`, whose own default was 100 MiB. Only a host that calls
-  `attachSocket` itself can raise it: `serve()`, `nisc start` and the dev
-  plugin take the default.
+  `maxPayload`, whose own default was 100 MiB. `serve()` passes
+  `runtime.socketMaxMessageBytes`; `nisc start` and the dev plugin call
+  `attachSocket` with no options and take the default. What it answers is how
+  the transport is retired: `close()` ends every connection it opened (`1001`)
+  and takes no more, for a host that stops its listener while the process goes
+  on.
 - A frame the transport refuses — malformed, not UTF-8, over the limit — ends
   that connection (`1002`, `1007`, `1009`) and logs one line; no other
   connection is touched.

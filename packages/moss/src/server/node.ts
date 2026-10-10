@@ -44,12 +44,16 @@ const MAX_MESSAGE_BYTES = 256 * 1024;
 // (permessage-deflate on by default — see `runtime.socketCompression`); the
 // protocol above the seam is nisc's own (../socket) and identical on every
 // runtime.
+//
+// Answers how the transport is retired: `close()` ends every connection it
+// opened (1001, going away) and takes no more. For a host that stops its
+// listener while the process goes on; one that exits needs none of it.
 export const attachSocket = (
   httpServer: Upgradeable,
   accept: SocketAccept,
   path = '/socket',
   options?: { compression?: boolean | Record<string, unknown>; maxMessageBytes?: number },
-): void => {
+): { close: () => void } => {
   const wss = new WebSocketServer({
     noServer: true,
     perMessageDeflate: options?.compression ?? true,
@@ -130,6 +134,12 @@ export const attachSocket = (
       }
     });
   });
+  return {
+    close: () => {
+      for (const client of wss.clients) client.close(1001, 'server closing');
+      wss.close();
+    },
+  };
 };
 
 // THE BUILT TERMINAL, served by the same process as the app — one origin, so the
@@ -182,12 +192,30 @@ export const mountSite = (server: MossServer, config: SiteConfig): void => {
   });
 };
 
+// BOOT AND LISTEN: `createServer`, then HTTP and the socket in one process.
+//
+// WHAT IT STARTED, THE SERVER IT RETURNS STOPS. `serve` makes a listener and a
+// websocket transport and hands back neither, so `close()` on what it does
+// hand back is the one way to stop them: moss's own timers (`MossServer`'s
+// `close`), then every connection, then the listener. The thing that started
+// a listener owns stopping it. It used to stop the timers and leave the port
+// bound and every terminal connected.
 export const serve = async (app: NiscApp, runtime: NiscRuntime & { port?: number }): Promise<MossServer> => {
   const server = await createServer(app, runtime);
   const port = runtime.port ?? 8787;
   const httpServer = listen({ fetch: server.fetch, port });
-  attachSocket(httpServer, server.socket, '/socket', { ...(runtime.socketCompression !== undefined ? { compression: runtime.socketCompression } : {}) });
+  const sockets = attachSocket(httpServer, server.socket, '/socket', {
+    ...(runtime.socketCompression !== undefined ? { compression: runtime.socketCompression } : {}),
+    ...(runtime.socketMaxMessageBytes !== undefined ? { maxMessageBytes: runtime.socketMaxMessageBytes } : {}),
+  });
   console.log(`moss serving http://localhost:${port}`);
   console.log(`surfaces: GET /catalog · GET|POST /api/vex · GET|POST /api/<resource>/vex · ws://localhost:${port}/socket`);
-  return server;
+  const retire = server.close;
+  return Object.assign(server, {
+    close: (): void => {
+      retire();
+      sockets.close();
+      httpServer.close();
+    },
+  });
 };

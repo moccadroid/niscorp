@@ -130,6 +130,13 @@ export type NiscRuntime = {
   // wrong at a hundred thousand, which is why it is a knob and not a constant.
   // `false` disables it; an object is passed through to `ws` for tuning.
   socketCompression?: boolean | Record<string, unknown>;
+  // THE LARGEST MESSAGE A CONNECTION MAY SEND, in bytes, counted once inflated
+  // (default: 256 KiB, the Node transport's own; ../server, node.ts says why
+  // that number). A message over it closes that connection with 1009. What a
+  // terminal sends is an event, a few KB; a deployment whose screens hand back
+  // more in one message raises this, and its memory for each connection with
+  // it. A file never goes over the socket.
+  socketMaxMessageBytes?: number;
   // THE OPERATOR KEY — the whole authentication story for the seam below.
   //
   // Registering an integration is a PLATFORM act, not a tenant one: it points

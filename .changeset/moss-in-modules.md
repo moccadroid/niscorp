@@ -269,3 +269,10 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 
 - A write through vex may name its place in a chain of effects in two headers, `x-tide-cause` and `x-tide-depth`, which `app.facts.chain` then decides whether to believe. The depth was read with `Number()`: an empty header was depth `0`, the start of a chain, and so `0x2` was 2, `1e1` was 10 and thirty nines a depth no whole number holds. A depth is digits and nothing else now, and a number that is exact. Anything else is no position: `chain` is not asked and the write is heard with none.
 - A caller that writes the header as `String(depth)` has nothing to change; lyra's does.
+
+**`serve` stops what it started, and takes the message limit: `runtime.socketMaxMessageBytes`.**
+
+- `serve(app, runtime)` (`@niscorp/moss/node`) makes an HTTP listener and a websocket transport and returns the server and neither of them. `server.close()` stopped moss's timers and left the port bound and every terminal connected, and nothing else could reach either. `close()` on the server `serve` returns now stops all three: moss's own timers, then every connection (closed `1001`), then the listener.
+- New: `runtime.socketMaxMessageBytes`, the largest message a connection may send. `serve` hands it to the transport, as it hands `runtime.socketCompression`. It could be said to `attachSocket` (`maxMessageBytes`) and not to `serve`, which calls it. Unset, the limit is the transport's 256 KiB, as before.
+- `attachSocket(…)` answers `{ close }` where it answered nothing: `close()` ends every connection the transport opened (`1001`) and takes no more. A host that ignores what it answers has nothing to change.
+- An app that called `server.close()` on a server from `serve` and went on using the port has to stop doing one of the two. `createServer`'s own `close` is as it was. `nisc start` and the dev plugin call `attachSocket` themselves, with no options, and are not changed here.
