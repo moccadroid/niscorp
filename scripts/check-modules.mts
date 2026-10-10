@@ -69,20 +69,22 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       // How it reaches them live. Not `manifest`: what somebody holds is a
       // function it is handed, and so is where a session comes from.
       socket: ['runtime', 'protocol', 'identity', 'shells'],
+      // How it reaches them as a page. Not `manifest` and not the server: a
+      // page's path, and the three things a document asks a server, are types
+      // written out in the module.
+      documents: ['protocol', 'identity', 'shells'],
       client: ['protocol'],
       terminal: ['client'],
     },
     flat: [
-      'document.ts',
       'driver.ts',
       'fabric.ts',
       'node.ts',
-      'pages.ts',
       'server.ts',
       'tide.ts',
       'vite.ts',
     ],
-    finished: ['runtime', 'protocol', 'feature', 'identity', 'manifest', 'data', 'shells', 'integrations', 'socket', 'client', 'terminal'],
+    finished: ['runtime', 'protocol', 'feature', 'identity', 'manifest', 'data', 'shells', 'integrations', 'socket', 'documents', 'client', 'terminal'],
     features: ['integrations'],
   },
 };

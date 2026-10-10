@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { RenderNodeSchema } from './tree';
 
 // What a page drawn on the server carries beside its HTML: the screen it was
-// drawn from. The server writes it into the page (../document.ts) and the
+// drawn from. The server writes it into the page (../documents) and the
 // terminal starts from it (../client), so the first render matches the HTML
 // and the first frames off the socket confirm it rather than paint it.
 

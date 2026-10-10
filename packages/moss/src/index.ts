@@ -6,6 +6,7 @@
 //   feature/      — what a feature is, and the seams the server starts one with
 //   shells/       — what somebody is looking at: the shell host, a shell's build, its stream, its snapshot
 //   socket/       — how it reaches them live: the handshake, the messages, revalidation (transport-blind)
+//   documents/    — how it reaches them as a page: the drawn document, the page router, pages as files
 //   server.ts     — boot refusal + the HTTP surfaces + the socket accept
 //   node.ts       — the Node listener + ws transport (./node subpath; Bun swaps this, never the app)
 export { defineApp } from './manifest';
@@ -29,10 +30,9 @@ export type { TideDriver } from './driver';
 export { CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, PROTOCOL, offerToken } from './protocol';
 export type { IdentityRecord } from './identity';
 export type { ShellHost, ShellSnapshot } from './shells';
-export { tokenFromCookie, embedSnapshot, documentHeaders, renderDocument, exportDocuments } from './document';
-export { sessionCookies } from './identity';
-export type { DocumentConfig, DrawnDocument, ExportedDocument } from './document';
-export { createPageRouter } from './pages';
+export { createPageRouter, embedSnapshot, documentHeaders, renderDocument, exportDocuments } from './documents';
+export { sessionCookies, tokenFromCookie } from './identity';
+export type { DocumentConfig, DrawnDocument, ExportedDocument } from './documents';
 export type { Connection } from './socket';
 export type { ServerMessage } from './protocol';
 export { migrateTables } from './data';

@@ -12,8 +12,8 @@ import type { NiscApp } from './manifest';
 import type { NiscRuntime } from './runtime';
 import { SUBPROTOCOL } from './protocol';
 import type { SocketAccept } from './socket';
-import { renderDocument } from './document';
-import type { DocumentConfig } from './document';
+import { renderDocument } from './documents';
+import type { DocumentConfig } from './documents';
 
 // ═══════════════════════════════════════════════════════════════
 // The Node entry — runtime-specific by design: the transport is a seam, so

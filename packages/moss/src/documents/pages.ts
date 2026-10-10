@@ -9,7 +9,7 @@
 
 // WHAT THE ROUTER READS OF A PAGE: where it is drawn, which of its canvases
 // the parameters of its path go to, and the canvases it has. A `PageManifest`
-// (./manifest) is one of these.
+// (../manifest) is one of these.
 export type PagePath = { path: string; params?: string; canvases: readonly { id: string }[] };
 
 export type PageMatch = { name: string; params: Record<string, string> };

@@ -7,7 +7,7 @@ import type { HostSetup } from './shell-host-double';
 import { createSocket } from '../src/socket';
 import { offerToken, offeredToken } from '../src/protocol';
 import type { Connection } from '../src/socket';
-import { createPageRouter } from '../src/pages';
+import { createPageRouter } from '../src/documents';
 import { createWire } from '../src/client';
 import type { WireEnv } from '../src/client';
 import type { NiscApp, PageManifest } from '../src/manifest';

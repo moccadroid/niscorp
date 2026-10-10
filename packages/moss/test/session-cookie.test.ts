@@ -9,7 +9,7 @@ import { attachSocket } from '../src/node';
 import { createShellHost } from '../src/shells';
 import { hostConfig } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
-import { renderDocument } from '../src/document';
+import { renderDocument } from '../src/documents';
 import { isOwnOrigin, openSealed, sealSession, sessionCookies } from '../src/identity';
 import { createSocket } from '../src/socket';
 import { offerToken, PROTOCOL } from '../src/protocol';

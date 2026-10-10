@@ -17,7 +17,7 @@ import { createSocket, DEFAULT_REVALIDATE_MS } from './socket';
 import type { SocketAccept } from './socket';
 import { createShellHost } from './shells';
 import type { ShellHostConfig } from './shells';
-import { createPageRouter } from './pages';
+import { createPageRouter } from './documents';
 import type { IdentityRecord, IdentityReport, ResolvedIdentity } from './identity';
 import type { ShellHost } from './shells';
 

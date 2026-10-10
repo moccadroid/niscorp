@@ -6,8 +6,8 @@ import { hostConfig } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import type { NiscApp, PageManifest } from '../src/manifest';
 import type { MossServer } from '../src/server';
-import { createPageRouter } from '../src/pages';
-import { documentHeaders, embedSnapshot, exportDocuments, renderDocument, tokenFromCookie } from '../src/document';
+import { createPageRouter, documentHeaders, embedSnapshot, exportDocuments, renderDocument } from '../src/documents';
+import { tokenFromCookie } from '../src/identity';
 import { readDocumentSnapshot } from '../src/client';
 
 // ═══════════════════════════════════════════════════════════════
