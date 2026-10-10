@@ -1,5 +1,5 @@
 import { createPostgresAdapter, createPostgresCache, createQueryEngine, scopeGrants, seedCache } from '@niscorp/vex';
-import type { CacheBackend, DatabaseSchema, PgPool, QueryEngine, QueryEngineConfig, SeedEntry, SeedMutation } from '@niscorp/vex';
+import type { CacheBackend, DatabaseAdapter, DatabaseSchema, PgPool, QueryEngine, QueryEngineConfig, SeedEntry, SeedMutation } from '@niscorp/vex';
 
 // ═══════════════════════════════════════════════════════════════
 // The data layer stands up from what's present (DESIGN.md § Derivation
@@ -10,6 +10,9 @@ import type { CacheBackend, DatabaseSchema, PgPool, QueryEngine, QueryEngineConf
 
 export type DataLayer = {
   engine: QueryEngine;
+  // What the engine reads through, for an engine that stands beside it
+  // (./own-entries.ts).
+  adapter: DatabaseAdapter;
   schema: DatabaseSchema;
   // every `<table>.<verb>` grant this schema can carry — the data
   // section's resolution set, and the input to policy compilation
@@ -51,5 +54,5 @@ export const createDataLayer = async (config: DataLayerConfig): Promise<DataLaye
   // So they introspect, they are grantable, and a host that grants one
   // authors a scope rule for it like everything else. Lyra scopes `tide_run`
   // on the identity the run declared.
-  return { engine, schema, grants: scopeGrants(schema.entities.map((e) => e.name)) };
+  return { engine, adapter, schema, grants: scopeGrants(schema.entities.map((e) => e.name)) };
 };

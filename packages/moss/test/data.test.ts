@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
 import { scopeGrants } from '@niscorp/vex';
+import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Charter } from '@niscorp/charter';
 import { memoKey } from '../src/identity';
 import type { TelemetrySpan } from '../src/runtime';
@@ -17,6 +18,8 @@ const charter: Charter = {
   public: [],
   reader: { data: ['notes.read'] },
   writer: { data: ['notes.read', 'notes.write.insert'] },
+  // Every grant the database can carry.
+  owner: { data: ['notes.*', 'tags.*'] },
 };
 
 type Env = { Variables: { roles: readonly string[] } };
@@ -26,7 +29,7 @@ const who = (...roles: string[]) => ({ key: memoKey(roles, undefined), roles });
 const world = async (telemetry?: { emit: (span: TelemetrySpan) => void }) => {
   const double = await engineDouble();
   const data = dataOver(
-    { engine: double.engine, grants: scopeGrants(['notes', 'tags']), grammars: await createGrammarUpgrader({}) },
+    { engine: double.engine, adapter: double.adapter, grants: scopeGrants(['notes', 'tags']), grammars: await createGrammarUpgrader({}) },
     { db: double.db, charter, ...(telemetry !== undefined ? { telemetry } : {}) },
   );
   const server = new Hono<Env>();
@@ -40,7 +43,7 @@ const world = async (telemetry?: { emit: (span: TelemetrySpan) => void }) => {
     const response = await server.request('/api/notes/vex', { method: 'POST', headers: { 'content-type': 'application/json', 'x-test-role': role, ...headers }, body: JSON.stringify(body) });
     return response.json();
   };
-  return { ...double, data, post };
+  return { ...double, data, post, server };
 };
 
 const READ = { fingerprint: 'notes/all', context: {} };
@@ -134,5 +137,82 @@ describe('the data module, over an engine', () => {
       ['vex.execute', 'ok', 'notes/all', true],
       ['vex.execute', 'ok', 'notes/all', false],
     ]);
+  });
+});
+
+// A FEATURE'S OWN ENTRIES (../src/data/own-entries.ts): what a feature reads
+// and writes on the tables it keeps. Here the feature keeps `tags`.
+const TAGS: SeedEntry = { fingerprint: 'tags/all', dsl: { from: ['tags'], fields: ['tags.id'], limit: 10 } };
+const ADD_TAG: SeedMutation = { fingerprint: 'tags/add', mutation: { op: 'insert', table: 'tags', values: { id: { $context: 'id' } } } };
+// Authored by the feature, on a table it did not name.
+const NOTES_BY_THE_FEATURE: SeedEntry = { fingerprint: 'tags/notes', dsl: { from: ['notes'], fields: ['notes.id'], limit: 10 } };
+const ADD_NOTE_BY_THE_FEATURE: SeedMutation = { fingerprint: 'tags/add-note', mutation: { op: 'insert', table: 'notes', values: { body: { $context: 'body' } } } };
+
+describe("the data module — a feature's own entries", () => {
+  const own = { entries: [TAGS, ADD_TAG, NOTES_BY_THE_FEATURE, ADD_NOTE_BY_THE_FEATURE], tables: ['tags'] };
+
+  it('are replayed in process, a read and a write, with no role asked for', async () => {
+    const { data, written } = await world();
+    const replay = await data.ownEntries(own);
+    expect(await replay('tags/all', {})).toEqual([{ id: 1, body: 'first' }]);
+    expect(await replay('tags/add', { id: 4 })).toEqual({ id: 7, body: 'written' });
+    expect(written).toHaveLength(1);
+    expect(written[0]?.sql).toMatch(/^INSERT INTO tags/);
+    expect(written[0]?.params).toEqual([4]);
+  });
+
+  it('are served by no route: whoever holds every grant is told the fingerprint is unknown, and no surface lists it', async () => {
+    const { data, server, written, read } = await world();
+    await data.ownEntries(own);
+    const asOwner = { 'content-type': 'application/json', 'x-test-role': 'owner' };
+    for (const path of ['/api/vex', '/api/notes/vex']) {
+      for (const fingerprint of ['tags/all', 'tags/add']) {
+        const response = await server.request(path, { method: 'POST', headers: asOwner, body: JSON.stringify({ fingerprint, context: { id: 4 } }) });
+        expect([path, fingerprint, response.status]).toEqual([path, fingerprint, 404]);
+        expect(await response.json()).toMatchObject({ error: 'cache_miss' });
+      }
+      const listed: unknown = await (await server.request(path, { headers: asOwner })).json();
+      expect(listed).toMatchObject({ fingerprints: expect.any(Array) });
+      expect(JSON.stringify(listed)).toContain('notes/all');
+      expect(JSON.stringify(listed)).not.toContain('tags/');
+    }
+    // The owner does hold the grants: the app's own entries answer them.
+    expect(await (await server.request('/api/vex', { method: 'POST', headers: asOwner, body: JSON.stringify(ADD) })).json()).toMatchObject({ result: { id: 7 } });
+    expect(written).toHaveLength(1);
+    expect(read).toHaveLength(0);
+  });
+
+  it('reach the tables the feature named and no other', async () => {
+    const { data, written, read } = await world();
+    const replay = await data.ownEntries(own);
+    await expect(replay('tags/notes', {})).rejects.toThrow(/^moss: the entry "tags\/notes" was refused \(\d+\): .*notes/);
+    await expect(replay('tags/add-note', { body: 'hello' })).rejects.toThrow(/"tags\/add-note" was refused/);
+    expect(read).toHaveLength(0);
+    expect(written).toHaveLength(0);
+  });
+
+  it('replay only what the feature handed over: an entry of the app is unknown to it', async () => {
+    const { data } = await world();
+    const replay = await data.ownEntries(own);
+    await expect(replay('notes/all', {})).rejects.toThrow(/"notes\/all" was refused \(404\)/);
+  });
+
+  it("a write of theirs tells the app's engine which tables changed, and is told to no subscriber of the routes", async () => {
+    const { data, engine } = await world();
+    const invalidated = vi.spyOn(engine, 'invalidate');
+    const heard: string[] = [];
+    data.onWrite((event) => heard.push(event.fingerprint));
+    const replay = await data.ownEntries(own);
+    await replay('tags/add', { id: 4 });
+    expect(invalidated.mock.calls).toEqual([[['tags']]]);
+    expect(heard).toEqual([]);
+  });
+
+  it('emits a span for each execution, as machinery does', async () => {
+    const spans: TelemetrySpan[] = [];
+    const { data } = await world({ emit: (span) => spans.push(span) });
+    const replay = await data.ownEntries(own);
+    await replay('tags/all', {});
+    expect(spans.map((span) => [span.name, span.status, span.attributes['fingerprint'], span.attributes['hasPrincipal']])).toEqual([['vex.execute', 'ok', 'tags/all', false]]);
   });
 });

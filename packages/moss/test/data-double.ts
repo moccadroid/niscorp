@@ -36,6 +36,8 @@ export const ADD_NOTE: SeedMutation = { fingerprint: 'notes/add', mutation: { op
 
 export type EngineDouble = {
   engine: QueryEngine;
+  // What the engine reads through.
+  adapter: DatabaseAdapter;
   // The client writes are replayed on: it runs nothing, and remembers the SQL
   // and the parameters of each statement it was handed.
   db: MutationClient;
@@ -76,5 +78,5 @@ export const engineDouble = async (rows: Record<string, unknown>[] = [{ id: 1, b
       return { rows: [{ id: 7, body: 'written' }] };
     },
   };
-  return { engine, db, written, read };
+  return { engine, adapter, db, written, read };
 };

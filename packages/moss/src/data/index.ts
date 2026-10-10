@@ -22,6 +22,10 @@
 // with no principal reads and writes: in process, replay only, under that
 // role's policy. Every execution is reported as a span (./span.ts).
 //
+// A FEATURE'S OWN ENTRIES (./own-entries.ts) are the reads and writes a
+// feature makes on the tables it keeps: seeded into a cache no route serves,
+// and replayed in process under a policy that admits those tables alone.
+//
 // A READ THAT KEEPS ANSWERING (./follow.ts) is the seam between a reactive
 // entry and the shell that asked for it over the in-process wire.
 //
@@ -37,6 +41,7 @@
 export { createData } from './data';
 export type { Data, DataConfig, DataRoutesConfig } from './data';
 export type { ExecuteAs } from './execute-as';
+export type { OwnEntries, Replay } from './own-entries';
 export { createWireFollower } from './follow';
 export { migrateTables } from './migrate';
 export type { TablesReport } from './migrate';

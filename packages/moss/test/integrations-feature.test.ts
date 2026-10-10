@@ -76,6 +76,7 @@ const world = async (over: { pool?: PgPool; who?: (principal: string | null) => 
     charter: { desk: { actions: ['desk.*', 'ext.desk.*'] }, member: { actions: { allow: ['ext.member.*'] } } },
     components: { Text: {} },
     pool: over.pool ?? poolOver({}),
+    ownEntries: async () => async () => undefined,
     grammars: await createGrammarUpgrader({}),
     fingerprints: async () => ['deals/open'],
     fingerprintsFor: async () => ['deals/open'],

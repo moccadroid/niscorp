@@ -2,7 +2,7 @@ import type { Hono } from 'hono';
 import type { Charter } from '@niscorp/charter';
 import type { ActionDefinition, FetchFn } from '@niscorp/nova';
 import type { Upgrader } from '@niscorp/strata';
-import type { PgPool } from '@niscorp/vex';
+import type { PgPool, SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Telemetry } from '../runtime';
 
 // ═══════════════════════════════════════════════════════════════
@@ -39,6 +39,11 @@ export type Whoever = { roles: readonly string[]; installed: readonly string[] |
 export type CredentialAnswer = { principal: string } | { refused: { status: 401 | 403; error: string; message: string } };
 
 type Actions = Readonly<Record<string, ActionDefinition>>;
+
+// How a feature replays one of its own entries, by its fingerprint: a read
+// answers its rows, a write the row it wrote (every row, when it wrote more
+// or fewer than one). Throws when the entry is refused.
+export type Replay = (fingerprint: string, context: Record<string, unknown>) => Promise<unknown>;
 
 export type FeatureSeams = {
   // ── the server ──
@@ -82,6 +87,12 @@ export type FeatureSeams = {
 
   // ── what they may read and write ──
   pool: PgPool;
+  // THE FEATURE'S OWN READS AND WRITES, on the tables it keeps: entries
+  // authored as an app authors its own, and the tables they touch. Answers how
+  // one is replayed, in process. No route serves them, whatever the charter
+  // grants whoever asks, and they run under a policy that admits those tables
+  // and no other.
+  ownEntries: (own: { entries: readonly (SeedEntry | SeedMutation)[]; tables: readonly string[] }) => Promise<Replay>;
   // Reads a stored document in this code's grammars, and stamps one it writes.
   grammars: Upgrader;
   // Every fingerprint the app serves.

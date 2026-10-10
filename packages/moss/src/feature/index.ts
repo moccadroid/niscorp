@@ -11,4 +11,4 @@
 // of moss; the manifest imports it, to say what `NiscApp.features` holds.
 // ═══════════════════════════════════════════════════════════════
 
-export type { CredentialAnswer, Feature, FeatureEnv, FeatureSeams, Whoever } from './seams';
+export type { CredentialAnswer, Feature, FeatureEnv, FeatureSeams, Replay, Whoever } from './seams';

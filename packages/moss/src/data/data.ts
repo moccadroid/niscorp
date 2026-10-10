@@ -1,7 +1,7 @@
 import type { Context, Env, Hono } from 'hono';
 import { migrate, upgradeStore } from '@niscorp/strata/postgres';
 import type { Sequence, Upgrader } from '@niscorp/strata';
-import type { CacheBackend, ExecuteRecord, MutationClient, PgPool, QueryEngine, QueryEngineConfig, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
+import type { CacheBackend, DatabaseAdapter, ExecuteRecord, MutationClient, PgPool, QueryEngine, QueryEngineConfig, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { ResolvedIdentity } from '../identity';
 import type { NiscApp, RunningManifest } from '../manifest';
 import { emitterOf } from '../runtime';
@@ -11,6 +11,8 @@ import { createExecuteAs } from './execute-as';
 import type { ExecuteAs } from './execute-as';
 import { createGrammarUpgrader } from './grammar';
 import { tableSequencesOf } from './migrate';
+import { createOwnEntries } from './own-entries';
+import type { OwnEntries, Replay } from './own-entries';
 import { createPolicies, resolvePolicyAtReachForRoles, resolvePolicyForRoles } from './policy';
 import { createVexRoutes } from './routes';
 import { vexRecordToSpan } from './span';
@@ -91,6 +93,9 @@ export type Data = {
   policyForRoles: (roles: readonly string[]) => ScopePolicy;
   // Run a seeded entry as a charter role (./execute-as.ts).
   executeAs: ExecuteAs;
+  // Take a feature's own entries, and answer how one is replayed
+  // (./own-entries.ts). No route serves them.
+  ownEntries: (own: OwnEntries) => Promise<Replay>;
   // The vex surfaces, for the server to mount at its root (./routes.ts).
   routes: <E extends Env>(config: DataRoutesConfig<E>) => Hono<E>;
   // Hear every write those surfaces serve (./writes.ts). Returns the way to
@@ -103,8 +108,9 @@ export type Data = {
   dropOnChange: (changed: RunningManifest['onChange']) => void;
 };
 
-// What stands once the database has been brought up.
-export type StoodUp = Pick<Data, 'engine' | 'grants' | 'grammars'>;
+// What stands once the database has been brought up: the engine, what can be
+// granted, the grammars, and the adapter the engine reads through.
+export type StoodUp = Pick<Data, 'engine' | 'grants' | 'grammars'> & { adapter: DatabaseAdapter };
 
 // THE TABLES EXIST BEFORE INTROSPECTION. The engine's introspected schema is
 // the grant universe policies compile from — a table created after it is a
@@ -127,7 +133,7 @@ const standUp = async (config: DataConfig): Promise<StoodUp> => {
   const grammars = await createGrammarUpgrader({ grammars: config.grammars });
   await upgradeStore(config.pool, INTEGRATION_ACTIONS_STORE, grammars);
   const layer = await createDataLayer(config);
-  return { grammars, engine: layer.engine, grants: layer.grants };
+  return { grammars, engine: layer.engine, grants: layer.grants, adapter: layer.adapter };
 };
 
 // EVERYTHING ELSE, over what stood up. Nothing here touches the database but
@@ -159,6 +165,11 @@ export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charte
       policyAtReach: (roles, reach) => resolvePolicyAtReachForRoles(governed, grants, roles, reach),
       ...(onExecute !== undefined ? { onExecute } : {}),
     }),
+    ownEntries: async (own) => {
+      const schema = engine.getSchema();
+      if (schema === undefined) throw new Error("moss: a feature's entries were handed over before the engine had read the database.");
+      return createOwnEntries({ adapter: stood.adapter, schema, db: config.db, engine, ...(onExecute !== undefined ? { onExecute } : {}) })(own);
+    },
     routes: <E extends Env>(routing: DataRoutesConfig<E>): Hono<E> =>
       createVexRoutes<E>({
         engine,
