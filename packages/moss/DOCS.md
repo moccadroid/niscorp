@@ -268,11 +268,16 @@ one ledgered run before introspection: once, recorded in `strata_ledger`, and
 refused if the ledger was edited or written by newer code. `migrations` on the
 runtime picks the posture: `'apply'` (default) runs what is pending; `'verify'`
 refuses to boot if anything is, for a deployment that migrates as a deploy step.
-`initIntegrations` and `initSessions` remain for hosts that are not moss's
-server, and go through the same ledger.
+`initSessions` remains for a host that is not moss's server, and goes through
+the same ledger.
+
+The run's order is: `MOSS_SEQUENCE`, `SESSIONS_SEQUENCE` under
+`session: 'sessions'`, the vex cache's, the tables the app's features keep
+(`Feature.tables`, in the order the app named the features), then
+`runtime.tables`.
 
 `tables` on the runtime hands over the app's own table sequences. They join
-that run after moss's — one transaction, one lock, one posture, so `'verify'`
+that run last — one transaction, one lock, one posture, so `'verify'`
 covers them. Absent, the app migrates its own tables itself, as before. Another
 owner's tables the app keeps go in the same list (`TIDE_SEQUENCE`), and a
 runtime that hands tables over does not also migrate them itself.
@@ -281,7 +286,9 @@ runtime that hands tables over does not also migrate them itself.
 
 The step that changes tables, for a deployment that migrates before it starts
 (`nisc migrate` calls it). It applies everything pending in the one run,
-whatever `runtime.migrations` says, and before the run may commit it asks
+whatever `runtime.migrations` says — the tables the app's features keep
+included, read off `app.features` as the server reads them — and before the
+run may commit it asks
 whether `app`'s entries fit what it leaves: every read is resolved against the
 schema as the transaction sees it, every write is put to the gate vex puts it
 to before it runs (`mutationMisfits`: its table, the columns it writes, its
@@ -434,14 +441,18 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   consist of is verified first: refused, it throws (`Refresh refused — …`,
   with what the check found) and nothing changed; accepted, it does what
   `refresh` does, and the set is frozen as the manifest was, so a set is
-  changed by handing over another of the same name. `'integrations'` is moss's
-  own set, read from its integration tables.
+  changed by handing over another of the same name. Every definition of the
+  set is read by nova's schema first: one nova does not read refuses the set
+  (`Refresh refused — actions nova does not read:`, naming the action and what
+  is wrong with it). `'integrations'` is the integrations feature's set, read
+  from its tables.
 - `verifyActions(source, actions): ManifestReport` — the dry run of
   `replaceActions`: the same verification over the same candidate (the app's
   actions, then each set, with `actions` in place of the set called `source`),
   answered as a report. Nothing changes. `errors` is `{ check, detail }[]`,
-  `check` one of `'charter'`, `'reach'`, `'variants'`; empty means
-  `replaceActions` would accept the set. `said` is what a boot only says (a
+  `check` one of `'actions'` (a definition nova's schema does not read),
+  `'charter'`, `'reach'`, `'variants'`; empty means `replaceActions` would
+  accept the set. `said` is what a boot only says (a
   chain of steps that never ends), and `charter` is the charter engine's whole
   report for the candidate.
 - `actions(): Readonly<Record<string, ActionDefinition>>` — the actions in
@@ -773,10 +784,13 @@ answers (who is calling, what exists for them, what they may read and write,
 what they are looking at, how it reaches them). It ships from an entry point of
 its own, and the core never imports it.
 
-- `Feature` — `{ name: string; start(seams: FeatureSeams): void | Promise<void> }`.
-  The app puts features in `NiscApp.features`. `createServer` starts each one,
-  in order, once its core stands and before anything is served; one that throws
-  refuses the boot.
+- `Feature` — `{ name: string; tables?: readonly Sequence[]; start(seams:
+  FeatureSeams): void | Promise<void> }`. The app puts features in
+  `NiscApp.features`. `createServer` starts each one, in order, once its core
+  stands and before anything is served; one that throws refuses the boot.
+  `tables` is the strata sequences of the tables the feature keeps: they are
+  migrated in the one ledgered run, before the feature starts, and
+  `migrateTables` runs them too.
 - `FeatureSeams` — everything of the core a feature may touch, each member one
   function or one narrow value: `routes(hono)` and `operatorRoutes(hono)` (mount
   behind the authentication, and behind the operator key); `credential(prefix,
@@ -784,9 +798,22 @@ its own, and the core never imports it.
   and `scopeOf(principal)`; `holds(roles, installed)`, `actions()`,
   `replaceActions(source, actions)`, `refusalOf(actions)`,
   `loadActionsFrom(source, load)`, `narrowCatalogs(filter)`, `charter`,
-  `components`; `pool`, `grammars`, `fingerprints()`, `fingerprintsFor(principal)`;
-  `telemetry`, `signingSeed`; `wrapWire(wrap)`. A route a feature mounts reads
-  who is calling as `c.get('principal')`.
+  `components`; `ownEntries({ entries, tables })`, `grammars`, `fingerprints()`,
+  `fingerprintsFor(principal)`; `telemetry`, `signingSeed`; `wrapWire(wrap)`. A
+  route a feature mounts reads who is calling as `c.get('principal')`.
+
+A feature is handed no pool. What it reads and writes on its own tables it
+authors as vex entries, as an app does, and hands over with the tables they
+touch: `ownEntries({ entries, tables })` answers `replay(fingerprint, context)`,
+which replays one in process (a read answers its rows, a write the row it
+wrote; a refusal throws). Those entries are seeded into a cache of their own,
+held by an engine no route is handed, so `/api/vex` answers `cache_miss` for
+one of them whatever the charter grants whoever asks, and no surface lists it.
+They run under a policy that admits the tables the feature named and no other,
+and asks for no principal. A write of theirs tells the app's engine which
+tables changed, so a reactive read over one of them answers again.
+`fingerprintsFor(principal)` is the fingerprints that principal's own policy
+lets them replay, as vex's discovery lists them.
 
 ### Many processes
 
@@ -1186,6 +1213,25 @@ await integrations.listAttachments('people.detail');
 - `storePress(integrationId, name, bytes, contentType): Promise<string>`
   (`StorePress`) — where a bundle's listing images land; it answers the URL
   they are served from. Absent, a bundle that declares press is refused.
+- `outboundTimeoutMs: number` — how long a call out to an integration's
+  service may take, its answer and its body together. Default `30000`, nova's
+  default wait for an endpoint's reply. It bounds every call: a screen's
+  through the proxy, a framed page and its callback, a vendor's webhook,
+  `callIntegration`, the bundle fetched at registration, the operator's probe,
+  and each press image. A call that is given up on reads as a service that is
+  unreachable (`502`; `callIntegration` rejects; the probe answers `status: 0`;
+  the bundle is refused). The shorter of this and an action's own `timeoutMs`
+  ends a call, so an integration whose endpoint is slow by nature needs this
+  raised as well; an answer that streams for longer than this is cut.
+- `pressMaxBytes: number` — how large one press image may be. Default
+  `5 * 1024 * 1024`, a number nobody measured. It is held to while the image
+  is read: a larger one is given up on where it crosses the line, and the
+  bundle is refused naming the path.
+
+An integration's id is lower-case letters, digits and hyphens, starting with a
+letter: it is a segment of every path the integration is served under and a
+part of every action it ships. A registration under any other id is a `400`,
+and a bundle that calls itself anything else is refused at intake.
 
 `Integrations` is a `Feature` that also carries the calls an app makes. They
 work once a server has started the feature, and reject with a sentence before
@@ -1219,8 +1265,43 @@ What the feature serves once it is started:
 
 A bearer token with the `ik_` prefix is an integration key: it is resolved to
 the integration it was issued to and, through `integrationActor`, to a
-principal (`401` unknown key, `403` no actor). Its tables are part of
-`MOSS_SEQUENCE` (`@niscorp/moss`), run by the server with the rest.
+principal (`401` unknown key, `403` no actor). No two integrations hold the
+hash of one key (a unique index on `integrations.key_hash`).
+
+**What the routes do, in order.**
+
+- *Register* (`POST /operator/integrations`, `{ id, url }`) fetches the
+  bundle, runs intake, copies the press, and for an integration that is
+  already approved asks whether the app could be served with the new actions.
+  Then the bundle lands in one transaction: the integration's row, its actions
+  in place of the ones it shipped before, and the hash of its key on the import
+  a key is issued with. It lands whole, or the import before it is still
+  there, whole.
+- *Approve* (`POST /operator/integrations/:id/approve`) reads what the
+  integration shipped, asks whether the app could be served with it, and only
+  then writes the approval. Refused, it answers `422` with the reason and
+  nothing is written.
+- *The contract* (`GET /api/integrations/contract`) lists, under
+  `fingerprints`, the reads and writes the caller's own policy lets them
+  replay: an integration asking with its key reads what its actor's rung
+  reaches, and nobody signed in reads what `public` reaches.
+- *A frame grant* (`POST /api/integrations/frame`) is an opaque random string,
+  kept by its hash in a table with what it opens and when it expires (thirty
+  minutes). Any process of the deployment redeems it, and it survives a
+  restart. It goes when its time is over, and when its integration is removed.
+
+**Its tables.** `integrations` and `integration_actions` are part of
+`MOSS_SEQUENCE` (`@niscorp/moss`). `integration_frame_grants` is the feature's
+own sequence, `nisc.moss.integrations`, which it names on itself
+(`Feature.tables`), so the server runs it with the rest and `migrateTables`
+does too. All three are tables like any other in the charter's `data`
+universe: a role granted a data wildcard denies them (`integrations.*`,
+`integration_actions.*`, `integration_frame_grants.*`).
+
+The feature reads and writes them through vex, with entries of its own that no
+route serves (see [Features](#features)); it holds no SQL. Landing a bundle and
+minting a frame grant are batches, so `runtime.db` has to have `transaction`,
+as it does for any batch an app writes.
 
 #### `createAssertionSigner(seed?)`
 

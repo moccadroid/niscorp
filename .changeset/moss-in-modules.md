@@ -124,3 +124,50 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
   - A stored action definition that nova's schema refuses is left out of what is served, with a line in the log. It used to be served as it stood.
   - A route body that is JSON and not an object (`null`) reads as an empty body. The route used to answer 500.
   - A component whose `propsSchema` cannot convert itself to JSON Schema is listed in the contract by its name and description. The contract route used to answer 500.
+
+**Integrations read and write through vex, and a feature is handed no pool.**
+
+- Every statement integrations ran on `integrations` and `integration_actions` is a vex entry now, replayed in process. Moss held twenty statements with no reason outside vex; four are left (the generation counter), and `pnpm check:raw-sql` counts them.
+- The entries are the feature's own. They are seeded into a cache no route serves, so `/api/vex` answers `cache_miss` for one of them whatever the charter grants whoever asks, and they run under a policy that admits the feature's tables and nothing else. A data grant on `integrations` opens no approval and no registration: those stay behind the operator key.
+- `FeatureSeams` has no `pool`. A feature of an app's own hands its reads and writes over as entries, with the tables they touch, and replays them: `const replay = await seams.ownEntries({ entries, tables })`, then `await replay(fingerprint, context)`.
+- `Feature.tables?: readonly Sequence[]` is new: the strata sequences of the tables a feature keeps. The server migrates them in the one ledgered run, after moss's own and before `runtime.tables`, and `migrateTables` (`nisc migrate`) runs them too.
+- What a caller sees: `last_import_at` is the server's clock where it was the database's. Nothing to change.
+
+**Registering an integration is one transaction, and an approval is verified before it is written.**
+
+- A bundle's row, its actions and the hash of its key landed as separate statements. One that failed part-way left a row that said one thing over actions that said another, or over none. They are one transaction now: a bundle lands whole, or the import before it is still there, whole.
+- **`runtime.db` has to have `transaction`.** Landing a bundle and minting a frame grant are vex batches, and a batch needs a client that can transact, as any batch an app writes does. A `db` that cannot answers `500` (`Batch mutations require a transactional client.`) to a registration. `createPglitePool` has one; a pool an app wraps itself gives `transaction` as it gives `query`.
+- Approving wrote the approval, handed the actions to the running manifest, and wrote the row back when that was refused. A process that died between the two writes left an approved row the next boot refused. The route now asks first whether the app could be served with what the integration shipped, and writes only then. A refused approval answers the same `422` with the same reason.
+- A refused approval no longer leaves its reason in `last_error` (`lastError` in the operator's list): nothing is written. A pane that read why an approval was refused off the list reads it off the answer.
+
+**No call out to an integration waits for ever, and a press image has a size.**
+
+- New on `createIntegrations`: `outboundTimeoutMs`, default `30000` (nova's default wait for an endpoint's reply), and `pressMaxBytes`, default `5 * 1024 * 1024`.
+- Every call out is given up on when it has taken `outboundTimeoutMs`, its answer and its body together: a screen's call through the proxy, a framed page and its callback, a vendor's webhook, `callIntegration`, the bundle fetched at registration, the operator's probe, and each press image. It reads as a service that is unreachable: `502` from the proxy, the frame door and the webhook; `callIntegration` rejects; the probe answers `status: 0`; the bundle is refused. None had a timeout, and a service that never answered held the call for as long as the process lived.
+- **An integration that takes longer than thirty seconds to answer, or whose answer streams for longer, is cut.** Set `outboundTimeoutMs` to what the slowest one needs. A longer `timeoutMs` on the integration's own action is not enough by itself: the shorter of the two ends the call.
+- A press image larger than `pressMaxBytes` refuses its bundle, naming the path. It is given up on while it is read, not after. Five mebibytes is a number nobody measured; set `pressMaxBytes` if a listing ships larger images. How many images a bundle may ship is still `storePress`'s to refuse.
+
+**A frame grant is a row, in a table of the integrations' own.**
+
+- Frame grants lived in the memory of the process that minted them. With two processes behind one address a frame opened by one was a `404` on the other, and a restart closed every open frame. A grant is kept in a table now, by its hash and never as itself, with what it opens and when it expires. Any process redeems it. It is the same opaque string for the screen that asks for one.
+- **A new table, and a new migration.** `integration_frame_grants` is the feature's own sequence, `nisc.moss.integrations`, and `nisc.moss` gains a third migration (below). A deployment that boots with `migrations: 'verify'` runs `nisc migrate` before it starts on this release, as for any release that adds a migration. With the default, `'apply'`, the server applies both when it boots.
+- **A role granted a data wildcard denies the new table too**, in an app that names the integrations feature: add `integration_frame_grants.*` beside `integrations.*` and `integration_actions.*` (AGENTS.md, rule 10a). The row holds a hash, a principal and a path.
+- A frame that was open when a deployment is upgraded holds a grant the old process kept in memory. It is unknown afterwards: the screen is reloaded once.
+
+**An integration's id is a name, and the hash of its key is its own.**
+
+- An id is lower-case letters, digits and hyphens, and starts with a letter: what the paths (`/integrations/<id>/…`) and the action names (`ext.<audience>.<id>.<name>`) already assumed. `POST /operator/integrations` with any other id answers `400` and fetches nothing; a bundle that calls itself anything else is refused at intake.
+- An integration that was registered earlier under an id that does not fit goes on being served. It cannot be imported again under that id: remove it and register it under one that fits.
+- `nisc.moss` gains a migration: a unique index on `integrations.key_hash` where it is not null. No two integrations hold the hash of one key. Moss mints a key from 32 random bytes and never wrote one hash to two rows; two rows somebody gave the same hash by hand refuse the migration, and one of them is cleared first.
+
+**A set of actions is read by nova's schema before it is taken.**
+
+- `server.replaceActions(source, actions)` verified a set against the charter and froze it, and no schema had read its definitions. One nova refuses was served, and was found when a shell that holds it was built, for whoever connected first. Every definition is read first now: `replaceActions` throws `Refresh refused — actions nova does not read:` with the action and what is wrong with it, and nothing changed.
+- `ManifestReport.errors[].check` has a fourth value, `'actions'`, in what `verifyActions` and `verifyApp` answer. Code that switches on `check` gains a case.
+- An app whose sets are `ActionDefinition`s nova reads has nothing to change. One that handed over a definition with a field nova does not have corrects the definition.
+
+**The contract lists the fingerprints its caller may replay.**
+
+- `GET /api/integrations/contract` listed every fingerprint the app serves under `fingerprints`, whoever asked: it compiled the caller's policy and then kept every entry. It lists the reads and writes the caller's own policy can touch now, as vex's discovery does for that policy.
+- **Asked with no credential, it lists what `public` may replay.** An integration's author asks with the integration's key and `x-nisc-acts-for`, and reads what the integration's actor reaches.
+- Intake is as it was: it admits an endpoint that names any fingerprint the app serves. Whether a call is served was, and is, decided by the caller's policy when it is made.
