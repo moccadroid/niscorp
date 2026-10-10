@@ -23,8 +23,7 @@ import type { TerminalSlotWrapper } from './slots';
 // drafts survive every update.
 // ═══════════════════════════════════════════════════════════
 
-export { terminalFrame } from './frame';
-export { TerminalApiKey, registerWireSlots } from './slots';
+export { TerminalApiKey } from './slots';
 export type { TerminalSlotWrapper, TerminalSlotWrapperProps } from './slots';
 
 export type VueTargetConfig = {

@@ -343,3 +343,10 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 - `onQuit` was called whenever the ink app unmounted, so a host that destroyed the terminal itself (`terminal.destroy()`, a swap to another target) was told that somebody quit. A handler that ends the process ended it on a swap. `onQuit` is not called for a destroy now, as `ttyTarget`'s never was.
 - A host that relied on `onQuit` to clean up after its own `destroy()` does that cleanup where it calls `destroy()`. relay and lyceum did not rely on it.
 - A component of the kit that throws while ink draws it ends the ink app, and ink says so by rejecting. Nothing handled that: the rejection reached the process, and Node ends a process on a rejection nobody handles, with every other terminal in it (a host that serves terminals over ssh has one for each person). It is logged (`[moss/ink] the terminal ended on an error:`) and reported through `onQuit` now, like a quit: that terminal ends, and the process and the others go on.
+
+**The client and terminal entries export what an app calls: six names leave.**
+
+- `@niscorp/moss/client` loses `SNAPSHOT_ELEMENT_ID` and the type `WireTokenStore`. The id is read by `readDocumentSnapshot()` and written by `embedSnapshot` (main entry): call those. The type is `WireEnv['tokens']`.
+- `@niscorp/moss/terminal/react` loses `registerWireSlots` and the type `WireSlotOptions`. `reactTarget`, `renderSnapshot` (`/terminal/react/server`) and `inkTarget` register the wire slots on the registry they are handed: call one of those. A kit that wants its own element around a canvas wraps the slot moss registered, read back with `registry.get('CanvasSlot')` once the target is made, as lyceum's does.
+- `@niscorp/moss/terminal/vue` loses `registerWireSlots` and `terminalFrame`: `vueTarget` and `renderSnapshot` (`/terminal/vue/server`) are the two things they were for.
+- Nothing in this repository imported any of the six. What each entry exports now is in `packages/moss/api.txt`: 104 names across moss's entries, where there were 110.

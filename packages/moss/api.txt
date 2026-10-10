@@ -49,13 +49,11 @@
 . tokenFromCookie
 . verifyApp
 ./client DocumentSnapshot
-./client SNAPSHOT_ELEMENT_ID
 ./client Wire
 ./client WireConfig
 ./client WireEnv
 ./client WireSnapshot
 ./client WireStatus
-./client WireTokenStore
 ./client browserEnv
 ./client createWire
 ./client readDocumentSnapshot
@@ -86,9 +84,7 @@
 ./terminal/react TerminalApiContext
 ./terminal/react TerminalSlotWrapper
 ./terminal/react TerminalSlotWrapperProps
-./terminal/react WireSlotOptions
 ./terminal/react reactTarget
-./terminal/react registerWireSlots
 ./terminal/react/server RenderSnapshotConfig
 ./terminal/react/server renderSnapshot
 ./terminal/tty TtyTargetConfig
@@ -97,8 +93,6 @@
 ./terminal/vue TerminalSlotWrapper
 ./terminal/vue TerminalSlotWrapperProps
 ./terminal/vue VueTargetConfig
-./terminal/vue registerWireSlots
-./terminal/vue terminalFrame
 ./terminal/vue vueTarget
 ./terminal/vue/server RenderSnapshotConfig
 ./terminal/vue/server renderSnapshot

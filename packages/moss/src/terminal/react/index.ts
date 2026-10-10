@@ -17,8 +17,10 @@ import type { TerminalSlotWrapper } from './slots';
 // ./frame, shared with the other react-shaped target (terminal/ink).
 // ═══════════════════════════════════════════════════════════
 
-export { TerminalApiContext, registerWireSlots } from './slots';
-export type { TerminalSlotWrapper, TerminalSlotWrapperProps, WireSlotOptions } from './slots';
+// What a kit component reads the wire through: what this target renders
+// against, the connection's status on it.
+export { TerminalApiContext } from './slots';
+export type { TerminalSlotWrapper, TerminalSlotWrapperProps } from './slots';
 
 export const reactTarget = (config: { root: HTMLElement; registry: ComponentRegistry<NovaComponent>; slotWrapper?: TerminalSlotWrapper }): Target => {
   const { root, registry, slotWrapper } = config;

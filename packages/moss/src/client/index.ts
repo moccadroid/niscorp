@@ -14,10 +14,8 @@ export { createWire } from './wire';
 export type { Wire, WireConfig, WireStatus } from './wire';
 export type { WireSnapshot } from './screen';
 export { browserEnv } from './env';
-export type { WireEnv, WireTokenStore } from './env';
+export type { WireEnv } from './env';
 export { readDocumentSnapshot } from './document';
-// What a server-rendered document carries beside its HTML, and the id of the
-// element it rides in. The server writes both and `readDocumentSnapshot` reads
-// them, so they are the protocol's.
-export { SNAPSHOT_ELEMENT_ID } from '../protocol';
+// What a server-rendered document carries beside its HTML. The server writes
+// it and `readDocumentSnapshot` reads it, so its shape is the protocol's.
 export type { DocumentSnapshot } from '../protocol';
