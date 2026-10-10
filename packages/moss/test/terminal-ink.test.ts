@@ -2,6 +2,7 @@ import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { Text } from 'ink';
+import { defaultRegistry } from '@niscorp/nova/adapters/ink';
 import type { NovaEvent, RenderComponentNode, RenderNode } from '@niscorp/nova';
 import { inkTarget } from '../src/terminal/ink';
 import type { InkTargetConfig } from '../src/terminal/ink';
@@ -78,7 +79,7 @@ afterEach(() => {
   for (const mount of mounts.splice(0)) mount.destroy();
 });
 
-const harness = (trees: Record<string, RenderNode[]>, options: { frame?: RenderNode[]; status?: TerminalApi['status'] } & Pick<InkTargetConfig, 'slotWrapper'> = {}) => {
+const harness = (trees: Record<string, RenderNode[]>, options: { frame?: RenderNode[]; status?: TerminalApi['status'] } & Pick<InkTargetConfig, 'slotWrapper' | 'registry'> = {}) => {
   const dispatched: { canvas: string; event: NovaEvent }[] = [];
   const published: { channel: string; payload?: unknown }[] = [];
   const { frame = FRAME, status = () => 'open', ...config } = options;
@@ -261,6 +262,18 @@ describe('the ink target — the focus ring and leaving', () => {
     await t.shows('[1]');
     await t.press('\u0003');
     await until(() => t.quit.mock.calls.length === 1, 'the host is told');
+  });
+
+  // A quit is the person at the keyboard leaving. A destroy is the host's own
+  // doing (a swap to another target, a connection it is ending): told of it as
+  // a quit, a host whose quit handler ends the process ends it on a swap.
+  it('destroy is not reported to the host as a quit', async () => {
+    const t = harness({ main: [button('save', 'Save')] });
+    await t.shows('[1]');
+    t.mount.destroy();
+    mounts.splice(0);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(t.quit).not.toHaveBeenCalled();
   });
 
   it('destroy takes the screen down: a later update paints nothing', async () => {

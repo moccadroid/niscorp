@@ -337,3 +337,8 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 
 - `inkTarget` acts on a typed number: `12` clicks what is marked `[12]`. It read one digit for each key it was handed, and two keys pressed in turn can be handed over as one (a slow link, an ssh session, a paste): those were dropped, and nothing happened. They are read as the number they spell.
 - An app has nothing to change.
+
+**`inkTarget`'s `onQuit` is the terminal ending, and not the host destroying it.**
+
+- `onQuit` was called whenever the ink app unmounted, so a host that destroyed the terminal itself (`terminal.destroy()`, a swap to another target) was told that somebody quit. A handler that ends the process ended it on a swap. `onQuit` is not called for a destroy now, as `ttyTarget`'s never was.
+- A host that relied on `onQuit` to clean up after its own `destroy()` does that cleanup where it calls `destroy()`. relay and lyceum did not rely on it.

@@ -89,12 +89,21 @@ export const inkTarget = (config: InkTargetConfig = {}): Target => (api) => {
     exitOnCtrlC: true,
     patchConsole: config.patchConsole ?? true,
   });
-  void instance.waitUntilExit().then(() => config.onQuit?.());
+  // A quit (Ctrl+C) is the person leaving, and the host's to hear: it owns the
+  // wire and the process. A destroy is the host's own doing (a swap, a
+  // connection it is closing), and it is not told of what it did itself.
+  let destroyed = false;
+  void instance.waitUntilExit().then(() => {
+    if (!destroyed) config.onQuit?.();
+  });
 
   // The conductor drives re-render: each `update` re-reads api.frame() and
   // the canvas trees, and React reconciles (focus survives by node key).
   return {
     update: () => instance.rerender(createElement(Frame)),
-    destroy: () => instance.unmount(),
+    destroy: () => {
+      destroyed = true;
+      instance.unmount();
+    },
   };
 };
