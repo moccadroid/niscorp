@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DefinitionValidationError } from '@niscorp/nova';
 import { createSocket } from '../src/socket';
-import type { Connection, SocketContext } from '../src/socket';
+import type { Connection, SocketConfig } from '../src/socket';
 import { CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, CLOSE_SHELL_FAILED, CLOSE_PROTOCOL_MISMATCH, PROTOCOL, PROTOCOL_MIN, ServerMessageSchema, offerToken } from '../src/protocol';
 import type { ServerMessage } from '../src/protocol';
 import type { ShellHost, ShellSession } from '../src/shells';
@@ -83,7 +83,7 @@ const hostFor = (session: ShellSession): ShellHost => ({
   deliver: () => false,
 });
 
-const ctxWith = (over: Partial<SocketContext> = {}): SocketContext => ({
+const ctxWith = (over: Partial<SocketConfig> = {}): SocketConfig => ({
   session: (token) => (token === 'good' ? 'usr_1' : null),
   catalog: () => CATALOG,
   ...over,
@@ -389,7 +389,7 @@ describe('socket — the authority channel', () => {
 
 describe('socket — revalidating a live connection', () => {
   // A verifier an app could plausibly write: tokens resolve until they don't.
-  const expiring = (): { verify: SocketContext['session']; expire: () => void; asked: () => number } => {
+  const expiring = (): { verify: SocketConfig['session']; expire: () => void; asked: () => number } => {
     let alive = true;
     let asked = 0;
     return {
@@ -616,10 +616,10 @@ describe('socket — a refusal does not carry the error that caused it', () => {
   const INTERNAL = 'connect ECONNREFUSED 10.1.2.3:5432 — password authentication failed for user "moss_rw"';
 
   it.each([
-    ['the verifier throwing an Error', (): SocketContext => ctxWith({ session: () => { throw new Error(INTERNAL); } })],
-    ['the verifier throwing something that is not an Error', (): SocketContext => ctxWith({ session: () => { throw INTERNAL; } })],
-    ['the catalog throwing', (): SocketContext => ctxWith({ catalog: () => { throw new Error(INTERNAL); } })],
-    ['the shell build throwing', (): SocketContext => ctxWith({ shells: { ...hostFor(recordingSession()), session: async () => { throw new Error(INTERNAL); } } })],
+    ['the verifier throwing an Error', (): SocketConfig => ctxWith({ session: () => { throw new Error(INTERNAL); } })],
+    ['the verifier throwing something that is not an Error', (): SocketConfig => ctxWith({ session: () => { throw INTERNAL; } })],
+    ['the catalog throwing', (): SocketConfig => ctxWith({ catalog: () => { throw new Error(INTERNAL); } })],
+    ['the shell build throwing', (): SocketConfig => ctxWith({ shells: { ...hostFor(recordingSession()), session: async () => { throw new Error(INTERNAL); } } })],
   ])('%s: the terminal reads a refusal and nothing of why; the log has it', async (_label, context) => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     const conn = new FakeConnection();

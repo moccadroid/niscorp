@@ -7,7 +7,7 @@ import { DEFAULT_TOKEN_KEY, sessionNameOf } from '../protocol';
 // browser does, in a cookie no script can read, and sends it by itself with
 // the two requests that need to know who is asking — the page, and the
 // upgrade that opens the socket. The server writes it in its answer to that
-// upgrade (../socket.ts), or to a sign-in the app answers over HTTP
+// upgrade (../socket), or to a sign-in the app answers over HTTP
 // (`sessionCookies`, below). Any other terminal — a process, a page served
 // from somewhere else — holds its own token and offers it, as before.
 //

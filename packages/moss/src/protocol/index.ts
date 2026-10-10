@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // The protocol — what both ends of the wire agree on.
 //
-// The server (../socket.ts, ../shells) and the terminal (../client) are
+// The server (../socket, ../shells) and the terminal (../client) are
 // built and shipped apart, and a browser may run a terminal older than the
 // server it reaches. So whatever one end writes for the other to read is said
 // here, once: how a connection is opened and ended, the messages on it, the

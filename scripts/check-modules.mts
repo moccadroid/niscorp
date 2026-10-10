@@ -66,6 +66,9 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       // Not `data`: what the feature reads and writes it hands over as entries
       // and replays through a seam, so it imports nothing of the data module.
       integrations: ['runtime', 'feature', 'manifest'],
+      // How it reaches them live. Not `manifest`: what somebody holds is a
+      // function it is handed, and so is where a session comes from.
+      socket: ['runtime', 'protocol', 'identity', 'shells'],
       client: ['protocol'],
       terminal: ['client'],
     },
@@ -76,11 +79,10 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       'node.ts',
       'pages.ts',
       'server.ts',
-      'socket.ts',
       'tide.ts',
       'vite.ts',
     ],
-    finished: ['runtime', 'protocol', 'feature', 'identity', 'manifest', 'data', 'shells', 'integrations', 'client', 'terminal'],
+    finished: ['runtime', 'protocol', 'feature', 'identity', 'manifest', 'data', 'shells', 'integrations', 'socket', 'client', 'terminal'],
     features: ['integrations'],
   },
 };

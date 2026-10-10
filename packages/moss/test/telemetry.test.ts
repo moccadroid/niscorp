@@ -21,7 +21,7 @@ import { createForwarder } from '../src/integrations/forward';
 import type { FoundIntegration } from '../src/integrations/registry';
 import { createAssertionSigner } from '../src/integrations/credentials';
 import { createSocket } from '../src/socket';
-import type { Connection, SocketContext } from '../src/socket';
+import type { Connection, SocketConfig } from '../src/socket';
 import { PROTOCOL, offerToken } from '../src/protocol';
 import type { ServerMessage } from '../src/protocol';
 import type { NiscApp } from '../src/manifest';
@@ -97,7 +97,7 @@ describe('fn.call', () => {
 
 // ── integration.call: the outbound seam, refusals included. ──────────────────
 describe('integration.call', () => {
-  const world = async (over: { status?: string; telemetry?: SocketContext['telemetry'] } = {}) => {
+  const world = async (over: { status?: string; telemetry?: SocketConfig['telemetry'] } = {}) => {
     const acme: FoundIntegration = { url: 'https://acme.example', status: over.status ?? 'approved', reach: {}, frames: {} };
     const signer = createAssertionSigner();
     const call = callIntegrationWith({
@@ -197,7 +197,7 @@ const fakeConnection = (): Connection & { sent: ServerMessage[] } => {
 };
 
 describe('socket telemetry', () => {
-  const ctxWith = (telemetry: SocketContext['telemetry']): SocketContext => ({
+  const ctxWith = (telemetry: SocketConfig['telemetry']): SocketConfig => ({
     session: (token) => (token === 'good' ? 'usr_1' : null),
     catalog: () => ({ ids: [], hash: 'h' }),
     telemetry,

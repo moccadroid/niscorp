@@ -50,7 +50,7 @@ const grant = (standing: Standing, token: string): void => {
   const message = JSON.stringify({ type: 'session', token } satisfies ServerMessage);
   for (const connection of standing.live?.connections ?? []) {
     if (connection.seal === undefined) connection.send(message);
-    // its browser keeps the session: sealed, so the page that carries it back cannot open it (../socket.ts)
+    // its browser keeps the session: sealed, so the page that carries it back cannot open it (../socket)
     else {
       void connection.seal(token).then(
         (sealed) => connection.send(JSON.stringify({ type: 'session', sealed } satisfies ServerMessage)),
