@@ -36,8 +36,10 @@
 // is what an app calls, and `packages/moss/api.txt` lists it. Everything else
 // in this directory is reached by the feature itself.
 //
-// This module imports `runtime`, `feature`, `manifest` and `data`. Nothing of
-// moss's core imports it: `pnpm check:modules` fails if something does.
+// This module imports `runtime`, `feature` and `manifest`. It imports nothing
+// of `data`: what it reads and writes it authors as vex entries (./entries.ts)
+// and replays through the seam it is handed. Nothing of moss's core imports
+// it: `pnpm check:modules` fails if something does.
 
 export type { CallIntegration } from './call';
 export { createAssertionSigner } from './credentials';

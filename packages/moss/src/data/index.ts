@@ -41,7 +41,6 @@
 export { createData } from './data';
 export type { Data, DataConfig, DataRoutesConfig } from './data';
 export type { ExecuteAs } from './execute-as';
-export type { OwnEntries, Replay } from './own-entries';
 export { createWireFollower } from './follow';
 export { featureTablesOf, migrateTables } from './migrate';
 export type { TablesReport } from './migrate';
