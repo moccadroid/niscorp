@@ -545,6 +545,99 @@ describe('socket — revalidating a live connection', () => {
       vi.useRealTimers();
     }
   });
+
+  // A pass asks the verifier about every connection, one after another. The
+  // timer started the next pass whether or not that one had finished, so a
+  // verifier that slowed down was asked more the slower it got.
+  it('a pass that is still asking when the next one is due is not joined by a second', async () => {
+    vi.useFakeTimers();
+    try {
+      let asking = 0;
+      let most = 0;
+      const slow = async (): Promise<string> => {
+        asking += 1;
+        most = Math.max(most, asking);
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        asking -= 1;
+        return 'usr_1';
+      };
+      let admitted = false;
+      const accept = createSocket(ctxWith({ session: (token) => (admitted ? slow() : token === 'good' ? 'usr_1' : null), revalidateMs: 1000 }));
+      await accept(SOCKET, new FakeConnection().offering('good'));
+      admitted = true;
+
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(most).toBe(1);
+      accept.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Nobody is closed on a verifier that cannot be asked. That it could not be
+  // asked is still something a deployment has to be able to read: said once
+  // for a pass, with the error, and not once for each connection.
+  it('a verifier that cannot be asked is said in the log, once for a pass', async () => {
+    vi.useFakeTimers();
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      let down = false;
+      const accept = createSocket(
+        ctxWith({
+          session: () => {
+            if (down) throw new Error('the session store is unreachable');
+            return 'usr_1';
+          },
+          revalidateMs: 1000,
+        }),
+      );
+      const connections = [new FakeConnection(), new FakeConnection(), new FakeConnection()];
+      for (const conn of connections) await accept(SOCKET, conn.offering('good'));
+
+      down = true;
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(logged).toHaveBeenCalledTimes(1);
+      expect(String(logged.mock.calls[0]?.[0])).toContain('3 of 3');
+      expect(logged.mock.calls[0]?.some((part) => part instanceof Error && part.message === 'the session store is unreachable')).toBe(true);
+      for (const conn of connections) expect(conn.closed).toBeUndefined();
+      accept.stop();
+    } finally {
+      logged.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  // A connection whose transport throws when it is told (it is half gone) was
+  // still in the map afterwards, so every pass threw on it again, at the same
+  // place: no connection after it was ever asked about, or closed.
+  it('a connection that cannot be told it expired does not keep the ones after it open', async () => {
+    vi.useFakeTimers();
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const auth = expiring();
+      const accept = createSocket(ctxWith({ session: auth.verify, revalidateMs: 1000 }));
+      const gone = new FakeConnection();
+      const next = new FakeConnection();
+      await accept(SOCKET, gone.offering('good'));
+      await accept(SOCKET, next.offering('good'));
+      gone.send = () => {
+        throw new Error('the socket is not open');
+      };
+
+      auth.expire();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(next.closed?.code).toBe(CLOSE_INVALID_TOKEN);
+      // the one that could not be told is closed all the same, and not asked about again
+      expect(gone.closed?.code).toBe(CLOSE_INVALID_TOKEN);
+      const before = auth.asked();
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(auth.asked()).toBe(before);
+      accept.stop();
+    } finally {
+      logged.mockRestore();
+      vi.useRealTimers();
+    }
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════

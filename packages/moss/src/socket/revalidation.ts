@@ -44,23 +44,41 @@ export const createRevalidation = (config: Pick<SocketConfig, 'session' | 'reval
   const live = new Map<Connection, Credential>();
 
   const expire = (connection: Connection): void => {
+    // Forgotten FIRST. A connection that is half gone may throw when it is
+    // told, and one still in the map is asked about, and told, on every pass
+    // after this one.
+    live.delete(connection);
     // Diagnostics before authority, as at upgrade — the close code is what
     // the terminal acts on; this is what a person reads in a log.
-    connection.send(JSON.stringify({ type: 'error', code: 'invalid_token', message: 'The session token no longer resolves to this principal.' } satisfies ServerMessage));
-    connection.close(CLOSE_INVALID_TOKEN, 'session expired');
-    live.delete(connection);
+    const told = (): void => connection.send(JSON.stringify({ type: 'error', code: 'invalid_token', message: 'The session token no longer resolves to this principal.' } satisfies ServerMessage));
+    const closed = (): void => connection.close(CLOSE_INVALID_TOKEN, 'session expired');
+    // Each on its own, so a connection that cannot be told is closed all the
+    // same. And nothing leaves a pass: it runs off a timer, where a throw is
+    // an unhandled rejection and Node ends the process, and the connections
+    // after this one are still to be asked about.
+    for (const step of [told, closed]) {
+      try {
+        step();
+      } catch (error) {
+        console.error('[moss/socket] a connection whose session expired could not be told so or closed, and is let go:', error);
+      }
+    }
   };
 
   const revalidate = async (): Promise<void> => {
+    let asked = 0;
+    const unanswered: unknown[] = [];
     for (const [connection, credential] of [...live]) {
       if (credential === null) continue; // anonymous — nothing to expire
+      asked += 1;
       let resolved: string | null;
       try {
         resolved = await config.session(credential.token);
-      } catch {
+      } catch (error) {
         // The verifier is unreachable — a database blip, a network hiccup.
         // That is not evidence a session ended, and signing everybody out on
         // it would turn a transient fault into an outage. Ask again next pass.
+        unanswered.push(error);
         continue;
       }
       // Unchanged is the overwhelmingly common answer. A token that stops
@@ -70,12 +88,36 @@ export const createRevalidation = (config: Pick<SocketConfig, 'session' | 'reval
       if (!live.has(connection)) continue; // it closed while we were awaiting
       expire(connection);
     }
+    // SAID, once for the pass and not once for each connection: with the
+    // verifier down that would be a line for everybody signed in, every pass.
+    // The first error stands for the rest; they are one outage.
+    if (unanswered.length > 0) {
+      console.error(`[moss/socket] the session verifier could not be asked about ${unanswered.length} of ${asked} connection(s). They stay open and are asked again:`, unanswered[0]);
+    }
+  };
+
+  // ONE PASS AT A TIME. A pass asks about every connection in turn, and takes
+  // as long as the verifier does. The timer does not wait for it: a pass begun
+  // while one was still asking doubled what a slow verifier was asked, and the
+  // one after that tripled it. A pass that is due while one runs is skipped;
+  // the next tick asks again.
+  let passing = false;
+  const pass = async (): Promise<void> => {
+    if (passing) return;
+    passing = true;
+    try {
+      await revalidate();
+    } catch (error) {
+      console.error('[moss/socket] a revalidation pass failed, and the next one starts over:', error);
+    } finally {
+      passing = false;
+    }
   };
 
   const revalidateMs = config.revalidateMs ?? DEFAULT_REVALIDATE_MS;
   let sweeper: ReturnType<typeof setInterval> | undefined;
   if (revalidateMs > 0 && Number.isFinite(revalidateMs)) {
-    sweeper = setInterval(() => void revalidate(), revalidateMs);
+    sweeper = setInterval(() => void pass(), revalidateMs);
     // Revalidation must never be the reason a process stays alive.
     sweeper.unref?.();
   }

@@ -971,7 +971,12 @@ measures the end.
   - Anonymous connections are never revalidated: nothing they hold can expire.
   - A verifier that **throws** is a fault, not a sign-out — the connection is
     left alone and asked again next pass, so a database blip cannot become an
-    outage. Only an explicit `null` (or a changed principal) closes.
+    outage. Only an explicit `null` (or a changed principal) closes. That it
+    threw is logged, once for a pass: how many connections could not be asked
+    about, and the first error.
+  - One pass at a time: a pass asks about every connection in turn, and one
+    that is due while another is still asking is skipped. A slow verifier is
+    not asked more the slower it gets.
   - Without this the socket was the asymmetry: the HTTP surfaces re-ask on
     every request, so an expired credential left the socket open and rendering
     while every endpoint the server shell called came back 401 — a live

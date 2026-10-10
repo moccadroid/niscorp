@@ -214,3 +214,10 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 
 - Opening a session waits twice: for what somebody holds, then for their shell to be built. A terminal that left in between (a tab closed while its shell was built, a reconnect that gave up) was attached to the shell all the same, and on Node nothing detached it afterwards: `ws` tells a close to whoever is listening when it happens, and the socket started listening after the second wait. A signed-in person's shell then counted a terminal that was not there and was never swept as idle (`runtime.shellIdleMs`); a shell built for nobody was never disposed. The close is heard before either wait now. A connection that closed while its catalog was asked is not handed to a shell host; one that closed while its shell was built is not attached, and the shell idles, or is disposed, at once.
 - A transport's `onClose` is called once for a connection, where it was called up to three times. An app and a transport have nothing to change.
+
+**A live connection's credential is asked about by one pass at a time, and a verifier that cannot be asked is in the log.**
+
+- Every `sessionRevalidateMs` the socket asks `session` about each signed-in connection, one after another. The timer started the next pass whether or not that one had finished, so a verifier that took longer than the interval was asked by two passes at once, then three. A pass that is due while one is still asking is skipped now.
+- A verifier that throws leaves the connection open, as before. That it threw was dropped without a word; it is logged, once for a pass, with how many connections could not be asked about and the first error.
+- A connection whose transport throws when it is told its session expired stayed in the list, so every later pass threw at the same place: no connection after it was asked about again, and the throw was an unhandled rejection. It is forgotten first, closed even if it cannot be told, and what it threw is logged.
+- An app has nothing to change.
