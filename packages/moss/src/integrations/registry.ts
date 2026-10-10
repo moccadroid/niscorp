@@ -22,9 +22,7 @@ import { reachOf } from './reach';
 
 // ── what a replay answers ────────────────────────────────────
 //
-// A read answers its rows. What a bundle declared (its capabilities, its
-// documents) is carried here and never read: each is held to being a list of
-// objects and no further, and one that is not reads as empty.
+// A read answers its rows: a list, whatever is in it.
 const rowsOf = (answered: unknown): unknown[] => z.array(z.unknown()).parse(answered);
 
 // EVERY ROW OF A LIST. A list entry answers one page, in the order of its key,
@@ -36,6 +34,9 @@ const everyRow = async <Row>(row: z.ZodType<Row>, page: (after: Row | undefined)
   return rows.length < PAGE || last === undefined ? rows : [...rows, ...(await everyRow(row, page, last))];
 };
 
+// A ROW, READ WHERE IT LEAVES THE DATABASE. What a bundle declared (its
+// capabilities, its documents) is carried here and never read: each is held to
+// being a list of objects and no further, and one that is not reads as empty.
 const text = z
   .string()
   .nullish()
