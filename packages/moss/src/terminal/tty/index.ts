@@ -1,10 +1,13 @@
 import { createInterface } from 'node:readline';
 import { createTtyView } from '@niscorp/nova/adapters/tty';
-import type { TtyComponent, TtyFrame, TtyInteractive } from '@niscorp/nova/adapters/tty';
+import type { TtyComponent, TtyFrame } from '@niscorp/nova/adapters/tty';
 import { defaultRegistry, fallback as defaultFallback } from '@niscorp/nova/adapters/tty/components';
-import type { ComponentRegistry, NovaEvent } from '@niscorp/nova';
+import type { ComponentRegistry } from '@niscorp/nova';
 import type { WireStatus } from '../../client';
 import type { Target } from '../index';
+import { runLine } from './commands';
+import { createFocus } from './focus';
+import { createLinkReport } from './link';
 
 // ═══════════════════════════════════════════════════════════
 // @niscorp/moss/terminal/tty — the line-terminal render target: a REPL over
@@ -13,12 +16,10 @@ import type { Target } from '../index';
 // them onto the adapter's numbered interactives with the same event
 // vocabulary every other target dispatches (`ui:click`, `ui:model`, `ui:key`).
 //
-// The input scheme is "numbers act, words fill": a bare number taps [n] —
-// click a button or row, flip a toggle, FOCUS an input (the next line typed
-// is its value, verbatim; an empty line cancels) — and bare words go straight
-// into the only input on screen. Command words (refs, help, quit, …) are the
-// escape hatch, not the default. All of this is target policy: the wire, the
-// server, and the apps never see anything but ordinary events.
+// What a typed line does is ./commands.ts ("numbers act, words fill"), the
+// focused input is ./focus.ts, what is said of the connection is ./link.ts.
+// All of it is target policy: the wire, the server, and the apps never see
+// anything but ordinary events.
 //
 // Runs on anything with a Readable/Writable pair: a real TTY, a test's
 // PassThrough, a pipe. Node-shaped code lives here, never in the adapter.
@@ -43,19 +44,6 @@ export type TtyTargetConfig = {
   prompt?: string;
 };
 
-const HELP = [
-  'type to act:',
-  '  <n>       tap [n] — click a button or row, flip a toggle, focus an input',
-  '  <words>   with one input on screen, typed words go straight into it',
-  '  …while an input is focused, the next line is its value; empty line cancels',
-  'commands:',
-  '  click/set/toggle/key <n> …   the explicit forms of the above',
-  '  refs                         list everything actionable',
-  '  show                         reprint the current screen',
-  '  publish <ch> [json]          publish on a channel',
-  '  quit                         leave',
-].join('\n');
-
 export const ttyTarget = (config: TtyTargetConfig): Target => (api) => {
   const { input, output } = config;
   const view = createTtyView(config.registry ?? defaultRegistry(), api, { fallback: config.fallback ?? defaultFallback });
@@ -64,72 +52,20 @@ export const ttyTarget = (config: TtyTargetConfig): Target => (api) => {
 
   let last: TtyFrame = { text: '', interactives: [] };
   let timer: ReturnType<typeof setTimeout> | undefined;
-  // The focused input, tracked by identity (canvas + ref), never by index —
-  // a repaint renumbers, identity survives the server echo.
-  let focus: { canvas: string; ref: string; name: string } | null = null;
 
   const rl = createInterface({ input, output, prompt: basePrompt });
   const say = (text: string): void => void output.write(`${text}\n`);
-
-  const valueText = (item: TtyInteractive): string =>
-    typeof item.value === 'string' || typeof item.value === 'number' ? String(item.value) : '';
-  const focusPrompt = (item: TtyInteractive): string => `${item.path ?? item.ref} ⟨${valueText(item)}⟩ › `;
-
-  const findFocused = (): TtyInteractive | undefined =>
-    focus === null
-      ? undefined
-      : last.interactives.find((item) => item.kind === 'model' && item.canvas === focus?.canvas && item.ref === focus?.ref);
-
-  const enterFocus = (item: TtyInteractive): void => {
-    focus = { canvas: item.canvas, ref: item.ref, name: item.path ?? item.ref };
-    rl.setPrompt(focusPrompt(item));
-    rl.prompt(true);
-  };
-
-  const exitFocus = (): void => {
-    focus = null;
-    rl.setPrompt(basePrompt);
-  };
-
-  // Report real transitions only: up once, down once — never the
-  // closed↔connecting flap of every backoff retry.
-  let link: 'unknown' | 'up' | 'down' | 'incompatible' = 'unknown';
+  const focus = createFocus(rl, basePrompt);
+  const reportLink = createLinkReport(say, () => rl.prompt(true));
   const checkStatus = (): void => {
-    if (config.status === undefined) return;
-    const now = config.status();
-    if (now === 'incompatible') {
-      if (link !== 'incompatible') say('× this terminal and the server speak different protocol versions — update one of them');
-      link = 'incompatible';
-      return;
-    }
-    if (now === 'open' && link !== 'up') {
-      link = 'up';
-      say('✓ connected');
-      rl.prompt(true);
-    } else if (now !== 'open' && link === 'up') {
-      link = 'down';
-      say('× connection lost — retrying');
-      rl.prompt(true);
-    } else if (link === 'unknown') {
-      link = 'down';
-      say('… connecting');
-    }
+    if (config.status !== undefined) reportLink(config.status());
   };
 
   const paint = (force = false): void => {
     const frame = view.render();
     const changed = frame.text !== last.text;
     last = frame;
-    // Focus follows identity across repaints; if the input left the screen
-    // (navigation, sign-out), focus drops with a note instead of swallowing
-    // the next line silently.
-    if (focus !== null) {
-      const still = findFocused();
-      if (still === undefined) {
-        say(`input ${focus.name} left the screen`);
-        exitFocus();
-      } else rl.setPrompt(focusPrompt(still));
-    }
+    focus.follow(last.interactives, say);
     if (!changed && !force) return;
     if (frame.text !== '') say(`\n${frame.text}`);
     rl.prompt(true);
@@ -146,122 +82,10 @@ export const ttyTarget = (config: TtyTargetConfig): Target => (api) => {
     timer = setTimeout(paint, debounceMs);
   };
 
-  // Dispatch for a numbered interactive — the canvas and the instance were
-  // recorded at render time (the instance is the origin: a list canvas has
-  // several live at once); frame chrome ('') dispatches nothing, same as
-  // every other target.
-  const act = (interactive: TtyInteractive, event: NovaEvent): void => {
-    if (interactive.canvas === '') {
-      say(`[${interactive.index}] is frame chrome — it dispatches nothing`);
-      return;
-    }
-    api.dispatch(interactive.canvas, interactive.origin === undefined ? event : { ...event, origin: interactive.origin });
-  };
-
-  const fill = (interactive: TtyInteractive, value: string): void =>
-    act(interactive, { type: 'ui:model', ref: interactive.ref, payload: value });
-
-  const flip = (interactive: TtyInteractive): void =>
-    act(interactive, { type: 'ui:model', ref: interactive.ref, payload: interactive.value !== true });
-
-  // A bare number: act by kind — the tap of this terminal.
-  const tap = (interactive: TtyInteractive): void => {
-    if (interactive.kind === 'model') {
-      enterFocus(interactive);
-      return;
-    }
-    if (interactive.kind === 'toggle') {
-      flip(interactive);
-      return;
-    }
-    act(interactive, interactive.value === undefined
-      ? { type: 'ui:click', ref: interactive.ref }
-      : { type: 'ui:click', ref: interactive.ref, payload: interactive.value });
-  };
-
-  const find = (token: string | undefined): TtyInteractive | undefined => {
-    const index = Number(token);
-    if (!Number.isInteger(index)) return undefined;
-    return last.interactives.find((item) => item.index === index);
-  };
-
-  const onLine = (raw: string): void => {
-    // Focused input: the whole line is the value, verbatim — even words that
-    // look like commands. An empty line cancels.
-    if (focus !== null) {
-      const target = findFocused();
-      if (raw !== '' && target !== undefined) fill(target, raw);
-      exitFocus();
-      rl.prompt();
-      return;
-    }
-
-    const line = raw.trim();
-    if (line === '') {
-      rl.prompt();
-      return;
-    }
-    const [head = '', second, ...restTokens] = line.split(/\s+/);
-    const rest = restTokens.join(' ');
-
-    if (head === 'help') say(HELP);
-    else if (head === 'show') paint(true);
-    else if (head === 'quit' || head === 'exit') {
-      if (config.onQuit !== undefined) config.onQuit();
-      else say('no quit handler — Ctrl+C to leave');
-      return;
-    } else if (head === 'refs') {
-      if (last.interactives.length === 0) say('nothing actionable on screen');
-      for (const item of last.interactives) {
-        const where = item.canvas === '' ? 'frame' : item.canvas;
-        say(`[${item.index}] ${item.kind}  ${item.ref} @${where}  ${item.label}${item.path !== undefined ? `  (${item.path})` : ''}`);
-      }
-    } else if (head === 'publish') {
-      if (second === undefined) say('usage: publish <channel> [json]');
-      else if (rest === '') api.publish(second);
-      else {
-        try {
-          api.publish(second, JSON.parse(rest));
-        } catch {
-          api.publish(second, rest);
-        }
-      }
-    } else if (head === 'set') {
-      const target = find(second);
-      if (target === undefined) say(`no [${second ?? '?'}] on screen — try refs`);
-      else if (target.kind === 'model') {
-        // `set 1 alex` fills; a bare `set 1` focuses instead of sending ''
-        if (rest === '') enterFocus(target);
-        else fill(target, rest);
-      } else if (target.kind === 'toggle') {
-        if (rest === 'true' || rest === 'false') act(target, { type: 'ui:model', ref: target.ref, payload: rest === 'true' });
-        else say(`[${target.index}] is a toggle — use: toggle ${target.index}`);
-      } else say(`[${target.index}] is not an input`);
-    } else if (head === 'toggle') {
-      const target = find(second);
-      if (target === undefined) say(`no [${second ?? '?'}] on screen — try refs`);
-      else if (target.kind === 'toggle') flip(target);
-      else say(`[${target.index}] is not a toggle`);
-    } else if (head === 'key') {
-      const target = find(second);
-      if (target === undefined) say(`no [${second ?? '?'}] on screen — try refs`);
-      else if (target.kind === 'model' && rest !== '') act(target, { type: 'ui:key', ref: target.ref, key: rest });
-      else say('usage: key <n> <key> — on an input');
-    } else if (head === 'click' || /^\d+$/.test(head)) {
-      const target = find(head === 'click' ? second : head);
-      if (target === undefined) say(`no [${head === 'click' ? second ?? '?' : head}] on screen — try refs`);
-      else tap(target);
-    } else {
-      // Not a command and not a number: words fill the only input on screen.
-      const inputs = last.interactives.filter((item) => item.kind === 'model');
-      if (inputs.length === 1 && inputs[0] !== undefined) fill(inputs[0], line);
-      else if (inputs.length === 0) say(`unknown command: ${head} — try help`);
-      else say(`several inputs on screen — pick one: ${inputs.map((item) => `[${item.index}]`).join(' ')}`);
-    }
-    rl.prompt();
-  };
-
-  rl.on('line', onLine);
+  const repl = { api, say, interactives: () => last.interactives, focus, show: () => paint(true), quit: config.onQuit };
+  rl.on('line', (raw: string) => {
+    if (runLine(repl, raw)) rl.prompt();
+  });
   // EOF (Ctrl+D / a closed pipe) means the same as `quit`.
   rl.on('close', () => config.onQuit?.());
 

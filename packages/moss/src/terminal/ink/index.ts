@@ -1,24 +1,16 @@
-import { createElement, useRef, type FC, type ReactNode } from 'react';
-import { render, Text as InkText, useFocusManager, useInput } from 'ink';
+import { createElement, type FC } from 'react';
+import { render, Text as InkText } from 'ink';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
-import {
-  defaultRegistry,
-  fallback as inkFallback,
-  TextWrap,
-  ErrorMarker,
-  CanvasMarkersContext,
-  FrameControlsContext,
-  markerFocusId,
-} from '@niscorp/nova/adapters/ink';
-import { createTtyView } from '@niscorp/nova/adapters/tty';
-import type { TtyInteractive } from '@niscorp/nova/adapters/tty';
-import { defaultRegistry as ttyRegistry, fallback as ttyFallback } from '@niscorp/nova/adapters/tty/components';
+import { defaultRegistry, fallback as inkFallback, TextWrap, ErrorMarker, FrameControlsContext } from '@niscorp/nova/adapters/ink';
 import type { ComponentRegistry } from '@niscorp/nova';
 import type { WireStatus } from '../../client';
 import type { Target } from '../index';
 import { terminalFrame } from '../react/frame';
 import { registerWireSlots } from '../react/slots';
 import type { TerminalSlotWrapper } from '../react/slots';
+import { STATUS_WORDS } from '../status';
+import { createMarks, markerProviders } from './marks';
+import { navOf } from './nav';
 
 // ═══════════════════════════════════════════════════════════
 // @niscorp/moss/terminal/ink — the full-screen terminal render target: nova's
@@ -29,10 +21,10 @@ import type { TerminalSlotWrapper } from '../react/slots';
 // row clicks, a toggle flips, an input takes focus (then typing types; a
 // focused input claims digits as text, so number navigation stands down).
 // The numbering comes from the TTY adapter's walker run over the SAME served
-// trees — one source of truth, so `[7]` is the same thing in the REPL and
-// the TUI. Tab/Shift+Tab and ↑/↓ still walk the focus ring; Enter activates;
-// Ctrl+C leaves. ESM only, like ink. Node-shaped and react-shaped code lives
-// here, never in moss core.
+// trees (./marks.ts), and what a number sends is the REPL's (../numbered.ts).
+// Tab/Shift+Tab and ↑/↓ still walk the focus ring (./nav.ts); Enter
+// activates; Ctrl+C leaves. ESM only, like ink. Node-shaped and react-shaped
+// code lives here, never in moss core.
 // ═══════════════════════════════════════════════════════════
 
 export type InkTargetConfig = {
@@ -55,136 +47,36 @@ export type InkTargetConfig = {
   patchConsole?: boolean;
 };
 
-// How long a typed digit waits for another before acting — only when a
-// longer number is still possible ('1' with 14 interactives on screen).
-const DIGIT_COMMIT_MS = 600;
+// The connection's status, for as long as it is not open.
+const statusLineOf = (status: (() => WireStatus) | undefined): FC => () => {
+  const now = status?.();
+  if (now === undefined || now === 'open') return null;
+  if (now === 'incompatible') return createElement(InkText, { color: 'red' }, STATUS_WORDS.incompatible);
+  return now === 'connecting' ? createElement(InkText, { color: 'yellow' }, STATUS_WORDS.connecting) : createElement(InkText, { color: 'red' }, STATUS_WORDS.lost);
+};
 
 export const inkTarget = (config: InkTargetConfig = {}): Target => (api) => {
   const registry = config.registry ?? defaultRegistry();
-
-  // ── the marker table: the TTY walker over the same trees ──
-  // Pure and cheap; rebuilt at the top of every frame render. Identity for
-  // lookup is (canvas, instance, ref, occurrence) — the instance keeps apart
-  // the live instances of a list canvas, which share refs (a tab bar: every
-  // tab's button is `open`); occurrence disambiguates a table's rows, which
-  // share one rowRef in row order.
-  const indexView = createTtyView(ttyRegistry(), api, { fallback: ttyFallback });
-  const marks = { list: [] as TtyInteractive[], byKey: new Map<string, TtyInteractive>() };
-  const reindex = (): void => {
-    marks.list = indexView.render().interactives;
-    marks.byKey.clear();
-    const seen = new Map<string, number>();
-    for (const item of marks.list) {
-      const base = `${item.canvas}:${item.origin ?? ''}:${item.ref}`;
-      const occurrence = seen.get(base) ?? 0;
-      seen.set(base, occurrence + 1);
-      marks.byKey.set(`${base}#${occurrence}`, item);
-      // click-kinds carry a stable payload — a list's rows share one ref and
-      // differ only by value, so value IS the identity there. Model-kinds'
-      // value changes as you type; they stay occurrence-keyed.
-      if ((item.kind === 'click' || item.kind === 'row') && item.value !== undefined) {
-        marks.byKey.set(`${base}@${JSON.stringify(item.value)}`, item);
-      }
-    }
-  };
-
-  // ink resolves markers per canvas and, inside an action instance, per
-  // instance — the slots' canvasProvider and instanceProvider curry them.
-  const resolverFor = (canvasId: string, instanceId: string) => (ref: string, identity: { value?: unknown; occurrence?: number } = {}) => {
-    const base = `${canvasId}:${instanceId}:${ref}`;
-    if (identity.value !== undefined) {
-      const byValue = marks.byKey.get(`${base}@${JSON.stringify(identity.value)}`);
-      if (byValue !== undefined) return byValue.index;
-    }
-    return marks.byKey.get(`${base}#${identity.occurrence ?? 0}`)?.index;
-  };
-  const CanvasMarkers: FC<{ canvasId: string; children?: ReactNode }> = ({ canvasId, children }) =>
-    createElement(CanvasMarkersContext.Provider, { value: resolverFor(canvasId, '') }, children);
-  const InstanceMarkers: FC<{ canvasId: string; instanceId: string; children?: ReactNode }> = ({ canvasId, instanceId, children }) =>
-    createElement(CanvasMarkersContext.Provider, { value: resolverFor(canvasId, instanceId) }, children);
-
+  const marks = createMarks(api);
   registerWireSlots(registry, {
     slotWrapper: config.slotWrapper,
     fallback: inkFallback,
     textWrapper: TextWrap,
     errorMarker: ErrorMarker,
-    canvasProvider: CanvasMarkers,
-    instanceProvider: InstanceMarkers,
+    ...markerProviders(marks),
   });
 
   // A focused input claims typed digits as text — the kit's Input reports
   // its focus through FrameControls and Nav stands down.
   const typingRef = { current: false };
   const frameControls = { setTyping: (typing: boolean): void => void (typingRef.current = typing) };
-
-  // ↑/↓ walk the focus ring; typed digits address `[n]` directly — click a
-  // button or row, flip a toggle, focus an input. Multi-digit numbers
-  // accumulate; an unambiguous one acts immediately.
-  const Nav: FC = () => {
-    const { focus, focusNext, focusPrevious } = useFocusManager();
-    const buffer = useRef('');
-    const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-    const clearBuffer = (): void => {
-      buffer.current = '';
-      if (timer.current !== undefined) {
-        clearTimeout(timer.current);
-        timer.current = undefined;
-      }
-    };
-    const commit = (): void => {
-      const index = Number(buffer.current);
-      clearBuffer();
-      const item = marks.list.find((entry) => entry.index === index);
-      if (item === undefined || item.canvas === '') return;
-      // focus follows the number for every kind — visible feedback, and for
-      // an input the focus IS the action (typing types from here on)
-      focus(markerFocusId(index));
-      // the instance it sits in is the origin (a list canvas has several live)
-      const origin = item.origin === undefined ? {} : { origin: item.origin };
-      if (item.kind === 'toggle') api.dispatch(item.canvas, { type: 'ui:model', ref: item.ref, payload: item.value !== true, ...origin });
-      else if (item.kind !== 'model')
-        api.dispatch(item.canvas, item.value === undefined ? { type: 'ui:click', ref: item.ref, ...origin } : { type: 'ui:click', ref: item.ref, payload: item.value, ...origin });
-    };
-    useInput((input, key) => {
-      // While an input is focused, vertical arrows belong to it (it forwards
-      // them to the server as ui:key — a palette moves its highlight).
-      if (key.downArrow) {
-        if (!typingRef.current) focusNext();
-        return;
-      }
-      if (key.upArrow) {
-        if (!typingRef.current) focusPrevious();
-        return;
-      }
-      if (typingRef.current) return;
-      if (/^[0-9]$/.test(input) && !key.ctrl && !key.meta) {
-        buffer.current += input;
-        if (timer.current !== undefined) clearTimeout(timer.current);
-        // no longer number is possible → act now; otherwise wait a beat
-        if (Number(buffer.current) * 10 > marks.list.length) commit();
-        else timer.current = setTimeout(commit, DIGIT_COMMIT_MS);
-        return;
-      }
-      if (buffer.current !== '') clearBuffer();
-    });
-    return null;
-  };
-
-  const StatusLine: FC = () => {
-    const status = config.status?.();
-    if (status === undefined || status === 'open') return null;
-    if (status === 'incompatible') {
-      return createElement(InkText, { color: 'red' }, '× this terminal and the server speak different protocol versions — update one of them');
-    }
-    return status === 'connecting'
-      ? createElement(InkText, { color: 'yellow' }, '… connecting')
-      : createElement(InkText, { color: 'red' }, '× connection lost — retrying');
-  };
+  const Nav = navOf({ api, marks, typing: () => typingRef.current });
+  const StatusLine = statusLineOf(config.status);
 
   // Nav and the status line read nothing of nova's: they sit beside the frame,
   // which is the one every react-shaped target draws (../react/frame).
   const Frame: FC = () => {
-    reindex();
+    marks.reindex();
     return createElement(
       FrameControlsContext.Provider,
       { value: frameControls },
