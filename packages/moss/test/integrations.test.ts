@@ -915,12 +915,9 @@ describe('the registry as vex entries — each statement, against a database', (
     expect(await rows(`SELECT status, approved_data FROM integrations WHERE id = 'issued'`)).toEqual([{ status: 'approved', approved_data: [] }]);
   });
 
-  it('10 · set back to pending, with why', async () => {
-    await replay('integrations/set-back-to-pending', { id: 'asking', last_error: 'Error: Refresh refused' });
-    expect(await rows(`SELECT status, approved_data, last_error FROM integrations WHERE id = 'asking'`)).toEqual([
-      { status: 'pending', approved_data: ['members.read', 'bookings.read'], last_error: 'Error: Refresh refused' },
-    ]);
-  });
+  // 10 was the statement that took an approval back when the app could not be
+  // served with it. It is gone with its entry: an approval is verified before
+  // it is written, from what `integrations/actions-of` reads (below).
 
   it('11 · remove: the row goes, and its actions with it', async () => {
     expect(await rows(`SELECT count(*)::int AS n FROM integration_actions WHERE integration_id = 'other'`)).toEqual([{ n: 1 }]);
@@ -1043,6 +1040,16 @@ describe('the registry as vex entries — each statement, against a database', (
         'ext.desk.beta.other',
         'ext.desk.beta.strip',
       ]);
+    });
+
+    it('what one integration shipped, approved or not: what is verified before it is approved', async () => {
+      // gamma is pending, so no list above serves its action.
+      expect(await replay('integrations/actions-of', { id: 'gamma', ...start })).toEqual([
+        { integration_id: 'gamma', action_id: 'ext.desk.gamma.roster', definition: { id: 'ext.desk.gamma.roster', title: 'roster' }, grammar: { 'nisc.nova': 3 } },
+      ]);
+      expect(z.array(z.object({ action_id: z.string() })).parse(await replay('integrations/actions-of', { id: 'alpha', ...start })).map((row) => row.action_id)).toEqual(['ext.desk.alpha.board', 'ext.desk.alpha.roster']);
+      expect(await replay('integrations/actions-of', { id: 'alpha', after_integration: 'alpha', after_action: 'ext.desk.alpha.board' })).toHaveLength(1);
+      expect(await replay('integrations/actions-of', { id: 'ghost', ...start })).toEqual([]);
     });
   });
 });

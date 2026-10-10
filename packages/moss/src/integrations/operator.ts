@@ -11,7 +11,7 @@ import { describePlacements } from './placements';
 import { copyPress } from './press';
 import type { StorePress } from './press';
 import { reachDeclares } from './reach';
-import { approveIntegration, findIntegration, landBundle, listIntegrations, recordFailedImport, removeIntegration, setBackToPending, standingOf } from './registry';
+import { approveIntegration, findIntegration, landBundle, listIntegrations, recordFailedImport, removeIntegration, standingOf, storedActionsOf } from './registry';
 
 // ═══════════════════════════════════════════════════════════════
 // THE OPERATOR SEAM — everything that decides WHICH integrations this
@@ -156,19 +156,22 @@ const register = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
 // still letting an integration name what it needs.
 //
 // Approving is also the moment its actions join the manifest, so this is the
-// second place the candidate set is verified before anything is served.
+// second place the candidate set is verified before anything is written.
+//
+// VERIFIED, THEN WRITTEN. The actions it shipped are read from its rows and
+// laid over the actions in force, and the running manifest says whether the
+// app could be served that way, without switching to it. Refused, nothing is
+// written: the row is as it was. This used to write the approval, hand the
+// actions over, and write the row back when that threw — and a process that
+// died between the two writes left an approved row the next boot refused.
 const approve = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
   routes.post('/integrations/:id/approve', async (c) => {
     const id = c.req.param('id');
+    const refusal = deps.refusalOf({ ...deps.actions(), ...(await storedActionsOf(deps.replay, id, deps.grammars)) });
+    if (refusal !== undefined) return c.json({ message: 'Refused — the app would not serve this.', reasons: [`Error: ${refusal}`] }, 422);
     const requested = await approveIntegration(deps.replay, id);
     if (requested === undefined) return c.json({ message: 'No such integration.' }, 404);
-    try {
-      await deps.reload();
-    } catch (err) {
-      await setBackToPending(deps.replay, id, String(err));
-      await deps.reload();
-      return c.json({ message: 'Refused — the app would not serve this.', reasons: [String(err)] }, 422);
-    }
+    await deps.reload();
     return c.json({ id, status: 'approved', granted: requested });
   });
 };

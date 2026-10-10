@@ -237,17 +237,14 @@ export const landBundle = async (replay: Replay, landing: Landing): Promise<void
 
 // APPROVE: what it asked to read and write becomes what it is granted, and it
 // is served from here on. Answers what was granted. `undefined`: there is no
-// such integration, and nothing was written.
+// such integration, and nothing was written. Whoever calls has asked first
+// whether the app could be served with it (`storedActionsOf`): nothing here
+// takes an approval back.
 export const approveIntegration = async (replay: Replay, id: string): Promise<readonly string[] | undefined> => {
   const asked = RequestedRowSchema.optional().parse(rowsOf(await replay('integrations/requested', { id }))[0]);
   if (asked === undefined) return undefined;
   await replay('integrations/approve', { id, approved_data: asked.requested_data });
   return asked.requested_data;
-};
-
-// An approval the app could not serve is taken back, with why.
-export const setBackToPending = async (replay: Replay, id: string, error: string): Promise<void> => {
-  await replay('integrations/set-back-to-pending', { id, last_error: error });
 };
 
 // The row goes, and its actions with it (the table's own cascade), and with
@@ -314,8 +311,7 @@ const storedAction = (id: string, definition: unknown): ActionDefinition | undef
   return undefined;
 };
 
-export const loadIntegrationActions = async (replay: Replay, upgrader?: Upgrader): Promise<Record<string, ActionDefinition>> => {
-  const rows = await everyRow(StoredActionRowSchema, (after) => replay('integrations/stored-actions', afterAction(after)));
+const actionsIn = (rows: readonly z.infer<typeof StoredActionRowSchema>[], upgrader: Upgrader | undefined): Record<string, ActionDefinition> => {
   const out: Record<string, ActionDefinition> = {};
   const keep = (id: string, definition: unknown): void => {
     const action = storedAction(id, definition);
@@ -337,3 +333,12 @@ export const loadIntegrationActions = async (replay: Replay, upgrader?: Upgrader
   }
   return out;
 };
+
+export const loadIntegrationActions = async (replay: Replay, upgrader?: Upgrader): Promise<Record<string, ActionDefinition>> =>
+  actionsIn(await everyRow(StoredActionRowSchema, (after) => replay('integrations/stored-actions', afterAction(after))), upgrader);
+
+// What ONE integration shipped, approved or not, read the same way: the
+// actions that would join the manifest if it were approved now. This is what
+// is verified before an approval is written.
+export const storedActionsOf = async (replay: Replay, id: string, upgrader?: Upgrader): Promise<Record<string, ActionDefinition>> =>
+  actionsIn(await everyRow(StoredActionRowSchema, (after) => replay('integrations/actions-of', { id, ...afterAction(after) })), upgrader);

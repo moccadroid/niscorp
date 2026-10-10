@@ -33,7 +33,12 @@ const replayOver =
 
 const desk: ActionDefinition = { id: 'ext.desk.belts.roster' };
 
-const world = async (over: { replay?: Replay; who?: (principal: string | null) => Whoever } = {}) => {
+// `refuses` stands in for the running manifest's verification: the sentence a
+// set of actions would be refused with, by `refusalOf` when it is asked and by
+// `replaceActions` when the set is handed over.
+const world = async (
+  over: { replay?: Replay; who?: (principal: string | null) => Whoever; refuses?: (actions: Readonly<Record<string, ActionDefinition>>) => string | undefined } = {},
+) => {
   const said = {
     credentials: new Map<string, (token: string, request: Request) => Promise<CredentialAnswer>>(),
     narrowings: [] as Parameters<FeatureSeams['narrowCatalogs']>[0][],
@@ -66,9 +71,11 @@ const world = async (over: { replay?: Replay; who?: (principal: string | null) =
     holds: () => [],
     actions: () => ({}),
     replaceActions: (source, actions) => {
+      const refusal = over.refuses?.(actions);
+      if (refusal !== undefined) throw new Error(refusal);
       said.replaced.push([source, actions]);
     },
-    refusalOf: () => undefined,
+    refusalOf: (actions) => over.refuses?.(actions),
     loadActionsFrom: (source, load) => {
       said.loaders.set(source, load);
     },
@@ -229,6 +236,67 @@ describe('createIntegrations — started with the seams', () => {
       { after_integration: '', after_action: '' },
       { after_integration: 'belts', after_action: placed[PAGE - 1]?.action_id },
     ]);
+  });
+});
+
+// AN APPROVAL, with the registry held in a map: one integration that was
+// registered and not approved, the action it shipped, and every write that is
+// made, by the fingerprint of its entry.
+describe('the operator approves an integration', () => {
+  const REFUSAL = 'Refresh refused — charter incoherent over the new artifacts:\n  no role grants "ext.desk.belts.roster"';
+  const registered = () => {
+    const held = { status: 'pending', writes: [] as string[] };
+    const shipped = { integration_id: 'belts', action_id: desk.id, definition: desk, grammar: {} };
+    const replay: Replay = async (fingerprint, context) => {
+      const isBelts = context['id'] === 'belts';
+      if (fingerprint === 'integrations/requested') return isBelts ? [{ requested_data: ['people.read'] }] : [];
+      if (fingerprint === 'integrations/actions-of') return isBelts ? [shipped] : [];
+      if (fingerprint === 'integrations/stored-actions') return held.status === 'approved' ? [shipped] : [];
+      if (fingerprint === 'integrations/approve' || fingerprint === 'integrations/set-back-to-pending') {
+        held.writes.push(fingerprint);
+        if (isBelts) held.status = fingerprint === 'integrations/approve' ? 'approved' : 'pending';
+      }
+      return [];
+    };
+    return { held, replay };
+  };
+  const approve = (operator: Hono<FeatureEnv>, id: string): Promise<Response> => Promise.resolve(operator.request(`/integrations/${id}/approve`, { method: 'POST' }));
+
+  it('one the app would not serve is refused before anything is written', async () => {
+    const { held, replay } = registered();
+    const { seams, said, operator } = await world({ replay, refuses: (actions) => (desk.id in actions ? REFUSAL : undefined) });
+    await createIntegrations().start(seams);
+
+    const answered = await approve(operator, 'belts');
+    expect(answered.status).toBe(422);
+    expect(await answered.json()).toEqual({ message: 'Refused — the app would not serve this.', reasons: [`Error: ${REFUSAL}`] });
+    // Nothing was written, so there is nothing to take back: the row is as it
+    // was, and the running manifest was handed nothing.
+    expect(held.writes).toEqual([]);
+    expect(held.status).toBe('pending');
+    expect(said.replaced).toEqual([]);
+  });
+
+  it('one the app would serve is written once, and its actions are handed to the running manifest', async () => {
+    const { held, replay } = registered();
+    const { seams, said, operator } = await world({ replay });
+    await createIntegrations().start(seams);
+
+    const answered = await approve(operator, 'belts');
+    expect(answered.status).toBe(200);
+    expect(await answered.json()).toEqual({ id: 'belts', status: 'approved', granted: ['people.read'] });
+    expect(held.writes).toEqual(['integrations/approve']);
+    expect(said.replaced).toEqual([['integrations', { [desk.id]: desk }]]);
+  });
+
+  it('one that is not there is a 404, and nothing is written', async () => {
+    const { held, replay } = registered();
+    const { seams, operator } = await world({ replay });
+    await createIntegrations().start(seams);
+
+    const answered = await approve(operator, 'ghost');
+    expect(answered.status).toBe(404);
+    expect(held.writes).toEqual([]);
   });
 });
 

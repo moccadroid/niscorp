@@ -158,12 +158,6 @@ const approve: SeedMutation = {
   mutation: { op: 'update', table: 'integrations', set: { status: 'approved', ...fromContext(['approved_data']) }, where: byId },
 };
 
-const setBackToPending: SeedMutation = {
-  fingerprint: 'integrations/set-back-to-pending',
-  intent: 'Take an approval back, with why',
-  mutation: { op: 'update', table: 'integrations', set: { status: 'pending', ...fromContext(['last_error']) }, where: byId },
-};
-
 const remove: SeedMutation = {
   fingerprint: 'integrations/remove',
   intent: 'Remove an integration; its actions go with the row',
@@ -256,6 +250,20 @@ const storedActions: SeedEntry = {
   },
 };
 
+// What one integration shipped, approved or not: read before it is approved,
+// to ask whether the app could be served with it.
+const actionsOf: SeedEntry = {
+  fingerprint: 'integrations/actions-of',
+  intent: 'The stored actions of one integration, whether or not it is approved, a page at a time',
+  dsl: {
+    from: ['integration_actions'],
+    fields: ['integration_actions.integration_id', 'integration_actions.action_id', 'integration_actions.definition', 'integration_actions.grammar'],
+    filter: { and: [{ eq: ['integration_actions.integration_id', { $context: 'id' }] }, afterAction] },
+    sort: byActionKey,
+    limit: PAGE,
+  },
+};
+
 export const REGISTRY_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [
   find,
   standing,
@@ -265,11 +273,11 @@ export const REGISTRY_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [
   land,
   landAndKeepKey,
   approve,
-  setBackToPending,
   remove,
   list,
   actionCounts,
   attachments,
   placements,
   storedActions,
+  actionsOf,
 ];
