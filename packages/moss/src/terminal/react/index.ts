@@ -5,6 +5,7 @@ import type { ComponentRegistry } from '@niscorp/nova';
 import { holdsDrawnScreen } from '../drawn';
 import type { Target } from '../index';
 import { terminalFrame } from './frame';
+import { hideStatus, showStatus } from '../status';
 import { registerWireSlots } from './slots';
 import type { TerminalSlotWrapper } from './slots';
 
@@ -28,9 +29,19 @@ export const reactTarget = (config: { root: HTMLElement; registry: ComponentRegi
     // The conductor drives re-render: each `update` re-reads api.frame() and
     // the canvas trees, and React reconciles (preserving focus by node key).
     const adopts = holdsDrawnScreen(root, api);
+    showStatus(root, api.status());
     const reactRoot = adopts ? hydrateRoot(root, createElement(Frame)) : createRoot(root);
-    const render = (): void => reactRoot.render(createElement(Frame));
+    const render = (): void => {
+      showStatus(root, api.status());
+      reactRoot.render(createElement(Frame));
+    };
     if (!adopts) render();
-    return { update: render, destroy: () => reactRoot.unmount() };
+    return {
+      update: render,
+      destroy: () => {
+        reactRoot.unmount();
+        hideStatus(root);
+      },
+    };
   };
 };

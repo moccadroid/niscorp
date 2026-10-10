@@ -32,13 +32,14 @@ const harness = (trees: Record<string, RenderNode[]>, options: { status?: () => 
     canvasTree: (id) => state.trees[id] ?? [],
     dispatch: (canvas, event) => void dispatched.push({ canvas, event: event as unknown as Record<string, unknown> }),
     publish: (channel, payload) => void published.push(payload === undefined ? { channel } : { channel, payload }),
+    status: options.status ?? (() => 'open'),
   };
   const input = new PassThrough();
   const output = new PassThrough();
   let screen = '';
   output.on('data', (chunk: Buffer) => (screen += chunk.toString()));
   const quit = vi.fn();
-  const mount = ttyTarget({ input, output, debounceMs: 0, onQuit: quit, ...options })(api);
+  const mount = ttyTarget({ input, output, debounceMs: 0, onQuit: quit })(api);
   const type = async (line: string): Promise<void> => {
     input.write(`${line}\n`);
     await tick();

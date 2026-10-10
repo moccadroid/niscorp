@@ -3,7 +3,6 @@ import { createTtyView } from '@niscorp/nova/adapters/tty';
 import type { TtyComponent, TtyFrame } from '@niscorp/nova/adapters/tty';
 import { defaultRegistry, fallback as defaultFallback } from '@niscorp/nova/adapters/tty/components';
 import type { ComponentRegistry } from '@niscorp/nova';
-import type { WireStatus } from '../../client';
 import type { Target } from '../index';
 import { runLine } from './commands';
 import { createFocus } from './focus';
@@ -34,11 +33,6 @@ export type TtyTargetConfig = {
   // called on `quit` / EOF — the host owns the wire and the process, so the
   // target only reports the intent
   onQuit?: () => void;
-  // the wire's connection state, when the host can supply it (wire.status) —
-  // the REPL says '… connecting' / '✓ connected' / '× connection lost',
-  // because a silent screen on a dead socket is indistinguishable from a
-  // working terminal rendering an empty app
-  status?: () => WireStatus;
   // coalesce a burst of wire updates into one repaint; 0 paints immediately
   debounceMs?: number;
   prompt?: string;
@@ -56,10 +50,11 @@ export const ttyTarget = (config: TtyTargetConfig): Target => (api) => {
   const rl = createInterface({ input, output, prompt: basePrompt });
   const say = (text: string): void => void output.write(`${text}\n`);
   const focus = createFocus(rl, basePrompt);
+  // The REPL says '… connecting' / '✓ connected' / '× connection lost',
+  // because a silent screen on a dead socket is indistinguishable from a
+  // working terminal rendering an empty app.
   const reportLink = createLinkReport(say, () => rl.prompt(true));
-  const checkStatus = (): void => {
-    if (config.status !== undefined) reportLink(config.status());
-  };
+  const checkStatus = (): void => reportLink(api.status());
 
   const paint = (force = false): void => {
     const frame = view.render();

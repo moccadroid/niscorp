@@ -17,7 +17,6 @@ const terminal = createTerminal({
   target: ttyTarget({
     input: process.stdin,
     output: process.stdout,
-    status: wire.status,
     onQuit: () => {
       terminal.destroy();
       wire.dispose();

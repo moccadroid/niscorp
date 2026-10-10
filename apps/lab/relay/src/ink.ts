@@ -13,7 +13,6 @@ const wire = createWire({ env: nodeEnv({ url, tokenFile: join(homedir(), '.moss'
 
 const terminal = createTerminal({
   target: inkTarget({
-    status: wire.status,
     onQuit: () => {
       terminal.destroy();
       wire.dispose();

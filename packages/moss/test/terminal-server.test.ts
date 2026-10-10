@@ -50,6 +50,7 @@ const apiOf = (dispatched: unknown[] = []): TerminalApi => ({
   canvasTree: (id) => (id === 'main' ? snapshot.trees.main : []),
   dispatch: (canvas, event) => void dispatched.push({ canvas, event }),
   publish: () => undefined,
+  status: () => 'connecting',
 });
 
 const mounts: TerminalMount[] = [];
@@ -100,7 +101,7 @@ describe('terminal/react/server', () => {
   it('a root with elements but a wire with no frame is replaced, not adopted', async () => {
     const { root } = page('<p>somebody else’s screen</p>');
     const complaints = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const empty: TerminalApi = { frame: () => [], canvasTree: () => [], dispatch: () => undefined, publish: () => undefined };
+    const empty: TerminalApi = { frame: () => [], canvasTree: () => [], dispatch: () => undefined, publish: () => undefined, status: () => 'connecting' };
     await act(async () => {
       mounts.push(reactTarget({ root, registry: registry() })(empty));
     });

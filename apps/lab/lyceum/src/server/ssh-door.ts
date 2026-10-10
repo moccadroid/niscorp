@@ -96,7 +96,6 @@ export const openSshDoor = async (config: { port: number; socketUrl: string; hos
               registry: lyceumInkRegistry(),
               stdin: tty.stdin,
               stdout: tty.stdout,
-              status: wire.status,
               // The console is this server's; nobody at the door reads it.
               patchConsole: false,
               onQuit: () => leave(),

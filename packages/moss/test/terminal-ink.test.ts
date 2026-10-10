@@ -78,16 +78,17 @@ afterEach(() => {
   for (const mount of mounts.splice(0)) mount.destroy();
 });
 
-const harness = (trees: Record<string, RenderNode[]>, options: { frame?: RenderNode[] } & Pick<InkTargetConfig, 'status' | 'slotWrapper'> = {}) => {
+const harness = (trees: Record<string, RenderNode[]>, options: { frame?: RenderNode[]; status?: TerminalApi['status'] } & Pick<InkTargetConfig, 'slotWrapper'> = {}) => {
   const dispatched: { canvas: string; event: NovaEvent }[] = [];
   const published: { channel: string; payload?: unknown }[] = [];
-  const { frame = FRAME, ...config } = options;
+  const { frame = FRAME, status = () => 'open', ...config } = options;
   const state = { trees };
   const api: TerminalApi = {
     frame: () => frame,
     canvasTree: (id) => state.trees[id] ?? [],
     dispatch: (canvas, event) => void dispatched.push({ canvas, event }),
     publish: (channel, payload) => void published.push(payload === undefined ? { channel } : { channel, payload }),
+    status,
   };
   const keys = keyboard();
   const screen = display();

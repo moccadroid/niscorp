@@ -8,8 +8,9 @@ import type { TerminalApi } from './index';
 // target, and are said here once.
 // ═══════════════════════════════════════════════════════════════
 
-// The frame and every canvas's tree — moss's `shells.snapshot`.
-export type DrawnSnapshot = { frame: RenderNode[]; trees: Record<string, RenderNode[]> };
+// The frame and every canvas's tree — moss's `shells.snapshot`, which also
+// says whether anything on the screen can still happen (`live`).
+export type DrawnSnapshot = { frame: RenderNode[]; trees: Record<string, RenderNode[]>; live?: boolean };
 
 const nothing = (): void => undefined;
 
@@ -20,6 +21,11 @@ export const drawnApi = (snapshot: DrawnSnapshot): TerminalApi => ({
   // a string has nobody to press it
   dispatch: nothing,
   publish: nothing,
+  // The status the page's terminal starts in, so a kit that draws the status
+  // draws the same thing on both sides: no socket is opened for a page with
+  // nothing left to happen (the wire's `static`), and every other page's is
+  // still connecting when its target first draws.
+  status: () => (snapshot.live === false ? 'static' : 'connecting'),
 });
 
 // A root that already holds elements was drawn on the server from the snapshot

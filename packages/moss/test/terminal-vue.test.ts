@@ -54,6 +54,7 @@ const harness = (trees: Record<string, RenderNode[]>, slotWrapper?: NovaComponen
     canvasTree: (id) => state.trees[id] ?? [],
     dispatch: (canvas, event) => void dispatched.push({ canvas, event }),
     publish: (channel, payload) => void published.push({ channel, payload }),
+    status: () => 'open',
   };
   const root = document.createElement('div');
   document.body.appendChild(root);

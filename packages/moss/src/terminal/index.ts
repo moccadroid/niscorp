@@ -1,6 +1,6 @@
 import type { RenderApi } from '@niscorp/nova';
 import { createWire } from '../client';
-import type { Wire } from '../client';
+import type { Wire, WireStatus } from '../client';
 import { onHotkey } from './hotkey';
 import { trapBack } from './history';
 import { followHead } from './head';
@@ -17,11 +17,17 @@ import { followHead } from './head';
 
 // What a target renders against — nova core's `RenderApi`: the wire's snapshot
 // as pull functions (frame + per-canvas trees) plus the event sinks (dispatch
-// tagged by canvas, publish). Aliased, not redeclared — the dom adapter, the
-// react adapter, and this conductor share ONE contract, so a target written
-// for nova's dom view drops straight onto the wire. A target never touches the
+// tagged by canvas, publish). Not redeclared — the dom adapter, the react
+// adapter, and this conductor share ONE contract, so a target written for
+// nova's dom view drops straight onto the wire. A target never touches the
 // wire directly.
-export type TerminalApi = RenderApi;
+//
+// And one thing a shell in the same process never needs: the connection's
+// `status`, pulled like the frame and the trees. A screen left up by a dead
+// socket looks exactly like a working one, so every target is told which it
+// is, the same way, and a change of status is an `update` like any other.
+// What a target draws for it is the target's, or the app's.
+export type TerminalApi = RenderApi & { status: () => WireStatus };
 
 // A mounted target: re-render on demand, tear down on swap.
 export type TerminalMount = { update: () => void; destroy: () => void };
@@ -31,7 +37,7 @@ export type TerminalMount = { update: () => void; destroy: () => void };
 // config on the concrete target (`reactTarget({ root, … })`, `domTarget({
 // root })`), never part of this contract: the conductor stays surface-blind
 // and runs anywhere the wire does. A target renders once on mount; the
-// conductor calls `update` on every wire change.
+// conductor calls `update` on every wire change: a frame, a tree, the status.
 export type Target = (api: TerminalApi) => TerminalMount;
 
 // The conductor: one target, one wire. Subscribes the target's `update` to
@@ -43,6 +49,7 @@ export const createTerminal = (config: { target: Target; wire: Wire }): { destro
     canvasTree: (id) => wire.snapshot().trees.get(id) ?? [],
     dispatch: (id, event) => wire.dispatch(id, event),
     publish: (channel, payload) => wire.publish(channel, payload),
+    status: () => wire.status(),
   };
   const mount = target(api);
   const unsubscribe = wire.subscribe(mount.update);

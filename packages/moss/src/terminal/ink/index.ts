@@ -3,8 +3,7 @@ import { render, Text as InkText } from 'ink';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { defaultRegistry, fallback as inkFallback, TextWrap, ErrorMarker, FrameControlsContext } from '@niscorp/nova/adapters/ink';
 import type { ComponentRegistry } from '@niscorp/nova';
-import type { WireStatus } from '../../client';
-import type { Target } from '../index';
+import type { Target, TerminalApi } from '../index';
 import { terminalFrame } from '../react/frame';
 import { registerWireSlots } from '../react/slots';
 import type { TerminalSlotWrapper } from '../react/slots';
@@ -33,10 +32,6 @@ export type InkTargetConfig = {
   slotWrapper?: TerminalSlotWrapper;
   stdin?: NodeJS.ReadStream;
   stdout?: NodeJS.WriteStream;
-  // the wire's connection state, when the host can supply it — rendered as a
-  // dim line while not open (a blank full-screen app on a dead socket is
-  // indistinguishable from a working empty one)
-  status?: () => WireStatus;
   // called when the ink app exits (Ctrl+C) — the host owns the wire/process
   onQuit?: () => void;
   // Route the process's console output above the frame (ink's patchConsole).
@@ -47,10 +42,12 @@ export type InkTargetConfig = {
   patchConsole?: boolean;
 };
 
-// The connection's status, for as long as it is not open.
-const statusLineOf = (status: (() => WireStatus) | undefined): FC => () => {
-  const now = status?.();
-  if (now === undefined || now === 'open') return null;
+// The connection's status, as a line for as long as it is not open: a blank
+// full-screen app on a dead socket is indistinguishable from a working empty
+// one.
+const statusLineOf = (status: TerminalApi['status']): FC => () => {
+  const now = status();
+  if (now === 'open') return null;
   if (now === 'incompatible') return createElement(InkText, { color: 'red' }, STATUS_WORDS.incompatible);
   return now === 'connecting' ? createElement(InkText, { color: 'yellow' }, STATUS_WORDS.connecting) : createElement(InkText, { color: 'red' }, STATUS_WORDS.lost);
 };
@@ -71,7 +68,7 @@ export const inkTarget = (config: InkTargetConfig = {}): Target => (api) => {
   const typingRef = { current: false };
   const frameControls = { setTyping: (typing: boolean): void => void (typingRef.current = typing) };
   const Nav = navOf({ api, marks, typing: () => typingRef.current });
-  const StatusLine = statusLineOf(config.status);
+  const StatusLine = statusLineOf(api.status);
 
   // Nav and the status line read nothing of nova's: they sit beside the frame,
   // which is the one every react-shaped target draws (../react/frame).

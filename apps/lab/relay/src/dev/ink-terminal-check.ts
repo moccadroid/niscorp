@@ -56,7 +56,7 @@ const main = async (): Promise<void> => {
   stdout.on('data', (chunk: Buffer) => (screen += chunk.toString()));
 
   const terminal = createTerminal({
-    target: inkTarget({ stdin: stdin as unknown as NodeJS.ReadStream, stdout: stdout as unknown as NodeJS.WriteStream, status: wire.status }),
+    target: inkTarget({ stdin: stdin as unknown as NodeJS.ReadStream, stdout: stdout as unknown as NodeJS.WriteStream }),
     wire,
   });
 

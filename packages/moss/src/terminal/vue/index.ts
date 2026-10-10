@@ -3,6 +3,7 @@ import type { NovaComponent } from '@niscorp/nova/adapters/vue';
 import type { ComponentRegistry } from '@niscorp/nova';
 import { holdsDrawnScreen } from '../drawn';
 import type { Target, TerminalApi } from '../index';
+import { hideStatus, showStatus } from '../status';
 import { terminalFrame } from './frame';
 import { registerWireSlots } from './slots';
 import type { TerminalSlotWrapper } from './slots';
@@ -15,10 +16,11 @@ import type { TerminalSlotWrapper } from './slots';
 // subpath.
 //
 // Re-render is REACTIVE, never a remount. The target hands its tree a LIVE
-// view of the api whose `frame()` / `canvasTree()` read a revision ref; the
-// conductor's `update` bumps it, and exactly the render functions that read
-// the wire — the frame and each CanvasSlot — re-run. Vue patches the DOM in
-// place, so focus, carets and Input drafts survive every update.
+// view of the api whose `frame()` / `canvasTree()` / `status()` read a revision
+// ref; the conductor's `update` bumps it, and exactly the render functions that
+// read the wire — the frame, each CanvasSlot, a kit component that draws the
+// status — re-run. Vue patches the DOM in place, so focus, carets and Input
+// drafts survive every update.
 // ═══════════════════════════════════════════════════════════
 
 export { terminalFrame } from './frame';
@@ -50,18 +52,27 @@ export const vueTarget = (config: VueTargetConfig): Target => {
       },
       dispatch: (canvasId, event) => api.dispatch(canvasId, event),
       publish: (channel, payload) => api.publish(channel, payload),
+      status: () => {
+        void revision.value;
+        return api.status();
+      },
     };
 
     const Frame = terminalFrame(live, registry);
 
     const adopts = holdsDrawnScreen(root, api);
+    showStatus(root, api.status());
     const app = adopts ? createSSRApp(Frame) : createApp(Frame);
     app.mount(root);
     return {
       update: () => {
+        showStatus(root, api.status());
         revision.value += 1;
       },
-      destroy: () => app.unmount(),
+      destroy: () => {
+        app.unmount();
+        hideStatus(root);
+      },
     };
   };
 };
