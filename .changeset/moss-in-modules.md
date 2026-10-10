@@ -109,7 +109,7 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 
 - **Nine fields leave `NiscApp`.** Eight are the configuration of `createIntegrations`, under the names they had: `integrationActor`, `attachable`, `menuSlots`, `assistantTools`, `publishChecks`, `editorRegions`, `placementNames`, `storePress`. The ninth, `installedIntegrations`, was deprecated and never called, and is gone. A manifest that still names one of the nine is refused at boot, as any field the type does not have is: `(the manifest): Unrecognized key: "menuSlots"`.
 - `NiscApp.features?: readonly Feature[]` is new. The server starts each feature, in order, once its core stands and before anything is served.
-- **An app that does not name the feature has no integrations.** None of `/api/integrations/*`, `/integrations/:id/*` and `/operator/integrations` is served, an `ik_` key is answered `invalid_token`, and no integration's actions are loaded. The tables are still created; rows in them are not served.
+- **An app that does not name the feature has no integrations.** None of `/api/integrations/*`, `/integrations/:id/*` and `/operator/integrations` is served, an `ik_` key is read as a session token and refused as one (`invalid_token`), and no integration's actions are loaded. The tables are still created; rows in them are not served.
 - **Each call that moved is on the object `createIntegrations` returned**, and takes no pool: it uses the one the server was given.
   - `server.callIntegration(id, path, init)` → `integrations.callIntegration(id, path, init)`. `MossServer.callIntegration` is gone.
   - `listAttachments(pool, hostAction)` → `integrations.listAttachments(hostAction)`.

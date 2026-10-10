@@ -49,6 +49,13 @@ describe('buildContract — components carry description and props', () => {
     const plain = buildContract(host, 'acme').components.find((c) => c.name === 'Plain');
     expect(plain).toEqual({ name: 'Plain', description: '' });
   });
+
+  it('lists a component whose props schema cannot describe itself by its name and description', () => {
+    // A JSON Schema where a zod schema was expected: nothing converts it, so
+    // the contract shows what it can and the route does not throw on it.
+    const odd = buildContract({ ...host, components: { Odd: { meta: { description: 'An odd one.', propsSchema: { type: 'object' } } } } }, 'acme');
+    expect(odd.components).toEqual([{ name: 'Odd', description: 'An odd one.' }]);
+  });
 });
 
 describe('contractAsMarkdown — the props table', () => {

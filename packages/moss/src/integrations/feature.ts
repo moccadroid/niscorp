@@ -132,14 +132,29 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
   seams.credential(KEY_PREFIX, keyCredential({ pool, actor: config.integrationActor, who: seams.who }));
   seams.wrapWire(flooredWire);
 
-  const host = { components: seams.components, charter: seams.charter, ...config };
-  seams.routes(contractRoutes({ host, fingerprintsFor: seams.fingerprintsFor, verifyKey: signer.verifyKey }));
+  // What the host offers a bundle to name: the kit's components, which the
+  // server knows, and what the app said when it created the feature.
+  const vocabulary = {
+    components: seams.components,
+    attachable: config.attachable,
+    menuSlots: config.menuSlots,
+    assistantTools: config.assistantTools,
+    publishChecks: config.publishChecks,
+    editorRegions: config.editorRegions,
+  };
+  seams.routes(
+    contractRoutes({
+      host: { components: seams.components, charter: seams.charter, attachable: config.attachable, menuSlots: config.menuSlots },
+      fingerprintsFor: seams.fingerprintsFor,
+      verifyKey: signer.verifyKey,
+    }),
+  );
   seams.operatorRoutes(
     operatorRoutes({
       pool,
       grammars: seams.grammars,
       fingerprints: seams.fingerprints,
-      vocabulary: host,
+      vocabulary,
       actions: seams.actions,
       refusalOf: seams.refusalOf,
       reload,

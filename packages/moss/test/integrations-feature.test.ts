@@ -248,6 +248,19 @@ describe('the routes the feature mounts, asked through the server it mounted the
     });
   });
 
+  it('an operator’s body that is not an object, or not JSON, reads as an empty one', async () => {
+    const { seams, operator } = await world();
+    await createIntegrations().start(seams);
+    for (const body of ['null', '"belts"', '[1]', 'not json', '{"id":7,"url":"https://belts.example"}']) {
+      const answered = await operator.request('/integrations', { method: 'POST', body, headers: { 'content-type': 'application/json' } });
+      expect(answered.status).toBe(400);
+      expect(await answered.json()).toEqual({ message: 'Give an id and a url.' });
+    }
+    // The probe's body names a path or nothing: for an integration that is not
+    // there it is not read at all.
+    expect((await operator.request('/integrations/belts/probe', { method: 'POST', body: 'null' })).status).toBe(404);
+  });
+
   it('the proxy asks for a principal; the webhook asks for none, and answers nothing for an integration that is not there', async () => {
     const { seams, server, caller } = await world();
     await createIntegrations().start(seams);
