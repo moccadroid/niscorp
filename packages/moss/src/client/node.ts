@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import type { WireEnv } from './index';
+import type { WireEnv } from './env';
 
 // ═══════════════════════════════════════════════════════════════
 // The Node host env — the wire on a plain Node (or Bun) process: the token

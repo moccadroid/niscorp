@@ -153,7 +153,7 @@ export default tseslint.config(
   // thing. `createServer` reached 1,345 lines with nothing counting.
   {
     files: ['packages/moss/src/*/**/*.ts', 'packages/moss/src/*/**/*.tsx'],
-    ignores: ['packages/moss/src/client/**', 'packages/moss/src/terminal/**'],
+    ignores: ['packages/moss/src/terminal/**'],
     rules: {
       'no-restricted-syntax': [
         'error',
