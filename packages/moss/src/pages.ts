@@ -1,5 +1,3 @@
-import type { PageManifest } from './manifest';
-
 // ═══════════════════════════════════════════════════════════════
 // Which page a path leads to. A page's `path` is literal segments and `:name`
 // parameters ("/docs/:slug"); a path matches a page when they have the same
@@ -9,6 +7,11 @@ import type { PageManifest } from './manifest';
 // path leads to never depends on the order they were written in.
 // ═══════════════════════════════════════════════════════════════
 
+// WHAT THE ROUTER READS OF A PAGE: where it is drawn, which of its canvases
+// the parameters of its path go to, and the canvases it has. A `PageManifest`
+// (./manifest) is one of these.
+export type PagePath = { path: string; params?: string; canvases: readonly { id: string }[] };
+
 export type PageMatch = { name: string; params: Record<string, string> };
 export type PageRouter = { match: (path: string) => PageMatch | undefined };
 
@@ -17,7 +20,7 @@ type Compiled = { name: string; segments: Segment[] };
 
 const segmentsOf = (path: string): string[] => path.split('?')[0]?.split('/').filter((part) => part !== '') ?? [];
 
-const compile = (name: string, page: PageManifest): Compiled => {
+const compile = (name: string, page: PagePath): Compiled => {
   if (!page.path.startsWith('/')) throw new Error(`moss: page "${name}" has the path "${page.path}" — a page's path starts with "/".`);
   const segments = segmentsOf(page.path).map((part): Segment => (part.startsWith(':') ? { param: part.slice(1) } : { literal: part }));
   for (const segment of segments) {
@@ -40,7 +43,7 @@ const collide = (a: Compiled, b: Compiled): boolean =>
     return other === undefined || 'param' in segment || 'param' in other || segment.literal === other.literal;
   });
 
-export const createPageRouter = (pages: Record<string, PageManifest>): PageRouter => {
+export const createPageRouter = (pages: Readonly<Record<string, PagePath>>): PageRouter => {
   const compiled = Object.entries(pages).map(([name, page]) => compile(name, page));
   for (const [index, page] of compiled.entries()) {
     const other = compiled.slice(index + 1).find((candidate) => collide(page, candidate));

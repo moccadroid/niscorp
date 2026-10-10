@@ -1,7 +1,6 @@
 import { headOf, placeHead } from '@niscorp/nova/document';
 import type { ScreenHead } from '@niscorp/nova/document';
-import type { ShellSnapshot } from './shells';
-import type { MossServer } from './server';
+import type { ShellHost, ShellSnapshot } from './shells';
 import { DEFAULT_TOKEN_KEY, SNAPSHOT_ELEMENT_ID } from './protocol';
 import type { DocumentSnapshot } from './protocol';
 import { sessionTokenOf, tokenFromCookie } from './identity';
@@ -65,8 +64,26 @@ export const documentHeaders = (principal: string | null): Record<string, string
 
 const escapeAttribute = (value: string): string => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
+// WHAT A DOCUMENT ASKS OF A SHELL HOST (./shells): the screen as it stands,
+// read without attaching. One function of the host.
+export type DocumentHost = Pick<ShellHost, 'snapshot'>;
+
+// WHAT A DOCUMENT ASKS OF A SERVER, and all it asks: who a token is, which
+// page a path leads to, and the app's own shell. A `MossServer` is one of
+// these, and so is anything else that answers the three.
+export type DocumentSource = {
+  // Who a token is; null is nobody.
+  principalOf: (token: string) => Promise<string | null>;
+  // The page a path leads to, with the host that draws it and the input its
+  // path carries; undefined for a path that is the app's.
+  page: (path: string) => { name: string; host: DocumentHost; inputs: Record<string, Record<string, unknown>> } | undefined;
+  // The app's own shell. Absent: the app serves none, and a path that is not
+  // a page goes out undrawn.
+  shells?: DocumentHost;
+};
+
 export type DocumentConfig = {
-  server: MossServer;
+  server: DocumentSource;
   // The app's index.html, as it would be served undrawn. It must hold the empty
   // root (`root`, default `<div id="root"></div>`) exactly once — that is where
   // the screen goes.
