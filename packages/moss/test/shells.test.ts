@@ -1294,6 +1294,26 @@ describe('shells — what fails is said', () => {
   });
 });
 
+// A terminal names the canvas an event came from, and the shell holds it to
+// that. A canvas the shell does not have is nowhere an event can have come
+// from: it used to be dispatched with no origin, to every instance at once.
+describe('shells — an event from a canvas the shell does not have', () => {
+  it('is dropped, where one from a canvas it has still lands', async () => {
+    const host = createShellHost(hostConfig({ ...ctx, app: twoCanvas }));
+    const session = await host.session('t', 'usr_1');
+    await tick();
+    const n = (canvas: string): unknown => session.shell.getRuntime(session.shell.getState().canvases[canvas]?.active?.id ?? '')?.getData()['n'];
+
+    session.dispatch('nowhere', { type: 'ui:click', ref: 'bump' });
+    await tick();
+    expect([n('left'), n('right')]).toEqual([0, 0]);
+
+    session.dispatch('right', { type: 'ui:click', ref: 'bump' });
+    await tick();
+    expect([n('left'), n('right')]).toEqual([0, 1]);
+  });
+});
+
 describe('shells — the instance a click names', () => {
   // A list canvas: two live counters at once, the second one "active". A
   // terminal names the card a press came from; moss holds that name to the

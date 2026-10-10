@@ -39,12 +39,19 @@ export const sessionOn = (host: HostParts, cell: Cell, ephemeral: boolean, rebui
   // would run triggers the person never pressed. With no claim, the canvas's
   // ACTIVE instance is the origin: on a card deck that is the only one
   // rendered. A canvas with nothing mounted dispatches unstamped (global).
+  //
+  // The CANVAS is a claim off the wire too. One the shell does not have is
+  // nowhere an event can have come from: a terminal tags an event with the
+  // canvas it drew it in. It is dropped. Dispatched, it had no canvas to be
+  // held to and no instance to be stamped with, so it went to every instance
+  // of the shell at once.
   dispatch: (canvas, event) => {
     const { shell } = cell.live;
     const state = shell.getState().canvases[canvas];
+    if (state === undefined) return;
     const claimed = event['origin'];
-    if (claimed !== undefined && (typeof claimed !== 'string' || !(state?.stack ?? []).some((item) => item.id === claimed))) return;
-    const active = state?.active;
+    if (claimed !== undefined && (typeof claimed !== 'string' || !state.stack.some((item) => item.id === claimed))) return;
+    const active = state.active;
     // WHAT AN EVENT IS belongs to nova, and nova's shell takes one of its
     // events and nothing else. What arrived here is whatever object a
     // terminal sent (the protocol holds it to being an object), so it is
