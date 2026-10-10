@@ -1,6 +1,7 @@
 import { shellSettled } from '@niscorp/nova';
-import type { ActionDefinition, RenderNode } from '@niscorp/nova';
-import type { ShellNeed } from './liveness';
+import type { RenderNode } from '@niscorp/nova';
+import type { SeedEntry, SeedMutation } from '@niscorp/vex';
+import { shellNeedOf } from './liveness';
 import type { Live } from './live';
 import { treeOf } from './stream';
 import type { ShellSnapshot } from './types';
@@ -55,26 +56,33 @@ export const read = (live: Live, canvases: readonly { id: string }[]): Pick<Shel
 };
 
 // Asked of the instances ON SCREEN, not of the catalog: what a screen needs is
-// a fact about what mounted for this principal, composed definitions included.
+// a fact about what mounted for this principal.
 //
-// `kept`: the host keeps a principal's shell. `ask`: what one definition needs
-// once drawn, or undefined when the host was given no way to ask.
+// The definition an instance runs is the one its principal's composition
+// holds (the same object), unless the instance was pushed `with` fragments:
+// then it is that definition with the fragments laid around it, which nova
+// composed when it mounted, and which fragments those were is known to the
+// shell alone. A fragment adds what can be pressed (a sheet's close), so the
+// definition is read where the composed one is: off the instance.
+//
+// `kept`: the host keeps a principal's shell. `entries`: the entries the
+// app serves, or undefined when the host was given no way to ask.
 export const needOf = (
   live: Live,
   principal: string | null,
   kept: boolean,
-  ask: ((definition: ActionDefinition) => ShellNeed) | undefined,
+  entries: ReadonlyMap<string, SeedEntry | SeedMutation> | undefined,
 ): Pick<ShellSnapshot, 'live' | 'why' | 'drawnWith'> => {
   const why: string[] = [];
   const drawnWith: string[] = [];
-  if (ask === undefined) return { live: true, why: ['this host was given no way to ask what its actions need'], drawnWith };
+  if (entries === undefined) return { live: true, why: ['this host was given no way to ask what its actions need'], drawnWith };
   // The app's shell IS the thing that stays: whoever is signed in has one.
   if (kept && principal !== null) why.push('the app’s shell is kept for whoever is signed in');
   for (const canvas of Object.values(live.shell.getState().canvases)) {
     for (const instance of canvas.stack) {
       const definition = live.shell.getRuntime(instance.id)?.definition;
       if (definition === undefined) continue;
-      const need = ask(definition);
+      const need = shellNeedOf(definition, entries);
       for (const reason of need.why) why.push(`${definition.id}: ${reason}`);
       for (const read of need.drawnWith) drawnWith.push(read);
     }

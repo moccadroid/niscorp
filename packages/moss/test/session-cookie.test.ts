@@ -3,12 +3,12 @@ import { randomUUID } from 'node:crypto';
 import { createServer as createHttp } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { WebSocket as Ws } from 'ws';
-import type { ScopePolicy } from '@niscorp/vex';
 import type { FunctionSession, NiscApp } from '../src/manifest';
 import type { MossServer } from '../src/server';
 import { attachSocket } from '../src/node';
 import { createShellHost } from '../src/shells';
-import type { ShellHostContext } from '../src/shells';
+import { hostConfig } from './shell-host-double';
+import type { HostSetup } from './shell-host-double';
 import { renderDocument } from '../src/document';
 import { isOwnOrigin, openSealed, sealSession, sessionCookies } from '../src/identity';
 import { createSocket } from '../src/socket';
@@ -58,16 +58,12 @@ afterAll(() => {
 // token — how much longer it resolves; an app's own provider says nothing.
 const serving = async (app: NiscApp, principalOf: (token: string) => string | null, lastsMs?: number): Promise<{ at: string; server: MossServer }> => {
   const catalogOf = (principal: string | null): { ids: string[]; hash: string } => ({ ids: [principal === null ? 'login' : 'home'], hash: 'h' });
-  const policy: ScopePolicy = { default: 'deny', entities: {} };
-  const context: ShellHostContext = {
+  const context: HostSetup = {
     app,
-    catalogFor: () => catalogOf(null),
-    variantsFor: () => new Map(),
-    resolve: async (principal) => ({ roles: [principal === null ? 'public' : 'member'], scope: {}, installed: undefined, catalog: catalogOf(principal), variants: new Map(), policy }),
+    resolve: async (principal) => ({ roles: [principal === null ? 'public' : 'member'], scope: {}, catalog: catalogOf(principal), variants: new Map() }),
     wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
-    runtime: {} as ShellHostContext['runtime'],
   };
-  const shells = createShellHost(context);
+  const shells = createShellHost(hostConfig(context));
   // revalidation off: whatever closes a socket here is not the timer
   const socket = createSocket({ session: principalOf, catalog: catalogOf, shells, revalidateMs: 0, ...(lastsMs === undefined ? {} : { sessionLastsMs: () => lastsMs }) });
   const http = createHttp((_request, answer) => answer.end());

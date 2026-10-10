@@ -3,7 +3,8 @@ import type { QueryResponse } from '@niscorp/vex';
 import type { FetchFn } from '@niscorp/nova';
 import { createWireFollower } from '../src/data/follow';
 import { createShellHost } from '../src/shells';
-import type { ShellHostContext } from '../src/shells';
+import { hostConfig } from './shell-host-double';
+import type { HostSetup } from './shell-host-double';
 import type { NiscApp } from '../src/manifest';
 import type { Connection } from '../src/socket';
 
@@ -87,18 +88,15 @@ describe('a shell following a read', () => {
       follower.handedOver();
       return { ok: true, status: 200, json: async () => ['Ada'], text: async () => '["Ada"]', onChange: follower.onChange };
     };
-    const ctx: ShellHostContext = {
+    const ctx: HostSetup = {
       app,
-      catalogFor: () => ({ ids: ['roster'], hash: 'h' }),
-      variantsFor: () => new Map(),
-      resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, catalog: { ids: ['roster'], hash: 'h' }, variants: new Map(), policy: { default: 'deny', entities: {} } }),
+      resolve: async () => ({ roles: ['public'], scope: {}, catalog: { ids: ['roster'], hash: 'h' }, variants: new Map() }),
       wire,
-      runtime: {} as ShellHostContext['runtime'],
     };
     const sent: string[] = [];
     const connection: Connection = { send: (text) => void sent.push(text), close: () => {}, onMessage: () => {}, onClose: () => {} };
 
-    const session = await createShellHost(ctx).session('t', 'usr_1');
+    const session = await createShellHost(hostConfig(ctx)).session('t', 'usr_1');
     await tick();
     session.attach(connection);
     await tick();

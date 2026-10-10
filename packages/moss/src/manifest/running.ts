@@ -1,4 +1,6 @@
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
+import type { ShellManifest } from './app';
+import { shellComponents } from './components';
 import type { PgPool, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { createGeneration } from './generation';
 import type { Generation } from './generation';
@@ -105,6 +107,15 @@ export type RunningManifest = {
   // What a set of roles holds, remembered until the next switch (./roles.ts).
   catalogFor: (roles: readonly string[], installed: readonly string[] | undefined) => Catalog;
   variantsFor: (roles: readonly string[]) => ReadonlyMap<string, LayoutNode>;
+  // The action definitions a set of roles holds, by id: granted, there for the
+  // install list, each with the layout variant those roles hold in its place
+  // (./roles.ts). Remembered like the two above.
+  definitionsFor: (roles: readonly string[], installed: readonly string[] | undefined) => Readonly<Record<string, ActionDefinition>>;
+  // Every component name a shell's trees may mention, with the contract
+  // declared for each (./components.ts): read off the actions in force and
+  // the shell manifest it is asked for, and remembered for that manifest
+  // until the next switch.
+  componentsFor: (shell: ShellManifest) => ReturnType<typeof shellComponents>;
   // The generation this process has seen; -1 until it watches and has read it.
   generation: () => number;
   // Stop watching.
@@ -150,6 +161,9 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     manifest: () => ({ charter: shipped.charter, actions: inForce, layouts: shipped.layouts }),
     installedOnly: (ids, installed) => narrowings.reduce((kept, narrow) => narrow(kept, installed), ids),
   });
+  // Kept by the shell manifest asked for: the app's own and each page's are
+  // objects that live as long as the app does.
+  let components = new WeakMap<ShellManifest, ReturnType<typeof shellComponents>>();
   const listeners = new Set<() => void>();
   let pointer: Generation | undefined;
 
@@ -169,6 +183,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     inForce = actions;
     report = verified;
     holdings.drop();
+    components = new WeakMap();
     for (const listener of [...listeners]) tell(listener);
     if (move) pointer?.bump();
   };
@@ -209,6 +224,14 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     },
     catalogFor: holdings.catalogFor,
     variantsFor: holdings.variantsFor,
+    definitionsFor: holdings.definitionsFor,
+    componentsFor: (shell) => {
+      const kept = components.get(shell);
+      if (kept !== undefined) return kept;
+      const read = shellComponents({ actions: inForce, layouts: shipped.layouts }, shell);
+      components.set(shell, read);
+      return read;
+    },
     generation: () => pointer?.current() ?? -1,
     stop: () => pointer?.stop(),
   };

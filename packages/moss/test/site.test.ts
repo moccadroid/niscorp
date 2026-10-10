@@ -4,13 +4,13 @@ import { join } from 'node:path';
 import { Hono } from 'hono';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { ActionDefinition } from '@niscorp/nova';
-import type { ScopePolicy } from '@niscorp/vex';
 import { createShellHost } from '../src/shells';
-import type { ShellHostContext, ShellSnapshot } from '../src/shells';
+import type { ShellSnapshot } from '../src/shells';
+import { hostConfig } from './shell-host-double';
+import type { HostSetup } from './shell-host-double';
 import type { NiscApp, PageManifest } from '../src/manifest';
 import type { MossServer } from '../src/server';
 import { createPageRouter } from '../src/pages';
-import { shellNeedOf } from '../src/shells';
 import { mountSite } from '../src/node';
 
 // ═══════════════════════════════════════════════════════════════
@@ -20,24 +20,20 @@ import { mountSite } from '../src/node';
 
 const words: ActionDefinition = { id: 'words', data: { title: 'Hello', slug: '' }, layout: { component: 'Text', children: '$.title' } };
 const counter: ActionDefinition = { id: 'counter', data: { n: 0 }, layout: { component: 'Text', children: '$.n' } };
-const policy: ScopePolicy = { default: 'deny', entities: {} };
 const docs: PageManifest = { path: '/docs/:slug', params: 'main', canvases: [{ id: 'main', initial: 'words' }] };
 const app = { charter: {}, assignments: {}, actions: { words, counter }, shell: { canvases: [{ id: 'main', initial: 'counter' }] }, pages: { docs } } as unknown as NiscApp;
 
 // A hono app carrying the parts of a moss server a site asks for, stood up the
 // way createServer stands them up (see document.test.ts).
 const serverOf = (): MossServer => {
-  const context: ShellHostContext = {
+  const context: HostSetup = {
     app,
-    catalogFor: () => ({ ids: [], hash: 'h' }),
-    variantsFor: () => new Map(),
-    resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, catalog: { ids: ['words', 'counter'], hash: 'h' }, variants: new Map(), policy }),
+    resolve: async () => ({ roles: ['public'], scope: {}, catalog: { ids: ['words', 'counter'], hash: 'h' }, variants: new Map() }),
     wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
-    runtime: {} as ShellHostContext['runtime'],
-    needOf: (definition) => shellNeedOf(definition, new Map()),
+    entries: new Map(),
   };
-  const shells = createShellHost(context);
-  const pageHost = createShellHost({ ...context, manifest: docs, kept: false });
+  const shells = createShellHost(hostConfig(context));
+  const pageHost = createShellHost(hostConfig({ ...context, manifest: docs, kept: false }));
   const router = createPageRouter({ docs });
   return Object.assign(new Hono(), {
     shells,

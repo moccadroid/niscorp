@@ -1,13 +1,7 @@
-import type { ActionDefinition, FetchFn, LayoutNode, RenderNode, Shell } from '@niscorp/nova';
-import type { QueryResponse, ScopePolicy } from '@niscorp/vex';
-import type { Intent, QueryWriters } from '../data';
-import type { Catalog, NiscApp, ShellManifest } from '../manifest';
-import type { NiscRuntime } from '../runtime';
-import type { ShellNeed } from './liveness';
+import type { RenderNode, Shell } from '@niscorp/nova';
 
-// What a host is handed, what it answers, and what a transport holds of one
-// session: the types of the module, in one place. Every other file here is one
-// job.
+// What a host answers, and what a transport holds of one session. What a host
+// is handed is ./config.ts.
 
 // WHAT A SHELL NEEDS OF A CONNECTION ATTACHED TO IT: somewhere to send a
 // frame, a way to end it, and how a sign-in is handed to its terminal. Three
@@ -19,85 +13,6 @@ export type ShellConnection = {
   // Set by the socket when the terminal's browser holds a seal: a session is
   // then handed over sealed. Absent, it is handed over as its token.
   seal?: (token: string) => Promise<string>;
-};
-
-
-// WHO A SHELL IS BEING BUILT FOR, resolved ONCE.
-//
-// A shell used to ask four separate synchronous questions about its principal,
-// every one of them ultimately answered by a resident map of the whole
-// population. One async answer replaces all four. This seam arrives last in the
-// migration because `inputs` decides what MOUNTS and so cannot be deferred the
-// way `seeds` can — which is exactly why it was the last thing still forcing an
-// application to hold a directory.
-export type ShellPrincipal = {
-  roles: readonly string[];
-  // The app's own scope values, passed back to `inputs` untouched. Moss never
-  // looks inside; it is the app's record, on its way back to the app.
-  scope: Record<string, unknown>;
-  // The tenant's live integrations. Carried because `adopt` has to recompute a
-  // catalog when the ACTIONS change, and a catalog that forgot which integrations were
-  // installed would hand every studio every integration's screens.
-  installed: readonly string[] | undefined;
-  catalog: Catalog;
-  variants: ReadonlyMap<string, LayoutNode>;
-  policy: ScopePolicy;
-};
-
-export type ShellHostContext = {
-  app: NiscApp;
-  // THE ACTIONS IN FORCE NOW (./manifest). Asked each time a shell is built
-  // and each time living shells adopt, because what the app consists of
-  // changes while a host stands: an approved integration's actions arrive
-  // after boot. Absent: what the app shipped, which is the whole of it for a
-  // host that stands by itself.
-  actions?: () => Readonly<Record<string, ActionDefinition>>;
-  // WHICH SHELL THIS HOST BUILDS. Default: the app's own (`app.shell`). A PAGE
-  // is the other answer — a manifest of its own, drawn per request.
-  manifest?: ShellManifest;
-  // Whether a principal's shell is KEPT. Default true: the app's shell is one
-  // durable shell per person, the thing that rearranges itself around them. A
-  // page's is not — `false` builds a shell for the length of one read or one
-  // connection, whoever is asking, and runs no `onSession` (session code is the
-  // app's; a page has none).
-  kept?: boolean;
-  // What one definition needs once drawn (./liveness.ts). Absent, every screen is
-  // counted live — a host that cannot ask must not conclude a page is finished.
-  needOf?: (definition: ActionDefinition) => ShellNeed;
-  // The one resolution, awaited once per shell build.
-  resolve: (principal: string | null) => Promise<ShellPrincipal>;
-  // The same derivations keyed by ROLES rather than by principal, for `adopt`.
-  // Adopting is for changed ARTIFACTS, not changed people: the roles a live
-  // shell was built with are still its roles, so re-resolving them would be a
-  // round trip to learn what the cell already knows.
-  catalogFor: (roles: readonly string[], installed: readonly string[] | undefined) => Catalog;
-  variantsFor: (roles: readonly string[]) => ReadonlyMap<string, LayoutNode>;
-  // The internal wire: the server's own fetch, authorized as the session.
-  wire: (token: string | null) => FetchFn;
-  // LAID AROUND THE WIRE A SESSION'S SCREENS CALL THROUGH, by whoever has a
-  // reason to answer for a call that failed (an integration that is down gets
-  // a sentence under it; ./integrations, floor.ts). It wraps the wire the
-  // shell's endpoints and functions are handed, and not the one `inputs` and
-  // `phrases` read through. Absent: the wire as it is.
-  wrapWire?: (inner: FetchFn) => FetchFn;
-  // AN INTENT ANSWERED BY A QUERY WRITTEN FOR IT, as a principal (./data,
-  // intents.ts): what a session's `answerIntent` asks. Whose policy and
-  // scope values it runs under is resolved by whoever supplies this, each time
-  // it is asked. Absent: a session that asks is told this host cannot.
-  answerIntent?: (principal: string | null, writers: QueryWriters, asked: Intent) => Promise<QueryResponse>;
-  // The environment and the per-principal policy — what the manifest's
-  // in-process functions close over (agents read data under the policy).
-  runtime: NiscRuntime;
-  // How long a durable shell may sit with NOTHING attached before it is
-  // disposed. Default `DEFAULT_IDLE_MS`; `0` or `Infinity` disables the sweep
-  // and shells live until sign-out or process exit. Only the idle clock is
-  // swept — there is deliberately no absolute cap, because that would discard
-  // the state of somebody who is working.
-  idleMs?: number;
-  // Send a changed canvas as a delta against the frame the connection last
-  // received, instead of whole. Default off; a connection is only ever sent one
-  // if it asked at attach. See `runtime.shellFrameDelta` and DOCS.md.
-  delta?: boolean;
 };
 
 export type ShellSession = {

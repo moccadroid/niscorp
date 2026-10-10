@@ -2,6 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { createServer as createHttp } from 'node:http';
 import type { Server } from 'node:http';
 import { createShellHost } from '../src/shells';
+import { hostConfig } from './shell-host-double';
 import { createSocket } from '../src/socket';
 import { attachSocket } from '../src/node';
 import { createWire } from '../src/client';
@@ -55,15 +56,12 @@ const servers: Server[] = [];
 
 // A live server on an ephemeral port, wired the way ./node wires one.
 const listening = async (delta: boolean): Promise<string> => {
-  const shells = createShellHost({
+  const shells = createShellHost(hostConfig({
     app,
-    catalogFor: () => ({ ids: ['roster'], hash: 'h' }),
-    variantsFor: () => new Map(),
-    resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, catalog: { ids: ['roster'], hash: 'h' }, variants: new Map(), policy: { default: 'deny' as const, entities: {} } }),
+    resolve: async () => ({ roles: ['public'], scope: {}, catalog: { ids: ['roster'], hash: 'h' }, variants: new Map() }),
     wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
-    runtime: {} as never,
     delta,
-  });
+  }));
   const accept = createSocket({
     session: (token) => (token === 'tok' ? 'usr_1' : null),
     catalog: () => ({ ids: ['roster'], hash: 'h' }),

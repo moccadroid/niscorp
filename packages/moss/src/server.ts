@@ -4,10 +4,10 @@ import { VEX_LIVE_ENV } from '@niscorp/vex/hono';
 import { wireFabric } from './fabric';
 import type { VerifyReport } from '@niscorp/charter';
 import { createRunningManifest, receiveManifest, refusalOf } from './manifest';
-import type { Catalog, ManifestReport, NiscApp } from './manifest';
+import type { Catalog, ManifestReport, NiscApp, ShellManifest } from './manifest';
 import type { ScopePolicy } from '@niscorp/vex';
 import type { NiscRuntime } from './runtime';
-import { createIdentity, sessionRemainingMs, sessionVerifierOf } from './identity';
+import { createIdentity, sessionRemainingMs, sessionRevokerOf, sessionVerifierOf } from './identity';
 import { createData, createWireFollower, featureTablesOf } from './data';
 import type { ExecuteAs } from './data';
 import { mintWrites } from './tide';
@@ -16,9 +16,8 @@ import type { CredentialAnswer, FeatureSeams } from './feature';
 import { createSocket, DEFAULT_REVALIDATE_MS } from './socket';
 import type { SocketAccept } from './socket';
 import { createShellHost } from './shells';
-import type { ShellHostContext } from './shells';
+import type { ShellHostConfig } from './shells';
 import { createPageRouter } from './pages';
-import { shellNeedOf } from './shells';
 import type { IdentityRecord, IdentityReport, ResolvedIdentity } from './identity';
 import type { ShellHost } from './shells';
 
@@ -211,6 +210,9 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // silently (which is what the old `?? devSession` default did, for every
   // app that never set the field). 'dev-open' announces itself on this line.
   const session = sessionVerifierOf(runtime);
+  // And how every session a principal holds is forgotten at a sign-out, where
+  // the deployment keeps the credential itself.
+  const revokeSessions = sessionRevokerOf(runtime);
 
   // WHAT SOMEBODY MAY READ AND WRITE, for every surface below (./data). It runs
   // the tables' one ledgered run, brings the documents stored in them to this
@@ -456,85 +458,110 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // endpoint calls ride the server's OWN surfaces with the session's token
   // (same wire, same enforcement — the shell is just another client).
   //
-  // ONE CONTEXT, for the app's host and for every page's: who a principal is,
-  // the governed wire and the environment are the same wherever a shell is
-  // built. What differs is the manifest it is built from and whether it is kept.
-  const shellContext: ShellHostContext = {
-        app,
-        actions: running.actions,
-        needOf: (definition) => shellNeedOf(definition, running.entries),
-        // ONE resolution per shell build, awaited. This was four synchronous
-        // questions, and every one of them was ultimately answered out of a
-        // resident map of the population.
-        resolve: async (principal) => {
-          const resolved = await identity.resolve(principal);
-          // THE INSTALL LIST IS RE-READ AT BUILD. A shell is the long-lived
-          // thing here: an identity record may have been resolved before the
-          // tenant installed an integration, and a shell built from it would be missing
-          // that integration's screens for the life of the session. Once per shell,
-          // not once per request — the seam this consults is synchronous and
-          // cheap, and it is the same one `adopt` re-reads for the same reason.
-          // The record IS the install list now — resolved through the same
-          // engine entries as everything else, revalidated on the identity
-          // cache's own clock.
-          return { roles: resolved.roles, scope: resolved.scope, installed: resolved.installed, catalog: catalog(resolved), variants: running.variantsFor(resolved.roles), policy: data.policyOf(resolved) };
+  // WHAT A SHELL HOST IS HANDED (./shells, config.ts), for the app's host and
+  // for every page's: each member one function or one value of the module that
+  // owns it. What differs between them is the shell manifest a host builds
+  // from, and whether what it builds is kept.
+
+  // The internal wire: the server's own surfaces, asked in process as the
+  // session whose token this is.
+  const wireAs =
+    (token: string | null): FetchFn =>
+    async (url, init) => {
+      const isVex = url.split('?')[0]?.endsWith('/vex') === true;
+      // A vex read made for a caller that can be told when to stop — a
+      // nova endpoint passes its instance's signal — may keep answering
+      // (`refresh: 'reactive'`; see ./data, follow.ts). The follower rides the
+      // in-process request's env, where no network request can put one.
+      const follower = isVex && init?.signal !== undefined ? createWireFollower(init.signal) : undefined;
+      const res = await server.request(
+        url,
+        {
+          method: init?.method ?? 'GET',
+          headers: { ...(init?.headers ?? {}), ...(token !== null ? { Authorization: `Bearer ${token}` } : {}) },
+          ...(init?.body !== undefined ? { body: init.body } : {}),
         },
-        catalogFor: running.catalogFor,
-        variantsFor: running.variantsFor,
-        // Asked by a session for its own principal. Who that is, is resolved
-        // again here: the policy and the scope values are the ones a request
-        // of theirs would be served under now.
-        answerIntent: async (principal, writers, asked) => {
-          const resolved = await identity.resolve(principal);
-          return data.answerIntent(writers, asked, resolved, identity.composeScope(principal, resolved));
-        },
-        runtime,
-        wrapWire: (inner) => wireWraps.reduce((wire, wrap) => wrap(wire), inner),
-        ...(runtime.shellIdleMs !== undefined ? { idleMs: runtime.shellIdleMs } : {}),
-        ...(runtime.shellFrameDelta !== undefined ? { delta: runtime.shellFrameDelta } : {}),
-        wire: (token) => async (url, init) => {
-          const isVex = url.split('?')[0]?.endsWith('/vex') === true;
-          // A vex read made for a caller that can be told when to stop — a
-          // nova endpoint passes its instance's signal — may keep answering
-          // (`refresh: 'reactive'`; see ./data, follow.ts). The follower rides the
-          // in-process request's env, where no network request can put one.
-          const follower = isVex && init?.signal !== undefined ? createWireFollower(init.signal) : undefined;
-          const res = await server.request(
-            url,
-            {
-              method: init?.method ?? 'GET',
-              headers: { ...(init?.headers ?? {}), ...(token !== null ? { Authorization: `Bearer ${token}` } : {}) },
-              ...(init?.body !== undefined ? { body: init.body } : {}),
-            },
-            follower === undefined ? undefined : { [VEX_LIVE_ENV]: follower.live },
-          );
-          // Vex replies `{ result, meta }`; endpoints want the data — the
-          // same unwrap the client wire applies, so an action behaves
-          // identically under either shell.
-          if (!isVex || !res.ok) {
-            follower?.end();
-            return res;
-          }
-          const body = (await res.json()) as Record<string, unknown> | null;
-          const result = body !== null && typeof body === 'object' && 'result' in body ? body['result'] : body;
-          follower?.handedOver();
-          return {
-            ok: res.ok,
-            status: res.status,
-            json: () => Promise.resolve(result),
-            text: () => Promise.resolve(JSON.stringify(result)),
-            ...(follower === undefined ? {} : { onChange: follower.onChange }),
-          };
-        },
-  };
-  const shells = app.shell !== undefined ? createShellHost(shellContext) : undefined;
+        follower === undefined ? undefined : { [VEX_LIVE_ENV]: follower.live },
+      );
+      // Vex replies `{ result, meta }`; endpoints want the data — the
+      // same unwrap the client wire applies, so an action behaves
+      // identically under either shell.
+      if (!isVex || !res.ok) {
+        follower?.end();
+        return res;
+      }
+      const body = (await res.json()) as Record<string, unknown> | null;
+      const result = body !== null && typeof body === 'object' && 'result' in body ? body['result'] : body;
+      follower?.handedOver();
+      return {
+        ok: res.ok,
+        status: res.status,
+        json: () => Promise.resolve(result),
+        text: () => Promise.resolve(JSON.stringify(result)),
+        ...(follower === undefined ? {} : { onChange: follower.onChange }),
+      };
+    };
+
+  const hostConfig = (shell: ShellManifest, kept: boolean): ShellHostConfig => ({
+    // WHAT A PRINCIPAL'S SHELL IS MADE OF: who they are (./identity), what
+    // they hold of the actions in force with their roles' layout variants in
+    // place, and which component names their trees may mention (./manifest),
+    // and the shell as its manifest says it. ONE resolution, awaited, for
+    // each build and each adopt. The record is resolved again each time,
+    // because a shell is the long-lived thing here: an identity resolved
+    // before the tenant installed an integration would leave a shell without
+    // that integration's screens for the life of the session.
+    composition: async (principal) => {
+      const resolved = await identity.resolve(principal);
+      return {
+        roles: resolved.roles,
+        scope: resolved.scope,
+        actions: running.definitionsFor(resolved.roles, resolved.installed),
+        components: running.componentsFor(shell),
+        canvases: shell.canvases,
+        ...(shell.layout !== undefined ? { frame: shell.layout } : {}),
+        ...(shell.layoutStore !== undefined ? { layoutStore: shell.layoutStore } : {}),
+        ...(shell.fragments !== undefined ? { fragments: shell.fragments } : {}),
+      };
+    },
+    // The app's code a shell calls: the two derivations of this shell's own
+    // manifest, and the four seams of the app's.
+    hooks: {
+      ...(shell.inputs !== undefined ? { inputs: shell.inputs } : {}),
+      ...(shell.seeds !== undefined ? { seeds: shell.seeds } : {}),
+      ...(app.phrases !== undefined ? { phrases: app.phrases } : {}),
+      ...(app.functions !== undefined ? { functions: app.functions } : {}),
+      ...(app.onSession !== undefined ? { onSession: app.onSession } : {}),
+      ...(app.runs !== undefined ? { runs: app.runs } : {}),
+    },
+    ...(app.phraseKeys !== undefined ? { phraseKeys: app.phraseKeys } : {}),
+    kept,
+    wire: wireAs,
+    wrapWire: (inner) => wireWraps.reduce((wire, wrap) => wrap(wire), inner),
+    // Asked by a session for its own principal. Who that is, is resolved
+    // again here: the policy and the scope values are the ones a request
+    // of theirs would be served under now.
+    answerIntent: async (principal, writers, asked) => {
+      const resolved = await identity.resolve(principal);
+      return data.answerIntent(writers, asked, resolved, identity.composeScope(principal, resolved));
+    },
+    ...(revokeSessions !== undefined ? { revokeSessions } : {}),
+    entries: running.entries,
+    ...(runtime.telemetry !== undefined ? { telemetry: runtime.telemetry } : {}),
+    limits: {
+      ...(runtime.shellIdleMs !== undefined ? { idleMs: runtime.shellIdleMs } : {}),
+      ...(runtime.shellFrameDelta !== undefined ? { delta: runtime.shellFrameDelta } : {}),
+      ...(runtime.endpointTimeoutMs !== undefined ? { endpointTimeoutMs: runtime.endpointTimeoutMs } : {}),
+    },
+  });
+  const shells = app.shell !== undefined ? createShellHost(hostConfig(app.shell, true)) : undefined;
 
   // PAGES: a host each, built from the page's own manifest and keeping nothing
   // (manifest/app.ts § pages). The router refuses two pages that could answer one path,
   // here, at boot — like every other incoherence.
   const pageManifests = app.pages ?? {};
   const pageRouter = createPageRouter(pageManifests);
-  const pageHosts = new Map(Object.entries(pageManifests).map(([name, manifest]) => [name, createShellHost({ ...shellContext, manifest, kept: false })]));
+  const pageHosts = new Map(Object.entries(pageManifests).map(([name, manifest]) => [name, createShellHost(hostConfig(manifest, false))]));
   const pageAt = (path: string): { name: string; host: ShellHost; inputs: Record<string, Record<string, unknown>> } | undefined => {
     const matched = pageRouter.match(path);
     if (matched === undefined) return undefined;

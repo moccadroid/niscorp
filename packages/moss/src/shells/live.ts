@@ -1,7 +1,7 @@
-import type { ActionDefinition, Shell } from '@niscorp/nova';
-import type { ShellManifest } from '../manifest';
+import type { Shell } from '@niscorp/nova';
 import type { Emit } from '../runtime';
-import type { ShellConnection, ShellHostContext } from './types';
+import type { ShellHostConfig } from './config';
+import type { ShellConnection } from './types';
 
 // What one host holds while it stands: each living shell with what is attached
 // to it, the cell a principal's shell is addressed through, and what every
@@ -9,6 +9,8 @@ import type { ShellConnection, ShellHostContext } from './types';
 
 export type Live = {
   shell: Shell;
+  // The canvases the shell was built with, as its composition named them.
+  canvases: readonly { id: string }[];
   connections: Set<ShellConnection>;
   // last frame per canvas — only changes are sent
   sent: Map<string, string>;
@@ -40,25 +42,18 @@ export type Live = {
 // re-authorize the server's own wire as the same session, and it is
 // refreshed on reattach so a rebuild uses the newest one the principal
 // arrived with rather than the one they first appeared with.
-export type Cell = { live: Live; token: string | null; principal: string | null; roles: readonly string[]; installed: readonly string[] | undefined; hash: string };
+export type Cell = { live: Live; token: string | null; principal: string | null };
 
 // WHAT EVERY PART OF ONE HOST READS, settled once when the host is created:
 // what it was handed, and what it worked out from that.
 export type HostParts = {
-  ctx: ShellHostContext;
-  // Where a span goes. Undefined when the deployment has no sink: then none
+  config: ShellHostConfig;
+  // Where a span goes. Undefined when the host was handed no sink: then none
   // is built.
   emit: Emit | undefined;
-  // The shell this host builds: the app's own, or a page's.
-  shellManifest: ShellManifest;
-  // Whether a principal's shell is kept (`ShellHostContext.kept`).
+  // Whether a principal's shell is kept (`ShellHostConfig.kept`).
   kept: boolean;
-  // The actions in force now.
-  actionsNow: () => Readonly<Record<string, ActionDefinition>>;
-  // Every component name a tree may mention, and the contracts declared.
-  componentNames: ReadonlySet<string>;
-  contracts: NonNullable<ShellManifest['components']>;
-  // Whether a changed canvas may be sent as a delta (`ShellHostContext.delta`).
+  // Whether a changed canvas may be sent as a delta (`ShellLimits.delta`).
   delta: boolean;
   // principal → the one living shell
   durable: Map<string, Cell>;

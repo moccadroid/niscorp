@@ -12,7 +12,9 @@ import { wireFabric } from '../src/fabric';
 import type { FabricApply } from '../src/fabric';
 import type { Fabric, FabricMessage } from '../src/runtime';
 import { createShellHost } from '../src/shells';
-import type { ShellHost, ShellHostContext } from '../src/shells';
+import type { ShellHost } from '../src/shells';
+import { hostConfig } from './shell-host-double';
+import type { HostSetup } from './shell-host-double';
 import { createIdentityCache } from '../src/identity/cache';
 import type { NiscApp } from '../src/manifest';
 
@@ -95,13 +97,10 @@ const app = {
   shell: { canvases: [{ id: 'main', initial: 'counter' }] },
 } as unknown as NiscApp;
 
-const shellCtx = (): ShellHostContext => ({
+const shellCtx = (): HostSetup => ({
   app,
-  catalogFor: () => ({ ids: ['counter'], hash: 'h' }),
-  variantsFor: () => new Map(),
-  resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, catalog: { ids: ['counter'], hash: 'h' }, variants: new Map(), policy: { default: 'deny', entities: {} } }),
+  resolve: async () => ({ roles: ['public'], scope: {}, catalog: { ids: ['counter'], hash: 'h' }, variants: new Map() }),
   wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
-  runtime: {} as never,
 });
 
 // An in-memory bus that delivers each publish to EVERY endpoint's subscriber,
@@ -139,8 +138,8 @@ const makeNode = (fabric: Fabric | undefined, origin: string, shells: ShellHost)
 describe('two processes over one fabric', () => {
   it('invalidate-identity on A resets the resident shell on B — no sign-out — and A applies it once', async () => {
     const bus = createBus();
-    const a = makeNode(bus.endpoint(), 'A', createShellHost(shellCtx()));
-    const bShells = createShellHost(shellCtx());
+    const a = makeNode(bus.endpoint(), 'A', createShellHost(hostConfig(shellCtx())));
+    const bShells = createShellHost(hostConfig(shellCtx()));
     const b = makeNode(bus.endpoint(), 'B', bShells);
 
     const before = (await bShells.session('t', 'usr_1')).shell; // resident in B
@@ -154,7 +153,7 @@ describe('two processes over one fabric', () => {
 
   it('a nudge on A wakes the principal’s channel on B, once', () => {
     const bus = createBus();
-    const a = makeNode(bus.endpoint(), 'A', createShellHost(shellCtx()));
+    const a = makeNode(bus.endpoint(), 'A', createShellHost(hostConfig(shellCtx())));
     const delivered: Array<{ principal: string; channel: string }> = [];
     const bShells = {
       session: async () => ({}) as never,
@@ -173,8 +172,8 @@ describe('two processes over one fabric', () => {
   });
 
   it('with no fabric, a signal on A never reaches B — byte-identical to one process', async () => {
-    const a = makeNode(undefined, 'A', createShellHost(shellCtx()));
-    const bShells = createShellHost(shellCtx());
+    const a = makeNode(undefined, 'A', createShellHost(hostConfig(shellCtx())));
+    const bShells = createShellHost(hostConfig(shellCtx()));
     const b = makeNode(undefined, 'B', bShells);
 
     const before = (await bShells.session('t', 'usr_1')).shell;
@@ -189,7 +188,7 @@ describe('two processes over one fabric', () => {
 
   it('a throwing subscriber on B does not harm the transport or A', () => {
     const bus = createBus();
-    const a = makeNode(bus.endpoint(), 'A', createShellHost(shellCtx()));
+    const a = makeNode(bus.endpoint(), 'A', createShellHost(hostConfig(shellCtx())));
     wireFabric(bus.endpoint(), 'B', { invalidateIdentity: () => { throw new Error('B is angry'); }, invalidateTenant: () => {}, nudge: () => {} });
     expect(() => a.invalidateIdentity('usr_1')).not.toThrow();
     expect(a.applied.identity).toBe(1);

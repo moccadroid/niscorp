@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { ActionDefinition } from '@niscorp/nova';
-import type { ScopePolicy } from '@niscorp/vex';
 import { createShellHost } from '../src/shells';
-import type { ShellHostContext } from '../src/shells';
+import type { ShellHost } from '../src/shells';
+import { hostConfig } from './shell-host-double';
+import type { HostSetup } from './shell-host-double';
 import { createSocket } from '../src/socket';
 import { offerToken, offeredToken } from '../src/protocol';
 import type { Connection } from '../src/socket';
@@ -20,23 +21,19 @@ const tick = (ms = 0): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 const search: ActionDefinition = { id: 'search', data: { q: '', topic: '' }, layout: { component: 'Input', model: '$.q' } };
 const counter: ActionDefinition = { id: 'counter', data: { n: 0 }, layout: { component: 'Button', ref: 'bump' }, triggers: [{ event: 'ui:click', ref: 'bump', do: [{ increment: 'n' }] }] };
-const policy: ScopePolicy = { default: 'deny', entities: {} };
 
 const page: PageManifest = { path: '/find/:topic', params: 'main', canvases: [{ id: 'main', initial: 'search' }] };
 const app = { charter: {}, assignments: {}, actions: { search, counter }, shell: { canvases: [{ id: 'main', initial: 'counter' }] }, pages: { find: page } } as unknown as NiscApp;
 
-const context: ShellHostContext = {
+const context: HostSetup = {
   app,
-  catalogFor: () => ({ ids: ['search', 'counter'], hash: 'h' }),
-  variantsFor: () => new Map(),
-  resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, catalog: { ids: ['search', 'counter'], hash: 'h' }, variants: new Map(), policy }),
+  resolve: async () => ({ roles: ['public'], scope: {}, catalog: { ids: ['search', 'counter'], hash: 'h' }, variants: new Map() }),
   wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
-  runtime: {} as ShellHostContext['runtime'],
 };
 
-const socketOf = (): { accept: ReturnType<typeof createSocket>; shells: ReturnType<typeof createShellHost>; pages: ReturnType<typeof createShellHost> } => {
-  const shells = createShellHost(context);
-  const pages = createShellHost({ ...context, manifest: page, kept: false });
+const socketOf = (): { accept: ReturnType<typeof createSocket>; shells: ShellHost; pages: ShellHost } => {
+  const shells = createShellHost(hostConfig(context));
+  const pages = createShellHost(hostConfig({ ...context, manifest: page, kept: false }));
   const router = createPageRouter({ find: page });
   const accept = createSocket({
     session: (token) => (token === 'good' ? 'usr_1' : null),

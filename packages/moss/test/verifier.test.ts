@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { PgPool } from '@niscorp/vex';
 import * as moss from '../src/index';
-import { sessionVerifierOf } from '../src/identity/verifier';
+import { sessionRevokerOf, sessionVerifierOf } from '../src/identity/verifier';
 
 // WHO A TOKEN IS, AND WHAT THE BOOT SAYS ABOUT IT. A deployment's door is one
 // of three, and the two moss cannot vouch for are said out loud when the
@@ -66,5 +66,24 @@ describe('a verifier passed as a function is named at boot', () => {
       info.mockRestore();
       error.mockRestore();
     }
+  });
+});
+
+// HOW A SIGN-OUT FORGETS A PRINCIPAL'S SESSIONS: the twin of the choice above,
+// asked by the server once and handed to the shell host.
+describe('sessionRevokerOf — who forgets every session a principal holds', () => {
+  it("under moss's own credential it deletes them, on the pool, for that principal", async () => {
+    const asked: { sql: string; params: readonly unknown[] }[] = [];
+    const pool: PgPool = { query: async (sql, params) => (asked.push({ sql, params: params ?? [] }), { rows: [] }) };
+    const revoke = sessionRevokerOf({ pool, session: 'sessions' });
+    await revoke?.('i_mara');
+    expect(asked).toHaveLength(1);
+    expect(asked[0]?.sql).toMatch(/^DELETE FROM/);
+    expect(asked[0]?.params).toEqual(['i_mara']);
+  });
+
+  it("a verifier of the app's own, and the dev one, keep nothing moss could forget", () => {
+    expect(sessionRevokerOf({ pool: noDatabase, session: 'dev-open' })).toBeUndefined();
+    expect(sessionRevokerOf({ pool: noDatabase, session: () => 'i_anyone' })).toBeUndefined();
   });
 });

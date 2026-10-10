@@ -14,7 +14,8 @@ import { describe, it, expect } from 'vitest';
 import type { ExecuteRecord } from '@niscorp/vex';
 import { vexRecordToSpan } from '../src/data/span';
 import { createShellHost, instrumentFunctions } from '../src/shells';
-import type { ShellHostContext } from '../src/shells';
+import { hostConfig } from './shell-host-double';
+import type { HostSetup } from './shell-host-double';
 import { callIntegrationWith } from '../src/integrations/call';
 import { createForwarder } from '../src/integrations/forward';
 import type { FoundIntegration } from '../src/integrations/registry';
@@ -25,7 +26,6 @@ import { PROTOCOL, offerToken } from '../src/protocol';
 import type { ServerMessage } from '../src/protocol';
 import type { NiscApp } from '../src/manifest';
 import type { TelemetrySpan } from '../src/runtime';
-import type { ScopePolicy } from '@niscorp/vex';
 
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 const capture = () => {
@@ -148,19 +148,16 @@ describe('integration.call', () => {
 describe('shell.build', () => {
   const counter = { id: 'counter', data: { n: 0 }, triggers: [] };
   const app = { charter: { public: ['counter'] }, assignments: {}, actions: { counter }, shell: { canvases: [{ id: 'main', initial: 'counter' }] } } as unknown as NiscApp;
-  const policy: ScopePolicy = { default: 'deny', entities: {} };
-  const ctxWith = (telemetry: ShellHostContext['runtime']['telemetry']): ShellHostContext => ({
+  const ctxWith = (telemetry: NonNullable<HostSetup['telemetry']>): HostSetup => ({
     app,
-    catalogFor: () => ({ ids: ['counter'], hash: 'h' }),
-    variantsFor: () => new Map(),
-    resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, catalog: { ids: ['counter'], hash: 'h' }, variants: new Map(), policy }),
+    resolve: async () => ({ roles: ['public'], scope: {}, catalog: { ids: ['counter'], hash: 'h' }, variants: new Map() }),
     wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
-    runtime: { telemetry } as ShellHostContext['runtime'],
+    telemetry,
   });
 
   it('a principal build is one shell.build span, not a reset', async () => {
     const { spans, telemetry } = capture();
-    await createShellHost(ctxWith(telemetry)).session('t', 'usr_1');
+    await createShellHost(hostConfig(ctxWith(telemetry))).session('t', 'usr_1');
     const build = spans.filter((s) => s.name === 'shell.build');
     expect(build).toHaveLength(1);
     expect(build[0]).toMatchObject({ status: 'ok', attributes: { reset: false, hasPrincipal: true } });
@@ -168,13 +165,13 @@ describe('shell.build', () => {
 
   it('an anonymous build reads hasPrincipal false', async () => {
     const { spans, telemetry } = capture();
-    await createShellHost(ctxWith(telemetry)).session(null, null);
+    await createShellHost(hostConfig(ctxWith(telemetry))).session(null, null);
     expect(spans.find((s) => s.name === 'shell.build')?.attributes['hasPrincipal']).toBe(false);
   });
 
   it('a reset is a build marked reset', async () => {
     const { spans, telemetry } = capture();
-    const host = createShellHost(ctxWith(telemetry));
+    const host = createShellHost(hostConfig(ctxWith(telemetry)));
     const session = await host.session('t', 'usr_1');
     session.reset();
     await tick();

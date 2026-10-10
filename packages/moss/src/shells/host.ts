@@ -1,14 +1,13 @@
 import { randomBytes } from 'node:crypto';
-import { ACTION_SLOT_NAME, CANVAS_SLOT_NAME } from '@niscorp/nova';
-import type { ActionDefinition } from '@niscorp/nova';
-import { componentsOf, snapshotShell } from '@niscorp/nova/reflect';
+import { snapshotShell } from '@niscorp/nova/reflect';
 import { emitterOf } from '../runtime';
 import { buildShell } from './build';
+import type { ShellHostConfig } from './config';
 import type { Cell, HostParts } from './live';
 import { sessionOn } from './shell-session';
 import { DEFAULT_SNAPSHOT_WAIT_MS, needOf, read, settle } from './snapshot';
 import { attach } from './stream';
-import type { ShellHost, ShellHostContext, ShellReport } from './types';
+import type { ShellHost, ShellReport } from './types';
 
 // ═══════════════════════════════════════════════════════════════
 // The shell host (DESIGN.md § The shell runs on the server): the shell
@@ -47,45 +46,6 @@ export const DEFAULT_IDLE_MS = 30 * 60 * 1000;
 // The sweep never runs less often than this, so a short `idleMs` is honoured
 // closely and a long one doesn't cost a wakeup per minute.
 const SWEEP_EVERY_MS = 60 * 1000;
-
-// What every part of the host reads, worked out once from what it was handed.
-const partsOf = (ctx: ShellHostContext): HostParts => {
-  const manifest = ctx.manifest ?? ctx.app.shell;
-  if (manifest === undefined) throw new Error('createShellHost: the app manifest has no `shell`.');
-  const shellManifest = manifest;
-  const actionsNow = ctx.actions ?? ((): Readonly<Record<string, ActionDefinition>> => ctx.app.actions);
-
-  // Every component NAME the app's layouts mention — nova's registry holds
-  // opaque components (generic, unknown), so the server registers name-only
-  // stubs: the render pipeline validates names and serializes trees; actual
-  // components live in the terminal. `componentsOf` (nova/reflect) is the one
-  // walk; no component list is ever authored. nova's own slot markers come
-  // from default layouts, not the app's, so the walk can't find them — seed
-  // them first.
-  const componentNames = new Set<string>([CANVAS_SLOT_NAME, ACTION_SLOT_NAME]);
-  for (const source of [actionsNow(), ctx.app.layouts ?? {}, shellManifest.canvases, shellManifest.layout ?? {}, shellManifest.layoutStore ?? {}, shellManifest.fragments ?? {}]) {
-    for (const name of componentsOf(source)) componentNames.add(name);
-  }
-  // Declared contracts register even when no authored layout mentions them
-  // (generated layouts may name them; the palette must see them).
-  const contracts = shellManifest.components ?? {};
-  for (const name of Object.keys(contracts)) componentNames.add(name);
-
-  return {
-    ctx,
-    // The deployment's telemetry sink, if any — read off the runtime this host
-    // already carries, so no signature grows. `undefined` when unset, which the
-    // build and dispatch sites guard on.
-    emit: emitterOf(ctx.runtime.telemetry),
-    shellManifest,
-    kept: ctx.kept ?? true,
-    actionsNow,
-    componentNames,
-    contracts,
-    delta: ctx.delta ?? false,
-    durable: new Map(),
-  };
-};
 
 // ── the idle sweep ──
 // A durable shell with nothing attached for `idleMs` is disposed. Safe by
@@ -129,32 +89,25 @@ const rosterOf = (durable: ReadonlyMap<string, Cell>): ShellReport[] => {
   return reports;
 };
 
-// RE-RESOLVED, not re-read off the cell. Adopting happens because something
-// the derivations were made FROM changed, and the commonest such change is a
-// tenant installing an integration — so the install list a shell was born with is
+// ASKED AGAIN, not read off the cell. Adopting happens because something
+// the composition was made FROM changed, and the commonest such change is a
+// tenant installing an integration — so what a shell was born holding is
 // exactly the thing that must not be trusted here. Asynchronous and
 // unawaited: definitions landing a tick late simply register, which is the
 // same progressive path `seeds` already takes.
 const adoptAll = async (host: HostParts): Promise<void> => {
-  const { ctx, actionsNow, durable } = host;
+  const { config, durable } = host;
   for (const [, cell] of durable) {
     if (cell.live.ended) continue;
-    const who = await ctx.resolve(cell.principal);
-    cell.roles = who.roles;
-    cell.installed = who.installed;
-    cell.hash = who.catalog.hash;
-    const granted = new Set(who.catalog.ids);
-    for (const [id, definition] of Object.entries(actionsNow())) {
-      if (!granted.has(id)) continue;
-      const layout = who.variants.get(id);
-      cell.live.shell.registerAction(layout === undefined ? definition : { ...definition, layout });
-    }
+    const made = await config.composition(cell.principal);
+    for (const definition of Object.values(made.actions)) cell.live.shell.registerAction(definition);
   }
 };
 
-export const createShellHost = (ctx: ShellHostContext): ShellHost => {
-  const host = partsOf(ctx);
-  const { shellManifest, kept, delta, durable } = host;
+export const createShellHost = (config: ShellHostConfig): ShellHost => {
+  const durable = new Map<string, Cell>();
+  const host: HostParts = { config, emit: emitterOf(config.telemetry), kept: config.kept ?? true, delta: config.limits?.delta ?? false, durable };
+  const { kept, delta } = host;
 
   // Dispose a shell and stand its replacement in the same cell, carrying the
   // attached connections across. Everything a shell is derived from — the
@@ -180,7 +133,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     old.connections.clear();
     old.shell.dispose();
     cell.live = next;
-    for (const { connection, wants } of carried) attach(next, connection, shellManifest.canvases, delta && wants);
+    for (const { connection, wants } of carried) attach(next, connection, next.canvases, delta && wants);
   };
 
   const durableCell = async (token: string | null, principal: string): Promise<Cell> => {
@@ -189,13 +142,12 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
       existing.token = token; // a rebuild should re-authorize as the newest session
       return existing;
     }
-    const who = await ctx.resolve(principal);
-    const cell: Cell = { live: await buildShell(host, token, principal), token, principal, roles: who.roles, installed: who.installed, hash: who.catalog.hash };
+    const cell: Cell = { live: await buildShell(host, token, principal), token, principal };
     durable.set(principal, cell);
     return cell;
   };
 
-  const idleMs = ctx.idleMs ?? DEFAULT_IDLE_MS;
+  const idleMs = config.limits?.idleMs ?? DEFAULT_IDLE_MS;
   let sweeper: ReturnType<typeof setInterval> | undefined;
   if (idleMs > 0 && Number.isFinite(idleMs)) {
     sweeper = setInterval(() => sweep(durable, idleMs), Math.min(idleMs, SWEEP_EVERY_MS));
@@ -206,9 +158,8 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   return {
     session: async (token, principal, options) => {
       if (principal === null || !kept) {
-        const who = await ctx.resolve(principal);
         const live = await buildShell(host, token, principal, false, options?.seed, options?.inputs);
-        return sessionOn(host, { live, token, principal, roles: who.roles, installed: who.installed, hash: who.catalog.hash }, true, rebuild);
+        return sessionOn(host, { live, token, principal }, true, rebuild);
       }
       return sessionOn(host, await durableCell(token, principal), false, rebuild);
     },
@@ -217,14 +168,14 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
       if (principal !== null && kept) {
         const cell = await durableCell(token, principal);
         const settled = await settle(cell.live, waitMs);
-        return { ...read(cell.live, shellManifest.canvases), settled, ...needOf(cell.live, principal, kept, ctx.needOf) };
+        return { ...read(cell.live, cell.live.canvases), settled, ...needOf(cell.live, principal, kept, config.entries) };
       }
       // Nobody in particular, or a page: a shell for the length of one read.
       const seed = randomBytes(9).toString('hex');
       const live = await buildShell(host, token, principal, false, seed, options?.inputs);
       try {
         const settled = await settle(live, waitMs);
-        return { ...read(live, shellManifest.canvases), seed, settled, ...needOf(live, principal, kept, ctx.needOf) };
+        return { ...read(live, live.canvases), seed, settled, ...needOf(live, principal, kept, config.entries) };
       } finally {
         live.ended = true;
         live.shell.dispose();

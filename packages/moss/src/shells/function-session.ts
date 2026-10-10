@@ -1,12 +1,10 @@
 import type { FetchFn, FunctionHandler, Shell } from '@niscorp/nova';
-import { revokeAllFor } from '../identity';
 import type { FunctionSession } from '../manifest';
 import { CLOSE_SIGNED_OUT } from '../protocol';
 import type { ServerMessage } from '../protocol';
 import { spanClock } from '../runtime';
 import type { Emit } from '../runtime';
 import type { HostParts, Live } from './live';
-import type { ShellPrincipal } from './types';
 
 // THE SESSION APP CODE IS HANDED (`functions`, `onSession`), made for one
 // shell: who is calling, the wire as them, and what a session may do by name
@@ -63,17 +61,16 @@ const grant = (standing: Standing, token: string): void => {
 };
 
 // REVOKE: forget the credential, close every terminal SIGNED_OUT,
-// evict the durable shell. Under moss's own credential the rows go
-// first — closing the terminals clears the tokens THEY held, not a
-// copy anywhere else. The shell is the principal's and every one of
-// its terminals closes, so every session the principal holds is
-// deleted, not only the one this shell was built with. A custom
-// verifier's credential is the app's to revoke; 'dev-open' stores
-// none. The teardown is deferred a microtask so the calling trigger
-// finishes before its own shell is disposed.
+// evict the durable shell. Where the deployment keeps the credential
+// (`revokeSessions` was handed in) the rows go first — closing the
+// terminals clears the tokens THEY held, not a copy anywhere else. The
+// shell is the principal's and every one of its terminals closes, so
+// every session the principal holds is deleted, not only the one this
+// shell was built with. The teardown is deferred a microtask so the
+// calling trigger finishes before its own shell is disposed.
 const revoke = (host: HostParts, standing: Standing, principal: string | null): Promise<void> => {
-  const { ctx, durable } = host;
-  const forgotten = ctx.runtime.session === 'sessions' && principal !== null ? revokeAllFor(ctx.runtime.pool, principal) : Promise.resolve();
+  const { config, durable } = host;
+  const forgotten = config.revokeSessions !== undefined && principal !== null ? config.revokeSessions(principal) : Promise.resolve();
   // Loud when it fails — a sign-out that left the credential alive is
   // a security fault, not a detail — and never an unhandled rejection
   // for a caller that did not await it. A caller that does still sees
@@ -97,17 +94,22 @@ const revoke = (host: HostParts, standing: Standing, principal: string | null): 
 // The manifest's in-process functions close over this, made for THIS
 // session — the shell and the live connection set land in `standing` just
 // after creation (a function that somehow runs before then fails loudly).
+//
+// `who`: the principal with what their composition says of them, and the ids
+// of the actions they hold.
 export const functionSessionFor = (
   host: HostParts,
-  made: { principal: string | null; who: ShellPrincipal; wire: FetchFn; standing: Standing },
+  who: { principal: string | null; roles: readonly string[]; scope: Record<string, unknown>; actions: readonly string[] },
+  wire: FetchFn,
+  standing: Standing,
 ): FunctionSession => {
-  const { ctx } = host;
-  const { principal, who, wire, standing } = made;
+  const { config } = host;
+  const { principal } = who;
   const session: FunctionSession = {
     principal,
     roles: who.roles,
     identity: who.scope,
-    actions: who.catalog.ids,
+    actions: who.actions,
     wire,
     get shell(): Shell {
       if (standing.shell === undefined) throw new Error('moss: a function touched the shell before the session finished building.');
@@ -116,15 +118,14 @@ export const functionSessionFor = (
     grant: (token) => grant(standing, token),
     revoke: () => revoke(host, standing, principal),
     answerIntent: (writers, asked) =>
-      ctx.answerIntent === undefined
+      config.answerIntent === undefined
         ? Promise.reject(new Error('moss: this shell host was given no way to answer an intent.'))
-        : ctx.answerIntent(principal, writers, asked),
+        : config.answerIntent(principal, writers, asked),
     // The session's own fields are stamped here so a caller cannot get them
     // wrong, and the shell id is read lazily — a run cannot happen before
     // the shell exists, but this object is built before it does.
     recordRun: (run) => {
-      if (ctx.app.runs === undefined) return;
-      ctx.app.runs({ ...run, at: Date.now(), principal, shellId: standing.shell?.id ?? '' }, session);
+      config.hooks.runs?.({ ...run, at: Date.now(), principal, shellId: standing.shell?.id ?? '' }, session);
     },
   };
   return session;

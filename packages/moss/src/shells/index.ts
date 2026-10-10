@@ -6,6 +6,10 @@
 // theirs right now. The shell runs here, on the server; a terminal draws what
 // it is sent.
 //
+// WHAT A HOST IS HANDED (./config.ts) is a typed object of the functions and
+// values it needs: one that answers what a principal's shell is made of, the
+// app's code it calls, the wire, and its limits. No manifest and no runtime.
+//
 // THE HOST (./host.ts) keeps one shell for each signed-in principal and builds
 // a throwaway one for anybody else: the cells, the idle sweep, the roster, a
 // reset, a delivery, and adopting definitions that changed.
@@ -25,12 +29,14 @@
 // without attaching, with whether anything on it can still happen
 // (./liveness.ts).
 //
-// This module imports `runtime`, `protocol`, `identity`, `manifest` and
-// `data`, and nothing else of moss.
+// This module imports `runtime`, `protocol`, `manifest` and `data`, and
+// nothing else of moss. Who somebody is, it is told: the composition it is
+// handed was resolved by the identity module, where the server stands.
 // ═══════════════════════════════════════════════════════════════
 
 export { instrumentFunctions } from './function-session';
 export { DEFAULT_IDLE_MS, createShellHost } from './host';
 export { shellNeedOf } from './liveness';
 export type { ShellNeed } from './liveness';
-export type { ShellConnection, ShellHost, ShellHostContext, ShellOpening, ShellPrincipal, ShellReport, ShellSession, ShellSnapshot } from './types';
+export type { ComponentContract, ShellComposition, ShellHooks, ShellHostConfig, ShellLimits } from './config';
+export type { ShellConnection, ShellHost, ShellOpening, ShellReport, ShellSession, ShellSnapshot } from './types';

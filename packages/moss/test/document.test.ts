@@ -1,12 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { ActionDefinition } from '@niscorp/nova';
-import type { ScopePolicy } from '@niscorp/vex';
 import { createShellHost } from '../src/shells';
-import type { ShellHostContext, ShellSnapshot } from '../src/shells';
+import type { ShellSnapshot } from '../src/shells';
+import { hostConfig } from './shell-host-double';
+import type { HostSetup } from './shell-host-double';
 import type { NiscApp, PageManifest } from '../src/manifest';
 import type { MossServer } from '../src/server';
 import { createPageRouter } from '../src/pages';
-import { shellNeedOf } from '../src/shells';
 import { documentHeaders, embedSnapshot, exportDocuments, renderDocument, tokenFromCookie } from '../src/document';
 import { readDocumentSnapshot } from '../src/client';
 
@@ -38,7 +38,6 @@ const post: ActionDefinition = {
   },
 };
 
-const policy: ScopePolicy = { default: 'deny', entities: {} };
 const docs: PageManifest = {
   path: '/docs/:slug',
   params: 'main',
@@ -51,19 +50,16 @@ const app = { charter: {}, assignments: {}, actions: { words, counter, chip, pos
 // The parts of a server a document asks for, stood up the way createServer
 // stands them up: one context, the app's host and each page's.
 const serverOf = (): MossServer => {
-  const context: ShellHostContext = {
+  const context: HostSetup = {
     app,
-    catalogFor: () => ({ ids: [], hash: 'h' }),
-    variantsFor: () => new Map(),
-    resolve: async (principal) => ({ roles: [principal === null ? 'public' : 'member'], scope: {}, installed: undefined, catalog: { ids: principal === null ? ['words', 'counter', 'post'] : ['words', 'counter', 'chip', 'post'], hash: 'h' }, variants: new Map(), policy }),
+    resolve: async (principal) => ({ roles: [principal === null ? 'public' : 'member'], scope: {}, catalog: { ids: principal === null ? ['words', 'counter', 'post'] : ['words', 'counter', 'chip', 'post'], hash: 'h' }, variants: new Map() }),
     wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
-    runtime: {} as ShellHostContext['runtime'],
-    needOf: (definition) => shellNeedOf(definition, new Map()),
+    entries: new Map(),
   };
-  const shells = createShellHost(context);
+  const shells = createShellHost(hostConfig(context));
   const hosts = new Map([
-    ['docs', createShellHost({ ...context, manifest: docs, kept: false })],
-    ['posts', createShellHost({ ...context, manifest: posts, kept: false })],
+    ['docs', createShellHost(hostConfig({ ...context, manifest: docs, kept: false }))],
+    ['posts', createShellHost(hostConfig({ ...context, manifest: posts, kept: false }))],
   ]);
   const router = createPageRouter({ docs, posts });
   return {

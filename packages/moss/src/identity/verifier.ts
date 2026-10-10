@@ -1,6 +1,6 @@
 import type { NiscRuntime, SessionVerifier } from '../runtime';
 import { devSession } from './dev-token';
-import { sessionOf } from './sessions';
+import { revokeAllFor, sessionOf } from './sessions';
 
 // The three-way choice, resolved once at boot (../server.ts). Typed callers
 // cannot reach the refusal — the field is required — but a JS config can,
@@ -29,3 +29,11 @@ export const sessionVerifierOf = (runtime: Pick<NiscRuntime, 'session' | 'pool'>
   console.info(`[moss] session: a function the app supplied${chosen.name === '' ? '' : ` (\`${chosen.name}\`)`} decides who a token is.`);
   return chosen;
 };
+
+// HOW EVERY SESSION A PRINCIPAL HOLDS IS FORGOTTEN, for a sign-out: the twin
+// of the choice above. Under moss's own credential the rows are deleted. A
+// verifier of the app's own keeps its credential where moss cannot reach, and
+// the app revokes it; 'dev-open' stores none. For those two there is nothing
+// here to forget, and the answer is undefined.
+export const sessionRevokerOf = (runtime: Pick<NiscRuntime, 'session' | 'pool'>): ((principal: string) => Promise<void>) | undefined =>
+  runtime.session === 'sessions' ? (principal) => revokeAllFor(runtime.pool, principal) : undefined;

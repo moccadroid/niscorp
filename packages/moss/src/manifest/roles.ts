@@ -1,5 +1,5 @@
 import { resolvePrincipal } from '@niscorp/charter';
-import type { LayoutNode } from '@niscorp/nova';
+import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
 import { assignedRoles, memoKey } from '../identity';
 import type { NiscApp } from './app';
 
@@ -71,9 +71,30 @@ export const resolveVariantsForRoles = (app: Pick<NiscApp, 'charter' | 'layouts'
 export const resolveVariants = (app: NiscApp, principal: string | null): ReadonlyMap<string, LayoutNode> =>
   resolveVariantsForRoles(app, assignedRoles(app.assignments, principal));
 
+// The action definitions a set of roles holds, by id, in the catalog's order:
+// each as the manifest has it, or with the layout variant those roles hold of
+// it in its place. The base is never edited: a variant is a copy that differs
+// in its layout. This is the one place the grant and the variant are applied
+// to a definition; a shell is built from the answer and adopts it.
+export const definitionsFor = (
+  actions: Readonly<Record<string, ActionDefinition>>,
+  ids: readonly string[],
+  variants: ReadonlyMap<string, LayoutNode>,
+): Readonly<Record<string, ActionDefinition>> =>
+  Object.freeze(
+    Object.fromEntries(
+      ids.flatMap((id): [string, ActionDefinition][] => {
+        const definition = actions[id];
+        if (definition === undefined) return [];
+        const layout = variants.get(id);
+        return [[id, layout === undefined ? definition : { ...definition, layout }]];
+      }),
+    ),
+  );
+
 // WHAT EACH SET OF ROLES HOLDS, REMEMBERED.
 //
-// Both answers are a function of the manifest and of (roles + install list),
+// Every answer is a function of the manifest and of (roles + install list),
 // and of nothing about the person asking. So they are kept by that key — one
 // entry per combination, about ten in a real deployment, where a key per
 // principal was one per person — until the manifest changes. Whoever changes
@@ -81,6 +102,8 @@ export const resolveVariants = (app: NiscApp, principal: string | null): Readonl
 export type RoleHoldings = {
   catalogFor: (roles: readonly string[], installed: readonly string[] | undefined) => Catalog;
   variantsFor: (roles: readonly string[]) => ReadonlyMap<string, LayoutNode>;
+  // The definitions themselves, granted and with the variant in place.
+  definitionsFor: (roles: readonly string[], installed: readonly string[] | undefined) => Readonly<Record<string, ActionDefinition>>;
   drop: () => void;
 };
 
@@ -92,6 +115,7 @@ export const createRoleHoldings = (config: {
 }): RoleHoldings => {
   const catalogs = new Map<string, Catalog>();
   const variants = new Map<string, ReadonlyMap<string, LayoutNode>>();
+  const definitions = new Map<string, Readonly<Record<string, ActionDefinition>>>();
   const kept = <Held>(memo: Map<string, Held>, key: string, resolve: () => Held): Held => {
     const hit = memo.get(key);
     if (hit !== undefined) return hit;
@@ -99,15 +123,19 @@ export const createRoleHoldings = (config: {
     memo.set(key, resolved);
     return resolved;
   };
-  return {
+  const holdings: RoleHoldings = {
     catalogFor: (roles, installed) => kept(catalogs, memoKey(roles, installed), () => catalogFor(config.manifest(), roles, installed, config.installedOnly)),
     // Which variant is held does not depend on what is installed.
     variantsFor: (roles) => kept(variants, memoKey(roles, undefined), () => resolveVariantsForRoles(config.manifest(), roles)),
+    definitionsFor: (roles, installed) =>
+      kept(definitions, memoKey(roles, installed), () => definitionsFor(config.manifest().actions, holdings.catalogFor(roles, installed).ids, holdings.variantsFor(roles))),
     drop: () => {
       catalogs.clear();
       variants.clear();
+      definitions.clear();
     },
   };
+  return holdings;
 };
 
 // A content hash of the resolved id set — identity, not cryptography

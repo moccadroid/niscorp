@@ -29,4 +29,4 @@ export type { Identity, IdentityConfig, IdentitySeam, ResolvedIdentity } from '.
 export { newSeal, openSealed, sealCookie, sealOf, sealSession } from './seal';
 export { isOwnOrigin, sessionCookies, sessionTokenOf, tokenFromCookie } from './session-cookie';
 export { SESSIONS_SEQUENCE, initSessions, mintSession, revokeAllFor, sessionOf, sessionRemainingMs } from './sessions';
-export { sessionVerifierOf } from './verifier';
+export { sessionRevokerOf, sessionVerifierOf } from './verifier';
