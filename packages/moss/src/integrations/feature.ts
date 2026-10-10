@@ -1,11 +1,11 @@
-import type { PgPool } from '@niscorp/vex';
-import type { Feature, FeatureSeams } from '../feature';
+import type { Feature, FeatureSeams, Replay } from '../feature';
 import { KEY_PREFIX, keyCredential } from './actor';
 import type { IntegrationActor } from './actor';
 import { callIntegrationWith } from './call';
 import type { CallIntegration } from './call';
 import { contractRoutes } from './contract';
 import { createAssertionSigner } from './credentials';
+import { REGISTRY_ENTRIES, REGISTRY_TABLES } from './entries';
 import { flooredWire } from './floor';
 import { createForwarder } from './forward';
 import { frameRoutes } from './frame';
@@ -112,24 +112,28 @@ const SOURCE = 'integrations';
 
 // What the calls an app makes are made of, once a server has started the
 // feature.
-type Started = { pool: PgPool; call: CallIntegration };
+type Started = { replay: Replay; call: CallIntegration };
 
 const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<Started> => {
-  const { pool } = seams;
+  // THE REGISTRY'S READS AND WRITES, handed over as entries of the feature's
+  // own: seeded where no route serves them, and replayed from here on by
+  // `replay` (./registry.ts, ./entries.ts).
+  const replay = await seams.ownEntries({ entries: REGISTRY_ENTRIES, tables: REGISTRY_TABLES });
+  const find = (id: string): ReturnType<typeof findIntegration> => findIntegration(replay, id);
   // THE DEPLOYMENT'S SIGNING IDENTITY — how an integration knows a call is
   // ours. The public half is served; verifying is all anybody can do with it
   // (./credentials.ts).
   const signer = createAssertionSigner(seams.signingSeed);
-  const forward = createForwarder({ find: (id) => findIntegration(pool, id), who: seams.who, scopeOf: seams.scopeOf, mint: signer.mint });
+  const forward = createForwarder({ find, who: seams.who, scopeOf: seams.scopeOf, mint: signer.mint });
   // Approved integrations' actions, read from rows. Handed to the running
   // manifest after an import, an approval and a removal: the set is verified
   // with everything else, and only then is it served.
-  const stored = (): ReturnType<typeof loadIntegrationActions> => loadIntegrationActions(pool, seams.grammars);
+  const stored = (): ReturnType<typeof loadIntegrationActions> => loadIntegrationActions(replay, seams.grammars);
   const reload = async (): Promise<void> => seams.replaceActions(SOURCE, await stored());
 
   seams.narrowCatalogs(filterInstalled);
   seams.loadActionsFrom(SOURCE, stored);
-  seams.credential(KEY_PREFIX, keyCredential({ pool, actor: config.integrationActor, who: seams.who }));
+  seams.credential(KEY_PREFIX, keyCredential({ byKey: (key) => integrationByKey(replay, key), actor: config.integrationActor, who: seams.who }));
   seams.wrapWire(flooredWire);
 
   // What the host offers a bundle to name: the kit's components, which the
@@ -151,7 +155,7 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
   );
   seams.operatorRoutes(
     operatorRoutes({
-      pool,
+      replay,
       grammars: seams.grammars,
       fingerprints: seams.fingerprints,
       vocabulary,
@@ -164,7 +168,7 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
   );
   // The frame doors, then the webhook, then the proxy: the proxy's pattern
   // matches every path the other three serve.
-  seams.routes(frameRoutes({ pool, who: seams.who, holds: seams.holds, forward }));
+  seams.routes(frameRoutes({ find, who: seams.who, holds: seams.holds, forward }));
   seams.routes(proxyRoutes({ holds: seams.holds, forward }));
 
   // WHATEVER WAS APPROVED BEFORE THIS PROCESS STARTED is part of the
@@ -173,7 +177,7 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
   const approved = await stored();
   if (Object.keys(approved).length > 0) seams.replaceActions(SOURCE, approved);
 
-  return { pool, call: callIntegrationWith({ forward, ...(seams.telemetry === undefined ? {} : { telemetry: seams.telemetry }) }) };
+  return { replay, call: callIntegrationWith({ forward, ...(seams.telemetry === undefined ? {} : { telemetry: seams.telemetry }) }) };
 };
 
 export const createIntegrations = (config: IntegrationsConfig = {}): Integrations => {
@@ -195,9 +199,9 @@ export const createIntegrations = (config: IntegrationsConfig = {}): Integration
       started = await start(config, seams);
     },
     callIntegration: async (id, path, init) => running('callIntegration').call(id, path, init),
-    listAttachments: async (hostAction) => listAttachments(running('listAttachments').pool, hostAction),
-    listPlacements: async () => listPlacements(running('listPlacements').pool),
-    integrationByKey: async (key) => integrationByKey(running('integrationByKey').pool, key),
+    listAttachments: async (hostAction) => listAttachments(running('listAttachments').replay, hostAction),
+    listPlacements: async () => listPlacements(running('listPlacements').replay),
+    integrationByKey: async (key) => integrationByKey(running('integrationByKey').replay, key),
     integrationOfAction,
   };
 };

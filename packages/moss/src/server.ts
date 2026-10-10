@@ -449,7 +449,6 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     narrowCatalogs: running.narrowCatalogs,
     charter: app.charter,
     components: app.shell?.components ?? {},
-    pool: runtime.pool,
     ownEntries: data.ownEntries,
     grammars: data.grammars,
     fingerprints: async () => (await data.engine.cache.keys?.()) ?? [],

@@ -1,6 +1,4 @@
-import type { PgPool } from '@niscorp/vex';
 import type { CredentialAnswer, FeatureSeams } from '../feature';
-import { integrationByKey } from './registry';
 
 // ═══════════════════════════════════════════════════════════════
 // WHO AN INTEGRATION IS when it acts and nobody is driving.
@@ -26,9 +24,14 @@ export type IntegrationActor = (integration: string, actsFor: string) => string 
 const NO_ACTOR: CredentialAnswer = { refused: { status: 403, error: 'no_actor', message: 'This integration has no actor there.' } };
 
 export const keyCredential =
-  (deps: { pool: PgPool; actor: IntegrationActor | undefined; who: FeatureSeams['who'] }) =>
+  (deps: {
+    // The approved integration a presented key belongs to (./registry.ts).
+    byKey: (key: string) => Promise<string | undefined>;
+    actor: IntegrationActor | undefined;
+    who: FeatureSeams['who'];
+  }) =>
   async (token: string, request: Request): Promise<CredentialAnswer> => {
-    const integration = await integrationByKey(deps.pool, token);
+    const integration = await deps.byKey(token);
     if (integration === undefined) return { refused: { status: 401, error: 'invalid_key', message: 'The integration key did not resolve.' } };
     const actor = (await deps.actor?.(integration, request.headers.get('x-nisc-acts-for') ?? '')) ?? null;
     if (actor === null) return NO_ACTOR;

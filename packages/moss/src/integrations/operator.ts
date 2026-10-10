@@ -2,8 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import type { Upgrader } from '@niscorp/strata';
-import type { PgPool } from '@niscorp/vex';
-import type { FeatureEnv } from '../feature';
+import type { FeatureEnv, Replay } from '../feature';
 import type { Bundle } from './bundle';
 import { hashIntegrationKey, mintIntegrationKey } from './credentials';
 import { intakeContextOf, runIntake } from './intake';
@@ -41,7 +40,8 @@ const ProbeBodySchema = z.looseObject({ path: z.string().optional().catch(undefi
 type Actions = Readonly<Record<string, ActionDefinition>>;
 
 export type OperatorDeps = {
-  pool: PgPool;
+  // What the registry's entries are replayed by (./registry.ts).
+  replay: Replay;
   // The host's grammars: a bundle's actions are brought to them before they
   // are read, and stored stamped with them.
   grammars: Upgrader;
@@ -108,12 +108,12 @@ const register = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
 
     const taken = await takeIn(deps, id, url);
     if (!taken.ok) {
-      await recordFailedImport(deps.pool, id, url, taken.error);
+      await recordFailedImport(deps.replay, id, url, taken.error);
       return c.json(taken.answer, taken.status);
     }
 
     // The candidate manifest, verified BEFORE anything is written.
-    const { approved: wasApproved, holdsKey } = await standingOf(deps.pool, id);
+    const { approved: wasApproved, holdsKey } = await standingOf(deps.replay, id);
     if (wasApproved) {
       // TRIED, NOT PUT IN. The bundle's actions over the actions in force are
       // a candidate the running manifest verifies without switching to it, so
@@ -123,7 +123,7 @@ const register = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
       if (refusal !== undefined) return c.json({ message: 'Refused — the app would not serve this.', reasons: [`Error: ${refusal}`] }, 422);
     }
 
-    await landBundle(deps.pool, {
+    await landBundle(deps.replay, {
       id,
       url,
       bundle: taken.bundle,
@@ -139,7 +139,7 @@ const register = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
     // so there is nothing to repeat. Losing it is not recovery, it is removal
     // and re-registration, which also re-fences everything the old key held.
     const key = holdsKey ? undefined : mintIntegrationKey();
-    if (key !== undefined) await keepKeyHash(deps.pool, id, hashIntegrationKey(key));
+    if (key !== undefined) await keepKeyHash(deps.replay, id, hashIntegrationKey(key));
 
     await deps.reload();
     const status = wasApproved ? 'approved' : 'pending';
@@ -159,12 +159,12 @@ const register = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
 const approve = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
   routes.post('/integrations/:id/approve', async (c) => {
     const id = c.req.param('id');
-    const requested = await approveIntegration(deps.pool, id);
+    const requested = await approveIntegration(deps.replay, id);
     if (requested === undefined) return c.json({ message: 'No such integration.' }, 404);
     try {
       await deps.reload();
     } catch (err) {
-      await setBackToPending(deps.pool, id, String(err));
+      await setBackToPending(deps.replay, id, String(err));
       await deps.reload();
       return c.json({ message: 'Refused — the app would not serve this.', reasons: [String(err)] }, 422);
     }
@@ -185,7 +185,7 @@ const approve = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
 const probe = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
   routes.post('/integrations/:id/probe', async (c) => {
     const id = c.req.param('id');
-    const found = await findIntegration(deps.pool, id);
+    const found = await findIntegration(deps.replay, id);
     if (found === undefined) return c.json({ message: 'No such integration.' }, 404);
     const sent: unknown = await c.req.json().catch(() => ({}));
     const path = ProbeBodySchema.parse(sent).path ?? 'bundle';
@@ -208,7 +208,7 @@ const probe = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
 
 export const operatorRoutes = (deps: OperatorDeps): Hono<FeatureEnv> => {
   const routes = new Hono<FeatureEnv>();
-  routes.get('/integrations', async (c) => c.json({ integrations: await listIntegrations(deps.pool) }));
+  routes.get('/integrations', async (c) => c.json({ integrations: await listIntegrations(deps.replay) }));
   register(deps, routes);
   approve(deps, routes);
 
@@ -217,7 +217,7 @@ export const operatorRoutes = (deps: OperatorDeps): Hono<FeatureEnv> => {
   // — which is why reinstalling restores it.
   routes.delete('/integrations/:id', async (c) => {
     const id = c.req.param('id');
-    await removeIntegration(deps.pool, id);
+    await removeIntegration(deps.replay, id);
     await deps.reload();
     return c.json({ id, removed: true });
   });

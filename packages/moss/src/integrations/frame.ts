@@ -1,12 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { PgPool } from '@niscorp/vex';
 import type { FeatureEnv, FeatureSeams } from '../feature';
 import { relayed } from './forward';
 import type { Forwarder } from './forward';
 import { FRAME_GRANT_URL, frameAdmits } from './reach';
-import { findIntegration } from './registry';
+import type { FoundIntegration } from './registry';
 
 // ═══════════════════════════════════════════════════════════════
 // THE FRAME SEAM
@@ -62,7 +61,8 @@ const FrameBodySchema = z.looseObject({ path: z.string().optional().catch(undefi
 type Grant = { integration: string; principal: string; path: string; expires: number };
 
 export type FrameDeps = {
-  pool: PgPool;
+  // An integration by its id (./registry.ts).
+  find: (id: string) => Promise<FoundIntegration | undefined>;
   who: FeatureSeams['who'];
   holds: FeatureSeams['holds'];
   forward: Forwarder;
@@ -104,7 +104,7 @@ export const frameRoutes = (deps: FrameDeps): Hono<FeatureEnv> => {
     const sent: unknown = await c.req.json().catch(() => ({}));
     const path = FrameBodySchema.parse(sent).path ?? '';
     const id = path.split('/')[2] ?? '';
-    const found = await findIntegration(deps.pool, id);
+    const found = await deps.find(id);
     if (found === undefined || found.status !== 'approved') return c.json({ message: 'No such integration.' }, 404);
     const caller = await deps.who(principal);
     if (caller.installed !== undefined && !caller.installed.includes(id)) return c.json({ message: 'Not installed here.' }, 404);

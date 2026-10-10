@@ -117,16 +117,11 @@ type Entry = Found & { why: 'credential' | 'store' | 'debt' | 'tables'; note: st
 const LEDGER: Readonly<Record<string, Readonly<Record<string, Entry>>>> = {
   moss: {
     'identity/sessions.ts': { doors: 6, statements: 6, tables: 1, why: 'credential', note: 'the session credential: a token hash is looked up before anybody is signed in' },
-    // Every statement on `integrations` and `integration_actions`, in one file.
-    // They were 24 across three: the lookup by id was written seven times and
-    // the failed-import upsert three, and each is here once. None went to vex.
-    'integrations/registry.ts': {
-      doors: 16,
-      statements: 16,
-      tables: 0,
-      why: 'debt',
-      note: 'the integration tables, read and written; one of the sixteen, the key-hash lookup, is a credential and stays',
-    },
+    // `integrations/registry.ts` is not here any more. It held every statement
+    // on `integrations` and `integration_actions`, sixteen of them, and each is
+    // a vex entry now (`integrations/entries.ts`), replayed through the seam a
+    // feature's own entries go through. The key-hash lookup went with the rest:
+    // the policy those entries run under asks for no principal.
     'manifest/generation.ts': { doors: 3, statements: 4, tables: 1, why: 'debt', note: 'the generation counter' },
     'tide.ts': { doors: 7, statements: 6, tables: 3, why: 'store', note: "tide's Postgres store; it belongs with tide" },
     'data/tables.ts': { doors: 0, statements: 0, tables: 15, why: 'tables', note: "moss's own table sequence, as it stood in integrations.ts: history, checksummed in every ledger" },

@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { ActionDefinition, FetchFn } from '@niscorp/nova';
-import type { PgPool } from '@niscorp/vex';
 import { createGrammarUpgrader } from '../src/data/grammar';
-import type { CredentialAnswer, FeatureEnv, FeatureSeams, Whoever } from '../src/feature';
+import type { CredentialAnswer, FeatureEnv, FeatureSeams, Replay, Whoever } from '../src/feature';
 import { createIntegrations, integrationOfAction } from '../src/integrations';
 import { hashIntegrationKey } from '../src/integrations/credentials';
+import { PAGE } from '../src/integrations/entries';
 
 // THE FEATURE, STARTED BY HAND: `createIntegrations` handed seams that are
 // plain functions over a map, the way a server hands it the real ones. No
@@ -15,30 +15,32 @@ import { hashIntegrationKey } from '../src/integrations/credentials';
 
 type Row = Record<string, unknown>;
 
-// A pool that answers the feature's statements from maps: which rows a
-// statement reads is told by the one clause that names it.
-const poolOver = (held: { keys?: Record<string, string>; stored?: Row[]; attached?: Row[]; found?: Record<string, Row> }): PgPool => ({
-  query: async (text, values = []) => {
-    if (text.includes('WHERE key_hash = $1')) {
-      const id = Object.entries(held.keys ?? {}).find(([key]) => hashIntegrationKey(key) === values[0])?.[1];
-      return { rows: id === undefined ? [] : [{ id }] };
+// What the feature's own entries answer, from maps: which rows a read answers
+// is told by its fingerprint and the context it is replayed with. A write
+// answers nothing and is not kept.
+const replayOver =
+  (held: { keys?: Record<string, string>; stored?: Row[]; attached?: Row[]; found?: Record<string, Row> }): Replay =>
+  async (fingerprint, context) => {
+    if (fingerprint === 'integrations/by-key') {
+      const id = Object.entries(held.keys ?? {}).find(([key]) => hashIntegrationKey(key) === context['key_hash'])?.[1];
+      return id === undefined ? [] : [{ id }];
     }
-    if (text.includes('a.definition')) return { rows: held.stored ?? [] };
-    if (text.includes('a.attach_to = $1')) return { rows: (held.attached ?? []).filter((row) => row['attach_to'] === values[0]) };
-    if (text.includes('SELECT url, status, reach, frames')) return { rows: [held.found?.[String(values[0])]].filter((row) => row !== undefined) };
-    return { rows: [] };
-  },
-});
+    if (fingerprint === 'integrations/stored-actions') return held.stored ?? [];
+    if (fingerprint === 'integrations/attachments') return (held.attached ?? []).filter((row) => row['attach_to'] === context['attach_to']);
+    if (fingerprint === 'integrations/find') return [held.found?.[String(context['id'])]].filter((row) => row !== undefined);
+    return [];
+  };
 
 const desk: ActionDefinition = { id: 'ext.desk.belts.roster' };
 
-const world = async (over: { pool?: PgPool; who?: (principal: string | null) => Whoever } = {}) => {
+const world = async (over: { replay?: Replay; who?: (principal: string | null) => Whoever } = {}) => {
   const said = {
     credentials: new Map<string, (token: string, request: Request) => Promise<CredentialAnswer>>(),
     narrowings: [] as Parameters<FeatureSeams['narrowCatalogs']>[0][],
     loaders: new Map<string, () => Promise<Record<string, ActionDefinition>>>(),
     wraps: [] as ((inner: FetchFn) => FetchFn)[],
     replaced: [] as [string, Record<string, ActionDefinition>][],
+    owned: [] as Parameters<FeatureSeams['ownEntries']>[0][],
   };
   // The server's side of the two mounts: every route behind a line that says
   // who is calling, as the server's authentication would have.
@@ -75,8 +77,10 @@ const world = async (over: { pool?: PgPool; who?: (principal: string | null) => 
     },
     charter: { desk: { actions: ['desk.*', 'ext.desk.*'] }, member: { actions: { allow: ['ext.member.*'] } } },
     components: { Text: {} },
-    pool: over.pool ?? poolOver({}),
-    ownEntries: async () => async () => undefined,
+    ownEntries: async (own) => {
+      said.owned.push(own);
+      return over.replay ?? replayOver({});
+    },
     grammars: await createGrammarUpgrader({}),
     fingerprints: async () => ['deals/open'],
     fingerprintsFor: async () => ['deals/open'],
@@ -109,10 +113,17 @@ describe('createIntegrations — before a server has started it', () => {
 });
 
 describe('createIntegrations — started with the seams', () => {
-  it('adds itself through them: a credential, a rule for what is installed, a set in rows, a wrap, and its routes', async () => {
+  it('adds itself through them: its own entries, a credential, a rule for what is installed, a set in rows, a wrap, and its routes', async () => {
     const { seams, said, server, operator } = await world();
     await createIntegrations().start(seams);
 
+    // Its reads and writes are entries it hands over once, with the tables
+    // they touch: every one is named under `integrations/`, and no two alike.
+    expect(said.owned).toHaveLength(1);
+    expect(said.owned[0]?.tables).toEqual(['integrations', 'integration_actions']);
+    const fingerprints = (said.owned[0]?.entries ?? []).map((entry) => entry.fingerprint);
+    expect(fingerprints.every((fingerprint) => fingerprint.startsWith('integrations/'))).toBe(true);
+    expect(new Set(fingerprints).size).toBe(fingerprints.length);
     expect([...said.credentials.keys()]).toEqual(['ik_']);
     expect([...said.loaders.keys()]).toEqual(['integrations']);
     expect(said.wraps).toHaveLength(1);
@@ -147,7 +158,7 @@ describe('createIntegrations — started with the seams', () => {
     await createIntegrations().start(empty.seams);
     expect(empty.said.replaced).toEqual([]);
 
-    const approved = await world({ pool: poolOver({ stored: [{ action_id: desk.id, definition: desk, grammar: {} }] }) });
+    const approved = await world({ replay: replayOver({ stored: [{ integration_id: 'belts', action_id: desk.id, definition: desk, grammar: {} }] }) });
     await createIntegrations().start(approved.seams);
     expect(approved.said.replaced).toEqual([['integrations', { [desk.id]: desk }]]);
     // ...and the loader it named reads the same rows again.
@@ -156,10 +167,10 @@ describe('createIntegrations — started with the seams', () => {
 
   it('a stored definition nova does not read is left out, and the rest is served', async () => {
     const { seams, said } = await world({
-      pool: poolOver({
+      replay: replayOver({
         stored: [
-          { action_id: desk.id, definition: desk, grammar: {} },
-          { action_id: 'ext.desk.belts.broken', definition: { id: 'ext.desk.belts.broken', tittle: 'A typo' }, grammar: {} },
+          { integration_id: 'belts', action_id: desk.id, definition: desk, grammar: {} },
+          { integration_id: 'belts', action_id: 'ext.desk.belts.broken', definition: { id: 'ext.desk.belts.broken', tittle: 'A typo' }, grammar: {} },
         ],
       }),
     });
@@ -174,30 +185,56 @@ describe('createIntegrations — started with the seams', () => {
     }
   });
 
-  it('the calls work from then on, against the pool the server handed over', async () => {
+  it('the calls work from then on, by the replay the server handed over', async () => {
     const { seams } = await world({
-      pool: poolOver({
+      replay: replayOver({
         keys: { ik_belts: 'belts' },
         attached: [
-          { action_id: 'ext.desk.belts.panel', preview: '/integrations/belts/preview', attach_to: 'people.detail' },
-          { action_id: 'ext.desk.pay.panel', preview: null, attach_to: 'somewhere.else' },
+          { integration_id: 'pay', action_id: 'ext.desk.pay.strip', preview: null, attach_to: 'people.detail' },
+          { integration_id: 'belts', action_id: 'ext.desk.belts.panel', preview: '/integrations/belts/preview', attach_to: 'people.detail' },
+          { integration_id: 'pay', action_id: 'ext.desk.pay.panel', preview: null, attach_to: 'somewhere.else' },
         ],
       }),
     });
     const integrations = createIntegrations();
     await integrations.start(seams);
 
-    expect(await integrations.listAttachments('people.detail')).toEqual([{ actionId: 'ext.desk.belts.panel', preview: '/integrations/belts/preview' }]);
+    // In the order of the action ids, whichever integration each belongs to.
+    expect(await integrations.listAttachments('people.detail')).toEqual([
+      { actionId: 'ext.desk.belts.panel', preview: '/integrations/belts/preview' },
+      { actionId: 'ext.desk.pay.strip', preview: '' },
+    ]);
     expect(await integrations.listPlacements()).toEqual({});
     expect(await integrations.integrationByKey('ik_belts')).toBe('belts');
     expect(await integrations.integrationByKey('ik_nobody')).toBeUndefined();
     await expect(integrations.callIntegration('ghost', 'sync', { principal: 'i_mara' })).rejects.toThrow('moss: callIntegration("ghost"): no such integration.');
   });
+
+  it('a list longer than one page is read to its end, each page asked for after the last row of the one before', async () => {
+    // One page and three rows more, in the order of an action's key.
+    const placed = Array.from({ length: PAGE + 3 }, (_, at) => ({ integration_id: 'belts', action_id: `ext.desk.belts.a${String(at).padStart(4, '0')}`, place_in: 'people.hub' }));
+    const asked: Record<string, unknown>[] = [];
+    const { seams } = await world({
+      replay: async (fingerprint, context) => {
+        if (fingerprint !== 'integrations/placements') return [];
+        asked.push(context);
+        return placed.filter((row) => row.action_id > String(context['after_action'])).slice(0, PAGE);
+      },
+    });
+    const integrations = createIntegrations();
+    await integrations.start(seams);
+
+    expect(Object.keys(await integrations.listPlacements())).toHaveLength(PAGE + 3);
+    expect(asked).toEqual([
+      { after_integration: '', after_action: '' },
+      { after_integration: 'belts', after_action: placed[PAGE - 1]?.action_id },
+    ]);
+  });
 });
 
 describe('the integration key, as the credential the feature registers', () => {
   const keyed = async (config: Parameters<typeof createIntegrations>[0], who?: (principal: string | null) => Whoever) => {
-    const { seams, said } = await world({ pool: poolOver({ keys: { ik_belts: 'belts' } }), ...(who === undefined ? {} : { who }) });
+    const { seams, said } = await world({ replay: replayOver({ keys: { ik_belts: 'belts' } }), ...(who === undefined ? {} : { who }) });
     await createIntegrations(config).start(seams);
     const principalOf = said.credentials.get('ik_');
     if (principalOf === undefined) throw new Error('no credential was registered');
@@ -283,7 +320,7 @@ describe('the routes the feature mounts, asked through the server it mounted the
     }) as typeof fetch;
     try {
       const found = { url: 'https://belts.example', status: 'approved', reach: { '/integrations/belts/roster': ['ext.desk.belts.roster'] }, frames: {} };
-      const { seams, server, caller } = await world({ pool: poolOver({ found: { belts: found } }), who: () => ({ roles: ['desk'], installed: ['belts'] }) });
+      const { seams, server, caller } = await world({ replay: replayOver({ found: { belts: found } }), who: () => ({ roles: ['desk'], installed: ['belts'] }) });
       await createIntegrations().start({ ...seams, holds: (roles) => (roles.includes('desk') ? ['ext.desk.belts.roster'] : []) });
       caller.principal = 'i_mara';
 

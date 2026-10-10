@@ -11,15 +11,13 @@
 // And the two doctrines the case turns on: a throwing sink costs the request
 // nothing, and an unconfigured sink is asked for nothing.
 import { describe, it, expect } from 'vitest';
-import { PGlite } from '@electric-sql/pglite';
-import { createPglitePool } from '@niscorp/vex/pglite';
 import type { ExecuteRecord } from '@niscorp/vex';
 import { vexRecordToSpan } from '../src/data/span';
 import { createShellHost, instrumentFunctions } from '../src/shells';
 import type { ShellHostContext } from '../src/shells';
 import { callIntegrationWith } from '../src/integrations/call';
 import { createForwarder } from '../src/integrations/forward';
-import { findIntegration, initIntegrations } from '../src/integrations/registry';
+import type { FoundIntegration } from '../src/integrations/registry';
 import { createAssertionSigner } from '../src/integrations/credentials';
 import { createSocket } from '../src/socket';
 import type { Connection, SocketContext } from '../src/socket';
@@ -100,13 +98,11 @@ describe('fn.call', () => {
 // ── integration.call: the outbound seam, refusals included. ──────────────────
 describe('integration.call', () => {
   const world = async (over: { status?: string; telemetry?: SocketContext['telemetry'] } = {}) => {
-    const pool = createPglitePool(new PGlite());
-    await initIntegrations(pool);
-    await pool.query(`INSERT INTO integrations (id, url, status) VALUES ('acme', 'https://acme.example', $1)`, [over.status ?? 'approved']);
+    const acme: FoundIntegration = { url: 'https://acme.example', status: over.status ?? 'approved', reach: {}, frames: {} };
     const signer = createAssertionSigner();
     const call = callIntegrationWith({
       forward: createForwarder({
-        find: (id) => findIntegration(pool, id),
+        find: async (id) => (id === 'acme' ? acme : undefined),
         who: async () => ({ roles: [], installed: ['acme'] }),
         scopeOf: async () => ({ studio_id: 's_1' }),
         mint: signer.mint,

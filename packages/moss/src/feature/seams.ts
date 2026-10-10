@@ -2,7 +2,7 @@ import type { Hono } from 'hono';
 import type { Charter } from '@niscorp/charter';
 import type { ActionDefinition, FetchFn } from '@niscorp/nova';
 import type { Upgrader } from '@niscorp/strata';
-import type { PgPool, SeedEntry, SeedMutation } from '@niscorp/vex';
+import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Telemetry } from '../runtime';
 
 // ═══════════════════════════════════════════════════════════════
@@ -86,7 +86,6 @@ export type FeatureSeams = {
   components: Readonly<Record<string, { meta?: { description?: string; propsSchema?: unknown } }>>;
 
   // ── what they may read and write ──
-  pool: PgPool;
   // THE FEATURE'S OWN READS AND WRITES, on the tables it keeps: entries
   // authored as an app authors its own, and the tables they touch. Answers how
   // one is replayed, in process. No route serves them, whatever the charter

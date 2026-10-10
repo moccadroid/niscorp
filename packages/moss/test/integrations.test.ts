@@ -10,7 +10,7 @@ import { reachOf } from '../src/integrations/reach';
 import { copyPress } from '../src/integrations/press';
 import { callIntegrationWith } from '../src/integrations/call';
 import { createForwarder } from '../src/integrations/forward';
-import { findIntegration, initIntegrations, listIntegrations } from '../src/integrations/registry';
+import { findIntegration, listIntegrations } from '../src/integrations/registry';
 import type { HostVocabulary, IntakeContext } from '../src/integrations/intake';
 import type { Bundle } from '../src/integrations/bundle';
 import type { StorePress } from '../src/integrations/press';
@@ -193,10 +193,10 @@ describe('offers and needs', () => {
 
   it('the row carries them, and a row predating the columns answers empty', async () => {
     const pool = createPglitePool(new PGlite());
-    await initIntegrations(pool);
+    const registry = await registryOver(pool);
     await pool.query(`INSERT INTO integrations (id, url, offers, needs) VALUES ('acme', 'https://acme.example', '["attendance"]'::jsonb, '["booking"]'::jsonb)`);
     await pool.query(`INSERT INTO integrations (id, url) VALUES ('elder', 'https://elder.example')`);
-    const rows = await listIntegrations(pool);
+    const rows = await listIntegrations(registry);
     expect(rows.find((r) => r.id === 'acme')?.offers).toEqual(['attendance']);
     expect(rows.find((r) => r.id === 'acme')?.needs).toEqual(['booking']);
     expect(rows.find((r) => r.id === 'elder')?.offers).toEqual([]);
@@ -262,17 +262,17 @@ describe('capabilities', () => {
 
   it('the row carries them, and a row predating the column answers empty', async () => {
     const pool = createPglitePool(new PGlite());
-    await initIntegrations(pool);
+    const registry = await registryOver(pool);
     await pool.query(`INSERT INTO integrations (id, url, capabilities) VALUES ('acme', 'https://acme.example', '[{"id":"desk","title":"Front desk"}]'::jsonb)`);
     await pool.query(`INSERT INTO integrations (id, url) VALUES ('elder', 'https://elder.example')`);
-    const rows = await listIntegrations(pool);
+    const rows = await listIntegrations(registry);
     expect(rows.find((r) => r.id === 'acme')?.capabilities).toEqual([{ id: 'desk', title: 'Front desk' }]);
     expect(rows.find((r) => r.id === 'elder')?.capabilities).toEqual([]);
   });
 
   it('a re-import replaces rather than accumulates', async () => {
     const pool = createPglitePool(new PGlite());
-    await initIntegrations(pool);
+    const registry = await registryOver(pool);
     const upsert = (caps: string): Promise<unknown> =>
       pool.query(
         `INSERT INTO integrations (id, url, capabilities) VALUES ('acme', 'https://acme.example', $1::jsonb)
@@ -281,7 +281,7 @@ describe('capabilities', () => {
       );
     await upsert('[{"id":"desk","title":"Front desk"}]');
     await upsert('[{"id":"billing-view","title":"See billing"}]');
-    const rows = await listIntegrations(pool);
+    const rows = await listIntegrations(registry);
     expect(rows.find((r) => r.id === 'acme')?.capabilities).toEqual([{ id: 'billing-view', title: 'See billing' }]);
   });
 });
@@ -351,18 +351,18 @@ describe('configuration — what a builder may set', () => {
 
   it('the row carries it, and a row predating the column answers empty', async () => {
     const pool = createPglitePool(new PGlite());
-    await initIntegrations(pool);
+    const registry = await registryOver(pool);
     const raw = '[{"kind":"toggle","key":"waitlist","title":"Waitlist","description":"","default":true}]';
     await pool.query(`INSERT INTO integrations (id, url, configuration) VALUES ('acme', 'https://acme.example', $1::jsonb)`, [raw]);
     await pool.query(`INSERT INTO integrations (id, url) VALUES ('elder', 'https://elder.example')`);
-    const rows = await listIntegrations(pool);
+    const rows = await listIntegrations(registry);
     expect(rows.find((r) => r.id === 'acme')?.configuration).toEqual([{ kind: 'toggle', key: 'waitlist', title: 'Waitlist', description: '', default: true }]);
     expect(rows.find((r) => r.id === 'elder')?.configuration).toEqual([]);
   });
 
   it('a re-import replaces rather than accumulates', async () => {
     const pool = createPglitePool(new PGlite());
-    await initIntegrations(pool);
+    const registry = await registryOver(pool);
     const upsert = (config: string): Promise<unknown> =>
       pool.query(
         `INSERT INTO integrations (id, url, configuration) VALUES ('acme', 'https://acme.example', $1::jsonb)
@@ -371,7 +371,7 @@ describe('configuration — what a builder may set', () => {
       );
     await upsert('[{"kind":"toggle","key":"a","title":"A","description":"","default":true}]');
     await upsert('[{"kind":"toggle","key":"b","title":"B","description":"","default":false}]');
-    const rows = await listIntegrations(pool);
+    const rows = await listIntegrations(registry);
     expect(rows.find((r) => r.id === 'acme')?.configuration).toEqual([{ kind: 'toggle', key: 'b', title: 'B', description: '', default: false }]);
   });
 });
@@ -503,7 +503,7 @@ describe('documents — what an add-on lets a person edit', () => {
 
   it('the row carries it, and a re-import replaces rather than accumulates', async () => {
     const pool = createPglitePool(new PGlite());
-    await initIntegrations(pool);
+    const registry = await registryOver(pool);
     const one = '[{"id":"a","title":"A","capability":"build","registry":[{"type":"t","label":"T","fields":[{"key":"k","label":"K","kind":"line","hint":"","placeholder":"","group":"","advanced":false,"options":[]}],"starter":{},"fragment":{"component":"Text"}}],"sections":{"open":{"max":5}},"regions":{},"checks":[],"publish":{"path":"/integrations/acme/x"}}]';
     const upsert = (documents: string): Promise<unknown> =>
       pool.query(
@@ -513,10 +513,10 @@ describe('documents — what an add-on lets a person edit', () => {
       );
     await upsert(one);
     await upsert('[]');
-    const rows = await listIntegrations(pool);
+    const rows = await listIntegrations(registry);
     expect(rows.find((r) => r.id === 'acme')?.documents).toEqual([]);
     await upsert(one);
-    const after = await listIntegrations(pool);
+    const after = await listIntegrations(registry);
     expect(after.find((r) => r.id === 'acme')?.documents?.[0]?.id).toBe('a');
   });
 });
@@ -618,7 +618,7 @@ describe('assistants — what an add-on’s assistant knows', () => {
 
   it('the row carries it, and a re-import replaces rather than accumulates', async () => {
     const pool = createPglitePool(new PGlite());
-    await initIntegrations(pool);
+    const registry = await registryOver(pool);
     const one = '[{"id":"brand","title":"Brand","intro":"","instructions":"help","grounding":[],"tools":[],"blocks":[],"starters":[],"applies":{"document":"website"},"subject":[]}]';
     const upsert = (assistants: string): Promise<unknown> =>
       pool.query(
@@ -628,10 +628,10 @@ describe('assistants — what an add-on’s assistant knows', () => {
       );
     await upsert(one);
     await upsert('[]');
-    const rows = await listIntegrations(pool);
+    const rows = await listIntegrations(registry);
     expect(rows.find((r) => r.id === 'acme')?.assistants).toEqual([]);
     await upsert(one);
-    const after = await listIntegrations(pool);
+    const after = await listIntegrations(registry);
     expect(after.find((r) => r.id === 'acme')?.assistants?.[0]?.id).toBe('brand');
   });
 });
@@ -698,14 +698,14 @@ describe('intakeContextOf — the host vocabulary reaches intake', () => {
 describe('callIntegration', () => {
   const world = async (over: { status?: string; installed?: readonly string[] | undefined } = {}) => {
     const pool = createPglitePool(new PGlite());
-    await initIntegrations(pool);
+    const registry = await registryOver(pool);
     await pool.query(`INSERT INTO integrations (id, url, status) VALUES ('acme', 'https://acme.example', $1)`, [over.status ?? 'approved']);
     const signer = createAssertionSigner();
     const answered = new Response(JSON.stringify({ erased: true }), { status: 200 });
     const fetchImpl = vi.fn(async () => answered);
     const call = callIntegrationWith({
       forward: createForwarder({
-        find: (id) => findIntegration(pool, id),
+        find: (id) => findIntegration(registry, id),
         who: async () => ({ roles: [], installed: 'installed' in over ? over.installed : ['acme'] }),
         scopeOf: async () => ({ studio_id: 's_1', audience: 'owner' }),
         mint: signer.mint,

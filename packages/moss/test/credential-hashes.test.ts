@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import { initSessions, sessionOf } from '../src/identity';
-import { initIntegrations, integrationByKey } from '../src/integrations/registry';
+import { integrationByKey } from '../src/integrations/registry';
+import { registryOver } from './registry-db';
 
 // GOLDEN: credentials already in somebody's database.
 //
@@ -31,11 +32,11 @@ describe('golden — credentials stored by earlier versions still resolve', () =
 
   it('an approved integration row keyed by sha256(key), hex', async () => {
     const pool = createPglitePool(new PGlite());
-    await initIntegrations(pool);
+    const registry = await registryOver(pool);
     await pool.query(
       `INSERT INTO integrations (id, url, status, key_hash) VALUES ('golden', 'https://golden.example', 'approved', $1)`,
       ['0598e870dd2e385f715ec6140e5e8cfab09d468bc512533451d463eec3a50c25'],
     );
-    expect(await integrationByKey(pool, 'ik_golden-integration-key')).toBe('golden');
+    expect(await integrationByKey(registry, 'ik_golden-integration-key')).toBe('golden');
   });
 });
