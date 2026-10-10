@@ -122,7 +122,7 @@ export const createWorld = async (options: WorldOptions): Promise<World> => {
       const session = await server.shells?.session(tokenFor(principal), principal);
       if (session === undefined || session === null) throw new Error('world: the app serves no shell');
       const messages: string[] = [];
-      session.attach({ send: (text) => messages.push(text), close: () => {}, onMessage: () => {}, onClose: () => {} });
+      session.attach({ send: (text) => messages.push(text), close: () => {} });
       sessions.set(principal, session);
       served.set(principal, messages);
       return session.shell;

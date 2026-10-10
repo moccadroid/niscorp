@@ -205,3 +205,7 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 **The canvases a shell has are the shell's.**
 
 - A canvas a shell gained while it ran (`shell.addCanvas`, or a push to a canvas its manifest does not list) was never sent to a terminal: the host walked the manifest's list. It is rendered, sent, attached to and read by a snapshot like the ones the shell was built with. A canvas that was removed is sent empty once, and no longer handed to a terminal that attaches later.
+
+**A shell is attached to what it uses of a connection.**
+
+- `server.shells.session(…)` answers a session whose `attach`, `detach` and `resync` took the transport's `Connection`. They take what a shell uses of one: `{ send, close, seal? }`. A `Connection` is one of those, so a transport and a check that pass a connection have nothing to change. An object literal written in place with `onMessage` or `onClose` beside them is refused by the compiler, as any literal with a member its type does not have: the shell never called either, and they are dropped.
