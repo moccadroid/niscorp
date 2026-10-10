@@ -32,7 +32,7 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 
 **The record `identity.resolve` answers is read by a schema.**
 
-- `roles` is a list of strings, `scope` an object, `installed` (when there) a list of strings, `tag` (when there) a string. A record that does not fit is refused with a sentence that names the field, and nothing is held for that principal: a session token whose principal resolves to such a record gets 401 `no_identity`, as for any principal the app cannot resolve. It used to be carried on as it was, and failed later, somewhere else, or not at all.
+- `roles` is a list of strings, `scope` an object, `installed` (when there) a list of strings, `tag` (when there) a string. A record that does not fit is refused with a sentence that names the field, and nothing is held for that principal: a request whose principal resolves to such a record is answered `500` `identity_failed`, as any failure to find out who is calling is (see "A failure to find out who is calling", below). It used to be carried on as it was, and failed later, somewhere else, or not at all.
 - What is inside `scope` is not looked at, and a field moss does not name stays on the record the `scope` hook is handed.
 - An app whose `resolve` returns an `IdentityRecord` has nothing to change.
 
@@ -251,3 +251,11 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 - `renderDocument` and `exportDocuments` took a `MossServer` and called `principalOf`, `page` and `shells` on it. `server` is typed as those three now, and of each shell host as `snapshot` alone. A `MossServer` is one of them: a caller that passes its server has nothing to change, and a check that stood a server up to draw a page can hand over the three.
 - `createPageRouter(pages)` took `Record<string, PageManifest>` and read `path`, `params` and each canvas's `id`. It takes a record of those. A record of `PageManifest` is one.
 - `tokenFromCookie`, `embedSnapshot`, `documentHeaders`, `renderDocument`, `exportDocuments` and `createPageRouter` are exported from the main entry as before.
+
+**A failure to find out who is calling is `500 identity_failed`, and is logged. It was `401`, and silent.**
+
+- Every HTTP request is identified once, at the door. A token the verifier says is nobody's is a failed sign-in, and is answered `401` `invalid_token`, as before.
+- Anything that *threw* while the server found out who is calling was answered `401` `no_identity` too, with nothing in the log: the database being down, the app's `identity.resolve` throwing, an identity record that does not parse. A client that drops its session on a `401` dropped it over a fault of the server's. It is answered `500` `{ error: 'identity_failed', message: 'The server could not find out who is calling. Why is in its log, not here.' }` now, and the error is logged. None of its text is sent.
+- The same answer where the throw used to reach Hono's own handler and came back as the text `Internal Server Error`: a `session` verifier that throws, and a feature's credential (an integration key) that cannot be read or whose principal cannot be resolved.
+- **`no_identity` is gone.** An app whose `identity.resolve` throws for a principal it does not know answers a record for nobody instead (`{ roles: ['public'], scope: {} }`), as lyra and lyceum do, or has its `session` verifier answer `null` for the token. Code that matched on `401` `no_identity` matches on `500` `identity_failed`.
+- The socket is as it was: a session that cannot be opened is `session_failed` and a `4500` close.

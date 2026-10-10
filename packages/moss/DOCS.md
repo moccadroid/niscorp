@@ -462,6 +462,16 @@ whose prefix a feature registered is that feature's to read (the integrations
 read `ik_`, an integration key); no header is the anonymous principal. There
 is no `/fns` surface.
 
+A token that is nobody's is a failed sign-in: `401`, `invalid_token`. A
+failure to *find out* who is calling is not: the verifier throwing, the
+identity seam throwing, an identity record that does not parse, a feature's
+credential that cannot be read. That is answered `500`
+`{ error: 'identity_failed', message }` and the error is in the server's log;
+none of its text is sent. A client that drops its session on a `401` does not
+drop it over a fault of the server's. An app whose `identity.resolve` does not
+know a principal answers a record for nobody (`{ roles: ['public'], scope: {} }`)
+and does not throw.
+
 #### `MossServer`
 
 `Hono<Env> & { socket: SocketAccept; shells?: ShellHost; principalOf; page; pages;

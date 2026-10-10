@@ -32,36 +32,47 @@ export type AuthenticationConfig = {
   resolve: Identity['resolve'];
 };
 
+// What the door found: who is calling, or what to answer instead.
+type Found = { principal: string | null; resolved: Env['Variables']['resolved'] } | { refused: { status: 401 | 403; error: string; message: string } };
+
+const INVALID_TOKEN = { refused: { status: 401, error: 'invalid_token', message: 'The session token did not resolve to a principal.' } } as const;
+
+// WHO IS CALLING, from the `Authorization` header. ONE resolution, here, for
+// everything downstream.
+const whoIsCalling = async (config: AuthenticationConfig, header: string | undefined, request: Request): Promise<Found> => {
+  if (header === undefined) return { principal: null, resolved: await config.resolve(null) };
+  const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : header;
+  const credential = config.credentials.find(({ prefix }) => token.startsWith(prefix));
+  if (credential !== undefined) {
+    const answer = await credential.principalOf(token, request);
+    if ('refused' in answer) return answer;
+    return { principal: answer.principal, resolved: await config.resolve(answer.principal) };
+  }
+  const principal = await config.session(token);
+  if (principal === null) return INVALID_TOKEN;
+  return { principal, resolved: await config.resolve(principal) };
+};
+
 export const authentication =
   (config: AuthenticationConfig): MiddlewareHandler<Env> =>
   async (c, next) => {
-    const header = c.req.header('Authorization');
-    if (header === undefined) {
-      c.set('principal', null);
-      c.set('resolved', await config.resolve(null));
-      return next();
-    }
-    const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : header;
-    const credential = config.credentials.find(({ prefix }) => token.startsWith(prefix));
-    if (credential !== undefined) {
-      const answer = await credential.principalOf(token, c.req.raw);
-      if ('refused' in answer) return c.json({ error: answer.refused.error, message: answer.refused.message }, answer.refused.status);
-      c.set('principal', answer.principal);
-      c.set('resolved', await config.resolve(answer.principal));
-      return next();
-    }
-    const principal = await config.session(token);
-    if (principal === null) {
-      return c.json({ error: 'invalid_token', message: 'The session token did not resolve to a principal.' }, 401);
-    }
-    c.set('principal', principal);
-    // ONE resolution, here, for everything downstream. A token that verifies to
-    // a principal the application cannot resolve is a 401 rather than a crash:
-    // an unknown principal is a failed sign-in, not a server fault.
+    let found: Found;
     try {
-      c.set('resolved', await config.resolve(principal));
-    } catch {
-      return c.json({ error: 'no_identity', message: 'The session token did not resolve to a principal.' }, 401);
+      found = await whoIsCalling(config, c.req.header('Authorization'), c.req.raw);
+    } catch (error) {
+      // AN UNKNOWN PRINCIPAL IS A FAILED SIGN-IN. A FAILURE TO FIND OUT IS NOT.
+      // The verifier says a token is nobody's by answering null, and that is
+      // the 401 above. What THROWS on the way is the server's own trouble: the
+      // database is down, the app's identity record does not parse, a
+      // feature's credential cannot be read. Answered 401 it told a client to
+      // throw its session away over a fault that was never its own, and
+      // nothing was logged. It is said here and answered as what it is. None
+      // of the error's text is sent: it can name a host, a table, a user.
+      console.error('[moss] who is calling could not be found out — answering 500:', error);
+      return c.json({ error: 'identity_failed', message: 'The server could not find out who is calling. Why is in its log, not here.' }, 500);
     }
+    if ('refused' in found) return c.json({ error: found.refused.error, message: found.refused.message }, found.refused.status);
+    c.set('principal', found.principal);
+    c.set('resolved', found.resolved);
     return next();
   };
