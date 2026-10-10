@@ -190,6 +190,18 @@ Operational shape, all falling out of "the message is state, not history":
   receive it, and the terminal holds no location that could drift out of step
   with the server's. It is also the answer to a real failure: with no history
   integration at all, a browser's back button unloaded the application.
+- **A connection that drops.** The trees a terminal holds stay on screen
+  while it reconnects: the current ones are re-sent when it does, and blanking
+  in between would show a working app as an empty one. The price is that a
+  screen left up by a dead socket looks exactly like a live one, so the
+  connection's status is on what every render target renders against, beside
+  the frame and the trees, and a change of it is an update like a change of
+  them. What is drawn for it is not moss's: the two console targets print a
+  line, and the three that draw into an element say it on that element
+  (`data-wire-status`) and leave what it looks like to the app's stylesheet.
+  The terminal holds one socket at a time — it lets go of the one it had
+  before it makes another — so one connection writes the screen, whatever a
+  person pressed while the last was still connecting.
 - **Emptiness.** A canvas whose layout renders no visible content is served as
   `[]`, so a terminal collapses chrome on `length` alone. An `ActionSlot` is a
   boundary, not content — visibility is decided by what's inside it.

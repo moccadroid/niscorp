@@ -1572,7 +1572,15 @@ you a throwaway anonymous shell and signing back in reattaches to the same
 wreck. On an open socket it sends `{ type: 'reset' }` and the fresh frame
 arrives on that same socket — same session, same token, nothing signed out. On
 a dead one it reconnects immediately instead of waiting out the backoff, which
-is the same recovery a layer down.
+is the same recovery a layer down. It is also the way out of `incompatible`,
+once the server has been updated: the connection it makes is found compatible
+or not on its own account, and is retried like any other when it drops.
+
+**The wire holds one socket at a time.** Before it makes one it lets go of the
+one it had: its handlers come off and it is closed. That one may have closed
+already, may have carried another principal, or may be a connect still in
+flight when `reset()` was called; whichever, nothing it says afterwards is
+heard, and its closing schedules nothing.
 
 **Nothing is sent on a socket that is not open, and nothing is queued.**
 `dispatch` and `publish` are dropped unless `status()` is `'open'` — the posture
@@ -1642,14 +1650,37 @@ in the subpaths.
   come, are a projection of the shell's own location — and the gesture is
   already here.
 - `TerminalApi` — what a target renders against: nova core's `RenderApi`
-  (`frame`, `canvasTree`, `dispatch`, `publish`), aliased not redeclared — the
-  DOM adapter, the React adapter, and the conductor share one contract. A
-  target never touches the wire directly.
+  (`frame`, `canvasTree`, `dispatch`, `publish`), not redeclared — the DOM
+  adapter, the React adapter, and the conductor share one contract — and
+  beside it `status(): WireStatus`, the connection's status. A target never
+  touches the wire directly.
 - `Target` — `(api) => TerminalMount` where `TerminalMount = { update,
   destroy }`. The render surface (a DOM root, a stdio pair) is construction
   config on the concrete target, never part of the contract — the conductor
   is surface-blind and runs anywhere the wire does. Renders once on mount;
-  the conductor calls `update` on every wire change.
+  the conductor calls `update` on every wire change: a frame, a tree, the
+  status.
+
+**The connection's status reaches every target, the same way.** When a
+connection drops, the trees the terminal holds stay on screen: a reconnect
+re-sends the current ones, and blanking in between would show a working app as
+an empty one. So a screen left up by a dead socket looks exactly like a live
+one, and every target is told which it is: `api.status()` is `'connecting' |
+'open' | 'closed' | 'incompatible' | 'static'`, pulled like the frame and the
+trees, and a change of it is an `update`. What a target does with it:
+
+| Target | What it does |
+|---|---|
+| `terminal/react`, `terminal/vue`, `terminal/dom` | Says it on its root element, `data-wire-status="closed"`, from mount to destroy. Draws nothing. |
+| `terminal/tty` | Prints a line for each real change: `… connecting`, `✓ connected`, `× connection lost — retrying`. |
+| `terminal/ink` | Shows a line above the screen for as long as it is not open. |
+| a target of the app's own | Reads `api.status()` where it paints. |
+
+What a lost connection LOOKS like in a browser is the app's: its kit's
+stylesheet (`[data-wire-status='closed'] { … }`), or a component of its kit
+that reads the status from what the target provides (`TerminalApiContext`,
+`TerminalApiKey`, below) and is drawn again when it changes. Nothing in an
+action or a layout knows there is a connection.
 
 ```typescript
 import { mountTerminal } from '@niscorp/moss/terminal';
@@ -1672,10 +1703,10 @@ Requires the optional `react`/`react-dom` peers.
   component registry bound to the wire via nova's React adapter, rendered
   into `root`. Registers wire-backed `CanvasSlot` and `ActionSlot` (the
   terminal has no shell for nova's shell-backed ones).
-- `registerWireSlots(registry, { slotWrapper?, fallback?, textWrapper?,
-  errorMarker?, canvasProvider?, instanceProvider? })` + `TerminalApiContext` — the wire-backed
-  slots themselves, shared by every react-shaped target (`terminal/ink`
-  imports them); a custom react-shaped target starts here.
+- `TerminalApiContext` — the `TerminalApi` the target renders against, for a
+  kit component that needs the wire itself:
+  `useContext(TerminalApiContext)?.status()` is the connection's status, and
+  the component is drawn again on every update.
 - `TerminalSlotWrapper` — an app component wrapping each action instance at
   the `ActionSlot` boundary; the terminal twin of nova's client-shell
   SlotWrapper. Served trees carry identity only, so the props are
@@ -1690,8 +1721,13 @@ Requires the optional `react`/`react-dom` peers.
 
 - `renderSnapshot({ snapshot, registry, slotWrapper? }): string` — the React
   target, drawing to a string: the same registry, the same wire slots and the
-  same tree as the browser's target, so what a server writes is what the browser
+  same frame as the browser's target, so what a server writes is what the browser
   adopts. Its own entry, so a browser bundle never carries `react-dom/server`.
+  `snapshot` is `{ frame, trees, live? }` — what `shells.snapshot` answers is
+  one. It is drawn with the status the page's terminal starts in: `'static'`
+  when `live` is `false` (no socket is opened for that page), `'connecting'`
+  otherwise. So a kit component that draws the status draws the same thing on
+  both sides. The same holds for the Vue entry below.
 
 **What a kit owes a server-drawn page.** The first pass in the browser must
 draw exactly what the server drew, so nothing that differs between the two may
@@ -1721,15 +1757,13 @@ Requires the optional `vue` peer.
   depend on a revision the conductor bumps, so only the frame and the canvas
   slots re-render and Vue patches in place — focus and input drafts survive.
 - `TerminalApiKey` — the injection key of the live `TerminalApi` (a kit
-  component reading `frame()` / `canvasTree()` in its render re-renders on
-  wire updates).
+  component reading `frame()` / `canvasTree()` / `status()` in its render
+  re-renders on wire updates).
 - `TerminalSlotWrapper` — a Vue component wrapping each action instance at
   the `ActionSlot` boundary, handed `{ canvasId, instanceId, definitionId }`
   as props and the content as its default slot.
 - **Adoption**, as the react target: a root that holds server-drawn elements,
   on a wire with a frame, is mounted with `createSSRApp` and adopted.
-- `registerWireSlots(registry, slotWrapper)`, `terminalFrame(api, registry)` —
-  the wire slots and the frame component, shared with the server entry.
 
 ### `@niscorp/moss/terminal/vue/server`
 
@@ -1761,11 +1795,11 @@ Requires the optional `vue` peer.
 
 ## `@niscorp/moss/terminal/tty`
 
-- `ttyTarget({ input, output, registry?, fallback?, onQuit?, status?,
-  debounceMs?, prompt? }): Target` — the line-terminal target: a REPL over
-  the wire. Pass `status: wire.status` and the REPL reports connection
-  transitions (`… connecting`, `✓ connected`, `× connection lost — retrying`)
-  — once per real transition, never the backoff flap.
+- `ttyTarget({ input, output, registry?, fallback?, onQuit?, debounceMs?,
+  prompt? }): Target` — the line-terminal target: a REPL over the wire. It
+  reports the connection's status (`… connecting`, `✓ connected`,
+  `× connection lost — retrying`) — once per real transition, never the
+  backoff flap.
   nova's TTY adapter renders each served frame to text with numbered `[n]`
   markers; commands map onto them with the same event vocabulary every other
   target dispatches. Runs on any Readable/Writable pair — a real TTY, a
@@ -1792,7 +1826,7 @@ createTerminal({ target: ttyTarget({ input: process.stdin, output: process.stdou
 
 ## `@niscorp/moss/terminal/ink`
 
-- `inkTarget({ registry?, slotWrapper?, stdin?, stdout?, status?, onQuit?, patchConsole? }):
+- `inkTarget({ registry?, slotWrapper?, stdin?, stdout?, onQuit?, patchConsole? }):
   Target` — the full-screen terminal target: nova's Ink kit
   (`@niscorp/nova/adapters/ink`) on the React adapter's walker, mounted with
   ink's renderer. Interaction is the TTY REPL's numbered addressing plus
@@ -1801,17 +1835,21 @@ createTerminal({ target: ttyTarget({ input: process.stdin, output: process.stdou
   the REPL and the TUI), and typed digits act on it — buttons and rows
   click, toggles flip, an input takes focus and typing types (a focused
   input claims digits as text; multi-digit numbers accumulate for a beat,
-  unambiguous ones act at once). Tab/Shift+Tab and ↑/↓ still walk the focus
-  ring; Enter activates; Ctrl+C leaves (`onQuit` fires). Inputs are
-  draft-preserving and `debounce`-honoring (ADAPTER.md §6). `status:
-  wire.status` renders a dim connection line while the socket is not open.
-  The wire-backed slots are shared with `terminal/react` — same seam,
-  different renderer. `patchConsole` (default on) routes the process's
+  unambiguous ones act at once, and digits that arrive together are the
+  number they spell). Tab/Shift+Tab and ↑/↓ still walk the focus ring; Enter
+  activates; Ctrl+C leaves. Inputs are draft-preserving and
+  `debounce`-honoring (ADAPTER.md §6). A line above the screen says the
+  connection's status while the socket is not open. The wire-backed slots
+  are shared with `terminal/react` — same seam, different renderer.
+  `onQuit` is the terminal ending, and the host's to act on (it owns the wire
+  and the process): the person left, or a component of the kit threw and ink
+  ended the app, which is logged and ends that one terminal. It is not called
+  for a `destroy`, which is the host's own doing. `patchConsole` (default on) routes the process's
   console above the frame; a host rendering several targets in one process
   (an SSH server, one per connection) turns it off, so its own logs never
   reach whoever is connected. ESM-only, like ink.
 
 ```typescript
 import { inkTarget } from '@niscorp/moss/terminal/ink';
-createTerminal({ target: inkTarget({ status: wire.status }), wire });
+createTerminal({ target: inkTarget(), wire });
 ```

@@ -121,6 +121,12 @@ already signed in — the token file is the terminal's localStorage. The
 server never learns which target rendered the frame; policy, layouts, and
 data are decided per principal, never per client.
 
+Every target is told the connection's status the same way, because a screen
+left up by a dead socket looks exactly like a live one. The REPL and the TUI
+print it. The three browser targets say it on their root element
+(`data-wire-status="closed"`) and draw nothing: what a lost connection looks
+like is the app's stylesheet's.
+
 ```
 ── main ────────────────────────────────
 Sign in to Relay
@@ -133,10 +139,10 @@ Magic link sent to alex@relay.app. The email is faked — the link is right here
 ```
 
 Under the hood: `./client` is the wire (a plain-TS protocol client: token
-slot, reconnect, session lifecycle — host-shaped pieces injected as a
-`WireEnv`, browser by default, `./client/node` for a plain process);
-`./terminal` is the conductor and the hot-swap switcher; targets close over
-their own surface (a DOM root, a stdio pair), so the contract is
+slot, one socket at a time, reconnect, session lifecycle — host-shaped pieces
+injected as a `WireEnv`, browser by default, `./client/node` for a plain
+process); `./terminal` is the conductor and the hot-swap switcher; targets
+close over their own surface (a DOM root, a stdio pair), so the contract is
 surface-blind. Framework-shaped code lives only in the target subpaths,
 never in moss core.
 
