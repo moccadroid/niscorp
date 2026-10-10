@@ -46,6 +46,20 @@ const okBundle = (meta: Record<string, unknown> = {}): Bundle => {
   return result.bundle;
 };
 
+describe('an integration id', () => {
+  it('is lower-case letters, digits and hyphens, starting with a letter: a bundle that says any other is refused', () => {
+    for (const id of ['acme', 'acme-pay', 'a2']) {
+      expect([id, runIntake({ integration: id, actions: {} }, ctx({ integrationId: id })).ok]).toEqual([id, true]);
+    }
+    // Each of these as the bundle's own word for itself, fetched under the same id.
+    for (const id of ['Acme', 'acme.pay', 'acme/pay', '9acme', 'acme_pay', '-acme', '']) {
+      const result = runIntake({ integration: id, actions: {} }, ctx({ integrationId: id }));
+      expect([id, result.ok]).toEqual([id, false]);
+      if (!result.ok) expect(result.reasons.join(' ')).toContain('integration');
+    }
+  });
+});
+
 describe('the listing vocabulary', () => {
   it('a bundle saying nothing new still parses, with empty long form', () => {
     const b = okBundle({ title: 'Acme', tagline: 'ranks' });
@@ -881,10 +895,10 @@ describe('the registry as vex entries — each statement, against a database', (
     expect(await rows(`SELECT url, status, title, last_error FROM integrations WHERE id = 'failed'`)).toEqual([
       { url: 'https://one.example', status: 'pending', title: '', last_error: 'the service did not answer with a bundle' },
     ]);
-    await pool.query(`UPDATE integrations SET title = 'Kept', status = 'approved', key_hash = 'h' WHERE id = 'failed'`);
+    await pool.query(`UPDATE integrations SET title = 'Kept', status = 'approved', key_hash = 'hash-of-failed' WHERE id = 'failed'`);
     await replay('integrations/record-failed-import', { id: 'failed', url: 'https://two.example', last_error: 'Refused.' });
     expect(await rows(`SELECT url, status, title, key_hash, last_error FROM integrations WHERE id = 'failed'`)).toEqual([
-      { url: 'https://two.example', status: 'approved', title: 'Kept', key_hash: 'h', last_error: 'Refused.' },
+      { url: 'https://two.example', status: 'approved', title: 'Kept', key_hash: 'hash-of-failed', last_error: 'Refused.' },
     ]);
   });
 
@@ -906,12 +920,12 @@ describe('the registry as vex entries — each statement, against a database', (
 
     // Again, on the row that is there: each column is replaced (an empty list
     // lands as an empty list), and what the bundle does not say stays.
-    await pool.query(`UPDATE integrations SET status = 'approved', key_hash = 'h', approved_data = '["members.read"]'::jsonb, last_error = 'old' WHERE id = 'landed'`);
+    await pool.query(`UPDATE integrations SET status = 'approved', key_hash = 'hash-of-landed', approved_data = '["members.read"]'::jsonb, last_error = 'old' WHERE id = 'landed'`);
     const again = landing('landed', { title: 'Belts 2', requested_data: [], reach: {}, story: [], offers: [], capabilities: [], last_import_at: '2026-10-11T09:30:00.000Z' });
     await replay('integrations/land', { ...again, actions: [] });
     const [second] = await rows(`SELECT * FROM integrations WHERE id = 'landed'`);
     expect(second).toMatchObject({ title: 'Belts 2', requested_data: [], reach: {}, story: [], offers: [], capabilities: [], needs: ['booking'] });
-    expect(second).toMatchObject({ status: 'approved', key_hash: 'h', approved_data: ['members.read'], last_error: null });
+    expect(second).toMatchObject({ status: 'approved', key_hash: 'hash-of-landed', approved_data: ['members.read'], last_error: null });
     expect(new Date(String(second?.['last_import_at'])).toISOString()).toBe('2026-10-11T09:30:00.000Z');
     expect(await rows(`SELECT count(*)::int AS n FROM integrations WHERE id = 'landed'`)).toEqual([{ n: 1 }]);
   });
@@ -990,6 +1004,14 @@ describe('the registry as vex entries — each statement, against a database', (
     // ...and the same import lands whole on a client that works.
     await landBundle(replay, landingOf(bundleOf('Second', ['three'])));
     expect(await held()).toMatchObject({ row: [{ title: 'Second' }], actions: [{ action_id: 'ext.desk.atomic.three' }] });
+  });
+
+  it('two integrations cannot hold the hash of one key, and any number can hold none', async () => {
+    await replay('integrations/land-and-keep-key', { ...landing('twin-a'), key_hash: 'one-hash', actions: [] });
+    await expect(replay('integrations/land-and-keep-key', { ...landing('twin-b'), key_hash: 'one-hash', actions: [] })).rejects.toThrow(/integrations_key_hash_unique/);
+    expect(await rows(`SELECT id FROM integrations WHERE key_hash = 'one-hash' OR id = 'twin-b'`)).toEqual([{ id: 'twin-a' }]);
+    // A row that holds no key is not held to it: the cases above left several.
+    expect(Number((await rows(`SELECT count(*)::int AS n FROM integrations WHERE key_hash IS NULL`))[0]?.['n'])).toBeGreaterThan(1);
   });
 
   // Not one of the sixteen: frame grants were a Map in the process that minted

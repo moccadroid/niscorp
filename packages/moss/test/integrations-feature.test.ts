@@ -371,6 +371,37 @@ describe('the routes the feature mounts, asked through the server it mounted the
     expect((await operator.request('/integrations/belts/probe', { method: 'POST', body: 'null' })).status).toBe(404);
   });
 
+  it('an id that is not a name is refused before anything is fetched or written', async () => {
+    const fetched: string[] = [];
+    const written: string[] = [];
+    const real = globalThis.fetch;
+    globalThis.fetch = async (url) => {
+      fetched.push(String(url));
+      return new Response('{}', { status: 404 });
+    };
+    try {
+      const { seams, operator } = await world({
+        replay: async (fingerprint) => {
+          written.push(fingerprint);
+          return [];
+        },
+      });
+      await createIntegrations().start(seams);
+      written.length = 0;
+      // Capitals, a path, a dot (an action's namespace is split on them), a
+      // digit first, an underscore, a hyphen first, a space.
+      for (const id of ['Belts', 'belts/../pay', 'be.lts', '9belts', 'belts_two', '-belts', 'belts two']) {
+        const answered = await operator.request('/integrations', { method: 'POST', body: JSON.stringify({ id, url: 'https://belts.example' }), headers: { 'content-type': 'application/json' } });
+        expect([id, answered.status]).toEqual([id, 400]);
+        expect(await answered.json()).toEqual({ message: 'An integration id is lower-case letters, digits and hyphens, and starts with a letter.' });
+      }
+      expect(fetched).toEqual([]);
+      expect(written).toEqual([]);
+    } finally {
+      globalThis.fetch = real;
+    }
+  });
+
   it('the proxy asks for a principal; the webhook asks for none, and answers nothing for an integration that is not there', async () => {
     const { seams, server, caller } = await world();
     await createIntegrations().start(seams);

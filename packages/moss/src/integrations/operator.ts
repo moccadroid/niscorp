@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import type { Upgrader } from '@niscorp/strata';
 import type { FeatureEnv, Replay } from '../feature';
+import { INTEGRATION_ID, INTEGRATION_ID_RULE } from './bundle';
 import type { Bundle } from './bundle';
 import { hashIntegrationKey, mintIntegrationKey } from './credentials';
 import { intakeContextOf, runIntake } from './intake';
@@ -111,6 +112,9 @@ const register = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
     const sent: unknown = await c.req.json().catch(() => ({}));
     const { id, url } = RegisterBodySchema.parse(sent);
     if (id === '' || url === '') return c.json({ message: 'Give an id and a url.' }, 400);
+    // Before anything is fetched or kept under it: the id becomes a segment of
+    // a path and a part of an action's name (./bundle.ts).
+    if (!INTEGRATION_ID.test(id)) return c.json({ message: INTEGRATION_ID_RULE }, 400);
 
     const taken = await takeIn(deps, id, url);
     if (!taken.ok) {

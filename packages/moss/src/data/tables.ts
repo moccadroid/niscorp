@@ -125,6 +125,14 @@ export const MOSS_SEQUENCE: Sequence = {
       description: 'Stored integration actions carry the grammar stamp their definition is written in',
       steps: [{ kind: 'sql', sql: `ALTER TABLE integration_actions ADD COLUMN grammar jsonb NOT NULL DEFAULT '{}'::jsonb` }],
     },
+    // A KEY IS ONE INTEGRATION'S. A presented key is resolved to "the" row that
+    // holds its hash, and nothing said there was only one. Rows that hold no
+    // key (never issued one) are as many as there are, so the index leaves
+    // them out.
+    {
+      description: 'No two integrations hold the hash of one key',
+      steps: [{ kind: 'sql', sql: `CREATE UNIQUE INDEX integrations_key_hash_unique ON integrations (key_hash) WHERE key_hash IS NOT NULL` }],
+    },
   ],
 };
 

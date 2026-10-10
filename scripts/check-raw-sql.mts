@@ -125,7 +125,7 @@ const LEDGER: Readonly<Record<string, Readonly<Record<string, Entry>>>> = {
     'integrations/tables.ts': { doors: 0, statements: 0, tables: 1, why: 'tables', note: "the integrations feature's own table sequence: frame grants, read and written through vex" },
     'manifest/generation.ts': { doors: 3, statements: 4, tables: 1, why: 'debt', note: 'the generation counter' },
     'tide.ts': { doors: 7, statements: 6, tables: 3, why: 'store', note: "tide's Postgres store; it belongs with tide" },
-    'data/tables.ts': { doors: 0, statements: 0, tables: 15, why: 'tables', note: "moss's own table sequence, as it stood in integrations.ts: history, checksummed in every ledger" },
+    'data/tables.ts': { doors: 0, statements: 0, tables: 16, why: 'tables', note: "moss's own table sequence, as it stood in integrations.ts: history, checksummed in every ledger; the sixteenth is the unique index on an integration's key hash, appended" },
     'data/migrate.ts': { doors: 1, statements: 0, tables: 0, why: 'tables', note: "hands the migration's own transaction to vex's adapter to read the schema" },
   },
 };

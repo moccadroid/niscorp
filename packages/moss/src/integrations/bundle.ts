@@ -226,9 +226,17 @@ const assistantDeclarationSchema = z
 
 export type AssistantDeclaration = z.infer<typeof assistantDeclarationSchema>;
 
+// WHAT AN INTEGRATION MAY BE CALLED. Its id is a segment of every path it is
+// served under (`/integrations/<id>/…`) and a part of every action it ships
+// (`ext.<audience>.<id>.<name>`, split on the dots), so it is held to what
+// both already assumed: lower-case letters, digits and hyphens, starting with
+// a letter. No slash, no dot, nothing a path or a namespace reads as its own.
+export const INTEGRATION_ID = /^[a-z][a-z0-9-]*$/;
+export const INTEGRATION_ID_RULE = 'An integration id is lower-case letters, digits and hyphens, and starts with a letter.';
+
 export const BundleSchema = z
   .object({
-    integration: z.string().min(1),
+    integration: z.string().regex(INTEGRATION_ID, INTEGRATION_ID_RULE),
     // The store card's words, and the listing page's long form. Title, a
     // line, a paragraph — then the story (sections a page renders in order),
     // the highlight lines, and the press images. Story and highlights are
