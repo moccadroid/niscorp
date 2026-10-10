@@ -29,11 +29,11 @@ type Env = { Variables: { roles: readonly string[] } };
 
 const who = (...roles: string[]) => ({ key: memoKey(roles, undefined), roles });
 
-const world = async (telemetry?: { emit: (span: TelemetrySpan) => void }) => {
+const world = async (telemetry?: { emit: (span: TelemetrySpan) => void }, governing: Charter = charter) => {
   const double = await engineDouble();
   const data = dataOver(
     { engine: double.engine, adapter: double.adapter, grants: scopeGrants(['notes', 'tags']), grammars: await createGrammarUpgrader({}) },
-    { db: double.db, charter, ...(telemetry !== undefined ? { telemetry } : {}) },
+    { db: double.db, charter: governing, ...(telemetry !== undefined ? { telemetry } : {}) },
   );
   const server = new Hono<Env>();
   // The server's part: who this request is. A header stands in for a session.
@@ -107,6 +107,42 @@ describe('the data module, over an engine', () => {
     await post('writer', ADD);
     await post('reader', ADD);
     expect(heard).toEqual(['first notes/add notes f_1', 'second notes/add', 'first notes/add notes no chain']);
+  });
+
+  // A role machinery runs as is a set of roles like any other, and its policy
+  // is a function of the charter. It was compiled twice for each call (once to
+  // read under, once more to write under) and neither was kept: identity
+  // resolution runs several entries for each sign-in.
+  it('a role machinery runs as has its policy compiled once, and kept until the manifest changes', async () => {
+    // How often the charter is asked for the role: every compilation reads it.
+    let read = 0;
+    const counted: Charter = Object.defineProperty({ ...charter }, 'reader', {
+      enumerable: true,
+      get: () => {
+        read += 1;
+        return charter['reader'];
+      },
+    });
+    const { data } = await world(undefined, counted);
+    const listeners: (() => void)[] = [];
+    data.dropOnChange((listener) => {
+      listeners.push(listener);
+      return () => undefined;
+    });
+
+    expect(await data.executeAs('reader', 'notes/all', {})).toEqual([{ id: 1, body: 'first' }]);
+    const once = read;
+    expect(once).toBeGreaterThan(0);
+    await data.executeAs('reader', 'notes/all', {});
+    await data.executeAs('reader', 'notes/all', {});
+    expect(read).toBe(once);
+    // and it is the one a request by somebody holding exactly that role is served under
+    data.policyOf(who('reader'));
+    expect(read).toBe(once);
+
+    listeners[0]?.();
+    await data.executeAs('reader', 'notes/all', {});
+    expect(read).toBe(once * 2);
   });
 
   it('runs a seeded entry as a charter role, under that role\'s grants', async () => {

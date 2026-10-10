@@ -51,6 +51,15 @@ describe('executeAs — a seeded entry as a charter role', () => {
     expect(asked.every((ask) => ask.roles.length === 1 && ask.roles[0] === 'reader')).toBe(true);
   });
 
+  it('asks for the role\'s policy once for a call, whether it reads or writes', async () => {
+    const { executeAs, asked } = await world();
+    await executeAs('reader', 'notes/all', {});
+    expect(asked).toEqual([{ roles: ['reader'] }]);
+    asked.length = 0;
+    await executeAs('writer', 'notes/add', { body: 'hello' });
+    expect(asked).toEqual([{ roles: ['writer'] }]);
+  });
+
   it('replays a seeded write on the client it was handed, with the context it was given', async () => {
     const { executeAs, written } = await world();
     expect(await executeAs('writer', 'notes/add', { body: 'hello' })).toEqual({ id: 7, body: 'written' });

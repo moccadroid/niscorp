@@ -3,6 +3,7 @@ import { migrate, upgradeStore } from '@niscorp/strata/postgres';
 import { handleDiscovery } from '@niscorp/vex';
 import type { Sequence, Upgrader } from '@niscorp/strata';
 import type { CacheBackend, DatabaseAdapter, ExecuteRecord, MutationClient, PgPool, QueryEngine, QueryEngineConfig, QueryResponse, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
+import { memoKey } from '../identity';
 import type { ResolvedIdentity } from '../identity';
 import type { NiscApp, RunningManifest } from '../manifest';
 import { emitterOf } from '../runtime';
@@ -16,7 +17,7 @@ import type { AnswerIntent, Intent, QueryWriters } from './intents';
 import { tableSequencesOf } from './migrate';
 import { createOwnEntries } from './own-entries';
 import type { OwnEntries, Replay } from './own-entries';
-import { createPolicies, resolvePolicyAtReachForRoles, resolvePolicyForRoles } from './policy';
+import { createPolicies, resolvePolicyForRoles } from './policy';
 import { createVexRoutes } from './routes';
 import { vexRecordToSpan } from './span';
 import { INTEGRATION_ACTIONS_STORE } from './tables';
@@ -124,6 +125,10 @@ export type Data = {
   dropOnChange: (changed: RunningManifest['onChange']) => void;
 };
 
+// Whoever runs as roles and is nobody: filed where somebody holding exactly
+// those roles, with no install list, is.
+const machinery = (roles: readonly string[]): Caller => ({ key: memoKey(roles, undefined), roles });
+
 // What stands once the database has been brought up: the engine, what can be
 // granted, the grammars, and the adapter the engine reads through.
 export type StoodUp = Pick<Data, 'engine' | 'grants' | 'grammars'> & { adapter: DatabaseAdapter };
@@ -194,12 +199,15 @@ export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charte
     // This compiled the policy and then kept every fingerprint whatever it
     // said, so somebody granted nothing was told the whole surface.
     fingerprintsFor: async (who) => (await handleDiscovery({ engine, locked: true, scopePolicy: policies.of(who) })).fingerprints.map((entry) => entry.fingerprint).sort(),
-    // Compiled for each call: nothing keeps a machinery role's policy.
+    // A ROLE MACHINERY RUNS AS IS A SET OF ROLES LIKE ANY OTHER: its policy is
+    // the kept one for that set, compiled at first sight and dropped when the
+    // manifest changes, and the same one a request by somebody holding exactly
+    // that role is served under. It was compiled afresh, twice, for each call.
     executeAs: createExecuteAs({
       engine,
       db: config.db,
-      policyFor: (roles) => resolvePolicyForRoles(governed, grants, roles),
-      policyAtReach: (roles, reach) => resolvePolicyAtReachForRoles(governed, grants, roles, reach),
+      policyFor: (roles) => policies.of(machinery(roles)),
+      policyAtReach: (roles, reach) => policies.atReach(machinery(roles), reach),
       ...(onExecute !== undefined ? { onExecute } : {}),
     }),
     answerIntent: async (writers, asked, who, scope) => answering()(writers, asked, { policy: policies.of(who), scope }),

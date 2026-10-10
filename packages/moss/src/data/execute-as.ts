@@ -32,15 +32,17 @@ export const createExecuteAs =
   (config: ExecuteAsConfig): ExecuteAs =>
   async (role, fingerprint, context, scope = {}) => {
     const roles = [role];
+    // Asked for once: a read and a write are under the one policy.
+    const policy = config.policyFor(roles);
     const outcome = await handleQuery(
       {
         engine: config.engine,
         locked: true,
-        scopePolicy: config.policyFor(roles),
+        scopePolicy: policy,
         policyForReach: (reach) => config.policyAtReach(roles, reach),
         // Mutation replay under the same role policy — write gates and scope
         // pins apply exactly as they would for a person.
-        mutations: { client: config.db, policy: config.policyFor(roles) },
+        mutations: { client: config.db, policy },
         // Machinery is observed too: a seeded entry run as a charter role is a
         // vex execution, and its scope carries no principal, so it reports as
         // `hasPrincipal: false` — which is the truth about it.
