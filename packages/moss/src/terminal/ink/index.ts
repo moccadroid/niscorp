@@ -1,6 +1,5 @@
 import { createElement, useRef, type FC, type ReactNode } from 'react';
 import { render, Text as InkText, useFocusManager, useInput } from 'ink';
-import { NovaRenderProvider, RenderTree } from '@niscorp/nova/adapters/react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import {
   defaultRegistry,
@@ -17,7 +16,8 @@ import { defaultRegistry as ttyRegistry, fallback as ttyFallback } from '@niscor
 import type { ComponentRegistry } from '@niscorp/nova';
 import type { WireStatus } from '../../client';
 import type { Target } from '../index';
-import { TerminalApiContext, registerWireSlots } from '../react/slots';
+import { terminalFrame } from '../react/frame';
+import { registerWireSlots } from '../react/slots';
 import type { TerminalSlotWrapper } from '../react/slots';
 
 // ═══════════════════════════════════════════════════════════
@@ -181,30 +181,16 @@ export const inkTarget = (config: InkTargetConfig = {}): Target => (api) => {
       : createElement(InkText, { color: 'red' }, '× connection lost — retrying');
   };
 
+  // Nav and the status line read nothing of nova's: they sit beside the frame,
+  // which is the one every react-shaped target draws (../react/frame).
   const Frame: FC = () => {
     reindex();
     return createElement(
       FrameControlsContext.Provider,
       { value: frameControls },
-      createElement(
-        TerminalApiContext.Provider,
-        { value: api },
-        createElement(
-          NovaRenderProvider,
-          {
-            registry,
-            // the frame is chrome — app events flow only from inside a canvas
-            dispatch: () => undefined,
-            publish: (channel: string, payload?: unknown) => api.publish(channel, payload),
-            fallback: inkFallback,
-            textWrapper: TextWrap,
-            errorMarker: ErrorMarker,
-          },
-          createElement(Nav),
-          createElement(StatusLine),
-          createElement(RenderTree, { nodes: api.frame() }),
-        ),
-      ),
+      createElement(Nav),
+      createElement(StatusLine),
+      terminalFrame(api, registry, { fallback: inkFallback, textWrapper: TextWrap, errorMarker: ErrorMarker }),
     );
   };
 

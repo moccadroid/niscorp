@@ -1,14 +1,13 @@
-import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
-import { NovaRenderProvider, RenderTree } from '@niscorp/nova/adapters/react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { ComponentRegistry, RenderNode } from '@niscorp/nova';
-import { TerminalApiContext, registerWireSlots } from './slots';
+import { terminalFrame } from './frame';
+import { registerWireSlots } from './slots';
 import type { TerminalSlotWrapper } from './slots';
 
 // ═══════════════════════════════════════════════════════════
 // @niscorp/moss/terminal/react/server — the React target, drawing to a string.
-// The same registry, the same wire slots and the same tree as the browser's
+// The same registry, the same wire slots and the same frame as the browser's
 // target (./index), so what a server writes into a document is what the
 // browser's target then adopts element for element. A terminal host, like any
 // other: it is handed a screen and draws it. Split from ./index so a browser
@@ -35,11 +34,5 @@ export const renderSnapshot = (config: RenderSnapshotConfig): string => {
     dispatch: nothing,
     publish: nothing,
   };
-  return renderToString(
-    createElement(
-      TerminalApiContext.Provider,
-      { value: api },
-      createElement(NovaRenderProvider, { registry, dispatch: nothing, publish: nothing }, createElement(RenderTree, { nodes: api.frame() })),
-    ),
-  );
+  return renderToString(terminalFrame(api, registry));
 };
