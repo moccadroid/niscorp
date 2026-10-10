@@ -140,10 +140,12 @@ const LEDGER: Readonly<Record<string, Readonly<Record<string, Entry>>>> = {
     'data/migrate.ts': { doors: 1, statements: 0, tables: 0, why: 'tables', note: "hands the migration's own transaction to vex's adapter to read the schema" },
   },
   tide: {
-    // Was `moss/tide.ts`, with these numbers. The engine's own bookkeeping
+    // Was `moss/tide.ts`, with six statements. The engine's own bookkeeping
     // goes through the pool and not through a host's write path: an engine
-    // claiming its own task has no principal to run a policy for.
-    'store/postgres.ts': { doors: 7, statements: 6, tables: 3, why: 'store', note: "tide's Postgres store: the engine's own rows, behind the store contract" },
+    // claiming its own task has no principal to run a policy for. The seventh
+    // statement reads and writes no row: it is the advisory lock a serial
+    // group is claimed behind, so two instances cannot both claim in it.
+    'store/postgres.ts': { doors: 7, statements: 7, tables: 3, why: 'store', note: "tide's Postgres store: the engine's own rows, behind the store contract, and one advisory lock" },
   },
 };
 

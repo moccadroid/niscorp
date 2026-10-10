@@ -51,6 +51,14 @@ export type TidePool = {
   transaction?: <T>(fn: (tx: { query: TidePoolQuery }) => Promise<T>) => Promise<T>;
 };
 
+// What a statement is sent on: the pool, or the transaction a store is inside.
+type Client = { query: TidePoolQuery };
+
+// SEVERAL STATEMENTS AS ONE. Over the pool, a transaction is opened for them.
+// A store that is already inside a transaction runs them where it stands:
+// they are part of the caller's transaction, and end with it.
+type Atomically = <T>(fn: (tx: Client) => Promise<T>) => Promise<T>;
+
 // One table per guarantee. `tide_run` and `tide_work` are the two that grow
 // with events; `tide_fact` is the intake, swept on its own horizon; and
 // `tide_reflex_state` holds one row per reflex, forever.
@@ -512,7 +520,13 @@ export const createTideStore = (pool: TidePool, options: TideStoreOptions = {}):
   // failure it reports would be a database that is not up yet.
   ready.catch(() => undefined);
 
-  const build = (client: TidePool): TideStore => {
+  const overPool: Atomically = (fn) => {
+    if (pool.transaction === undefined)
+      throw new Error('tide store: this pool cannot transact — fan-out, attempt recording and a serial claim are transactions, not conventions');
+    return pool.transaction(fn);
+  };
+
+  const build = (client: Client, atomically: Atomically): TideStore => {
     const store: TideStore = {
       query: async <T extends TableName>(spec: QuerySpec<T>) => {
         await ready;
@@ -565,11 +579,11 @@ export const createTideStore = (pool: TidePool, options: TideStoreOptions = {}):
         // `FOR UPDATE SKIP LOCKED` makes N instances ticking at once ordinary
         // contention rather than a lock service — a throughput choice; the
         // exactly-once part is that it is one statement.
-        const take = async (extra: Fields, limit: number) => {
+        const take = async (db: Client, extra: Fields, limit: number) => {
           if (limit <= 0) return [];
           const where = compileWhere({ ...spec.where, ...extra }, 1, 'c');
           const set = compileSet(spec.set, where.params.length + 1);
-          const result = await client.query(
+          const result = await db.query(
             `UPDATE ${table} SET ${set.sql}
              WHERE ctid IN (
                SELECT c.ctid FROM ${table} c WHERE ${where.sql}${order}
@@ -588,7 +602,7 @@ export const createTideStore = (pool: TidePool, options: TideStoreOptions = {}):
           return sortRows(result.rows.map((row) => rowToEntity(spec.table, row)), spec.order);
         };
 
-        if (spec.onePer === undefined) return take({}, spec.limit);
+        if (spec.onePer === undefined) return take(client, {}, spec.limit);
 
         // `order: 'serial'` — at most one held row per group, counting what
         // an earlier claim already holds.
@@ -598,6 +612,17 @@ export const createTideStore = (pool: TidePool, options: TideStoreOptions = {}):
         // are claimed one at a time — there are as many of those as there are
         // serial reflexes, which is a handful — and everything else is taken
         // in the single bulk statement above.
+        //
+        // ONE AT A TIME, AND ONE INSTANCE AT A TIME. Asking whether a group is
+        // held and then claiming in it are two statements, and another
+        // instance's two could run between them: both were told nothing was
+        // held, and each took a row. So the pair runs in a transaction, behind
+        // an advisory lock on the group that ends with it. Whoever does not
+        // get the lock leaves the group to whoever has it, as SKIP LOCKED
+        // leaves a row: nothing waits. Whoever gets it next asks after the
+        // other's claim is committed, and is told the group is held. A
+        // transaction alone would not do it: under READ COMMITTED both would
+        // still be told nothing was held.
         const { column, held, only } = spec.onePer;
         const restricted = [...only];
         // Room is RESERVED for the serial groups before the bulk claim runs.
@@ -605,14 +630,21 @@ export const createTideStore = (pool: TidePool, options: TideStoreOptions = {}):
         // parallel reflex starves every serial one — the mirror of the defect
         // where a serial reflex with five thousand due tasks starved
         // everybody else because LIMIT was applied before the serial filter.
-        const claimed = await take({ [column]: { notIn: restricted } }, spec.limit - restricted.length);
+        const claimed = await take(client, { [column]: { notIn: restricted } }, spec.limit - restricted.length);
+
+        const takeOneOf = (group: string) =>
+          atomically(async (tx) => {
+            const lock = await tx.query('SELECT pg_try_advisory_xact_lock(hashtext($1), hashtext($2)) AS free', [`tide:${table}.${snake(column)}`, group]);
+            if (lock.rows[0]?.['free'] !== true) return [];
+            const busy = compileWhere({ ...held, [column]: group }, 1, 'c');
+            const taken = await tx.query(`SELECT c.id FROM ${table} c WHERE ${busy.sql} LIMIT 1`, busy.params);
+            if (taken.rows.length > 0) return [];
+            return take(tx, { [column]: group }, 1);
+          });
 
         for (const group of restricted) {
           if (claimed.length >= spec.limit) break;
-          const busy = compileWhere({ ...held, [column]: group }, 1, 'c');
-          const taken = await client.query(`SELECT c.id FROM ${table} c WHERE ${busy.sql} LIMIT 1`, busy.params);
-          if (taken.rows.length > 0) continue;
-          claimed.push(...(await take({ [column]: group }, 1)));
+          claimed.push(...(await takeOneOf(group)));
         }
 
         return claimed;
@@ -641,17 +673,18 @@ export const createTideStore = (pool: TidePool, options: TideStoreOptions = {}):
 
       transact: async <T>(fn: (tx: TideStore) => Promise<T>): Promise<T> => {
         await ready;
-        if (client.transaction === undefined)
-          throw new Error('tide store: this pool cannot transact — fan-out and attempt recording are transactions, not conventions');
-        // `query` is called ON the transaction, never taken off it: where the
-        // pool hands a checked-out client through, it is a method that needs
-        // its receiver, and taken off it failed inside the driver — which the
-        // fan-out then recorded as a deferred run, and nothing ever ran.
-        return client.transaction((tx) => fn(build({ ...client, query: (text, values) => tx.query(text, values) })));
+        // The store the caller is handed runs on the transaction itself, and
+        // `query` is called ON it, never taken off it: where the pool hands a
+        // checked-out client through, it is a method that needs its receiver,
+        // and taken off it failed inside the driver — which the fan-out then
+        // recorded as a deferred run, and nothing ever ran. What that store
+        // does as one step, it does inside this transaction: it opens no
+        // second one beside it.
+        return atomically((tx) => fn(build(tx, (inner) => inner(tx))));
       },
     };
     return store;
   };
 
-  return { ...build(pool), ready };
+  return { ...build(pool, overPool), ready };
 };

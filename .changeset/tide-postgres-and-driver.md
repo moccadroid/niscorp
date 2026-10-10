@@ -17,6 +17,13 @@ Tide's Postgres store and its driver ship from tide. They were in `@niscorp/moss
 - `createTideDriver({ tide, now?, janitorMs?, retention? })` answers a `TideDriver`: `ingest` and `fire` that wake the engine, `wake()`, and `stop()`. It advances to quiescence on every ingest, sleeps until the instant `nextDue` names, and sweeps on a slow beat. The types `TideDriver` and `TideDriverConfig` come with it.
 - The engine still reads no clock and sets no timer. The driver is what does, for a host that does not want to write those twenty lines.
 
+**Two instances cannot both claim in one serial group.**
+
+- A reflex with `order: 'serial'` runs one task at a time: the store claims in its group only when no task of it is held. The Postgres store asked whether the group was held and then claimed, as two statements. With two processes on one database, both could ask before either claimed, and each took a task: two tasks of a serial reflex ran at once.
+- The two statements now run in one transaction, behind an advisory lock on the group (`pg_try_advisory_xact_lock`) that ends with the transaction. An instance that does not get the lock leaves the group to the one that has it; nothing waits.
+- Proved on PGlite, where two stores over one database interleave their statements: the test claims twice at once and was red (two held) before the change. PGlite has one connection, so two real connections under `READ COMMITTED` were not run.
+- `createTideStore` over a pool with no `transaction` now refuses a serial claim with the sentence `transact` already refused with. Such a pool could not run tide before: fan-out is a transaction.
+
 **A wait longer than a timer can hold no longer makes the driver a loop.**
 
 - The driver sleeps until the instant `nextDue` names, with one timer. Node keeps a timer's delay in 32 bits: one over 2^31 − 1 ms (24.8 days) is not refused, it is set to 1 ms, with a `TimeoutOverflowWarning`. A reflex whose next occurrence was further off than that had the driver wake every millisecond, advance, find nothing and ask again. Every wait is cut to 2^31 − 1 ms now: the driver wakes then, finds nothing, and waits out the rest.
