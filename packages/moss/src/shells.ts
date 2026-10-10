@@ -451,7 +451,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
     const userId = principal ?? 'anonymous';
 
     const registry = createComponentRegistry();
-    for (const name of componentNames) registry.register(name, (contracts[name] ?? {}) as Parameters<typeof registry.register>[1]);
+    for (const name of componentNames) registry.register(name, contracts[name] ?? {});
 
     // The manifest's in-process functions, built for THIS session — the
     // shell and the live connection set land in the closures just after
@@ -945,7 +945,7 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
   if (idleMs > 0 && Number.isFinite(idleMs)) {
     sweeper = setInterval(sweep, Math.min(idleMs, SWEEP_EVERY_MS));
     // The sweep must never be the reason a process stays alive.
-    (sweeper as unknown as { unref?: () => void }).unref?.();
+    sweeper.unref?.();
   }
 
   return {
