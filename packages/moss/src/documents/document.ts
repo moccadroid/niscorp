@@ -31,6 +31,19 @@ export const embedSnapshot = (snapshot: ShellSnapshot, principal: string | null,
 export const documentHeaders = (principal: string | null): Record<string, string> =>
   principal === null ? { 'cache-control': 'no-cache', vary: 'Cookie' } : { 'cache-control': 'private, no-store', vary: 'Cookie' };
 
+// WHERE THE SCREEN GOES: inside the root, which is an EMPTY ELEMENT — an
+// opening tag and, at once, its closing tag. Answers the root with a screen
+// in it, or undefined for a root with no inside (an opening tag alone, one
+// that holds something, one closed in its own tag): there is no place for a
+// screen then. The place used to be found by looking for `></div>`, so a root
+// that was another element was written back as it was, with the snapshot
+// beside it and no screen, and the page was reported as drawn.
+const rootHolding = (root: string): ((screen: string) => string) | undefined => {
+  const closing = root.lastIndexOf('</');
+  if (closing <= 0 || !root.startsWith('<') || root[closing - 1] !== '>' || !root.endsWith('>')) return undefined;
+  return (screen) => `${root.slice(0, closing)}${screen}${root.slice(closing)}`;
+};
+
 const escapeAttribute = (value: string): string => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
 export const renderDocument = async (config: DocumentConfig): Promise<DrawnDocument> => {
@@ -39,6 +52,11 @@ export const renderDocument = async (config: DocumentConfig): Promise<DrawnDocum
   const root = config.root ?? DEFAULT_ROOT;
   const undrawn: DrawnDocument = { html: template, headers: documentHeaders(null), drawn: false, principal: null };
   if (!template.includes(root)) return undrawn;
+  const holding = rootHolding(root);
+  if (holding === undefined) {
+    console.error(`[moss/document] the root ${root} has no place for a screen — a root is an empty element, like ${DEFAULT_ROOT}. "${request.path}" is served undrawn.`);
+    return undrawn;
+  }
 
   try {
     // The session the browser holds (../identity, session-cookie.ts). A page
@@ -69,7 +87,7 @@ export const renderDocument = async (config: DocumentConfig): Promise<DrawnDocum
       .join('');
     const placed = template
       // functions, both, so nothing in the screen is read as a replacement pattern
-      .replace(root, () => `${root.replace('></div>', () => `>${screen}</div>`)}${embedSnapshot(snapshot, principal, request.path)}`)
+      .replace(root, () => `${holding(screen)}${embedSnapshot(snapshot, principal, request.path)}`)
       .replace(/<html([^>]*)>/, (whole, existing: string) => (attributes === '' ? whole : `<html${existing}${attributes}>`));
     const head = headOf({ frame: () => snapshot.frame, canvasTree: (id) => snapshot.trees[id] ?? [] });
     // what a head may not hold was left out: say so, where somebody can see it

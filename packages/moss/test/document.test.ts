@@ -222,6 +222,31 @@ describe('renderDocument', () => {
     const page = await renderDocument({ server: serverOf(), template: '<html><body></body></html>', request: { path: '/' }, draw });
     expect(page.drawn).toBe(false);
   });
+
+  // The screen was put into the root by looking for `></div>` in it. A root
+  // that is another element had no such place: the snapshot was written
+  // beside it, the screen nowhere, and the page was reported as drawn — so a
+  // terminal started from a screen that was not in the page.
+  it('a root that is another empty element is where the screen goes', async () => {
+    const root = '<main id="app" data-kit="a>b"></main>';
+    const page = await renderDocument({ server: serverOf(), template: TEMPLATE.replace('<div id="root"></div>', root), root, request: { path: '/' }, draw });
+    expect(page.drawn).toBe(true);
+    expect(page.html).toContain('<main id="app" data-kit="a>b"><main>0</main></main><script type="application/json" id="nisc-snapshot">');
+  });
+
+  it.each([
+    ['an opening tag alone', '<div id="root">'],
+    ['an element that is not empty', '<div id="root"> </div>'],
+    ['an element closed in its own tag', '<div id="root"/>'],
+  ])('a root that is %s has no place for the screen: the page goes out undrawn, as the template, and it is said', async (_label, root) => {
+    const said = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const template = TEMPLATE.replace('<div id="root"></div>', root);
+    const page = await renderDocument({ server: serverOf(), template, root, request: { path: '/' }, draw });
+    expect(page).toMatchObject({ drawn: false, html: template, principal: null });
+    expect(page.html).not.toContain('nisc-snapshot');
+    expect(String(said.mock.calls[0]?.[0])).toContain('root');
+    said.mockRestore();
+  });
 });
 
 describe('renderDocument — the head a screen has', () => {

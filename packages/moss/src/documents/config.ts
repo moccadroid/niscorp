@@ -30,8 +30,7 @@ export type DocumentSource = {
 export type DocumentConfig = {
   server: DocumentSource;
   // The app's index.html, as it would be served undrawn. It must hold the empty
-  // root (`root`, default `<div id="root"></div>`) exactly once — that is where
-  // the screen goes.
+  // root (`root`, below) exactly once — that is where the screen goes.
   template: string;
   // What the request named and carried. `host` is its `Host` header: the
   // session cookie's name ends with the port a page is on (../identity,
@@ -53,6 +52,11 @@ export type DocumentConfig = {
   tokenKey?: string;
   // How long the screen may take to settle before it is drawn as it stands.
   waitMs?: number;
+  // The element the screen is put into, written as it stands in the template:
+  // an EMPTY element, its opening tag and at once its closing tag. Default
+  // `<div id="root"></div>`. A template that does not hold it, or a root that
+  // is not an empty element, has no place for a screen: the page goes out
+  // undrawn.
   root?: string;
 };
 

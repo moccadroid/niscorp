@@ -239,3 +239,15 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 
 - `path: '/docs/:id/versions/:id'` was accepted, and the canvas its parameters go to was handed one `id`: the later segment's. The first was matched and lost. `createServer` and `createPageRouter` refuse it now: `moss: page "…" names the parameter ":id" twice in "…" — give each parameter of a path its own name.`
 - An app with such a path names the second parameter something else. No lab app has one.
+
+**A document's `root` is any empty element, and one with no place for a screen is not reported as drawn.**
+
+- `renderDocument` put the screen into the root by looking for `></div>` in it. A `root` that was another element (`<main id="app"></main>`) was written back as it was, with the snapshot beside it and no screen in it, and the page was reported `drawn: true`: the terminal started from a screen that was not in the page. The screen goes inside any root that is an empty element now, an opening tag and at once its closing tag.
+- A `root` with no inside (an opening tag alone, an element that holds something, one closed in its own tag) is answered as a template that does not hold the root always was: the template as it is, `drawn: false`, and one line in the log that names the root.
+- An app that passes no `root`, or one that is an empty `div`, sees no difference.
+
+**`DocumentConfig.server` is the three things a document asks, and `createPageRouter` takes what it reads of a page.**
+
+- `renderDocument` and `exportDocuments` took a `MossServer` and called `principalOf`, `page` and `shells` on it. `server` is typed as those three now, and of each shell host as `snapshot` alone. A `MossServer` is one of them: a caller that passes its server has nothing to change, and a check that stood a server up to draw a page can hand over the three.
+- `createPageRouter(pages)` took `Record<string, PageManifest>` and read `path`, `params` and each canvas's `id`. It takes a record of those. A record of `PageManifest` is one.
+- `tokenFromCookie`, `embedSnapshot`, `documentHeaders`, `renderDocument`, `exportDocuments` and `createPageRouter` are exported from the main entry as before.

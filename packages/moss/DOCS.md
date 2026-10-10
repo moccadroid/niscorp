@@ -635,7 +635,7 @@ opens no socket.
 
 ```typescript
 const page = await renderDocument({
-  server,                                   // the MossServer
+  server,                                   // the MossServer, or anything with its `principalOf`, `page` and `shells`
   template,                                 // the app's index.html, as it would go out undrawn
   request: { path, cookie },                // what the request named and carried
   draw: (snapshot) => renderSnapshot({ snapshot, registry, slotWrapper }),
@@ -678,7 +678,15 @@ const page = await renderDocument({
   Without it the template's is left as it is.
 - **`template`** must hold the empty root (`root`, default
   `<div id="root"></div>`). The screen goes inside it, the snapshot element
-  straight after.
+  straight after. `root` is an empty element written as it stands in the
+  template, its opening tag and at once its closing tag: any element
+  (`<main id="app"></main>`), not only a `div`. A template that does not hold
+  the root, or a root that is not an empty element (an opening tag alone, one
+  that holds something, one closed in its own tag), has no place for a screen:
+  the page goes out undrawn (`drawn: false`), and the second case is logged.
+- **`server`** is asked three things, and its type says so
+  (`DocumentConfig['server']`): `principalOf(token)`, `page(path)` and
+  `shells`, and of each shell host only `snapshot`. A `MossServer` is one.
 - **Nothing here can fail a page.** A kit component that throws, a shell that
   will not build: the answer is the template as it is (`drawn: false`), and the
   terminal paints it the way it did before any of this existed.
