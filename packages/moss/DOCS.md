@@ -1219,8 +1219,10 @@ await integrations.listAttachments('people.detail');
   through the proxy, a framed page and its callback, a vendor's webhook,
   `callIntegration`, the bundle fetched at registration, the operator's probe,
   and each press image. A call that is given up on reads as a service that is
-  unreachable (`502`; `callIntegration` rejects; the probe answers `status: 0`;
-  the bundle is refused). The shorter of this and an action's own `timeoutMs`
+  unreachable: `502` from the proxy, the frame door, the webhook and a
+  registration whose bundle did not arrive; `callIntegration` rejects; the
+  probe answers `status: 0`; a press image that did not arrive refuses its
+  bundle (`422`). The shorter of this and an action's own `timeoutMs`
   ends a call, so an integration whose endpoint is slow by nature needs this
   raised as well; an answer that streams for longer than this is cut.
 - `pressMaxBytes: number` — how large one press image may be. Default
