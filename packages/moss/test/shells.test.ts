@@ -1220,6 +1220,80 @@ describe('shells — adopt', () => {
   });
 });
 
+// ═══════════════════════════════════════════════════════════════
+// WHAT FAILS IS SAID. Four places caught an error and went on, which is
+// right, and wrote nothing, which left a screen missing a card, a delivery
+// that never arrived or a shell missing from the roster with no line anywhere
+// to say why.
+// ═══════════════════════════════════════════════════════════════
+
+describe('shells — what fails is said', () => {
+  const logged = async (run: () => Promise<void>): Promise<string[]> => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await run();
+      return errors.mock.calls.map((call) => String(call[0]));
+    } finally {
+      errors.mockRestore();
+    }
+  };
+  const seeded = (seeds: NonNullable<NonNullable<NiscApp['shell']>['seeds']>): HostSetup => ({
+    ...ctx,
+    app: { ...app, shell: { canvases: [{ id: 'main', mode: 'list' }], seeds } } as unknown as NiscApp,
+  });
+
+  it('a seed that cannot be pushed is skipped and named; the ones after it are pushed', async () => {
+    const host = createShellHost(hostConfig(seeded(() => ({ main: [{ action: 'counter', with: ['no-such-fragment'] }, 'counter'] }))));
+    let session: Awaited<ReturnType<typeof host.session>> | undefined;
+    const lines = await logged(async () => {
+      session = await host.session('t', 'usr_1');
+      await tick();
+      await tick();
+    });
+    expect(session?.shell.getCanvasState('main').stack).toHaveLength(1);
+    expect(lines.filter((line) => line.includes('counter') && line.includes('main'))).toHaveLength(1);
+  });
+
+  it('seeds that cannot be derived leave the canvas as it was, and say so', async () => {
+    const host = createShellHost(hostConfig(seeded(async () => Promise.reject(new Error('the rows could not be read')))));
+    const lines = await logged(async () => {
+      const snapshot = await host.snapshot('t', 'usr_1');
+      expect(snapshot.settled).toBe(true);
+      expect(snapshot.trees['main']).toEqual([]);
+    });
+    expect(lines.some((line) => line.includes('seeds'))).toBe(true);
+  });
+
+  it('a delivery the shell throws on answers false, and says so', async () => {
+    const host = createShellHost(hostConfig(ctx));
+    const session = await host.session('t', 'usr_1');
+    session.shell.publish = () => {
+      throw new Error('the bus is gone');
+    };
+    let delivered: boolean | undefined;
+    const lines = await logged(async () => {
+      delivered = host.deliver('usr_1', 'a-channel');
+    });
+    expect(delivered).toBe(false);
+    expect(lines.some((line) => line.includes('a-channel'))).toBe(true);
+  });
+
+  it('a shell that cannot be read is left off the roster, and said', async () => {
+    const host = createShellHost(hostConfig(ctx));
+    const broken = await host.session('t', 'usr_1');
+    await host.session('t', 'usr_2');
+    broken.shell.getState = () => {
+      throw new Error('disposed under us');
+    };
+    let roster: string[] = [];
+    const lines = await logged(async () => {
+      roster = host.list().map((report) => report.principal);
+    });
+    expect(roster).toEqual(['usr_2']);
+    expect(lines.some((line) => line.includes('usr_1'))).toBe(true);
+  });
+});
+
 describe('shells — the instance a click names', () => {
   // A list canvas: two live counters at once, the second one "active". A
   // terminal names the card a press came from; moss holds that name to the

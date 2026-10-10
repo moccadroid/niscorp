@@ -82,8 +82,11 @@ const rosterOf = (durable: ReadonlyMap<string, Cell>): ShellReport[] => {
         .canvases.filter((canvas) => canvas.items.length > 0)
         .map((canvas) => ({ id: canvas.id, actions: canvas.items.map((item) => item.definitionId) }));
       reports.push({ principal, connections: live.connections.size, since: live.since, idleSince: live.idleSince, canvases });
-    } catch {
-      // unreadable (disposed under us) — not a shell anybody can be shown
+    } catch (error) {
+      // Unreadable (disposed under us): not a shell anybody can be shown. It
+      // is said, because a shell missing from the roster is what an operator
+      // would otherwise have to guess at.
+      console.error(`[moss/shells] the shell of ${principal} could not be read for the roster, and is left off it:`, error);
     }
   }
   return reports;
@@ -286,7 +289,8 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
       try {
         cell.live.shell.publish(channel, payload);
         return true;
-      } catch {
+      } catch (error) {
+        console.error(`[moss/shells] a delivery on "${channel}" to the shell of ${principal} failed:`, error);
         return false;
       }
     },

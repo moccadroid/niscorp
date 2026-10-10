@@ -67,16 +67,20 @@ const seedCanvases = (
             // on, derived a tick late because it had to be read; `back`
             // undoing it would empty the canvas somebody just landed on.
             live.shell.push(canvasId, action, input, withFragments, { history: false });
-          } catch {
-            // an unknown canvas or definition is a skipped seed, not a
-            // dead session
+          } catch (error) {
+            // A seed that cannot be pushed (a fragment the shell does not
+            // have, an input its action refuses) is a skipped seed, not a
+            // dead session. It is said: the screen is missing a card.
+            console.error(`[moss/shells] the seed "${action}" on canvas "${canvasId}" could not be pushed, and was skipped:`, error);
           }
         }
       }
     })
-    .catch(() => {
-      // a failed derivation seeds nothing — the canvas stays empty and
-      // the rest of the shell is untouched
+    .catch((error: unknown) => {
+      // A failed derivation seeds nothing — the canvas stays as it was and
+      // the rest of the shell is untouched. It is said: the app's own hook
+      // threw, and nothing else would tell anybody.
+      console.error('[moss/shells] the seeds of a shell could not be derived, and none was pushed:', error);
     });
 };
 
