@@ -414,21 +414,6 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   const operator = new Hono<Env>();
   guardOperator(operator, { key: runtime.operatorKey ?? '', gate: runtime.operatorGate });
 
-  // The fingerprints somebody may be told of: every read and write the app
-  // serves. The policy of whoever asks is compiled on the way, so a principal
-  // the charter cannot resolve is refused here as it is on every other route.
-  const fingerprintsFor = async (principal: string | null): Promise<string[]> => {
-    const discovery = await data.engine.cache.entries?.();
-    if (discovery === undefined) return [];
-    const compiled = data.policyOf(await identity.resolve(principal));
-    return discovery
-      .filter(({ entry }) => entry.kind === 'ok' || entry.kind === 'mutation')
-      .map(({ key }) => key)
-      .filter((key) => !key.startsWith('neg:'))
-      .sort()
-      .filter(() => compiled !== undefined);
-  };
-
   // WHAT A FEATURE IS HANDED (./feature): each member one function or one
   // narrow value of the module that owns it, and nothing of the manifest or
   // the runtime beside what is named.
@@ -455,7 +440,9 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     ownEntries: data.ownEntries,
     grammars: data.grammars,
     fingerprints: async () => (await data.engine.cache.keys?.()) ?? [],
-    fingerprintsFor,
+    // A principal the charter cannot resolve is refused here, as it is on
+    // every other route.
+    fingerprintsFor: async (principal) => data.fingerprintsFor(await identity.resolve(principal)),
     telemetry: runtime.telemetry,
     signingSeed: runtime.signingSeed,
     wrapWire: (wrap) => {

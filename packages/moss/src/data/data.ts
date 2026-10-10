@@ -94,6 +94,9 @@ export type Data = {
   // caller's own, so nothing it does to the answer reaches a policy a request
   // is served under.
   policyForRoles: (roles: readonly string[]) => ScopePolicy;
+  // The fingerprints somebody may be told of: every read and write the app
+  // serves, sorted. The policy of whoever asks is compiled on the way.
+  fingerprintsFor: (who: Caller) => Promise<string[]>;
   // Run a seeded entry as a charter role (./execute-as.ts).
   executeAs: ExecuteAs;
   // Take a feature's own entries, and answer how one is replayed
@@ -160,6 +163,17 @@ export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charte
     grammars,
     policyOf: policies.of,
     policyForRoles: (roles) => resolvePolicyForRoles(governed, grants, roles),
+    fingerprintsFor: async (who) => {
+      const discovery = await engine.cache.entries?.();
+      if (discovery === undefined) return [];
+      const compiled = policies.of(who);
+      return discovery
+        .filter(({ entry }) => entry.kind === 'ok' || entry.kind === 'mutation')
+        .map(({ key }) => key)
+        .filter((key) => !key.startsWith('neg:'))
+        .sort()
+        .filter(() => compiled !== undefined);
+    },
     // Compiled for each call: nothing keeps a machinery role's policy.
     executeAs: createExecuteAs({
       engine,
