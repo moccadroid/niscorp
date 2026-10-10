@@ -62,6 +62,12 @@ export const CLOSE_SIGNED_OUT = 4403;
 // the process and every other session stay up, and reconnecting later is
 // reasonable — the next build is attempted fresh.
 export const CLOSE_SHELL_FAILED = 4500;
+// Application close code: the server is serving as many terminals with nobody
+// signed in as it is set to, and built no shell for this one. Nothing is
+// wrong with the terminal or its token: reconnecting later is right, and a
+// terminal does, as after any close that is not one of the two recoveries
+// above. The preceding `error` (`at_capacity`) says it in a sentence.
+export const CLOSE_AT_CAPACITY = 4503;
 // Application close code: terminal and server speak protocols the other cannot
 // (see PROTOCOL). Not a retry: reconnecting speaks the same protocol again. A
 // browser terminal needs a reload to fetch the current build; the preceding

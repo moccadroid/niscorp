@@ -226,3 +226,11 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 
 - A handshake that failed (the verifier threw, what somebody holds could not be asked, their shell could not be built) was refused to its terminal with `session_failed` and a `4500` close, and logged. It emitted no span: with the verifier down, upgrades did not turn into errors on whatever reads `runtime.telemetry`, they stopped being counted. It emits one `socket.upgrade` span now, `status: 'error'`, with `hasPrincipal` as far as the handshake got.
 - A sink that counts `socket.upgrade` spans by status gains a value. What the terminal is told has not changed.
+
+**Shells for nobody signed in have a limit: `runtime.anonymousShellMax`, default 1,000.**
+
+- Somebody signed in has one shell, however many terminals they open. Nobody signed in has one for each connection, and opening a connection takes no account and no token: nothing limited how many were alive, so the memory of the process was anybody's to fill.
+- New: `runtime.anonymousShellMax`, how many shells for nobody may be alive at once. A connection over it is sent `{ type: 'error', code: 'at_capacity', message: 'This server is serving as many terminals with nobody signed in as it is set to. Try again in a moment.' }` and closed with the new close code `4503`. No shell is built for it. Somebody signed in is served whatever the count is.
+- **The default is 1,000, from a measurement.** Lyceum's real boot, 2,000 connections for nobody opened through `server.socket` and held, the heap read after a forced collection before and after: 52.5 KB of heap for each (about 110 KB resident); 26.7 KB for an app of one canvas and one action. The Node transport holds about 260 KB resident more for each connection while compression is on. A thousand fit a process given 512 MB.
+- **An app with a public screen that more than a thousand visitors have open at once sets `anonymousShellMax`** to what its memory carries (`Infinity` is no limit, as before). A page of the manifest that is not live opens no socket and takes no place.
+- A terminal built on `@niscorp/moss/client` has nothing to change: it logs the `error`, and reconnects with its usual backoff, as after any close that is not `4401` or `4403`. A terminal written by hand treats `4503` as a close to retry later, and keeps its token.

@@ -59,6 +59,22 @@ export type NiscRuntime = {
   // against a rebuild on the next connect — an operational decision about a
   // deployment, not something an application is written against.
   shellIdleMs?: number;
+  // How many shells for NOBODY SIGNED IN may be alive at once (default 1,000;
+  // `Infinity` is no limit).
+  //
+  // Somebody signed in has one shell however many terminals they open. Nobody
+  // signed in has one for each connection, and opening a connection takes no
+  // account and no token, so without a limit the memory of the process is
+  // anybody's to fill. A connection over it is told so (`at_capacity`) and
+  // closed with 4503, and its terminal tries again later like after any close.
+  //
+  // The default comes from a measurement (../socket, places.ts): a shell for
+  // nobody costs about 53 KB of heap in lyceum and 27 KB for an app of one
+  // screen, and the Node transport about 260 KB more for each connection while
+  // compression is on. A thousand of them fit a process given 512 MB. A
+  // deployment with a public screen and more visitors at once than that raises
+  // it, from those numbers and its own memory.
+  anonymousShellMax?: number;
   // How long a server shell's endpoint call waits for its reply before it
   // fails to the action's `onError` (default: nova's, 30 seconds). An
   // endpoint that is slow by nature says so itself (`timeoutMs`); this is the

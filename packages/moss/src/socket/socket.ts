@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { DefinitionValidationError } from '@niscorp/nova';
 import { sealSession } from '../identity';
-import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SHELL_FAILED, PROTOCOL } from '../protocol';
+import { CLOSE_AT_CAPACITY, CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SHELL_FAILED, PROTOCOL } from '../protocol';
 import type { ServerMessage } from '../protocol';
 import { emitterOf, spanClock } from '../runtime';
 import type { Emit, TelemetrySpan } from '../runtime';
@@ -12,6 +12,7 @@ import { endingOf } from './ending';
 import type { Ending } from './ending';
 import { parametersOf, protocolRefusal, whoIsAsking } from './handshake';
 import type { SaidOnce } from './handshake';
+import { DEFAULT_ANONYMOUS_SHELL_MAX, createPlaces } from './places';
 import { createRevalidation } from './revalidation';
 import { messageHandler } from './routing';
 
@@ -49,9 +50,11 @@ const spanOf = (emit: Emit | undefined): Span | undefined => {
   return (name, status, hasPrincipal) => emit({ name, startUnixNano: clock.startUnixNano, endUnixNano: clock.endUnixNano(), status, attributes: { hasPrincipal } });
 };
 
-// THE SESSION A CONNECTION IS ATTACHED TO, asked of the host its address
-// leads to. Undefined: the app serves no shell.
-const sessionFor = (config: Pick<SocketConfig, 'shells' | 'page'>, params: URLSearchParams, token: string | null, principal: string | null): Promise<ShellSession> | undefined => {
+// WHERE THE SESSION A CONNECTION IS ATTACHED TO COMES FROM: the host its
+// address leads to, asked with what the address says of the shell to open.
+// Undefined: the app serves no shell.
+type Opening = (token: string | null, principal: string | null) => Promise<ShellSession>;
+const openingOf = (config: Pick<SocketConfig, 'shells' | 'page'>, params: URLSearchParams): Opening | undefined => {
   // An anonymous terminal whose page was rendered server-side names the id
   // seed that page's shell was built under, so this connection's throwaway
   // shell mints the same instance ids and its first frames match the page.
@@ -65,14 +68,19 @@ const sessionFor = (config: Pick<SocketConfig, 'shells' | 'page'>, params: URLSe
   const path = params.get('path');
   const route = path === null ? undefined : config.page?.(path);
   const host = route?.host ?? config.shells;
+  if (host === undefined) return undefined;
 
-  return host?.session(token, principal, { ...(seed === undefined ? {} : { seed }), ...(route === undefined ? {} : { inputs: route.inputs }) });
+  return (token, principal) => host.session(token, principal, { ...(seed === undefined ? {} : { seed }), ...(route === undefined ? {} : { inputs: route.inputs }) });
 };
+
+// What a connection for nobody is told when there is no place left for it.
+const AT_CAPACITY: ServerMessage = { type: 'error', code: 'at_capacity', message: 'This server is serving as many terminals with nobody signed in as it is set to. Try again in a moment.' };
 
 export const createSocket = (config: SocketConfig): SocketAccept => {
   const emit = emitterOf(config.telemetry);
   const notOwn: SaidOnce = { said: false };
   const revalidation = createRevalidation(config);
+  const places = createPlaces(config.anonymousShellMax ?? DEFAULT_ANONYMOUS_SHELL_MAX);
 
   // WHAT AN ADMITTED CONNECTION IS SERVED: `hello`, then the session it is
   // attached to (undefined when the app serves no shell). Both are awaited,
@@ -82,7 +90,7 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
     connection: Connection,
     send: (message: ServerMessage) => void,
     ending: Ending,
-    params: URLSearchParams,
+    opening: { session: Opening | undefined; delta: boolean },
     who: { token: string | null; principal: string | null },
   ): Promise<ShellSession | undefined> => {
     // The catalog channel: the application, resolved for YOU, on every
@@ -96,17 +104,12 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
     // The canvas streams: attach to the session's shell (durable per
     // principal — the shell outlives this connection) and it re-sends the
     // current trees; every change fans out to every attached connection.
-    // Frame deltas are OPT-IN by the terminal, on the upgrade URL — the
-    // capability has to be known before the first frame is sent. A terminal
-    // that says nothing is served whole frames forever, which is what every
-    // terminal built before this existed does.
-    const wantsDelta = params.get('delta') === '1';
-    const session = await sessionFor(config, params, who.token, who.principal);
+    const session = await opening.session?.(who.token, who.principal);
     if (session === undefined) return undefined;
     // Closed while its shell was built: it is not attached, and the session is
     // told at once that this connection is done with it — which lets a kept
     // shell idle and disposes one built for this connection alone.
-    if (!ending.ended()) session.attach(connection, { delta: wantsDelta });
+    if (!ending.ended()) session.attach(connection, { delta: opening.delta });
     ending.then(() => session.detach(connection));
     return session;
   };
@@ -135,6 +138,7 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
       // verifier down, upgrades did not turn into errors, they went missing.
       span?.('socket.upgrade', 'error', found.principal);
       revalidation.release(connection);
+      places.give(connection);
       try {
         send(refusalOf(error));
         connection.close(CLOSE_SHELL_FAILED, 'session failed');
@@ -169,23 +173,39 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
       send({ type: 'error', code: 'seal_not_kept', message: 'This browser did not keep the cookie a sealed sign-in is opened with. Sign in again: it will be handed over as a token.' });
     }
 
+    // A SHELL FOR NOBODY TAKES A PLACE (./places.ts), before anything is asked
+    // for it: arrivals in one moment each find the count the one before left.
+    // With none left the terminal is told so and closed, and no shell is built.
+    const session = openingOf(config, params);
+    if (principal === null && session !== undefined && !places.take(connection)) {
+      span?.('socket.upgrade', 'refused', false);
+      send(AT_CAPACITY);
+      connection.close(CLOSE_AT_CAPACITY, 'at capacity');
+      return;
+    }
+
     revalidation.hold(connection, token !== null && token !== '' && principal !== null ? { token, principal } : null);
     // Listened for here, before anything below awaits (./ending.ts).
     const ending = endingOf(connection);
     ending.then(() => revalidation.release(connection));
+    ending.then(() => places.give(connection));
     // The connection's whole life, closed by the same clock — how long
     // terminals stay, and under a principal or anonymous. Registered here so it
     // fires however the connection ends (graceful, expiry, transport drop).
     if (span !== undefined) ending.then(() => span('socket.close', 'ok', principal !== null));
 
-    const session = await served(connection, send, ending, params, { token, principal });
+    // Frame deltas are OPT-IN by the terminal, on the upgrade URL — the
+    // capability has to be known before the first frame is sent. A terminal
+    // that says nothing is served whole frames forever, which is what every
+    // terminal built before this existed does.
+    const attached = await served(connection, send, ending, { session, delta: params.get('delta') === '1' }, { token, principal });
 
     // Admitted: the handshake resolved a principal, said hello, and attached a
     // shell. The span measures that, not the connection's life (that is
     // `socket.close`).
     span?.('socket.upgrade', 'ok', principal !== null);
 
-    connection.onMessage(messageHandler(session, connection, send));
+    connection.onMessage(messageHandler(attached, connection, send));
   };
 
   return Object.assign(accept, { stop: revalidation.stop });

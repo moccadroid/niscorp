@@ -644,6 +644,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     ...(shells !== undefined ? { shells } : {}),
     page: pageAt,
     ...(runtime.sessionRevalidateMs !== undefined ? { revalidateMs: runtime.sessionRevalidateMs } : {}),
+    ...(runtime.anonymousShellMax !== undefined ? { anonymousShellMax: runtime.anonymousShellMax } : {}),
     ...(runtime.telemetry !== undefined ? { telemetry: runtime.telemetry } : {}),
     ...(runtime.origins !== undefined ? { origins: runtime.origins } : {}),
     ...(runtime.session === 'sessions' ? { sessionLastsMs: (token: string) => sessionRemainingMs(runtime.pool, token) } : {}),

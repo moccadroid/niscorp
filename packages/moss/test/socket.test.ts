@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DefinitionValidationError } from '@niscorp/nova';
-import { createSocket } from '../src/socket';
+import { createSocket, DEFAULT_ANONYMOUS_SHELL_MAX } from '../src/socket';
 import type { Connection, SocketConfig } from '../src/socket';
-import { CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, CLOSE_SHELL_FAILED, CLOSE_PROTOCOL_MISMATCH, PROTOCOL, PROTOCOL_MIN, ServerMessageSchema, offerToken } from '../src/protocol';
+import { CLOSE_AT_CAPACITY, CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, CLOSE_SHELL_FAILED, CLOSE_PROTOCOL_MISMATCH, PROTOCOL, PROTOCOL_MIN, ServerMessageSchema, offerToken } from '../src/protocol';
 import type { ServerMessage } from '../src/protocol';
 import { createShellHost } from '../src/shells';
 import type { ShellHost, ShellSession } from '../src/shells';
@@ -1157,5 +1157,123 @@ describe('socket — a connection that closed before its session was ready', () 
 
     expect(asked).not.toHaveBeenCalled();
     expect(session.calls).toEqual([]);
+  });
+});
+
+// Somebody signed in has one shell, however many terminals they open. Nobody
+// signed in has one for each connection, and a connection costs whoever opens
+// it nothing: no account, no token. So how many of those are alive at once has
+// a limit, and a connection over it is told so and closed.
+describe('socket — shells for nobody alive at once', () => {
+  // A host that counts what it was asked for, and by whom.
+  const counting = (): { shells: Pick<ShellHost, 'session'>; asked: (string | null)[] } => {
+    const asked: (string | null)[] = [];
+    return { shells: { session: async (_token, principal) => (asked.push(principal), recordingSession()) }, asked };
+  };
+
+  it('a connection for nobody over the limit is told so in one sentence and closed, and no shell is built for it', async () => {
+    const host = counting();
+    const accept = createSocket(ctxWith({ shells: host.shells, anonymousShellMax: 2 }));
+    const served = [new FakeConnection(), new FakeConnection()];
+    for (const conn of served) await accept(SOCKET, conn);
+    expect(host.asked).toEqual([null, null]);
+
+    const over = new FakeConnection();
+    await accept(SOCKET, over);
+    expect(over.sent.map((message) => (message.type === 'error' ? message.code : message.type))).toEqual(['at_capacity']);
+    expect(over.first('error')?.message).toBe('This server is serving as many terminals with nobody signed in as it is set to. Try again in a moment.');
+    expect(over.closed?.code).toBe(CLOSE_AT_CAPACITY);
+    expect(host.asked).toEqual([null, null]);
+    // the ones being served are not touched
+    for (const conn of served) expect(conn.closed).toBeUndefined();
+  });
+
+  it('somebody signed in is served whatever the count for nobody is', async () => {
+    const host = counting();
+    const accept = createSocket(ctxWith({ shells: host.shells, anonymousShellMax: 1, revalidateMs: 0 }));
+    await accept(SOCKET, new FakeConnection());
+    const signedIn = new FakeConnection();
+    await accept(SOCKET, signedIn.offering('good'));
+    expect(signedIn.first('hello')?.principal).toBe('usr_1');
+    expect(signedIn.closed).toBeUndefined();
+    expect(host.asked).toEqual([null, 'usr_1']);
+  });
+
+  it('a place is given back when its connection closes', async () => {
+    const host = counting();
+    const accept = createSocket(ctxWith({ shells: host.shells, anonymousShellMax: 1 }));
+    const first = new FakeConnection();
+    await accept(SOCKET, first);
+    first.close();
+    const next = new FakeConnection();
+    await accept(SOCKET, next);
+    expect(next.first('hello')?.principal).toBeNull();
+    expect(next.closed).toBeUndefined();
+  });
+
+  it('…and when its shell could not be built', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let failing = true;
+    const shells: Pick<ShellHost, 'session'> = {
+      session: async () => {
+        if (failing) throw new Error('a definition failed');
+        return recordingSession();
+      },
+    };
+    const accept = createSocket(ctxWith({ shells, anonymousShellMax: 1 }));
+    const refused = new FakeConnection();
+    await accept(SOCKET, refused);
+    expect(refused.closed?.code).toBe(CLOSE_SHELL_FAILED);
+    failing = false;
+    const next = new FakeConnection();
+    await accept(SOCKET, next);
+    expect(next.closed).toBeUndefined();
+    logged.mockRestore();
+  });
+
+  it('arrivals in one moment do not get past it together', async () => {
+    const host = counting();
+    const accept = createSocket(ctxWith({ shells: host.shells, anonymousShellMax: 3 }));
+    const arriving = Array.from({ length: 10 }, () => new FakeConnection());
+    await Promise.all(arriving.map((conn) => accept(SOCKET, conn)));
+    expect(host.asked).toHaveLength(3);
+    expect(arriving.filter((conn) => conn.closed?.code === CLOSE_AT_CAPACITY)).toHaveLength(7);
+  });
+
+  it('a page’s shell for nobody counts as the app’s does', async () => {
+    const host = counting();
+    const page = counting();
+    const accept = createSocket(ctxWith({ shells: host.shells, page: (path) => (path === '/docs' ? { host: page.shells, inputs: {} } : undefined), anonymousShellMax: 1 }));
+    await accept(`${SOCKET}&path=/docs`, new FakeConnection());
+    const over = new FakeConnection();
+    await accept(SOCKET, over);
+    expect(over.closed?.code).toBe(CLOSE_AT_CAPACITY);
+    expect([page.asked, host.asked]).toEqual([[null], []]);
+  });
+
+  it('an app that serves no shell builds none, and counts none', async () => {
+    const accept = createSocket(ctxWith({ anonymousShellMax: 1 }));
+    for (const conn of [new FakeConnection(), new FakeConnection(), new FakeConnection()]) {
+      await accept(SOCKET, conn);
+      expect(conn.closed).toBeUndefined();
+    }
+  });
+
+  it('told nothing, the limit is the default', async () => {
+    expect(DEFAULT_ANONYMOUS_SHELL_MAX).toBe(1000);
+    const host = counting();
+    const accept = createSocket(ctxWith({ shells: host.shells }));
+    const arriving = Array.from({ length: DEFAULT_ANONYMOUS_SHELL_MAX + 1 }, () => new FakeConnection());
+    for (const conn of arriving) await accept(SOCKET, conn);
+    expect(arriving.filter((conn) => conn.closed !== undefined)).toHaveLength(1);
+    expect(arriving.at(-1)?.closed?.code).toBe(CLOSE_AT_CAPACITY);
+  });
+
+  it('`Infinity` is no limit', async () => {
+    const host = counting();
+    const accept = createSocket(ctxWith({ shells: host.shells, anonymousShellMax: Infinity }));
+    const arriving = Array.from({ length: DEFAULT_ANONYMOUS_SHELL_MAX + 5 }, () => new FakeConnection());
+    for (const conn of arriving) await accept(SOCKET, conn);
+    expect(arriving.every((conn) => conn.closed === undefined)).toBe(true);
   });
 });

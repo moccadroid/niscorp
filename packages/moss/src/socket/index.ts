@@ -29,6 +29,10 @@
 // has no streams, and a message aimed at one is answered honestly with
 // `no_shell` rather than silently dropped.
 //
+// A SHELL FOR NOBODY TAKES A PLACE (./places.ts): somebody signed in has one
+// shell, nobody signed in has one for each connection, and how many of those
+// are alive at once has a limit.
+//
 // IDENTITY IS ASKED TWICE (./revalidation.ts): once at upgrade, and then on a
 // timer for as long as the connection lives. The second is what lets a
 // `session` verifier's expiry mean anything here — the HTTP surfaces re-ask on
@@ -41,5 +45,6 @@
 
 export type { HeldCatalog, SessionSource, SocketConfig } from './config';
 export type { Connection, SocketAccept } from './connection';
+export { DEFAULT_ANONYMOUS_SHELL_MAX } from './places';
 export { DEFAULT_REVALIDATE_MS } from './revalidation';
 export { createSocket } from './socket';

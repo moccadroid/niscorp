@@ -22,6 +22,7 @@ export {
   CLOSE_INVALID_TOKEN,
   CLOSE_SIGNED_OUT,
   CLOSE_SHELL_FAILED,
+  CLOSE_AT_CAPACITY,
   CLOSE_PROTOCOL_MISMATCH,
 } from './connection';
 export { encodeDelta, applyDelta, frameHash } from './delta';

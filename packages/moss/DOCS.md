@@ -249,6 +249,7 @@ type NiscRuntime = {
   migrations?: 'apply' | 'verify'; // the boot's ledgered run; default 'apply'
   tables?: readonly Sequence[];    // the app's own table sequences, in that same run
   shellIdleMs?: number;            // idle shell eviction; default 30 min, `0` disables
+  anonymousShellMax?: number;      // shells for nobody signed in alive at once; default 1,000, `Infinity` is no limit
   endpointTimeoutMs?: number;      // a server shell's endpoint call; default nova's, 30s
   sessionRevalidateMs?: number;    // live-socket re-verify; default 60s, `0` disables
   identityMax?: number;            // resident identity records; default 10,000; 0 or less refuses the boot
@@ -274,6 +275,33 @@ never learns what expiry means — it only asks again, on both surfaces. A
 function is named at boot too, in one line (`[moss] session: a function the app
 supplied (…) decides who a token is.`): moss cannot tell an identity provider
 from a stub that trusts whatever it is shown, so the choice is in the log.
+
+`anonymousShellMax` — how many shells for nobody signed in may be alive at
+once. Somebody signed in has one shell however many terminals they open; nobody
+signed in has one for each connection, and opening a connection takes no
+account and no token. A connection over the limit is sent
+`{ type: 'error', code: 'at_capacity' }` and closed with `4503`; no shell is
+built for it, and its terminal tries again later, as after any other close.
+Somebody signed in is served whatever the count is, and a shell one of the
+manifest's pages builds for somebody signed in takes no place.
+
+The default is from a measurement (2026-10-10, Node 24): lyceum's real boot,
+2,000 connections for nobody opened through `server.socket` and held, the heap
+read after a forced collection before and after, with a transport that drops
+what it is sent.
+
+| | for each shell for nobody |
+| --- | --- |
+| heap used, lyceum (its lock screen: 6.7 KB as JSON) | 52.5 KB |
+| resident size, lyceum | about 110 KB |
+| heap used, an app of one canvas and one action | 26.7 KB |
+| the Node transport, compression on (below) | about 260 KB resident more |
+
+At 1,000 that is about 53 MB of heap, and about 370 MB resident with the
+transport's compression: the largest round number that still fits a process
+given 512 MB. A deployment with a public screen and more visitors at once than
+that raises it from those numbers and its own memory, and turns compression off
+or down first.
 
 #### `mintSession(pool, principal, ttlMs)` / `sessionOf(pool, token)` / `revokeSession(pool, token)` / `revokeAllFor(pool, principal)`
 
@@ -1026,6 +1054,10 @@ measures the end.
 - `popTo` names a canvas and an instance already on its stack
   (`{ type: 'popTo', canvas, instance }`): unmount everything above it, in one
   step — a breadcrumb's jump, which several `back`s would race.
+- `CLOSE_AT_CAPACITY = 4503`: the server is serving as many terminals with
+  nobody signed in as `runtime.anonymousShellMax` allows, and built no shell
+  for this one. An `at_capacity` error frame, then the close. Not a recovery:
+  the terminal keeps what it holds and reconnects with its usual backoff.
 - `CLOSE_INVALID_TOKEN = 4401`, `CLOSE_SIGNED_OUT = 4403`,
   `CLOSE_SHELL_FAILED = 4500`, `CLOSE_PROTOCOL_MISMATCH = 4426`. `4500` means
   the server could not open a session for this connection (commonly a
@@ -1033,8 +1065,9 @@ measures the end.
   close. The frame names the failing definitions when that is the cause; of any
   other cause it says nothing, and the error is in the server's log. The
   refusal is that terminal's alone, and reconnecting later is reasonable.
-- `error` codes: `invalid_token`, `session_failed`, `client_too_old`,
-  `server_too_old`, `no_shell` (the app serves no shell), `invalid_message`
+- `error` codes: `invalid_token`, `session_failed`, `at_capacity`,
+  `client_too_old`, `server_too_old`, `no_shell` (the app serves no shell),
+  `invalid_message`
   (what was sent is not JSON, not one of the messages above, or one of them
   with a field it does not have: nothing of it is acted on), `message_failed`
   (the server threw acting on a message it could read; why is in its log, and
