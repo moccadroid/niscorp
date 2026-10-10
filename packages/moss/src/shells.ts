@@ -1,4 +1,4 @@
-import { createShell, createComponentRegistry, createLayoutStore, canvasTreeOf, shellSettled, CANVAS_SLOT_NAME, ACTION_SLOT_NAME } from '@niscorp/nova';
+import { createShell, createComponentRegistry, createLayoutStore, canvasTreeOf, shellSettled, CANVAS_SLOT_NAME, ACTION_SLOT_NAME, NovaEventSchema } from '@niscorp/nova';
 import { componentsOf, snapshotShell } from '@niscorp/nova/reflect';
 import type { ActionDefinition, Shell, CanvasConfig, FetchFn, FunctionHandler, LayoutNode, RenderNode } from '@niscorp/nova';
 import { emitterOf, spanClock } from './runtime';
@@ -823,13 +823,16 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
       const { shell } = cell.live;
       const state = shell.getState().canvases[canvas];
       const claimed = event['origin'];
-      if (claimed !== undefined) {
-        if (typeof claimed !== 'string' || !(state?.stack ?? []).some((item) => item.id === claimed)) return;
-        shell.dispatch(event as Parameters<Shell['dispatch']>[0]);
-        return;
-      }
+      if (claimed !== undefined && (typeof claimed !== 'string' || !(state?.stack ?? []).some((item) => item.id === claimed))) return;
       const active = state?.active;
-      shell.dispatch((active === undefined ? event : { ...event, origin: active.id }) as Parameters<Shell['dispatch']>[0]);
+      // WHAT AN EVENT IS belongs to nova, and nova's shell takes one of its
+      // events and nothing else. What arrived here is whatever object a
+      // terminal sent (the protocol holds it to being an object), so it is
+      // read by nova's schema where it enters the shell. One that does not
+      // parse is dropped, as an event naming an instance that is not there is:
+      // there is nothing it could have been a press on.
+      const read = NovaEventSchema.safeParse(claimed !== undefined || active === undefined ? event : { ...event, origin: active.id });
+      if (read.success) shell.dispatch(read.data);
     },
     publish: (channel, payload) => cell.live.shell.publish(channel, payload),
     back: () => cell.live.shell.back(),

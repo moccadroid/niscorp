@@ -927,6 +927,23 @@ describe('shells — the instance a click names', () => {
     expect([n(a), n(b), n(side)]).toEqual([0, 0, 0]);
   });
 
+  // What an event is belongs to nova, and its shell takes one of nova's events
+  // and nothing else. What a terminal sent is read by nova's schema where it
+  // enters the shell: it used to be handed over as whatever object arrived.
+  it('what is not one of nova’s events is not dispatched', async () => {
+    const { session, a, b, n } = await setup();
+    session.dispatch('tray', { type: 'ui:click', ref: 'bump', origin: a, more: 'than an event has' });
+    session.dispatch('tray', { type: 'ui:click', ref: 'bump', more: 'than an event has' });
+    session.dispatch('tray', { type: 'ui:hover', ref: 'bump' });
+    session.dispatch('tray', { ref: 'bump' });
+    await tick();
+    expect([n(a), n(b)]).toEqual([0, 0]);
+    // And one that is, still lands.
+    session.dispatch('tray', { type: 'ui:click', ref: 'bump', origin: a, payload: { any: 'thing' } });
+    await tick();
+    expect([n(a), n(b)]).toEqual([1, 0]);
+  });
+
   it('a click naming an instance that is gone, or no instance at all, is dropped', async () => {
     const { session, a, b, side, n } = await setup();
     session.shell.removeInstance('tray', a ?? '');

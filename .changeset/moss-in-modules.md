@@ -181,3 +181,8 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
   - It read `session.policy` to know what the caller may read (which feeds, which stored queries to offer) → `server.policyForRoles(session.roles)`: the same policy, compiled for the asking, a copy that is the asker's own.
   - It read `session.runtime` for its own database (minting a session for somebody else, a sync, a raw statement of the deployment's own) → the runtime the app created and handed to `createServer`, closed over where the app builds its manifest. Moss does not hand it back.
 - A read or a write as the caller is `session.wire`, as before.
+
+**An event a terminal sends is read by nova's schema before a shell is handed it.**
+
+- The socket holds `event` to being an object and no more; the shell it is dispatched into took whatever arrived. It is now parsed by nova's `NovaEventSchema` first: one of `ui:click`, `ui:submit`, `ui:input`, `ui:focus`, `ui:blur`, `ui:model`, `ui:key`, `ui:drop`, with `ref`, `payload`, `origin` (and `key` on `ui:key`) and no other field. One that does not parse is dropped, as an event naming an instance that is not on its canvas is.
+- A terminal built on `@niscorp/moss/client` and one of nova's adapters sends nothing else, and has nothing to change. A terminal written by hand that added a field of its own to an event, or sent a type nova does not define, used to have it dispatched; it sends nova's event.
