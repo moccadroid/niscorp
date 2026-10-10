@@ -187,7 +187,9 @@ export const contractAsMarkdown = (contract: Contract, fingerprints: readonly st
 
 export type ContractDeps = {
   host: ContractHost;
-  // The fingerprints somebody may be told of.
+  // The fingerprints whoever asks may replay: what the contract lists is the
+  // caller's own, so an integration asking with its key reads what its actor's
+  // rung reaches, and somebody granted nothing reads none.
   fingerprintsFor: (principal: string | null) => Promise<readonly string[]>;
   // The public half of the deployment's signing key (./credentials.ts).
   verifyKey: string;

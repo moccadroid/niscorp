@@ -1,5 +1,6 @@
 import type { Context, Env, Hono } from 'hono';
 import { migrate, upgradeStore } from '@niscorp/strata/postgres';
+import { handleDiscovery } from '@niscorp/vex';
 import type { Sequence, Upgrader } from '@niscorp/strata';
 import type { CacheBackend, DatabaseAdapter, ExecuteRecord, MutationClient, PgPool, QueryEngine, QueryEngineConfig, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { ResolvedIdentity } from '../identity';
@@ -94,8 +95,11 @@ export type Data = {
   // caller's own, so nothing it does to the answer reaches a policy a request
   // is served under.
   policyForRoles: (roles: readonly string[]) => ScopePolicy;
-  // The fingerprints somebody may be told of: every read and write the app
-  // serves, sorted. The policy of whoever asks is compiled on the way.
+  // The fingerprints somebody may be told of, sorted: of the reads and writes
+  // the app serves, the ones their own policy lets them replay, as vex's
+  // discovery lists them for that policy (a read by the tables it reads, a
+  // write by what it writes). Whether a replay is then served is still decided
+  // when it is asked.
   fingerprintsFor: (who: Caller) => Promise<string[]>;
   // Run a seeded entry as a charter role (./execute-as.ts).
   executeAs: ExecuteAs;
@@ -163,17 +167,11 @@ export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charte
     grammars,
     policyOf: policies.of,
     policyForRoles: (roles) => resolvePolicyForRoles(governed, grants, roles),
-    fingerprintsFor: async (who) => {
-      const discovery = await engine.cache.entries?.();
-      if (discovery === undefined) return [];
-      const compiled = policies.of(who);
-      return discovery
-        .filter(({ entry }) => entry.kind === 'ok' || entry.kind === 'mutation')
-        .map(({ key }) => key)
-        .filter((key) => !key.startsWith('neg:'))
-        .sort()
-        .filter(() => compiled !== undefined);
-    },
+    // Vex's own discovery, asked under the caller's policy: it lists an entry
+    // only when the policy can touch every table the entry reads, or writes.
+    // This compiled the policy and then kept every fingerprint whatever it
+    // said, so somebody granted nothing was told the whole surface.
+    fingerprintsFor: async (who) => (await handleDiscovery({ engine, locked: true, scopePolicy: policies.of(who) })).fingerprints.map((entry) => entry.fingerprint).sort(),
     // Compiled for each call: nothing keeps a machinery role's policy.
     executeAs: createExecuteAs({
       engine,

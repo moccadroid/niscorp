@@ -96,7 +96,8 @@ export type FeatureSeams = {
   grammars: Upgrader;
   // Every fingerprint the app serves.
   fingerprints: () => Promise<readonly string[]>;
-  // The fingerprints somebody may be told of: the reads and writes, sorted.
+  // The fingerprints somebody may be told of: the reads and writes their own
+  // policy lets them replay, sorted. Nobody signed in is asked as `null`.
   fingerprintsFor: (principal: string | null) => Promise<readonly string[]>;
 
   // ── what the deployment supplies ──

@@ -219,6 +219,25 @@ describe("the data module — a feature's own entries", () => {
   });
 });
 
+describe('the data module — the fingerprints somebody may be told of', () => {
+  // The engine holds a read of `notes`, the same read at a reach, and a write
+  // that inserts a note (./data-double.ts).
+  it('are the entries their own policy lets them replay: a read by the tables it reads, a write by what it writes', async () => {
+    const { data } = await world();
+    expect(await data.fingerprintsFor(who('public'))).toEqual([]);
+    expect(await data.fingerprintsFor(who('reader'))).toEqual(['notes/all', 'notes/mine']);
+    expect(await data.fingerprintsFor(who('writer'))).toEqual(['notes/add', 'notes/all', 'notes/mine']);
+    // Several roles are a union, as they are when an entry is replayed.
+    expect(await data.fingerprintsFor(who('public', 'writer'))).toEqual(['notes/add', 'notes/all', 'notes/mine']);
+  });
+
+  it("are never a feature's own entries, whatever the caller holds", async () => {
+    const { data } = await world();
+    await data.ownEntries({ entries: [TAGS, ADD_TAG], tables: ['tags'] });
+    expect(await data.fingerprintsFor(who('owner'))).toEqual(['notes/add', 'notes/all', 'notes/mine']);
+  });
+});
+
 // WHOSE TABLES ONE RUN COVERS (../src/data/migrate.ts). Nothing is run here:
 // the pool is never asked, and the cache keeps no table.
 describe('the data module — the tables a run covers', () => {
