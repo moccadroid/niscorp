@@ -1,6 +1,7 @@
 import { afterEach, describe, it, expect } from 'vitest';
-import { createTideDriver } from '../src/index';
+import { createMemoryStore, createTide, createTideDriver } from '../src/index';
 import type { AdvanceReport, Tide } from '../src/index';
+import { testTransform } from './support';
 
 // THE DRIVER'S EDGE WITH ITS HOST: stopping. A host stops the driver and then
 // closes the database under the engine (a dev server re-booting, a test
@@ -82,5 +83,49 @@ describe('stopping the tide driver', () => {
     await stopping;
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(unhandled).toEqual([]);
+  });
+});
+
+// A DELAY A TIMER CANNOT HOLD. Node keeps a timer's delay in 32 bits: one over
+// 2^31 − 1 ms (24.8 days) is not refused, it is set to 1 ms, with a warning.
+// So a reflex whose next occurrence was a month off made the driver a loop:
+// wake, find nothing to do, ask when, sleep "a month", wake a millisecond
+// later. The same for a janitor's beat somebody set that long.
+//
+// A real engine over an empty store, with one answer replaced: nothing here is
+// cast into being a tide.
+const TOO_LONG_FOR_A_TIMER = 2 ** 31 + 60_000;
+
+const countedEngine = (nextDue: Tide['nextDue']): { tide: Tide; advances: () => number } => {
+  const real = createTide({ store: createMemoryStore(), transform: testTransform });
+  let advances = 0;
+  const tide: Tide = {
+    ...real,
+    advance: async (options) => {
+      advances += 1;
+      return real.advance(options);
+    },
+    nextDue,
+  };
+  return { tide, advances: () => advances };
+};
+
+describe('a delay longer than a timer can hold', () => {
+  it('a next due instant a month off is waited for, not woken for every millisecond', async () => {
+    const engine = countedEngine(async (now) => now + TOO_LONG_FOR_A_TIMER);
+    const driver = createTideDriver({ tide: engine.tide });
+    await driver.wake();
+    expect(engine.advances()).toBe(1);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    await driver.stop();
+    expect(engine.advances()).toBe(1);
+  });
+
+  it('a janitor beat that long does not beat every millisecond', async () => {
+    const engine = countedEngine(async () => undefined);
+    const driver = createTideDriver({ tide: engine.tide, janitorMs: TOO_LONG_FOR_A_TIMER });
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    await driver.stop();
+    expect(engine.advances()).toBe(0);
   });
 });

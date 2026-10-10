@@ -17,4 +17,9 @@ Tide's Postgres store and its driver ship from tide. They were in `@niscorp/moss
 - `createTideDriver({ tide, now?, janitorMs?, retention? })` answers a `TideDriver`: `ingest` and `fire` that wake the engine, `wake()`, and `stop()`. It advances to quiescence on every ingest, sleeps until the instant `nextDue` names, and sweeps on a slow beat. The types `TideDriver` and `TideDriverConfig` come with it.
 - The engine still reads no clock and sets no timer. The driver is what does, for a host that does not want to write those twenty lines.
 
+**A wait longer than a timer can hold no longer makes the driver a loop.**
+
+- The driver sleeps until the instant `nextDue` names, with one timer. Node keeps a timer's delay in 32 bits: one over 2^31 − 1 ms (24.8 days) is not refused, it is set to 1 ms, with a `TimeoutOverflowWarning`. A reflex whose next occurrence was further off than that had the driver wake every millisecond, advance, find nothing and ask again. Every wait is cut to 2^31 − 1 ms now: the driver wakes then, finds nothing, and waits out the rest.
+- The same for a `janitorMs` set that long, which beat every millisecond.
+
 **What to change:** nothing, for an app that did not take these from moss. One that did imports them from here: see the moss changeset.

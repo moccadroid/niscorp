@@ -64,6 +64,15 @@ const DEFAULT_JANITOR_MS = 300_000;
 // bug, not a workload) — generous enough that no real chain hits it.
 const MAX_STEPS_PER_DRAIN = 10_000;
 
+// THE LONGEST A TIMER WAITS. A runtime keeps a timer's delay in 32 bits, and
+// Node does not refuse one over 2^31 − 1 ms (24.8 days): it warns, and waits
+// 1 ms. A next occurrence a month off, or a janitor's beat set that long, was
+// therefore a loop. Every wait is cut to this. Waking early costs one advance
+// that finds nothing and asks again when: the rest is waited out by the timer
+// set after it.
+const LONGEST_TIMER_MS = 2 ** 31 - 1;
+const waitable = (ms: number): number => Math.min(ms, LONGEST_TIMER_MS);
+
 // LET THE PROCESS END WITH A TIMER STILL PENDING. Node's timers can be told so
 // (`unref`); a timer anywhere else is a number and holds nothing open. Asked of
 // the value and not of its type, so this file needs no runtime's types.
@@ -85,7 +94,7 @@ const progressOf = (report: AdvanceReport): number =>
 export const createTideDriver = (config: TideDriverConfig): TideDriver => {
   const { tide } = config;
   const now = config.now ?? (() => Date.now());
-  const janitorMs = config.janitorMs ?? DEFAULT_JANITOR_MS;
+  const janitorMs = waitable(config.janitorMs ?? DEFAULT_JANITOR_MS);
 
   let running = false;
   let queued = false;
@@ -121,7 +130,7 @@ export const createTideDriver = (config: TideDriverConfig): TideDriver => {
     // Quiescent yet still "due now" means advance cannot progress it (facts
     // waiting for reflexes to load, say). Retry on the janitor's beat, not
     // in a hot loop.
-    timer = setTimeout(() => void wake(), delay > 0 ? delay : janitorMs);
+    timer = setTimeout(() => void wake(), delay > 0 ? waitable(delay) : janitorMs);
     letProcessEnd(timer);
   };
 
