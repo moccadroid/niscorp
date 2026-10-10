@@ -1,7 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { z } from 'zod';
 import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
+import type { PgPool } from '@niscorp/vex';
+import type { Replay } from '../src/data/own-entries';
+import { registryOver } from './registry-db';
 import { runIntake, intakeContextOf } from '../src/integrations/intake';
 import { reachOf } from '../src/integrations/reach';
 import { copyPress } from '../src/integrations/press';
@@ -761,5 +764,245 @@ describe('callIntegration', () => {
     const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(init.method).toBe('GET');
     expect('body' in init).toBe(false);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// THE PROBE — every statement the registry ran on `integrations` and
+// `integration_actions`, sixteen of them, authored as a vex entry
+// (../src/integrations/entries.ts) and run against a real database. One
+// database for all of it; each case writes the rows it reads, under ids of
+// its own. Where a case names SQL, it is the statement the entry stands in
+// for, run on the same rows as the oracle.
+// ═══════════════════════════════════════════════════════════════
+
+describe('the registry as vex entries — each statement, against a database', () => {
+  let pool: PgPool;
+  let replay: Replay;
+  const rows = async (text: string, values: unknown[] = []): Promise<Record<string, unknown>[]> => (await pool.query(text, values)).rows;
+  const json = (value: unknown): string => JSON.stringify(value);
+
+  beforeAll(async () => {
+    pool = createPglitePool(new PGlite());
+    replay = await registryOver(pool);
+  });
+
+  // What a bundle says of its integration, as the registry hands it over.
+  const landing = (id: string, over: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id,
+    url: `https://${id}.example`,
+    title: 'Belts',
+    tagline: 'Ranks, live',
+    description: 'A paragraph.',
+    adds: 'Adds a screen under People.',
+    settings_action: `ext.desk.${id}.settings`,
+    requested_actions: ['ext.desk.*'],
+    requested_data: ['members.read'],
+    reach: { [`/integrations/${id}/roster`]: [`ext.desk.${id}.roster`] },
+    frames: { [`/integrations/${id}/embed/pay`]: `ext.desk.${id}.pay` },
+    phrasebook: { de: { Hello: 'Hallo' } },
+    story: [{ heading: 'How it started', prose: 'In a garage.' }],
+    highlights: ['Belt colors, live'],
+    press: [`/blobs/${id}/hero.png`],
+    offers: ['attendance'],
+    needs: ['booking'],
+    capabilities: [{ id: 'desk', title: 'Front desk' }],
+    configuration: [{ key: 'strict', title: 'Strict', description: '', kind: 'toggle', default: false }],
+    documents: [],
+    assistants: [],
+    last_import_at: '2026-10-10T08:00:00.000Z',
+    ...over,
+  });
+  const action = (integration: string, name: string, over: Record<string, unknown> = {}): Record<string, unknown> => ({
+    integration_id: integration,
+    action_id: `ext.desk.${integration}.${name}`,
+    definition: { id: `ext.desk.${integration}.${name}`, title: name },
+    attach_to: '',
+    preview: '',
+    place_in: '',
+    grammar: { 'nisc.nova': 3 },
+    ...over,
+  });
+
+  it('1 · find: one integration by its id, and no row for an id that is not there', async () => {
+    const reach = { '/integrations/found/roster': ['ext.desk.found.roster'] };
+    const frames = { '/integrations/found/embed/pay': 'ext.desk.found.pay' };
+    await pool.query(`INSERT INTO integrations (id, url, status, reach, frames) VALUES ('found', 'https://found.example', 'approved', $1::jsonb, $2::jsonb)`, [json(reach), json(frames)]);
+    expect(await replay('integrations/find', { id: 'found' })).toEqual([{ url: 'https://found.example', status: 'approved', reach, frames }]);
+    expect(await replay('integrations/find', { id: 'found' })).toEqual(await rows('SELECT url, status, reach, frames FROM integrations WHERE id = $1', ['found']));
+    expect(await replay('integrations/find', { id: 'ghost' })).toEqual([]);
+  });
+
+  it('2 · record a failed import: a row that was not there arrives pending; one that was keeps all but its address and the reason', async () => {
+    await replay('integrations/record-failed-import', { id: 'failed', url: 'https://one.example', last_error: 'the service did not answer with a bundle' });
+    expect(await rows(`SELECT url, status, title, last_error FROM integrations WHERE id = 'failed'`)).toEqual([
+      { url: 'https://one.example', status: 'pending', title: '', last_error: 'the service did not answer with a bundle' },
+    ]);
+    await pool.query(`UPDATE integrations SET title = 'Kept', status = 'approved', key_hash = 'h' WHERE id = 'failed'`);
+    await replay('integrations/record-failed-import', { id: 'failed', url: 'https://two.example', last_error: 'Refused.' });
+    expect(await rows(`SELECT url, status, title, key_hash, last_error FROM integrations WHERE id = 'failed'`)).toEqual([
+      { url: 'https://two.example', status: 'approved', title: 'Kept', key_hash: 'h', last_error: 'Refused.' },
+    ]);
+  });
+
+  it('3 · standing: what the row says of approval and of a key', async () => {
+    await pool.query(`INSERT INTO integrations (id, url, status, key_hash) VALUES ('keyed', 'https://keyed.example', 'approved', 'abc'), ('unkeyed', 'https://unkeyed.example', 'pending', NULL)`);
+    expect(await replay('integrations/standing', { id: 'keyed' })).toEqual([{ status: 'approved', key_hash: 'abc' }]);
+    expect(await replay('integrations/standing', { id: 'unkeyed' })).toEqual([{ status: 'pending', key_hash: null }]);
+    expect(await replay('integrations/standing', { id: 'ghost' })).toEqual([]);
+  });
+
+  it('4 · land the row: every column a bundle says, the instant it was handed, and no error', async () => {
+    await replay('integrations/land-row', landing('landed'));
+    const { id: _id, last_import_at: _at, ...said } = landing('landed');
+    const [first] = await rows(`SELECT * FROM integrations WHERE id = 'landed'`);
+    expect(first).toMatchObject({ ...said, id: 'landed', status: 'pending', key_hash: null, approved_data: [], last_error: null });
+    expect(new Date(String(first?.['last_import_at'])).toISOString()).toBe('2026-10-10T08:00:00.000Z');
+
+    // Again, on the row that is there: each column is replaced (an empty list
+    // lands as an empty list), and what the bundle does not say stays.
+    await pool.query(`UPDATE integrations SET status = 'approved', key_hash = 'h', approved_data = '["members.read"]'::jsonb, last_error = 'old' WHERE id = 'landed'`);
+    const again = landing('landed', { title: 'Belts 2', requested_data: [], reach: {}, story: [], offers: [], capabilities: [], last_import_at: '2026-10-11T09:30:00.000Z' });
+    await replay('integrations/land-row', again);
+    const [second] = await rows(`SELECT * FROM integrations WHERE id = 'landed'`);
+    expect(second).toMatchObject({ title: 'Belts 2', requested_data: [], reach: {}, story: [], offers: [], capabilities: [], needs: ['booking'] });
+    expect(second).toMatchObject({ status: 'approved', key_hash: 'h', approved_data: ['members.read'], last_error: null });
+    expect(new Date(String(second?.['last_import_at'])).toISOString()).toBe('2026-10-11T09:30:00.000Z');
+    expect(await rows(`SELECT count(*)::int AS n FROM integrations WHERE id = 'landed'`)).toEqual([{ n: 1 }]);
+  });
+
+  it('5, 6 · land an action, and drop the actions of one integration and of no other', async () => {
+    await replay('integrations/land-row', landing('other'));
+    const riding = action('landed', 'roster', { attach_to: 'people.detail', preview: '/integrations/landed/preview' });
+    await replay('integrations/land-action', riding);
+    await replay('integrations/land-action', action('landed', 'board', { place_in: 'people.hub' }));
+    await replay('integrations/land-action', action('other', 'roster'));
+    expect(await rows(`SELECT * FROM integration_actions WHERE integration_id = 'landed' ORDER BY action_id`)).toEqual([action('landed', 'board', { place_in: 'people.hub' }), riding]);
+
+    await replay('integrations/drop-actions', { id: 'landed' });
+    expect(await rows(`SELECT integration_id, action_id FROM integration_actions WHERE integration_id IN ('landed', 'other')`)).toEqual([{ integration_id: 'other', action_id: 'ext.desk.other.roster' }]);
+  });
+
+  it('7 · keep the hash of the key an integration was issued', async () => {
+    await pool.query(`INSERT INTO integrations (id, url) VALUES ('issued', 'https://issued.example')`);
+    await replay('integrations/keep-key-hash', { id: 'issued', key_hash: 'deadbeef' });
+    expect(await rows(`SELECT id, key_hash FROM integrations WHERE key_hash = 'deadbeef'`)).toEqual([{ id: 'issued', key_hash: 'deadbeef' }]);
+  });
+
+  it('8, 9 · approve: what was asked for is read, and written as what is granted', async () => {
+    await pool.query(`INSERT INTO integrations (id, url, requested_data) VALUES ('asking', 'https://asking.example', '["members.read","bookings.read"]'::jsonb)`);
+    expect(await replay('integrations/requested', { id: 'asking' })).toEqual([{ requested_data: ['members.read', 'bookings.read'] }]);
+    expect(await replay('integrations/requested', { id: 'ghost' })).toEqual([]);
+    await replay('integrations/approve', { id: 'asking', approved_data: ['members.read', 'bookings.read'] });
+    expect(await rows(`SELECT status, approved_data FROM integrations WHERE id = 'asking'`)).toEqual([{ status: 'approved', approved_data: ['members.read', 'bookings.read'] }]);
+    // An approval of nothing asked for grants an empty list, not an object.
+    await replay('integrations/approve', { id: 'issued', approved_data: [] });
+    expect(await rows(`SELECT status, approved_data FROM integrations WHERE id = 'issued'`)).toEqual([{ status: 'approved', approved_data: [] }]);
+  });
+
+  it('10 · set back to pending, with why', async () => {
+    await replay('integrations/set-back-to-pending', { id: 'asking', last_error: 'Error: Refresh refused' });
+    expect(await rows(`SELECT status, approved_data, last_error FROM integrations WHERE id = 'asking'`)).toEqual([
+      { status: 'pending', approved_data: ['members.read', 'bookings.read'], last_error: 'Error: Refresh refused' },
+    ]);
+  });
+
+  it('11 · remove: the row goes, and its actions with it', async () => {
+    expect(await rows(`SELECT count(*)::int AS n FROM integration_actions WHERE integration_id = 'other'`)).toEqual([{ n: 1 }]);
+    await replay('integrations/remove', { id: 'other' });
+    expect(await rows(`SELECT id FROM integrations WHERE id = 'other'`)).toEqual([]);
+    expect(await rows(`SELECT count(*)::int AS n FROM integration_actions WHERE integration_id = 'other'`)).toEqual([{ n: 0 }]);
+    // Removing what is not there writes nothing and throws nothing.
+    expect(await replay('integrations/remove', { id: 'ghost' })).toEqual([]);
+  });
+
+  describe('the lists', () => {
+    const start = { after_integration: '', after_action: '' };
+
+    beforeAll(async () => {
+      // Two approved integrations and one that is pending, each with actions.
+      for (const [id, status] of [['alpha', 'approved'], ['beta', 'approved'], ['gamma', 'pending']] as const) {
+        await replay('integrations/land-row', landing(id));
+        await pool.query('UPDATE integrations SET status = $2 WHERE id = $1', [id, status]);
+      }
+      await replay('integrations/land-action', action('alpha', 'roster', { attach_to: 'people.detail', preview: '/integrations/alpha/preview' }));
+      await replay('integrations/land-action', action('alpha', 'board', { place_in: 'people.hub' }));
+      await replay('integrations/land-action', action('beta', 'strip', { attach_to: 'people.detail' }));
+      await replay('integrations/land-action', action('beta', 'other', { attach_to: 'class.detail', place_in: 'schedule.hub' }));
+      await replay('integrations/land-action', action('gamma', 'roster', { attach_to: 'people.detail', place_in: 'people.hub' }));
+    });
+
+    it('12 · the actions of approved integrations that ride a host action', async () => {
+      expect(await replay('integrations/attachments', { attach_to: 'people.detail', ...start })).toEqual([
+        { integration_id: 'alpha', action_id: 'ext.desk.alpha.roster', preview: '/integrations/alpha/preview' },
+        { integration_id: 'beta', action_id: 'ext.desk.beta.strip', preview: '' },
+      ]);
+      const oracle = await rows(
+        `SELECT a.action_id, a.preview FROM integration_actions a JOIN integrations i ON i.id = a.integration_id
+          WHERE i.status = 'approved' AND a.attach_to = $1 ORDER BY a.action_id`,
+        ['people.detail'],
+      );
+      expect(z.array(z.object({ action_id: z.string(), preview: z.string() })).parse(await replay('integrations/attachments', { attach_to: 'people.detail', ...start }))).toEqual(oracle);
+      expect(await replay('integrations/attachments', { attach_to: 'nothing.rides.this', ...start })).toEqual([]);
+    });
+
+    it('13 · the actions of approved integrations that are placed under a hub', async () => {
+      expect(await replay('integrations/placements', start)).toEqual([
+        { integration_id: 'alpha', action_id: 'ext.desk.alpha.board', place_in: 'people.hub' },
+        { integration_id: 'beta', action_id: 'ext.desk.beta.other', place_in: 'schedule.hub' },
+      ]);
+    });
+
+    it('14 · the approved integration a key hash belongs to, and nobody for a hash that is pending or unknown', async () => {
+      await pool.query(`UPDATE integrations SET key_hash = 'hash-of-alpha' WHERE id = 'alpha'`);
+      await pool.query(`UPDATE integrations SET key_hash = 'hash-of-gamma' WHERE id = 'gamma'`);
+      expect(await replay('integrations/by-key', { key_hash: 'hash-of-alpha' })).toEqual([{ id: 'alpha' }]);
+      expect(await replay('integrations/by-key', { key_hash: 'hash-of-gamma' })).toEqual([]);
+      expect(await replay('integrations/by-key', { key_hash: 'nobody' })).toEqual([]);
+    });
+
+    it('15 · every integration as the operator sees it, and how many actions each ships', async () => {
+      const listed = z.array(z.record(z.string(), z.unknown())).parse(await replay('integrations/list', { after: '' }));
+      const counted = z.array(z.object({ integration_id: z.string(), action_count: z.number() })).parse(await replay('integrations/action-counts', { after: '' }));
+      const counts = new Map(counted.map((row) => [row.integration_id, row.action_count]));
+      const together: Record<string, unknown>[] = listed.map((row) => ({ ...row, action_count: counts.get(String(row['id'])) ?? 0 }));
+      // The statement the two entries stand in for: one list, each row with
+      // its count, an integration that ships no action counted as none.
+      const oracle = await rows(`
+        SELECT i.id, i.url, i.status, i.title, i.tagline, i.adds, i.settings_action,
+               i.requested_actions, i.requested_data, i.approved_data,
+               i.offers, i.needs, i.capabilities, i.configuration, i.documents, i.assistants,
+               i.last_import_at, i.last_error,
+               (SELECT count(*) FROM integration_actions a WHERE a.integration_id = i.id)::int AS action_count
+          FROM integrations i ORDER BY i.id`);
+      expect(together).toEqual(oracle);
+      expect(together.find((row) => row['id'] === 'alpha')?.['action_count']).toBe(2);
+      expect(together.find((row) => row['id'] === 'found')?.['action_count']).toBe(0);
+      // A page starts after the key it is handed.
+      const later = z.array(z.object({ id: z.string() })).parse(await replay('integrations/list', { after: 'found' }));
+      expect(later.map((row) => row.id)).toEqual(listed.map((row) => String(row['id'])).filter((id) => id > 'found'));
+      expect(await replay('integrations/action-counts', { after: 'alpha' })).toEqual([
+        { integration_id: 'beta', action_count: 2 },
+        { integration_id: 'gamma', action_count: 1 },
+      ]);
+    });
+
+    it('16 · the stored actions of every approved integration, and a page that starts after an action', async () => {
+      const stored = z.array(z.object({ integration_id: z.string(), action_id: z.string(), definition: z.unknown(), grammar: z.unknown() })).parse(await replay('integrations/stored-actions', start));
+      expect(stored.map((row) => row.action_id)).toEqual(['ext.desk.alpha.board', 'ext.desk.alpha.roster', 'ext.desk.beta.other', 'ext.desk.beta.strip']);
+      expect(stored[0]).toEqual({ integration_id: 'alpha', action_id: 'ext.desk.alpha.board', definition: { id: 'ext.desk.alpha.board', title: 'board' }, grammar: { 'nisc.nova': 3 } });
+      const oracle = await rows(
+        `SELECT a.action_id, a.definition, a.grammar FROM integration_actions a
+           JOIN integrations i ON i.id = a.integration_id
+          WHERE i.status = 'approved' ORDER BY a.integration_id, a.action_id`,
+      );
+      expect(stored.map(({ integration_id: _integration, ...row }) => row)).toEqual(oracle);
+      // After the second action of alpha: the rest of that order, across the
+      // integration's edge.
+      expect(z.array(z.object({ action_id: z.string() })).parse(await replay('integrations/stored-actions', { after_integration: 'alpha', after_action: 'ext.desk.alpha.roster' })).map((row) => row.action_id)).toEqual([
+        'ext.desk.beta.other',
+        'ext.desk.beta.strip',
+      ]);
+    });
   });
 });
