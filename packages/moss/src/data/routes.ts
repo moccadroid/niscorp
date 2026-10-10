@@ -41,6 +41,18 @@ export type VexRoutesConfig<E extends Env> = {
   writes: Pick<WriteLane, 'within' | 'report'>;
 };
 
+// HOW DEEP IN A CHAIN A REQUEST SAYS IT IS: a whole number that is not
+// negative, written as `String(depth)` writes one — digits and nothing else.
+// Read by its form and not with `Number()`, which reads more than a number:
+// an empty header is 0 to it, and 0 is the start of a chain, so a chain whose
+// depth was lost on the way was counted from the beginning again, under a
+// ceiling that exists to stop it. Undefined: the header names no depth.
+const depthOf = (header: string | undefined): number | undefined => {
+  if (header === undefined || !/^\d+$/.test(header)) return undefined;
+  const depth = Number(header);
+  return Number.isSafeInteger(depth) ? depth : undefined;
+};
+
 // A sub-app, for the server to mount at its root behind the authentication
 // every route gets. It holds the paths: a shell's wire and the client both
 // tell a vex surface by where it is.
@@ -53,8 +65,8 @@ export const createVexRoutes = <E extends Env>(config: VexRoutesConfig<E>): Hono
   // `facts.chain` gate decides whether the caller's word is good.
   routes.use('/api/*', async (c, next) => {
     const cause = c.req.header('x-tide-cause');
-    const depth = Number(c.req.header('x-tide-depth'));
-    if (cause === undefined || cause === '' || !Number.isInteger(depth) || depth < 0) return next();
+    const depth = depthOf(c.req.header('x-tide-depth'));
+    if (cause === undefined || cause === '' || depth === undefined) return next();
     return config.writes.within({ cause, depth }, () => next());
   });
 

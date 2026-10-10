@@ -151,4 +151,27 @@ describe('the vex surfaces', () => {
     await post('/api/vex', 'writer', add, { 'x-tide-cause': 'f_1', 'x-tide-depth': 'deep' });
     expect(heard.map((write) => write.chain)).toEqual([undefined, undefined, undefined, undefined, undefined, undefined]);
   });
+
+  // The depth was read with `Number()`, which reads more than a number: an
+  // empty header is 0, and so is one of spaces. A request that named a cause
+  // and an empty depth was then heard at depth 0, the start of a chain: a
+  // chain whose depth was lost on the way was counted from the beginning.
+  it.each([
+    ['empty', ''],
+    ['spaces', '  '],
+    ['written in hex', '0x2'],
+    ['written with an exponent', '1e1'],
+    ['signed', '+2'],
+    ['more than a whole number can hold', '9'.repeat(30)],
+  ])('a depth that is %s is no position', async (_label, depth) => {
+    const { post, heard } = await world();
+    await post('/api/vex', 'writer', { fingerprint: 'notes/add', context: { body: 'hello' } }, { 'x-tide-cause': 'f_1', 'x-tide-depth': depth });
+    expect(heard.map((write) => write.chain)).toEqual([undefined]);
+  });
+
+  it('a depth of 0 is a position, written as String(depth) writes it', async () => {
+    const { post, heard } = await world();
+    await post('/api/vex', 'writer', { fingerprint: 'notes/add', context: { body: 'hello' } }, { 'x-tide-cause': 'f_1', 'x-tide-depth': '0' });
+    expect(heard[0]?.chain).toEqual({ cause: 'f_1', depth: 0 });
+  });
 });

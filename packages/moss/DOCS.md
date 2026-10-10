@@ -825,7 +825,11 @@ surface, a write with no tenant).
 its chain position in `x-tide-cause` / `x-tide-depth`; this decides whether
 that caller's word is good, so the chain-depth ceiling survives the trip
 through the database. Absent = hints are always dropped, which is the safe
-default: a forged depth could park an innocent chain.
+default: a forged depth could park an innocent chain. A position is a cause
+that is not empty and a depth written as `String(depth)` writes a whole number
+that is not negative: digits and nothing else. Anything else (an empty depth,
+`0x2`, `1e1`, `+2`, a number too large to be exact) is no position, and `chain`
+is not asked.
 
 #### `createTideDriver({ tide, janitorMs?, retention? }) : TideDriver`
 

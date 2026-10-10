@@ -264,3 +264,8 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 
 - A committed write is told to the fact lane (`app.facts`) and then to the reactions (`app.reactions`). When the fact lane threw (`facts.tide()`, `facts.identity(scope)` or `facts.chain` throwing on a scope the app did not expect) no reaction heard of that write, and the throw went to vex. Each is told on its own now: the throw is logged (`[moss:writes] …`) and the reactions run.
 - A reaction that throws was already kept from the next reaction, and still is. An app has nothing to change.
+
+**`x-tide-depth` is read as digits, not with `Number()`.**
+
+- A write through vex may name its place in a chain of effects in two headers, `x-tide-cause` and `x-tide-depth`, which `app.facts.chain` then decides whether to believe. The depth was read with `Number()`: an empty header was depth `0`, the start of a chain, and so `0x2` was 2, `1e1` was 10 and thirty nines a depth no whole number holds. A depth is digits and nothing else now, and a number that is exact. Anything else is no position: `chain` is not asked and the write is heard with none.
+- A caller that writes the header as `String(depth)` has nothing to change; lyra's does.
