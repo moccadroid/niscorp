@@ -3,7 +3,7 @@ import { applyDelta, frameHash } from '../src/protocol';
 import type { DeltaOp } from '../src/protocol';
 import { createShellHost } from '../src/shells';
 import type { ShellHostContext } from '../src/shells';
-import type { NiscApp } from '../src/manifest';
+import type { FunctionSession, NiscApp } from '../src/manifest';
 import type { Connection } from '../src/socket';
 import type { ScopePolicy } from '@niscorp/vex';
 
@@ -126,6 +126,47 @@ describe('shells — the shell host', () => {
     session.dispatch('main', { type: 'ui:click', ref: 'bump' });
     await tick();
     expect(session.shell.getRuntime(active!.id)?.getData()['n']).toBe(1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// WHAT APP CODE IS HANDED — the session `functions` and `onSession` close
+// over. It says who is calling and lends capabilities; it holds no key.
+// ═══════════════════════════════════════════════════════════════
+
+describe('shells — the session app code is handed', () => {
+  const sessionOf = async (extra: Partial<ShellHostContext>, principal: string | null): Promise<FunctionSession> => {
+    const seen: { session?: FunctionSession } = {};
+    const withFunctions = {
+      ...app,
+      functions: (session: FunctionSession) => {
+        seen.session = session;
+        return {};
+      },
+    } as unknown as NiscApp;
+    await createShellHost({ ...ctx, ...extra, app: withFunctions }).session(principal === null ? null : 't', principal);
+    if (seen.session === undefined) throw new Error('the functions seam was not called');
+    return seen.session;
+  };
+  const writers = { generateDsl: async () => ({ from: ['notes'] }), mapToShape: async () => ({ ir: {}, transformed: null }) } as unknown as Parameters<FunctionSession['answerIntent']>[0];
+  const asked = { intent: 'every note', shape: [] };
+
+  it('an intent is answered as the session’s own principal, whoever the app code names', async () => {
+    const calls: { principal: string | null; intent: string }[] = [];
+    const answerIntent: ShellHostContext['answerIntent'] = async (principal, _writers, intent) => {
+      calls.push({ principal, intent: intent.intent });
+      return { result: ['a note'], meta: { cache: { hit: false, fingerprint: 'fp_1' }, context: {} } };
+    };
+    const member = await sessionOf({ answerIntent }, 'usr_1');
+    const nobody = await sessionOf({ answerIntent }, null);
+    expect((await member.answerIntent(writers, asked)).meta.cache.fingerprint).toBe('fp_1');
+    await nobody.answerIntent(writers, asked);
+    expect(calls).toEqual([{ principal: 'usr_1', intent: 'every note' }, { principal: null, intent: 'every note' }]);
+  });
+
+  it('a host that was given no way to answer an intent says so', async () => {
+    const session = await sessionOf({}, 'usr_1');
+    await expect(session.answerIntent(writers, asked)).rejects.toThrow(/no way to answer an intent/);
   });
 });
 

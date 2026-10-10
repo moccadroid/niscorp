@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import type { FunctionSession } from '@niscorp/moss';
 import { queryRecord, queriesKnown } from '@lyceum/app/vex/query.entries';
-import { queryEngineFor } from '../querying';
 import type { Querier, Known } from '../querying';
 import { vexOver } from '../vex-over';
 
@@ -61,11 +60,9 @@ export const routeQuery = async (session: FunctionSession, querier: Querier, sta
 
   const shape = route.generate;
   try {
-    const engine = await queryEngineFor(session.runtime, querier);
-    const answered = await engine.execute(
-      { intent: request, shape: shape.shape, context: {} },
-      { scope: { userId: session.principal }, scopePolicy: session.policy },
-    );
+    // Written by the querier's two seams, in moss's engine: under this
+    // session's policy and scope, and kept in the cache `/api/vex` replays.
+    const answered = await session.answerIntent(querier, { intent: request, shape: shape.shape });
     const fingerprint = answered.meta.cache.fingerprint;
     if (fingerprint === undefined) throw new Error('the query was answered but not stored');
     await record(shape.kind, 'generated', fingerprint);

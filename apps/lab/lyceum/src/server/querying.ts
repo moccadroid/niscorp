@@ -1,12 +1,10 @@
-import { createMemoryCache, createPostgresAdapter, createQueryEngine } from '@niscorp/vex';
-import type { GenerateDsl, MapToShape, Query, QueryEngine } from '@niscorp/vex';
+import { createPostgresAdapter, createQueryEngine } from '@niscorp/vex';
+import type { GenerateDsl, MapToShape, Query } from '@niscorp/vex';
 import { createQueryDsl, createShapeMapper } from '@niscorp/vex/agent';
 import type { SignalClient } from '@niscorp/cortex';
 import { createSignal } from '@niscorp/signal';
 import type { ChoiceQuestion } from '@niscorp/signal';
-import type { NiscRuntime } from '@niscorp/moss';
 import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
-import { BEHAVIORS } from '@lyceum/app/vex/behaviors';
 import { createDecider } from './decider';
 import type { QueryShape } from '@lyceum/app/vex/query.shapes';
 
@@ -151,30 +149,10 @@ export const createQuerier = (env: Record<string, string | undefined>): Querier 
   return liveQuerier(env);
 };
 
-// THE GENERATIVE ENGINE: the same database and the same CACHE as moss's own
-// engine — so a fingerprint minted here is one moss's locked /api/vex replays
-// — with the querier's hooks. No policy of its own: every execute is handed the
-// caller's. One per runtime.
-const engines = new WeakMap<object, Promise<QueryEngine>>();
-
-export const queryEngineFor = (runtime: NiscRuntime, querier: Querier): Promise<QueryEngine> => {
-  const hit = engines.get(runtime.pool);
-  if (hit !== undefined) return hit;
-  const booted = (async () => {
-    const engine = createQueryEngine({
-      adapter: createPostgresAdapter({ pool: runtime.pool }),
-      cache: runtime.cache ?? createMemoryCache(),
-      generateDsl: querier.generateDsl,
-      mapToShape: querier.mapToShape,
-      // Who "me" is: the columns lyceum's behaviors bind to the caller's
-      // userId (members.member_id, queries.member_id) — so "what's my name?" is
-      // a filter on the caller's own value, bound by the engine, and one
-      // stored query answers it for everybody.
-      behaviors: BEHAVIORS,
-    });
-    await engine.introspect();
-    return engine;
-  })();
-  engines.set(runtime.pool, booted);
-  return booted;
-};
+// WHERE THE GENERATION RUNS: in moss's own engine, asked through the session
+// (`session.answerIntent(querier, …)`, ./assistant/vex-query.ts). It is handed
+// `generateDsl` and `mapToShape` off the querier, writes under the caller's
+// policy, and keeps what it wrote in the cache `/api/vex` replays from. Who
+// "me" is comes from the behaviors the app ships (app/vex/behaviors.ts): the
+// columns bound to the caller's userId, so "what's my name?" is a filter on
+// the caller's own value and one stored query answers it for everybody.

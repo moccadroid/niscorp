@@ -1,5 +1,5 @@
 import type { Sequence } from '@niscorp/strata';
-import type { ScopeBehaviors, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
+import type { GenerateDsl, MapToShape, QueryResponse, ScopeBehaviors, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Charter } from '@niscorp/charter';
 import type { ActionDefinition, ActionFragment, CanvasConfig, FetchFn, FunctionHandler, LayoutNode, Shell } from '@niscorp/nova';
 import type { PhraseKeys, Phrasebook } from '@niscorp/nova/i18n';
@@ -378,6 +378,26 @@ export type FunctionSession = {
   // credential is gone — await it to know; ignoring it is still safe.
   grant: (token: string) => void;
   revoke: () => Promise<void>;
+  // AN INTENT ANSWERED BY A QUERY WRITTEN FOR IT, as this session's principal.
+  //
+  // The routes replay what is stored and write nothing. An app that lets a
+  // model write a query hands over its two writers (vex's `generateDsl` and
+  // `mapToShape`) and asks here: the query is written, compiled and run under
+  // the policy and the scope values the routes serve this principal under,
+  // resolved when it is asked. The writer is shown only the tables they may
+  // read, and a query that reaches past their policy is refused. What was
+  // written is kept where the routes replay from: `meta.cache.fingerprint` of
+  // the answer is how it is replayed afterwards, over `wire`, by whoever the
+  // policy lets.
+  //
+  // Moss keeps one engine for each `writers` object, so hand over the same
+  // object each time. It rejects with what vex throws: `code` is
+  // `'unsatisfiable'` when the writer found no query for the intent and
+  // `'scope_denied'` when what it wrote reaches past the policy.
+  answerIntent: (
+    writers: { generateDsl: GenerateDsl; mapToShape: MapToShape },
+    asked: { intent: string; shape: unknown; context?: Record<string, unknown> },
+  ) => Promise<QueryResponse>;
   // Record one model run. `at`, `principal` and `shellId` are stamped here, so a
   // caller supplies only what it knows: which agent, which model, what was said,
   // what it cost. A no-op when the manifest declares no `runs` sink.

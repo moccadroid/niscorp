@@ -5,10 +5,11 @@ import { emitterOf, spanClock } from './runtime';
 import type { Emit } from './runtime';
 import { randomBytes } from 'node:crypto';
 import { evaluate } from '@niscorp/prism';
-import type { ScopePolicy } from '@niscorp/vex';
+import type { QueryResponse, ScopePolicy } from '@niscorp/vex';
 import type { Catalog, FunctionSession, NiscApp, ShellManifest } from './manifest';
 import type { ShellNeed } from './liveness';
 import type { NiscRuntime } from './runtime';
+import type { Intent, QueryWriters } from './data';
 import type { Connection } from './socket';
 import { CLOSE_SIGNED_OUT, encodeDelta, frameHash } from './protocol';
 import type { ServerMessage } from './protocol';
@@ -102,6 +103,11 @@ export type ShellHostContext = {
   // shell's endpoints and functions are handed, and not the one `inputs` and
   // `phrases` read through. Absent: the wire as it is.
   wrapWire?: (inner: FetchFn) => FetchFn;
+  // AN INTENT ANSWERED BY A QUERY WRITTEN FOR IT, as a principal (./data,
+  // intents.ts): what a session's `answerIntent` asks. Whose policy and
+  // scope values it runs under is resolved by whoever supplies this, each time
+  // it is asked. Absent: a session that asks is told this host cannot.
+  answerIntent?: (principal: string | null, writers: QueryWriters, asked: Intent) => Promise<QueryResponse>;
   // The environment and the per-principal policy — what the manifest's
   // in-process functions close over (agents read data under the policy).
   runtime: NiscRuntime;
@@ -509,6 +515,10 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
           });
           return forgotten;
         },
+        answerIntent: (writers, asked) =>
+          ctx.answerIntent === undefined
+            ? Promise.reject(new Error('moss: this shell host was given no way to answer an intent.'))
+            : ctx.answerIntent(principal, writers, asked),
         // The session's own fields are stamped here so a caller cannot get them
         // wrong, and the shell id is read lazily — a run cannot happen before
         // the shell exists, but this object is built before it does.

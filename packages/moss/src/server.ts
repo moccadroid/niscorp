@@ -481,6 +481,13 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
         },
         catalogFor: running.catalogFor,
         variantsFor: running.variantsFor,
+        // Asked by a session for its own principal. Who that is, is resolved
+        // again here: the policy and the scope values are the ones a request
+        // of theirs would be served under now.
+        answerIntent: async (principal, writers, asked) => {
+          const resolved = await identity.resolve(principal);
+          return data.answerIntent(writers, asked, resolved, identity.composeScope(principal, resolved));
+        },
         runtime,
         wrapWire: (inner) => wireWraps.reduce((wire, wrap) => wrap(wire), inner),
         ...(runtime.shellIdleMs !== undefined ? { idleMs: runtime.shellIdleMs } : {}),
