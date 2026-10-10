@@ -332,3 +332,8 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 - **The React, Vue and DOM targets say the status on their root element**, as `data-wire-status="connecting | open | closed | incompatible | static"`, from the moment they mount until they are destroyed, and draw nothing for it. What a lost connection looks like is the app's: its stylesheet (`[data-wire-status='closed'] …`), or a component of its kit that reads the status where the target provides what it renders against, `useContext(TerminalApiContext)?.status()` in React and `inject(TerminalApiKey)?.status()` in Vue, and is drawn again when it changes.
 - A page drawn on the server (`renderSnapshot` of each target) is drawn with the status its terminal starts in, so a kit component that draws the status draws the same thing on both sides and the page is adopted: `static` for a snapshot that says `live: false` (no socket is opened for it), `connecting` for every other.
 - **A target of an app's own** is handed the status and may read it; one that hands what it renders against on to a moss target has nothing to change (lyceum's does). **Code that builds a `TerminalApi` by hand** to drive a target directly (a test) adds `status: () => 'open'`.
+
+**In the full-screen terminal, digits that arrive together are the number they spell.**
+
+- `inkTarget` acts on a typed number: `12` clicks what is marked `[12]`. It read one digit for each key it was handed, and two keys pressed in turn can be handed over as one (a slow link, an ssh session, a paste): those were dropped, and nothing happened. They are read as the number they spell.
+- An app has nothing to change.

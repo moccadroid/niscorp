@@ -225,6 +225,17 @@ describe('the ink target — typed numbers', () => {
     expect(t.dispatched.at(-1)).toEqual({ canvas: 'main', event: { type: 'ui:click', ref: 'b1' } });
   });
 
+  // Two keys pressed in turn can arrive as one read: over a slow link, an ssh
+  // door, a paste. ink hands them over together, as it hands over a paste.
+  it('digits that arrive together are the number they spell', async () => {
+    const twelve = Array.from({ length: 12 }, (_, i) => button(`b${i + 1}`, `B${i + 1}`));
+    const t = harness({ main: twelve });
+    await t.shows('[12]');
+    await t.press('12');
+    await t.sent(1);
+    expect(t.dispatched).toEqual([{ canvas: 'main', event: { type: 'ui:click', ref: 'b12' } }]);
+  });
+
   it('a number nothing on screen carries dispatches nothing', async () => {
     const t = harness({ main: [button('save', 'Save')] });
     await t.shows('[1]');

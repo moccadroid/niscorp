@@ -54,7 +54,9 @@ export const navOf = (deps: {
         return;
       }
       if (typing()) return;
-      if (/^[0-9]$/.test(input) && !key.ctrl && !key.meta) {
+      // One digit, or several: keys pressed in turn can arrive as one read
+      // (a slow link, a paste), and ink hands them over together.
+      if (/^[0-9]+$/.test(input) && !key.ctrl && !key.meta) {
         buffer.current += input;
         if (timer.current !== undefined) clearTimeout(timer.current);
         // no longer number is possible → act now; otherwise wait a beat
