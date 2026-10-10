@@ -27,6 +27,10 @@ export type ForwardDeps = {
   // The scope values a principal carries: the ones the engine pins rows by.
   scopeOf: (principal: string) => Promise<Record<string, unknown>>;
   mint: AssertionSigner['mint'];
+  // How long a call may take, in ms, its answer and its body together. Past
+  // it the call is given up on, and ends as `unreachable` like any call no
+  // answer came back from. Every door is bounded here, so none can forget.
+  timeoutMs: number;
   fetch?: typeof fetch;
 };
 
@@ -71,7 +75,7 @@ export type Forwarded =
   // door's own gate said no.
   | { kind: 'refused'; why: 'unknown' | 'uninstalled' | 'inadmissible' }
   | { kind: 'refused'; why: 'unapproved'; status: string }
-  // It was sent and no answer came back.
+  // It was sent and no answer came back, or none came back in time.
   | { kind: 'unreachable'; error: unknown };
 
 export type Forwarder = (call: Forward) => Promise<Forwarded>;
@@ -80,9 +84,15 @@ export const createForwarder = (deps: ForwardDeps): Forwarder => {
   const send = deps.fetch ?? fetch;
   // The request is built inside the same guard as the fetch: a body that
   // cannot be read is a call that did not go out.
+  //
+  // NO CALL WAITS FOR EVER. Each goes out with a signal that fires when it has
+  // taken `timeoutMs`: a service that never answers is given up on, and so is
+  // one whose answer never ends, because the signal goes on holding while the
+  // body is read by whoever the answer is handed to.
   const sent = async (url: string, request: () => RequestInit | Promise<RequestInit>): Promise<Forwarded> => {
     try {
-      return { kind: 'answered', response: await send(url, await request()) };
+      const init = await request();
+      return { kind: 'answered', response: await send(url, { ...init, signal: AbortSignal.timeout(deps.timeoutMs) }) };
     } catch (error) {
       return { kind: 'unreachable', error };
     }

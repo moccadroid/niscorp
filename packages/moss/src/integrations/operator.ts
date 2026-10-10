@@ -59,6 +59,10 @@ export type OperatorDeps = {
   placementNames: Readonly<Record<string, string>>;
   // Where a press image lands. Absent: a bundle that declares press is refused.
   storePress: StorePress | undefined;
+  // How long a call out may take, in ms (the bundle fetched at registration,
+  // the probe, one press image), and how large one press image may be.
+  timeoutMs: number;
+  pressMaxBytes: number;
 };
 
 // A bundle that may land, or why it may not: what to keep on the row, and
@@ -72,7 +76,9 @@ type Taken =
 const takeIn = async (deps: OperatorDeps, id: string, url: string): Promise<Taken> => {
   let payload: unknown;
   try {
-    const response = await fetch(`${url.replace(/\/$/, '')}/bundle`);
+    // Given up on when it has taken too long, the answer and its body
+    // together: a service that never answers is one that did not answer.
+    const response = await fetch(`${url.replace(/\/$/, '')}/bundle`, { signal: AbortSignal.timeout(deps.timeoutMs) });
     if (!response.ok) throw new Error(String(response.status));
     payload = await response.json();
   } catch {
@@ -87,7 +93,7 @@ const takeIn = async (deps: OperatorDeps, id: string, url: string): Promise<Take
   // verified — so a press refusal leaves the app exactly as it
   // found it. Blobs written before a later refusal are orphans in the
   // host's store, which is cheaper than any coherence they could buy.
-  const press = await copyPress(result.bundle, id, url, deps.storePress);
+  const press = await copyPress(result.bundle, id, url, { store: deps.storePress, timeoutMs: deps.timeoutMs, maxBytes: deps.pressMaxBytes });
   if (!press.ok) return { ok: false, error: press.reasons.join('; '), status: 422, answer: { message: 'Refused.', reasons: press.reasons } };
   return { ok: true, bundle: result.bundle, press: press.urls };
 };
@@ -201,7 +207,9 @@ const probe = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
     }
     const started = Date.now();
     try {
-      const response = await fetch(`${found.url.replace(/\/$/, '')}/${path}`);
+      // A probe of a service that never answers says so, in as long as any
+      // call out may take.
+      const response = await fetch(`${found.url.replace(/\/$/, '')}/${path}`, { signal: AbortSignal.timeout(deps.timeoutMs) });
       const text = await response.text();
       return c.json({ status: response.status, ms: Date.now() - started, body: text.slice(0, 2000) });
     } catch (err) {

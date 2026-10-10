@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { createForwarder } from '../src/integrations/forward';
 import type { ForwardDeps } from '../src/integrations/forward';
 import type { FoundIntegration } from '../src/integrations/registry';
+import { neverAnswers } from './never-answers';
 
 // THE ONE WAY OUT to an integration's service, driven by itself: the registry
 // is a map, who somebody is and what they carry are said here, and nothing is
@@ -19,6 +20,8 @@ const world = (over: Partial<ForwardDeps> & { rows?: Record<string, FoundIntegra
     who,
     scopeOf: async () => ({ userId: 'i_mara', studioId: 's_1' }),
     mint,
+    // As long as a deployment allows a call when it says nothing else.
+    timeoutMs: 30_000,
     fetch: send,
     ...over,
   });
@@ -82,7 +85,8 @@ describe('createForwarder — a call that goes out', () => {
     // The path goes under the service's address, whether or not that ends in a slash.
     const [url, init] = send.mock.calls[0] ?? [];
     expect(url).toBe('https://acme.example/lifecycle/erase?hard=1');
-    expect(init).toEqual({ method: 'POST', headers: { authorization: `Bearer ${mint.mock.results[0]?.value}` }, body: '{}' });
+    // As the door built it, and with the signal that ends a call that takes too long.
+    expect(init).toEqual({ method: 'POST', headers: { authorization: `Bearer ${mint.mock.results[0]?.value}` }, body: '{}', signal: expect.any(AbortSignal) });
   });
 
   it('for nobody: nobody is asked about, nothing is minted, and the request goes as the door built it', async () => {
@@ -133,5 +137,21 @@ describe('createForwarder — a call that goes out', () => {
     });
     expect(ended).toEqual({ kind: 'unreachable', error: unread });
     expect(send).not.toHaveBeenCalled();
+  });
+});
+
+describe('createForwarder — a service that never answers', () => {
+  const how = (ended: Awaited<ReturnType<ReturnType<typeof createForwarder>>>): string => (ended.kind === 'unreachable' ? String(ended.error) : ended.kind);
+
+  it('is given up on once the call has taken as long as the deployment allows, and reads as unreachable', async () => {
+    const service = neverAnswers();
+    const { forward } = world({ fetch: service.fetch, timeoutMs: 20 });
+    expect(how(await forward({ integration: 'acme', principal: 'i_mara', path: 'x', request: get }))).toMatch(/^TimeoutError/);
+  });
+
+  it('whoever the call is for: a vendor’s webhook is given up on the same way', async () => {
+    const service = neverAnswers();
+    const { forward } = world({ fetch: service.fetch, timeoutMs: 20 });
+    expect(how(await forward({ integration: 'acme', path: 'hook/stripe', request: () => ({ method: 'POST', body: '{}' }) }))).toMatch(/^TimeoutError/);
   });
 });

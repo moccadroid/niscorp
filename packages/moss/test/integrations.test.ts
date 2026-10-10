@@ -5,6 +5,7 @@ import { createPglitePool } from '@niscorp/vex/pglite';
 import type { PgPool } from '@niscorp/vex';
 import type { Replay } from '../src/data/own-entries';
 import { failingAt, registryOver } from './registry-db';
+import { neverAnswers } from './never-answers';
 import { runIntake, intakeContextOf } from '../src/integrations/intake';
 import { reachOf } from '../src/integrations/reach';
 import { copyPress } from '../src/integrations/press';
@@ -104,10 +105,15 @@ describe('copyPress', () => {
     return { calls, seam };
   };
 
+  // The bounds a deployment sets on one image: here half a minute to arrive,
+  // and a megabyte, unless a case says otherwise.
+  const copy = (b: Bundle, serviceUrl: string, store: StorePress | undefined, fetchImpl: typeof fetch, limits: { timeoutMs?: number; maxBytes?: number } = {}) =>
+    copyPress(b, 'acme', serviceUrl, { store, timeoutMs: 30_000, maxBytes: 1024 * 1024, fetch: fetchImpl, ...limits });
+
   it('no press declared: nothing fetched, nothing stored', async () => {
     const fetchImpl = vi.fn();
     const { calls, seam } = recordingSeam();
-    const result = await copyPress(okBundle(), 'acme', 'https://acme.example', seam, fetchImpl as unknown as typeof fetch);
+    const result = await copy(okBundle(), 'https://acme.example', seam, fetchImpl as unknown as typeof fetch);
     expect(result).toEqual({ ok: true, urls: [] });
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(calls).toHaveLength(0);
@@ -119,13 +125,14 @@ describe('copyPress', () => {
     const { calls, seam } = recordingSeam();
     const b = okBundle({ press: ['/integrations/acme/press/hero.png', '/integrations/acme/press/team.jpg'] });
 
-    const result = await copyPress(b, 'acme', 'https://acme.example/', seam, fetchImpl as unknown as typeof fetch);
+    const result = await copy(b, 'https://acme.example/', seam, fetchImpl as unknown as typeof fetch);
 
     expect(result).toEqual({ ok: true, urls: ['/blobs/acme/press/hero.png', '/blobs/acme/press/team.jpg'] });
     // The declared path maps exactly as the proxy maps it: prefix off, onto
-    // the registered origin. No other url shape exists for it to fetch.
-    expect(fetchImpl).toHaveBeenNthCalledWith(1, 'https://acme.example/press/hero.png');
-    expect(fetchImpl).toHaveBeenNthCalledWith(2, 'https://acme.example/press/team.jpg');
+    // the registered origin. No other url shape exists for it to fetch. Each
+    // goes out with the signal that ends it when it takes too long.
+    expect(fetchImpl).toHaveBeenNthCalledWith(1, 'https://acme.example/press/hero.png', { signal: expect.any(AbortSignal) });
+    expect(fetchImpl).toHaveBeenNthCalledWith(2, 'https://acme.example/press/team.jpg', { signal: expect.any(AbortSignal) });
     expect(calls[0]).toMatchObject({ id: 'acme', name: 'press/hero.png', contentType: 'image/png' });
     expect([...(calls[0]?.bytes ?? [])]).toEqual([...payload]);
     // The killed-service property: the result holds host ground only. Nothing
@@ -136,7 +143,7 @@ describe('copyPress', () => {
 
   it('press declared with no seam to hold it refuses, naming the gap', async () => {
     const b = okBundle({ press: ['/integrations/acme/press/hero.png'] });
-    const result = await copyPress(b, 'acme', 'https://acme.example', undefined, vi.fn() as unknown as typeof fetch);
+    const result = await copy(b, 'https://acme.example', undefined, vi.fn() as unknown as typeof fetch);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reasons[0]).toContain('storePress');
   });
@@ -145,7 +152,7 @@ describe('copyPress', () => {
     const fetchImpl = vi.fn(async () => new Response('gone', { status: 404 }));
     const { seam } = recordingSeam();
     const b = okBundle({ press: ['/integrations/acme/press/hero.png'] });
-    const result = await copyPress(b, 'acme', 'https://acme.example', seam, fetchImpl as unknown as typeof fetch);
+    const result = await copy(b, 'https://acme.example', seam, fetchImpl as unknown as typeof fetch);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reasons[0]).toBe('press "/integrations/acme/press/hero.png": the service answered 404');
   });
@@ -154,7 +161,7 @@ describe('copyPress', () => {
     const fetchImpl = vi.fn(async () => new Response('<html>', { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } }));
     const { seam } = recordingSeam();
     const b = okBundle({ press: ['/integrations/acme/press/hero.png'] });
-    const result = await copyPress(b, 'acme', 'https://acme.example', seam, fetchImpl as unknown as typeof fetch);
+    const result = await copy(b, 'https://acme.example', seam, fetchImpl as unknown as typeof fetch);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reasons[0]).toContain('"text/html", which is not an image');
   });
@@ -165,9 +172,40 @@ describe('copyPress', () => {
       throw new Error('too big for this deployment');
     };
     const b = okBundle({ press: ['/integrations/acme/press/hero.png'] });
-    const result = await copyPress(b, 'acme', 'https://acme.example', seam, fetchImpl as unknown as typeof fetch);
+    const result = await copy(b, 'https://acme.example', seam, fetchImpl as unknown as typeof fetch);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reasons[0]).toContain('too big');
+  });
+
+  it('an image that never arrives is given up on, and refuses the bundle naming the path', async () => {
+    const service = neverAnswers();
+    const { calls, seam } = recordingSeam();
+    const b = okBundle({ press: ['/integrations/acme/press/hero.png'] });
+    const result = await copy(b, 'https://acme.example', seam, service.fetch, { timeoutMs: 20 });
+    expect(result).toEqual({ ok: false, reasons: [expect.stringMatching(/^press "\/integrations\/acme\/press\/hero\.png": TimeoutError/)] });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('an image larger than the deployment allows is refused where it crosses the line, not once all of it was read', async () => {
+    // Eight chunks of a kilobyte, handed over one at a time as they are asked for.
+    const pulled: number[] = [];
+    const body = new ReadableStream<Uint8Array>({
+      pull: (controller) => {
+        if (pulled.length === 8) controller.close();
+        else {
+          pulled.push(pulled.length);
+          controller.enqueue(new Uint8Array(1024));
+        }
+      },
+    });
+    const fetchImpl = async (): Promise<Response> => new Response(body, { status: 200, headers: { 'content-type': 'image/png' } });
+    const { calls, seam } = recordingSeam();
+    const b = okBundle({ press: ['/integrations/acme/press/hero.png'] });
+    const result = await copy(b, 'https://acme.example', seam, fetchImpl, { maxBytes: 2048 });
+    expect(result).toEqual({ ok: false, reasons: ['press "/integrations/acme/press/hero.png": larger than 2048 bytes, which is as large as one image may be here'] });
+    expect(calls).toHaveLength(0);
+    // Given up on at the third kilobyte: the rest was never asked for.
+    expect(pulled.length).toBeLessThan(8);
   });
 });
 
@@ -711,6 +749,7 @@ describe('callIntegration', () => {
         who: async () => ({ roles: [], installed: 'installed' in over ? over.installed : ['acme'] }),
         scopeOf: async () => ({ studio_id: 's_1', audience: 'owner' }),
         mint: signer.mint,
+        timeoutMs: 30_000,
         fetch: fetchImpl as unknown as typeof fetch,
       }),
     });

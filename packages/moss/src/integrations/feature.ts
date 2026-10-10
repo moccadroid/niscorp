@@ -84,7 +84,26 @@ export type IntegrationsConfig = {
   // declares press, which is a sentence at import rather than a hole in a
   // listing.
   storePress?: StorePress;
+  // HOW LONG A CALL OUT TO AN INTEGRATION'S SERVICE MAY TAKE, in ms, its
+  // answer and its body together. Every call: a screen's through the proxy, a
+  // framed page and its callback, a vendor's webhook, `callIntegration`, the
+  // bundle fetched at registration, the operator's probe, one press image.
+  // Past it the call is given up on, and reads as a service that is
+  // unreachable. Default 30000, nova's default wait for an endpoint's reply.
+  // The shorter of the two ends a call: an integration whose endpoint is slow
+  // by nature, and says so with a longer `timeoutMs` on its action, needs this
+  // raised as well.
+  outboundTimeoutMs?: number;
+  // HOW LARGE ONE PRESS IMAGE MAY BE, in bytes. Held to while the image is
+  // read: a larger one is given up on where it crosses the line, and refuses
+  // the bundle. Default 5 MiB, which nobody measured: it is a number that
+  // lets a listing image through and keeps one import from holding an
+  // arbitrary body in memory.
+  pressMaxBytes?: number;
 };
+
+const DEFAULT_OUTBOUND_TIMEOUT_MS = 30_000;
+const DEFAULT_PRESS_MAX_BYTES = 5 * 1024 * 1024;
 
 export type Integrations = Feature & {
   // CALL AN INSTALLED INTEGRATION WHEN NOBODY IS DRIVING — the outbound half
@@ -124,7 +143,8 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
   // ours. The public half is served; verifying is all anybody can do with it
   // (./credentials.ts).
   const signer = createAssertionSigner(seams.signingSeed);
-  const forward = createForwarder({ find, who: seams.who, scopeOf: seams.scopeOf, mint: signer.mint });
+  const timeoutMs = config.outboundTimeoutMs ?? DEFAULT_OUTBOUND_TIMEOUT_MS;
+  const forward = createForwarder({ find, who: seams.who, scopeOf: seams.scopeOf, mint: signer.mint, timeoutMs });
   // Approved integrations' actions, read from rows. Handed to the running
   // manifest after an import, an approval and a removal: the set is verified
   // with everything else, and only then is it served.
@@ -164,6 +184,8 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
       reload,
       placementNames: config.placementNames ?? {},
       storePress: config.storePress,
+      timeoutMs,
+      pressMaxBytes: config.pressMaxBytes ?? DEFAULT_PRESS_MAX_BYTES,
     }),
   );
   // The frame doors, then the webhook, then the proxy: the proxy's pattern

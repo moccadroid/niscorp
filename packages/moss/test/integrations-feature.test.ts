@@ -6,6 +6,7 @@ import type { CredentialAnswer, FeatureEnv, FeatureSeams, Replay, Whoever } from
 import { createIntegrations, integrationOfAction } from '../src/integrations';
 import { hashIntegrationKey } from '../src/integrations/credentials';
 import { PAGE } from '../src/integrations/entries';
+import { neverAnswers } from './never-answers';
 
 // THE FEATURE, STARTED BY HAND: `createIntegrations` handed seams that are
 // plain functions over a map, the way a server hands it the real ones. No
@@ -398,5 +399,50 @@ describe('the routes the feature mounts, asked through the server it mounted the
     } finally {
       globalThis.fetch = real;
     }
+  });
+});
+
+// NO CALL OUT WAITS FOR EVER. The service here never answers (./never-answers.ts),
+// and the deployment allows a call 20 ms (`outboundTimeoutMs`).
+describe('a service that never answers', () => {
+  const found = { url: 'https://belts.example', status: 'approved', reach: { '/integrations/belts/roster': ['ext.desk.belts.roster'] }, frames: {} };
+  const against = async <Answer>(run: (started: Awaited<ReturnType<typeof world>>, signals: (AbortSignal | undefined)[]) => Promise<Answer>): Promise<Answer> => {
+    const service = neverAnswers();
+    const real = globalThis.fetch;
+    globalThis.fetch = service.fetch;
+    try {
+      const started = await world({ replay: replayOver({ found: { belts: found } }), who: () => ({ roles: ['desk'], installed: ['belts'] }) });
+      await createIntegrations({ outboundTimeoutMs: 20 }).start({ ...started.seams, holds: () => ['ext.desk.belts.roster'] });
+      return await run(started, service.signals);
+    } finally {
+      globalThis.fetch = real;
+    }
+  };
+  const endedBy = (signal: AbortSignal | undefined): string => (signal === undefined ? 'no signal' : signal.aborted ? String(signal.reason) : 'a signal that has not fired');
+
+  it('a bundle that is being fetched at registration is given up on, and the import is refused as one that did not answer', async () => {
+    await against(async ({ operator }, signals) => {
+      const answered = await operator.request('/integrations', { method: 'POST', body: JSON.stringify({ id: 'belts', url: 'https://belts.example' }), headers: { 'content-type': 'application/json' } });
+      expect(answered.status).toBe(502);
+      expect(await answered.json()).toEqual({ message: 'The integration did not answer with a bundle.' });
+      expect(signals.map(endedBy)).toEqual([expect.stringMatching(/^TimeoutError/)]);
+    });
+  });
+
+  it('the operator’s probe is given up on, and says so in what it answers', async () => {
+    await against(async ({ operator }, signals) => {
+      const answered = await operator.request('/integrations/belts/probe', { method: 'POST' });
+      expect(await answered.json()).toMatchObject({ status: 0, body: expect.stringMatching(/^TimeoutError/) });
+      expect(signals.map(endedBy)).toEqual([expect.stringMatching(/^TimeoutError/)]);
+    });
+  });
+
+  it('a screen’s call through the proxy is given up on, and reads as an integration that is unreachable', async () => {
+    await against(async ({ server, caller }, signals) => {
+      caller.principal = 'i_mara';
+      const answered = await server.request('/integrations/belts/roster');
+      expect(answered.status).toBe(502);
+      expect(signals.map(endedBy)).toEqual([expect.stringMatching(/^TimeoutError/)]);
+    });
   });
 });

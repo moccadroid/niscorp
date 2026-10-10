@@ -106,6 +106,7 @@ describe('integration.call', () => {
         who: async () => ({ roles: [], installed: ['acme'] }),
         scopeOf: async () => ({ studio_id: 's_1' }),
         mint: signer.mint,
+        timeoutMs: 30_000,
         fetch: (async () => new Response(JSON.stringify({ ok: true }), { status: 200 })) as unknown as typeof fetch,
       }),
       ...(over.telemetry !== undefined ? { telemetry: over.telemetry } : {}),
