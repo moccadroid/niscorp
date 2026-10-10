@@ -234,3 +234,8 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 - **The default is 1,000, from a measurement.** Lyceum's real boot, 2,000 connections for nobody opened through `server.socket` and held, the heap read after a forced collection before and after: 52.5 KB of heap for each (about 110 KB resident); 26.7 KB for an app of one canvas and one action. The Node transport holds about 260 KB resident more for each connection while compression is on. A thousand fit a process given 512 MB.
 - **An app with a public screen that more than a thousand visitors have open at once sets `anonymousShellMax`** to what its memory carries (`Infinity` is no limit, as before). A page of the manifest that is not live opens no socket and takes no place.
 - A terminal built on `@niscorp/moss/client` has nothing to change: it logs the `error`, and reconnects with its usual backoff, as after any close that is not `4401` or `4403`. A terminal written by hand treats `4503` as a close to retry later, and keeps its token.
+
+**A page whose path names one parameter twice refuses the boot.**
+
+- `path: '/docs/:id/versions/:id'` was accepted, and the canvas its parameters go to was handed one `id`: the later segment's. The first was matched and lost. `createServer` and `createPageRouter` refuse it now: `moss: page "…" names the parameter ":id" twice in "…" — give each parameter of a path its own name.`
+- An app with such a path names the second parameter something else. No lab app has one.

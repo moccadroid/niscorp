@@ -28,6 +28,14 @@ const compile = (name: string, page: PagePath): Compiled => {
       throw new Error(`moss: page "${name}" names the parameter ":${segment.param}" in "${page.path}" — a parameter is a plain name.`);
     }
   }
+  // The parameters are handed over by name: one named twice has two segments
+  // and one place to put them, so the later one would be kept and the first
+  // matched and then lost.
+  const named = segments.flatMap((segment) => ('param' in segment ? [segment.param] : []));
+  const twice = named.find((param, index) => named.indexOf(param) !== index);
+  if (twice !== undefined) {
+    throw new Error(`moss: page "${name}" names the parameter ":${twice}" twice in "${page.path}" — give each parameter of a path its own name.`);
+  }
   if (page.params !== undefined && !page.canvases.some((canvas) => canvas.id === page.params)) {
     throw new Error(`moss: page "${name}" sends its path's parameters to the canvas "${page.params}", which it does not have.`);
   }

@@ -149,7 +149,8 @@ go. It is the same machinery with the keeping taken out:
 A path matches a page when both have the same number of segments and every
 literal one is equal; nothing else (no wildcards, no order). Two pages that
 could both answer one path are refused at boot, as is a `params` canvas the page
-does not have. Any path no page answers is the app's.
+does not have, and a path that names one parameter twice (`/docs/:id/versions/:id`:
+the parameters are handed over by name). Any path no page answers is the app's.
 
 Whether a page may be kept by a cache, or written to a file, is not a property
 of the page: see [`documentHeaders`](#the-document).
