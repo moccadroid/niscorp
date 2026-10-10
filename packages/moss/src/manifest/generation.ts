@@ -72,19 +72,46 @@ export const createGeneration = (pointer: Pointer, ctx: { onMoved: () => void | 
     if (checking) return;
     checking = true;
     try {
-      const n = await pointer.read();
-      const first = seen === -1;
-      const moved = !first && n !== seen;
+      const n = await reading();
+      if (n === undefined || n === seen) return;
+      // SEEN ONLY ONCE IT IS FOLLOWED. A move is news that the rows changed,
+      // and it has been heard when what was derived from them has been read
+      // again. Counted as seen before that, a reload that threw was never
+      // tried again: the next look found nothing new, and this process went on
+      // serving what it had. So a move that could not be followed is left
+      // unseen, said to be what it is, and found again at the next look.
+      if (seen !== -1 && !(await followed(n))) return;
       seen = n;
-      if (moved) await ctx.onMoved();
+    } finally {
+      checking = false;
+    }
+  };
+
+  // Where the counter is, or `undefined` when it could not be read.
+  const reading = async (): Promise<number | undefined> => {
+    try {
+      return await pointer.read();
     } catch (err) {
       // LOUD. A counter nobody can read means this process has stopped hearing
       // about other processes' writes, which is precisely the condition the
       // whole mechanism exists to prevent. Silence here would reproduce the bug
       // in the shape of its own fix.
       console.error('[moss:generation] could not read the generation pointer — this process may be serving stale resolutions', err);
-    } finally {
-      checking = false;
+      return undefined;
+    }
+  };
+
+  // Do what a move asks for. `false`: it could not be done, and the log says so.
+  const followed = async (n: number): Promise<boolean> => {
+    try {
+      await ctx.onMoved();
+      return true;
+    } catch (err) {
+      console.error(
+        `[moss:generation] the generation pointer moved (${seen} → ${n}) and this process could not follow it — it is serving what it had, and tries again at its next look`,
+        err,
+      );
+      return false;
     }
   };
 

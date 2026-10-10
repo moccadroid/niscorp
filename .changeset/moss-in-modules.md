@@ -303,6 +303,13 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 - A counter that could not be moved after five tries in a row is logged (`[moss:generation] could not move the pointer`). A row somebody deleted used to be moved without a word, and nothing was moved.
 - An app has nothing to change. A role granted a data wildcard still denies `moss_generation.*` (AGENTS.md, rule 10a).
 
+**A change another process made is followed, or tried again.**
+
+- When the generation pointer moves, a process reads again the sets of actions that live in rows. When that failed (the database out of reach for a moment, a set this process refuses), the move was counted as seen all the same: the process went on serving what it had until the pointer moved again, and its log said the pointer `could not be read`, which it had been.
+- A move is counted as seen once it has been followed. One that could not be is logged as that (`the generation pointer moved (3 → 4) and this process could not follow it`), and is tried again at the next poll (`sessionRevalidateMs`), and the one after, until it is. A process that can never follow says so at every poll.
+- `server.generation()` answers the last generation this process followed.
+- An app has nothing to change.
+
 **`serve` stops what it started, and takes the message limit: `runtime.socketMaxMessageBytes`.**
 
 - `serve(app, runtime)` (`@niscorp/moss/node`) makes an HTTP listener and a websocket transport and returns the server and neither of them. `server.close()` stopped moss's timers and left the port bound and every terminal connected, and nothing else could reach either. `close()` on the server `serve` returns now stops all three: moss's own timers, then every connection (closed `1001`), then the listener.

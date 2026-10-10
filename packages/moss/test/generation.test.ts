@@ -90,6 +90,42 @@ describe('generation pointer', () => {
     gen.stop();
   });
 
+  // A MOVE THIS PROCESS COULD NOT FOLLOW. The pointer was read, it had moved,
+  // and reading the rows again threw (a database that blinked). The move was
+  // counted as seen before the reload was tried, so the next look found
+  // nothing new and never tried again: this process went on serving what it
+  // had, until some other move. And the log said the pointer could not be
+  // READ, which it had been.
+  it('a move it could not follow is said to be that, and is followed at the next look', async () => {
+    const pool = fakePool();
+    const errors: string[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => errors.push(String(args[0]));
+    let tries = 0;
+    let followed = 0;
+    const gen = createGeneration(pool, {
+      onMoved: () => {
+        tries += 1;
+        if (tries === 1) throw new Error('the database blinked');
+        followed += 1;
+      },
+      everyMs: 1,
+    });
+    await settle();
+    pool.poke();
+    await new Promise((r) => setTimeout(r, 40));
+    gen.stop();
+    console.error = original;
+
+    // Tried, failed, tried again at the next look, and then it was seen.
+    expect(followed).toBe(1);
+    expect(tries).toBe(2);
+    expect(gen.current()).toBe(1);
+    // The pointer was read each time. What failed was following it.
+    expect(errors.filter((line) => line.includes('could not follow'))).toHaveLength(1);
+    expect(errors.filter((line) => line.includes('could not read'))).toEqual([]);
+  });
+
   it('stopping ends the polling', async () => {
     const pool = fakePool();
     let moves = 0;
