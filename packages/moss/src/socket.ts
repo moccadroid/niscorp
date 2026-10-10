@@ -1,6 +1,5 @@
+import { z } from 'zod';
 import { DefinitionValidationError } from '@niscorp/nova';
-import type { RenderNode } from '@niscorp/nova';
-import type { Catalog } from './manifest';
 import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SHELL_FAILED, ClientMessageSchema, DEFAULT_TOKEN_KEY, PROTOCOL, PROTOCOL_MIN, offeredSealed, offeredToken } from './protocol';
 import type { ClientMessage, ServerMessage } from './protocol';
 import type { ShellHost } from './shells';
@@ -67,17 +66,27 @@ export type Connection = {
   seal?: (token: string) => Promise<string>;
 };
 
+// WHAT THE SOCKET ASKS OF A SHELL HOST (./shells): the session a connection is
+// attached to. One function of the host, so a host is handed here as that and
+// no more.
+export type SessionSource = Pick<ShellHost, 'session'>;
+
+// What somebody holds of the application, as `hello` says it: the ids of the
+// actions granted to them, and the version token of that set. Written out
+// here: whoever stands the socket up says where it comes from.
+export type HeldCatalog = { ids: readonly string[]; hash: string };
+
 export type SocketContext = {
   session: (token: string) => string | null | Promise<string | null>;
-  catalog: (principal: string | null) => Catalog | Promise<Catalog>;
+  catalog: (principal: string | null) => HeldCatalog | Promise<HeldCatalog>;
   // The shell host — when the manifest declares a shell, events route into
   // the session's server shell and render frames flow back.
-  shells?: ShellHost;
+  shells?: SessionSource;
   // WHICH HOST A PATH LEADS TO. A terminal on a page names the path it is on
   // (`?path=`); this answers with that page's host and the input its path
   // carries, or undefined for a path that is the app's. Absent: every
   // connection is the app's, as before pages existed.
-  page?: (path: string) => { host: ShellHost; inputs: Record<string, Record<string, unknown>> } | undefined;
+  page?: (path: string) => { host: SessionSource; inputs: Record<string, Record<string, unknown>> } | undefined;
   // How often a LIVE connection's credential is re-verified. Default
   // `DEFAULT_REVALIDATE_MS`; `0` or `Infinity` disables it, and a token
   // checked once at upgrade is then trusted for the life of the connection.
@@ -134,6 +143,14 @@ const messageOf = (text: string): ClientMessage | undefined => {
   }
 };
 
+// The definitions a build refused, by id. Nova's error carries them in its
+// context, which is typed as any record: read here, where it is used.
+const FailuresSchema = z.object({ failures: z.array(z.object({ id: z.string() })) });
+const failedDefinitions = (error: DefinitionValidationError): string[] => {
+  const read = FailuresSchema.safeParse(error.context);
+  return read.success ? read.data.failures.map((failure) => failure.id) : [];
+};
+
 // The one answer to all three: what a message is, which is true whatever was
 // sent, rather than a guess at what the sender meant.
 const INVALID_MESSAGE = `Not a message of protocol ${PROTOCOL}: it must be JSON, name a type a terminal sends, and carry that type's fields and no others.`;
@@ -180,7 +197,7 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
   if (revalidateMs > 0 && Number.isFinite(revalidateMs)) {
     sweeper = setInterval(() => void revalidate(), revalidateMs);
     // Revalidation must never be the reason a process stays alive.
-    (sweeper as unknown as { unref?: () => void }).unref?.();
+    sweeper.unref?.();
   }
 
   // REFUSING ONE SESSION MUST NEVER COST THE OTHERS. Every await in the body
@@ -200,10 +217,7 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
     } catch (error) {
       console.error('[moss/socket] refused a session:', error);
       live.delete(connection);
-      const failures =
-        error instanceof DefinitionValidationError
-          ? ((error.context as { failures?: { id: string }[] } | undefined)?.failures ?? []).map((f) => f.id)
-          : [];
+      const failures = error instanceof DefinitionValidationError ? failedDefinitions(error) : [];
       // The error is the server's — it can name a host, a table, a user — and
       // whoever is on this connection has not been shown to be anybody. So it
       // is logged above and none of its text is sent. Definitions that failed
@@ -244,7 +258,8 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
     // request. From any other origin the cookie is not looked at — a browser
     // sends it with a stranger's page all the same. `key` is which of the
     // browser's sessions this terminal is (a seat); a name, not a secret.
-    const key = /^[\w.-]{1,64}$/.test(params.get('key') ?? '') ? (params.get('key') as string) : DEFAULT_TOKEN_KEY;
+    const named = params.get('key');
+    const key = named !== null && /^[\w.-]{1,64}$/.test(named) ? named : DEFAULT_TOKEN_KEY;
     const page = upgrade !== undefined && isOwnOrigin(upgrade.origin, upgrade.host, ctx.origins) ? new URL(upgrade.origin) : undefined;
     const secure = page?.protocol === 'https:';
     const held = page === undefined ? null : sessionTokenOf(upgrade?.cookie, { port: page.port, secure }, key);
@@ -338,8 +353,8 @@ export const createSocket = (ctx: SocketContext): SocketAccept => {
     // shell mints the same instance ids and its first frames match the page.
     // Shape-checked, never trusted further: it only ever names ids inside the
     // caller's own shell.
-    const named = params.get('seed');
-    const seed = named !== null && /^[0-9a-f]{8,40}$/.test(named) ? named : undefined;
+    const namedSeed = params.get('seed');
+    const seed = namedSeed !== null && /^[0-9a-f]{8,40}$/.test(namedSeed) ? namedSeed : undefined;
 
     // The path the terminal is on decides which shell it is served: a page's,
     // built for this connection alone, or the app's.
