@@ -4,7 +4,7 @@ import type { Server } from 'node:http';
 import { createShellHost } from '../src/shells';
 import { hostConfig } from './shell-host-double';
 import { createSocket } from '../src/socket';
-import { attachSocket } from '../src/node';
+import { attachSocket } from '../src/server/node';
 import { createWire } from '../src/client';
 import type { WireEnv } from '../src/client';
 import type { NiscApp } from '../src/manifest';

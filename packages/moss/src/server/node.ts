@@ -6,14 +6,14 @@ import { WebSocketServer } from 'ws';
 import type { WebSocket as ServerSocket } from 'ws';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
+import { renderDocument } from '../documents';
+import type { DocumentConfig } from '../documents';
+import type { NiscApp } from '../manifest';
+import { SUBPROTOCOL } from '../protocol';
+import type { NiscRuntime } from '../runtime';
+import type { SocketAccept } from '../socket';
+import type { MossServer } from './moss-server';
 import { createServer } from './server';
-import type { MossServer } from './server';
-import type { NiscApp } from './manifest';
-import type { NiscRuntime } from './runtime';
-import { SUBPROTOCOL } from './protocol';
-import type { SocketAccept } from './socket';
-import { renderDocument } from './documents';
-import type { DocumentConfig } from './documents';
 
 // ═══════════════════════════════════════════════════════════════
 // The Node entry — runtime-specific by design: the transport is a seam, so
@@ -42,7 +42,7 @@ const MAX_MESSAGE_BYTES = 256 * 1024;
 
 // The `ws` half of the transport seam: RFC 6455 stays library-handled
 // (permessage-deflate on by default — see `runtime.socketCompression`); the
-// protocol above the seam is nisc's own (../socket.ts) and identical on every
+// protocol above the seam is nisc's own (../socket) and identical on every
 // runtime.
 export const attachSocket = (
   httpServer: Upgradeable,
@@ -55,7 +55,7 @@ export const attachSocket = (
     perMessageDeflate: options?.compression ?? true,
     maxPayload: options?.maxMessageBytes ?? MAX_MESSAGE_BYTES,
     // Of what a terminal offers, `nisc` is answered and nothing else: the
-    // other entry is its token (socket.ts), which is not said back.
+    // other entry is its token (../socket), which is not said back.
     handleProtocols: (offered) => (offered.has(SUBPROTOCOL) ? SUBPROTOCOL : false),
   });
   // The cookies moss answers an upgrade with ride the 101 itself.
@@ -70,7 +70,7 @@ export const attachSocket = (
     if (new URL(url, 'http://nisc.local').pathname !== path) return;
     // THE REQUEST IS ANSWERED ONCE MOSS HAS DECIDED WHO IS ASKING, because the
     // answer is the one thing that can write a browser's session cookie
-    // (identity/session-cookie.ts). Until then the raw socket is nobody's to listen to,
+    // (../identity, session-cookie.ts). Until then the raw socket is nobody's to listen to,
     // and a peer that resets it would be an 'error' thrown out of Node — the
     // whole process. Heard here, it is that request's alone.
     socket.on('error', () => {});
@@ -101,7 +101,7 @@ export const attachSocket = (
       });
       return ws;
     };
-    // accept promises to handle its own failures (see socket.ts). This is
+    // accept promises to handle its own failures (see ../socket). This is
     // the floor under that promise: an await added there without a guard
     // degrades to one logged close here instead of an unhandled rejection
     // taking every session on the box down with it.
@@ -137,7 +137,7 @@ export const attachSocket = (
 //
 // `dist` is what the app's bundler wrote: index.html and its assets. Every GET
 // that nothing registered earlier answers is a file from it, or a PAGE:
-// index.html with the caller's screen drawn into it (./document) — the app's own
+// index.html with the caller's screen drawn into it (../documents) — the app's own
 // for `/`, one of the manifest's pages for a path that leads to one. index.html
 // itself is never served as a file: it is the template, and goes out drawn.
 //

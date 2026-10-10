@@ -6,7 +6,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocket } from 'ws';
-import { attachSocket } from '../src/node';
+import { attachSocket } from '../src/server/node';
 import { createSocket } from '../src/socket';
 import { offerToken, PROTOCOL } from '../src/protocol';
 import type { SocketAccept } from '../src/socket';

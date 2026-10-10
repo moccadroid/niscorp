@@ -157,7 +157,7 @@ export type NiscRuntime = {
   operatorGate?: (c: Context, next: Next) => Response | void | Promise<Response | void>;
 
   // THE CLUSTER FABRIC — how an invalidation or a nudge reaches a SECOND moss
-  // process (../fabric.ts). Off by default, and needed only when a deployment
+  // process (../server, fabric.ts). Off by default, and needed only when a deployment
   // grows past one process per service: a role change in process A resets the
   // shell resident in B, a nudge in A wakes a channel subscriber in B. The seam
   // takes functions, not a connection — `LISTEN/NOTIFY` on the pool moss holds

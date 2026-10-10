@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
-import { guardOperator, secretsEqual } from '../src/server';
+import { guardOperator, secretsEqual } from '../src/server/operator';
 
 // ═══════════════════════════════════════════════════════════════
 // The operator prefix's two gates, tested through the seam moss uses to install

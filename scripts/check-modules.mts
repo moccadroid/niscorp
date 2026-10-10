@@ -73,17 +73,14 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       // page's path, and the three things a document asks a server, are types
       // written out in the module.
       documents: ['protocol', 'identity', 'shells'],
+      // The wiring: it may import every core module, and no feature. Its
+      // node.ts and vite.ts are entry points of their own (`./node`, `./vite`).
+      // `tide` is still flat (tide.ts): the fact lane mints through it.
+      server: ['runtime', 'protocol', 'feature', 'identity', 'manifest', 'data', 'shells', 'socket', 'documents'],
       client: ['protocol'],
       terminal: ['client'],
     },
-    flat: [
-      'driver.ts',
-      'fabric.ts',
-      'node.ts',
-      'server.ts',
-      'tide.ts',
-      'vite.ts',
-    ],
+    flat: ['driver.ts', 'tide.ts'],
     finished: ['runtime', 'protocol', 'feature', 'identity', 'manifest', 'data', 'shells', 'integrations', 'socket', 'documents', 'client', 'terminal'],
     features: ['integrations'],
   },

@@ -8,8 +8,8 @@
 // `wireFabric` and the same appliers the server wires, so this exercises the
 // real plumbing, not a mock of it.
 import { describe, it, expect } from 'vitest';
-import { wireFabric } from '../src/fabric';
-import type { FabricApply } from '../src/fabric';
+import { wireFabric } from '../src/server/fabric';
+import type { FabricApply } from '../src/server/fabric';
 import type { Fabric, FabricMessage } from '../src/runtime';
 import { createShellHost } from '../src/shells';
 import type { ShellHost } from '../src/shells';

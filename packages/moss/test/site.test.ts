@@ -11,7 +11,7 @@ import type { HostSetup } from './shell-host-double';
 import type { NiscApp, PageManifest } from '../src/manifest';
 import type { MossServer } from '../src/server';
 import { createPageRouter } from '../src/documents';
-import { mountSite } from '../src/node';
+import { mountSite } from '../src/server/node';
 
 // ═══════════════════════════════════════════════════════════════
 // The built terminal, served by the app's own process (`mountSite`): what is a

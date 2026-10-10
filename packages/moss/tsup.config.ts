@@ -26,7 +26,7 @@ export default defineConfig([
   {
     entry: {
       index: 'src/index.ts',
-      node: 'src/node.ts',
+      node: 'src/server/node.ts',
       // A feature, from an entry of its own: nothing the main entry reaches
       // imports it (scripts/check-modules.mts).
       integrations: 'src/integrations/index.ts',
@@ -40,7 +40,7 @@ export default defineConfig([
       'terminal/dom/index': 'src/terminal/dom/index.ts',
       'terminal/dom/server': 'src/terminal/dom/server.ts',
       'terminal/tty/index': 'src/terminal/tty/index.ts',
-      vite: 'src/vite.ts',
+      vite: 'src/server/vite.ts',
     },
     format: ['esm', 'cjs'],
     dts: true,

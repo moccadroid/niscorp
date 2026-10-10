@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { ViteDevServer } from 'vite';
-import { mossDev } from '../src/vite';
+import { mossDev } from '../src/server/vite';
 import type { MossServer } from '../src/server';
 
 // The dev server's own sign-in (`/dev/as/<who>`), driven through the

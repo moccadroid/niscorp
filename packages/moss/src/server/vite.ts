@@ -1,12 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import type { Plugin, ViteDevServer } from 'vite';
+import type { Connect, Plugin, ViteDevServer } from 'vite';
 import { getRequestListener } from '@hono/node-server';
-import { renderDocument } from './documents';
-import type { DocumentConfig } from './documents';
+import { renderDocument } from '../documents';
+import type { DocumentConfig } from '../documents';
+import { sessionCookies } from '../identity';
+import type { MossServer } from './moss-server';
 import { attachSocket, MOSS_PATHS } from './node';
-import { sessionCookies } from './identity';
-import type { MossServer } from './server';
 
 // ═══════════════════════════════════════════════════════════════
 // @niscorp/moss/vite — the app server inside vite's dev process.
@@ -43,7 +43,7 @@ export type DevApp = {
   site?: DocumentConfig['site'];
   tokenKey?: string;
   // A dev-only signed-in URL: `/dev/as/<who>` puts the token this returns in
-  // the browser's own session cookie (identity/session-cookie.ts) — as a sign-in the
+  // the browser's own session cookie (../identity, session-cookie.ts) — as a sign-in the
   // app answers over HTTP would — and goes to `/`. `null` is nobody of that
   // name. It lives in vite's middleware and nowhere else, so it cannot ship.
   signIn?: (who: string) => string | null | Promise<string | null>;
@@ -76,6 +76,80 @@ const retire = async (booted: Booted): Promise<void> => {
 };
 
 const said = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+// WHAT A REQUEST MEETS IN DEV, in this order: the sign-in URL, the paths the
+// app server answers, then a page drawn into vite's own index.html. Anything
+// else is vite's. `current` is the app that is booted now: a re-boot swaps
+// what it answers, never this handler.
+const devMiddleware =
+  (vite: ViteDevServer, options: MossDevOptions, owned: RegExp, current: () => Promise<Booted>): Connect.NextHandleFunction =>
+  (req, res, next) => {
+    const url = req.url ?? '/';
+    const path = url.split('?')[0] ?? '/';
+
+    const who = /^\/dev\/as\/([\w.@%-]+)$/.exec(path)?.[1];
+    if (who !== undefined) {
+      void current()
+        .then(async ({ app }) => {
+          if (app.signIn === undefined) {
+            next();
+            return;
+          }
+          const token = await app.signIn(decodeURIComponent(who));
+          if (token === null) {
+            res.setHeader('content-type', 'text/html; charset=utf-8');
+            res.end(`<p>nobody called ${who.replace(/[<&"]/g, '')}</p>`);
+            return;
+          }
+          const scheme = 'encrypted' in req.socket && req.socket.encrypted === true ? 'https' : 'http';
+          res.statusCode = 302;
+          res.setHeader('set-cookie', sessionCookies(`${scheme}://${req.headers.host ?? 'localhost'}`, token, app.tokenKey !== undefined ? { key: app.tokenKey } : {}));
+          res.setHeader('location', '/');
+          res.end();
+        })
+        .catch(() => {
+          res.statusCode = 500;
+          res.end('the dev sign-in failed');
+        });
+      return;
+    }
+
+    if (owned.test(path)) {
+      void current().then(({ listener }) => listener(req, res)).catch(() => {
+        res.statusCode = 503;
+        res.end('the app server did not boot — see the dev server’s log');
+      });
+      return;
+    }
+
+    if (req.method !== 'GET') {
+      next();
+      return;
+    }
+    void current()
+      .then(async ({ app }) => {
+        if (app.draw === undefined || (path !== '/' && path !== '/index.html' && app.server.page(path) === undefined)) {
+          next();
+          return;
+        }
+        const template = await vite.transformIndexHtml(url, await readFile(resolve(vite.config.root, options.index ?? 'index.html'), 'utf8'));
+        const page = await renderDocument({
+          server: app.server,
+          template,
+          request: { path: path === '/index.html' ? '/' : path, cookie: req.headers.cookie ?? null, host: req.headers.host ?? null },
+          draw: app.draw,
+          ...(app.htmlAttributes !== undefined ? { htmlAttributes: app.htmlAttributes } : {}),
+          ...(app.site !== undefined ? { site: app.site } : {}),
+          ...(app.tokenKey !== undefined ? { tokenKey: app.tokenKey } : {}),
+        });
+        res.statusCode = 200;
+        res.setHeader('content-type', 'text/html; charset=utf-8');
+        for (const [name, value] of Object.entries(page.headers)) res.setHeader(name, value);
+        res.end(page.html);
+      })
+      // not drawn is not broken: vite serves index.html as it always did
+      .catch(() => next());
+  };
 
 export const mossDev = (options: MossDevOptions): Plugin => ({
   name: 'moss-dev',
@@ -129,72 +203,6 @@ export const mossDev = (options: MossDevOptions): Plugin => ({
     vite.watcher.on('unlink', reboot);
     vite.httpServer?.once('close', () => void current.then(retire, () => undefined));
 
-    vite.middlewares.use((req, res, next) => {
-      const url = req.url ?? '/';
-      const path = url.split('?')[0] ?? '/';
-
-      const who = /^\/dev\/as\/([\w.@%-]+)$/.exec(path)?.[1];
-      if (who !== undefined) {
-        void current
-          .then(async ({ app }) => {
-            if (app.signIn === undefined) {
-              next();
-              return;
-            }
-            const token = await app.signIn(decodeURIComponent(who));
-            if (token === null) {
-              res.setHeader('content-type', 'text/html; charset=utf-8');
-              res.end(`<p>nobody called ${who.replace(/[<&"]/g, '')}</p>`);
-              return;
-            }
-            const scheme = 'encrypted' in req.socket && req.socket.encrypted === true ? 'https' : 'http';
-            res.statusCode = 302;
-            res.setHeader('set-cookie', sessionCookies(`${scheme}://${req.headers.host ?? 'localhost'}`, token, app.tokenKey !== undefined ? { key: app.tokenKey } : {}));
-            res.setHeader('location', '/');
-            res.end();
-          })
-          .catch(() => {
-            res.statusCode = 500;
-            res.end('the dev sign-in failed');
-          });
-        return;
-      }
-
-      if (owned.test(path)) {
-        void current.then(({ listener }) => listener(req, res)).catch(() => {
-          res.statusCode = 503;
-          res.end('the app server did not boot — see the dev server’s log');
-        });
-        return;
-      }
-
-      if (req.method !== 'GET') {
-        next();
-        return;
-      }
-      void current
-        .then(async ({ app }) => {
-          if (app.draw === undefined || (path !== '/' && path !== '/index.html' && app.server.page(path) === undefined)) {
-            next();
-            return;
-          }
-          const template = await vite.transformIndexHtml(url, await readFile(resolve(vite.config.root, options.index ?? 'index.html'), 'utf8'));
-          const page = await renderDocument({
-            server: app.server,
-            template,
-            request: { path: path === '/index.html' ? '/' : path, cookie: req.headers.cookie ?? null, host: req.headers.host ?? null },
-            draw: app.draw,
-            ...(app.htmlAttributes !== undefined ? { htmlAttributes: app.htmlAttributes } : {}),
-            ...(app.site !== undefined ? { site: app.site } : {}),
-            ...(app.tokenKey !== undefined ? { tokenKey: app.tokenKey } : {}),
-          });
-          res.statusCode = 200;
-          res.setHeader('content-type', 'text/html; charset=utf-8');
-          for (const [name, value] of Object.entries(page.headers)) res.setHeader(name, value);
-          res.end(page.html);
-        })
-        // not drawn is not broken: vite serves index.html as it always did
-        .catch(() => next());
-    });
+    vite.middlewares.use(devMiddleware(vite, options, owned, () => current));
   },
 });

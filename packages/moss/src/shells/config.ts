@@ -10,7 +10,7 @@ import type { Telemetry } from '../runtime';
 //
 // Each member is one function or one value of whoever owns it. A host is
 // handed no application manifest and no runtime: it reads nothing of either
-// but what is named here, and whoever stands it up (../server.ts) says where
+// but what is named here, and whoever stands it up (../server, hosts.ts) says where
 // each comes from.
 // ═══════════════════════════════════════════════════════════════
 

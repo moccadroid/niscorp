@@ -7,8 +7,9 @@
 //   shells/       — what somebody is looking at: the shell host, a shell's build, its stream, its snapshot
 //   socket/       — how it reaches them live: the handshake, the messages, revalidation (transport-blind)
 //   documents/    — how it reaches them as a page: the drawn document, the page router, pages as files
-//   server.ts     — boot refusal + the HTTP surfaces + the socket accept
-//   node.ts       — the Node listener + ws transport (./node subpath; Bun swaps this, never the app)
+//   server/       — the wiring: createServer constructs the modules, starts the features, mounts the routes
+//                   (server/node.ts is the `./node` entry: the Node listener + ws transport; Bun swaps it,
+//                   never the app. server/vite.ts is the `./vite` entry: the dev plugin.)
 export { defineApp } from './manifest';
 export type { NiscApp, ShellManifest, PageManifest, FunctionSession, LayoutVariant, RunRecord, RunTurn, RunSink } from './manifest';
 export { mintDevToken } from './identity';

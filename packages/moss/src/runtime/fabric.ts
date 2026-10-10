@@ -1,7 +1,7 @@
 // What travels between two moss processes of one deployment, and the two
 // functions a host supplies to carry it. The types are here because the
 // deployment hands the transport over (`runtime.fabric`); what moss does with
-// it is ../fabric.ts.
+// it is ../server, fabric.ts.
 
 // What crosses: an idempotent, order-independent invalidation or wake. A nudge
 // carries no payload — it names the principal whose shell to wake and the

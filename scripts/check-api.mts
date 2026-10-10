@@ -24,8 +24,8 @@ const packages = resolve(import.meta.dirname, '..', 'packages');
 const ENTRIES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   moss: {
     '.': 'src/index.ts',
-    './node': 'src/node.ts',
-    './vite': 'src/vite.ts',
+    './node': 'src/server/node.ts',
+    './vite': 'src/server/vite.ts',
     './integrations': 'src/integrations/index.ts',
     './client': 'src/client/index.ts',
     './client/node': 'src/client/node.ts',

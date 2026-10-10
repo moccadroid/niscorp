@@ -2,7 +2,7 @@ import type { NiscRuntime, SessionVerifier } from '../runtime';
 import { devSession } from './dev-token';
 import { revokeAllFor, sessionOf } from './sessions';
 
-// The three-way choice, resolved once at boot (../server.ts). Typed callers
+// The three-way choice, resolved once at boot (../server). Typed callers
 // cannot reach the refusal — the field is required — but a JS config can,
 // and the sentence names the choices rather than assuming the reader has
 // the type open.

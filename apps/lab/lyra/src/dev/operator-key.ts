@@ -4,7 +4,7 @@
 // THE KEY IS A BOOT-TIME INPUT. `devRuntime` reads `process.env.OPERATOR_KEY`
 // when it builds the runtime (server/runtime.ts), and moss reads
 // `runtime.operatorKey` ONCE, when `createServer` mounts the operator prefix
-// (guardOperator, packages/moss/src/server.ts). Nothing consults either again.
+// (guardOperator, packages/moss/src/server/operator.ts). Nothing consults either again.
 //
 // These checks used to write `runtime.operatorKey = KEY` in their own module
 // body, which is after the import graph has booted the world. That worked
