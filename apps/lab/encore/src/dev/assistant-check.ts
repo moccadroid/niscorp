@@ -215,7 +215,7 @@ const main = async (): Promise<void> => {
   const llm = world.booted.agent.llm;
   const input = loop?.lastAgentInput();
   if (session === undefined || llm === undefined || input === undefined) throw new Error('assistant-check: no session, model or run input to preview');
-  const tools = createReadTools({ wire: session.wire, policy: session.policy, entries: ENTRIES });
+  const tools = createReadTools({ wire: session.wire, policy: world.booted.server.policyForRoles(session.roles), entries: ENTRIES });
   const preview = await encoreAgent.preview(input.input, { llm, tools, deps: {} });
   const roles = preview.messages.map((message) => message.role);
   const firstTurn = roles.findIndex((role) => role !== 'system');
@@ -241,7 +241,7 @@ const main = async (): Promise<void> => {
     wireCalls += 1;
     return session.wire(url, init);
   };
-  const opTools = createReadTools({ wire: countingWire, policy: session.policy, entries: ENTRIES });
+  const opTools = createReadTools({ wire: countingWire, policy: world.booted.server.policyForRoles(session.roles), entries: ENTRIES });
   const listed = ListedSchema.parse(await toolNamed(opTools, 'list_queries').config.execute({}, toolContext()));
   const mutations = ENTRIES.flatMap((entry) => ('mutation' in entry ? [entry.fingerprint] : []));
   check(`list_queries: ${listed.queries.length} readable fingerprints, each with what it returns and the context it needs — without a request`, listed.queries.length > 10 && listed.queries.every((query) => query.returns !== '') && listed.queries.find((query) => query.fingerprint === 'lineup/forDay')?.context.join() === 'day,stageId' && wireCalls === 0);
@@ -260,7 +260,7 @@ const main = async (): Promise<void> => {
   check('a context that is not a JSON object fails the tool’s own schema — it never reaches execute, so never the wire', !queryInput.safeParse({ fingerprint: 'lineup/forDay', context: 'day=sat' }).success && wireCalls === 1);
   check('...while the SAME object stringified (as gpt-oss sends nested args) validates once cortex has decoded it', queryInput.safeParse(deepDecodeJsonish({ fingerprint: 'lineup/forDay', context: '{"day":"sat"}' })).success);
   const manyRows: FetchFn = async () => ({ ok: true, status: 200, json: async () => Array.from({ length: 300 }, (_, index) => ({ id: index })), text: async () => '' });
-  const cappedRows = RowsSchema.parse(await toolNamed(createReadTools({ wire: manyRows, policy: session.policy, entries: ENTRIES }), 'query').config.execute({ fingerprint: 'lineup/forDay', context: { day: 'sat' } }, toolContext()));
+  const cappedRows = RowsSchema.parse(await toolNamed(createReadTools({ wire: manyRows, policy: world.booted.server.policyForRoles(session.roles), entries: ENTRIES }), 'query').config.execute({ fingerprint: 'lineup/forDay', context: { day: 'sat' } }, toolContext()));
   check(`the answer is CAPPED (${cappedRows.rows.length} of 300 rows), and says what it left out`, cappedRows.rows.length === QUERY_MAX_ROWS && String(cappedRows.note).includes('260'));
 
   // ═══ f. it adds and aims; it closes nothing ══════════════
@@ -424,8 +424,8 @@ const main = async (): Promise<void> => {
   const liaisonSession = world.booted.intent.sessionOf(LIAISON_PRINCIPAL);
   if (liaisonSession === undefined) throw new Error('assistant-check: the liaison has no session');
   let liaisonWire = 0;
-  const liaisonTools = createReadTools({ wire: (url, init) => { liaisonWire += 1; return liaisonSession.wire(url, init); }, policy: liaisonSession.policy, entries: ENTRIES });
-  const liaisonListed = readableQueries({ policy: liaisonSession.policy, entries: ENTRIES }).map((query) => query.fingerprint);
+  const liaisonTools = createReadTools({ wire: (url, init) => { liaisonWire += 1; return liaisonSession.wire(url, init); }, policy: world.booted.server.policyForRoles(liaisonSession.roles), entries: ENTRIES });
+  const liaisonListed = readableQueries({ policy: world.booted.server.policyForRoles(liaisonSession.roles), entries: ENTRIES }).map((query) => query.fingerprint);
   check(`the liaison’s allow-set DERIVES from their policy: ${liaisonListed.length} reads against the operator’s ${listed.queries.length}`, liaisonListed.length > 0 && liaisonListed.length < listed.queries.length && !liaisonListed.includes('lineup/forDay'));
   const liaisonLineup = RefusedSchema.safeParse(await toolNamed(liaisonTools, 'query').config.execute({ fingerprint: 'lineup/forDay', context: { day: 'sat' } }, toolContext()));
   check('...the running order is refused to them BEFORE the wire — never asked of the engine at all', liaisonLineup.success && liaisonWire === 0);

@@ -6,8 +6,7 @@
 // the Bearer token, the catalog resolved per principal, vex reads/writes
 // under the principal's compiled policy, and discovery advertising only
 // what the policy can touch.
-import { createServer } from '@niscorp/moss';
-import { relay } from '@relay/app/app';
+import { serverOn } from '../server/boot';
 import { devRuntime } from '../server/runtime';
 import { mintToken } from '../server/users';
 
@@ -17,7 +16,7 @@ type Json = Record<string, unknown>;
 
 const main = async (): Promise<void> => {
   const dev = await devRuntime();
-  const app = await createServer(relay, dev);
+  const app = await serverOn(dev);
   const rt = { db: dev.db };
 
   const request = async (path: string, opts: { as?: string; token?: string; body?: unknown } = {}): Promise<{ status: number; body: Json }> => {

@@ -67,7 +67,7 @@ export const boot = async (): Promise<{
 
   const bundles = await loadBundles(runtime);
 
-  const app = buildAtrium(bundles.entries);
+  const app = buildAtrium(bundles.entries, runtime);
   const server = await createServer(app, runtime);
   // The bundles' actions come from rows, so they are not part of what the app
   // ships: they are handed to the server as a set of their own, here and after

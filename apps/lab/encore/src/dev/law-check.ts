@@ -140,7 +140,7 @@ const main = async (): Promise<void> => {
   const lawSession = world.booted.intent.sessionOf(OP);
   if (lawSession === undefined) throw new Error('law-check: no session');
   let requestsMade = 0;
-  const lawTools = createReadTools({ wire: (url, init) => { requestsMade += 1; return lawSession.wire(url, init); }, policy: lawSession.policy, entries: ENTRIES });
+  const lawTools = createReadTools({ wire: (url, init) => { requestsMade += 1; return lawSession.wire(url, init); }, policy: world.booted.server.policyForRoles(lawSession.roles), entries: ENTRIES });
   const queryTool = lawTools.find((tool) => tool.config.name === 'query');
   const verdicts = await Promise.all(mutations.map(async (fingerprint) => JSON.stringify(await queryTool?.config.execute({ fingerprint, context: {} }, { runId: 'law', agentId: 'law', agentPath: ['law'], signal: new AbortController().signal, forward: () => {} }))));
   check(`the read tool refuses ALL ${mutations.length} mutations — the feed’s included — before the wire (${requestsMade} requests made)`, mutations.length === 11 && verdicts.every((verdict) => verdict.includes('"refused"') && verdict.includes('changes data')) && requestsMade === 0);

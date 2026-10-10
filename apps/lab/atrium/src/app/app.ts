@@ -1,5 +1,5 @@
 import { defineApp } from '@niscorp/moss';
-import type { NiscApp } from '@niscorp/moss';
+import type { NiscApp, NiscRuntime } from '@niscorp/moss';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { CHARTER, ASSIGNMENTS } from './charter';
 import { CATALOG_DEFINITIONS } from '@atrium/app/action-catalog';
@@ -56,7 +56,11 @@ const ICONS: Record<string, string> = {
 // own (`server.replaceActions('bundles', …)`): at start, and again after every
 // sync. Shipping them here as well would put each one in the manifest twice,
 // and the copy shipped here would never leave.
-export const buildAtrium = (bundleEntries: readonly (SeedEntry | SeedMutation)[]): NiscApp => {
+//
+// And of the RUNTIME boot created, for the connector functions alone: they run
+// the app's own sync and resolve on the app's own database, which a session
+// does not carry.
+export const buildAtrium = (bundleEntries: readonly (SeedEntry | SeedMutation)[], runtime: NiscRuntime): NiscApp => {
   return defineApp({
     charter: CHARTER,
     assignments: ASSIGNMENTS,
@@ -76,7 +80,7 @@ export const buildAtrium = (bundleEntries: readonly (SeedEntry | SeedMutation)[]
     // once per session so handlers close over the shell and policy.
     functions: (session) => ({
       ...authFunctions(session),
-      ...connectorFunctions(session),
+      ...connectorFunctions(session, runtime),
       ...assistantFunctions(session),
     }),
 

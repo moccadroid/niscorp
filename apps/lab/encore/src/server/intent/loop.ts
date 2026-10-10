@@ -28,6 +28,7 @@ import type { Ceiling } from '@encore/server/watch/ceiling';
 import { createReloader } from '@encore/server/watch/reload';
 import type { Reloader } from '@encore/server/watch/reload';
 import { ENTRIES } from '@encore/app/vex';
+import type { ScopePolicy } from '@niscorp/vex';
 import { QUESTION_CANVASES } from '@encore/app/canvas-placement';
 import { STORIES_KEPT, eventStory, sentenceStory, withRun } from './story';
 import type { Story, StoryNames } from './story';
@@ -78,6 +79,11 @@ export type IntentDeps = {
   // Wall-clock milliseconds, for the brief's rate limit. Absent = Date.now; a
   // check that has to cross ten seconds hands in its own.
   now?: () => number;
+  // WHAT A SET OF ROLES MAY READ AND WRITE: the server's own answer
+  // (`server.policyForRoles`), a copy that is the caller's. A session carries
+  // no policy; the loop asks for its roles' once, to know which tables its
+  // principal reads.
+  policyFor: (roles: readonly string[]) => ScopePolicy;
   // The pacer's clock. Absent = the system's; a check that wants to watch the
   // debounce without sleeping hands in its own.
   pacerClock?: PacerClock;
@@ -215,7 +221,8 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
   const titles = Object.fromEntries(held.map((definition) => [definition.id, definition.title ?? definition.id]));
   // The context packs this principal may even be asked about: the ones their
   // own compiled policy can read.
-  const packs = readablePacks(session.policy, CONTEXT_PACKS);
+  const policy = deps.policyFor(session.roles);
+  const packs = readablePacks(policy, CONTEXT_PACKS);
 
   const records: PassRecord[] = [];
   const pinned = new Set<string>();
@@ -367,6 +374,7 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
 
   const assist = createAssist({
     session,
+    policy,
     agent: deps.agent,
     ...(deps.traceDir !== undefined ? { traceDir: deps.traceDir } : {}),
     clock: clock,
@@ -408,6 +416,7 @@ export const createIntentLoop = (session: FunctionSession, deps: IntentDeps): In
 
   const watcher = createWatcher({
     session,
+    policy,
     decider: deps.decider,
     definitions: deps.definitions,
     clock,

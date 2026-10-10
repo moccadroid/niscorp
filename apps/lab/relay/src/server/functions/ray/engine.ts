@@ -21,6 +21,16 @@ import { llmFor, type AgentRole } from '@relay/server/llm';
 
 export type RayEngine = { engine: QueryEngine; db: NiscRuntime['db'] };
 
+// What Ray is built from that a session does not carry: the environment the
+// app's own boot created, and what a set of roles may read and write. The
+// same roles must be handed the SAME policy object each time: an engine is
+// kept for each policy (see `rayEngine`), so a fresh object per session would
+// be a fresh engine, and a fresh introspection, per session.
+export type RaySeams = {
+  runtime: NiscRuntime;
+  policyFor: (roles: readonly string[]) => ScopePolicy;
+};
+
 // What Ray's tools close over — the session, from moss's function seam:
 // the living shell, who is asking, their policy, and the lazy engine.
 export type RayContext = {

@@ -30,8 +30,8 @@
 // WHEN IT CHANGES, every other process finds out by a pointer in the database
 // that each one polls (./generation.ts).
 //
-// This module imports `runtime`, `identity` and `feature` (for the type of
-// what `NiscApp.features` holds), and nothing else of moss.
+// This module imports `identity` and `feature` (for the type of what
+// `NiscApp.features` holds), and nothing else of moss.
 // ═══════════════════════════════════════════════════════════════
 
 export { defineApp } from './app';

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { mintSession } from '@niscorp/moss';
 import type { FunctionSession, MossServer } from '@niscorp/moss';
 import type { FunctionHandler } from '@niscorp/nova';
+import type { PgPool } from '@niscorp/vex';
 import { memberJoin } from '@lyceum/app/vex/member.entries';
 import type { Moderation } from '../moderation';
 import { vexOver, wireAs } from '../vex-over';
@@ -28,7 +29,9 @@ const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const OFFERED = 12;
 const EnterSchema = z.looseObject({ chosen: z.string().trim().min(1, 'Choose a name first.').max(40, 'A name is 40 letters at most.'), typed: z.boolean() });
 
-export const doorFunctions = (session: FunctionSession, server: () => MossServer, moderation: Moderation): Record<string, FunctionHandler> => ({
+// `pool` is the app's own, handed in by its boot: a session says who is
+// calling and carries no database.
+export const doorFunctions = (session: FunctionSession, server: () => MossServer, pool: PgPool, moderation: Moderation): Record<string, FunctionHandler> => ({
   'door.names': async () => {
     const names = (await moderation.offer(OFFERED)).map((name, index) => ({ name, area: `n${index}` }));
     const rows = [];
@@ -42,7 +45,7 @@ export const doorFunctions = (session: FunctionSession, server: () => MossServer
     }
     if (await moderation.taken(chosen)) throw new Error(`Somebody is already ${chosen}. Choose another.`);
     const memberId = `m_${randomBytes(8).toString('hex')}`;
-    const token = await mintSession(session.runtime.pool, memberId, SESSION_TTL_MS);
+    const token = await mintSession(pool, memberId, SESSION_TTL_MS);
     // Two people pressing the same name at once: the second is told, as if it
     // had been taken a moment earlier — which it was.
     await vexOver(wireAs(server(), token))(memberJoin.fingerprint, { name: chosen }).catch(() => {

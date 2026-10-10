@@ -464,8 +464,6 @@ export const createShellHost = (ctx: ShellHostContext): ShellHost => {
         identity: who.scope,
         actions: ids,
         wire,
-        runtime: ctx.runtime,
-        policy: who.policy,
         get shell(): Shell {
           if (built === undefined) throw new Error('moss: a function touched the shell before the session finished building.');
           return built;

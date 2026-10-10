@@ -1,4 +1,5 @@
 import { defineApp } from '@niscorp/moss';
+import type { NiscApp } from '@niscorp/moss';
 import { CHARTER } from './charter/charter';
 import { ASSIGNMENTS } from './charter/assignments';
 import { CATALOG_DEFINITIONS } from '@relay/app/action-catalog';
@@ -16,6 +17,7 @@ import { createDevtoolsFunctions, DEVTOOLS_CANVAS } from '@niscorp/nova/devtools
 import { USERS } from '@relay/server/users';
 import { authFunctions } from '@relay/server/functions/auth';
 import { rayFunctions } from '@relay/server/functions/ray';
+import type { RaySeams } from '@relay/server/functions/ray';
 import { modelFunctions } from '@relay/server/functions/models';
 
 // ═══════════════════════════════════════════════════════════
@@ -25,9 +27,13 @@ import { modelFunctions } from '@relay/server/functions/models';
 // The server derives everything else from these plus a database (whose
 // seeded vex_cache IS the API surface). The one derivation relay owns is
 // `shell.inputs`: per-principal boot input for the chrome.
+//
+// A function of `ray`, the one thing the manifest's code needs that is not an
+// artifact: the environment Ray's engine stands on and the policy it reads
+// under (server/boot.ts fills both in).
 // ═══════════════════════════════════════════════════════════
 
-export const relay = defineApp({
+export const buildRelay = (ray: RaySeams): NiscApp => defineApp({
   charter: CHARTER,
   assignments: ASSIGNMENTS,
   actions: CATALOG_DEFINITIONS,
@@ -43,7 +49,7 @@ export const relay = defineApp({
   // shell and policy. The model fns take no session: which model an agent runs
   // on is the server's state, the same for every session (server/llm/index.ts).
   functions: (session) => ({
-    ...rayFunctions(session),
+    ...rayFunctions(session, ray),
     ...authFunctions(session),
     ...modelFunctions(),
     ...createDevtoolsFunctions({ shell: () => session.shell, definitions: CATALOG_DEFINITIONS }),

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { FunctionHandler } from '@niscorp/nova';
-import type { FunctionSession } from '@niscorp/moss';
+import type { FunctionSession, NiscRuntime } from '@niscorp/moss';
 import { resolveStatements } from '@atrium/db/resolve';
 import { refreshServer, syncIntegrations } from '@atrium/server/bundles';
 
@@ -30,7 +30,13 @@ const CONNECTOR_TIMEOUT_MS = 2500;
 const KeyPayload = z.object({ stayId: z.string().optional(), keyStayId: z.string().optional() });
 const ResyncPayload = z.object({ selected: z.object({ connector_id: z.string().optional() }).optional() });
 
-export const connectorFunctions = (session: FunctionSession): Record<string, FunctionHandler> => ({
+// `runtime` is the app's own, handed in by its boot (the manifest is built
+// there, over it): a session says who is calling and carries no database.
+// What these two do with it is machinery no caller's policy describes: a join
+// across the connector registry, a pull from a vendor's service, the
+// deployment's own resolve. They run for whoever the charter grants the
+// action that calls them.
+export const connectorFunctions = (_session: FunctionSession, runtime: NiscRuntime): Record<string, FunctionHandler> => ({
   // Cut a door credential. `stayId` comes from the action's data, which lives in
   // the server's shell — a terminal cannot forge it.
   'connector.issueKey': async (data) => {
@@ -38,7 +44,7 @@ export const connectorFunctions = (session: FunctionSession): Record<string, Fun
     const stayId = payload.stayId ?? payload.keyStayId ?? '';
     if (stayId === '') throw new Error('No stay to cut a key for.');
 
-    const rows = await session.runtime.pool.query(
+    const rows = await runtime.pool.query(
       `SELECT s.external_id AS stay_ref, r.external_id AS room_ref, r.number AS room_number, c.service_url, c.name AS connector_name, c.live_version
        FROM stays s
        JOIN properties p ON p.id = s.property_id
@@ -91,9 +97,9 @@ export const connectorFunctions = (session: FunctionSession): Record<string, Fun
     // a property-level toggle resolves the whole estate.
     const connectorId = ResyncPayload.parse(data).selected?.connector_id ?? '';
     const scoped = connectorId === '' ? undefined : connectorId;
-    const reports = await syncIntegrations(session.runtime, scoped);
-    for (const statement of resolveStatements(scoped)) await session.runtime.pool.query(statement, []);
-    await refreshServer(session.runtime);
+    const reports = await syncIntegrations(runtime, scoped);
+    for (const statement of resolveStatements(scoped)) await runtime.pool.query(statement, []);
+    await refreshServer(runtime);
     // The console renders this: what each connector's service said. A refusal
     // is a row here and old rows on disk — never a thrown call, because the
     // switch flip itself succeeded.

@@ -7,7 +7,7 @@ import { rayAgent } from './agent';
 import { llmFor } from '@relay/server/llm';
 import { traceWiring, type TraceStep } from './trace';
 import { sessionStore, type ChatMessage } from './sessions';
-import { rayEngine, type RayContext } from './engine';
+import { rayEngine, type RayContext, type RaySeams } from './engine';
 
 // The channel the chat's live trace listens on. Named here because the server
 // is what announces on it; the action names the same string in its trigger.
@@ -31,8 +31,13 @@ const toTranscript = (messages: ChatMessage[]): Message[] =>
 // compiled scope policy (Ray reads what you read), and the environment
 // (keys from .env, the engine over the server's own pool). Nothing
 // LLM-shaped runs in a browser.
+//
+// The session carries neither the environment nor a policy: it says who is
+// calling. Both come from `seams`, which whoever boots the app fills in
+// (server/boot.ts): the runtime the app itself created, and the server's
+// answer to what a set of roles may read and write.
 // ═══════════════════════════════════════════════════════════
-export const rayFunctions = (session: FunctionSession): Record<string, FunctionHandler> => {
+export const rayFunctions = (session: FunctionSession, seams: RaySeams): Record<string, FunctionHandler> => {
   const userId = session.principal ?? 'anonymous';
   const store = sessionStore(userId);
   const ray: RayContext = {
@@ -41,8 +46,10 @@ export const rayFunctions = (session: FunctionSession): Record<string, FunctionH
       return session.shell;
     },
     userId,
-    policy: session.policy,
-    engine: () => rayEngine(session.runtime, session.policy),
+    get policy() {
+      return seams.policyFor(session.roles);
+    },
+    engine: () => rayEngine(seams.runtime, seams.policyFor(session.roles)),
   };
   // ONE build tool for the session: its builtActions memory is what makes
   // `edit` work across messages ("change the screen you built" is almost

@@ -196,10 +196,12 @@ type FunctionSession = {
   identity: Record<string, unknown>;  // the scope half of the resolved identity
   actions: readonly string[];      // the session's granted action ids, installs filtered
   wire: FetchFn;                   // the server's own surfaces, as this session
-  runtime: NiscRuntime;
-  policy: ScopePolicy;             // the caller's compiled scope policy
   grant: (token: string) => void;  // session GRANT (login): send it down, reconnect
   revoke: () => Promise<void>;     // session REVOKE (sign-out): close 4403, evict
+  answerIntent: (                  // a query written for an intent, as this principal
+    writers: { generateDsl: GenerateDsl; mapToShape: MapToShape },
+    asked: { intent: string; shape: unknown; context?: Record<string, unknown> },
+  ) => Promise<QueryResponse>;
   recordRun: (run: Omit<RunRecord, 'at' | 'principal' | 'shellId'>) => void;
 };
 ```
@@ -207,6 +209,31 @@ type FunctionSession = {
 `revoke` settles when the credential is gone: under `session: 'sessions'` it
 deletes every session the principal has (`revokeAllFor`). `recordRun` is a
 no-op when the manifest declares no `runs` sink.
+
+**A session says who is calling and holds no key.** It carries no `runtime`
+(the database pool, the operator key, the signing seed) and no `policy` (the
+object the routes enforce for everybody holding those roles). What app code
+needs of either has a call:
+
+- **A read or a write as the caller**: `session.wire`, the routes, enforced.
+- **A query written for an intent**: `session.answerIntent(writers, asked)`.
+  The routes replay stored queries and write none. An app that lets a model
+  write one hands over vex's two writers (`generateDsl`, `mapToShape`), the
+  intent and the shape. The query is written, compiled and run under the
+  policy and the scope values the routes serve this principal under, resolved
+  when it is asked: the writer is shown only the tables they may read, and a
+  query that reaches past their policy is refused. It is kept in the cache the
+  routes replay from, so `answer.meta.cache.fingerprint` replays over
+  `session.wire` afterwards, for whoever the policy lets. Moss keeps one
+  engine for each `writers` object: hand over the same object each time. It
+  rejects with what vex throws (`code: 'unsatisfiable'`, `'scope_denied'`).
+- **What the caller's roles may read and write**, for code that chooses what
+  to offer: `server.policyForRoles(session.roles)`. A copy compiled for the
+  asking, the asker's own.
+- **The app's own database**, for machinery no caller's policy describes
+  (minting a session for somebody else, a sync, a refresh): the runtime the app
+  created and handed to `createServer`, closed over where the app builds its
+  manifest. Moss does not hand it back.
 
 ### The environment
 

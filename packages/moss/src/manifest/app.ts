@@ -1,9 +1,8 @@
 import type { Sequence } from '@niscorp/strata';
-import type { GenerateDsl, MapToShape, QueryResponse, ScopeBehaviors, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
+import type { GenerateDsl, MapToShape, QueryResponse, ScopeBehaviors, SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Charter } from '@niscorp/charter';
 import type { ActionDefinition, ActionFragment, CanvasConfig, FetchFn, FunctionHandler, LayoutNode, Shell } from '@niscorp/nova';
 import type { PhraseKeys, Phrasebook } from '@niscorp/nova/i18n';
-import type { NiscRuntime } from '../runtime';
 import type { Feature } from '../feature';
 import type { IdentityRecord } from '../identity';
 
@@ -350,10 +349,21 @@ export type RunRecord = {
 export type RunSink = (record: RunRecord, session: FunctionSession) => void;
 
 // What a session's functions close over: the living shell (durable per
-// principal), who is calling, the server's own surfaces as the session,
-// the environment the server stands on, and the principal's compiled
-// scope policy — dynamic reads (agents) execute under it, so an agent
-// sees what its caller sees and is refused what its caller is refused.
+// principal), who is calling, the server's own surfaces as the session, and
+// what a session may ask for by name.
+//
+// IT SAYS WHO IS CALLING AND HOLDS NO KEY. It used to carry `runtime`, the
+// whole environment (the database pool, the operator key, the signing seed),
+// and `policy`, the very object the routes enforce for everybody holding
+// those roles. Code that runs for one person was handed what reaches every
+// person's rows. What an app read them for has a call of its own:
+//
+//   a read or a write as the caller      `wire` (the routes, enforced)
+//   a query written for an intent        `answerIntent` below
+//   what the caller's roles may read     `server.policyForRoles(session.roles)`,
+//                                        a copy that is the asker's own
+//   the app's own database               the runtime the app created, closed
+//                                        over where the app builds its manifest
 export type FunctionSession = {
   shell: Shell;
   principal: string | null;
@@ -367,8 +377,6 @@ export type FunctionSession = {
   // disagree about what this person holds.
   actions: readonly string[];
   wire: FetchFn;
-  runtime: NiscRuntime;
-  policy: ScopePolicy;
   // Session lifecycle, as capabilities — no reserved channels, no
   // observers. A login fn GRANTS: the token goes down every connection of
   // this session as a `session` message and the terminals reconnect

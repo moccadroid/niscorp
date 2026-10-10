@@ -3,4 +3,4 @@
 // session's durable shell, its reads run under the caller's compiled scope
 // policy, its keys come from the server's .env.
 export { rayFunctions } from './run';
-export { rayEngine, type RayEngine, type RayContext } from './engine';
+export { rayEngine, type RayEngine, type RayContext, type RaySeams } from './engine';

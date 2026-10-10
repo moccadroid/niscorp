@@ -57,7 +57,7 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       protocol: [],
       feature: ['runtime'],
       identity: ['runtime', 'protocol'],
-      manifest: ['runtime', 'identity', 'feature'],
+      manifest: ['identity', 'feature'],
       data: ['runtime', 'identity', 'manifest'],
       // Not `data`: what the feature reads and writes it hands over as entries
       // and replays through a seam, so it imports nothing of the data module.

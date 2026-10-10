@@ -8,6 +8,7 @@ try {
 
 import { createServer, mintDevToken } from '@niscorp/moss';
 import type { MossServer, NiscApp, RunRecord as SpentRun } from '@niscorp/moss';
+import type { ScopePolicy } from '@niscorp/vex';
 import { buildEncore } from '@encore/app/app';
 import { DIRECTOR_PRINCIPAL } from '@encore/app/charter/assignments';
 import { createDirector } from './director/director';
@@ -90,9 +91,16 @@ export const boot = async (options: BootOptions = {}): Promise<Booted> => {
   const director = createDirector((body) => sendAsDirector(body));
   const COMMANDS: Record<string, () => void> = { play: director.play, pause: director.pause, faster: director.faster, slower: director.slower, replay: director.replay };
 
+  // What a set of roles may read is the server's to say, and the server stands
+  // after the loops that ask: until then nobody has a session to ask for.
+  let policyFor: (roles: readonly string[]) => ScopePolicy = () => {
+    throw new Error('encore: a session asked what it may read before the server was up');
+  };
+
   const intent = createIntentLoops(
     {
     decider,
+    policyFor: (roles) => policyFor(roles),
     agent,
     ceiling: createCeiling(options.eventPassesPerSecond ?? EVENT_PASSES_PER_SECOND),
     ...(options.now !== undefined ? { now: options.now } : {}),
@@ -118,6 +126,7 @@ export const boot = async (options: BootOptions = {}): Promise<Booted> => {
     if (spent.length > KEPT_RUNS) spent.shift();
   });
   const server = await createServer(app, runtime);
+  policyFor = server.policyForRoles;
   // PRE-WARM, ONCE THE PROCESS IS QUIET. The handshake to the provider is most
   // of a cold pass, so it is paid at boot rather than by whoever types first —
   // but AFTER the database has booted, not beside it: PGlite's start-up holds

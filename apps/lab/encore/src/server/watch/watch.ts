@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { ActionDefinition, FetchFn, Shell } from '@niscorp/nova';
 import type { FunctionSession } from '@niscorp/moss';
+import type { ScopePolicy } from '@niscorp/vex';
 import { ATTENTION_STRIP_ID } from '@encore/app/actions/frame/attention-strip.action';
 import { CLOCK_CHANNEL } from '@encore/app/actions/frame/director-deck.action';
 import { CANVAS_PLACEMENT } from '@encore/app/canvas-placement';
@@ -101,6 +102,8 @@ export type BriefRequest = { event: FeedEvent; standing: readonly StandingCause[
 
 export type WatchDeps = {
   session: FunctionSession;
+  // What this session's roles may read: which feeds exist for it.
+  policy: ScopePolicy;
   decider: Decider;
   definitions: Record<string, ActionDefinition>;
   // THIS session's clock: advanced here when the row is, read by both speeds.
@@ -158,7 +161,7 @@ export const createWatcher = (deps: WatchDeps): Watcher => {
   const tables = referencedTables(views);
   const canShow = granted.has(ATTENTION_STRIP_ID);
   // The feeds this policy can read, every table of each. The rest do not exist.
-  const feeds = FEEDS.filter((feed) => tablesOf(feed.entry).every((table) => canRead(session.policy, table)));
+  const feeds = FEEDS.filter((feed) => tablesOf(feed.entry).every((table) => canRead(deps.policy, table)));
 
   const cursors = new Map<string, number>();
   let labelCursor = 0;

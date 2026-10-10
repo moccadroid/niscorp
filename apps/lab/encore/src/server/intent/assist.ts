@@ -8,6 +8,7 @@ import { CANVAS_PLACEMENT, QUESTION_CANVASES, tileOf } from '@encore/app/canvas-
 import { NOT_SUBMITTED, RAIL_PHRASES, SUBMITTED } from '@encore/app/rail-phrases';
 import { CITE_KEY, PLACED_BY, PLACED_FRAGMENT, WHY, keptAcrossReopen } from '@encore/app/shell/fragments/placed.fragment';
 import { ENTRIES } from '@encore/app/vex';
+import type { ScopePolicy } from '@niscorp/vex';
 import type { ContextPack } from '@encore/app/vex/context-packs';
 import type { FestivalClock } from '@encore/lib/festival-clock';
 import { encoreAgent } from '@encore/server/agent/agent';
@@ -90,6 +91,9 @@ export type PassContext = {
 
 export type AssistDeps = {
   session: FunctionSession;
+  // What this session's roles may read: the agent's read tools are the
+  // stored queries over tables it reads, and no others.
+  policy: ScopePolicy;
   agent: AgentLlm;
   clock: FestivalClock;
   definitions: Record<string, ActionDefinition>;
@@ -803,7 +807,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
     const outcome = await runAgent({
       ...request,
       llm,
-      tools: createReadTools({ wire: session.wire, policy: session.policy, entries: ENTRIES, onRows: (rows) => lookedUpRows.push(...harvestRows(rows)) }),
+      tools: createReadTools({ wire: session.wire, policy: deps.policy, entries: ENTRIES, onRows: (rows) => lookedUpRows.push(...harvestRows(rows)) }),
       abort: controller.signal,
       refusals: (data, response) => {
         const verdict = admitAnswer(answerContext(), data, response);

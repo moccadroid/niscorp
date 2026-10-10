@@ -26,13 +26,13 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve } from '@hono/node-server';
-import { createServer, CLOSE_INVALID_TOKEN, offerToken, PROTOCOL } from '@niscorp/moss';
+import { CLOSE_INVALID_TOKEN, offerToken, PROTOCOL } from '@niscorp/moss';
 import { attachSocket } from '@niscorp/moss/node';
 import { createWire } from '@niscorp/moss/client';
 import { nodeEnv } from '@niscorp/moss/client/node';
 import type { ServerMessage } from '@niscorp/moss';
 import type { RenderNode } from '@niscorp/nova';
-import { relay } from '../app/app';
+import { serverOn } from '../server/boot';
 import { devRuntime } from '../server/runtime';
 import { mintToken, userByUsername } from '../server/users';
 
@@ -101,7 +101,7 @@ const main = async (): Promise<void> => {
   // A quarter-second so the check runs at human speed. A deployment leaves
   // this at the 60s default; it is here because a check should not sleep for a
   // minute to prove a timer fires.
-  const server = await createServer(relay, { ...runtime, session, sessionRevalidateMs: 250 });
+  const server = await serverOn({ ...runtime, session, sessionRevalidateMs: 250 });
   const httpServer = serve({ fetch: server.fetch, port: 0 });
   attachSocket(httpServer, server.socket);
   const address = httpServer.address();
