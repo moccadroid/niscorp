@@ -133,7 +133,7 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
     old.connections.clear();
     old.shell.dispose();
     cell.live = next;
-    for (const { connection, wants } of carried) attach(next, connection, next.canvases, delta && wants);
+    for (const { connection, wants } of carried) attach(next, connection, delta && wants);
   };
 
   const durableCell = async (token: string | null, principal: string): Promise<Cell> => {
@@ -168,14 +168,14 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
       if (principal !== null && kept) {
         const cell = await durableCell(token, principal);
         const settled = await settle(cell.live, waitMs);
-        return { ...read(cell.live, cell.live.canvases), settled, ...needOf(cell.live, principal, kept, config.entries) };
+        return { ...read(cell.live), settled, ...needOf(cell.live, principal, kept, config.entries) };
       }
       // Nobody in particular, or a page: a shell for the length of one read.
       const seed = randomBytes(9).toString('hex');
       const live = await buildShell(host, token, principal, false, seed, options?.inputs);
       try {
         const settled = await settle(live, waitMs);
-        return { ...read(live, live.canvases), seed, settled, ...needOf(live, principal, kept, config.entries) };
+        return { ...read(live), seed, settled, ...needOf(live, principal, kept, config.entries) };
       } finally {
         live.ended = true;
         live.shell.dispose();

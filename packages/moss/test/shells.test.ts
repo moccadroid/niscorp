@@ -754,6 +754,59 @@ describe('shells — a canvas that fails to render', () => {
   });
 });
 
+// ═══════════════════════════════════════════════════════════════
+// THE CANVASES A SHELL HAS are asked of the shell. The host walked the
+// manifest's list in six places, so a canvas the shell gained while it ran
+// was never sent to anybody.
+// ═══════════════════════════════════════════════════════════════
+
+describe('shells — the canvases a shell has', () => {
+  const canvasesSent = (conn: ReturnType<typeof fakeConnection>): unknown[] => conn.sent.filter((m) => m['type'] === 'render').map((m) => m['canvas']);
+
+  it('a canvas added while the shell runs is served like the ones it was built with', async () => {
+    const host = createShellHost(hostConfig(ctx));
+    const session = await host.session('t', 'usr_1');
+    const first = fakeConnection();
+    session.attach(first);
+    await tick();
+    first.sent.length = 0;
+
+    session.shell.addCanvas({ id: 'late', initial: { action: 'counter' } });
+    await tick();
+    await tick();
+
+    // The terminal already attached is sent it; a newcomer is handed it with
+    // the rest; and a document reads it.
+    expect(canvasesSent(first)).toContain('late');
+    const second = fakeConnection();
+    session.attach(second);
+    expect(canvasesSent(second)).toEqual(['main', 'late']);
+    expect(Object.keys((await host.snapshot('t', 'usr_1')).trees)).toEqual(['main', 'late']);
+    first.sent.length = 0;
+    session.resync(first);
+    expect(canvasesSent(first)).toEqual(['main', 'late']);
+  });
+
+  it('a canvas that is removed is served empty once, and then not again', async () => {
+    const twoCtx = { ...ctx, app: twoCanvas };
+    const host = createShellHost(hostConfig(twoCtx));
+    const session = await host.session('t', 'usr_1');
+    const conn = fakeConnection();
+    session.attach(conn);
+    await tick();
+    conn.sent.length = 0;
+
+    session.shell.removeCanvas('left');
+    await tick();
+    await tick();
+    expect(conn.sent.filter((m) => m['type'] === 'render' && m['canvas'] === 'left')).toEqual([{ type: 'render', canvas: 'left', tree: [] }]);
+
+    const later = fakeConnection();
+    session.attach(later);
+    expect(canvasesSent(later)).toEqual(['right']);
+  });
+});
+
 describe('shells — the frame layout store and re-send', () => {
   // A frame that is nothing but a ref: `{ ref: 'r' }` resolves against the
   // seeded store. Without the seed this throws LayoutRefNotFoundError and the

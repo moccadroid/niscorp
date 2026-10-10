@@ -2,6 +2,7 @@ import { shellSettled } from '@niscorp/nova';
 import type { RenderNode } from '@niscorp/nova';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { shellNeedOf } from './liveness';
+import { canvasesOf } from './live';
 import type { Live } from './live';
 import { treeOf } from './stream';
 import type { ShellSnapshot } from './types';
@@ -37,7 +38,7 @@ export const settle = async (live: Live, waitMs: number): Promise<boolean> => {
 
 // Read-only: `sent` is not touched, so the connections already attached keep
 // their baseline and a snapshot can never make a flush skip a frame.
-export const read = (live: Live, canvases: readonly { id: string }[]): Pick<ShellSnapshot, 'frame' | 'trees'> => {
+export const read = (live: Live): Pick<ShellSnapshot, 'frame' | 'trees'> => {
   let frameTree: RenderNode[] = [];
   try {
     frameTree = live.shell.getShellRenderTree();
@@ -45,11 +46,11 @@ export const read = (live: Live, canvases: readonly { id: string }[]): Pick<Shel
     console.error('[moss/shells] the shell frame failed to render for a snapshot — serving an empty arrangement:', error);
   }
   const trees: Record<string, RenderNode[]> = {};
-  for (const canvas of canvases) {
+  for (const canvasId of canvasesOf(live)) {
     try {
-      trees[canvas.id] = treeOf(live, canvas.id);
+      trees[canvasId] = treeOf(live, canvasId);
     } catch (error) {
-      console.error(`[moss/shells] canvas "${canvas.id}" failed to render for a snapshot — leaving it out:`, error);
+      console.error(`[moss/shells] canvas "${canvasId}" failed to render for a snapshot — leaving it out:`, error);
     }
   }
   return { frame: frameTree, trees };

@@ -16,8 +16,8 @@ export const sessionOn = (host: HostParts, cell: Cell, ephemeral: boolean, rebui
   get shell(): Shell {
     return cell.live.shell;
   },
-  attach: (connection, options) => attach(cell.live, connection, cell.live.canvases, host.delta && options?.delta === true),
-  resync: (connection) => resync(cell.live, connection, cell.live.canvases),
+  attach: (connection, options) => attach(cell.live, connection, host.delta && options?.delta === true),
+  resync: (connection) => resync(cell.live, connection),
   detach: (connection) => {
     const live = cell.live;
     live.connections.delete(connection);

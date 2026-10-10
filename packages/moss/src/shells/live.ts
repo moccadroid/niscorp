@@ -5,12 +5,10 @@ import type { ShellConnection } from './types';
 
 // What one host holds while it stands: each living shell with what is attached
 // to it, the cell a principal's shell is addressed through, and what every
-// part of the host reads. Types only; the files beside this one do the work.
+// part of the host reads. The files beside this one do the work.
 
 export type Live = {
   shell: Shell;
-  // The canvases the shell was built with, as its composition named them.
-  canvases: readonly { id: string }[];
   connections: Set<ShellConnection>;
   // last frame per canvas — only changes are sent
   sent: Map<string, string>;
@@ -34,6 +32,12 @@ export type Live = {
   // a document rendered before them would be missing the screen's cards.
   seeded: Promise<void>;
 };
+
+// THE CANVASES A SHELL HAS, asked of the shell: the ones it was built with,
+// in the order it was given them, and whatever it gained or lost since. Every
+// part of the host that goes over a shell's canvases goes over these. The
+// manifest's list says what a shell starts with, and is read once, to build it.
+export const canvasesOf = (live: Live): string[] => Object.keys(live.shell.getState().canvases);
 
 // The indirection `reset` needs. A session, a socket and the durable map all
 // address a principal's shell through ONE mutable cell, so replacing the

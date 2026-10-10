@@ -2,6 +2,7 @@ import { canvasTreeOf } from '@niscorp/nova';
 import type { RenderNode } from '@niscorp/nova';
 import { encodeDelta, frameHash } from '../protocol';
 import type { ServerMessage } from '../protocol';
+import { canvasesOf } from './live';
 import type { Live } from './live';
 import type { ShellConnection } from './types';
 
@@ -16,9 +17,6 @@ import type { ShellConnection } from './types';
 // all of them, and a delta is encoded once for the whole set. A connection
 // holds none of this: it is a place to send to.
 // ═══════════════════════════════════════════════════════════════
-
-// A canvas a shell has, as far as the stream needs one: its id.
-type Canvases = readonly { id: string }[];
 
 // No visible content = empty tree over the wire, so a terminal collapses chrome
 // on `length` alone. The rule is nova's (`canvasTreeOf`): a canvas is handed to
@@ -88,16 +86,24 @@ const shorterAsDelta = (previous: string, next: string, canvasId: string): strin
 
 // One pass over a shell: re-render, and send what changed to every attached
 // connection.
-const pass = (live: Live, canvases: Canvases, delta: boolean): void => {
+const pass = (live: Live, delta: boolean): void => {
   if (live.ended) return;
-  for (const canvas of canvases) {
-    const next = frameOf(live, canvas.id);
-    const previous = live.sent.get(canvas.id);
+  const canvases = canvasesOf(live);
+  // A canvas the shell no longer has. Every terminal holds a tree for it, so
+  // it is sent empty, once, and what was last sent for it is forgotten.
+  for (const gone of [...live.sent.keys()].filter((canvasId) => !canvases.includes(canvasId))) {
+    live.sent.delete(gone);
+    const empty = JSON.stringify({ type: 'render', canvas: gone, tree: [] } satisfies ServerMessage);
+    for (const connection of live.connections) connection.send(empty);
+  }
+  for (const canvasId of canvases) {
+    const next = frameOf(live, canvasId);
+    const previous = live.sent.get(canvasId);
     if (next === null || previous === next) continue;
-    live.sent.set(canvas.id, next);
+    live.sent.set(canvasId, next);
     // Encoded ONCE for the whole set: every connection holds `sent`, so
     // they share a baseline and therefore a delta.
-    const short = delta && previous !== undefined && live.deltaReady.size > 0 ? shorterAsDelta(previous, next, canvas.id) : null;
+    const short = delta && previous !== undefined && live.deltaReady.size > 0 ? shorterAsDelta(previous, next, canvasId) : null;
     for (const connection of live.connections) {
       connection.send(short !== null && live.deltaReady.has(connection) ? short : next);
     }
@@ -125,14 +131,14 @@ const pass = (live: Live, canvases: Canvases, delta: boolean): void => {
 // tick later: some transitions (instance status settling after its
 // loads) land AFTER the last notification, and the trailing pass
 // catches the settled tree.
-export const follow = (live: Live, canvases: Canvases, delta: boolean): void => {
+export const follow = (live: Live, delta: boolean): void => {
   const flush = (): void => {
     if (live.flushing) return;
     live.flushing = true;
     queueMicrotask(() => {
       live.flushing = false;
-      pass(live, canvases, delta);
-      setTimeout(() => pass(live, canvases, delta), 0);
+      pass(live, delta);
+      setTimeout(() => pass(live, delta), 0);
     });
   };
   live.shell.onStateChange(flush);
@@ -148,7 +154,7 @@ export const follow = (live: Live, canvases: Canvases, delta: boolean): void => 
 //
 // `wantsDelta`: this connection may be sent deltas (it asked, and the host
 // sends them).
-export const attach = (live: Live, connection: ShellConnection, canvases: Canvases, wantsDelta: boolean): void => {
+export const attach = (live: Live, connection: ShellConnection, wantsDelta: boolean): void => {
   live.connections.add(connection);
   if (wantsDelta) live.deltaReady.add(connection);
   live.idleSince = null;
@@ -165,18 +171,18 @@ export const attach = (live: Live, connection: ShellConnection, canvases: Canvas
   const frameMessage = JSON.stringify({ type: 'frame', tree: frameTree } satisfies ServerMessage);
   connection.send(frameMessage);
   live.sentFrame = frameMessage;
-  for (const canvas of canvases) {
-    const next = frameOf(live, canvas.id);
+  for (const canvasId of canvasesOf(live)) {
+    const next = frameOf(live, canvasId);
     if (next === null) continue;
     // Attaching RENDERS, and rendering can pick up a change the flush pass
     // has not sent yet — `sent` would then move to a frame only the newcomer
     // holds, and the next pass would skip it as unchanged, leaving everyone
     // else stale. So the newcomer's frame is the whole room's frame. Deltas
     // depend on this being true: one baseline, or the encode is a lie.
-    if (live.sent.get(canvas.id) !== next) {
+    if (live.sent.get(canvasId) !== next) {
       for (const other of live.connections) if (other !== connection) other.send(next);
     }
-    live.sent.set(canvas.id, next);
+    live.sent.set(canvasId, next);
     connection.send(next);
   }
 };
@@ -184,7 +190,7 @@ export const attach = (live: Live, connection: ShellConnection, canvases: Canvas
 // Whole frames for this one connection — the state both ends can always
 // agree on. It stays delta-capable: it is level with `sent` again the
 // moment this returns, and the checksum will catch it if it is not.
-export const resync = (live: Live, connection: ShellConnection, canvases: Canvases): void => {
+export const resync = (live: Live, connection: ShellConnection): void => {
   if (!live.connections.has(connection)) return;
   let frameTree: RenderNode[] = [];
   try {
@@ -193,8 +199,8 @@ export const resync = (live: Live, connection: ShellConnection, canvases: Canvas
     console.error('[moss/shells] the shell frame failed to render on resync — serving an empty arrangement:', error);
   }
   connection.send(JSON.stringify({ type: 'frame', tree: frameTree } satisfies ServerMessage));
-  for (const canvas of canvases) {
-    const current = live.sent.get(canvas.id) ?? frameOf(live, canvas.id);
+  for (const canvasId of canvasesOf(live)) {
+    const current = live.sent.get(canvasId) ?? frameOf(live, canvasId);
     if (current === null || current === undefined) continue;
     connection.send(current);
   }
