@@ -10,8 +10,8 @@ import { PAGE } from './entries';
 import { reachOf } from './reach';
 
 // ═══════════════════════════════════════════════════════════════
-// THE REGISTRY — everything asked of `integrations` and `integration_actions`,
-// each behind a function named for what it does.
+// THE REGISTRY — everything asked of `integrations`, `integration_actions` and
+// `integration_frame_grants`, each behind a function named for what it does.
 //
 // None of it is SQL. Each function replays one of the feature's own entries
 // (./entries.ts) through vex, by the `replay` the server hands the feature
@@ -251,6 +251,33 @@ export const approveIntegration = async (replay: Replay, id: string): Promise<re
 // the row the key that was hashed on it.
 export const removeIntegration = async (replay: Replay, id: string): Promise<void> => {
   await replay('integrations/remove', { id });
+};
+
+// ── frame grants ─────────────────────────────────────────────
+
+// What a frame grant opens: one page of one integration, for one principal.
+export type FrameGrant = { integration: string; principal: string; path: string };
+
+const FrameGrantRowSchema = z.object({ principal: z.string(), path: z.string() });
+
+// Keep a grant, by its hash, until `expires`. The grants whose time was over
+// at `now` go in the same transaction.
+export const keepFrameGrant = async (replay: Replay, grantHash: string, grant: FrameGrant, now: Date, expires: Date): Promise<void> => {
+  await replay('integrations/keep-frame-grant', {
+    grant_hash: grantHash,
+    integration_id: grant.integration,
+    principal: grant.principal,
+    path: grant.path,
+    expires_at: expires.toISOString(),
+    now: now.toISOString(),
+  });
+};
+
+// The grant a hash stands for, if it is this integration's and its time is not
+// over at `now`. One answer for unknown, expired and another integration's.
+export const frameGrantHeld = async (replay: Replay, grantHash: string, integration: string, now: Date): Promise<FrameGrant | undefined> => {
+  const row = FrameGrantRowSchema.optional().parse(rowsOf(await replay('integrations/frame-grant', { grant_hash: grantHash, integration_id: integration, now: now.toISOString() }))[0]);
+  return row === undefined ? undefined : { integration, principal: row.principal, path: row.path };
 };
 
 // ── the bindings, read back for the host's derivations ───────

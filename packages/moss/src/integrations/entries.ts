@@ -1,9 +1,9 @@
 import type { Filter, Mutation, SeedEntry, SeedMutation } from '@niscorp/vex';
 
 // ═══════════════════════════════════════════════════════════════
-// THE REGISTRY'S ENTRIES — every read and write on `integrations` and
-// `integration_actions`, authored as vex entries, the way an app authors its
-// own.
+// THE REGISTRY'S ENTRIES — every read and write on `integrations`,
+// `integration_actions` and `integration_frame_grants`, authored as vex
+// entries, the way an app authors its own.
 //
 // They are the feature's own (../feature, the `ownEntries` seam): seeded where
 // no route serves them and replayed in process by ./registry.ts, under a
@@ -15,8 +15,9 @@ import type { Filter, Mutation, SeedEntry, SeedMutation } from '@niscorp/vex';
 // `last_import_at` is a value in the context, not `now()`.
 // ═══════════════════════════════════════════════════════════════
 
-// The tables these entries touch: all the policy they run under admits.
-export const REGISTRY_TABLES: readonly string[] = ['integrations', 'integration_actions'];
+// The tables these entries touch: all the policy they run under admits. The
+// first two are moss's own (../data); the third is the feature's (./tables.ts).
+export const REGISTRY_TABLES: readonly string[] = ['integrations', 'integration_actions', 'integration_frame_grants'];
 
 // EVERY LIST IS READ A PAGE AT A TIME, in the order of its key, each page
 // starting after the last row of the one before (vex has no offset: a page is
@@ -264,6 +265,41 @@ const actionsOf: SeedEntry = {
   },
 };
 
+// ── frame grants ─────────────────────────────────────────────
+//
+// A grant is kept by its hash, with what it opens and when it expires
+// (./frame.ts). `now` and `expires_at` are instants the caller hands over.
+
+// The grants whose time is over go when the next one is minted, in the same
+// transaction: nothing else sweeps them.
+const keepFrameGrant: SeedMutation = {
+  fingerprint: 'integrations/keep-frame-grant',
+  intent: 'Keep the hash of a frame grant with what it opens and when it expires, and let go of every grant whose time is over',
+  mutation: [
+    { op: 'delete', table: 'integration_frame_grants', where: { lte: ['integration_frame_grants.expires_at', { $context: 'now' }] } },
+    { op: 'insert', table: 'integration_frame_grants', values: fromContext(['grant_hash', 'integration_id', 'principal', 'path', 'expires_at']) },
+  ],
+};
+
+// One answer for a grant that is unknown, that is another integration's, and
+// whose time is over: no row.
+const frameGrant: SeedEntry = {
+  fingerprint: 'integrations/frame-grant',
+  intent: 'What a frame grant opens and for whom, if it is this integration’s and its time is not over',
+  dsl: {
+    from: ['integration_frame_grants'],
+    fields: ['integration_frame_grants.principal', 'integration_frame_grants.path'],
+    filter: {
+      and: [
+        { eq: ['integration_frame_grants.grant_hash', { $context: 'grant_hash' }] },
+        { eq: ['integration_frame_grants.integration_id', { $context: 'integration_id' }] },
+        { gt: ['integration_frame_grants.expires_at', { $context: 'now' }] },
+      ],
+    },
+    limit: 1,
+  },
+};
+
 export const REGISTRY_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [
   find,
   standing,
@@ -280,4 +316,6 @@ export const REGISTRY_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [
   placements,
   storedActions,
   actionsOf,
+  keepFrameGrant,
+  frameGrant,
 ];

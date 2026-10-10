@@ -1,11 +1,12 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { FeatureEnv, FeatureSeams } from '../feature';
+import type { FeatureEnv, FeatureSeams, Replay } from '../feature';
 import { relayed } from './forward';
 import type { Forwarder } from './forward';
 import { FRAME_GRANT_URL, frameAdmits } from './reach';
-import type { FoundIntegration } from './registry';
+import { findIntegration, frameGrantHeld, keepFrameGrant } from './registry';
+import type { FrameGrant } from './registry';
 
 // ═══════════════════════════════════════════════════════════════
 // THE FRAME SEAM
@@ -25,14 +26,20 @@ import type { FoundIntegration } from './registry';
 // cannot have. The screen therefore asks for a GRANT over its own
 // authenticated wire, and the iframe spends it.
 //
-// THE GRANT IS OPAQUE AND LOCAL — deliberately NOT a signed assertion. It
-// travels in a URL, where things linger: history, logs, a Referer. Anything
-// this deployment's key signs is something an integration accepts as identity, so a
+// THE GRANT IS OPAQUE — deliberately NOT a signed assertion. It travels in a
+// URL, where things linger: history, logs, a Referer. Anything this
+// deployment's key signs is something an integration accepts as identity, so a
 // signed grant leaking from a URL bar would be an identity token leaking. A
-// random string in a Map cannot be replayed as anything; it is redeemed here,
-// and what crosses to the integration is a fresh assertion exactly like every other
-// call. Held in memory for the same reason the signing keypair is: it is
-// short-lived, and a restart costs one reload.
+// random string cannot be replayed as anything; it is redeemed here, and what
+// crosses to the integration is a fresh assertion exactly like every other
+// call.
+//
+// IT IS KEPT IN A ROW, BY ITS HASH (./tables.ts, `integration_frame_grants`),
+// with what it opens and when it expires. It was a Map in the process that
+// minted it, so behind one address with two processes a frame opened by one
+// was a 404 on the other, and a restart closed every frame that was open. The
+// row holds the hash and never the grant, as the integration key's does: a
+// copy of the table opens nothing.
 //
 // Reusable within its life rather than strictly once — a reload must not
 // break the screen somebody is halfway through.
@@ -45,7 +52,7 @@ import type { FoundIntegration } from './registry';
 // takes the half-filled form with it.
 //
 // It stays cheap to hold: opaque, single-principal, single-path, redeemable
-// only at this origin, and gone on restart.
+// only at this origin, and gone when the next grant is minted after its time.
 const GRANT_TTL_MS = 30 * 60_000;
 
 // BOUNDED TO ONE SEGMENT BESIDE THE DECLARED PAGE. `embed/onboarding` may call
@@ -58,45 +65,35 @@ const CALLBACK = /^[a-z0-9][a-z0-9-]*$/;
 // as the bundle declared it. Anything else reads as no path.
 const FrameBodySchema = z.looseObject({ path: z.string().optional().catch(undefined) }).catch({});
 
-type Grant = { integration: string; principal: string; path: string; expires: number };
-
 export type FrameDeps = {
-  // An integration by its id (./registry.ts).
-  find: (id: string) => Promise<FoundIntegration | undefined>;
+  // What the registry's entries are replayed by (./registry.ts): an
+  // integration is found by it, and a grant kept and read.
+  replay: Replay;
   who: FeatureSeams['who'];
   holds: FeatureSeams['holds'];
   forward: Forwarder;
 };
 
-// The grants this process has minted, and the one a request presents: of this
-// integration, and not yet expired. One answer for expired, unknown, and
-// minted-for-another-integration: a grant is a URL somebody may still have, and
-// what it opens is nothing.
-const createGrants = (): { mint: (grant: Omit<Grant, 'expires'>) => string; held: (token: string, integration: string) => Grant | undefined } => {
-  const grants = new Map<string, Grant>();
-  const sweep = (now: number): void => {
-    for (const [token, grant] of grants) if (now >= grant.expires) grants.delete(token);
-  };
-  return {
-    mint: (grant) => {
-      const now = Date.now();
-      sweep(now);
-      const token = randomBytes(24).toString('hex');
-      grants.set(token, { ...grant, expires: now + GRANT_TTL_MS });
-      return token;
-    },
-    held: (token, integration) => {
-      const now = Date.now();
-      sweep(now);
-      const grant = grants.get(token);
-      return grant === undefined || grant.integration !== integration || now >= grant.expires ? undefined : grant;
-    },
-  };
-};
+// What a row keeps of a grant.
+const hashOf = (grant: string): string => createHash('sha256').update(grant).digest('hex');
+
+// The grants of this deployment: minted here, kept in the registry, and the
+// one a request presents read back from it — of this integration, and not yet
+// expired. One answer for expired, unknown, and minted-for-another-integration:
+// a grant is a URL somebody may still have, and what it opens is nothing.
+const createGrants = (replay: Replay): { mint: (grant: FrameGrant) => Promise<string>; held: (token: string, integration: string) => Promise<FrameGrant | undefined> } => ({
+  mint: async (grant) => {
+    const now = Date.now();
+    const token = randomBytes(24).toString('hex');
+    await keepFrameGrant(replay, hashOf(token), grant, new Date(now), new Date(now + GRANT_TTL_MS));
+    return token;
+  },
+  held: (token, integration) => frameGrantHeld(replay, hashOf(token), integration, new Date()),
+});
 
 export const frameRoutes = (deps: FrameDeps): Hono<FeatureEnv> => {
   const routes = new Hono<FeatureEnv>();
-  const grants = createGrants();
+  const grants = createGrants(deps.replay);
 
   routes.post(FRAME_GRANT_URL, async (c) => {
     const principal = c.get('principal');
@@ -104,7 +101,7 @@ export const frameRoutes = (deps: FrameDeps): Hono<FeatureEnv> => {
     const sent: unknown = await c.req.json().catch(() => ({}));
     const path = FrameBodySchema.parse(sent).path ?? '';
     const id = path.split('/')[2] ?? '';
-    const found = await deps.find(id);
+    const found = await findIntegration(deps.replay, id);
     if (found === undefined || found.status !== 'approved') return c.json({ message: 'No such integration.' }, 404);
     const caller = await deps.who(principal);
     if (caller.installed !== undefined && !caller.installed.includes(id)) return c.json({ message: 'Not installed here.' }, 404);
@@ -122,7 +119,7 @@ export const frameRoutes = (deps: FrameDeps): Hono<FeatureEnv> => {
     const held = new Set(deps.holds(caller.roles, caller.installed));
     if (!frameAdmits(found.frames, path, held)) return c.json({ message: 'No such frame.' }, 404);
 
-    const token = grants.mint({ integration: id, principal, path });
+    const token = await grants.mint({ integration: id, principal, path });
     return c.json({ src: `/integrations/${id}/frame/${token}`, expiresIn: GRANT_TTL_MS });
   });
 
@@ -130,7 +127,7 @@ export const frameRoutes = (deps: FrameDeps): Hono<FeatureEnv> => {
   // proxy so `/integrations/:id/*` does not match first and demand a principal.
   routes.get('/integrations/:id/frame/:token', async (c) => {
     const id = c.req.param('id');
-    const grant = grants.held(c.req.param('token'), id);
+    const grant = await grants.held(c.req.param('token'), id);
     if (grant === undefined) return c.json({ message: 'Not found.' }, 404);
     // Re-checked at REDEEM, not just at mint: an uninstall between the two is
     // exactly the moment a stale tab must stop working.
@@ -159,9 +156,9 @@ export const frameRoutes = (deps: FrameDeps): Hono<FeatureEnv> => {
   routes.post('/integrations/:id/frame/:token/:call', async (c) => {
     const id = c.req.param('id');
     const call = c.req.param('call');
-    const grant = grants.held(c.req.param('token'), id);
-    if (grant === undefined) return c.json({ message: 'Not found.' }, 404);
     if (!CALLBACK.test(call)) return c.json({ message: 'Not found.' }, 404);
+    const grant = await grants.held(c.req.param('token'), id);
+    if (grant === undefined) return c.json({ message: 'Not found.' }, 404);
 
     // Beside the page, never above it: the declared frame's own directory.
     const rest = grant.path.split('/').slice(3);

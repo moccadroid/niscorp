@@ -5,6 +5,7 @@ import { checksumOf, type Sequence } from '@niscorp/strata';
 import { readLedger } from '@niscorp/strata/postgres';
 import { MOSS_SEQUENCE } from '../src/data';
 import { SESSIONS_SEQUENCE } from '../src/identity';
+import { INTEGRATIONS_SEQUENCE } from '../src/integrations/tables';
 import { TIDE_SEQUENCE } from '../src/tide';
 import { createServer } from '../src/server';
 
@@ -23,6 +24,8 @@ const PINNED: ReadonlyArray<[Sequence, number, string]> = [
   [MOSS_SEQUENCE, 2, '92bd612e35a830e2f58de2327451a8e3346e7bc102ab0b49777c349792894b1a'],
   [SESSIONS_SEQUENCE, 1, '83a62e0217940bfe62136052c18f730947355d20e481d9aceb76463251b33700'],
   [TIDE_SEQUENCE, 1, '41f565e0faf179237fb6b92ca50f6266677871a4965e61bc3494a1d59d9c541b'],
+  // The integrations feature's own sequence: frame grants.
+  [INTEGRATIONS_SEQUENCE, 1, 'd2f51c7b98fb171f5c961f0a51157dbe48c36ee2e9a1d719cde07739bf6062c6'],
 ];
 
 describe('baselines — applied migrations are history', () => {

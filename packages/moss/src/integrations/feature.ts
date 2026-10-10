@@ -14,6 +14,7 @@ import { operatorRoutes } from './operator';
 import type { StorePress } from './press';
 import { proxyRoutes } from './proxy';
 import { findIntegration, integrationByKey, listAttachments, listPlacements, loadIntegrationActions } from './registry';
+import { INTEGRATIONS_SEQUENCE } from './tables';
 
 // ═══════════════════════════════════════════════════════════════
 // THE FEATURE — integrations as one object an app creates, configures and
@@ -190,7 +191,7 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
   );
   // The frame doors, then the webhook, then the proxy: the proxy's pattern
   // matches every path the other three serve.
-  seams.routes(frameRoutes({ find, who: seams.who, holds: seams.holds, forward }));
+  seams.routes(frameRoutes({ replay, who: seams.who, holds: seams.holds, forward }));
   seams.routes(proxyRoutes({ holds: seams.holds, forward }));
 
   // WHATEVER WAS APPROVED BEFORE THIS PROCESS STARTED is part of the
@@ -217,6 +218,8 @@ export const createIntegrations = (config: IntegrationsConfig = {}): Integration
   };
   return {
     name: 'integrations',
+    // The table it keeps beside moss's own: frame grants (./tables.ts).
+    tables: [INTEGRATIONS_SEQUENCE],
     start: async (seams) => {
       started = await start(config, seams);
     },

@@ -992,6 +992,31 @@ describe('the registry as vex entries — each statement, against a database', (
     expect(await held()).toMatchObject({ row: [{ title: 'Second' }], actions: [{ action_id: 'ext.desk.atomic.three' }] });
   });
 
+  // Not one of the sixteen: frame grants were a Map in the process that minted
+  // them. They are rows of a table of the feature's own, read and written
+  // through vex like the rest.
+  it('a frame grant: kept by its hash until its time is over, read back for its own integration, and let go when the next is kept', async () => {
+    await replay('integrations/land', { ...landing('framed'), actions: [] });
+    const page = '/integrations/framed/embed/pay';
+    const kept = (hash: string, now: string, expires: string): Record<string, unknown> => ({ grant_hash: hash, integration_id: 'framed', principal: 'i_mara', path: page, now, expires_at: expires });
+    const asked = (over: Record<string, unknown> = {}): Promise<unknown> => replay('integrations/frame-grant', { grant_hash: 'hash-one', integration_id: 'framed', now: '2026-10-10T08:59:59.000Z', ...over });
+
+    await replay('integrations/keep-frame-grant', kept('hash-one', '2026-10-10T08:30:00.000Z', '2026-10-10T09:00:00.000Z'));
+    expect(await asked()).toEqual([{ principal: 'i_mara', path: page }]);
+    // One answer for a hash nobody kept, another integration's address, and a
+    // grant whose time is over: no row.
+    expect(await asked({ grant_hash: 'hash-nobody-kept' })).toEqual([]);
+    expect(await asked({ integration_id: 'issued' })).toEqual([]);
+    expect(await asked({ now: '2026-10-10T09:00:00.000Z' })).toEqual([]);
+
+    // Kept after the first one's time: the first is let go in the same write.
+    await replay('integrations/keep-frame-grant', kept('hash-two', '2026-10-10T09:30:00.000Z', '2026-10-10T10:00:00.000Z'));
+    expect(await rows('SELECT grant_hash FROM integration_frame_grants ORDER BY grant_hash')).toEqual([{ grant_hash: 'hash-two' }]);
+    // A grant is its integration's, and goes when the integration does.
+    await replay('integrations/remove', { id: 'framed' });
+    expect(await rows('SELECT grant_hash FROM integration_frame_grants')).toEqual([]);
+  });
+
   describe('the lists', () => {
     const start = { after_integration: '', after_action: '' };
 

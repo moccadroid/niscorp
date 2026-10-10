@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
+import { z } from 'zod';
 import type { ActionDefinition, FetchFn } from '@niscorp/nova';
 import { createGrammarUpgrader } from '../src/data/grammar';
 import type { CredentialAnswer, FeatureEnv, FeatureSeams, Replay, Whoever } from '../src/feature';
@@ -113,9 +114,11 @@ describe('createIntegrations — before a server has started it', () => {
     expect(integrationOfAction('people.detail')).toBeUndefined();
   });
 
-  it('is what a manifest holds in `features`: a name, and a function to start it with', () => {
+  it('is what a manifest holds in `features`: a name, the tables it keeps, and a function to start it with', () => {
     const integrations = createIntegrations();
     expect(integrations.name).toBe('integrations');
+    // One sequence of its own, for the table frame grants are kept in.
+    expect((integrations.tables ?? []).map((sequence) => sequence.id)).toEqual(['nisc.moss.integrations']);
     expect(typeof integrations.start).toBe('function');
   });
 });
@@ -128,7 +131,7 @@ describe('createIntegrations — started with the seams', () => {
     // Its reads and writes are entries it hands over once, with the tables
     // they touch: every one is named under `integrations/`, and no two alike.
     expect(said.owned).toHaveLength(1);
-    expect(said.owned[0]?.tables).toEqual(['integrations', 'integration_actions']);
+    expect(said.owned[0]?.tables).toEqual(['integrations', 'integration_actions', 'integration_frame_grants']);
     const fingerprints = (said.owned[0]?.entries ?? []).map((entry) => entry.fingerprint);
     expect(fingerprints.every((fingerprint) => fingerprint.startsWith('integrations/'))).toBe(true);
     expect(new Set(fingerprints).size).toBe(fingerprints.length);
@@ -444,5 +447,91 @@ describe('a service that never answers', () => {
       expect(answered.status).toBe(502);
       expect(signals.map(endedBy)).toEqual([expect.stringMatching(/^TimeoutError/)]);
     });
+  });
+});
+
+// A FRAME GRANT IS A ROW. Two processes of one deployment are two features
+// started over one registry: the map here stands in for the table both read
+// and write, keyed as the table is, by the hash of the grant.
+describe('a frame grant, with two processes behind one address', () => {
+  const PAGE_PATH = '/integrations/belts/embed/pay';
+  const found = { url: 'https://belts.example', status: 'approved', reach: {}, frames: { [PAGE_PATH]: 'ext.desk.belts.pay' } };
+  const deployment = () => {
+    const grants = new Map<string, Row>();
+    const replay: Replay = async (fingerprint, context) => {
+      if (fingerprint === 'integrations/find') return context['id'] === 'belts' ? [found] : [];
+      if (fingerprint === 'integrations/keep-frame-grant') {
+        for (const [hash, row] of grants) if (String(row['expires_at']) <= String(context['now'])) grants.delete(hash);
+        grants.set(String(context['grant_hash']), { integration_id: context['integration_id'], principal: context['principal'], path: context['path'], expires_at: context['expires_at'] });
+        return [];
+      }
+      if (fingerprint === 'integrations/frame-grant') {
+        const row = grants.get(String(context['grant_hash']));
+        return row !== undefined && row['integration_id'] === context['integration_id'] && String(row['expires_at']) > String(context['now']) ? [row] : [];
+      }
+      return [];
+    };
+    const process = async () => {
+      const started = await world({ replay, who: () => ({ roles: ['desk'], installed: ['belts'] }) });
+      await createIntegrations().start({ ...started.seams, holds: () => ['ext.desk.belts.pay'] });
+      return started;
+    };
+    return { grants, process };
+  };
+  // The page the integration serves, whoever asks for it.
+  const serving = async <Answer>(run: () => Promise<Answer>): Promise<Answer> => {
+    const real = globalThis.fetch;
+    globalThis.fetch = async () => new Response('<html>pay</html>', { status: 200, headers: { 'content-type': 'text/html' } });
+    try {
+      return await run();
+    } finally {
+      globalThis.fetch = real;
+    }
+  };
+  const grantFrom = async (one: Awaited<ReturnType<typeof world>>): Promise<string> => {
+    one.caller.principal = 'i_mara';
+    const minted = await one.server.request('/api/integrations/frame', { method: 'POST', body: JSON.stringify({ path: PAGE_PATH }), headers: { 'content-type': 'application/json' } });
+    expect(minted.status).toBe(200);
+    return z.object({ src: z.string() }).parse(await minted.json()).src;
+  };
+
+  it('a grant one process minted is redeemed by the other', async () => {
+    await serving(async () => {
+      const { grants, process } = deployment();
+      const [one, other] = [await process(), await process()];
+      const src = await grantFrom(one);
+
+      const page = await other.server.request(src);
+      expect(page.status).toBe(200);
+      expect(await page.text()).toBe('<html>pay</html>');
+      // ...and the page's call back, on the same grant.
+      expect((await other.server.request(`${src}/session`, { method: 'POST', body: '{}' })).status).toBe(200);
+
+      // What is kept is the hash: the grant itself is in no row, so a copy of
+      // the table opens nothing.
+      const token = src.split('/').at(-1) ?? '';
+      expect(token).toMatch(/^[0-9a-f]{48}$/);
+      expect([...grants.keys()]).toHaveLength(1);
+      expect(JSON.stringify([...grants])).not.toContain(token);
+    });
+  });
+
+  it('a grant is for one integration, and for half an hour', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      await serving(async () => {
+        const { process } = deployment();
+        const [one, other] = [await process(), await process()];
+        const src = await grantFrom(one);
+        // Presented under another integration's address, it opens nothing.
+        expect((await other.server.request(src.replace('/belts/', '/pay/'))).status).toBe(404);
+        vi.setSystemTime(Date.now() + 29 * 60_000);
+        expect((await other.server.request(src)).status).toBe(200);
+        vi.setSystemTime(Date.now() + 2 * 60_000);
+        expect((await other.server.request(src)).status).toBe(404);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
