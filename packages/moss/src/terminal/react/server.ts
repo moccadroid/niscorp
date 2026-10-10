@@ -1,6 +1,8 @@
 import { renderToString } from 'react-dom/server';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
-import type { ComponentRegistry, RenderNode } from '@niscorp/nova';
+import type { ComponentRegistry } from '@niscorp/nova';
+import { drawnApi } from '../drawn';
+import type { DrawnSnapshot } from '../drawn';
 import { terminalFrame } from './frame';
 import { registerWireSlots } from './slots';
 import type { TerminalSlotWrapper } from './slots';
@@ -16,23 +18,14 @@ import type { TerminalSlotWrapper } from './slots';
 
 export type RenderSnapshotConfig = {
   // the frame and every canvas's tree — moss's `shells.snapshot`
-  snapshot: { frame: RenderNode[]; trees: Record<string, RenderNode[]> };
+  snapshot: DrawnSnapshot;
   // the app's kit, exactly as the browser's `reactTarget` is given it
   registry: ComponentRegistry<NovaComponent>;
   slotWrapper?: TerminalSlotWrapper;
 };
 
-const nothing = (): void => undefined;
-
 export const renderSnapshot = (config: RenderSnapshotConfig): string => {
   const { snapshot, registry, slotWrapper } = config;
   registerWireSlots(registry, { slotWrapper });
-  const api = {
-    frame: () => snapshot.frame,
-    canvasTree: (id: string) => snapshot.trees[id] ?? [],
-    // a string has nobody to press it
-    dispatch: nothing,
-    publish: nothing,
-  };
-  return renderToString(terminalFrame(api, registry));
+  return renderToString(terminalFrame(drawnApi(snapshot), registry));
 };

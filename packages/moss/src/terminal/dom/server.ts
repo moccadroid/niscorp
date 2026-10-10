@@ -1,7 +1,9 @@
 import { renderToString } from '@niscorp/nova/adapters/dom/server';
 import type { DomComponent } from '@niscorp/nova/adapters/dom';
 import { defaultRegistry, fallback } from '@niscorp/nova/adapters/dom/components';
-import type { ComponentRegistry, RenderNode } from '@niscorp/nova';
+import type { ComponentRegistry } from '@niscorp/nova';
+import { drawnApi } from '../drawn';
+import type { DrawnSnapshot } from '../drawn';
 
 // ═══════════════════════════════════════════════════════════
 // @niscorp/moss/terminal/dom/server — the plain-DOM target, drawing a served
@@ -17,18 +19,12 @@ import type { ComponentRegistry, RenderNode } from '@niscorp/nova';
 // ═══════════════════════════════════════════════════════════
 
 export type RenderSnapshotConfig = {
-  snapshot: { frame: RenderNode[]; trees: Record<string, RenderNode[]> };
+  snapshot: DrawnSnapshot;
   // the app's DOM kit; omitted, nova's reference kit
   registry?: ComponentRegistry<DomComponent>;
   // a DOM to draw in
   window: object;
 };
 
-const nothing = (): void => undefined;
-
 export const renderSnapshot = (config: RenderSnapshotConfig): string =>
-  renderToString(
-    config.registry ?? defaultRegistry(),
-    { frame: () => config.snapshot.frame, canvasTree: (id) => config.snapshot.trees[id] ?? [], dispatch: nothing, publish: nothing },
-    { window: config.window, fallback },
-  );
+  renderToString(config.registry ?? defaultRegistry(), drawnApi(config.snapshot), { window: config.window, fallback });

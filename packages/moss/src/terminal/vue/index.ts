@@ -3,6 +3,7 @@ import { NovaRenderProvider, RenderTree } from '@niscorp/nova/adapters/vue';
 import type { NovaComponent } from '@niscorp/nova/adapters/vue';
 import { ACTION_SLOT_NAME, CANVAS_SLOT_NAME, scopeDispatch } from '@niscorp/nova';
 import type { ComponentRegistry, NovaEvent } from '@niscorp/nova';
+import { holdsDrawnScreen } from '../drawn';
 import type { Target, TerminalApi } from '../index';
 
 // ═══════════════════════════════════════════════════════════
@@ -147,11 +148,7 @@ export const vueTarget = (config: VueTargetConfig): Target => {
 
     const Frame = terminalFrame(live, registry);
 
-    // A root that already holds elements was drawn on the server from the
-    // snapshot the wire starts from (./server): adopt them. Only when there is a
-    // frame to adopt them WITH — a wire that did not start from the page's
-    // snapshot has nothing that matches, and the elements are replaced.
-    const adopts = root.firstElementChild !== null && api.frame().length > 0;
+    const adopts = holdsDrawnScreen(root, api);
     const app = adopts ? createSSRApp(Frame) : createApp(Frame);
     app.mount(root);
     return {

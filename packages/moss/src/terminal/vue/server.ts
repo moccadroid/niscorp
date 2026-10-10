@@ -1,7 +1,9 @@
 import { createSSRApp } from 'vue';
 import { renderToString } from 'vue/server-renderer';
 import type { NovaComponent } from '@niscorp/nova/adapters/vue';
-import type { ComponentRegistry, RenderNode } from '@niscorp/nova';
+import type { ComponentRegistry } from '@niscorp/nova';
+import { drawnApi } from '../drawn';
+import type { DrawnSnapshot } from '../drawn';
 import { registerWireSlots, terminalFrame } from './index';
 import type { TerminalSlotWrapper } from './index';
 
@@ -13,22 +15,13 @@ import type { TerminalSlotWrapper } from './index';
 // ═══════════════════════════════════════════════════════════
 
 export type RenderSnapshotConfig = {
-  snapshot: { frame: RenderNode[]; trees: Record<string, RenderNode[]> };
+  snapshot: DrawnSnapshot;
   registry: ComponentRegistry<NovaComponent>;
   slotWrapper?: TerminalSlotWrapper;
 };
 
-const nothing = (): void => undefined;
-
 export const renderSnapshot = (config: RenderSnapshotConfig): Promise<string> => {
   const { snapshot, registry, slotWrapper } = config;
   registerWireSlots(registry, slotWrapper);
-  const api = {
-    frame: () => snapshot.frame,
-    canvasTree: (id: string) => snapshot.trees[id] ?? [],
-    // a string has nobody to press it
-    dispatch: nothing,
-    publish: nothing,
-  };
-  return renderToString(createSSRApp(terminalFrame(api, registry)));
+  return renderToString(createSSRApp(terminalFrame(drawnApi(snapshot), registry)));
 };
