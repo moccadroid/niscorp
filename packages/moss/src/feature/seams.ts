@@ -2,7 +2,7 @@ import type { Hono } from 'hono';
 import type { Charter } from '@niscorp/charter';
 import type { ActionDefinition, FetchFn } from '@niscorp/nova';
 import type { Sequence, Upgrader } from '@niscorp/strata';
-import type { SeedEntry, SeedMutation } from '@niscorp/vex';
+import type { SeedEntry, SeedMutation, WriteEvent } from '@niscorp/vex';
 import type { Telemetry } from '../runtime';
 
 // ═══════════════════════════════════════════════════════════════
@@ -17,10 +17,12 @@ import type { Telemetry } from '../runtime';
 // module's whole answer. A feature that needs something that is not here does
 // not reach for it: the seam is added to its owner first, on its own.
 //
-// TWENTY MEMBERS, AND EACH IS ONE A FEATURE USES (counted 2026-10-10 against
-// ../integrations, the one feature there is: none is unused). A member that
-// stops being used is taken out; one is not added for a feature that might
-// want it.
+// TWENTY-ONE MEMBERS. Twenty are used by ../integrations (counted 2026-10-10:
+// none is unused). The twenty-first, `onWrite`, is what the fact lane needs to
+// stop being part of the server (../server, lanes.ts) and be a feature: the
+// seam is added to its owner first, on its own, and the feature follows. A
+// member that stops being used is taken out; one is not added for a feature
+// that might want it.
 //
 // The types are written out here rather than imported from their owners,
 // because the manifest names a feature (`NiscApp.features`) and so this module
@@ -106,6 +108,15 @@ export type FeatureSeams = {
   // The fingerprints somebody may be told of: the reads and writes their own
   // policy lets them replay, sorted. Nobody signed in is asked as `null`.
   fingerprintsFor: (principal: string | null) => Promise<readonly string[]>;
+  // HEAR EVERY WRITE THE ROUTES SERVE, once it is committed: what vex reports
+  // of it (the statements that ran, the rows the database returned, the scope
+  // the request could not forge), and the place in a chain of effects the
+  // request that wrote said it was at, when it said one. That place is the
+  // caller's word and nothing more: whoever hears it decides whether to
+  // believe it. Told after the commit, and on its own: a listener that throws
+  // is logged, and neither the write nor the next listener is touched.
+  // Returns the way to stop hearing.
+  onWrite: (listener: (event: WriteEvent, chain: { cause: string; depth: number } | undefined) => void) => () => void;
 
   // ── what the deployment supplies ──
   // Where a span goes. Absent: none is built.

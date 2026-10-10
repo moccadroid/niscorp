@@ -93,6 +93,7 @@ const world = async (
     grammars: await createGrammarUpgrader({}),
     fingerprints: async () => ['deals/open'],
     fingerprintsFor: async () => ['deals/open'],
+    onWrite: () => () => undefined,
     telemetry: undefined,
     signingSeed: undefined,
     wrapWire: (wrap) => {
