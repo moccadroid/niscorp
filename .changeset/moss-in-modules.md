@@ -131,7 +131,7 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 - The entries are the feature's own. They are seeded into a cache no route serves, so `/api/vex` answers `cache_miss` for one of them whatever the charter grants whoever asks, and they run under a policy that admits the feature's tables and nothing else. A data grant on `integrations` opens no approval and no registration: those stay behind the operator key.
 - `FeatureSeams` has no `pool`. A feature of an app's own hands its reads and writes over as entries, with the tables they touch, and replays them: `const replay = await seams.ownEntries({ entries, tables })`, then `await replay(fingerprint, context)`.
 - `Feature.tables?: readonly Sequence[]` is new: the strata sequences of the tables a feature keeps. The server migrates them in the one ledgered run, after moss's own and before `runtime.tables`, and `migrateTables` (`nisc migrate`) runs them too.
-- What a caller sees: `last_import_at` is the server's clock where it was the database's. Nothing to change.
+- What a caller sees: `last_import_at` is the server's clock where it was the database's. `integrations.listAttachments(hostAction)` still answers in the order of the action ids, compared character by character where it was the database's collation: on a database whose collation is not `C`, two ids that differ in a hyphen or a dot may change places. Nothing to change.
 
 **Registering an integration is one transaction, and an approval is verified before it is written.**
 
