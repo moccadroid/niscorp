@@ -407,6 +407,16 @@ findings land in the report's `perRole[].issues`, which boot does not read. A
 role granted an action that pushes one it is not granted boots, and the press
 does nothing. Returns a Hono app extended with the `MossServer` members below.
 
+`createServer` wires, and answers no question of its own (`src/server/`). In
+order: the manifest is read and frozen; who a token is is resolved
+(`runtime.session`; unset, the boot is refused here, before a table exists);
+the tables are migrated and the data module stands; the running manifest is
+created, which is the boot check; identity; the server's own routes (the
+authentication, `/catalog`, vex); the shell hosts, the app's and each page's;
+what crosses processes and what hears a write; the features, each started with
+the seams; the operator prefix; the generation pointer is watched; the socket.
+A step that refuses is the boot's refusal.
+
 **The manifest is read first.** Before a table is created or a row is read,
 `createServer` parses the manifest with a schema, and a manifest that does not
 parse refuses the boot:
@@ -923,8 +933,8 @@ lets them replay, as vex's discovery lists them.
   `invalidate-tenant` and `nudge` — what `server.invalidateIdentity`,
   `invalidateTenant` and `nudge` publish after applying locally. Best-effort:
   each targets state that heals on its own clock. Unset, every path behaves as
-  in one process. `wireFabric(fabric, origin, apply)` is the wiring, exported
-  for hosts that are not moss's server.
+  in one process. The wiring is `src/server/fabric.ts` and
+  `src/server/signals.ts`; it is the server's own and is not exported.
 - `createGeneration(pool, { onMoved, everyMs? }): Generation` — the persistent
   pointer `server.refresh()` moves (`moss_generation`, part of
   `MOSS_SEQUENCE`). Each process polls it (`DEFAULT_GENERATION_POLL_MS`, 60s;
@@ -1034,9 +1044,12 @@ measures the end.
 
 ### The socket protocol
 
-- `createSocket(ctx): SocketAccept` — `ctx = { session, catalog, shells?, page?,
-  revalidateMs?, telemetry? }`. One `accept(url, connection)` per connection; `accept.stop()`
-  ends revalidation (the timer is unref'd, so a plain process needn't call it).
+- `server.socket` is a `SocketAccept`: one `accept(url, connection)` per
+  connection, fed by the runtime's transport; `accept.stop()` ends revalidation
+  (the timer is unref'd, so a plain process needn't call it). `createServer`
+  builds it (`src/socket/`), handed who a token is, what somebody holds, and
+  where a session comes from for the app and for each page. It is not
+  exported.
 - **Identity is asked twice.** At upgrade, and then every `revalidateMs`
   (default `DEFAULT_REVALIDATE_MS`, 60s; `0` disables) for as long as the
   connection lives. A token that stops resolving — or starts resolving to
