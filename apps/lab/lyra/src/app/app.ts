@@ -34,7 +34,7 @@ export type ServerDeps = {
   tide: () => import('@niscorp/tide').Tide;
   // The driver around it: the waking intake the bridge mints through, and
   // the verb the automations screen fires.
-  driver: () => import('@niscorp/moss').TideDriver;
+  driver: () => import('@niscorp/tide').TideDriver;
   // Re-read the automation rows into tide. Late-bound like everything else
   // here; the `automations` reaction is its only caller.
   reloadAutomations: () => Promise<number>;

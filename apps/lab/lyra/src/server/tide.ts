@@ -1,7 +1,7 @@
 import { createTide } from '@niscorp/tide';
 import type { Tide } from '@niscorp/tide';
+import { createTideStore } from '@niscorp/tide/postgres';
 import { evaluate } from '@niscorp/prism';
-import { createTideStore } from '@niscorp/moss';
 import type { MossServer } from '@niscorp/moss';
 import { mutationEffect } from '@niscorp/vex';
 import type { PgPool } from '@niscorp/vex';

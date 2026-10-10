@@ -1,9 +1,10 @@
-import { createServer, createTideDriver, mintDevToken, sessionCookies } from '@niscorp/moss';
+import { createServer, mintDevToken, sessionCookies } from '@niscorp/moss';
 import { redeemLink } from './links';
 import { unsubscribe } from './unsubscribe';
 import { readMailEvent } from './mail/send';
-import type { ExecuteAs, MossServer, NiscApp, TideDriver } from '@niscorp/moss';
-import type { Tide } from '@niscorp/tide';
+import type { ExecuteAs, MossServer, NiscApp } from '@niscorp/moss';
+import { createTideDriver } from '@niscorp/tide';
+import type { Tide, TideDriver } from '@niscorp/tide';
 import { buildLyra } from '@lyra/app/app';
 import { COMPONENT_NAMES } from '@lyra/ui/registry';
 // The lab's integration registrar is HARNESS — it seeds the lab world the way

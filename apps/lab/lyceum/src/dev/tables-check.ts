@@ -10,7 +10,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import { checksumOf } from '@niscorp/strata';
 import { migrate, readLedger } from '@niscorp/strata/postgres';
-import { TIDE_TABLES } from '@niscorp/moss';
+import { TIDE_TABLES } from '@niscorp/tide/postgres';
 import { DDL, LYCEUM_SEQUENCE, LYCEUM_SEQUENCES } from '@lyceum/db/schema';
 import { check, finish } from './harness';
 

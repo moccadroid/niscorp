@@ -5,7 +5,10 @@
     "declaration": false,
     "declarationMap": false,
     "sourceMap": false,
-    "rootDir": "."
+    "rootDir": ".",
+    "types": [
+      "node"
+    ]
   },
   "include": [
     "src",

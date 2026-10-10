@@ -6,7 +6,7 @@ import { askAsAutomation } from '../tide';
 import { evaluate } from '@niscorp/prism';
 import { RECIPES } from '@lyra/app/reflexes/recipes';
 
-type Deps = { tide: () => Tide; driver: () => import('@niscorp/moss').TideDriver; server: () => import('@niscorp/moss').MossServer };
+type Deps = { tide: () => Tide; driver: () => import('@niscorp/tide').TideDriver; server: () => import('@niscorp/moss').MossServer };
 
 const mine = (studioId: string, reflexId: string): boolean => reflexId.startsWith(`${studioId}:`);
 

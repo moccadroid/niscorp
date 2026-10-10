@@ -1,12 +1,13 @@
 import { z } from 'zod';
-import { anchorDraft, createTide, draftSchemaOf, occurrencesBetween, ReflexSchema, zonedParts } from '@niscorp/tide';
-import type { DraftChoice, Reflex, ReflexDraft, Tide } from '@niscorp/tide';
+import { anchorDraft, createTide, createTideDriver, draftSchemaOf, occurrencesBetween, ReflexSchema, zonedParts } from '@niscorp/tide';
+import type { DraftChoice, Reflex, ReflexDraft, Tide, TideDriver } from '@niscorp/tide';
+import { createTideStore } from '@niscorp/tide/postgres';
 import { createReflexAgent, effectProblem, isDraft, reflexConversation } from '@niscorp/tide/agent';
 import type { OfferedEffect, ReflexAnswer } from '@niscorp/tide/agent';
 import { evaluate } from '@niscorp/prism';
 import { createSignal } from '@niscorp/signal';
-import { createTideDriver, createTideStore, mintSession } from '@niscorp/moss';
-import type { MossServer, TideDriver } from '@niscorp/moss';
+import { mintSession } from '@niscorp/moss';
+import type { MossServer } from '@niscorp/moss';
 import { deckShow, slidesDeck, TALK_DECK } from '@lyceum/app/vex/deck.entries';
 import { timersAll } from '@lyceum/app/vex/timer.entries';
 import { vexOver, wireAs } from './vex-over';

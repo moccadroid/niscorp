@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
-import { createPglitePool } from '@niscorp/vex/pglite';
-import type { PgPool } from '@niscorp/vex';
-import { STORE_CONTRACT } from '@niscorp/tide/testing';
-import { createTideStore, TIDE_TABLES } from '../src/tide';
-import { createDataLayer } from '../src/data/engine';
+import { STORE_CONTRACT } from '../src/testing';
+import { createTideStore, TIDE_TABLES } from '../src/store/postgres';
+import type { TidePool } from '../src/store/postgres';
+import { pglitePool } from './support';
 
 // THE SAME CHECKS THE MEMORY STORE RUNS, against a real database.
 //
@@ -15,17 +14,18 @@ import { createDataLayer } from '../src/data/engine';
 // claimed it was "held to the same tests" and there were none, so every one
 // of those was invisible to CI.
 //
-// `STORE_CONTRACT` is imported from tide rather than restated here, so there
-// is one definition of the contract and not two readings of a comment.
+// `STORE_CONTRACT` is the list `store.test.ts` runs against the memory store,
+// so there is one definition of the contract and not two readings of a
+// comment.
 
 const freshStore = async () => {
   const db = new PGlite();
-  const store = createTideStore(createPglitePool(db));
+  const store = createTideStore(pglitePool(db));
   await store.ready;
   return store;
 };
 
-describe('the store contract — postgres, via vex', () => {
+describe('the store contract — postgres', () => {
   for (const check of STORE_CONTRACT)
     it(check.name, async () => {
       await check.run(await freshStore());
@@ -38,10 +38,10 @@ describe('the store contract — postgres, via vex', () => {
 // and on such a pool every transaction failed inside the driver.
 const storeOverClient = async () => {
   const db = new PGlite();
-  const pool = createPglitePool(db);
-  const clientOver = (inner: { query: PgPool['query'] }) => ({
+  const pool = pglitePool(db);
+  const clientOver = (inner: { query: TidePool['query'] }) => ({
     inner,
-    query(this: { inner: { query: PgPool['query'] } }, text: string, values?: unknown[]) {
+    query(this: { inner: { query: TidePool['query'] } }, text: string, values?: unknown[]) {
       return this.inner.query(text, values);
     },
   });
@@ -60,10 +60,12 @@ describe('the store contract — a transaction that hands its client through', (
     });
 });
 
+// That they are ordinary tables to a host (introspected, grantable, scopeable)
+// is the host's to prove: moss does, in its test/tide-tables.test.ts.
 describe('the engine tables are not application data', () => {
   it('a store creates its own schema, idempotently', async () => {
     const db = new PGlite();
-    const pool = createPglitePool(db);
+    const pool = pglitePool(db);
     await createTideStore(pool).ready;
     // Twice, because a boot that has already run must not be a boot that
     // fails — every statement in the DDL is IF NOT EXISTS for this reason.
@@ -71,26 +73,5 @@ describe('the engine tables are not application data', () => {
     const tables = await pool.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`);
     const names = tables.rows.map((row) => String(row['table_name']));
     for (const table of TIDE_TABLES) expect(names).toContain(table);
-  });
-
-  it('and they are ordinary tables — introspected, grantable, scopeable', async () => {
-    const db = new PGlite();
-    const pool = createPglitePool(db);
-    await createTideStore(pool).ready;
-    await pool.query('CREATE TABLE IF NOT EXISTS members (id text PRIMARY KEY, name text)');
-
-    const layer = await createDataLayer({ pool });
-
-    // An authored, scoped entry over the run ledger has to compile against a
-    // table vex has heard of, so hiding them would close the door as well as
-    // the hole. What keeps a grant safe here is what keeps every other grant
-    // safe: the host's scope rule.
-    expect(layer.schema.entities.map((entity) => entity.table)).toContain('tide_run');
-    expect(layer.grants).toContain('tide_run.read');
-
-    // The identity a run declared IS the column a host scopes on, so it has
-    // to survive introspection as a real field.
-    const runEntity = layer.schema.entities.find((entity) => entity.table === 'tide_run');
-    expect(runEntity?.fields.map((field) => field.name)).toContain('as_who');
   });
 });

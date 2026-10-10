@@ -2,7 +2,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { createPostgresCache } from '@niscorp/vex';
 import { createPglitePool, RAW_DATE_PARSERS } from '@niscorp/vex/pglite';
 import type { NiscRuntime } from '@niscorp/moss';
-import { TIDE_DDL } from '@niscorp/moss';
+import { TIDE_DDL } from '@niscorp/tide/postgres';
 import { DDL } from '@lyra/db/schema';
 import { TIDE_MIRROR_DDL } from '@lyra/db/tide-mirror';
 import { buildSeedSql } from '@lyra/db/seed';

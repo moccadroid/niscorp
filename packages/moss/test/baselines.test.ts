@@ -6,7 +6,6 @@ import { readLedger } from '@niscorp/strata/postgres';
 import { MOSS_SEQUENCE } from '../src/data';
 import { SESSIONS_SEQUENCE } from '../src/identity';
 import { INTEGRATIONS_SEQUENCE } from '../src/integrations/tables';
-import { TIDE_SEQUENCE } from '../src/tide';
 import { createServer } from '../src/server';
 
 // ═══════════════════════════════════════════════════════════════
@@ -17,6 +16,9 @@ import { createServer } from '../src/server';
 // Red here means an applied migration changed. Do not re-pin the checksum:
 // put the change back, and append a new migration to the sequence instead.
 // (Rewording a full-line `--` comment is fine — strata hashes without them.)
+//
+// Tide's sequence (`nisc.moss.tide`) is pinned where it lives now: tide's own
+// test/baselines.test.ts.
 // ═══════════════════════════════════════════════════════════════
 
 const PINNED: ReadonlyArray<[Sequence, number, string]> = [
@@ -25,7 +27,6 @@ const PINNED: ReadonlyArray<[Sequence, number, string]> = [
   // Appended: the unique index on an integration's key hash.
   [MOSS_SEQUENCE, 3, 'b05aa252f4f3b70dad03282552ac6b94c5d4e5012d964c23cb32fedbb4f8b60f'],
   [SESSIONS_SEQUENCE, 1, '83a62e0217940bfe62136052c18f730947355d20e481d9aceb76463251b33700'],
-  [TIDE_SEQUENCE, 1, '41f565e0faf179237fb6b92ca50f6266677871a4965e61bc3494a1d59d9c541b'],
   // The integrations feature's own sequence: frame grants.
   [INTEGRATIONS_SEQUENCE, 1, 'd2f51c7b98fb171f5c961f0a51157dbe48c36ee2e9a1d719cde07739bf6062c6'],
 ];

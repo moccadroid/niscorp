@@ -80,7 +80,7 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       client: ['protocol'],
       terminal: ['client'],
     },
-    flat: ['driver.ts', 'tide.ts'],
+    flat: ['tide.ts'],
     finished: ['runtime', 'protocol', 'feature', 'identity', 'manifest', 'data', 'shells', 'integrations', 'socket', 'documents', 'client', 'terminal'],
     features: ['integrations'],
   },

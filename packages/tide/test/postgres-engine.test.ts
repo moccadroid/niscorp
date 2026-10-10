@@ -1,13 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
-import { createPglitePool } from '@niscorp/vex/pglite';
-import { createTide } from '@niscorp/tide';
-import type { EffectRegistry, ReflexInput, Row, Tide, TideConfig, TideEvent } from '@niscorp/tide';
-import { createTideStore } from '../src/tide';
+import { createTide } from '../src/index';
+import type { EffectRegistry, ReflexInput, Row, Tide, TideConfig, TideEvent } from '../src/index';
+import { createTideStore } from '../src/store/postgres';
+import type { TidePool } from '../src/store/postgres';
+import { pglitePool } from './support';
 
 // THE ENGINE, ON A REAL DATABASE.
 //
-// `tide-store.test.ts` holds the store to its six-method contract. That is
+// `postgres-store.test.ts` holds the store to its six-method contract. That is
 // necessary and it is not sufficient: every defect that reached the built
 // engine was a defect in how the ENGINE composes those methods — a claim that
 // could not see a rewound run, a lease nobody took back, a transient throw
@@ -39,10 +40,10 @@ const transform = (config: unknown, source: Row): unknown => {
   return walk(config);
 };
 
-type Harness = { tide: Tide; calls: unknown[]; events: TideEvent[]; pool: ReturnType<typeof createPglitePool> };
+type Harness = { tide: Tide; calls: unknown[]; events: TideEvent[]; pool: TidePool };
 
 const harness = async (reflexes: readonly ReflexInput[], effects: EffectRegistry, extra?: Partial<TideConfig>): Promise<Harness> => {
-  const pool = createPglitePool(new PGlite());
+  const pool = pglitePool(new PGlite());
   const store = createTideStore(pool);
   await store.ready;
 

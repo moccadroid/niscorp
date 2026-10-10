@@ -1,5 +1,5 @@
 import { sqlSteps, type Sequence } from '@niscorp/strata';
-import { TIDE_SEQUENCE } from '@niscorp/moss';
+import { TIDE_SEQUENCE } from '@niscorp/tide/postgres';
 
 // The Ministry's tables. Who somebody IS in the talk — not yet assigned, a
 // department, the speaker, the projector — is read from these rows by the

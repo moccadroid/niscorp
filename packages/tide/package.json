@@ -41,6 +41,16 @@
         "default": "./dist/testing.cjs"
       }
     },
+    "./postgres": {
+      "import": {
+        "types": "./dist/postgres.d.ts",
+        "default": "./dist/postgres.js"
+      },
+      "require": {
+        "types": "./dist/postgres.d.cts",
+        "default": "./dist/postgres.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -63,10 +73,14 @@
   },
   "peerDependencies": {
     "@niscorp/cortex": "workspace:^",
+    "@niscorp/strata": "workspace:^",
     "zod": "^4.2.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.1",
     "@niscorp/cortex": "workspace:^",
+    "@niscorp/strata": "workspace:^",
+    "@types/node": "^26.1.1",
     "tsup": "^8.5.1",
     "typescript": "^6.0.2",
     "vitest": "^4.1.2",
@@ -74,6 +88,9 @@
   },
   "peerDependenciesMeta": {
     "@niscorp/cortex": {
+      "optional": true
+    },
+    "@niscorp/strata": {
       "optional": true
     }
   }

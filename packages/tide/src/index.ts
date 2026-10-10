@@ -11,6 +11,15 @@ export type { TideErrorCode } from './errors';
 export { createMemoryStore } from './store/memory';
 export type { MemoryStore } from './store/memory';
 
+// ── the driver ──────────────────────────────────────────────────
+//
+// The engine reads no clock and sets no timer. This is what does, for a host
+// that wants one written: wake on ingest, sleep until the next due instant.
+// The Postgres store is NOT here: it is `@niscorp/tide/postgres`, so that
+// nothing this entry reaches imports strata.
+export { createTideDriver } from './driver';
+export type { TideDriver, TideDriverConfig } from './driver';
+
 // ── the grammar ─────────────────────────────────────────────────
 export {
   ReflexSchema,

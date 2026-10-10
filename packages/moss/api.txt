@@ -24,17 +24,11 @@
 . ShellHost
 . ShellManifest
 . ShellSnapshot
-. TIDE_DDL
-. TIDE_SEQUENCE
-. TIDE_TABLES
 . TablesReport
 . Telemetry
 . TelemetrySpan
-. TideDriver
 . createPageRouter
 . createServer
-. createTideDriver
-. createTideStore
 . defineApp
 . documentHeaders
 . embedSnapshot

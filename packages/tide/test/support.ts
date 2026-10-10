@@ -1,4 +1,6 @@
+import type { PGlite } from '@electric-sql/pglite';
 import type { Row, TransformFn } from '../src/index';
+import type { TidePool } from '../src/store/postgres';
 
 // A five-op stand-in for the `transform` seam. Tide doesn't know Prism —
 // that is the whole point of the seam — so the tests don't import it either.
@@ -51,3 +53,11 @@ export const clockFrom = (start: number) => {
 };
 
 export const utc = (iso: string): number => Date.parse(iso);
+
+// A PGlite as the pool the Postgres store runs on: a statement, and a
+// transaction. Both are called ON the database, never taken off it — they are
+// methods that reach for `this`.
+export const pglitePool = (db: PGlite): TidePool => ({
+  query: (text, values) => db.query(text, values),
+  transaction: (fn) => db.transaction((tx) => fn({ query: (text, values) => tx.query(text, values) })),
+});

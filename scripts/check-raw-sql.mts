@@ -16,6 +16,17 @@
 // the same change, so the count goes down in a diff somebody reads and never
 // up without one.
 //
+// TIDE IS SWEPT, with one file in the ledger: its Postgres store
+// (`store/postgres.ts`, the `@niscorp/tide/postgres` entry), which was in moss
+// until tide's hosting left it. Tide is an engine, and it is not listed with
+// vex and strata, on purpose. Those two are SQL all the way through. Tide's
+// engine holds none: it reaches storage through a contract of six
+// capabilities, and is handed a store. Listing the whole package as a place
+// SQL lives would stop this check seeing a statement written into the engine,
+// which is the one thing about tide's SQL worth catching. So the store's
+// numbers are held like any other file's, and a statement anywhere else in
+// tide fails as a file outside the ledger.
+//
 // A repo script, like check-fact-door: reading a package's source is a repo
 // concern, not something a package ships.
 //
@@ -109,7 +120,8 @@ const sqlIn = (text: string): Found => {
 // `why` says which of three things a file is:
 //   credential — runs before a principal exists, so there is no policy to run
 //                under. This is the one kind that stays.
-//   store      — an engine's own storage, living in the wrong package.
+//   store      — an engine's own storage, in that engine's package: tide's
+//                Postgres store. The engine is handed it and holds no SQL.
 //   debt       — no reason. It goes through vex or it goes.
 
 type Entry = Found & { why: 'credential' | 'store' | 'debt' | 'tables'; note: string };
@@ -124,9 +136,14 @@ const LEDGER: Readonly<Record<string, Readonly<Record<string, Entry>>>> = {
     // the policy those entries run under asks for no principal.
     'integrations/tables.ts': { doors: 0, statements: 0, tables: 1, why: 'tables', note: "the integrations feature's own table sequence: frame grants, read and written through vex" },
     'manifest/generation.ts': { doors: 3, statements: 4, tables: 1, why: 'debt', note: 'the generation counter' },
-    'tide.ts': { doors: 7, statements: 6, tables: 3, why: 'store', note: "tide's Postgres store; it belongs with tide" },
     'data/tables.ts': { doors: 0, statements: 0, tables: 16, why: 'tables', note: "moss's own table sequence, as it stood in integrations.ts: history, checksummed in every ledger; the sixteenth is the unique index on an integration's key hash, appended" },
     'data/migrate.ts': { doors: 1, statements: 0, tables: 0, why: 'tables', note: "hands the migration's own transaction to vex's adapter to read the schema" },
+  },
+  tide: {
+    // Was `moss/tide.ts`, with these numbers. The engine's own bookkeeping
+    // goes through the pool and not through a host's write path: an engine
+    // claiming its own task has no principal to run a policy for.
+    'store/postgres.ts': { doors: 7, statements: 6, tables: 3, why: 'store', note: "tide's Postgres store: the engine's own rows, behind the store contract" },
   },
 };
 
@@ -217,7 +234,7 @@ for (const [file, entry] of [...ledger].sort()) {
 
 const sum = (why: Entry['why'], pick: (entry: Entry) => number): number => [...ledger.values()].filter((entry) => entry.why === why).reduce((total, entry) => total + pick(entry), 0);
 lines.push(
-  `statements that read or write rows outside vex: ${sum('debt', (e) => e.statements)} with no reason, ${sum('store', (e) => e.statements)} in a store that belongs elsewhere, ${sum('credential', (e) => e.statements)} credential`,
+  `statements that read or write rows outside vex: ${sum('debt', (e) => e.statements)} with no reason, ${sum('store', (e) => e.statements)} in tide's own store, ${sum('credential', (e) => e.statements)} credential`,
 );
 
 for (const line of lines) console.log(line);

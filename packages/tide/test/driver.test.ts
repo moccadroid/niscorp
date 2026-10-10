@@ -1,6 +1,6 @@
 import { afterEach, describe, it, expect } from 'vitest';
-import type { AdvanceReport, Tide } from '@niscorp/tide';
-import { createTideDriver } from '../src/driver';
+import { createTideDriver } from '../src/index';
+import type { AdvanceReport, Tide } from '../src/index';
 
 // THE DRIVER'S EDGE WITH ITS HOST: stopping. A host stops the driver and then
 // closes the database under the engine (a dev server re-booting, a test

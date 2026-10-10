@@ -1,4 +1,5 @@
-import type { AdvanceReport, Fact, Retention, Tide } from '@niscorp/tide';
+import type { Tide } from './tide';
+import type { AdvanceReport, Fact, Retention } from './types';
 
 // ═══════════════════════════════════════════════════════════════
 // The tide driver — wake on ingest, sleep until the next due
