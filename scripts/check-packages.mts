@@ -27,6 +27,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os';
 import { builtinModules } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
+import ts from 'typescript';
 
 const root = resolve(import.meta.dirname, '..');
 
@@ -172,7 +173,19 @@ for (const { dir, manifest } of packages) {
 // dependency, a peer, or the package itself — and, from the main entry, not
 // an optional peer.
 const BUILTIN = new Set(builtinModules.flatMap((name) => [name, `node:${name}`]));
-const STATIC_IMPORT = /(?:^|[;\s}])(?:import|export)\s*(?:[\w*{}\s,$]*?\s*from\s*)?["']([^"']+)["']/g;
+// Read by a parser, not by a pattern over the text. The pattern took a sentence
+// for a statement: moss's built entry holds the string "Keep why an import did
+// not land on the row, and the address it was fetched from", and the words
+// from `import` to `from` with the quote that closes the string read as an
+// import of whatever came before the next quote.
+const staticImportsOf = (source: string): string[] =>
+  ts
+    .createSourceFile('built.js', source, ts.ScriptTarget.Latest, false, ts.ScriptKind.JS)
+    .statements.flatMap((statement) =>
+      (ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)) && statement.moduleSpecifier !== undefined && ts.isStringLiteral(statement.moduleSpecifier)
+        ? [statement.moduleSpecifier.text]
+        : [],
+    );
 const packageOf = (specifier: string): string => specifier.split('/').slice(0, specifier.startsWith('@') ? 2 : 1).join('/');
 const entryFile = (entry: unknown): string | undefined =>
   typeof entry === 'string' ? entry : isRecord(entry) ? entryFile(entry['default']) : undefined;
@@ -181,9 +194,7 @@ const loadsOf = (file: string, seen = new Set<string>()): Set<string> => {
   const bare = new Set<string>();
   if (seen.has(file)) return bare;
   seen.add(file);
-  const source = readFileSync(file, 'utf8');
-  for (const match of source.matchAll(STATIC_IMPORT)) {
-    const specifier = match[1] ?? '';
+  for (const specifier of staticImportsOf(readFileSync(file, 'utf8'))) {
     if (specifier.startsWith('.')) for (const inner of loadsOf(resolve(dirname(file), specifier), seen)) bare.add(inner);
     else if (!BUILTIN.has(specifier)) bare.add(packageOf(specifier));
   }
