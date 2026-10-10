@@ -4,8 +4,11 @@ import { createSocket } from '../src/socket';
 import type { Connection, SocketConfig } from '../src/socket';
 import { CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, CLOSE_SHELL_FAILED, CLOSE_PROTOCOL_MISMATCH, PROTOCOL, PROTOCOL_MIN, ServerMessageSchema, offerToken } from '../src/protocol';
 import type { ServerMessage } from '../src/protocol';
+import { createShellHost } from '../src/shells';
 import type { ShellHost, ShellSession } from '../src/shells';
 import { sealSession } from '../src/identity';
+import type { NiscApp } from '../src/manifest';
+import { hostConfig } from './shell-host-double';
 
 // A fake transport — the four-function Connection seam, capturing everything
 // so the protocol can be driven headlessly (no websocket).
@@ -951,5 +954,115 @@ describe('socket — a sign-in handed over sealed', () => {
     expect(conn.answered).toBeUndefined();
     expect(conn.seal).toBeUndefined();
     warned.mockRestore();
+  });
+});
+
+// A session takes time to stand up: who somebody is and what they hold are
+// asked, and their shell is built. The terminal may be gone by then. On Node
+// the transport tells a close to whoever is listening when it happens, and to
+// nobody who starts listening afterwards — so a connection attached after it
+// closed was attached for ever: a kept shell never idled, a throwaway one was
+// never disposed.
+describe('socket — a connection that closed before its session was ready', () => {
+  const counter = { id: 'counter', data: { n: 0 }, triggers: [{ event: 'ui:click', ref: 'bump', do: [{ increment: 'n' }] }] };
+  const app = { charter: { public: ['counter'] }, assignments: {}, actions: { counter }, shell: { canvases: [{ id: 'main', initial: 'counter' }] } } as unknown as NiscApp;
+  const realHost = (): ShellHost =>
+    createShellHost(
+      hostConfig({
+        app,
+        resolve: async () => ({ roles: ['public'], scope: {}, catalog: { ids: ['counter'], hash: 'h' }, variants: new Map() }),
+        wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
+        idleMs: 0,
+      }),
+    );
+
+  // A transport as `ws` is one: a close reaches the listeners there are, once.
+  const droppable = (): { connection: Connection; drop: () => void } => {
+    const listeners: (() => void)[] = [];
+    let dropped = false;
+    return {
+      connection: {
+        send: () => {},
+        close: () => {},
+        onMessage: () => {},
+        onClose: (fn) => {
+          if (!dropped) listeners.push(fn);
+        },
+      },
+      drop: () => {
+        dropped = true;
+        for (const fn of listeners.splice(0)) fn();
+      },
+    };
+  };
+
+  // The host, with the moment its session is handed over held back: the test
+  // closes the connection in between.
+  const heldBack = (host: ShellHost): { shells: Pick<ShellHost, 'session'>; built: () => ShellSession | undefined; release: () => void } => {
+    let built: ShellSession | undefined;
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => void (release = resolve));
+    return {
+      shells: {
+        session: async (token, principal, options) => {
+          built = await host.session(token, principal, options);
+          await gate;
+          return built;
+        },
+      },
+      built: () => built,
+      release: () => release(),
+    };
+  };
+
+  it('somebody signed in: their shell has nothing attached, and idles from then', async () => {
+    const host = realHost();
+    const held = heldBack(host);
+    const accept = createSocket(ctxWith({ shells: held.shells, revalidateMs: 0 }));
+    const { connection, drop } = droppable();
+    connection.upgrade = { offered: offerToken('good') };
+    const accepting = accept(SOCKET, connection);
+    await vi.waitFor(() => expect(held.built()).toBeDefined());
+
+    drop();
+    held.release();
+    await accepting;
+
+    expect(host.list().map((shell) => ({ principal: shell.principal, connections: shell.connections, idle: shell.idleSince !== null }))).toEqual([{ principal: 'usr_1', connections: 0, idle: true }]);
+    host.stop();
+  });
+
+  it('nobody signed in: the shell built for that connection is disposed', async () => {
+    const host = realHost();
+    const held = heldBack(host);
+    const accept = createSocket(ctxWith({ shells: held.shells, revalidateMs: 0 }));
+    const { connection, drop } = droppable();
+    const accepting = accept(SOCKET, connection);
+    await vi.waitFor(() => expect(held.built()).toBeDefined());
+
+    drop();
+    held.release();
+    await accepting;
+
+    expect(() => held.built()?.shell.push('main', 'counter')).toThrow();
+    host.stop();
+  });
+
+  it('a connection that closes while what it holds is being asked is not handed to a shell host at all', async () => {
+    const session = recordingSession();
+    const asked = vi.fn(async () => session);
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => void (release = resolve));
+    const accept = createSocket(ctxWith({ shells: { session: asked }, catalog: async () => (await gate, CATALOG), revalidateMs: 0 }));
+    const { connection, drop } = droppable();
+    const accepting = accept(SOCKET, connection);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    drop();
+    release();
+    await accepting;
+
+    expect(asked).not.toHaveBeenCalled();
+    expect(session.calls).toEqual([]);
   });
 });

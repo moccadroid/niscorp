@@ -977,6 +977,10 @@ measures the end.
     while every endpoint the server shell called came back 401 — a live
     interface whose every load silently fails.
 - `Connection` — the transport seam: `{ send, close, onMessage, onClose }`.
+  `onClose` is called once, as soon as who is asking is decided and before
+  `hello`: a connection that closes while its session is being opened (its
+  catalog asked, its shell built) is not attached to a shell, so a kept shell
+  idles and one built for that connection alone is disposed.
 - `ServerMessage` — `hello | catalog | frame | render | render-delta | session | error`.
 - `ClientMessage` — `event | publish | resync | reset | back | popTo`.
 - **A message a terminal sends is at most 256 KB**, counted as it is once

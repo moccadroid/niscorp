@@ -7,6 +7,8 @@ import { emitterOf, spanClock } from '../runtime';
 import type { ShellSession } from '../shells';
 import type { SocketConfig } from './config';
 import type { Connection, SocketAccept } from './connection';
+import { endingOf } from './ending';
+import type { Ending } from './ending';
 import { parametersOf, protocolRefusal, whoIsAsking } from './handshake';
 import type { SaidOnce } from './handshake';
 import { createRevalidation } from './revalidation';
@@ -59,6 +61,43 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
   const emit = emitterOf(config.telemetry);
   const notOwn: SaidOnce = { said: false };
   const revalidation = createRevalidation(config);
+
+  // WHAT AN ADMITTED CONNECTION IS SERVED: `hello`, then the session it is
+  // attached to (undefined when the app serves no shell). Both are awaited,
+  // and the terminal may be gone by the time either lands: A CONNECTION THAT
+  // CLOSED BEFORE ITS SESSION WAS READY LEAVES NOTHING ATTACHED.
+  const served = async (
+    connection: Connection,
+    send: (message: ServerMessage) => void,
+    ending: Ending,
+    params: URLSearchParams,
+    who: { token: string | null; principal: string | null },
+  ): Promise<ShellSession | undefined> => {
+    // The catalog channel: the application, resolved for YOU, on every
+    // (re)connect — reconnect re-sends current state, no replay machinery.
+    const { ids, hash } = await config.catalog(who.principal);
+    // Closed while that was asked: there is nobody to say hello to, and no
+    // host is asked for a shell.
+    if (ending.ended()) return undefined;
+    send({ type: 'hello', protocol: PROTOCOL, principal: who.principal, catalog: { actions: ids, hash } });
+
+    // The canvas streams: attach to the session's shell (durable per
+    // principal — the shell outlives this connection) and it re-sends the
+    // current trees; every change fans out to every attached connection.
+    // Frame deltas are OPT-IN by the terminal, on the upgrade URL — the
+    // capability has to be known before the first frame is sent. A terminal
+    // that says nothing is served whole frames forever, which is what every
+    // terminal built before this existed does.
+    const wantsDelta = params.get('delta') === '1';
+    const session = await sessionFor(config, params, who.token, who.principal);
+    if (session === undefined) return undefined;
+    // Closed while its shell was built: it is not attached, and the session is
+    // told at once that this connection is done with it — which lets a kept
+    // shell idle and disposes one built for this connection alone.
+    if (!ending.ended()) session.attach(connection, { delta: wantsDelta });
+    ending.then(() => session.detach(connection));
+    return session;
+  };
 
   // REFUSING ONE SESSION MUST NEVER COST THE OTHERS. Every await in the body
   // below can throw — the verifier on a database blip, the shell build on a
@@ -116,33 +155,18 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
     }
 
     revalidation.hold(connection, token !== null && token !== '' && principal !== null ? { token, principal } : null);
-    connection.onClose(() => revalidation.release(connection));
+    // Listened for here, before anything below awaits (./ending.ts).
+    const ending = endingOf(connection);
+    ending.then(() => revalidation.release(connection));
     // The connection's whole life, closed by the same clock — how long
     // terminals stay, and under a principal or anonymous. Registered here so it
     // fires however the connection ends (graceful, expiry, transport drop).
     if (emit !== undefined && upClock !== undefined) {
       const hadPrincipal = principal !== null;
-      connection.onClose(() => emit({ name: 'socket.close', startUnixNano: upClock.startUnixNano, endUnixNano: upClock.endUnixNano(), status: 'ok', attributes: { hasPrincipal: hadPrincipal } }));
+      ending.then(() => emit({ name: 'socket.close', startUnixNano: upClock.startUnixNano, endUnixNano: upClock.endUnixNano(), status: 'ok', attributes: { hasPrincipal: hadPrincipal } }));
     }
 
-    // The catalog channel: the application, resolved for YOU, on every
-    // (re)connect — reconnect re-sends current state, no replay machinery.
-    const { ids, hash } = await config.catalog(principal);
-    send({ type: 'hello', protocol: PROTOCOL, principal, catalog: { actions: ids, hash } });
-
-    // The canvas streams: attach to the session's shell (durable per
-    // principal — the shell outlives this connection) and it re-sends the
-    // current trees; every change fans out to every attached connection.
-    // Frame deltas are OPT-IN by the terminal, on the upgrade URL — the
-    // capability has to be known before the first frame is sent. A terminal
-    // that says nothing is served whole frames forever, which is what every
-    // terminal built before this existed does.
-    const wantsDelta = params.get('delta') === '1';
-    const session = await sessionFor(config, params, token, principal);
-    if (session !== undefined) {
-      session.attach(connection, { delta: wantsDelta });
-      connection.onClose(() => session.detach(connection));
-    }
+    const session = await served(connection, send, ending, params, { token, principal });
 
     // Admitted: the handshake resolved a principal, said hello, and attached a
     // shell. The span measures that, not the connection's life (that is
