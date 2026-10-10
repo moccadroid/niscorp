@@ -307,6 +307,75 @@ describe('shells — reset', () => {
     expect((await host.session('t', 'usr_1')).shell).toBe(first.shell);
   });
 
+  // ONE RESET OF A SHELL AT A TIME. A reset builds, then swaps. Two that
+  // overlapped each built from the shell that stood when they began: the first
+  // to land carried the terminals to its shell, the second found none left to
+  // carry and took the cell. The terminals were on a shell nothing addressed.
+  it('resets that overlap leave every terminal on the shell that is kept', async () => {
+    const host = createShellHost(hostConfig({ ...ctx, app: wide }));
+    const session = await host.session('t', 'usr_1');
+    const connection = fakeConnection();
+    session.attach(connection);
+    await tick();
+
+    session.reset();
+    host.reset('usr_1');
+    session.reset();
+    for (let i = 0; i < 6; i += 1) await tick();
+
+    expect(host.list()).toHaveLength(1);
+    expect(host.list()[0]?.connections).toBe(1);
+    // The shell the session addresses is the one the terminal is served from.
+    connection.sent.length = 0;
+    session.dispatch('main', { type: 'ui:click', ref: 'bump' });
+    await tick();
+    expect(connection.sent.some((m) => m['type'] === 'render' && m['canvas'] === 'main')).toBe(true);
+  });
+
+  it('a shell that ended while its replacement was built is not replaced', async () => {
+    // Nobody in particular: the shell goes when its last terminal does.
+    const session = await createShellHost(hostConfig(ctx)).session(null, null);
+    const connection = fakeConnection();
+    session.attach(connection);
+    await tick();
+    const stood = session.shell;
+
+    session.reset();
+    session.detach(connection);
+    for (let i = 0; i < 4; i += 1) await tick();
+
+    // No shell was stood up for nobody: what the session addresses is the one
+    // that ended, and it is disposed.
+    expect(session.shell).toBe(stood);
+    expect(() => session.shell.push('main', 'counter')).toThrow();
+  });
+
+  // What a shell was opened with is part of what it is rebuilt from. A reset
+  // rebuilt from the principal alone, so a page's shell came back without the
+  // parameters of its path, on other instance ids than the page was drawn with.
+  it('a shell that is reset is rebuilt with what it was opened with: its inputs and its id seed', async () => {
+    const words = { id: 'words', data: { slug: '' }, layout: { component: 'Text', children: '$.slug' } };
+    const paged = { ...app, actions: { words } } as unknown as NiscApp;
+    const page = { canvases: [{ id: 'main', initial: 'words' }] };
+    const host = createShellHost(
+      hostConfig({ ...ctx, app: paged, manifest: page, kept: false, resolve: async () => ({ roles: ['public'], scope: {}, catalog: { ids: ['words'] }, variants: new Map() }) }),
+    );
+    const session = await host.session(null, null, { seed: 'abcdef0123', inputs: { main: { slug: 'intro' } } });
+    await tick();
+    const opened = session.shell;
+    const shown = (): { id: string | undefined; slug: unknown } => {
+      const active = session.shell.getState().canvases['main']?.active;
+      return { id: active?.id, slug: session.shell.getRuntime(active?.id ?? '')?.getData()['slug'] };
+    };
+    expect(shown()).toEqual({ id: 'act-abcdef0123-1', slug: 'intro' });
+
+    session.reset();
+    for (let i = 0; i < 4; i += 1) await tick();
+
+    expect(session.shell).not.toBe(opened);
+    expect(shown()).toEqual({ id: 'act-abcdef0123-1', slug: 'intro' });
+  });
+
   it('resetting a principal who holds no shell answers false rather than throwing', async () => {
     const host = createShellHost(hostConfig(ctx));
     expect(host.reset('usr_nobody')).toBe(false);

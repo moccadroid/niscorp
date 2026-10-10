@@ -120,20 +120,45 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
   // later and every attached terminal receives a fresh frame when it does —
   // exactly as `seeds` already behaves. A reset that blocked its caller on a
   // round trip would make a role change slower than the write that caused it.
-  const rebuild = async (cell: Cell): Promise<void> => {
-    const old = cell.live;
+  const replace = async (cell: Cell): Promise<void> => {
+    // Signed out, swept, or left by its last terminal since the reset was
+    // asked for: there is nobody to rebuild it for.
+    if (cell.live.ended) return;
     // The replacement is built BEFORE the old one is torn down. The build runs
     // app code — `inputs`, `functions`, `onSession` — and if that throws, a
     // reset that had already disposed the old shell would leave the session
     // holding nothing at all: strictly worse than the wedged shell it was
-    // called to fix. Built first, a failed reset changes nothing.
-    const next = await buildShell(host, cell.token, cell.principal, true);
+    // called to fix. Built first, a failed reset changes nothing. It is built
+    // from everything the shell was opened with: the principal, the newest
+    // token, and the id seed and the inputs a page's path carried.
+    const next = await buildShell(host, cell.token, cell.principal, true, cell.opening?.seed, cell.opening?.inputs);
+    const old = cell.live;
+    // It ended while its replacement was built. The replacement is nobody's.
+    if (old.ended) {
+      next.ended = true;
+      next.shell.dispose();
+      return;
+    }
     const carried = [...old.connections].map((connection) => ({ connection, wants: old.deltaReady.has(connection) }));
     old.ended = true;
     old.connections.clear();
     old.shell.dispose();
     cell.live = next;
     for (const { connection, wants } of carried) attach(next, connection, delta && wants);
+  };
+
+  // ONE RESET OF A CELL AT A TIME, each after the one before it. A reset
+  // builds and then swaps, so two that overlapped each began from the shell
+  // that stood then: the first to land carried the terminals to its shell and
+  // the second, finding none left to carry, took the cell. The terminals were
+  // left on a shell nothing addressed and nothing would dispose. Each reset
+  // that was asked for still happens, in turn: the second may be for a reason
+  // that arrived after the first had read what it builds from.
+  const rebuild = (cell: Cell): Promise<void> => {
+    const turn = (cell.resetting ?? Promise.resolve()).then(() => replace(cell));
+    // The next one waits for this one whether it lands or fails.
+    cell.resetting = turn.catch(() => undefined);
+    return turn;
   };
 
   // ONE BUILD FOR A PRINCIPAL AT A TIME. A build awaits (who they are, their
@@ -178,7 +203,7 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
     session: async (token, principal, options) => {
       if (principal === null || !kept) {
         const live = await buildShell(host, token, principal, false, options?.seed, options?.inputs);
-        return sessionOn(host, { live, token, principal }, true, rebuild);
+        return sessionOn(host, { live, token, principal, ...(options !== undefined ? { opening: options } : {}) }, true, rebuild);
       }
       return sessionOn(host, await durableCell(token, principal), false, rebuild);
     },

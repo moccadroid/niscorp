@@ -1,7 +1,7 @@
 import type { Shell } from '@niscorp/nova';
 import type { Emit } from '../runtime';
 import type { ShellHostConfig } from './config';
-import type { ShellConnection } from './types';
+import type { ShellConnection, ShellOpening } from './types';
 
 // What one host holds while it stands: each living shell with what is attached
 // to it, the cell a principal's shell is addressed through, and what every
@@ -46,7 +46,18 @@ export const canvasesOf = (live: Live): string[] => Object.keys(live.shell.getSt
 // re-authorize the server's own wire as the same session, and it is
 // refreshed on reattach so a rebuild uses the newest one the principal
 // arrived with rather than the one they first appeared with.
-export type Cell = { live: Live; token: string | null; principal: string | null };
+export type Cell = {
+  live: Live;
+  token: string | null;
+  principal: string | null;
+  // What the shell was opened with, beside who it is for (the id seed, the
+  // inputs a page's path carries): part of what it is rebuilt from. A kept
+  // shell is opened with neither.
+  opening?: ShellOpening;
+  // The reset of this cell that is under way, or the last one that ran. The
+  // next one waits for it.
+  resetting?: Promise<void>;
+};
 
 // WHAT EVERY PART OF ONE HOST READS, settled once when the host is created:
 // what it was handed, and what it worked out from that.
