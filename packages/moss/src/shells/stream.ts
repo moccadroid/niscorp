@@ -158,7 +158,7 @@ export const attach = (live: Live, connection: ShellConnection, wantsDelta: bool
   live.connections.add(connection);
   if (wantsDelta) live.deltaReady.add(connection);
   live.idleSince = null;
-  let frameTree: RenderNode[] = [];
+  let frameTree: RenderNode[] | undefined;
   try {
     // The arrangement carries words too — a canvas's own chrome, a Sheet's
     // title — and gets them from the same place: the shell it was rendered by.
@@ -166,11 +166,23 @@ export const attach = (live: Live, connection: ShellConnection, wantsDelta: bool
   } catch (error) {
     console.error('[moss/shells] the shell frame failed to render — serving an empty arrangement:', error);
   }
-  // The newcomer joins the frame's shared baseline the same way it joins each
-  // canvas's below — so the next flush re-sends the frame only if it changes.
-  const frameMessage = JSON.stringify({ type: 'frame', tree: frameTree } satisfies ServerMessage);
+  const frameMessage = JSON.stringify({ type: 'frame', tree: frameTree ?? [] } satisfies ServerMessage);
   connection.send(frameMessage);
-  live.sentFrame = frameMessage;
+  if (frameTree === undefined) {
+    // What the newcomer was served is not the frame: nobody is level with
+    // anything, so the next one that renders goes to everybody.
+    delete live.sentFrame;
+  } else {
+    // The newcomer joins the frame's shared baseline the same way it joins
+    // each canvas's below, and for the same reason the others are sent it
+    // when it moved: attaching RENDERS, and can pick up a change the flush
+    // has not sent yet. The baseline then moved to a frame only the newcomer
+    // held, and the flush, finding nothing changed, sent it to nobody else.
+    if (live.sentFrame !== frameMessage) {
+      for (const other of live.connections) if (other !== connection) other.send(frameMessage);
+    }
+    live.sentFrame = frameMessage;
+  }
   for (const canvasId of canvasesOf(live)) {
     const next = frameOf(live, canvasId);
     if (next === null) continue;

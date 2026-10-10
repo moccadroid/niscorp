@@ -988,6 +988,61 @@ describe('shells — the frame layout store and re-send', () => {
     expect(frames(conn).length).toBe(settled);
   });
 
+  // Attaching renders the frame, and that can pick up a change the flush has
+  // not sent yet. The frame last sent then moved to one only the newcomer
+  // held, and the flush, finding nothing changed, sent it to nobody else.
+  it('a terminal that attaches while the frame has changed does not leave the others on the old one', async () => {
+    const host = createShellHost(hostConfig(refCtx));
+    const session = await host.session('t', 'usr_1');
+    const first = fakeConnection();
+    session.attach(first);
+    await tick();
+    await tick();
+
+    session.shell.setLayout('r', { component: 'Text', children: 'swapped-dock' });
+    // Before the flush runs: somebody else attaches.
+    const second = fakeConnection();
+    session.attach(second);
+    await tick();
+    await tick();
+
+    expect(JSON.stringify(frames(second).at(-1))).toContain('swapped-dock');
+    expect(JSON.stringify(frames(first).at(-1))).toContain('swapped-dock');
+    // Once: the flush that follows finds everybody level.
+    expect(frames(first).filter((frame) => JSON.stringify(frame).includes('swapped-dock'))).toHaveLength(1);
+  });
+
+  it('a frame that fails to render for a newcomer is not taken for the one everybody holds', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const host = createShellHost(hostConfig(refCtx));
+      const session = await host.session('t', 'usr_1');
+      const first = fakeConnection();
+      session.attach(first);
+      await tick();
+      const held = frames(first).length;
+
+      const render = session.shell.getShellRenderTree.bind(session.shell);
+      session.shell.getShellRenderTree = () => {
+        throw new Error('the frame is poisoned, this once');
+      };
+      const second = fakeConnection();
+      session.attach(second);
+      // The newcomer is served an empty arrangement; the others keep theirs.
+      expect(frames(second).at(-1)).toEqual({ type: 'frame', tree: [] });
+      expect(frames(first)).toHaveLength(held);
+
+      // It renders again: the newcomer is sent the frame it never had.
+      session.shell.getShellRenderTree = render;
+      session.dispatch('main', { type: 'ui:click', ref: 'bump' });
+      await tick();
+      await tick();
+      expect(JSON.stringify(frames(second).at(-1))).toContain('seeded-dock');
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
   it('a canvas-only change on a frame with no ref sends no frame message', async () => {
     const host = createShellHost(hostConfig(ctx)); // the plain app: default frame, no ref
     const conn = fakeConnection();
