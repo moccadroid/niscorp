@@ -317,3 +317,8 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 - New: `runtime.socketMaxMessageBytes`, the largest message a connection may send. `serve` hands it to the transport, as it hands `runtime.socketCompression`. It could be said to `attachSocket` (`maxMessageBytes`) and not to `serve`, which calls it. Unset, the limit is the transport's 256 KiB, as before.
 - `attachSocket(…)` answers `{ close }` where it answered nothing: `close()` ends every connection the transport opened (`1001`) and takes no more. A host that ignores what it answers has nothing to change.
 - An app that called `server.close()` on a server from `serve` and went on using the port has to stop doing one of the two. `createServer`'s own `close` is as it was. `nisc start` and the dev plugin call `attachSocket` themselves, with no options, and are not changed here.
+
+**The wire holds one socket at a time.**
+
+- `wire.reset()` on a socket that is not open connects again. Pressed while a connect was still in flight (the reset key held down on a slow network, a reset straight after the page loads), the socket it was waiting on was left as it was, with the wire still listening to it. Both opened: two sockets wrote one snapshot, a sign-out or a drop heard on either was taken for the connection's, and the first to close scheduled a third. The wire lets go of the socket it had before it makes another: it is no longer listened to, and it is closed.
+- An app has nothing to change.

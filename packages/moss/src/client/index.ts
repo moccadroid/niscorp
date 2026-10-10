@@ -313,8 +313,24 @@ export const createWire = (config: WireConfig = {}): Wire => {
   // a base carried across a reconnect is a base the server never assumed.
   const bases = new Map<string, string>();
 
+  // ONE SOCKET AT A TIME. Whatever socket there was is let go of before
+  // another is made: no longer listened to, and closed. It may be one that has
+  // closed, one that carried another principal, or one whose connect was still
+  // in flight when somebody pressed reset — left listened to, that one opened
+  // beside its replacement, and two sockets wrote one snapshot.
+  const letGo = (): void => {
+    const old = socket;
+    socket = null;
+    if (old === null) return;
+    old.onopen = null;
+    old.onmessage = null;
+    old.onclose = null;
+    old.close();
+  };
+
   const connect = (): void => {
     if (disposed) return;
+    letGo();
     setStatus('connecting');
     bases.clear();
     // The address says nothing about who this is — it is what every proxy on
@@ -462,12 +478,6 @@ export const createWire = (config: WireConfig = {}): Wire => {
     clearTimeout(retry);
     attempts = 0; // a new principal is a fresh session — start backoff clean
     publishSnapshot(EMPTY);
-    const old = socket;
-    socket = null;
-    if (old !== null) {
-      old.onclose = null;
-      old.close();
-    }
     connect();
   };
 

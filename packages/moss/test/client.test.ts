@@ -248,6 +248,52 @@ describe('the wire — reset', () => {
     expect(FakeSocket.last().sent).toHaveLength(before);
     expect(FakeSocket.instances).toHaveLength(1);
   });
+
+  // A connect still in flight is not an open socket, so a reset connects
+  // again. The socket it was waiting on used to be left as it was, with the
+  // wire still listening to it: two sockets, one snapshot.
+  describe('while a connect is in flight', () => {
+    const row = (value: string): { type: 'text'; value: string }[] => [{ type: 'text', value }];
+    const resetWhileConnecting = (): { wire: ReturnType<typeof createWire>; first: FakeSocket; second: FakeSocket } => {
+      const wire = createWire({ url: URL, env: env() });
+      const first = FakeSocket.last();
+      wire.reset();
+      return { wire, first, second: FakeSocket.last() };
+    };
+
+    it('lets go of the socket it was waiting on', () => {
+      const { first, second } = resetWhileConnecting();
+      expect(second).not.toBe(first);
+      expect(first.closed).toBe(true);
+    });
+
+    it('one socket writes the snapshot: what the other still says is not heard', () => {
+      const { wire, first, second } = resetWhileConnecting();
+      second.open();
+      second.emit({ type: 'render', canvas: 'main', tree: row('from the second') });
+      first.open();
+      first.emit({ type: 'render', canvas: 'main', tree: row('from the first') });
+      expect(wire.snapshot().trees.get('main')).toEqual(row('from the second'));
+    });
+
+    it('the other closing is not the connection closing, and schedules no third', () => {
+      const { wire, first, second } = resetWhileConnecting();
+      second.open();
+      first.serverClose(1006);
+      expect(wire.status()).toBe('open');
+      vi.advanceTimersByTime(120_000);
+      expect(FakeSocket.instances).toHaveLength(2);
+    });
+
+    it('a sign-out heard on the other signs nobody out', () => {
+      storage.setItem('nisc.token', 'tok');
+      const { first, second } = resetWhileConnecting();
+      second.open();
+      first.serverClose(CLOSE_SIGNED_OUT);
+      expect(storage.getItem('nisc.token')).toBe('tok');
+      expect(FakeSocket.instances).toHaveLength(2);
+    });
+  });
 });
 
 describe('the wire — back', () => {
