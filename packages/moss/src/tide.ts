@@ -1,8 +1,24 @@
+import { z } from 'zod';
 import type { Sequence } from '@niscorp/strata';
 import { migrate as migrateLedger } from '@niscorp/strata/postgres';
-import { PRIMARY_KEY, UNIQUE_BY } from '@niscorp/tide';
+import { FactKindSchema, OpSchema, PRIMARY_KEY, UNIQUE_BY } from '@niscorp/tide';
 import type { ClaimSpec, Comparison, Mutation, Order, QuerySpec, RemoveSpec, TableName, Tide, TideStore, TideTables, Where } from '@niscorp/tide';
-import type { PgPool, WriteEvent } from '@niscorp/vex';
+import type { WriteEvent } from '@niscorp/vex';
+
+// THE POOL THIS STORE RUNS ON, as much of one as it uses: a statement with its
+// values, and several statements that land together or not at all. Written out
+// here, so the store depends on no driver and on nobody else's name for a
+// pool: vex's `PgPool`, a PGlite behind a shim and a `pg` pool wrapped to
+// check a client out for each transaction are all one of these.
+//
+// `query` and `transaction` are called ON the object that has them, never
+// taken off it first: a driver's own object has them as methods that reach
+// for `this`.
+export type TidePoolQuery = (text: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
+export type TidePool = {
+  query: TidePoolQuery;
+  transaction?: <T>(fn: (tx: { query: TidePoolQuery }) => Promise<T>) => Promise<T>;
+};
 
 // ═══════════════════════════════════════════════════════════════
 // TIDE, MADE DURABLE — and it lives HERE, not in tide.
@@ -220,22 +236,131 @@ const fromColumn = (column: string, value: unknown): unknown => {
   return value;
 };
 
+// WHAT A ROW OF EACH TABLE IS, once its columns are fields again. The database
+// is outside this process, so a row is read by a schema like anything else
+// that arrives: one that does not fit is refused where it is read, with the
+// table and the field in the sentence, and never handed to the engine as
+// something it is not. Each schema is held to the engine's own type for that
+// table by the record below, so the two cannot drift.
+const FactRowSchema = z.object({
+  id: z.string(),
+  kind: FactKindSchema,
+  entity: z.string().optional(),
+  op: OpSchema.optional(),
+  row: z.record(z.string(), z.unknown()).optional(),
+  name: z.string().optional(),
+  payload: z.unknown().optional(),
+  reflex: z.string().optional(),
+  runId: z.string().optional(),
+  occurrence: z.string().optional(),
+  stats: z.object({ total: z.number(), done: z.number(), failed: z.number() }).optional(),
+  target: z.string().optional(),
+  by: z.string().optional(),
+  at: z.number(),
+  notBefore: z.number().optional(),
+  dedupeKey: z.string().optional(),
+  cause: z.string().optional(),
+  depth: z.number(),
+  deliveredAt: z.number().optional(),
+  parked: z.string().optional(),
+  released: z.boolean().optional(),
+  as: z.string().optional(),
+  root: z.string().optional(),
+  descendants: z.number().optional(),
+});
+
+const RunRowSchema = z.object({
+  id: z.string(),
+  reflexId: z.string(),
+  version: z.string(),
+  as: z.string().optional(),
+  cause: z.string(),
+  occurrence: z.string().optional(),
+  factIds: z.array(z.string()).optional(),
+  state: z.enum(['pending', 'fanned', 'settled', 'skipped']),
+  depth: z.number(),
+  selected: z.number().optional(),
+  total: z.number(),
+  done: z.number(),
+  failed: z.number(),
+  dueAt: z.number(),
+  createdAt: z.number(),
+  settledAt: z.number().optional(),
+  drained: z.boolean().optional(),
+  note: z.string().optional(),
+});
+
+const TaskRowSchema = z.object({
+  id: z.string(),
+  runId: z.string(),
+  reflexId: z.string(),
+  unit: z.string(),
+  cause: z.string(),
+  env: z.record(z.string(), z.unknown()),
+  depth: z.number(),
+  state: z.enum(['pending', 'claimed', 'retrying', 'done', 'failed']),
+  attempt: z.number(),
+  token: z.string().optional(),
+  claimedUntil: z.number(),
+  notBefore: z.number(),
+  input: z.unknown().optional(),
+  output: z.unknown().optional(),
+  error: z.string().optional(),
+  createdAt: z.number(),
+  settledAt: z.number().optional(),
+});
+
+const StateRowSchema = z.object({
+  reflexId: z.string(),
+  armedAt: z.number(),
+  materializedThrough: z.number().optional(),
+});
+
+const ROW_SCHEMAS: { [T in TableName]: z.ZodType<TideTables[T]> } = {
+  fact: FactRowSchema,
+  run: RunRowSchema,
+  task: TaskRowSchema,
+  state: StateRowSchema,
+};
+
 const rowToEntity = <T extends TableName>(table: T, row: Record<string, unknown>): TideTables[T] => {
   const entity: Record<string, unknown> = {};
   for (const [column, value] of Object.entries(row)) {
     const mapped = fromColumn(column, value);
     if (mapped !== undefined) entity[camel(column)] = mapped;
   }
-  return entity as TideTables[T];
+  const read = ROW_SCHEMAS[table].safeParse(entity);
+  if (!read.success) {
+    const misfits = read.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
+    throw new Error(`tide store: a row of ${SQL_TABLE[table]} does not read as a ${table} (${misfits})`);
+  }
+  return read.data;
 };
 
 // ── the WHERE compiler ──────────────────────────────────────────
 
-const COMPARATORS: Record<string, string> = { eq: '=', ne: '<>', lt: '<', lte: '<=', gt: '>', gte: '>=' };
+// What a store is asked with, as the compilers read it: fields by name. A
+// `Where`, an `Order` and a `Mutation` over any one table are each one of
+// these, so a compiler takes the table's own and asks for no cast.
+type Fields = Readonly<Record<string, unknown>>;
+type Ordering = readonly { by: string; dir?: 'asc' | 'desc' }[];
+
+const COMPARATORS = [
+  ['eq', '='],
+  ['ne', '<>'],
+  ['lt', '<'],
+  ['lte', '<='],
+  ['gt', '>'],
+  ['gte', '>='],
+] as const;
+
+// Anything that is an object and not a list is a comparison: `{ gt: 3 }`,
+// `{ in: [...] }`. Every other value is what the column must equal.
+const isComparison = (test: unknown): test is Comparison<unknown> => test !== null && typeof test === 'object' && !Array.isArray(test);
 
 type Bind = { sql: string; params: unknown[] };
 
-const compileWhere = (where: Where<Record<string, unknown>> | undefined, start: number, alias = ''): Bind => {
+const compileWhere = (where: Fields | undefined, start: number, alias = ''): Bind => {
   const clauses: string[] = [];
   const params: unknown[] = [];
   const prefix = alias === '' ? '' : `${alias}.`;
@@ -247,16 +372,16 @@ const compileWhere = (where: Where<Record<string, unknown>> | undefined, start: 
   for (const [field, test] of Object.entries(where ?? {})) {
     const column = `${prefix}${snake(field)}`;
     const bare = snake(field);
-    if (test === null || typeof test !== 'object' || Array.isArray(test)) {
+    if (!isComparison(test)) {
       // An equality on `undefined` means IS NULL, which is what the engine
       // means when it filters on a column it just cleared.
       clauses.push(test === undefined ? `${column} IS NULL` : `${column} = ${slot(toColumn(bare, test))}`);
       continue;
     }
 
-    const comparison = test as Comparison<unknown>;
-    for (const [op, symbol] of Object.entries(COMPARATORS)) {
-      const operand = comparison[op as keyof Comparison<unknown>];
+    const comparison = test;
+    for (const [op, symbol] of COMPARATORS) {
+      const operand = comparison[op];
       if (operand === undefined) continue;
       // `ne` must be true for a NULL column: a run that has never been
       // drained is not drained, and plain SQL `<>` answers NULL there.
@@ -270,20 +395,20 @@ const compileWhere = (where: Where<Record<string, unknown>> | undefined, start: 
   return { sql: clauses.length === 0 ? 'TRUE' : clauses.join(' AND '), params };
 };
 
-const compileOrder = (order: Order<Record<string, unknown>> | undefined, alias = ''): string => {
+const compileOrder = (order: Ordering | undefined, alias = ''): string => {
   if (order === undefined || order.length === 0) return '';
   const prefix = alias === '' ? '' : `${alias}.`;
-  return ` ORDER BY ${order.map((key) => `${prefix}${snake(String(key.by))} ${key.dir === 'desc' ? 'DESC' : 'ASC'}`).join(', ')}`;
+  return ` ORDER BY ${order.map((key) => `${prefix}${snake(key.by)} ${key.dir === 'desc' ? 'DESC' : 'ASC'}`).join(', ')}`;
 };
 
 // The same comparison SQL made, applied to what came back. Kept beside the
 // compiler so the two cannot drift.
-const sortRows = <R>(rows: readonly R[], order: Order<Record<string, unknown>> | undefined): R[] => {
+const sortRows = <R>(rows: readonly R[], order: Order<R> | undefined): R[] => {
   if (order === undefined || order.length === 0) return [...rows];
   return [...rows].sort((left, right) => {
     for (const key of order) {
-      const a = (left as Record<string, unknown>)[String(key.by)];
-      const b = (right as Record<string, unknown>)[String(key.by)];
+      const a: unknown = left[key.by];
+      const b: unknown = right[key.by];
       const compared = typeof a === 'number' && typeof b === 'number' ? a - b : String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
       if (compared !== 0) return compared * (key.dir === 'desc' ? -1 : 1);
     }
@@ -291,7 +416,7 @@ const sortRows = <R>(rows: readonly R[], order: Order<Record<string, unknown>> |
   });
 };
 
-const compileSet = (set: Mutation<Record<string, unknown>>, start: number): Bind => {
+const compileSet = (set: Fields, start: number): Bind => {
   const assignments: string[] = [];
   const params: unknown[] = [];
   for (const [field, value] of Object.entries(set)) {
@@ -299,7 +424,7 @@ const compileSet = (set: Mutation<Record<string, unknown>>, start: number): Bind
     if (value !== null && typeof value === 'object' && 'inc' in value) {
       // Column arithmetic, so two settling tasks cannot lose an increment
       // between a read and a write.
-      assignments.push(`${column} = coalesce(${column}, 0) + ${Number((value as { inc: number }).inc)}`);
+      assignments.push(`${column} = coalesce(${column}, 0) + ${Number(value.inc)}`);
       continue;
     }
     params.push(toColumn(column, value));
@@ -325,6 +450,13 @@ const mintId = ((): ((table: TableName) => string) => {
 // (PGlite says so outright; `pg` under parameters too). The comments ride
 // along: strata hashes a step without its full-line comments, so rewording
 // one is not an edit.
+//
+// SPLIT ON EVERY `;`, AND FOR MIGRATION 1 ONLY. That is not how a sequence is
+// split: a `;` inside a statement would cut it in two, and a new sequence uses
+// strata's `sqlSteps` (nisc AGENTS.md, rule 17). It cannot be corrected here.
+// The sixteen steps this makes of TIDE_DDL have run, their checksum is in
+// every ledger, and a different split is a different history. TIDE_DDL holds
+// sixteen `;`, each the end of a statement. Nothing new is split this way.
 const statementsOf = (ddl: string): { kind: 'sql'; sql: string }[] =>
   ddl
     .split(';')
@@ -356,7 +488,7 @@ export type TideStoreOptions = {
   migrate?: boolean;
 };
 
-export const createTideStore = (pool: PgPool, options: TideStoreOptions = {}): TideStore & { ready: Promise<void> } => {
+export const createTideStore = (pool: TidePool, options: TideStoreOptions = {}): TideStore & { ready: Promise<void> } => {
   // EVERY method awaits this. The last store had three transactional methods
   // that did not, so on a real pool they raced the DDL and threw
   // `42P01 undefined_table` INSIDE a transaction — which the fan-out then
@@ -370,14 +502,14 @@ export const createTideStore = (pool: PgPool, options: TideStoreOptions = {}): T
   // failure it reports would be a database that is not up yet.
   ready.catch(() => undefined);
 
-  const build = (client: PgPool): TideStore => {
+  const build = (client: TidePool): TideStore => {
     const store: TideStore = {
       query: async <T extends TableName>(spec: QuerySpec<T>) => {
         await ready;
-        const where = compileWhere(spec.where as Where<Record<string, unknown>>, 1);
+        const where = compileWhere(spec.where, 1);
         const limit = spec.limit === undefined ? '' : ` LIMIT ${Math.max(0, Math.floor(spec.limit))}`;
         const result = await client.query(
-          `SELECT * FROM ${SQL_TABLE[spec.table]} WHERE ${where.sql}${compileOrder(spec.order as Order<Record<string, unknown>>)}${limit}`,
+          `SELECT * FROM ${SQL_TABLE[spec.table]} WHERE ${where.sql}${compileOrder(spec.order)}${limit}`,
           where.params,
         );
         return result.rows.map((row) => rowToEntity(spec.table, row));
@@ -387,7 +519,8 @@ export const createTideStore = (pool: PgPool, options: TideStoreOptions = {}): T
       // DATABASE's, decided under the constraint, not a read the caller races.
       appendIfAbsent: async <T extends TableName>(table: T, input: Omit<TideTables[T], 'id'> & { id?: string }) => {
         await ready;
-        const withId = PRIMARY_KEY[table] === 'id' ? { ...(input as Record<string, unknown>), id: input.id ?? mintId(table) } : { ...(input as Record<string, unknown>) };
+        const given: Fields = input;
+        const withId: Fields = PRIMARY_KEY[table] === 'id' ? { ...given, id: input.id ?? mintId(table) } : given;
         const entries = Object.entries(withId).filter(([, value]) => value !== undefined);
         const columns = entries.map(([field]) => snake(field));
         const params = entries.map(([field, value]) => toColumn(snake(field), value));
@@ -397,8 +530,8 @@ export const createTideStore = (pool: PgPool, options: TideStoreOptions = {}): T
         const unique = UNIQUE_BY[table];
         const target =
           unique.when === undefined
-            ? `(${unique.by.map((column) => snake(String(column))).join(', ')})`
-            : `(${unique.by.map((column) => (column === 'entity' || column === 'name' ? `coalesce(${snake(String(column))},'')` : snake(String(column)))).join(', ')}) WHERE ${snake(String(unique.when))} IS NOT NULL`;
+            ? `(${unique.by.map((column) => snake(column)).join(', ')})`
+            : `(${unique.by.map((column) => (column === 'entity' || column === 'name' ? `coalesce(${snake(column)},'')` : snake(column))).join(', ')}) WHERE ${snake(unique.when)} IS NOT NULL`;
 
         const result = await client.query(
           `INSERT INTO ${SQL_TABLE[table]} (${columns.join(', ')}) VALUES (${params.map((_value, index) => `$${index + 1}`).join(', ')})
@@ -416,16 +549,16 @@ export const createTideStore = (pool: PgPool, options: TideStoreOptions = {}): T
       claim: async <T extends TableName>(spec: ClaimSpec<T>) => {
         await ready;
         const table = SQL_TABLE[spec.table];
-        const order = compileOrder(spec.order as Order<Record<string, unknown>>, 'c');
+        const order = compileOrder(spec.order, 'c');
 
         // Selection and mutation in ONE statement, which is the promise.
         // `FOR UPDATE SKIP LOCKED` makes N instances ticking at once ordinary
         // contention rather than a lock service — a throughput choice; the
         // exactly-once part is that it is one statement.
-        const take = async (extra: Where<Record<string, unknown>>, limit: number) => {
+        const take = async (extra: Fields, limit: number) => {
           if (limit <= 0) return [];
-          const where = compileWhere({ ...(spec.where as Where<Record<string, unknown>>), ...extra }, 1, 'c');
-          const set = compileSet(spec.set as Mutation<Record<string, unknown>>, where.params.length + 1);
+          const where = compileWhere({ ...spec.where, ...extra }, 1, 'c');
+          const set = compileSet(spec.set, where.params.length + 1);
           const result = await client.query(
             `UPDATE ${table} SET ${set.sql}
              WHERE ctid IN (
@@ -442,7 +575,7 @@ export const createTideStore = (pool: PgPool, options: TideStoreOptions = {}): T
           // returns them, so without this a fan-out ran in heap order here and
           // insertion order in memory — two stores, two answers, and a headless
           // check that cannot assert on either.
-          return sortRows(result.rows.map((row) => rowToEntity(spec.table, row)), spec.order as Order<Record<string, unknown>> | undefined);
+          return sortRows(result.rows.map((row) => rowToEntity(spec.table, row)), spec.order);
         };
 
         if (spec.onePer === undefined) return take({}, spec.limit);
@@ -462,14 +595,14 @@ export const createTideStore = (pool: PgPool, options: TideStoreOptions = {}): T
         // parallel reflex starves every serial one — the mirror of the defect
         // where a serial reflex with five thousand due tasks starved
         // everybody else because LIMIT was applied before the serial filter.
-        const claimed = await take({ [String(column)]: { notIn: restricted } }, spec.limit - restricted.length);
+        const claimed = await take({ [column]: { notIn: restricted } }, spec.limit - restricted.length);
 
         for (const group of restricted) {
           if (claimed.length >= spec.limit) break;
-          const busy = compileWhere({ ...(held as Where<Record<string, unknown>>), [String(column)]: group }, 1, 'c');
+          const busy = compileWhere({ ...held, [column]: group }, 1, 'c');
           const taken = await client.query(`SELECT c.id FROM ${table} c WHERE ${busy.sql} LIMIT 1`, busy.params);
           if (taken.rows.length > 0) continue;
-          claimed.push(...(await take({ [String(column)]: group }, 1)));
+          claimed.push(...(await take({ [column]: group }, 1)));
         }
 
         return claimed;
@@ -477,9 +610,9 @@ export const createTideStore = (pool: PgPool, options: TideStoreOptions = {}): T
 
       cas: async <T extends TableName>(table: T, id: string, expect: Where<TideTables[T]>, set: Mutation<TideTables[T]>) => {
         await ready;
-        const key = snake(String(PRIMARY_KEY[table]));
-        const where = compileWhere(expect as Where<Record<string, unknown>>, 2);
-        const patch = compileSet(set as Mutation<Record<string, unknown>>, where.params.length + 2);
+        const key = snake(PRIMARY_KEY[table]);
+        const where = compileWhere(expect, 2);
+        const patch = compileSet(set, where.params.length + 2);
         const result = await client.query(
           `UPDATE ${SQL_TABLE[table]} SET ${patch.sql} WHERE ${key} = $1 AND ${where.sql} RETURNING ${key}`,
           [id, ...where.params, ...patch.params],
@@ -489,10 +622,10 @@ export const createTideStore = (pool: PgPool, options: TideStoreOptions = {}): T
 
       remove: async <T extends TableName>(spec: RemoveSpec<T>) => {
         await ready;
-        const where = compileWhere(spec.where as Where<Record<string, unknown>>, 1);
+        const where = compileWhere(spec.where, 1);
         // Work goes with its run through the foreign key, not through a
         // second statement somebody can forget.
-        const result = await client.query(`DELETE FROM ${SQL_TABLE[spec.table]} WHERE ${where.sql} RETURNING ${snake(String(PRIMARY_KEY[spec.table]))}`, where.params);
+        const result = await client.query(`DELETE FROM ${SQL_TABLE[spec.table]} WHERE ${where.sql} RETURNING ${snake(PRIMARY_KEY[spec.table])}`, where.params);
         return result.rows.length;
       },
 

@@ -47,7 +47,6 @@ const storeOverClient = async () => {
   });
   const store = createTideStore({
     query: (text, values) => pool.query(text, values),
-    statementTimeouts: false,
     transaction: (fn) => db.transaction((tx) => fn(clientOver({ query: (text, values) => tx.query(text, values) }))),
   });
   await store.ready;
