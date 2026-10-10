@@ -332,61 +332,6 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     return c.json({ principal, actions: ids, hash });
   });
 
-  // WHAT HEARS A WRITE. Vex reports each committed mutation once, with
-  // per-statement writes, and the data module hands it to whoever subscribed,
-  // in this order of record:
-  //
-  //   1. The FACT lane — rows ride here and into tide's ledger only,
-  //      stamped with the identity the app derives from the write's
-  //      own scope. That stamp is the tenancy fence (see mintWrites).
-  //   2. The REACTIONS — row-less by design and routed by declared
-  //      interest: table, op, count, scope, with `deliver` to push
-  //      onto living shells. A receiver that wants data re-reads it
-  //      under its own policy.
-  //
-  // Late-bound throughout: shells and tide stand up after the mounts.
-  const facts = app.facts;
-  if (facts !== undefined) {
-    data.onWrite((event, hints) => {
-      const tide = facts.tide();
-      const as = tide !== undefined ? facts.identity(event.scope) : undefined;
-      if (tide === undefined || as === undefined) return;
-      // The chain position the request named, if the app's gate takes that
-      // caller's word for it.
-      const chain = hints === undefined ? undefined : facts.chain?.(event.scope, hints);
-      mintWrites(tide, event, as, Date.now(), chain).catch((err) => console.error('[moss:facts]', err));
-    });
-  }
-  const reactions = app.reactions;
-  if (reactions !== undefined) {
-    data.onWrite((event) => {
-      const tools = {
-        // Local delivery carries the payload — an optimisation for a
-        // shell resident in THIS process. The cross-process nudge is
-        // payload-less: a shell in another process re-reads under its
-        // own policy, which is the row-less doctrine and the only safe
-        // thing to send off-box. No fabric → the publish is a no-op and
-        // this is exactly today's local deliver.
-        deliver: (principal: string, channel: string, payload?: unknown) => {
-          const local = (server as MossServer).shells?.deliver(principal, channel, payload) ?? false;
-          publishFabric({ kind: 'nudge', principal, channel });
-          return local;
-        },
-      };
-      for (const write of event.writes) {
-        if (write.rows.length === 0) continue;
-        for (const reaction of reactions) {
-          if (reaction.table !== write.table || (reaction.op !== undefined && reaction.op !== write.op)) continue;
-          try {
-            reaction.run({ fingerprint: event.fingerprint, table: write.table, op: write.op, count: write.rows.length, scope: event.scope }, tools);
-          } catch (err) {
-            console.error('[moss:reactions]', err);
-          }
-        }
-      }
-    });
-  }
-
   // The vex surfaces (./data, routes.ts) — the adapter does the work; the
   // server says WHO. Locked always; scope values and the compiled policy both
   // come from the principal, never from the request.
@@ -490,8 +435,8 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
         follower?.end();
         return res;
       }
-      const body = (await res.json()) as Record<string, unknown> | null;
-      const result = body !== null && typeof body === 'object' && 'result' in body ? body['result'] : body;
+      const body: unknown = await res.json();
+      const result = body !== null && typeof body === 'object' && 'result' in body ? body.result : body;
       follower?.handedOver();
       return {
         ok: res.ok,
@@ -570,6 +515,62 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     if (host === undefined || manifest === undefined) return undefined;
     return { name: matched.name, host, inputs: manifest.params === undefined ? {} : { [manifest.params]: matched.params } };
   };
+
+  // WHAT HEARS A WRITE. Vex reports each committed mutation once, with
+  // per-statement writes, and the data module hands it to whoever subscribed,
+  // in this order of record:
+  //
+  //   1. The FACT lane — rows ride here and into tide's ledger only,
+  //      stamped with the identity the app derives from the write's
+  //      own scope. That stamp is the tenancy fence (see mintWrites).
+  //   2. The REACTIONS — row-less by design and routed by declared
+  //      interest: table, op, count, scope, with `deliver` to push
+  //      onto living shells. A receiver that wants data re-reads it
+  //      under its own policy.
+  //
+  // Subscribed once the shells stand, which a reaction delivers into. Tide
+  // and the fabric are late-bound: both are asked when a write is heard.
+  const facts = app.facts;
+  if (facts !== undefined) {
+    data.onWrite((event, hints) => {
+      const tide = facts.tide();
+      const as = tide !== undefined ? facts.identity(event.scope) : undefined;
+      if (tide === undefined || as === undefined) return;
+      // The chain position the request named, if the app's gate takes that
+      // caller's word for it.
+      const chain = hints === undefined ? undefined : facts.chain?.(event.scope, hints);
+      mintWrites(tide, event, as, Date.now(), chain).catch((err) => console.error('[moss:facts]', err));
+    });
+  }
+  const reactions = app.reactions;
+  if (reactions !== undefined) {
+    data.onWrite((event) => {
+      const tools = {
+        // Local delivery carries the payload — an optimisation for a
+        // shell resident in THIS process. The cross-process nudge is
+        // payload-less: a shell in another process re-reads under its
+        // own policy, which is the row-less doctrine and the only safe
+        // thing to send off-box. No fabric → the publish is a no-op and
+        // this is exactly today's local deliver.
+        deliver: (principal: string, channel: string, payload?: unknown) => {
+          const local = shells?.deliver(principal, channel, payload) ?? false;
+          publishFabric({ kind: 'nudge', principal, channel });
+          return local;
+        },
+      };
+      for (const write of event.writes) {
+        if (write.rows.length === 0) continue;
+        for (const reaction of reactions) {
+          if (reaction.table !== write.table || (reaction.op !== undefined && reaction.op !== write.op)) continue;
+          try {
+            reaction.run({ fingerprint: event.fingerprint, table: write.table, op: write.op, count: write.rows.length, scope: event.scope }, tools);
+          } catch (err) {
+            console.error('[moss:reactions]', err);
+          }
+        }
+      }
+    });
+  }
 
   // THE CLUSTER FABRIC. One origin per process, stamped on every signal so a
   // process ignores its own echoes. The three appliers below are LOCAL-ONLY —

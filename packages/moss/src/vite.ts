@@ -147,7 +147,7 @@ export const mossDev = (options: MossDevOptions): Plugin => ({
               res.end(`<p>nobody called ${who.replace(/[<&"]/g, '')}</p>`);
               return;
             }
-            const scheme = (req.socket as { encrypted?: boolean }).encrypted === true ? 'https' : 'http';
+            const scheme = 'encrypted' in req.socket && req.socket.encrypted === true ? 'https' : 'http';
             res.statusCode = 302;
             res.setHeader('set-cookie', sessionCookies(`${scheme}://${req.headers.host ?? 'localhost'}`, token, app.tokenKey !== undefined ? { key: app.tokenKey } : {}));
             res.setHeader('location', '/');
