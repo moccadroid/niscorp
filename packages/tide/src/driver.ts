@@ -99,7 +99,7 @@ export const createTideDriver = (config: TideDriverConfig): TideDriver => {
       const report = await tide.advance({ now: now() });
       if (progressOf(report) === 0) return;
     }
-    console.error(`[moss:tide-driver] a drain exceeded ${MAX_STEPS_PER_DRAIN} steps — stopping this pass; the janitor will resume it`);
+    console.error(`[tide:driver] a drain exceeded ${MAX_STEPS_PER_DRAIN} steps — stopping this pass; the janitor will resume it`);
   };
 
   // Never rejects: it runs detached after every drain, and an unhandled
@@ -111,7 +111,7 @@ export const createTideDriver = (config: TideDriverConfig): TideDriver => {
       due = await tide.nextDue(now());
     } catch (err) {
       // Stopping mid-read (the store closing under it) is expected, not news.
-      if (!stopped) console.error('[moss:tide-driver] next due', err);
+      if (!stopped) console.error('[tide:driver] next due', err);
       return;
     }
     if (stopped) return;
@@ -140,7 +140,7 @@ export const createTideDriver = (config: TideDriverConfig): TideDriver => {
           await drain();
         }
       } catch (err) {
-        console.error('[moss:tide-driver]', err);
+        console.error('[tide:driver]', err);
       } finally {
         running = false;
         cycle = undefined;
@@ -152,7 +152,7 @@ export const createTideDriver = (config: TideDriverConfig): TideDriver => {
 
   const janitor = setInterval(() => {
     if (config.retention !== undefined) {
-      void tide.sweep(now(), config.retention).catch((err) => console.error('[moss:tide-driver] sweep', err));
+      void tide.sweep(now(), config.retention).catch((err) => console.error('[tide:driver] sweep', err));
     }
     void wake();
   }, janitorMs);
