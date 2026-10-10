@@ -117,12 +117,18 @@ const sqlIn = (text: string): Found => {
 // how a strata sequence is written and is not what this check is about, but
 // is counted so a new one is seen.
 //
-// `why` says which of three things a file is:
+// `why` says which of four things a file is:
 //   credential — runs before a principal exists, so there is no policy to run
 //                under. This is the one kind that stays.
 //   store      — an engine's own storage, in that engine's package: tide's
 //                Postgres store. The engine is handed it and holds no SQL.
-//   debt       — no reason. It goes through vex or it goes.
+//   tables     — a strata sequence: what the owner of some tables migrates.
+//                A row a migration writes beside its table (AGENTS.md, rule
+//                17) is counted as a statement, and is part of the migration.
+//   debt       — no reason. It goes through vex or it goes. NONE IS LEFT
+//                (2026-10-11): the last four were the generation counter's.
+//                The kind stays, so that a statement somebody argues in has
+//                a name that says what it is.
 
 type Entry = Found & { why: 'credential' | 'store' | 'debt' | 'tables'; note: string };
 
@@ -135,8 +141,13 @@ const LEDGER: Readonly<Record<string, Readonly<Record<string, Entry>>>> = {
     // feature's own entries go through. The key-hash lookup went with the rest:
     // the policy those entries run under asks for no principal.
     'integrations/tables.ts': { doors: 0, statements: 0, tables: 1, why: 'tables', note: "the integrations feature's own table sequence: frame grants, read and written through vex" },
-    'manifest/generation.ts': { doors: 3, statements: 4, tables: 1, why: 'debt', note: 'the generation counter' },
-    'data/tables.ts': { doors: 0, statements: 0, tables: 16, why: 'tables', note: "moss's own table sequence, as it stood in integrations.ts: history, checksummed in every ledger; the sixteenth is the unique index on an integration's key hash, appended" },
+    // `manifest/generation.ts` is not here any more. It held the last four
+    // statements with no reason. Three read and moved the generation counter,
+    // and are two vex entries now (`data/pointer.ts`), replayed the way a
+    // feature's own are. The fourth was the counter's seed row, which is a
+    // step of migration 1: it is declared with that migration now, and is the
+    // one statement counted below.
+    'data/tables.ts': { doors: 0, statements: 1, tables: 17, why: 'tables', note: "moss's own table sequence, as it stood in integrations.ts: history, checksummed in every ledger; the sixteenth is the unique index on an integration's key hash, appended; the seventeenth and the one statement are the generation pointer's table and its seed row, the last two steps of migration 1, declared here and not beside the code that polls" },
     'data/migrate.ts': { doors: 1, statements: 0, tables: 0, why: 'tables', note: "hands the migration's own transaction to vex's adapter to read the schema" },
   },
   tide: {

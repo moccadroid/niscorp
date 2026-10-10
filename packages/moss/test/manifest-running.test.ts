@@ -1,9 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
-import type { PgPool } from '@niscorp/vex';
 import type { ActionDefinition } from '@niscorp/nova';
 import { createRunningManifest } from '../src/manifest';
-import type { RunningManifestConfig, ShippedManifest } from '../src/manifest';
+import type { Pointer, RunningManifestConfig, ShippedManifest } from '../src/manifest';
 
 // THE RUNNING MANIFEST: what the app consists of right now, changed in one
 // place and only to something that may be served. Driven directly, with small
@@ -385,17 +384,18 @@ describe('what the app shipped, and a set that was taken', () => {
 });
 
 describe('watch — the pointer the other processes poll', () => {
-  // A pool of exactly the shape the pointer uses: one counter, moved by an
-  // UPDATE here or by `poke`, which is what another process did.
-  const pointerPool = (): { pool: PgPool; poke: () => void; moves: () => number } => {
+  // The pointer's row, as the manifest is handed it: one counter, moved by a
+  // `move` here or by `poke`, which is what another process did.
+  const pointerRow = (): { pointer: Pointer; poke: () => void; moves: () => number } => {
     const state = { n: 0, moves: 0 };
     return {
-      pool: {
-        query: async (sql: string) => {
-          if (!sql.startsWith('UPDATE')) return { rows: [{ n: state.n }] };
+      pointer: {
+        read: async () => state.n,
+        move: async (from) => {
+          if (state.n !== from) return false;
           state.n += 1;
           state.moves += 1;
-          return { rows: [] };
+          return true;
         },
       },
       poke: () => void (state.n += 1),
@@ -405,8 +405,8 @@ describe('watch — the pointer the other processes poll', () => {
   const aMoment = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 25));
 
   it('before it watches a switch moves nothing; after, each switch moves the pointer once', async () => {
-    const { pool, moves } = pointerPool();
-    const manifest = running(shippedApp(), { pointer: { pool, everyMs: 1 } });
+    const { pointer, moves } = pointerRow();
+    const manifest = running(shippedApp(), { pointer: { ...pointer, everyMs: 1 } });
     try {
       manifest.replace('bundles', { [desk.id]: desk });
       await aMoment();
@@ -431,10 +431,10 @@ describe('watch — the pointer the other processes poll', () => {
   });
 
   it('a move another process made reads the sets that live in rows again, and moves nothing', async () => {
-    const { pool, poke, moves } = pointerPool();
+    const { pointer, poke, moves } = pointerRow();
     const rows: { now: Record<string, ActionDefinition> } = { now: { [desk.id]: desk } };
     const shipped = shippedApp();
-    const manifest = running(shipped, { loaders: { integrations: async () => rows.now }, pointer: { pool, everyMs: 1 } });
+    const manifest = running(shipped, { loaders: { integrations: async () => rows.now }, pointer: { ...pointer, everyMs: 1 } });
     try {
       manifest.replace('integrations', rows.now);
       manifest.replace('bundles', { [pay.id]: pay });
@@ -464,9 +464,9 @@ describe('watch — the pointer the other processes poll', () => {
   });
 
   it('a set named after the manifest stands is read again the same way, and has its place from when it was named', async () => {
-    const { pool, poke, moves } = pointerPool();
+    const { pointer, poke, moves } = pointerRow();
     const rows: { now: Record<string, ActionDefinition> } = { now: { [desk.id]: desk } };
-    const manifest = running(shippedApp(), { pointer: { pool, everyMs: 1 } });
+    const manifest = running(shippedApp(), { pointer: { ...pointer, everyMs: 1 } });
     try {
       const told = vi.fn();
       manifest.onChange(told);
@@ -494,8 +494,8 @@ describe('watch — the pointer the other processes poll', () => {
   });
 
   it('stopping ends the watching', async () => {
-    const { pool, poke } = pointerPool();
-    const manifest = running(shippedApp(), { pointer: { pool, everyMs: 1 } });
+    const { pointer, poke } = pointerRow();
+    const manifest = running(shippedApp(), { pointer: { ...pointer, everyMs: 1 } });
     manifest.watch();
     await aMoment();
     const told = vi.fn();

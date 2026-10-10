@@ -1,6 +1,5 @@
 import type { Sequence } from '@niscorp/strata';
 import type { DocumentStore } from '@niscorp/strata/postgres';
-import { GENERATION_DDL } from '../manifest';
 
 // ═══════════════════════════════════════════════════════════════
 // THE TABLES MOSS OWNS, and the documents stored in them.
@@ -9,6 +8,22 @@ import { GENERATION_DDL } from '../manifest';
 // an app that had to author them would author them differently each time, and
 // the shape is not application knowledge.
 // ═══════════════════════════════════════════════════════════════
+
+// THE GENERATION POINTER'S TABLE, AND ITS ONE ROW. History: these two
+// statements are the last two steps of migration 1 below, and every database
+// has run them. They were declared beside the code that polls the pointer
+// (../manifest, generation.ts) and are here now, byte for byte, with the rest
+// of what moss migrates: that file holds no SQL any more. The row is written
+// by the migration, in the same transaction as its table (rule 17), and is
+// read and moved through vex from then on (./pointer.ts).
+//
+// TWO STATEMENTS, SENT SEPARATELY. A driver that prepares its statements refuses
+// a string carrying more than one command, and the failure arrives as a
+// DatabaseError at boot rather than as anything about generations.
+const GENERATION_DDL: readonly string[] = [
+  /* sql */ `CREATE TABLE IF NOT EXISTS moss_generation (id INT PRIMARY KEY, n BIGINT NOT NULL DEFAULT 0)`,
+  /* sql */ `INSERT INTO moss_generation (id, n) VALUES (1, 0) ON CONFLICT (id) DO NOTHING`,
+];
 
 // THE TABLES MOSS OWNS, as one strata sequence. Migration 1 is the DDL every
 // boot used to run, verbatim and in order — CREATE … IF NOT EXISTS, then the

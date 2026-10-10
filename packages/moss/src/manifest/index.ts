@@ -47,7 +47,7 @@ export type {
   ShellCanvas,
   ShellManifest,
 } from './app';
-export { GENERATION_DDL } from './generation';
+export type { Pointer } from './generation';
 export { receiveManifest } from './handover';
 export { layoutMisfits } from './layout';
 export type { KitComponents } from './layout';

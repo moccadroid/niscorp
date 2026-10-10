@@ -38,6 +38,11 @@
 // run (./tables.ts), and the documents stored in them are read in this code's
 // grammars (./grammar.ts).
 //
+// THE GENERATION POINTER'S ROW (./pointer.ts) is one of those tables' rows:
+// the counter every process polls. It is read and moved here, by two entries
+// replayed as a feature's own are, and the manifest module, which holds the
+// clock, is handed those two functions.
+//
 // This module imports `runtime`, `identity` and `manifest`, and nothing else
 // of moss.
 // ═══════════════════════════════════════════════════════════════

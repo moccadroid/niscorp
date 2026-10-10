@@ -1,6 +1,3 @@
-import { z } from 'zod';
-import type { PgPool } from '@niscorp/vex';
-
 // ═══════════════════════════════════════════════════════════════
 // THE GENERATION POINTER — how a second process finds out.
 //
@@ -29,7 +26,22 @@ import type { PgPool } from '@niscorp/vex';
 // The cost is that staleness is bounded by a poll rather than instant. It is
 // bounded by `sessionRevalidateMs`, a knob already being tuned for exactly this
 // class of question. Today it is bounded by nothing.
+//
+// THIS FILE HOLDS THE CLOCK AND NO SQL. The counter is one row of a table the
+// data module owns, read and moved there, through vex (../data, pointer.ts).
+// This module sits beneath that one and cannot import it, so the two things it
+// asks of the row are handed to it as functions.
 // ═══════════════════════════════════════════════════════════════
+
+// THE ROW, as far as this module may know it: where the counter is, and one
+// step on from where it was read.
+export type Pointer = {
+  // The number the counter is at.
+  read: () => Promise<number>;
+  // Move it from `from` to the next number, if it is still at `from`. Answers
+  // whether it was: `false` is somebody else having moved it first.
+  move: (from: number) => Promise<boolean>;
+};
 
 export type Generation = {
   /** This process changed something every process should forget. */
@@ -39,25 +51,14 @@ export type Generation = {
   stop: () => void;
 };
 
-// TWO STATEMENTS, SENT SEPARATELY. A driver that prepares its statements refuses
-// a string carrying more than one command, and the failure arrives as a
-// DatabaseError at boot rather than as anything about generations.
-export const GENERATION_DDL: readonly string[] = [
-  /* sql */ `CREATE TABLE IF NOT EXISTS moss_generation (id INT PRIMARY KEY, n BIGINT NOT NULL DEFAULT 0)`,
-  /* sql */ `INSERT INTO moss_generation (id, n) VALUES (1, 0) ON CONFLICT (id) DO NOTHING`,
-];
-
 export const DEFAULT_GENERATION_POLL_MS = 60 * 1000;
 
-// What the pointer's row holds. The database is outside this process, so the
-// row is parsed like anything else that arrives: a BIGINT is handed over as a
-// number or as the text of one.
-const PointerRowSchema = z.object({ n: z.coerce.number() });
+// How often a move is tried again when the counter moved between reading it
+// and writing the next number. Each failure is another process's move landing
+// in that instant, so more than a few in a row is not contention any more.
+const MOVE_ATTEMPTS = 5;
 
-export const createGeneration = (
-  pool: PgPool,
-  ctx: { onMoved: () => void | Promise<void>; everyMs?: number },
-): Generation => {
+export const createGeneration = (pointer: Pointer, ctx: { onMoved: () => void | Promise<void>; everyMs?: number }): Generation => {
   const everyMs = ctx.everyMs ?? DEFAULT_GENERATION_POLL_MS;
   // Starts at -1 rather than 0 so the first read establishes a baseline instead
   // of reporting a move that never happened.
@@ -71,12 +72,7 @@ export const createGeneration = (
     if (checking) return;
     checking = true;
     try {
-      const result = await pool.query('SELECT n FROM moss_generation WHERE id = 1');
-      // A pointer with no row reads as zero; one whose `n` is not a number is
-      // not a reading, and what was last seen stands.
-      const row = PointerRowSchema.safeParse(result.rows[0] ?? { n: 0 });
-      if (!row.success) return;
-      const n = row.data.n;
+      const n = await pointer.read();
       const first = seen === -1;
       const moved = !first && n !== seen;
       seen = n;
@@ -92,22 +88,30 @@ export const createGeneration = (
     }
   };
 
+  // ONE STEP ON, FROM WHERE IT IS. The counter cannot be told to add one: the
+  // write grammar sets a column to a value and reads none. So it is read, and
+  // the next number is written where the counter is still what was read. Where
+  // it is not, another process moved it in that instant, and it is read again.
+  const move = async (): Promise<void> => {
+    for (let attempt = 0; attempt < MOVE_ATTEMPTS; attempt += 1) {
+      const n = await pointer.read();
+      if (await pointer.move(n)) {
+        // Adopt our own move immediately, so `seen` cannot lag behind a value
+        // this process itself wrote and then "discover" it a minute later.
+        seen = n + 1;
+        return;
+      }
+    }
+    throw new Error(`the pointer moved under this process ${MOVE_ATTEMPTS} times in a row`);
+  };
+
   void read();
   const timer = everyMs > 0 ? setInterval(() => void read(), everyMs) : undefined;
   timer?.unref?.();
 
   return {
     bump: () => {
-      void pool
-        .query('UPDATE moss_generation SET n = n + 1 WHERE id = 1')
-        .then(async () => {
-          // Adopt our own bump immediately, so `seen` cannot lag behind a value
-          // this process itself wrote and then "discover" it a minute later.
-          const result = await pool.query('SELECT n FROM moss_generation WHERE id = 1');
-          const row = PointerRowSchema.safeParse(result.rows[0]);
-          if (row.success) seen = row.data.n;
-        })
-        .catch((err: unknown) => console.error('[moss:generation] could not move the pointer', err));
+      void move().catch((err: unknown) => console.error('[moss:generation] could not move the pointer', err));
     },
     current: () => seen,
     stop: () => {

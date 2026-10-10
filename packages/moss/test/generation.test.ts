@@ -1,23 +1,23 @@
 import { describe, it, expect } from 'vitest';
 import { createGeneration } from '../src/manifest/generation';
+import type { Pointer } from '../src/manifest/generation';
 
-// A pool of exactly the shape this module uses, so the pointer is tested
-// without a database and without waiting on a real clock.
-const fakePool = (start = 0) => {
+// The row, as this module is handed it: where the counter is, and one step on
+// from where it was read. So the pointer is tested without a database and
+// without waiting on a real clock.
+const fakePool = (start = 0): Pointer & { poke: () => number; value: () => number } => {
   let n = start;
-  const pool = {
-    query: async (sql: string) => {
-      if (sql.startsWith('UPDATE')) {
-        n += 1;
-        return { rows: [] };
-      }
-      return { rows: [{ n }] };
+  return {
+    read: async () => n,
+    move: async (from) => {
+      if (n !== from) return false;
+      n += 1;
+      return true;
     },
     // what another process did
     poke: () => (n += 1),
     value: () => n,
   };
-  return pool as unknown as Parameters<typeof createGeneration>[0] & { poke: () => number; value: () => number };
 };
 
 const settle = async (): Promise<void> => {
@@ -74,7 +74,12 @@ describe('generation pointer', () => {
     const errors: unknown[] = [];
     const original = console.error;
     console.error = (...args: unknown[]) => errors.push(args[0]);
-    const broken = { query: async () => { throw new Error('relation "moss_generation" does not exist'); } } as unknown as Parameters<typeof createGeneration>[0];
+    const broken: Pointer = {
+      read: async () => {
+        throw new Error('relation "moss_generation" does not exist');
+      },
+      move: async () => false,
+    };
     const gen = createGeneration(broken, { onMoved: () => undefined, everyMs: 0 });
     await settle();
     console.error = original;

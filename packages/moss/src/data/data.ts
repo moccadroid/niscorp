@@ -5,7 +5,7 @@ import type { Sequence, Upgrader } from '@niscorp/strata';
 import type { CacheBackend, DatabaseAdapter, ExecuteRecord, MutationClient, PgPool, QueryEngine, QueryEngineConfig, QueryResponse, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { memoKey } from '../identity';
 import type { ResolvedIdentity } from '../identity';
-import type { NiscApp, RunningManifest } from '../manifest';
+import type { NiscApp, Pointer, RunningManifest } from '../manifest';
 import { emitterOf } from '../runtime';
 import type { Telemetry } from '../runtime';
 import { createDataLayer } from './engine';
@@ -18,6 +18,7 @@ import { tableSequencesOf } from './migrate';
 import { createOwnEntries } from './own-entries';
 import type { OwnEntries, Replay } from './own-entries';
 import { createPolicies, resolvePolicyForRoles } from './policy';
+import { POINTER, pointerOver } from './pointer';
 import { createVexRoutes } from './routes';
 import { vexRecordToSpan } from './span';
 import { INTEGRATION_ACTIONS_STORE } from './tables';
@@ -118,6 +119,10 @@ export type Data = {
   // Hear every write those surfaces serve (./writes.ts). Returns the way to
   // stop hearing.
   onWrite: (listener: WriteListener) => () => void;
+  // THE GENERATION POINTER'S ROW (./pointer.ts): where the counter is, and one
+  // step on from where it was read. The manifest module holds the clock that
+  // polls it; the row is read and written here, through vex.
+  pointer: Pointer;
   // WHEN THE MANIFEST CHANGES, what was compiled from it goes. This is handed
   // the manifest's own way of saying that it changed, once, after both stand:
   // the manifest cannot be built before `grants` is known, so it cannot
@@ -188,6 +193,24 @@ export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charte
     return answers;
   };
 
+  // ENTRIES THAT ARE NOT THE APP'S, over the engine that stood up: seeded where
+  // no route serves them, and replayed in process (./own-entries.ts).
+  const ownEntries = async (own: OwnEntries, told: ((record: ExecuteRecord) => void) | undefined): Promise<Replay> => {
+    const schema = engine.getSchema();
+    if (schema === undefined) throw new Error('moss: entries of its own were handed over before the engine had read the database.');
+    return createOwnEntries({ adapter: stood.adapter, schema, db: config.db, engine, ...(told !== undefined ? { onExecute: told } : {}) })(own);
+  };
+
+  // The pointer's two entries, seeded when the pointer is first asked. NO SPAN
+  // for them: a poll is not something a request did, and one every interval
+  // from every process would be a line in every sink that says nothing. The
+  // statements they stand in for made none.
+  let pointerEntries: Promise<Replay> | undefined;
+  const pointerReplay = (): Promise<Replay> => {
+    pointerEntries ??= ownEntries(POINTER, undefined);
+    return pointerEntries;
+  };
+
   return {
     engine,
     grants,
@@ -211,11 +234,7 @@ export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charte
       ...(onExecute !== undefined ? { onExecute } : {}),
     }),
     answerIntent: async (writers, asked, who, scope) => answering()(writers, asked, { policy: policies.of(who), scope }),
-    ownEntries: async (own) => {
-      const schema = engine.getSchema();
-      if (schema === undefined) throw new Error("moss: a feature's entries were handed over before the engine had read the database.");
-      return createOwnEntries({ adapter: stood.adapter, schema, db: config.db, engine, ...(onExecute !== undefined ? { onExecute } : {}) })(own);
-    },
+    ownEntries: (own) => ownEntries(own, onExecute),
     routes: <E extends Env>(routing: DataRoutesConfig<E>): Hono<E> =>
       createVexRoutes<E>({
         engine,
@@ -228,6 +247,7 @@ export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charte
         writes,
       }),
     onWrite: writes.subscribe,
+    pointer: pointerOver(pointerReplay),
     dropOnChange: (changed) => {
       changed(policies.drop);
     },

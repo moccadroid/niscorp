@@ -1,9 +1,9 @@
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
 import type { ShellManifest } from './app';
 import { shellComponents } from './components';
-import type { PgPool, SeedEntry, SeedMutation } from '@niscorp/vex';
+import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { createGeneration } from './generation';
-import type { Generation } from './generation';
+import type { Generation, Pointer } from './generation';
 import { freezeDeep } from './handover';
 import { createRoleHoldings } from './roles';
 import type { Catalog, InstalledOnly } from './roles';
@@ -54,10 +54,10 @@ export type RunningManifestConfig = {
   // another process says something changed. A set with no loader is whatever
   // it was last replaced with.
   loaders?: Readonly<Record<string, ActionLoader>>;
-  // The generation pointer (./generation.ts): where it is kept and how often
-  // it is read, once `watch` is called. Absent: this manifest tells no other
-  // process that it changed, and hears from none.
-  pointer?: { pool: PgPool; everyMs?: number };
+  // The generation pointer (./generation.ts): how its row is read and moved,
+  // and how often it is read, once `watch` is called. Absent: this manifest
+  // tells no other process that it changed, and hears from none.
+  pointer?: Pointer & { everyMs?: number };
 };
 
 export type RunningManifest = {
@@ -206,7 +206,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     watch: () => {
       const where = config.pointer;
       if (pointer !== undefined || where === undefined) return;
-      pointer = createGeneration(where.pool, { onMoved: reload, ...(where.everyMs === undefined ? {} : { everyMs: where.everyMs }) });
+      pointer = createGeneration({ read: where.read, move: where.move }, { onMoved: reload, ...(where.everyMs === undefined ? {} : { everyMs: where.everyMs }) });
     },
     onChange: (listener) => {
       listeners.add(listener);

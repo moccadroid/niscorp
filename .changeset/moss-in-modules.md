@@ -128,7 +128,7 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 
 **Integrations read and write through vex, and a feature is handed no pool.**
 
-- Every statement integrations ran on `integrations` and `integration_actions` is a vex entry now, replayed in process. Moss held twenty statements with no reason outside vex; four are left (the generation counter), and `pnpm check:raw-sql` counts them.
+- Every statement integrations ran on `integrations` and `integration_actions` is a vex entry now, replayed in process. Moss held twenty statements with no reason outside vex; none is left (the generation counter went last, below), and `pnpm check:raw-sql` holds the count at zero.
 - The entries are the feature's own. They are seeded into a cache no route serves, so `/api/vex` answers `cache_miss` for one of them whatever the charter grants whoever asks, and they run under a policy that admits the feature's tables and nothing else. A data grant on `integrations` opens no approval and no registration: those stay behind the operator key.
 - `FeatureSeams` has no `pool`. A feature of an app's own hands its reads and writes over as entries, with the tables they touch, and replays them: `const replay = await seams.ownEntries({ entries, tables })`, then `await replay(fingerprint, context)`.
 - `Feature.tables?: readonly Sequence[]` is new: the strata sequences of the tables a feature keeps. The server migrates them in the one ledgered run, after moss's own and before `runtime.tables`, and `migrateTables` (`nisc migrate`) runs them too.
@@ -293,6 +293,15 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 - A write is told to the features that hear writes, in the order the app named them, and then to `reactions`. That is the order it was told in while the bridge was part of the server.
 - New from `@niscorp/moss/tide`: `createTideFacts`, and the types `TideFactsConfig` and `FactIntake`.
 - New on `FeatureSeams`: `onWrite(listener)`. A feature of an app's own hears every write the routes serve, once it is committed: what vex reports of it, and the place in a chain of effects the request said it was at. It answers the way to stop hearing.
+
+**The generation counter is read and moved through vex.**
+
+- Every process polls one row, `moss_generation`, to learn that another changed what the app consists of. It was read and moved by statements sent to the pool: the last SQL in moss with no reason to be outside vex. It is two entries of moss's own now, replayed in process under a policy that admits that one table. No route serves them, and no charter has to grant them.
+- A move is a compare and a set. Vex's write grammar sets a column to a value and reads none, so it cannot add one: the counter is read, and the next number is written where the counter is still what was read. Where it is not, another process moved it in that instant, and it is read again. Run on PGlite with two servers over one database, both moving at once: the counter went from 1 to 3, and each followed the other.
+- The counter is moved through `runtime.db`, the client every write is replayed on. It was `runtime.pool`. An app whose `db` and `pool` reach one database, which is every app there is, sees no difference.
+- No span is emitted for the counter's reads and moves, as none was: a poll is not something a request did.
+- A counter that could not be moved after five tries in a row is logged (`[moss:generation] could not move the pointer`). A row somebody deleted used to be moved without a word, and nothing was moved.
+- An app has nothing to change. A role granted a data wildcard still denies `moss_generation.*` (AGENTS.md, rule 10a).
 
 **`serve` stops what it started, and takes the message limit: `runtime.socketMaxMessageBytes`.**
 
