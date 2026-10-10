@@ -259,3 +259,8 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 - The same answer where the throw used to reach Hono's own handler and came back as the text `Internal Server Error`: a `session` verifier that throws, and a feature's credential (an integration key) that cannot be read or whose principal cannot be resolved.
 - **`no_identity` is gone.** An app whose `identity.resolve` throws for a principal it does not know answers a record for nobody instead (`{ roles: ['public'], scope: {} }`), as lyra and lyceum do, or has its `session` verifier answer `null` for the token. Code that matched on `401` `no_identity` matches on `500` `identity_failed`.
 - The socket is as it was: a session that cannot be opened is `session_failed` and a `4500` close.
+
+**A lane that throws on a write no longer keeps the other from hearing of it.**
+
+- A committed write is told to the fact lane (`app.facts`) and then to the reactions (`app.reactions`). When the fact lane threw (`facts.tide()`, `facts.identity(scope)` or `facts.chain` throwing on a scope the app did not expect) no reaction heard of that write, and the throw went to vex. Each is told on its own now: the throw is logged (`[moss:writes] …`) and the reactions run.
+- A reaction that throws was already kept from the next reaction, and still is. An app has nothing to change.

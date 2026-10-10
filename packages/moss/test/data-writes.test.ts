@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { WriteEvent } from '@niscorp/vex';
 import { createWriteLane } from '../src/data/writes';
 import type { ChainHints } from '../src/data/writes';
@@ -78,16 +78,26 @@ describe('the write lane', () => {
   });
 
   // The one observer the lane replaced ran its two jobs one after the other,
-  // and a throw in the first kept the second from running. The lane keeps
-  // that: the throw goes to whoever reported, which is vex, and vex logs it.
-  it('a subscriber that throws ends the telling of that write, and the throw is the reporter\'s', () => {
+  // and a throw in the first kept the second from running. The lane kept that
+  // for a while: the fact lane throwing (an app's `facts.identity`) meant no
+  // reaction heard of that write. Each subscriber's failure is its own now:
+  // it is logged here, the others are told, and nothing reaches the reporter.
+  it('a subscriber that throws is logged, and the others are still told of that write', () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const lane = createWriteLane();
     const heard: string[] = [];
+    lane.subscribe((write) => heard.push(`before:${write.fingerprint}`));
     lane.subscribe(() => {
-      throw new Error('the first listener failed');
+      throw new Error('the fact lane failed');
     });
-    lane.subscribe((write) => heard.push(write.fingerprint));
-    expect(() => lane.report(event('notes/add'))).toThrow('the first listener failed');
-    expect(heard).toEqual([]);
+    lane.subscribe((write) => heard.push(`after:${write.fingerprint}`));
+    expect(() => lane.report(event('notes/add'))).not.toThrow();
+    expect(heard).toEqual(['before:notes/add', 'after:notes/add']);
+    expect(logged).toHaveBeenCalledTimes(1);
+    expect(logged.mock.calls[0]?.some((part) => part instanceof Error && part.message === 'the fact lane failed')).toBe(true);
+    // and the next write is told to all three again
+    lane.report(event('notes/edit'));
+    expect(heard).toEqual(['before:notes/add', 'after:notes/add', 'before:notes/edit', 'after:notes/edit']);
+    logged.mockRestore();
   });
 });

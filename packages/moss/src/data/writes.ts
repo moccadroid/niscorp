@@ -43,13 +43,22 @@ export const createWriteLane = (): WriteLane => {
       };
     },
     within: (chain, run) => position.run(chain, run),
-    // IN THE ORDER THEY SUBSCRIBED, and not kept apart: a listener that throws
-    // ends the telling of that write, and vex, which called, logs the throw
-    // and answers the request as written. The one observer this lane replaced
-    // behaved so, and nothing has decided otherwise.
+    // IN THE ORDER THEY SUBSCRIBED, AND EACH ON ITS OWN. A listener that throws
+    // used to end the telling of that write: the fact lane failing (an app's
+    // `facts.identity` throwing on a scope it did not expect) meant no
+    // reaction heard of a write that had been committed. The write is done by
+    // the time anybody is told, and what one listener makes of it is nothing
+    // to the next. So a throw is logged here and the rest are told; nothing
+    // reaches vex, which answers the request as written either way.
     report: (event) => {
       const chain = position.getStore();
-      for (const listener of [...listeners]) listener(event, chain);
+      for (const listener of [...listeners]) {
+        try {
+          listener(event, chain);
+        } catch (error) {
+          console.error(`[moss:writes] somebody told of the write "${event.fingerprint}" failed. The others are still told:`, error);
+        }
+      }
     },
   };
 };

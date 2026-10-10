@@ -769,7 +769,10 @@ tool that needs it without a server.
 
 Vex is the choke point every application write passes through, so its write
 observer is where a host learns about all of them. Moss subscribes once and
-splits the news down two lanes with deliberately different privileges.
+splits the news down two lanes with deliberately different privileges. The
+fact lane is told first, then the reactions, and each on its own: a lane that
+throws (an app's `facts.identity`, say) is logged, and the other still hears
+of that write. The write was committed before either is told.
 
 #### `app.reactions` — the app's lane, row-less
 
