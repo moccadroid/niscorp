@@ -67,10 +67,8 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // (./wire.ts): same wire, same enforcement.
   const hosts = standHosts({ app, runtime, identity, running, data, wire: wireOver(server), wrapWire: wrappedBy(registered), revokeSessions });
 
-  // 8. What crosses processes (./signals.ts), and what hears a write
-  // (./lanes.ts): the fact lane, then the reactions.
+  // 8. What crosses processes (./signals.ts).
   const signals = standSignals({ fabric: runtime.fabric, identity, shells: hosts.shells });
-  hearWrites({ app, onWrite: data.onWrite, deliver: signals.deliver });
 
   // 9. WHEN WHAT THE APP CONSISTS OF CHANGES — a set of actions replaced, a
   // `refresh`, a move another process made — what this server derived from the
@@ -102,6 +100,9 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   const seams = seamsOf({ app, runtime, server, operator, registered, identity, running, data });
   for (const feature of app.features ?? []) await feature.start(seams);
   server.route('/operator', operator);
+  // And the app's reactions hear a write (./lanes.ts), after the features: one
+  // that hears writes too subscribed while it started, and is told first.
+  hearWrites({ app, onWrite: data.onWrite, deliver: signals.deliver });
 
   // 11. From here on a change moves the generation pointer, so every other
   // process drops what it derived within one poll; and a move one of them

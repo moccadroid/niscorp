@@ -1,0 +1,214 @@
+import { describe, it, expect, vi } from 'vitest';
+import type { WriteEvent } from '@niscorp/vex';
+import { createGrammarUpgrader } from '../src/data/grammar';
+import type { FeatureSeams } from '../src/feature';
+import { createTideFacts } from '../src/tide';
+import type { FactIntake, TideFactsConfig } from '../src/tide';
+import { mintFromWrites } from '../src/tide/feature';
+
+// THE WRITE-FACT BRIDGE, AS A FEATURE: handed the one seam it uses, a write
+// reported to it by hand, and an intake that keeps what it is given. No
+// database, no server and no tide.
+
+type Listener = Parameters<FeatureSeams['onWrite']>[0];
+type Minted = { fact: Parameters<FactIntake['ingest']>[0]; options: Parameters<FactIntake['ingest']>[1] };
+
+// The seam: it keeps who subscribed, and `report` tells them of a write.
+const writes = () => {
+  const listeners = new Set<Listener>();
+  const onWrite: FeatureSeams['onWrite'] = (listener) => {
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  };
+  const report = (event: WriteEvent, chain?: { cause: string; depth: number }): void => {
+    for (const listener of listeners) listener(event, chain);
+  };
+  return { onWrite, report, listening: () => listeners.size };
+};
+
+// An intake that keeps every fact it is handed, with what it was handed beside it.
+const intake = () => {
+  const minted: Minted[] = [];
+  const tide: FactIntake = {
+    ingest: async (fact, options) => {
+      minted.push({ fact, options });
+      return undefined;
+    },
+  };
+  return { tide, minted };
+};
+
+// Minting is not awaited by the lane: let what was started finish.
+const settled = async (): Promise<void> => {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+};
+
+const twoStatements: WriteEvent = {
+  fingerprint: 'bookings/move',
+  writes: [
+    { table: 'bookings', op: 'update', rows: [{ id: 1 }, { id: 2 }] },
+    // A statement the scope narrowed to nothing: it changed nothing.
+    { table: 'waitlist', op: 'delete', rows: [] },
+    { table: 'audit', op: 'insert', rows: [{ id: 9 }] },
+  ],
+  scope: { userId: 'usr_1', studio: 'north' },
+};
+
+const studioOf: TideFactsConfig['identity'] = (scope) => (typeof scope['studio'] === 'string' ? `automation@${scope['studio']}` : undefined);
+
+describe('a write, minted into tide as facts', () => {
+  it('mints one fact for each row a statement returned, for the identity the write’s scope names', async () => {
+    const lane = writes();
+    const { tide, minted } = intake();
+    mintFromWrites({ tide: () => tide, identity: studioOf }, lane);
+    lane.report(twoStatements);
+    await settled();
+    expect(minted.map(({ fact }) => ({ kind: fact.kind, entity: fact.entity, op: fact.op, row: fact.row }))).toEqual([
+      { kind: 'write', entity: 'bookings', op: 'update', row: { id: 1 } },
+      { kind: 'write', entity: 'bookings', op: 'update', row: { id: 2 } },
+      { kind: 'write', entity: 'audit', op: 'insert', row: { id: 9 } },
+    ]);
+    expect(minted.map(({ options }) => options)).toEqual([{ as: 'automation@north' }, { as: 'automation@north' }, { as: 'automation@north' }]);
+    // One write is one moment: every fact of it carries the same stamp.
+    expect(new Set(minted.map(({ fact }) => fact.at)).size).toBe(1);
+  });
+
+  it('mints nothing for a write whose scope names no identity', async () => {
+    const lane = writes();
+    const { tide, minted } = intake();
+    mintFromWrites({ tide: () => tide, identity: studioOf }, lane);
+    lane.report({ ...twoStatements, scope: { userId: 'operator' } });
+    await settled();
+    expect(minted).toEqual([]);
+  });
+
+  it('mints nothing while there is no tide to mint into, and does not ask whose write it was', async () => {
+    const lane = writes();
+    const identity = vi.fn(studioOf);
+    mintFromWrites({ tide: () => undefined, identity }, lane);
+    lane.report(twoStatements);
+    await settled();
+    expect(identity).not.toHaveBeenCalled();
+  });
+
+  it('asks for the tide at each write, so one that stands up later is minted into', async () => {
+    const lane = writes();
+    const { tide, minted } = intake();
+    const standing: { tide: FactIntake | undefined } = { tide: undefined };
+    mintFromWrites({ tide: () => standing.tide, identity: studioOf }, lane);
+    lane.report(twoStatements);
+    standing.tide = tide;
+    lane.report(twoStatements);
+    await settled();
+    expect(minted).toHaveLength(3);
+  });
+});
+
+describe('the place in a chain a request named', () => {
+  const named = { cause: 'task:t_1', depth: 2 };
+
+  it('is dropped when the app has no gate', async () => {
+    const lane = writes();
+    const { tide, minted } = intake();
+    mintFromWrites({ tide: () => tide, identity: studioOf }, lane);
+    lane.report(twoStatements, named);
+    await settled();
+    expect(minted[0]?.options).toEqual({ as: 'automation@north' });
+  });
+
+  it('is dropped when the gate does not take that caller’s word', async () => {
+    const lane = writes();
+    const { tide, minted } = intake();
+    mintFromWrites({ tide: () => tide, identity: studioOf, chain: () => undefined }, lane);
+    lane.report(twoStatements, named);
+    await settled();
+    expect(minted[0]?.options).toEqual({ as: 'automation@north' });
+  });
+
+  it('rides the facts one hop deeper when the gate takes it, and the gate is handed the write’s scope', async () => {
+    const lane = writes();
+    const { tide, minted } = intake();
+    const chain = vi.fn<NonNullable<TideFactsConfig['chain']>>((_scope, hints) => hints);
+    mintFromWrites({ tide: () => tide, identity: studioOf, chain }, lane);
+    lane.report(twoStatements, named);
+    await settled();
+    expect(chain).toHaveBeenCalledWith(twoStatements.scope, named);
+    expect(minted.map(({ options }) => options)).toEqual(Array.from({ length: 3 }, () => ({ as: 'automation@north', cause: 'task:t_1', depth: 3 })));
+  });
+
+  it('is not asked about when the request named none', async () => {
+    const lane = writes();
+    const { tide } = intake();
+    const chain = vi.fn<NonNullable<TideFactsConfig['chain']>>((_scope, hints) => hints);
+    mintFromWrites({ tide: () => tide, identity: studioOf, chain }, lane);
+    lane.report(twoStatements);
+    await settled();
+    expect(chain).not.toHaveBeenCalled();
+  });
+});
+
+describe('an intake that fails', () => {
+  it('is logged, and whoever reported the write is thrown nothing', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const lane = writes();
+    const failing: FactIntake = {
+      ingest: async () => {
+        throw new Error('the ledger is closed');
+      },
+    };
+    mintFromWrites({ tide: () => failing, identity: studioOf }, lane);
+    expect(() => lane.report(twoStatements)).not.toThrow();
+    await settled();
+    expect(logged).toHaveBeenCalledTimes(1);
+    expect(logged.mock.calls[0]?.[0]).toBe('[moss:facts]');
+    logged.mockRestore();
+  });
+});
+
+describe('createTideFacts — the feature', () => {
+  // Every seam but the one it is for answers by throwing its own name.
+  const seamsThatOnlyHear = async (onWrite: FeatureSeams['onWrite']): Promise<FeatureSeams> => {
+    const notAsked = (seam: string) => (): never => {
+      throw new Error(`the feature asked for ${seam}`);
+    };
+    return {
+      routes: notAsked('routes'),
+      operatorRoutes: notAsked('operatorRoutes'),
+      credential: notAsked('credential'),
+      who: notAsked('who'),
+      scopeOf: notAsked('scopeOf'),
+      holds: notAsked('holds'),
+      actions: notAsked('actions'),
+      replaceActions: notAsked('replaceActions'),
+      refusalOf: notAsked('refusalOf'),
+      loadActionsFrom: notAsked('loadActionsFrom'),
+      narrowCatalogs: notAsked('narrowCatalogs'),
+      charter: {},
+      components: {},
+      ownEntries: notAsked('ownEntries'),
+      grammars: await createGrammarUpgrader({}),
+      fingerprints: notAsked('fingerprints'),
+      fingerprintsFor: notAsked('fingerprintsFor'),
+      onWrite,
+      telemetry: undefined,
+      signingSeed: undefined,
+      wrapWire: notAsked('wrapWire'),
+    };
+  };
+
+  it('is started with the seams, hears writes, and asks the server for nothing else', async () => {
+    const lane = writes();
+    const { tide, minted } = intake();
+    const feature = createTideFacts({ tide: () => tide, identity: studioOf });
+    expect(feature.name).toBe('tide-facts');
+    // It keeps no tables: tide's are tide's, migrated by whoever keeps them.
+    expect(feature.tables).toBeUndefined();
+    await feature.start(await seamsThatOnlyHear(lane.onWrite));
+    expect(lane.listening()).toBe(1);
+    lane.report(twoStatements);
+    await settled();
+    expect(minted).toHaveLength(3);
+  });
+});

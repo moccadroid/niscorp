@@ -52,7 +52,6 @@ const whole = (): NiscApp => ({
   onSession: () => undefined,
   runs: () => undefined,
   reactions: [{ table: 'deals', op: 'update', run: () => undefined }],
-  facts: { tide: () => undefined, identity: () => undefined, chain: () => undefined },
 });
 
 describe('the manifest’s schema', () => {
@@ -109,6 +108,14 @@ describe('the manifest’s schema', () => {
     ]);
     // A field that configured the integrations is not the manifest's any more.
     expect(manifestMisfits({ ...whole(), menuSlots: ['home'] })).toEqual(['(the manifest): Unrecognized key: "menuSlots"']);
+  });
+
+  // The write-fact bridge was three functions under `facts`. It is a feature
+  // (`createTideFacts`, from `@niscorp/moss/tide`), so a manifest that still
+  // names the field is told, at boot, and not served with the bridge silently
+  // gone.
+  it('refuses `facts`, which configured what is a feature now', () => {
+    expect(manifestMisfits({ ...whole(), facts: { tide: () => undefined, identity: () => undefined } })).toEqual(['(the manifest): Unrecognized key: "facts"']);
   });
 
   it('holds a canvas, a page and the lists to their shapes', () => {

@@ -102,6 +102,9 @@
 ./terminal/vue vueTarget
 ./terminal/vue/server RenderSnapshotConfig
 ./terminal/vue/server renderSnapshot
+./tide FactIntake
+./tide TideFactsConfig
+./tide createTideFacts
 ./vite DevApp
 ./vite MossDevOptions
 ./vite mossDev

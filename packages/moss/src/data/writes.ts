@@ -45,8 +45,8 @@ export const createWriteLane = (): WriteLane => {
     within: (chain, run) => position.run(chain, run),
     // IN THE ORDER THEY SUBSCRIBED, AND EACH ON ITS OWN. A listener that throws
     // used to end the telling of that write: the fact lane failing (an app's
-    // `facts.identity` throwing on a scope it did not expect) meant no
-    // reaction heard of a write that had been committed. The write is done by
+    // `identity` throwing on a scope it did not expect) meant no reaction
+    // heard of a write that had been committed. The write is done by
     // the time anybody is told, and what one listener makes of it is nothing
     // to the next. So a throw is logged here and the rest are told; nothing
     // reaches vex, which answers the request as written either way.

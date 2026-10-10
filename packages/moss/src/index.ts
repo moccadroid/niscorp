@@ -37,4 +37,6 @@ export { migrateTables } from './data';
 export type { TablesReport } from './data';
 // A FEATURE is not exported here: it ships from an entry point of its own, and
 // nothing this entry reaches imports one. Integrations are
-// `@niscorp/moss/integrations` (src/integrations/).
+// `@niscorp/moss/integrations` (src/integrations/); a write minted into tide as
+// a fact is `@niscorp/moss/tide` (src/tide/). Tide's Postgres store and its
+// driver are not moss's at all: `@niscorp/tide/postgres`, `@niscorp/tide`.

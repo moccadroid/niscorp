@@ -10,11 +10,12 @@ BREAKING — approved by moccadroid, 2026-10-09: import only what `@niscorp/moss
 
 Moss had grown to twenty-eight files flat in `src/`, one of them a single function of 1,345 lines, and it exported 135 names of which 71 were imported by nothing outside the package. `docs/plans/moss-refactor.md` is the audit and the plan.
 
-**The main entry exports 56 names, not 135.**
+**The main entry exports 50 names, not 135.**
 
 - Gone, and never part of what an app calls: `createShellHost`, `createSocket`, `createDataLayer`, `createGeneration`, `createIdentityCache`, `wireFabric`, `runIntake`, `copyPress`, `callIntegrationWith`, `initIntegrations`, `listIntegrations`, `loadIntegrationActions`, `filterInstalled`, `buildContract`, `contractAsMarkdown`, `describePlacements`, `verifyAssertion`, `mintIntegrationKey`, `hashIntegrationKey`, `mintWrites`, `revokeSession`, `sessionVerifierOf`, `shellNeedOf`, `emitterOf`, `spanClock`, `resolvePolicyAtReach`, `resolveVariantsForRoles`, the constants `GENERATION_DDL`, `SESSIONS_SEQUENCE`, `SNAPSHOT_ELEMENT_ID`, `CLOSE_SHELL_FAILED`, `DEFAULT_GENERATION_POLL_MS`, `DEFAULT_IDENTITY_IDLE_MS`, `DEFAULT_IDENTITY_MAX`, `DEFAULT_IDLE_MS`, `DEFAULT_REVALIDATE_MS`, and the types that went with them.
 - An app that imported one of these was reaching into moss. Say which and why in an issue; the answer is a call that is meant to be public, not the name coming back.
 - Seven more names moved to `@niscorp/moss/integrations`, and two types arrived, `Feature` and `FeatureSeams`: see "Integrations are a feature" below.
+- Six more left for tide, where they are called by the names they had: see "Tide's hosting is tide's" below.
 
 **A message on the socket is read whole, by a schema, or not at all.**
 
@@ -59,7 +60,7 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 
 - `createServer(app, runtime)` parses the manifest before anything else uses it, and a manifest that does not parse refuses the boot with `The manifest does not parse — refusing to serve:` and one line for each place that does not fit (`actions.home: Unrecognized key: "tittle"`, `shell.inputs: expected a function`). It used to be used as it stood: a definition nova refuses was found when a shell that holds it was built, for whoever connected first, and a seam that was not a function when it was first called.
 - An action, a fragment and a layout are read by nova's schemas, an entry's `dsl` and `mutation` by vex's, its `mapping` by Prism's, `grammars` by strata's. Every other data field is held to the shape `NiscApp` gives it, and a code seam to being a function.
-- A field the type does not have is refused, on the manifest itself, on the shell or a page, on a canvas, a layout variant, an entry, a reaction, `identity`, `facts` and `phraseKeys`. The compiler already refuses one written in place; one that arrived through a spread or a cast used to be carried and ignored. An app that kept something of its own there keeps it beside the manifest. A component's contract (`shell.components`) and a resource written as an object may still carry more than moss names.
+- A field the type does not have is refused, on the manifest itself, on the shell or a page, on a canvas, a layout variant, an entry, a reaction, `identity` and `phraseKeys`. The compiler already refuses one written in place; one that arrived through a spread or a cast used to be carried and ignored. An app that kept something of its own there keeps it beside the manifest. A component's contract (`shell.components`) and a resource written as an object may still carry more than moss names.
 - An app whose manifest is typed as `NiscApp`, with no cast and no extra field on the way, has nothing to change for the parse.
 - Then `createServer` freezes the manifest, every level of it, in place. Once it has returned, an edit throws a `TypeError` where it is written: `app.actions.x = …`, `delete app.actions.x`, `app.actions = …`, `app.charter.role = …`, `app.entries.push(…)`, a write to a definition, a layout node, a canvas or a variant. A function and an instance of a class (a zod schema a kit handed over as a component's props) are not frozen and not looked inside. Before `createServer` is called nothing is frozen: `defineApp` returns its argument, and an app may go on assembling it.
 - An edit to the charter, the behaviors or the layout variants used to be half served: it reached whoever was resolved next and nobody already resolved, and no check had seen it until a `refresh`.
@@ -262,13 +263,36 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 
 **A lane that throws on a write no longer keeps the other from hearing of it.**
 
-- A committed write is told to the fact lane (`app.facts`) and then to the reactions (`app.reactions`). When the fact lane threw (`facts.tide()`, `facts.identity(scope)` or `facts.chain` throwing on a scope the app did not expect) no reaction heard of that write, and the throw went to vex. Each is told on its own now: the throw is logged (`[moss:writes] …`) and the reactions run.
+- A committed write is told to the fact lane (the feature that mints it into tide, `createTideFacts`, below) and then to the reactions (`app.reactions`). When the fact lane threw (its `tide()`, `identity(scope)` or `chain` throwing on a scope the app did not expect) no reaction heard of that write, and the throw went to vex. Each is told on its own now: the throw is logged (`[moss:writes] …`) and the reactions run.
 - A reaction that throws was already kept from the next reaction, and still is. An app has nothing to change.
 
 **`x-tide-depth` is read as digits, not with `Number()`.**
 
-- A write through vex may name its place in a chain of effects in two headers, `x-tide-cause` and `x-tide-depth`, which `app.facts.chain` then decides whether to believe. The depth was read with `Number()`: an empty header was depth `0`, the start of a chain, and so `0x2` was 2, `1e1` was 10 and thirty nines a depth no whole number holds. A depth is digits and nothing else now, and a number that is exact. Anything else is no position: `chain` is not asked and the write is heard with none.
+- A write through vex may name its place in a chain of effects in two headers, `x-tide-cause` and `x-tide-depth`, which the `chain` gate of `createTideFacts` (below) then decides whether to believe. The depth was read with `Number()`: an empty header was depth `0`, the start of a chain, and so `0x2` was 2, `1e1` was 10 and thirty nines a depth no whole number holds. A depth is digits and nothing else now, and a number that is exact. Anything else is no position: `chain` is not asked and the write is heard with none.
 - A caller that writes the header as `String(depth)` has nothing to change; lyra's does.
+
+**Tide's hosting is tide's: the store and the driver ship from tide, and the write-fact bridge is a feature, `@niscorp/moss/tide`.**
+
+- Moss held a Postgres store that implements tide's store contract, and a driver that paces tide. They are tide's storage and tide's pacing, and every moss app installed `@niscorp/tide` because of them. Both are in tide now (the tide changeset), under the names they had:
+  - `createTideStore`, `TIDE_SEQUENCE`, `TIDE_TABLES`, `TIDE_DDL` → `import … from '@niscorp/tide/postgres'`.
+  - `createTideDriver` and the type `TideDriver` → `import … from '@niscorp/tide'`.
+
+  Each is called as it was: `createTideStore(runtime.pool)` takes the pool it took.
+- **The tables are the ones the database has.** `TIDE_SEQUENCE` is the same sequence under the same id, `nisc.moss.tide`, with the same migrations in the same order. A deployment that ran it finds nothing pending.
+- **`@niscorp/tide` is an optional peer of moss.** An app that runs no tide does not install it, and nothing in moss's main entry imports it. An app that uses `@niscorp/tide/postgres` has `@niscorp/strata` installed, which every moss app does.
+- **`NiscApp.facts` is gone: minting a write into tide is a feature.** An app that did it creates the feature and names it in its manifest:
+
+  ```ts
+  import { createTideFacts } from '@niscorp/moss/tide';
+
+  const app = defineApp({ charter, actions, features: [createTideFacts({ tide: () => driver, identity, chain })] });
+  ```
+
+  `tide`, `identity` and `chain` are the three functions `facts` held, under the names they had, and each is asked what it was asked. A manifest that still names `facts` is refused at boot, as any field the type does not have is: `(the manifest): Unrecognized key: "facts"`.
+- **An app that does not name the feature mints nothing.** No write becomes a fact, and a reflex with a `write` trigger is never woken by one.
+- A write is told to the features that hear writes, in the order the app named them, and then to `reactions`. That is the order it was told in while the bridge was part of the server.
+- New from `@niscorp/moss/tide`: `createTideFacts`, and the types `TideFactsConfig` and `FactIntake`.
+- New on `FeatureSeams`: `onWrite(listener)`. A feature of an app's own hears every write the routes serve, once it is committed: what vex reports of it, and the place in a chain of effects the request said it was at. It answers the way to stop hearing.
 
 **`serve` stops what it started, and takes the message limit: `runtime.socketMaxMessageBytes`.**
 

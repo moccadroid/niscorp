@@ -26,8 +26,9 @@ const tokenFor = (studioId: string): string => mintDevToken(`automation@${studio
 // travels with the work rather than being ambient. `chain` carries the run's
 // position when an EFFECT is the caller — the bridge stamps it onto the facts
 // it mints from this write, so the depth ceiling survives the trip through
-// the database. Moss trusts the headers only because `facts.chain` (app.ts)
-// vouches for the automation principal this token names.
+// the database. The headers are believed only because the `chain` gate of the
+// tide-facts feature (app.ts) vouches for the automation principal this token
+// names.
 const callVex = async (deps: { server: () => MossServer }, as: string, fingerprint: string, context: Record<string, unknown>, chain?: { cause: string; depth: number }): Promise<unknown> => {
   const studioId = as.slice(as.indexOf('@') + 1);
   const response = await deps.server().fetch(

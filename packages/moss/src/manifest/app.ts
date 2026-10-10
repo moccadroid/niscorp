@@ -247,39 +247,10 @@ export type NiscApp = {
       tools: { deliver: (principal: string, channel: string, payload?: unknown) => boolean },
     ) => void;
   }[];
-  // The write-fact bridge. Vex is the choke point every write passes
-  // through; when an app runs tide, each committed statement is minted into
-  // it as a `{ kind: 'write' }` fact — entity, op, and the row the database
-  // returned — stamped with the identity `identity(scope)` names. That
-  // identity is the fact's tenancy fence: tide offers a fact only to
-  // reflexes running AS the same identity, so whose write it was decides
-  // who may be woken by it. Returning undefined mints nothing for that
-  // write (an operator surface, a write with no tenant). `tide` is a
-  // getter because the instance stands up after the server does.
-  //
-  // Rows travel HERE and into tide's ledger only — host plumbing on one
-  // side, the identity fence on the other. They never reach `onMutation`.
-  //
-  // The intake is structural — hand back the tide DRIVER, so a minted fact
-  // wakes the engine instead of waiting for anybody's beat.
-  facts?: {
-    tide: () => FactIntake | undefined;
-    identity: (scope: Record<string, unknown>) => string | undefined;
-    // The causality gate. A tide effect that writes back through vex
-    // forwards its chain position as request headers (`x-tide-cause`,
-    // `x-tide-depth`); this decides whether THAT CALLER's word is good —
-    // return the hints to accept them onto the minted facts, undefined to
-    // drop them. Absent = hints are always dropped, which is the safe
-    // default: a forged depth could park an innocent chain, and a forged
-    // cause is fabricated provenance. An app grants this to exactly the
-    // principals that ARE its automation rungs.
-    chain?: (scope: Record<string, unknown>, hints: { cause: string; depth: number }) => { cause: string; depth: number } | undefined;
-  };
+  // (A write minted into tide as a fact is not a field here. It is a feature:
+  // `createTideFacts` from `@niscorp/moss/tide`, named in `features`. The
+  // rows of a write travel there and nowhere else.)
 };
-
-// The one verb the bridge needs. Both `Tide` and `TideDriver` satisfy it;
-// hand out the driver unless you have a reason to want facts that wait.
-export type FactIntake = Pick<import('@niscorp/tide').Tide, 'ingest'>;
 
 // One turn of an exchange with a model, in order. Provider-blind and
 // library-blind on purpose: moss depends on neither an LLM client nor an agent

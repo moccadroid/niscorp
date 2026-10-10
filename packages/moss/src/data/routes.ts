@@ -61,8 +61,9 @@ export const createVexRoutes = <E extends Env>(config: VexRoutesConfig<E>): Hono
 
   // THE CHAIN CHANNEL. A tide effect writing back through vex names its chain
   // position in two headers; they ride the write lane's context so whoever
-  // hears the write can read them. Untrusted at this point: the app's
-  // `facts.chain` gate decides whether the caller's word is good.
+  // hears the write can read them. Untrusted at this point: whoever hears
+  // them decides whether the caller's word is good (the feature that mints a
+  // write into tide asks the app's `chain` gate).
   routes.use('/api/*', async (c, next) => {
     const cause = c.req.header('x-tide-cause');
     const depth = depthOf(c.req.header('x-tide-depth'));

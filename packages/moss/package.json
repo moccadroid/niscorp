@@ -51,6 +51,16 @@
         "default": "./dist/integrations.cjs"
       }
     },
+    "./tide": {
+      "import": {
+        "types": "./dist/tide.d.ts",
+        "default": "./dist/tide.js"
+      },
+      "require": {
+        "types": "./dist/tide.d.cts",
+        "default": "./dist/tide.cjs"
+      }
+    },
     "./client": {
       "import": {
         "types": "./dist/client.d.ts",
@@ -197,6 +207,9 @@
     "vite": ">=6"
   },
   "peerDependenciesMeta": {
+    "@niscorp/tide": {
+      "optional": true
+    },
     "vite": {
       "optional": true
     },

@@ -17,12 +17,10 @@ import type { Telemetry } from '../runtime';
 // module's whole answer. A feature that needs something that is not here does
 // not reach for it: the seam is added to its owner first, on its own.
 //
-// TWENTY-ONE MEMBERS. Twenty are used by ../integrations (counted 2026-10-10:
-// none is unused). The twenty-first, `onWrite`, is what the fact lane needs to
-// stop being part of the server (../server, lanes.ts) and be a feature: the
-// seam is added to its owner first, on its own, and the feature follows. A
-// member that stops being used is taken out; one is not added for a feature
-// that might want it.
+// TWENTY-ONE MEMBERS, AND EACH IS ONE A FEATURE USES (counted 2026-10-11
+// against the two features there are: twenty by ../integrations, `onWrite` by
+// ../tide, and none is unused). A member that stops being used is taken out;
+// one is not added for a feature that might want it.
 //
 // The types are written out here rather than imported from their owners,
 // because the manifest names a feature (`NiscApp.features`) and so this module

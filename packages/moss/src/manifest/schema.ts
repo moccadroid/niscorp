@@ -131,7 +131,6 @@ const fields = {
   onSession: seam.optional(),
   runs: seam.optional(),
   reactions: z.array(ReactionSchema).readonly().optional(),
-  facts: z.object({ tide: seam, identity: seam, chain: seam.optional() }).strict().optional(),
 } satisfies Record<keyof NiscApp, z.ZodType>;
 
 export const ManifestSchema = z.object(fields).strict();

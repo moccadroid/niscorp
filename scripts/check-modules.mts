@@ -75,17 +75,16 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       documents: ['protocol', 'identity', 'shells'],
       // The wiring: it may import every core module, and no feature. Its
       // node.ts and vite.ts are entry points of their own (`./node`, `./vite`).
-      // `tide` is the one thing it imports that is not core: the fact lane
-      // mints through it (server/lanes.ts), until that lane is a feature.
-      server: ['runtime', 'protocol', 'feature', 'identity', 'manifest', 'data', 'shells', 'socket', 'documents', 'tide'],
-      // A committed write, minted into tide.
-      tide: [],
+      server: ['runtime', 'protocol', 'feature', 'identity', 'manifest', 'data', 'shells', 'socket', 'documents'],
+      // A committed write, minted into tide as a fact. A feature: it hears a
+      // write through the seam it is handed, and imports nothing of `data`.
+      tide: ['feature'],
       client: ['protocol'],
       terminal: ['client'],
     },
     flat: [],
     finished: ['runtime', 'protocol', 'feature', 'identity', 'manifest', 'data', 'shells', 'integrations', 'socket', 'documents', 'server', 'tide', 'client', 'terminal'],
-    features: ['integrations'],
+    features: ['integrations', 'tide'],
   },
 };
 

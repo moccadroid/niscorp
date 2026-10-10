@@ -1,6 +1,7 @@
 import { defineApp } from '@niscorp/moss';
 import type { NiscApp } from '@niscorp/moss';
 import { createIntegrations } from '@niscorp/moss/integrations';
+import { createTideFacts } from '@niscorp/moss/tide';
 import { CHARTER } from './charter/charter';
 import { AREAS, areasFor, landingFor } from './nav/sections';
 import { CATALOG_DEFINITIONS } from './action-catalog';
@@ -223,6 +224,35 @@ export const buildLyra = (deps: ServerDeps): NiscApp => {
     placementNames: { ...Object.fromEntries(AREAS.map((area) => [area.id, area.label])), 'people.detail': 'a member’s record' },
   });
 
+  // The write-fact bridge, a feature of moss too: every committed write
+  // becomes tide facts, stamped with the identity the write's own scope names
+  // — the same `automation@<studioId>` the studio's reflexes run as, so a fact
+  // can wake this studio's automations and nobody else's. A write with no
+  // studio (an operator surface) names no identity and mints nothing.
+  const tideFacts = createTideFacts({
+    // The DRIVER, not bare tide: a minted fact wakes the engine. Boot-
+    // window writes land before it stands up; no driver, no facts —
+    // seeding is not an event stream.
+    tide: () => {
+      try {
+        return deps.driver();
+      } catch {
+        return undefined;
+      }
+    },
+    identity: (scope) => {
+      const as = String(scope['automationActor'] ?? '');
+      return as === '' ? undefined : as;
+    },
+    // Chain headers are believed from the automation rungs and nobody
+    // else: a forged depth could park an innocent chain, and the robots
+    // are the only principals whose writes ARE chain hops.
+    // The write's OWN scope says who its automation would be; a write made
+    // BY that principal is the one whose chain headers are worth trusting. No
+    // lookup: both halves are already on the scope the engine stamped.
+    chain: (scope, hints) => (String(scope['userId'] ?? '') === String(scope['automationActor'] ?? '\u0000') ? hints : undefined),
+  });
+
   const app: NiscApp = defineApp({
     charter: CHARTER,
     // NO ASSIGNMENT MAP. `identity` below answers per principal, one row at a
@@ -236,7 +266,7 @@ export const buildLyra = (deps: ServerDeps): NiscApp => {
     behaviors: scopeBehaviors,
     resources: RESOURCES,
 
-    features: [integrations],
+    features: [integrations, tideFacts],
     // WHO SOMEBODY IS, resolved once per session and held by moss.
     //
     // Everything here is stable for as long as a session lasts: which studio,
@@ -371,35 +401,6 @@ export const buildLyra = (deps: ServerDeps): NiscApp => {
         },
       },
     ],
-
-    // The write-fact bridge: every committed write becomes tide facts,
-    // stamped with the identity the write's own scope names — the same
-    // `automation@<studioId>` the studio's reflexes run as, so a fact can
-    // wake this studio's automations and nobody else's. A write with no
-    // studio (an operator surface) names no identity and mints nothing.
-    facts: {
-      // The DRIVER, not bare tide: a minted fact wakes the engine. Boot-
-      // window writes land before it stands up; no driver, no facts —
-      // seeding is not an event stream.
-      tide: () => {
-        try {
-          return deps.driver();
-        } catch {
-          return undefined;
-        }
-      },
-      identity: (scope) => {
-        const as = String(scope['automationActor'] ?? '');
-        return as === '' ? undefined : as;
-      },
-      // Chain headers are believed from the automation rungs and nobody
-      // else: a forged depth could park an innocent chain, and the robots
-      // are the only principals whose writes ARE chain hops.
-      // The write's OWN scope says who its automation would be; a write made
-      // BY that principal is the one whose chain headers are worth trusting. No
-      // lookup: both halves are already on the scope the engine stamped.
-      chain: (scope, hints) => (String(scope['userId'] ?? '') === String(scope['automationActor'] ?? '\u0000') ? hints : undefined),
-    },
 
     // `world.refresh` re-derives assignments with the SAME `assignmentsFrom`
     // boot uses — injected, so a refresh cannot disagree with a restart. (Its

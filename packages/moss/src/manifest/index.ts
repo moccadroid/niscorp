@@ -37,7 +37,6 @@
 export { defineApp } from './app';
 export type {
   CanvasSeed,
-  FactIntake,
   FunctionSession,
   LayoutVariant,
   NiscApp,
