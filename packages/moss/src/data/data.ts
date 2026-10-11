@@ -1,6 +1,6 @@
 import type { Context, Env, Hono } from 'hono';
 import { migrate, upgradeStore } from '@niscorp/strata/postgres';
-import { handleDiscovery } from '@niscorp/vex';
+import { handleDiscovery, seedCache } from '@niscorp/vex';
 import type { Sequence, Upgrader } from '@niscorp/strata';
 import type { CacheBackend, DatabaseAdapter, ExecuteRecord, MutationClient, PgPool, QueryEngine, QueryEngineConfig, QueryResponse, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { memoKey } from '../identity';
@@ -29,10 +29,11 @@ import type { WriteListener } from './writes';
 // WHAT SOMEBODY MAY READ AND WRITE, as one object the server builds once and
 // every surface asks.
 //
-// It is handed exactly what the answer is made of: the database, the tables
-// and the entries, the charter and the row behaviors a policy is compiled
-// from, and where a span goes. It knows no manifest and no runtime, and
-// nothing of who is calling: the caller says that, for each request.
+// It is handed exactly what the answer is made of: the database, the tables,
+// the charter and the row behaviors a policy is compiled from, and where a
+// span goes; and, once it stands, the entries it serves (`seed`). It knows no
+// manifest and no runtime, and nothing of who is calling: the caller says
+// that, for each request.
 // ═══════════════════════════════════════════════════════════════
 
 export type DataConfig = {
@@ -59,9 +60,6 @@ export type DataConfig = {
   tables?: readonly Sequence[];
   // The app's own grammars (`NiscApp.grammars`): after nova's and Prism's.
   grammars?: readonly Sequence[];
-  // The entries the app serves. They are seeded, and they are the whole
-  // surface: nothing else is replayed.
-  entries?: readonly (SeedEntry | SeedMutation)[];
   // What every policy is compiled from.
   charter: NiscApp['charter'];
   behaviors?: NiscApp['behaviors'];
@@ -91,6 +89,16 @@ export type Data = {
   // The upgrader over nova's, Prism's and the app's grammars: it reads a
   // stored document current, and stamps one that is written.
   grammars: Upgrader;
+  // THE ENTRIES THE APP SERVES, SEEDED WHERE VEX REPLAYS FROM. Each lands in
+  // the cache as a protected row, and one the database already carries as
+  // authored is left untouched; a write that fails vex's authoring lint
+  // throws. They are the whole surface: nothing else is replayed.
+  //
+  // Handed the entries by whoever holds them (the running manifest), once,
+  // after both stand: the manifest cannot be built before `grants` is known,
+  // so its entries cannot arrive with the rest. This module reads them off no
+  // app.
+  seed: (entries: readonly (SeedEntry | SeedMutation)[]) => Promise<void>;
   // The policy somebody reads and writes under: compiled once for each set of
   // roles, and kept until the manifest changes.
   policyOf: (who: Caller) => ScopePolicy;
@@ -215,6 +223,7 @@ export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charte
     engine,
     grants,
     grammars,
+    seed: (entries) => seedCache(engine.cache, entries),
     policyOf: policies.of,
     policyForRoles: (roles) => resolvePolicyForRoles(governed, grants, roles),
     // Vex's own discovery, asked under the caller's policy: it lists an entry

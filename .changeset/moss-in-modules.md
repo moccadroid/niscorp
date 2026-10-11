@@ -140,6 +140,7 @@ Where the right column says there is nothing to call and an app did call it, say
 
 - `refresh()` ran a shorter copy of the boot check: the charter and the layout variants. It is now the same verification as boot's, entries' `reach` included. It verifies what is in force, and what is in force was verified when it was taken, so an app sees no difference.
 - A boot that is refused prints the chains of steps that never end before it throws. It printed them only when the charter had passed.
+- **A boot the check refuses has seeded no entry.** The app's entries were written into `vex_cache` before the check ran, so a manifest that was refused had already written its rows. They are seeded once the check has passed, by the same seeding, into the same table. A manifest that fails both the check and vex's lint of a write (`Mutation seed "…" fails the authoring lint`) is refused with the check's sentence, where it was refused with the lint's; corrected, the next boot says the other. An app that boots has nothing to change.
 
 **The generation counter is read and moved through vex, and a change another process made is followed, or tried again.**
 

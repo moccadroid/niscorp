@@ -8,7 +8,9 @@
 //
 // THE ENGINE (./engine.ts) stands up from what is present: the seeded entries
 // are the whole surface, and what can be granted is the tables the database
-// has.
+// has. Which entries those are, this module does not read off an app: it is
+// handed them to seed, once, by the running manifest that holds them
+// (`Data.seed`).
 //
 // THE POLICY a set of roles reads and writes under (./policy.ts) is their
 // `data` grants over that set, with the app's row behaviors: compiled once for

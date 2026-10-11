@@ -7,9 +7,10 @@ import type { NiscRuntime } from '../runtime';
 // tables' one ledgered run, brings the documents stored in them to this
 // code's grammars, and stands the engine up over what is there — in that
 // order, because a table created after the engine has looked is a table no
-// grant can reach. It is handed the database, the tables and the entries, the
-// charter and the row behaviors, and where a span goes; who a request is, it
-// is told for each request.
+// grant can reach. It is handed the database, the tables, the charter and the
+// row behaviors, and where a span goes; who a request is, it is told for each
+// request. The entries it serves are not read off the app here: the running
+// manifest holds them and hands them over when it stands (./manifest.ts).
 export const standData = (app: NiscApp, runtime: NiscRuntime): Promise<Data> =>
   createData({
     pool: runtime.pool,
@@ -22,7 +23,6 @@ export const standData = (app: NiscApp, runtime: NiscRuntime): Promise<Data> =>
     featureTables: featureTablesOf(app),
     tables: runtime.tables,
     grammars: app.grammars,
-    entries: app.entries,
     charter: app.charter,
     behaviors: app.behaviors,
     telemetry: runtime.telemetry,

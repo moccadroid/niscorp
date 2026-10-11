@@ -300,6 +300,37 @@ describe('the data module — the fingerprints somebody may be told of', () => {
 
 });
 
+// THE APP'S ENTRIES ARE SEEDED WHEN THEY ARE HANDED OVER (`seed`). What the
+// routes replay is what whoever holds the entries hands the data module (the
+// running manifest, where a server stands), and nothing the data module read
+// off an app. The engine here was stood up holding three (./data-double.ts).
+describe('the data module — the entries the app serves', () => {
+  const BODIES: SeedEntry = { fingerprint: 'notes/bodies', dsl: { from: ['notes'], fields: ['notes.body'] } };
+  const ASK = { fingerprint: 'notes/bodies', context: {} };
+
+  it('replays an entry once it has been handed over, and not before', async () => {
+    const { data, post } = await world();
+    expect(await post('reader', ASK)).toMatchObject({ error: 'cache_miss' });
+    await data.seed([BODIES]);
+    expect(await post('reader', ASK)).toMatchObject({ result: [{ id: 1, body: 'first' }] });
+  });
+
+  it('lands each as a protected row, and leaves one that is already there as authored untouched', async () => {
+    const { data, engine } = await world();
+    await data.seed([BODIES]);
+    const landed = await engine.cache.get('notes/bodies');
+    expect(landed).toMatchObject({ kind: 'ok', protected: true, dsl: BODIES.dsl });
+    await data.seed([BODIES]);
+    expect(await engine.cache.get('notes/bodies')).toBe(landed);
+  });
+
+  it('refuses a write that fails the authoring lint, naming it', async () => {
+    const { data } = await world();
+    const unbounded: SeedMutation = { fingerprint: 'notes/clear', mutation: { op: 'delete', table: 'notes', where: {} } } as unknown as SeedMutation;
+    await expect(data.seed([unbounded])).rejects.toThrow(/Mutation seed "notes\/clear" fails the authoring lint/);
+  });
+});
+
 // WHOSE TABLES ONE RUN COVERS (../src/data/migrate.ts). Nothing is run here:
 // the pool is never asked, and the cache keeps no table.
 describe('the data module — the tables a run covers', () => {

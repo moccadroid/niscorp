@@ -49,8 +49,9 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // 3. The tables are migrated and `data` stands (./data.ts).
   const data = await standData(app, runtime);
 
-  // 4. The running manifest: creating it is the boot check (./manifest.ts).
-  const running = standManifest(app, runtime, data);
+  // 4. The running manifest: creating it is the boot check, and it hands the
+  // data module the entries to seed (./manifest.ts).
+  const running = await standManifest(app, runtime, data);
 
   // 5. Identity (./identity.ts).
   const identity = standIdentity(app, runtime, data);

@@ -12,7 +12,11 @@ import type { NiscRuntime } from '../runtime';
 // Creating it IS the boot check: an incoherent manifest refuses here, before
 // anything else stands (the charter with each role's closure audited, every
 // entry's reach, the layout variants).
-export const standManifest = (app: NiscApp, runtime: Pick<NiscRuntime, 'sessionRevalidateMs'>, data: Pick<Data, 'grants' | 'dropOnChange' | 'pointer'>): RunningManifest => {
+export const standManifest = async (
+  app: NiscApp,
+  runtime: Pick<NiscRuntime, 'sessionRevalidateMs'>,
+  data: Pick<Data, 'grants' | 'dropOnChange' | 'pointer' | 'seed'>,
+): Promise<RunningManifest> => {
   const running = createRunningManifest({
     shipped: app,
     grants: data.grants,
@@ -25,5 +29,10 @@ export const standManifest = (app: NiscApp, runtime: Pick<NiscRuntime, 'sessionR
   // Handed over here, because the manifest could not be built before the
   // grantable set was known.
   data.dropOnChange(running.onChange);
+  // THE ENTRIES ARE THE RUNNING MANIFEST'S TO HAND OVER, for the same reason
+  // and at the same moment: it holds them, and what vex replays from is seeded
+  // with what it holds. After the check above, so a manifest that is refused
+  // has written no row.
+  await data.seed(running.entries());
   return running;
 };
