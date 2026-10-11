@@ -1143,16 +1143,25 @@ it in. No new test starts a database, and none calls `createServer`.
   in six shuffled orders (seeds 1 to 6): at the commit this started from,
   moss failed one or two tests in every one of the six, all among those four;
   after, 1,125 of 1,125 each time. Tide passed all six before and after.
-- **The long timeouts are gone, with their cause.** Both packages had
+- **The database tests cost less; the 30 s budget stays.** Both packages had
   `testTimeout: 30_000`. Measured: a PGlite start is 660 ms on an idle machine
   and 1.0 to 2.7 s with every core busy. Tide's two Postgres files started one
   for each test, 45 and 26: 55 s of file time in a suite of 35 s. They start
   one for a file, in a hook, and empty its tables for each test: 235 tests in
   3.0 s, the slowest 207 ms. Moss's ten files started 62 between them, and 35
-  tests took over a second, the slowest 3.5 s; a file initialises one database
-  and each test starts its own from that data directory in 140 ms: 9.6 s for
-  the suite where it took 19.8, and one test over a second (1.1 s, and it
-  starts no database). Both configs have vitest's own 5 s.
+  tests took over a second, the slowest 3.5 s; each test starts its own from
+  an initialised data directory in 140 ms: 9.6 s for the suite where it took
+  19.8, and one test over a second (1.1 s, and it starts no database).
+  The 30 s was then taken out of both configs, on those numbers, and that was
+  wrong: they were measured with one suite running alone. With every
+  package's tests running at once (`pnpm verify`) the run failed twice with
+  nothing wrong in the code: a hook of tide's that initialised a database
+  passed vitest's 10 s, and a database test of moss's passed its 5 s (the
+  suite took 33.7 s instead of 12). So: the one database a run initialises
+  from nothing is made in vitest's global setup, before any test is timed
+  (`test/initialised-database.ts` in each package, `a7b73a9`), and the 30 s is
+  back in both configs for the reason the base gave for it, with these
+  measurements beside it. Vex and strata have the same budget.
 - **Clocks.** The generation pointer's tests, the running manifest's, two of a
   snapshot's and the dev plugin's edit tests hold the clock; tide's driver
   tests do too. Every other timer in the two test directories is a wait on
