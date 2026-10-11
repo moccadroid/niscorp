@@ -1203,7 +1203,11 @@ lets them replay, as vex's discovery lists them.
 default. A `TelemetrySpan` is `{ name, startUnixNano, endUnixNano, status: 'ok'
 | 'error' | 'refused', attributes, traceId?, spanId?, parentSpanId? }`. Moss
 emits one per vex execution, fn call, integration call, shell build, and socket
-upgrade and close. A `socket.upgrade` is `ok` (admitted), `refused` (the token
+upgrade and close. A vex execution is a request's replay, one `executeAs`
+makes, and one a feature makes of its own entries: the integrations'
+registry reads and writes are `vex.execute` spans whose `fingerprint` starts
+with `integrations/` and whose `hasPrincipal` is `false`. The generation
+counter's poll emits none. A `socket.upgrade` is `ok` (admitted), `refused` (the token
 offered is nobody's) or `error` (the session could not be opened: the verifier
 threw, what somebody holds could not be asked, their shell could not be built).
 `emit` is never awaited, and a sink that throws costs the caller nothing: the
@@ -1859,7 +1863,11 @@ that:
 
 Which integrations are live for a principal is `installed` on the record the
 app's `identity.resolve` answers; absent, every approved integration is live
-for everybody.
+for everybody. The rule that reads it is this feature's (an
+`ext.<audience>.<integration>.<name>` action is there for somebody only where
+that integration is in their list), and it is laid when the feature starts:
+an app that names no feature has no such rule, and holds an `ext.…` action
+of its own wherever the charter grants it.
 
 What the feature serves once it is started:
 
