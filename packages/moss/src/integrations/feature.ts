@@ -158,16 +158,16 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
   // (./credentials.ts).
   const signer = createAssertionSigner(config.signingSeed);
   const timeoutMs = config.outboundTimeoutMs ?? DEFAULT_OUTBOUND_TIMEOUT_MS;
-  const forward = createForwarder({ find, who: seams.who, scopeOf: seams.scopeOf, mint: signer.mint, timeoutMs });
+  const forward = createForwarder({ find, resolveIdentity: seams.resolveIdentity, scopeOf: seams.scopeOf, mint: signer.mint, timeoutMs });
   // Approved integrations' actions, read from rows. Handed to the running
   // manifest after an import, an approval and a removal: the set is verified
   // with everything else, and only then is it served.
   const stored = (): ReturnType<typeof loadIntegrationActions> => loadIntegrationActions(replay, seams.grammars);
   const reload = async (): Promise<void> => seams.replaceActions(await stored());
 
-  seams.narrowCatalogs(filterInstalled);
+  seams.addCatalogFilter(filterInstalled);
   seams.setActionsLoader(stored);
-  seams.credential(KEY_PREFIX, keyCredential({ byKey: (key) => integrationByKey(replay, key), actor: config.integrationActor, who: seams.who }));
+  seams.registerCredential(KEY_PREFIX, keyCredential({ byKey: (key) => integrationByKey(replay, key), actor: config.integrationActor, resolveIdentity: seams.resolveIdentity }));
   seams.wrapWire(flooredWire);
 
   // What the host offers a bundle to name: the kit's components, which the
@@ -180,14 +180,14 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
     publishChecks: config.publishChecks,
     editorRegions: config.editorRegions,
   };
-  seams.routes(
+  seams.mountRoutes(
     contractRoutes({
       host: { components: seams.components, charter: seams.charter, attachable: config.attachable, menuSlots: config.menuSlots },
       fingerprintsFor: seams.fingerprintsFor,
       verifyKey: signer.verifyKey,
     }),
   );
-  seams.operatorRoutes(
+  seams.mountOperatorRoutes(
     operatorRoutes({
       replay,
       grammars: seams.grammars,
@@ -204,8 +204,8 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
   );
   // The frame doors, then the webhook, then the proxy: the proxy's pattern
   // matches every path the other three serve.
-  seams.routes(frameRoutes({ replay, who: seams.who, holds: seams.holds, forward }));
-  seams.routes(proxyRoutes({ holds: seams.holds, forward }));
+  seams.mountRoutes(frameRoutes({ replay, resolveIdentity: seams.resolveIdentity, grantedActionIds: seams.grantedActionIds, forward }));
+  seams.mountRoutes(proxyRoutes({ grantedActionIds: seams.grantedActionIds, forward }));
 
   // WHATEVER WAS APPROVED BEFORE THIS PROCESS STARTED is part of the
   // application, so it is folded in before anything is served — not on first

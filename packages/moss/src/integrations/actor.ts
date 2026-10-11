@@ -28,7 +28,7 @@ export const keyCredential =
     // The approved integration a presented key belongs to (./registry.ts).
     byKey: (key: string) => Promise<string | undefined>;
     actor: IntegrationActor | undefined;
-    who: FeatureSeams['who'];
+    resolveIdentity: FeatureSeams['resolveIdentity'];
   }) =>
   async (token: string, request: Request): Promise<CredentialAnswer> => {
     const integration = await deps.byKey(token);
@@ -38,7 +38,7 @@ export const keyCredential =
     // The app's answer may be PURE (composing the actor id from its parts) —
     // whether the install is live is identity's question, so an actor that
     // resolves to nobody is refused here, where null used to be.
-    const resolved = await deps.who(actor);
+    const resolved = await deps.resolveIdentity(actor);
     if (resolved.roles.length === 1 && resolved.roles[0] === 'public') return NO_ACTOR;
     return { principal: actor };
   };

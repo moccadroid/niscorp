@@ -37,7 +37,7 @@ export type FeatureEnv = { Variables: { principal: string | null } };
 // Who a principal is, as far as a feature may know: the roles they wear, and
 // the integrations live for their tenant (`undefined`: the app keeps no list,
 // and every one is live).
-export type Whoever = { roles: readonly string[]; installed: readonly string[] | undefined };
+export type PrincipalIdentity = { roles: readonly string[]; installed: readonly string[] | undefined };
 
 // What a credential of the feature's own says about a token: the principal it
 // stands for, or what to answer instead. A principal is resolved by the server
@@ -55,25 +55,25 @@ export type FeatureSeams = {
   // ── the server ──
   // Mount routes at the server's root, after its own, behind the
   // authentication every route gets.
-  routes: (routes: Hono<FeatureEnv>) => void;
+  mountRoutes: (routes: Hono<FeatureEnv>) => void;
   // Mount routes under `/operator`, behind the operator key and the app's own
   // gate.
-  operatorRoutes: (routes: Hono<FeatureEnv>) => void;
+  mountOperatorRoutes: (routes: Hono<FeatureEnv>) => void;
   // A bearer token that starts with `prefix` is this feature's to read. It is
   // handed the token and the request it came on, and says who that is.
-  credential: (prefix: string, principalOf: (token: string, request: Request) => Promise<CredentialAnswer>) => void;
+  registerCredential: (prefix: string, principalOf: (token: string, request: Request) => Promise<CredentialAnswer>) => void;
 
   // ── who is calling ──
   // Who a principal is: the roles they wear, and the integrations live for
   // them. `null` is nobody signed in.
-  who: (principal: string | null) => Promise<Whoever>;
+  resolveIdentity: (principal: string | null) => Promise<PrincipalIdentity>;
   // The scope values a principal carries: the ones the engine pins rows by.
   scopeOf: (principal: string) => Promise<Record<string, unknown>>;
 
   // ── what exists for them ──
   // The action ids a set of roles holds of the actions in force, for an
   // install list.
-  holds: (roles: readonly string[], installed: readonly string[] | undefined) => readonly string[];
+  grantedActionIds: (roles: readonly string[], installed: readonly string[] | undefined) => readonly string[];
   // The actions in force: what the app shipped, then each set handed over.
   actions: () => Actions;
   // THIS FEATURE'S OWN SET OF ACTIONS, put in place of the one it handed over
@@ -91,7 +91,7 @@ export type FeatureSeams = {
   // of a deployment: with no loader it stays in the process it was handed to.
   setActionsLoader: (load: () => Promise<Record<string, ActionDefinition>>) => void;
   // One more rule for which granted actions are there for an install list.
-  narrowCatalogs: (filter: (ids: readonly string[], installed: ReadonlySet<string> | undefined) => readonly string[]) => void;
+  addCatalogFilter: (filter: (ids: readonly string[], installed: ReadonlySet<string> | undefined) => readonly string[]) => void;
   // The charter the app shipped: role names, and what each selects.
   charter: Charter;
   // The kit's component contracts, by name: a description, and the schema of

@@ -220,17 +220,17 @@ describe('createTideFacts — the feature', () => {
       throw new Error(`the feature asked for ${seam}`);
     };
     return {
-      routes: notAsked('routes'),
-      operatorRoutes: notAsked('operatorRoutes'),
-      credential: notAsked('credential'),
-      who: notAsked('who'),
+      mountRoutes: notAsked('mountRoutes'),
+      mountOperatorRoutes: notAsked('mountOperatorRoutes'),
+      registerCredential: notAsked('registerCredential'),
+      resolveIdentity: notAsked('resolveIdentity'),
       scopeOf: notAsked('scopeOf'),
-      holds: notAsked('holds'),
+      grantedActionIds: notAsked('grantedActionIds'),
       actions: notAsked('actions'),
       replaceActions: notAsked('replaceActions'),
       refusalOf: notAsked('refusalOf'),
       setActionsLoader: notAsked('setActionsLoader'),
-      narrowCatalogs: notAsked('narrowCatalogs'),
+      addCatalogFilter: notAsked('addCatalogFilter'),
       charter: {},
       components: {},
       ownEntries: notAsked('ownEntries'),

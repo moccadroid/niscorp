@@ -760,7 +760,7 @@ describe('callIntegration', () => {
     const call = callIntegrationWith({
       forward: createForwarder({
         find: (id) => findIntegration(registry, id),
-        who: async () => ({ roles: [], installed: 'installed' in over ? over.installed : ['acme'] }),
+        resolveIdentity: async () => ({ roles: [], installed: 'installed' in over ? over.installed : ['acme'] }),
         scopeOf: async () => ({ studio_id: 's_1', audience: 'owner' }),
         mint: signer.mint,
         timeoutMs: 30_000,

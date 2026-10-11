@@ -43,7 +43,7 @@ const createHookLimit = (): ((id: string, now: number) => boolean) => {
 };
 
 export type ProxyDeps = {
-  holds: FeatureSeams['holds'];
+  grantedActionIds: FeatureSeams['grantedActionIds'];
   forward: Forwarder;
 };
 
@@ -132,7 +132,7 @@ const proxy = (deps: ProxyDeps, routes: Hono<FeatureEnv>): void => {
       //
       // Checked BEFORE the assertion is minted: an inadmissible path gets no
       // credential, not even one that would have died at the other end.
-      admits: (found, caller) => reachAdmits(found.reach, c.req.path, new Set(deps.holds(caller.roles, caller.installed))),
+      admits: (found, caller) => reachAdmits(found.reach, c.req.path, new Set(deps.grantedActionIds(caller.roles, caller.installed))),
       path: `${here.pathname.split('/').slice(3).join('/')}${here.search}`,
       request: async (assertion) => ({
         method: c.req.method,

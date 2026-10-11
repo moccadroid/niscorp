@@ -42,7 +42,7 @@ export type SeamParts = {
   operator: Hono<Env>;
   registered: Registered;
   identity: Pick<Identity, 'resolve' | 'scopeValuesFor'>;
-  running: Pick<RunningManifest, 'catalogFor' | 'actions' | 'claim' | 'verify' | 'narrowCatalogs'>;
+  running: Pick<RunningManifest, 'catalogFor' | 'actions' | 'claim' | 'verify' | 'addCatalogFilter'>;
   data: Pick<Data, 'ownEntries' | 'grammars' | 'upgradeStore' | 'fingerprints' | 'fingerprintsFor' | 'onWrite'>;
 };
 
@@ -55,23 +55,23 @@ export const seamsOf = (feature: Pick<Feature, 'name'>, { app, runtime, server, 
 };
 
 const seamsFor = (feature: Pick<Feature, 'name'>, owned: OwnedActions, { app, runtime, server, operator, registered, identity, running, data }: SeamParts): FeatureSeams => ({
-  routes: (routes) => {
+  mountRoutes: (routes) => {
     server.route('/', routes);
   },
-  operatorRoutes: (routes) => {
+  mountOperatorRoutes: (routes) => {
     operator.route('/', routes);
   },
-  credential: (prefix, principalOf) => {
+  registerCredential: (prefix, principalOf) => {
     registered.credentials.push({ prefix, principalOf });
   },
-  who: identity.resolve,
+  resolveIdentity: identity.resolve,
   scopeOf: identity.scopeValuesFor,
-  holds: (roles, installed) => running.catalogFor(roles, installed).ids,
+  grantedActionIds: (roles, installed) => running.catalogFor(roles, installed).ids,
   actions: running.actions,
   replaceActions: owned.replace,
   refusalOf: (actions) => refusalOf(running.verify(actions), 'refresh'),
   setActionsLoader: owned.setLoader,
-  narrowCatalogs: running.narrowCatalogs,
+  addCatalogFilter: running.addCatalogFilter,
   charter: app.charter,
   components: app.shell?.components ?? {},
   // The tables are the ones this feature named as its own, and it cannot say

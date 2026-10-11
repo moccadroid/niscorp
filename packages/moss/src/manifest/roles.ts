@@ -33,7 +33,7 @@ export type Catalog = { ids: readonly string[]; hash: string };
 // list: an action an integration ships exists only where that integration is
 // installed. `undefined` is "every one is live". Handed in, because what an
 // integration is, and which action belongs to which, is not known here: the
-// integrations feature says it through the seam (./running.ts, narrowCatalogs).
+// integrations feature says it through the seam (./running.ts, addCatalogFilter).
 export type InstalledOnly = (ids: readonly string[], installed: ReadonlySet<string> | undefined) => readonly string[];
 
 // The application, resolved for a set of roles — granted action ids plus

@@ -16,10 +16,10 @@ const approved: FoundIntegration = { url: 'https://vendor.example/', status: 'ap
 const door = (): { hook: (id: string) => Promise<number>; sent: () => number } => {
   const send = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => new Response('{}', { status: 200 }));
   const routes = proxyRoutes({
-    holds: () => [],
+    grantedActionIds: () => [],
     forward: createForwarder({
       find: async (id) => (id === 'pay' || id === 'belts' ? approved : undefined),
-      who: async () => ({ roles: [], installed: undefined }),
+      resolveIdentity: async () => ({ roles: [], installed: undefined }),
       scopeOf: async () => ({}),
       mint: () => 'unused',
       timeoutMs: 30_000,

@@ -50,7 +50,7 @@ export type RunningManifestConfig = {
   // Which of a set of roles' actions are there for an install list. A function,
   // because this module does not know what an integration is (./roles.ts).
   // Absent: every granted action is there, whatever is installed, until
-  // somebody says otherwise (`narrowCatalogs`).
+  // somebody says otherwise (`addCatalogFilter`).
   installedOnly?: InstalledOnly;
   // The generation pointer (./generation.ts): how its row is read and moved,
   // and how often it is read, once `watch` is called. Absent: this manifest
@@ -129,7 +129,7 @@ export type RunningManifest = {
   // ONE MORE RULE FOR WHICH GRANTED ACTIONS ARE THERE FOR AN INSTALL LIST, laid
   // after the ones already said. What was remembered for each set of roles is
   // dropped, so the next answer is made with it.
-  narrowCatalogs: (filter: InstalledOnly) => void;
+  addCatalogFilter: (filter: InstalledOnly) => void;
   // The ids of the actions a set of roles holds, with their version token,
   // remembered until the next switch (./roles.ts).
   catalogFor: (roles: readonly string[], installed: readonly string[] | undefined) => Catalog;
@@ -288,7 +288,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
         listeners.delete(listener);
       };
     },
-    narrowCatalogs: (filter) => {
+    addCatalogFilter: (filter) => {
       narrowings.push(filter);
       holdings.drop();
     },

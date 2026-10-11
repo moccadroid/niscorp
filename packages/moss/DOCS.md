@@ -1011,17 +1011,17 @@ its own, and the core never imports it.
 
   | Member | What it is for |
   |---|---|
-  | `routes(hono)` | mount routes at the server's root, behind the authentication every route gets |
-  | `operatorRoutes(hono)` | mount routes under `/operator`, behind the operator key and the app's gate |
-  | `credential(prefix, principalOf)` | read a bearer token that starts with the feature's own prefix, and say who it is |
-  | `who(principal)` | who a principal is: their roles, and the integrations live for them |
+  | `mountRoutes(hono)` | mount routes at the server's root, behind the authentication every route gets |
+  | `mountOperatorRoutes(hono)` | mount routes under `/operator`, behind the operator key and the app's gate |
+  | `registerCredential(prefix, principalOf)` | read a bearer token that starts with the feature's own prefix, and say who it is |
+  | `resolveIdentity(principal)` | who a principal is: their roles, and the integrations live for them |
   | `scopeOf(principal)` | the scope values a principal carries, which the engine pins rows by |
-  | `holds(roles, installed)` | the action ids a set of roles holds of the actions in force |
+  | `grantedActionIds(roles, installed)` | the action ids a set of roles holds of the actions in force |
   | `actions()` | the actions in force: what the app shipped, then each set handed over |
   | `replaceActions(actions)` | put a set of actions in place of the feature's own, in this process; throws when the app could not be served so. A feature has one set, kept under its name, and is its only writer |
   | `refusalOf(actions)` | the sentence the app would be refused with if exactly these were in force, or `undefined` |
   | `setActionsLoader(load)` | how the feature's set, kept in rows, is read again when another process moved the generation pointer; a set with no loader is not carried to another process |
-  | `narrowCatalogs(filter)` | one more rule for which granted actions are there for an install list |
+  | `addCatalogFilter(filter)` | one more rule for which granted actions are there for an install list |
   | `charter` | the charter the app shipped: role names, and what each selects |
   | `components` | the kit's component contracts by name: a description, and the props' schema |
   | `ownEntries(entries)` | hand over the feature's own reads and writes, on the tables it named as its own, and get back how one is replayed |

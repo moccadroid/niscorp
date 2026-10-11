@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { ActionDefinition, FetchFn } from '@niscorp/nova';
 import type { DocumentStore } from '@niscorp/strata/postgres';
 import { createGrammarUpgrader } from '../src/data/grammar';
-import type { CredentialAnswer, FeatureEnv, FeatureSeams, Replay, Whoever } from '../src/feature';
+import type { CredentialAnswer, FeatureEnv, FeatureSeams, Replay, PrincipalIdentity } from '../src/feature';
 import { createIntegrations } from '../src/integrations';
 import { integrationOfAction } from '../src/integrations/installed';
 import { hashIntegrationKey } from '../src/integrations/credentials';
@@ -43,14 +43,14 @@ const desk: ActionDefinition = { id: 'ext.desk.belts.roster' };
 const world = async (
   over: {
     replay?: Replay;
-    who?: (principal: string | null) => Whoever;
+    who?: (principal: string | null) => PrincipalIdentity;
     refuses?: (actions: Readonly<Record<string, ActionDefinition>>) => string | undefined;
     upgradeStore?: FeatureSeams['upgradeStore'];
   } = {},
 ) => {
   const said = {
     credentials: new Map<string, (token: string, request: Request) => Promise<CredentialAnswer>>(),
-    narrowings: [] as Parameters<FeatureSeams['narrowCatalogs']>[0][],
+    narrowings: [] as Parameters<FeatureSeams['addCatalogFilter']>[0][],
     loaders: [] as (() => Promise<Record<string, ActionDefinition>>)[],
     wraps: [] as ((inner: FetchFn) => FetchFn)[],
     replaced: [] as Record<string, ActionDefinition>[],
@@ -70,18 +70,18 @@ const world = async (
   });
   const operator = new Hono<FeatureEnv>();
   const seams: FeatureSeams = {
-    routes: (routes) => {
+    mountRoutes: (routes) => {
       server.route('/', routes);
     },
-    operatorRoutes: (routes) => {
+    mountOperatorRoutes: (routes) => {
       operator.route('/', routes);
     },
-    credential: (prefix, principalOf) => {
+    registerCredential: (prefix, principalOf) => {
       said.credentials.set(prefix, principalOf);
     },
-    who: async (principal) => over.who?.(principal) ?? { roles: ['public'], installed: undefined },
+    resolveIdentity: async (principal) => over.who?.(principal) ?? { roles: ['public'], installed: undefined },
     scopeOf: async (principal) => ({ userId: principal }),
-    holds: () => [],
+    grantedActionIds: () => [],
     actions: () => ({}),
     replaceActions: (actions) => {
       const refusal = over.refuses?.(actions);
@@ -92,7 +92,7 @@ const world = async (
     setActionsLoader: (load) => {
       said.loaders.push(load);
     },
-    narrowCatalogs: (filter) => {
+    addCatalogFilter: (filter) => {
       said.narrowings.push(filter);
     },
     charter: { desk: { actions: ['desk.*', 'ext.desk.*'] }, member: { actions: { allow: ['ext.member.*'] } } },
@@ -379,7 +379,7 @@ describe('the operator approves an integration', () => {
 });
 
 describe('the integration key, as the credential the feature registers', () => {
-  const keyed = async (config: Parameters<typeof createIntegrations>[0], who?: (principal: string | null) => Whoever) => {
+  const keyed = async (config: Parameters<typeof createIntegrations>[0], who?: (principal: string | null) => PrincipalIdentity) => {
     const { seams, said } = await world({ replay: replayOver({ keys: { ik_belts: 'belts' } }), ...(who === undefined ? {} : { who }) });
     await createIntegrations(config).start(seams);
     const principalOf = said.credentials.get('ik_');
@@ -547,7 +547,7 @@ describe('the routes the feature mounts, asked through the server it mounted the
     try {
       const found = { url: 'https://belts.example', status: 'approved', reach: { '/integrations/belts/roster': ['ext.desk.belts.roster'] }, frames: {} };
       const { seams, server, caller } = await world({ replay: replayOver({ found: { belts: found } }), who: () => ({ roles: ['desk'], installed: ['belts'] }) });
-      await createIntegrations().start({ ...seams, holds: (roles) => (roles.includes('desk') ? ['ext.desk.belts.roster'] : []) });
+      await createIntegrations().start({ ...seams, grantedActionIds: (roles) => (roles.includes('desk') ? ['ext.desk.belts.roster'] : []) });
       caller.principal = 'i_mara';
 
       expect((await server.request('/integrations/belts/roster?view=summary')).status).toBe(200);
@@ -569,7 +569,7 @@ describe('a service that never answers', () => {
     globalThis.fetch = service.fetch;
     try {
       const started = await world({ replay: replayOver({ found: { belts: found } }), who: () => ({ roles: ['desk'], installed: ['belts'] }) });
-      await createIntegrations({ outboundTimeoutMs: 20 }).start({ ...started.seams, holds: () => ['ext.desk.belts.roster'] });
+      await createIntegrations({ outboundTimeoutMs: 20 }).start({ ...started.seams, grantedActionIds: () => ['ext.desk.belts.roster'] });
       return await run(started, service.signals);
     } finally {
       globalThis.fetch = real;
@@ -627,7 +627,7 @@ describe('a frame grant, with two processes behind one address', () => {
     };
     const process = async () => {
       const started = await world({ replay, who: () => ({ roles: ['desk'], installed: ['belts'] }) });
-      await createIntegrations().start({ ...started.seams, holds: () => ['ext.desk.belts.pay'] });
+      await createIntegrations().start({ ...started.seams, grantedActionIds: () => ['ext.desk.belts.pay'] });
       return started;
     };
     return { grants, process };

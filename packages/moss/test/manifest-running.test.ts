@@ -250,14 +250,14 @@ describe('what a set of roles holds', () => {
     const everything = manifest.catalogFor(['member'], ['belts']);
     expect(everything.ids).toEqual([desk.id, pay.id, 'home', 'panel']);
 
-    manifest.narrowCatalogs(installedOnly);
+    manifest.addCatalogFilter(installedOnly);
 
     // What was remembered was made without the filter, so it is not kept.
     expect(manifest.catalogFor(['member'], ['belts'])).not.toBe(everything);
     expect(manifest.catalogFor(['member'], ['belts']).ids).toEqual([desk.id, 'home', 'panel']);
     expect(manifest.catalogFor(['member'], undefined).ids).toEqual([desk.id, pay.id, 'home', 'panel']);
     // A second rule is applied to what the first kept.
-    manifest.narrowCatalogs((ids) => ids.filter((id) => id !== 'panel'));
+    manifest.addCatalogFilter((ids) => ids.filter((id) => id !== 'panel'));
     expect(manifest.catalogFor(['member'], ['belts']).ids).toEqual([desk.id, 'home']);
   });
 

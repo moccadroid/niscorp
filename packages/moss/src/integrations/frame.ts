@@ -69,8 +69,8 @@ export type FrameDeps = {
   // What the registry's entries are replayed by (./registry.ts): an
   // integration is found by it, and a grant kept and read.
   replay: Replay;
-  who: FeatureSeams['who'];
-  holds: FeatureSeams['holds'];
+  resolveIdentity: FeatureSeams['resolveIdentity'];
+  grantedActionIds: FeatureSeams['grantedActionIds'];
   forward: Forwarder;
 };
 
@@ -103,7 +103,7 @@ export const frameRoutes = (deps: FrameDeps): Hono<FeatureEnv> => {
     const id = path.split('/')[2] ?? '';
     const found = await findIntegration(deps.replay, id);
     if (found === undefined || found.status !== 'approved') return c.json({ message: 'No such integration.' }, 404);
-    const caller = await deps.who(principal);
+    const caller = await deps.resolveIdentity(principal);
     if (caller.installed !== undefined && !caller.installed.includes(id)) return c.json({ message: 'Not installed here.' }, 404);
     // THE DECLARATION IS THE PERIMETER HERE TOO. A grant is only ever minted
     // for a page the bundle named at intake, so a screen cannot frame a path
@@ -116,7 +116,7 @@ export const frameRoutes = (deps: FrameDeps): Hono<FeatureEnv> => {
     // page that mounts a payment provider's onboarding form against the
     // studio's merchant account. The bundle names the owning action now, and a
     // grant is minted only for somebody who holds it.
-    const held = new Set(deps.holds(caller.roles, caller.installed));
+    const held = new Set(deps.grantedActionIds(caller.roles, caller.installed));
     if (!frameAdmits(found.frames, path, held)) return c.json({ message: 'No such frame.' }, 404);
 
     const token = await grants.mint({ integration: id, principal, path });

@@ -17,7 +17,7 @@ const world = (over: Partial<ForwardDeps> & { rows?: Record<string, FoundIntegra
   const who = vi.fn(async () => ({ roles: ['desk'], installed: ['acme'] as readonly string[] | undefined }));
   const forward = createForwarder({
     find: async (id) => rows[id],
-    who,
+    resolveIdentity: who,
     scopeOf: async () => ({ userId: 'i_mara', studioId: 's_1' }),
     mint,
     // As long as a deployment allows a call when it says nothing else.
@@ -47,14 +47,14 @@ describe('createForwarder — what is refused, and that nothing went out', () =>
   });
 
   it('one that is not installed for the principal’s tenant', async () => {
-    const { forward, send, mint } = world({ who: async () => ({ roles: ['desk'], installed: ['somebody-else'] }) });
+    const { forward, send, mint } = world({ resolveIdentity: async () => ({ roles: ['desk'], installed: ['somebody-else'] }) });
     expect(await forward({ integration: 'acme', principal: 'i_mara', path: 'x', request: get })).toEqual({ kind: 'refused', why: 'uninstalled' });
     expect(send).not.toHaveBeenCalled();
     expect(mint).not.toHaveBeenCalled();
   });
 
   it('an app that keeps no install list admits', async () => {
-    const { forward } = world({ who: async () => ({ roles: ['desk'], installed: undefined }) });
+    const { forward } = world({ resolveIdentity: async () => ({ roles: ['desk'], installed: undefined }) });
     expect((await forward({ integration: 'acme', principal: 'i_mara', path: 'x', request: get })).kind).toBe('answered');
   });
 

@@ -1,4 +1,4 @@
-import type { Whoever } from '../feature';
+import type { PrincipalIdentity } from '../feature';
 import type { AssertionSigner } from './credentials';
 import type { FoundIntegration } from './registry';
 
@@ -23,7 +23,7 @@ export type ForwardDeps = {
   find: (id: string) => Promise<FoundIntegration | undefined>;
   // Who a call is made for: the roles a reach is decided by, and the
   // integrations live for their tenant.
-  who: (principal: string) => Promise<Whoever>;
+  resolveIdentity: (principal: string) => Promise<PrincipalIdentity>;
   // The scope values a principal carries: the ones the engine pins rows by.
   scopeOf: (principal: string) => Promise<Record<string, unknown>>;
   mint: AssertionSigner['mint'];
@@ -50,7 +50,7 @@ type ForSomebody = Outbound & {
   // The door's own gate, asked once the integration is found, approved and
   // installed, and before anything is minted: a call it does not admit gets no
   // credential, not even one that would have died at the other end.
-  admits?: (found: FoundIntegration, caller: Whoever) => boolean;
+  admits?: (found: FoundIntegration, caller: PrincipalIdentity) => boolean;
   // The request, built once it is known that the call goes out. `assertion` is
   // the token the door sends as `authorization: Bearer …`.
   request: (assertion: string) => RequestInit | Promise<RequestInit>;
@@ -108,7 +108,7 @@ export const createForwarder = (deps: ForwardDeps): Forwarder => {
       return sent(url, call.request);
     }
     const principal = call.principal;
-    const caller = await deps.who(principal);
+    const caller = await deps.resolveIdentity(principal);
     if (caller.installed !== undefined && !caller.installed.includes(call.integration)) return { kind: 'refused', why: 'uninstalled' };
     if (call.admits !== undefined && !call.admits(found, caller)) return { kind: 'refused', why: 'inadmissible' };
     const assertion = deps.mint({ integration: call.integration, principal, scope: { ...(await deps.scopeOf(principal)), ...(call.scope ?? {}) } });

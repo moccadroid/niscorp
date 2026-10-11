@@ -103,7 +103,7 @@ describe('integration.call', () => {
     const call = callIntegrationWith({
       forward: createForwarder({
         find: async (id) => (id === 'acme' ? acme : undefined),
-        who: async () => ({ roles: [], installed: ['acme'] }),
+        resolveIdentity: async () => ({ roles: [], installed: ['acme'] }),
         scopeOf: async () => ({ studio_id: 's_1' }),
         mint: signer.mint,
         timeoutMs: 30_000,
