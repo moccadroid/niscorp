@@ -169,6 +169,15 @@ const approve: SeedMutation = {
   mutation: { op: 'update', table: 'integrations', set: { status: 'approved', ...fromContext(['approved_data']) }, where: byId },
 };
 
+// An approval, taken back: the integration is as it was before somebody said
+// yes, and the row says why. What it was granted stays written beside the
+// status that no longer serves it, as it always did.
+const setBackToPending: SeedMutation = {
+  fingerprint: 'integrations/set-back-to-pending',
+  intent: 'Take an approval back, and keep why on the row',
+  mutation: { op: 'update', table: 'integrations', set: { status: 'pending', ...fromContext(['last_error']) }, where: byId },
+};
+
 const remove: SeedMutation = {
   fingerprint: 'integrations/remove',
   intent: 'Remove an integration; its actions go with the row',
@@ -319,6 +328,7 @@ export const REGISTRY_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [
   land,
   landAndKeepKey,
   approve,
+  setBackToPending,
   remove,
   list,
   actionCounts,

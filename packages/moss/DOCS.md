@@ -1857,7 +1857,11 @@ hash of one key (a unique index on `integrations.key_hash`).
 - *Approve* (`POST /operator/integrations/:id/approve`) reads what the
   integration shipped, asks whether the app could be served with it, and only
   then writes the approval. Refused, it answers `422` with the reason and
-  nothing is written.
+  nothing is written. Written, its actions are read from the rows and handed
+  to the running app; if the app does not take them all the same (something
+  else changed what it consists of in between), the approval is taken back:
+  the row is pending again with the reason in `lastError`, and the answer is
+  the same `422`.
 - *The contract* (`GET /api/integrations/contract`) lists, under
   `fingerprints`, the reads and writes the caller's own policy lets them
   replay: an integration asking with its key reads what its actor's rung

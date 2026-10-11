@@ -3,12 +3,16 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { ActionDefinition, FetchFn } from '@niscorp/nova';
 import type { DocumentStore } from '@niscorp/strata/postgres';
+import { createPostgresAdapter } from '@niscorp/vex';
+import type { DatabaseSchema, MutationClient } from '@niscorp/vex';
 import { createGrammarUpgrader } from '../src/data/grammar';
+import { createOwnEntries } from '../src/data/own-entries';
 import type { CredentialAnswer, FeatureEnv, FeatureSeams, Replay, PrincipalIdentity } from '../src/feature';
 import { createIntegrations } from '../src/integrations';
 import { integrationOfAction } from '../src/integrations/installed';
 import { hashIntegrationKey } from '../src/integrations/credentials';
-import { PAGE } from '../src/integrations/entries';
+import { PAGE, REGISTRY_ENTRIES, REGISTRY_TABLES } from '../src/integrations/entries';
+import { setBackToPending } from '../src/integrations/registry';
 import { neverAnswers } from './never-answers';
 
 // THE FEATURE, STARTED BY HAND: `createIntegrations` handed seams that are
@@ -323,7 +327,8 @@ describe('createIntegrations — started with the seams', () => {
 describe('the operator approves an integration', () => {
   const REFUSAL = 'Refresh refused — charter incoherent over the new artifacts:\n  no role grants "ext.desk.belts.roster"';
   const registered = () => {
-    const held = { status: 'pending', writes: [] as string[] };
+    // `kept`: what each write was handed beside the integration's id.
+    const held = { status: 'pending', writes: [] as string[], kept: [] as Record<string, unknown>[] };
     const shipped = { integration_id: 'belts', action_id: desk.id, definition: desk, grammar: {} };
     const replay: Replay = async (fingerprint, context) => {
       const isBelts = context['id'] === 'belts';
@@ -332,6 +337,8 @@ describe('the operator approves an integration', () => {
       if (fingerprint === 'integrations/stored-actions') return held.status === 'approved' ? [shipped] : [];
       if (fingerprint === 'integrations/approve' || fingerprint === 'integrations/set-back-to-pending') {
         held.writes.push(fingerprint);
+        const { id: _id, ...kept } = context;
+        held.kept.push(kept);
         if (isBelts) held.status = fingerprint === 'integrations/approve' ? 'approved' : 'pending';
       }
       return [];
@@ -365,6 +372,52 @@ describe('the operator approves an integration', () => {
     expect(await answered.json()).toEqual({ id: 'belts', status: 'approved', granted: ['people.read'] });
     expect(held.writes).toEqual(['integrations/approve']);
     expect(said.replaced).toEqual([{ [desk.id]: desk }]);
+  });
+
+  // THE QUESTION WAS ANSWERED YES, AND THE HAND-OVER IS THEN REFUSED: something
+  // else changed between the two (another approval, a set the app handed over),
+  // or the rows could not be read again. The approval was already written.
+  // Left there, the answer was a 500 over a row that said approved: every
+  // process that read the rows next was refused them, and so was the next
+  // boot. It is taken back, as it was before the approval was verified first.
+  it('one whose actions the app then does not take is taken back: pending again, with why on the row and in the answer', async () => {
+    const { held, replay } = registered();
+    // Asked first, and not refused; refused when the set is handed over.
+    const handed = { count: 0 };
+    const { seams, said, operator } = await world({ replay, refuses: (actions) => (desk.id in actions && (handed.count += 1) > 1 ? REFUSAL : undefined) });
+    await createIntegrations().start(seams);
+
+    const answered = await approve(operator, 'belts');
+    expect(answered.status).toBe(422);
+    expect(await answered.json()).toEqual({ message: 'Refused — the app would not serve this.', reasons: [`Error: ${REFUSAL}`] });
+    expect(held.writes).toEqual(['integrations/approve', 'integrations/set-back-to-pending']);
+    expect(held.kept[1]).toEqual({ last_error: `Error: ${REFUSAL}` });
+    expect(held.status).toBe('pending');
+    // What is served is read again from the rows as they are now: without it.
+    expect(said.replaced).toEqual([{}]);
+  });
+
+  // WHAT THE TAKING BACK WRITES: the feature's entry, compiled by vex's own
+  // Postgres adapter and replayed the way a server replays it, on a client
+  // that runs nothing and keeps the statement it is sent.
+  it('the taking back is one statement on that integration’s row: pending, and why', async () => {
+    const column = (name: string, primaryKey = false): DatabaseSchema['entities'][number]['fields'][number] => ({ name, type: 'text', normalizedType: 'string', nullable: !primaryKey, primaryKey });
+    const schema: DatabaseSchema = {
+      entities: [{ name: 'integrations', table: 'integrations', fields: [column('id', true), column('status'), column('last_error')], relations: [], indexes: [] }],
+    };
+    const written: { sql: string; params: readonly unknown[] }[] = [];
+    const db: MutationClient = {
+      query: async (sql, params) => {
+        written.push({ sql, params: params ?? [] });
+        return { rows: [] };
+      },
+    };
+    const adapter = { ...createPostgresAdapter({ pool: { query: async () => ({ rows: [] }) } }), introspect: async () => schema };
+    const replay = await createOwnEntries({ adapter, db, engine: { invalidate: () => undefined } })({ owner: 'the feature "integrations"', entries: REGISTRY_ENTRIES, tables: REGISTRY_TABLES });
+
+    await setBackToPending(replay, 'belts', 'Error: the app would not serve this');
+
+    expect(written).toEqual([{ sql: "UPDATE integrations SET status = 'pending', last_error = $1 WHERE integrations.id = $2 RETURNING *", params: ['Error: the app would not serve this', 'belts'] }]);
   });
 
   it('one that is not there is a 404, and nothing is written', async () => {

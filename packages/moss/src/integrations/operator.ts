@@ -12,7 +12,7 @@ import { describePlacements } from './placements';
 import { copyPress } from './press';
 import type { StorePress } from './press';
 import { reachDeclares } from './reach';
-import { approveIntegration, findIntegration, landBundle, listIntegrations, recordFailedImport, removeIntegration, standingOf, storedActionsOf } from './registry';
+import { approveIntegration, findIntegration, landBundle, listIntegrations, recordFailedImport, removeIntegration, setBackToPending, standingOf, storedActionsOf } from './registry';
 
 // ═══════════════════════════════════════════════════════════════
 // THE OPERATOR SEAM — everything that decides WHICH integrations this
@@ -179,6 +179,16 @@ const register = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
 // written: the row is as it was. This used to write the approval, hand the
 // actions over, and write the row back when that threw — and a process that
 // died between the two writes left an approved row the next boot refused.
+//
+// AND TAKEN BACK WHEN THE APP DOES NOT TAKE IT ALL THE SAME. Asking first makes
+// a refusal after the write rare; it does not make it impossible. Between the
+// question and the hand-over something else can change what the app consists
+// of (another approval, a set the app handed over), and the rows are read
+// again for the hand-over. When that throws, the row already says approved:
+// answered as a fault, it stayed approved, and every process that read the
+// rows next was refused them, the next boot included. So the approval is set
+// back to pending with why, what is served is read again from the rows as
+// they are then, and the answer is the refusal it is.
 const approve = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
   routes.post('/integrations/:id/approve', async (c) => {
     const id = c.req.param('id');
@@ -186,7 +196,14 @@ const approve = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
     if (refusal !== undefined) return c.json({ message: 'Refused — the app would not serve this.', reasons: [`Error: ${refusal}`] }, 422);
     const requested = await approveIntegration(deps.replay, id);
     if (requested === undefined) return c.json({ message: 'No such integration.' }, 404);
-    await deps.reload();
+    try {
+      await deps.reload();
+    } catch (error) {
+      const why = String(error);
+      await setBackToPending(deps.replay, id, why);
+      await deps.reload();
+      return c.json({ message: 'Refused — the app would not serve this.', reasons: [why] }, 422);
+    }
     return c.json({ id, status: 'approved', granted: requested });
   });
 };

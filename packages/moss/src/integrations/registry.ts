@@ -257,13 +257,19 @@ export const landBundle = async (replay: Replay, landing: Landing): Promise<{ ke
 // APPROVE: what it asked to read and write becomes what it is granted, and it
 // is served from here on. Answers what was granted. `undefined`: there is no
 // such integration, and nothing was written. Whoever calls has asked first
-// whether the app could be served with it (`storedActionsOf`): nothing here
-// takes an approval back.
+// whether the app could be served with it (`storedActionsOf`).
 export const approveIntegration = async (replay: Replay, id: string): Promise<readonly string[] | undefined> => {
   const asked = RequestedRowSchema.optional().parse(rowsOf(await replay('integrations/requested', { id }))[0]);
   if (asked === undefined) return undefined;
   await replay('integrations/approve', { id, approved_data: asked.requested_data });
   return asked.requested_data;
+};
+
+// AN APPROVAL, TAKEN BACK: the integration is pending again, and the row
+// keeps why (the operator's list shows it as `lastError`). For the approval
+// that was asked about, written, and then not taken by the app all the same.
+export const setBackToPending = async (replay: Replay, id: string, why: string): Promise<void> => {
+  await replay('integrations/set-back-to-pending', { id, last_error: why });
 };
 
 // The row goes, and its actions with it (the table's own cascade), and with
