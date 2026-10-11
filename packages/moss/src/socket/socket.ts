@@ -13,7 +13,9 @@ import type { Ending } from './ending';
 import { parametersOf, protocolRefusal, whoIsAsking } from './handshake';
 import type { SaidOnce, UpgradeParameters } from './handshake';
 import { DEFAULT_ANONYMOUS_SHELL_MAX, createAnonymousShellLimit } from './anonymous-shell-limit';
+import type { AnonymousShellLimit } from './anonymous-shell-limit';
 import { createRevalidation } from './revalidation';
+import type { Revalidation } from './revalidation';
 import { messageHandler } from './routing';
 
 // The definitions a build refused, by id. Nova's error carries them in its
@@ -73,43 +75,113 @@ const openingOf = (config: Pick<SocketConfig, 'shells' | 'page'>, { seed, path }
 // What a connection for nobody is told when there is no place left for it.
 const AT_CAPACITY: ServerMessage = { type: 'error', code: 'at_capacity', message: 'This server is serving as many terminals with nobody signed in as it is set to. Try again in a moment.' };
 
+// WHAT AN ADMITTED CONNECTION IS SERVED: `hello`, then the session it is
+// attached to (undefined when the app serves no shell). Both are awaited,
+// and the terminal may be gone by the time either lands: A CONNECTION THAT
+// CLOSED BEFORE ITS SESSION WAS READY LEAVES NOTHING ATTACHED.
+const served = async (
+  config: Pick<SocketConfig, 'catalog'>,
+  connection: Connection,
+  send: (message: ServerMessage) => void,
+  ending: Ending,
+  opening: { session: Opening | undefined; delta: boolean },
+  who: { token: string | null; principal: string | null },
+): Promise<ShellSession | undefined> => {
+  // The catalog channel: the application, resolved for YOU, on every
+  // (re)connect — reconnect re-sends current state, no replay machinery.
+  const { ids, hash } = await config.catalog(who.principal);
+  // Closed while that was asked: there is nobody to say hello to, and no
+  // host is asked for a shell.
+  if (ending.ended()) return undefined;
+  send({ type: 'hello', protocol: PROTOCOL, principal: who.principal, catalog: { actions: ids, hash } });
+
+  // The canvas streams: attach to the session's shell (durable per
+  // principal — the shell outlives this connection) and it re-sends the
+  // current trees; every change fans out to every attached connection.
+  const session = await opening.session?.(who.token, who.principal);
+  if (session === undefined) return undefined;
+  // Closed while its shell was built: it is not attached, and the session is
+  // told at once that this connection is done with it — which lets a kept
+  // shell idle and disposes one built for this connection alone.
+  if (!ending.ended()) session.attach(connection, { delta: opening.delta });
+  ending.then(() => session.detach(connection));
+  return session;
+};
+
+// WHAT A SOCKET HOLDS ACROSS ITS CONNECTIONS: what it was made with, and the
+// three things that are counted or said once for all of them.
+type Held = { config: SocketConfig; notOwn: SaidOnce; revalidation: Revalidation; anonymousShells: AnonymousShellLimit };
+
+// ONE CONNECTION, FROM ITS ADDRESS TO ITS FIRST MESSAGE: the protocol it
+// speaks, who is asking, a place for a shell for nobody, what it is served,
+// and where its messages go from then on. It throws when the session cannot
+// be opened; `accept` (below) is what answers that.
+const open = async (held: Held, url: string, connection: Connection, send: (message: ServerMessage) => void, span: Span | undefined, found: { principal: boolean }): Promise<void> => {
+  const { config, notOwn, revalidation, anonymousShells } = held;
+  const params = parametersOf(url);
+  const mismatch = protocolRefusal(params);
+  if (mismatch !== undefined) {
+    send(mismatch);
+    connection.close(CLOSE_PROTOCOL_MISMATCH, 'protocol mismatch');
+    return;
+  }
+  const asking = await whoIsAsking(url, connection.upgrade, config, notOwn);
+  if (asking === 'invalid_token') {
+    span?.('socket.upgrade', 'refused', false);
+    send({ type: 'error', code: 'invalid_token', message: 'The session token did not resolve to a principal.' });
+    connection.close(CLOSE_INVALID_TOKEN, 'invalid token');
+    return;
+  }
+  const { token, principal, seal } = asking;
+  found.principal = principal !== null;
+  if (asking.cookies.length > 0) connection.upgrade?.answer?.(asking.cookies);
+  if (seal !== null) connection.seal = (granted) => sealSession(seal, granted);
+  // The terminal is told, and stops asking to be handed sign-ins sealed —
+  // the next one reaches it as a token, on this connection already.
+  if (asking.sealLost) {
+    send({ type: 'error', code: 'seal_not_kept', message: 'This browser did not keep the cookie a sealed sign-in is opened with. Sign in again: it will be handed over as a token.' });
+  }
+
+  // A SHELL FOR NOBODY TAKES A PLACE (./anonymous-shell-limit.ts), before anything is asked
+  // for it: arrivals in one moment each find the count the one before left.
+  // With none left the terminal is told so and closed, and no shell is built.
+  const session = openingOf(config, params);
+  if (principal === null && session !== undefined && !anonymousShells.acquire(connection)) {
+    span?.('socket.upgrade', 'refused', false);
+    send(AT_CAPACITY);
+    connection.close(CLOSE_AT_CAPACITY, 'at capacity');
+    return;
+  }
+
+  revalidation.hold(connection, token !== null && token !== '' && principal !== null ? { token, principal } : null);
+  // Listened for here, before anything below awaits (./ending.ts).
+  const ending = endingOf(connection);
+  ending.then(() => revalidation.release(connection));
+  ending.then(() => anonymousShells.release(connection));
+  // The connection's whole life, closed by the same clock — how long
+  // terminals stay, and under a principal or anonymous. Registered here so it
+  // fires however the connection ends (graceful, expiry, transport drop).
+  if (span !== undefined) ending.then(() => span('socket.close', 'ok', principal !== null));
+
+  // Frame deltas are OPT-IN by the terminal, on the upgrade URL — the
+  // capability has to be known before the first frame is sent. A terminal
+  // that says nothing is served whole frames forever, which is what every
+  // terminal built before this existed does.
+  const attached = await served(config, connection, send, ending, { session, delta: params.delta === '1' }, { token, principal });
+
+  // Admitted: the handshake resolved a principal, said hello, and attached a
+  // shell. The span measures that, not the connection's life (that is
+  // `socket.close`).
+  span?.('socket.upgrade', 'ok', principal !== null);
+
+  connection.onMessage(messageHandler(attached, connection, send));
+};
+
 export const createSocket = (config: SocketConfig): SocketAccept => {
   const emit = emitterOf(config.telemetry);
-  const notOwn: SaidOnce = { said: false };
   const revalidation = createRevalidation(config);
   const anonymousShells = createAnonymousShellLimit(config.anonymousShellMax ?? DEFAULT_ANONYMOUS_SHELL_MAX);
-
-  // WHAT AN ADMITTED CONNECTION IS SERVED: `hello`, then the session it is
-  // attached to (undefined when the app serves no shell). Both are awaited,
-  // and the terminal may be gone by the time either lands: A CONNECTION THAT
-  // CLOSED BEFORE ITS SESSION WAS READY LEAVES NOTHING ATTACHED.
-  const served = async (
-    connection: Connection,
-    send: (message: ServerMessage) => void,
-    ending: Ending,
-    opening: { session: Opening | undefined; delta: boolean },
-    who: { token: string | null; principal: string | null },
-  ): Promise<ShellSession | undefined> => {
-    // The catalog channel: the application, resolved for YOU, on every
-    // (re)connect — reconnect re-sends current state, no replay machinery.
-    const { ids, hash } = await config.catalog(who.principal);
-    // Closed while that was asked: there is nobody to say hello to, and no
-    // host is asked for a shell.
-    if (ending.ended()) return undefined;
-    send({ type: 'hello', protocol: PROTOCOL, principal: who.principal, catalog: { actions: ids, hash } });
-
-    // The canvas streams: attach to the session's shell (durable per
-    // principal — the shell outlives this connection) and it re-sends the
-    // current trees; every change fans out to every attached connection.
-    const session = await opening.session?.(who.token, who.principal);
-    if (session === undefined) return undefined;
-    // Closed while its shell was built: it is not attached, and the session is
-    // told at once that this connection is done with it — which lets a kept
-    // shell idle and disposes one built for this connection alone.
-    if (!ending.ended()) session.attach(connection, { delta: opening.delta });
-    ending.then(() => session.detach(connection));
-    return session;
-  };
+  const held: Held = { config, notOwn: { said: false }, revalidation, anonymousShells };
 
   // REFUSING ONE SESSION MUST NEVER COST THE OTHERS. Every await in the body
   // below can throw — the verifier on a database blip, the shell build on a
@@ -128,7 +200,7 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
     // then failed to open says of it.
     const found = { principal: false };
     try {
-      await open(url, connection, send, span, found);
+      await open(held, url, connection, send, span, found);
     } catch (error) {
       console.error('[moss/socket] refused a session:', error);
       // A fault, and counted as one. It used to leave no span at all: with the
@@ -143,66 +215,6 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
         // The transport is already gone — there is nobody left to tell.
       }
     }
-  };
-
-  const open = async (url: string, connection: Connection, send: (message: ServerMessage) => void, span: Span | undefined, found: { principal: boolean }): Promise<void> => {
-    const params = parametersOf(url);
-    const mismatch = protocolRefusal(params);
-    if (mismatch !== undefined) {
-      send(mismatch);
-      connection.close(CLOSE_PROTOCOL_MISMATCH, 'protocol mismatch');
-      return;
-    }
-    const asking = await whoIsAsking(url, connection.upgrade, config, notOwn);
-    if (asking === 'invalid_token') {
-      span?.('socket.upgrade', 'refused', false);
-      send({ type: 'error', code: 'invalid_token', message: 'The session token did not resolve to a principal.' });
-      connection.close(CLOSE_INVALID_TOKEN, 'invalid token');
-      return;
-    }
-    const { token, principal, seal } = asking;
-    found.principal = principal !== null;
-    if (asking.cookies.length > 0) connection.upgrade?.answer?.(asking.cookies);
-    if (seal !== null) connection.seal = (granted) => sealSession(seal, granted);
-    // The terminal is told, and stops asking to be handed sign-ins sealed —
-    // the next one reaches it as a token, on this connection already.
-    if (asking.sealLost) {
-      send({ type: 'error', code: 'seal_not_kept', message: 'This browser did not keep the cookie a sealed sign-in is opened with. Sign in again: it will be handed over as a token.' });
-    }
-
-    // A SHELL FOR NOBODY TAKES A PLACE (./anonymous-shell-limit.ts), before anything is asked
-    // for it: arrivals in one moment each find the count the one before left.
-    // With none left the terminal is told so and closed, and no shell is built.
-    const session = openingOf(config, params);
-    if (principal === null && session !== undefined && !anonymousShells.acquire(connection)) {
-      span?.('socket.upgrade', 'refused', false);
-      send(AT_CAPACITY);
-      connection.close(CLOSE_AT_CAPACITY, 'at capacity');
-      return;
-    }
-
-    revalidation.hold(connection, token !== null && token !== '' && principal !== null ? { token, principal } : null);
-    // Listened for here, before anything below awaits (./ending.ts).
-    const ending = endingOf(connection);
-    ending.then(() => revalidation.release(connection));
-    ending.then(() => anonymousShells.release(connection));
-    // The connection's whole life, closed by the same clock — how long
-    // terminals stay, and under a principal or anonymous. Registered here so it
-    // fires however the connection ends (graceful, expiry, transport drop).
-    if (span !== undefined) ending.then(() => span('socket.close', 'ok', principal !== null));
-
-    // Frame deltas are OPT-IN by the terminal, on the upgrade URL — the
-    // capability has to be known before the first frame is sent. A terminal
-    // that says nothing is served whole frames forever, which is what every
-    // terminal built before this existed does.
-    const attached = await served(connection, send, ending, { session, delta: params.delta === '1' }, { token, principal });
-
-    // Admitted: the handshake resolved a principal, said hello, and attached a
-    // shell. The span measures that, not the connection's life (that is
-    // `socket.close`).
-    span?.('socket.upgrade', 'ok', principal !== null);
-
-    connection.onMessage(messageHandler(attached, connection, send));
   };
 
   return Object.assign(accept, { stop: revalidation.stop });
