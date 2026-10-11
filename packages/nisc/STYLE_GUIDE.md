@@ -164,6 +164,25 @@ Plain `name.ts` is fine when the file's role is obvious from context or when it'
 
 ---
 
+## Modules
+
+A package that holds more than one concern is made of modules. The rules, and how something new gets in, are in AGENTS.md, "Changing a package". What is longer than a rule is here.
+
+**A module's door says what is behind it.** A module is a directory under `src/` with an `index.ts`. In moss each of those files carries a comment that says the question the module answers, what each file in it is for, and which modules it imports. Code in another module imports the door (`../identity`), never a file behind it (`../identity/cache`). An entry point of the package is a door, or one file that a door names as an entry (`server/node.ts` is `@niscorp/moss/node`).
+
+**What a factory is handed is a type in its own module.** Each member is one function or one value, named for what it answers, with a comment that says who supplies it (`shells/config.ts`, `socket/config.ts`). Not the manifest, not the runtime, not an object carrying either. When the type needs a shape another module owns and may not import that module, the shape is written out where it is needed, and the wiring holds the two to each other where it hands one over.
+
+**A seam belongs to the module that answers the question.** A feature reaches the core through one object it is handed when it starts. Each member is one function or one narrow value, and each is there because a feature uses it; one that stops being used is taken out, and one is not added for a feature that might want it.
+
+**What each gate counts, and how a package joins it.**
+
+- `scripts/check-modules.mts`. `PACKAGES` holds, for each package it knows: which module may import which, which modules are features, and the files still flat in `src/`. A file at the top of `src/` that is not in that list fails, and so does a name in the list with no file, so the list only gets shorter. A package joins by getting an entry.
+- `scripts/check-api.mts`. `ENTRIES` maps each entry point of a package to its source file, and the names are `packages/<name>/api.txt`, one line each. `pnpm check:api --write` records what is exported now; the diff of `api.txt` is what a reviewer reads.
+- `scripts/check-raw-sql.mts`. It sweeps every package but vex and strata. Its ledger names each file that holds a door to the pool or a statement, with its exact numbers and one of four reasons: `credential` (it runs before a principal exists, so there is no policy to run under), `store` (an engine's own storage, in that engine's package), `tables` (a strata sequence), `debt` (no reason; none is left). A number that is off fails in either direction, so a statement that is taken out comes out of the ledger in the same change.
+- `eslint.config.mjs`. The block for a package's modules holds rule 16 in full (no type assertion but `as const`, no non-null `!`, no `function` declaration, no `let` at the top of a file) and the two sizes. A package joins by having its `src/*/**` added to that block's `files`.
+
+---
+
 ## Naming
 
 | Thing | Convention | Example |

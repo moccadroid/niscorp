@@ -2,7 +2,7 @@
 
 > **Reading this from `node_modules/@niscorp/nisc/`?** It is the rulebook for the nisc version installed beside it, shipped with it. Where it names a path in the nisc repository, look here instead: `packages/<name>/README.md` and `DESIGN.md` are `node_modules/@niscorp/<name>/`; `/STYLE_GUIDE.md` is beside this file; the lab apps it holds up as examples (`apps/lab/lyceum`, …) and `docs/` are at [github.com/moccadroid/niscorp](https://github.com/moccadroid/niscorp). An app made by `npm create nisc` points its own `AGENTS.md` here.
 
-> **Changing nisc itself — a package, not an app built on it?** The `@niscorp` packages are live on npm and may be in use by third parties. No change may break an app that works today, and a breaking change is never yours to decide: it is a last resort that needs the maintainer's explicit approval *before* it is written. Read `/STYLE_GUIDE.md`, "The packages are live", first.
+> **Changing nisc itself — a package, not an app built on it?** The `@niscorp` packages are live on npm and may be in use by third parties. No change may break an app that works today, and a breaking change is never yours to decide: it is a last resort that needs the maintainer's explicit approval *before* it is written. Read `/STYLE_GUIDE.md`, "The packages are live", first, and then the last part of this file, "Changing a package": where a new thing goes, and the builds that fail when it goes somewhere else.
 
 For agents generating or reviewing a nisc application. This file states the application-level rules, and it presumes no app that came before it — but it is not the whole specification. The **grammars** live in the package docs, and they are required reading, not background: a layout node, an `ActionDefinition`, a Prism config, a charter document and a Vex DSL are each defined in their own package's `README.md` and `DESIGN.md`. Read the doc for a package before authoring that package's artifact. This file governs how they compose into an application.
 
@@ -466,3 +466,43 @@ A review pass checks, in order:
 9. Versions (rules 17–20): `pnpm check:grammars` and `pnpm check:sources` pass; no DDL outside a sequence; no edited migration, snapshot, early-stamp corpus file or hand-moved lock.
 
 Report violations by rule number. A change that makes the app less declarative, less validated, or less observable is wrong even if it works.
+
+## Changing a package
+
+**This part is for whoever changes a `@niscorp` package. Everything above it is for whoever builds an app on them.** Read `/STYLE_GUIDE.md`, "The packages are live", before it: what a change may do to an app that works today comes first.
+
+**A package is held to the rules nisc sets for apps.** It runs no SQL of its own: its reads and writes are vex entries, as an app's are ("Using Vex"). What crosses a boundary is parsed by a schema (rule 13), rule 16 applies in full, and its tables are strata sequences (rule 17). Moss broke each of them for as long as they were only written down: forty statements sent straight to the pool, one boundary with a schema, 135 exported names of which 71 were imported by nothing, one function of 1,345 lines (`docs/plans/moss-refactor.md` is the audit). The rules below are what was missing, and each has a build that fails.
+
+**A package is made of modules.** A module is a directory under `src/` with an `index.ts`.
+
+1. **One door.** Code outside a module imports `../<module>`, never a file inside it.
+2. **Declared dependencies.** Which module may import which is one table, in `scripts/check-modules.mts`, and the table has no cycle. A new import between two modules is a line in that table, in the same change.
+3. **One owner.** Each table and each piece of state that outlives a request belongs to one module. Nobody else writes it.
+4. **Narrow inputs.** A factory takes a typed object of the functions and values it needs. Never the whole manifest, never the whole runtime, never an object that stands in for either.
+5. **Parse where it enters.** A body, a socket message, a row, a fetched payload, a message from another process, a token: parsed by a schema in the module where it enters. No type assertion.
+6. **Nothing flat.** Only `index.ts` sits at the top of `src/`.
+7. **Limits.** A function is at most 100 lines, a file at most 400 lines of code. One that grows past either has stopped being one thing.
+
+**How something new gets in.** In this order, and before any of it is written:
+
+1. Name the question it answers. It goes in the module that owns that question (a package's `DESIGN.md` says which module owns what; moss's is "How the code is laid out").
+2. If it answers none of them, it is a **feature**: a directory of its own, an entry point of its own, and it reaches the core only through a seam. The core never imports it.
+3. If the seam it needs is not there, the seam is the first change, on its own, added to the module that owns the answer.
+4. A new export is a decision, not a side effect of a file needing a name: it is a line in the package's `api.txt` in the same change, and it is documented under its entry point.
+5. A statement outside vex is an entry in the ledger of `scripts/check-raw-sql.mts`, with its reason, or it does not exist. The reasons that hold are a credential read before anybody is signed in, an engine's own store, and a migration.
+6. If it fits nowhere, the architecture is wrong. Say so, and propose the refactor before writing the feature. A refactor is considered every time; adding on top of what is there is how the one function got to 1,345 lines.
+
+A defect found on the way gets a test that fails first. A commit moves code or changes behaviour, never both.
+
+**The gates.** All four run in `pnpm verify` and in CI. The three checks print one `[pass]`/`[fail]` line for each thing they hold.
+
+| Run | It fails when |
+|---|---|
+| `pnpm check:modules` | a file sits flat in `src/`; a module imports a file inside another, or a module the table does not give it; the table has a cycle; the core imports a feature (rules 1, 2, 6) |
+| `pnpm check:api` | an entry point exports a name that is not in `api.txt`, or `api.txt` holds one that is no longer exported; an entry writes `export *` |
+| `pnpm check:raw-sql` | a file outside the ledger holds SQL, or a file in it holds more or fewer statements than its line says |
+| `pnpm lint` | a type assertion other than `as const`, a non-null `!`, a `function` declaration, a `let` at the top of a file; a function or a file over its size (rules 5 and 7) |
+
+Rules 3 and 4 have no gate. They are what a review reads for.
+
+`check:raw-sql` sweeps every package but vex and strata, where SQL lives. The other three hold the packages their tables list, which today is moss. A package joins them by being added to `PACKAGES` in `check-modules.mts`, `ENTRIES` in `check-api.mts`, and the module block of `eslint.config.mjs`. What each gate counts, and what a door, a factory's config and a seam look like, is `/STYLE_GUIDE.md`, "Modules".
