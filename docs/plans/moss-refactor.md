@@ -3,13 +3,18 @@
 **Status: Built (2026-10-11), with what Part 9 lists as not met. The go was the
 owner's, on 2026-10-09: "we'll break it... go do the refactor". Every item of
 the build order is built (Part 7 gives the commits): 154 commits on branch
-`worktree-moss-refactor`, base `9e88009` (moss 0.4.0), not pushed and not
+`worktree-moss-refactor`, base `9e88009` (moss 0.4.0), and the commits that
+closed the loose ends after them (Part 11, "Closed since"), not pushed and not
 merged. The four gates are in `pnpm verify` and in `verify.yml`, and pass. Part
 9 was checked item by item against the code on 2026-10-11: five of its seven
-items are met; one boundary is still read without a schema, and the lab apps'
-checks pass at 126 of 133. Two of the 21 defects are open (4.3). Part 11 is
-what moss is now, in numbers, and what is left. Not done here: Midas and the
-two websites, which are other repositories, and the release. Next: Part 10.**
+items were met then, and the sixth is since (the boundary that was read
+without a schema is parsed); the lab apps' checks pass at 126 of 133, each of
+the seven for a reason outside moss that Part 9 names. Of the 21 defects one
+is half fixed by decision (10: the webhook limit is per process) and none is
+open; a 22nd was found on a real Postgres and fixed (4.3). Part 11 is what
+moss is now, in numbers, what ran on a real Postgres, and what is left. Not
+done here: Midas and the two websites, which are other repositories, and the
+release. Next: Part 10.**
 
 This replaces the first version of this file, which planned a tidy-up. The
 audit found that the problem is larger than structure.
@@ -613,6 +618,13 @@ comment, as the lint's two sizes do.
 The largest module is `integrations`: 20 files and 1,838 lines of code, more
 than `server` (867), `data` (784), `manifest` (758) and `shells` (758).
 
+Counted again after the loose ends below were closed, the same day, for the
+four rows they moved (the others were not measured again): 149 source files
+(one more, `server/transport.ts`); 22 files import zod, with 38 calls of
+`parse` or `safeParse`; moss has 64 test files and 987 tests, and tide the 12
+and 232 it had. The gates pass as they did: 103 names in `api.txt`, 14 modules,
+no statement outside vex without a reason.
+
 **What is left.** None of it stops the artifactory; each is somebody's to
 decide.
 
@@ -633,8 +645,9 @@ decide.
   repositories. The changeset's last part, "What an app changes", is what each
   follows.
 
-**Closed since (2026-10-11).** Each was in the list above when this part was
-written, and each got a test that failed first.
+**Closed since (2026-10-11).** Each was in the list above, or open in 4.3,
+when this part was written. Each fix got a test that failed first. The webhook
+limit was not changed: it got tests that hold it to what the documents say.
 
 - **`runtime.socketMaxMessageBytes` and `runtime.socketCompression` hold on
   every path.** They reached the transport under `serve` and nowhere else:
@@ -667,4 +680,45 @@ written, and each got a test that failed first.
   shape of a DNS rebinding) never reached the sign-in: vite's own check of
   the host answers it `403` before moss's middleware runs, as it does for
   `/catalog` and a page; that was run too, under `nisc dev`.
+- **Defect 15, the retry that logged at every poll** (4.3): said when it
+  first fails, again when what it says changes, and once when it is followed.
+- **Defect 10, the webhook limit** (4.3): decided to stay a limit per
+  process, and said to be one where it is written and documented.
+
+**Run on a real Postgres (2026-10-11).** Everything before this ran on PGlite,
+which has one connection. These ran once on PostgreSQL 18.4 (the
+`embedded-postgres` package, in a folder outside the repository, on a spare
+port), each side of a race on a `pg` pool of its own. The scripts are not in
+the repository: no package has a place for a test that needs a server.
+
+- **Tide's Postgres store** (`@niscorp/tide/postgres`, built). Its store
+  contract, 21 checks: all pass on empty tables, and again each in a database
+  of its own. Defect 16, a serial group claimed by two instances: 1,000 rounds
+  of two pools claiming at once, then 500 rounds of four claims from each pool
+  at once. Every round, exactly one task of the group was held, the two were
+  told as many as were held, and the group was claimable again once that task
+  was done. As a control, the same 500 rounds with the transaction taken away
+  (each statement on whichever connection was free): two tasks of one group
+  were held in 499 of them, so the rounds do see the defect.
+- **The generation pointer** (`src/data/pointer.ts`, through
+  `src/data/own-entries.ts`, from source). Two movers with a pool each, 2,000
+  rounds of read-then-move at once: 2,002 moves were told they landed, each on
+  a number of its own, and the counter went from 0 to 2,002; in 1,998 rounds
+  both had read the same number, and never did both land from it. Four movers
+  on each pool at once, 500 rounds: the same. Two generations
+  (`src/manifest/generation.ts`) bumping at once, 500 rounds: 1,000 bumps, the
+  counter on by 1,000, nothing logged.
+- **The integrations registry** (built, through `createServer`, the operator's
+  routes and `migrateTables`). `migrateTables` on an empty database applied
+  five migrations (`nisc.moss` 1 to 3, `nisc.vex.cache/1`,
+  `nisc.moss.integrations/1`), and nothing on the migrated one. A server with
+  `migrations: 'verify'` booted on the migrated database and was refused on an
+  empty one. A registration was one transaction on one connection; one whose
+  third statement failed left the import before it whole. Two processes
+  importing one integration again at once, 200 rounds: what was held was
+  always one bundle, whole. An approval by one process was served by the other
+  within its poll. **Two processes registering one new integration at once,
+  200 rounds, showed defect 22** (4.3): both were answered a key and one was
+  dead, every round. After the fix, the same 200 rounds: every key answered
+  is the key the row holds, and never two.
 

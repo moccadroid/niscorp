@@ -778,7 +778,12 @@ On the record, so nothing reads as finished that isn't:
   A shell is still resident in one process. A drawn document
   adds one requirement to stickiness: the page request and the socket should
   land on the same process, or a principal's shell is built twice and the page
-  repaints once.
+  repaints once. And one limit is each process's own: the integrations'
+  webhook door lets 240 calls a minute through for each integration, counted
+  in the memory of the process that takes them, so N processes let a vendor
+  through up to N times as often. One ceiling for a deployment would be a
+  store its processes share, with a write for every call; it is not built,
+  and a deployment that needs it sets it at its proxy.
 - **Opening the app at a position.** A path that seeds the *app's* shell (a
   deep link to a record) is not built. It is not the same thing as a page's
   parameters: the app's shell is durable and shared across a person's
