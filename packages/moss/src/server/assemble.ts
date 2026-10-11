@@ -35,13 +35,33 @@ export type ServerParts = {
   data: Data;
 };
 
-export const assembleServer = async ({ app, runtime, session, revokeSessions, data }: ServerParts): Promise<MossServer> => {
+// WHAT A BOOT STARTED, A BOOT THAT FAILS STOPS. Three of the steps below start
+// a timer (the identity cache's sweep, each shell host's, the socket's
+// revalidation) and a fourth starts one later (the generation poll). A server
+// that is returned has `close` for all of them. One that is not returned, a
+// feature that throws when it is started, a page the router refuses, has
+// nobody holding anything to stop them by: so each step that starts something
+// says here how it is stopped, and a throw stops them before it goes on up.
+// `close` on the server that IS returned runs the same list.
+export const assembleServer = async (parts: ServerParts): Promise<MossServer> => {
+  const stops: (() => void)[] = [];
+  try {
+    return await assemble(parts, stops);
+  } catch (error) {
+    for (const stop of stops) stop();
+    throw error;
+  }
+};
+
+const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerParts, stops: (() => void)[]): Promise<MossServer> => {
   // 4. The running manifest: creating it is the boot check, and it hands the
   // data module the entries to seed (./manifest.ts).
   const running = await standManifest(app, runtime, data);
+  stops.push(running.stop);
 
   // 5. Identity (./identity.ts).
   const identity = standIdentity(app, runtime, data);
+  stops.push(identity.stop);
 
   // 6. The server's own surfaces (./routes.ts): the authentication, the
   // catalog and vex. `registered` is what a feature adds to them when it
@@ -54,6 +74,7 @@ export const assembleServer = async ({ app, runtime, session, revokeSessions, da
   // endpoint calls ride the server's OWN surfaces with the session's token
   // (./wire.ts): same wire, same enforcement.
   const hosts = standHosts({ app, runtime, identity, running, data, wire: wireOver(server), wrapWire: wrappedBy(registered), revokeSessions });
+  stops.push(hosts.stop);
 
   // 8. What crosses processes (./signals.ts).
   const signals = standSignals({ fabric: runtime.fabric, identity, reset: hosts.reset, shells: hosts.shells });
@@ -103,6 +124,7 @@ export const assembleServer = async ({ app, runtime, session, revokeSessions, da
 
   // 12. The socket (./socket.ts).
   const socket = standSocket({ runtime, session, identity, running, hosts });
+  stops.push(socket.stop);
 
   // 13. The server: hono, and what `MossServer` adds to it (./moss-server.ts).
   return Object.assign(server, {
@@ -124,12 +146,9 @@ export const assembleServer = async ({ app, runtime, session, revokeSessions, da
     charterReport: () => running.report().charter,
     generation: running.generation,
     // Every timer this server owns, stopped once. See the type for why this is
-    // one call and not four.
+    // one call and not four. The list a boot that fails runs.
     close: () => {
-      running.stop();
-      identity.stop();
-      socket.stop();
-      hosts.stop();
+      for (const stop of stops) stop();
     },
     executeAs: data.executeAs,
     identity: async (principal: string | null) => {

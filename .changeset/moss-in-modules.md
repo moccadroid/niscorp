@@ -371,6 +371,12 @@ Where the right column says there is nothing to call and an app did call it, say
 - `attachSocket(…)` answers `{ close }` where it answered nothing: `close()` ends every connection the transport opened (`1001`) and takes no more. A host that ignores what it answers has nothing to change.
 - An app that called `server.close()` on a server from `serve` and went on using the port has to stop doing one of the two. `createServer`'s own `close` is as it was.
 
+**A boot that fails stops what it started.**
+
+- `createServer` starts timers before it has a server to return: the identity cache's sweep, and one idle sweep for the app's shell host and each page's. When a step after them refused the boot (a feature that throws when it is started, a page whose path the router refuses), they went on running, and nothing was returned to stop them by. Every timer is `unref`'d, so a process that exits on a failed boot never saw it; a process that boots again in place (the dev plugin on every edit, a host that retries) kept two more intervals, and what they hold, for each failed boot.
+- A boot that throws stops everything it had started, and then throws what it threw. `close()` on a server that did boot runs the same list.
+- An app has nothing to change.
+
 **The two settings of the transport hold wherever a server's socket is attached: `runtime.socketMaxMessageBytes`, `runtime.socketCompression`.**
 
 - New: `runtime.socketMaxMessageBytes`, the largest message a connection may send. It could be said to `attachSocket` (`maxMessageBytes`) and not to the runtime. Unset, the limit is the transport's 256 KiB, as before.

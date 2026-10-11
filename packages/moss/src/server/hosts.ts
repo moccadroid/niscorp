@@ -106,13 +106,15 @@ const hostConfig = (parts: HostParts, shell: ShellManifest, kept: boolean): Shel
 
 export const standHosts = (parts: HostParts): Hosts => {
   const { app } = parts;
-  const shells = app.shell !== undefined ? createShellHost(hostConfig(parts, app.shell, true)) : undefined;
-
   // PAGES: a host each, built from the page's own manifest and keeping nothing
   // (../manifest, app.ts § pages). The router refuses two pages that could
-  // answer one path, here, at boot — like every other incoherence.
+  // answer one path, here, at boot — like every other incoherence. BEFORE ANY
+  // HOST IS MADE: a host starts its idle sweep when it is made, and a refusal
+  // after the app's own was made left that sweep running with nothing to stop
+  // it by.
   const pageManifests = app.pages ?? {};
   const pageRouter = createPageRouter(pageManifests);
+  const shells = app.shell !== undefined ? createShellHost(hostConfig(parts, app.shell, true)) : undefined;
   const pageHosts = new Map(Object.entries(pageManifests).map(([name, manifest]) => [name, createShellHost(hostConfig(parts, manifest, false))]));
   // Every host there is. What is asked of "every living shell" is asked of
   // each of these, never of the app's own alone.
