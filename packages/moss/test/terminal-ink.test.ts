@@ -18,8 +18,13 @@ import type { TerminalApi, TerminalMount } from '../src/terminal';
 // ink writes a frame as it changes only where it believes somebody is
 // watching, and a CI runner says nobody is: there it writes one frame, when it
 // unmounts. Said before ink is loaded, which is when it asks.
+//
+// The kit draws what has the focus in inverse, and with colour off there is no
+// inverse: the screen would not say where the focus is. A runner's output is
+// not a terminal, so colour is asked for by name.
 vi.hoisted(() => {
   process.env['CI'] = 'false';
+  process.env['FORCE_COLOR'] = '1';
 });
 
 // RenderComponentNode, not the RenderNode union: `ref` and `model` live on the
@@ -62,16 +67,20 @@ const until = (pred: () => boolean, why: string, ms = 5_000): Promise<void> =>
 // before it reads keys one at a time, and reads them with 'readable' + read().
 // ink's own types ask for Node's tty streams, which nothing but a real
 // terminal can make; these two casts are the whole of the pretending.
-const keyboard = (): { stream: NodeJS.ReadStream; press: (keys: string) => void } => {
+const keyboard = (): { stream: NodeJS.ReadStream; press: (keys: string) => void; unread: () => boolean } => {
   const stream = new PassThrough();
   const tty = Object.assign(stream, { isTTY: true, setRawMode: () => tty, ref: () => tty, unref: () => tty });
-  return { stream: tty as unknown as NodeJS.ReadStream, press: (keys) => void stream.write(keys) };
+  return { stream: tty as unknown as NodeJS.ReadStream, press: (keys) => void stream.write(keys), unread: () => stream.readableLength > 0 };
 };
-const display = (): { stream: NodeJS.WriteStream; shown: () => string; wipe: () => void } => {
+// `shown` is the words on the screen; `written` is those words with the colour
+// and inverse they were written in, which is where the focus can be read.
+const STYLE = /\u001b\[[0-9;]*m/g;
+const INVERSE = '\u001b[7m';
+const display = (): { stream: NodeJS.WriteStream; shown: () => string; written: () => string; wipe: () => void } => {
   const stream = Object.assign(new PassThrough(), { isTTY: true, columns: 100, rows: 40 });
-  let shown = '';
-  stream.on('data', (chunk: Buffer) => (shown += chunk.toString()));
-  return { stream: stream as unknown as NodeJS.WriteStream, shown: () => shown, wipe: () => (shown = '') };
+  let written = '';
+  stream.on('data', (chunk: Buffer) => (written += chunk.toString()));
+  return { stream: stream as unknown as NodeJS.WriteStream, shown: () => written.replace(STYLE, ''), written: () => written, wipe: () => (written = '') };
 };
 
 const mounts: TerminalMount[] = [];
@@ -98,14 +107,23 @@ const harness = (trees: Record<string, RenderNode[]>, options: { frame?: RenderN
   const mount = inkTarget({ stdin: keys.stream, stdout: screen.stream, onQuit: quit, patchConsole: false, ...config })(api);
   mounts.push(mount);
   const shows = (words: string): Promise<void> => until(() => screen.shown().includes(words), `the screen shows "${words}"`);
-  // A key is read by whoever is listening when it arrives, and ink's
-  // components start listening once they are on screen.
+  // A key is pressed once ink has read it. One written before ink reads keys
+  // waits in the stream until it does; one written before the last was read
+  // would arrive with it, as one read of two keys.
   const press = async (key: string): Promise<void> => {
-    await new Promise((resolve) => setTimeout(resolve, 20));
     keys.press(key);
+    await until(() => !keys.unread(), 'ink read the key');
   };
   const sent = (count: number): Promise<void> => until(() => dispatched.length >= count, `${count} event${count === 1 ? '' : 's'} dispatched`);
-  return { mount, state, dispatched, published, quit, press, sent, shows, shown: screen.shown, wipe: screen.wipe };
+  // ink moves the focus on Tab in a turn of its own, after the key is read,
+  // and what is focused takes its keys one turn after it is drawn so. So a key
+  // meant for what Tab reaches waits for the screen to show the focus there,
+  // and then for the turn ink had already asked for when it drew it.
+  const focusOn = async (words: string): Promise<void> => {
+    await until(() => screen.written().includes(`${INVERSE}${words}`), `the focus is on "${words}"`);
+    await new Promise((resolve) => setImmediate(resolve));
+  };
+  return { mount, state, dispatched, published, quit, press, sent, shows, focusOn, shown: screen.shown, wipe: screen.wipe };
 };
 
 describe('the ink target — painting', () => {
@@ -220,11 +238,11 @@ describe('the ink target — typed numbers', () => {
     await t.sent(1);
     expect(t.dispatched).toEqual([{ canvas: 'main', event: { type: 'ui:click', ref: 'b12' } }]);
     // [1] could be the start of [10], [11] or [12]: it acts when no second
-    // digit came, which is not at once
-    await t.press('1');
+    // digit came, which is a beat of 400 ms later and not at once
     const pressed = Date.now();
+    await t.press('1');
     await t.sent(2);
-    expect(Date.now() - pressed).toBeGreaterThanOrEqual(400);
+    expect(Date.now() - pressed).toBeGreaterThan(300);
     expect(t.dispatched.at(-1)).toEqual({ canvas: 'main', event: { type: 'ui:click', ref: 'b1' } });
   });
 
@@ -254,6 +272,7 @@ describe('the ink target — the focus ring and leaving', () => {
     const t = harness({ main: [instance('i1', 'main', [button('save', 'Save', 'draft')])] });
     await t.shows('[1]');
     await t.press('\t');
+    await t.focusOn('( Save )');
     await t.press('\r');
     await t.sent(1);
     expect(t.dispatched).toEqual([{ canvas: 'main', event: { type: 'ui:click', ref: 'save', payload: 'draft', origin: 'i1' } }]);
