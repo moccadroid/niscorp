@@ -38,7 +38,9 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 | the type `Catalog` | `Awaited<ReturnType<MossServer['catalogOf']>>` |
 | `resolvePolicyForRoles(app, grants, roles)` | `server.policyForRoles(roles)` |
 | `resolvePolicyAtReach` | nothing to call. The routes and `server.executeAs` serve an entry at the reach it declares: replay the entry |
-| `resolveVariantsForRoles(app, roles)` | `resolveVariants({ charter, layouts, assignments: { someone: roles } }, 'someone')` |
+| `resolveRoles(app, principal)` | `(await server.identity(principal)).roles` |
+| `resolvePolicy(app, grants, principal)` | `server.policyForRoles((await server.identity(principal)).roles)` |
+| `resolveVariants(app, principal)`, `resolveVariantsForRoles(app, roles)` | nothing to call. The shell a server builds for somebody has the variant they hold in place of each action's layout, and `server.charterReport()` and `verifyApp` say whether the variants are coherent |
 | `auditClosure`, `wearableOf`, `verifyVariants` | `server.charterReport()` for what a server is serving, `server.verifyActions(source, actions)` for a set it has not taken, `verifyApp(app, grants)` where there is no server |
 | `loadIntegrationActions` | `server.actions()` |
 | `memoKeyOf(app, principal)` | nothing to call: it was the key of memos nothing outside the server can address. To learn whether two principals are served the same application, compare `(await server.catalogOf(principal)).hash` |
@@ -135,7 +137,7 @@ Where the right column says there is nothing to call and an app did call it, say
 - New on `MossServer`: `catalogOf(principal)` and `catalogForRoles(roles, installed?)` answer `{ ids, hash }` from the actions in force; `actions()` is the actions in force, by id; `policyForRoles(roles)` is the vex policy a request by somebody holding exactly those roles is served under; `verifyActions(source, actions)` is the dry run of `replaceActions`, answered as a report, changing nothing.
 - New in the main entry: `verifyApp(app, grants)`, the check boot runs for an app that is not booted, and the type of its report, `ManifestReport`: `{ errors, said, charter }`. `errors[].check` is one of `'actions'`, `'charter'`, `'reach'`, `'variants'`. `report.charter` is what `verifyCharter` answered, closure issues included, and `report.errors.filter((error) => error.check === 'variants')` is what `verifyVariants` returned.
 - These are what the functions they replace should have been. `resolveCatalog` read `assignments` and nothing else, so in an app that resolves people through `identity` it answered as `public` for everybody the assignments did not name; the server resolves who somebody is the way a request does. `resolvePolicyForRoles` compiled from whatever manifest and whatever list of grants it was handed, so a check that wrote the grants down itself read a policy no request was served under; the server compiles from the charter and the `behaviors` in force, over every table the database has. What `policyForRoles` answers is compiled for the asking and is the caller's own: nothing done to it reaches a request.
-- Three functions that read `assignments` only are still exported, for a tool with a manifest and no server: `resolveRoles`, `resolvePolicy`, `resolveVariants`. With a server, ask the server.
+- **`resolveRoles`, `resolvePolicy` and `resolveVariants` are gone too.** Each read `assignments` and nothing else, so for an app that resolves people through `identity` each answered as `public` for everybody: a wrong answer, handed to whoever picked that way beside `server.identity` and `server.policyForRoles`. Who somebody is, is asked of the server, which resolves them the way a request does; a check that has no server boots one, as the checks of the lab apps do.
 - Code running in a session that wants what its own caller holds asks `GET /catalog` over the session's wire, as before.
 
 **`refresh` runs the check boot runs.**

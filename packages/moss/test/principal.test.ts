@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
-import { resolveRoles } from '../src/identity';
-import { resolvePolicy } from '../src/data';
-import { resolveVariants } from '../src/manifest';
+import { assignedRoles } from '../src/identity';
+import { resolvePolicyForRoles } from '../src/data/policy';
 import type { NiscApp } from '../src/manifest';
-import { catalogFor } from '../src/manifest/roles';
+import { catalogFor, resolveVariantsForRoles } from '../src/manifest/roles';
 import type { Catalog } from '../src/manifest/roles';
 import { verifyVariants } from '../src/manifest/verify';
 
@@ -30,6 +29,15 @@ const grants = scopeGrants(['deals', 'contacts']);
 // What a principal holds by the assignments alone: its roles, then what those
 // roles are granted. No install list, so nothing is filtered.
 const resolveCatalog = (of: NiscApp, principal: string | null): Catalog => catalogFor(of, resolveRoles(of, principal), undefined, (ids) => ids);
+
+// WHO SOMEBODY IS BY THE ASSIGNMENTS, and what the roles that answers hold:
+// the two steps a server takes for an app with no identity seam, written out.
+// (Three exported functions did both steps in one, for any app, and so
+// answered `public` for one that resolves people through `identity`. They are
+// gone; what they wrapped is what is held here.)
+const resolveRoles = (of: Pick<NiscApp, 'assignments'>, principal: string | null): readonly string[] => assignedRoles(of.assignments, principal);
+const resolvePolicy = (of: NiscApp, over: readonly string[], principal: string | null) => resolvePolicyForRoles(of, over, resolveRoles(of, principal));
+const resolveVariants = (of: NiscApp, principal: string | null) => resolveVariantsForRoles(of, resolveRoles(of, principal));
 
 describe('principal — per-principal resolution', () => {
   it('an unassigned or anonymous principal wears public', () => {

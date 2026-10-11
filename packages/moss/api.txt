@@ -39,9 +39,6 @@
 . mintSession
 . offerToken
 . renderDocument
-. resolvePolicy
-. resolveRoles
-. resolveVariants
 . revokeAllFor
 . sessionCookies
 . sessionOf

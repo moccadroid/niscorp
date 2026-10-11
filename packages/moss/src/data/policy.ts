@@ -1,7 +1,6 @@
 import { createScopePolicy, mergeScopePolicies } from '@niscorp/vex';
 import type { ScopePolicy } from '@niscorp/vex';
 import { resolvePrincipal, resolveScoping } from '@niscorp/charter';
-import { assignedRoles } from '../identity';
 import type { ResolvedIdentity } from '../identity';
 import type { NiscApp } from '../manifest';
 
@@ -13,29 +12,25 @@ import type { NiscApp } from '../manifest';
 // ═══════════════════════════════════════════════════════════════
 
 // What a policy is compiled from, of the manifest: the charter and the row
-// behaviors. The two forms that take a principal read the assignments too.
+// behaviors. Never the assignments: who somebody is, is asked of ../identity,
+// and what reaches here is the roles they were resolved to. (Two forms took a
+// principal and read `assignments` themselves. For an app that resolves people
+// through its identity seam they compiled the policy of `public`.)
 type Governed = Pick<NiscApp, 'charter' | 'behaviors'>;
 
-// The compiled ScopePolicy this principal reads and writes under: their
+// THE COMPILED ScopePolicy A SET OF ROLES READS AND WRITES UNDER: their
 // resolved `data` grants × the app's row behaviors. An ungranted phase is
 // absent, and vex's default-deny refuses it.
-export const resolvePolicy = (app: Governed & Pick<NiscApp, 'assignments'>, grants: readonly string[], principal: string | null): ScopePolicy => {
-  // ONE POLICY PER ROLE, then merged — because a principal may hold several,
-  // and reach belongs to the role rather than to the person.
-  //
-  // Compiling once for the principal assumed one role each. That holds until
-  // somebody is two things at once: an instructor who also trains is staff on
-  // the roster and a member in the class, and no single reach describes both —
-  // studio-wide on the read they do as staff, their own rows on the write they
-  // do as a member. Per role, each with its own scoping, and the union is what
-  // they may do.
-  return resolvePolicyForRoles(app, grants, assignedRoles(app.assignments, principal));
-};
-
-// THE SAME COMPILATION, given the roles directly — for a caller that has already
-// resolved who somebody is and should not have to ask a second time. The
-// principal was only ever a way to reach `roles`; taking it as the argument is
-// what lets identity resolve once per session instead of once per request.
+//
+// ONE POLICY PER ROLE, then merged — because somebody may hold several, and
+// reach belongs to the role rather than to the person.
+//
+// Compiling once for all of them assumed one role each. That holds until
+// somebody is two things at once: an instructor who also trains is staff on
+// the roster and a member in the class, and no single reach describes both —
+// studio-wide on the read they do as staff, their own rows on the write they
+// do as a member. Per role, each with its own scoping, and the union is what
+// they may do.
 export const resolvePolicyForRoles = (app: Governed, grants: readonly string[], roles: readonly string[]): ScopePolicy => {
   const behaviors = app.behaviors ?? {};
   return mergeScopePolicies(
@@ -45,7 +40,7 @@ export const resolvePolicyForRoles = (app: Governed, grants: readonly string[], 
   );
 };
 
-// THE SAME PRINCIPAL, COMPILED AT A REACH THE READ DEMANDS.
+// THE SAME ROLES, COMPILED AT A REACH THE READ DEMANDS.
 //
 // The merge above is a union, so a principal holding two roles reaches as wide
 // as either grants. That is right for the roster somebody is paid to read and
@@ -56,13 +51,6 @@ export const resolvePolicyForRoles = (app: Governed, grants: readonly string[], 
 // policy at that reach instead. GRANTS ARE UNCHANGED — the union of every role's
 // verbs, so this can only narrow rows, never widen phases. A caller with no verb
 // for the table is still refused.
-export const resolvePolicyAtReach = (
-  app: Governed & Pick<NiscApp, 'assignments'>,
-  grants: readonly string[],
-  principal: string | null,
-  reach: string,
-): ScopePolicy => resolvePolicyAtReachForRoles(app, grants, assignedRoles(app.assignments, principal), reach);
-
 export const resolvePolicyAtReachForRoles = (
   app: Governed,
   grants: readonly string[],

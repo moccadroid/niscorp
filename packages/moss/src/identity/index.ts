@@ -24,7 +24,7 @@ export type { IdentityReport } from './cache';
 export { mintDevToken } from './dev-token';
 export { memoKey } from './memo-key';
 export type { IdentityRecord } from './record';
-export { assignedRoles, createIdentity, resolveRoles } from './resolution';
+export { assignedRoles, createIdentity } from './resolution';
 export type { Identity, IdentityConfig, IdentitySeam, ResolvedIdentity } from './resolution';
 export { newSeal, openSealed, sealCookie, sealOf, sealSession } from './seal';
 export { isOwnOrigin, sessionCookies, sessionTokenOf, tokenFromCookie } from './session-cookie';

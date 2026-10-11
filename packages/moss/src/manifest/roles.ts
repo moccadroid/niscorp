@@ -64,17 +64,14 @@ export const variantLayouts = (variants: Readonly<Record<string, LayoutVariant>>
   return layouts;
 };
 
+// The layout bindings of a set of roles — action id → the granted variant's
+// layout (ring 2). Grants come from the charter's `layouts` section over
+// the variant-id universe. Two granted variants of one action is
+// incoherence the boot check refused (./verify.ts), so resolution never picks.
 export const resolveVariantsForRoles = (app: Pick<NiscApp, 'charter' | 'layouts'>, roles: readonly string[]): ReadonlyMap<string, LayoutNode> => {
   const variants = app.layouts ?? {};
   return variantLayouts(variants, resolvePrincipal(app.charter, Object.keys(variants), roles, 'layouts'));
 };
-
-// The principal's layout bindings — action id → the granted variant's
-// layout (ring 2). Grants come from the charter's `layouts` section over
-// the variant-id universe. Two granted variants of one action is
-// incoherence the boot check refused (./verify.ts), so resolution never picks.
-export const resolveVariants = (app: Pick<NiscApp, 'charter' | 'layouts' | 'assignments'>, principal: string | null): ReadonlyMap<string, LayoutNode> =>
-  resolveVariantsForRoles(app, assignedRoles(app.assignments, principal));
 
 // THE VARIANT IN ITS PLACE, written once: the definitions a list of ids names,
 // in the list's order, each as the manifest has it or with the layout

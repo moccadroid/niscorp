@@ -65,7 +65,6 @@ export type { Pointer } from './generation';
 export { receiveManifest } from './handover';
 export { layoutMisfits } from './layout';
 export type { KitComponents } from './layout';
-export { resolveVariants } from './roles';
 export type { Catalog, InstalledOnly } from './roles';
 export { createRunningManifest } from './running';
 export type { ActionLoader, OwnedActions, RunningManifest, RunningManifestConfig } from './running';

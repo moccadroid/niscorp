@@ -61,6 +61,5 @@ export { featureTablesOf } from './feature-tables';
 export type { FeatureTables } from './feature-tables';
 export { migrateTables } from './migrate';
 export type { TablesReport } from './migrate';
-export { resolvePolicy } from './policy';
 export { MOSS_SEQUENCE } from './tables';
 export type { WriteListener, WriteRequest } from './writes';
