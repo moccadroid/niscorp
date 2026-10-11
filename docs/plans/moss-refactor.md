@@ -1,30 +1,17 @@
 # Moss: the audit, and the refactor that follows from it
 
-**Status: Built (2026-10-11), with what Part 9 lists as not met. The go was the
-owner's, on 2026-10-09: "we'll break it... go do the refactor". Every item of
-the build order is built (Part 7 gives the commits): 154 commits on branch
-`worktree-moss-refactor`, base `9e88009` (moss 0.4.0), and the commits that
-closed the loose ends after them (Part 11, "Closed since"), not pushed and not
-merged. The four gates are in `pnpm verify` and in `verify.yml`, and pass. Part
-9 was checked item by item against the code on 2026-10-11: five of its seven
-items were met then, and the sixth is since (the boundary that was read
-without a schema is parsed); the lab apps' checks pass at 126 of 133, each of
-the seven for a reason outside moss that Part 9 names. Of the 21 defects one
-is half fixed by decision (10: the webhook limit is per process) and none is
-open; a 22nd was found on a real Postgres and fixed (4.3). A review of the
-whole, the same day, found three places where a document said more than the
-code did (one owner for what a shell loads, defect 5 for every living shell,
-what another process follows after `replaceActions`); Part 11, "After a
-review", says what closed each. A second review, the same day, held the
-feature seam and the public API against one owner for each table and each
-piece of state, and against one way to do a thing; Part 11, "After a second
-review", says what it found and what closed each. A third reviewer, the same
-day, read the four gates as an adversary and walked round each; Part 11,
-"After a review of the gates", says how, what closed each way round, and what
-each gate still cannot see. Part 11 is what
-moss is now, in numbers, what ran on a real Postgres, and what is left. Not
-done here: Midas and the two websites, which are other repositories, and the
-release. Next: Part 10.**
+**Status: built, reviewed twice, a third review to follow. The go was the
+owner's, on 2026-10-09. The build order was built from 2026-10-09 to
+2026-10-11. In a first review (2026-10-11) two independent reviewers both
+said not done: the feature seam, one owner for what a shell loads, gates that
+could be walked around, second ways in the API, defect 5 for kept shells
+only, guards no test held; four rounds of fixes closed those. In a second
+(2026-10-11) two fresh reviewers both said not done by a small margin: two
+regressions, four unlisted changes, a gate rule, stale statements; two rounds
+of fixes closed those. Nothing is pushed or merged (275 commits since
+`9e88009`, moss 0.4.0). CI has never run on this branch, the new Postgres
+service included. Midas and the two websites are other repositories, and are
+not touched. Part 11 keeps the detail.**
 
 This replaces the first version of this file, which planned a tidy-up. The
 audit found that the problem is larger than structure.
@@ -186,20 +173,20 @@ Read, not reproduced. Each needs a failing test before it is fixed.
 that fixed it, read from the log and from the code where it is named. Whether
 each fix's test failed first was checked by the phase that wrote it, and not
 again here. A reviewer then took guards out one at a time and ran the suites,
-and that was done again, wider: Part 11, "After a review of the tests", says
+and that was done again, wider: Part 11, "After the first review, fixes: round 4", says
 which fixes no test held and what holds them now.
 
 | | Now | Where |
 |---|---|---|
-| 1 | fixed | `2fc4154`: an approval is verified before it is written. That fix let a hand-over that throws AFTER the write out as a 500, with the row left approved; since 2026-10-11 such an approval is taken back, as it was before `2fc4154` (Part 11, "After a review against the plan"). |
+| 1 | fixed | `2fc4154`: an approval is verified before it is written. That fix let a hand-over that throws AFTER the write out as a 500, with the row left approved; since 2026-10-11 such an approval is taken back, as it was before `2fc4154` (Part 11, "After the second review, fixes: round 1"). |
 | 2 | fixed | `bb6a2a8`: a bundle lands in one transaction |
 | 3 | fixed | `3dec693`: one shell is built for a principal at a time |
 | 4 | fixed | `812372e`: a shell is reset one reset at a time, from what it was opened with. One test stood for the turn and for two other lines of `replaceShell` and passed with any one of them out. Since 2026-10-11 each has a test red without it: the turn (the order of two resets, which was not tested), the check after the build, the check before it. The second read of the cell, after the build, covered no case the turn does not, and is gone (`641ee17`, `33ca092`). |
-| 5 | fixed, in two steps | `3f3923e`: a living shell holds what its principal holds now. That covered the shells a host keeps, one for each signed-in principal, and only the app's own host was asked. A shell built for one connection (a visitor's; every shell of a page's host) kept what it was built with. Since 2026-10-11 it is every living shell: a host holds each shell it built until it ends (`src/shells/live.ts`, `living`), `adopt` walks those and the builds under way, and a change is asked of every host, the app's and each page's (`src/server/hosts.ts`, `adopt`). Part 11, "After a review". Two more of the same day, Part 11, "After a review against the plan": the adopts were one chain that waited for every build under way, so one build that never landed ended it for the whole host (each change walks on its own now, and each build is followed on its own); and an adopt took the actions of the answer a shell is made of and not its frame, layout store and fragments (it takes those too). |
+| 5 | fixed, in two steps | `3f3923e`: a living shell holds what its principal holds now. That covered the shells a host keeps, one for each signed-in principal, and only the app's own host was asked. A shell built for one connection (a visitor's; every shell of a page's host) kept what it was built with. Since 2026-10-11 it is every living shell: a host holds each shell it built until it ends (`src/shells/host-state.ts`, `living`), `adopt` walks those and the builds under way, and a change is asked of every host, the app's and each page's (`src/server/hosts.ts`, `adopt`). Part 11, "After the first review, fixes: round 1". Two more of the same day, Part 11, "After the second review, fixes: round 1": the adopts were one chain that waited for every build under way, so one build that never landed ended it for the whole host (each change walks on its own now, and each build is followed on its own); and an adopt took the actions of the answer a shell is made of and not its frame, layout store and fragments (it takes those too). And one more, Part 11, "After the second review, fixes: round 2": within one change the living shells were asked one after another, so a principal who was never answered held every shell after theirs for that change (each shell adopts on its own now). |
 | 6 | fixed | `1fbe5a7`: a connection that closed before its session was ready leaves nothing attached |
 | 7 | fixed | `6d7d054`: a message the shell throws on is one message |
 | 8 | fixed | `d424c3a`: a refused terminal is not sent the error that refused it |
-| 9 | fixed | `52ba2d1`: `runtime.anonymousShellMax`, default 1,000, from a measurement. The terminal it refuses came back every half second to a second for as long as it was refused, because the wire forgot its backoff when the socket opened; since 2026-10-11 it is forgotten at the first frame, and a refused terminal waits longer each time (Part 11, "After a review against the plan"). |
+| 9 | fixed | `52ba2d1`: `runtime.anonymousShellMax`, default 1,000, from a measurement. The terminal it refuses came back every half second to a second for as long as it was refused, because the wire forgot its backoff when the socket opened; since 2026-10-11 it is forgotten at the first frame, and a refused terminal waits longer each time (Part 11, "After the second review, fixes: round 1"). |
 | 10 | half, and decided to stay so | `bcec37f`: a frame grant is a row, so any process redeems it. The webhook limit is a limit per process, by decision (2026-10-11): 240 calls a minute for each integration, counted in the memory of the process that takes them (`src/integrations/proxy.ts`). With N processes a vendor is let through up to N × 240 a minute, and nothing is lost. One limit across processes needs a store they share and a write for every call; none was built. The constant's comment and `DOCS.md` say what it is, and `test/integrations-hook-limit.test.ts` holds it to that. |
 | 11 | fixed | after the build order, which did not name it: a seed that is given and decodes to fewer than 32 bytes throws when the signer is made (`src/integrations/credentials.ts`), which for a server is while it boots. The sentence says the seed's length, never the seed. No seed still generates a key. |
 | 12 | fixed | `3f95b94`: `outboundTimeoutMs` (30 s) and `pressMaxBytes` (5 MiB, a number nobody measured) |
@@ -211,7 +198,7 @@ which fixes no test held and what holds them now.
 | 18 | fixed | `e6f7c0b`: a reset while connecting leaves one socket |
 | 19 | fixed | `edfb856`: every render target is told the connection's status |
 | 20 | fixed | `2b7b321`: an id is a name, and a unique index on `integrations.key_hash` |
-| 21 | fixed | after the build order, which did not name it: `/dev/as/<who>` answers a request whose socket ends on this machine (`127.0.0.0/8`, `::1`, the IPv4-mapped form) and answers any other `403`, with why (`src/server/vite.ts`). `signInFromNetwork: true` on `mossDev` opens it to other devices. No forwarded-for header is read. |
+| 21 | fixed | after the build order, which did not name it: `/dev/as/<who>` answers a request whose socket ends on this machine (`127.0.0.0/8`, `::1`, the IPv4-mapped form) and answers any other `403`, with why (`src/server/vite.ts`). `signInFromNetwork: true` on `mossDev` opens it to other devices, and with them to any page a browser on one of them has open: the refusal of another site's page does not hold at the server's network address (Part 11, "After the second review, fixes: round 2"). No forwarded-for header is read. |
 
 **Found afterwards, by running on a real Postgres (2026-10-11).** Everything
 above ran on PGlite, which has one connection. Part 11 says what was run on a
@@ -303,9 +290,9 @@ tide stops being a peer every app must install.
   import whom is `scripts/check-modules.mts`, and moss's `DESIGN.md` ("How the
   code is laid out") carries a copy.
 - Tide's hosting did move to tide (`@niscorp/tide/postgres`, and the driver in
-  tide's main entry). What moss kept of it is a second feature, `tide`: three
+  tide's main entry). What moss kept of it is a second feature, `tide`: four
   files that mint a committed write into tide as a fact, on one seam,
-  `onWrite`. `@niscorp/tide` is an optional peer of moss.
+  `onWrite`. The module is named for its entry point, `@niscorp/moss/tide`. `@niscorp/tide` is an optional peer of moss.
 
 The terminal side is two modules: `client` imports `protocol`, and `terminal`
 imports `client`.
@@ -330,8 +317,8 @@ they exist before anything starts, and because which tables a feature
 addresses outside the app's policy has to be readable without running it.
 Each feature is handed seams made for it, and the members that reach
 something owned (its tables, its set of actions, the documents in its rows)
-are bound to that feature and take no name (Part 11, "After a second
-review").
+are bound to that feature and take no name (Part 11, "After the first
+review, fixes: round 2").
 
 ### 5.5 How something new gets in
 
@@ -401,14 +388,14 @@ run them; they pass here.
 
 | Gate | Built in | What it holds now |
 |---|---|---|
-| `check:raw-sql` | `bb04ed7`; whatever sends a statement and however it is cased, `5a76069` | Every package but vex and strata. 0 statements with no reason, 6 credential (`moss/identity/sessions.ts`), 7 in tide's own store (`tide/store/postgres/`: 4 in `store.ts`, 3 in `claim.ts`), and one row a migration writes (`moss/data/tables.ts`). |
-| `check:modules` | `0f3f059`; a finished module imports nothing flat, `45a5093`; the core imports no feature, `b9979b1`; every way a file names another, `93182f4`; a door names what is behind it, `5c3d49c` | Moss: 14 modules, no cycle, nothing flat in `src/` since `fed4ac1`. It holds two things this part gave to the lint: no import of another module's inner file, and the terminal side importing nothing of moss but `protocol`. |
-| `check:api` | `0f3f059`; names asked of the compiler, and members, `5ad1130`; tide, `a88b66c` | Moss: 89 names and 304 members across 16 entry points. Tide: 127 names and 325 members across 4. "Each package's" is not built: the other twelve have no `api.txt`. |
+| `check:raw-sql` | `bb04ed7`; whatever sends a statement and however it is cased, `5a76069` | Every package but vex and strata. 0 statements with no reason, 5 credential (`moss/identity/sessions.ts`; six until `revokeSession` went, `a8c5169`), 7 in tide's own store (`tide/store/postgres/`: 4 in `store.ts`, 3 in `claim.ts`), and one row a migration writes (`moss/data/tables.ts`). |
+| `check:modules` | `0f3f059`; a finished module imports nothing flat, `45a5093`; the core imports no feature, `b9979b1`; every way a file names another, `93182f4`; a door names what is behind it, `5c3d49c`, by its whole name, and no path is written with a backslash, `c0404a2`; a door exports only names another module takes, `850e9ae` | Moss: 14 modules, no cycle, nothing flat in `src/` since `fed4ac1`, and 115 names on the ten doors that are not entry points, each taken by another module. It holds two things this part gave to the lint: no import of another module's inner file, and the terminal side importing nothing of moss but `protocol`. |
+| `check:api` | `0f3f059`; names asked of the compiler, and members, `5ad1130`; tide, `a88b66c`; the members of a type that is reached and not exported by name, `32c6354` | Moss: 89 names and 304 members across 16 entry points, and 66 members of 22 types that something exported takes or answers and no entry exports by name (a type counted for each entry that reaches it). Tide: 127 names and 325 members across 4, and no such type. "Each package's" is not built: the other twelve have no `api.txt`. |
 | `pnpm lint` | in `verify` since `0f3f059`; the block for moss's modules, `8ccbd40`; the client under it, `28a78cb`; the terminal, `bbb4fb3`; with types, `0fc23c5`; no written predicate, `83d80e9`; every file and no comment that switches it off, `f0be5d7`; the width, `534c0fb`; tide's store and driver, `9b32289`; tried on every run, `9b7ed95` | For every file under `packages/moss/src`, and tide's `src/store/postgres/` and `src/driver.ts`: no type assertion but `as const`, no `any` that becomes a typed value, no written type predicate, no non-null assertion, no `function` declaration, no `let` or `var` at the top of a file, 100 lines to a function, 400 to a file and 200 characters to a line. |
 | `AGENTS.md` | the last phase; the gates as a table of what each fails on and what it cannot see, after the review of them | "Changing a package": 5.2, 5.5 and the gates; `STYLE_GUIDE.md`, "Modules", for what is longer. |
 
 What each gate fails on, in full, and what it cannot see, is the comment at
-the top of its script, and Part 11, "After a review of the gates".
+the top of its script, and Part 11, "After the first review, fixes: round 3".
 
 Rules 3 and 4 of 5.2 (one owner; narrow inputs) have no gate. They were read
 for, phase by phase, and Part 9 says what a reading of the whole finds.
@@ -522,36 +509,60 @@ Not here: stopping the seeding of `vex_cache`. That belongs to the artifactory.
    `index.ts` and 14 directories, each with an `index.ts`; `check:modules`
    fails on anything else.
 2. **No factory takes `NiscApp` or `NiscRuntime` but `createServer` and
-   `serve`. Met for every factory; two steps of the wiring are typed on the
-   whole of them.** Every `create…` function outside `server` is handed a
-   typed object of its own (`DataConfig`, `RunningManifestConfig`,
-   `IdentityConfig`, `ShellHostConfig`, `SocketConfig`, `DocumentConfig`,
-   `IntegrationsConfig`, `TideFactsConfig`). Inside `server`, the module that
-   may hold both, `buildData(app: NiscApp, runtime: NiscRuntime)`
-   (`src/server/data.ts:14`) and `buildRunningManifest(app: NiscApp, …)`
-   (`src/server/manifest.ts:15`) take the whole manifest and hand on its
-   fields; the other steps take a `Pick`. Two functions that are not factories
-   take the whole manifest because the whole of it is their subject:
-   `defineApp` and `receiveManifest` (`src/manifest/handover.ts:49`), which
-   parses and freezes it. `migrateTables` takes four fields of the runtime and
-   two of the manifest (`src/data/migrate.ts:160`).
+   `serve`. Met for every module's factory. The wiring itself is typed on the
+   whole of both, in four functions: an exception, stated here.** Every
+   `create…` function outside `server` is handed a typed object of its own
+   (`DataConfig`, `RunningManifestConfig`, `IdentityConfig`,
+   `ShellHostConfig`, `SocketConfig`, `DocumentConfig`, `IntegrationsConfig`,
+   `TideFactsConfig`). `createServer` (`src/server/server.ts:53`) and `serve`
+   (`src/server/node.ts:119`) take both, as the rule allows. Inside `server`,
+   `createServer` is cut into four functions, each where its order can be
+   held by a test with nothing behind it, and they are typed on the whole:
+   - `createServerWith(app: NiscApp, runtime: NiscRuntime, dataOf)`
+     (`server.ts:30`), which is `createServer` with the step that asks a
+     database handed in;
+   - `buildData(app: NiscApp, runtime: NiscRuntime)` (`src/server/data.ts:14`);
+   - `assembleServer(deps: ServerDeps)` and its body `assemble`
+     (`src/server/assemble.ts:46`, `56`), where `ServerDeps` (`assemble.ts:27`)
+     holds `app: NiscApp` and `runtime: NiscRuntime`. That is an object that
+     carries both, which the rule as `AGENTS.md` words it ("never an object
+     that stands in for either") forbids of a factory;
+   - `buildRunningManifest(app: NiscApp, runtime: Pick<…>, data)`
+     (`src/server/manifest.ts:15`), whose subject is the whole manifest.
+
+   It is an exception and not a meeting of the rule, and it is left: these
+   four are `createServer` itself, in the one module that may hold both, and
+   what they do with the two is hand each step a `Pick` (`buildIdentity`,
+   `identity.ts:11`; `RouteDeps`, `routes.ts:24`; `ShellHostsDeps`,
+   `hosts.ts:23`; `SeamDeps`, `features.ts:38`; `ReactionDeps`,
+   `reactions.ts:23`; `SocketDeps`, `socket.ts:14`). Between them the four
+   read every one of `NiscApp`'s twenty fields, and a `Pick` on `ServerDeps`
+   would name nineteen (all but `grammars`, which the step before it reads).
+   No module but `server` is handed either whole. Two
+   functions that are not factories take the whole manifest because the whole
+   of it is their subject: `defineApp` (`src/manifest/app.ts:458`) and
+   `receiveManifest` (`src/manifest/handover.ts:48`), which parses and
+   freezes it. `migrateTables` takes four fields of the runtime and two of
+   the manifest (`src/data/migrate.ts:156`).
 3. **No SQL statement outside the two declared places. Met, with one more
-   place, declared.** The two were the credential and tide's store. The six
-   credential statements are in `src/identity/sessions.ts`; tide's seven are in
-   tide. A third kind is in the gate's ledger as `tables`: the seed row of the
+   place, declared.** The two were the credential and tide's store. The five
+   credential statements are in `src/identity/sessions.ts` (six until
+   `revokeSession`, which only tests called, went); tide's seven are in tide.
+   A third kind is in the gate's ledger as `tables`: the seed row of the
    generation counter, an `INSERT` that is a step of migration 1
-   (`src/data/tables.ts:25`). Nothing else: the integration key's hash is
+   (`src/data/tables.ts:49`). Nothing else: the integration key's hash is
    looked up through vex.
 4. **No boundary without a schema; no type assertion. The second is met. The
    first is not, in one place.**
    - No type assertion, no non-null assertion and no `function` declaration in
-     148 files, counted from the syntax tree; the lint holds it.
+     154 files, counted from the syntax tree; the lint holds it.
    - Parsed by a schema where it enters: the manifest, a set of actions, a
      socket message on both ends, the snapshot a drawn page carries, an event,
      the integrations' route bodies, their rows, the bundle, a press image's
      type, the assertion's payload, the identity record, a session row, the
-     dev token, a sealed sign-in, the counter's row. 19 files import zod and
-     hold 33 calls of `parse` or `safeParse`, where there was one file and two.
+     dev token, a sealed sign-in, the counter's row, the fabric's message, the
+     parameters of an upgrade. 22 files import zod and hold 38 calls of
+     `parse` or `safeParse`, where there was one file and two.
    - **Not parsed: a message from another process.**
      `src/server/fabric.ts:57–79` switches on `message.kind` and reads
      `principal`, `tag` and `channel` as the type the host's transport gave
@@ -576,16 +587,25 @@ Not here: stopping the seeding of `vex_cache`. That belongs to the artifactory.
      the deployment's own object, typed, and each refusal is said where the
      field is read.
 5. **`createServer` builds, wires and mounts, and holds no route body. Met.**
-   `src/server/server.ts:33–158`: thirteen numbered steps, each a call to a
-   file beside it. The routes are in `src/server/routes.ts` and in the
-   features. It spans 126 lines with its comments; it was 1,345.
+   It is two files now. `src/server/server.ts` (53 lines) holds `createServer`
+   (line 53, one line: `createServerWith` over `buildData`) and
+   `createServerWith` (lines 30 to 51), which is steps 1 to 3: the manifest
+   is read and frozen, the verifier is resolved, the data module is brought
+   up. `src/server/assemble.ts` (162 lines) holds steps 4 to 13 in `assemble`
+   (lines 56 to 162), behind `assembleServer` (lines 46 to 54), which stops
+   what a boot started when the boot throws. Thirteen numbered steps in all,
+   each a call to a file beside it. The routes are in `src/server/routes.ts`
+   and in the features. The function was 1,345 lines; the longest of the
+   three is `assemble`, 107 lines as written and 53 of code by the lint's own
+   count.
 6. **Every gate in Part 6 is in CI and green. Met here; CI has not run.** The
    four are steps of `verify.yml` and of `pnpm verify`, and pass on this
    branch. The branch is not pushed. What Part 6 asked of `check:api` for
    "each package" held for moss alone. *Since (2026-10-11):* for moss and
    tide; the other twelve packages have no `api.txt`.
 7. **Lyceum's, relay's, lyra's, atrium's and encore's checks pass. Not met:
-   126 of 133.** Each `src/dev/*-check.ts`, run one at a time on 2026-10-11:
+   126 of 133.** Each `src/dev/*-check.ts`, run one at a time on 2026-10-11,
+   and again after each round of fixes with the same seven failing:
    encore 13 of 13, lyceum 17 of 18, atrium 18 of 19, relay 28 of 32, lyra 50
    of 51. Each of the seven that fail was run again alone, to read why. Three
    need a model's key this machine does not
@@ -606,9 +626,11 @@ The artifactory is its own plan. What is decided about it:
 
 - It is a sub-module of moss that every load goes through. It is asked; it is
   not handed around. In the map above it is what `manifest` grows into.
-  **Where it will be asked is built (2026-10-11), and no more than that.**
-  The running manifest (`src/manifest/running.ts`) is the one owner of the
-  four kinds while a server runs:
+  **Where it will be asked is built (2026-10-11), for three of the four
+  kinds, and no more than that.** While a server runs, the running manifest
+  (`src/manifest/running.ts`) is the one place an action, a layout and a
+  fragment are asked of. Of the entries it is the source, and one of two
+  holders:
   - An action, a layout and a fragment reach a shell in one answer,
     `artifactsFor(shell, roles, installed)`: the definitions those roles hold
     with their layout variant in place, the shell's canvases, frame and layout
@@ -618,13 +640,56 @@ The artifactory is its own plan. What is decided about it:
     (`src/server/hosts.ts`). The variant is put in its place by one function,
     which the closure audit reads through too (`src/manifest/roles.ts`,
     `withVariants`).
-  - The entries are held there (`entries()`). What vex replays from is seeded
-    with what it hands over (`Data.seed`, from `src/server/manifest.ts`), a
-    verification is handed them, and a shell's liveness reads the ones its
-    composition answered. Where no server stands (`migrateTables`,
+  - The entries the app shipped are held there (`entries()`), and that list
+    is their source: a verification is handed it, and a shell's liveness
+    reads the ones its composition answered. It is copied once, at boot, into
+    vex's cache (`Data.seed`, called from `src/server/manifest.ts:38`), and
+    from then on the cache is what runs them: a replay, and `fingerprints()`,
+    resolve in the cache and do not ask the manifest. The cache also holds
+    what the list does not: a query `answerIntent` stores there while the app
+    runs (`src/data/intents.ts`), and any row it held before this boot,
+    because seeding takes none out. Where no server stands (`migrateTables`,
     `verifyApp`), one pure function says what an app's entries are:
     `entriesOf` (`src/manifest/entries.ts`), which the running manifest reads
     too.
+
+  **What the artifactory will still change outside `manifest`.** Each read
+  against the code on 2026-10-11:
+  - **In `data`: what the cache holds, and who decides it.** `seed`
+    (`src/data/data.ts:289`, `seedCache(engine.cache, entries)`) copies the
+    list in; `fingerprints` (`data.ts:290`) is the cache's keys, and
+    `fingerprintsFor` (`data.ts:297`) is vex's discovery over the same
+    engine; `src/data/intents.ts` writes a query into the same cache through
+    an engine of its own. A replay through the routes (`src/data/routes.ts`)
+    resolves there. So what a fingerprint resolves to is decided in `data`,
+    by what was last written to a table, and nothing of `manifest` is asked.
+  - **In `server`: the one seeding line.** `await
+    data.seed(running.entries())` (`src/server/manifest.ts:38`) is where the
+    two holders meet, once, at boot. The manifest's list is fixed when the
+    server starts: there is no way to hand an entry over while it runs, as
+    there is for a set of actions (`replaceActions`), and nothing would copy
+    one into the cache if there were.
+  - **`artifactsFor(shell, roles, installed)` is synchronous and is asked by
+    roles.** Its type answers a `ShellArtifacts`, not a promise of one
+    (`src/manifest/running.ts`), what it answers is remembered for each set
+    of roles and install list and never for a person (`RoleMemo`,
+    `src/manifest/roles.ts`), and the one caller hands it
+    `resolved.roles` and `resolved.installed` (`src/server/hosts.ts:78`). An
+    id that resolves to what one person made, or to a draft in their shell,
+    needs the principal, and a read of rows needs to be awaited: the
+    signature, the memo's key, that caller and `ShellHostConfig.composition`
+    (which is already asked by principal, and awaited) are what moves.
+  - **An adopt does not take the canvases again.** `takeLayouts`
+    (`src/shells/host.ts`) puts in place the frame, each `{ ref }` of the
+    layout store and each fragment that is answered differently; what a
+    shell's canvases are, and what each mounts first, is derived when it is
+    built and is the shell's own state from then on. A published default
+    that changes which canvases a shell has reaches a living shell by a
+    reset, not by an adopt.
+  - **A shell's liveness reads the manifest's list, not the cache.**
+    `shellNeedOf` (`src/shells/liveness.ts`) is handed the entries of the
+    composition, so an entry that is only in the cache is reported as not
+    readable. It follows whichever of the two comes to hold them.
 
   Not built, on purpose: nothing is stored or published, `vex_cache` is still
   seeded, and a replay still resolves its entry in vex's cache. An adopt takes
@@ -652,49 +717,44 @@ draws the same with its layout held by reference.
 
 ## 11. What moss is now
 
-Measured on 2026-10-11, by one script over `packages/moss/src` and by the
-gates. "Lines of code" leaves out blank lines and lines that hold only a
-comment, as the lint's two sizes do.
+Measured on 2026-10-11, after the last round of fixes below, by one script
+over `packages/moss/src`, by the gates, and by the test runs. "Lines of code"
+leaves out blank lines and lines that hold only a comment, as the lint's two
+sizes do. The size of a function and of a file is the lint's own count: its
+two rules (`max-lines-per-function`, `max-lines`, blank lines and comment
+lines skipped) run over the same files with the bound lowered until they
+report.
 
-| | 2026-10-09 | 2026-10-11 |
+| | 2026-10-09 | 2026-10-11, as it stands |
 |---|---|---|
-| Source files | 43, of which 28 flat in `src/` | 148, of which one at the top of `src/`: `index.ts` |
+| Source files | 43, of which 28 flat in `src/` | 154, of which one at the top of `src/`: `index.ts` |
 | Directories | two | 14, each a module with an `index.ts` |
-| Lines | 10,554 (5,868 code, 4,017 comment) | 14,878 (7,775 code, 6,140 comment-only) |
-| Names exported from the main entry | 135; imported by something outside moss: 64; by nothing: 71 | 49; imported by something in this repository outside moss: 34; by nothing here: 15 |
-| Names exported, every entry point | 185 across 14 | 103 across 16 (`api.txt`): main 49, `client` 9, `integrations` 7, `terminal` 6, `node` 5, `terminal/vue` 5, `terminal/react` 4, `tide` 3, `vite` 3, each `/server` 2, `tty` 2, `ink` 2, `dom` 1, `client/node` 1 |
-| Functions over the size | ten over 120 lines as written | none over 100 lines of code. The largest is `createWire`, 98 (`client/wire.ts:221`). Five still span more than 120 lines with their comments: `createWire` 141, `createSocket` 134, `buildShell` 129, `createServer` 122, `createShellHost` 122 |
-| Files over the size | three | none over 400 lines of code. The largest is `integrations/intake.ts`, 290 (428 lines) |
+| Lines | 10,554 (5,868 code, 4,017 comment) | 16,494 (8,316 code, 7,146 comment-only, 1,032 blank) |
+| Names exported from the main entry | 135; imported by something outside moss: 64; by nothing: 71 | 38; taken by something in this repository outside moss: 33 (32 by an import, and `migrateTables` by the cli's awaited `import()`); by nothing here: 5 |
+| Names exported, every entry point | 185 across 14 | 89 across 16 (`api.txt`): main 38, `client` 9, `terminal` 6, `integrations` 5, `node` 5, `terminal/vue` 5, `terminal/react` 4, `vite` 3, `tide` 2, each of the three `/server` 2, `tty` 2, `ink` 2, `dom` 1, `client/node` 1 |
+| Members recorded in `api.txt` | none | 304 of exported types and objects, and 66 of 22 types that are reached and not exported by name (a type counted for each entry that reaches it) |
+| Names on the doors of the ten core modules | no doors | 115, each taken by another module (157 until 42 that nothing took came off) |
+| Functions over the size | ten over 120 lines as written | none over 100 lines of code. The largest is `createRunningManifest`, 90 (`manifest/running.ts:246`); then `createConnection` 78 (`client/wire.ts:242`) and `devMiddleware` 71 (`server/vite.ts:180`). Two span more than 120 lines as written, comments and blank lines counted: `buildShell` 142 and `createConnection` 125 |
+| Files over the size | three | none over 400 lines of code. The largest is `integrations/intake.ts`, 294 (435 lines) |
 | Type assertions | about 110 | 0 |
-| Files that import zod | one, with two parses | 19, with 33 |
-| SQL statements outside vex | 40 that read or write rows | 7 in moss: 6 credential, 1 a migration's seed row. 7 in tide's store, which is tide's now |
-| Tests | 43 files, 546 cases | moss: 61 files, 920 tests. Tide, which took the store's and the driver's: 12 files, 232 tests |
+| Files that import zod | one, with two parses | 22, with 38 calls of `parse` or `safeParse` |
+| SQL statements outside vex | 40 that read or write rows | 6 in moss: 5 credential, 1 a migration's seed row. 7 in tide's store, which is tide's now |
+| Tests | 43 files, 546 cases | moss: 75 files, 1,160 tests. Tide, which took the store's and the driver's: 13 files, 235 tests. The cli: 9 files, 88 tests |
 
-The largest module is `integrations`: 20 files and 1,838 lines of code, more
-than `server` (867), `data` (784), `manifest` (758) and `shells` (758).
+The largest module is `integrations`: 20 files and 1,884 lines of code, more
+than `server` (1,008), `terminal` (939), `data` (860), `shells` (852) and
+`manifest` (842).
 
-Counted again after the loose ends below were closed, the same day, for the
-four rows they moved (the others were not measured again): 149 source files
-(one more, `server/transport.ts`); 22 files import zod, with 38 calls of
-`parse` or `safeParse`; moss has 64 test files and 987 tests, and tide the 12
-and 232 it had. The gates pass as they did: 103 names in `api.txt`, 14 modules,
-no statement outside vex without a reason.
-
-Counted once more after the review below, the same day, for the rows it
-moved: 151 source files (two more, `manifest/entries.ts` and
-`manifest/artifacts.ts`); moss has 66 test files and 1,018 tests. Of the five
-functions that span more than 120 lines with their comments, `createServer`
-is 126 now and `createShellHost` 130, and none is over 100 lines of code. The
-gates pass as they did: 103 names in `api.txt`, 14 modules under the same
-table of who may import whom, no statement outside vex without a reason.
+On the branch: 275 commits since `9e88009`.
 
 **What is left.** None of it stops the artifactory; each is somebody's to
 decide.
 
 - **Names that stayed in the main entry and that nothing in this repository
-  imports** were decided by the second review, below: of the fifteen, ten
-  left, and `Feature`, `FeatureSeams`, `Telemetry`, `TelemetrySpan` and
-  `revokeAllFor` stay, each shown in use in `DOCS.md`.
+  imports** were decided in round 2 of the fixes after the first review,
+  below: of the fifteen, ten left, and `Feature`, `FeatureSeams`,
+  `Telemetry`, `TelemetrySpan` and `revokeAllFor` stay, each shown in use in
+  `DOCS.md`.
 - **The gates list one package, and part of a second.** `check:modules` holds
   moss. `check:api` holds moss and tide. The module block of the lint holds
   moss, and of tide the store and the driver that came out of moss.
@@ -702,7 +762,7 @@ decide.
   joins is in `AGENTS.md`, "Changing a package"; none was added that this
   refactor did not touch.
 - **The repository is not formatted.** `.prettierrc` names a width of 100 and
-  nothing enforces it: by `prettier --check`, 119 of moss's 154 source files
+  nothing enforces it: by `prettier --check`, 120 of moss's 154 source files
   differ from it. The lint holds a line to 200, which is not the same thing.
   Formatting is a decision for the whole repository.
 - **The webhook limit is per process** (4.3, 10), and the documents say so.
@@ -743,19 +803,28 @@ limit was not changed: it got tests that hold it to what the documents say.
   came back signed in as whoever the page named; an image, a fetch and a frame
   of the address each had the app mint a session, and left no cookie. A
   request marked `Sec-Fetch-Site: cross-site` is refused now, and the same
-  four pages leave the app unasked. A request that names another host (the
-  shape of a DNS rebinding) never reached the sign-in: vite's own check of
-  the host answers it `403` before moss's middleware runs, as it does for
-  `/catalog` and a page; that was run too, under `nisc dev`.
+  four pages leave the app unasked. (A browser marks a request so only to an
+  address it trusts. What that leaves open under `signInFromNetwork` is in
+  "After the second review, fixes: round 2".) A request that names another
+  host (the shape of a DNS rebinding) never reached the sign-in: vite's own
+  check of the host answers it `403` before moss's middleware runs, as it
+  does for `/catalog` and a page; that was run too, under `nisc dev`.
 - **Defect 15, the retry that logged at every poll** (4.3): said when it
   first fails, again when what it says changes, and once when it is followed.
 - **Defect 10, the webhook limit** (4.3): decided to stay a limit per
   process, and said to be one where it is written and documented.
 
-**After a review (2026-10-11).** Two reviewers held the whole against what the
-owner asked for. They found three places where a document said more than the
-code did. Each is closed, with tests that stand a shell host, the server's
-wiring or a running manifest up and start no database and no server.
+Counted when those were closed, for the four rows they moved: 149 source
+files (one more, `server/transport.ts`); 22 files import zod, with 38 calls
+of `parse` or `safeParse`; moss had 64 test files and 987 tests, and tide the
+12 and 232 it had.
+
+**After the first review, fixes: round 1 (2026-10-11).** Two independent
+reviewers held the whole against what the owner asked for, and both said it
+was not done. Four rounds of fixes followed, this one and the three after it.
+This round: three places where a document said more than the code did. Each
+is closed, with tests that stand a shell host, the server's wiring or a
+running manifest up and start no database and no server.
 
 - **Only an action had one owner that was asked.** An action reached a shell
   through the running manifest. The frame, the layout store and the fragments
@@ -785,7 +854,7 @@ wiring or a running manifest up and start no database and no server.
   because the shell that still stood adopted and its replacement, built from
   the earlier answer, then took its place. A replacement is a build under way
   now, and its cell adopts when it lands. A host holds every
-  shell it built until it ends, and `endShell` (`src/shells/live.ts`) is the
+  shell it built until it ends, and `endShell` (`src/shells/host-state.ts`, which was `live.ts`) is the
   one place a shell is marked ended and let go. That an ended shell is let go
   is asked of the collector for four ways of ending: with the removal taken
   out, all four fail. What it costs is said in the changeset and held by a
@@ -795,8 +864,7 @@ wiring or a running manifest up and start no database and no server.
   principal's reset
   (`invalidateIdentity`), are asked of every host, the app's and each page's.
   Not moved then: `deliver` and `nudge` reached the shell the app's host keeps
-  for a principal and no shell of a page's. Moved since ("After a review of
-  the tests", below): a nudge reaches every living shell of a principal.
+  for a principal and no shell of a page's. Moved since ("After the first review, fixes: round 4", below): a nudge reaches every living shell of a principal.
 - **"Every other process follows" after `replaceActions`.** The pointer
   moves and every process follows it, but a set handed to one process is in
   no other: the reviewer ran two servers on one database, both reached the
@@ -814,11 +882,16 @@ The lab apps' checks were run again on the built result, each as its own
 process, one at a time: 126 of 133, the same seven failing as in Part 9 (encore
 13 of 13, lyceum 17 of 18, atrium 18 of 19, relay 28 of 32, lyra 50 of 51).
 
-**After a second review (2026-10-11).** A reviewer booted a server with a
-feature of its own, and read the public API against "one way to do a thing".
-Each finding was checked by reading and, where it could be, by running it
-against the wiring with no database: every one held. Each fix got a test that
-failed first; none of the new tests starts a database or calls `createServer`.
+Counted after it, for the rows it moved: 151 source files (two more,
+`manifest/entries.ts` and `manifest/artifacts.ts`); moss had 66 test files
+and 1,018 tests.
+
+**After the first review, fixes: round 2 (2026-10-11).** From the same
+review: a server booted with a feature of its own, and the public API read
+against "one way to do a thing". Each finding was checked by reading and,
+where it could be, by running it against the wiring with no database: every
+one held. Each fix got a test that failed first; none of the new tests starts
+a database or calls `createServer`.
 
 - **The feature seam handed out what rule 3 forbids.** A feature somebody
   else wrote read an app's table by naming it to `ownEntries`, was handed the
@@ -860,14 +933,15 @@ failed first; none of the new tests starts a database or calls `createServer`.
   `createPlaces`, and the six `stand…` functions are renamed, with three files,
   in commits that only rename.
 
-**Left by that review, each for a reason.** `MOSS_PATHS` (`src/server/node.ts`)
+**Left by that round, each for a reason.** `MOSS_PATHS` (`src/server/node.ts`)
 still names `integrations`: the comment on it says why its three readers
 cannot all ask a server instead. Names that read as this codebase's voice and
-were outside what the review named stay as they are: `dataOver`, `wireOver`,
-`pointerOver`, `wrappedBy`, `WriteLane`, `mintWrites`, `ShellHostConfig.kept`,
-`MossServer.nudge` (published in 0.4.0, and the fabric's message kind between
-processes has the same name), `storePress` and `pressMaxBytes` (`press` is the
-bundle grammar's own field).
+were outside what the review named stayed as they were: `dataOver`,
+`wireOver`, `pointerOver`, `wrappedBy`, `WriteLane`, `mintWrites`,
+`ShellHostConfig.kept`, `MossServer.nudge` (published in 0.4.0, and the
+fabric's message kind between processes has the same name), `storePress` and
+`pressMaxBytes` (`press` is the bundle grammar's own field). The first five
+are renamed since: "After the second review, fixes: round 2", below.
 
 Counted after it, for the rows it moved: 154 source files (three more:
 `data/feature-tables.ts`, `server/assemble.ts`, `tide/chain.ts`); moss has 68
@@ -875,13 +949,14 @@ test files and 1,043 tests; `api.txt` holds 89 names, 38 of them the main
 entry's. The gates pass as they did, 14 modules under the same table of who
 may import whom, no statement outside vex without a reason.
 
-**After a review of the gates (2026-10-11).** A reviewer read the four gates
-as an adversary and showed, on copies outside the tree, that each passed on
-code that breaks its rule. Every one was reproduced first, the same way: a
-copy of the gates and of moss's source under the system's temp directory, the
-walkaround written into the copy, the gate run. Then it was closed, and made a
-case the gate runs against itself every time: something small that must fail,
-beside a twin that does the same thing by the rules and must pass.
+**After the first review, fixes: round 3, the gates (2026-10-11).** From the
+same review: the four gates read as an adversary reads them, and shown, on
+copies outside the tree, to pass on code that breaks their rules. Every one
+was reproduced first, the same way: a copy of the gates and of moss's source
+under the system's temp directory, the walkaround written into the copy, the
+gate run. Then it was closed, and made a case the gate runs against itself
+every time: something small that must fail, beside a twin that does the same
+thing by the rules and must pass.
 
 - **`check:modules` read `import` and `export` declarations and literal
   `import()` calls.** Five ways round it, all reproduced: a type taken with
@@ -898,8 +973,9 @@ beside a twin that does the same thing by the rules and must pass.
   names another now, a file is `.ts` or `.tsx` or it fails, a name that is
   not relative is a package `package.json` names, and `import()` takes one
   written string. 25 pairs and one link (`93182f4`, `5c3d49c`).
-  *Cannot see:* what a door exports from inside its module; code loaded by
-  `eval` or by reading a file; whether what a door says of a file is so.
+  *Cannot see:* what a door exports from inside its module (held since:
+  "After the second review, fixes: round 2"); code loaded by `eval` or by
+  reading a file; whether what a door says of a file is so.
 - **`check:api` read the statements of each entry file, and recorded names.**
   `export const { createShellHost } = inner` and `export namespace internals`
   both reported the old 89 names; a member added to `MossServer` moved no
@@ -911,7 +987,8 @@ beside a twin that does the same thing by the rules and must pass.
   `const` object, where the package itself declares the member. Tide's four
   entries are recorded. 17 pairs (`5ad1130`, `a88b66c`).
   *Cannot see:* a signature; a second level of members; what an exported
-  function takes when that type is not exported.
+  function takes when that type is not exported (recorded one level since:
+  "After the second review, fixes: round 2").
 - **`check:raw-sql` told a pool by four names and a statement by its
   capitals.** `const conn = runtime.pool; conn.query('select … from
   sessions')` counted as nothing. Fifteen more of the kind were found:
@@ -954,7 +1031,7 @@ are 161 to 180, 20 are 181 to 200 and 16 were wider, the widest 273. The bound
 is 200 and those sixteen were rewrapped. Held to 100 wide instead (prettier
 over a copy, then the lint's own count), five functions were over 100 lines:
 `createShellHost` 114, `createSocket` 110, `createWire` 109, `dataOver`
-117, `createRunningManifest` 107. Each was split, in a commit that only
+(`createDataWith` now) 117, `createRunningManifest` 107. Each was split, in a commit that only
 moves code (`9671b2d` to `b556963`). Measured again the same way, the
 largest is `createRunningManifest` at 99, and no file is over 400. As
 written, the largest function is 86 lines of code and the largest file 290
@@ -1021,16 +1098,16 @@ the repository: no package has a place for a test that needs a server.
   is the key the row holds, and never two.
 
 Those runs are a check of the repository since the same day:
-`pnpm check:postgres` (below, "After a review of the tests").
+`pnpm check:postgres` (below, "After the first review, fixes: round 4").
 
-**After a review of the tests (2026-10-11).** A reviewer took guards out of
-a copy one at a time and ran the suites: a fix no test fails without is not
-held. Four of the 26 lines they tried survived, defect 16's fix had no test
-in the repository, one test stood for three guards of defect 4, and three of
-seven tests they ran alone failed. Everything below was reproduced first, on
-a copy under the system's temp directory, and every new test was seen red
-with its line out and green with it in. No new test starts a database, and
-none calls `createServer`.
+**After the first review, fixes: round 4, the tests (2026-10-11).** From the
+same review: guards taken out of a copy one at a time and the suites run. A
+fix no test fails without is not held. Four of the 26 lines they tried
+survived, defect 16's fix had no test in the repository, one test stood for
+three guards of defect 4, and three of seven tests they ran alone failed.
+Everything below was reproduced first, on a copy under the system's temp
+directory, and every new test was seen red with its line out and green with
+it in. No new test starts a database, and none calls `createServer`.
 
 - **The four survivors are held.** The operator prefix is mounted after the
   features start (a feature's operator route answered the right key 404), and
@@ -1133,9 +1210,10 @@ time: 126 of 133, the same seven failing as in Part 9 (encore 13 of 13,
 lyceum 17 of 18, atrium 18 of 19, relay 28 of 32, lyra 50 of 51). Atrium's
 dev check is one of its 18: it runs `nisc dev` now, and asks one thing more.
 
-**After a review against the plan (2026-10-11).** Two reviewers held the work
-against this plan and against what the owner asked for, and both said it was
-not done, by a small margin. They ran what they found on copies outside the
+**After the second review, fixes: round 1 (2026-10-11).** Two fresh reviewers
+held the work against this plan and against what the owner asked for, and
+both said it was not done, by a small margin. Two rounds of fixes followed,
+this one and the one after it. They ran what they found on copies outside the
 tree. Each defect below was reproduced here first, by a test that was red
 (the first also by a server on PGlite in a copy), then fixed, and then the
 fix was taken out of a copy and the whole suite run: the new test is what
@@ -1210,22 +1288,22 @@ database that has no `sessions` table.
 And one test broke the rule it sits under: `manifest-schema.test.ts` called
 `createServer`, over a pool that fails if asked, to hold that a manifest is
 read before the database is. The boot's order is a function over the step
-that brings the data module up (`serverOver`; `createServer` is it over
-`buildData`), and the test holds the order on that.
+that brings the data module up (`createServerWith`, named `serverOver`
+then; `createServer` is it over `buildData`), and the test holds the order
+on that.
 
 Where a reviewer's finding was not as read: none. Each was reproduced as
 described.
 
-Left by this round, each seen on the way and none of them asked for:
+Left by this round, each seen on the way and none of them asked for. The
+first two are closed by the round after it:
 
-- Within one change's walk the living shells are asked one after another, so
-  a principal whose roles are never answered holds the shells after theirs
-  for that change. The next change walks all of them again. Asking all at
-  once would resolve every principal of a host in one moment, which is what
-  the walk is one at a time to avoid.
-- `initSessions`, `revokeSession` and `sessionOf` are still in
+- Within one change's walk the living shells were asked one after another, so
+  a principal whose roles are never answered held the shells after theirs
+  for that change.
+- `initSessions`, `revokeSession` and `sessionOf` were still in
   `src/identity/sessions.ts`. The verifier calls the third; only the tests
-  call the first two.
+  called the first two.
 - `mintSession` on a database that still has a `sessions` table from an
   earlier time, under a verifier of the app's own, succeeds, and mints a token
   nobody verifies. The call is handed a pool and cannot know what the runtime
@@ -1243,3 +1321,154 @@ whom. Tide has the 13 files and 235 tests it had. The lab apps' checks were
 run again on the built result, each as its own process, one at a time: 126 of
 133, the same seven failing as in Part 9 (encore 13 of 13, lyceum 17 of 18,
 atrium 18 of 19, relay 28 of 32, lyra 50 of 51).
+
+**After the second review, fixes: round 2 (2026-10-11).** What the second
+review left once round 1 had closed its defects of behaviour: a gate rule,
+statements that said more than the code, names, what a door exports, what the
+record of the API misses, and what round 1 had listed as left. Each was
+reproduced before anything was changed. A commit renames or changes
+behaviour, never both; no new test starts a database or calls
+`createServer`.
+
+- **A gate rule passed on a substring** (`c0404a2`). `check:modules` asked
+  whether a door's comment contained a file's name: `./shell-session.ts`
+  contains `session.ts`, so a new `shells/session.ts` passed, and so did
+  `data/entries.ts` and `identity/cookie.ts`. Added to the real tree, all
+  three now fail. And an import written `'..\\identity\\cache'`, which
+  TypeScript reads as a path, was one name with no slash to the gate, a file
+  of the importer's own module: it is refused. Each has its pair in the
+  self-test, written first and seen to fail ("the bad one did not fail …: it
+  failed nothing").
+- **A door exports what another module takes** (`622768f`, `850e9ae`). The
+  ten doors of the core exported 157 names, counted by reading every
+  `import { … }`, `export { … } from` and `import('…').Name` that names a
+  door; 42 were taken by no file outside their module (shells 12 of 17,
+  documents 7 of 13, data 6 of 15, manifest 6 of 30, identity 5 of 28, socket
+  4 of 9, runtime 2 of 12). They came off, and the eleven files under `test/`
+  that took one through a door import the file that declares it. The rule is
+  the gate's ninth: a door that is not an entry point exports only names that
+  a file in another module, or at the top of `src/`, writes beside the door's
+  path. A namespace import takes no name, a test is not a taker, and `export
+  *` on such a door fails. Four pairs. Moss: 115 names of 10 doors.
+- **Names** (`2c0dacb`, `76bbd06`, `36e4916`). Each name the review listed
+  was looked for at `9e88009`. What the code had before the refactor stays:
+  `Live` and `Cell` (`shells.ts`), `drawnWith` (in 0.4.0), `mintWrites`
+  (exported then), and `marks.ts`, whose table was `const marks` in
+  `terminal/ink/index.ts`. What the refactor introduced is renamed, through
+  the TypeScript language service, in commits that only rename:
+  `Standing` → `ShellRef`; `standingOf` → `registrationOf`; `RoleHoldings` →
+  `RoleMemo`; `laidOver` → `mergedActions`; `narrowings` → `catalogFilters`;
+  `landBundle` → `writeBundle` (and `Landing` → `BundleImport`); `SaidOnce` →
+  `WarnedOnce`; `whoIsAsking` → `authenticateUpgrade`; `hearUpgrades` →
+  `listenForUpgrades`; `dataOver`, `serverOver`, `pointerOver`, `wireOver` →
+  `createDataWith`, `createServerWith`, `createPointer`,
+  `createInternalWire`; `wrappedBy` → `composeWireWraps`; `WriteLane` →
+  `WriteNotifier`; the files `shells/live.ts` → `host-state.ts` and
+  `socket/ending.ts` → `connection-close.ts` (with `Ending`, `endingOf` →
+  `ConnectionClose`, `closeOf`); and the three registry entries that carried
+  the words (`integrations/registration`, `integrations/write-bundle`,
+  `integrations/write-bundle-and-keep-key`: they are seeded into a cache in
+  memory at each start, so no row holds the old ones). Seven more that sat
+  beside those and had the same fault went with them (`whoIsCalling`, the
+  rest of the `…Over` family, three more `land…` names). The two types both called
+  `HostParts` are `HostState` (shells: what a host holds while it runs) and
+  `ShellHostsDeps` (server: what `buildShellHosts` is handed). **Two words
+  for what a function is handed**, by meaning: `…Config` is the argument of
+  something another module or an app calls, and `…Deps` is what a module's
+  own code hands one of its own parts, the word nova, tide and the style
+  guide's own example already use. So the server's seven `…Parts`, the
+  client's one, and six `…Config` that were handed inside one module are
+  `…Deps`; `Parts` is gone as a suffix. **The module `tide` keeps its
+  name**: it is named for the entry point it ships from,
+  `@niscorp/moss/tide`, which apps import and which is named as `./node` and
+  `./vite` are, and its door says so. Nothing exported was renamed.
+- **The record of the API** (`32c6354`). `api.txt` held one level of members
+  for each exported type, and none for a type that is reached and not
+  exported by name: `ShellSession`, `SocketAccept`, `Catalog`,
+  `ManifestReport`, `ShellReport`, `TablesReport`. `check:api` follows each
+  exported signature now (what a function takes and answers, each member's
+  type, through a union, a promise, a list and an object written in place)
+  and records the members of each type the package declares under a name and
+  no entry exports, in brackets: `. (ShellSession).attach`. 66 members of 22
+  types, a type counted for each entry that reaches it. Five pairs. Not
+  followed: a type a reached type's own member takes, and a type with no
+  name that is not written out in the package.
+- **Each living shell adopts on its own** (`5a7be2d`), which round 1 had
+  left. Two tests, red first and red again on a copy with the fix out
+  (`expected ['home', 'extra'] to deeply equal ['home']`; the two that fail
+  of the file's 91). What it costs is said where it is written and in
+  `DOCS.md` and the changeset: a change asks about every living shell in the
+  same moment, so an app's `identity` runs at once for every signed-in
+  principal whose record is not held.
+- **`initSessions` and `revokeSession` are gone** (`a8c5169`), with the two
+  tests that were theirs alone; the other tests make the table as a server
+  does. That the sessions sequence runs twice is held where a server reaches
+  it (`migrate.test.ts`). One credential statement fewer: five.
+- **What `signInFromNetwork` opens** (`2abebc0`). The refusal of another
+  site's page reads `Sec-Fetch-Site`, which a browser sends only to an
+  address it trusts. Run in Chrome on this machine, from a page on
+  `127.0.0.1`: an image of `localhost` carried `cross-site`; the same image
+  of the machine's network address over plain http carried no
+  `Sec-Fetch-Site`, no `Origin`, and no `Referer` once the page asked for it
+  to be left off. Without the option that request is refused by where it
+  comes from (it arrived from the network address, not from loopback). With
+  it, a page of any site in a browser on any device that reaches the dev
+  server signs that browser in as whoever it names. No check was added: none
+  would be complete. The option's comment, `DOCS.md` and the changeset say
+  what it opens.
+- **Where the entries are held** (`f691194`). Five statements said one
+  holder; the code has two, and was left as Part 10 leaves it. The running
+  manifest's list is the source; it is copied once into vex's cache; a
+  replay and `fingerprints()` resolve in the cache; and the cache holds what
+  the list does not (a query `answerIntent` wrote, any row from before this
+  boot: run, a cache seeded with two entries and then with one still held
+  both). Said the same way in ten files of `src/`, `DESIGN.md`, `DOCS.md`,
+  the changeset, and Part 10, which gains what the artifactory will still
+  change outside `manifest`.
+- **This plan.** Part 9, item 5 said where `createServer` was two rounds ago,
+  and item 2 said the other steps take a `Pick` where `ServerDeps` holds
+  both whole: both say what is so, and item 2 states the exception. The
+  table above is the tree as it stands. The status at the top is twelve
+  lines, and the headings of this part name rounds of fixes after a review,
+  which is what each was.
+
+`pnpm check:postgres` was run again on a real Postgres, because the engine
+of a feature's own entries and the registry changed after it last ran:
+PostgreSQL 18.4, the `embedded-postgres` package in a folder outside the
+repository, on a spare port. 13 checks passed in 11.8 s: tide's store
+contract (21 of 21), a serial group claimed by two pools (300 rounds, and 150
+with four claims from each: one task held every time), the generation
+pointer moved by two processes (800 moves, the counter on by 800, none said
+to have failed), `migrateTables` on an empty database (5 migrations) and
+again (none), a registration in one transaction, two first registrations of
+one integration at once (100 rounds: no key answered that the row does not
+hold), and an approval served by the other process.
+
+Where a reviewer's finding was not as read: none was wrong. Two were counted
+differently here. The review counted 42 of 155 names on the core's doors and
+11 of 16 on the shells'; counted as above it is 42 of 157 and 12 of 17. And
+the statements about where the entries are held were five, three of them in
+`src/`; the same claim, or half of it, was in seven more files of `src/`,
+and those say what is so too.
+
+Left by this round:
+
+- `mintSession` under a verifier of the app's own, on a database that still
+  has a `sessions` table, and the introspection each of moss's own engines
+  makes at boot: both as round 1 left them, above.
+- Names that were not on the review's list and were not renamed:
+  `whileUnderWay`, `inForce`, `narrowedBy` and `ShellHostConfig.kept` inside
+  moss; and in the API, `FeatureSeams.endlessChains` (nova's word for what it
+  finds is a runaway chain) and `layoutMisfits` (vex publishes
+  `mutationMisfits`, the same word for the same thing). The metaphors the
+  API had in 0.4.0 stay: `nudge`, `fabric`, `wearable`, `seal`,
+  `offerToken`, `drawnWith`, `storePress`, `owned`.
+- `check:api` records one level: a type a reached type's member takes
+  (`ShellConnection`, which `ShellSession.attach` takes) has no lines.
+- `check:modules` holds that a name on a door is taken, not that it belongs
+  there: one needless import keeps it.
+
+Counted after it: the table at the top of this part. The lab apps' checks
+were run again on the built result, each as its own process, one at a time:
+126 of 133, the same seven failing as in Part 9 (encore 13 of 13, lyceum
+17 of 18, atrium 18 of 19, relay 28 of 32, lyra 50 of 51).
