@@ -62,6 +62,22 @@
 //      between them: a sentence about the code that nothing held. A name is
 //      matched whole: `./shell-session.ts` does not name a `session.ts`.
 //
+// AND ONE IS ABOUT WHAT A DOOR IS FOR:
+//
+//   9. A DOOR EXPORTS WHAT ANOTHER MODULE TAKES. A door is a module's
+//      interface to the other modules, so a name no file outside the module
+//      takes from it is not part of it. Moss's ten core doors exported 157
+//      names and 42 of them were taken by nothing (shells: 12 of 17). A TAKER
+//      is a file in another module, or at the top of `src/`, that writes the
+//      name beside the door's path: `import { name } from '../door'`,
+//      `export { name } from '../door'`, or `import('../door').name` as a
+//      type. A namespace import, a `require` and an awaited `import()` take
+//      no name, so a door cannot be kept wide by importing all of it. A test
+//      is not a taker: it may import the file that declares what it needs,
+//      and a name only a test wants stays behind the door. A door that is an
+//      entry point of the package (`./<module>` in `exports`) is not held by
+//      this: an app takes its names, and `check:api` records them.
+//
 // A file still flat may be imported by anything while it exists; that is what
 // being in the middle of a move looks like. A module named in `finished` is no
 // longer in the middle of it: everything it needs is a module, so a flat file
@@ -69,9 +85,11 @@
 // the server's files and rule 3 would not see it.
 //
 // WHAT THIS CANNOT SEE. It reads imports, not what is done with them.
-//   - A module's door may export anything from inside it. That is what a door
-//     is, and what it should export is a review's question (rules 3 and 4 of
-//     "Changing a package": one owner, narrow inputs).
+//   - Whether a name a door exports should be one. It holds that somebody
+//     takes it, which one needless import satisfies; what belongs in a
+//     module's interface is a review's question (rules 3 and 4 of "Changing a
+//     package": one owner, narrow inputs). Nor does it read what an entry
+//     point's door exports: that is `check:api`.
 //   - Code that loads code without the words above: `eval`, `new Function`, a
 //     file read and run, a worker started on a path.
 //   - What another package hands back. A dependency that re-exported this
@@ -153,6 +171,8 @@ type Source = {
   // the package's own name, and the packages its package.json lets it import
   name: string;
   dependencies: readonly string[];
+  // the modules whose door is an entry point: `./<module>` in `exports`
+  entries: readonly string[];
   // every file under src/, by its path from src/ with forward slashes
   files: ReadonlyMap<string, string>;
   // what sits under src/ and is neither a file nor a directory: a link
@@ -181,6 +201,7 @@ const sourceOf = (root: string): Source => {
   return {
     name: typeof manifest['name'] === 'string' ? manifest['name'] : '',
     dependencies: [...Object.keys(fieldsOf(manifest['dependencies'])), ...Object.keys(fieldsOf(manifest['peerDependencies']))],
+    entries: Object.keys(fieldsOf(manifest['exports'])).map((key) => key.replace(/^\.\//, '')),
     files,
     links,
   };
@@ -191,11 +212,16 @@ const sourceOf = (root: string): Source => {
 type Imports = {
   // every other file or package the file names, as written
   specifiers: string[];
+  // every name the file takes from one of them, written beside its path
+  taken: { specifier: string; name: string }[];
   // every load this check cannot follow, as a few words saying which
   unreadable: string[];
 };
 
 const written = (node: ts.Node | undefined): string | undefined => (node !== undefined && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) ? node.text : undefined);
+
+// `import('…').Outer.Inner` takes `Outer` from the file.
+const leftmost = (name: ts.EntityName): string => (ts.isIdentifier(name) ? name.text : leftmost(name.left));
 
 // `import(…)`, `require(…)`, `module.require(…)`: a call that loads what its
 // first argument names.
@@ -205,13 +231,32 @@ const loads = (callee: ts.Expression): boolean =>
 const importsOf = (path: string, text: string): Imports => {
   const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, path.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const specifiers: string[] = [];
+  const taken: Imports['taken'] = [];
   const unreadable: string[] = [];
   const take = (node: ts.Node | undefined, what: string): void => {
     const specifier = written(node);
     if (specifier === undefined) unreadable.push(`${what} of a path that is not written out`);
     else specifiers.push(specifier);
   };
+  const takes = (from: ts.Node | undefined, names: readonly string[]): void => {
+    const specifier = written(from);
+    if (specifier !== undefined) for (const name of names) taken.push({ specifier, name });
+  };
   const visit = (node: ts.Node): void => {
+    // The names written beside a path: `import { a }`, `export { a } from`,
+    // `import('…').a`. Under the name the other file gives it, not a local one.
+    if (ts.isImportDeclaration(node)) {
+      const bindings = node.importClause?.namedBindings;
+      const named = bindings !== undefined && ts.isNamedImports(bindings) ? bindings.elements.map((element) => (element.propertyName ?? element.name).text) : [];
+      takes(node.moduleSpecifier, [...(node.importClause?.name === undefined ? [] : ['default']), ...named]);
+    }
+    if (ts.isExportDeclaration(node) && node.exportClause !== undefined && ts.isNamedExports(node.exportClause)) {
+      takes(
+        node.moduleSpecifier,
+        node.exportClause.elements.map((element) => (element.propertyName ?? element.name).text),
+      );
+    }
+    if (ts.isImportTypeNode(node) && node.qualifier !== undefined) takes(ts.isLiteralTypeNode(node.argument) ? node.argument.literal : undefined, [leftmost(node.qualifier)]);
     if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier !== undefined) take(node.moduleSpecifier, 'an import');
     if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) take(node.moduleReference.expression, 'an `import =`');
     if (ts.isImportTypeNode(node)) take(ts.isLiteralTypeNode(node.argument) ? node.argument.literal : undefined, 'an `import()` type');
@@ -230,7 +275,31 @@ const importsOf = (path: string, text: string): Imports => {
   // `/// <reference path="…" />` names a file; `types="…"` names a package.
   for (const reference of source.referencedFiles) specifiers.push(reference.fileName.startsWith('.') ? reference.fileName : `./${reference.fileName}`);
   for (const reference of source.typeReferenceDirectives) specifiers.push(reference.fileName);
-  return { specifiers, unreadable: [...new Set(unreadable)] };
+  return { specifiers, taken, unreadable: [...new Set(unreadable)] };
+};
+
+// ─── what a door exports ─────────────────────────────────────
+
+const boundNames = (name: ts.BindingName): string[] => (ts.isIdentifier(name) ? [name.text] : name.elements.flatMap((element) => (ts.isBindingElement(element) ? boundNames(element.name) : [])));
+
+const exported = (statement: ts.Statement): boolean => ts.canHaveModifiers(statement) && (ts.getModifiers(statement) ?? []).some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword);
+
+// The names a door exports, however each is written, and whether it exports
+// any that cannot be listed from the file (`export *`).
+const exportsOf = (path: string, text: string): { names: string[]; unlisted: boolean } => {
+  const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const names = source.statements.flatMap((statement): string[] => {
+    if (ts.isExportDeclaration(statement)) {
+      if (statement.exportClause === undefined) return [];
+      return ts.isNamedExports(statement.exportClause) ? statement.exportClause.elements.map((element) => element.name.text) : [statement.exportClause.name.text];
+    }
+    if (ts.isExportAssignment(statement)) return ['default'];
+    if (!exported(statement)) return [];
+    if (ts.isVariableStatement(statement)) return statement.declarationList.declarations.flatMap((declaration) => boundNames(declaration.name));
+    const declares = ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement) || ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement) || ts.isEnumDeclaration(statement);
+    return declares && statement.name !== undefined ? [statement.name.text] : [];
+  });
+  return { names: [...new Set(names)], unlisted: source.statements.some((statement) => ts.isExportDeclaration(statement) && statement.exportClause === undefined) };
 };
 
 // `@scope/name/deep` and `name/deep` are the packages `@scope/name` and `name`.
@@ -325,10 +394,27 @@ const judge = (shape: Shape, source: Source): Held[] => {
     if (inner) deep.push(`${file} imports ${target}`);
   };
 
+  // Which module's door a relative path names, when it names one.
+  const doorNamed = (file: string, specifier: string): string | undefined => {
+    const parts = posix
+      .normalize(posix.join(posix.dirname(file), specifier))
+      .replace(/\/$/, '')
+      .split('/');
+    const module = parts[0] ?? '';
+    const door = (parts.length === 1 && isDirectory(module)) || (parts.length === 2 && parts[1] === 'index');
+    return door && directories.includes(module) ? module : undefined;
+  };
+  // module → the names a file outside it takes from its door
+  const takenFrom = new Map<string, Set<string>>();
+
   for (const [file, text] of source.files) {
     if (!READ.test(file)) continue;
     const imports = importsOf(file, text);
     for (const what of imports.unreadable) unreadable.push(`${file} has ${what}`);
+    for (const { specifier, name } of imports.taken) {
+      const module = specifier.startsWith('.') && !specifier.includes('\\') ? doorNamed(file, specifier) : undefined;
+      if (module !== undefined && !file.startsWith(`${module}/`)) takenFrom.set(module, (takenFrom.get(module) ?? new Set<string>()).add(name));
+    }
     for (const specifier of imports.specifiers) {
       // TypeScript reads `..\low\low` as `../low/low`. Read here, it would be
       // one name with no slash in it: a file of the importer's own module.
@@ -355,6 +441,14 @@ const judge = (shape: Shape, source: Source): Held[] => {
     const behind = new Set(paths.filter((path) => path.startsWith(`${directory}/`)).map((path) => path.slice(directory.length + 1).split('/')[0] ?? ''));
     return [...behind].filter((name) => name !== 'index.ts' && !names(said, name)).map((name) => `${directory}/index.ts does not name ${name}`);
   });
+  // A DOOR EXPORTS WHAT ANOTHER MODULE TAKES: each name a door exports is
+  // written beside that door's path by a file outside the module. Not asked of
+  // a door that is an entry point of the package.
+  const doors = directories.filter((directory) => !source.entries.includes(directory)).map((directory) => ({ door: `${directory}/index.ts`, takers: takenFrom.get(directory), ...exportsOf(`${directory}/index.ts`, source.files.get(`${directory}/index.ts`) ?? '') }));
+  const untaken = doors.flatMap(({ door, names: exports, unlisted, takers }) => [
+    ...(unlisted ? [`${door} has \`export *\`, whose names cannot be listed`] : []),
+    ...exports.filter((name) => takers?.has(name) !== true).map((name) => `${door} exports ${name}`),
+  ]);
   const unknown = [
     ...Object.entries(shape.modules).flatMap(([module, needs]) => needs.filter((need) => shape.modules[need] === undefined).map((need) => `${module} names ${need}`)),
     ...shape.finished.filter((module) => shape.modules[module] === undefined).map((module) => `finished names ${module}`),
@@ -376,6 +470,14 @@ const judge = (shape: Shape, source: Source): Held[] => {
     { label: 'every directory in src/ is a declared module', passed: undeclared.length === 0, detail: undeclared.join(', ') },
     { label: 'every module has an index.ts', passed: doorless.length === 0, detail: doorless.join(', ') },
     { label: "a module's door names every file behind it", passed: unnamed.length === 0, detail: some(unnamed) },
+    {
+      label: 'a door exports only names another module takes',
+      passed: untaken.length === 0,
+      detail:
+        untaken.length === 0
+          ? `${doors.reduce((sum, door) => sum + door.names.length, 0)} names of ${doors.length} doors`
+          : `${some(untaken)}${untaken.length > 6 ? `; and ${untaken.length - 6} more` : ''} — nothing outside the module imports it by name: take it off the door (a test imports the file that declares it)`,
+    },
     { label: 'every dependency named is a module', passed: unknown.length === 0, detail: unknown.join('; ') },
     { label: 'the modules have no cycle', passed: cycle === undefined, detail: cycle ?? `${Object.keys(shape.modules).length} modules` },
     { label: 'a module, and the top of src/, imports a module by its door', passed: deep.length === 0, detail: some(deep) },
@@ -406,7 +508,7 @@ const FIXTURE: Readonly<Record<string, string>> = {
   'low/index.ts': "// ./low.ts is the module. A case may add ./f.ts, ./f.tsx, ./t.ts or ./flat.ts beside it.\nexport { low } from './low';\nexport type { Low } from './low';\n",
   'low/low.ts': 'export type Low = { n: number };\nexport const low = (): Low => ({ n: 1 });\n',
   'high/index.ts': "// ./high.ts is the module. A case may add ./f.ts or ./t.ts beside it.\nexport { high } from './high';\n",
-  'high/high.ts': "import { low } from '../low';\nexport const high = (): number => low().n;\n",
+  'high/high.ts': "import { low } from '../low';\nimport type { Low } from '../low';\nexport const high = (): number => {\n  const made: Low = low();\n  return made.n;\n};\n",
   'extra/index.ts': "import { low } from '../low';\nexport const extra = (): number => low().n;\n",
 };
 
@@ -418,6 +520,7 @@ const FLAT = 'no new file at the top of src/';
 const RELATIVE = 'the package is imported by a relative path, and other packages are ones package.json names';
 const READABLE = 'every import is one this check can read';
 const NAMED = "a module's door names every file behind it";
+const TAKEN = 'a door exports only names another module takes';
 
 type Case = { what: string; fails: string; bad: Readonly<Record<string, string>>; good: Readonly<Record<string, string>> };
 
@@ -562,7 +665,7 @@ const DOOR_CASE: Case = {
   what: 'a file its module\'s door does not name',
   fails: NAMED,
   bad: { 'low/more.ts': 'export const more = 1;\n' },
-  good: { 'low/more.ts': 'export const more = 1;\n', 'low/index.ts': "// ./low.ts is the module, and ./more.ts is one more.\nexport { low } from './low';\n" },
+  good: { 'low/more.ts': 'export const more = 1;\n', 'low/index.ts': "// ./low.ts is the module, and ./more.ts is one more.\nexport { low } from './low';\nexport type { Low } from './low';\n" },
 };
 
 // The door names `./low.ts`. That is not naming `./w.ts`, though the one name
@@ -571,8 +674,37 @@ const DOOR_NAME_CASE: Case = {
   what: 'a file whose name is the end of one its door does name (`w.ts` beside `./low.ts`)',
   fails: NAMED,
   bad: { 'low/w.ts': 'export const more = 1;\n' },
-  good: { 'low/w.ts': 'export const more = 1;\n', 'low/index.ts': "// ./low.ts is the module, and ./w.ts is one more.\nexport { low } from './low';\n" },
+  good: { 'low/w.ts': 'export const more = 1;\n', 'low/index.ts': "// ./low.ts is the module, and ./w.ts is one more.\nexport { low } from './low';\nexport type { Low } from './low';\n" },
 };
+// What a door exports is what another module takes. The door of `extra` is an
+// entry point of the fixture, and is not asked.
+const LOW_DOOR = "// ./low.ts is the module. ./f.ts holds one more name, and a case may add ./t.ts.\nexport { low } from './low';\nexport type { Low } from './low';\n";
+const TAKEN_CASES: readonly Case[] = [
+  {
+    what: 'a name on a door that no other module takes',
+    fails: TAKEN,
+    bad: { 'low/f.ts': 'export const spare = 1;\n', 'low/index.ts': `${LOW_DOOR}export { spare } from './f';\n` },
+    good: { 'low/f.ts': 'export const spare = 1;\n', 'low/index.ts': `${LOW_DOOR}export { spare } from './f';\n`, 'high/f.ts': "import { spare } from '../low';\nexport const twice = spare * 2;\n" },
+  },
+  {
+    what: 'a name on a door that only its own module takes from it',
+    fails: TAKEN,
+    bad: { 'low/f.ts': 'export const spare = 1;\n', 'low/t.ts': "export { spare } from '.';\n", 'low/index.ts': `${LOW_DOOR}export { spare } from './f';\n` },
+    good: { 'low/f.ts': 'export const spare = 1;\n', 'low/t.ts': "export { spare } from './f';\n", 'low/index.ts': LOW_DOOR },
+  },
+  {
+    what: 'a door kept wide by a namespace import of all of it',
+    fails: TAKEN,
+    bad: { 'low/f.ts': 'export const spare = 1;\n', 'low/index.ts': `${LOW_DOOR}export { spare } from './f';\n`, 'high/f.ts': "import * as all from '../low';\nexport const twice = all.spare * 2;\n" },
+    good: { 'low/f.ts': 'export const spare = 1;\n', 'low/index.ts': `${LOW_DOOR}export { spare } from './f';\n`, 'high/f.ts': "export type Spare = typeof import('../low').spare;\n" },
+  },
+  {
+    what: "a door that exports `*`, whose names cannot be listed",
+    fails: TAKEN,
+    bad: { 'low/f.ts': 'export const spare = 1;\n', 'low/index.ts': `${LOW_DOOR}export * from './f';\n`, 'high/f.ts': "import { spare } from '../low';\nexport const twice = spare * 2;\n" },
+    good: { 'low/f.ts': 'export const spare = 1;\n', 'low/index.ts': `${LOW_DOOR}export { spare as other } from './f';\n`, 'high/f.ts': "import { other as spare } from '../low';\nexport const twice = spare * 2;\n" },
+  },
+];
 const BACKSLASH_CASE: Case = {
   what: "another module's inner file, named with backslashes: `'..\\\\low\\\\low'`",
   fails: READABLE,
@@ -583,13 +715,14 @@ const BACKSLASH_CASE: Case = {
 const fixtureOf = (added: Readonly<Record<string, string>>, links: readonly string[] = []): Source => ({
   name: '@fixture/pkg',
   dependencies: ['zod'],
+  entries: ['.', 'extra'],
   files: new Map(Object.entries({ ...FIXTURE, ...added })),
   links,
 });
 const failing = (held: readonly Held[]): string[] => held.filter((one) => !one.passed).map((one) => one.label);
 
 ok('self-test: the package the cases are built on passes every rule', failing(judge(FIXTURE_SHAPE, fixtureOf({}))).length === 0, failing(judge(FIXTURE_SHAPE, fixtureOf({}))).join('; '));
-for (const one of [...CASES, DOOR_CASE, DOOR_NAME_CASE, BACKSLASH_CASE]) {
+for (const one of [...CASES, DOOR_CASE, DOOR_NAME_CASE, BACKSLASH_CASE, ...TAKEN_CASES]) {
   const bad = failing(judge(FIXTURE_SHAPE, fixtureOf(one.bad)));
   const good = failing(judge(FIXTURE_SHAPE, fixtureOf(one.good)));
   const caught = bad.includes(one.fails);
