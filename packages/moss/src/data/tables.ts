@@ -145,11 +145,43 @@ export const MOSS_SEQUENCE: Sequence = {
       steps: [{ kind: 'sql', sql: `CREATE UNIQUE INDEX integrations_key_hash_unique ON integrations (key_hash) WHERE key_hash IS NOT NULL` }],
     },
     // WHAT A BUNDLE SAYS IN THE HOST APP'S OWN VOCABULARY is one value the app
-    // reads with a schema of its own (../integrations): moss keeps it and reads
-    // nothing inside it. No value: the bundle carried none.
+    // reads with a schema of its own (../integrations): moss keeps it in
+    // `extension` and reads nothing inside it. No value: the bundle carried
+    // none. The columns that held one product's vocabulary go: a listing's
+    // words, what a bundle offered and needed, where its screens were placed.
+    // `IF EXISTS`, because migration 1 converges a table older than some of
+    // them.
     {
-      description: 'An integration keeps what its bundle says in the host app’s own vocabulary as one value',
-      steps: [{ kind: 'sql', sql: `ALTER TABLE integrations ADD COLUMN extension jsonb` }],
+      description: 'An integration keeps what its bundle says in the host app’s own vocabulary as one value, and the columns of one product’s vocabulary go',
+      steps: [
+        { kind: 'sql', sql: `ALTER TABLE integrations ADD COLUMN extension jsonb` },
+        {
+          kind: 'sql',
+          sql: `ALTER TABLE integrations
+  DROP COLUMN IF EXISTS title,
+  DROP COLUMN IF EXISTS tagline,
+  DROP COLUMN IF EXISTS description,
+  DROP COLUMN IF EXISTS story,
+  DROP COLUMN IF EXISTS highlights,
+  DROP COLUMN IF EXISTS press,
+  DROP COLUMN IF EXISTS adds,
+  DROP COLUMN IF EXISTS settings_action,
+  DROP COLUMN IF EXISTS offers,
+  DROP COLUMN IF EXISTS needs,
+  DROP COLUMN IF EXISTS capabilities,
+  DROP COLUMN IF EXISTS configuration,
+  DROP COLUMN IF EXISTS documents,
+  DROP COLUMN IF EXISTS assistants,
+  DROP COLUMN IF EXISTS frames`,
+        },
+        {
+          kind: 'sql',
+          sql: `ALTER TABLE integration_actions
+  DROP COLUMN IF EXISTS attach_to,
+  DROP COLUMN IF EXISTS preview,
+  DROP COLUMN IF EXISTS place_in`,
+        },
+      ],
     },
   ],
 };

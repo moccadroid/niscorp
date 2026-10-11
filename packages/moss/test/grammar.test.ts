@@ -132,8 +132,6 @@ describe('submitted documents — upgraded at intake', () => {
       ),
     endlessChains,
     fingerprints: new Set<string>(),
-    attachable: new Set<string>(),
-    menuSlots: new Set<string>(),
     upgrader: await createGrammarUpgrader({ grammars: [kit] }),
   });
 

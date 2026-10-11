@@ -6,11 +6,8 @@ import type { FeatureEnv, Replay } from '../feature';
 import { INTEGRATION_ID, INTEGRATION_ID_RULE } from './bundle';
 import type { Bundle } from './bundle';
 import { hashIntegrationKey, mintIntegrationKey } from './credentials';
-import { extensionContextOf, intakeContextOf, runIntake } from './intake';
-import type { ExtensionConfig, HostVocabulary } from './intake';
-import { describePlacements } from './placements';
-import { copyPress } from './press';
-import type { StorePress } from './press';
+import { extensionContextOf, runIntake } from './intake';
+import type { ExtensionConfig, IntakeContext } from './intake';
 import { reachDeclares } from './reach';
 import { approveIntegration, findIntegration, writeBundle, listIntegrations, recordFailedImport, removeIntegration, setBackToPending, registrationOf, storedActionsOf } from './registry';
 
@@ -51,35 +48,32 @@ export type OperatorDeps<Extension = undefined> = {
   grammars: Upgrader;
   // Every fingerprint the app serves: what an endpoint may name.
   fingerprints: () => Promise<readonly string[]>;
-  // What the host offers a bundle to name (./intake.ts).
-  vocabulary: HostVocabulary;
+  // The host's two answers about what a bundle ships: whether a layout fits
+  // the kit, and which chains of steps never end (./intake.ts).
+  layoutMisfits: IntakeContext['layoutMisfits'];
+  endlessChains: IntakeContext['endlessChains'];
   // The actions in force, and whether the app could be served with a given set.
   actions: () => Actions;
   refusalOf: (actions: Actions) => string | undefined;
   // Read the approved integrations' actions again and hand them to the running
   // manifest. Throws when the app could not be served with them.
   reload: () => Promise<void>;
-  // The host's words for its own hubs and screens, for the placement sentence.
-  placementNames: Readonly<Record<string, string>>;
-  // Where a press image lands. Absent: a bundle that declares press is refused.
-  storePress: StorePress | undefined;
-  // How long a call out may take, in ms (the bundle fetched at registration,
-  // the probe, one press image), and how large one press image may be.
+  // How long a call out may take, in ms: the bundle fetched at registration,
+  // and the probe.
   timeoutMs: number;
-  pressMaxBytes: number;
 };
 
 // A bundle that may land, or why it may not: what to keep on the row, and
 // what to answer.
 type Taken =
-  | { ok: true; bundle: Bundle; press: readonly string[]; extension: unknown }
+  | { ok: true; bundle: Bundle; extension: unknown }
   | { ok: false; error: string; status: 422 | 502; answer: { message: string; reasons?: string[] } };
 
 const refused = (reasons: string[]): Taken => ({ ok: false, error: reasons.join('; '), status: 422, answer: { message: 'Refused.', reasons } });
 
-// FETCH, THEN THE GATE, THEN THE PRESS, THEN THE APP'S `prepare`. Nothing is
-// written here: a bundle that is refused at any of the four leaves the last
-// good import serving.
+// FETCH, THEN THE GATE, THEN THE APP'S `prepare`. Nothing is written here: a
+// bundle that is refused at any of the three leaves the last good import
+// serving.
 const takeIn = async <Extension>(deps: OperatorDeps<Extension>, id: string, url: string): Promise<Taken> => {
   let payload: unknown;
   try {
@@ -92,24 +86,24 @@ const takeIn = async <Extension>(deps: OperatorDeps<Extension>, id: string, url:
     return { ok: false, error: 'the service did not answer with a bundle', status: 502, answer: { message: 'The integration did not answer with a bundle.' } };
   }
 
-  const fingerprints = new Set(await deps.fingerprints());
-  const context = { ...intakeContextOf(deps.vocabulary, id, fingerprints, deps.grammars), url, hostActions: deps.actions() };
+  const context = {
+    integrationId: id,
+    url,
+    layoutMisfits: deps.layoutMisfits,
+    endlessChains: deps.endlessChains,
+    fingerprints: new Set(await deps.fingerprints()),
+    upgrader: deps.grammars,
+    hostActions: deps.actions(),
+  };
   const result = runIntake(payload, { ...context, ...(deps.extension === undefined ? {} : { extension: deps.extension }) });
   if (!result.ok) return refused(result.reasons);
-
-  // Press crosses HERE — after the gate, before the candidate is
-  // verified — so a press refusal leaves the app exactly as it
-  // found it. Blobs written before a later refusal are orphans in the
-  // host's store, which is cheaper than any coherence they could buy.
-  const press = await copyPress(result.bundle, id, url, { store: deps.storePress, timeoutMs: deps.timeoutMs, maxBytes: deps.pressMaxBytes });
-  if (!press.ok) return refused(press.reasons);
 
   // The app's own step, for an extension that is there: what it answers is
   // what the row keeps. One that throws refuses the bundle whole.
   const prepare = deps.extension?.prepare;
-  if (prepare === undefined || result.extension === undefined) return { ok: true, bundle: result.bundle, press: press.urls, extension: result.extension };
+  if (prepare === undefined || result.extension === undefined) return { ok: true, bundle: result.bundle, extension: result.extension };
   try {
-    return { ok: true, bundle: result.bundle, press: press.urls, extension: await prepare(result.extension, extensionContextOf(result.bundle, context)) };
+    return { ok: true, bundle: result.bundle, extension: await prepare(result.extension, extensionContextOf(result.bundle, context)) };
   } catch (error) {
     return refused([`extension: ${String(error)}`]);
   }
@@ -162,8 +156,6 @@ const register = <Extension>(deps: OperatorDeps<Extension>, routes: Hono<Feature
       id,
       url,
       bundle: taken.bundle,
-      adds: describePlacements(taken.bundle, deps.placementNames),
-      press: taken.press,
       extension: taken.extension,
       stamp: deps.grammars.stamp,
       ...(key === undefined ? {} : { keyHash: hashIntegrationKey(key) }),

@@ -34,15 +34,9 @@ const everyRow = async <Row>(row: z.ZodType<Row>, page: (after: Row | undefined)
   return rows.length < PAGE || last === undefined ? rows : [...rows, ...(await everyRow(row, page, last))];
 };
 
-// A ROW, READ WHERE IT LEAVES THE DATABASE. What a bundle declared (its
-// capabilities, its documents) is carried here and never read: each is held to
-// being a list of objects and no further, and one that is not reads as empty.
-const text = z
-  .string()
-  .nullish()
-  .transform((value) => value ?? '');
+// A ROW, READ WHERE IT LEAVES THE DATABASE. A list of names that is not one
+// reads as empty.
 const strings = z.array(z.string()).catch([]);
-const carried = z.array(z.record(z.string(), z.unknown())).catch([]);
 
 // What the proxy may forward, as the row holds it. A row whose column holds
 // another shape admits nothing, which is what an empty one says.
@@ -66,8 +60,6 @@ const afterAction = (last: { integration_id: string; action_id: string } | undef
   after_action: last?.action_id ?? '',
 });
 
-const AttachmentRowSchema = z.object({ ...actionKey, preview: text });
-const PlacementRowSchema = z.object({ ...actionKey, place_in: z.string() });
 const StoredActionRowSchema = z.object({ ...actionKey, definition: z.unknown(), grammar: z.unknown() });
 
 // A count is a bigint, which one driver hands back as a number and another as
@@ -79,24 +71,13 @@ const ListedRowSchema = z
     id: z.string(),
     url: z.string(),
     status: z.string(),
-    title: text,
-    tagline: text,
-    adds: text,
-    settings_action: text,
     requested_actions: strings,
     requested_data: strings,
     approved_data: strings,
-    offers: strings,
-    needs: strings,
-    capabilities: carried,
-    configuration: carried,
-    documents: carried,
-    assistants: carried,
     extension: z.unknown(),
-    // A TIMESTAMP IS NOT ALWAYS A DATE. Different drivers hand back a Date, an
-    // ISO string, or a number for the same column — PGlite returns a string
-    // here, so the Date-only branch this had made every row read 'never', on a
-    // field whose entire job is saying when it last worked.
+    // A TIMESTAMP IS NOT ALWAYS A DATE. Drivers hand back a Date, an ISO
+    // string or a number for the same column (PGlite returns a string), so
+    // each is read as the instant it names.
     last_import_at: z.unknown().transform((at) => (at instanceof Date ? at.getTime() : typeof at === 'string' || typeof at === 'number' ? new Date(at).getTime() : null)),
     last_error: z.string().nullish(),
   })
@@ -104,26 +85,17 @@ const ListedRowSchema = z
     id: row.id,
     url: row.url,
     status: row.status,
-    title: row.title,
-    tagline: row.tagline,
-    adds: row.adds,
-    settingsAction: row.settings_action,
     requestedActions: row.requested_actions,
     requestedData: row.requested_data,
     approvedData: row.approved_data,
-    offers: row.offers,
-    needs: row.needs,
-    capabilities: row.capabilities,
-    configuration: row.configuration,
-    documents: row.documents,
-    assistants: row.assistants,
     extension: row.extension ?? null,
     lastImportAt: row.last_import_at,
     lastError: row.last_error ?? null,
   }));
 
 // One integration as the operator's list shows it. `status` is what the row
-// says ('pending', 'approved'); the declarations are as they were imported.
+// says ('pending', 'approved'); `extension` is what the row keeps of the host
+// app's own vocabulary, as it was stored (null: none).
 export type IntegrationRow = z.infer<typeof ListedRowSchema> & { actionCount: number };
 
 // ── one integration: found, taken in, approved, removed ──────
@@ -158,11 +130,6 @@ export type BundleImport = {
   url: string;
   // the bundle intake let in
   bundle: Bundle;
-  // the sentence both decision screens print (./placements.ts)
-  adds: string;
-  // The urls the HOST answered with when the press was copied (./press.ts) —
-  // the declared paths died the moment the bytes crossed.
-  press: readonly string[];
   // What the row keeps of the host app's own vocabulary: the bundle's
   // `extension` as the app's schema read it and its `prepare` answered it.
   // `undefined`: none, and the row holds null.
@@ -178,46 +145,20 @@ export type BundleImport = {
 
 // The row a bundle is kept as: each column under its own name, as the entry
 // reads them.
-const importedRow = ({ id, url, bundle, adds, press, extension }: BundleImport): Record<string, unknown> => ({
+const importedRow = ({ id, url, bundle, extension }: BundleImport): Record<string, unknown> => ({
   id,
   url,
+  requested_actions: bundle.grants.actions,
+  requested_data: bundle.grants.data,
+  // Derived again on every import, so a screen an integration dropped takes
+  // its endpoint's reach with it: the list never only grows.
+  reach: reachOf(bundle, id),
+  // Its own words, in the languages it speaks: beside its actions, so the
+  // app's language pass reaches them.
+  phrasebook: bundle.phrasebook,
   // Handed over as JSON text, which the column reads as the value it spells:
   // a text handed over as itself would be read as JSON, and refused.
   extension: extension === undefined ? null : JSON.stringify(extension),
-  title: bundle.meta.title,
-  tagline: bundle.meta.tagline,
-  description: bundle.meta.description,
-  adds,
-  settings_action: bundle.settings,
-  requested_actions: bundle.grants.actions,
-  requested_data: bundle.grants.data,
-  // Re-derived on every import, so a screen an integration DROPPED takes its
-  // endpoint's reach with it. An allow-list that only ever grows is a
-  // list of everything the integration has ever been able to do.
-  reach: reachOf(bundle, id),
-  // The integration's own words, in the languages it speaks — stored beside
-  // its actions so the app's language pass can reach them, and
-  // re-imported whole like everything else about a bundle.
-  phrasebook: bundle.phrasebook,
-  story: bundle.meta.story,
-  highlights: bundle.meta.highlights,
-  press,
-  // What it tells and hears — carried, never read here; the host's bus
-  // is the consumer.
-  offers: bundle.offers,
-  needs: bundle.needs,
-  // The verbs it gates on — carried the same way; the host's role editor
-  // is the consumer.
-  capabilities: bundle.capabilities,
-  // What a builder may set — carried the same way; the host's per-product
-  // settings form is the consumer, and the delivery is the assertion's.
-  configuration: bundle.configuration,
-  // What an add-on lets a person edit — carried the same way; the host's
-  // editor is the consumer.
-  documents: bundle.documents,
-  // What an add-on's assistant knows — carried the same way; the host's
-  // assistant is the consumer.
-  assistants: bundle.assistants,
   // This process's clock: an entry takes its instant from whoever replays it.
   last_import_at: new Date().toISOString(),
 });
@@ -226,8 +167,6 @@ const importedRow = ({ id, url, bundle, adds, press, extension }: BundleImport):
 // actions in place of whatever it shipped before, and the hash of its key when
 // one is issued with the import. ONE BATCH, so one transaction (./entries.ts):
 // it lands whole, or what the import before it wrote is still there, whole.
-// They were separate statements, and one that failed part-way left a row that
-// said one thing over actions that said another, or over none.
 //
 // ANSWERS WHETHER THE KEY THIS IMPORT CAME WITH IS THE ONE THE ROW HOLDS. The
 // key is kept where the row held none (./entries.ts): `false` when the import
@@ -235,18 +174,8 @@ const importedRow = ({ id, url, bundle, adds, press, extension }: BundleImport):
 // the same moment, had its key kept first. The bundle landed either way.
 export const writeBundle = async (replay: Replay, imported: BundleImport): Promise<{ keptKey: boolean }> => {
   const { bundle } = imported;
-  const actions = Object.entries(bundle.actions).map(([actionId, definition]) => {
-    const binding = bundle.attachments[actionId];
-    return {
-      action_id: actionId,
-      definition,
-      attach_to: binding === undefined ? '' : typeof binding === 'string' ? binding : binding.to,
-      preview: binding === undefined || typeof binding === 'string' ? '' : binding.preview,
-      place_in: bundle.placements[actionId] ?? '',
-      // Stamped current: intake upgraded every definition to this code's grammars.
-      grammar: imported.stamp,
-    };
-  });
+  // Stamped current: intake upgraded every definition to this code's grammars.
+  const actions = Object.entries(bundle.actions).map(([actionId, definition]) => ({ action_id: actionId, definition, grammar: imported.stamp }));
   const said = { ...importedRow(imported), actions };
   if (imported.keyHash === undefined) {
     await replay('integrations/write-bundle', said);
@@ -282,23 +211,6 @@ export const setBackToPending = async (replay: Replay, id: string, why: string):
 // the row the key that was hashed on it.
 export const removeIntegration = async (replay: Replay, id: string): Promise<void> => {
   await replay('integrations/remove', { id });
-};
-
-// ── the bindings, read back for the host's derivations ───────
-//
-// Approved only, like everything else served from these tables. The app's own
-// functions consume these: a hub asks which placed screens it lists, a host
-// action asks which panels ride it. The app never parses a bundle.
-
-// In the order of the action ids, whichever integration each belongs to.
-export const listAttachments = async (replay: Replay, hostAction: string): Promise<{ actionId: string; preview: string }[]> => {
-  const rows = await everyRow(AttachmentRowSchema, (after) => replay('integrations/attachments', { attach_to: hostAction, ...afterAction(after) }));
-  return rows.map((row) => ({ actionId: row.action_id, preview: row.preview })).sort((a, b) => (a.actionId < b.actionId ? -1 : a.actionId > b.actionId ? 1 : 0));
-};
-
-export const listPlacements = async (replay: Replay): Promise<Record<string, string>> => {
-  const rows = await everyRow(PlacementRowSchema, (after) => replay('integrations/placements', afterAction(after)));
-  return Object.fromEntries(rows.map((row) => [row.action_id, row.place_in]));
 };
 
 // A presented key, resolved to the integration it names — or nothing.

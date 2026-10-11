@@ -50,8 +50,6 @@
 //     bundle.ts            — the grammar of what an integration publishes
 //     intake.ts            — the gate: a bundle lands whole or not at all
 //     reach.ts             — what a bundle may be called at, from what it declares
-//     press.ts             — a listing's images, copied once at intake
-//     placements.ts        — the sentence that says what appears where
 //     contract.ts          — what an author builds against: the components and
 //                            fingerprints the host offers, as JSON and Markdown
 //     operator.ts          — the operator's routes: register, approve, revoke
@@ -82,4 +80,3 @@ export { createIntegrations } from './feature';
 export type { Integrations, IntegrationsConfig } from './feature';
 export type { ExtensionConfig, ExtensionContext } from './intake';
 export type { RegisteredIntegration } from './registry';
-export type { StorePress } from './press';

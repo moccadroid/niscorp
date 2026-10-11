@@ -37,15 +37,12 @@ const ctx = (): IntakeContext => ({
     ),
   endlessChains,
   fingerprints: new Set<string>(),
-  attachable: new Set<string>(),
-  menuSlots: new Set<string>(),
 });
 
 // One action carrying one layout node, namespaced so only the props check can
 // fail it.
 const withLayout = (layout: unknown): unknown => ({
   integration: 'acme',
-  meta: {},
   actions: { 'ext.staff.acme.desk': { id: 'ext.staff.acme.desk', layout } },
 });
 

@@ -29,8 +29,8 @@ const PINNED: ReadonlyArray<[Sequence, number, string]> = [
   [MOSS_SEQUENCE, 2, '92bd612e35a830e2f58de2327451a8e3346e7bc102ab0b49777c349792894b1a'],
   // The unique index on an integration's key hash.
   [MOSS_SEQUENCE, 3, 'b05aa252f4f3b70dad03282552ac6b94c5d4e5012d964c23cb32fedbb4f8b60f'],
-  // An integration's `extension`: what its bundle says in the host app's own vocabulary.
-  [MOSS_SEQUENCE, 4, 'f77d8516226709fb23801a26dc6bd5c9834c7c0ea3d1ef0dfea178cb72844576'],
+  // An integration's `extension` comes, and the columns of one product's vocabulary go.
+  [MOSS_SEQUENCE, 4, 'd4fdae75451da4bb3d46c6b31c8ad1797f1c0a487eb85708f30c5d4e5e37ce5b'],
   [SESSIONS_SEQUENCE, 1, '83a62e0217940bfe62136052c18f730947355d20e481d9aceb76463251b33700'],
 ];
 
@@ -77,7 +77,7 @@ describe('boot — every owner through one ledger', () => {
     await pool.query(`CREATE TABLE integrations (id text PRIMARY KEY, url text NOT NULL, key_hash text, status text NOT NULL DEFAULT 'pending')`);
     await pool.query(`INSERT INTO integrations (id, url) VALUES ('acme', 'https://acme.example')`);
     await quietly(() => createServer(app, { pool, db: pool, session: 'dev-open' }));
-    const { rows } = await pool.query(`SELECT id, reach, assistants, phrasebook FROM integrations`);
-    expect(rows).toEqual([{ id: 'acme', reach: [], assistants: [], phrasebook: {} }]);
+    const { rows } = await pool.query(`SELECT id, reach, phrasebook, extension FROM integrations`);
+    expect(rows).toEqual([{ id: 'acme', reach: [], phrasebook: {}, extension: null }]);
   });
 });

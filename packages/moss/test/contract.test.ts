@@ -14,7 +14,7 @@ import type { ContractHost } from '../src/integrations/contract';
 // ═══════════════════════════════════════════════════════════════
 
 // What the contract is made of: the charter and the kit's components, as the
-// server hands them over, and the seats and hubs the app named.
+// server hands them over.
 const host: ContractHost = {
   charter: {},
   components: {
@@ -32,8 +32,6 @@ const host: ContractHost = {
     // No meta: the host handed moss a bare name, and the contract loses nothing.
     Plain: {},
   },
-  attachable: {},
-  menuSlots: [],
 };
 
 describe('buildContract — components carry description and props', () => {

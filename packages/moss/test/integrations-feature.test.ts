@@ -28,14 +28,13 @@ type Row = Record<string, unknown>;
 // is told by its fingerprint and the context it is replayed with. A write
 // answers nothing and is not kept.
 const replayOver =
-  (held: { keys?: Record<string, string>; stored?: Row[]; attached?: Row[]; found?: Record<string, Row> }): Replay =>
+  (held: { keys?: Record<string, string>; stored?: Row[]; found?: Record<string, Row> }): Replay =>
   async (fingerprint, context) => {
     if (fingerprint === 'integrations/by-key') {
       const id = Object.entries(held.keys ?? {}).find(([key]) => hashIntegrationKey(key) === context['key_hash'])?.[1];
       return id === undefined ? [] : [{ id }];
     }
     if (fingerprint === 'integrations/stored-actions') return held.stored ?? [];
-    if (fingerprint === 'integrations/attachments') return (held.attached ?? []).filter((row) => row['attach_to'] === context['attach_to']);
     if (fingerprint === 'integrations/find') return [held.found?.[String(context['id'])]].filter((row) => row !== undefined);
     return [];
   };
@@ -131,10 +130,9 @@ const world = async (
 
 describe('createIntegrations — before a server has started it', () => {
   it('every call that needs the server says so in a sentence, and the one that needs nothing answers', async () => {
-    const integrations = createIntegrations({ attachable: { 'people.detail': {} } });
+    const integrations = createIntegrations();
     const sentence = /^moss: integrations\.\w+ was called before a server started the feature\. Put what createIntegrations returned in the manifest's `features`/;
-    await expect(integrations.listAttachments('people.detail')).rejects.toThrow(sentence);
-    await expect(integrations.listPlacements()).rejects.toThrow(sentence);
+    await expect(integrations.listIntegrations()).rejects.toThrow(sentence);
     await expect(integrations.integrationByKey('ik_anything')).rejects.toThrow(sentence);
     await expect(integrations.callIntegration('belts', 'sync', { principal: 'i_mara' })).rejects.toThrow(/integrations\.callIntegration was called before/);
     expect(integrations.integrationOfAction('ext.desk.belts.roster')).toBe('belts');
@@ -272,49 +270,32 @@ describe('createIntegrations — started with the seams', () => {
   });
 
   it('the calls work from then on, by the replay the server handed over', async () => {
-    const { seams } = await world({
-      replay: replayOver({
-        keys: { ik_belts: 'belts' },
-        attached: [
-          { integration_id: 'pay', action_id: 'ext.desk.pay.strip', preview: null, attach_to: 'people.detail' },
-          { integration_id: 'belts', action_id: 'ext.desk.belts.panel', preview: '/integrations/belts/preview', attach_to: 'people.detail' },
-          { integration_id: 'pay', action_id: 'ext.desk.pay.panel', preview: null, attach_to: 'somewhere.else' },
-        ],
-      }),
-    });
+    const { seams } = await world({ replay: replayOver({ keys: { ik_belts: 'belts' } }) });
     const integrations = createIntegrations();
     await integrations.start(seams);
 
-    // In the order of the action ids, whichever integration each belongs to.
-    expect(await integrations.listAttachments('people.detail')).toEqual([
-      { actionId: 'ext.desk.belts.panel', preview: '/integrations/belts/preview' },
-      { actionId: 'ext.desk.pay.strip', preview: '' },
-    ]);
-    expect(await integrations.listPlacements()).toEqual({});
+    expect(await integrations.listIntegrations()).toEqual([]);
     expect(await integrations.integrationByKey('ik_belts')).toBe('belts');
     expect(await integrations.integrationByKey('ik_nobody')).toBeUndefined();
     await expect(integrations.callIntegration('ghost', 'sync', { principal: 'i_mara' })).rejects.toThrow('moss: callIntegration("ghost"): no such integration.');
   });
 
   it('a list longer than one page is read to its end, each page asked for after the last row of the one before', async () => {
-    // One page and three rows more, in the order of an action's key.
-    const placed = Array.from({ length: PAGE + 3 }, (_, at) => ({ integration_id: 'belts', action_id: `ext.desk.belts.a${String(at).padStart(4, '0')}`, place_in: 'people.hub' }));
+    // One page and three rows more, in the order of the ids.
+    const registered = Array.from({ length: PAGE + 3 }, (_, at) => ({ id: `vendor-${String(at).padStart(4, '0')}`, url: 'https://vendor.example', status: 'approved', extension: null }));
     const asked: Record<string, unknown>[] = [];
     const { seams } = await world({
       replay: async (fingerprint, context) => {
-        if (fingerprint !== 'integrations/placements') return [];
+        if (fingerprint !== 'integrations/list') return [];
         asked.push(context);
-        return placed.filter((row) => row.action_id > String(context['after_action'])).slice(0, PAGE);
+        return registered.filter((row) => row.id > String(context['after'])).slice(0, PAGE);
       },
     });
     const integrations = createIntegrations();
     await integrations.start(seams);
 
-    expect(Object.keys(await integrations.listPlacements())).toHaveLength(PAGE + 3);
-    expect(asked).toEqual([
-      { after_integration: '', after_action: '' },
-      { after_integration: 'belts', after_action: placed[PAGE - 1]?.action_id },
-    ]);
+    expect(await integrations.listIntegrations()).toHaveLength(PAGE + 3);
+    expect(asked).toEqual([{ after: '' }, { after: registered[PAGE - 1]?.id }]);
   });
 });
 
@@ -461,7 +442,7 @@ describe('the integration key, as the credential the feature registers', () => {
 describe('the routes the feature mounts, asked through the server it mounted them on', () => {
   it('serves the verify key and the contract, made of what the app said and what the server knows', async () => {
     const { seams, server } = await world();
-    await createIntegrations({ attachable: { 'people.detail': { person_id: 'personId' } }, menuSlots: ['hub.people'] }).start(seams);
+    await createIntegrations().start(seams);
 
     const key = (await (await server.request('/api/integrations/verify-key')).json()) as { alg: string; key: string };
     expect(key.alg).toBe('ed25519');
@@ -473,9 +454,6 @@ describe('the routes the feature mounts, asked through the server it mounted the
       // Every audience the charter drew an `ext.` fence for.
       audiences: ['desk', 'member'],
       components: [{ name: 'Text', description: '' }],
-      // The offered keys, never the host's paths.
-      attachable: { 'people.detail': ['person_id'] },
-      menuSlots: ['hub.people'],
       fingerprints: ['deals/open'],
       verifyKey: key.key,
     });
@@ -551,7 +529,7 @@ describe('the routes the feature mounts, asked through the server it mounted the
       return [];
     };
     const real = globalThis.fetch;
-    globalThis.fetch = async () => new Response(JSON.stringify({ integration: 'belts', meta: { title: 'Belts' }, actions: { [desk.id]: desk } }), { status: 200, headers: { 'content-type': 'application/json' } });
+    globalThis.fetch = async () => new Response(JSON.stringify({ integration: 'belts', actions: { [desk.id]: desk } }), { status: 200, headers: { 'content-type': 'application/json' } });
     try {
       const { seams, operator } = await world({ replay: registry });
       await createIntegrations().start(seams);

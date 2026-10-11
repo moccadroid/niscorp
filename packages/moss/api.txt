@@ -43,7 +43,6 @@
 ./integrations Integrations
 ./integrations IntegrationsConfig
 ./integrations RegisteredIntegration
-./integrations StorePress
 ./integrations createAssertionSigner
 ./integrations createIntegrations
 ./node MOSS_PATHS

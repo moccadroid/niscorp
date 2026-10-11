@@ -34,7 +34,7 @@ const serviceAnswering = (answer: (url: string) => Response = () => new Response
 
 describe('the operator’s routes', () => {
   const roster = { id: 'ext.desk.belts.roster' };
-  const bundle = { integration: 'belts', meta: { title: 'Belts' }, actions: { [roster.id]: roster } };
+  const bundle = { integration: 'belts', actions: { [roster.id]: roster } };
   const real = globalThis.fetch;
   afterEach(() => {
     globalThis.fetch = real;
@@ -58,14 +58,12 @@ describe('the operator’s routes', () => {
       extension: undefined,
       grammars: await createGrammarUpgrader({}),
       fingerprints: async () => [],
-      vocabulary: { layoutMisfits: () => [], endlessChains: () => [], attachable: undefined, menuSlots: undefined, assistantTools: undefined, publishChecks: undefined, editorRegions: undefined },
+      layoutMisfits: () => [],
+      endlessChains: () => [],
       actions: () => ({}),
       refusalOf: () => undefined,
       reload: async () => void (reloads.count += 1),
-      placementNames: {},
-      storePress: undefined,
       timeoutMs: 30_000,
-      pressMaxBytes: 1024,
       ...over,
     });
     const register = (): Promise<Response> => Promise.resolve(operator.request('/integrations', { method: 'POST', headers: json, body: JSON.stringify({ id: 'belts', url: 'https://belts.example' }) }));
@@ -191,7 +189,6 @@ describe('reachOf — what a bundle declares is what its own prefix holds', () =
   it('an endpoint outside the integration’s own prefix is no reach of its', () => {
     const declared = BundleSchema.parse({
       integration: 'belts',
-      meta: { title: 'Belts' },
       actions: {
         'ext.desk.belts.roster': {
           id: 'ext.desk.belts.roster',

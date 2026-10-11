@@ -8,13 +8,12 @@ import type { Bundle } from './bundle';
 // that exposes rank data. For a payments service it exposes a payments service.
 //
 // So the declaration becomes the perimeter: the union of every endpoint a
-// bundle's actions name under its own prefix, plus every preview an attachment
-// rides on. Anything else is not a route this integration has, and the proxy
-// answers as if it were not there.
+// bundle's actions name under its own prefix. Anything else is not a route
+// this integration has, and the proxy answers as if it were not there.
 //
 // DERIVED, NEVER AUTHORED. An integration cannot widen its own reach without shipping
-// the screen or the strip that uses it, and re-importing is the only thing that
-// moves it — the same call an operator already makes.
+// the screen that uses it, and re-importing is the only thing that moves it —
+// the same call an operator already makes.
 const normalizeReach = (path: string): string => (path.split('?')[0] ?? '').replace(/\/+$/, '');
 
 // ENDPOINT → THE ACTIONS THAT DECLARE IT, and the second half is the whole
@@ -49,12 +48,6 @@ export const reachOf = (bundle: Bundle, integrationId: string): Reach => {
     for (const endpoint of Object.values(action.endpoints ?? {})) {
       admit('url' in endpoint ? endpoint.url : '', actionId);
     }
-  }
-  // A preview belongs to the action that rides the strip, so it inherits that
-  // action's audience rather than being reachable by everybody who can see the
-  // host screen it hangs off.
-  for (const [actionId, binding] of Object.entries(bundle.attachments)) {
-    if (typeof binding !== 'string') admit(binding.preview, actionId);
   }
   return Object.fromEntries(Object.entries(reach).sort(([a], [b]) => a.localeCompare(b)));
 };

@@ -10,10 +10,9 @@ import { withFallbackMessage } from './fallback-message';
 import { createForwarder } from './forward';
 import { filterInstalled, integrationOfAction } from './installed';
 import { operatorRoutes } from './operator';
-import type { StorePress } from './press';
 import { proxyRoutes } from './proxy';
 import type { ExtensionConfig } from './intake';
-import { findIntegration, integrationByKey, listAttachments, listPlacements, loadIntegrationActions, registeredIntegrations } from './registry';
+import { findIntegration, integrationByKey, loadIntegrationActions, registeredIntegrations } from './registry';
 import type { RegisteredIntegration } from './registry';
 import { STORED_ACTIONS } from './tables';
 
@@ -21,9 +20,9 @@ import { STORED_ACTIONS } from './tables';
 // THE FEATURE — integrations as one object an app creates, configures and
 // puts in its manifest's `features`.
 //
-// `createIntegrations(config)` is what the app says about itself: where an
-// integration may appear, who it is when it acts alone, where its press
-// images land. The server starts the feature with the seams (../feature), and
+// `createIntegrations(config)` is what the app says about itself: who an
+// integration is when it acts alone, and what a bundle may say in the app's
+// own vocabulary. The server starts the feature with the seams (../feature), and
 // everything it adds to the app it adds through them: its routes, its
 // credential, the actions of the integrations that were approved, the rule
 // for what is installed where, the sentence under a failing call.
@@ -49,49 +48,6 @@ export type IntegrationsConfig<Extension = undefined> = {
   // Absent = integration keys resolve to nobody and every keyed call is 403.
   // May be async: an app answering this from rows reads the row.
   integrationActor?: IntegrationActor;
-  // WHERE AN INTEGRATION MAY APPEAR — the host's half of the placement
-  // contract, advertised on the discovery surface and enforced at intake.
-  //
-  // `attachable`: host action id → the offers, as {offered key: host data
-  // path} (a member detail offering `membership_id` from `$.membershipId`).
-  // Declaring an action here is declaring a seat. The KEYS are the contract —
-  // advertised on discovery, what a rider receives as input and what a
-  // preview call carries. The PATHS are the host's private wiring: how its
-  // own strip derivation and push trigger read those values off its data —
-  // a rider never sees them.
-  attachable?: Readonly<Record<string, Readonly<Record<string, string>>>>;
-  // `menuSlots`: hub action ids whose item lists accept placed integration
-  // screens. Who owns a menu is the host's question; this list is its answer,
-  // and intake refuses a placement outside it.
-  menuSlots?: readonly string[];
-  // THE VOCABULARY AN ADD-ON'S DECLARATIONS MAY NAME — the same posture as
-  // `menuSlots`: the host names what it offers, intake refuses anything outside
-  // it, so a `documents`/`assistants` declaration fails at registration, not in
-  // front of a person. The names are carried; what a tool DOES, what a check
-  // MEANS, and which region an id draws are the host's.
-  //
-  // `assistantTools`: the host's closed assistant tool set; an `assistants`
-  // declaration's `tools[]` is checked against it.
-  assistantTools?: readonly string[];
-  // `publishChecks`: the checks the host runs before publishing a document; a
-  // `documents` declaration's `checks[]` is checked against it.
-  publishChecks?: readonly string[];
-  // `editorRegions`: region action ids the host's editor offers a document
-  // beyond the bundle's own actions; a `documents` declaration's `regions`
-  // values are admitted if they are one of these OR one of the bundle's actions.
-  editorRegions?: readonly string[];
-  // WORDS FOR THE IDS ABOVE, for the one sentence a person reads before
-  // turning an integration on. Optional: without it the approval card and store tile
-  // print ids, which is honest and unhelpful.
-  placementNames?: Readonly<Record<string, string>>;
-  // WHERE PRESS IMAGES LAND. A bundle may declare listing images
-  // (meta.press); intake fetches the bytes once and hands them here, and the
-  // URL this answers with is what the store serves forever after — the host's
-  // blob store, its bounds, its refusals (throw, and the bundle is refused
-  // whole). Optional: a deployment without one refuses any bundle that
-  // declares press, which is a sentence at import rather than a hole in a
-  // listing.
-  storePress?: StorePress;
   // A FIXED SEED FOR THE KEYPAIR ASSERTIONS ARE SIGNED WITH (./credentials.ts).
   // 32 bytes, as base64. Without one the keypair is made when the feature
   // starts and kept nowhere, so every boot has a new one: right where a
@@ -108,23 +64,16 @@ export type IntegrationsConfig<Extension = undefined> = {
   // HOW LONG A CALL OUT TO AN INTEGRATION'S SERVICE MAY TAKE, in ms, its
   // answer and its body together. Every call: a screen's through the proxy, a
   // vendor's webhook, `callIntegration`, the bundle fetched at registration,
-  // the operator's probe, one press image.
+  // the operator's probe.
   // Past it the call is given up on, and reads as a service that is
   // unreachable. Default 30000, nova's default wait for an endpoint's reply.
   // The shorter of the two ends a call: an integration whose endpoint is slow
   // by nature, and says so with a longer `timeoutMs` on its action, needs this
   // raised as well.
   outboundTimeoutMs?: number;
-  // HOW LARGE ONE PRESS IMAGE MAY BE, in bytes. Held to while the image is
-  // read: a larger one is given up on where it crosses the line, and refuses
-  // the bundle. Default 5 MiB, which nobody measured: it is a number that
-  // lets a listing image through and keeps one import from holding an
-  // arbitrary body in memory.
-  pressMaxBytes?: number;
 };
 
 const DEFAULT_OUTBOUND_TIMEOUT_MS = 30_000;
-const DEFAULT_PRESS_MAX_BYTES = 5 * 1024 * 1024;
 
 export type Integrations<Extension = undefined> = Feature & {
   // THE INTEGRATIONS THAT ARE REGISTERED, in the order of their ids: each with
@@ -138,12 +87,6 @@ export type Integrations<Extension = undefined> = Feature & {
   // integration answered, whatever it answered. Deliberately not gated by
   // reach: a lifecycle verb is not an action and has no screen (./call.ts).
   callIntegration: CallIntegration;
-  // THE BINDINGS, read back for the host's own derivations; approved
-  // integrations only. Which of their actions ride a host action, each with
-  // its preview endpoint ('' when it has none)...
-  listAttachments: (hostAction: string) => Promise<{ actionId: string; preview: string }[]>;
-  // ...and which are placed under a menu hub: action id → hub.
-  listPlacements: () => Promise<Record<string, string>>;
   // The approved integration a presented key belongs to, or undefined.
   integrationByKey: (key: string) => Promise<string | undefined>;
   // `ext.<audience>.<integration>.<name>` → the integration. Reads nothing,
@@ -182,21 +125,9 @@ const start = async <Extension>(config: IntegrationsConfig<Extension>, seams: Fe
   seams.registerCredential(KEY_PREFIX, keyCredential({ byKey: (key) => integrationByKey(replay, key), actor: config.integrationActor, resolveIdentity: seams.resolveIdentity }));
   seams.wrapWire(withFallbackMessage);
 
-  // What the host offers a bundle to name and answers about one: the two
-  // questions the server answers through the seams, and what the app said
-  // when it created the feature.
-  const vocabulary = {
-    layoutMisfits: seams.layoutMisfits,
-    endlessChains: seams.endlessChains,
-    attachable: config.attachable,
-    menuSlots: config.menuSlots,
-    assistantTools: config.assistantTools,
-    publishChecks: config.publishChecks,
-    editorRegions: config.editorRegions,
-  };
   seams.mountRoutes(
     contractRoutes({
-      host: { components: seams.components, charter: seams.charter, attachable: config.attachable, menuSlots: config.menuSlots, extension: config.extension?.contract },
+      host: { components: seams.components, charter: seams.charter, extension: config.extension?.contract },
       fingerprintsFor: seams.fingerprintsFor,
       verifyKey: signer.verifyKey,
     }),
@@ -207,14 +138,12 @@ const start = async <Extension>(config: IntegrationsConfig<Extension>, seams: Fe
       extension: config.extension,
       grammars: seams.grammars,
       fingerprints: seams.fingerprints,
-      vocabulary,
+      layoutMisfits: seams.layoutMisfits,
+      endlessChains: seams.endlessChains,
       actions: seams.actions,
       refusalOf: seams.refusalOf,
       reload,
-      placementNames: config.placementNames ?? {},
-      storePress: config.storePress,
       timeoutMs,
-      pressMaxBytes: config.pressMaxBytes ?? DEFAULT_PRESS_MAX_BYTES,
     }),
   );
   seams.mountRoutes(proxyRoutes({ grantedActionIds: seams.grantedActionIds, forward }));
@@ -250,8 +179,6 @@ export const createIntegrations = <Extension = undefined>(config: IntegrationsCo
     },
     callIntegration: async (id, path, init) => running('callIntegration').call(id, path, init),
     listIntegrations: async () => registeredIntegrations(running('listIntegrations').replay, config.extension?.schema),
-    listAttachments: async (hostAction) => listAttachments(running('listAttachments').replay, hostAction),
-    listPlacements: async () => listPlacements(running('listPlacements').replay),
     integrationByKey: async (key) => integrationByKey(running('integrationByKey').replay, key),
     integrationOfAction,
   };

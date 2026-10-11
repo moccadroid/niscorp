@@ -19,12 +19,10 @@ const ctx = (hostActions: Record<string, ActionDefinition> = {}): IntakeContext 
   layoutMisfits: () => [],
   endlessChains,
   fingerprints: new Set<string>(),
-  attachable: new Set<string>(),
-  menuSlots: new Set<string>(),
   hostActions,
 });
 
-const bundle = (actions: Record<string, unknown>): unknown => ({ integration: 'acme', meta: {}, actions });
+const bundle = (actions: Record<string, unknown>): unknown => ({ integration: 'acme', actions });
 const reasonsOf = (r: ReturnType<typeof runIntake>): string[] => (r.ok ? [] : r.reasons);
 
 describe('runIntake — a chain that never ends', () => {

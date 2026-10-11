@@ -20,10 +20,6 @@ export type Contract = {
   audiences: readonly string[];
   namespace: string;
   actionSchema: string;
-  // The placement vocabulary: which host actions offer a seat (and what they
-  // hand a rider), and which menu hubs accept placed screens.
-  attachable: Record<string, readonly string[]>;
-  menuSlots: readonly string[];
   // What the host app tells vendors about its own vocabulary: what a bundle
   // may say under `extension`. As the app handed it over; absent when it
   // handed none.
@@ -53,13 +49,10 @@ const componentMetaOf = (meta: unknown): ComponentMeta => {
 };
 
 // What the contract is made of: the kit's components and the charter, which
-// the server knows, and the seats and hubs the app named when it created the
-// feature.
+// the server knows, and what the app tells vendors of its own vocabulary.
 export type ContractHost = {
   components: Readonly<Record<string, { meta?: unknown }>>;
   charter: Charter;
-  attachable?: Readonly<Record<string, Readonly<Record<string, string>>>>;
-  menuSlots?: readonly string[];
   // `extension.contract` of `createIntegrations` (./intake.ts).
   extension?: unknown;
 };
@@ -86,17 +79,11 @@ export const buildContract = (host: ContractHost, integrationId: string): Contra
       if (parts[0] === 'ext' && parts[1] !== undefined && parts[1] !== '*') audiences.add(parts[1]);
     }
   }
-  // Only the offered KEYS are advertised — the host's data paths are its
-  // private wiring, not part of any contract an author builds against.
-  const attachable: Record<string, readonly string[]> = {};
-  for (const [action, offers] of Object.entries(host.attachable ?? {})) attachable[action] = Object.keys(offers);
   return {
     components,
     audiences: [...audiences].sort(),
     namespace: `ext.<audience>.${integrationId}.<name>`,
     actionSchema: 'nova ActionDefinition',
-    attachable,
-    menuSlots: [...(host.menuSlots ?? [])],
     ...(host.extension === undefined ? {} : { extension: host.extension }),
   };
 };
@@ -163,22 +150,6 @@ export const contractAsMarkdown = (contract: Contract, fingerprints: readonly st
     `\`/integrations/<your id>/\`. Nothing else.`,
     ``,
     fingerprints.map((f) => `- ${f}`).join('\n') || '(none — your grants reach nothing yet)',
-    ``,
-    `## Where your screens may appear`,
-    ``,
-    `Declare \`attachments\` (action → host action) to ride a host screen, and`,
-    `\`placements\` (action → hub) to list under a menu hub. \`settings\` names the one`,
-    `action the store tile opens. Anything else is refused.`,
-    ``,
-    `Attachable, with what each hands you as input:`,
-    ``,
-    Object.entries(contract.attachable)
-      .map(([action, offers]) => `- ${action} — offers ${offers.join(', ') || '(nothing)'}`)
-      .join('\n') || '(none)',
-    ``,
-    `Menu hubs accepting placements:`,
-    ``,
-    contract.menuSlots.map((hub) => `- ${hub}`).join('\n') || '(none)',
     ``,
     ...(contract.extension === undefined
       ? []

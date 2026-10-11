@@ -87,36 +87,14 @@ const recordFailedImport: SeedMutation = {
 // What a bundle says of its integration. The row is written whole on every
 // import: on a row that is there, each of these replaces what it held.
 const importedColumns = {
-  ...fromContext([
-    'url',
-    'title',
-    'tagline',
-    'description',
-    'adds',
-    'settings_action',
-    'requested_actions',
-    'requested_data',
-    'reach',
-    'phrasebook',
-    'story',
-    'highlights',
-    'press',
-    'offers',
-    'needs',
-    'capabilities',
-    'configuration',
-    'documents',
-    'assistants',
-    'extension',
-    'last_import_at',
-  ]),
+  ...fromContext(['url', 'requested_actions', 'requested_data', 'reach', 'phrasebook', 'extension', 'last_import_at']),
   last_error: null,
 };
 
 // LANDING A BUNDLE IS ONE BATCH, and a batch is one transaction: the row as
 // the bundle says it is now, the actions it shipped before taken out, and one
 // row for each action it ships (`actions`, a list in the context: its id, its
-// definition, where it is attached and placed, the grammars it is written in).
+// definition, the grammars it is written in).
 // A statement that fails takes the ones before it back, so a bundle lands
 // whole or the import before it stays whole.
 const writeBundleStatements: Mutation[] = [
@@ -130,9 +108,6 @@ const writeBundleStatements: Mutation[] = [
       integration_id: { $context: 'id' },
       action_id: { $item: 'action_id' },
       definition: { $item: 'definition' },
-      attach_to: { $item: 'attach_to' },
-      preview: { $item: 'preview' },
-      place_in: { $item: 'place_in' },
       grammar: { $item: 'grammar' },
     },
   },
@@ -188,26 +163,16 @@ const remove: SeedMutation = {
 
 const list: SeedEntry = {
   fingerprint: 'integrations/list',
-  intent: 'Every integration as the operator sees it, a page at a time',
+  intent: 'Every integration, with what its row keeps of the host app’s own vocabulary, a page at a time',
   dsl: {
     from: ['integrations'],
     fields: [
       'integrations.id',
       'integrations.url',
       'integrations.status',
-      'integrations.title',
-      'integrations.tagline',
-      'integrations.adds',
-      'integrations.settings_action',
       'integrations.requested_actions',
       'integrations.requested_data',
       'integrations.approved_data',
-      'integrations.offers',
-      'integrations.needs',
-      'integrations.capabilities',
-      'integrations.configuration',
-      'integrations.documents',
-      'integrations.assistants',
       'integrations.extension',
       'integrations.last_import_at',
       'integrations.last_error',
@@ -231,30 +196,6 @@ const actionCounts: SeedEntry = {
     groupBy: ['integration_actions.integration_id'],
     filter: { gt: ['integration_actions.integration_id', { $context: 'after' }] },
     sort: [{ field: 'integration_actions.integration_id', dir: 'asc' }],
-    limit: PAGE,
-  },
-};
-
-const attachments: SeedEntry = {
-  fingerprint: 'integrations/attachments',
-  intent: 'The actions of approved integrations that ride a host action, a page at a time',
-  dsl: {
-    from: ['integration_actions', 'integrations'],
-    fields: ['integration_actions.integration_id', 'integration_actions.action_id', 'integration_actions.preview'],
-    filter: { and: [approved, { eq: ['integration_actions.attach_to', { $context: 'attach_to' }] }, afterAction] },
-    sort: byActionKey,
-    limit: PAGE,
-  },
-};
-
-const placements: SeedEntry = {
-  fingerprint: 'integrations/placements',
-  intent: 'The actions of approved integrations that are placed under a menu hub, a page at a time',
-  dsl: {
-    from: ['integration_actions', 'integrations'],
-    fields: ['integration_actions.integration_id', 'integration_actions.action_id', 'integration_actions.place_in'],
-    filter: { and: [approved, { neq: ['integration_actions.place_in', ''] }, afterAction] },
-    sort: byActionKey,
     limit: PAGE,
   },
 };
@@ -298,8 +239,6 @@ export const REGISTRY_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [
   remove,
   list,
   actionCounts,
-  attachments,
-  placements,
   storedActions,
   actionsOf,
 ];
