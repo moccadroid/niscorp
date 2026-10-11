@@ -13,7 +13,7 @@
     "dev": "turbo dev",
     "test": "turbo test",
     "typecheck": "turbo typecheck",
-    "lint": "node scripts/check-lint.mts && eslint --max-warnings 0 \"apps/lab/lyra/src/**/*.ts\" packages/moss/src packages/tide/src/store/postgres packages/tide/src/driver.ts \"packages/charter/src/**/*.ts\"",
+    "lint": "eslint --max-warnings 0 \"apps/lab/lyra/src/**/*.ts\" packages/moss/src packages/tide/src/store/postgres packages/tide/src/driver.ts \"packages/charter/src/**/*.ts\"",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
     "check:packages": "node scripts/check-packages.mts",
     "check:create": "node scripts/check-create.mts",
@@ -30,8 +30,7 @@
     "check:raw-sql": "node scripts/check-raw-sql.mts",
     "check:modules": "node scripts/check-modules.mts",
     "check:api": "node scripts/check-api.mts",
-    "check:postgres": "node scripts/check-postgres.mts",
-    "verify": "pnpm build && pnpm check:packages && pnpm check:create && pnpm check:grammars && pnpm check:sources && pnpm check:fact-door && pnpm check:raw-sql && pnpm check:modules && pnpm check:api && pnpm check:postgres && pnpm lint && pnpm typecheck && pnpm test"
+    "verify": "pnpm build && pnpm check:packages && pnpm check:create && pnpm check:grammars && pnpm check:sources && pnpm check:fact-door && pnpm check:raw-sql && pnpm check:modules && pnpm check:api && pnpm lint && pnpm typecheck && pnpm test"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",

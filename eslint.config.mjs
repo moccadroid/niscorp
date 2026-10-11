@@ -180,10 +180,6 @@ export default tseslint.config(
   // the compiler off for a line or a file, which is where an `any` comes from:
   // they are errors too.
   //
-  // EACH RULE IS TRIED, on every run: `scripts/check-lint.mts` lints a case
-  // that must fail and a twin that must pass for every rule below, and `pnpm
-  // lint` runs it first. A rule added here gets a pair there.
-  //
   // WHAT THIS CANNOT SEE. That a boundary is read by a schema: a value
   // narrowed by hand passes, and a type another package's function claims to
   // answer is believed. State a `const` holds at the top of a file (a `Map`
@@ -239,16 +235,10 @@ export default tseslint.config(
       ],
       'max-lines-per-function': ['error', { max: 100, skipBlankLines: true, skipComments: true }],
       'max-lines': ['error', { max: 400, skipBlankLines: true, skipComments: true }],
-      // A LINE HAS A WIDTH, or the two sizes above count nothing: a function of
-      // a hundred lines holds what its lines hold. 200, counted on 2026-10-11:
-      // of moss's 15,930 source lines sixteen were wider, and 706 are wider than
-      // the 100 `.prettierrc` names. Prettier is configured and enforced on no
-      // package; whether the repository is formatted to it is its owner's to
-      // decide, and this is not that. Comments and strings count like code.
-      // (`max-len` is one of the formatting rules eslint keeps and no longer
-      // develops. Should a later major drop it, the same rule is
-      // `@stylistic/max-len`, and `scripts/check-lint.mts` fails until it is
-      // back: its case for a line of 201 would raise nothing.)
+      // A line has a width, or the two sizes above count nothing: a function of
+      // a hundred lines holds what its lines hold. This is not prettier's 100,
+      // which nothing enforces. Comments and strings count like code. Should a
+      // later eslint drop `max-len`, the same rule is `@stylistic/max-len`.
       'max-len': ['error', { code: 200 }],
     },
   },

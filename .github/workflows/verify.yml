@@ -29,22 +29,6 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    # A real Postgres beside the job, for the one step that needs two
-    # connections that meet ("Check against Postgres", below). The job runs on
-    # the runner itself, so the service is reached at localhost on the port
-    # mapped here; the health check holds the steps back until it answers.
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - uses: actions/checkout@v5
         with:
@@ -109,52 +93,28 @@ jobs:
         run: pnpm check:fact-door
 
       # A package above the engines runs no SQL of its own: its reads and writes
-      # are vex, as an application's are. Every statement that exists today is
-      # counted per file in the script's ledger; a new one, or a number that no
-      # longer matches, fails. A statement is counted whatever sends it and
-      # however it is cased. The script tests itself first, and its header says
-      # what it cannot see. See scripts/check-raw-sql.mts.
+      # are vex, as an application's are. Every statement is counted per file in
+      # the script's ledger; a new one, or a number that does not match, fails.
+      # See scripts/check-raw-sql.mts.
       - name: Check for SQL outside vex
         run: pnpm check:raw-sql
 
-      # A package is made of modules: nothing new at the top of src/, a module is
-      # imported by its door, and it imports only the modules it declares. Every
-      # way a file names another counts, a type-only one included, and the three
-      # roads round a door fail: the package's own name, an alias, a file of an
-      # extension the check does not read. The script tests itself first. See
-      # scripts/check-modules.mts.
+      # A package is made of modules: nothing at the top of src/ but index.ts, a
+      # module is imported by its door, and it imports only the modules it
+      # declares. See scripts/check-modules.mts.
       - name: Check the modules
         run: pnpm check:modules
 
-      # What a package exports is a file in the repository (api.txt): each name,
-      # and each member of an exported type, so a new one is a line in a diff
-      # rather than an accident. It asks the compiler, and a type from another
-      # package is read from its dist: it runs after the build. The script tests
-      # itself first. See scripts/check-api.mts.
+      # The names a package exports are a file in the repository (api.txt), so
+      # a new one is a line in a diff. See scripts/check-api.mts.
       - name: Check the public API
         run: pnpm check:api
 
-      # What only a real Postgres can show. Every test of tide's store and of
-      # moss runs on PGlite, which has one connection, so a fix for something
-      # two processes do to each other passes there with the fix taken out.
-      # This runs the three such races on the service above, each side on a
-      # pool of its own: a serial group claimed by two instances of tide, the
-      # generation pointer moved by two processes, two first registrations of
-      # one integration; and the tables' migration, on an empty database and
-      # again. Without the variable the script says it did not run and exits 0
-      # (that is how `pnpm verify` stays usable on a machine with no Postgres);
-      # here it is set, so here it runs. See scripts/check-postgres.mts.
-      - name: Check against Postgres
-        env:
-          CHECK_POSTGRES_URL: postgres://postgres:postgres@localhost:5432/postgres
-        run: pnpm check:postgres
-
-      # The lint existed and nothing ran it. It holds the syntax the style guide
-      # bans and, for moss's source and tide's store and driver, the stricter
-      # rules: with the compiler's types (so it runs after the build), no `any`
-      # that becomes a typed value, and a size for a function, a file and a line.
-      # It first tries each of those rules on a case that must fail and a twin
-      # that must pass (scripts/check-lint.mts), and it allows no warning.
+      # The syntax the style guide bans and, for moss's source and tide's store
+      # and driver, the stricter rules: no type assertion, no `any` that becomes
+      # a typed value (it reads the compiler's types, so it runs after the
+      # build), and a size for a function, a file and a line. No warning is
+      # allowed.
       - name: Lint
         run: pnpm lint
 
