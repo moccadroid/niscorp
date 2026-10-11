@@ -445,7 +445,8 @@ does nothing. Returns a Hono app extended with the `MossServer` members below.
 order: the manifest is read and frozen; who a token is is resolved
 (`runtime.session`; unset, the boot is refused here, before a table exists);
 the tables are migrated and the data module stands; the running manifest is
-created, which is the boot check; identity; the server's own routes (the
+created, which is the boot check, and the entries it holds are seeded where
+vex replays from; identity; the server's own routes (the
 authentication, `/catalog`, vex); the shell hosts, the app's and each page's;
 what crosses processes; the features, each started with the seams; the
 operator prefix; the app's reactions hear a write; the generation pointer is
@@ -542,8 +543,13 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   is in force (the charter, every entry's reach, the layout variants), drop
   every per-principal memo and identity record, and have every living shell
   adopt: it is brought level with what its principal holds now, in place
-  (`ShellHost.adopt`, below). It also moves the generation pointer,
-  so every other process on the same database does the same within one poll.
+  (`ShellHost.adopt`, below). Every living shell is the one kept for each
+  signed-in person, the one built for each connection of nobody signed in,
+  and the one a page built for each connection. It also moves the generation
+  pointer, and every other process on the same database follows it within
+  one poll: it reads again the sets of actions it has a loader for, runs the
+  same check, drops what it derived and has its living shells adopt (see
+  [Many processes](#many-processes)).
   It ships nothing: the manifest that was handed over cannot be edited, and
   `replaceActions` is how actions arrive.
 - `replaceActions(source, actions): void` — hand over a set of actions that
@@ -553,8 +559,14 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   force are what the app shipped, then each set. What the app would then
   consist of is verified first: refused, it throws (`Refresh refused — …`,
   with what the check found) and nothing changed; accepted, it does what
-  `refresh` does, and the set is frozen as the manifest was, so a set is
-  changed by handing over another of the same name. Every definition of the
+  `refresh` does in this process, and the set is frozen as the manifest was,
+  so a set is changed by handing over another of the same name.
+  **The set is handed to this process, and no other process is handed it.**
+  Another process follows the pointer the call moved, as after a `refresh`,
+  and goes on serving the set of that name it was last handed itself, or
+  none. An app that runs several processes keeps the set in rows and says
+  how it is read, in a feature of its own
+  ([Many processes](#many-processes), "The pointer carries no set"). Every definition of the
   set is read by nova's schema first: one nova does not read refuses the set
   (`Refresh refused — actions nova does not read:`, naming the action and what
   is wrong with it). `'integrations'` is the integrations feature's set, read
@@ -600,7 +612,9 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
 - `generation(): number` — the generation this process last observed (`-1`
   before the first read).
 - `invalidateIdentity(principal): boolean` — forget one principal's identity
-  record and reset their shell (a role change). `false` = no record was held.
+  record and reset every living shell of theirs (a role change): the one the
+  app keeps for them, and the one a page built for each connection of theirs.
+  `false` = no record was held.
 - `invalidateTenant(tag): number` — forget every identity record wearing the
   tag the app put on it (`IdentityRecord.tag`); answers how many. Forgets, does
   not reset shells.
@@ -948,9 +962,9 @@ its own, and the core never imports it.
   | `scopeOf(principal)` | the scope values a principal carries, which the engine pins rows by |
   | `holds(roles, installed)` | the action ids a set of roles holds of the actions in force |
   | `actions()` | the actions in force: what the app shipped, then each set handed over |
-  | `replaceActions(source, actions)` | put a set of actions in place of the one of that name; throws when the app could not be served so |
+  | `replaceActions(source, actions)` | put a set of actions in place of the one of that name, in this process; throws when the app could not be served so |
   | `refusalOf(actions)` | the sentence the app would be refused with if exactly these were in force, or `undefined` |
-  | `loadActionsFrom(source, load)` | how a set kept in rows is read again when another process changed something |
+  | `loadActionsFrom(source, load)` | how a set kept in rows is read again when another process moved the generation pointer; a set with no loader is not carried to another process |
   | `narrowCatalogs(filter)` | one more rule for which granted actions are there for an install list |
   | `charter` | the charter the app shipped: role names, and what each selects |
   | `components` | the kit's component contracts by name: a description, and the props' schema |
@@ -1001,8 +1015,38 @@ lets them replay, as vex's discovery lists them.
 - The generation pointer — the persistent counter `server.refresh()` and
   `server.replaceActions()` move (`moss_generation`, one row, part of
   `MOSS_SEQUENCE`). Each process polls it (on `sessionRevalidateMs`; 60s when
-  that is unset), and when it has moved reads again what it keeps from rows
-  and drops what it derived. The row is read and moved through vex, by two
+  that is unset), and when it has moved it reads again every set of actions
+  it has a loader for, runs the check boot runs over what it would then
+  serve, drops what it derived (what each set of roles holds, the compiled
+  policies, the identity records) and has its living shells adopt.
+  **The pointer carries no set.** It says that something changed, and a
+  process learns what by reading rows. The sets that have a loader are the
+  integrations feature's (`'integrations'`) and any a feature of the app's
+  own named with `seams.loadActionsFrom(source, load)`. A set handed to
+  `server.replaceActions` in one process, with no loader, is in that
+  process's memory: every other process reaches the same generation and goes
+  on serving the set of that name it was last handed itself, or none.
+  So an app that runs several processes, and loads actions from its own
+  tables, says how they are read, in a feature of its own:
+
+  ```ts
+  const bundles: Feature = {
+    name: 'bundles',
+    start: async (seams) => {
+      // every process reads the rows again when the pointer moves
+      seams.loadActionsFrom('bundles', loadBundles);
+      // what the rows hold when this process starts
+      seams.replaceActions('bundles', await loadBundles());
+    },
+  };
+  // ...and where the app has changed the rows, in the process that did:
+  server.replaceActions('bundles', await loadBundles());
+  ```
+
+  The call moves the pointer, and each other process reads the rows through
+  its loader within one poll. An app that names no loader calls
+  `replaceActions` in each of its processes itself, on a signal of its own.
+  The row is read and moved through vex, by two
   entries of moss's own that no route serves (`src/data/pointer.ts`);
   `src/manifest/generation.ts` holds the clock and no SQL. A move is a compare
   and a set: the next number is written where the counter is still what was
@@ -1080,21 +1124,34 @@ is asked instead: `(await server.identity(principal)).roles`,
   runtime, but a typed object of what it needs: one function that answers what
   a principal's shell is made of (who they are, the action definitions they
   hold with their roles' layout variant in place, the canvases, the frame, the
-  layout store's seed, the fragments, the component names), the app's code a
-  shell calls (`inputs`, `seeds`, `phrases`, `functions`, `onSession`,
-  `runs`), the wire for a token, and its limits. A shell may sit unattached for
-  `runtime.shellIdleMs` (default 30 minutes; `0` disables the sweep).
+  layout store's seed, the fragments, the entries, the component names), the
+  app's code a shell calls (`inputs`, `seeds`, `phrases`, `functions`,
+  `onSession`, `runs`), the wire for a token, and its limits. Everything in
+  that answer but who somebody is comes from the running manifest, which is
+  asked once for each build and once for each adopt
+  (`src/manifest/artifacts.ts`): an action, a layout, a fragment and an entry
+  reach a shell through that one answer, and the server's wiring reads none
+  of them off the app. A kept shell may sit unattached for
+  `runtime.shellIdleMs` (default 30 minutes; `0` disables the sweep). A shell
+  that is not kept (nobody signed in; any shell of a page's host) ends when
+  its last terminal leaves, and the host holds nothing of a shell that has
+  ended.
   - `session(token, principal, options?)` — `options = { seed?, inputs? }`;
     `snapshot` is described under [The document](#the-document), and what it
     answers is exported as `ShellSnapshot`.
     Two first arrivals for one principal in the same moment are handed one
     shell: one is built.
-  - `adopt()` — every living durable shell is brought level with what its
-    principal holds now, in place (what `server.refresh()` and
-    `server.replaceActions()` cause). Definitions that arrived or changed are
+  - `adopt()` — every living shell this host built is brought level with what
+    its principal holds now, in place (what `server.refresh()` and
+    `server.replaceActions()` cause, in every host: the app's and each
+    page's). Every living shell: the ones the host keeps, and the ones it
+    built for one connection, which for the app's host is each visitor's and
+    for a page's host is everybody's. Definitions that arrived or changed are
     registered and mounted instances keep their state; one that left, or is no
     longer granted, is removed and its instances unmounted. A shell that
-    cannot adopt is logged and keeps what it held; the rest go on.
+    cannot adopt is logged and keeps what it held; the rest go on. A shell
+    whose build was under way adopts when it lands. One built for the length
+    of a `snapshot` is read and ended, and adopts nothing.
   - `deliver(principal, channel, payload?): boolean` — publish into one
     principal's living durable shell. `false` = they have no living shell;
     nothing is built.
@@ -1103,6 +1160,9 @@ is asked instead: `(await server.identity(principal)).roles`,
     so moss enumerates it; an app keeping its own note beside it can only drift.
   - `reset(principal): boolean` — dispose that principal's shell and stand its
     replacement in the same slot, carrying the attached connections across.
+    Every living shell of theirs on this host: the one it keeps for them, or,
+    on a host that keeps none (a page's), the one built for each of their
+    connections, each replaced for itself.
     `false` = they hold no shell, which is an answer, not an error. The
     replacement is built from what the shell was opened with (for a page's,
     the inputs of its path and its id seed), and a shell's resets run one

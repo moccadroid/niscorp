@@ -60,6 +60,18 @@ that makes publish a runtime write for every artifact is specified and unbuilt
 of roles holds, and the policy it reads and writes under, are derived from what
 is in force and dropped when that changes, so there is no invalidation
 protocol; a pointer in the database tells every other process that it did.
+The pointer tells them *that*, not *what*: another process reads again the
+sets of actions it has a loader for (the ones a feature keeps in rows), and a
+set handed to one process with `replaceActions` and no loader is that
+process's alone. A library every process reads is the part that is unbuilt.
+
+And there is one place it will be asked. Everything a shell loads that
+somebody authored (its actions, its frame and layout store, its fragments, the
+entries its reads replay) is answered by the running manifest in one function,
+for a shell and a set of roles (`src/manifest/artifacts.ts`). A shell is built
+from that answer and adopts it; the entries vex replays are seeded from what
+the running manifest holds; nothing else in moss reads one of the four off
+what the app handed over.
 
 ### 3. One gate, every kind of principal
 
@@ -160,7 +172,10 @@ entry.
    a principal is a record (roles, scope values, what is installed for them).
 2. **What exists for them?** `manifest`: what the app handed over, read by a
    schema and frozen; what it consists of right now, with one writer; whether
-   that may be served; and what a set of roles holds of it.
+   that may be served; and what a set of roles holds of it. It is the one
+   owner of every artifact a shell loads: the actions, the frame and the
+   layout store, the fragments and the entries are asked of it, in one answer
+   for a shell and a set of roles, and read off the app by nothing else.
 3. **What may they read and write?** `data`: the vex engine, the policy a set
    of roles reads and writes under, the routes, a seeded entry run as a
    charter role, and the tables with their migration.
@@ -459,7 +474,16 @@ Two design points worth naming:
 One durable nova `Shell` per authenticated principal — the socket is ephemeral,
 the shell survives disconnect (reattach re-sends the current trees, and N
 attached connections receive the same frames: shared canvases are the same
-mechanism). Anonymous connections get a throwaway shell, disposed on detach.
+mechanism). Anonymous connections get a throwaway shell, disposed on detach,
+and so does every connection of a page.
+
+**Every living shell follows a change.** When what the app consists of
+changes, each shell that lives is brought level with what its principal holds
+now, in place: the kept ones, a visitor's, and a page's, in every host. A
+host holds every shell it built from when its build lands until it ends, and
+lets it go where it ends, so the walk is over the shells that live and no
+other. A role change (`invalidateIdentity`) rebuilds every living shell of
+that principal the same way: the kept one, and each one a page built for them.
 
 **Lifetime.** A durable shell lives until sign-out, an operator reset, or the
 idle sweep: nothing attached for `runtime.shellIdleMs` (default 30 minutes) and
@@ -468,10 +492,10 @@ deliberately no absolute cap, because that would discard the state of somebody
 who is working. There is no TTL on the session behind it; a shell going away is
 not a person being signed out.
 
-**Enumeration and reset.** `shells.list()` reports every living shell —
-principal, attached connections, age, idle time, and what is mounted on each
-canvas. `shells.reset(principal)` disposes one and stands its replacement in
-the same slot, carrying the attached connections across, so every terminal
+**Enumeration and reset.** `shells.list()` reports every living shell the
+host keeps — principal, attached connections, age, idle time, and what is
+mounted on each canvas. `shells.reset(principal)` disposes one and stands its
+replacement in the same slot, carrying the attached connections across, so every terminal
 receives a frame and current trees exactly as on reattach. Both exist because
 the host owns the map: an app that keeps its own note beside it can only drift
 from it, and a shell nobody can enumerate is one nobody can be helped out of.
@@ -775,6 +799,9 @@ On the record, so nothing reads as finished that isn't:
   every process polls (`src/manifest/generation.ts` holds the clock; the row is
   read and moved through vex, `src/data/pointer.ts`), and an optional fabric
   (`runtime.fabric`, `src/server/fabric.ts`) carries identity invalidations and nudges.
+  A set of actions does not cross: a process that follows the pointer reads
+  again the sets it has a loader for, and a set handed to another process
+  with `replaceActions` alone never reaches it (DOCS.md, "Many processes").
   A shell is still resident in one process. A drawn document
   adds one requirement to stickiness: the page request and the socket should
   land on the same process, or a principal's shell is built twice and the page

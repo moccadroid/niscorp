@@ -54,7 +54,8 @@ export type RunningManifestConfig = {
   installedOnly?: InstalledOnly;
   // The named sets that live in rows, each with how it is read again when
   // another process says something changed. A set with no loader is whatever
-  // it was last replaced with.
+  // THIS process last replaced it with: no other process is handed it, and
+  // none can read it.
   loaders?: Readonly<Record<string, ActionLoader>>;
   // The generation pointer (./generation.ts): how its row is read and moved,
   // and how often it is read, once `watch` is called. Absent: this manifest
@@ -84,7 +85,9 @@ export type RunningManifest = {
   // arrives; an action the set no longer names leaves). Throws, with the
   // sentence `refresh` throws, when the app could not be served that way.
   // Taken, the set is frozen where it stands, as the manifest was: what is in
-  // force is not edited, it is replaced.
+  // force is not edited, it is replaced. Taken HERE: the pointer this moves
+  // tells the other processes that something changed, and each reads again
+  // the sets it has a loader for. A set with none is in no other process.
   replace: (source: string, actions: Record<string, ActionDefinition>) => void;
   // Something derived from the manifest went stale where this module cannot
   // see (a role moved, an install landed): verify what is in force again, drop
@@ -93,7 +96,9 @@ export type RunningManifest = {
   // START TELLING THE OTHER PROCESSES, AND HEARING THEM. From here on a switch
   // moves the pointer; and a move another process made is answered by reading
   // every set that has a loader and switching WITHOUT moving it again — or
-  // every process would move every other process's, for ever. Its own call,
+  // every process would move every other process's, for ever. WHAT IS TOLD IS
+  // THAT SOMETHING CHANGED, NEVER WHAT: a set reaches another process only by
+  // that process reading it, so only a set with a loader does. Its own call,
   // because a server that refuses to boot must leave no timer behind, and
   // because what a process does while it starts is no news to the others.
   watch: () => void;

@@ -110,8 +110,9 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // 11. From here on a change moves the generation pointer, so every other
   // process drops what it derived within one poll; and a move one of them
   // makes is answered here by reading again every set a feature keeps in
-  // rows. Only now, so a boot that refuses above leaves no timer polling
-  // behind it.
+  // rows. A set an app handed to one process (`replaceActions`) with no
+  // loader is not among those: it does not cross. Only now, so a boot that
+  // refuses above leaves no timer polling behind it.
   running.watch();
 
   // 12. The socket (./socket.ts).

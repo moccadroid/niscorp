@@ -34,20 +34,31 @@ export type MossServer = Hono<Env> & {
   pages: readonly { name: string; path: string }[];
   // Something the server derived its answers from changed where it cannot see
   // (a role, an install): verify what is in force again, drop every
-  // per-principal memo, and have living shells adopt their re-resolved
-  // definitions. It ships nothing: what the app consists of changes through
-  // `replaceActions`, and the manifest it handed over cannot be edited.
+  // per-principal memo, and have every living shell adopt its re-resolved
+  // definitions: the ones kept for a signed-in principal, the ones built for
+  // nobody signed in, and the ones each page built. It ships nothing: what the
+  // app consists of changes through `replaceActions`, and the manifest it
+  // handed over cannot be edited.
   refresh: () => void;
   // HAND OVER A SET OF ACTIONS THAT ARRIVED WHILE THE APP RUNS — for an app
   // that loads actions from its own rows. `source` names the set: handing the
   // same name over again puts the new set in place of the old, so an action it
   // no longer names leaves. What the app would then consist of is verified
   // first. Refused, this throws with the sentence `refresh` throws and nothing
-  // changed; accepted, it does what `refresh` does, and the set is frozen
-  // where it stands: to change it, hand over another. The actions in force are
-  // what the app shipped, then each set. `'integrations'` is taken: the
-  // integrations feature hands the approved integrations' actions over under
-  // that name, read from its tables.
+  // changed; accepted, it does what `refresh` does in this process, and the
+  // set is frozen where it stands: to change it, hand over another. The
+  // actions in force are what the app shipped, then each set. `'integrations'`
+  // is taken: the integrations feature hands the approved integrations'
+  // actions over under that name, read from its tables.
+  //
+  // THE SET IS HANDED TO THIS PROCESS, AND NO OTHER PROCESS IS HANDED IT. The
+  // call moves the generation pointer, and another process that follows it
+  // reads again the sets it has a loader for, drops what it derived and has
+  // its shells adopt. A set that arrived here and nowhere else it cannot
+  // read: it goes on serving the set of this name it was last handed itself.
+  // An app that runs several processes keeps the set in rows and names how it
+  // is read, in a feature of its own (`FeatureSeams.loadActionsFrom`), or
+  // calls this in each process.
   replaceActions: (source: string, actions: Record<string, ActionDefinition>) => void;
   // WOULD THAT SET BE TAKEN — the dry run of `replaceActions`: the same
   // verification over the same candidate, answered as a report, and nothing is
@@ -83,7 +94,9 @@ export type MossServer = Hono<Env> & {
   // database. `errors` is always empty: a report with one never got this far.
   charterReport: () => VerifyReport;
   // ONE PERSON'S identity, forgotten — for a change that concerns them and
-  // nobody else (their role moved, their tenant installed an integration). `false` if
+  // nobody else (their role moved, their tenant installed an integration).
+  // Every living shell of theirs is rebuilt: the one the app keeps for them,
+  // and the one a page built for each connection of theirs. `false` if
   // they were not held, which is an answer rather than an error. `refresh()`
   // above is the deployment-wide hammer; this is the scalpel, and a tenant-local
   // write should reach for it rather than dropping every principal's record.
@@ -111,8 +124,12 @@ export type MossServer = Hono<Env> & {
   // second process: it is just the local `deliver`. Payload-less by the
   // row-less doctrine — a nudge says a channel changed, never what to.
   nudge: (principal: string, channel: string) => void;
-  // The generation this process has observed. Moves when any process calls
-  // `refresh`; every process drops its derivations within one poll of it.
+  // The generation this process has followed. It moves when any process calls
+  // `refresh` or `replaceActions`; every process, within one poll of it, reads
+  // again the sets of actions it has a loader for and drops what it derived.
+  // Two processes at one generation have followed the same moves. They serve
+  // the same actions only where every set reached both: one handed to a single
+  // process with no loader did not.
   generation: () => number;
   // RETIRE EVERYTHING THIS SERVER STARTED that outlives a request — the
   // generation poll, the identity idle sweep, the socket's revalidation, the

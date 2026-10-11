@@ -75,14 +75,15 @@ export type FeatureSeams = {
   holds: (roles: readonly string[], installed: readonly string[] | undefined) => readonly string[];
   // The actions in force: what the app shipped, then each set handed over.
   actions: () => Actions;
-  // Put a set of actions in place of the one of that name. Throws, and changes
-  // nothing, when the app could not be served that way.
+  // Put a set of actions in place of the one of that name, in this process.
+  // Throws, and changes nothing, when the app could not be served that way.
   replaceActions: (source: string, actions: Record<string, ActionDefinition>) => void;
   // Could the app be served with exactly these actions in force? The sentence
   // it would be refused with, or `undefined`. Nothing is switched.
   refusalOf: (actions: Actions) => string | undefined;
   // How a set that lives in rows is read again when another process says that
-  // something changed.
+  // something changed. It is what carries a set to the other processes of a
+  // deployment: a set with no loader stays in the process it was handed to.
   loadActionsFrom: (source: string, load: () => Promise<Record<string, ActionDefinition>>) => void;
   // One more rule for which granted actions are there for an install list.
   narrowCatalogs: (filter: (ids: readonly string[], installed: ReadonlySet<string> | undefined) => readonly string[]) => void;

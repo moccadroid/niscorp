@@ -37,8 +37,10 @@
 // action ids granted, and the layout variant held of each, remembered until
 // the manifest changes.
 //
-// WHEN IT CHANGES, every other process finds out by a pointer in the database
-// that each one polls (./generation.ts).
+// WHEN IT CHANGES, every other process finds out that it did, by a pointer in
+// the database that each one polls (./generation.ts). It finds out what by
+// reading again the sets it has a loader for; a set handed to one process
+// with no loader is that process's alone.
 //
 // This module imports `identity` and `feature` (for the type of what
 // `NiscApp.features` holds), and nothing else of moss.

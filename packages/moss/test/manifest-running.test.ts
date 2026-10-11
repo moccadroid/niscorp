@@ -542,6 +542,71 @@ describe('watch — the pointer the other processes poll', () => {
     }
   });
 
+  // TWO PROCESSES OVER ONE POINTER, each a running manifest of its own. What
+  // the second follows is the pointer: it reads again the sets it has a loader
+  // for, drops what it derived and tells whoever listens. A set is not carried
+  // by the pointer. One handed to a process is in that process's memory, and
+  // the other serves the set of that name it was handed itself.
+  it('a set handed to one process is that process’s: another follows the pointer, and does not have the set', async () => {
+    const { pointer } = pointerRow();
+    const here = running(shippedApp(), { pointer: { ...pointer, everyMs: 1 } });
+    const there = running(shippedApp(), { pointer: { ...pointer, everyMs: 1 } });
+    try {
+      there.replace('bundles', { [desk.id]: desk });
+      here.watch();
+      there.watch();
+      await aMoment();
+      const told = vi.fn();
+      there.onChange(told);
+      const heldThere = there.catalogFor(['member'], undefined);
+
+      here.replace('bundles', { [pay.id]: pay });
+      await aMoment();
+
+      // The other process followed: it is at the generation the move landed
+      // on, it was told once, and what it had derived was dropped.
+      expect(there.generation()).toBe(here.generation());
+      expect(told).toHaveBeenCalledTimes(1);
+      expect(there.catalogFor(['member'], undefined)).not.toBe(heldThere);
+      // And it serves the set it was handed itself, not the one handed here.
+      expect(Object.keys(here.actions())).toEqual(['home', 'panel', pay.id]);
+      expect(Object.keys(there.actions())).toEqual(['home', 'panel', desk.id]);
+    } finally {
+      here.stop();
+      there.stop();
+    }
+  });
+
+  it('a set both processes name a loader for is read again by the other when one replaces it', async () => {
+    const { pointer } = pointerRow();
+    // The rows both read: what an app keeps a set in.
+    const rows: { now: Record<string, ActionDefinition> } = { now: { [desk.id]: desk } };
+    const load = async (): Promise<Record<string, ActionDefinition>> => rows.now;
+    const here = running(shippedApp(), { pointer: { ...pointer, everyMs: 1 } });
+    const there = running(shippedApp(), { pointer: { ...pointer, everyMs: 1 } });
+    try {
+      // As a feature does when it starts, in each process: how the set is
+      // read, and what the rows hold now.
+      for (const manifest of [here, there]) {
+        manifest.loadFrom('bundles', load);
+        manifest.replace('bundles', await load());
+        manifest.watch();
+      }
+      await aMoment();
+
+      // One process changes the rows and hands over what they hold.
+      rows.now = { [desk.id]: desk, [pay.id]: pay };
+      here.replace('bundles', await load());
+      await aMoment();
+
+      expect(Object.keys(here.actions())).toEqual(['home', 'panel', desk.id, pay.id]);
+      expect(Object.keys(there.actions())).toEqual(['home', 'panel', desk.id, pay.id]);
+    } finally {
+      here.stop();
+      there.stop();
+    }
+  });
+
   it('stopping ends the watching', async () => {
     const { pointer, poke } = pointerRow();
     const manifest = running(shippedApp(), { pointer: { ...pointer, everyMs: 1 } });
