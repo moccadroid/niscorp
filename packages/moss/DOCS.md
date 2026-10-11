@@ -1573,6 +1573,20 @@ hash of one key (a unique index on `integrations.key_hash`).
   kept by its hash in a table with what it opens and when it expires (thirty
   minutes). Any process of the deployment redeems it, and it survives a
   restart. It goes when its time is over, and when its integration is removed.
+- *A webhook* (`POST /integrations/:id/hook/*`) takes no session and no
+  assertion is minted for it: the body goes on to the integration's service
+  byte for byte, with the vendor's headers but `authorization` and `host`,
+  and the integration checks the vendor's signature itself. An integration
+  that is unknown or not approved answers `404`. **The door has a limit, and
+  it is a limit per process**: 240 calls a minute for each integration,
+  counted in the memory of the process that takes them, in windows of a minute
+  that start at a window's first call. Past it the answer is `429`
+  `{ message: 'Too many.' }` and nothing is forwarded. With several processes
+  behind one address a vendor is let through up
+  to that many times 240 a minute, however the balancer splits its calls, and
+  a process that restarts counts from nothing. It is not a ceiling for the
+  deployment, and neither number is a setting: a deployment that needs one
+  ceiling across its processes sets it where they meet, at its proxy.
 
 **Its tables.** `integrations` and `integration_actions` are part of
 `MOSS_SEQUENCE` (`@niscorp/moss`). `integration_frame_grants` is the feature's

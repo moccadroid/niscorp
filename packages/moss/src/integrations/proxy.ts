@@ -14,9 +14,18 @@ import { reachAdmits } from './reach';
 // ═══════════════════════════════════════════════════════════════
 
 // A DOOR WE DID NOT LOCK NEEDS A LIMIT. Every other surface is bounded by a
-// credential; the webhook is bounded by the vendor behaving. In-process and per
-// integration, so a deployment on two machines gets two ceilings — the honest
-// cost of not putting a shared store behind this yet.
+// credential; the webhook is bounded by the vendor behaving.
+//
+// IT IS A LIMIT PER PROCESS, AND SAYS SO: 240 calls a minute for each
+// integration, counted in the memory of the process that takes them, in
+// windows of a minute that start at a window's first call. A deployment of N
+// processes behind one address lets a vendor through up to N × 240 times a
+// minute, however its balancer splits the calls, and a process that restarts
+// counts from nothing. It bounds what one process forwards; it is not a
+// ceiling for the deployment. One that held across processes needs a store
+// they share, a write for every call a vendor makes, and moss keeps none for
+// this: a deployment that needs that ceiling sets it where its processes
+// meet, at its proxy. Neither number is a setting.
 const HOOK_LIMIT = 240;
 const HOOK_WINDOW_MS = 60_000;
 

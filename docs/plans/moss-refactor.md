@@ -183,7 +183,7 @@ again here.
 | 7 | fixed | `6d7d054`: a message the shell throws on is one message |
 | 8 | fixed | `d424c3a`: a refused terminal is not sent the error that refused it |
 | 9 | fixed | `52ba2d1`: `runtime.anonymousShellMax`, default 1,000, from a measurement |
-| 10 | half | `bcec37f`: a frame grant is a row, so any process redeems it. The webhook limit is still kept by each process (`src/integrations/proxy.ts:16–33`): with two processes a vendor is allowed twice as many calls a minute, and nothing is lost. |
+| 10 | half, and decided to stay so | `bcec37f`: a frame grant is a row, so any process redeems it. The webhook limit is a limit per process, by decision (2026-10-11): 240 calls a minute for each integration, counted in the memory of the process that takes them (`src/integrations/proxy.ts`). With N processes a vendor is let through up to N × 240 a minute, and nothing is lost. One limit across processes needs a store they share and a write for every call; none was built. The constant's comment and `DOCS.md` say what it is, and `test/integrations-hook-limit.test.ts` holds it to that. |
 | 11 | fixed | after the build order, which did not name it: a seed that is given and decodes to fewer than 32 bytes throws when the signer is made (`src/integrations/credentials.ts`), which for a server is while it boots. The sentence says the seed's length, never the seed. No seed still generates a key. |
 | 12 | fixed | `3f95b94`: `outboundTimeoutMs` (30 s) and `pressMaxBytes` (5 MiB, a number nobody measured) |
 | 13 | fixed | `cec2c66`: the dev verifier is not exported, and a verifier of the app's own is said at boot |
@@ -617,7 +617,9 @@ decide.
   stored credential; lyceum imports `mintSession`).
 - **The gates list one package.** `check:modules`, `check:api` and the module
   block of the lint hold moss. `check:raw-sql` sweeps the others.
-- **The webhook limit is per process** (4.3, 10).
+- **The webhook limit is per process** (4.3, 10), and the documents say so.
+  Whether a deployment of several processes wants one ceiling is its owner's
+  to say; it would be a shared store, and none is built.
 - **Midas, nisc-website and moccadroid-website** import moss and are other
   repositories. The changeset's last part, "What an app changes", is what each
   follows.
