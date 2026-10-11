@@ -647,4 +647,13 @@ written, and each got a test that failed first.
   `nisc dev` builds the plugin itself and does not pass that option on: an
   app under `nisc dev` that wants the sign-in on a phone has no way to say so
   yet, and no app in this repository gives `dev.signIn` at all.
+  A page of another site, open in the developer's browser, asks from this
+  machine too. Run in Chrome: sent to the sign-in by such a page, the browser
+  came back signed in as whoever the page named; an image, a fetch and a frame
+  of the address each had the app mint a session, and left no cookie. A
+  request marked `Sec-Fetch-Site: cross-site` is refused now, and the same
+  four pages leave the app unasked. A request that names another host (the
+  shape of a DNS rebinding) never reached the sign-in: vite's own check of
+  the host answers it `403` before moss's middleware runs, as it does for
+  `/catalog` and a page; that was run too, under `nisc dev`.
 

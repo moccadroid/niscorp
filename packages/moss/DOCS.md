@@ -1437,7 +1437,13 @@ Requires the optional `vite` peer.
     `403` with a sentence that says why, and the app is not asked. What a
     header says of where a request came from (`X-Forwarded-For`) is not read;
     behind a proxy on the same machine every request is the proxy's, and is
-    this machine's.
+    this machine's. **And it is not answered to a page of another site**: a
+    request a browser marks `Sec-Fetch-Site: cross-site` is answered `403`
+    too, whatever `signInFromNetwork` says. A page open in the developer's
+    browser asks from this machine, and sent there by one, the browser came
+    back signed in as whoever that page named. An address that is typed,
+    pasted, bookmarked or linked from the app's own page is answered; one
+    clicked on another site's page is pasted into the address bar instead.
   - `signInFromNetwork?: boolean` (default `false`) answers the sign-in to
     every device that can reach the dev server, for trying a signed-in screen
     on a phone. It hands out a session for whoever the address names: with it

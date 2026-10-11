@@ -136,6 +136,37 @@ describe('the dev server’s sign-in', () => {
     });
   });
 
+  // A page of another site, open in the developer's own browser, asks from
+  // this machine too. Run in Chrome: sent there by such a page, the browser
+  // came back signed in as whoever the page had named; and an image, a fetch
+  // or a frame of it had the app mint a session each time. A browser says
+  // which site started a request (`Sec-Fetch-Site`).
+  describe('is not answered to a page of another site', () => {
+    it('a request another site’s page started is refused, told why, and the app is not asked', async () => {
+      const answer = await signInAt('ada', { host: 'localhost:5173', 'sec-fetch-site': 'cross-site' });
+      expect(answer.status).toBe(403);
+      expect(answer.headers['set-cookie']).toBeUndefined();
+      expect(answer.headers['location']).toBeUndefined();
+      expect(answer.body).toContain('another site');
+      expect(answer.asked).toEqual([]);
+    });
+
+    it('nor with `signInFromNetwork`, which is about which devices ask and not which pages', async () => {
+      const answer = await signInAt('ada', { host: 'localhost:5173', 'sec-fetch-site': 'cross-site' }, { options: { signInFromNetwork: true } });
+      expect(answer.status).toBe(403);
+      expect(answer.asked).toEqual([]);
+    });
+
+    it.each([
+      ['typed, pasted or bookmarked', 'none'],
+      ['a link on the app’s own page', 'same-origin'],
+      ['a page on another port of this machine', 'same-site'],
+    ])('the address %s is answered (%s)', async (_how, site) => {
+      const answer = await signInAt('ada', { host: 'localhost:5173', 'sec-fetch-site': site });
+      expect(answer.status).toBe(302);
+      expect(answer.asked).toEqual(['ada']);
+    });
+  });
 });
 
 // The plugin attaches the socket before any app has booted, and an edit swaps

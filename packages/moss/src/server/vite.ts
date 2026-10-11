@@ -99,6 +99,33 @@ const LOOPBACK = loopback();
 const isFromThisMachine = (address: string | undefined): boolean =>
   address !== undefined && (isIPv4(address) ? LOOPBACK.check(address, 'ipv4') : isIPv6(address) && LOOPBACK.check(address, 'ipv6'));
 
+// THE SIGN-IN SIGNS WHOEVER ASKS IN AS WHOEVER THE ADDRESS NAMES, so it is
+// answered to the developer and to nobody else. Why a request is refused, or
+// undefined when it is answered:
+//
+//   - it did not come from this machine, unless the host opened the sign-in
+//     to the network (`signInFromNetwork`);
+//   - a page of another site started it. That page is open in the developer's
+//     own browser, so its request comes from this machine too: sent there by
+//     such a page, the browser came back signed in as whoever the page had
+//     named, and an image or a fetch of the address had the app mint a session
+//     each time. A browser says which site started a request
+//     (`Sec-Fetch-Site`), and a page cannot write that header. An address that
+//     is typed, pasted, bookmarked, or linked from the app's own page is not
+//     another site's, and something that is not a browser sends no such header.
+const signInRefusal = (req: Connect.IncomingMessage, fromNetwork: boolean): string | undefined => {
+  if (!fromNetwork && !isFromThisMachine(req.socket.remoteAddress)) {
+    return (
+      `The dev sign-in (/dev/as/…) answers requests from this machine only, and this one came from ${req.socket.remoteAddress ?? 'an address the server cannot see'}. ` +
+      'It hands out a session for whoever the address names. To sign in from another device, set `signInFromNetwork: true` on mossDev: anybody who can reach this dev server then signs in as anybody.'
+    );
+  }
+  if (req.headers['sec-fetch-site'] === 'cross-site') {
+    return 'The dev sign-in (/dev/as/…) was asked for by a page of another site, and is not answered to one: it would sign this browser in as whoever that page named. Open the address yourself, from the address bar.';
+  }
+  return undefined;
+};
+
 // An app that is booted, and what answers for it. `transport` is the one its
 // connections are opened by: made for this app, set as its server's socket
 // says (the two settings of its runtime), and retired with it. Absent where
@@ -134,16 +161,12 @@ const devMiddleware =
             next();
             return;
           }
-          // IT SIGNS WHOEVER ASKS IN AS WHOEVER THE ADDRESS NAMES, so it answers
-          // the developer's own machine and nobody else, unless the host opened
-          // it (`signInFromNetwork`). Refused before the app is asked anything.
-          if (options.signInFromNetwork !== true && !isFromThisMachine(req.socket.remoteAddress)) {
+          // Refused before the app is asked anything.
+          const refusal = signInRefusal(req, options.signInFromNetwork === true);
+          if (refusal !== undefined) {
             res.statusCode = 403;
             res.setHeader('content-type', 'text/plain; charset=utf-8');
-            res.end(
-              `The dev sign-in (/dev/as/…) answers requests from this machine only, and this one came from ${req.socket.remoteAddress ?? 'an address the server cannot see'}. ` +
-                'It hands out a session for whoever the address names. To sign in from another device, set `signInFromNetwork: true` on mossDev: anybody who can reach this dev server then signs in as anybody.',
-            );
+            res.end(refusal);
             return;
           }
           const token = await app.signIn(decodeURIComponent(who));

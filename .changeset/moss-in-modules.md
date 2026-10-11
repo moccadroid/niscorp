@@ -370,6 +370,8 @@ Where the right column says there is nothing to call and an app did call it, say
 - New on `mossDev`: `signInFromNetwork: true` answers it to every device that can reach the dev server, for trying a signed-in screen on a phone on a network you trust. The name says what it opens: the sign-in, to the network.
 - **A developer who opened `/dev/as/<who>` from a second device** sets `signInFromNetwork: true` where the app adds `mossDev` itself. `nisc dev` adds the plugin for the app and does not turn it on: under `nisc dev` the sign-in is this machine's.
 - A dev server behind a proxy on the same machine sees every request as the proxy's, which is this machine: the check cannot tell those apart, and a proxy that listens on a network is its owner's to close.
+- **It is not answered to a page of another site either.** Such a page is open in the developer's own browser, so its request comes from this machine. Run in Chrome before this change: a page of another site that sent the browser to `/dev/as/<who>` left it signed in as whoever the page had named, and an image, a fetch or a frame of the address had the app mint a session each time (the browser kept no cookie from those three). A browser says which site started a request, in a header a page cannot write: a request marked `Sec-Fetch-Site: cross-site` is answered `403` with why, and `signIn` is not called, whatever `signInFromNetwork` says.
+- An address that is typed, pasted, bookmarked, opened by a tool, or linked from the app's own page is answered as before. **A link to `/dev/as/<who>` on another site's page** (a README in a browser, a chat) is refused when it is clicked: paste the address instead.
 
 **(8) THE TERMINAL**
 
