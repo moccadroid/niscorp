@@ -1,7 +1,6 @@
 import type { Tide } from '@niscorp/tide';
+import type { WriteEvent } from '@niscorp/vex';
 import type { Feature, FeatureSeams } from '../feature';
-import { chainHintsOf } from './chain';
-import { mintWrites } from './mint';
 
 // ═══════════════════════════════════════════════════════════════
 // THE FEATURE — a committed write becomes tide facts, as one object an app
@@ -56,7 +55,8 @@ export const mintFromWrites = (config: TideFactsConfig, seams: Pick<FeatureSeams
     const as = tide !== undefined ? config.identity(event.scope) : undefined;
     if (tide === undefined || as === undefined) return;
     // The chain position the request named in this feature's own two headers
-    // (./chain.ts), if the app's gate takes that caller's word for it.
+    // (`chainHintsOf`, below), if the app's gate takes that caller's word for
+    // it.
     const hints = chainHintsOf(request);
     const chain = hints === undefined ? undefined : config.chain?.(event.scope, hints);
     mintWrites(tide, event, as, Date.now(), chain).catch((err) => console.error('[moss:facts]', err));
@@ -68,3 +68,74 @@ export const createTideFacts = (config: TideFactsConfig): Feature => ({
     mintFromWrites(config, seams);
   },
 });
+
+// THE PLACE IN A CHAIN OF EFFECTS A REQUEST NAMED.
+//
+// A tide effect that writes back through vex says where in a chain it is, in
+// two headers of its request: `x-tide-cause`, the task that caused the write,
+// and `x-tide-depth`, how many hops in that task is. They are this feature's
+// headers, and it is this file that knows their names and reads them: the core
+// hands on what a request said (../feature, the `onWrite` seam) and reads no
+// header of anybody's.
+//
+// What they say is the caller's word. Whether it is believed is the app's
+// `chain` gate (`TideFactsConfig.chain`, above).
+
+export type ChainHints = { cause: string; depth: number };
+
+// HOW DEEP IN A CHAIN A REQUEST SAYS IT IS: a whole number that is not
+// negative, written as `String(depth)` writes one — digits and nothing else.
+// Read by its form and not with `Number()`, which reads more than a number:
+// an empty header is 0 to it, and 0 is the start of a chain, so a chain whose
+// depth is lost on the way would be counted from the beginning again, under a
+// ceiling that exists to stop it. Undefined: the header names no depth.
+const depthOf = (header: string | undefined): number | undefined => {
+  if (header === undefined || !/^\d+$/.test(header)) return undefined;
+  const depth = Number(header);
+  return Number.isSafeInteger(depth) ? depth : undefined;
+};
+
+// The position a request named, or undefined when it named none that reads
+// as one: no cause, an empty one, or a depth that is not a depth.
+const chainHintsOf = (request: { header: (name: string) => string | undefined }): ChainHints | undefined => {
+  const cause = request.header('x-tide-cause');
+  const depth = depthOf(request.header('x-tide-depth'));
+  return cause === undefined || cause === '' || depth === undefined ? undefined : { cause, depth };
+};
+
+// THE WRITE-FACT BRIDGE — vex's write observer, minted into tide.
+//
+// One fact per (statement × returned row): a two-statement mutation
+// is two stimuli, and an UPDATE the scope narrowed to nothing is
+// none — zero rows mint zero facts, so "a write landed" is never
+// said about a write that changed nothing.
+//
+// `as` is the fact's identity fence. Tide offers a fact only to
+// reflexes running AS the same identity, and consults no scope
+// policy on the way (the row travels unread) — so the stamp here,
+// derived from the WRITE's own scope by the app's naming rule, is
+// what keeps one tenant's row out of another tenant's automation.
+// Stamping by anything else (a listener's interest, a default)
+// would walk data across that fence.
+//
+// `chain` is the causality thread: when the write came from a tide effect
+// (the handler forwarded its task and depth, the app's gate vouched for the
+// caller), the minted facts carry `cause: task:<id>` and `depth + 1` — the
+// same stamps an in-engine emit gets — so the chain ceiling holds across a
+// trip through the database instead of resetting at every hop.
+const mintWrites = async (
+  intake: Pick<Tide, 'ingest'>,
+  event: WriteEvent,
+  as: string,
+  at: number,
+  chain?: { cause: string; depth: number },
+): Promise<void> => {
+  for (const write of event.writes) {
+    for (const row of write.rows) {
+      await intake.ingest(
+        { kind: 'write', entity: write.table, op: write.op, row, at },
+        { as, ...(chain !== undefined ? { cause: chain.cause, depth: chain.depth + 1 } : {}) },
+      );
+    }
+  }
+};

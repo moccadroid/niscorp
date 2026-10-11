@@ -9,9 +9,9 @@
 // Tide's Postgres store and its driver are tide's own
 // (`@niscorp/tide/postgres`, `createTideDriver`). This is the glue only a
 // host can be: vex reports a write, and each row it returned becomes a
-// `{ kind: 'write' }` fact (./mint.ts), for the identity the app reads off
-// the write's scope (./feature.ts), at the place in a chain the request that
-// wrote named in the two headers that are this feature's (./chain.ts).
+// `{ kind: 'write' }` fact, for the identity the app reads off the write's
+// scope, at the place in a chain the request that wrote named in the two
+// headers that are this feature's (./feature.ts holds all three).
 // ═══════════════════════════════════════════════════════════════
 
 // THIS FILE IS AN ENTRY POINT: `@niscorp/moss/tide`. What it exports is what
