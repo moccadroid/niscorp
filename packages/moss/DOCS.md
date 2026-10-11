@@ -342,10 +342,9 @@ it does nothing else:
 **A deployment that faces the internet** limits how many connections one
 address may hold where the address is known: at its proxy or load balancer,
 on the socket's path (`/socket`). With that in place, `anonymousShellMax` is
-what it is sized for here, memory. Two things an app can do on its own: a
-first screen for nobody that is a page which is not live opens no socket and
-takes no place (`nisc build` says which pages are), and a screen that needs
-nobody signed in to press anything is such a page.
+what it is sized for here, memory. What an app can do on its own: a first
+screen for nobody that is a page which is not live opens no socket and takes
+no place (`nisc build` says which pages are live, and why).
 
 The default is from a measurement (2026-10-10, Node 24): lyceum's real boot,
 2,000 connections for nobody opened through `server.socket` and held, the heap
