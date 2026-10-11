@@ -163,9 +163,6 @@ export const migrateTables = async (
   // them.
   const entries = entriesOf(app);
   const cache = runtime.cache ?? createPostgresCache({ pool: runtime.pool });
-  // A claim that cannot hold is refused before the database is asked
-  // anything, as a server refuses it.
-  const featureTables = featureTablesOf(app, runtime.cache);
 
   // As the database stands now — read before the run, on the pool: a single-
   // connection database (PGlite) cannot answer the pool while a transaction is
@@ -179,7 +176,7 @@ export const migrateTables = async (
   }
 
   let found: Pick<TablesReport, 'removed' | 'retyped' | 'alreadyBroken'> = { removed: [], retyped: [], alreadyBroken: [] };
-  const owners: TableOwners = { pool: runtime.pool, cache: runtime.cache, storesSessions: runtime.session === 'sessions', featureTables, tables: runtime.tables };
+  const owners: TableOwners = { pool: runtime.pool, cache: runtime.cache, storesSessions: runtime.session === 'sessions', featureTables: featureTablesOf(app), tables: runtime.tables };
   const report = await migrate(runtime.pool, tableSequencesOf(owners), {
     ...(options.dryRun === true ? { dryRun: true } : {}),
     guard: async (tx) => {

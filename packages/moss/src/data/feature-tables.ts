@@ -1,7 +1,6 @@
 import type { Sequence } from '@niscorp/strata';
-import type { CacheBackend } from '@niscorp/vex';
 import type { NiscApp } from '../manifest';
-import { CACHE_HOLDS, CORE_TABLES } from './tables';
+import { CORE_TABLES } from './tables';
 
 // ═══════════════════════════════════════════════════════════════
 // WHICH TABLES ARE A FEATURE'S OWN — read off the app's features before any
@@ -16,13 +15,6 @@ import { CACHE_HOLDS, CORE_TABLES } from './tables';
 //
 // ONE OWNER PER TABLE. A table of the core's is no feature's (./tables.ts,
 // `CORE_TABLES`), and a table one feature names is not another's.
-//
-// THE CORE'S TABLES, BY THE NAMES THIS DEPLOYMENT GAVE THEM. Three of the four
-// have one name everywhere. The fourth is vex's cache, which is `vex_cache`
-// unless the deployment handed the runtime a cache of its own, and a Postgres
-// cache may keep its table under any name. So the cache in force is asked
-// which table it keeps (`CacheBackend.table`), and that one is refused too:
-// what is in it is every entry the engine replays.
 // ═══════════════════════════════════════════════════════════════
 
 export type FeatureTables = {
@@ -42,28 +34,12 @@ const coreTableRefusal = (feature: string, table: string, holds: string): Error 
       `Keep what the feature needs in a table of its own (\`tables.sequences\`).`,
   );
 
-// The schema whose tables the engine serves (./engine.ts makes its adapter
-// with no other). A cache kept in another schema keeps a table no entry
-// reaches, so its name is free here.
-const SERVED_SCHEMA = 'public';
-
-// The core's tables on a deployment whose cache is `cache`: the ones every
-// deployment has, and the one this cache keeps vex's entries in. No cache
-// handed over is the default one, which `CORE_TABLES` already names.
-const coreTablesWith = (cache: Pick<CacheBackend, 'table'> | undefined): ReadonlyMap<string, string> => {
-  const kept = cache?.table;
-  if (kept === undefined || kept.schema !== SERVED_SCHEMA) return CORE_TABLES;
-  return new Map([...CORE_TABLES, [kept.name, CACHE_HOLDS]]);
-};
-
 // The tables the app's features keep, in the order the app named the features.
 // One function, for the server and for the step that migrates before it
 // starts: the two must run the same sequences, or a boot that only verifies
 // (`migrations: 'verify'`) finds one pending that the step never applied.
-// Throws on a claim that cannot hold, before a table is made. `cache` is the
-// one the deployment handed its runtime, when it handed one.
-export const featureTablesOf = (app: Pick<NiscApp, 'features'>, cache?: Pick<CacheBackend, 'table'>): readonly FeatureTables[] => {
-  const core = coreTablesWith(cache);
+// Throws on a claim that cannot hold, before a table is made.
+export const featureTablesOf = (app: Pick<NiscApp, 'features'>): readonly FeatureTables[] => {
   const ownerOf = new Map<string, string>();
   const features = new Set<string>();
   return (app.features ?? []).map((feature) => {
@@ -73,7 +49,7 @@ export const featureTablesOf = (app: Pick<NiscApp, 'features'>, cache?: Pick<Cac
     features.add(feature.name);
     const names = feature.tables?.names ?? [];
     for (const table of names) {
-      const holds = core.get(table);
+      const holds = CORE_TABLES.get(table);
       if (holds !== undefined) throw coreTableRefusal(feature.name, table, holds);
       const other = ownerOf.get(table);
       if (other !== undefined) throw new Error(`moss: the features "${other}" and "${feature.name}" both name the table "${table}" as their own. A table has one owner.`);

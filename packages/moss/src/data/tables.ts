@@ -22,14 +22,10 @@ import type { Sequence } from '@niscorp/strata';
 // deployment's ledger has them; in code they are the integrations feature's
 // (../integrations, which names them as its own), and nothing in this module
 // reads or writes a row of either.
-// What vex's cache holds, said once: for its default table below, and for
-// the table a deployment's own cache keeps instead (./feature-tables.ts).
-export const CACHE_HOLDS = 'the entries vex replays';
-
 export const CORE_TABLES: ReadonlyMap<string, string> = new Map([
   ['moss_generation', 'the generation pointer every process polls'],
   ['sessions', 'the stored session credentials'],
-  ['vex_cache', CACHE_HOLDS],
+  ['vex_cache', 'the entries vex replays'],
   ['strata_ledger', 'the record of every migration that ran'],
 ]);
 

@@ -1079,10 +1079,7 @@ its own, and the core never imports it.
   the app's policy without running it. A table has one owner: a feature that
   names one of the core's (`sessions`, `moss_generation`, `vex_cache`,
   `strata_ledger`), or a table another feature names, refuses the boot (and
-  `migrateTables`) with a sentence that says which table and why. The
-  cache's table is refused under the name the deployment gave it: where
-  `runtime.cache` is a Postgres cache with a `table` of its own, that table
-  is the core's, as `vex_cache` is where it is not.
+  `migrateTables`) with a sentence that says which table and why.
   `tables.sequences` is the strata sequences that make them: they are
   migrated in the one ledgered run, before the feature starts, and
   `migrateTables` runs them too.
