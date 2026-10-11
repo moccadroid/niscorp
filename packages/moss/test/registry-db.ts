@@ -15,8 +15,7 @@ import { INTEGRATIONS_SEQUENCE } from '../src/integrations/tables';
 export const registryOver = async (pool: PgPool, db: PgPool = pool): Promise<Replay> => {
   await migrate(pool, [MOSS_SEQUENCE, INTEGRATIONS_SEQUENCE]);
   const adapter = createPostgresAdapter({ pool });
-  const schema = await adapter.introspect();
-  return createOwnEntries({ adapter, schema, db, engine: { invalidate: () => undefined } })({ owner: 'the feature "integrations"', entries: REGISTRY_ENTRIES, tables: REGISTRY_TABLES });
+  return createOwnEntries({ adapter, db, engine: { invalidate: () => undefined } })({ owner: 'the feature "integrations"', entries: REGISTRY_ENTRIES, tables: REGISTRY_TABLES });
 };
 
 // THE SAME DATABASE, THROUGH A CLIENT ON WHICH ONE KIND OF STATEMENT FAILS,

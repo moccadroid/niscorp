@@ -58,13 +58,19 @@ export const tableNamed = (name: string): DatabaseSchema['entities'][number] => 
   indexes: [{ name: `${name}_pkey`, fields: ['id'], unique: true, type: 'btree' }],
 });
 
-export const engineDouble = async (rows: Record<string, unknown>[] = [{ id: 1, body: 'first' }], schema: DatabaseSchema = NOTES_SCHEMA): Promise<EngineDouble> => {
+// `entities`: the list of tables the app gave vex (`vexConfig.entities`). The
+// engine then asks the adapter for those alone, and the adapter answers them
+// alone, as vex's Postgres adapter does.
+export const engineDouble = async (rows: Record<string, unknown>[] = [{ id: 1, body: 'first' }], schema: DatabaseSchema = NOTES_SCHEMA, entities?: string[]): Promise<EngineDouble> => {
   const read: (readonly unknown[])[] = [];
   const tablesRead: string[] = [];
   const written: EngineDouble['written'] = [];
   const adapter: DatabaseAdapter = {
     id: 'double',
-    introspect: async () => schema,
+    introspect: async (options) => {
+      const asked = options?.entities;
+      return asked === undefined ? schema : { entities: schema.entities.filter((entity) => asked.includes(entity.name)) };
+    },
     compile: (resolved) => {
       for (const source of resolved.sources) if (source.entity !== undefined) tablesRead.push(source.entity.table);
       return { sql: 'SELECT 1', paramSlots: [], contextContract: {} };
@@ -86,7 +92,7 @@ export const engineDouble = async (rows: Record<string, unknown>[] = [{ id: 1, b
   };
   const cache = createMemoryCache();
   await seedCache(cache, [READ_NOTES, READ_OWN_NOTES, ADD_NOTE]);
-  const engine = createQueryEngine({ adapter, cache });
+  const engine = createQueryEngine({ adapter, cache, ...(entities !== undefined ? { config: { entities } } : {}) });
   await engine.introspect();
   const db: MutationClient = {
     query: async (sql, params) => {

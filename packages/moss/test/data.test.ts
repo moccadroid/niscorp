@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
 import { compile, execute } from '@niscorp/prism';
 import { createMemoryCache, createPostgresCache, scopeGrants } from '@niscorp/vex';
-import type { SeedEntry, SeedMutation } from '@niscorp/vex';
+import type { DatabaseSchema, SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Charter } from '@niscorp/charter';
 import type { Sequence } from '@niscorp/strata';
 import type { DocumentStore } from '@niscorp/strata/postgres';
@@ -12,7 +12,7 @@ import { dataOver } from '../src/data/data';
 import { createGrammarUpgrader } from '../src/data/grammar';
 import { featureTablesOf } from '../src/data/feature-tables';
 import { migrateTables, tableSequencesOf } from '../src/data/migrate';
-import { engineDouble } from './data-double';
+import { NOTES_SCHEMA, engineDouble } from './data-double';
 
 // WHAT SOMEBODY MAY READ AND WRITE, as the one object a server builds: the
 // part of it that stands over an engine, held here against an engine with no
@@ -302,6 +302,67 @@ describe("the data module — a feature's own entries", () => {
     const replay = await data.ownEntries('tagging', own);
     await replay('tags/all', {});
     expect(spans.map((span) => [span.name, span.status, span.attributes['fingerprint'], span.attributes['hasPrincipal']])).toEqual([['vex.execute', 'ok', 'tags/all', false]]);
+  });
+});
+
+// THE LIST OF TABLES AN APP GIVES VEX (`runtime.vexConfig.entities`) IS ABOUT
+// THE APP'S ENGINE. Moss's own entries ran on engines that reused that
+// engine's schema, which the list had already cut down: with a list that
+// leaves moss's tables out (every list an app would write), the generation
+// pointer could not be read (`Entity "moss_generation" not found in schema`)
+// and a feature's own entries refused its start. Each of those engines reads
+// its owner's tables off the database itself.
+describe("the data module — moss's own entries, where the app gave vex a list of tables", () => {
+  const generation: DatabaseSchema['entities'][number] = {
+    name: 'moss_generation',
+    table: 'moss_generation',
+    fields: [
+      { name: 'id', type: 'integer', normalizedType: 'number', nullable: false, primaryKey: true },
+      { name: 'n', type: 'bigint', normalizedType: 'number', nullable: false, primaryKey: false },
+    ],
+    relations: [],
+    indexes: [{ name: 'moss_generation_pkey', fields: ['id'], unique: true, type: 'btree' }],
+  };
+
+  // The database holds `notes`, `tags` and the pointer's table; the app's
+  // list names `notes` alone.
+  const listed = async () => {
+    const double = await engineDouble([{ n: 3 }], { entities: [...NOTES_SCHEMA.entities, generation] }, ['notes']);
+    const data = dataOver(
+      { engine: double.engine, adapter: double.adapter, grants: scopeGrants(['notes']), grammars: await createGrammarUpgrader({}), upgradeStore: async () => undefined },
+      { db: double.db, charter, featureTables: [{ feature: 'tagging', names: ['tags'], sequences: [] }] },
+    );
+    return { ...double, data };
+  };
+
+  it("the app's engine knows the tables of the list, and no other", async () => {
+    const { engine } = await listed();
+    expect(engine.getSchema()?.entities.map((entity) => entity.name)).toEqual(['notes']);
+  });
+
+  it('the generation pointer is read and moved', async () => {
+    const { data, written } = await listed();
+    expect(await data.pointer.read()).toBe(3);
+    await data.pointer.move(3);
+    expect(written[0]?.sql).toMatch(/^UPDATE moss_generation/);
+  });
+
+  it("a feature's own entries are taken and replayed on the tables it named", async () => {
+    const { data, written, tablesRead } = await listed();
+    const replay = await data.ownEntries('tagging', [TAGS, ADD_TAG]);
+    await replay('tags/all', {});
+    await replay('tags/add', { id: 4 });
+    expect(tablesRead).toEqual(['tags']);
+    expect(written[0]?.sql).toMatch(/^INSERT INTO tags/);
+  });
+
+  it('and reach no other table for it: neither one of the list, nor one the list left out', async () => {
+    const { data, read, written } = await listed();
+    const POINTER_BY_THE_FEATURE: SeedEntry = { fingerprint: 'tags/pointer', dsl: { from: ['moss_generation'], fields: ['moss_generation.n'], limit: 1 } };
+    await expect(data.ownEntries('tagging', [TAGS, NOTES_BY_THE_FEATURE])).rejects.toThrow(/handed over an entry that reads or writes a table that is not its own: "tags\/notes"/);
+    await expect(data.ownEntries('tagging', [TAGS, POINTER_BY_THE_FEATURE])).rejects.toThrow(/handed over an entry that reads or writes a table that is not its own: "tags\/pointer"/);
+    expect(read).toHaveLength(0);
+    expect(written).toHaveLength(0);
   });
 });
 

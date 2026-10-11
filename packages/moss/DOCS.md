@@ -305,6 +305,13 @@ hold wherever that socket is attached: under `serve`, `nisc start`, the dev
 plugin (`nisc dev`), and a host of the app's own that calls
 `attachSocket(httpServer, server.socket)`. No host says them again.
 
+`vexConfig` is handed to the app's query engine. A list of tables given there
+(`entities`) cuts down what that engine knows: the entries the app serves, and
+the `data` universe its charter is resolved over. It says nothing about moss's
+own reads and writes. The generation counter and a feature's own entries (the
+integrations' registry) read the tables that are theirs off the database
+whatever the list names, and know no other table.
+
 `session` is required, deliberately — authentication is the one door that must
 not default open, and it used to. Three answers: `'sessions'` uses moss's own
 stored credential (below); `'dev-open'` trusts every well-formed token and says

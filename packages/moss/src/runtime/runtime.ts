@@ -25,7 +25,11 @@ export type NiscRuntime = {
   // generated one may ask for, how long a read may run. Here rather than on
   // the manifest for the reason every knob below is: these are decisions about
   // a deployment's database, not something an application is written against.
-  // Unset, the engine runs on its defaults.
+  // Unset, the engine runs on its defaults. THEY ARE THE APP'S ENGINE'S: a
+  // list of tables given here (`entities`) cuts down what the app's entries
+  // and its charter's `data` universe see, and says nothing about moss's own
+  // reads and writes (the generation pointer, a feature's own entries), which
+  // know the tables that are theirs whatever it names (../data, own-entries.ts).
   vexConfig?: QueryEngineConfig['config'];
   // WHO A TOKEN IS. Required, deliberately — every other door in moss fails
   // closed, and this is the one where forgetting a field used to open it for

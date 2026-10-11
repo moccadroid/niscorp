@@ -261,11 +261,8 @@ export const dataOver = (prepared: PreparedEngine, config: Pick<DataConfig, 'db'
 
   // ENTRIES THAT ARE NOT THE APP'S, over the engine that stood up: seeded where
   // no route serves them, and replayed in process (./own-entries.ts).
-  const ownEntries = async (own: OwnEntries, told: ((record: ExecuteRecord) => void) | undefined): Promise<Replay> => {
-    const schema = engine.getSchema();
-    if (schema === undefined) throw new Error('moss: entries of its own were handed over before the engine had read the database.');
-    return createOwnEntries({ adapter: prepared.adapter, schema, db: config.db, engine, ...(told !== undefined ? { onExecute: told } : {}) })(own);
-  };
+  const ownEntries = (own: OwnEntries, told: ((record: ExecuteRecord) => void) | undefined): Promise<Replay> =>
+    createOwnEntries({ adapter: prepared.adapter, db: config.db, engine, ...(told !== undefined ? { onExecute: told } : {}) })(own);
 
   const tablesOf = featureTablesOver(config);
 

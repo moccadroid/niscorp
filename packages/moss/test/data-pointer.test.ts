@@ -50,8 +50,9 @@ const world = (answers: { read?: Record<string, unknown>[]; untyped?: boolean; w
     },
   };
   const replay = createOwnEntries({
-    adapter: createPostgresAdapter({ pool }),
-    schema: SCHEMA,
+    // What the database holds is said here: the pool answers rows and knows no
+    // catalog.
+    adapter: { ...createPostgresAdapter({ pool }), introspect: async () => SCHEMA },
     db,
     engine: { invalidate: (tables) => void invalidated.push([...tables]) },
   })(POINTER);

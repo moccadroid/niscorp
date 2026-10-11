@@ -1,5 +1,5 @@
 import { createMemoryCache, createQueryEngine, handleDiscovery, handleQuery, seedCache, tablesChangedBy } from '@niscorp/vex';
-import type { DatabaseAdapter, DatabaseSchema, ExecuteRecord, MutationClient, QueryEngine, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
+import type { DatabaseAdapter, ExecuteRecord, MutationClient, QueryEngine, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
 
 // ═══════════════════════════════════════════════════════════════
 // A FEATURE'S OWN ENTRIES — the reads and writes a feature makes on the tables
@@ -42,11 +42,10 @@ export type OwnEntries = {
 export type Replay = (fingerprint: string, context: Record<string, unknown>) => Promise<unknown>;
 
 export type OwnEntriesConfig = {
-  // The adapter the app's own engine reads through, and the schema that engine
-  // introspected: a feature's entries see the tables the app's see, and a read
-  // of theirs is bounded as an app's is.
+  // The adapter the app's own engine reads through: a read of theirs is
+  // bounded as an app's is, and the tables that are their owner's are asked
+  // of the database through it.
   adapter: DatabaseAdapter;
-  schema: DatabaseSchema;
   // The client a write is replayed on.
   db: MutationClient;
   // The app's engine, told which tables a write of the feature's changed: a
@@ -65,11 +64,20 @@ const messageOf = (body: unknown): string =>
 export const createOwnEntries =
   (config: OwnEntriesConfig) =>
   async (own: OwnEntries): Promise<Replay> => {
-    const { schema } = config;
     const cache = createMemoryCache();
     await seedCache(cache, own.entries);
-    // An engine beside the app's, over the same database. It introspects
-    // nothing: the tables are the ones the app's engine found.
+    // ITS OWNER'S TABLES, READ OFF THE DATABASE FOR THIS ENGINE, AND NO OTHER
+    // TABLE. It used to be handed the schema the app's engine had read, and
+    // that one is the app's to cut down: with `runtime.vexConfig.entities`
+    // set, it holds the tables of that list, moss's own are not among them,
+    // and every entry here answered `Entity "…" not found in schema`: the
+    // generation pointer could not be read or moved, and a feature's entries
+    // refused its start. So the list an app gives vex says nothing here, and
+    // neither does anything else of the app's engine. What this engine knows
+    // is the tables that are its owner's, which is also all it may serve.
+    const schema = await config.adapter.introspect({ entities: [...own.tables] });
+    // An engine beside the app's, over the same database, through the same
+    // adapter.
     const engine = createQueryEngine({
       adapter: { id: config.adapter.id, compile: config.adapter.compile, execute: config.adapter.execute, capabilities: config.adapter.capabilities, introspect: async () => schema },
       cache,
