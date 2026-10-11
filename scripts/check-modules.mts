@@ -49,14 +49,18 @@
 //   7. EVERY IMPORT CAN BE READ. `import()` and `require()` take one string
 //      written out. A path built while the program runs cannot be checked, so
 //      it is refused, and so are `createRequire` and a `require` handed
-//      around: each makes a loader nothing here can follow.
+//      around: each makes a loader nothing here can follow. A path is written
+//      with forward slashes: TypeScript reads `..\low\low` as `../low/low`,
+//      and read here it was one name with no slash in it, a file of the
+//      importer's own module.
 //
 // AND ONE IS ABOUT WHAT A READER FINDS:
 //
 //   8. A DOOR SAYS WHAT IS BEHIND IT. The comment of a module's `index.ts`
 //      names every file and every directory in the module. The style guide
 //      said each door did. Seven of moss's fourteen did not, for 30 files
-//      between them: a sentence about the code that nothing held.
+//      between them: a sentence about the code that nothing held. A name is
+//      matched whole: `./shell-session.ts` does not name a `session.ts`.
 //
 // A file still flat may be imported by anything while it exists; that is what
 // being in the middle of a move looks like. A module named in `finished` is no
@@ -267,6 +271,11 @@ const TOP = /^index(\.[cm]?[jt]sx?)?$/;
 
 const some = (found: readonly string[]): string => found.slice(0, 6).join('; ');
 
+// Does a door's comment name this file or directory? The name whole: not as
+// the end of a longer one (`session.ts` in `./shell-session.ts`), and not as
+// the start of one (`host.ts` in `host.tsx`, a directory `dom` in `dom.ts`).
+const names = (said: string, name: string): boolean => new RegExp(`(?<![\\w.-])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-]|\\.\\w)`).test(said);
+
 const judge = (shape: Shape, source: Source): Held[] => {
   const paths = [...source.files.keys()];
   const flatNow = paths.filter((path) => !path.includes('/') && path !== 'index.ts');
@@ -321,7 +330,10 @@ const judge = (shape: Shape, source: Source): Held[] => {
     const imports = importsOf(file, text);
     for (const what of imports.unreadable) unreadable.push(`${file} has ${what}`);
     for (const specifier of imports.specifiers) {
-      if (specifier.startsWith('.')) relative(file, specifier);
+      // TypeScript reads `..\low\low` as `../low/low`. Read here, it would be
+      // one name with no slash in it: a file of the importer's own module.
+      if (specifier.includes('\\')) unreadable.push(`${file} has an import of a path written with a backslash (${specifier})`);
+      else if (specifier.startsWith('.')) relative(file, specifier);
       else if (isBuiltin(specifier)) continue;
       else if (packageOf(specifier) === source.name) foreign.push(`${file} imports ${specifier}: its own package, by name`);
       else if (!source.dependencies.includes(packageOf(specifier))) foreign.push(`${file} imports ${specifier}, which package.json does not name`);
@@ -341,7 +353,7 @@ const judge = (shape: Shape, source: Source): Held[] => {
       .filter((line) => line.trimStart().startsWith('//'))
       .join('\n');
     const behind = new Set(paths.filter((path) => path.startsWith(`${directory}/`)).map((path) => path.slice(directory.length + 1).split('/')[0] ?? ''));
-    return [...behind].filter((name) => name !== 'index.ts' && !said.includes(name)).map((name) => `${directory}/index.ts does not name ${name}`);
+    return [...behind].filter((name) => name !== 'index.ts' && !names(said, name)).map((name) => `${directory}/index.ts does not name ${name}`);
   });
   const unknown = [
     ...Object.entries(shape.modules).flatMap(([module, needs]) => needs.filter((need) => shape.modules[need] === undefined).map((need) => `${module} names ${need}`)),
@@ -553,6 +565,21 @@ const DOOR_CASE: Case = {
   good: { 'low/more.ts': 'export const more = 1;\n', 'low/index.ts': "// ./low.ts is the module, and ./more.ts is one more.\nexport { low } from './low';\n" },
 };
 
+// The door names `./low.ts`. That is not naming `./w.ts`, though the one name
+// ends with the other.
+const DOOR_NAME_CASE: Case = {
+  what: 'a file whose name is the end of one its door does name (`w.ts` beside `./low.ts`)',
+  fails: NAMED,
+  bad: { 'low/w.ts': 'export const more = 1;\n' },
+  good: { 'low/w.ts': 'export const more = 1;\n', 'low/index.ts': "// ./low.ts is the module, and ./w.ts is one more.\nexport { low } from './low';\n" },
+};
+const BACKSLASH_CASE: Case = {
+  what: "another module's inner file, named with backslashes: `'..\\\\low\\\\low'`",
+  fails: READABLE,
+  bad: { 'high/f.ts': "import type { Low } from '..\\\\low\\\\low';\nexport type L = Low;\n" },
+  good: { 'high/f.ts': "import type { Low } from '../low';\nexport type L = Low;\n" },
+};
+
 const fixtureOf = (added: Readonly<Record<string, string>>, links: readonly string[] = []): Source => ({
   name: '@fixture/pkg',
   dependencies: ['zod'],
@@ -562,7 +589,7 @@ const fixtureOf = (added: Readonly<Record<string, string>>, links: readonly stri
 const failing = (held: readonly Held[]): string[] => held.filter((one) => !one.passed).map((one) => one.label);
 
 ok('self-test: the package the cases are built on passes every rule', failing(judge(FIXTURE_SHAPE, fixtureOf({}))).length === 0, failing(judge(FIXTURE_SHAPE, fixtureOf({}))).join('; '));
-for (const one of [...CASES, DOOR_CASE]) {
+for (const one of [...CASES, DOOR_CASE, DOOR_NAME_CASE, BACKSLASH_CASE]) {
   const bad = failing(judge(FIXTURE_SHAPE, fixtureOf(one.bad)));
   const good = failing(judge(FIXTURE_SHAPE, fixtureOf(one.good)));
   const caught = bad.includes(one.fails);
