@@ -199,23 +199,28 @@ const replaceShell = async (host: HostParts, cell: Cell): Promise<void> => {
   for (const { connection, wants } of carried) attach(next, connection, host.delta && wants);
 };
 
-// A BUILD, FROM WHEN IT STARTS UNTIL ITS SHELL IS ONE OF THE LIVING. While it
-// runs it is among the builds under way, so a change that happens meanwhile
-// is adopted when it lands. `cellOf` makes the cell the shell is addressed
-// through. A shell that ended on the way (app code that signed out while its
-// session was being built) is not put among the living: nothing would take
-// it out again.
-const landing = (host: HostParts, build: Promise<Live>, cellOf: (live: Live) => Cell): Promise<Cell> => {
-  const landed = build.then((live) => {
-    const cell = cellOf(live);
-    if (!live.ended) host.living.set(live, cell);
-    return cell;
-  });
-  host.underWay.add(landed);
-  const over = (): void => void host.underWay.delete(landed);
-  landed.then(over, over);
-  return landed;
+// AMONG THE BUILDS UNDER WAY, from now until it lands or fails: a change that
+// happens meanwhile is adopted by its cell when it lands (`adoptAll`).
+const whileUnderWay = (host: HostParts, build: Promise<Cell>): Promise<Cell> => {
+  host.underWay.add(build);
+  const over = (): void => void host.underWay.delete(build);
+  build.then(over, over);
+  return build;
 };
+
+// A BUILD, FROM WHEN IT STARTS UNTIL ITS SHELL IS ONE OF THE LIVING. `cellOf`
+// makes the cell the shell is addressed through. A shell that ended on the
+// way (app code that signed out while its session was being built) is not put
+// among the living: nothing would take it out again.
+const landing = (host: HostParts, build: Promise<Live>, cellOf: (live: Live) => Cell): Promise<Cell> =>
+  whileUnderWay(
+    host,
+    build.then((live) => {
+      const cell = cellOf(live);
+      if (!live.ended) host.living.set(live, cell);
+      return cell;
+    }),
+  );
 
 // EVERY LIVING SHELL OF ONE PRINCIPAL: the one this host keeps for them; or,
 // on a host that keeps none, the one built for each of their connections.
@@ -241,6 +246,13 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
     const turn = (cell.resetting ?? Promise.resolve()).then(() => replaceShell(host, cell));
     // The next one waits for this one whether it lands or fails.
     cell.resetting = turn.catch(() => undefined);
+    // A replacement is a build under way like a first one: it is made from
+    // what its principal held when it began, so a change that happens before
+    // it lands is adopted by the cell once it has.
+    void whileUnderWay(
+      host,
+      turn.then(() => cell),
+    );
     return turn;
   };
 

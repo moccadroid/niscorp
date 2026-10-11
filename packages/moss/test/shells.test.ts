@@ -1362,6 +1362,44 @@ describe('shells — adopt', () => {
     expect(mounted(session)).toEqual(['home', 'ledger']);
   });
 
+  // A REPLACEMENT IS A BUILD UNDER WAY TOO. A reset builds the shell that will
+  // stand, from what its principal held when the reset began. A change that
+  // happens while it is built is adopted by the shell that still stands, and
+  // the replacement then took its place holding what was held before.
+  it.each([
+    ['a kept shell', {}],
+    ['a shell that is not kept', { kept: false }],
+  ] as const)('%s that was being replaced when the app changed adopts when its replacement lands', async (_which, setup) => {
+    // The build waits here, after it has asked what its principal holds.
+    let waiting: Promise<void> | undefined;
+    const slow = { ...base, shell: { canvases: [{ id: 'main', initial: 'home' }], inputs: async () => (await waiting, {}) } } as unknown as NiscApp;
+    let inForce: Record<string, unknown> = { home, extra };
+    const host = createShellHost(
+      hostConfig({
+        ...ctx,
+        ...setup,
+        app: slow,
+        actions: () => inForce as ReturnType<NonNullable<HostSetup['actions']>>,
+        resolve: async () => ({ roles: ['member'], scope: {}, catalog: { ids: Object.keys(inForce) }, variants: new Map() }),
+      }),
+    );
+    const session = await host.session('t', 'usr_1');
+    const stood = session.shell;
+    let release = (): void => undefined;
+    waiting = new Promise<void>((resolve) => void (release = resolve));
+
+    session.reset();
+    await settle();
+    inForce = { home };
+    host.adopt();
+    await settle();
+    release();
+    await settle();
+
+    expect(session.shell).not.toBe(stood);
+    expect(() => session.shell.push('main', 'extra')).toThrow();
+  });
+
   it('every shell of one principal on a host that keeps none adopts, each for itself', async () => {
     const { host, hold } = world({ kept: false });
     const tabs = [await host.session('t', 'usr_1'), await host.session('t', 'usr_1')];

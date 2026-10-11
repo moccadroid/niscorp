@@ -1150,8 +1150,9 @@ is asked instead: `(await server.identity(principal)).roles`,
     registered and mounted instances keep their state; one that left, or is no
     longer granted, is removed and its instances unmounted. A shell that
     cannot adopt is logged and keeps what it held; the rest go on. A shell
-    whose build was under way adopts when it lands. One built for the length
-    of a `snapshot` is read and ended, and adopts nothing.
+    whose build was under way adopts when it lands, and so does one a reset
+    was replacing. One built for the length of a `snapshot` is read and
+    ended, and adopts nothing.
   - `deliver(principal, channel, payload?): boolean` — publish into one
     principal's living durable shell. `false` = they have no living shell;
     nothing is built.
