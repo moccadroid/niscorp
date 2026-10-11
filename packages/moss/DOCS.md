@@ -272,8 +272,8 @@ type NiscRuntime = {
   identityMax?: number;            // resident identity records; default 10,000; 0 or less refuses the boot
   identityIdleMs?: number;         // drop an unread identity record; default 30 min, `0` disables
   shellFrameDelta?: boolean;       // send changed canvases as deltas; default off
-  socketCompression?: boolean | Record<string, unknown>;  // permessage-deflate; default on (read by `serve`)
-  socketMaxMessageBytes?: number;  // the largest message a connection may send; default 256 KiB (read by `serve`)
+  socketCompression?: boolean | Record<string, unknown>;  // permessage-deflate; default on
+  socketMaxMessageBytes?: number;  // the largest message a connection may send; default 256 KiB
   operatorKey?: string;            // enables `/operator/*`; absent, every route there is 404
   operatorGate?: (c: Context, next: Next) => Response | void | Promise<Response | void>;
   fabric?: Fabric;                 // cross-process invalidations and nudges; default off
@@ -286,11 +286,11 @@ type NiscRuntime = {
 the function form of `session`. The type is not exported by name.
 
 `socketCompression` and `socketMaxMessageBytes` are settings of the Node
-transport, and `serve` (`@niscorp/moss/node`) is what reads them. A host that
-attaches the socket itself says them to `attachSocket`, as its options;
-`nisc start` and the dev plugin attach with no options, so under those two the
-transport runs on its defaults (compression on, 256 KiB) whatever the runtime
-says.
+transport. The server reads them, once, and the socket it hands out
+(`server.socket`) carries them to whichever transport is handed it. So they
+hold wherever that socket is attached: under `serve`, `nisc start`, the dev
+plugin (`nisc dev`), and a host of the app's own that calls
+`attachSocket(httpServer, server.socket)`. No host says them again.
 
 `session` is required, deliberately — authentication is the one door that must
 not default open, and it used to. Three answers: `'sessions'` uses moss's own
@@ -1153,8 +1153,8 @@ is asked instead: `(await server.identity(principal)).roles`,
   inflated. One over that closes the connection with `1009` — the transport's
   own close, not one of moss's — and what it carried did not arrive: the
   terminal reconnects as after any other close, and a signed-in person's shell
-  is as it was. The limit is the Node transport's (`attachSocket`'s
-  `maxMessageBytes`, below; `runtime.socketMaxMessageBytes` under `serve`),
+  is as it was. The limit is the Node transport's, set by
+  `runtime.socketMaxMessageBytes` wherever the server's socket is attached,
   and it is a bound on memory, not on speed: the
   server keeps what a message carried — the value in the shell, and again in
   the last frame it sent — and sends it back down in every later frame of that
@@ -1299,10 +1299,9 @@ served. Turn it off — or tune `zlibDeflateOptions.memLevel` / `windowBits`
 through the object form — when connection count matters more than bandwidth.
 An object is handed to `ws` verbatim; see its `perMessageDeflate` options.
 
-The setting is the Node transport's, and `serve` is what reads it off the
-runtime. A host that attaches the socket itself says it to `attachSocket`
-(`{ compression }`); `nisc start` and the dev plugin do not, and run with
-compression on.
+The setting is the Node transport's, and the server's socket carries it there
+from the runtime: it holds under `serve`, `nisc start`, the dev plugin, and a
+host that attaches `server.socket` itself.
 
 #### Frame deltas — `runtime.shellFrameDelta`, default **off**
 
@@ -1355,23 +1354,24 @@ Correctness, which matters more than the saving:
 
 - `serve(app, runtime & { port? }): Promise<MossServer>` — boots and listens:
   `createServer` runs inside (boot refusal included), then HTTP + the socket
-  in one process. `port` defaults to 8787. It hands the transport
-  `runtime.socketCompression` and `runtime.socketMaxMessageBytes`. **`close()`
+  in one process. `port` defaults to 8787. **`close()`
   on the server it returns stops what `serve` started**: moss's own timers,
   then every connection (closed `1001`), then the listener. `serve` hands back
   neither the listener nor the transport, so that is the one way to stop them.
 - `attachSocket(httpServer, accept, path?, options?): { close }` — embed the
   socket on an existing server (raw `ws`, `noServer`, path-matched — coexists
-  with vite HMR). `path` defaults to `/socket`. `options = { compression?,
-  maxMessageBytes? }`. `compression` is the same value as
-  `runtime.socketCompression` and defaults to `true`; `serve()` passes the
-  runtime's through for you, and a host running its own listener says it here
-  or runs on the default. `maxMessageBytes` is the largest message
-  a connection may send, in bytes, and defaults to 256 KB (`256 * 1024`); a
-  message over it closes that connection with `1009`. It is handed to `ws` as
-  `maxPayload`, whose own default was 100 MiB. `serve()` passes
-  `runtime.socketMaxMessageBytes`; `nisc start` and the dev plugin call
-  `attachSocket` with no options and take the default. What it answers is how
+  with vite HMR). `path` defaults to `/socket`. **A host that attaches a
+  server's socket passes no options**: `server.socket` says how it is to be
+  attached (`runtime.socketCompression`, `runtime.socketMaxMessageBytes`), and
+  the transport reads that off it. `serve`, `nisc start` and the dev plugin
+  all attach it that way. `options = { compression?, maxMessageBytes? }` is
+  for a host that means otherwise, and for an accept of its own that says
+  nothing; a setting named there wins, and one that is not named stays what
+  the socket says. What neither says is the default: `compression` `true`,
+  and `maxMessageBytes` 256 KB (`256 * 1024`), the largest message a
+  connection may send, in bytes; a message over it closes that connection
+  with `1009`. It is handed to `ws` as `maxPayload`, whose own default was
+  100 MiB. What it answers is how
   the transport is retired: `close()` ends every connection it opened (`1001`)
   and takes no more, for a host that stops its listener while the process goes
   on.
@@ -1405,13 +1405,18 @@ Correctness, which matters more than the saving:
 Requires the optional `vite` peer.
 
 - `mossDev(options: MossDevOptions): Plugin` — the app server inside vite's
-  dev process (serve only): no proxy and no second process. The socket is attached once to
-  vite's own http server; `/` and any path a page answers go out as
+  dev process (serve only): no proxy and no second process. The socket is
+  heard once on vite's own http server, and each upgrade is answered by the
+  transport of the app that is booted then: one for each app, set as its
+  runtime says (`socketCompression`, `socketMaxMessageBytes`). An upgrade that
+  arrives during a boot waits for it; one that meets an app that did not boot
+  is refused with `503`. `/` and any path a page answers go out as
   `index.html` through `transformIndexHtml` with the screen drawn in
   (`renderDocument`); `MOSS_PATHS` go to the app server; the rest is vite's.
   An edit under a watched path re-boots the whole app and reloads the page;
   the outgoing server answers until the new one is up, and a failed re-boot
-  keeps it.
+  keeps it. The connections of an app that is let go are closed (`1001`), so
+  a terminal that is not a page connects again, to the app that is booted.
   - `options.app(load): Promise<DevApp>` — stand the app up. `load` is vite's
     `ssrLoadModule`. `DevApp = { server, close?, draw?, htmlAttributes?,
     site?, tokenKey?, signIn? }`; absent `draw`, pages go out undrawn.

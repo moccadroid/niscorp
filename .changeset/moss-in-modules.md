@@ -330,13 +330,19 @@ Where the right column says there is nothing to call and an app did call it, say
 - `renderDocument` and `exportDocuments` took a `MossServer` and called `principalOf`, `page` and `shells` on it. `server` is typed as those three now, and of each shell host as `snapshot` alone. A `MossServer` is one of them: a caller that passes its server has nothing to change, and a check that stood a server up to draw a page can hand over the three.
 - `createPageRouter(pages)` took `Record<string, PageManifest>` and read `path`, `params` and each canvas's `id`. It takes a record of those. A record of `PageManifest` is one.
 
-**`serve` stops what it started, and takes the message limit: `runtime.socketMaxMessageBytes`.**
+**`serve` stops what it started.**
 
 - `serve(app, runtime)` (`@niscorp/moss/node`) makes an HTTP listener and a websocket transport and returns the server and neither of them. `server.close()` stopped moss's timers and left the port bound and every terminal connected, and nothing else could reach either. `close()` on the server `serve` returns now stops all three: moss's own timers, then every connection (closed `1001`), then the listener.
-- New: `runtime.socketMaxMessageBytes`, the largest message a connection may send. `serve` hands it to the transport, as it hands `runtime.socketCompression`. It could be said to `attachSocket` (`maxMessageBytes`) and not to `serve`, which calls it. Unset, the limit is the transport's 256 KiB, as before.
-- **Both settings are read by `serve` and by nothing else.** `nisc start` and the dev plugin call `attachSocket` themselves, with no options, and are not changed here: under those two the transport runs on its defaults, whatever the runtime says. A host that attaches the socket itself says both to `attachSocket`.
 - `attachSocket(…)` answers `{ close }` where it answered nothing: `close()` ends every connection the transport opened (`1001`) and takes no more. A host that ignores what it answers has nothing to change.
 - An app that called `server.close()` on a server from `serve` and went on using the port has to stop doing one of the two. `createServer`'s own `close` is as it was.
+
+**The two settings of the transport hold wherever a server's socket is attached: `runtime.socketMaxMessageBytes`, `runtime.socketCompression`.**
+
+- New: `runtime.socketMaxMessageBytes`, the largest message a connection may send. It could be said to `attachSocket` (`maxMessageBytes`) and not to the runtime. Unset, the limit is the transport's 256 KiB, as before.
+- `runtime.socketCompression` was read by `serve` and by nothing else: `nisc start` and the dev plugin attach the socket themselves and are not handed the runtime, so under those two a deployment that turned compression off was served compressed. The server reads both settings now, once, and the socket it hands out (`server.socket`) carries them to whichever transport is handed it. They hold under `serve`, `nisc start`, the dev plugin, and a host that calls `attachSocket(httpServer, server.socket)`.
+- **A deployment that set `socketCompression` and runs under `nisc start` or `nisc dev` gets what it set**, where it got compression on. Nothing to change, unless the setting was left there by mistake.
+- `attachSocket`'s `options` are for a host that means otherwise, and for an accept of its own that says nothing: a setting named there wins, and one that is not named stays what the socket says. A host that passed `{ compression: runtime.socketCompression }` itself deletes the argument.
+- **In the dev plugin, the connections of an app that an edit replaced are closed (`1001`).** The plugin kept one transport for as long as vite ran, and a terminal that was connected when an edit re-booted the app stayed attached to the server that had been let go. There is one transport for each app that is booted now, set as that app's runtime says and retired with it: a page is reloaded as before, and a terminal that is not a page (a console) connects again, to the app that is booted. An upgrade that meets an app that did not boot is answered `503`, where it was opened and closed with `1011`.
 
 **(8) THE TERMINAL**
 

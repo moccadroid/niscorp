@@ -6,7 +6,9 @@ import { renderDocument } from '../documents';
 import type { DocumentConfig } from '../documents';
 import { sessionCookies } from '../identity';
 import type { MossServer } from './moss-server';
-import { attachSocket, MOSS_PATHS } from './node';
+import { MOSS_PATHS } from './node';
+import { createTransport, hearUpgrades } from './transport';
+import type { Transport } from './transport';
 
 // ═══════════════════════════════════════════════════════════════
 // @niscorp/moss/vite — the app server inside vite's dev process.
@@ -16,8 +18,9 @@ import { attachSocket, MOSS_PATHS } from './node';
 // runs is the source on disk and an edit is a fresh boot. What it does, in the
 // order a request meets it:
 //
-//   the socket   attached ONCE, delegating to whichever server is current —
-//                a re-boot swaps what it delegates to, never the handler
+//   the socket   heard ONCE on vite's listener; each upgrade is answered by the
+//                transport of whichever app is booted now — one for each app,
+//                set as its runtime says, and retired with it
 //   /dev/as/:who a signed-in URL, when the app can mint a dev token
 //   a page       `/`, or a path one of the manifest's pages answers: index.html
 //                through vite first (its client, the framework's refresh
@@ -29,7 +32,8 @@ import { attachSocket, MOSS_PATHS } from './node';
 // fresh database, fresh seed, fresh shells — then reloads the page so the
 // browser reconnects to the new server. The outgoing server keeps answering
 // until the new one is up, so a broken edit does not take the dev server down,
-// and is then let go, timers included.
+// and is then let go, timers included and its connections closed: a terminal
+// that is not a page (a console) connects again, to the app that is booted.
 // ═══════════════════════════════════════════════════════════════
 
 export type DevApp = {
@@ -68,9 +72,17 @@ export type MossDevOptions = {
 const DEFAULT_WATCH = /([\\/]src[\\/](app|server|db|ui)[\\/])|([\\/]nisc\.config\.[cm]?[jt]s$)/;
 const REBOOT_DEBOUNCE_MS = 200;
 
-type Booted = { app: DevApp; listener: ReturnType<typeof getRequestListener> };
+// An app that is booted, and what answers for it. `transport` is the one its
+// connections are opened by: made for this app, set as its server's socket
+// says (the two settings of its runtime), and retired with it. Absent where
+// vite has no listener of its own (middleware mode): then there is no socket.
+type Booted = { app: DevApp; listener: ReturnType<typeof getRequestListener>; transport?: Transport };
 
+// Let an app go: its connections first (closed 1001 — the server they were
+// attached to is going, and a terminal that is closed connects again, to the
+// app that is booted now), then its timers, then whatever it says itself.
 const retire = async (booted: Booted): Promise<void> => {
+  booted.transport?.close();
   booted.app.server.socket.stop();
   await (booted.app.close ?? ((): void => booted.app.server.close()))();
 };
@@ -160,21 +172,27 @@ export const mossDev = (options: MossDevOptions): Plugin => ({
     const owned = options.owned ?? MOSS_PATHS;
     const load = (id: string): Promise<Record<string, unknown>> => vite.ssrLoadModule(id);
 
+    const httpServer = vite.httpServer;
     const boot = async (): Promise<Booted> => {
       const app = await options.app(load);
-      return { app, listener: getRequestListener(app.server.fetch) };
+      return { app, listener: getRequestListener(app.server.fetch), ...(httpServer !== null ? { transport: createTransport(app.server.socket) } : {}) };
     };
     let current = boot();
     current.catch((error: unknown) => vite.config.logger.error(`[${label}] the app did not boot: ${said(error)}`, { timestamp: true }));
 
-    if (vite.httpServer !== null) {
-      attachSocket(
-        vite.httpServer,
-        Object.assign(async (url: string, connection: Parameters<MossServer['socket']>[1]) => (await current).app.server.socket(url, connection), {
-          // whichever server is current owns the revalidation timer; this handler owns none
-          stop: (): void => void current.then(({ app }) => app.server.socket.stop(), () => undefined),
-        }),
-      );
+    // THE SOCKET FOLLOWS THE APP THAT IS BOOTED NOW. The listener is vite's and
+    // is heard once, before any app is up; which transport answers an upgrade
+    // is asked at each one, so a connection is set as the runtime of the app
+    // it reaches says (`socketMaxMessageBytes`, `socketCompression`), and one
+    // that arrives during a boot waits for it, as a page does. An app that did
+    // not boot has no socket: the request is refused, as its routes are.
+    if (httpServer !== null) {
+      hearUpgrades(httpServer, '/socket', (req, socket, head) => {
+        void current.then(
+          ({ transport }) => transport?.upgrade(req, socket, head),
+          () => socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'),
+        );
+      });
     }
 
     let timer: ReturnType<typeof setTimeout> | undefined;

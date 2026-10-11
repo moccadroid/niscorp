@@ -595,14 +595,6 @@ decide.
 
 - **A boundary without a schema**, and **two defects**: the fabric's message
   (Part 9, item 4), the signing seed, and the dev sign-in (4.3, 11 and 21).
-- **`runtime.socketMaxMessageBytes` and `runtime.socketCompression` reach the
-  socket under `serve` and nowhere else.** `nisc start`
-  (`packages/cli/src/commands.ts:238`) and the dev plugin
-  (`src/server/vite.ts:171`) call `attachSocket` with no options, and neither
-  is handed the runtime: the transport runs on its defaults there, 256 KiB and
-  compression on. The documents say so. A fix is not a few lines: the dev
-  plugin attaches once, before any app has booted, and swaps servers on an
-  edit, so it cannot be told a setting when it attaches.
 - **Names that stayed in the main entry and that nothing in this repository
   imports**, each in doubt, not decided: `resolveRoles`, `resolvePolicy`,
   `resolveVariants` (three resolvers that read `assignments` only; the server
@@ -617,4 +609,17 @@ decide.
 - **Midas, nisc-website and moccadroid-website** import moss and are other
   repositories. The changeset's last part, "What an app changes", is what each
   follows.
+
+**Closed since (2026-10-11).** Each was in the list above when this part was
+written, and each got a test that failed first.
+
+- **`runtime.socketMaxMessageBytes` and `runtime.socketCompression` hold on
+  every path.** They reached the transport under `serve` and nowhere else:
+  `nisc start` and the dev plugin attach the socket with no options and are
+  not handed the runtime. The socket a server hands out carries them now
+  (`socket.transport`, filled in `src/server/socket.ts`, the one place that
+  reads them), and a transport reads them off the accept it is handed
+  (`src/server/transport.ts`), so no host says them. The dev plugin, which
+  hears vite's listener before any app has booted and swaps apps on an edit,
+  keeps one transport for each booted app and retires it with the app.
 
