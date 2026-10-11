@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
 import type { FetchFn } from '@niscorp/nova';
 import type { Data } from '../data';
-import type { FeatureSeams } from '../feature';
+import type { Feature, FeatureSeams } from '../feature';
 import type { Identity } from '../identity';
 import { refusalOf } from '../manifest';
 import type { NiscApp, RunningManifest } from '../manifest';
@@ -79,3 +79,10 @@ export const seamsOf = ({ app, runtime, server, operator, registered, identity, 
     registered.wireWraps.push(wrap);
   },
 });
+
+// THE FEATURES ARE STARTED, in the order the app named them, each with the
+// seams. One that throws refuses the boot.
+export const startFeatures = async (features: readonly Feature[], parts: SeamParts): Promise<void> => {
+  const seams = seamsOf(parts);
+  for (const feature of features) await feature.start(seams);
+};

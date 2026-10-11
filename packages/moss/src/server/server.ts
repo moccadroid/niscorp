@@ -4,7 +4,7 @@ import { receiveManifest } from '../manifest';
 import type { NiscApp } from '../manifest';
 import type { NiscRuntime } from '../runtime';
 import { standData } from './data';
-import { emptyRegister, seamsOf, wrappedBy } from './features';
+import { emptyRegister, startFeatures, wrappedBy } from './features';
 import { standHosts } from './hosts';
 import { standIdentity } from './identity';
 import { hearWrites } from './lanes';
@@ -100,8 +100,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   // moves nobody's pointer. And before the operator prefix is mounted, because
   // a prefix's routes are taken when it is mounted (./operator.ts).
   const operator = operatorPrefix(runtime);
-  const seams = seamsOf({ app, runtime, server, operator, registered, identity, running, data });
-  for (const feature of app.features ?? []) await feature.start(seams);
+  await startFeatures(app.features ?? [], { app, runtime, server, operator, registered, identity, running, data });
   server.route('/operator', operator);
   // And the app's reactions hear a write (./lanes.ts), after the features: one
   // that hears writes too subscribed while it started, and is told first.
