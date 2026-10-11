@@ -210,7 +210,7 @@ director (or, one day, real feeds) ── vex mutation ──▶ a write lands
 
 - **The reaction carries no rows and must not.** moss's `reactions` say *that* a write
   landed; what it wrote is re-read through the session's own wire, under the session's
-  own policy (`packages/moss/src/app.ts:274-296`: "rows handed to imperative code would
+  own policy (`packages/moss/src/manifest/app.ts:227-249`: "rows handed to imperative code would
   be rows outside every fence this stack builds"). So the liaison, who cannot read the
   incident log, is never shown — or asked about — a security incident. Permission as
   existence, for events too, with no code that says so.

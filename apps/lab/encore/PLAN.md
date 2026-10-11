@@ -443,7 +443,7 @@ Cases this raised:
 - **cortex: `output.schema` is static by construction**, so DESIGN.md's per-run enum
   contract is not expressible on an agent defined once. Either `RunOptions` takes an
   `output.schema` override, or per-run narrowing is `validate`'s job (and then see above).
-- **moss: `RunRecord.outcome` is `'ok' | 'failed'`** (`packages/moss/src/app.ts:389`). An
+- **moss: `RunRecord.outcome` is `'ok' | 'failed'`** (`packages/moss/src/manifest/app.ts:313`). An
   aborted run is neither; it is recorded `failed` with `label: '<mode>:aborted'`.
 - **signal's `usage.reported` gap is closed by using cortex** (`RunMeta.usage.reported`); the
   DOCS.md note and the abort-surfaces-as-error note from slice 1b still stand for anyone
@@ -634,7 +634,7 @@ Cases this raised:
 - **nova: `reconcileCanvas` is keyed by action id per canvas** (`packages/nova/src/shell/reconcile.ts`
   — `find((item) => item.definitionId === entry.actionId)`), so a list canvas cannot be reconciled
   to two instances of one action. `attention` is managed by hand.
-- **moss: `reactions` are per table, not per session** (`packages/moss/src/app.ts:274-296`) — right,
+- **moss: `reactions` are per table, not per session** (`packages/moss/src/manifest/app.ts:227-249`) — right,
   and it means fan-out to live sessions is the app's (`functions.ts` roster). A `sessions()` iterator
   on the server would make that three lines shorter.
 - **vex: no way to read "max(rev)"** without an aggregate entry; the feeds sort newest-first with a

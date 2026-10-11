@@ -8,8 +8,8 @@ import type { ShellHostConfig } from '../src/shells';
 // stand a host up with no server: from an app, and from who the test says a
 // principal is and what they hold.
 //
-// What a principal's shell is made of is put together the way ../src/server.ts
-// does, with the manifest's own two functions: the definitions granted with
+// What a principal's shell is made of is put together the way
+// ../src/server/hosts.ts does, with the manifest's own two functions: the definitions granted with
 // the layout variant in place (`definitionsFor`), and the component names
 // (`shellComponents`). A test says who somebody is; it does not say what a
 // composition looks like.

@@ -1,6 +1,6 @@
 import type { PageManifest } from '@niscorp/moss';
 
-// PAGES — what is drawn at a path and kept by nothing (moss, app.ts § pages).
+// PAGES — what is drawn at a path and kept by nothing (moss, manifest/app.ts § pages).
 // The app itself is `/`; these stand beside it.
 //
 // The data half only: which canvases, what mounts on them, how they are

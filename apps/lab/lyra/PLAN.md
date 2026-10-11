@@ -516,7 +516,7 @@ One issuer: the deployment. Authority flows from lyra, so credentials do too —
 registration is a granting ceremony where moss mints the integration key,
 returns it once, and stores only the hash; the operator puts it in the
 service's environment and that is the entire exchange. Both directions hang
-off it (moss `assert.ts`; nothing Stripe-specific):
+off it (moss `integrations/credentials.ts`; nothing Stripe-specific):
 
 1. **moss → integration.** Identity travels inside a short-lived signed
    assertion — ed25519, deployment keypair minted at boot, public half served

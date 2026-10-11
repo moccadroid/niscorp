@@ -520,7 +520,7 @@ and does not throw.
 
 #### `MossServer`
 
-`Hono<Env> & { socket: SocketAccept; shells?: ShellHost; principalOf; page; pages;
+`Hono<Env> & { socket; shells?: ShellHost; principalOf; page; pages;
 refresh; replaceActions; verifyActions; actions; catalogOf; catalogForRoles;
 policyForRoles; charterReport; invalidateIdentity; invalidateTenant; identity;
 executeAs; nudge; generation; close; identities? }`.
