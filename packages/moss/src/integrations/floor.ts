@@ -1,5 +1,5 @@
+import { z } from 'zod';
 import type { FetchFn } from '@niscorp/nova';
-import { isRecord } from '@niscorp/nova/reflect';
 
 // ── THE FLOOR UNDER A FAILING INTEGRATION ───────────────────────────
 //
@@ -12,6 +12,11 @@ import { isRecord } from '@niscorp/nova/reflect';
 // a message passes through untouched — the integration's own words always win —
 // and no other path pays anything.
 const INTEGRATION_PATH = /^\/integrations\/([a-z][a-z0-9-]*)\//;
+
+// WHAT A FAILED REPLY SAYS FOR ITSELF, read by a schema: the body is another
+// service's JSON. It says something when it is an object with a `message` that
+// is text; whatever else it carries is its own, and is served on as it came.
+const SaidSchema = z.looseObject({ message: z.string() });
 
 export const flooredWire = (inner: FetchFn): FetchFn => async (url, init) => {
   const integration = INTEGRATION_PATH.exec(url)?.[1];
@@ -32,10 +37,10 @@ export const flooredWire = (inner: FetchFn): FetchFn => async (url, init) => {
 
   try {
     const body: unknown = await reply.json();
-    const message = isRecord(body) ? body['message'] : undefined;
+    const said = SaidSchema.safeParse(body);
     // The proxy's own generic phrase gets the same upgrade as silence — it
     // knows no integration name; this seam does.
-    if (typeof message === 'string' && message !== 'The integration is unreachable.') {
+    if (said.success && said.data.message !== 'The integration is unreachable.') {
       // Re-serve the consumed body — `json()` reads once.
       return { ok: false, status: reply.status, json: async () => body, text: async () => JSON.stringify(body) };
     }

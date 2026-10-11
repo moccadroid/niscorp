@@ -529,7 +529,13 @@ Not here: stopping the seeding of `vex_cache`. That belongs to the artifactory.
      where each is read (`session` unset, `identityMax` of zero).
      *Since (2026-10-11):* the parameters of an upgrade are read by one schema
      (`UpgradeParametersSchema`, `src/socket/handshake.ts`), and a protocol is
-     digits: `Number()` had read `0x2` as 2.
+     digits: `Number()` had read `0x2` as 2. An integration's error body is
+     read by a schema (`src/integrations/floor.ts`), accepting what the hand
+     check accepted. Vex's reply over the internal wire is left as it is: it
+     is the server's own surface answering inside the process, and nothing
+     from outside reaches that line unparsed. The runtime is left too: it is
+     the deployment's own object, typed, and each refusal is said where the
+     field is read.
 5. **`createServer` builds, wires and mounts, and holds no route body. Met.**
    `src/server/server.ts:33–154`: thirteen numbered steps, each a call to a
    file beside it. The routes are in `src/server/routes.ts` and in the
