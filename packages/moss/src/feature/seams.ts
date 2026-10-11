@@ -98,7 +98,9 @@ export type FeatureSeams = {
   // that something changed. It is what carries the set to the other processes
   // of a deployment: with no loader it stays in the process it was handed to.
   setActionsLoader: (load: () => Promise<Record<string, ActionDefinition>>) => void;
-  // One more rule for which granted actions are there for an install list.
+  // One more rule for which granted actions are there for an install list. A
+  // filter narrows: of what it answers, the ids it was handed are kept, and
+  // one it was not handed is dropped. It grants nothing; the charter does.
   addCatalogFilter: (filter: (ids: readonly string[], installed: ReadonlySet<string> | undefined) => readonly string[]) => void;
   // The charter the app shipped: role names, and what each selects.
   charter: Charter;

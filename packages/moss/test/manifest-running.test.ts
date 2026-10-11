@@ -261,6 +261,36 @@ describe('what a set of roles holds', () => {
     expect(manifest.catalogFor(['member'], ['belts']).ids).toEqual([desk.id, 'home']);
   });
 
+  // A FILTER NARROWS. What one answered WAS the catalog: a filter that named
+  // an id it was not handed gave that id to whoever asked, whatever the
+  // charter grants them, and with the id the definition a shell is built from.
+  // A feature anybody writes adds one (`FeatureSeams.addCatalogFilter`).
+  it('a filter that answers an id it was not handed grants nothing: neither the id nor its definition', () => {
+    const manifest = createRunningManifest({ shipped: shippedApp(), grants: scopeGrants(['deals']) });
+    manifest.replace('bundles', { [desk.id]: desk });
+    // `public` is granted `home`. The filter adds `panel` and an integration's action.
+    manifest.addCatalogFilter((ids) => [...ids, 'panel', desk.id]);
+
+    expect(manifest.catalogFor(['public'], undefined).ids).toEqual(['home']);
+    expect(Object.keys(definitionsOf(manifest, ['public']))).toEqual(['home']);
+    // What the charter does grant is still there.
+    expect(manifest.catalogFor(['member'], undefined).ids).toEqual([desk.id, 'home', 'panel']);
+  });
+
+  it('nor does a filter put back what the one before it took out', () => {
+    const manifest = running(shippedApp());
+    manifest.replace('bundles', { [desk.id]: desk, [pay.id]: pay });
+    manifest.addCatalogFilter((ids) => [...ids, pay.id]);
+
+    // `pay` is not installed: the first filter took it out for this list.
+    expect(manifest.catalogFor(['member'], ['belts']).ids).toEqual([desk.id, 'home', 'panel']);
+  });
+
+  it('the one a manifest is made with is held to it too', () => {
+    const manifest = createRunningManifest({ shipped: shippedApp(), grants: scopeGrants(['deals']), installedOnly: (ids) => [...ids, 'panel'] });
+    expect(manifest.catalogFor(['public'], undefined).ids).toEqual(['home']);
+  });
+
   // What a shell is built from: the definitions themselves, with the grant and
   // the layout variant already applied. This is the one place either is.
   it('the definitions held are the granted ones, each with the layout variant those roles hold in its place', () => {

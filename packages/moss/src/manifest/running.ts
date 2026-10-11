@@ -7,7 +7,7 @@ import { entriesOf } from './entries';
 import { createGeneration } from './generation';
 import type { Generation, Pointer } from './generation';
 import { freezeDeep } from './handover';
-import { createRoleHoldings } from './roles';
+import { createRoleHoldings, narrowedBy } from './roles';
 import type { Catalog, InstalledOnly } from './roles';
 import { candidateOf, refusalOf, verifyManifest } from './verify';
 import type { ManifestCandidate, ManifestReport, ShippedManifest } from './verify';
@@ -49,8 +49,9 @@ export type RunningManifestConfig = {
   grants: readonly string[];
   // Which of a set of roles' actions are there for an install list. A function,
   // because this module does not know what an integration is (./roles.ts).
-  // Absent: every granted action is there, whatever is installed, until
-  // somebody says otherwise (`addCatalogFilter`).
+  // Held to narrowing, like one added later. Absent: every granted action is
+  // there, whatever is installed, until somebody says otherwise
+  // (`addCatalogFilter`).
   installedOnly?: InstalledOnly;
   // The generation pointer (./generation.ts): how its row is read and moved,
   // and how often it is read, once `watch` is called. Absent: this manifest
@@ -131,8 +132,10 @@ export type RunningManifest = {
   // the old one is dropped. Returns the way to stop being told.
   onChange: (listener: () => void) => () => void;
   // ONE MORE RULE FOR WHICH GRANTED ACTIONS ARE THERE FOR AN INSTALL LIST, laid
-  // after the ones already said. What was remembered for each set of roles is
-  // dropped, so the next answer is made with it.
+  // after the ones already said. It takes ids out and puts none in: what it
+  // answers is kept where it was handed it, and nowhere else. What was
+  // remembered for each set of roles is dropped, so the next answer is made
+  // with it.
   addCatalogFilter: (filter: InstalledOnly) => void;
   // The ids of the actions a set of roles holds, with their version token,
   // remembered until the next switch (./roles.ts).
@@ -254,11 +257,12 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   let report = verifiedAtBoot(candidate(inForce));
 
   // The rules for what is there for an install list, each applied to what the
-  // one before it kept.
+  // one before it kept, and each held to narrowing it (./roles.ts,
+  // `narrowedBy`): none of them can put an id there.
   const narrowings: InstalledOnly[] = config.installedOnly === undefined ? [] : [config.installedOnly];
   const holdings = createRoleHoldings({
     manifest: () => ({ charter: shipped.charter, actions: inForce, layouts: shipped.layouts }),
-    installedOnly: (ids, installed) => narrowings.reduce((kept, narrow) => narrow(kept, installed), ids),
+    installedOnly: (ids, installed) => narrowings.reduce((kept, narrow) => narrowedBy(narrow, kept, installed), ids),
   });
   const components = createComponentNames((shell) => shellComponents({ actions: inForce, layouts: shipped.layouts }, shell));
   const byFingerprint: ShellArtifacts['entries'] = new Map(entries.map((entry) => [entry.fingerprint, entry]));

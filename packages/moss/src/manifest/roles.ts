@@ -36,6 +36,17 @@ export type Catalog = { ids: readonly string[]; hash: string };
 // integrations feature says it through the seam (./running.ts, addCatalogFilter).
 export type InstalledOnly = (ids: readonly string[], installed: ReadonlySet<string> | undefined) => readonly string[];
 
+// A FILTER NARROWS, AND IS HELD TO IT: what it answers, of the ids it was
+// handed, in the order they were handed. An id it names that it was not
+// handed is not in the answer. What a filter answered used to BE the catalog,
+// so one that named an id nobody had granted gave that action to whoever
+// asked, with the definition a shell is built from; and a feature anybody
+// writes adds a filter. Only the charter grants.
+export const narrowedBy = (filter: InstalledOnly, ids: readonly string[], installed: ReadonlySet<string> | undefined): readonly string[] => {
+  const answered = new Set(filter(ids, installed));
+  return ids.filter((id) => answered.has(id));
+};
+
 // The application, resolved for a set of roles — granted action ids plus
 // the version token (equal hash, equal application; pushed over the
 // socket as the catalog-change signal).

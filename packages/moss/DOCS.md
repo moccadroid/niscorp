@@ -1065,7 +1065,7 @@ its own, and the core never imports it.
   | `replaceActions(actions)` | put a set of actions in place of the feature's own, in this process; throws when the app could not be served so. A feature has one set, kept under its name, and is its only writer |
   | `refusalOf(actions)` | the sentence the app would be refused with if exactly these were in force, or `undefined` |
   | `setActionsLoader(load)` | how the feature's set, kept in rows, is read again when another process moved the generation pointer; a set with no loader is not carried to another process |
-  | `addCatalogFilter(filter)` | one more rule for which granted actions are there for an install list |
+  | `addCatalogFilter(filter)` | one more rule for which granted actions are there for an install list. A filter narrows: an id it answers that it was not handed is dropped, so it grants nothing |
   | `charter` | the charter the app shipped: role names, and what each selects |
   | `components` | the kit's component contracts by name: a description, and the props' schema |
   | `ownEntries(entries)` | hand over the feature's own reads and writes, on the tables it named as its own, and get back how one is replayed |
