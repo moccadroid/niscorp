@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createScopePolicy } from '@niscorp/vex';
 import type { ExecuteRecord, ScopePolicy } from '@niscorp/vex';
-import { createExecuteAs } from '../src/data/execute-as';
+import { createExecuteAs } from '../src/data/policy';
 import { engineDouble } from './data-double';
 
 // A SEEDED ENTRY, RUN AS A CHARTER ROLE. The engine has no database behind it

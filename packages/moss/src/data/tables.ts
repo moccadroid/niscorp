@@ -12,7 +12,7 @@ import type { Sequence } from '@niscorp/strata';
 // migration 1 below. Every database has run them, so their text is
 // checksummed and must never be edited. The row is written by the migration,
 // in the same transaction as its table (rule 17), and is read and moved
-// through vex (./pointer.ts).
+// through vex (./own-entries.ts).
 //
 // TWO STATEMENTS, SENT SEPARATELY. A driver that prepares its statements refuses
 // a string carrying more than one command, and the failure arrives as a

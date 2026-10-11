@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { QueryResponse } from '@niscorp/vex';
 import type { FetchFn } from '@niscorp/nova';
-import { createWireFollower } from '../src/data/follow';
+import { createWireFollower } from '../src/data/writes';
 import { hostConfig, standHost } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import type { NiscApp } from '../src/manifest';

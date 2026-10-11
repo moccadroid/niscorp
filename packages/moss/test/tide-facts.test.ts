@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { WriteEvent } from '@niscorp/vex';
-import { createGrammarUpgrader } from '../src/data/grammar';
+import { createGrammarUpgrader } from '../src/data/engine';
 import type { FeatureSeams } from '../src/feature';
 import { createTideFacts } from '../src/tide';
 import type { TideFactsConfig } from '../src/tide';

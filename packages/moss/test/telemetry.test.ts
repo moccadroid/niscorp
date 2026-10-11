@@ -12,7 +12,7 @@
 // unconfigured sink is asked for nothing.
 import { describe, it, expect, vi } from 'vitest';
 import type { ExecuteRecord } from '@niscorp/vex';
-import { vexRecordToSpan } from '../src/data/span';
+import { vexRecordToSpan } from '../src/data/engine';
 import { instrumentFunctions } from '../src/shells/function-session';
 import { hostConfig, standHost } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';

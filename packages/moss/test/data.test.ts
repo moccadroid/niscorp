@@ -9,8 +9,8 @@ import type { DocumentStore } from '@niscorp/strata/postgres';
 import { memoKey } from '../src/identity';
 import type { TelemetrySpan } from '../src/runtime';
 import { createDataWith } from '../src/data/data';
-import { createGrammarUpgrader } from '../src/data/grammar';
-import { featureTablesOf } from '../src/data/feature-tables';
+import { createGrammarUpgrader } from '../src/data/engine';
+import { featureTablesOf } from '../src/data/migrate';
 import { tableSequencesOf } from '../src/data/migrate';
 import { NOTES_SCHEMA, engineDouble } from './data-double';
 

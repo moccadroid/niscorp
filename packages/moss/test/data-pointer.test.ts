@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createPostgresAdapter } from '@niscorp/vex';
 import type { DatabaseSchema, MutationClient, PgPool } from '@niscorp/vex';
 import { createOwnEntries } from '../src/data/own-entries';
-import { POINTER, createPointer } from '../src/data/pointer';
+import { POINTER, createPointer } from '../src/data/own-entries';
 
 // THE GENERATION POINTER'S ROW, THROUGH VEX. The two entries are seeded and
 // replayed the way a feature's own are, compiled by vex's own Postgres

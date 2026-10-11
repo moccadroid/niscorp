@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { compile, execute } from '@niscorp/prism';
 import { createScopePolicy } from '@niscorp/vex';
 import type { GenerateDsl, MapToShape } from '@niscorp/vex';
-import { createIntentAnswers } from '../src/data/intents';
-import type { QueryWriters } from '../src/data/intents';
+import { createIntentAnswers } from '../src/data/routes';
+import type { QueryWriters } from '../src/data/routes';
 import { NOTES_SCHEMA, engineDouble } from './data-double';
 
 // AN INTENT, ANSWERED BY A QUERY WRITTEN FOR IT. The engine has no database

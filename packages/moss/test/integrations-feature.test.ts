@@ -5,7 +5,7 @@ import type { ActionDefinition, FetchFn } from '@niscorp/nova';
 import type { DocumentStore } from '@niscorp/strata/postgres';
 import { createPostgresAdapter } from '@niscorp/vex';
 import type { DatabaseSchema, MutationClient } from '@niscorp/vex';
-import { createGrammarUpgrader } from '../src/data/grammar';
+import { createGrammarUpgrader } from '../src/data/engine';
 import { createOwnEntries } from '../src/data/own-entries';
 import type { CredentialAnswer, FeatureEnv, FeatureSeams, Replay, PrincipalIdentity } from '../src/feature';
 import { endlessChains, layoutMisfits } from '../src/manifest';

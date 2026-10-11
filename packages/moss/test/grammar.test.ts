@@ -5,7 +5,7 @@ import { createIntegrations } from '../src/integrations';
 import { createServer } from '../src/server';
 import { endlessChains, layoutMisfits } from '../src/manifest';
 import { runIntake, type IntakeContext } from '../src/integrations/intake';
-import { createGrammarUpgrader } from '../src/data/grammar';
+import { createGrammarUpgrader } from '../src/data/engine';
 import { pristineDatabases } from './pristine-database';
 
 // A database of its own for each test that wants one, started from one that

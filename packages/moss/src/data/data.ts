@@ -9,20 +9,15 @@ import type { ResolvedIdentity } from '../identity';
 import type { NiscApp, Pointer, RunningManifest } from '../manifest';
 import { emitterOf } from '../runtime';
 import type { Telemetry } from '../runtime';
-import { createDataLayer } from './engine';
-import { createExecuteAs } from './execute-as';
-import type { FeatureTables } from './feature-tables';
-import type { ExecuteAs } from './execute-as';
-import { createGrammarUpgrader } from './grammar';
-import { createIntentAnswers } from './intents';
-import type { AnswerIntent, Intent, QueryWriters } from './intents';
+import { createDataLayer, createGrammarUpgrader, vexRecordToSpan } from './engine';
 import { tableSequencesOf } from './migrate';
-import { createOwnEntries } from './own-entries';
+import type { FeatureTables } from './migrate';
+import { POINTER, createOwnEntries, createPointer } from './own-entries';
 import type { OwnEntries, Replay } from './own-entries';
-import { createPolicies, resolvePolicyForRoles } from './policy';
-import { POINTER, createPointer } from './pointer';
-import { createVexRoutes } from './routes';
-import { vexRecordToSpan } from './span';
+import { createExecuteAs, createPolicies, resolvePolicyForRoles } from './policy';
+import type { ExecuteAs } from './policy';
+import { createIntentAnswers, createVexRoutes } from './routes';
+import type { AnswerIntent, Intent, QueryWriters } from './routes';
 import { createWriteNotifier } from './writes';
 import type { WriteListener } from './writes';
 
@@ -54,7 +49,7 @@ export type DataConfig = {
   // The deployment keeps moss's own credential (`session: 'sessions'`), so its
   // table is one of the run's.
   storesSessions: boolean;
-  // The tables the app's features keep (./feature-tables.ts): their
+  // The tables the app's features keep (./migrate.ts): their
   // sequences run after moss's and the cache's, in the same run, and their
   // names are all a feature's own entries may address.
   featureTables?: readonly FeatureTables[];
@@ -103,7 +98,7 @@ export type Data = {
   // else: a request's fingerprint resolves in the cache, and so does
   // `fingerprints` below. So the entries have two holders, the manifest's
   // list and this copy, and the copy is not only the list: a query written
-  // for an intent while the app runs is stored there too (./intents.ts).
+  // for an intent while the app runs is stored there too (./routes.ts).
   seed: (entries: readonly (SeedEntry | SeedMutation)[]) => Promise<void>;
   // The policy somebody reads and writes under: compiled once for each set of
   // roles, and kept until the manifest changes.
@@ -123,11 +118,11 @@ export type Data = {
   // write by what it writes). Whether a replay is then served is still decided
   // when it is asked.
   fingerprintsFor: (who: Caller) => Promise<string[]>;
-  // Run a seeded entry as a charter role (./execute-as.ts).
+  // Run a seeded entry as a charter role (./policy.ts).
   executeAs: ExecuteAs;
   // Answer an intent with a query written for it, as somebody already
   // resolved: under their policy, with the scope values the server says they
-  // carry (./intents.ts). The one place a query is written; the routes replay.
+  // carry (./routes.ts). The one place a query is written; the routes replay.
   answerIntent: (writers: QueryWriters, asked: Intent, who: Caller, scope: Record<string, unknown>) => Promise<QueryResponse>;
   // Take the own entries of the feature of that name, and answer how one is
   // replayed (./own-entries.ts). No route serves them, and they reach the
@@ -146,7 +141,7 @@ export type Data = {
   // Hear every write those surfaces serve (./writes.ts). Returns the way to
   // stop hearing.
   onWrite: (listener: WriteListener) => () => void;
-  // THE GENERATION POINTER'S ROW (./pointer.ts): where the counter is, and one
+  // THE GENERATION POINTER'S ROW (./own-entries.ts): where the counter is, and one
   // step on from where it was read. The manifest module holds the clock that
   // polls it; the row is read and written here, through vex.
   pointer: Pointer;
@@ -177,7 +172,7 @@ export type PreparedEngine = Pick<Data, 'grants' | 'grammars'> & { engine: Query
 // was edited or written by newer code. The engine's `cache.init()` then finds
 // its sequence already applied.
 //
-// THEN THE GRAMMARS this code reads documents in (./grammar.ts). NO ROW IS
+// THEN THE GRAMMARS this code reads documents in (./engine.ts). NO ROW IS
 // BROUGHT TO THEM HERE. The documents stored in a table are its owner's to
 // bring current, and the only tables that hold any are a feature's: it asks
 // when it starts (`Data.upgradeStore`).

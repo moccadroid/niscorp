@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { createGrammarUpgrader } from '../src/data/grammar';
+import { createGrammarUpgrader } from '../src/data/engine';
 import type { FeatureEnv, Replay } from '../src/feature';
 import { BundleSchema } from '../src/integrations/bundle';
 import { createForwarder } from '../src/integrations/forward';
