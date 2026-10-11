@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createForwarder } from '../src/integrations/forward';
-import { proxyRoutes } from '../src/integrations/proxy';
+import { proxyRoutes } from '../src/integrations/forward';
 import type { FoundIntegration } from '../src/integrations/registry';
 
-// THE WEBHOOK DOOR, AND WHAT IT HANDS ON (../src/integrations/proxy.ts). A
+// THE WEBHOOK DOOR, AND WHAT IT HANDS ON (../src/integrations/forward.ts). A
 // vendor calls in with no session and no key; what reaches the integration is
 // what the vendor sent, less the two headers that would lie on the other side.
 //

@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createForwarder } from '../src/integrations/forward';
-import { proxyRoutes } from '../src/integrations/proxy';
+import { proxyRoutes } from '../src/integrations/forward';
 import type { FoundIntegration } from '../src/integrations/registry';
 
-// THE WEBHOOK DOOR'S LIMIT (../src/integrations/proxy.ts), held to what the
+// THE WEBHOOK DOOR'S LIMIT (../src/integrations/forward.ts), held to what the
 // documents say it is: 240 calls a minute for each integration, counted by the
 // process that takes them.
 //

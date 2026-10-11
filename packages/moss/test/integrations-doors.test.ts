@@ -7,7 +7,7 @@ import { BundleSchema } from '../src/integrations/bundle';
 import { createForwarder } from '../src/integrations/forward';
 import { operatorRoutes } from '../src/integrations/operator';
 import type { OperatorDeps } from '../src/integrations/operator';
-import { proxyRoutes } from '../src/integrations/proxy';
+import { proxyRoutes } from '../src/integrations/forward';
 import { reachOf } from '../src/integrations/reach';
 
 // THE DOORS OF THE INTEGRATIONS FEATURE, each asked what it refuses: the

@@ -5,67 +5,57 @@
 // its own deploy cycle, on its own machine. It shares no code with the app it
 // extends: everything crosses a wire.
 //
-// That constraint decides the whole design, and most of it is subtraction:
+//   IT SHIPS ACTIONS AND LAYOUTS, and its words for them. It cannot ship a vex
+//   entry: an entry is a compiled query authored against a schema it cannot
+//   import. It calls what the contract lists, and a read that does not exist
+//   is a change to the app.
 //
-//   IT SHIPS ACTIONS AND LAYOUTS. Nothing else. It cannot ship a vex entry,
-//   because an entry is a compiled query authored against a schema it cannot
-//   import, and the generation path is deliberately unwired. It calls what
-//   discovery advertises, and if it needs a read that does not exist, that is a
-//   change to the app rather than to the integration.
+//   IT BRINGS ITS OWN STORAGE. Whatever it keeps lives on the other side of the
+//   wire, keyed by identifiers the app hands over.
 //
-//   IT BRINGS ITS OWN STORAGE. A feature needing a column beside the app's is a
-//   migration in the app, not an integration. Anything else lives on the other
-//   side of the wire, keyed by identifiers we hand over.
+//   IT ANNOUNCES; THE APP FETCHES. There is no poll and no sweep at boot.
+//   Registering is the announcement, and importing again is the same call.
 //
-//   IT ANNOUNCES; WE FETCH. There is no poll and no boot-time sweep. Registering
-//   IS the announcement, it is idempotent, and re-importing is the same call.
+//   IT REACHES EXACTLY TWO PLACES. A fingerprint the app serves, or a URL under
+//   its own prefix. Every endpoint of every action it ships is held to that at
+//   intake.
 //
-//   IT REACHES EXACTLY TWO PLACES. A fingerprint the app already serves, or a
-//   URL under its own prefix. Every endpoint on every action it ships is checked
-//   against that at intake.
+//   WHAT ELSE A BUNDLE SAYS IS THE HOST APP'S. A store listing, where a screen
+//   is placed, a setting a person may change: one app's vocabulary, carried
+//   under `extension`, read by a schema that app supplies, and kept on the
+//   integration's row for the app to read back.
 //
-// Two credentials, revocable at different granularities. The integration's own
-// KEY is long-lived: it acts as itself, as a principal with a charter rung, for
-// work nobody asked for (a nightly sync). A per-request TOKEN is minted by the
-// proxy when a person is driving: it acts on behalf of them, it lasts seconds,
-// and it is only valid while the key that owns it is — so revoking one key
-// kills every token it holds without storing any of them.
+// Two credentials. The integration's own KEY is long-lived: it acts as itself,
+// as a principal with a charter rung, for work nobody asked for (a nightly
+// sync). An ASSERTION is minted for each call the app forwards: it says who is
+// driving, lasts seconds, and is verified with a public key the app serves.
 // ═══════════════════════════════════════════════════════════════
 
 // THIS FILE IS AN ENTRY POINT: `@niscorp/moss/integrations`. What it exports
 // is what an app calls, and `packages/moss/api.txt` lists it. Everything else
 // in this directory is reached by the feature itself.
 //
-// WHAT EACH FILE BEHIND THIS DOOR IS FOR, in the order a bundle meets them:
+// WHAT EACH FILE BEHIND THIS DOOR IS FOR:
 //
-//   the feature
-//     feature.ts           — createIntegrations: what an app says about itself,
-//                            and everything the feature adds through its seams
-//     tables.ts            — the two tables it keeps, and the documents in them
-//     entries.ts           — every read and write on those tables, as vex entries
-//     registry.ts          — each thing asked of those tables, as a function that
-//                            replays an entry and reads the rows by a schema
-//
-//   a bundle arriving
-//     bundle.ts            — the grammar of what an integration publishes
-//     intake.ts            — the gate: a bundle lands whole or not at all
-//     reach.ts             — what a bundle may be called at, from what it declares
-//     contract.ts          — what an author builds against: the components and
-//                            fingerprints the host offers, as JSON and Markdown
-//     operator.ts          — the operator's routes: register, approve, revoke
-//
-//   who is who
-//     credentials.ts       — the signed assertion of who is calling, and the key
-//                            an integration is issued
-//     actor.ts             — who an integration is when it acts and nobody drives
-//     installed.ts         — which integration an action belongs to, and which
-//                            actions are there for an install list
-//
-//   a call crossing
-//     forward.ts           — the one way out to an integration's own service
-//     proxy.ts             — a screen calling out, and a vendor's webhook coming in
-//     call.ts              — the deployment's own call, when nobody is driving
-//     fallback-message.ts  — the sentence put under a call that failed with none
+//   feature.ts      createIntegrations: what an app says about itself, and
+//                   everything the feature adds through its seams
+//   bundle.ts       the fields of what an integration publishes
+//   intake.ts       the gate: a bundle lands whole or not at all, held to moss's
+//                   checks and to the app's own for its `extension`
+//   reach.ts        what a bundle may be called at, from what its actions declare
+//   entries.ts      every read and write on the feature's two tables, as vex
+//                   entries
+//   registry.ts     each thing asked of those tables, as a function that replays
+//                   an entry and reads the rows by a schema; the documents kept
+//                   in them; and which integration an action belongs to
+//   operator.ts     the operator's routes (register, approve, remove, list,
+//                   probe), and the contract a vendor builds against
+//   forward.ts      the one way out to an integration's own service, and the
+//                   doors that use it: a screen's call through the proxy, a
+//                   vendor's webhook, the app's own call when nobody is driving;
+//                   and the sentence put under a call that failed with none
+//   credentials.ts  the signed assertion of who is calling, the key an
+//                   integration is issued, and who it is when it acts alone
 //
 // This module imports `runtime` (where a span goes) and `feature` (what it is
 // started with), and nothing else of moss: what a feature anybody writes may

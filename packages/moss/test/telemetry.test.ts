@@ -16,7 +16,7 @@ import { vexRecordToSpan } from '../src/data/engine';
 import { instrumentFunctions } from '../src/shells/function-session';
 import { hostConfig, standHost } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
-import { callIntegrationWith } from '../src/integrations/call';
+import { callIntegrationWith } from '../src/integrations/forward';
 import { createForwarder } from '../src/integrations/forward';
 import type { FoundIntegration } from '../src/integrations/registry';
 import { createAssertionSigner } from '../src/integrations/credentials';

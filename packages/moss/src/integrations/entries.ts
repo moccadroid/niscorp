@@ -17,7 +17,7 @@ import type { Filter, Mutation, SeedEntry, SeedMutation } from '@niscorp/vex';
 
 // THE TABLES THAT ARE THE FEATURE'S OWN: what it names on itself
 // (`Feature.tables.names`, ./feature.ts), so all the policy its entries run
-// under admits. ./tables.ts says which sequence makes each.
+// under admits. ./registry.ts says which sequence makes them.
 export const REGISTRY_TABLES: readonly string[] = ['integrations', 'integration_actions'];
 
 // EVERY LIST IS READ A PAGE AT A TIME, in the order of its key, each page

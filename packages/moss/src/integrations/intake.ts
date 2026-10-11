@@ -46,7 +46,7 @@ export type ExtensionConfig<Extension> = {
   // that reads as `undefined`.
   prepare?: (extension: Extension, bundle: ExtensionContext) => Extension | Promise<Extension>;
   // What the app tells vendors about its vocabulary: a plain value, served
-  // with the contract as it is (./contract.ts).
+  // with the contract as it is (./operator.ts).
   contract?: unknown;
 };
 

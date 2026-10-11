@@ -10,7 +10,7 @@ import { createOwnEntries } from '../src/data/own-entries';
 import type { CredentialAnswer, FeatureEnv, FeatureSeams, Replay, PrincipalIdentity } from '../src/feature';
 import { endlessChains, layoutMisfits } from '../src/manifest';
 import { createIntegrations } from '../src/integrations';
-import { integrationOfAction } from '../src/integrations/installed';
+import { integrationOfAction } from '../src/integrations/registry';
 import { hashIntegrationKey } from '../src/integrations/credentials';
 import { PAGE, REGISTRY_ENTRIES, REGISTRY_TABLES } from '../src/integrations/entries';
 import { setBackToPending } from '../src/integrations/registry';

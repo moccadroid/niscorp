@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import type { FetchFn } from '@niscorp/nova';
-import { withFallbackMessage } from '../src/integrations/fallback-message';
+import { withFallbackMessage } from '../src/integrations/forward';
 
-// The sentence under a failing integration call (../src/integrations/fallback-message.ts).
+// The sentence under a failing integration call (../src/integrations/forward.ts).
 // What an integration's service answered is another process's JSON: these hold
 // which of its replies are its own words, and which get the fallback.
 const FLOOR = { message: 'The belts add-on is not answering right now. The rest of the studio is unaffected.' };

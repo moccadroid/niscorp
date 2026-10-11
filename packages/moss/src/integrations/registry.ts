@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { StrataError, depthRefusal, exceedsDepth, type Upgrader } from '@niscorp/strata';
+import type { DocumentStore } from '@niscorp/strata/postgres';
 import { ActionDefinitionSchema } from '@niscorp/nova';
 import type { ActionDefinition } from '@niscorp/nova';
 import { isRecord } from '@niscorp/nova/reflect';
@@ -316,3 +317,49 @@ export const loadIntegrationActions = async (replay: Replay, upgrader?: Upgrader
 // is verified before an approval is written.
 export const storedActionsOf = async (replay: Replay, id: string, upgrader?: Upgrader): Promise<Record<string, ActionDefinition>> =>
   actionsIn(await everyRow(StoredActionRowSchema, (after) => replay('integrations/actions-of', { id, ...afterAction(after) })), upgrader);
+
+// ═══════════════════════════════════════════════════════════════
+// THE TABLES THE FEATURE KEEPS: `integrations` and `integration_actions`.
+//
+// The core's sequence makes them (`nisc.moss`, ../data): every deployment's
+// ledger has them there, and a migration that has run is never moved or
+// edited, so their DDL stays where it is. In code they are this feature's: it
+// names both as its own (./entries.ts, `REGISTRY_TABLES`), and nothing in the
+// core reads or writes a row of them.
+// ═══════════════════════════════════════════════════════════════
+
+// THE ROWS THAT HOLD DOCUMENTS: every stored action's definition is a nova
+// action, stamped with the grammars it was written in (`{}`, a row with no
+// stamp, reads as the start of every grammar). The feature has them brought
+// current when it starts (./feature.ts, the `upgradeStore` seam): rows carry
+// the stamp they were written at, what they have not seen runs once, and they
+// are written back current. A row written by newer code refuses the start,
+// as a ledger written by newer code refuses the boot.
+export const STORED_ACTIONS: DocumentStore = {
+  table: 'integration_actions',
+  column: 'definition',
+  stamp: 'grammar',
+  kind: 'nisc.nova/action',
+  key: ['integration_id', 'action_id'],
+};
+
+// ── which integration an action belongs to ───────────────────
+//
+// `ext.<audience>.<integration>.<name>` → the integration. Derived, never
+// stored twice.
+export const integrationOfAction = (id: string): string | undefined =>
+  id.startsWith('ext.') ? id.split('.')[2] : undefined;
+
+// INSTALLATION IS PER TENANT, and this is where that lands.
+//
+// The charter grants `ext.desk.*` once, to every desk in the deployment — so
+// without this, one studio installing an integration puts it on every studio's front
+// desk. Moss cannot filter that itself: it does not know what a studio is, on
+// purpose. The app answers, and the answer is a list of ids.
+export const filterInstalled = (ids: readonly string[], installed: ReadonlySet<string> | undefined): readonly string[] => {
+  if (installed === undefined) return ids;
+  return ids.filter((id) => {
+    const owner = integrationOfAction(id);
+    return owner === undefined || installed.has(owner);
+  });
+};

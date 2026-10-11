@@ -1,20 +1,13 @@
 import type { Feature, FeatureSeams, Replay } from '../feature';
-import { KEY_PREFIX, keyCredential } from './actor';
-import type { IntegrationActor } from './actor';
-import { callIntegrationWith } from './call';
-import type { CallIntegration } from './call';
-import { contractRoutes } from './contract';
-import { createAssertionSigner } from './credentials';
+import { KEY_PREFIX, createAssertionSigner, keyCredential } from './credentials';
+import type { IntegrationActor } from './credentials';
 import { REGISTRY_ENTRIES, REGISTRY_TABLES } from './entries';
-import { withFallbackMessage } from './fallback-message';
-import { createForwarder } from './forward';
-import { filterInstalled, integrationOfAction } from './installed';
-import { operatorRoutes } from './operator';
-import { proxyRoutes } from './proxy';
+import { callIntegrationWith, createForwarder, proxyRoutes, withFallbackMessage } from './forward';
+import type { CallIntegration } from './forward';
 import type { ExtensionConfig } from './intake';
-import { findIntegration, integrationByKey, loadIntegrationActions, registeredIntegrations } from './registry';
+import { contractRoutes, operatorRoutes } from './operator';
+import { STORED_ACTIONS, filterInstalled, findIntegration, integrationByKey, integrationOfAction, loadIntegrationActions, registeredIntegrations } from './registry';
 import type { RegisteredIntegration } from './registry';
-import { STORED_ACTIONS } from './tables';
 
 // ═══════════════════════════════════════════════════════════════
 // THE FEATURE — integrations as one object an app creates, configures and
@@ -38,7 +31,7 @@ export type IntegrationsConfig<Extension = undefined> = {
   // row and tell vendors about it. Absent: a bundle that carries an
   // `extension` is refused.
   extension?: ExtensionConfig<Extension>;
-  // WHO AN INTEGRATION IS when it acts and nobody is driving (./actor.ts). The
+  // WHO AN INTEGRATION IS when it acts and nobody is driving (./credentials.ts). The
   // app answers with a principal, and from there NOTHING is special: that
   // principal's charter rung compiles its policy, its scope values pin its
   // rows, and the engine stamps its writes.
@@ -85,7 +78,7 @@ export type Integrations<Extension = undefined> = Feature & {
   // of `executeAs`. Refuses (throws) unless it is approved and installed for
   // this principal's tenant, mints the assertion, and returns what the
   // integration answered, whatever it answered. Deliberately not gated by
-  // reach: a lifecycle verb is not an action and has no screen (./call.ts).
+  // reach: a lifecycle verb is not an action and has no screen (./forward.ts).
   callIntegration: CallIntegration;
   // The approved integration a presented key belongs to, or undefined.
   integrationByKey: (key: string) => Promise<string | undefined>;
@@ -104,7 +97,7 @@ const start = async <Extension>(config: IntegrationsConfig<Extension>, seams: Fe
   // `replay` (./registry.ts, ./entries.ts).
   const replay = await seams.ownEntries(REGISTRY_ENTRIES);
   // THE STORED ACTIONS, BROUGHT TO THIS CODE'S GRAMMARS before one is read
-  // (./tables.ts). The rows are this feature's, so the asking is: the core
+  // (./registry.ts). The rows are this feature's, so the asking is: the core
   // upgrades no row of its own accord.
   await seams.upgradeStore(STORED_ACTIONS);
   const find = (id: string): ReturnType<typeof findIntegration> => findIntegration(replay, id);
@@ -172,7 +165,7 @@ export const createIntegrations = <Extension = undefined>(config: IntegrationsCo
   };
   return {
     name: 'integrations',
-    // The two tables that are its own (./tables.ts says where they are made).
+    // The two tables that are its own (./registry.ts says where they are made).
     tables: { names: REGISTRY_TABLES },
     start: async (seams) => {
       started = await start(config, seams);

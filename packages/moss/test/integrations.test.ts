@@ -6,7 +6,7 @@ import type { Replay } from '../src/data/own-entries';
 import { failingAt, registryOver } from './registry-db';
 import { endlessChains, layoutMisfits } from '../src/manifest';
 import { runIntake } from '../src/integrations/intake';
-import { callIntegrationWith } from '../src/integrations/call';
+import { callIntegrationWith } from '../src/integrations/forward';
 import { createForwarder } from '../src/integrations/forward';
 import { findIntegration, writeBundle, listIntegrations, registeredIntegrations } from '../src/integrations/registry';
 import type { BundleImport } from '../src/integrations/registry';
