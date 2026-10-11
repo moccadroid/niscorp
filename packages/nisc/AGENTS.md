@@ -471,7 +471,7 @@ Report violations by rule number. A change that makes the app less declarative, 
 
 **This part is for whoever changes a `@niscorp` package. Everything above it is for whoever builds an app on them.** Read `/STYLE_GUIDE.md`, "The packages are live", before it: what a change may do to an app that works today comes first.
 
-**A package is held to the rules nisc sets for apps.** It runs no SQL of its own: its reads and writes are vex entries, as an app's are ("Using Vex"). What crosses a boundary is parsed by a schema (rule 13), rule 16 applies in full, and its tables are strata sequences (rule 17). Moss broke each of them for as long as they were only written down: forty statements sent straight to the pool, one boundary with a schema, 135 exported names of which 71 were imported by nothing, one function of 1,345 lines (`docs/plans/moss-refactor.md` is the audit). The rules below are what was missing, and each has a build that fails.
+**A package is held to the rules nisc sets for apps.** It runs no SQL of its own: its reads and writes are vex entries, as an app's are ("Using Vex"). What crosses a boundary is parsed by a schema (rule 13), rule 16 applies in full, and its tables are strata sequences (rule 17). Moss broke each of them for as long as they were only written down: forty statements sent straight to the pool, one boundary with a schema, 135 exported names of which 71 were imported by nothing, one function of 1,345 lines (the audit is in the history of `docs/plans/moss-refactor.md`). The rules below are what was missing, and each has a build that fails.
 
 **A package is made of modules.** A module is a directory under `src/` with an `index.ts`.
 

@@ -8,13 +8,13 @@ Moss is rebuilt as modules, and its public API is what an app is meant to call. 
 
 BREAKING — approved by moccadroid, 2026-10-09: import only what `@niscorp/moss` still exports (the list is `packages/moss/api.txt`); the changes an app has to make are listed below, one per part.
 
-Moss had grown to twenty-eight files flat in `src/`, one of them a single function of 1,345 lines, and it exported 135 names of which 71 were imported by nothing outside the package. `docs/plans/moss-refactor.md` is the audit and the plan.
+Moss had grown to twenty-eight files flat in `src/`, one of them a single function of 1,345 lines, and it exported 135 names of which 71 were imported by nothing outside the package. `docs/plans/moss-refactor.md` says how moss is built now; the audit is in that file's history.
 
 **How to read this.** The parts are in eight groups, in the order an app meets them: (1) what is imported from where, (2) the manifest, (3) the session and who is calling, (4) integrations, (5) a write and tide, (6) the socket and the shells, (7) pages and the Node entry, (8) the terminal. Each part says what changed and what an app writes instead, and a part that asks nothing of an app says so. The last part, "What an app changes", is the list to work down.
 
 **(1) WHAT IS IMPORTED FROM WHERE**
 
-**The main entry exports 30 names, not 135. All eighteen entries together export 88, where fourteen exported 185.**
+**The main entry exports 30 names, not 135. All eighteen entries together export 90, where fourteen exported 185.**
 
 106 names left the main entry and one arrived (`verifyApp`). Every name that left is in this table, with what to write instead. A name stays where it is the one way to do something an app is meant to do, or the type of something an app writes; a second way to what the server answers, a part of something exported whole, and a type that only names what an exported function takes or answers and that nothing imports, left.
 
