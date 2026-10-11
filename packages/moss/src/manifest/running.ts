@@ -78,11 +78,15 @@ export type OwnedActions = {
 export type RunningManifest = {
   // The actions in force now: what the app shipped, then each named set.
   actions: () => Actions;
-  // THE ENTRIES THE APP SERVES, in the order it shipped them. They are held
-  // here and nowhere else while a server runs: whoever seeds them where vex
-  // replays from is handed this list, a verification reads it, and a shell is
-  // handed them by fingerprint with the rest of what it is made of
-  // (`artifactsFor`).
+  // THE ENTRIES THE APP SHIPPED, in the order it shipped them. This list is
+  // their SOURCE while a server runs, and it is one of two places they are
+  // held. A verification reads it; a shell is handed them by fingerprint with
+  // the rest of what it is made of (`artifactsFor`); and it is copied once,
+  // at boot, into the cache vex replays from (../data, `Data.seed`). THE
+  // CACHE IS WHAT RUNS THEM: a replay, and the list of fingerprints the data
+  // module answers, resolve there and never ask here. And the cache holds
+  // what this list does not: a query written while the app runs (../data,
+  // intents.ts), and any row it held before this boot.
   entries: () => readonly (SeedEntry | SeedMutation)[];
   // Would the app serve THESE actions, everything else as it stands? Nothing
   // is switched: this is how a bundle is tried before any of it is written.
@@ -149,7 +153,9 @@ export type RunningManifest = {
   // THE ONE QUESTION A SHELL ASKS OF WHAT EXISTS: once to be built, and once
   // more each time it adopts. An action, a layout, a fragment and an entry
   // reach a shell through this answer and through nothing else, so whatever
-  // comes to decide what an id resolves to decides it here. The definitions
+  // comes to decide what a shell is handed for an id decides it here. (What a
+  // read REPLAYS is decided elsewhere: its fingerprint resolves in vex's
+  // cache, `entries` above.) The definitions
   // are remembered for each set of roles and the component names for each
   // shell manifest, both until the next switch.
   artifactsFor: (shell: ShellManifest, roles: readonly string[], installed: readonly string[] | undefined) => ShellArtifacts;

@@ -17,15 +17,20 @@
 // WHAT A SHELL IS MADE OF, FOR A SET OF ROLES, is that owner's one answer
 // (./artifacts.ts): the actions they hold, the shell's frame and layout store,
 // its fragments, and the entries. An action, a layout, a fragment and an entry
-// reach a shell through that answer and through nothing else, so it is where
-// whatever decides what an id resolves to will be asked.
+// reach a shell through that answer and through nothing else, so for those it
+// is where whatever decides what an id resolves to will be asked.
 //
 // EVERY COMPONENT NAME A SHELL'S TREES MAY MENTION is read off the same
 // artifacts (./components.ts), each with the contract declared for it.
 //
-// WHICH ENTRIES AN APP SERVES is said by one function (./entries.ts). The
-// running manifest holds what it answers while a server runs; the step that
-// migrates before one starts asks the function itself.
+// WHICH ENTRIES AN APP SHIPPED is said by one function (./entries.ts). The
+// running manifest holds what it answers while a server runs, and is their
+// source; the step that migrates before one starts asks the function itself.
+// It is not the only place they are held. Its list is copied once, at boot,
+// into the cache vex replays from (../data), and a replay resolves its
+// fingerprint there and asks nothing here. That cache also holds what this
+// module never sees: a query written while the app runs, and any row it held
+// before this boot.
 //
 // WHETHER IT MAY BE SERVED is one verification (./verify.ts), asked at boot, at
 // every change and before a bundle is let in: the charter, with what each

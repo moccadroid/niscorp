@@ -529,6 +529,20 @@ operator prefix; the app's reactions hear a write; the generation pointer is
 watched; the socket.
 A step that refuses is the boot's refusal.
 
+**Where the app's entries are held.** In two places while a server runs. The
+running manifest holds the list the app shipped and is their source: the boot
+check reads it, and a shell is told of the reads on its screens from it. That
+list is copied once, at boot, into the cache vex replays from (`vex_cache`,
+or the cache `runtime.cache` hands over). The cache is what runs them: a
+request's fingerprint, and the list of fingerprints a feature or the operator
+is told of, resolve there, and the manifest is not asked. The cache also
+holds what the list does not: a query `session.answerIntent` wrote while the
+app runs, and any row it held before this boot (seeding writes each entry of
+the list and takes none out, so in a database that outlives the process an
+entry the app no longer ships is still there, protected). As in 0.4.0. Which
+of the two decides what a fingerprint resolves to is what the next piece of
+work changes, and nothing here has moved it.
+
 **The manifest is read first.** Before a table is created or a row is read,
 `createServer` parses the manifest with a schema, and a manifest that does not
 parse refuses the boot:
@@ -799,10 +813,13 @@ is live when something on it can still happen:
 A read made while the action opened is **finished**: its answer is in the tree
 (and listed in `drawnWith`). The app's own shell is always live for a signed-in
 principal — it is the thing that is kept. nova supplies the facts
-(`livenessOf`, `@niscorp/nova/reflect`); moss composes the verdict, because it
-holds the entries behind each fingerprint (`src/shells/liveness.ts`; the
-function is not exported, its answer is `live`, `why` and `drawnWith` on the
-snapshot).
+(`livenessOf`, `@niscorp/nova/reflect`); moss composes the verdict, because
+the running manifest holds the entries the app shipped, by fingerprint
+(`src/shells/liveness.ts`; the function is not exported, its answer is
+`live`, `why` and `drawnWith` on the snapshot). It reads that list and not
+the cache a replay resolves in, which can hold more: a fingerprint the
+manifest does not carry (a query written by `answerIntent`, a row an earlier
+boot seeded) is the last line of the table.
 
 When `live` is false the trees are the whole of the screen, and the terminal
 opens no socket.
@@ -1295,7 +1312,10 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
   asked once for each build and once for each adopt
   (`src/manifest/artifacts.ts`): an action, a layout, a fragment and an entry
   reach a shell through that one answer, and the server's wiring reads none
-  of them off the app. A kept shell may sit unattached for
+  of them off the app. For an entry that is what a shell is told of the reads
+  on its screens. What a read replays is not in the answer: the entries have
+  two holders (see "Where the app's entries are held", under `createServer`).
+  A kept shell may sit unattached for
   `runtime.shellIdleMs` (default 30 minutes; `0` disables the sweep). A shell
   that is not kept (nobody signed in; any shell of a page's host) ends when
   its last terminal leaves, and the host holds nothing of a shell that has

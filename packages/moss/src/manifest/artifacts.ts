@@ -12,9 +12,17 @@ import type { ShellCanvas, ShellManifest } from './app';
 // manifest; the frame, the layout store and the fragments were read off the
 // shell's manifest by the server's wiring; the entries were held in a map of
 // their own. So whatever is to decide which action, layout, fragment or entry
-// an id resolves to had four modules to change. It has one function now: a
-// shell is built from this answer and adopts it, and nothing else of moss
-// reads one of the four off what the app handed over.
+// an id resolves to had four modules to change. For what a SHELL IS HANDED it
+// has one function now: a shell is built from this answer and adopts it, and
+// nothing else of moss reads one of the four off what the app handed over.
+//
+// FOR AN ENTRY THAT IS HALF OF IT. The entries in this answer are what a
+// shell is told of the reads on its screens (whether one keeps answering).
+// What a read REPLAYS is not asked here: a fingerprint resolves in vex's
+// cache, into which the same list was copied at boot (../data, `Data.seed`),
+// and which also holds what this answer does not (a query written while the
+// app runs). So whatever comes to decide what a fingerprint resolves to has
+// this function and that cache to change.
 // ═══════════════════════════════════════════════════════════════
 
 export type ShellArtifacts = {
@@ -31,8 +39,9 @@ export type ShellArtifacts = {
   layoutStore?: Readonly<Record<string, LayoutNode>>;
   // THE FRAGMENTS an action may be composed with, by id.
   fragments?: Readonly<Record<string, ActionFragment>>;
-  // THE ENTRIES the app serves, by fingerprint: what a read or a write on one
-  // of this shell's screens replays.
+  // THE ENTRIES the app shipped, by fingerprint: what a shell is told of a
+  // read or a write on one of its screens. The replay itself resolves the
+  // fingerprint in vex's cache, not here.
   entries: ReadonlyMap<string, SeedEntry | SeedMutation>;
   // Every component name a tree of this shell may mention, each with the
   // contract declared for it (./components.ts). Not an artifact: it is read

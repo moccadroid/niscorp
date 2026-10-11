@@ -6,11 +6,14 @@
 // under a policy compiled from the charter, and this is where that is set up.
 // `createData` (./data.ts) is the one object the server builds for all of it.
 //
-// THE ENGINE (./engine.ts) stands up from what is present: the seeded entries
-// are the whole surface, and what can be granted is the tables the database
-// has. Which entries those are, this module does not read off an app: it is
-// handed them to seed, once, by the running manifest that holds them
-// (`Data.seed`).
+// THE ENGINE (./engine.ts) stands up from what is present: what a request may
+// replay is what its cache holds, and what can be granted is the tables the
+// database has. The app's entries this module does not read off an app: their
+// source is the running manifest, which hands its list over once to be
+// copied into that cache (`Data.seed`). From then on a replay, and the list
+// of fingerprints, resolve in the cache and ask the manifest nothing; and the
+// cache also holds a query written for an intent while the app runs
+// (./intents.ts) and any row it held before this boot.
 //
 // THE POLICY a set of roles reads and writes under (./policy.ts) is their
 // `data` grants over that set, with the app's row behaviors: compiled once for

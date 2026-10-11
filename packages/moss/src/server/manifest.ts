@@ -30,9 +30,11 @@ export const buildRunningManifest = async (
   // grantable set was known.
   data.dropOnChange(running.onChange);
   // THE ENTRIES ARE THE RUNNING MANIFEST'S TO HAND OVER, for the same reason
-  // and at the same moment: it holds them, and what vex replays from is seeded
-  // with what it holds. After the check above, so a manifest that is refused
-  // has written no row.
+  // and at the same moment: it is their source, and its list is copied here,
+  // once, into the cache vex replays from. After the check above, so a
+  // manifest that is refused has written no row. This line is the one place
+  // the two holders of the entries meet: afterwards a replay resolves in the
+  // cache, and the manifest is not asked.
   await data.seed(running.entries());
   return running;
 };

@@ -176,13 +176,21 @@ entry.
    a principal is a record (roles, scope values, what is installed for them).
 2. **What exists for them?** `manifest`: what the app handed over, read by a
    schema and frozen; what it consists of right now, with one writer; whether
-   that may be served; and what a set of roles holds of it. It is the one
-   owner of every artifact a shell loads: the actions, the frame and the
-   layout store, the fragments and the entries are asked of it, in one answer
-   for a shell and a set of roles, and read off the app by nothing else.
+   that may be served; and what a set of roles holds of it. Every artifact a
+   shell is handed is asked of it: the actions, the frame and the layout
+   store, the fragments and the entries, in one answer for a shell and a set
+   of roles, and read off the app by nothing else. Of the entries it is the
+   source and not the only holder: see `data`, next.
 3. **What may they read and write?** `data`: the vex engine, the policy a set
    of roles reads and writes under, the routes, a seeded entry run as a
-   charter role, and the tables with their migration.
+   charter role, and the tables with their migration. The engine's cache is
+   the second place the app's entries are held. The running manifest's list
+   is copied into it once, at boot; from then on a replay, and the list of
+   fingerprints, resolve in the cache and the manifest is not asked; and the
+   cache holds what the list does not, a query written for an intent while
+   the app runs and any row it held before this boot. So what a fingerprint
+   resolves to is decided in `data` today, and what an action, a layout or a
+   fragment resolves to in `manifest`.
 4. **What are they looking at?** `shells`: the shell host, one shell's build,
    the stream of frames, and the screen read without attaching.
 5. **How does it reach them?** `socket` for the live wire, `documents` for a

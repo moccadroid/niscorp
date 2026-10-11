@@ -90,15 +90,22 @@ export type Data = {
   // The upgrader over nova's, Prism's and the app's grammars: it reads a
   // stored document current, and stamps one that is written.
   grammars: Upgrader;
-  // THE ENTRIES THE APP SERVES, SEEDED WHERE VEX REPLAYS FROM. Each lands in
-  // the cache as a protected row, and one the database already carries as
+  // THE ENTRIES THE APP SHIPPED, COPIED INTO THE CACHE VEX REPLAYS FROM. Each
+  // lands there as a protected row, and one the cache already carries as
   // authored is left untouched; a write that fails vex's authoring lint
-  // throws. They are the whole surface: nothing else is replayed.
+  // throws. No row is taken out: an entry an earlier boot seeded stays.
   //
-  // Handed the entries by whoever holds them (the running manifest), once,
-  // after both stand: the manifest cannot be built before `grants` is known,
-  // so its entries cannot arrive with the rest. This module reads them off no
-  // app.
+  // Handed the entries by their source (the running manifest), once, after
+  // both stand: the manifest cannot be built before `grants` is known, so its
+  // entries cannot arrive with the rest. This module reads them off no app.
+  //
+  // FROM HERE ON THE CACHE IS WHAT A REPLAY READS, and it is asked of nobody
+  // else: a request's fingerprint resolves in the cache, and so does
+  // `fingerprints` below. So the entries have two holders, the manifest's
+  // list and this copy, and the copy is not only the list: a query written
+  // for an intent while the app runs is stored there too (./intents.ts). What
+  // the cache holds, and who decides it, is the next module's to change
+  // (docs/plans/moss-refactor.md, Part 10).
   seed: (entries: readonly (SeedEntry | SeedMutation)[]) => Promise<void>;
   // The policy somebody reads and writes under: compiled once for each set of
   // roles, and kept until the manifest changes.

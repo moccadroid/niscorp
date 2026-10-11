@@ -7,9 +7,10 @@ import type { CacheBackend, DatabaseAdapter, DatabaseSchema, PgPool, QueryEngine
 // surface — nothing generates here — and the grantable set is the
 // introspected schema × vex's verb leaves. No table list is ever authored.
 //
-// The entries are not seeded here. They are held by the running manifest,
-// which cannot stand before the grantable set is known, so they are handed
-// over once it does (./data.ts, `seed`).
+// The entries are not seeded here. Their source is the running manifest,
+// which cannot stand before the grantable set is known, so its list is
+// copied into this engine's cache once it does (./data.ts, `seed`). The
+// cache is what a replay resolves in.
 // ═══════════════════════════════════════════════════════════════
 
 export type DataLayer = {

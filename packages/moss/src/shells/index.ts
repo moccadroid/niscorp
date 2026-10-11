@@ -9,8 +9,10 @@
 // WHAT A HOST IS HANDED (./config.ts) is a typed object of the functions and
 // values it needs: one that answers what a principal's shell is made of, the
 // app's code it calls, the wire, and its limits. No manifest and no runtime.
-// Every action, layout, fragment and entry a shell loads is in that one
-// answer: a host reads none of them anywhere else.
+// Every action, layout, fragment and entry a shell is handed is in that one
+// answer: a host reads none of them anywhere else. (What one of its reads
+// replays is not handed to it: the read goes over the wire, and its
+// fingerprint resolves in the cache vex replays from.)
 //
 // WHAT A HOST ANSWERS (./types.ts) is a type too: the host, what a transport
 // holds of one session, and what a shell needs of a connection attached to it.

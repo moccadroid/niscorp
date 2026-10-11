@@ -22,11 +22,13 @@ import type { Telemetry } from '../runtime';
 // their roles hold of each, is decided where this is answered, once: the host
 // filters nothing and swaps nothing.
 //
-// EVERYTHING A SHELL LOADS THAT SOMEBODY AUTHORED ARRIVES HERE: its actions,
-// its frame and layout store, its fragments, and the entries its reads
-// replay. All but who somebody is comes from one owner (../manifest,
+// EVERYTHING A SHELL IS HANDED THAT SOMEBODY AUTHORED ARRIVES HERE: its
+// actions, its frame and layout store, its fragments, and the entries the
+// app shipped. All but who somebody is comes from one owner (../manifest,
 // `RunningManifest.artifactsFor`, whose answer is one of these without `roles`
-// and `scope`), and a host reads none of it anywhere else.
+// and `scope`), and a host reads none of it anywhere else. The entries are
+// what a host is TOLD of a screen's reads. What a read replays is not in this
+// answer: it goes over the wire, and its fingerprint resolves in vex's cache.
 export type ShellComposition = {
   // WHO THEY ARE: the roles they hold, and the app's own scope values, handed
   // back to `inputs` and `phrases` untouched. Moss never looks inside them.
@@ -43,7 +45,7 @@ export type ShellComposition = {
   frame?: LayoutNode;
   layoutStore?: Readonly<Record<string, LayoutNode>>;
   fragments?: Readonly<Record<string, ActionFragment>>;
-  // THE ENTRIES the app serves, by fingerprint: how a drawn screen's reads
+  // THE ENTRIES the app shipped, by fingerprint: how a drawn screen's reads
   // are known to keep answering or not (./liveness.ts). Absent, every screen
   // is counted live: a host that cannot ask must not conclude a page is
   // finished.

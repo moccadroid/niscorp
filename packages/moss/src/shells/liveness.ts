@@ -7,8 +7,12 @@ import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 //
 // nova reports what an action can still do once it has been drawn (its
 // `livenessOf`: gestures, channels, endpoints and when each is called). It
-// cannot say what answers a url. Moss can: the entries behind each fingerprint
-// are in the manifest, so "this read keeps answering" is a lookup, not a guess.
+// cannot say what answers a url. Moss can, for an entry the app shipped: those
+// are in the manifest, by fingerprint, so "this read keeps answering" is a
+// lookup, not a guess. What a replay runs is not read here. It resolves in
+// vex's cache, which was seeded with the manifest's list and can hold more
+// (a query written while the app runs, a row from an earlier boot): a
+// fingerprint the manifest does not carry is said to be unreadable, below.
 //
 // A screen is LIVE when something on it can still happen — and then it needs a
 // shell standing behind it and a socket to reach it. Otherwise its tree is the
@@ -56,8 +60,9 @@ export const shellNeedOf = (definition: ActionDefinition, entries: ReadonlyMap<s
       why.push(`its read "${use.name}" keeps answering (${entry.fingerprint} is reactive)`);
       continue;
     }
-    // A replay of something the manifest does not carry (an entry seeded into
-    // the database some other way) may be reactive too. It cannot be read here,
+    // A replay of something the manifest does not carry (an entry the cache
+    // holds from somewhere else: written for an intent while the app runs, or
+    // seeded by an earlier boot) may be reactive too. It cannot be read here,
     // so it is not concluded finished.
     if (fingerprint !== undefined && entry === undefined) {
       why.push(`its read "${use.name}" replays "${fingerprint}", which the manifest does not carry — whether it keeps answering is not readable`);
