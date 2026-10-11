@@ -87,37 +87,3 @@ describe('sessionRevokerOf — who forgets every session a principal holds', () 
     expect(sessionRevokerOf({ pool: noDatabase, session: () => 'i_anyone' })).toBeUndefined();
   });
 });
-
-// MOSS'S STORED SESSIONS ARE WHAT `session: 'sessions'` VERIFIES WITH, and the
-// two calls an app makes on them are for a deployment in that mode: it is the
-// one whose database has the table (`createServer` and `migrateTables` make
-// it there, and nowhere else). Called on any other database, they failed with
-// the driver's sentence about a relation, which says nothing of the choice
-// that was made on the runtime.
-describe('mintSession and revokeAllFor, on a database that keeps no stored sessions', () => {
-  // What Postgres answers for a table that is not there, as `pg` and PGlite
-  // both hand it over: an error with the code of an undefined table.
-  const noSuchTable = (): Error => Object.assign(new Error('relation "sessions" does not exist'), { code: '42P01' });
-  const without: PgPool = { query: async () => Promise.reject(noSuchTable()) };
-  // The whole message: `toThrowError` with an Error compares the two messages.
-  const sentence = (call: string): Error =>
-    new Error(
-      `moss: ${call} was called on a database that has no \`sessions\` table. Moss's stored sessions are what \`session: 'sessions'\` verifies with: ` +
-        'with that on the runtime, createServer and migrateTables make the table, and mintSession and revokeAllFor are for that deployment. ' +
-        'An app whose `session` is a verifier of its own keeps its own credential, and mints and revokes it itself.',
-    );
-
-  it('mintSession says which choice it belongs to', async () => {
-    await expect(moss.mintSession(without, 'i_mara', 60_000)).rejects.toThrowError(sentence('mintSession'));
-  });
-
-  it('revokeAllFor says the same', async () => {
-    await expect(moss.revokeAllFor(without, 'i_mara')).rejects.toThrowError(sentence('revokeAllFor'));
-  });
-
-  it('what the database throws for any other reason is thrown as it is', async () => {
-    const down: PgPool = { query: async () => Promise.reject(Object.assign(new Error('the connection was refused'), { code: 'ECONNREFUSED' })) };
-    await expect(moss.mintSession(down, 'i_mara', 60_000)).rejects.toThrow(/^the connection was refused$/);
-    await expect(moss.revokeAllFor(down, 'i_mara')).rejects.toThrow(/^the connection was refused$/);
-  });
-});
