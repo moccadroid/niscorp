@@ -1307,7 +1307,7 @@ describe('shells — adopt', () => {
       hostConfig({
         ...ctx,
         ...setup,
-        app: base,
+        app: setup.app ?? base,
         actions: () => inForce as ReturnType<NonNullable<HostSetup['actions']>>,
         resolve: async (principal) => {
           const ids = held.get(principal ?? '') ?? Object.keys(inForce);
@@ -1441,6 +1441,83 @@ describe('shells — adopt', () => {
     const session = await arriving;
     await settle();
 
+    session.shell.push('main', 'ledger');
+    expect(mounted(session)).toEqual(['home', 'ledger']);
+  });
+
+  // A BUILD UNDER WAY HOLDS NOBODY ELSE UP. Adopts were one chain, and each
+  // waited for every build that was under way when it was asked for. A build
+  // that never lands (somebody whose `inputs` never answers) then ended the
+  // chain: every other shell of the host adopted the change after it and none
+  // after that, so an action that was taken away stayed pushable.
+  const stuck = (): NiscApp => ({
+    ...base,
+    shell: { canvases: [{ id: 'main', initial: 'home' }], inputs: ({ principal }) => (principal === 'usr_stuck' ? new Promise<never>(() => undefined) : {}) },
+  });
+
+  it('a build that never lands holds no later change back from anybody else', async () => {
+    const { host, force } = world({ app: stuck() });
+    const session = await host.session('t', 'usr_1');
+    void host.session('t', 'usr_stuck');
+    await settle();
+
+    force({ home, extra, ledger });
+    host.adopt();
+    await settle();
+    session.shell.push('main', 'ledger');
+    expect(mounted(session)).toEqual(['home', 'ledger']);
+
+    // The change after that one: both leave.
+    force({ home });
+    host.adopt();
+    await settle();
+
+    expect(mounted(session)).toEqual(['home']);
+    expect(() => session.shell.push('main', 'extra')).toThrow();
+    expect(() => session.shell.push('main', 'ledger')).toThrow();
+  });
+
+  it('nor does a build that fails', async () => {
+    const failing: NiscApp = {
+      ...base,
+      shell: {
+        canvases: [{ id: 'main', initial: 'home' }],
+        inputs: ({ principal }) => (principal === 'usr_broken' ? Promise.reject(new Error('their inputs cannot be read')) : {}),
+      },
+    };
+    const { host, force } = world({ app: failing });
+    const session = await host.session('t', 'usr_1');
+    const refused = host.session('t', 'usr_broken');
+    force({ home });
+    host.adopt();
+    await expect(refused).rejects.toThrow('their inputs cannot be read');
+    await settle();
+
+    expect(() => session.shell.push('main', 'extra')).toThrow();
+  });
+
+  // THE OTHER HALF: a build under way was made from what its principal held
+  // when it began, so it ends up level with what is in force WHEN IT LANDS,
+  // however many changes happened on the way.
+  it('a build that was under way through two changes holds what is in force when it lands', async () => {
+    let release = (): void => undefined;
+    const waiting = new Promise<void>((resolve) => void (release = resolve));
+    const slow: NiscApp = { ...base, shell: { canvases: [{ id: 'main', initial: 'home' }], inputs: async () => (await waiting, {}) } };
+    const { host, force } = world({ app: slow });
+    const arriving = host.session('t', 'usr_1');
+    await settle();
+
+    force({ home, extra, ledger });
+    host.adopt();
+    await settle();
+    force({ home, ledger });
+    host.adopt();
+    await settle();
+    release();
+    const session = await arriving;
+    await settle();
+
+    expect(() => session.shell.push('main', 'extra')).toThrow();
     session.shell.push('main', 'ledger');
     expect(mounted(session)).toEqual(['home', 'ledger']);
   });

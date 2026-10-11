@@ -113,11 +113,22 @@ const rosterOf = (durable: ReadonlyMap<string, Cell>): ShellReport[] => {
 // that had it, for as long as the shell lived.
 const adoptInto = async (host: HostParts, cell: Cell): Promise<void> => {
   if (cell.live.ended) return;
+  // The place of this asking among every one this host made. Taken before
+  // the question is put, so a later number was asked later.
+  host.asked += 1;
+  const asked = host.asked;
   const made = await host.config.composition(cell.principal);
   // Read after the answer: a reset may have put another shell in the cell
   // while it was asked for.
   const live = cell.live;
   if (live.ended) return;
+  // WHAT WAS ASKED LAST IS WHAT A SHELL HOLDS. Two changes are two askings,
+  // and nothing makes the first be answered first (who somebody is, is read
+  // from the app, as slowly as it reads). An answer that arrives after a
+  // later asking was already put in place is the older of the two: it is
+  // dropped, and the shell holds what the last change left its principal with.
+  if (cell.level !== undefined && asked < cell.level) return;
+  cell.level = asked;
   // A definition that arrived may mention a component nothing mentioned
   // when the shell was built.
   for (const [name, contract] of Object.entries(made.components)) {
@@ -129,21 +140,30 @@ const adoptInto = async (host: HostParts, cell: Cell): Promise<void> => {
   live.entries = made.entries;
 };
 
-// EVERY LIVING SHELL OF THIS HOST, whoever it is for and whether it is kept,
-// and each one whose build was under way when this was asked: it was built
-// from what its principal held before the change. The walk went over the
-// kept shells alone, so a shell built for one connection (a visitor's, and
-// everybody's on a host that keeps none) held what it was built with for as
-// long as it lived.
+// ONE CHANGE, ASKED OF EVERY LIVING SHELL OF THIS HOST, whoever it is for and
+// whether it is kept, and of each one whose build was under way when the
+// change happened: it was built from what its principal held before it. The
+// walk went over the kept shells alone, so a shell built for one connection
+// (a visitor's, and everybody's on a host that keeps none) held what it was
+// built with for as long as it lived.
 //
 // Asynchronous and unawaited: definitions landing a tick late simply
-// register, which is the same progressive path `seeds` already takes. One
-// at a time, so a change does not resolve every principal at once.
+// register, which is the same progressive path `seeds` already takes. The
+// living shells one at a time, so a change does not resolve every principal
+// at once.
+//
+// A CHANGE WAITS FOR NO OTHER CHANGE, AND FOR NO BUILD. Each change walks on
+// its own, and each build under way is followed on its own: its cell adopts
+// when it lands, whenever that is. The changes were one chain, and each
+// waited for every build under way: one build that never landed (somebody
+// whose `inputs` never answers) ended the chain, and no shell of the host
+// adopted anything again. Which of two changes a shell ends up with is not
+// decided by the order they finish in (`adoptInto`).
 //
 // A SHELL THAT CANNOT ADOPT IS SAID, AND THE REST GO ON. One throw (a
 // principal that no longer resolves) used to end the walk, and every
 // principal after it kept the old application until something else changed.
-const adoptAll = async (host: HostParts, underWay: readonly Promise<Cell>[]): Promise<void> => {
+const adoptAll = (host: HostParts): void => {
   const adopting = async (cell: Cell): Promise<void> => {
     try {
       await adoptInto(host, cell);
@@ -151,12 +171,12 @@ const adoptAll = async (host: HostParts, underWay: readonly Promise<Cell>[]): Pr
       console.error(`[moss/shells] the shell of ${cell.principal ?? 'nobody'} could not adopt what changed, and keeps what it held:`, error);
     }
   };
-  for (const cell of [...host.living.values()]) await adopting(cell);
-  for (const build of underWay) {
-    // A build that fails is its caller's to hear of; there is nothing to adopt.
-    const cell = await build.catch(() => undefined);
-    if (cell !== undefined) await adopting(cell);
-  }
+  // A build that fails is its caller's to hear of; there is nothing to adopt.
+  for (const build of host.underWay) void build.then(adopting, () => undefined);
+  const living = [...host.living.values()];
+  void (async () => {
+    for (const cell of living) await adopting(cell);
+  })();
 };
 
 // Dispose a shell and stand its replacement in the same cell, carrying the
@@ -361,13 +381,19 @@ const deliverTo =
 
 export const createShellHost = (config: ShellHostConfig): ShellHost => {
   const durable = new Map<string, Cell>();
-  const host: HostParts = { config, emit: emitterOf(config.telemetry), kept: config.kept ?? true, delta: config.limits?.delta ?? false, durable, living: new Map(), underWay: new Set() };
+  const host: HostParts = {
+    config,
+    emit: emitterOf(config.telemetry),
+    kept: config.kept ?? true,
+    delta: config.limits?.delta ?? false,
+    durable,
+    living: new Map(),
+    underWay: new Set(),
+    asked: 0,
+  };
   const { kept } = host;
   const rebuild = (cell: Cell): Promise<void> => rebuildCell(host, cell);
   const durableCell = createDurableCells(host);
-
-  // The adopt that is under way, or the last one that ran (it never rejects).
-  let adopted: Promise<void> = Promise.resolve();
 
   return {
     session: async (token, principal, options) => {
@@ -380,13 +406,7 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
       return sessionOn(host, await durableCell(token, principal), false, rebuild);
     },
     snapshot: snapshotOf(host, durableCell),
-    // One adopt after another: a later change is adopted after an earlier
-    // one, however long each takes to be answered, so what a shell ends up
-    // holding is what the last change left its principal with.
-    adopt: () => {
-      const arriving = [...host.underWay];
-      adopted = adopted.then(() => adoptAll(host, arriving));
-    },
+    adopt: () => adoptAll(host),
     deliver: deliverTo(host),
     list: () => rosterOf(durable),
     reset: (principal) => {

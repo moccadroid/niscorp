@@ -69,6 +69,12 @@ export type Cell = {
   // The reset of this cell that is under way, or the last one that ran. The
   // next one waits for it.
   resetting?: Promise<void>;
+  // WHICH ASKING ITS SHELL IS LEVEL WITH: the place, among every asking of
+  // what a principal holds that the host made for an adopt (`HostParts.asked`),
+  // of the one whose answer was last put in place. An answer to an earlier
+  // asking that arrives afterwards is older, and is not put in its place.
+  // Undefined: the cell has adopted nothing yet.
+  level?: number;
 };
 
 // WHAT EVERY PART OF ONE HOST READS, settled once when the host is created:
@@ -95,6 +101,10 @@ export type HostParts = {
   // not, each until it lands or fails. What lands after a change was built
   // from what its principal held before it, and adopts when it lands.
   underWay: Set<Promise<Cell>>;
+  // HOW MANY TIMES THE HOST HAS ASKED WHAT A PRINCIPAL HOLDS, FOR AN ADOPT.
+  // Each asking takes the next number, so of two answers for one cell the one
+  // with the higher number was asked later (`Cell.level`).
+  asked: number;
 };
 
 // A SHELL ENDS HERE, AND NOTHING ELSE SETS `ended`. It is marked, so a pass
