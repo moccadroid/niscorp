@@ -12,9 +12,14 @@
 // Every action, layout, fragment and entry a shell loads is in that one
 // answer: a host reads none of them anywhere else.
 //
+// WHAT A HOST ANSWERS (./types.ts) is a type too: the host, what a transport
+// holds of one session, and what a shell needs of a connection attached to it.
+//
 // THE HOST (./host.ts) keeps one shell for each signed-in principal and builds
 // a throwaway one for anybody else: the cells, the idle sweep, the roster, a
-// reset, a delivery, and adopting definitions that changed.
+// reset, a delivery, and adopting definitions that changed. What it holds
+// while it stands (./live.ts) is each living shell with what is attached to
+// it, and the one place a shell is marked ended and let go.
 //
 // THE BUILD OF ONE SHELL (./build.ts) is who it is for, what mounts on its
 // canvases, the words it wears, and the session its app code is handed

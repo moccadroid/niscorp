@@ -36,6 +36,41 @@
 // is what an app calls, and `packages/moss/api.txt` lists it. Everything else
 // in this directory is reached by the feature itself.
 //
+// WHAT EACH FILE BEHIND THIS DOOR IS FOR, in the order a bundle meets them:
+//
+//   the feature
+//     feature.ts           — createIntegrations: what an app says about itself,
+//                            and everything the feature adds through its seams
+//     tables.ts            — the three tables it keeps, and the sequence of its
+//                            own that makes the third
+//     entries.ts           — every read and write on those tables, as vex entries
+//     registry.ts          — each thing asked of those tables, as a function that
+//                            replays an entry and reads the rows by a schema
+//
+//   a bundle arriving
+//     bundle.ts            — the grammar of what an integration publishes
+//     intake.ts            — the gate: a bundle lands whole or not at all
+//     reach.ts             — what a bundle may be called at, from what it declares
+//     press.ts             — a listing's images, copied once at intake
+//     placements.ts        — the sentence that says what appears where
+//     contract.ts          — what an author builds against: the components and
+//                            fingerprints the host offers, as JSON and Markdown
+//     operator.ts          — the operator's routes: register, approve, revoke
+//
+//   who is who
+//     credentials.ts       — the signed assertion of who is calling, and the key
+//                            an integration is issued
+//     actor.ts             — who an integration is when it acts and nobody drives
+//     installed.ts         — which integration an action belongs to, and which
+//                            actions are there for an install list
+//
+//   a call crossing
+//     forward.ts           — the one way out to an integration's own service
+//     proxy.ts             — a screen calling out, and a vendor's webhook coming in
+//     frame.ts             — a framed page of the integration's own, and its grant
+//     call.ts              — the deployment's own call, when nobody is driving
+//     fallback-message.ts  — the sentence put under a call that failed with none
+//
 // This module imports `runtime`, `feature` and `manifest`. It imports nothing
 // of `data`: what it reads and writes it authors as vex entries (./entries.ts)
 // and replays through the seam it is handed. Nothing of moss's core imports

@@ -20,6 +20,9 @@
 // reach a shell through that answer and through nothing else, so it is where
 // whatever decides what an id resolves to will be asked.
 //
+// EVERY COMPONENT NAME A SHELL'S TREES MAY MENTION is read off the same
+// artifacts (./components.ts), each with the contract declared for it.
+//
 // WHICH ENTRIES AN APP SERVES is said by one function (./entries.ts). The
 // running manifest holds what it answers while a server runs; the step that
 // migrates before one starts asks the function itself.

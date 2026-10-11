@@ -15,7 +15,9 @@
 // A PRINCIPAL IS A RECORD (./record.ts): roles, scope values, the integrations
 // live for them. The app says which, and the answer is held, bounded, for as
 // long as a session's credential is trusted (./cache.ts). `createIdentity`
-// (./resolution.ts) is the one object the server builds for all of it.
+// (./resolution.ts) is the one object the server builds for all of it. What
+// is worked out for somebody is kept by what it depends on, their roles and
+// what is installed for them, and never by who they are (./memo-key.ts).
 //
 // This module imports `runtime` and `protocol`, and nothing else of moss.
 // ═══════════════════════════════════════════════════════════════

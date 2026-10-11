@@ -49,6 +49,13 @@
 //      it is refused, and so are `createRequire` and a `require` handed
 //      around: each makes a loader nothing here can follow.
 //
+// AND ONE IS ABOUT WHAT A READER FINDS:
+//
+//   8. A DOOR SAYS WHAT IS BEHIND IT. The comment of a module's `index.ts`
+//      names every file and every directory in the module. The style guide
+//      said each door did. Seven of moss's fourteen did not, for 30 files
+//      between them: a sentence about the code that nothing held.
+//
 // A file still flat may be imported by anything while it exists; that is what
 // being in the middle of a move looks like. A module named in `finished` is no
 // longer in the middle of it: everything it needs is a module, so a flat file
@@ -64,6 +71,8 @@
 //   - What another package hands back. A dependency that re-exported this
 //     package's insides would carry them in; `check:packages` installs each
 //     package alone, where such a cycle does not resolve.
+//   - Whether what a door says of a file is so. It holds that the file's name
+//     is in the door's comment, and reads no further.
 //   - The table itself. A line added to `modules` is allowed by definition:
 //     it is a diff somebody reads.
 //
@@ -318,6 +327,16 @@ const judge = (shape: Shape, source: Source): Held[] => {
   const unread = [...paths.filter((path) => !READ.test(path)), ...source.links.map((link) => `${link} (a link)`)];
   const undeclared = directories.filter((directory) => shape.modules[directory] === undefined);
   const doorless = directories.filter((directory) => !source.files.has(`${directory}/index.ts`));
+  // A DOOR SAYS WHAT IS BEHIND IT: each file and each directory that sits in a
+  // module beside its index.ts is named in that file's comments.
+  const unnamed = directories.flatMap((directory) => {
+    const said = (source.files.get(`${directory}/index.ts`) ?? '')
+      .split('\n')
+      .filter((line) => line.trimStart().startsWith('//'))
+      .join('\n');
+    const behind = new Set(paths.filter((path) => path.startsWith(`${directory}/`)).map((path) => path.slice(directory.length + 1).split('/')[0] ?? ''));
+    return [...behind].filter((name) => name !== 'index.ts' && !said.includes(name)).map((name) => `${directory}/index.ts does not name ${name}`);
+  });
   const unknown = [
     ...Object.entries(shape.modules).flatMap(([module, needs]) => needs.filter((need) => shape.modules[need] === undefined).map((need) => `${module} names ${need}`)),
     ...shape.finished.filter((module) => shape.modules[module] === undefined).map((module) => `finished names ${module}`),
@@ -338,6 +357,7 @@ const judge = (shape: Shape, source: Source): Held[] => {
     { label: 'every file in src/ is one this check reads (.ts, .tsx)', passed: unread.length === 0, detail: unread.length === 0 ? `${paths.length} files` : some(unread) },
     { label: 'every directory in src/ is a declared module', passed: undeclared.length === 0, detail: undeclared.join(', ') },
     { label: 'every module has an index.ts', passed: doorless.length === 0, detail: doorless.join(', ') },
+    { label: "a module's door names every file behind it", passed: unnamed.length === 0, detail: some(unnamed) },
     { label: 'every dependency named is a module', passed: unknown.length === 0, detail: unknown.join('; ') },
     { label: 'the modules have no cycle', passed: cycle === undefined, detail: cycle ?? `${Object.keys(shape.modules).length} modules` },
     { label: 'a module, and the top of src/, imports a module by its door', passed: deep.length === 0, detail: some(deep) },
@@ -365,9 +385,9 @@ const ok = (label: string, passed: boolean, detail = ''): void => {
 const FIXTURE_SHAPE: Shape = { modules: { low: [], high: ['low'], extra: ['low'] }, flat: [], finished: ['low', 'high', 'extra'], features: ['extra'] };
 const FIXTURE: Readonly<Record<string, string>> = {
   'index.ts': "export { high } from './high';\n",
-  'low/index.ts': "export { low } from './low';\nexport type { Low } from './low';\n",
+  'low/index.ts': "// ./low.ts is the module. A case may add ./f.ts, ./f.tsx, ./t.ts or ./flat.ts beside it.\nexport { low } from './low';\nexport type { Low } from './low';\n",
   'low/low.ts': 'export type Low = { n: number };\nexport const low = (): Low => ({ n: 1 });\n',
-  'high/index.ts': "export { high } from './high';\n",
+  'high/index.ts': "// ./high.ts is the module. A case may add ./f.ts, ./t.ts or ./t.d.ts beside it.\nexport { high } from './high';\n",
   'high/high.ts': "import { low } from '../low';\nexport const high = (): number => low().n;\n",
   'extra/index.ts': "import { low } from '../low';\nexport const extra = (): number => low().n;\n",
 };
@@ -379,6 +399,7 @@ const READS = 'every file in src/ is one this check reads (.ts, .tsx)';
 const FLAT = 'no new file at the top of src/';
 const RELATIVE = 'the package is imported by a relative path, and other packages are ones package.json names';
 const READABLE = 'every import is one this check can read';
+const NAMED = "a module's door names every file behind it";
 
 type Case = { what: string; fails: string; bad: Readonly<Record<string, string>>; good: Readonly<Record<string, string>> };
 
@@ -519,6 +540,13 @@ const CASES: readonly Case[] = [
   },
 ];
 
+const DOOR_CASE: Case = {
+  what: 'a file its module\'s door does not name',
+  fails: NAMED,
+  bad: { 'low/more.ts': 'export const more = 1;\n' },
+  good: { 'low/more.ts': 'export const more = 1;\n', 'low/index.ts': "// ./low.ts is the module, and ./more.ts is one more.\nexport { low } from './low';\n" },
+};
+
 const fixtureOf = (added: Readonly<Record<string, string>>, links: readonly string[] = []): Source => ({
   name: '@fixture/pkg',
   dependencies: ['zod'],
@@ -528,7 +556,7 @@ const fixtureOf = (added: Readonly<Record<string, string>>, links: readonly stri
 const failing = (held: readonly Held[]): string[] => held.filter((one) => !one.passed).map((one) => one.label);
 
 ok('self-test: the package the cases are built on passes every rule', failing(judge(FIXTURE_SHAPE, fixtureOf({}))).length === 0, failing(judge(FIXTURE_SHAPE, fixtureOf({}))).join('; '));
-for (const one of CASES) {
+for (const one of [...CASES, DOOR_CASE]) {
   const bad = failing(judge(FIXTURE_SHAPE, fixtureOf(one.bad)));
   const good = failing(judge(FIXTURE_SHAPE, fixtureOf(one.good)));
   const caught = bad.includes(one.fails);

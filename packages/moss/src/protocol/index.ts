@@ -8,6 +8,15 @@
 // frame delta codec, the screen a drawn page carries, and what a browser's
 // session goes by.
 //
+//   ./connection.ts    how a connection is opened and how it ends: the protocol
+//                      number, what a terminal offers to say who it is, the
+//                      close codes
+//   ./messages.ts      the envelope: every message either end sends, as a schema
+//   ./tree.ts          a rendered tree, as it crosses the wire or sits in a page
+//   ./delta.ts         frame deltas: what changed in a tree, encoded and applied
+//   ./snapshot.ts      the screen a page drawn on the server carries
+//   ./session-name.ts  what a browser's session goes by, on both ends
+//
 // This module imports nothing else of moss, and it is all of moss the terminal
 // side imports.
 // ═══════════════════════════════════════════════════════════════

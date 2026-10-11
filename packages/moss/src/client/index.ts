@@ -6,7 +6,8 @@
 //   ./wire.ts        the connection: one socket, its status, when to try again
 //   ./credential.ts  who the terminal is between connects
 //   ./screen.ts      what it holds of the screen: the frame, a tree per canvas
-//   ./env.ts         the host it runs in, and the browser's (`./node` has Node's)
+//   ./env.ts         the host it runs in, and the browser's
+//   ./node.ts        the host a plain Node process is: `@niscorp/moss/client/node`
 //   ./document.ts    the screen a server-drawn page carries, read out of it
 // ═══════════════════════════════════════════════════════════════
 
