@@ -44,7 +44,7 @@ export type IntakeContext = {
   regions?: ReadonlySet<string>;
   tools?: ReadonlySet<string>;
   checks?: ReadonlySet<string>;
-  // The host's grammars (../data, grammar.ts). With it, a bundle's actions are
+  // The host's grammars (../data, engine.ts). With it, a bundle's actions are
   // upgraded from the bundle's `grammar` stamp BEFORE they are parsed — an
   // action in an older grammar would fail today's strict schema otherwise.
   upgrader?: Upgrader;

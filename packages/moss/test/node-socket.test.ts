@@ -173,7 +173,7 @@ describe('the ws transport', () => {
   });
 });
 
-// The socket as the server stands it up (../src/server/socket.ts), behind the
+// The socket as the server stands it up (../src/server/server.ts), behind the
 // real transport, attached the way `nisc start` attaches it: with no options.
 describe('the ws transport — a server’s socket says how it is to be attached', () => {
   const serving = async (settings: { socketMaxMessageBytes?: number; socketCompression?: boolean }): Promise<string> => {

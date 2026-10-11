@@ -85,7 +85,7 @@ export type RunningManifest = {
   // CACHE IS WHAT RUNS THEM: a replay, and the list of fingerprints the data
   // module answers, resolve there and never ask here. And the cache holds
   // what this list does not: a query written while the app runs (../data,
-  // intents.ts), and any row it held before this boot.
+  // routes.ts), and any row it held before this boot.
   entries: () => readonly (SeedEntry | SeedMutation)[];
   // Would the app serve THESE actions, everything else as it stands? Nothing
   // is switched: this is how a bundle is tried before any of it is written.

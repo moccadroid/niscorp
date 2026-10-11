@@ -11,7 +11,7 @@ import { assembleServer } from '../src/server/server';
 import { engineDouble } from './data-double';
 
 // THE SERVER, ASSEMBLED OVER A DATA MODULE WITH NO DATABASE BEHIND IT
-// (../src/server/assemble.ts): everything `createServer` does once the
+// (../src/server/server.ts): everything `createServer` does once the
 // database is up.
 //
 // WHAT A BOOT STARTED, A BOOT THAT FAILS STOPS. A server that is returned has

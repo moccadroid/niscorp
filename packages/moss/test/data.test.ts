@@ -468,7 +468,7 @@ describe('the data module — the tables a run covers', () => {
   });
 });
 
-// WHICH TABLES ARE A FEATURE'S OWN (../src/data/feature-tables.ts), read off
+// WHICH TABLES ARE A FEATURE'S OWN (../src/data/migrate.ts), read off
 // the features before any of them runs.
 describe("the data module — the tables a feature names as its own", () => {
   const naming = (name: string, ...names: string[]) => ({ name, tables: { names }, start: () => undefined });

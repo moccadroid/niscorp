@@ -5,7 +5,7 @@ import type { Data } from '../src/data';
 import type { NiscApp } from '../src/manifest';
 import { buildRunningManifest } from '../src/server/server';
 
-// THE RUNNING MANIFEST AS THE SERVER STANDS IT UP (../src/server/manifest.ts),
+// THE RUNNING MANIFEST AS THE SERVER STANDS IT UP (../src/server/server.ts),
 // with no server and no database: the data module is a stand-in that records
 // what it is handed.
 //

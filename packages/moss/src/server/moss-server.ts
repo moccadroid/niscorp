@@ -103,7 +103,7 @@ export type MossServer = Hono<Env> & {
   identity: (principal: string | null) => Promise<IdentityRecord>;
   // Execute a seeded entry as a declared charter role — for surfaces that have
   // no principal by nature. In-process, replay-only, charter-bounded; see
-  // ../data, execute-as.ts.
+  // ../data, policy.ts.
   executeAs: ExecuteAs;
   // FORGET ONE TENANT, not the deployment. The application tags each identity
   // record it resolves (`IdentityRecord.tag`); this drops every record wearing

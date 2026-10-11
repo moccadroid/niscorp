@@ -6,7 +6,7 @@ import type { NiscRuntime } from '../src/runtime';
 import { buildSocket } from '../src/server/server';
 import type { Connection } from '../src/socket';
 
-// THE SOCKET AS THE SERVER STANDS IT UP (../src/server/socket.ts): what the
+// THE SOCKET AS THE SERVER STANDS IT UP (../src/server/server.ts): what the
 // runtime says of it reaches it. The socket's own tests (socket.test.ts) hand
 // `createSocket` its settings themselves; these hold the wiring that reads
 // them off the runtime, so a deployment that sets a limit, its origins or its

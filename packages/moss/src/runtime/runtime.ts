@@ -35,7 +35,7 @@ export type NiscRuntime = {
   // closed, and a default here would open this one for everyone. Three answers:
   //   'sessions' — moss's own stored credential (../identity/sessions.ts): 256-bit token,
   //                hashed at rest, expiring, revoked by deleting its row.
-  //   'dev-open' — the dev stub (../identity/dev-token.ts): every well-formed token is trusted and
+  //   'dev-open' — the dev stub (../identity/verifier.ts): every well-formed token is trusted and
   //                the boot says so out loud. Harnesses and demo floors.
   //   a function — the app's own identity provider.
   session: SessionVerifier | 'sessions' | 'dev-open';
@@ -72,7 +72,7 @@ export type NiscRuntime = {
   // closed with 4503, and its terminal tries again later like after any close.
   //
   // The default is sized to what a shell for nobody and its connection hold
-  // (../socket, anonymous-shell-limit.ts has the numbers): a thousand of them
+  // (../socket, socket.ts has the numbers): a thousand of them
   // fit a process given 512 MB. A deployment with a public screen and more
   // visitors at once than that raises it, from those numbers and its own memory.
   //
@@ -173,7 +173,7 @@ export type NiscRuntime = {
   operatorGate?: (c: Context, next: Next) => Response | void | Promise<Response | void>;
 
   // THE CLUSTER FABRIC — how an invalidation or a nudge reaches a SECOND moss
-  // process (../server, fabric.ts). Off by default, and needed only when a deployment
+  // process (../server, signals.ts). Off by default, and needed only when a deployment
   // grows past one process per service: a role change in process A resets the
   // shell resident in B, a nudge in A wakes a channel subscriber in B. The seam
   // takes functions, not a connection — `LISTEN/NOTIFY` on the pool moss holds

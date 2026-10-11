@@ -18,7 +18,7 @@ import type { SocketAccept } from '../src/socket';
 const mossClosed = vi.fn();
 
 // How the stood-in server's socket says it is to be attached: what the real
-// one fills from the runtime (../src/server/socket.ts; held in
+// one fills from the runtime (../src/server/server.ts; held in
 // node-socket.test.ts). Set by a test before it serves.
 const said: { transport?: SocketAccept['transport'] } = {};
 

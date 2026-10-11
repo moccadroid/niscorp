@@ -1103,8 +1103,8 @@ tables changed, so a reactive read over one of them answers again.
   `invalidate-tenant` and `nudge` — what `server.invalidateIdentity`,
   `invalidateTenant` and `nudge` publish after applying locally. Best-effort:
   each targets state that heals on its own clock. Unset, every path behaves as
-  in one process. The wiring is `src/server/fabric.ts` and
-  `src/server/signals.ts`; it is the server's own and is not exported.
+  in one process. The wiring is `src/server/signals.ts`; it is the server's
+  own and is not exported.
   **What the transport hands to `apply` is read by a schema** before anything
   of it is used: the object moss published, with exactly its fields. `apply`
   takes whatever the transport read off its wire (`unknown`), so a transport
@@ -1131,7 +1131,7 @@ tables changed, so a reactive read over one of them answers again.
   signal of its own. Each call moves the pointer once more, and the others drop
   what they derived and adopt again.
   The row is read and moved through vex, by two
-  entries of moss's own that no route serves (`src/data/pointer.ts`);
+  entries of moss's own that no route serves (`src/data/own-entries.ts`);
   `src/manifest/generation.ts` holds the clock and no SQL. A move is a compare
   and a set: the next number is written where the counter is still what was
   read, and read again where it is not. A move a process could not follow is

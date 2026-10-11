@@ -274,7 +274,7 @@ that made the table:
 | Table | Whose | Where its statements are written | What is somewhere else, and why |
 |---|---|---|---|
 | `sessions` | `identity` | `identity/sessions.ts`: five statements straight to the pool, before anybody is signed in | Its table is made in `data`'s one migration run, from a sequence `identity` declares |
-| `moss_generation` | `data` | `data/pointer.ts`: two entries, one that reads and one that moves | `manifest` decides when it moves (`manifest/generation.ts`), through a function `data` hands over |
+| `moss_generation` | `data` | `data/own-entries.ts`: two entries, one that reads and one that moves | `manifest` decides when it moves (`manifest/generation.ts`), through a function `data` hands over |
 | `integrations`, `integration_actions` | the `integrations` feature | `integrations/entries.ts`: vex entries, replayed through the seam the feature is handed | The two tables are made by the core's own sequence (`data/tables.ts`, `nisc.moss`): that is the history every database has run, and it is not edited. The documents stored in `integration_actions` are brought to the current grammars by `data`, which holds the pool, when the feature asks through its seam |
 | `integration_frame_grants` | the `integrations` feature | `integrations/entries.ts`, and its own sequence in `integrations/tables.ts` | nothing |
 
@@ -575,7 +575,7 @@ committed write to a table the query reads, it refetches (once for everybody
 who would get the same rows) and calls back with the caller's new answer if it
 changed (vex DESIGN.md, "Reactive reads").
 
-The wire is the whole seam (`src/data/follow.ts`). Toward vex it is a `VexLive` — a
+The wire is the whole seam (`src/data/writes.ts`). Toward vex it is a `VexLive` — a
 signal and a callback, carried in the in-process request's hono env, where no
 network request can put one. Toward nova it is the response's `onChange`, which
 nova applies through the endpoint's own `response` and `target`; the shell
@@ -842,8 +842,8 @@ On the record, so nothing reads as finished that isn't:
 - **Scale-out** beyond sticky sessions pinned by session id. What crosses
   processes today is invalidation only: `refresh` moves a generation pointer
   every process polls (`src/manifest/generation.ts` holds the clock; the row is
-  read and moved through vex, `src/data/pointer.ts`), and an optional fabric
-  (`runtime.fabric`, `src/server/fabric.ts`) carries identity invalidations and nudges.
+  read and moved through vex, `src/data/own-entries.ts`), and an optional fabric
+  (`runtime.fabric`, `src/server/signals.ts`) carries identity invalidations and nudges.
   A set of actions does not cross: a process that follows the pointer reads
   again the sets it has a loader for, and a set handed to another process
   with `replaceActions` alone never reaches it (DOCS.md, "Many processes").

@@ -55,7 +55,7 @@ export const seamsOf = (feature: Pick<Feature, 'name'>, { app, runtime, server, 
 };
 
 // The kit as the manifest's own check of a layout reads it (../manifest,
-// layout.ts): each component of the app's shell, with the schema of its props
+// verify.ts): each component of the app's shell, with the schema of its props
 // where the app carried one.
 const kitOf = (app: Pick<NiscApp, 'shell'>): KitComponents => new Map(Object.entries(app.shell?.components ?? {}).map(([name, contract]) => [name, { propsSchema: contract.meta?.propsSchema }]));
 

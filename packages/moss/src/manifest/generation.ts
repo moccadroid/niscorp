@@ -24,7 +24,7 @@
 // none.
 //
 // THIS FILE HOLDS THE CLOCK AND NO SQL. The counter is one row of a table the
-// data module owns, read and moved there, through vex (../data, pointer.ts).
+// data module owns, read and moved there, through vex (../data, own-entries.ts).
 // This module sits beneath that one and cannot import it, so the two things it
 // asks of the row are handed to it as functions.
 // ═══════════════════════════════════════════════════════════════

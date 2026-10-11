@@ -4,7 +4,7 @@ import { VEX_LIVE_ENV } from '@niscorp/vex/hono';
 import type { Env } from '../src/server/moss-server';
 import { createInternalWire } from '../src/server/hosts';
 
-// THE WIRE A SERVER SHELL'S ENDPOINT CALLS RIDE (../src/server/wire.ts): the
+// THE WIRE A SERVER SHELL'S ENDPOINT CALLS RIDE (../src/server/hosts.ts): the
 // server's own surfaces, asked in process as the session whose token it was
 // made for. The server here is three routes that say what they were asked;
 // nothing of moss stands behind them.

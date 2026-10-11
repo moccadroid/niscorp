@@ -3,7 +3,7 @@ import { z } from 'zod';
 // What travels between two moss processes of one deployment, and the two
 // functions a host supplies to carry it. They are here because the deployment
 // hands the transport over (`runtime.fabric`); what moss does with it is
-// ../server, fabric.ts.
+// ../server, signals.ts.
 
 // The origin a message is stamped with: the process that published it, so a
 // process ignores its own echoes (`LISTEN/NOTIFY` delivers to the sender too).
@@ -11,7 +11,7 @@ const stamp = { origin: z.string() };
 
 // WHAT CROSSES, AS A SCHEMA, because what a transport hands back came from
 // another process over a wire that is not moss's: it is read by this before
-// anything of it is used (../server, fabric.ts), and the types below are
+// anything of it is used (../server, signals.ts), and the types below are
 // inferred from it, so the two cannot disagree. Strict: a field no message has
 // is a message this process does not read.
 //

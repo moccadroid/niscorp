@@ -115,7 +115,7 @@ export type ShellHostConfig = {
   // `phrases` read through. Absent: the wire as it is.
   wrapWire?: (inner: FetchFn) => FetchFn;
   // AN INTENT ANSWERED BY A QUERY WRITTEN FOR IT, as a principal (../data,
-  // intents.ts): what a session's `answerIntent` asks. Whose policy and
+  // routes.ts): what a session's `answerIntent` asks. Whose policy and
   // scope values it runs under is resolved by whoever supplies this, each time
   // it is asked. Absent: a session that asks is told this host cannot.
   answerIntent?: (principal: string | null, writers: QueryWriters, asked: Intent) => Promise<QueryResponse>;
