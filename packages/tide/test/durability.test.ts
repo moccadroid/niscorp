@@ -845,22 +845,31 @@ describe('the fence holds across engines', () => {
   it('a late attempt from an engine whose lease lapsed does not overwrite a reclaim still in flight', async () => {
     const store = createMemoryStore();
     const reflex: ReflexInput = { id: 'slow', intent: 'Do slow work.', on: { manual: {} }, effect: { name: 'work' } };
+    // A gate an effect stalls at: it says when the effect has reached it, and
+    // opens when the test says. So each step below waits for the engine to be
+    // where the step needs it, and not for 20 ms to have been enough.
     const gate = () => {
       let open: () => void = () => undefined;
+      let reach: () => void = () => undefined;
       const shut = new Promise<void>((resolve) => {
         open = resolve;
       });
-      return { shut, open: () => open() };
+      const reached = new Promise<void>((resolve) => {
+        reach = resolve;
+      });
+      return { shut, reached, reach: () => reach(), open: () => open() };
     };
     const aGate = gate();
     const bGate = gate();
     const engine = (run: () => Promise<unknown>) =>
       createTide({ store, transform: testTransform, leaseMs: 1_000, effects: { work: { run } } });
     const a = engine(async () => {
+      aGate.reach();
       await aGate.shut;
       return 'from a';
     });
     const b = engine(async () => {
+      bGate.reach();
       await bGate.shut;
       return 'from b';
     });
@@ -871,14 +880,12 @@ describe('the fence holds across engines', () => {
     const drain = async (tide: Tide, now: number): Promise<void> => {
       for (let i = 0; i < 10; i += 1) await tide.advance({ now });
     };
-    const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 20));
-
     // A claims the task and stalls in the effect; its lease lapses; B takes
     // the task back and stalls too.
     const aRun = drain(a, T0);
-    await settle();
+    await aGate.reached;
     const bRun = drain(b, T0 + 5_000);
-    await settle();
+    await bGate.reached;
 
     // A finishes first, late: refused.
     aGate.open();
