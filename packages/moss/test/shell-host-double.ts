@@ -25,7 +25,7 @@ export type HostSetup = {
   app: NiscApp;
   // The shell this host builds, when it is a page's. Absent: the app's own.
   manifest?: ShellManifest;
-  // The actions in force now. Absent: what the app ships.
+  // The actions in force. Absent: what the app ships.
   actions?: () => Readonly<Record<string, ActionDefinition>>;
   // Who a principal is and what they hold: roles, scope values, the ids of
   // the actions granted to them, and the layout variant held of each.

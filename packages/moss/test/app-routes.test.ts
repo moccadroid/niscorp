@@ -19,8 +19,8 @@ const freshDatabase = pristineDatabases();
 // Such a route reads the principal off the context exactly as moss's own
 // surfaces do, and that holds only because the identity middleware is
 // registered on `*` inside createServer, ahead of anything an app can add.
-// Apps rely on it and nothing here held it: had the middleware moved onto
-// moss's own prefixes, an app's route would have read nobody for everybody.
+// Registered on moss's own prefixes only, it would leave an app's route
+// reading nobody for everybody.
 // ═══════════════════════════════════════════════════════════════
 
 // 'dev-open' and PGlite each announce themselves at boot; neither line is this test.

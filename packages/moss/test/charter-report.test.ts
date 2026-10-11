@@ -12,18 +12,15 @@ import { pristineDatabases } from './pristine-database';
 const freshDatabase = pristineDatabases();
 
 // THE REPORT BOOT VERIFIED, HANDED BACK. `createServer` refuses on the report's
-// errors and reads nothing else of it, so the warnings (an action no role
-// grants, an allow that matches nothing) and each role's closure issues were
-// computed on every boot and every change and then dropped. A host that
-// wanted them had to run `verifyCharter` again, over a data universe it built
-// by hand. `charterReport()` is the one the server itself verified.
+// errors; `charterReport()` hands the host the whole report the server itself
+// verified, with the warnings (an action no role grants, an allow that matches
+// nothing) and each role's closure issues.
 //
 // And it answers for WHAT IS IN FORCE. What the app consists of changes through
 // one door, `replaceActions`, which verifies before it switches: a set the app
 // could not be served with is refused, and the report, the actions and what
 // each principal holds stay as they were. `verifyActions` is that door's dry
-// run. The charter is not something that changes after the hand-over at all;
-// the last case is what a boot says to one that does not hold.
+// run.
 
 const home: ActionDefinition = {
   id: 'home',

@@ -5,10 +5,8 @@ import { subscribeReactions } from '../src/server/reactions';
 
 // THE APP'S REACTIONS (../src/server/reactions.ts): which of them hears a
 // write, and what it is told. A write is put to them by hand here, as the data
-// module tells whoever subscribed; no database and no server.
-//
-// Nothing asked. The three rules below each came out of a copy with every
-// test passing, and DOCS.md states each of them as a rule.
+// module tells whoever subscribed; no database and no server. DOCS.md states
+// each of the rules below.
 
 type Reaction = NonNullable<NiscApp['reactions']>[number];
 type Told = Parameters<Reaction['run']>[0];

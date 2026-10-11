@@ -22,9 +22,9 @@ describe('createAssertionSigner — the seed', () => {
     expect(createAssertionSigner('').verifyKey).not.toBe(createAssertionSigner('').verifyKey);
   });
 
-  // A seed that decoded to fewer than 32 bytes was dropped without a word and
-  // a random key was made in its place: two processes given the same seed
-  // signed with different keys, and each refused what the other had signed.
+  // A seed that decodes to fewer than 32 bytes is refused, not replaced by a
+  // random key: two processes given the same seed would sign with different
+  // keys, and each would refuse what the other signed.
   it.each([
     ['a word', 'consent-check-seed', 13],
     ['sixteen bytes', randomBytes(16).toString('base64'), 16],
@@ -53,11 +53,10 @@ describe('createAssertionSigner — the seed', () => {
 });
 
 // WHAT THE OTHER END DOES WITH AN ASSERTION. `verifyAssertion` is no part of
-// what moss exports: an integration's service verifies for itself. It is the
-// verification the changeset describes, kept so that the tests which ask "can
-// the other end verify what this deployment signed" ask something: an oracle
-// that passed a forged or an expired assertion would have made every one of
-// them pass on anything.
+// what moss exports: an integration's service verifies for itself. It stands
+// in for that service in the tests which ask "can the other end verify what
+// this deployment signed"; an oracle that passed a forged or an expired
+// assertion would make every one of them pass on anything.
 describe('verifyAssertion — what an integration’s service accepts as identity', () => {
   const b64url = (text: string): string => Buffer.from(text).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 

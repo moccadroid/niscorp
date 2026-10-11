@@ -32,9 +32,6 @@ const resolveCatalog = (of: NiscApp, principal: string | null): Catalog => catal
 
 // WHO SOMEBODY IS BY THE ASSIGNMENTS, and what the roles that answers hold:
 // the two steps a server takes for an app with no identity seam, written out.
-// (Three exported functions did both steps in one, for any app, and so
-// answered `public` for one that resolves people through `identity`. They are
-// gone; what they wrapped is what is held here.)
 const resolveRoles = (of: Pick<NiscApp, 'assignments'>, principal: string | null): readonly string[] => assignedRoles(of.assignments, principal);
 const resolvePolicy = (of: NiscApp, over: readonly string[], principal: string | null) => resolvePolicyForRoles(of, over, resolveRoles(of, principal));
 const resolveVariants = (of: NiscApp, principal: string | null) => resolveVariantsForRoles(of, resolveRoles(of, principal));
@@ -95,8 +92,8 @@ describe('principal — per-principal resolution', () => {
   });
 });
 
-// Ring 2: the same app, plus a basic variant of crm.deals granted to viewer
-// — and denied back in sales, since `extends` composes every section.
+// The same app, plus a basic variant of crm.deals granted to viewer — and
+// denied back in sales, since `extends` composes every section.
 const basic = { component: 'Text', children: 'basic' };
 const varApp = {
   ...app,

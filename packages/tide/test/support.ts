@@ -67,13 +67,9 @@ export const pglitePool = (db: PGlite): TidePool => ({
 
 // ONE DATABASE FOR A FILE, AND ITS TABLES EMPTIED FOR EACH TEST.
 //
-// Starting a PGlite is what these tests cost: 660 ms measured here on an idle
-// machine (920 the first in a process), and 1.0 to 2.7 s with every core busy.
-// The two files that run on one started a database for each test, 45 and 26
-// of them: 34 s and 21 s of the suite, a test of about a second each, and a
-// package-wide `testTimeout` of 30 s so that a slow runner did not read the
-// start as a hang. What a test needs is tide's tables with no row in them, and
-// that is a TRUNCATE on a database that is already up.
+// Starting a PGlite is what these tests cost. What a test needs is tide's
+// tables with no row in them, and that is a TRUNCATE on a database that is
+// already up.
 //
 // Call it once at the top of a test file. The database starts in a
 // `beforeAll`, from the directory the run initialised before any test

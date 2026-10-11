@@ -64,8 +64,8 @@ describe('authentication — who is calling', () => {
 
 // An unknown principal is a failed sign-in. A failure to FIND OUT who somebody
 // is, is not: the database is down, the app's record does not parse, the
-// verifier cannot be reached. Answered 401, it told a client to throw its
-// session away over a fault of the server's, and nothing was logged.
+// verifier cannot be reached. Answered 401, it would tell a client to throw its
+// session away over a fault of the server's.
 describe('authentication — who is calling could not be found out', () => {
   const INTERNAL = 'connect ECONNREFUSED 10.1.2.3:5432';
   const failing = async (): Promise<never> => {

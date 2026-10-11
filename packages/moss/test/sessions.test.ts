@@ -202,11 +202,11 @@ describe('sign-out — session.revoke() under moss sessions', () => {
 });
 
 describe('onSession — a microtask is enough to reach the shell', () => {
-  // The documented contract: `onSession` runs before the shell exists, so it
-  // defers. A microtask is the deferral an observer needs — anything later
-  // subscribes after the shell's mount calls have answered. An await between
-  // the seam and the shell (the phrases, once) makes that microtask land
-  // mid-build, where the getter throws.
+  // `onSession` runs before the shell exists, so it defers. A microtask is the
+  // deferral an observer needs — anything later subscribes after the shell's
+  // mount calls have answered. An await between the seam and the shell
+  // (resolving phrases) must not make that microtask land mid-build, where the
+  // getter throws.
   it('holds when the app resolves phrases asynchronously', async () => {
     const catalog = { ids: ['counter'], hash: 'h' };
     const reached: boolean[] = [];

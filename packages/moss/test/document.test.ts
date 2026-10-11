@@ -223,10 +223,10 @@ describe('renderDocument', () => {
     expect(page.drawn).toBe(false);
   });
 
-  // The screen was put into the root by looking for `></div>` in it. A root
-  // that is another element had no such place: the snapshot was written
-  // beside it, the screen nowhere, and the page was reported as drawn — so a
-  // terminal started from a screen that was not in the page.
+  // The root may be any empty element, not only a `<div>`. Were the screen put
+  // in by looking for `></div>`, a root that is another element would have the
+  // snapshot written beside it and the screen nowhere, with the page reported
+  // as drawn.
   it('a root that is another empty element is where the screen goes', async () => {
     const root = '<main id="app" data-kit="a>b"></main>';
     const page = await renderDocument({ server: serverOf(), template: TEMPLATE.replace('<div id="root"></div>', root), root, request: { path: '/' }, draw });
@@ -271,7 +271,7 @@ describe('renderDocument — the head a screen has', () => {
     expect(head).toContain('<meta property="og:type" content="article" data-nova-head>');
     // nobody said where the document lives: the template's stays
     expect(head).toContain('<link rel="canonical" href="https://example.com/">');
-    // the screen is where it always was, and the terminal starts from the same trees
+    // the screen is in the root, and the terminal starts from the same trees
     // (this test's drawer prints every text in the trees, the title's included — a kit draws nothing for a head)
     expect(page.html).toContain('A post</main></div><script type="application/json" id="nisc-snapshot">');
     expect(JSON.stringify(parsed(page.html)?.trees)).toContain('nova:head');

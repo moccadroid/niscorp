@@ -1,8 +1,8 @@
 // THE CLUSTER FABRIC — invalidations and nudges between processes. These pin
-// the mechanism the case turns on: a signal published on A is applied on B and
-// NOT re-applied on A (echo suppression), a remote apply never re-publishes (no
-// amplification), both sides are fire-and-forget-contained, and with no fabric
-// configured everything behaves exactly as one process does today.
+// the mechanism: a signal published on A is applied on B and NOT re-applied on
+// A (echo suppression), a remote apply never re-publishes (no amplification),
+// both sides are fire-and-forget-contained, and with no fabric configured
+// everything behaves exactly as one process does.
 //
 // The integration uses two real shell hosts over one in-memory bus — the same
 // `wireFabric` and the same appliers the server wires, so this exercises the
@@ -94,8 +94,8 @@ describe('wireFabric', () => {
   });
 
   // What a transport hands over came from another process, off a wire moss
-  // does not own. It was switched on and its fields used as the type said they
-  // were: a principal that was a number reached the identity cache as one.
+  // does not own. It is read by a schema, not used as the type says it is: a
+  // principal that is a number must not reach the identity cache.
   describe('what a transport hands over is read by a schema', () => {
     const notMessages: readonly [string, unknown][] = [
       ['a field of the wrong type', { kind: 'nudge', principal: 7, channel: 'roster', origin: 'other' }],

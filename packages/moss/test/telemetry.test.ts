@@ -1,6 +1,6 @@
-// TELEMETRY — the moss half of the observability case. Every span in the
-// system is built by moss and handed to one runtime hook; these install a
-// capturing emitter at each seam and pin what it receives:
+// TELEMETRY — every span in the system is built by moss and handed to one
+// runtime hook; these install a capturing emitter at each seam and pin what it
+// receives:
 //   - vex.execute:      vex's record → a span, principal PRESENCE only, no
 //                       scope value ever crossing into the attributes;
 //   - fn.call:          one span per in-process function invocation;
@@ -8,8 +8,8 @@
 //   - shell.build:      one span per build, a rebuild marked reset;
 //   - socket.upgrade / socket.close: admitted, refused, and lifetime.
 //
-// And the two doctrines the case turns on: a throwing sink costs the request
-// nothing, and an unconfigured sink is asked for nothing.
+// And two rules: a throwing sink costs the request nothing, and an
+// unconfigured sink is asked for nothing.
 import { describe, it, expect, vi } from 'vitest';
 import type { ExecuteRecord } from '@niscorp/vex';
 import { vexRecordToSpan } from '../src/data/span';
@@ -147,7 +147,7 @@ describe('integration.call', () => {
   });
 });
 
-// ── shell.build: reusing the shell-host harness shape. ───────────────────────
+// ── shell.build: a shell host stood up with a sink. ──────────────────────────
 describe('shell.build', () => {
   const counter = { id: 'counter', data: { n: 0 }, triggers: [] };
   const app = { charter: { public: ['counter'] }, assignments: {}, actions: { counter }, shell: { canvases: [{ id: 'main', initial: 'counter' }] } } as unknown as NiscApp;
@@ -227,9 +227,9 @@ describe('socket telemetry', () => {
     expect(spans.some((s) => s.name === 'socket.close')).toBe(false);
   });
 
-  // A handshake that fails is refused to its terminal and logged. It left no
-  // span at all: with the verifier down, upgrades did not turn into errors on
-  // a dashboard, they stopped being counted.
+  // A handshake that fails is refused to its terminal, logged, and leaves an
+  // error span: with the verifier down, upgrades show as errors on a dashboard
+  // and do not go uncounted.
   it.each([
     ['the verifier cannot be asked', { session: () => { throw new Error('the session store is unreachable'); } }, false],
     ['what they hold cannot be asked', { catalog: () => { throw new Error('the database is down'); } }, true],

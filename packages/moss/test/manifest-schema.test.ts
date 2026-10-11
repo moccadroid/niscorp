@@ -107,14 +107,13 @@ describe('the manifest’s schema', () => {
       'features.1.name: Invalid input: expected string, received undefined',
       'features.2: Invalid input: expected object, received string',
     ]);
-    // A field that configured the integrations is not the manifest's any more.
+    // What configures the integrations is not a field of the manifest.
     expect(manifestMisfits({ ...whole(), menuSlots: ['home'] })).toEqual(['(the manifest): Unrecognized key: "menuSlots"']);
   });
 
-  // The write-fact bridge was three functions under `facts`. It is a feature
-  // (`createTideFacts`, from `@niscorp/moss/tide`), so a manifest that still
-  // names the field is told, at boot, and not served with the bridge silently
-  // gone.
+  // The write-fact bridge is a feature (`createTideFacts`, from
+  // `@niscorp/moss/tide`), so a manifest that names `facts` is told, at boot,
+  // and not served with the bridge silently missing.
   it('refuses `facts`, which configured what is a feature now', () => {
     expect(manifestMisfits({ ...whole(), facts: { tide: () => undefined, identity: () => undefined } })).toEqual(['(the manifest): Unrecognized key: "facts"']);
   });

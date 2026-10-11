@@ -7,10 +7,10 @@ import type { IntakeContext } from '../src/integrations/intake';
 // ═══════════════════════════════════════════════════════════════
 // Intake checks a layout's component NAMES and, when the app carried a props
 // schema for a component, its PROPS. A bundle shipping a prop the component does
-// not have — a wrong key, a value outside a closed set — used to install
-// cleanly and do nothing under a customer's finger; the kit's strict schema is
-// exactly what refuses it, and intake is the only place a bundle arriving over
-// HTTP passes through. A prop whose value is deferred to render time (a binding,
+// not have — a wrong key, a value outside a closed set — would install cleanly
+// and do nothing under a customer's finger; the kit's strict schema is exactly
+// what refuses it, and intake is the only place a bundle arriving over HTTP
+// passes through. A prop whose value is deferred to render time (a binding,
 // a directive) has its key checked and its value left alone.
 // ═══════════════════════════════════════════════════════════════
 
@@ -31,7 +31,7 @@ const ctx = (): IntakeContext => ({
       layout,
       new Map<string, { propsSchema?: unknown }>([
         ['Choice', { propsSchema: Choice }],
-        ['Plain', {}], // no schema — name-only, as before
+        ['Plain', {}], // no schema — name-only
       ]),
     ),
   endlessChains,

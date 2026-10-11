@@ -20,12 +20,10 @@ const fakePool = (start = 0): Pointer & { poke: () => number; value: () => numbe
 };
 
 // THE CLOCK IS THE TEST'S. The pointer is looked at once when it is made and
-// then once every `everyMs`, on a timer. These tests waited on the real one:
-// a poll every millisecond, and 20 to 80 ms of sleep in the hope that enough
-// looks had happened, or `waitFor` until three more had. Here a look happens
-// when the test says: the poll is a second, and `looks(n)` moves the clock on
-// by n of them, each with everything it started run to its end. So "after one
-// look" is one look, and "a quiet interval" is as many as the test names.
+// then once every `everyMs`, on a timer. A look happens when the test says:
+// the poll is a second, and `looks(n)` moves the clock on by n of them, each
+// with everything it started run to its end. So "after one look" is one look,
+// and "a quiet interval" is as many as the test names.
 const EVERY_MS = 1_000;
 const looks = (count: number): Promise<unknown> => vi.advanceTimersByTimeAsync(count * EVERY_MS);
 // The look a pointer takes when it is made, and whatever else is already due.
@@ -97,19 +95,17 @@ describe('generation pointer', () => {
     const gen = createGeneration(broken, { onMoved: () => undefined, everyMs: 0 });
     await settled();
     console.error = original;
-    // The whole point of choosing a counter over LISTEN/NOTIFY was that its
-    // failure mode is visible. A silent one would reproduce the bug inside its
-    // own fix.
+    // A counter is used instead of LISTEN/NOTIFY because its failure mode is
+    // visible: a silent failure would leave stale resolutions unnoticed.
     expect(errors.some((e) => String(e).includes('may be serving stale resolutions'))).toBe(true);
     gen.stop();
   });
 
-  // A MOVE THIS PROCESS COULD NOT FOLLOW. The pointer was read, it had moved,
-  // and reading the rows again threw (a database that blinked). The move was
-  // counted as seen before the reload was tried, so the next look found
-  // nothing new and never tried again: this process went on serving what it
-  // had, until some other move. And the log said the pointer could not be
-  // READ, which it had been.
+  // A MOVE THIS PROCESS COULD NOT FOLLOW. The pointer is read and has moved,
+  // and reading the rows again throws (a database that blinks). The move counts
+  // as seen only once it is followed, so the next look tries again, and the log
+  // says the move could not be followed rather than that the pointer could not
+  // be READ.
   it('a move it could not follow is said to be that, and is followed at the next look', async () => {
     const pool = fakePool();
     const errors: string[] = [];
@@ -153,8 +149,8 @@ describe('generation pointer', () => {
   });
 
   // A MOVE THAT CANNOT BE FOLLOWED, FOR A LONG TIME. It is tried again at every
-  // look, which is right, and every try said so in the log, which was a line
-  // each poll for as long as a set this process refuses sat in the rows.
+  // look, but the log says so once, not a line each poll for as long as a set
+  // this process refuses sits in the rows.
   it('a move that cannot be followed is said when it first fails, again when what it says changes, and once when it is followed', async () => {
     const pool = fakePool();
     const said: string[] = [];
@@ -234,10 +230,10 @@ describe('generation pointer', () => {
     }
   });
 
-  // SOMEBODY ELSE'S MOVE, PASSED OVER BY ITS OWN. Another process moved the
-  // pointer since this one last looked, and then this one moves it too. It
-  // counted the number its own move landed on as seen, and that number is past
-  // the other process's move: what that one changed was never read here.
+  // SOMEBODY ELSE'S MOVE IS NOT PASSED OVER BY ITS OWN. Another process moved
+  // the pointer since this one last looked, and then this one moves it too. The
+  // number its own move lands on is past the other process's move, so it is not
+  // counted as seen: what that one changed still has to be read here.
   it('its own bump does not pass over a move another process made first', async () => {
     const pool = fakePool();
     let moves = 0;

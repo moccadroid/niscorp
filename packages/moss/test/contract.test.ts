@@ -10,7 +10,7 @@ import type { ContractHost } from '../src/integrations/contract';
 // props schema is derived — through nova's paletteEntryOf — from the same Zod
 // schema the renderer validates against, so what the contract advertises and
 // what the app enforces cannot drift. A component registered with no meta is
-// still listed, by name alone, exactly as the whole list used to be.
+// still listed, by name alone.
 // ═══════════════════════════════════════════════════════════════
 
 // What the contract is made of: the charter and the kit's components, as the

@@ -14,9 +14,8 @@ import { turn } from './turn';
 // and stand-ins for the rest.
 //
 // WHAT A SHELL IS MADE OF IS ASKED OF THE RUNNING MANIFEST, AND OF NOTHING
-// ELSE. The actions always were. The frame, the layout store and the fragments
-// were read off the shell's manifest by this wiring, so a running manifest
-// that answered others was not heard. Here it answers others, and the shell
+// ELSE: the actions, the frame, the layout store and the fragments alike. Here
+// the running manifest answers others than what the app shipped, and the shell
 // shows them.
 
 // A frame around one canvas. `dock` puts a `{ ref }` beside it, which the
@@ -146,11 +145,10 @@ describe('the shell hosts — what a shell is made of is asked of the running ma
   });
 });
 
-// EVERY HOST IS ASKED. When what the app consists of changed, the server had
-// its own host adopt and no page's: a page somebody had open kept the actions
-// it was built with. And a principal's reset (`invalidateIdentity`) reached
-// the shell the app's host keeps for them, and no shell a page had built for
-// them.
+// EVERY HOST IS ASKED. When what the app consists of changes, every host
+// adopts, the app's and each page's. A principal's reset (`invalidateIdentity`)
+// reaches the shell the app's host keeps for them and every shell a page has
+// built for them.
 describe('the shell hosts — a change reaches the living shells of every host', () => {
   // Six turns of the event loop (./turn.ts): an adopt and a reset are not
   // waited for by whoever asked, and each is a handful of hops.
@@ -183,13 +181,10 @@ describe('the shell hosts — a change reaches the living shells of every host',
     }
   });
 
-  // THE ANSWER A SHELL IS BUILT FROM IS THE ANSWER IT ADOPTS, ALL OF IT. An
-  // adopt took the actions, the component names and the entries of it, and
-  // left the frame, the layout store and the fragments as the shell was built
-  // with them. Nothing changes those three while a server runs yet; whatever
-  // comes to would have reached the next shell that is built and no living
-  // one. Here the running manifest is a stand-in that answers others once
-  // something was published.
+  // THE ANSWER A SHELL IS BUILT FROM IS THE ANSWER IT ADOPTS, ALL OF IT: the
+  // actions, the component names and the entries, and also the frame, the
+  // layout store and the fragments. Here the running manifest is a stand-in
+  // that answers others once something was published.
   it('a living shell whose frame, layout store and fragments the running manifest answers differently after a change shows the change', async () => {
     const answering = { published: false };
     const hosts = buildShellHosts(
@@ -252,10 +247,9 @@ describe('the shell hosts — a change reaches the living shells of every host',
   });
 });
 
-// WHAT THE WIRING TELLS EACH HOST. Five lines of ../src/server/hosts.ts came
-// out of a copy one at a time and every test passed: nothing asked whether a
-// page's host keeps a shell, whether a page's sweep is stopped, or whether
-// three things the runtime says reach a host at all.
+// WHAT THE WIRING TELLS EACH HOST (../src/server/hosts.ts): whether a page's
+// host keeps a shell, whether a page's sweep is stopped, and whether three
+// things the runtime says reach a host at all.
 describe('the shell hosts — what each host is told', () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -277,10 +271,10 @@ describe('the shell hosts — what each host is told', () => {
   });
 
   // ONE WAY TO EACH. A host that is handed out (`server.shells`, a page's
-  // `host`) carried `adopt` and `stop`: the first did for one host what
-  // `server.refresh` does for all of them, and left the others on the old
-  // application; the second was `server.close` for one host. Both are the
-  // wiring's alone (`hosts.adopt`, `hosts.stop`).
+  // `host`) carries neither `adopt` nor `stop`: adopting on one host would
+  // leave the others on the old application, and stopping one is not what
+  // `server.close` does for all of them. Both are the wiring's alone
+  // (`hosts.adopt`, `hosts.stop`).
   it('a host that is handed out has no way to adopt and none to stop: those are asked of all of them at once', () => {
     const hosts = buildShellHosts(depsWith(shipped));
     try {

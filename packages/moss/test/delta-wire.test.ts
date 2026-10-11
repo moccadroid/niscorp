@@ -120,11 +120,10 @@ describe('frame deltas over a real websocket', () => {
         await until(() => treeOf(asked) !== was && same(), `both terminals reach n=${i}`);
       }
 
-      // Both ends really exercised the path they were meant to. Measured here:
-      // 1 whole frame + 8 deltas = 6.8 KB, against 9 whole frames = 53.1 KB.
+      // Both ends really exercised the path they were meant to.
       expect(askedTally.delta).toBeGreaterThan(0);
       expect(silentTally.delta).toBe(0);
-      // Ten frames' worth of chrome not re-sent — the whole point.
+      // Chrome that does not change is not re-sent — the whole point.
       expect(askedTally.bytes).toBeLessThan(silentTally.bytes / 2);
       // And nobody had to recover: no delta failed, so no resync was needed.
       expect(askedTally.render).toBe(silentTally.render - askedTally.delta);

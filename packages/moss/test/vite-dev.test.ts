@@ -88,10 +88,10 @@ describe('the dev server’s sign-in', () => {
     expect(answer.body).toBe('<p>nobody called zed</p>');
   });
 
-  // The sign-in hands a session for whoever the address names to whoever asks.
-  // It asked nothing about where the request came from: with the dev server
-  // listening on a network (`vite --host`), every device on it could sign in
-  // as anybody.
+  // The sign-in hands a session for whoever the address names to whoever asks,
+  // so it answers only a request from this machine: with the dev server
+  // listening on a network (`vite --host`), every device on it could otherwise
+  // sign in as anybody.
   describe('answers this machine, and nobody else', () => {
     it.each([['127.0.0.1'], ['127.8.9.10'], ['::1'], ['::ffff:127.0.0.1'], ['::ffff:7f00:1']])('a request from %s is this machine’s, and is signed in', async (from) => {
       const answer = await signInAt('ada', { host: 'localhost:5173' }, { from });
@@ -209,8 +209,7 @@ describe('the dev server — an edit', () => {
 // The plugin attaches the socket before any app has booted, and an edit swaps
 // the app. How a connection is set (the largest message, compression) is the
 // app's runtime's, carried by its server's socket: it has to follow the app
-// that is booted NOW. The plugin attached one transport, once, with no
-// settings, so in dev both ran on the defaults whatever the runtime said.
+// that is booted NOW.
 describe('the dev server’s socket', () => {
   const listeners: Server[] = [];
   afterAll(() => {
@@ -266,8 +265,7 @@ describe('the dev server’s socket', () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       // The boot ends when the test says, so the first connection is made
-      // while it is still booting, whatever the machine's pace (it was a boot
-      // that took 40 ms, and a connection that hoped to be quicker).
+      // while it is still booting, whatever the machine's pace.
       const boot = { finish: (): void => {} };
       const booting = new Promise<void>((resolve) => void (boot.finish = resolve));
       const { url } = await dev([async () => (await booting, appHolding(1024))]);

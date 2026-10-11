@@ -90,11 +90,9 @@ describe('the write lane', () => {
     expect(heard).toEqual(['notes/add']);
   });
 
-  // The one observer the lane replaced ran its two jobs one after the other,
-  // and a throw in the first kept the second from running. The lane kept that
-  // for a while: the fact lane throwing (an app's `facts.identity`) meant no
-  // reaction heard of that write. Each subscriber's failure is its own now:
-  // it is logged here, the others are told, and nothing reaches the reporter.
+  // Each subscriber's failure is its own: it is logged here, the others are
+  // told, and nothing reaches the reporter. A throw in the fact lane (an app's
+  // `facts.identity`) must not keep a reaction from hearing of that write.
   it('a subscriber that throws is logged, and the others are still told of that write', () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const lane = createWriteNotifier();

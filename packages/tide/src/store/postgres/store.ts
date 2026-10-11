@@ -10,9 +10,7 @@ import { TIDE_SEQUENCE } from './tables';
 
 // ── the store ───────────────────────────────────────────────────
 
-// A counter, in the closure that owns it rather than at module scope. Same
-// value, same monotonicity; what changes is that it is no longer process-global
-// state a second store would silently share.
+// A counter, held in a closure rather than as a bare module variable.
 const mintId = ((): ((table: TableName) => string) => {
   let sequence = 0;
   return (table) => {
@@ -29,14 +27,13 @@ export type TideStoreOptions = {
 };
 
 export const createTideStore = (pool: TidePool, options: TideStoreOptions = {}): TideStore & { ready: Promise<void> } => {
-  // EVERY method awaits this. The last store had three transactional methods
-  // that did not, so on a real pool they raced the DDL and threw
-  // `42P01 undefined_table` INSIDE a transaction — which the fan-out then
-  // turned into a permanently skipped run.
+  // EVERY method awaits this: on a real pool a method that did not would race
+  // the DDL and throw `42P01 undefined_table` INSIDE a transaction, which the
+  // fan-out would turn into a permanently skipped run.
   // THROUGH THE LEDGER (strata): the sequence runs once, in one transaction,
   // and is recorded — a boot that has already run finds nothing pending. Its
-  // one migration is the DDL every boot used to run, IF NOT EXISTS throughout,
-  // so a store created before the ledger existed converges instead of failing.
+  // first migration is the DDL, IF NOT EXISTS throughout, so a store whose
+  // tables already exist converges instead of failing.
   const ready: Promise<void> = options.migrate === false ? Promise.resolve() : migrateLedger(pool, [TIDE_SEQUENCE]).then(() => undefined);
   // An unhandled rejection here is process-fatal on Node ≥ 15, and the
   // failure it reports would be a database that is not up yet.
@@ -116,10 +113,9 @@ export const createTideStore = (pool: TidePool, options: TideStoreOptions = {}):
         // The store the caller is handed runs on the transaction itself, and
         // `query` is called ON it, never taken off it: where the pool hands a
         // checked-out client through, it is a method that needs its receiver,
-        // and taken off it failed inside the driver — which the fan-out then
-        // recorded as a deferred run, and nothing ever ran. What that store
-        // does as one step, it does inside this transaction: it opens no
-        // second one beside it.
+        // and taken off it fails inside the driver. What that store does as
+        // one step, it does inside this transaction: it opens no second one
+        // beside it.
         return atomically((tx) => fn(build(tx, (inner) => inner(tx))));
       },
     };

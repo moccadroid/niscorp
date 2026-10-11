@@ -124,8 +124,7 @@ describe('the data module, over an engine', () => {
   });
 
   // A role machinery runs as is a set of roles like any other, and its policy
-  // is a function of the charter. It was compiled twice for each call (once to
-  // read under, once more to write under) and neither was kept: identity
+  // is a function of the charter: compiled once and kept, because identity
   // resolution runs several entries for each sign-in.
   it('a role machinery runs as has its policy compiled once, and kept until the manifest changes', async () => {
     // How often the charter is asked for the role: every compilation reads it.
@@ -259,11 +258,10 @@ describe("the data module — a feature's own entries", () => {
     expect(read).toHaveLength(0);
   });
 
-  // WHICH TABLES IS NOT THE ASKER'S TO SAY. It was: the seam took a list of
-  // tables beside the entries, and admitted whatever was in it, so a feature
-  // somebody else wrote read `sessions` by naming it. The tables are the ones
-  // the feature named on itself, and an entry over any other is refused when
-  // it is handed over, a read and a write alike.
+  // WHICH TABLES IS NOT THE ASKER'S TO SAY. The tables are the ones the feature
+  // named on itself, and an entry over any other is refused when it is handed
+  // over, a read and a write alike: a list taken from the asker would let any
+  // feature read `sessions` by naming it.
   it('reach the tables the feature named as its own and no other: an entry over another table is refused when it is handed over', async () => {
     const { data, written, read } = await world();
     await expect(data.ownEntries('tagging', [TAGS, NOTES_BY_THE_FEATURE])).rejects.toThrow(
@@ -306,12 +304,10 @@ describe("the data module — a feature's own entries", () => {
 });
 
 // THE LIST OF TABLES AN APP GIVES VEX (`runtime.vexConfig.entities`) IS ABOUT
-// THE APP'S ENGINE. Moss's own entries ran on engines that reused that
-// engine's schema, which the list had already cut down: with a list that
-// leaves moss's tables out (every list an app would write), the generation
-// pointer could not be read (`Entity "moss_generation" not found in schema`)
-// and a feature's own entries refused its start. Each of those engines reads
-// its owner's tables off the database itself.
+// THE APP'S ENGINE ONLY. It cuts that engine's schema down to the list, which
+// leaves moss's tables out, so moss's own entries (the generation pointer, a
+// feature's own) run on engines that read their owner's tables off the
+// database itself.
 describe("the data module — moss's own entries, where the app gave vex a list of tables", () => {
   const generation: DatabaseSchema['entities'][number] = {
     name: 'moss_generation',
@@ -367,9 +363,7 @@ describe("the data module — moss's own entries, where the app gave vex a list 
 });
 
 // THE DOCUMENTS A FEATURE KEEPS IN ITS ROWS are brought to this code's
-// grammars when the feature asks, and only in a table that is its own. The
-// core did it at every boot for one feature's table, whether or not the app
-// named that feature.
+// grammars when the feature asks, and only in a table that is its own.
 describe("the data module — the documents stored in a feature's table", () => {
   const store = (table: string): DocumentStore => ({ table, column: 'definition', stamp: 'grammar', kind: 'nisc.nova/action', key: ['id'] });
 
@@ -402,9 +396,8 @@ describe('the data module — the fingerprints somebody may be told of', () => {
     expect(await data.fingerprintsFor(who('public', 'writer'))).toEqual(['notes/add', 'notes/all', 'notes/mine']);
   });
 
-  // EVERY FINGERPRINT THE APP SERVES is the data module's to answer. The
-  // server's wiring reached through `data.engine` for the cache's keys: the
-  // whole engine handed out, for one list.
+  // EVERY FINGERPRINT THE APP SERVES is the data module's to answer, so it
+  // hands out no engine for the cache's keys.
   it('every fingerprint the app serves is answered by the data module, which hands out no engine', async () => {
     const { data } = await world();
     expect([...(await data.fingerprints())].sort()).toEqual(['notes/add', 'notes/all', 'notes/mine']);
@@ -423,8 +416,8 @@ describe('the data module — the fingerprints somebody may be told of', () => {
 
 // THE APP'S ENTRIES ARE SEEDED WHEN THEY ARE HANDED OVER (`seed`). What the
 // routes replay is what whoever holds the entries hands the data module (the
-// running manifest, where a server stands), and nothing the data module read
-// off an app. The engine here was stood up holding three (./data-double.ts).
+// running manifest, where a server stands), and nothing the data module reads
+// off an app. The engine here starts holding three (./data-double.ts).
 describe('the data module — the entries the app serves', () => {
   const BODIES: SeedEntry = { fingerprint: 'notes/bodies', dsl: { from: ['notes'], fields: ['notes.body'] } };
   const ASK = { fingerprint: 'notes/bodies', context: {} };

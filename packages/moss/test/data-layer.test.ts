@@ -8,9 +8,8 @@ import { pristineDatabases } from './pristine-database';
 // was initialised once for this file (./pristine-database.ts says why).
 const freshDatabase = pristineDatabases();
 
-// The engine's settings reach the engine. Moss built it with none, so a
-// deployment ran on vex's defaults — 100 rows for a query that states no
-// limit, 1000 at most — and had no way to say otherwise.
+// The engine's settings reach the engine. With none given it runs on vex's
+// defaults: 100 rows for a query that states no limit, 1000 at most.
 
 const layerWith = async (vexConfig?: { defaultLimit?: number; maxLimit?: number }) => {
   const db = freshDatabase();

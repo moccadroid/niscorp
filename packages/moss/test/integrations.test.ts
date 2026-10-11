@@ -837,12 +837,11 @@ describe('callIntegration', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// THE PROBE — every statement the registry ran on `integrations` and
-// `integration_actions`, sixteen of them, authored as a vex entry
+// THE REGISTRY AS VEX ENTRIES — every statement the registry runs on
+// `integrations` and `integration_actions`, authored as a vex entry
 // (../src/integrations/entries.ts) and run against a real database. One
 // database for the cases that write, and each of them writes every row it
 // reads, under ids no other case uses: it passes alone, and in any order.
-// (Four of them read what an earlier case had left, and failed without it.)
 // The lists are read from a database of their own, written once and only
 // read. Where a case names SQL, it is the statement the entry stands in for,
 // run on the same rows as the oracle.
@@ -926,8 +925,8 @@ describe('the registry as vex entries — each statement, against a database', (
     expect(await replay('integrations/registration', { id: 'ghost' })).toEqual([]);
   });
 
-  // 4, 5, 6 and 7 were four statements, run one after the other. They are one
-  // batch now (the case after these holds that it lands whole or not at all).
+  // 4, 5, 6 and 7 are one batch (the case after these holds that it lands whole
+  // or not at all).
   it('4 · land a bundle: every column the bundle says, the instant it was handed, and no error', async () => {
     await replay('integrations/write-bundle', { ...landing('landed'), actions: [] });
     const { id: _id, last_import_at: _at, ...said } = landing('landed');
@@ -974,12 +973,9 @@ describe('the registry as vex entries — each statement, against a database', (
     expect(await actionsOf('late')).toEqual([{ integration_id: 'late', ...action('late', 'roster') }]);
   });
 
-  // TWO REGISTRATIONS OF ONE NEW INTEGRATION AT ONCE each found no key, each
-  // minted one, and each landed with its own: the later one wrote its hash
-  // over the earlier one's, and both were answered a key. One of the two keys
-  // was dead on arrival (found on a real Postgres, from two connections, 200
-  // times in 200). The key is kept where none is held, and what the landing
-  // answers says whether it was.
+  // TWO REGISTRATIONS OF ONE NEW INTEGRATION AT ONCE each find no key, each
+  // mint one, and each land with their own. The key is kept where none is
+  // held, and what the landing answers says whether it was.
   it('7 · ...and a row that holds a key keeps it: a landing that comes with another lands its bundle and not its key', async () => {
     const rowsIn = (answered: unknown): unknown[] => (Array.isArray(answered) ? answered : [answered]);
     const keptIn = (answered: unknown, hash: string): boolean => rowsIn(answered).some((row) => typeof row === 'object' && row !== null && 'key_hash' in row && row.key_hash === hash);
@@ -1007,10 +1003,6 @@ describe('the registry as vex entries — each statement, against a database', (
     await replay('integrations/approve', { id: 'asking-nothing', approved_data: [] });
     expect(await rows(`SELECT status, approved_data FROM integrations WHERE id = 'asking-nothing'`)).toEqual([{ status: 'approved', approved_data: [] }]);
   });
-
-  // 10 was the statement that took an approval back when the app could not be
-  // served with it. It is gone with its entry: an approval is verified before
-  // it is written, from what `integrations/actions-of` reads (below).
 
   it('11 · remove: the row goes, and its actions with it', async () => {
     await replay('integrations/write-bundle', { ...landing('leaving'), actions: [action('leaving', 'roster')] });
@@ -1060,8 +1052,7 @@ describe('the registry as vex entries — each statement, against a database', (
     expect(await rows(`SELECT id FROM integrations WHERE id IN ('keyless-a', 'keyless-b') AND key_hash IS NULL ORDER BY id`)).toEqual([{ id: 'keyless-a' }, { id: 'keyless-b' }]);
   });
 
-  // Not one of the sixteen: frame grants were a Map in the process that minted
-  // them. They are rows of a table of the feature's own, read and written
+  // Frame grants are rows of a table of the feature's own, read and written
   // through vex like the rest.
   it('a frame grant: kept by its hash until its time is over, read back for its own integration, and let go when the next is kept', async () => {
     await replay('integrations/write-bundle', { ...landing('framed'), actions: [] });

@@ -87,8 +87,7 @@ describe('snapshot — the screen, read without attaching', () => {
 
   // HOW LONG A SNAPSHOT WAITS IS WHAT THESE TWO ARE ABOUT, so the clock is
   // theirs: the seeds answer at an instant the test names, and the wait is
-  // over at another. They slept 30 and 80 ms of the real one against waits
-  // of 300 and 5.
+  // over at another.
   it('waits for seeds that are read a moment later', async () => {
     vi.useFakeTimers();
     try {

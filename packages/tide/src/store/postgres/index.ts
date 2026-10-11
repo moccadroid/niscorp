@@ -9,9 +9,8 @@
 // ledger its tables are migrated through. Strata is an optional
 // peer: whoever keeps tide's tables in Postgres installs it.
 //
-// It was in moss, written against vex's pool type, and every moss
-// app installed tide for it. It is tide's storage, held to tide's
-// store contract (test/postgres-store.test.ts), so it is here.
+// It is tide's storage, held to tide's store contract
+// (test/postgres-store.test.ts).
 //
 // The engine's own writes go through the POOL, not through a host's
 // write path (under moss: vex's mutation pipeline), and the reason

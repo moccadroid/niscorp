@@ -42,9 +42,9 @@ describe('the server’s own wire — who a call is made as', () => {
 
   // AN ENDPOINT MAY DECLARE HEADERS, and an action is data somebody else may
   // have written (an integration's bundle). Whatever it says of
-  // `Authorization`, the call is made as the session whose screen it is: laid
-  // under the endpoint's own, the session's token lost to it, and a screen
-  // read and wrote as whoever its author named.
+  // `Authorization`, the call is made as the session whose screen it is: the
+  // session's token goes over the endpoint's own headers, or a screen would
+  // read and write as whoever its author named.
   it('an endpoint that declares its own `Authorization` is still made as the session', async () => {
     const { wire } = serverSaying();
     const answered = await wire('the-sessions-token')('/who', { method: 'POST', headers: { Authorization: 'Bearer somebody-elses', 'content-type': 'application/json' }, body: '{"n":1}' });

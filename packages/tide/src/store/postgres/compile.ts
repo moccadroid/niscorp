@@ -23,7 +23,7 @@ const COMPARATORS = [
 // fields by name and what each holds is unknown, so what says it is a
 // comparison is read by a schema. `satisfies` holds the schema to the engine's
 // own type, so the two cannot drift. A member the schema does not name is
-// left out, as it was not read before.
+// left out.
 const ComparisonSchema = z.object({
   eq: z.unknown().optional(),
   ne: z.unknown().optional(),

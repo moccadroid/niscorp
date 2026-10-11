@@ -370,8 +370,7 @@ describe('sessionCookies — for a sign-in the app answers over HTTP', () => {
 
 // A browser sends every cookie it holds for the host, and anybody who can set
 // a cookie there chooses its name. The session is the cookie of exactly its
-// name: read by how a name ends, a cookie called `evil-nisc.token` was
-// somebody's session.
+// name, never one that only ends with it.
 describe('tokenFromCookie', () => {
   it('reads the cookie of exactly the name asked for, among the others a browser sends', () => {
     expect(tokenFromCookie('theme=dark; nisc.token=st_abc; other=1')).toBe('st_abc');

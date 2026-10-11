@@ -57,8 +57,8 @@ describe('identity cache', () => {
     cache.stop();
   });
 
-  // INVARIANT 3 — losing the cache must lose no information. If dropping it
-  // loses something, it was not a cache.
+  // Losing the cache must lose no information. If dropping it loses something,
+  // it was not a cache.
   it('dropping a record loses nothing: the next read re-resolves the same answer', async () => {
     let calls = 0;
     const cache = createIdentityCache({
@@ -94,9 +94,7 @@ describe('identity cache', () => {
     cache.stop();
   });
 
-  // INVARIANT 5 / 6 — bounded, and the bound is enforced rather than hoped at.
-  // The directory's worst property was that it worked beautifully at demo scale
-  // and died at production scale with no signal in between.
+  // Bounded, and the bound is enforced rather than hoped at.
   it('is bounded: the ceiling holds and eviction is least-recently-read', async () => {
     const cache = createIdentityCache({ resolve: async (p) => recordFor(p), max: 3, idleMs: 0 });
 
@@ -116,8 +114,8 @@ describe('identity cache', () => {
   });
 
   // A ceiling with no room under it cannot be kept: making room for the first
-  // record evicted from an empty cache without end, so the first sign-in hung
-  // the process. It is refused where the cache is made, which is at boot.
+  // record would evict from an empty cache without end. It is refused where the
+  // cache is made, which is at boot.
   it.each([0, -1])('refuses a ceiling of %s with a sentence, before anybody signs in', (max) => {
     expect(() => createIdentityCache({ resolve: async (p) => recordFor(p), max, idleMs: 0 })).toThrow(/identityMax.*at least one/);
   });
@@ -142,8 +140,8 @@ describe('identity cache', () => {
     cache.stop();
   });
 
-  // D1, mechanically: a stale principal's window is the revalidation clock, and
-  // it is the same clock a live socket credential already runs on.
+  // A stale principal's window is the revalidation clock, the same clock a live
+  // socket credential runs on.
   it('revalidates on the clock: a record older than the window re-resolves', async () => {
     const c = clock();
     let role = 'member';
@@ -169,13 +167,9 @@ describe('identity cache', () => {
     cache.stop();
   });
 
-  // INVARIANT 1 — enumeration is an OPERATOR capability and returns structural
-  // facts. The roster must not become a way to read everybody's record, which
-  // is the exact door `everyone()` opened in the directory this replaces.
-  // The criterion the plan had written off as unachievable: a tenant-local
-  // write must invalidate that tenant, not the deployment. It needs the app to
-  // have said which records go together, because naming them any other way
-  // means enumerating the population.
+  // A tenant-local write invalidates that tenant, not the deployment. It needs
+  // the app to have said which records go together, because naming them any
+  // other way means enumerating the population.
   it('a tag forgets one group and leaves the rest held', async () => {
     let calls = 0;
     const cache = createIdentityCache({
@@ -207,8 +201,8 @@ describe('identity cache', () => {
   it('the tag map cannot be read through — it only forgets', async () => {
     const cache = createIdentityCache({ resolve: async () => ({ roles: ['member'], scope: {}, tag: 'st_a' }), idleMs: 0 });
     await cache.get('a_1');
-    // Falsifiable: if a `byTag`/`ofTag`/`find` ever appears, this fails and the
-    // exception invariant 2 was granted stops being an exception.
+    // Falsifiable: if a `byTag`/`ofTag`/`find` ever appears, this fails, and
+    // the tag map stops being write-only.
     const surface = Object.keys(cache).sort();
     expect(surface).toEqual(['get', 'invalidate', 'invalidateAll', 'invalidateTag', 'list', 'meter', 'stop']);
     expect(JSON.stringify(cache.list())).not.toContain('st_a');
@@ -248,9 +242,8 @@ describe('identity cache', () => {
     cache.stop();
   });
 
-  // INVARIANT 4 — opaque contents. Moss must not read a field off an
-  // app-supplied record, so a record whose every property throws on access must
-  // still round-trip intact.
+  // Opaque contents. Moss must not read a field off an app-supplied record, so
+  // a record whose every property throws on access must still round-trip intact.
   it('never inspects what it holds', async () => {
     const booby = {
       roles: ['member'],

@@ -110,9 +110,8 @@ describe('a write, minted into tide as facts', () => {
 });
 
 // THE FEATURE READS ITS OWN HEADERS. A tide effect that writes back through
-// vex names its place in two headers, and they are this feature's: the core's
-// routes read them by name and handed on what they made of them. The core
-// hands on what the request said now, and the reading is here.
+// vex names its place in two headers, and they are this feature's: the core
+// hands on what the request said, and the reading is here.
 describe('the place in a chain a request named', () => {
   const named = { cause: 'task:t_1', depth: 2 };
   const headers = { 'x-tide-cause': 'task:t_1', 'x-tide-depth': '2' };
@@ -176,10 +175,10 @@ describe('the place in a chain a request named', () => {
     expect(await askedAbout({ 'x-tide-cause': 'f_1', 'x-tide-depth': 'deep' })).toBeUndefined();
   });
 
-  // The depth was read with `Number()`, which reads more than a number: an
-  // empty header is 0, and so is one of spaces. A request that named a cause
-  // and an empty depth was then heard at depth 0, the start of a chain: a
-  // chain whose depth was lost on the way was counted from the beginning.
+  // `Number()` reads more than a number: an empty header is 0, and so is one of
+  // spaces. A request that names a cause and an empty depth must not be heard
+  // at depth 0, the start of a chain: a chain whose depth was lost on the way
+  // is not counted from the beginning.
   it.each([
     ['empty', ''],
     ['spaces', '  '],

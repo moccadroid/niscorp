@@ -5,9 +5,9 @@ import { testTransform } from './support';
 
 // THE DRIVER'S EDGE WITH ITS HOST: stopping. A host stops the driver and then
 // closes the database under the engine (a dev server re-booting, a test
-// ending). Found in lyceum's dev server: the next-due read that runs after
-// every drain was still in flight when the database closed, rejected
-// unhandled, and took the whole process down.
+// ending). The next-due read that runs after every drain must not be left in
+// flight when the database closes: rejected unhandled, it would take the whole
+// process down.
 
 const idle: AdvanceReport = {
   now: 0,
@@ -96,9 +96,9 @@ describe('stopping the tide driver', () => {
 
 // A DELAY A TIMER CANNOT HOLD. Node keeps a timer's delay in 32 bits: one over
 // 2^31 − 1 ms (24.8 days) is not refused, it is set to 1 ms, with a warning.
-// So a reflex whose next occurrence was a month off made the driver a loop:
-// wake, find nothing to do, ask when, sleep "a month", wake a millisecond
-// later. The same for a janitor's beat somebody set that long.
+// So a reflex whose next occurrence is a month off would make the driver a
+// loop: wake, find nothing to do, ask when, sleep "a month", wake a
+// millisecond later. The same for a janitor's beat set that long.
 //
 // A real engine over an empty store, with one answer replaced: nothing here is
 // cast into being a tide.
@@ -119,11 +119,9 @@ const countedEngine = (nextDue: Tide['nextDue']): { tide: Tide; advances: () => 
   return { tide, advances: () => at.length, advancedAt: () => at };
 };
 
-// THE CLOCK IS THE TEST'S HERE. These two slept 60 ms on the real one and
-// counted: a loop of a wake each millisecond showed as about sixty, and a
-// machine that fitted fewer into the sleep showed fewer. On a clock the test
-// moves, a minute passes with no wake where the loop made sixty thousand, and
-// the wake that is due a month off happens at that instant.
+// THE CLOCK IS THE TEST'S HERE. On a clock the test moves, a minute passes with
+// no wake where a loop would make sixty thousand, and the wake that is due a
+// month off happens at that instant.
 //
 // The janitor's beat is set as long as the delay in both: by default it wakes
 // the driver every five minutes whatever is due, and these are about one

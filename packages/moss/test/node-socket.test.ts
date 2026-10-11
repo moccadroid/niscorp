@@ -67,7 +67,7 @@ afterAll(() => {
 describe('the ws transport', () => {
   // `ws` reports a frame it refuses as an 'error' on that connection, and an
   // 'error' nobody listens for is thrown by Node out of the socket's data
-  // handler. Before the transport listened, this one frame ended the process.
+  // handler: unlistened, this one frame would end the process.
   it('a frame the transport refuses closes that connection, and nothing else', async () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const escaped: unknown[] = [];
@@ -90,7 +90,7 @@ describe('the ws transport', () => {
       }
       // Nothing was thrown out of the server's data handler. Asked here, after
       // the server has answered two more messages: a throw from the frame it
-      // refused would have come before either of them (it slept 50 ms for that).
+      // refused would have come before either of them.
       expect(escaped).toEqual([]);
       expect(warned).toHaveBeenCalledTimes(1);
     } finally {
@@ -101,7 +101,7 @@ describe('the ws transport', () => {
 
   // What a message carries the server keeps and sends back in every later
   // frame, so a connection is held to 256 KB a message unless the host says
-  // otherwise. Told nothing, `ws` took 100 MiB.
+  // otherwise. Told nothing, `ws` takes 100 MiB.
   it('a message of 256 KB arrives; one byte more closes that connection with 1009, and nothing else', async () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
@@ -147,9 +147,9 @@ describe('the ws transport', () => {
 
   // The two settings of the transport are the deployment's
   // (`runtime.socketMaxMessageBytes`, `runtime.socketCompression`), and the
-  // socket a server hands out carries them. A host that attached it and said
-  // nothing (`nisc start`, the dev plugin) got the defaults, whatever the
-  // runtime said.
+  // socket a server hands out carries them, so a host that attaches it and says
+  // nothing (`nisc start`, the dev plugin) gets the runtime's settings, not the
+  // defaults.
   it('an accept that says how it is to be attached is attached that way by a host that says nothing', async () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
@@ -346,8 +346,7 @@ describe('the ws transport — the upgrade says who is asking', () => {
     peer.write(`GET /socket?protocol=${PROTOCOL} HTTP/1.1\r\nHost: ${hostname}:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Protocol: ${offerToken('tok/with+symbols=').join(', ')}\r\n\r\n`);
     await vi.waitFor(() => expect(asked).toHaveLength(1));
     peer.resetAndDestroy();
-    // The server has seen it go; only then does the verifier answer. (It slept
-    // 250 ms here, against a verifier that took 80.)
+    // The server has seen it go; only then does the verifier answer.
     await gone;
     verifier.decide();
     await vi.waitFor(() => expect(served).toEqual(['usr_1'])); // decided after it had gone, and said to nobody
@@ -374,8 +373,7 @@ describe('the ws transport — the upgrade says who is asking', () => {
   });
 });
 
-// TWO THINGS THE TRANSPORT DOES WITH AN UPGRADE THAT IS NOT A SESSION. Each
-// line came out of a copy with every test passing.
+// TWO THINGS THE TRANSPORT DOES WITH AN UPGRADE THAT IS NOT A SESSION.
 describe('the ws transport — an upgrade that is not a session', () => {
   // An accept that says what it was asked to serve, on a listener of its own.
   const attached = async (accept: (url: string) => Promise<void>): Promise<{ httpServer: Server; origin: string }> => {
@@ -390,7 +388,7 @@ describe('the ws transport — an upgrade that is not a session', () => {
 
   // THE LISTENER IS NOT MOSS'S ALONE. A dev server hears its own socket on it,
   // and an app may hear one of its own. An upgrade to another path is theirs:
-  // taken by moss as well, one request was upgraded twice.
+  // taken by moss as well, one request would be upgraded twice.
   it('an upgrade to another path is left to whoever else hears the listener', async () => {
     const accepted: string[] = [];
     const { httpServer, origin } = await attached(async (url) => void accepted.push(url));

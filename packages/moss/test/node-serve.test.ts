@@ -87,10 +87,8 @@ afterEach(() => {
 });
 
 describe('serve', () => {
-  // `serve` made an HTTP listener and a websocket transport, returned the
-  // server and neither of them, and nothing could stop either: a host that
-  // called `server.close()` stopped moss's timers and left the port bound and
-  // every terminal connected.
+  // `serve` makes an HTTP listener and a websocket transport and returns only
+  // the server, so `server.close()` is a host's only way to stop them.
   it('what it started, the server it returns stops: its own timers, every connection, and the listener', async () => {
     const { server, port } = await serving();
     const client = await opened(`ws://127.0.0.1:${port}/socket`);
@@ -103,11 +101,9 @@ describe('serve', () => {
     await vi.waitFor(async () => expect(await accepts(port)).toBe(false));
   });
 
-  // The largest message a connection may send could be said to `attachSocket`
-  // and not to `serve`, which called it. Then `serve` read the runtime for it,
-  // and the two other hosts that attach a socket did not. The server's socket
-  // says it now (from the runtime: node-socket.test.ts), and `serve` attaches
-  // the socket as it says, like every host.
+  // The largest message a connection may send is said by the server's socket
+  // (from the runtime: node-socket.test.ts), and `serve` attaches the socket as
+  // it says, like every host.
   it('the largest message a connection may send is what the server’s socket says', async () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     said.transport = { maxMessageBytes: 1024 };

@@ -15,11 +15,9 @@ import { engineDouble } from './data-double';
 // database is up.
 //
 // WHAT A BOOT STARTED, A BOOT THAT FAILS STOPS. A server that is returned has
-// one `close` for every timer it owns. One that was never returned had
-// nothing: a reviewer's feature threw in `start`, the boot was refused, and
-// two intervals went on running, with nobody holding anything to stop them
-// by. A dev server that re-boots on every edit keeps each of those until the
-// process ends.
+// one `close` for every timer it owns. A boot that is refused returns nothing
+// to close, so it clears its own: a dev server that re-boots on every edit
+// would otherwise keep each of those until the process ends.
 
 // An app with what starts a timer before a feature is started: a shell, whose
 // host sweeps idle shells, and an identity seam, whose cache sweeps idle
@@ -113,9 +111,8 @@ describe('the server, assembled — a boot that fails stops what it started', ()
   });
 });
 
-// TWO THINGS THE ASSEMBLY DOES IN AN ORDER, OR AT A MOMENT, THAT NOTHING ELSE
-// SAYS. Both were found by taking the line out and running every test: none
-// failed.
+// THINGS THE ASSEMBLY DOES IN AN ORDER, OR AT A MOMENT, THAT NOTHING ELSE
+// SAYS.
 describe('the server, assembled — what holds only because of where a line stands', () => {
   // The pointer is read once the server stands, and the database here has no
   // such row: what the poll says of that is not these tests'.
@@ -125,9 +122,9 @@ describe('the server, assembled — what holds only because of where a line stan
 
   // A PREFIX'S ROUTES ARE TAKEN WHEN IT IS MOUNTED. A feature adds its
   // operator routes while it starts, so the prefix is mounted after every
-  // feature has started. Mounted before, the prefix was empty when it was
-  // taken: the operator's own key was answered 404, the same answer a stranger
-  // gets, on every route a feature had.
+  // feature has started. Mounted before, the prefix would be empty when it was
+  // taken, and the operator's own key would be answered 404, the same answer a
+  // stranger gets, on every route a feature has.
   it('a route a feature adds to the operator prefix answers the operator’s key, and nobody else', async () => {
     quiet();
     const listing: Feature = {
@@ -150,10 +147,10 @@ describe('the server, assembled — what holds only because of where a line stan
     }
   });
 
-  // WHO SOMEBODY IS WAS DERIVED FROM WHAT THE APP CONSISTED OF: a role, an
+  // WHO SOMEBODY IS IS DERIVED FROM WHAT THE APP CONSISTS OF: a role, an
   // install, an approval. When that changes, the records go with the policies
-  // compiled from them. Kept, a promoted instructor held their old rung until
-  // the record went stale on its own clock, a minute by default.
+  // compiled from them. Kept, a promoted instructor would hold their old rung
+  // until the record went stale on its own clock, a minute by default.
   it('a change to what the app consists of drops every identity record: who somebody is, is asked again', async () => {
     quiet();
     const now = { roles: ['public'] };
@@ -179,8 +176,8 @@ describe('the server, assembled — what holds only because of where a line stan
   });
 
   // AND THE LIVING SHELLS ARE BROUGHT LEVEL. The hosts' own test asks a host
-  // to adopt; that the server asks the hosts, when a set of actions is handed
-  // over, nothing asked.
+  // to adopt; this one holds that the server asks the hosts when a set of
+  // actions is handed over.
   it('a set of actions handed over reaches a shell that is already open', async () => {
     quiet();
     const server = await assemble(appWith({ charter: { public: ['home', 'extra'] } }));
@@ -199,8 +196,7 @@ describe('the server, assembled — what holds only because of where a line stan
 });
 
 // A REQUEST, AND A SCREEN'S CALL, AS SOMEBODY. Each of these is one line of
-// the wiring that hands a module what another answers, and each came out of a
-// copy with every test passing.
+// the wiring that hands a module what another answers.
 describe('the server, assembled — who a call is made as', () => {
   const quiet = (): void => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -214,8 +210,8 @@ describe('the server, assembled — who a call is made as', () => {
   // THE SCOPE A WRITE RUNS UNDER IS PUT TOGETHER BY THE SERVER, from who is
   // calling: their id, what their identity record says of them, and what the
   // app's `scope` adds. A reaction is told it, and a behavior's `to:` resolves
-  // against it. Handed an empty one, every row-level rule compared a column
-  // to nothing.
+  // against it. Handed an empty one, every row-level rule would compare a
+  // column to nothing.
   it('a write is scoped by who made it: their id, their record’s values, and what the app’s `scope` adds', async () => {
     quiet();
     const heard: unknown[] = [];

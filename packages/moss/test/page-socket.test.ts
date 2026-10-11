@@ -54,7 +54,7 @@ const connect = async (accept: ReturnType<typeof createSocket>, url: string, tok
   const connection: Connection = { send: (text) => void sent.push(JSON.parse(text) as Record<string, unknown>), close: () => {}, onMessage: () => {}, onClose: () => {}, upgrade: { offered: offerToken(token) } };
   await accept(url, connection);
   // What a shell sends after it is attached goes out on its next two turns
-  // (a pass at once and one a turn later): that, and not 5 ms.
+  // (a pass at once and one a turn later).
   await tick();
   await tick();
   return sent;

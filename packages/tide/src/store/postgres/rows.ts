@@ -4,9 +4,7 @@ import type { TableName, TideTables } from '../../types';
 
 // ── the mapping ─────────────────────────────────────────────────
 //
-// One place, both directions. Hand-written per-table row builders are how
-// the last store ended up reading `started_at` off the wrong column in one
-// direction and not at all in the other.
+// One place, both directions, so the two cannot drift apart.
 
 export const SQL_TABLE: Record<TableName, string> = {
   fact: 'tide_fact',

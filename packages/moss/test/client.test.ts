@@ -152,10 +152,9 @@ describe('the wire — connect + snapshot', () => {
     expect(ticks).toBe(2);
   });
 
-  // What this protects is the SHAPE of what goes up the socket. It used to send
-  // on a socket nobody had opened, which no browser allows (a connecting
-  // WebSocket throws on `send`) — so the socket is opened first, and the test
-  // below holds the other half: nothing goes up one that is not.
+  // What this protects is the SHAPE of what goes up the socket. The socket is
+  // opened first, because a connecting WebSocket throws on `send`; the test
+  // below holds the other half: nothing goes up one that is not open.
   it('sends event and publish envelopes on the socket', () => {
     const wire = createWire({ url: URL, env: env() });
     FakeSocket.last().open();
@@ -250,8 +249,8 @@ describe('the wire — reset', () => {
   });
 
   // A connect still in flight is not an open socket, so a reset connects
-  // again. The socket it was waiting on used to be left as it was, with the
-  // wire still listening to it: two sockets, one snapshot.
+  // again, and lets go of the socket it was waiting on: the wire listens to one
+  // socket for one snapshot.
   describe('while a connect is in flight', () => {
     const row = (value: string): { type: 'text'; value: string }[] => [{ type: 'text', value }];
     const resetWhileConnecting = (): { wire: ReturnType<typeof createWire>; first: FakeSocket; second: FakeSocket } => {
@@ -406,10 +405,10 @@ describe('the wire — reconnect backoff', () => {
   });
 
   // A SERVER THAT REFUSES A CONNECTION OPENS IT FIRST: a refusal is a message
-  // and a close code, and both need an open socket. The backoff was forgotten
-  // when a socket opened, so a terminal that was refused every time (no place
-  // left for a shell for nobody, `4503`) came back every half second to a
-  // second, for as long as it was refused.
+  // and a close code, and both need an open socket. So the backoff is not
+  // forgotten when a socket opens: a terminal that is refused every time (no
+  // place left for a shell for nobody, `4503`) would otherwise come back every
+  // half second to a second, for as long as it is refused.
   const refusedWith = (code: number, said: Record<string, unknown>[]): void => {
     const socket = FakeSocket.last();
     socket.open();
@@ -497,8 +496,7 @@ describe('the wire — inbound diagnostics', () => {
 });
 
 // What the server sends is read as the protocol says it, whole, before any of
-// it reaches the screen. It used to be cast: a tree was whatever arrived under
-// `tree`, and the first thing to find out otherwise was the kit drawing it.
+// it reaches the screen. Nothing is cast.
 describe('the wire — what the server sends is parsed', () => {
   const row = { type: 'text', value: 'row' };
   const shown = (): { wire: ReturnType<typeof createWire>; socket: FakeSocket; warn: ReturnType<typeof vi.spyOn> } => {
@@ -649,8 +647,6 @@ describe('the wire — connection status', () => {
   });
 });
 
-// browserEnv is browser code — tested against a faked window, the one place
-// a global shim is honest (it IS the host this env binds to).
 // ═══════════════════════════════════════════════════════════════
 // FRAME DELTAS, terminal side. The wire either lands on exactly the frame the
 // server meant, or it asks for a whole one. There is no third outcome — a
@@ -766,6 +762,8 @@ describe('the wire — frame deltas', () => {
   });
 });
 
+// browserEnv is browser code — tested against a faked window, the one place
+// a global shim is honest (it IS the host this env binds to).
 describe('browserEnv — the browser host', () => {
   const g = globalThis as unknown as { window?: unknown };
   afterEach(() => {
@@ -843,7 +841,7 @@ describe('browserEnv — the browser host', () => {
       e.tokens.save('tok');
       e.tokens.load();
       expect(written).toEqual([]);
-      // letting go removes the copy an earlier build left, with what is stored
+      // letting go removes any cookie copy of the token, with what is stored
       e.tokens.clear();
       expect(storage.getItem('nisc.token')).toBeNull();
       expect(written).toEqual(['nisc.token=; Path=/; Max-Age=0; SameSite=Lax; Secure']);

@@ -82,9 +82,9 @@ describe('the features, as the server starts them', () => {
     expect(first.seams()).not.toBe(second.seams());
   });
 
-  // The seed assertions are signed with was a member of the seams, so every
-  // feature was handed the private half of that key. It is the integrations
-  // feature's own setting now (`createIntegrations({ signingSeed })`).
+  // The seed assertions are signed with is the integrations feature's own
+  // setting (`createIntegrations({ signingSeed })`), so no feature is handed
+  // the private half of that key.
   it('none is handed a signing seed', async () => {
     const probe = keeping('probe');
     const { start } = await world([probe.feature]);
@@ -94,9 +94,8 @@ describe('the features, as the server starts them', () => {
 });
 
 // WHAT A FEATURE ASKS ABOUT SOMETHING SOMEBODY ELSE WROTE, before it lets it
-// in. The integrations feature asked the manifest module itself, by importing
-// two of its functions: a feature somebody else writes has the seams and
-// nothing else, and could not ask. Both are seams.
+// in. A feature somebody else writes has the seams and nothing else, so both
+// questions are seams.
 describe('the features — what somebody else wrote', () => {
   // The app's kit: a component with a strict schema of its props, and one
   // with none.
@@ -142,9 +141,9 @@ describe('the features — a credential of a feature’s own', () => {
 const TAGS: SeedEntry = { fingerprint: 'tagging/all', dsl: { from: ['tags'], fields: ['tags.id'], limit: 10 } };
 const NOTES: SeedEntry = { fingerprint: 'probe/notes', dsl: { from: ['notes'], fields: ['notes.id', 'notes.body'], limit: 10 } };
 
-// WHAT A REVIEWER RAN: a feature of its own, booted beside the app, that
-// handed `ownEntries` a read of a table with the table's name beside it. The
-// seam admitted whatever tables the caller named, so it read every session.
+// A FEATURE'S OWN ENTRIES RUN OUTSIDE THE APP'S POLICY, so the seam admits
+// only the tables the feature named as its own: a feature that hands
+// `ownEntries` a read of any other table is refused.
 describe("the features — a feature's own entries", () => {
   it('reach the tables that feature named as its own', async () => {
     const tagging = keeping('tagging');
@@ -177,9 +176,8 @@ const roster: ActionDefinition = { id: 'ext.desk.belts.roster' };
 const checkout: ActionDefinition = { id: 'ext.desk.pay.checkout' };
 
 // ONE WRITER FOR A SET OF ACTIONS. A feature's set is kept under the feature's
-// name and written through that feature's seams, which name no set: it was
-// `replaceActions(source, actions)`, and any feature wrote any set by naming
-// it, the app's and another feature's alike.
+// name and written through that feature's seams, which name no set: a feature
+// cannot write the app's set or another feature's by naming it.
 describe("the features — a feature's set of actions", () => {
   it('is its own: the seam names no set, and what one feature hands over leaves another feature\'s set alone', async () => {
     const belts = keeping('belts');

@@ -9,10 +9,8 @@ import { buildRunningManifest } from '../src/server/manifest';
 // with no server and no database: the data module is a stand-in that records
 // what it is handed.
 //
-// THE ENTRIES HAVE ONE HOLDER WHILE A SERVER RUNS. The data module seeded what
-// it had read off the app, and the running manifest kept a map of its own made
-// from the same field. The running manifest holds them now, and what is seeded
-// where vex replays from is what it hands over.
+// THE ENTRIES HAVE ONE HOLDER WHILE A SERVER RUNS: the running manifest, and
+// what is seeded where vex replays from is what it hands over.
 
 type Entry = SeedEntry | SeedMutation;
 

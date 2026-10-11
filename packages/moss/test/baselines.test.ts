@@ -21,14 +21,14 @@ const freshDatabase = pristineDatabases();
 // put the change back, and append a new migration to the sequence instead.
 // (Rewording a full-line `--` comment is fine — strata hashes without them.)
 //
-// Tide's sequence (`nisc.moss.tide`) is pinned where it lives now: tide's own
+// Tide's sequence (`nisc.moss.tide`) is pinned in tide's own
 // test/baselines.test.ts.
 // ═══════════════════════════════════════════════════════════════
 
 const PINNED: ReadonlyArray<[Sequence, number, string]> = [
   [MOSS_SEQUENCE, 1, '1c21031de558301ea60804cce1ed1e5c636aa8644fcdedc1ef96f5bebb558880'],
   [MOSS_SEQUENCE, 2, '92bd612e35a830e2f58de2327451a8e3346e7bc102ab0b49777c349792894b1a'],
-  // Appended: the unique index on an integration's key hash.
+  // The unique index on an integration's key hash.
   [MOSS_SEQUENCE, 3, 'b05aa252f4f3b70dad03282552ac6b94c5d4e5012d964c23cb32fedbb4f8b60f'],
   [SESSIONS_SEQUENCE, 1, '83a62e0217940bfe62136052c18f730947355d20e481d9aceb76463251b33700'],
   // The integrations feature's own sequence: frame grants.

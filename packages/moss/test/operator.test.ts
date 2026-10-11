@@ -76,7 +76,7 @@ describe('guardOperator — the app gate governs the whole prefix', () => {
     });
     const res = await call(server, 'K');
     expect(res.status).toBe(200);
-    // The exact case the measurement table found unreachable, inverted.
+    // moss's own route is among the paths the gate sees.
     expect(seen).toContain('/operator/integrations');
   });
 

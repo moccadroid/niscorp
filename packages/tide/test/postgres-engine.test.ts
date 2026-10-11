@@ -8,16 +8,15 @@ import { oneDatabase } from './support';
 // THE ENGINE, ON A REAL DATABASE.
 //
 // `postgres-store.test.ts` holds the store to its six-method contract. That is
-// necessary and it is not sufficient: every defect that reached the built
-// engine was a defect in how the ENGINE composes those methods — a claim that
-// could not see a rewound run, a lease nobody took back, a transient throw
-// that consumed an occurrence. Those were caught in memory, where the store is
-// a Map and a transaction is a snapshot.
+// necessary and it is not sufficient: the ENGINE composes those methods — a
+// claim that must see a rewound run, a lease that is taken back, a transient
+// throw that must not consume an occurrence. In memory the store is a Map and
+// a transaction is a snapshot.
 //
 // So the same scenarios run here against Postgres: real constraints, real
 // transactions, real NULLs, real bigints coming back as strings. A store that
-// passes the unit contract and fails this one is exactly the store the last
-// version of this package shipped.
+// passes the unit contract and fails this one is not a store the engine can
+// run on.
 
 const vienna = 'Europe/Vienna';
 const T0 = Date.UTC(2026, 2, 1, 0, 0, 0);
@@ -42,7 +41,7 @@ const transform = (config: unknown, source: Row): unknown => {
 type Harness = { tide: Tide; calls: unknown[]; events: TideEvent[]; pool: TidePool };
 
 // One database for the file, emptied for each engine that is stood up
-// (./support.ts says why: a database for each test was 26 starts).
+// (./support.ts says why).
 const database = oneDatabase();
 
 const harness = async (reflexes: readonly ReflexInput[], effects: EffectRegistry, extra?: Partial<TideConfig>): Promise<Harness> => {
@@ -295,9 +294,9 @@ describe('recovery on postgres', () => {
 
     // THE STATE A CRASH LEAVES, written directly because no verb produces it on
     // purpose: the row says claimed, a token is held, the lease is running, and
-    // the process that owned it is gone. Before the lease existed this task sat
+    // the process that owned it is gone. Without the lease this task would sit
     // here forever — its run never settled, never drained, and an
-    // `overlap: 'skip'` reflex behind it was blocked for good.
+    // `overlap: 'skip'` reflex behind it blocked for good.
     const [task] = await tide.ledger.tasks();
     await pool.query(
       `UPDATE tide_work SET state = 'claimed', token = 'ghost', claimed_until = $1, settled_at = NULL WHERE id = $2`,

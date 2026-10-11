@@ -12,8 +12,7 @@ import { NOTES_SCHEMA, engineDouble, tableNamed } from './data-double';
 
 // THE CORE READS AND WRITES NO ROW OF A FEATURE'S TABLES. The integrations'
 // three are in every deployment's database (`nisc.moss` makes two of them,
-// whether or not the app names the feature), and the core once brought the
-// documents in one of them current at every boot. Here a server stands over a
+// whether or not the app names the feature). Here a server stands over a
 // database that has the three tables, with everything that could reach a row
 // recorded: each table a read names, each statement a write sends, each
 // statement the pool is sent, and each store whose documents are upgraded.

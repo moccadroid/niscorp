@@ -15,7 +15,7 @@ import { turn } from './turn';
 const tick = turn;
 
 // A connection that records what it was sent. The four-function seam, faked —
-// the same shape ./node's ws transport provides.
+// the same shape the ws transport in ../src/server/node.ts provides.
 const fakeConnection = (): Connection & { sent: Record<string, unknown>[]; closes: number[] } => {
   const sent: Record<string, unknown>[] = [];
   const closes: number[] = [];
@@ -58,9 +58,7 @@ describe('shells — the shell host', () => {
     expect(a.shell).toBe(b.shell);
   });
 
-  // What a principal's shell is made of is asked ONCE for a build. It was
-  // asked twice: once for the build, and once more to write on the cell what
-  // nothing then read.
+  // What a principal's shell is made of is asked ONCE for a build.
   it('who somebody is and what they hold is asked once for each shell that is built', async () => {
     const asked: (string | null)[] = [];
     const host = standHost(hostConfig({ ...ctx, resolve: async (principal) => (asked.push(principal), ctx.resolve(principal)) }));
@@ -145,11 +143,10 @@ describe('shells — the shell host', () => {
 
 // ═══════════════════════════════════════════════════════════════
 // ONE BUILD FOR A PRINCIPAL AT A TIME. Finding no shell, building one and
-// keeping it were a look, two awaits and a write: two arrivals in the same
-// moment (a page's read and its socket, two tabs) each found none and each
-// built one. The second took the first's place in the map, and the first
-// stood for ever with its functions and its session code running, held by
-// whoever had arrived first.
+// keeping it are a look, two awaits and a write: two arrivals in the same
+// moment (a page's read and its socket, two tabs) must not each find none and
+// each build one, or the one that lost its place in the map would stand for
+// ever with its functions and its session code running.
 // ═══════════════════════════════════════════════════════════════
 
 describe('shells — two first arrivals for one principal', () => {
@@ -363,9 +360,10 @@ describe('shells — reset', () => {
   });
 
   // ONE RESET OF A SHELL AT A TIME. A reset builds, then swaps. Two that
-  // overlapped each built from the shell that stood when they began: the first
-  // to land carried the terminals to its shell, the second found none left to
-  // carry and took the cell. The terminals were on a shell nothing addressed.
+  // overlapped would each build from the shell that stood when they began: the
+  // first to land would carry the terminals to its shell, and the second would
+  // find none left to carry and take the cell, leaving the terminals on a shell
+  // nothing addresses.
   it('resets that overlap leave every terminal on the shell that is kept', async () => {
     const host = standHost(hostConfig({ ...ctx, app: wide }));
     const session = await host.session('t', 'usr_1');
@@ -389,16 +387,15 @@ describe('shells — reset', () => {
 
   // THE THREE THINGS A RESET CHECKS, EACH BY THE CASE ONLY IT COVERS. The test
   // above passes with the turn taken away, because a reset whose shell was
-  // replaced under it finds that out when it lands; and one test stood for the
-  // two checks below, which passed with either of them taken away. What a
-  // principal holds is answered by hand here (`answeredByHand`), so a build
-  // stands still where the test needs it to.
+  // replaced under it finds that out when it lands; so each check below has a
+  // case of its own. What a principal holds is answered by hand here
+  // (`answeredByHand`), so a build stands still where the test needs it to.
 
   // EACH RESET IN TURN. The second reset is asked for a reason: something
   // changed after the first had read what it builds from. So the second reads
   // only once the first has landed, and its shell is the one that stands.
-  // Begun together, whichever build was answered last stood, whatever it had
-  // read.
+  // Begun together, whichever build was answered last would stand, whatever it
+  // had read.
   it('two resets happen in turn: the second reads what it builds from once the first has landed, and its shell stands', async () => {
     const extra = { id: 'extra', data: {} };
     const who = answeredByHand(['counter']);
@@ -433,8 +430,8 @@ describe('shells — reset', () => {
 
   // A BUILD AWAITS, AND THE SHELL IT REPLACES CAN END MEANWHILE: its last
   // terminal leaves, its principal signs out, the sweep takes it. The
-  // replacement is then nobody's. Put in the cell, it was a living shell that
-  // nothing was attached to and nothing would end.
+  // replacement is then nobody's. Put in the cell, it would be a living shell
+  // that nothing is attached to and nothing would end.
   it('a shell that ended while its replacement was being built is not replaced', async () => {
     const who = answeredByHand(['counter']);
     // Nobody in particular: the shell goes when its last terminal does.
@@ -476,9 +473,10 @@ describe('shells — reset', () => {
     expect(session.shell).toBe(stood);
   });
 
-  // What a shell was opened with is part of what it is rebuilt from. A reset
-  // rebuilt from the principal alone, so a page's shell came back without the
-  // parameters of its path, on other instance ids than the page was drawn with.
+  // What a shell was opened with is part of what it is rebuilt from: a reset
+  // that rebuilt from the principal alone would bring a page's shell back
+  // without the parameters of its path, on other instance ids than the page
+  // was drawn with.
   it('a shell that is reset is rebuilt with what it was opened with: its inputs and its id seed', async () => {
     const words = { id: 'words', data: { slug: '' }, layout: { component: 'Text', children: '$.slug' } };
     const paged = { ...app, actions: { words } } as unknown as NiscApp;
@@ -511,8 +509,8 @@ describe('shells — reset', () => {
 
   // A HOST THAT KEEPS NO SHELL (a page's) builds one for each connection, so
   // somebody signed in may have several living at once. A reset by principal
-  // found none of them: it looked where kept shells are, and answered `false`
-  // for somebody with two tabs open.
+  // reaches them too: it does not look only where kept shells are and answer
+  // `false` for somebody with two tabs open.
   it('reaches every living shell of the principal on a host that keeps none, and nobody else’s', async () => {
     const host = standHost(hostConfig({ ...ctx, kept: false }));
     const mine = [await host.session('t', 'usr_1'), await host.session('t', 'usr_1')];
@@ -576,11 +574,10 @@ describe('shells — reset', () => {
     session.attach(connection);
 
     broken = true;
-    // The rebuild is asynchronous now — `reset` answers "did they hold a shell"
-    // immediately and the replacement lands a tick later, exactly as `seeds`
-    // already behaved. So the failure surfaces on the console rather than to
-    // this caller. What must NOT change is the guarantee underneath: a reset
-    // that cannot build leaves the old shell standing.
+    // The rebuild is asynchronous — `reset` answers "did they hold a shell"
+    // immediately and the replacement lands a tick later. So the failure
+    // surfaces on the console rather than to this caller. The guarantee
+    // underneath: a reset that cannot build leaves the old shell standing.
     const errors: unknown[] = [];
     const original = console.error;
     console.error = (...args: unknown[]) => errors.push(args[0]);
@@ -757,9 +754,9 @@ describe('shells — the idle sweep', () => {
 
 // ═══════════════════════════════════════════════════════════════
 // THE RENDER GUARD — one canvas that throws must not take the session
-// with it. Unguarded this was a shell wedged for the life of the process:
-// the pass died mid-loop, every canvas after it went unrendered, and the
-// throw escaped a microtask with nobody to catch it.
+// with it. Unguarded, it would be a shell wedged for the life of the process:
+// the pass would die mid-loop, every canvas after it would go unrendered, and
+// the throw would escape a microtask with nobody to catch it.
 // ═══════════════════════════════════════════════════════════════
 
 // Two canvases, and a layout that actually renders `n` — the host only sends a
@@ -920,8 +917,7 @@ describe('shells — frame deltas', () => {
 
   // The encode's cost follows the size of the frames, not of the change, and it
   // is paid on the thread every session shares. So past 64 KB — on either side
-  // of the change — a frame goes out whole without being compared. Before the
-  // bound, the two middle steps below went out as deltas, after the encode.
+  // of the change — a frame goes out whole without being compared.
   it('a frame over 64 KB is sent whole, whichever side of the change it is on', async () => {
     const padded = {
       ...app,
@@ -1057,9 +1053,9 @@ describe('shells — a canvas that fails to render', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// THE CANVASES A SHELL HAS are asked of the shell. The host walked the
-// manifest's list in six places, so a canvas the shell gained while it ran
-// was never sent to anybody.
+// THE CANVASES A SHELL HAS are asked of the shell, not read from the
+// manifest's list: a canvas the shell gains while it runs is sent like the
+// ones it was built with.
 // ═══════════════════════════════════════════════════════════════
 
 describe('shells — the canvases a shell has', () => {
@@ -1159,8 +1155,9 @@ describe('shells — the frame layout store and re-send', () => {
   });
 
   // Attaching renders the frame, and that can pick up a change the flush has
-  // not sent yet. The frame last sent then moved to one only the newcomer
-  // held, and the flush, finding nothing changed, sent it to nobody else.
+  // not sent yet. The frame last sent must not move to one only the newcomer
+  // holds: the flush would then find nothing changed and send it to nobody
+  // else.
   it('a terminal that attaches while the frame has changed does not leave the others on the old one', async () => {
     const host = standHost(hostConfig(refCtx));
     const session = await host.session('t', 'usr_1');
@@ -1287,9 +1284,9 @@ describe('shells — a canvas placed by an action, not the frame', () => {
 
 // ═══════════════════════════════════════════════════════════════
 // ADOPT — what the app consists of changed while shells stand. Afterwards a
-// living shell holds exactly what its principal holds now. It used to add
-// and never take away: an action that was removed, or was no longer granted,
-// stayed mounted and pushable in every shell that had it.
+// living shell holds exactly what its principal holds: an action that was
+// removed, or is no longer granted, is neither mounted nor pushable in any
+// shell.
 // ═══════════════════════════════════════════════════════════════
 
 describe('shells — adopt', () => {
@@ -1446,11 +1443,10 @@ describe('shells — adopt', () => {
     expect(mounted(session)).toEqual(['home', 'ledger']);
   });
 
-  // A BUILD UNDER WAY HOLDS NOBODY ELSE UP. Adopts were one chain, and each
-  // waited for every build that was under way when it was asked for. A build
-  // that never lands (somebody whose `inputs` never answers) then ended the
-  // chain: every other shell of the host adopted the change after it and none
-  // after that, so an action that was taken away stayed pushable.
+  // A BUILD UNDER WAY HOLDS NOBODY ELSE UP. A build that never lands (somebody
+  // whose `inputs` never answers) must not end the chain of adopts: every other
+  // shell of the host adopts each change, so an action that was taken away
+  // does not stay pushable.
   const stuck = (): NiscApp => ({
     ...base,
     shell: { canvases: [{ id: 'main', initial: 'home' }], inputs: ({ principal }) => (principal === 'usr_stuck' ? new Promise<never>(() => undefined) : {}) },
@@ -1498,10 +1494,10 @@ describe('shells — adopt', () => {
   });
 
   // ONE SHELL THAT IS NEVER ANSWERED HOLDS UP NOBODY. Within one change the
-  // living shells were asked one after another, each waiting for the one
-  // before it: somebody whose composition is never answered (an app's
-  // `identity` that hangs for them) held every shell after theirs for that
-  // change, and those kept an action that had been taken away.
+  // living shells are not asked one after another: somebody whose composition
+  // is never answered (an app's `identity` that hangs for them) must not hold
+  // every shell after theirs, which would keep an action that had been taken
+  // away.
   const neverAnswered = (who: string, setup: Partial<HostSetup> = {}): { host: ReturnType<typeof standHost>; change: (actions: Record<string, unknown>) => void } => {
     let inForce: Record<string, unknown> = { home, extra };
     let changed = false;
@@ -1593,10 +1589,10 @@ describe('shells — adopt', () => {
   });
 
   // EVERY LIVING SHELL ADOPTS, WHOEVER IT IS FOR AND WHETHER IT IS KEPT. The
-  // walk went over the shells a host keeps, which is one for each signed-in
-  // principal of the app's own host. A shell built for one connection kept
-  // what it was built with for as long as it lived: a visitor's on the app's
-  // host, and everybody's on a host that keeps none (a page's).
+  // walk covers more than the shells a host keeps (one for each signed-in
+  // principal of the app's own host): a shell built for one connection would
+  // keep what it was built with for as long as it lived, a visitor's on the
+  // app's host and everybody's on a host that keeps none (a page's).
   const everyKind = [
     ['nobody signed in, on a host that keeps its principals’ shells', {}, null],
     ['somebody signed in, on a host that keeps none (a page’s)', { kept: false }, 'usr_1'],
@@ -1635,7 +1631,7 @@ describe('shells — adopt', () => {
   // A REPLACEMENT IS A BUILD UNDER WAY TOO. A reset builds the shell that will
   // stand, from what its principal held when the reset began. A change that
   // happens while it is built is adopted by the shell that still stands, and
-  // the replacement then took its place holding what was held before.
+  // the replacement would then take its place holding what was held before.
   it.each([
     ['a kept shell', {}],
     ['a shell that is not kept', { kept: false }],
@@ -1672,8 +1668,8 @@ describe('shells — adopt', () => {
 
   // AN ADOPT TAKES WHAT A BUILD TAKES, OF THE SAME ANSWER: the frame, what
   // each `{ ref }` in it resolves to, and the fragments, beside the actions.
-  // And of those it takes what the answer says differently now, and nothing
-  // else: a ref the shell's own code has set since (somebody's own
+  // And of those it takes what the answer says differently from what the shell
+  // holds, and nothing else: a ref the shell's own code has set (somebody's own
   // arrangement, `shell.setLayout`) is not set back by a change that did not
   // touch it.
   describe('the shell’s own layouts', () => {
@@ -1868,7 +1864,7 @@ describe('shells — a shell that ended is let go', () => {
     })();
 
     expect(await collected(replaced)).toBe(true);
-    // The replacement is the one the host knows now.
+    // The replacement is the one the host knows.
     const standing = session.shell;
     expect(host.reset('usr_1')).toBe(true);
     await settle();
@@ -1895,9 +1891,9 @@ describe('shells — a shell that ended is let go', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// WHAT FAILS IS SAID. Four places caught an error and went on, which is
-// right, and wrote nothing, which left a screen missing a card, a delivery
-// that never arrived or a shell missing from the roster with no line anywhere
+// WHAT FAILS IS SAID. Where an error is caught and the host goes on, which is
+// right, a line says why: otherwise a screen missing a card, a delivery that
+// never arrived or a shell missing from the roster would have no line anywhere
 // to say why.
 // ═══════════════════════════════════════════════════════════════
 
@@ -1970,7 +1966,7 @@ describe('shells — what fails is said', () => {
 
 // A terminal names the canvas an event came from, and the shell holds it to
 // that. A canvas the shell does not have is nowhere an event can have come
-// from: it used to be dispatched with no origin, to every instance at once.
+// from: it is dropped, not dispatched with no origin to every instance at once.
 describe('shells — an event from a canvas the shell does not have', () => {
   it('is dropped, where one from a canvas it has still lands', async () => {
     const host = standHost(hostConfig({ ...ctx, app: twoCanvas }));
@@ -2048,7 +2044,7 @@ describe('shells — the instance a click names', () => {
 
   // What an event is belongs to nova, and its shell takes one of nova's events
   // and nothing else. What a terminal sent is read by nova's schema where it
-  // enters the shell: it used to be handed over as whatever object arrived.
+  // enters the shell.
   it('what is not one of nova’s events is not dispatched', async () => {
     const { session, a, b, n } = await setup();
     session.dispatch('tray', { type: 'ui:click', ref: 'bump', origin: a, more: 'than an event has' });
@@ -2079,9 +2075,8 @@ describe('shells — the instance a click names', () => {
 // A MESSAGE PUT TO SOMEBODY'S SHELLS (`deliver`): whatever of theirs is
 // listening on the channel hears it, with what it carries. A host that keeps
 // one shell for a principal has one to put it to. A host that keeps none (a
-// page's) built one for each of their connections, and looked for theirs
-// where kept shells are: it found none, answered `false`, and a page somebody
-// had open in two tabs heard nothing.
+// page's) builds one for each of their connections, and looks for theirs among
+// those too: a page somebody has open in two tabs hears it.
 // ═══════════════════════════════════════════════════════════════
 describe('shells — a message delivered to a principal', () => {
   const inbox = { id: 'inbox', data: { heard: 0, said: '' }, triggers: [{ message: 'news', do: [{ increment: 'heard' }, { set: 'said', value: '@event.payload.text' }] }] };

@@ -4,9 +4,9 @@ import type { Sequence } from '@niscorp/strata';
 // with events; `tide_fact` is the intake, swept on its own horizon; and
 // `tide_reflex_state` holds one row per reflex, forever.
 //
-// The CHECK constraints are not decoration. The last hand-written store read
-// state back through a blind cast, so a run whose state was `'sttled'` was
-// constructible — and its work was never claimed and it hung there.
+// The CHECK constraints are not decoration: a run whose state is misspelled
+// (`'sttled'`) is refused by the database, not constructed and left hanging
+// with its work never claimed.
 export const TIDE_TABLES = ['tide_fact', 'tide_run', 'tide_work', 'tide_reflex_state'] as const;
 
 // HISTORY. This text is migration 1 of `nisc.moss.tide` (TIDE_SEQUENCE below),
@@ -140,9 +140,9 @@ ALTER TABLE tide_reflex_state DROP COLUMN IF EXISTS polled_at;
 // SPLIT ON EVERY `;`, AND FOR MIGRATION 1 ONLY. That is not how a sequence is
 // split: a `;` inside a statement would cut it in two, and a new sequence uses
 // strata's `sqlSteps` (nisc AGENTS.md, rule 17). It cannot be corrected here.
-// The sixteen steps this makes of TIDE_DDL have run, their checksum is in
-// every ledger, and a different split is a different history. TIDE_DDL holds
-// sixteen `;`, each the end of a statement. Nothing new is split this way.
+// The steps this makes of TIDE_DDL have run, their checksum is in every
+// ledger, and a different split is a different history. Each `;` in TIDE_DDL
+// ends a statement. Nothing new is split this way.
 const statementsOf = (ddl: string): { kind: 'sql'; sql: string }[] =>
   ddl
     .split(';')
@@ -150,9 +150,9 @@ const statementsOf = (ddl: string): { kind: 'sql'; sql: string }[] =>
     .filter((chunk) => chunk.split('\n').some((line) => line.trim() !== '' && !line.trim().startsWith('--')))
     .map((sql) => ({ kind: 'sql', sql }));
 
-// THE ID SAYS `moss`, AND STAYS. The sequence was named when this store was in
-// moss, and every ledger that has run it holds its rows under that name. Under
-// another id it would be a sequence no ledger has seen.
+// THE ID SAYS `moss`, AND STAYS. Every ledger that has run this sequence holds
+// its rows under that name. Under another id it would be a sequence no ledger
+// has seen.
 export const TIDE_SEQUENCE: Sequence = {
   id: 'nisc.moss.tide',
   migrations: [

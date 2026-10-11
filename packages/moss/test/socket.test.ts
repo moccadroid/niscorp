@@ -77,11 +77,8 @@ const hostFor = (session: ShellSession): ShellHost => ({
   snapshot: async () => ({ frame: [], trees: {}, settled: true, live: true, why: [], drawnWith: [] }),
   list: () => [],
   reset: () => false,
-  // `deliver` arrived with the socket fan-out and this literal did not follow —
-  // exactly the drift the comment above warned about, which went unseen because
-  // this directory was never typechecked. False: nothing in these tests pushes
-  // to a principal, and a stub that claimed a successful delivery would be
-  // asserting something no one asked it.
+  // False: nothing in these tests pushes to a principal, and a stub that
+  // claimed a successful delivery would be asserting something no one asked it.
   deliver: () => false,
 });
 
@@ -128,8 +125,7 @@ describe('socket — the authority channel', () => {
   });
 
   // The address is what every proxy on the way writes into its log, so it is
-  // not where a terminal says who it is — and a server that still read it
-  // there would keep that open for whoever went on using it.
+  // not where a terminal says who it is.
   it('a token in the address is not who the terminal is', async () => {
     const accept = createSocket(ctxWith());
     const conn = new FakeConnection();
@@ -171,8 +167,8 @@ describe('socket — the authority channel', () => {
     ['older than the server serves', String(PROTOCOL_MIN - 1), 'client_too_old'],
     ['newer than the server speaks', String(PROTOCOL + 1), 'server_too_old'],
     ['not a protocol at all', 'banana', 'client_too_old'],
-    // A protocol is digits. Read with `Number()`, each of these was the
-    // protocol this server speaks, and its terminal was served.
+    // A protocol is digits. `Number()` would read each of these as the
+    // protocol this server speaks.
     ['whose protocol is written in hex', `0x${PROTOCOL.toString(16)}`, 'client_too_old'],
     ['whose protocol is written with a fraction', `${PROTOCOL}.0`, 'client_too_old'],
     ['whose protocol is written with an exponent', `${PROTOCOL}e0`, 'client_too_old'],
@@ -240,8 +236,7 @@ describe('socket — the authority channel', () => {
   });
 
   // What a terminal sends is read as the protocol says it, whole, before any
-  // of it is acted on. A message with a field too many used to be routed: the
-  // fields the checks looked at were right, and the rest was never looked at.
+  // of it is acted on: a message with a field too many is not routed.
   it.each([
     ['text that is not JSON', '{"type":"back"'],
     ['JSON that is not an object', '"back"'],
@@ -390,9 +385,9 @@ describe('socket — the authority channel', () => {
 
 // ═══════════════════════════════════════════════════════════════
 // REVALIDATION — identity asked twice. The HTTP surfaces re-ask on every
-// request; a socket that asked only at upgrade is the hole every
-// long-lived credential leaks through, and the reason an app could not
-// give its tokens an expiry that meant anything on a live connection.
+// request; a socket that asked only at upgrade would be the hole every
+// long-lived credential leaks through, and an app's tokens could not expire
+// on a live connection.
 // ═══════════════════════════════════════════════════════════════
 
 describe('socket — revalidating a live connection', () => {
@@ -494,8 +489,7 @@ describe('socket — revalidating a live connection', () => {
       await vi.advanceTimersByTimeAsync(10_000);
       expect(auth.asked()).toBe(before);
       expect(conn.closed).toBeUndefined();
-      // And a pass has nothing to say of them: asked about all the same, each
-      // one was a line in the log at every pass, for a verifier nobody asked.
+      // And a pass logs nothing about them.
       expect(logged).not.toHaveBeenCalled();
       accept.stop();
     } finally {
@@ -557,8 +551,8 @@ describe('socket — revalidating a live connection', () => {
   });
 
   // A pass asks the verifier about every connection, one after another. The
-  // timer started the next pass whether or not that one had finished, so a
-  // verifier that slowed down was asked more the slower it got.
+  // next pass does not start while one is running, so a verifier that slows
+  // down is not asked more the slower it gets.
   it('a pass that is still asking when the next one is due is not joined by a second', async () => {
     vi.useFakeTimers();
     try {
@@ -617,9 +611,9 @@ describe('socket — revalidating a live connection', () => {
     }
   });
 
-  // A connection whose transport throws when it is told (it is half gone) was
-  // still in the map afterwards, so every pass threw on it again, at the same
-  // place: no connection after it was ever asked about, or closed.
+  // A connection whose transport throws when it is told (it is half gone) does
+  // not stay in the map: a pass that threw on it again, at the same place,
+  // would never ask about or close the connections after it.
   it('a connection that cannot be told it expired does not keep the ones after it open', async () => {
     vi.useFakeTimers();
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -649,8 +643,7 @@ describe('socket — revalidating a live connection', () => {
     }
   });
 
-  // The transport above still said the connection closed, which is what let
-  // go of it. One whose transport throws on the close as well says nothing
+  // A connection whose transport throws on the close as well says nothing
   // afterwards: it is forgotten because it expired, not because it closed.
   it('a connection that can be neither told nor closed is forgotten all the same, and is not asked about again', async () => {
     vi.useFakeTimers();
@@ -904,10 +897,10 @@ describe('socket — a browser on the app’s own page', () => {
     expect(conn.order[0]).toBe('answer');
   });
 
-  // Over plain http on the default port, the script-readable copy an earlier
-  // build kept has the very name of this cookie. The browser sends it, the
-  // page offers the same token from storage — and the answer replaces the copy
-  // with one script cannot read.
+  // Over plain http on the default port, a script-readable copy of the token
+  // has the very name of this cookie. The browser sends it, the page offers the
+  // same token from storage — and the answer replaces the copy with one script
+  // cannot read.
   it('a token the page offers is written even when the browser sent the same one', async () => {
     const conn = new FakeConnection().from({ origin: 'http://intranet.example', host: 'intranet.example', cookie: 'nisc.token=good' }).offering('good');
     await createSocket(ctxWith())(SOCKET, conn);
@@ -1139,8 +1132,8 @@ describe('socket — a sign-in handed over sealed', () => {
 // asked, and their shell is built. The terminal may be gone by then. On Node
 // the transport tells a close to whoever is listening when it happens, and to
 // nobody who starts listening afterwards — so a connection attached after it
-// closed was attached for ever: a kept shell never idled, a throwaway one was
-// never disposed.
+// closed would be attached for ever: a kept shell would never idle, a
+// throwaway one would never be disposed.
 describe('socket — a connection that closed before its session was ready', () => {
   const counter = { id: 'counter', data: { n: 0 }, triggers: [{ event: 'ui:click', ref: 'bump', do: [{ increment: 'n' }] }] };
   const app = { charter: { public: ['counter'] }, assignments: {}, actions: { counter }, shell: { canvases: [{ id: 'main', initial: 'counter' }] } } as unknown as NiscApp;

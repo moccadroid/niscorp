@@ -66,8 +66,8 @@ const MAX_STEPS_PER_DRAIN = 10_000;
 
 // THE LONGEST A TIMER WAITS. A runtime keeps a timer's delay in 32 bits, and
 // Node does not refuse one over 2^31 − 1 ms (24.8 days): it warns, and waits
-// 1 ms. A next occurrence a month off, or a janitor's beat set that long, was
-// therefore a loop. Every wait is cut to this. Waking early costs one advance
+// 1 ms. A next occurrence a month off, or a janitor's beat set that long, would
+// therefore be a loop. Every wait is cut to this. Waking early costs one advance
 // that finds nothing and asks again when: the rest is waited out by the timer
 // set after it.
 const LONGEST_TIMER_MS = 2 ** 31 - 1;

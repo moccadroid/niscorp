@@ -8,10 +8,9 @@ import type { Connection } from '../src/socket';
 
 // THE SOCKET AS THE SERVER STANDS IT UP (../src/server/socket.ts): what the
 // runtime says of it reaches it. The socket's own tests (socket.test.ts) hand
-// `createSocket` its settings themselves, so three lines of the wiring that
-// read them off the runtime came out of a copy with every test passing: a
-// deployment that set a limit, its origins or its revalidation clock was
-// served the defaults.
+// `createSocket` its settings themselves; these hold the wiring that reads
+// them off the runtime, so a deployment that sets a limit, its origins or its
+// revalidation clock is not served the defaults.
 //
 // No server and no database: who a token is, is a map here, and a shell is an
 // object that takes a connection.

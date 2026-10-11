@@ -49,8 +49,8 @@ describe('createPageRouter — which page a path leads to', () => {
   });
 
   // The parameters of a path are handed to a canvas by name. A name written
-  // twice had two segments and one place to put them: the later one won, and
-  // the first was matched and then lost without a word.
+  // twice has two segments and one place to put them: the first would be
+  // matched and then lost without a word.
   it('a path that names one parameter twice is refused', () => {
     expect(() => createPageRouter({ a: page('/docs/:id/versions/:id') })).toThrow(/page "a" names the parameter ":id" twice in "\/docs\/:id\/versions\/:id"/);
     expect(() => createPageRouter({ a: page('/docs/:doc/versions/:version') })).not.toThrow();

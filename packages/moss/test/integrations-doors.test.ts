@@ -15,9 +15,6 @@ import { reachOf } from '../src/integrations/reach';
 // door, the operator's routes and the proxy, mounted over a registry that is a
 // map and a service that is a function. No database, and nothing leaves the
 // process.
-//
-// Every case here names a line that came out of a copy with every test
-// passing: the door did the right thing, and nothing asked.
 
 type Row = Record<string, unknown>;
 const json = { 'content-type': 'application/json' };

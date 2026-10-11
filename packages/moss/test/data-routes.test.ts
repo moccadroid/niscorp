@@ -134,9 +134,8 @@ describe('the vex surfaces', () => {
   });
 
   // WHAT THE REQUEST SAID IS HANDED ON, AND NO HEADER IS READ HERE. The routes
-  // read two headers by name, `x-tide-cause` and `x-tide-depth`, and handed on
-  // what they made of them: the core knew a feature's header names. Whoever
-  // hears a write asks for the headers that are its own.
+  // hand on what the request said in its headers, and whoever hears a write
+  // asks for the headers that are its own.
   it('a write is told with what its request said in its headers, asked by name', async () => {
     const { post, heard } = await world();
     await post('/api/vex', 'writer', { fingerprint: 'notes/add', context: { body: 'hello' } }, { 'x-of-a-feature': 'f_1', 'x-another': '' });

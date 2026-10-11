@@ -152,9 +152,7 @@ describe('createIntegrations — before a server has started it', () => {
   });
 });
 
-// THE DOCUMENTS IN ITS ROWS ARE ITS OWN TO BRING CURRENT. The core did it, at
-// every boot, for `integration_actions`, whether or not the app named this
-// feature: one module rewriting another's rows.
+// THE DOCUMENTS IN ITS ROWS ARE ITS OWN TO BRING CURRENT, not the core's.
 describe('createIntegrations — the stored actions', () => {
   it('are brought to this code\'s grammars by the feature when it starts, before one is read', async () => {
     const { seams, said } = await world();
@@ -216,11 +214,10 @@ describe('createIntegrations — started with the seams', () => {
     ]);
   });
 
-  // THE SEED IS THE FEATURE'S OWN SETTING: `createIntegrations({ signingSeed })`.
-  // It was the deployment's (`runtime.signingSeed`) and reached the feature as
-  // a seam, so every feature an app named was handed the private half of the
-  // key assertions are signed with. The feature makes its signer when it is
-  // started: a start that throws refuses the boot.
+  // THE SEED IS THE FEATURE'S OWN SETTING: `createIntegrations({ signingSeed })`,
+  // so no other feature is handed the private half of the key assertions are
+  // signed with. The feature makes its signer when it is started: a start that
+  // throws refuses the boot.
   it('a signing seed that cannot be a key refuses the start, and so the boot', async () => {
     const { seams, said } = await world();
     await expect(createIntegrations({ signingSeed: 'consent-check-seed' }).start(seams)).rejects.toThrow(/signing seed.*decodes to 13 bytes.*`signingSeed` of `createIntegrations`/);
@@ -377,12 +374,11 @@ describe('the operator approves an integration', () => {
     expect(said.replaced).toEqual([{ [desk.id]: desk }]);
   });
 
-  // THE QUESTION WAS ANSWERED YES, AND THE HAND-OVER IS THEN REFUSED: something
+  // THE QUESTION IS ANSWERED YES, AND THE HAND-OVER IS THEN REFUSED: something
   // else changed between the two (another approval, a set the app handed over),
-  // or the rows could not be read again. The approval was already written.
-  // Left there, the answer was a 500 over a row that said approved: every
-  // process that read the rows next was refused them, and so was the next
-  // boot. It is taken back, as it was before the approval was verified first.
+  // or the rows could not be read again. The approval is already written, so it
+  // is taken back: left as approved, every process that read the rows next
+  // would be refused them, and so would the next boot.
   it('one whose actions the app then does not take is taken back: pending again, with why on the row and in the answer', async () => {
     const { held, replay } = registered();
     // Asked first, and not refused; refused when the set is handed over.
@@ -532,10 +528,10 @@ describe('the routes the feature mounts, asked through the server it mounted the
     }
   });
 
-  // TWO REGISTRATIONS OF ONE NEW INTEGRATION AT ONCE. Each asked how the
-  // integration stands before either had landed, was told it holds no key,
-  // minted one and landed with it; the later landing wrote its hash over the
-  // earlier one's. Both were answered a key, and one of the two was dead.
+  // TWO REGISTRATIONS OF ONE NEW INTEGRATION AT ONCE. Each asks how the
+  // integration stands before either has landed, is told it holds no key, mints
+  // one and lands with it. The row keeps one hash, so only one of the two keys
+  // can be answered.
   //
   // The registry here is a map that does what the database does with the
   // feature's entries (held against a database in integrations.test.ts): a
@@ -728,9 +724,9 @@ describe('a frame grant, with two processes behind one address', () => {
   });
 
   // THE DECLARATION IS THE PERIMETER, AND THE SCREEN THAT OWNS THE PAGE IS WHO
-  // IT IS FOR. Signed in and installed was once all this door asked: a member
-  // of a studio was handed the page that mounts a payment provider's
-  // onboarding form against the studio's merchant account.
+  // IT IS FOR. Signed in and installed is not enough: a member of a studio must
+  // not be handed the page that mounts a payment provider's onboarding form
+  // against the studio's merchant account.
   const askFor = (one: Awaited<ReturnType<typeof world>>, path: string): Promise<Response> =>
     Promise.resolve(one.server.request('/api/integrations/frame', { method: 'POST', body: JSON.stringify({ path }), headers: { 'content-type': 'application/json' } }));
 

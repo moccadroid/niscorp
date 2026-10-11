@@ -5,8 +5,7 @@ import type { FoundIntegration } from '../src/integrations/registry';
 
 // THE WEBHOOK DOOR'S LIMIT (../src/integrations/proxy.ts), held to what the
 // documents say it is: 240 calls a minute for each integration, counted by the
-// process that takes them. Nothing here fails before a fix: it is the limit as
-// it stands, written down where a change to it would be seen.
+// process that takes them.
 //
 // No database: the registry is a map, and the vendor's call goes nowhere.
 

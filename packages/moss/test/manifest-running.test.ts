@@ -240,10 +240,10 @@ describe('what a set of roles holds', () => {
     expect(manifest.catalogFor(['member'], ['belts']).ids).toEqual([desk.id, 'home']);
   });
 
-  // A FILTER NARROWS. What one answered WAS the catalog: a filter that named
-  // an id it was not handed gave that id to whoever asked, whatever the
-  // charter grants them, and with the id the definition a shell is built from.
-  // A feature anybody writes adds one (`FeatureSeams.addCatalogFilter`).
+  // A FILTER NARROWS. What one answers is not the catalog: a filter that names
+  // an id it was not handed must not give that id to whoever asks, whatever the
+  // charter grants them, nor the definition a shell is built from. A feature
+  // anybody writes adds one (`FeatureSeams.addCatalogFilter`).
   it('a filter that answers an id it was not handed grants nothing: neither the id nor its definition', () => {
     const manifest = createRunningManifest({ shipped: shippedApp(), grants: scopeGrants(['deals']) });
     manifest.replace('bundles', { [desk.id]: desk });
@@ -456,10 +456,9 @@ describe('watch — the pointer the other processes poll', () => {
       moves: () => state.moves,
     };
   };
-  // THE CLOCK IS THE TEST'S. The pointer is polled on a timer; these waited 25
-  // ms on the real one, with a poll every millisecond, for "a few looks" to
-  // have happened. A moment here is one look: the poll is a second, and the
-  // clock is moved on by one, with everything that look started run to its end.
+  // THE CLOCK IS THE TEST'S. The pointer is polled on a timer. A moment here is
+  // one look: the poll is a second, and the clock is moved on by one, with
+  // everything that look started run to its end.
   const EVERY_MS = 1_000;
   const aMoment = (): Promise<unknown> => vi.advanceTimersByTimeAsync(EVERY_MS);
   beforeEach(() => {
@@ -629,10 +628,8 @@ describe('watch — the pointer the other processes poll', () => {
   });
 
   // ONE WRITER FOR A SET OF ACTIONS. Whoever claims a set is handed the two
-  // ways it is written, and nobody else has either. A reviewer's server took
-  // `server.replaceActions('integrations', …)` from the app while the
-  // integrations feature wrote the same set from its rows: two writers, and the
-  // later one won until the next reload.
+  // ways it is written, and nobody else has either: two writers of one set
+  // would race, and the later one would win until the next reload.
   it('a set that was claimed is replaced by whoever claimed it, and by nobody else', () => {
     const manifest = running(shippedApp());
     const integrations = manifest.claim('integrations', 'the feature "integrations"');

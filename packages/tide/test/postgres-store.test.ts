@@ -6,21 +6,15 @@ import type { TidePool } from '../src/store/postgres';
 import { initialisedDirectory } from './initialised-database';
 import { oneDatabase, pglitePool } from './support';
 
-// THE SAME CHECKS THE MEMORY STORE RUNS, against a real database.
-//
-// This is the file whose absence let the last SQL store diverge in eleven
-// ways: LIMIT applied before the serial filter, `total` counted from the
-// input array rather than the rows written, a dedupe index that outlived its
-// rows, list reads answering opposite ends of the same list. Its header
-// claimed it was "held to the same tests" and there were none, so every one
-// of those was invisible to CI.
+// THE SAME CHECKS THE MEMORY STORE RUNS, against a real database, so the SQL
+// store cannot diverge from the memory store unseen.
 //
 // `STORE_CONTRACT` is the list `store.test.ts` runs against the memory store,
 // so there is one definition of the contract and not two readings of a
 // comment.
 
 // One database for the file, emptied before each store is made (./support.ts
-// says why: a database for each test was 45 starts, and most of the suite).
+// says why).
 const database = oneDatabase();
 
 const freshStore = async () => {
@@ -39,8 +33,7 @@ describe('the store contract — postgres', () => {
 
 // The same contract over a pool whose transaction hands its client through as
 // it is: `query` is a method there, and it needs its receiver — the shape of a
-// checked-out `pg` client. The store took `query` off the transaction once,
-// and on such a pool every transaction failed inside the driver.
+// checked-out `pg` client.
 const storeOverClient = async () => {
   const { db, pool } = await database.emptied();
   const clientOver = (inner: { query: TidePool['query'] }) => ({
@@ -65,10 +58,10 @@ describe('the store contract — a transaction that hands its client through', (
 });
 
 // TWO INSTANCES, ONE SERIAL GROUP. `onePer` promises at most one held row for a
-// group, counting what somebody else already holds. The store asked whether the
-// group was held and then claimed, as two statements, and another instance's
-// two could run between them: both asked, both were told nothing was held, and
-// each took a row. Two tasks of a serial reflex ran at once.
+// group, counting what somebody else already holds. The store asks whether the
+// group is held and then claims, as two statements, and another instance's two
+// could run between them: both would ask, both would be told nothing is held,
+// and each would take a row. Two tasks of a serial reflex would run at once.
 //
 // Two stores over one database are two instances: their statements interleave
 // at every await, as two processes' do.

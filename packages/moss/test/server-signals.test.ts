@@ -17,9 +17,8 @@ import type { Signals } from '../src/server/signals';
 // an identity cache, and the fabric is a list of subscribers. No server and no
 // database.
 //
-// The fabric's own tests (fabric.test.ts) wire a process by hand, in the test.
-// So four lines of the real wiring, the four that publish, came out of a copy
-// one at a time and nothing failed.
+// The fabric's own tests (fabric.test.ts) wire a process by hand, in the test;
+// these hold the real wiring, the four lines that publish.
 
 // An action that listens: it counts what it hears on `news`, and keeps what
 // the message carried.
@@ -102,8 +101,7 @@ const stopping = async (processes: readonly Process[], run: () => Promise<void>)
 describe('the signals of a server — a nudge', () => {
   // A NUDGE TELLS SOMEBODY'S SCREENS THAT A CHANNEL CHANGED. Their screens are
   // every living shell of theirs: the one the app keeps, and the one a page
-  // built for each connection they have to it. It reached the kept shell
-  // alone, so a page somebody had open went on showing what it had read.
+  // built for each connection they have to it.
   it('reaches every living shell of the principal: the one the app keeps and each one a page built for them', async () => {
     const here = processOn(undefined);
     await stopping([here], async () => {
