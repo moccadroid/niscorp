@@ -118,10 +118,8 @@ const landed = {
 // definition, where it is attached and placed, the grammars it is written in).
 // A statement that fails takes the ones before it back, so a bundle lands
 // whole or the import before it stays whole.
-//
-// `more` is what one of the two landings writes beside what the bundle says.
-const landing = (more: Record<string, { $context: string }>): Mutation[] => [
-  { op: 'insert', table: 'integrations', values: { ...fromContext(['id']), ...more, ...landed }, onConflict: { target: ['id'], set: { ...more, ...landed } } },
+const landing: Mutation[] = [
+  { op: 'insert', table: 'integrations', values: { ...fromContext(['id']), ...landed }, onConflict: { target: ['id'], set: landed } },
   { op: 'delete', table: 'integration_actions', where: { eq: ['integration_actions.integration_id', { $context: 'id' }] } },
   {
     op: 'insertEach',
@@ -142,15 +140,26 @@ const landing = (more: Record<string, { $context: string }>): Mutation[] => [
 const land: SeedMutation = {
   fingerprint: 'integrations/land',
   intent: 'Land a bundle: the row of its integration as the bundle says it is now, and its actions in place of the ones before',
-  mutation: landing({}),
+  mutation: landing,
 };
 
 // The same, for the import a key is issued with: the hash of the key is on the
 // row in the transaction that lands the bundle, or neither is.
+//
+// THE KEY IS KEPT WHERE NONE IS HELD, AND ONLY THERE. Whoever registers asks
+// first how the integration stands, and mints a key when it holds none; two
+// registrations of one new integration in the same moment are both told that,
+// and both come here with a key. The hash was written with the row, so the
+// later of the two wrote over the earlier one's, and both were answered a key
+// of which one was dead. It is a statement of its own now, the last of the
+// batch, and it writes where the row still holds no key: the later
+// transaction waits for the earlier one's row, finds a key on it, and writes
+// none. The row that statement answers carries the hash, so whoever landed
+// reads off the reply whether its key is the one that was kept (./registry.ts).
 const landAndKeepKey: SeedMutation = {
   fingerprint: 'integrations/land-and-keep-key',
-  intent: 'Land a bundle, and keep the hash of the key its integration is issued with it',
-  mutation: landing(fromContext(['key_hash'])),
+  intent: 'Land a bundle, and keep the hash of the key its integration is issued with it, where it holds none',
+  mutation: [...landing, { op: 'update', table: 'integrations', set: fromContext(['key_hash']), where: { and: [byId, { isNull: 'integrations.key_hash' }] } }],
 };
 
 const approve: SeedMutation = {

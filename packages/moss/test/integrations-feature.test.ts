@@ -413,6 +413,55 @@ describe('the routes the feature mounts, asked through the server it mounted the
     }
   });
 
+  // TWO REGISTRATIONS OF ONE NEW INTEGRATION AT ONCE. Each asked how the
+  // integration stands before either had landed, was told it holds no key,
+  // minted one and landed with it; the later landing wrote its hash over the
+  // earlier one's. Both were answered a key, and one of the two was dead.
+  //
+  // The registry here is a map that does what the database does with the
+  // feature's entries (held against a database in integrations.test.ts): a
+  // landing that comes with a key keeps it only where the row holds none, and
+  // answers the row it wrote the key on.
+  it('two registrations of one new integration at once: one of them is answered a key, and it is the key that is kept', async () => {
+    const kept = new Map<string, string>();
+    const landed = new Set<string>();
+    const registry: Replay = async (fingerprint, context) => {
+      const id = String(context['id']);
+      if (fingerprint === 'integrations/standing') return landed.has(id) ? [{ status: 'pending', key_hash: kept.get(id) ?? null }] : [];
+      if (fingerprint === 'integrations/land') return void landed.add(id);
+      if (fingerprint === 'integrations/land-and-keep-key') {
+        landed.add(id);
+        const row = { id, key_hash: kept.get(id) ?? null };
+        if (kept.has(id)) return row;
+        kept.set(id, String(context['key_hash']));
+        return [row, { id, key_hash: kept.get(id) }];
+      }
+      return [];
+    };
+    const real = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({ integration: 'belts', meta: { title: 'Belts' }, actions: { [desk.id]: desk } }), { status: 200, headers: { 'content-type': 'application/json' } });
+    try {
+      const { seams, operator } = await world({ replay: registry });
+      await createIntegrations().start(seams);
+      const register = async (): Promise<{ status: number; key: unknown }> => {
+        const answered = await operator.request('/integrations', { method: 'POST', body: JSON.stringify({ id: 'belts', url: 'https://belts.example' }), headers: { 'content-type': 'application/json' } });
+        const body: unknown = await answered.json();
+        return { status: answered.status, key: typeof body === 'object' && body !== null && 'key' in body ? body.key : undefined };
+      };
+
+      const answers = await Promise.all([register(), register()]);
+      expect(answers.map((answer) => answer.status)).toEqual([200, 200]);
+      const keys = answers.map((answer) => answer.key).filter((key) => typeof key === 'string');
+      expect(keys).toHaveLength(1);
+      expect(hashIntegrationKey(String(keys[0]))).toBe(kept.get('belts'));
+
+      // And an import after those is answered none, as any import after the first.
+      expect((await register()).key).toBeUndefined();
+    } finally {
+      globalThis.fetch = real;
+    }
+  });
+
   it('the proxy asks for a principal; the webhook asks for none, and answers nothing for an integration that is not there', async () => {
     const { seams, server, caller } = await world();
     await createIntegrations().start(seams);

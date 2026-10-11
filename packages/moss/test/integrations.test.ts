@@ -957,6 +957,28 @@ describe('the registry as vex entries — each statement, against a database', (
     expect(await actionsOf('late')).toEqual([{ integration_id: 'late', ...action('late', 'roster') }]);
   });
 
+  // TWO REGISTRATIONS OF ONE NEW INTEGRATION AT ONCE each found no key, each
+  // minted one, and each landed with its own: the later one wrote its hash
+  // over the earlier one's, and both were answered a key. One of the two keys
+  // was dead on arrival (found on a real Postgres, from two connections, 200
+  // times in 200). The key is kept where none is held, and what the landing
+  // answers says whether it was.
+  it('7 · ...and a row that holds a key keeps it: a landing that comes with another lands its bundle and not its key', async () => {
+    const rowsIn = (answered: unknown): unknown[] => (Array.isArray(answered) ? answered : [answered]);
+    const keptIn = (answered: unknown, hash: string): boolean => rowsIn(answered).some((row) => typeof row === 'object' && row !== null && 'key_hash' in row && row.key_hash === hash);
+
+    const first = await replay('integrations/land-and-keep-key', { ...landing('raced'), key_hash: 'first-key', actions: [action('raced', 'one')] });
+    expect(keptIn(first, 'first-key')).toBe(true);
+
+    const second = await replay('integrations/land-and-keep-key', { ...landing('raced', { title: 'Belts, again' }), key_hash: 'second-key', actions: [action('raced', 'two')] });
+    // The bundle landed: it is the later import.
+    expect(await rows(`SELECT title, key_hash FROM integrations WHERE id = 'raced'`)).toEqual([{ title: 'Belts, again', key_hash: 'first-key' }]);
+    expect(await actionsOf('raced')).toEqual([{ integration_id: 'raced', ...action('raced', 'two') }]);
+    // Its key did not, and it is told so.
+    expect(keptIn(second, 'second-key')).toBe(false);
+    expect(await rows(`SELECT id FROM integrations WHERE key_hash = 'second-key'`)).toEqual([]);
+  });
+
   it('8, 9 · approve: what was asked for is read, and written as what is granted', async () => {
     await pool.query(`INSERT INTO integrations (id, url, requested_data) VALUES ('asking', 'https://asking.example', '["members.read","bookings.read"]'::jsonb)`);
     expect(await replay('integrations/requested', { id: 'asking' })).toEqual([{ requested_data: ['members.read', 'bookings.read'] }]);

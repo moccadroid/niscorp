@@ -219,6 +219,12 @@ Where the right column says there is nothing to call and an app did call it, say
 - A refused approval no longer leaves its reason in `last_error` (`lastError` in the operator's list): nothing is written. A pane that read why an approval was refused off the list reads it off the answer.
 - Importing a bundle again for an approved integration asks the same question, and was answered by putting the bundle's actions into the running manifest and taking them out again when the check threw: a refusal dropped every identity record and every compiled policy twice and moved the generation pointer twice, in every process. The bundle is verified as a candidate now, and the running app is not touched. The answer is the same `422`, and an import that is accepted moves the pointer once.
 
+**Two registrations of one new integration at once are answered one key, and it is the key that works.**
+
+- Registering asks how the integration stands, mints a key when it holds none, and lands the bundle with the key's hash. Two registrations of one new integration in the same moment (an operator's tool that retries while the first call is still out, two operators) were both told it holds no key, both minted one, and the later landing wrote its hash over the earlier one's. Both were answered `200` with a `key`, and one of the two keys was nobody's from the start. Found by running the routes from two connections of a real Postgres: 200 rounds, 200 dead keys.
+- The key's hash is written where the row holds none, in the same transaction as the bundle, and the registration reads off what was written whether its key is the one that was kept. The one whose key was kept is answered it. The other is answered as any import after the first is: `200`, its bundle landed, and no `key`.
+- **A tool that registers reads `key` from the answer that carries one**, as it did, and does not expect one from every answer to a first registration it sent twice. Nothing else to change.
+
 **No call out to an integration waits for ever, and a press image has a size.**
 
 - New on `createIntegrations`: `outboundTimeoutMs`, default `30000` (nova's default wait for an endpoint's reply), and `pressMaxBytes`, default `5 * 1024 * 1024`.

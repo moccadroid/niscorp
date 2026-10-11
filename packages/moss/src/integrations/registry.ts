@@ -52,6 +52,11 @@ const FramesSchema = z.record(z.string(), z.string()).catch({});
 
 const FoundRowSchema = z.object({ url: z.string(), status: z.string(), reach: ReachSchema, frames: FramesSchema });
 const StandingRowSchema = z.object({ status: z.string(), key_hash: z.string().nullish() });
+// What a landing that came with a key wrote: the rows of two tables, of which
+// only an integration's carries `key_hash`. One row alone is answered as
+// itself, and a write that answers nothing as nothing.
+const WrittenRowSchema = z.looseObject({ key_hash: z.string().nullish() });
+const WrittenSchema = z.union([z.array(WrittenRowSchema), WrittenRowSchema.transform((row) => [row]), z.undefined().transform(() => [])]);
 const RequestedRowSchema = z.object({ requested_data: strings });
 const KeyHolderRowSchema = z.object({ id: z.string() });
 
@@ -217,7 +222,12 @@ const landedRow = ({ id, url, bundle, adds, press }: Landing): Record<string, un
 // it lands whole, or what the import before it wrote is still there, whole.
 // They were separate statements, and one that failed part-way left a row that
 // said one thing over actions that said another, or over none.
-export const landBundle = async (replay: Replay, landing: Landing): Promise<void> => {
+//
+// ANSWERS WHETHER THE KEY THIS IMPORT CAME WITH IS THE ONE THE ROW HOLDS. The
+// key is kept where the row held none (./entries.ts): `false` when the import
+// came with no key, and when another registration of the same integration, in
+// the same moment, had its key kept first. The bundle landed either way.
+export const landBundle = async (replay: Replay, landing: Landing): Promise<{ keptKey: boolean }> => {
   const { bundle } = landing;
   const actions = Object.entries(bundle.actions).map(([actionId, definition]) => {
     const binding = bundle.attachments[actionId];
@@ -232,8 +242,16 @@ export const landBundle = async (replay: Replay, landing: Landing): Promise<void
     };
   });
   const said = { ...landedRow(landing), actions };
-  if (landing.keyHash === undefined) await replay('integrations/land', said);
-  else await replay('integrations/land-and-keep-key', { ...said, key_hash: landing.keyHash });
+  if (landing.keyHash === undefined) {
+    await replay('integrations/land', said);
+    return { keptKey: false };
+  }
+  // A batch answers every row its statements wrote, and one row alone as that
+  // row. The statement that keeps the key answers the integration's row with
+  // the hash on it, and writes no row where a key was held already: so the key
+  // was kept exactly when a row that carries its hash came back.
+  const written = WrittenSchema.parse(await replay('integrations/land-and-keep-key', { ...said, key_hash: landing.keyHash }));
+  return { keptKey: written.some((row) => row.key_hash === landing.keyHash) };
 };
 
 // APPROVE: what it asked to read and write becomes what it is granted, and it

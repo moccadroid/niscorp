@@ -196,6 +196,15 @@ again here.
 | 20 | fixed | `2b7b321`: an id is a name, and a unique index on `integrations.key_hash` |
 | 21 | fixed | after the build order, which did not name it: `/dev/as/<who>` answers a request whose socket ends on this machine (`127.0.0.0/8`, `::1`, the IPv4-mapped form) and answers any other `403`, with why (`src/server/vite.ts`). `signInFromNetwork: true` on `mossDev` opens it to other devices. No forwarded-for header is read. |
 
+**Found afterwards, by running on a real Postgres (2026-10-11).** Everything
+above ran on PGlite, which has one connection. Part 11 says what was run on a
+Postgres with separate connections. It showed one defect the audit had not
+read:
+
+| | Where | What | Now |
+|---|---|---|---|
+| 22 | `src/integrations/operator.ts`, `entries.ts` | Two registrations of one new integration at once are both told it holds no key, both mint one, and the later landing writes its hash over the earlier one's: both are answered a key, and one of the two is dead. 200 rounds from two connections, 200 dead keys. | fixed: the hash is written where the row holds none, in the batch that lands the bundle, and a registration is answered a key only when its own was kept. |
+
 ## 5. The architecture
 
 ### 5.1 The idea every module shares

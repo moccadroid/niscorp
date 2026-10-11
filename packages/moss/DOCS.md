@@ -1560,7 +1560,10 @@ hash of one key (a unique index on `integrations.key_hash`).
   Then the bundle lands in one transaction: the integration's row, its actions
   in place of the ones it shipped before, and the hash of its key on the import
   a key is issued with. It lands whole, or the import before it is still
-  there, whole.
+  there, whole. The answer carries `key` once, on the registration whose key
+  the row holds: the hash is written where the row holds none, so of two
+  registrations of one new integration in the same moment one is answered
+  the key and the other is answered as a later import is, with none.
 - *Approve* (`POST /operator/integrations/:id/approve`) reads what the
   integration shipped, asks whether the app could be served with it, and only
   then writes the approval. Refused, it answers `422` with the reason and

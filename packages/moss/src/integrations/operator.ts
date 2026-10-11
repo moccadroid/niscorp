@@ -142,7 +142,7 @@ const register = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
     const key = holdsKey ? undefined : mintIntegrationKey();
 
     // The row, the actions and the hash of the key land together or not at all.
-    await landBundle(deps.replay, {
+    const { keptKey } = await landBundle(deps.replay, {
       id,
       url,
       bundle: taken.bundle,
@@ -154,7 +154,12 @@ const register = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
 
     await deps.reload();
     const status = wasApproved ? 'approved' : 'pending';
-    return c.json({ id, status, actions: Object.keys(taken.bundle.actions).length, ...(key === undefined ? {} : { key }) });
+    // A KEY IS ANSWERED BY THE REGISTRATION WHOSE KEY THE ROW HOLDS, and by no
+    // other. Two registrations of one new integration in the same moment both
+    // mint one, since each was told the integration holds none; the row keeps
+    // the first, and the other is answered as any import after the first is:
+    // its bundle landed, and no key.
+    return c.json({ id, status, actions: Object.keys(taken.bundle.actions).length, ...(key !== undefined && keptKey ? { key } : {}) });
   });
 };
 
