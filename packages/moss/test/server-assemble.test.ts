@@ -93,6 +93,24 @@ describe('the server, assembled — a boot that fails stops what it started', ()
     if (outcome !== null && typeof outcome === 'object' && 'close' in outcome && typeof outcome.close === 'function') outcome.close();
     expect(new Set(clear.mock.calls.map(([handle]) => handle))).toEqual(new Set(made));
   });
+
+  // A deployment that boots once calls no `close`: its process ends when its
+  // work does, and a sweep must never be the reason it does not. Each timer
+  // is asked whether it holds the process open, the one page's host included.
+  it('no timer a server starts keeps its process alive', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const page = { path: '/docs', canvases: [{ id: 'main', initial: 'home' }] };
+    const { made, outcome } = await intervalsDuring(() => assemble(appWith({ pages: { page } })));
+    try {
+      // The app's host, the page's, the identity cache, the socket's
+      // revalidation and the generation poll.
+      expect(made).toHaveLength(5);
+      const holding = made.map((handle) => (handle !== null && typeof handle === 'object' && 'hasRef' in handle && typeof handle.hasRef === 'function' ? Boolean(handle.hasRef()) : true));
+      expect(holding).toEqual([false, false, false, false, false]);
+    } finally {
+      if (outcome !== null && typeof outcome === 'object' && 'close' in outcome && typeof outcome.close === 'function') outcome.close();
+    }
+  });
 });
 
 // TWO THINGS THE ASSEMBLY DOES IN AN ORDER, OR AT A MOMENT, THAT NOTHING ELSE

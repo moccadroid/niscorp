@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createIdentityCache } from '../src/identity/cache';
 import type { IdentityRecord } from '../src/identity';
 
-// A controllable clock, so the sweep and the revalidation window are tested
-// rather than waited for. `setInterval` is never reached: every test drives
-// eviction through the paths a request takes.
+// A controllable clock, so the revalidation window is tested rather than
+// waited for: every test but the idle sweep's drives eviction through the
+// paths a request takes, and starts no timer (`idleMs: 0`). The sweep is the
+// cache's own `setInterval`, and its tests hold that clock too.
 const clock = () => {
   let t = 1_000;
   return { now: () => t, advance: (ms: number) => (t += ms) };
@@ -419,5 +420,70 @@ describe('identity cache — an invalidation while a resolve is out', () => {
     await cache.get('b_1');
     expect(app.calls()).toBe(1);
     cache.stop();
+  });
+
+  // Somebody who was HELD under the tag was named by the invalidation: what
+  // is known of them is stale, and a re-read of them that was already out
+  // read its rows before. It is not kept whatever it says, the tag it comes
+  // back wearing included (they were moved to another tenant, and that move
+  // is why the tenant was forgotten).
+  it('holds for somebody held under the tag whose re-read was out: it is not kept, whichever tag it comes back wearing', async () => {
+    let t = 1_000;
+    const app = seam();
+    const cache = createIdentityCache({ resolve: app.resolve, idleMs: 0, revalidateMs: 60_000, now: () => t });
+    const first = cache.get('a_1');
+    app.land(0, { roles: ['member'], scope: {}, tag: 'st_a' });
+    await first;
+
+    t += 61_000;
+    const reread = cache.get('a_1');
+    expect(cache.invalidateTag('st_a')).toEqual(['a_1']);
+    app.land(1, { roles: ['member'], scope: {}, tag: 'st_b' });
+    await reread;
+
+    expect(cache.meter().size).toBe(0);
+    void cache.get('a_1');
+    expect(app.calls()).toBe(3);
+    cache.stop();
+  });
+});
+
+// A RECORD NOBODY HAS ASKED FOR IN A WHILE IS LET GO, on the cache's own
+// sweep: a deployment's memory is not every principal it ever served. The
+// clock is the test's.
+describe('identity cache — the idle sweep', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a record nobody asked for within `idleMs` is forgotten, and one that was asked for is kept', async () => {
+    vi.useFakeTimers();
+    const resolved: string[] = [];
+    const cache = createIdentityCache({ resolve: async (principal) => (resolved.push(principal), { roles: ['member'], scope: {} }), idleMs: 10_000 });
+    try {
+      await cache.get('p_idle');
+      await cache.get('p_busy');
+      await vi.advanceTimersByTimeAsync(8_000);
+      await cache.get('p_busy');
+      await vi.advanceTimersByTimeAsync(4_000);
+
+      // Twelve seconds since `p_idle` was asked for, four since `p_busy` was.
+      expect(cache.list().map((held) => held.principal)).toEqual(['p_busy']);
+      expect(cache.meter()).toMatchObject({ size: 1, evicted: 1 });
+      // Forgetting loses nothing: asked for again, they are resolved again.
+      await cache.get('p_idle');
+      expect(resolved).toEqual(['p_idle', 'p_busy', 'p_idle']);
+    } finally {
+      cache.stop();
+    }
+  });
+
+  it('stopping the cache stops the sweep', async () => {
+    vi.useFakeTimers();
+    const cache = createIdentityCache({ resolve: async () => ({ roles: ['member'], scope: {} }), idleMs: 10_000 });
+    await cache.get('p_idle');
+    cache.stop();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(cache.list().map((held) => held.principal)).toEqual(['p_idle']);
   });
 });

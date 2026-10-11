@@ -5,7 +5,7 @@ import type { Server } from 'node:http';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WebSocket } from 'ws';
+import { WebSocket, WebSocketServer } from 'ws';
 import { attachSocket } from '../src/server/node';
 import { buildSocket } from '../src/server/socket';
 import { createSocket } from '../src/socket';
@@ -357,5 +357,65 @@ describe('the ws transport — the upgrade says who is asking', () => {
     const next = await opened(`${url}?protocol=${PROTOCOL}`);
     await vi.waitFor(() => expect(served).toContain(null));
     next.close();
+  });
+});
+
+// TWO THINGS THE TRANSPORT DOES WITH AN UPGRADE THAT IS NOT A SESSION. Each
+// line came out of a copy with every test passing.
+describe('the ws transport — an upgrade that is not a session', () => {
+  // An accept that says what it was asked to serve, on a listener of its own.
+  const attached = async (accept: (url: string) => Promise<void>): Promise<{ httpServer: Server; origin: string }> => {
+    const httpServer = createHttp((_req, res) => res.end('ok'));
+    attachSocket(httpServer, Object.assign((url: string) => accept(url), { stop: (): void => {} }), '/socket');
+    await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve));
+    servers.push(httpServer);
+    const address = httpServer.address();
+    if (address === null || typeof address === 'string') throw new Error('no port');
+    return { httpServer, origin: `ws://127.0.0.1:${address.port}` };
+  };
+
+  // THE LISTENER IS NOT MOSS'S ALONE. A dev server hears its own socket on it,
+  // and an app may hear one of its own. An upgrade to another path is theirs:
+  // taken by moss as well, one request was upgraded twice.
+  it('an upgrade to another path is left to whoever else hears the listener', async () => {
+    const accepted: string[] = [];
+    const { httpServer, origin } = await attached(async (url) => void accepted.push(url));
+    const theirs = new WebSocketServer({ noServer: true });
+    httpServer.on('upgrade', (req, socket, head) => {
+      if (req.url !== '/theirs') return;
+      theirs.handleUpgrade(req, socket, head, (connection) => connection.send('served by the other one'));
+    });
+
+    const heard = await new Promise<string>((resolve, reject) => {
+      const client = new WebSocket(`${origin}/theirs`);
+      client.once('message', (data) => {
+        resolve(String(data));
+        client.close();
+      });
+      client.once('error', reject);
+    });
+    expect(heard).toBe('served by the other one');
+    // The transport is told of an upgrade before they are: it was not asked to serve this one.
+    expect(accepted).toEqual([]);
+  });
+
+  // An accept is the app's server, and one that rejects has decided nothing:
+  // the request it was handed is still unanswered. It is answered and closed,
+  // or the peer waits on it for as long as it cares to.
+  it('an accept that fails closes that connection, and what it failed with is in the log', async () => {
+    const said = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { origin } = await attached(() => Promise.reject(new Error('the accept failed')));
+      const closed = await new Promise<number>((resolve, reject) => {
+        // Not answered at all, the handshake is given up on here, and that is the failure.
+        const client = new WebSocket(`${origin}/socket`, { handshakeTimeout: 2_000 });
+        client.once('close', (code) => resolve(code));
+        client.once('error', reject);
+      });
+      expect(closed).toBe(1011);
+      expect(said).toHaveBeenCalledWith('[moss/node] a connection escaped accept:', expect.objectContaining({ message: 'the accept failed' }));
+    } finally {
+      said.mockRestore();
+    }
   });
 });

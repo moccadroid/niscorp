@@ -10,7 +10,7 @@ import { createShellHost } from '../src/shells';
 import { hostConfig } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import { renderDocument } from '../src/documents';
-import { openSealed, ownOriginOf, sealSession, sessionCookies } from '../src/identity';
+import { openSealed, ownOriginOf, sealSession, sessionCookies, tokenFromCookie } from '../src/identity';
 import { createSocket } from '../src/socket';
 import { offerToken, PROTOCOL } from '../src/protocol';
 import { browserEnv, createWire } from '../src/client';
@@ -357,6 +357,28 @@ describe('sessionCookies — for a sign-in the app answers over HTTP', () => {
     ['a page request straight to a dev server', new Request('http://localhost:5197/login', { headers: { host: 'localhost:5197' } }), 'nisc.token.5197'],
   ])('given %s', (_label, request, name) => {
     expect(sessionCookies(request, 'st_abc')[0]?.split('=')[0]).toBe(name);
+  });
+});
+
+// A browser sends every cookie it holds for the host, and anybody who can set
+// a cookie there chooses its name. The session is the cookie of exactly its
+// name: read by how a name ends, a cookie called `evil-nisc.token` was
+// somebody's session.
+describe('tokenFromCookie', () => {
+  it('reads the cookie of exactly the name asked for, among the others a browser sends', () => {
+    expect(tokenFromCookie('theme=dark; nisc.token=st_abc; other=1')).toBe('st_abc');
+    expect(tokenFromCookie('nisc.token.desk=st_desk; nisc.token=st_abc', 'nisc.token.desk')).toBe('st_desk');
+    expect(tokenFromCookie('nisc.token=tok%2Fwith%2Bsymbols%3D')).toBe('tok/with+symbols=');
+  });
+
+  it('a cookie whose name only ends with it, or only starts with it, is not it', () => {
+    expect(tokenFromCookie('evil-nisc.token=st_planted')).toBeNull();
+    expect(tokenFromCookie('nisc.token.held=1')).toBeNull();
+    expect(tokenFromCookie('evil-nisc.token=st_planted; nisc.token=st_abc')).toBe('st_abc');
+  });
+
+  it('no header, no such cookie, an empty one and one that does not decode are nobody', () => {
+    for (const header of [undefined, null, '', 'theme=dark', 'nisc.token=', 'nisc.token=%E0%A4%A']) expect(tokenFromCookie(header)).toBeNull();
   });
 });
 

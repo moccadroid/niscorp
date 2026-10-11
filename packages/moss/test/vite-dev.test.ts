@@ -1,4 +1,4 @@
-import { describe, it, expect, afterAll, vi } from 'vitest';
+import { describe, it, expect, afterAll, afterEach, vi } from 'vitest';
 import { createServer as createHttp } from 'node:http';
 import type { Server } from 'node:http';
 import type { ViteDevServer } from 'vite';
@@ -166,6 +166,75 @@ describe('the dev server’s sign-in', () => {
       expect(answer.status).toBe(302);
       expect(answer.asked).toEqual(['ada']);
     });
+  });
+});
+
+// WHEN A FILE CHANGES. The clock is the test's: the plugin waits 200 ms after
+// the last change before it boots, and nothing here waits on a real one.
+describe('the dev server — an edit', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // The plugin over apps that say which boot they are: whoever is signed in
+  // is handed `st_boot_<n>` by the app that is serving. `boots` is how each
+  // boot ends, in turn; the last one is every boot after it.
+  const booting = (boots: readonly ('up' | 'broken')[]) => {
+    const made = { boots: 0 };
+    const plugin = standIn(async () => {
+      made.boots += 1;
+      const nth = made.boots;
+      if (boots[Math.min(nth, boots.length) - 1] === 'broken') throw new Error('a broken edit');
+      return { server: serverOf({ socket: Object.assign(async (): Promise<void> => undefined, { stop: (): void => {} }) }), signIn: () => `st_boot_${nth}` };
+    });
+    // Which boot answers a sign-in now: the cookie it sets, or what it said instead.
+    const servedBy = (): Promise<string> =>
+      new Promise((resolve) => {
+        const answered: { cookie: string } = { cookie: '' };
+        const res = {
+          statusCode: 200,
+          setHeader: (name: string, value: string | string[]) => {
+            if (name === 'set-cookie') answered.cookie = String(value);
+          },
+          end: (body?: string) => resolve(answered.cookie === '' ? (body ?? '') : answered.cookie),
+        };
+        plugin.middleware()?.({ url: '/dev/as/ada', headers: { host: 'localhost:5173' }, socket: { remoteAddress: '127.0.0.1' } }, res, () => resolve('passed on'));
+      });
+    return { ...plugin, made, servedBy };
+  };
+
+  it('a file of the app re-boots it, once for a burst of changes; a file that is not the app’s does not', async () => {
+    vi.useFakeTimers();
+    const { edit, made, servedBy } = booting(['up']);
+    expect(await servedBy()).toContain('st_boot_1');
+
+    // The terminal's own entry, a document, a stylesheet: vite's to reload.
+    for (const file of ['/project/src/main.tsx', '/project/README.md', '/project/src/styles.css']) edit(file);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(made.boots).toBe(1);
+
+    for (const file of ['/project/src/app/app.ts', '/project/src/server/boot.ts', '/project/nisc.config.ts']) edit(file);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(made.boots).toBe(2);
+    expect(await servedBy()).toContain('st_boot_2');
+  });
+
+  // An edit that does not boot is the commonest thing in a dev session: a
+  // file saved half-written. The app that was serving goes on serving, and
+  // the next edit that boots takes its place.
+  it('an edit that does not boot leaves the app that was serving in place, and says why', async () => {
+    vi.useFakeTimers();
+    const { edit, said, servedBy } = booting(['up', 'broken', 'up']);
+    expect(await servedBy()).toContain('st_boot_1');
+
+    edit('/project/src/app/app.ts');
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(said.filter((line) => line.includes('re-boot failed'))).toEqual(['[moss] re-boot failed: a broken edit']);
+    expect(await servedBy()).toContain('st_boot_1');
+
+    edit('/project/src/app/app.ts');
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(await servedBy()).toContain('st_boot_3');
   });
 });
 

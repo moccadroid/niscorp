@@ -52,6 +52,9 @@ mkdirSync(join(dist, 'assets'));
 writeFileSync(join(dist, 'index.html'), '<!doctype html><html lang="en"><head></head><body><div id="root"></div></body></html>');
 writeFileSync(join(dist, 'assets', 'index-AbC12345.js'), 'export const built = true;\n');
 writeFileSync(join(dist, 'robots.txt'), 'User-agent: *\n');
+// A file the build left under one of the app server's own prefixes.
+mkdirSync(join(dist, 'api'));
+writeFileSync(join(dist, 'api', 'built.txt'), 'a file, where the server’s routes are\n');
 afterAll(() => rmSync(dist, { recursive: true, force: true }));
 
 const site = (): MossServer => {
@@ -99,5 +102,20 @@ describe('mountSite', () => {
   it('an unknown path under the app server’s own is a 404, as before', async () => {
     const server = site();
     expect((await server.request('/api/nope')).status).toBe(404);
+  });
+
+  // The server's own prefixes are its routes' and nobody else's: what answers
+  // under `/api` is decided by who is calling, never by what a build wrote to
+  // a folder. A file there is not served, whatever its name.
+  it('a file the build left under one of the app server’s own prefixes is not served', async () => {
+    const server = site();
+    const asked = await server.request('/api/built.txt');
+    expect(asked.status).toBe(404);
+    expect(await asked.text()).not.toContain('a file, where');
+    // The prefixes are the host's to say: under another set, the same file is a file.
+    const other = serverOf();
+    mountSite(other, { dist, draw, owned: /^\/private(\/|$)/ });
+    expect(await (await other.request('/api/built.txt')).text()).toBe('a file, where the server’s routes are\n');
+    expect((await other.request('/private/thing')).status).toBe(404);
   });
 });
