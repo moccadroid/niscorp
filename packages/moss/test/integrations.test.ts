@@ -826,9 +826,12 @@ describe('callIntegration', () => {
 // THE PROBE — every statement the registry ran on `integrations` and
 // `integration_actions`, sixteen of them, authored as a vex entry
 // (../src/integrations/entries.ts) and run against a real database. One
-// database for all of it; each case writes the rows it reads, under ids of
-// its own. Where a case names SQL, it is the statement the entry stands in
-// for, run on the same rows as the oracle.
+// database for the cases that write, and each of them writes every row it
+// reads, under ids no other case uses: it passes alone, and in any order.
+// (Four of them read what an earlier case had left, and failed without it.)
+// The lists are read from a database of their own, written once and only
+// read. Where a case names SQL, it is the statement the entry stands in for,
+// run on the same rows as the oracle.
 // ═══════════════════════════════════════════════════════════════
 
 describe('the registry as vex entries — each statement, against a database', () => {
@@ -986,8 +989,9 @@ describe('the registry as vex entries — each statement, against a database', (
     await replay('integrations/approve', { id: 'asking', approved_data: ['members.read', 'bookings.read'] });
     expect(await rows(`SELECT status, approved_data FROM integrations WHERE id = 'asking'`)).toEqual([{ status: 'approved', approved_data: ['members.read', 'bookings.read'] }]);
     // An approval of nothing asked for grants an empty list, not an object.
-    await replay('integrations/approve', { id: 'issued', approved_data: [] });
-    expect(await rows(`SELECT status, approved_data FROM integrations WHERE id = 'issued'`)).toEqual([{ status: 'approved', approved_data: [] }]);
+    await pool.query(`INSERT INTO integrations (id, url) VALUES ('asking-nothing', 'https://asking-nothing.example')`);
+    await replay('integrations/approve', { id: 'asking-nothing', approved_data: [] });
+    expect(await rows(`SELECT status, approved_data FROM integrations WHERE id = 'asking-nothing'`)).toEqual([{ status: 'approved', approved_data: [] }]);
   });
 
   // 10 was the statement that took an approval back when the app could not be
@@ -995,10 +999,14 @@ describe('the registry as vex entries — each statement, against a database', (
   // it is written, from what `integrations/actions-of` reads (below).
 
   it('11 · remove: the row goes, and its actions with it', async () => {
-    expect(await rows(`SELECT count(*)::int AS n FROM integration_actions WHERE integration_id = 'other'`)).toEqual([{ n: 1 }]);
-    await replay('integrations/remove', { id: 'other' });
-    expect(await rows(`SELECT id FROM integrations WHERE id = 'other'`)).toEqual([]);
-    expect(await rows(`SELECT count(*)::int AS n FROM integration_actions WHERE integration_id = 'other'`)).toEqual([{ n: 0 }]);
+    await replay('integrations/land', { ...landing('leaving'), actions: [action('leaving', 'roster')] });
+    await replay('integrations/land', { ...landing('staying'), actions: [action('staying', 'roster')] });
+    expect(await rows(`SELECT count(*)::int AS n FROM integration_actions WHERE integration_id = 'leaving'`)).toEqual([{ n: 1 }]);
+    await replay('integrations/remove', { id: 'leaving' });
+    expect(await rows(`SELECT id FROM integrations WHERE id = 'leaving'`)).toEqual([]);
+    expect(await rows(`SELECT count(*)::int AS n FROM integration_actions WHERE integration_id = 'leaving'`)).toEqual([{ n: 0 }]);
+    // And nobody else's: the one beside it keeps its row and its action.
+    expect(await actionsOf('staying')).toHaveLength(1);
     // Removing what is not there writes nothing and throws nothing.
     expect(await replay('integrations/remove', { id: 'ghost' })).toEqual([]);
   });
@@ -1032,8 +1040,10 @@ describe('the registry as vex entries — each statement, against a database', (
     await replay('integrations/land-and-keep-key', { ...landing('twin-a'), key_hash: 'one-hash', actions: [] });
     await expect(replay('integrations/land-and-keep-key', { ...landing('twin-b'), key_hash: 'one-hash', actions: [] })).rejects.toThrow(/integrations_key_hash_unique/);
     expect(await rows(`SELECT id FROM integrations WHERE key_hash = 'one-hash' OR id = 'twin-b'`)).toEqual([{ id: 'twin-a' }]);
-    // A row that holds no key is not held to it: the cases above left several.
-    expect(Number((await rows(`SELECT count(*)::int AS n FROM integrations WHERE key_hash IS NULL`))[0]?.['n'])).toBeGreaterThan(1);
+    // A row that holds no key is not held to it: two land with none.
+    await replay('integrations/land', { ...landing('keyless-a'), actions: [] });
+    await replay('integrations/land', { ...landing('keyless-b'), actions: [] });
+    expect(await rows(`SELECT id FROM integrations WHERE id IN ('keyless-a', 'keyless-b') AND key_hash IS NULL ORDER BY id`)).toEqual([{ id: 'keyless-a' }, { id: 'keyless-b' }]);
   });
 
   // Not one of the sixteen: frame grants were a Map in the process that minted
@@ -1050,29 +1060,41 @@ describe('the registry as vex entries — each statement, against a database', (
     // One answer for a hash nobody kept, another integration's address, and a
     // grant whose time is over: no row.
     expect(await asked({ grant_hash: 'hash-nobody-kept' })).toEqual([]);
-    expect(await asked({ integration_id: 'issued' })).toEqual([]);
+    await replay('integrations/land', { ...landing('framed-too'), actions: [] });
+    expect(await asked({ integration_id: 'framed-too' })).toEqual([]);
     expect(await asked({ now: '2026-10-10T09:00:00.000Z' })).toEqual([]);
 
     // Kept after the first one's time: the first is let go in the same write.
     await replay('integrations/keep-frame-grant', kept('hash-two', '2026-10-10T09:30:00.000Z', '2026-10-10T10:00:00.000Z'));
-    expect(await rows('SELECT grant_hash FROM integration_frame_grants ORDER BY grant_hash')).toEqual([{ grant_hash: 'hash-two' }]);
+    expect(await rows(`SELECT grant_hash FROM integration_frame_grants WHERE integration_id = 'framed' ORDER BY grant_hash`)).toEqual([{ grant_hash: 'hash-two' }]);
     // A grant is its integration's, and goes when the integration does.
     await replay('integrations/remove', { id: 'framed' });
-    expect(await rows('SELECT grant_hash FROM integration_frame_grants')).toEqual([]);
+    expect(await rows(`SELECT grant_hash FROM integration_frame_grants WHERE integration_id = 'framed'`)).toEqual([]);
   });
 
   describe('the lists', () => {
     const start = { after_integration: '', after_action: '' };
+    // A LIST SAYS SOMETHING OF EVERY ROW, so these are read from a database
+    // that holds the rows written here and no other: what a case above wrote,
+    // and in which order they ran, is not among them. Written once, and each
+    // case below only reads.
+    let pool: PgPool;
+    let replay: Replay;
+    const rows = async (text: string, values: unknown[] = []): Promise<Record<string, unknown>[]> => (await pool.query(text, values)).rows;
 
     beforeAll(async () => {
-      // Two approved integrations and one that is pending, each with actions.
+      pool = createPglitePool(new PGlite());
+      replay = await registryOver(pool);
+      // Two approved integrations and one that is pending, each with actions
+      // and the hash of a key; and an approved one that ships no action.
       const shipped: Record<string, Record<string, unknown>[]> = {
         alpha: [action('alpha', 'roster', { attach_to: 'people.detail', preview: '/integrations/alpha/preview' }), action('alpha', 'board', { place_in: 'people.hub' })],
         beta: [action('beta', 'strip', { attach_to: 'people.detail' }), action('beta', 'other', { attach_to: 'class.detail', place_in: 'schedule.hub' })],
         gamma: [action('gamma', 'roster', { attach_to: 'people.detail', place_in: 'people.hub' })],
+        delta: [],
       };
-      for (const [id, status] of [['alpha', 'approved'], ['beta', 'approved'], ['gamma', 'pending']] as const) {
-        await replay('integrations/land', { ...landing(id), actions: shipped[id] ?? [] });
+      for (const [id, status] of [['alpha', 'approved'], ['beta', 'approved'], ['gamma', 'pending'], ['delta', 'approved']] as const) {
+        await replay('integrations/land-and-keep-key', { ...landing(id), key_hash: `hash-of-${id}`, actions: shipped[id] ?? [] });
         await pool.query('UPDATE integrations SET status = $2 WHERE id = $1', [id, status]);
       }
     });
@@ -1099,8 +1121,6 @@ describe('the registry as vex entries — each statement, against a database', (
     });
 
     it('14 · the approved integration a key hash belongs to, and nobody for a hash that is pending or unknown', async () => {
-      await pool.query(`UPDATE integrations SET key_hash = 'hash-of-alpha' WHERE id = 'alpha'`);
-      await pool.query(`UPDATE integrations SET key_hash = 'hash-of-gamma' WHERE id = 'gamma'`);
       expect(await replay('integrations/by-key', { key_hash: 'hash-of-alpha' })).toEqual([{ id: 'alpha' }]);
       expect(await replay('integrations/by-key', { key_hash: 'hash-of-gamma' })).toEqual([]);
       expect(await replay('integrations/by-key', { key_hash: 'nobody' })).toEqual([]);
@@ -1122,10 +1142,11 @@ describe('the registry as vex entries — each statement, against a database', (
           FROM integrations i ORDER BY i.id`);
       expect(together).toEqual(oracle);
       expect(together.find((row) => row['id'] === 'alpha')?.['action_count']).toBe(2);
-      expect(together.find((row) => row['id'] === 'found')?.['action_count']).toBe(0);
+      expect(together.find((row) => row['id'] === 'delta')?.['action_count']).toBe(0);
+      expect(together.map((row) => row['id'])).toEqual(['alpha', 'beta', 'delta', 'gamma']);
       // A page starts after the key it is handed.
-      const later = z.array(z.object({ id: z.string() })).parse(await replay('integrations/list', { after: 'found' }));
-      expect(later.map((row) => row.id)).toEqual(listed.map((row) => String(row['id'])).filter((id) => id > 'found'));
+      const later = z.array(z.object({ id: z.string() })).parse(await replay('integrations/list', { after: 'beta' }));
+      expect(later.map((row) => row.id)).toEqual(['delta', 'gamma']);
       const countedLater = await replay('integrations/action-counts', { after: 'alpha' });
       expect(countedLater).toEqual(await rows(`SELECT integration_id, count(*)::int AS action_count FROM integration_actions WHERE integration_id > 'alpha' GROUP BY integration_id ORDER BY integration_id`));
       expect(countedLater).toContainEqual({ integration_id: 'beta', action_count: 2 });
