@@ -184,7 +184,7 @@ again here.
 | 8 | fixed | `d424c3a`: a refused terminal is not sent the error that refused it |
 | 9 | fixed | `52ba2d1`: `runtime.anonymousShellMax`, default 1,000, from a measurement |
 | 10 | half | `bcec37f`: a frame grant is a row, so any process redeems it. The webhook limit is still kept by each process (`src/integrations/proxy.ts:16–33`): with two processes a vendor is allowed twice as many calls a minute, and nothing is lost. |
-| 11 | **open** | `src/integrations/credentials.ts:89`: a seed under 32 bytes still becomes a random key, with nothing said. No phase of the build order named it. |
+| 11 | fixed | after the build order, which did not name it: a seed that is given and decodes to fewer than 32 bytes throws when the signer is made (`src/integrations/credentials.ts`), which for a server is while it boots. The sentence says the seed's length, never the seed. No seed still generates a key. |
 | 12 | fixed | `3f95b94`: `outboundTimeoutMs` (30 s) and `pressMaxBytes` (5 MiB, a number nobody measured) |
 | 13 | fixed | `cec2c66`: the dev verifier is not exported, and a verifier of the app's own is said at boot |
 | 14 | fixed | `7707fa8`: an invalidation is not undone by the resolve it interrupted |
@@ -429,7 +429,8 @@ was built with `socket` and `documents`, before tide's hosting left.
 | 10 | `a7831db` to `fba90ea` (17) | `client` and `terminal` under the lint; one set of wire slots, one frame. Defects 18, 19. |
 | 11 | `ceae73d` to the commit that wrote this | The three documents read against the code; `memoKeyOf` out of the main entry; `AGENTS.md`, "Changing a package"; this file; the changeset as one document. |
 
-Two defects were in no item's list and are open: 11 and 21 (4.3).
+Two defects were in no item's list: 11, fixed after the build order, and 21,
+open (4.3).
 
 ## 8. Decisions
 
@@ -606,7 +607,7 @@ than `server` (867), `data` (784), `manifest` (758) and `shells` (758).
 **What is left.** None of it stops the artifactory; each is somebody's to
 decide.
 
-- **Two defects**: the signing seed, and the dev sign-in (4.3, 11 and 21).
+- **One defect**: the dev sign-in (4.3, 21).
 - **Names that stayed in the main entry and that nothing in this repository
   imports**, each in doubt, not decided: `resolveRoles`, `resolvePolicy`,
   `resolveVariants` (three resolvers that read `assignments` only; the server
@@ -637,4 +638,9 @@ written, and each got a test that failed first.
 - **The fabric's message is parsed** (Part 9, item 4). The schema is the
   source of the type; a message that does not parse is dropped and the first
   one is logged with what was wrong.
+- **Defect 11, the signing seed** (4.3). Lyra is the one lab app that passes
+  one (`LYRA_SIGNING_SEED`, when it is set); two of its checks set that
+  variable to a word, after the app has booted, for lyra's own unsubscribe
+  signature, and moss never sees it. Booted with the word in the environment,
+  lyra is refused with the sentence; with 32 bytes it boots.
 

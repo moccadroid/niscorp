@@ -239,6 +239,13 @@ Where the right column says there is nothing to call and an app did call it, say
 - An integration that was registered earlier under an id that does not fit goes on being served. It cannot be imported again under that id: remove it and register it under one that fits.
 - The third migration of `nisc.moss` is a unique index on `integrations.key_hash` where it is not null. No two integrations hold the hash of one key. Moss mints a key from 32 random bytes and never wrote one hash to two rows; two rows somebody gave the same hash by hand refuse the migration, and one of them is cleared first.
 
+**A signing seed that cannot be a key refuses the boot.**
+
+- `runtime.signingSeed` makes the keypair assertions are signed with the same in every process and across restarts. It is 32 bytes, as base64. One that decoded to fewer was dropped without a word and a random key was generated in its place: two processes given the same seed signed with different keys, each refused what the other had signed, and an integration holding the public half of one refused every call from the other. Nothing said why.
+- A seed that is given and decodes to fewer than 32 bytes throws now, when the signer is made: for a server that names the integrations feature, while it boots; for `createAssertionSigner(seed)` called directly, at the call. `moss: the signing seed decodes to 13 bytes, and a signing key is 32. …` The sentence says the seed's length and never the seed.
+- No seed is as it was: absent, or the empty string, generates a key that is kept nowhere. A seed longer than 32 bytes is its first 32, as it was.
+- **An app whose seed is shorter than 32 bytes gives one that is 32** (`node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"`), or removes it. Such an app was already signing with a random key: every integration that holds its public key reads the new one from `GET /api/integrations/verify-key`, once, and it stays put from then on.
+
 **The contract lists the fingerprints its caller may replay.**
 
 - `GET /api/integrations/contract` listed every fingerprint the app serves under `fingerprints`, whoever asked: it compiled the caller's policy and then kept every entry. It lists the reads and writes the caller's own policy can touch now, as vex's discovery does for that policy.

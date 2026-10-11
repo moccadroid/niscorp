@@ -278,7 +278,7 @@ type NiscRuntime = {
   operatorGate?: (c: Context, next: Next) => Response | void | Promise<Response | void>;
   fabric?: Fabric;                 // cross-process invalidations and nudges; default off
   telemetry?: Telemetry;           // one span sink; default off
-  signingSeed?: string;            // dev only: a stable assertion signing keypair
+  signingSeed?: string;            // dev only: a stable assertion signing keypair; 32 bytes as base64, and fewer refuses the boot
 };
 ```
 
@@ -1570,6 +1570,15 @@ as it does for any batch an app writes.
 every call to an integration with, for a check or a service in the same
 workspace that wants to mint or hold one. An integration verifies it against
 `GET /api/integrations/verify-key`.
+
+`seed` is 32 bytes as base64, and makes the same keypair wherever it is given:
+it is what `runtime.signingSeed` hands the feature. With no seed (absent, or
+the empty string) a keypair is generated and kept nowhere. **A seed that is
+given and decodes to fewer than 32 bytes throws**, when the signer is made,
+which for a server is while it boots: `moss: the signing seed decodes to 13
+bytes, and a signing key is 32. …` The sentence says the length and never the
+seed. It used to be dropped without a word and a random key made in its place.
+A seed longer than 32 bytes is its first 32.
 
 ## `@niscorp/moss/tide`
 

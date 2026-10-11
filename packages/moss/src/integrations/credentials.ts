@@ -72,10 +72,23 @@ export type AssertionSigner = {
 //
 // The seed is 32 bytes, base64 — an ed25519 private scalar. It never leaves the
 // deployment; only the public half is ever served.
+const SEED_BYTES = 32;
+
+// A SEED THAT IS GIVEN AND CANNOT BE A KEY REFUSES, when the signer is made.
+// One that decoded to fewer than 32 bytes used to be dropped without a word
+// and a random key made in its place: two processes given the same seed signed
+// with different keys, each refused what the other had signed, and nothing
+// said why. The sentence says what was given by its length. Never the seed.
+const seedRefusal = (bytes: number): Error =>
+  new Error(
+    `moss: the signing seed decodes to ${bytes} ${bytes === 1 ? 'byte' : 'bytes'}, and a signing key is ${SEED_BYTES}. ` +
+      `Give ${SEED_BYTES} random bytes as base64 (\`runtime.signingSeed\`), or give none: with no seed a key is made when the server starts and kept nowhere.`,
+  );
+
 const signerFromSeed = (seed: Buffer): { publicKey: KeyObject; privateKey: KeyObject } => {
   // ed25519 private keys are a fixed 32-byte scalar; PKCS8 wraps them in a
   // constant DER prefix, so a deterministic key is that prefix plus the seed.
-  const pkcs8 = Buffer.concat([Buffer.from('302e020100300506032b657004220420', 'hex'), seed.subarray(0, 32)]);
+  const pkcs8 = Buffer.concat([Buffer.from('302e020100300506032b657004220420', 'hex'), seed.subarray(0, SEED_BYTES)]);
   const privateKey = createPrivateKey({ key: pkcs8, format: 'der', type: 'pkcs8' });
   // node derives the public half from a private key it is handed. It is handed
   // the key as PEM because that is a form `createPublicKey` is typed to take;
@@ -83,10 +96,13 @@ const signerFromSeed = (seed: Buffer): { publicKey: KeyObject; privateKey: KeyOb
   return { privateKey, publicKey: createPublicKey(privateKey.export({ type: 'pkcs8', format: 'pem' })) };
 };
 
+// `seedB64` absent, or the empty string an unset environment variable reads
+// as: no seed, and a key is generated. Anything else is a seed, and is used
+// or refused. One longer than a key is its first 32 bytes.
 export const createAssertionSigner = (seedB64?: string): AssertionSigner => {
   const seed = seedB64 !== undefined && seedB64 !== '' ? Buffer.from(seedB64, 'base64') : undefined;
-  const { publicKey, privateKey } =
-    seed !== undefined && seed.length >= 32 ? signerFromSeed(seed) : generateKeyPairSync('ed25519');
+  if (seed !== undefined && seed.length < SEED_BYTES) throw seedRefusal(seed.length);
+  const { publicKey, privateKey } = seed !== undefined ? signerFromSeed(seed) : generateKeyPairSync('ed25519');
   const verifyKey = publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
   return {
     verifyKey,

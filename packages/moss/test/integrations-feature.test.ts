@@ -165,6 +165,16 @@ describe('createIntegrations — started with the seams', () => {
     ]);
   });
 
+  // The seed is the deployment's (`runtime.signingSeed`), and the feature makes
+  // its signer when it is started: a start that throws refuses the boot.
+  it('a signing seed that cannot be a key refuses the start, and so the boot', async () => {
+    const { seams, said } = await world();
+    await expect(createIntegrations().start({ ...seams, signingSeed: 'consent-check-seed' })).rejects.toThrow(/signing seed.*decodes to 13 bytes/);
+    // refused before anything was added to the app
+    expect(said.credentials.size).toBe(0);
+    expect(said.wraps).toEqual([]);
+  });
+
   it('hands over what was approved before this process started, and nothing when nothing was', async () => {
     const empty = await world();
     await createIntegrations().start(empty.seams);

@@ -188,5 +188,10 @@ export type NiscRuntime = {
   // on every restart and it starts refusing calls. Setting it makes the public
   // half stable, so a separate service's environment stays valid across
   // restarts. A deployment leaves this unset and keeps the ephemeral key.
+  //
+  // 32 bytes, as base64. One that decodes to fewer refuses the boot of an app
+  // that names the integrations feature, with a sentence that says its length:
+  // it used to be dropped without a word, and each process signed with a
+  // random key of its own.
   signingSeed?: string;
 };
