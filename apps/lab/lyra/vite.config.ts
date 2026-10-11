@@ -8,190 +8,30 @@ try {
   /* no .env present — the seam simply does not exist */
 }
 
-import { defineConfig, type Plugin, type ViteDevServer } from 'vite';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { getRequestListener } from '@hono/node-server';
-import { attachSocket } from '@niscorp/moss/node';
-import { sessionCookies } from '@niscorp/moss';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { readFile } from 'node:fs/promises';
 
-// The app server runs INSIDE vite's dev process — one `pnpm dev`, no proxy, no
-// second terminal. `ssrLoadModule` gives the composition vite's own resolution,
-// so this is the same boot `serve.ts` runs standalone, and it re-boots on save:
-// a fresh PGlite, a fresh seed, fresh shells, then a full reload so the browser
-// reconnects to the new server. Sessions reset on each save; that is what a dev
-// reload is.
+// THE FRAMEWORK'S PLUGIN, THE ALIAS, THE PORT: what vite needs to know of this
+// app, and nothing of how its server runs.
 //
-// `ui` is in the watch set because the SERVER holds the component registry too
-// — it verifies a layout's props against the kit's schemas before serving it.
-// Leave the kit out and a new prop is valid in the browser and rejected on the
-// server, which reads as "the control silently isn't there".
-const SERVER_DIRS = /[\\/]src[\\/](app|server|db|ui)[\\/]/;
-
-type BootedServer = {
-  fetch: (req: Request) => Response | Promise<Response>;
-  socket: Parameters<typeof attachSocket>[1];
-  // The in-process replay seam. `/dev/as` needs it to mint a token, which is
-  // the one thing that surface does — and taking it from the BOOTED server
-  // rather than importing a module means it cannot drift away from the server
-  // actually answering requests.
-  executeAs: unknown;
-  // A booted server owns timers — the socket's revalidation pass, the shell
-  // host's idle sweep. A hot rebuild has to hand them back.
-  shells?: { stop: () => void };
-  // the page a path leads to, if it leads to one (moss's `server.page`)
-  page: (path: string) => unknown;
-};
-
-const appServer = (): Plugin => ({
-  name: 'lyra-app-server',
-  configureServer: (viteServer: ViteDevServer) => {
-    let current: Promise<{ listener: ReturnType<typeof getRequestListener>; server: BootedServer }>;
-
-    const build = async (): Promise<{ listener: ReturnType<typeof getRequestListener>; server: BootedServer }> => {
-      const mod = (await viteServer.ssrLoadModule('/src/server/boot.ts')) as { bootDevServer: () => Promise<{ server: BootedServer }> };
-      const { server } = await mod.bootDevServer();
-      return { listener: getRequestListener(server.fetch), server };
-    };
-    current = build();
-
-    // The socket is attached ONCE with a delegating accept — every rebuild
-    // swaps what it delegates to, never the upgrade handler.
-    if (viteServer.httpServer !== null) {
-      attachSocket(
-        viteServer.httpServer,
-        Object.assign(async (url: string, connection: Parameters<BootedServer['socket']>[1]) => (await current).server.socket(url, connection), {
-          stop: () => void current.then(({ server }) => server.socket.stop(), () => {}),
-        }),
-      );
-    }
-
-    let timer: NodeJS.Timeout | undefined;
-    const rebuild = (file: string): void => {
-      if (!SERVER_DIRS.test(file)) return;
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        // The outgoing server keeps running until the new one is up (a failed
-        // rebuild must not take the dev server down with it), and is then
-        // retired, timers included.
-        const outgoing = current;
-        current = build();
-        void current.then(
-          () => {
-            void outgoing.then(
-              ({ server }) => {
-                server.socket.stop();
-                server.shells?.stop();
-              },
-              () => {}, // it never booted; there is nothing to retire
-            );
-            viteServer.config.logger.info('[lyra] app server re-booted', { timestamp: true });
-            viteServer.ws.send({ type: 'full-reload' });
-          },
-          (error: unknown) => viteServer.config.logger.error(`[lyra] re-boot failed: ${error instanceof Error ? error.message : String(error)}`, { timestamp: true }),
-        );
-      }, 200);
-    };
-    viteServer.watcher.on('change', rebuild);
-    viteServer.watcher.on('add', rebuild);
-    viteServer.watcher.on('unlink', rebuild);
-
-    // ─── /dev/as/<username> — a signed-in URL ────────────────
-    //
-    // A headless browser can photograph a page but cannot click one, so any
-    // judgement about a SIGNED-IN screen would otherwise be made without
-    // looking at it. This mints the same dev token the login page mints and
-    // hands it to the wire the same way, then redirects.
-    //
-    // It lives in vite's dev middleware and nowhere else, so it cannot ship:
-    // no route on the moss server, nothing in the bundle.
-    viteServer.middlewares.use((req, res, next) => {
-      const who = /^\/dev\/as\/([\w.@-]+)/.exec(req.url ?? '')?.[1];
-      if (who === undefined) {
-        next();
-        return;
-      }
-      void current
-        .then(async ({ server }) => {
-          const tokens = (await viteServer.ssrLoadModule('/src/server/tokens.ts')) as {
-            mintToken: (runAs: unknown, email: string) => Promise<string | null>;
-          };
-          const token = await tokens.mintToken(server.executeAs, decodeURIComponent(who));
-          if (token === null) {
-            res.setHeader('content-type', 'text/html');
-            res.end(`<p>no such person: ${who}</p>`);
-            return;
-          }
-          // Into the browser's own cookie, which no script can read — set by
-          // this answer, so the redirect arrives as this person.
-          res.statusCode = 302;
-          res.setHeader('set-cookie', sessionCookies(`http://${req.headers.host ?? 'localhost'}`, token));
-          res.setHeader('location', '/');
-          res.end();
-        })
-        .catch(() => {
-          res.statusCode = 500;
-          res.end('dev login failed');
-        });
-    });
-
-    // ─── the page, drawn by the app server ───────────────────
-    //
-    // The same thing a deployment's own route does (src/server/document.ts),
-    // with one step in front of it: index.html goes through vite first, so the
-    // drawn page still carries vite's client and React's refresh preamble.
-    viteServer.middlewares.use((req, res, next) => {
-      const path = (req.url ?? '').split('?')[0] ?? '/';
-      if (req.method !== 'GET') {
-        next();
-        return;
-      }
-      void current
-        .then(async ({ server }) => {
-          // The app's own page, or a path one of the manifest's pages answers.
-          // Everything else (a source file, an asset, vite's own urls) is vite's.
-          if (path !== '/' && path !== '/index.html' && server.page(path) === undefined) {
-            next();
-            return;
-          }
-          const template = await viteServer.transformIndexHtml(req.url ?? '/', await readFile(resolve(here, 'index.html'), 'utf8'));
-          const mod = (await viteServer.ssrLoadModule('/src/server/document.ts')) as {
-            renderPage: (config: { server: BootedServer; template: string; path: string; cookie: string | null; host: string | null }) => Promise<{ html: string; headers: Record<string, string> }>;
-          };
-          const page = await mod.renderPage({ server, template, path: path === '/index.html' ? '/' : path, cookie: req.headers.cookie ?? null, host: req.headers.host ?? null });
-          res.statusCode = 200;
-          res.setHeader('content-type', 'text/html; charset=utf-8');
-          for (const [name, value] of Object.entries(page.headers)) res.setHeader(name, value);
-          res.end(page.html);
-        })
-        // Not drawn is not broken: vite serves index.html the way it always did.
-        .catch(() => next());
-    });
-
-    viteServer.middlewares.use((req, res, next) => {
-      // THREE PREFIXES THE APP SERVER OWNS, and the list is the whole routing
-      // table: /api (vex and the app's own surfaces), /catalog (the resolved
-      // application), /operator (the keyed seam an administration tool talks to)
-      // and /integrations (the proxy out to a registered service). Anything else
-      // is vite's — which is why a missing prefix here reads as an HTML page
-      // where a JSON answer was expected, rather than as a 404.
-      const OWNED = ['/api', '/catalog', '/operator', '/integrations'];
-      if (req.url !== undefined && OWNED.some((prefix) => req.url?.startsWith(prefix) === true)) {
-        void current.then(({ listener }) => listener(req, res));
-        return;
-      }
-      next();
-    });
-  },
-});
-
+// The app server runs inside vite's dev process under `nisc dev` (`pnpm dev`):
+// the command adds moss's dev plugin (`@niscorp/moss/vite`) and feeds it from
+// nisc.config.ts, the same boot and the same drawing `nisc build` and
+// `nisc start` use. That plugin re-boots the app on an edit (a fresh PGlite, a
+// fresh seed, fresh shells, then a full reload), attaches the socket with the
+// settings the app's runtime says, draws `/` and the pages, and answers the
+// dev sign-in (`/dev/as/<email>`, nisc.config.ts `dev.signIn`) to this machine
+// and to no page of another site.
+//
+// This file held a plugin of its own that did all of that a second time, and
+// answered first: its sign-in asked nothing about where a request came from.
 const here = dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = resolve(here, '../../..');
 
 export default defineConfig({
-  plugins: [react(), appServer()],
+  plugins: [react()],
   resolve: {
     alias: { '@lyra': resolve(here, 'src') },
   },
