@@ -31,8 +31,6 @@
 //     a tenant is and the boundary this whole design rests on is gone.
 // ═══════════════════════════════════════════════════════════════
 
-import type { IdentityRecord } from './record';
-
 // One resident identity, as an operator needs to see it: structural facts only.
 // Naming the principal is the application's job, and what the record CONTAINS
 // is never any of moss's business.
@@ -293,3 +291,55 @@ export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache =>
     },
   };
 };
+
+// What an application says a principal IS. Opaque: `roles` goes to charter,
+// `installed` is filtered against, `scope` is merged into vex's scope values
+// without moss ever looking inside it.
+export type IdentityRecord = {
+  // The rungs this principal wears. Charter compiles a policy from them.
+  roles: readonly string[];
+  // Everything else a principal is — a tenant, a region, a locale. Merged into
+  // the engine's scope values server-side and unforgeable by a request.
+  scope: Record<string, unknown>;
+  // Integration ids live for this principal's tenant. `undefined` means every
+  // registered integration is live, which is right for a single-tenant app and
+  // wrong the moment there are two.
+  installed?: readonly string[];
+  // WHAT THIS PRINCIPAL SHARES A FATE WITH — an opaque string the application
+  // chooses, and the only reason moss keeps a second map.
+  //
+  // This is NOT a secondary index, and the difference is the whole
+  // justification: a by-email index is a way to FIND somebody, and a way to
+  // find somebody is a query planner. This supports exactly one operation —
+  // FORGET everyone wearing this tag — and no operation that returns a record.
+  // You cannot read anything through it.
+  //
+  // It exists because "a tenant-local write invalidates that tenant, not the
+  // deployment" is otherwise unachievable: dropping one tenant's records means
+  // naming them, and naming them without enumerating the population needs the
+  // application to have said, at resolve time, which ones go together. Moss
+  // never interprets the string — it is a tenant id here, and it could be an
+  // org, a region, or nothing at all.
+  tag?: string;
+};
+
+// THE MEMO KEY every per-principal resolution (../manifest, ../data) actually
+// depends on.
+//
+// A policy and a layout variant are compiled from the roles somebody wears; a
+// catalog from their roles and the integrations installed for them. Nothing
+// reads the principal itself. So a memo is keyed by that combination, not by
+// principal: it holds one entry for each (combination × install-set) pair, not
+// one for each person, and a map that is never evicted stays small.
+// ONE SPELLING of the key, so every seam agrees about what counts as the same
+// principal-shape.
+//
+// NUL separators, the same reason the policy at a reach is kept behind one
+// (../data, policy.ts): no id can contain it, so `['a','b']` cannot spell
+// itself the same way as `['a b']`.
+//
+// `undefined` is "every registered integration is live" and the empty list is
+// "none are" — different answers, and a key that conflated them would serve one
+// tenant's catalog to the other.
+export const memoKey = (roles: readonly string[], installed: readonly string[] | undefined): string =>
+  `${[...roles].sort().join('\0')}\0\0${installed === undefined ? '*' : [...installed].sort().join('\0')}`;

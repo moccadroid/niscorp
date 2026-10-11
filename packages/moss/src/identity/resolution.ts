@@ -1,8 +1,6 @@
 import { z } from 'zod';
-import { createIdentityCache } from './cache';
-import type { IdentityCache } from './cache';
-import { memoKey } from './memo-key';
-import type { IdentityRecord } from './record';
+import { createIdentityCache, memoKey } from './cache';
+import type { IdentityCache, IdentityRecord } from './cache';
 
 // ═══════════════════════════════════════════════════════════════
 // A PRINCIPAL IS A RECORD — the second half of "who is calling", as one object
