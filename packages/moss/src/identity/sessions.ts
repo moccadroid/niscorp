@@ -30,6 +30,15 @@ import type { PgPool } from '@niscorp/vex';
 // The app mints at its own door (after ITS identity check — a password, an
 // SSO callback, a magic link) and hands the token to the terminal. Moss
 // never learns how the app decided; the app never touches token mechanics.
+//
+// THEY ARE WHAT `session: 'sessions'` VERIFIES WITH, AND NOTHING ELSE READS
+// THEM. That deployment's database has the table (the server's one ledgered
+// run makes it there, ../data, migrate.ts) and its verifier is the lookup
+// below. A deployment whose `session` is a verifier of its own keeps its own
+// credential: it has no table of these, no call here reads one for it, and a
+// token minted here would be one nobody verifies. So the two calls an app
+// makes (`mintSession`, `revokeAllFor`) say that in a sentence when the table
+// is not there, where the driver said a relation does not exist.
 // ═══════════════════════════════════════════════════════════════
 
 const hashSessionToken = (token: string): string => createHash('sha256').update(token).digest('hex');
@@ -73,25 +82,50 @@ export const SESSIONS_SEQUENCE: Sequence = {
   ],
 };
 
-// Through the ledger, for a host that is not moss's server (which runs every
-// owner's sequence in one pass).
+// The table alone, through the ledger. A server makes it in the one pass that
+// runs every owner's sequence (../data, migrate.ts), and the package exports
+// no way to make it by itself: this is how the tests of this file stand one
+// up.
 export const initSessions = async (pool: PgPool): Promise<void> => {
   await migrate(pool, [SESSIONS_SEQUENCE]);
+};
+
+// What Postgres says of a table that is not there (`undefined_table`), as a
+// driver hands it over: an error that carries the code.
+const UNDEFINED_TABLE = '42P01';
+const isUndefinedTable = (error: unknown): boolean => typeof error === 'object' && error !== null && 'code' in error && error.code === UNDEFINED_TABLE;
+
+// ONE OF THE TWO CALLS AN APP MAKES ON THE STORED SESSIONS, run where the
+// table may not be: in a deployment that did not choose them. What the
+// database throws for any other reason is thrown as it is.
+const onStoredSessions = async <Answer>(call: string, run: () => Promise<Answer>): Promise<Answer> => {
+  try {
+    return await run();
+  } catch (error) {
+    if (!isUndefinedTable(error)) throw error;
+    throw new Error(
+      `moss: ${call} was called on a database that has no \`sessions\` table. Moss's stored sessions are what \`session: 'sessions'\` verifies with: ` +
+        'with that on the runtime, createServer and migrateTables make the table, and mintSession and revokeAllFor are for that deployment. ' +
+        'An app whose `session` is a verifier of its own keeps its own credential, and mints and revokes it itself.',
+      { cause: error },
+    );
+  }
 };
 
 // The broom rides the mint: every new session sweeps the expired ones, so
 // the table is self-maintaining at exactly the rate it grows and no
 // deployment needs a timer for it.
-export const mintSession = async (pool: PgPool, principal: string, ttlMs: number): Promise<string> => {
-  await pool.query('DELETE FROM sessions WHERE expires_at < now()');
-  const token = `${SESSION_TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
-  await pool.query('INSERT INTO sessions (token_hash, principal, expires_at) VALUES ($1, $2, $3)', [
-    hashSessionToken(token),
-    principal,
-    new Date(Date.now() + ttlMs),
-  ]);
-  return token;
-};
+export const mintSession = (pool: PgPool, principal: string, ttlMs: number): Promise<string> =>
+  onStoredSessions('mintSession', async () => {
+    await pool.query('DELETE FROM sessions WHERE expires_at < now()');
+    const token = `${SESSION_TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
+    await pool.query('INSERT INTO sessions (token_hash, principal, expires_at) VALUES ($1, $2, $3)', [
+      hashSessionToken(token),
+      principal,
+      new Date(Date.now() + ttlMs),
+    ]);
+    return token;
+  });
 
 export const sessionOf = async (pool: PgPool, token: string): Promise<string | null> => {
   const res = await pool.query('SELECT principal FROM sessions WHERE token_hash = $1 AND expires_at > now()', [hashSessionToken(token)]);
@@ -111,6 +145,7 @@ export const revokeSession = async (pool: PgPool, token: string): Promise<void> 
   await pool.query('DELETE FROM sessions WHERE token_hash = $1', [hashSessionToken(token)]);
 };
 
-export const revokeAllFor = async (pool: PgPool, principal: string): Promise<void> => {
-  await pool.query('DELETE FROM sessions WHERE principal = $1', [principal]);
-};
+export const revokeAllFor = (pool: PgPool, principal: string): Promise<void> =>
+  onStoredSessions('revokeAllFor', async () => {
+    await pool.query('DELETE FROM sessions WHERE principal = $1', [principal]);
+  });

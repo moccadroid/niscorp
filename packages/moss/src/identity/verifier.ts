@@ -14,7 +14,7 @@ export const sessionVerifierOf = (runtime: Pick<NiscRuntime, 'session' | 'pool'>
   if (chosen === undefined) {
     throw new Error(
       'moss: `runtime.session` is unset — authentication is the one door that must not default open. ' +
-        "Choose: 'sessions' (moss's stored credential: mintSession/sessionOf/revokeAllFor), 'dev-open' (every token is trusted; development only), or your own verifier function.",
+        "Choose: 'sessions' (moss's stored credential: mintSession, revokeAllFor), 'dev-open' (every token is trusted; development only), or your own verifier function.",
     );
   }
   if (chosen === 'sessions') return (token) => sessionOf(runtime.pool, token);

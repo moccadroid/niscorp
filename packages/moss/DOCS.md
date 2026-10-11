@@ -390,6 +390,24 @@ the row.
   table is made by `createServer`, and by `migrateTables`, under
   `session: 'sessions'` and only then. Nothing else is exported of the stored
   credential.
+- **They are for a deployment whose `session` is `'sessions'`, and for no
+  other.** The stored sessions are what that verifier reads, and nothing else
+  reads them. Called on a database that has no `sessions` table, each of the
+  two throws a sentence that says so (`moss: mintSession was called on a
+  database that has no \`sessions\` table…`).
+- **An app whose `session` is a verifier of its own keeps its own
+  credential.** It mints its tokens, stores what it needs to recognise one,
+  and answers `null` for one that expired or was revoked: none of that is
+  moss's, and there is no stored session of moss's for it to consult
+  (`server.principalOf(token)` asks the app's own verifier, so calling it
+  from inside that verifier is the verifier asking itself). `session.revoke()`
+  in a function closes that principal's terminals and disposes their shell,
+  and forgets nothing: the app deletes its own credential where it signs
+  somebody out. An app that wants moss's stored sessions and a rule of its
+  own on top (a member who was removed, an account on hold) sets
+  `session: 'sessions'` and puts the rule where it belongs: `revokeAllFor`
+  when the member is removed, or `identity.resolve` answering
+  `{ roles: ['public'], scope: {} }` for somebody who may hold nothing.
 
 ```typescript
 // the app's own door: who they are is the app's to establish, then a session
