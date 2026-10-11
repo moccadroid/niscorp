@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
+import { z } from 'zod';
 import type { ActionDefinition, FetchFn } from '@niscorp/nova';
 import type { DocumentStore } from '@niscorp/strata/postgres';
 import { createPostgresAdapter } from '@niscorp/vex';
@@ -604,6 +605,149 @@ describe('the routes the feature mounts, asked through the server it mounted the
     } finally {
       globalThis.fetch = real;
     }
+  });
+});
+
+// THE HOST APP'S OWN VOCABULARY: what a bundle carries under `extension`, read
+// by the schema the app supplied, and kept on the integration's row.
+describe('extension, through the feature', () => {
+  const Listing = z.object({ title: z.string(), tagline: z.string().default(''), press: z.array(z.string()).default([]) }).strict();
+  const json = { 'content-type': 'application/json' };
+  // A vendor whose service answers `bundle` with the bundle a test names.
+  const vendorServing = async <Answer>(bundle: unknown, run: () => Promise<Answer>): Promise<Answer> => {
+    const real = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify(bundle), { status: 200, headers: json });
+    try {
+      return await run();
+    } finally {
+      globalThis.fetch = real;
+    }
+  };
+  // A registry that keeps, in order, what happened, and the extension each
+  // landing was handed for the row (as JSON text: the column reads it).
+  const recording = () => {
+    const order: string[] = [];
+    const landed: unknown[] = [];
+    const failed: Record<string, unknown>[] = [];
+    const replay: Replay = async (fingerprint, context) => {
+      if (fingerprint === 'integrations/write-bundle' || fingerprint === 'integrations/write-bundle-and-keep-key') {
+        order.push('the row is written');
+        landed.push(JSON.parse(z.string().parse(context['extension'])));
+      }
+      if (fingerprint === 'integrations/record-failed-import') failed.push(context);
+      return [];
+    };
+    return { order, landed, failed, replay };
+  };
+  const register = (operator: Hono<FeatureEnv>): Promise<Response> =>
+    Promise.resolve(operator.request('/integrations', { method: 'POST', body: JSON.stringify({ id: 'belts', url: 'https://belts.example' }), headers: json }));
+  const declared = { integration: 'belts', actions: { [desk.id]: desk }, extension: { title: 'Belts', press: ['/integrations/belts/press/hero.png'] } };
+
+  it('prepare runs once at import, before the row is written, and what it answers is what is stored', async () => {
+    const { order, landed, replay } = recording();
+    const prepared: unknown[] = [];
+    const { seams, operator } = await world({ replay });
+    await createIntegrations({
+      extension: {
+        schema: Listing,
+        prepare: async (extension, bundle) => {
+          order.push('prepare');
+          prepared.push({ extension, integration: bundle.integration, url: bundle.url, actions: Object.keys(bundle.actions) });
+          return { ...extension, press: extension.press.map((path) => path.replace('/integrations/belts/press/', '/blobs/belts/')) };
+        },
+      },
+    }).start(seams);
+
+    const answered = await vendorServing(declared, () => register(operator));
+    expect(answered.status).toBe(200);
+    expect(order).toEqual(['prepare', 'the row is written']);
+    expect(prepared).toEqual([{ extension: { title: 'Belts', tagline: '', press: ['/integrations/belts/press/hero.png'] }, integration: 'belts', url: 'https://belts.example', actions: [desk.id] }]);
+    expect(landed).toEqual([{ title: 'Belts', tagline: '', press: ['/blobs/belts/hero.png'] }]);
+  });
+
+  it('with no prepare, what the schema answered is what is stored', async () => {
+    const { landed, replay } = recording();
+    const { seams, operator } = await world({ replay });
+    await createIntegrations({ extension: { schema: Listing } }).start(seams);
+    expect((await vendorServing(declared, () => register(operator))).status).toBe(200);
+    expect(landed).toEqual([{ title: 'Belts', tagline: '', press: ['/integrations/belts/press/hero.png'] }]);
+  });
+
+  it('a prepare that throws refuses the bundle whole: no row is written, and the operator reads why', async () => {
+    const { landed, failed, replay } = recording();
+    const { seams, operator } = await world({ replay });
+    await createIntegrations({
+      extension: {
+        schema: Listing,
+        prepare: async () => {
+          throw new Error('the image store is full');
+        },
+      },
+    }).start(seams);
+
+    const answered = await vendorServing(declared, () => register(operator));
+    expect(answered.status).toBe(422);
+    expect(await answered.json()).toEqual({ message: 'Refused.', reasons: ['extension: Error: the image store is full'] });
+    expect(landed).toEqual([]);
+    expect(failed).toEqual([{ id: 'belts', url: 'https://belts.example', last_error: 'extension: Error: the image store is full' }]);
+  });
+
+  it('an extension the app’s check refuses is refused at registration, with its reasons', async () => {
+    const { landed, replay } = recording();
+    const { seams, operator } = await world({ replay });
+    await createIntegrations({ extension: { schema: Listing, check: (extension) => (extension.tagline === '' ? ['listing: a tagline is what the store tile shows'] : []) } }).start(seams);
+    const answered = await vendorServing(declared, () => register(operator));
+    expect(answered.status).toBe(422);
+    expect(await answered.json()).toEqual({ message: 'Refused.', reasons: ['listing: a tagline is what the store tile shows'] });
+    expect(landed).toEqual([]);
+  });
+
+  // THE ONE READ: every registered integration, with what the row holds of the
+  // app's vocabulary, read by the app's schema.
+  it('the registered integrations are read back, each with its id, its status, where it lives and its stored extension', async () => {
+    const rows = [
+      { id: 'belts', url: 'https://belts.example', status: 'approved', extension: { title: 'Belts' } },
+      { id: 'pay', url: 'https://pay.example', status: 'pending', extension: null },
+    ];
+    const { seams } = await world({ replay: async (fingerprint, context) => (fingerprint === 'integrations/list' ? rows.filter((row) => row.id > String(context['after'])) : []) });
+    const integrations = createIntegrations({ extension: { schema: Listing } });
+    await expect(integrations.listIntegrations()).rejects.toThrow(/integrations\.listIntegrations was called before a server started the feature/);
+    await integrations.start(seams);
+
+    const listed = await integrations.listIntegrations();
+    expect(listed).toEqual([
+      { id: 'belts', url: 'https://belts.example', status: 'approved', extension: { title: 'Belts', tagline: '', press: [] } },
+      { id: 'pay', url: 'https://pay.example', status: 'pending', extension: undefined },
+    ]);
+    // Typed by the app's own schema: this line is held by the compiler.
+    const titles: (string | undefined)[] = listed.map((integration) => integration.extension?.title);
+    expect(titles).toEqual(['Belts', undefined]);
+  });
+
+  it('a stored extension the app’s schema no longer reads is answered as none, with a line that names the integration', async () => {
+    const rows = [{ id: 'belts', url: 'https://belts.example', status: 'approved', extension: { title: 7 } }];
+    const { seams } = await world({ replay: async (fingerprint, context) => (fingerprint === 'integrations/list' ? rows.filter((row) => row.id > String(context['after'])) : []) });
+    const integrations = createIntegrations({ extension: { schema: Listing } });
+    await integrations.start(seams);
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      expect(await integrations.listIntegrations()).toEqual([{ id: 'belts', url: 'https://belts.example', status: 'approved', extension: undefined }]);
+      expect(logged.mock.calls.map(([line]) => String(line))).toEqual([expect.stringMatching(/^\[moss\] the stored extension of integration "belts" is not read: title: /)]);
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
+  it('the contract carries what the app tells vendors of its vocabulary, as it is, and nothing where it tells none', async () => {
+    const told = { placements: ['hub.people'], listing: 'title, tagline, press' };
+    const withOne = await world();
+    await createIntegrations({ extension: { schema: Listing, contract: told } }).start(withOne.seams);
+    expect(await (await withOne.server.request('/api/integrations/contract?id=belts')).json()).toMatchObject({ extension: told });
+    expect(await (await withOne.server.request('/api/integrations/contract?id=belts&format=md')).text()).toContain(JSON.stringify(told, null, 2));
+
+    const without = await world();
+    await createIntegrations().start(without.seams);
+    expect(await (await without.server.request('/api/integrations/contract?id=belts')).json()).not.toHaveProperty('extension');
   });
 });
 

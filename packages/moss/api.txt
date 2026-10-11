@@ -38,8 +38,11 @@
 ./client createWire
 ./client readDocumentSnapshot
 ./client/node nodeEnv
+./integrations ExtensionConfig
+./integrations ExtensionContext
 ./integrations Integrations
 ./integrations IntegrationsConfig
+./integrations RegisteredIntegration
 ./integrations StorePress
 ./integrations createAssertionSigner
 ./integrations createIntegrations

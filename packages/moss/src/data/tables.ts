@@ -144,5 +144,12 @@ export const MOSS_SEQUENCE: Sequence = {
       description: 'No two integrations hold the hash of one key',
       steps: [{ kind: 'sql', sql: `CREATE UNIQUE INDEX integrations_key_hash_unique ON integrations (key_hash) WHERE key_hash IS NOT NULL` }],
     },
+    // WHAT A BUNDLE SAYS IN THE HOST APP'S OWN VOCABULARY is one value the app
+    // reads with a schema of its own (../integrations): moss keeps it and reads
+    // nothing inside it. No value: the bundle carried none.
+    {
+      description: 'An integration keeps what its bundle says in the host app’s own vocabulary as one value',
+      steps: [{ kind: 'sql', sql: `ALTER TABLE integrations ADD COLUMN extension jsonb` }],
+    },
   ],
 };

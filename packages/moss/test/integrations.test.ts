@@ -11,7 +11,7 @@ import { reachOf } from '../src/integrations/reach';
 import { copyPress } from '../src/integrations/press';
 import { callIntegrationWith } from '../src/integrations/call';
 import { createForwarder } from '../src/integrations/forward';
-import { findIntegration, writeBundle, listIntegrations } from '../src/integrations/registry';
+import { findIntegration, writeBundle, listIntegrations, registeredIntegrations } from '../src/integrations/registry';
 import type { BundleImport } from '../src/integrations/registry';
 import type { HostVocabulary, IntakeContext } from '../src/integrations/intake';
 import { BundleSchema } from '../src/integrations/bundle';
@@ -36,8 +36,9 @@ const misfitsOver =
   (layout) =>
     layoutMisfits(layout, new Map(kit));
 
-const ctx = (over: Partial<IntakeContext> = {}): IntakeContext => ({
+const ctx = <Extension = undefined>(over: Partial<IntakeContext<Extension>> = {}): IntakeContext<Extension> => ({
   integrationId: 'acme',
+  url: 'https://acme.example',
   layoutMisfits: misfitsOver([]),
   endlessChains,
   fingerprints: new Set<string>(),
@@ -69,6 +70,83 @@ describe('an integration id', () => {
       expect([id, result.ok]).toEqual([id, false]);
       if (!result.ok) expect(result.reasons.join(' ')).toContain('integration');
     }
+  });
+});
+
+describe('a bundle’s own fields', () => {
+  it('a top-level key that is not one of them refuses the bundle, in a sentence that names the key and says where a host’s vocabulary goes', () => {
+    const result = runIntake({ integration: 'acme', actions: {}, listing: { title: 'Acme' }, seats: [] }, ctx());
+    expect(result).toEqual({
+      ok: false,
+      reasons: [
+        '"listing" is not a field of a bundle. What belongs to the host app’s own vocabulary goes under `extension`.',
+        '"seats" is not a field of a bundle. What belongs to the host app’s own vocabulary goes under `extension`.',
+      ],
+    });
+  });
+});
+
+describe('extension — the host app’s own vocabulary', () => {
+  const Listing = z.object({ title: z.string(), tagline: z.string().default(''), screen: z.string().optional() }).strict();
+  const roster = { id: 'ext.desk.acme.roster', title: 'Roster' };
+  const carrying = (extension: unknown, actions: Record<string, unknown> = { [roster.id]: roster }): unknown => ({ integration: 'acme', actions, extension });
+
+  it('is read by the schema the app supplied, and what the schema answers is the extension', () => {
+    const result = runIntake(carrying({ title: 'Acme' }), ctx({ extension: { schema: Listing } }));
+    expect(result).toMatchObject({ ok: true, extension: { title: 'Acme', tagline: '' } });
+  });
+
+  it('one the schema does not read refuses the bundle, each place it does not as a reason under `extension`', () => {
+    const result = runIntake(carrying({ title: 7, colour: 'red' }), ctx({ extension: { schema: Listing } }));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reasons).toHaveLength(2);
+    expect(result.reasons).toContainEqual(expect.stringMatching(/^extension\.title: /));
+    expect(result.reasons).toContainEqual(expect.stringMatching(/^extension: .*colour/));
+  });
+
+  it('a bundle that carries none is read by the schema too: refused where the schema asks for one, taken where it does not', () => {
+    const none = { integration: 'acme', actions: {} };
+    expect(runIntake(none, ctx({ extension: { schema: Listing } }))).toMatchObject({ ok: false, reasons: [expect.stringMatching(/^extension: /)] });
+    expect(runIntake(none, ctx({ extension: { schema: Listing.optional() } }))).toMatchObject({ ok: true, extension: undefined });
+  });
+
+  it('an app that supplied no schema takes no extension: a bundle that carries one is refused, and one that carries none is taken', () => {
+    expect(runIntake(carrying({ title: 'Acme' }), ctx())).toEqual({ ok: false, reasons: ['extension: this app takes no extension, and the bundle carries one.'] });
+    expect(runIntake({ integration: 'acme', actions: {} }, ctx())).toMatchObject({ ok: true, extension: undefined });
+  });
+
+  it('the app’s check is handed the extension and what moss knows of the bundle, and its reasons are reported with moss’s own', () => {
+    const asked: unknown[] = [];
+    const taking = ctx({
+      fingerprints: new Set(['deals/open']),
+      extension: {
+        schema: Listing,
+        check: (extension, bundle) => {
+          asked.push({ extension, integration: bundle.integration, url: bundle.url, actions: Object.keys(bundle.actions), fingerprints: [...bundle.fingerprints], fits: bundle.layoutMisfits({ component: 'Nope' }).length });
+          return extension.screen === undefined || bundle.actions[extension.screen] !== undefined ? [] : [`listing: "${extension.screen}" is not an action in this bundle`];
+        },
+      },
+    });
+
+    expect(runIntake(carrying({ title: 'Acme', screen: roster.id }), taking)).toMatchObject({ ok: true });
+    expect(asked).toEqual([{ extension: { title: 'Acme', tagline: '', screen: roster.id }, integration: 'acme', url: 'https://acme.example', actions: [roster.id], fingerprints: ['deals/open'], fits: 1 }]);
+
+    // One reason of moss's own (an action outside the integration's namespace)
+    // and one of the app's, in one answer.
+    const stray = { id: 'desk.stray' };
+    const refused = runIntake(carrying({ title: 'Acme', screen: 'ext.desk.acme.ghost' }, { [stray.id]: stray }), taking);
+    expect(refused).toEqual({
+      ok: false,
+      reasons: ['action desk.stray: not namespaced ext.<audience>.<integration>.<name>', 'listing: "ext.desk.acme.ghost" is not an action in this bundle'],
+    });
+  });
+
+  it('the check is not asked about an extension the schema refused', () => {
+    const asked: unknown[] = [];
+    const result = runIntake(carrying({ title: 7 }), ctx({ extension: { schema: Listing, check: (extension) => (asked.push(extension), []) } }));
+    expect(result.ok).toBe(false);
+    expect(asked).toEqual([]);
   });
 });
 
@@ -735,7 +813,7 @@ describe('intakeContextOf — the host vocabulary reaches intake', () => {
     const run = (tools: string[]) =>
       runIntake(
         { integration: 'acme', actions: {}, capabilities: [{ id: 'build', title: 'Build' }], documents: [doc()], assistants: [{ id: 'a', title: 'A', instructions: 'x', tools, applies: { document: 'd' } }] },
-        intakeContextOf(host, 'acme', new Set()),
+        { ...intakeContextOf(host, 'acme', new Set()), url: 'https://acme.example' },
       );
     expect(run(['floors']).ok, 'a listed tool is admitted').toBe(true);
     const bad = run(['telepathy']);
@@ -747,7 +825,7 @@ describe('intakeContextOf — the host vocabulary reaches intake', () => {
     const run = (checks: string[]) =>
       runIntake(
         { integration: 'acme', actions: {}, capabilities: [{ id: 'build', title: 'Build' }], documents: [doc({ checks })] },
-        intakeContextOf(host, 'acme', new Set()),
+        { ...intakeContextOf(host, 'acme', new Set()), url: 'https://acme.example' },
       );
     expect(run(['readability']).ok, 'a listed check is admitted').toBe(true);
     expect(run(['telekinesis']).ok).toBe(false);
@@ -878,6 +956,8 @@ describe('the registry as vex entries — each statement, against a database', (
     configuration: [{ key: 'strict', title: 'Strict', description: '', kind: 'toggle', default: false }],
     documents: [],
     assistants: [],
+    // JSON text, as the registry hands it over.
+    extension: JSON.stringify({ listing: { title: 'Belts' } }),
     last_import_at: '2026-10-10T08:00:00.000Z',
     ...over,
   });
@@ -927,19 +1007,39 @@ describe('the registry as vex entries — each statement, against a database', (
     await replay('integrations/write-bundle', { ...landing('landed'), actions: [] });
     const { id: _id, last_import_at: _at, ...said } = landing('landed');
     const [first] = await rows(`SELECT * FROM integrations WHERE id = 'landed'`);
-    expect(first).toMatchObject({ ...said, id: 'landed', status: 'pending', key_hash: null, approved_data: [], last_error: null });
+    expect(first).toMatchObject({ ...said, extension: { listing: { title: 'Belts' } }, id: 'landed', status: 'pending', key_hash: null, approved_data: [], last_error: null });
     expect(new Date(String(first?.['last_import_at'])).toISOString()).toBe('2026-10-10T08:00:00.000Z');
 
     // Again, on the row that is there: each column is replaced (an empty list
     // lands as an empty list), and what the bundle does not say stays.
     await pool.query(`UPDATE integrations SET status = 'approved', key_hash = 'hash-of-landed', approved_data = '["members.read"]'::jsonb, last_error = 'old' WHERE id = 'landed'`);
-    const again = landing('landed', { title: 'Belts 2', requested_data: [], reach: {}, story: [], offers: [], capabilities: [], last_import_at: '2026-10-11T09:30:00.000Z' });
+    const again = landing('landed', { title: 'Belts 2', requested_data: [], reach: {}, story: [], offers: [], capabilities: [], extension: null, last_import_at: '2026-10-11T09:30:00.000Z' });
     await replay('integrations/write-bundle', { ...again, actions: [] });
     const [second] = await rows(`SELECT * FROM integrations WHERE id = 'landed'`);
-    expect(second).toMatchObject({ title: 'Belts 2', requested_data: [], reach: {}, story: [], offers: [], capabilities: [], needs: ['booking'] });
+    expect(second).toMatchObject({ title: 'Belts 2', requested_data: [], reach: {}, story: [], offers: [], capabilities: [], needs: ['booking'], extension: null });
     expect(second).toMatchObject({ status: 'approved', key_hash: 'hash-of-landed', approved_data: ['members.read'], last_error: null });
     expect(new Date(String(second?.['last_import_at'])).toISOString()).toBe('2026-10-11T09:30:00.000Z');
     expect(await rows(`SELECT count(*)::int AS n FROM integrations WHERE id = 'landed'`)).toEqual([{ n: 1 }]);
+  });
+
+  // What the row keeps of the host app's own vocabulary is whatever value the
+  // app's `prepare` answered: it is read back as that value, by the app's schema.
+  it('an extension is kept as the value it is, and read back as it: an object, a list, a text, a number, or none', async () => {
+    const kept = async (extension: unknown): Promise<unknown> => {
+      const bundle = BundleSchema.parse({ integration: 'extended', actions: {} });
+      await writeBundle(replay, { id: 'extended', url: 'https://extended.example', bundle, adds: '', press: [], extension, stamp: {} });
+      return (await registeredIntegrations(replay, z.unknown())).find((integration) => integration.id === 'extended');
+    };
+    const registered = (extension: unknown): unknown => ({ id: 'extended', url: 'https://extended.example', status: 'pending', extension });
+    const listing = { listing: { title: 'Belts', press: ['/blobs/a.png'] }, placed: { 'ext.desk.extended.roster': 'hub.people' } };
+    expect(await kept(listing)).toEqual(registered(listing));
+    expect(await kept(['hub.people', 'hub.me'])).toEqual(registered(['hub.people', 'hub.me']));
+    expect(await kept('a sentence')).toEqual(registered('a sentence'));
+    expect(await kept(7)).toEqual(registered(7));
+    expect(await kept(undefined)).toEqual(registered(undefined));
+    // An app that supplied no schema reads none, whatever the row holds.
+    await kept(listing);
+    expect((await registeredIntegrations(replay, undefined)).find((integration) => integration.id === 'extended')).toEqual(registered(undefined));
   });
 
   it('5, 6 · ...with its actions, in place of the ones it shipped before, and of no other integration’s', async () => {
@@ -1016,7 +1116,7 @@ describe('the registry as vex entries — each statement, against a database', (
   it('landing a bundle is all or nothing: a failure part-way leaves the rows of the import before it whole', async () => {
     const bundleOf = (title: string, names: readonly string[]): Bundle =>
       BundleSchema.parse({ integration: 'atomic', meta: { title }, actions: Object.fromEntries(names.map((name) => [`ext.desk.atomic.${name}`, { id: `ext.desk.atomic.${name}`, title: name }])) });
-    const landingOf = (bundle: Bundle): BundleImport => ({ id: 'atomic', url: 'https://atomic.example', bundle, adds: '', press: [], stamp: { 'nisc.nova': 3 } });
+    const landingOf = (bundle: Bundle): BundleImport => ({ id: 'atomic', url: 'https://atomic.example', bundle, adds: '', press: [], extension: undefined, stamp: { 'nisc.nova': 3 } });
     const held = async (): Promise<unknown> => ({
       row: await rows(`SELECT * FROM integrations WHERE id = 'atomic'`),
       actions: await rows(`SELECT * FROM integration_actions WHERE integration_id = 'atomic' ORDER BY action_id`),
@@ -1113,7 +1213,7 @@ describe('the registry as vex entries — each statement, against a database', (
         SELECT i.id, i.url, i.status, i.title, i.tagline, i.adds, i.settings_action,
                i.requested_actions, i.requested_data, i.approved_data,
                i.offers, i.needs, i.capabilities, i.configuration, i.documents, i.assistants,
-               i.last_import_at, i.last_error,
+               i.extension, i.last_import_at, i.last_error,
                (SELECT count(*) FROM integration_actions a WHERE a.integration_id = i.id)::int AS action_count
           FROM integrations i ORDER BY i.id`);
       expect(together).toEqual(oracle);

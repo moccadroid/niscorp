@@ -347,6 +347,12 @@ export const BundleSchema = z
     // WHAT AN ADD-ON'S ASSISTANT KNOWS AND MAY DO — instructions, grounding,
     // blocks, tools, and what it applies to. See `assistantDeclarationSchema`.
     assistants: z.array(assistantDeclarationSchema).default([]),
+    // THE HOST APP'S OWN VOCABULARY: whatever the app that takes this bundle
+    // lets one say beyond the fields above (a store listing, where a screen is
+    // placed). Nothing here reads inside it: intake hands it to the schema the
+    // app supplied (`extension` of `createIntegrations`, ./intake.ts), and an
+    // app that supplied none takes no bundle that carries one.
+    extension: z.unknown().optional(),
   })
   .strict();
 

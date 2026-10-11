@@ -55,6 +55,7 @@ describe('the operator’s routes', () => {
     };
     const operator = operatorRoutes({
       replay,
+      extension: undefined,
       grammars: await createGrammarUpgrader({}),
       fingerprints: async () => [],
       vocabulary: { layoutMisfits: () => [], endlessChains: () => [], attachable: undefined, menuSlots: undefined, assistantTools: undefined, publishChecks: undefined, editorRegions: undefined },

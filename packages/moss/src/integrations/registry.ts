@@ -92,6 +92,7 @@ const ListedRowSchema = z
     configuration: carried,
     documents: carried,
     assistants: carried,
+    extension: z.unknown(),
     // A TIMESTAMP IS NOT ALWAYS A DATE. Different drivers hand back a Date, an
     // ISO string, or a number for the same column — PGlite returns a string
     // here, so the Date-only branch this had made every row read 'never', on a
@@ -116,6 +117,7 @@ const ListedRowSchema = z
     configuration: row.configuration,
     documents: row.documents,
     assistants: row.assistants,
+    extension: row.extension ?? null,
     lastImportAt: row.last_import_at,
     lastError: row.last_error ?? null,
   }));
@@ -161,6 +163,10 @@ export type BundleImport = {
   // The urls the HOST answered with when the press was copied (./press.ts) —
   // the declared paths died the moment the bytes crossed.
   press: readonly string[];
+  // What the row keeps of the host app's own vocabulary: the bundle's
+  // `extension` as the app's schema read it and its `prepare` answered it.
+  // `undefined`: none, and the row holds null.
+  extension: unknown;
   // The grammars the definitions are written in: this code's, since intake
   // upgraded every one of them.
   stamp: Upgrader['stamp'];
@@ -172,9 +178,12 @@ export type BundleImport = {
 
 // The row a bundle is kept as: each column under its own name, as the entry
 // reads them.
-const importedRow = ({ id, url, bundle, adds, press }: BundleImport): Record<string, unknown> => ({
+const importedRow = ({ id, url, bundle, adds, press, extension }: BundleImport): Record<string, unknown> => ({
   id,
   url,
+  // Handed over as JSON text, which the column reads as the value it spells:
+  // a text handed over as itself would be read as JSON, and refused.
+  extension: extension === undefined ? null : JSON.stringify(extension),
   title: bundle.meta.title,
   tagline: bundle.meta.tagline,
   description: bundle.meta.description,
@@ -312,6 +321,34 @@ export const listIntegrations = async (replay: Replay): Promise<IntegrationRow[]
   const counted = await everyRow(ActionCountRowSchema, (after) => replay('integrations/action-counts', { after: after?.integration_id ?? '' }));
   const counts = new Map(counted.map((row) => [row.integration_id, row.action_count]));
   return listed.map((row) => ({ ...row, actionCount: counts.get(row.id) ?? 0 }));
+};
+
+// ── the registered integrations, read back for the host app ──
+
+const RegisteredRowSchema = z.object({ id: z.string(), url: z.string(), status: z.string(), extension: z.unknown() });
+
+// One registered integration as the app reads it back: which it is, how it
+// stands ('pending', 'approved'), where its service lives, and what its row
+// holds of the app's own vocabulary.
+export type RegisteredIntegration<Extension> = { id: string; status: string; url: string; extension: Extension | undefined };
+
+// What a row holds of the app's vocabulary, read by the app's schema: the row
+// is outside this process, and the schema may have changed since it was
+// written. One the schema does not read is answered as none, with a line that
+// names the integration: importing it again writes it anew.
+const storedExtension = <Extension>(id: string, stored: unknown, schema: z.ZodType<Extension> | undefined): Extension | undefined => {
+  if (schema === undefined || stored === null || stored === undefined) return undefined;
+  const read = schema.safeParse(stored);
+  if (read.success) return read.data;
+  const first = read.error.issues[0];
+  console.error(`[moss] the stored extension of integration "${id}" is not read: ${first === undefined ? 'no reason given' : `${first.path.join('.') || '(root)'}: ${first.message}`}`);
+  return undefined;
+};
+
+// Every registered integration, in the order of the ids.
+export const registeredIntegrations = async <Extension>(replay: Replay, schema: z.ZodType<Extension> | undefined): Promise<RegisteredIntegration<Extension>[]> => {
+  const rows = await everyRow(RegisteredRowSchema, (after) => replay('integrations/list', { after: after?.id ?? '' }));
+  return rows.map((row) => ({ id: row.id, status: row.status, url: row.url, extension: storedExtension(row.id, row.extension, schema) }));
 };
 
 // Every approved integration's actions, as the manifest wants them.

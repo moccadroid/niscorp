@@ -6,8 +6,8 @@ import type { FeatureEnv, Replay } from '../feature';
 import { INTEGRATION_ID, INTEGRATION_ID_RULE } from './bundle';
 import type { Bundle } from './bundle';
 import { hashIntegrationKey, mintIntegrationKey } from './credentials';
-import { intakeContextOf, runIntake } from './intake';
-import type { HostVocabulary } from './intake';
+import { extensionContextOf, intakeContextOf, runIntake } from './intake';
+import type { ExtensionConfig, HostVocabulary } from './intake';
 import { describePlacements } from './placements';
 import { copyPress } from './press';
 import type { StorePress } from './press';
@@ -40,9 +40,12 @@ const ProbeBodySchema = z.looseObject({ path: z.string().optional().catch(undefi
 
 type Actions = Readonly<Record<string, ActionDefinition>>;
 
-export type OperatorDeps = {
+export type OperatorDeps<Extension = undefined> = {
   // What the registry's entries are replayed by (./registry.ts).
   replay: Replay;
+  // The host app's own vocabulary (./intake.ts). Absent: a bundle that carries
+  // an `extension` is refused.
+  extension: ExtensionConfig<Extension> | undefined;
   // The host's grammars: a bundle's actions are brought to them before they
   // are read, and stored stamped with them.
   grammars: Upgrader;
@@ -69,12 +72,15 @@ export type OperatorDeps = {
 // A bundle that may land, or why it may not: what to keep on the row, and
 // what to answer.
 type Taken =
-  | { ok: true; bundle: Bundle; press: readonly string[] }
+  | { ok: true; bundle: Bundle; press: readonly string[]; extension: unknown }
   | { ok: false; error: string; status: 422 | 502; answer: { message: string; reasons?: string[] } };
 
-// FETCH, THEN THE GATE, THEN THE PRESS. Nothing is written here: a bundle that
-// is refused at any of the three leaves the last good import serving.
-const takeIn = async (deps: OperatorDeps, id: string, url: string): Promise<Taken> => {
+const refused = (reasons: string[]): Taken => ({ ok: false, error: reasons.join('; '), status: 422, answer: { message: 'Refused.', reasons } });
+
+// FETCH, THEN THE GATE, THEN THE PRESS, THEN THE APP'S `prepare`. Nothing is
+// written here: a bundle that is refused at any of the four leaves the last
+// good import serving.
+const takeIn = async <Extension>(deps: OperatorDeps<Extension>, id: string, url: string): Promise<Taken> => {
   let payload: unknown;
   try {
     // Given up on when it has taken too long, the answer and its body
@@ -87,16 +93,26 @@ const takeIn = async (deps: OperatorDeps, id: string, url: string): Promise<Take
   }
 
   const fingerprints = new Set(await deps.fingerprints());
-  const result = runIntake(payload, { ...intakeContextOf(deps.vocabulary, id, fingerprints, deps.grammars), hostActions: deps.actions() });
-  if (!result.ok) return { ok: false, error: result.reasons.join('; '), status: 422, answer: { message: 'Refused.', reasons: result.reasons } };
+  const context = { ...intakeContextOf(deps.vocabulary, id, fingerprints, deps.grammars), url, hostActions: deps.actions() };
+  const result = runIntake(payload, { ...context, ...(deps.extension === undefined ? {} : { extension: deps.extension }) });
+  if (!result.ok) return refused(result.reasons);
 
   // Press crosses HERE — after the gate, before the candidate is
   // verified — so a press refusal leaves the app exactly as it
   // found it. Blobs written before a later refusal are orphans in the
   // host's store, which is cheaper than any coherence they could buy.
   const press = await copyPress(result.bundle, id, url, { store: deps.storePress, timeoutMs: deps.timeoutMs, maxBytes: deps.pressMaxBytes });
-  if (!press.ok) return { ok: false, error: press.reasons.join('; '), status: 422, answer: { message: 'Refused.', reasons: press.reasons } };
-  return { ok: true, bundle: result.bundle, press: press.urls };
+  if (!press.ok) return refused(press.reasons);
+
+  // The app's own step, for an extension that is there: what it answers is
+  // what the row keeps. One that throws refuses the bundle whole.
+  const prepare = deps.extension?.prepare;
+  if (prepare === undefined || result.extension === undefined) return { ok: true, bundle: result.bundle, press: press.urls, extension: result.extension };
+  try {
+    return { ok: true, bundle: result.bundle, press: press.urls, extension: await prepare(result.extension, extensionContextOf(result.bundle, context)) };
+  } catch (error) {
+    return refused([`extension: ${String(error)}`]);
+  }
 };
 
 // Register / announce / re-import — one verb.
@@ -107,7 +123,7 @@ const takeIn = async (deps: OperatorDeps, id: string, url: string): Promise<Take
 // sentence while the previous import keeps serving — because a bundle
 // committed before that check would take the app down until somebody deleted
 // rows by hand.
-const register = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
+const register = <Extension>(deps: OperatorDeps<Extension>, routes: Hono<FeatureEnv>): void => {
   routes.post('/integrations', async (c) => {
     const sent: unknown = await c.req.json().catch(() => ({}));
     const { id, url } = RegisterBodySchema.parse(sent);
@@ -148,6 +164,7 @@ const register = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
       bundle: taken.bundle,
       adds: describePlacements(taken.bundle, deps.placementNames),
       press: taken.press,
+      extension: taken.extension,
       stamp: deps.grammars.stamp,
       ...(key === undefined ? {} : { keyHash: hashIntegrationKey(key) }),
     });
@@ -189,7 +206,7 @@ const register = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
 // rows next was refused them, the next boot included. So the approval is set
 // back to pending with why, what is served is read again from the rows as
 // they are then, and the answer is the refusal it is.
-const approve = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
+const approve = (deps: Pick<OperatorDeps, 'replay' | 'grammars' | 'actions' | 'refusalOf' | 'reload'>, routes: Hono<FeatureEnv>): void => {
   routes.post('/integrations/:id/approve', async (c) => {
     const id = c.req.param('id');
     const refusal = deps.refusalOf({ ...deps.actions(), ...(await storedActionsOf(deps.replay, id, deps.grammars)) });
@@ -218,7 +235,7 @@ const approve = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
 // a second door into the integration's service beside the proxy, and one that minted
 // no assertion at all. An operator wanting a path the integration never declared is
 // asking a question about somebody else's service, not about this one.
-const probe = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
+const probe = (deps: Pick<OperatorDeps, 'replay' | 'timeoutMs'>, routes: Hono<FeatureEnv>): void => {
   routes.post('/integrations/:id/probe', async (c) => {
     const id = c.req.param('id');
     const found = await findIntegration(deps.replay, id);
@@ -244,7 +261,7 @@ const probe = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
   });
 };
 
-export const operatorRoutes = (deps: OperatorDeps): Hono<FeatureEnv> => {
+export const operatorRoutes = <Extension = undefined>(deps: OperatorDeps<Extension>): Hono<FeatureEnv> => {
   const routes = new Hono<FeatureEnv>();
   routes.get('/integrations', async (c) => c.json({ integrations: await listIntegrations(deps.replay) }));
   register(deps, routes);

@@ -29,6 +29,8 @@ const PINNED: ReadonlyArray<[Sequence, number, string]> = [
   [MOSS_SEQUENCE, 2, '92bd612e35a830e2f58de2327451a8e3346e7bc102ab0b49777c349792894b1a'],
   // The unique index on an integration's key hash.
   [MOSS_SEQUENCE, 3, 'b05aa252f4f3b70dad03282552ac6b94c5d4e5012d964c23cb32fedbb4f8b60f'],
+  // An integration's `extension`: what its bundle says in the host app's own vocabulary.
+  [MOSS_SEQUENCE, 4, 'f77d8516226709fb23801a26dc6bd5c9834c7c0ea3d1ef0dfea178cb72844576'],
   [SESSIONS_SEQUENCE, 1, '83a62e0217940bfe62136052c18f730947355d20e481d9aceb76463251b33700'],
 ];
 
@@ -55,10 +57,10 @@ describe('boot — every owner through one ledger', () => {
     const pool = createPglitePool(freshDatabase());
     await quietly(() => createServer(app, { pool, db: pool, session: 'sessions' }));
     const ledger = await readLedger(pool);
-    expect(ledger.map((r) => `${r.sequence}/${r.n}`)).toEqual(['nisc.moss/1', 'nisc.moss/2', 'nisc.moss/3', 'nisc.moss.sessions/1', 'nisc.vex.cache/1']);
+    expect(ledger.map((r) => `${r.sequence}/${r.n}`)).toEqual(['nisc.moss/1', 'nisc.moss/2', 'nisc.moss/3', 'nisc.moss/4', 'nisc.moss.sessions/1', 'nisc.vex.cache/1']);
 
     await quietly(() => createServer(app, { pool, db: pool, session: 'sessions', migrations: 'verify' }));
-    expect((await readLedger(pool)).length).toBe(5);
+    expect((await readLedger(pool)).length).toBe(6);
   });
 
   it("migrations: 'verify' refuses a database nobody migrated — and creates nothing", async () => {

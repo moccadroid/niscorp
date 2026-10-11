@@ -12,7 +12,9 @@ import { filterInstalled, integrationOfAction } from './installed';
 import { operatorRoutes } from './operator';
 import type { StorePress } from './press';
 import { proxyRoutes } from './proxy';
-import { findIntegration, integrationByKey, listAttachments, listPlacements, loadIntegrationActions } from './registry';
+import type { ExtensionConfig } from './intake';
+import { findIntegration, integrationByKey, listAttachments, listPlacements, loadIntegrationActions, registeredIntegrations } from './registry';
+import type { RegisteredIntegration } from './registry';
 import { STORED_ACTIONS } from './tables';
 
 // ═══════════════════════════════════════════════════════════════
@@ -30,7 +32,13 @@ import { STORED_ACTIONS } from './tables';
 // a server has started the feature, and say so in a sentence before that.
 // ═══════════════════════════════════════════════════════════════
 
-export type IntegrationsConfig = {
+export type IntegrationsConfig<Extension = undefined> = {
+  // THE APP'S OWN VOCABULARY: what a bundle may say under `extension`, beyond
+  // the fields that are nisc's own (./intake.ts, `ExtensionConfig`). The app
+  // supplies the schema that reads it, and may check it, prepare it for the
+  // row and tell vendors about it. Absent: a bundle that carries an
+  // `extension` is refused.
+  extension?: ExtensionConfig<Extension>;
   // WHO AN INTEGRATION IS when it acts and nobody is driving (./actor.ts). The
   // app answers with a principal, and from there NOTHING is special: that
   // principal's charter rung compiles its policy, its scope values pin its
@@ -118,7 +126,12 @@ export type IntegrationsConfig = {
 const DEFAULT_OUTBOUND_TIMEOUT_MS = 30_000;
 const DEFAULT_PRESS_MAX_BYTES = 5 * 1024 * 1024;
 
-export type Integrations = Feature & {
+export type Integrations<Extension = undefined> = Feature & {
+  // THE INTEGRATIONS THAT ARE REGISTERED, in the order of their ids: each with
+  // how it stands ('pending', 'approved'), where its service lives, and the
+  // `extension` its row holds, read by the app's schema. What an app shows of
+  // an integration, and where, it builds from this.
+  listIntegrations: () => Promise<RegisteredIntegration<Extension>[]>;
   // CALL AN INSTALLED INTEGRATION WHEN NOBODY IS DRIVING — the outbound half
   // of `executeAs`. Refuses (throws) unless it is approved and installed for
   // this principal's tenant, mints the assertion, and returns what the
@@ -142,7 +155,7 @@ export type Integrations = Feature & {
 // feature.
 type Started = { replay: Replay; call: CallIntegration };
 
-const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<Started> => {
+const start = async <Extension>(config: IntegrationsConfig<Extension>, seams: FeatureSeams): Promise<Started> => {
   // THE REGISTRY'S READS AND WRITES, handed over as entries of the feature's
   // own: seeded where no route serves them, and replayed from here on by
   // `replay` (./registry.ts, ./entries.ts).
@@ -183,7 +196,7 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
   };
   seams.mountRoutes(
     contractRoutes({
-      host: { components: seams.components, charter: seams.charter, attachable: config.attachable, menuSlots: config.menuSlots },
+      host: { components: seams.components, charter: seams.charter, attachable: config.attachable, menuSlots: config.menuSlots, extension: config.extension?.contract },
       fingerprintsFor: seams.fingerprintsFor,
       verifyKey: signer.verifyKey,
     }),
@@ -191,6 +204,7 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
   seams.mountOperatorRoutes(
     operatorRoutes({
       replay,
+      extension: config.extension,
       grammars: seams.grammars,
       fingerprints: seams.fingerprints,
       vocabulary,
@@ -214,7 +228,7 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
   return { replay, call: callIntegrationWith({ forward, ...(seams.telemetry === undefined ? {} : { telemetry: seams.telemetry }) }) };
 };
 
-export const createIntegrations = (config: IntegrationsConfig = {}): Integrations => {
+export const createIntegrations = <Extension = undefined>(config: IntegrationsConfig<Extension> = {}): Integrations<Extension> => {
   // What the last server to start this feature gave it. A manifest is handed
   // to one server; a process that builds a second from the same manifest (a
   // dev floor rebuilding) has the calls follow the one built last.
@@ -235,6 +249,7 @@ export const createIntegrations = (config: IntegrationsConfig = {}): Integration
       started = await start(config, seams);
     },
     callIntegration: async (id, path, init) => running('callIntegration').call(id, path, init),
+    listIntegrations: async () => registeredIntegrations(running('listIntegrations').replay, config.extension?.schema),
     listAttachments: async (hostAction) => listAttachments(running('listAttachments').replay, hostAction),
     listPlacements: async () => listPlacements(running('listPlacements').replay),
     integrationByKey: async (key) => integrationByKey(running('integrationByKey').replay, key),

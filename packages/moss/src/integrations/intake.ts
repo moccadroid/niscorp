@@ -1,3 +1,4 @@
+import type { z } from 'zod';
 import { StrataError, depthRefusal, exceedsDepth, type Upgrader } from '@niscorp/strata';
 import type { ActionDefinition } from '@niscorp/nova';
 import { isRecord } from '@niscorp/nova/reflect';
@@ -12,8 +13,49 @@ import type { AssistantDeclaration, Bundle, DocumentDeclaration } from './bundle
 // is coherent and all of it lands, or none of it does and the rows from the
 // last good import keep serving.
 
-export type IntakeContext = {
+// WHAT MOSS KNOWS OF A BUNDLE THAT THE APP'S OWN CHECK MAY NEED: which
+// integration it is and where its service lives, the actions it ships (each
+// already held to its namespace, its endpoints and the kit), the fingerprints
+// the app serves, and the host's answer about a layout, for a layout the app's
+// vocabulary lets a bundle carry.
+export type ExtensionContext = {
+  integration: string;
+  url: string;
+  actions: Readonly<Record<string, ActionDefinition>>;
+  fingerprints: ReadonlySet<string>;
+  layoutMisfits: (layout: unknown) => string[];
+};
+
+// THE HOST APP'S OWN VOCABULARY, as the app hands it to `createIntegrations`
+// (./feature.ts). Moss reads nothing inside an extension: it asks these.
+export type ExtensionConfig<Extension> = {
+  // What a bundle's `extension` may be. It reads whatever the bundle carries
+  // there, a bundle that carries nothing included: a schema that takes
+  // `undefined` makes the extension optional. It also reads back what was
+  // stored, so it takes what it answers.
+  schema: z.ZodType<Extension>;
+  // The reasons the app refuses an extension the schema read, each a sentence.
+  // They are reported with moss's own, and any one refuses the bundle.
+  check?: (extension: Extension, bundle: ExtensionContext) => string[];
+  // Run once for an import that passed every check, before the row is written:
+  // what it answers is what is stored. For what must not depend on the
+  // vendor's service being reachable later (an image copied to the app's own
+  // store). Throwing refuses the bundle whole. Not called for an extension
+  // that reads as `undefined`.
+  prepare?: (extension: Extension, bundle: ExtensionContext) => Extension | Promise<Extension>;
+  // What the app tells vendors about its vocabulary: a plain value, served
+  // with the contract as it is (./contract.ts).
+  contract?: unknown;
+};
+
+export type IntakeContext<Extension = undefined> = {
   integrationId: string;
+  // Where the integration's service lives: the address the bundle was fetched
+  // from.
+  url: string;
+  // The app's own vocabulary. Absent: a bundle that carries an `extension` is
+  // refused.
+  extension?: ExtensionConfig<Extension>;
   // DOES A LAYOUT COMPOSE WHAT THE APP'S KIT HAS: the host's answer, each place
   // it does not as a sentence (the `layoutMisfits` seam). The component's name
   // is the floor — a layout naming one the terminal cannot render shows
@@ -81,7 +123,7 @@ export const intakeContextOf = (
   integrationId: string,
   fingerprints: ReadonlySet<string>,
   upgrader?: Upgrader,
-): IntakeContext => ({
+): Omit<IntakeContext, 'url' | 'extension'> => ({
   integrationId,
   ...(upgrader === undefined ? {} : { upgrader }),
   layoutMisfits: host.layoutMisfits,
@@ -96,7 +138,10 @@ export const intakeContextOf = (
 
 const AUDIENCE = /^[a-z][a-z0-9-]*$/;
 
-export type IntakeResult = { ok: true; bundle: Bundle } | { ok: false; reasons: string[] };
+// A bundle that may land, with its extension as the app's schema read it
+// (`undefined`: it carries none, and the app asks for none); or every reason it
+// may not.
+export type IntakeResult<Extension = undefined> = { ok: true; bundle: Bundle; extension: Extension | undefined } | { ok: false; reasons: string[] };
 
 // A bundle's actions, brought to the host's grammar. Only the stamp and the
 // actions are touched; everything else is parsed as it arrived.
@@ -122,17 +167,21 @@ const upgradeBundle = (payload: unknown, upgrader: Upgrader | undefined): { ok: 
 };
 
 // Each check below reads the bundle the schema already read and answers the
-// reasons it finds, in order. `runIntake` at the foot runs them in the order
-// the reasons have always been said in.
+// reasons it finds, in order. `runIntake` at the foot runs them, and reports
+// every reason together.
+
+// What moss's own checks read of the context: all of it but the app's
+// vocabulary.
+type Checked = Omit<IntakeContext, 'extension'>;
 
 // A layout, held to what the kit has (the host's answer), with each misfit
 // said under the name of the thing the layout belongs to. Used for an action's
 // layout and for section and block fragments alike: a fragment is a layout
 // over `$.content` and earns the same refusal at the same moment.
-const layoutReasons = (layout: unknown, label: string, ctx: IntakeContext): string[] => ctx.layoutMisfits(layout).map((misfit) => `${label}: ${misfit}`);
+const layoutReasons = (layout: unknown, label: string, ctx: Pick<IntakeContext, 'layoutMisfits'>): string[] => ctx.layoutMisfits(layout).map((misfit) => `${label}: ${misfit}`);
 
 // ── it reaches two places and no others ──
-const endpointReasons = (id: string, action: ActionDefinition, ctx: IntakeContext): string[] => {
+const endpointReasons = (id: string, action: ActionDefinition, ctx: Checked): string[] => {
   const reasons: string[] = [];
   for (const [name, endpoint] of Object.entries(action.endpoints ?? {})) {
     if ('fn' in endpoint) {
@@ -169,7 +218,7 @@ const endpointReasons = (id: string, action: ActionDefinition, ctx: IntakeContex
   return reasons;
 };
 
-const actionReasons = (bundle: Bundle, ctx: IntakeContext): string[] => {
+const actionReasons = (bundle: Bundle, ctx: Checked): string[] => {
   const reasons: string[] = [];
   for (const [id, action] of Object.entries(bundle.actions)) {
     // ── the namespace ──
@@ -204,14 +253,14 @@ const actionReasons = (bundle: Bundle, ctx: IntakeContext): string[] => {
 // with the host's actions, since a loop can close through the host's
 // triggers; a loop the host has on its own is the host's to answer (boot
 // names it) and does not refuse somebody else's bundle.
-const chainReasons = (bundle: Bundle, ctx: IntakeContext): string[] =>
+const chainReasons = (bundle: Bundle, ctx: Checked): string[] =>
   ctx
     .endlessChains({ ...(ctx.hostActions ?? {}), ...bundle.actions })
     .filter((chain) => chain.through.some((actionId) => bundle.actions[actionId] !== undefined))
     .map((chain) => `a chain of steps that never ends: ${chain.path}`);
 
 // ── the bindings point at things that exist, on both ends ────
-const bindingReasons = (bundle: Bundle, ctx: IntakeContext): string[] => {
+const bindingReasons = (bundle: Bundle, ctx: Checked): string[] => {
   const reasons: string[] = [];
   for (const [actionId, binding] of Object.entries(bundle.attachments)) {
     const host = typeof binding === 'string' ? binding : binding.to;
@@ -258,7 +307,7 @@ const bindingReasons = (bundle: Bundle, ctx: IntakeContext): string[] => {
 // One document's section types: none declared twice, each field's key once, a
 // `pick` with something to pick from, no `list` (that is a block's), and a
 // fragment that composes what the kit has.
-const sectionTypeReasons = (doc: DocumentDeclaration, ctx: IntakeContext): string[] => {
+const sectionTypeReasons = (doc: DocumentDeclaration, ctx: Checked): string[] => {
   const reasons: string[] = [];
   const seenType = new Set<string>();
   for (const section of doc.registry) {
@@ -285,7 +334,7 @@ const sectionTypeReasons = (doc: DocumentDeclaration, ctx: IntakeContext): strin
 // Cross-references the host holds or the bundle itself declares — the same
 // posture as every check above. Shape is the schema's; these are the things
 // only the surrounding bundle and the host can know are wrong.
-const documentReasons = (bundle: Bundle, ctx: IntakeContext): string[] => {
+const documentReasons = (bundle: Bundle, ctx: Checked): string[] => {
   const reasons: string[] = [];
   const ownPrefix = `/integrations/${ctx.integrationId}/`;
   const ownActions = new Set(Object.keys(bundle.actions));
@@ -329,7 +378,7 @@ const documentReasons = (bundle: Bundle, ctx: IntakeContext): string[] => {
 // One assistant's block types: none declared twice, each field's key once, a
 // `pick` with something to pick from, and a fragment that composes what the
 // kit has. A `list` field IS allowed in a block — this is the one place it is.
-const blockReasons = (assistant: AssistantDeclaration, ctx: IntakeContext): string[] => {
+const blockReasons = (assistant: AssistantDeclaration, ctx: Checked): string[] => {
   const reasons: string[] = [];
   const seenBlock = new Set<string>();
   for (const block of assistant.blocks) {
@@ -349,7 +398,7 @@ const blockReasons = (assistant: AssistantDeclaration, ctx: IntakeContext): stri
 };
 
 // ── WHAT AN ADD-ON'S ASSISTANT KNOWS ─────────────────────────
-const assistantReasons = (bundle: Bundle, ctx: IntakeContext): string[] => {
+const assistantReasons = (bundle: Bundle, ctx: Checked): string[] => {
   const reasons: string[] = [];
   const ownActions = new Set(Object.keys(bundle.actions));
   const documentIds = new Set(bundle.documents.map((d) => d.id));
@@ -382,17 +431,48 @@ const assistantReasons = (bundle: Bundle, ctx: IntakeContext): string[] => {
   return reasons;
 };
 
-export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult => {
+// ── the host app's own vocabulary ────────────────────────────
+//
+// What the bundle carries under `extension`, read by the schema the app
+// supplied and then held to the app's own check. An app that supplied no
+// schema takes no extension.
+const extensionOf = <Extension>(bundle: Bundle, ctx: IntakeContext<Extension>): { reasons: string[]; extension?: Extension } => {
+  const config = ctx.extension;
+  if (config === undefined) return { reasons: bundle.extension === undefined ? [] : ['extension: this app takes no extension, and the bundle carries one.'] };
+  const read = config.schema.safeParse(bundle.extension);
+  if (!read.success) return { reasons: read.error.issues.map((issue) => `${['extension', ...issue.path].join('.')}: ${issue.message}`) };
+  return { reasons: config.check?.(read.data, extensionContextOf(bundle, ctx)) ?? [], extension: read.data };
+};
+
+export const extensionContextOf = (bundle: Bundle, ctx: Pick<IntakeContext, 'integrationId' | 'url' | 'fingerprints' | 'layoutMisfits'>): ExtensionContext => ({
+  integration: ctx.integrationId,
+  url: ctx.url,
+  actions: bundle.actions,
+  fingerprints: ctx.fingerprints,
+  layoutMisfits: ctx.layoutMisfits,
+});
+
+// WHAT THE BUNDLE'S OWN SCHEMA REFUSED, each issue as a sentence. A top-level
+// key that is not a field of a bundle is named, with where it belongs: the
+// fields of a bundle are nisc's own, and what one app's vocabulary adds to
+// them is that app's to read.
+const schemaReasons = (error: z.ZodError): string[] =>
+  error.issues.flatMap((issue) =>
+    issue.code === 'unrecognized_keys' && issue.path.length === 0
+      ? issue.keys.map((key) => `"${key}" is not a field of a bundle. What belongs to the host app’s own vocabulary goes under \`extension\`.`)
+      : [`${issue.path.join('.') || '(root)'}: ${issue.message}`],
+  );
+
+export const runIntake = <Extension = undefined>(payload: unknown, ctx: IntakeContext<Extension>): IntakeResult<Extension> => {
   // Before anything reads it — the upgrader walks it and the schema recurses
   // on it, and either overflows the stack on a deep enough payload.
   if (exceedsDepth(payload)) return { ok: false, reasons: [depthRefusal()] };
   const upgraded = upgradeBundle(payload, ctx.upgrader);
   if (!upgraded.ok) return upgraded;
   const parsed = BundleSchema.safeParse(upgraded.payload);
-  if (!parsed.success) {
-    return { ok: false, reasons: parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`) };
-  }
+  if (!parsed.success) return { ok: false, reasons: schemaReasons(parsed.error) };
   const bundle = parsed.data;
+  const extension = extensionOf(bundle, ctx);
   const reasons = [
     ...(bundle.integration === ctx.integrationId ? [] : [`bundle says it is "${bundle.integration}" but was fetched as "${ctx.integrationId}"`]),
     ...actionReasons(bundle, ctx),
@@ -400,6 +480,7 @@ export const runIntake = (payload: unknown, ctx: IntakeContext): IntakeResult =>
     ...bindingReasons(bundle, ctx),
     ...documentReasons(bundle, ctx),
     ...assistantReasons(bundle, ctx),
+    ...extension.reasons,
   ];
-  return reasons.length > 0 ? { ok: false, reasons } : { ok: true, bundle };
+  return reasons.length > 0 ? { ok: false, reasons } : { ok: true, bundle, extension: extension.extension };
 };

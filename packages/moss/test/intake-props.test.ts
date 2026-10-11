@@ -25,6 +25,7 @@ const Choice = z
 
 const ctx = (): IntakeContext => ({
   integrationId: 'acme',
+  url: 'https://acme.example',
   // The host's answer about a layout, over a kit of two components.
   layoutMisfits: (layout) =>
     layoutMisfits(

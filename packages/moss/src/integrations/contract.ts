@@ -24,6 +24,10 @@ export type Contract = {
   // hand a rider), and which menu hubs accept placed screens.
   attachable: Record<string, readonly string[]>;
   menuSlots: readonly string[];
+  // What the host app tells vendors about its own vocabulary: what a bundle
+  // may say under `extension`. As the app handed it over; absent when it
+  // handed none.
+  extension?: unknown;
 };
 
 // A props schema the contract can show: it converts itself to JSON Schema
@@ -56,6 +60,8 @@ export type ContractHost = {
   charter: Charter;
   attachable?: Readonly<Record<string, Readonly<Record<string, string>>>>;
   menuSlots?: readonly string[];
+  // `extension.contract` of `createIntegrations` (./intake.ts).
+  extension?: unknown;
 };
 
 export const buildContract = (host: ContractHost, integrationId: string): Contract => {
@@ -91,6 +97,7 @@ export const buildContract = (host: ContractHost, integrationId: string): Contra
     actionSchema: 'nova ActionDefinition',
     attachable,
     menuSlots: [...(host.menuSlots ?? [])],
+    ...(host.extension === undefined ? {} : { extension: host.extension }),
   };
 };
 
@@ -173,6 +180,18 @@ export const contractAsMarkdown = (contract: Contract, fingerprints: readonly st
     ``,
     contract.menuSlots.map((hub) => `- ${hub}`).join('\n') || '(none)',
     ``,
+    ...(contract.extension === undefined
+      ? []
+      : [
+          `## What this app adds: \`extension\``,
+          ``,
+          `A bundle says what belongs to this app's own vocabulary under \`extension\`. What the app tells you of it:`,
+          ``,
+          '```json',
+          JSON.stringify(contract.extension, null, 2),
+          '```',
+          ``,
+        ]),
     `## What you cannot ship`,
     ``,
     `- vex entries or mutations. Call what is listed above; if you need a read that`,

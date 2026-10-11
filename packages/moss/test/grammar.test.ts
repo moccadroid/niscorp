@@ -121,6 +121,7 @@ describe('stored documents — upgraded at boot, by the feature that keeps them'
 describe('submitted documents — upgraded at intake', () => {
   const ctx = async (): Promise<IntakeContext> => ({
     integrationId: 'acme',
+    url: 'https://acme.example',
     layoutMisfits: (layout) =>
       layoutMisfits(
         layout,

@@ -15,6 +15,7 @@ import type { IntakeContext } from '../src/integrations/intake';
 
 const ctx = (hostActions: Record<string, ActionDefinition> = {}): IntakeContext => ({
   integrationId: 'acme',
+  url: 'https://acme.example',
   layoutMisfits: () => [],
   endlessChains,
   fingerprints: new Set<string>(),
