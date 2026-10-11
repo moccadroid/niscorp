@@ -134,7 +134,7 @@ const literalText = (node: ts.Node): string | undefined => {
 const bare = (node: ts.Expression): ts.Expression =>
   ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isNonNullExpression(node) || ts.isAwaitExpression(node) ? bare(node.expression) : node;
 
-const named = (name: ts.PropertyName, pattern: RegExp): boolean => (ts.isIdentifier(name) || ts.isStringLiteral(name)) && pattern.test(name.text);
+const named = (name: ts.Node, pattern: RegExp): boolean => (ts.isIdentifier(name) || ts.isStringLiteral(name)) && pattern.test(name.text);
 
 // The text a call is handed. pg takes `{ text, values }` and libsql `{ sql,
 // args }` where the others take the text itself.
