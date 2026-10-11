@@ -1496,6 +1496,75 @@ describe('shells — adopt', () => {
     expect(() => session.shell.push('main', 'extra')).toThrow();
   });
 
+  // ONE SHELL THAT IS NEVER ANSWERED HOLDS UP NOBODY. Within one change the
+  // living shells were asked one after another, each waiting for the one
+  // before it: somebody whose composition is never answered (an app's
+  // `identity` that hangs for them) held every shell after theirs for that
+  // change, and those kept an action that had been taken away.
+  const neverAnswered = (who: string, setup: Partial<HostSetup> = {}): { host: ReturnType<typeof standHost>; change: (actions: Record<string, unknown>) => void } => {
+    let inForce: Record<string, unknown> = { home, extra };
+    let changed = false;
+    const host = standHost(
+      hostConfig({
+        ...ctx,
+        ...setup,
+        app: base,
+        actions: () => inForce as ReturnType<NonNullable<HostSetup['actions']>>,
+        resolve: async (principal) => {
+          // Answered while their shell is built, and never again after the change.
+          if (changed && principal === who) await new Promise<never>(() => undefined);
+          return { roles: ['member'], scope: {}, catalog: { ids: Object.keys(inForce) }, variants: new Map() };
+        },
+      }),
+    );
+    return {
+      host,
+      change: (actions) => {
+        inForce = actions;
+        changed = true;
+      },
+    };
+  };
+
+  it('a principal who is never answered holds up nobody after them, in that change', async () => {
+    const { host, change } = neverAnswered('usr_stuck');
+    const before = await host.session('t', 'usr_before');
+    // Built before the two after it, so a walk reaches it before them.
+    await host.session('t', 'usr_stuck');
+    const after = await host.session('t', 'usr_after');
+    const last = await host.session('t', 'usr_last');
+    for (const session of [before, after, last]) session.shell.push('main', 'extra');
+    await settle();
+
+    change({ home, ledger });
+    host.adopt();
+    await settle();
+
+    for (const session of [before, after, last]) {
+      expect(mounted(session)).toEqual(['home']);
+      session.shell.push('main', 'ledger');
+      expect(mounted(session)).toEqual(['home', 'ledger']);
+    }
+  });
+
+  it('nor on a host that keeps no shell, where every connection has its own', async () => {
+    const { host, change } = neverAnswered('usr_stuck', { kept: false });
+    await host.session('t', 'usr_stuck');
+    const after = await host.session('t', 'usr_after');
+    const nobody = await host.session(null, null);
+    for (const session of [after, nobody]) session.shell.push('main', 'extra');
+    await settle();
+
+    change({ home });
+    host.adopt();
+    await settle();
+
+    for (const session of [after, nobody]) {
+      expect(mounted(session)).toEqual(['home']);
+      expect(() => session.shell.push('main', 'extra')).toThrow();
+    }
+  });
+
   // THE OTHER HALF: a build under way was made from what its principal held
   // when it began, so it ends up level with what is in force WHEN IT LANDS,
   // however many changes happened on the way.

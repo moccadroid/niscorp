@@ -193,20 +193,25 @@ const adoptInto = async (host: HostState, cell: Cell): Promise<void> => {
 // built with for as long as it lived.
 //
 // Asynchronous and unawaited: definitions landing a tick late simply
-// register, which is the same progressive path `seeds` already takes. The
-// living shells one at a time, so a change does not resolve every principal
-// at once.
+// register, which is the same progressive path `seeds` already takes.
 //
-// A CHANGE WAITS FOR NO OTHER CHANGE, AND FOR NO BUILD. Each change walks on
-// its own, and each build under way is followed on its own: its cell adopts
-// when it lands, whenever that is. The changes were one chain, and each
-// waited for every build under way: one build that never landed (somebody
-// whose `inputs` never answers) ended the chain, and no shell of the host
-// adopted anything again. Which of two changes a shell ends up with is not
-// decided by the order they finish in (`adoptInto`). What one walk still
-// waits for is its own askings, one after another: a principal who is never
-// answered holds the shells after theirs for that change, and the next
-// change walks all of them again.
+// EACH SHELL ADOPTS ON ITS OWN. A change waits for no other change, for no
+// build, and no shell waits for another shell. Each build under way is
+// followed on its own: its cell adopts when it lands, whenever that is. The
+// changes were one chain, and each waited for every build under way: one
+// build that never landed (somebody whose `inputs` never answers) ended the
+// chain, and no shell of the host adopted anything again. And within one
+// change the living shells were asked one after another, each after the one
+// before it had been answered: a principal whose composition was never
+// answered held every shell after theirs for that change. Which of two
+// changes a shell ends up with is not decided by the order they finish in
+// (`adoptInto`).
+//
+// WHAT THAT COSTS: every living shell's composition is asked in the same
+// moment, where it was one at a time. Who a principal is, is asked once for
+// all the shells of that principal and remembered (the identity module), so
+// a change is as many resolutions at once as the host has principals whose
+// record is not held.
 //
 // A SHELL THAT CANNOT ADOPT IS SAID, AND THE REST GO ON. One throw (a
 // principal that no longer resolves) used to end the walk, and every
@@ -221,10 +226,7 @@ const adoptAll = (host: HostState): void => {
   };
   // A build that fails is its caller's to hear of; there is nothing to adopt.
   for (const build of host.underWay) void build.then(adopting, () => undefined);
-  const living = [...host.living.values()];
-  void (async () => {
-    for (const cell of living) await adopting(cell);
-  })();
+  for (const cell of [...host.living.values()]) void adopting(cell);
 };
 
 // Dispose a shell and stand its replacement in the same cell, carrying the

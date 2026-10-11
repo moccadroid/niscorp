@@ -620,9 +620,10 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   is in force (the charter, every entry's reach, the layout variants), drop
   every per-principal memo and identity record, and have every living shell
   adopt: it is brought level with what its principal holds now, in place
-  (`ShellHost.adopt`, below). Every living shell is the one kept for each
-  signed-in person, the one built for each connection of nobody signed in,
-  and the one a page built for each connection. It also moves the generation
+  ("A change is the server's", under `shells` below). Every living shell is
+  the one kept for each signed-in person, the one built for each connection
+  of nobody signed in, and the one a page built for each connection. It also
+  moves the generation
   pointer, and every other process on the same database follows it within
   one poll: it reads again the sets of actions it has a loader for, runs the
   same check, drops what it derived and has its living shells adopt (see
@@ -1328,6 +1329,10 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
     it. What a shell's canvases are, and what is mounted on them, is the
     shell's own state and is not taken again: a reset builds that afresh. A
     shell that cannot adopt is logged and keeps what it held; the rest go on.
+    Each shell adopts on its own: one whose principal is never answered (an
+    `identity` that hangs for them) holds up no other. So a change asks about
+    every living shell in the same moment, and an app's `identity` runs at
+    once for every signed-in principal whose record is not held.
     A shell whose build was under way adopts when it lands, and so does one a
     reset was replacing; no change waits for a build, or for another change.
     One built for the length of a `snapshot` is read and ended, and adopts
