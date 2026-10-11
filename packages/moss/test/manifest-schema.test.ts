@@ -1,19 +1,21 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { z } from 'zod';
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
 import type { PgPool, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { receiveManifest } from '../src/manifest';
 import type { NiscApp } from '../src/manifest';
 import { manifestMisfits } from '../src/manifest/schema';
-import { createServer } from '../src/server';
+import { serverOver } from '../src/server/server';
 
 // THE MANIFEST IS READ BY A SCHEMA WHEN IT IS HANDED OVER, AND THEN FROZEN.
 // Every case but the last is the schema, or the hand-over, over a small object:
-// no database and no server. The last one calls `createServer`, because what
-// it proves is about `createServer`: that it refuses before it touches the
-// database it was given. That database is a pool that fails the test if it is
-// asked anything. (That an edit throws once `createServer` has RETURNED is
-// proved where a server is booted anyway: charter-report.test.ts.)
+// no database and no server. The last one is the order of a boot: that a
+// manifest is read before the database is asked anything. It is held on the
+// boot itself (`serverOver`, which is `createServer` with the step that
+// brings the data module up handed in), with a step that says it was reached
+// and a pool that says it was asked. No server is created and no database is
+// started. (That an edit throws once `createServer` has RETURNED is proved
+// where a server is booted anyway: charter-report.test.ts.)
 
 const plain: LayoutNode = { component: 'Text', children: 'plain' };
 const home: ActionDefinition = { id: 'home', layout: plain, triggers: [{ event: 'ui:click', ref: 'open', do: [{ push: { action: 'panel' } }] }] };
@@ -244,12 +246,12 @@ describe('the hand-over freezes what it read', () => {
   });
 });
 
-describe('createServer — a manifest that does not parse', () => {
-  it('refuses with every place that does not fit, before the database is asked anything', async () => {
-    const asked: string[] = [];
+describe('a boot — a manifest that does not parse', () => {
+  it('refuses with every place that does not fit, before the data module is brought up and before the database is asked anything', async () => {
+    const reached: string[] = [];
     const pool: PgPool = {
       query: async (sql: string) => {
-        asked.push(sql);
+        reached.push(`the database was asked: ${sql}`);
         throw new Error('the database was asked before the manifest was read');
       },
     };
@@ -262,9 +264,30 @@ describe('createServer — a manifest that does not parse', () => {
       }),
     );
 
-    await expect(createServer(handed, { pool, db: pool, session: 'dev-open' })).rejects.toThrow(
+    const booting = serverOver(handed, { pool, db: pool, session: 'dev-open' }, async () => {
+      reached.push('the data module was brought up');
+      throw new Error('the data module was brought up before the manifest was read');
+    });
+
+    await expect(booting).rejects.toThrow(
       /^The manifest does not parse — refusing to serve:\n {2}actions\.panel\.layout\.component: Invalid input: expected string, received number\n {2}shell\.inputs: expected a function$/,
     );
-    expect(asked).toEqual([]);
+    expect(reached).toEqual([]);
+  });
+
+  it('one that parses goes on to the step that brings the data module up', async () => {
+    const reached: string[] = [];
+    const pool: PgPool = { query: async () => ({ rows: [] }) };
+    const said = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const booting = serverOver({ charter: { public: ['home'] }, actions: { home, panel } }, { pool, db: pool, session: 'dev-open' }, async () => {
+        reached.push('the data module was brought up');
+        throw new Error('and that is as far as this goes');
+      });
+      await expect(booting).rejects.toThrow('and that is as far as this goes');
+      expect(reached).toEqual(['the data module was brought up']);
+    } finally {
+      said.mockRestore();
+    }
   });
 });
