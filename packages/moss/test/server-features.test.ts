@@ -93,6 +93,68 @@ describe('the features, as the server starts them', () => {
   });
 });
 
+// A CREDENTIAL IS REACHED BY ITS PREFIX. The door hands a token to the first
+// credential whose prefix the token starts with, and to the session verifier
+// when none does. So what a feature registers decides whose tokens it is
+// handed, and a feature anybody writes registers one.
+describe('the features — a credential of a feature’s own', () => {
+  const nobody = async (): Promise<{ refused: { status: 401; error: string; message: string } }> => ({ refused: { status: 401, error: 'refused', message: 'No.' } });
+  // A feature that registers each of these prefixes when it starts.
+  const reading = (name: string, ...prefixes: string[]): Feature => ({
+    name,
+    start: (seams) => {
+      for (const prefix of prefixes) seams.registerCredential(prefix, nobody);
+    },
+  });
+
+  it('is registered under the prefix its tokens carry, one for each feature that has one', async () => {
+    const { start, parts } = await world([reading('keys', 'ik_'), reading('hooks', 'wh_')]);
+    await start();
+    expect(parts.registered.credentials.map((credential) => [credential.feature, credential.prefix])).toEqual([
+      ['keys', 'ik_'],
+      ['hooks', 'wh_'],
+    ]);
+  });
+
+  // Every token starts with nothing: the feature would be handed every token
+  // there is, each person's session included, and decide who it is.
+  it('an empty prefix refuses the boot', async () => {
+    const { start, parts } = await world([reading('greedy', '')]);
+    await expect(start()).rejects.toThrow(
+      /^moss: the feature "greedy" registered a credential with an empty prefix\. A token is handed to the credential whose prefix it starts with, and every token starts with nothing: this one would be handed every token there is, each person's session included\./,
+    );
+    expect(parts.registered.credentials).toEqual([]);
+  });
+
+  // Which of two features reads a token would be whichever started first.
+  it.each([
+    ['the prefix another feature registered', 'ik_', 'ik_'],
+    ['one that another feature’s prefix starts with', 'ik_', 'ik'],
+    ['one that starts with another feature’s prefix', 'ik_', 'ik_live_'],
+  ])('%s refuses the boot', async (_what, first, second) => {
+    const { start, parts } = await world([reading('keys', first), reading('other', second)]);
+    await expect(start()).rejects.toThrow(
+      `moss: the feature "other" registered a credential for tokens that start with "${second}", and the feature "keys" reads the ones that start with "${first}". ` +
+        'One is the start of the other, so which of the two a token is handed to would be decided by the order the features start in.',
+    );
+    expect(parts.registered.credentials.map((credential) => credential.prefix)).toEqual([first]);
+  });
+
+  it('a feature that registers one prefix twice is refused the same way', async () => {
+    const { start } = await world([reading('keys', 'ik_', 'ik_')]);
+    await expect(start()).rejects.toThrow(/the feature "keys" registered a credential for tokens that start with "ik_", and the feature "keys" reads the ones that start with "ik_"/);
+  });
+
+  // `st_` is what moss's own stored sessions start with (../src/identity).
+  it.each(['st_', 's', 'st_live_'])('a prefix that overlaps the one moss’s stored sessions carry ("%s") refuses the boot', async (prefix) => {
+    const { start } = await world([reading('greedy', prefix)]);
+    await expect(start()).rejects.toThrow(
+      `moss: the feature "greedy" registered a credential for tokens that start with "${prefix}", and the sessions moss keeps itself start with "st_". ` +
+        "One is the start of the other, so in a deployment that keeps them (`session: 'sessions'`) a person's session would be handed to the feature.",
+    );
+  });
+});
+
 const TAGS: SeedEntry = { fingerprint: 'tagging/all', dsl: { from: ['tags'], fields: ['tags.id'], limit: 10 } };
 const NOTES: SeedEntry = { fingerprint: 'probe/notes', dsl: { from: ['notes'], fields: ['notes.id', 'notes.body'], limit: 10 } };
 

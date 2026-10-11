@@ -34,6 +34,12 @@ import type { PgPool } from '@niscorp/vex';
 
 const hashSessionToken = (token: string): string => createHash('sha256').update(token).digest('hex');
 
+// What every token minted here starts with. It is how a stored session is
+// told from a credential of a feature's own at the door (../server,
+// authenticate.ts), which is why no feature may register a prefix that
+// overlaps it.
+export const SESSION_TOKEN_PREFIX = 'st_';
+
 // What the two lookups read off a row. The database is outside this process,
 // so a row is parsed like anything else that arrives: one that is not there,
 // or does not hold what was selected, is nobody.
@@ -78,7 +84,7 @@ export const initSessions = async (pool: PgPool): Promise<void> => {
 // deployment needs a timer for it.
 export const mintSession = async (pool: PgPool, principal: string, ttlMs: number): Promise<string> => {
   await pool.query('DELETE FROM sessions WHERE expires_at < now()');
-  const token = `st_${randomBytes(32).toString('base64url')}`;
+  const token = `${SESSION_TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
   await pool.query('INSERT INTO sessions (token_hash, principal, expires_at) VALUES ($1, $2, $3)', [
     hashSessionToken(token),
     principal,
