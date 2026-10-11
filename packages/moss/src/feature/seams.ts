@@ -68,12 +68,7 @@ export type FeatureSeams = {
   // gate.
   mountOperatorRoutes: (routes: Hono<FeatureEnv>) => void;
   // A bearer token that starts with `prefix` is this feature's to read. It is
-  // handed the token and the request it came on, and says who that is. THE
-  // PREFIX IS WHAT ITS TOKENS START WITH AND NO OTHER TOKEN DOES: not empty
-  // (every token starts with nothing), not the start of another feature's
-  // prefix nor starting with one, and sharing no start with `st_`, which the
-  // sessions moss keeps itself carry. Any of those throws here, which refuses
-  // the boot, with a sentence that says which.
+  // handed the token and the request it came on, and says who that is.
   registerCredential: (prefix: string, principalOf: (token: string, request: Request) => Promise<CredentialAnswer>) => void;
 
   // ── who is calling ──

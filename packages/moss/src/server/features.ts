@@ -6,7 +6,6 @@ import type { Identity } from '../identity';
 import { endlessChains, layoutMisfits, refusalOf } from '../manifest';
 import type { KitComponents, NiscApp, OwnedActions, RunningManifest } from '../manifest';
 import type { NiscRuntime } from '../runtime';
-import { registerCredential } from './authenticate';
 import type { FeatureCredential } from './authenticate';
 import type { Env } from './moss-server';
 
@@ -67,10 +66,8 @@ const seamsFor = (feature: Pick<Feature, 'name'>, owned: OwnedActions, { app, ru
   mountOperatorRoutes: (routes) => {
     operator.route('/', routes);
   },
-  // Held to being a prefix no other credential shares the start of, and
-  // refused otherwise (./authenticate.ts).
   registerCredential: (prefix, principalOf) => {
-    registerCredential(registered.credentials, { feature: feature.name, prefix, principalOf });
+    registered.credentials.push({ prefix, principalOf });
   },
   resolveIdentity: identity.resolve,
   scopeOf: identity.scopeValuesFor,

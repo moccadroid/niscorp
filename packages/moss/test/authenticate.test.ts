@@ -52,7 +52,7 @@ describe('authentication — who is calling', () => {
 
   it('a feature’s own credential says who its token is, or what to answer instead', async () => {
     const credentials: AuthenticationDeps['credentials'] = [
-      { feature: 'integrations', prefix: 'ik_', principalOf: async (token) => (token === 'ik_live' ? { principal: 'integration@studio' } : { refused: { status: 403, error: 'forbidden', message: 'No.' } }) },
+      { prefix: 'ik_', principalOf: async (token) => (token === 'ik_live' ? { principal: 'integration@studio' } : { refused: { status: 403, error: 'forbidden', message: 'No.' } }) },
     ];
     const admitted = await asked(serverWith({ credentials }), 'ik_live');
     expect(await admitted.json()).toEqual({ principal: 'integration@studio', roles: ['member'] });
@@ -75,8 +75,8 @@ describe('authentication — who is calling could not be found out', () => {
   it.each([
     ['who the principal is cannot be resolved', (): Hono<Env> => serverWith({ resolve: failing }), 'good'],
     ['the verifier cannot be asked', (): Hono<Env> => serverWith({ session: failing }), 'good'],
-    ['a feature’s credential cannot be read', (): Hono<Env> => serverWith({ credentials: [{ feature: 'integrations', prefix: 'ik_', principalOf: failing }] }), 'ik_live'],
-    ['a feature’s principal cannot be resolved', (): Hono<Env> => serverWith({ credentials: [{ feature: 'integrations', prefix: 'ik_', principalOf: async () => ({ principal: 'integration@studio' }) }], resolve: failing }), 'ik_live'],
+    ['a feature’s credential cannot be read', (): Hono<Env> => serverWith({ credentials: [{ prefix: 'ik_', principalOf: failing }] }), 'ik_live'],
+    ['a feature’s principal cannot be resolved', (): Hono<Env> => serverWith({ credentials: [{ prefix: 'ik_', principalOf: async () => ({ principal: 'integration@studio' }) }], resolve: failing }), 'ik_live'],
   ])('%s: answered 500 and logged, not 401, and nothing of why is sent', async (_label, server, token) => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     const answer = await asked(server(), token);

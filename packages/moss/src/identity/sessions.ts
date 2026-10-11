@@ -43,11 +43,8 @@ import type { PgPool } from '@niscorp/vex';
 
 const hashSessionToken = (token: string): string => createHash('sha256').update(token).digest('hex');
 
-// What every token minted here starts with. It is how a stored session is
-// told from a credential of a feature's own at the door (../server,
-// authenticate.ts), which is why no feature may register a prefix that
-// overlaps it.
-export const SESSION_TOKEN_PREFIX = 'st_';
+// What every token minted here starts with.
+const SESSION_TOKEN_PREFIX = 'st_';
 
 // What the two lookups read off a row. The database is outside this process,
 // so a row is parsed like anything else that arrives: one that is not there,

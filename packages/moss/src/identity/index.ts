@@ -30,5 +30,5 @@ export { assignedRoles, createIdentity } from './resolution';
 export type { Identity, ResolvedIdentity } from './resolution';
 export { newSeal, openSealed, sealCookie, sealOf, sealSession } from './seal';
 export { ownOriginOf, sessionCookies, sessionTokenOf } from './session-cookie';
-export { SESSIONS_SEQUENCE, SESSION_TOKEN_PREFIX, mintSession, revokeAllFor, sessionRemainingMs } from './sessions';
+export { SESSIONS_SEQUENCE, mintSession, revokeAllFor, sessionRemainingMs } from './sessions';
 export { sessionRevokerOf, sessionVerifierOf } from './verifier';

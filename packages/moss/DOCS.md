@@ -1093,7 +1093,7 @@ its own, and the core never imports it.
   |---|---|
   | `mountRoutes(hono)` | mount routes at the server's root, behind the authentication every route gets |
   | `mountOperatorRoutes(hono)` | mount routes under `/operator`, behind the operator key and the app's gate |
-  | `registerCredential(prefix, principalOf)` | read a bearer token that starts with the feature's own prefix, and say who it is. The prefix is what its tokens start with and no other token does: one that is empty, that is the start of another feature's or starts with it, or that shares a start with `st_` (what moss's stored sessions carry) refuses the boot, with a sentence that says which |
+  | `registerCredential(prefix, principalOf)` | read a bearer token that starts with the feature's own prefix, and say who it is |
   | `resolveIdentity(principal)` | who a principal is: their roles, and the integrations live for them |
   | `scopeOf(principal)` | the scope values a principal carries, which the engine pins rows by |
   | `grantedActionIds(roles, installed)` | the action ids a set of roles holds of the actions in force |
