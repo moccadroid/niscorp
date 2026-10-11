@@ -278,7 +278,6 @@ type NiscRuntime = {
   operatorGate?: (c: Context, next: Next) => Response | void | Promise<Response | void>;
   fabric?: Fabric;                 // cross-process invalidations and nudges; default off
   telemetry?: Telemetry;           // one span sink; default off
-  signingSeed?: string;            // dev only: a stable assertion signing keypair; 32 bytes as base64, and fewer refuses the boot
 };
 ```
 
@@ -986,7 +985,6 @@ its own, and the core never imports it.
   | `fingerprintsFor(principal)` | the fingerprints that principal's own policy lets them replay |
   | `onWrite(listener)` | hear every write the routes serve, once it is committed: what vex reports of it, and the place in a chain the request named; answers the way to stop hearing |
   | `telemetry` | where a span goes; absent, none is built |
-  | `signingSeed` | the seed the deployment signs with (`runtime.signingSeed`) |
   | `wrapWire(wrap)` | lay a function around the wire a session's screens call through |
 
 A feature is handed no pool. What it reads and writes on its own tables it
@@ -1578,6 +1576,15 @@ await integrations.listAttachments('people.detail');
 - `storePress(integrationId, name, bytes, contentType): Promise<string>`
   (`StorePress`) — where a bundle's listing images land; it answers the URL
   they are served from. Absent, a bundle that declares press is refused.
+- `signingSeed: string` — a fixed seed for the keypair assertions are signed
+  with: 32 bytes, as base64 (`node -e
+  "console.log(require('node:crypto').randomBytes(32).toString('base64'))"`).
+  With none, a keypair is made when the feature starts and kept nowhere, so
+  each boot and each process has its own. Give one where an integration's
+  service holds the public half in its environment, or where a deployment
+  runs more than one process: the same seed is the same key everywhere. It is
+  this feature's setting and no other feature is handed it. One that decodes
+  to fewer than 32 bytes refuses the boot.
 - `outboundTimeoutMs: number` — how long a call out to an integration's
   service may take, its answer and its body together. Default `30000`, nova's
   default wait for an endpoint's reply. It bounds every call: a screen's
@@ -1695,7 +1702,7 @@ workspace that wants to mint or hold one. An integration verifies it against
 `GET /api/integrations/verify-key`.
 
 `seed` is 32 bytes as base64, and makes the same keypair wherever it is given:
-it is what `runtime.signingSeed` hands the feature. With no seed (absent, or
+it is what the feature is given as `signingSeed`. With no seed (absent, or
 the empty string) a keypair is generated and kept nowhere. **A seed that is
 given and decodes to fewer than 32 bytes throws**, when the signer is made,
 which for a server is while it boots: `moss: the signing seed decodes to 13

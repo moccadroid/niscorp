@@ -24,15 +24,6 @@ export const devRuntime = async (): Promise<DevRuntime> => {
 
   const operatorKey = process.env['OPERATOR_KEY'] ?? '';
 
-  // A FIXED SIGNING SEED, dev only. Lyra's database is in-memory and replayed on
-  // every boot, so without this the assertion keypair is fresh each restart —
-  // and the payments integration, a SEPARATE process holding lyra's old public key,
-  // starts answering "who are you?" to every call until somebody re-copies the
-  // new one. Set `LYRA_SIGNING_SEED` (32 bytes base64) and the public half stays
-  // put across restarts, so the integration's env stays valid. Unset in production,
-  // where the ephemeral key is the right default (assert.ts).
-  const signingSeed = process.env['LYRA_SIGNING_SEED'] ?? '';
-
   return {
     db,
     pool: createPglitePool(db, RAW_DATE_PARSERS),
@@ -41,6 +32,5 @@ export const devRuntime = async (): Promise<DevRuntime> => {
     // moss says so at boot. The honest label for what this always was.
     session: 'dev-open',
     ...(operatorKey === '' ? {} : { operatorKey }),
-    ...(signingSeed === '' ? {} : { signingSeed }),
   };
 };

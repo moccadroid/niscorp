@@ -324,7 +324,7 @@ export type RunSink = (record: RunRecord, session: FunctionSession) => void;
 // what a session may ask for by name.
 //
 // IT SAYS WHO IS CALLING AND HOLDS NO KEY. It used to carry `runtime`, the
-// whole environment (the database pool, the operator key, the signing seed),
+// whole environment (the database pool, the operator key),
 // and `policy`, the very object the routes enforce for everybody holding
 // those roles. Code that runs for one person was handed what reaches every
 // person's rows. What an app read them for has a call of its own:

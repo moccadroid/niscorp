@@ -130,9 +130,6 @@ export type FeatureSeams = {
   // ── what the deployment supplies ──
   // Where a span goes. Absent: none is built.
   telemetry: Telemetry | undefined;
-  // The seed the deployment signs with (`runtime.signingSeed`). Absent: a key
-  // made at boot and kept nowhere.
-  signingSeed: string | undefined;
 
   // ── what they are looking at ──
   // Lay a function around the wire a session's screens call through.

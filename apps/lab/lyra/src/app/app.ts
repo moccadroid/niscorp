@@ -39,6 +39,9 @@ export type ServerDeps = {
   // Re-read the automation rows into tide. Late-bound like everything else
   // here; the `automations` reaction is its only caller.
   reloadAutomations: () => Promise<number>;
+  // The seed the integrations feature signs its assertions with, when the
+  // environment gives one (`boot.ts` reads it). Absent: a key made at boot.
+  signingSeed?: string;
 };
 
 const ROLE_LABEL: Record<string, string> = { owner: 'Owner', manager: 'Manager', instructor: 'Instructor', desk: 'Front desk', member: 'Member', automation: 'Automation', integration: 'Integration' };
@@ -222,6 +225,7 @@ export const buildLyra = (deps: ServerDeps): NiscApp => {
     // approval card and the store tile say "under Money" rather than
     // "under hub.money". Derived from the nav rather than typed twice.
     placementNames: { ...Object.fromEntries(AREAS.map((area) => [area.id, area.label])), 'people.detail': 'a member’s record' },
+    ...(deps.signingSeed === undefined ? {} : { signingSeed: deps.signingSeed }),
   });
 
   // The write-fact bridge, a feature of moss too: every committed write

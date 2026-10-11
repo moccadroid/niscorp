@@ -181,17 +181,4 @@ export type NiscRuntime = {
   // ring buffer and/or an exporter. Operational, not application: a service is
   // observed by virtue of running moss, never by anything it authors.
   telemetry?: Telemetry;
-
-  // A FIXED SEED FOR THE ASSERTION SIGNING KEYPAIR — dev only, and off by
-  // default (../integrations, credentials.ts). Without it the keypair regenerates every boot, which
-  // on an in-memory database means an integration's held public key goes stale
-  // on every restart and it starts refusing calls. Setting it makes the public
-  // half stable, so a separate service's environment stays valid across
-  // restarts. A deployment leaves this unset and keeps the ephemeral key.
-  //
-  // 32 bytes, as base64. One that decodes to fewer refuses the boot of an app
-  // that names the integrations feature, with a sentence that says its length:
-  // it used to be dropped without a word, and each process signed with a
-  // random key of its own.
-  signingSeed?: string;
 };

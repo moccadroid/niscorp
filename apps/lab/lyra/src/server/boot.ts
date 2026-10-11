@@ -44,8 +44,19 @@ export const boot = async (): Promise<{ server: MossServer; runtime: DevRuntime;
   const runtime = await devRuntime();
   let built: MossServer | undefined;
   let tide: Tide | undefined;
+  // A FIXED SIGNING SEED, dev only. Lyra's database is in-memory and replayed on
+  // every boot, so without this the assertion keypair is fresh each restart —
+  // and the payments integration, a SEPARATE process holding lyra's old public key,
+  // starts answering "who are you?" to every call until somebody re-copies the
+  // new one. Set `LYRA_SIGNING_SEED` (32 bytes base64) and the public half stays
+  // put across restarts, so the integration's env stays valid. Unset in production,
+  // where the ephemeral key is the right default. It is the integrations
+  // feature's setting, so it goes to where the feature is created and not onto
+  // the runtime.
+  const signingSeed = process.env['LYRA_SIGNING_SEED'] ?? '';
   const app = buildLyra(
     {
+      ...(signingSeed === '' ? {} : { signingSeed }),
       pool: runtime.pool,
       server: () => (built === undefined ? (() => { throw new Error('boot: the server is not up yet'); })() : built),
       tide: () => (tide === undefined ? (() => { throw new Error('boot: tide is not up yet'); })() : tide),

@@ -194,7 +194,6 @@ describe('createTideFacts — the feature', () => {
       fingerprintsFor: notAsked('fingerprintsFor'),
       onWrite,
       telemetry: undefined,
-      signingSeed: undefined,
       wrapWire: notAsked('wrapWire'),
     };
   };

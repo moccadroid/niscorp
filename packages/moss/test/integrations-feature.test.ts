@@ -114,7 +114,6 @@ const world = async (
     fingerprintsFor: async () => ['deals/open'],
     onWrite: () => () => undefined,
     telemetry: undefined,
-    signingSeed: undefined,
     wrapWire: (wrap) => {
       said.wraps.push(wrap);
     },
@@ -209,14 +208,33 @@ describe('createIntegrations — started with the seams', () => {
     ]);
   });
 
-  // The seed is the deployment's (`runtime.signingSeed`), and the feature makes
-  // its signer when it is started: a start that throws refuses the boot.
+  // THE SEED IS THE FEATURE'S OWN SETTING: `createIntegrations({ signingSeed })`.
+  // It was the deployment's (`runtime.signingSeed`) and reached the feature as
+  // a seam, so every feature an app named was handed the private half of the
+  // key assertions are signed with. The feature makes its signer when it is
+  // started: a start that throws refuses the boot.
   it('a signing seed that cannot be a key refuses the start, and so the boot', async () => {
     const { seams, said } = await world();
-    await expect(createIntegrations().start({ ...seams, signingSeed: 'consent-check-seed' })).rejects.toThrow(/signing seed.*decodes to 13 bytes/);
+    await expect(createIntegrations({ signingSeed: 'consent-check-seed' }).start(seams)).rejects.toThrow(/signing seed.*decodes to 13 bytes.*`signingSeed` of `createIntegrations`/);
     // refused before anything was added to the app
     expect(said.credentials.size).toBe(0);
     expect(said.wraps).toEqual([]);
+  });
+
+  it('signs with the seed it was created with, and with a key of its own when it was given none', async () => {
+    const verifyKeyOf = async (config: Parameters<typeof createIntegrations>[0]): Promise<unknown> => {
+      const { seams, server } = await world();
+      await createIntegrations(config).start(seams);
+      return (await server.request('/api/integrations/verify-key')).json();
+    };
+    const seed = Buffer.alloc(32, 7).toString('base64');
+    const seeded = await verifyKeyOf({ signingSeed: seed });
+    expect(seeded).toMatchObject({ key: expect.any(String) });
+    // The same seed is the same key, in another process as in this one.
+    expect(await verifyKeyOf({ signingSeed: seed })).toEqual(seeded);
+    expect(await verifyKeyOf({ signingSeed: Buffer.alloc(32, 8).toString('base64') })).not.toEqual(seeded);
+    // No seed: a key made at the start and kept nowhere, so never the same twice.
+    expect(await verifyKeyOf({})).not.toEqual(await verifyKeyOf({}));
   });
 
   it('hands over what was approved before this process started, and nothing when nothing was', async () => {

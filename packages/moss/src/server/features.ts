@@ -36,7 +36,7 @@ export const wrappedBy =
 
 export type SeamParts = {
   app: Pick<NiscApp, 'charter' | 'shell'>;
-  runtime: Pick<NiscRuntime, 'telemetry' | 'signingSeed'>;
+  runtime: Pick<NiscRuntime, 'telemetry'>;
   // The server's root and its operator prefix: where a feature's routes go.
   server: Hono<Env>;
   operator: Hono<Env>;
@@ -77,7 +77,6 @@ export const seamsOf = (feature: Pick<Feature, 'name'>, { app, runtime, server, 
   fingerprintsFor: async (principal) => data.fingerprintsFor(await identity.resolve(principal)),
   onWrite: data.onWrite,
   telemetry: runtime.telemetry,
-  signingSeed: runtime.signingSeed,
   wrapWire: (wrap) => {
     registered.wireWraps.push(wrap);
   },

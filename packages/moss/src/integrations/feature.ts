@@ -85,6 +85,19 @@ export type IntegrationsConfig = {
   // declares press, which is a sentence at import rather than a hole in a
   // listing.
   storePress?: StorePress;
+  // A FIXED SEED FOR THE KEYPAIR ASSERTIONS ARE SIGNED WITH (./credentials.ts).
+  // 32 bytes, as base64. Without one the keypair is made when the feature
+  // starts and kept nowhere, so every boot has a new one: right where a
+  // restart costing one retry is fine, and wrong where an integration's
+  // service holds the public half in its environment and every restart, or
+  // every other process of the deployment, would be signing with a key it
+  // does not know. With one, the public half stays put.
+  //
+  // The feature's own setting, and nobody else's: the private half of that key
+  // is made from it, so it is said here, to the one thing that signs, and is
+  // on no object another feature is handed. One that decodes to fewer than 32
+  // bytes refuses the boot, with a sentence that says its length.
+  signingSeed?: string;
   // HOW LONG A CALL OUT TO AN INTEGRATION'S SERVICE MAY TAKE, in ms, its
   // answer and its body together. Every call: a screen's through the proxy, a
   // framed page and its callback, a vendor's webhook, `callIntegration`, the
@@ -147,7 +160,7 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
   // THE DEPLOYMENT'S SIGNING IDENTITY — how an integration knows a call is
   // ours. The public half is served; verifying is all anybody can do with it
   // (./credentials.ts).
-  const signer = createAssertionSigner(seams.signingSeed);
+  const signer = createAssertionSigner(config.signingSeed);
   const timeoutMs = config.outboundTimeoutMs ?? DEFAULT_OUTBOUND_TIMEOUT_MS;
   const forward = createForwarder({ find, who: seams.who, scopeOf: seams.scopeOf, mint: signer.mint, timeoutMs });
   // Approved integrations' actions, read from rows. Handed to the running

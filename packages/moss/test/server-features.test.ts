@@ -78,6 +78,16 @@ describe('the features, as the server starts them', () => {
     await start();
     expect(first.seams()).not.toBe(second.seams());
   });
+
+  // The seed assertions are signed with was a member of the seams, so every
+  // feature was handed the private half of that key. It is the integrations
+  // feature's own setting now (`createIntegrations({ signingSeed })`).
+  it('none is handed a signing seed', async () => {
+    const probe = keeping('probe');
+    const { start } = await world([probe.feature]);
+    await start();
+    expect(Object.keys(probe.seams())).not.toContain('signingSeed');
+  });
 });
 
 const TAGS: SeedEntry = { fingerprint: 'tagging/all', dsl: { from: ['tags'], fields: ['tags.id'], limit: 10 } };

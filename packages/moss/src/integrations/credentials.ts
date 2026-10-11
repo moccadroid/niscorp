@@ -82,7 +82,7 @@ const SEED_BYTES = 32;
 const seedRefusal = (bytes: number): Error =>
   new Error(
     `moss: the signing seed decodes to ${bytes} ${bytes === 1 ? 'byte' : 'bytes'}, and a signing key is ${SEED_BYTES}. ` +
-      `Give ${SEED_BYTES} random bytes as base64 (\`runtime.signingSeed\`), or give none: with no seed a key is made when the server starts and kept nowhere.`,
+      `Give ${SEED_BYTES} random bytes as base64 (\`signingSeed\` of \`createIntegrations\`), or give none: with no seed a key is made when the server starts and kept nowhere.`,
   );
 
 const signerFromSeed = (seed: Buffer): { publicKey: KeyObject; privateKey: KeyObject } => {
