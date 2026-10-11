@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { PGlite } from '@electric-sql/pglite';
+import type { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import { createMemoryCache, createPostgresCache, createTieredCache } from '@niscorp/vex';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
@@ -8,6 +8,11 @@ import { defineApp } from '../src/manifest';
 import { createServer } from '../src/server';
 import { migrateTables } from '../src/data/migrate';
 import type { NiscRuntime } from '../src/runtime';
+import { pristineDatabases } from './pristine-database';
+
+// A database of its own for each test that wants one, started from one that
+// was initialised once for this file (./pristine-database.ts says why).
+const freshDatabase = pristineDatabases();
 
 // THE STEP, AND WHAT IT REFUSES. An app with one table, in the shapes a few
 // releases would give it, on one database that outlives them.
@@ -35,7 +40,7 @@ const add = (...columns: string[]): SeedMutation => ({
 const appOf = (...entries: (SeedEntry | SeedMutation)[]) => defineApp({ charter: { public: [] }, actions: {}, entries });
 
 const database = () => {
-  const db = new PGlite();
+  const db = freshDatabase();
   const pool = createPglitePool(db);
   const runtimeOf = (sequences: Sequence[], migrations?: 'verify'): NiscRuntime => ({
     pool,

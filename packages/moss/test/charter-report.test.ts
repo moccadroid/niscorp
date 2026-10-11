@@ -1,10 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
-import { PGlite } from '@electric-sql/pglite';
+import type { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import type { ActionDefinition } from '@niscorp/nova';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { defineApp } from '../src/manifest';
 import { createServer } from '../src/server';
+import { pristineDatabases } from './pristine-database';
+
+// A database of its own for each test that wants one, started from one that
+// was initialised once for this file (./pristine-database.ts says why).
+const freshDatabase = pristineDatabases();
 
 // THE REPORT BOOT VERIFIED, HANDED BACK. `createServer` refuses on the report's
 // errors and reads nothing else of it, so the warnings (an action no role
@@ -52,7 +57,7 @@ const quietly = async <T>(run: () => Promise<T>): Promise<T> => {
 };
 
 const boot = async (app: ReturnType<typeof manifest>) => {
-  const pool = createPglitePool(new PGlite());
+  const pool = createPglitePool(freshDatabase());
   return quietly(() => createServer(app, { pool, db: pool, session: 'dev-open' }));
 };
 

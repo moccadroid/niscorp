@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import { initSessions, mintSession, sessionOf, sessionRemainingMs, revokeSession, revokeAllFor } from '../src/identity/sessions';
 import { sessionRevokerOf, sessionVerifierOf } from '../src/identity/verifier';
@@ -10,6 +9,11 @@ import { hostConfig } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import type { FunctionSession, NiscApp } from '../src/manifest';
 import type { PgPool } from '@niscorp/vex';
+import { pristineDatabases } from './pristine-database';
+
+// A database of its own for each test that wants one, started from one that
+// was initialised once for this file (./pristine-database.ts says why).
+const freshDatabase = pristineDatabases();
 
 // THE TESTS NO APP CAN WRITE. An app's harness mints its own tokens, so every
 // check it runs passes whether the verifier is real or not — a suite that
@@ -19,7 +23,7 @@ import type { PgPool } from '@niscorp/vex';
 // verifier refusing with the sentence instead of serving.
 
 const freshPool = async () => {
-  const pool = createPglitePool(new PGlite());
+  const pool = createPglitePool(freshDatabase());
   await initSessions(pool);
   return pool;
 };
@@ -102,7 +106,7 @@ describe('sessions — the human credential', () => {
   });
 
   it('initSessions is a boot that can run twice', async () => {
-    const pool = createPglitePool(new PGlite());
+    const pool = createPglitePool(freshDatabase());
     await initSessions(pool);
     await initSessions(pool);
     const token = await mintSession(pool, 'i_mara', 60_000);
@@ -112,7 +116,7 @@ describe('sessions — the human credential', () => {
 
 describe('sessionVerifierOf — the three-way choice, and the refusal', () => {
   it('an unset verifier refuses with the sentence naming the choices', () => {
-    const pool = createPglitePool(new PGlite());
+    const pool = createPglitePool(freshDatabase());
     expect(() => sessionVerifierOf({ pool } as Parameters<typeof sessionVerifierOf>[0])).toThrow(
       /'sessions'.*'dev-open'|dev-open.*sessions/,
     );
@@ -129,7 +133,7 @@ describe('sessionVerifierOf — the three-way choice, and the refusal', () => {
   it("'dev-open' trusts every token and says so out loud", async () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      const pool = createPglitePool(new PGlite());
+      const pool = createPglitePool(freshDatabase());
       const verify = sessionVerifierOf({ pool, session: 'dev-open' });
       expect(spy).toHaveBeenCalledWith(expect.stringContaining('every well-formed token is trusted'));
       expect(await verify(mintDevToken('i_anyone'))).toBe('i_anyone');
@@ -139,7 +143,7 @@ describe('sessionVerifierOf — the three-way choice, and the refusal', () => {
   });
 
   it('a function passes through untouched', async () => {
-    const pool = createPglitePool(new PGlite());
+    const pool = createPglitePool(freshDatabase());
     const verify = sessionVerifierOf({ pool, session: (token) => (token === 'the-one' ? 'i_mara' : null) });
     expect(await verify('the-one')).toBe('i_mara');
     expect(await verify('another')).toBeNull();

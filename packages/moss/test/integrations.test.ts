@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { z } from 'zod';
-import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import type { PgPool } from '@niscorp/vex';
 import type { Replay } from '../src/data/own-entries';
@@ -18,6 +17,11 @@ import { BundleSchema } from '../src/integrations/bundle';
 import type { Bundle } from '../src/integrations/bundle';
 import type { StorePress } from '../src/integrations/press';
 import { createAssertionSigner, verifyAssertion } from '../src/integrations/credentials';
+import { pristineDatabases } from './pristine-database';
+
+// A database of its own for each test that wants one, started from one that
+// was initialised once for this file (./pristine-database.ts says why).
+const freshDatabase = pristineDatabases();
 
 // The listing's long form travels WITH the bundle (story, highlights, press),
 // and press is the one field that moves bytes: copied at intake, never
@@ -246,7 +250,7 @@ describe('offers and needs', () => {
   });
 
   it('the row carries them, and a row predating the columns answers empty', async () => {
-    const pool = createPglitePool(new PGlite());
+    const pool = createPglitePool(freshDatabase());
     const registry = await registryOver(pool);
     await pool.query(`INSERT INTO integrations (id, url, offers, needs) VALUES ('acme', 'https://acme.example', '["attendance"]'::jsonb, '["booking"]'::jsonb)`);
     await pool.query(`INSERT INTO integrations (id, url) VALUES ('elder', 'https://elder.example')`);
@@ -315,7 +319,7 @@ describe('capabilities', () => {
   });
 
   it('the row carries them, and a row predating the column answers empty', async () => {
-    const pool = createPglitePool(new PGlite());
+    const pool = createPglitePool(freshDatabase());
     const registry = await registryOver(pool);
     await pool.query(`INSERT INTO integrations (id, url, capabilities) VALUES ('acme', 'https://acme.example', '[{"id":"desk","title":"Front desk"}]'::jsonb)`);
     await pool.query(`INSERT INTO integrations (id, url) VALUES ('elder', 'https://elder.example')`);
@@ -325,7 +329,7 @@ describe('capabilities', () => {
   });
 
   it('a re-import replaces rather than accumulates', async () => {
-    const pool = createPglitePool(new PGlite());
+    const pool = createPglitePool(freshDatabase());
     const registry = await registryOver(pool);
     const upsert = (caps: string): Promise<unknown> =>
       pool.query(
@@ -404,7 +408,7 @@ describe('configuration — what a builder may set', () => {
   });
 
   it('the row carries it, and a row predating the column answers empty', async () => {
-    const pool = createPglitePool(new PGlite());
+    const pool = createPglitePool(freshDatabase());
     const registry = await registryOver(pool);
     const raw = '[{"kind":"toggle","key":"waitlist","title":"Waitlist","description":"","default":true}]';
     await pool.query(`INSERT INTO integrations (id, url, configuration) VALUES ('acme', 'https://acme.example', $1::jsonb)`, [raw]);
@@ -415,7 +419,7 @@ describe('configuration — what a builder may set', () => {
   });
 
   it('a re-import replaces rather than accumulates', async () => {
-    const pool = createPglitePool(new PGlite());
+    const pool = createPglitePool(freshDatabase());
     const registry = await registryOver(pool);
     const upsert = (config: string): Promise<unknown> =>
       pool.query(
@@ -556,7 +560,7 @@ describe('documents — what an add-on lets a person edit', () => {
   });
 
   it('the row carries it, and a re-import replaces rather than accumulates', async () => {
-    const pool = createPglitePool(new PGlite());
+    const pool = createPglitePool(freshDatabase());
     const registry = await registryOver(pool);
     const one = '[{"id":"a","title":"A","capability":"build","registry":[{"type":"t","label":"T","fields":[{"key":"k","label":"K","kind":"line","hint":"","placeholder":"","group":"","advanced":false,"options":[]}],"starter":{},"fragment":{"component":"Text"}}],"sections":{"open":{"max":5}},"regions":{},"checks":[],"publish":{"path":"/integrations/acme/x"}}]';
     const upsert = (documents: string): Promise<unknown> =>
@@ -671,7 +675,7 @@ describe('assistants — what an add-on’s assistant knows', () => {
   });
 
   it('the row carries it, and a re-import replaces rather than accumulates', async () => {
-    const pool = createPglitePool(new PGlite());
+    const pool = createPglitePool(freshDatabase());
     const registry = await registryOver(pool);
     const one = '[{"id":"brand","title":"Brand","intro":"","instructions":"help","grounding":[],"tools":[],"blocks":[],"starters":[],"applies":{"document":"website"},"subject":[]}]';
     const upsert = (assistants: string): Promise<unknown> =>
@@ -751,7 +755,7 @@ describe('intakeContextOf — the host vocabulary reaches intake', () => {
 
 describe('callIntegration', () => {
   const world = async (over: { status?: string; installed?: readonly string[] | undefined } = {}) => {
-    const pool = createPglitePool(new PGlite());
+    const pool = createPglitePool(freshDatabase());
     const registry = await registryOver(pool);
     await pool.query(`INSERT INTO integrations (id, url, status) VALUES ('acme', 'https://acme.example', $1)`, [over.status ?? 'approved']);
     const signer = createAssertionSigner();
@@ -841,7 +845,7 @@ describe('the registry as vex entries — each statement, against a database', (
   const json = (value: unknown): string => JSON.stringify(value);
 
   beforeAll(async () => {
-    pool = createPglitePool(new PGlite());
+    pool = createPglitePool(freshDatabase());
     replay = await registryOver(pool);
   });
 
@@ -1083,7 +1087,7 @@ describe('the registry as vex entries — each statement, against a database', (
     const rows = async (text: string, values: unknown[] = []): Promise<Record<string, unknown>[]> => (await pool.query(text, values)).rows;
 
     beforeAll(async () => {
-      pool = createPglitePool(new PGlite());
+      pool = createPglitePool(freshDatabase());
       replay = await registryOver(pool);
       // Two approved integrations and one that is pending, each with actions
       // and the hash of a key; and an approved one that ships no action.

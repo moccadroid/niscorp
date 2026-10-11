@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import { checksumOf, type Sequence } from '@niscorp/strata';
 import { readLedger } from '@niscorp/strata/postgres';
@@ -7,6 +6,11 @@ import { MOSS_SEQUENCE } from '../src/data';
 import { SESSIONS_SEQUENCE } from '../src/identity';
 import { INTEGRATIONS_SEQUENCE } from '../src/integrations/tables';
 import { createServer } from '../src/server';
+import { pristineDatabases } from './pristine-database';
+
+// A database of its own for each test that wants one, started from one that
+// was initialised once for this file (./pristine-database.ts says why).
+const freshDatabase = pristineDatabases();
 
 // ═══════════════════════════════════════════════════════════════
 // HISTORY, PINNED. Every deployed database has run these migrations and
@@ -51,7 +55,7 @@ describe('boot — every owner through one ledger', () => {
   };
 
   it('a fresh database is migrated once and recorded; the next boot finds nothing to do', async () => {
-    const pool = createPglitePool(new PGlite());
+    const pool = createPglitePool(freshDatabase());
     await quietly(() => createServer(app, { pool, db: pool, session: 'sessions' }));
     const ledger = await readLedger(pool);
     expect(ledger.map((r) => `${r.sequence}/${r.n}`)).toEqual(['nisc.moss/1', 'nisc.moss/2', 'nisc.moss/3', 'nisc.moss.sessions/1', 'nisc.vex.cache/1']);
@@ -61,7 +65,7 @@ describe('boot — every owner through one ledger', () => {
   });
 
   it("migrations: 'verify' refuses a database nobody migrated — and creates nothing", async () => {
-    const pool = createPglitePool(new PGlite());
+    const pool = createPglitePool(freshDatabase());
     const error = await quietly(() => createServer(app, { pool, db: pool, session: 'dev-open', migrations: 'verify' })).catch((e: unknown) => e);
     expect(error).toMatchObject({ code: 'PENDING' });
     expect(String(error)).toContain('nisc.moss/1');
@@ -70,7 +74,7 @@ describe('boot — every owner through one ledger', () => {
   });
 
   it('a deployment from before the ledger converges: an older integrations table gains its later columns, rows kept', async () => {
-    const pool = createPglitePool(new PGlite());
+    const pool = createPglitePool(freshDatabase());
     await pool.query(`CREATE TABLE integrations (id text PRIMARY KEY, url text NOT NULL, key_hash text, status text NOT NULL DEFAULT 'pending')`);
     await pool.query(`INSERT INTO integrations (id, url) VALUES ('acme', 'https://acme.example')`);
     await quietly(() => createServer(app, { pool, db: pool, session: 'dev-open' }));

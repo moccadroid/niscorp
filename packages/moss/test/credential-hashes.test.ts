@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import { initSessions, sessionOf } from '../src/identity';
 import { integrationByKey } from '../src/integrations/registry';
 import { registryOver } from './registry-db';
+import { pristineDatabases } from './pristine-database';
+
+// A database of its own for each test that wants one, started from one that
+// was initialised once for this file (./pristine-database.ts says why).
+const freshDatabase = pristineDatabases();
 
 // GOLDEN: credentials already in somebody's database.
 //
@@ -21,7 +25,7 @@ import { registryOver } from './registry-db';
 
 describe('golden — credentials stored by earlier versions still resolve', () => {
   it('a session row keyed by sha256(token), hex', async () => {
-    const pool = createPglitePool(new PGlite());
+    const pool = createPglitePool(freshDatabase());
     await initSessions(pool);
     await pool.query(
       `INSERT INTO sessions (token_hash, principal, expires_at) VALUES ($1, 'i_golden', now() + interval '1 hour')`,
@@ -31,7 +35,7 @@ describe('golden — credentials stored by earlier versions still resolve', () =
   });
 
   it('an approved integration row keyed by sha256(key), hex', async () => {
-    const pool = createPglitePool(new PGlite());
+    const pool = createPglitePool(freshDatabase());
     const registry = await registryOver(pool);
     await pool.query(
       `INSERT INTO integrations (id, url, status, key_hash) VALUES ('golden', 'https://golden.example', 'approved', $1)`,

@@ -1,11 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
-import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import type { Sequence } from '@niscorp/strata';
 import { createIntegrations } from '../src/integrations';
 import { createServer } from '../src/server';
 import { runIntake, type IntakeContext } from '../src/integrations/intake';
 import { createGrammarUpgrader } from '../src/data/grammar';
+import { pristineDatabases } from './pristine-database';
+
+// A database of its own for each test that wants one, started from one that
+// was initialised once for this file (./pristine-database.ts says why).
+const freshDatabase = pristineDatabases();
 
 // ═══════════════════════════════════════════════════════════════
 // Documents in the grammar this code speaks — with a REAL migration: a Prism
@@ -71,7 +75,7 @@ const quietly = <T>(run: () => Promise<T>): Promise<T> => {
 // A database as a deployment had it: moss's tables, one approved integration,
 // and one stored action written before the kit's rename, at `stamp`.
 const deploymentWith = async (stamp: Record<string, number>) => {
-  const pool = createPglitePool(new PGlite());
+  const pool = createPglitePool(freshDatabase());
   await quietly(() => createServer({ charter: {}, actions: {} }, { pool, db: pool, session: 'dev-open' }));
   await pool.query(`INSERT INTO integrations (id, url, status) VALUES ('acme', 'https://acme.example', 'approved')`);
   await pool.query(`INSERT INTO integration_actions (integration_id, action_id, definition, grammar) VALUES ('acme', 'acme.list', $1::jsonb, $2::jsonb)`, [

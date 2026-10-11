@@ -1,9 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
-import { PGlite } from '@electric-sql/pglite';
+import type { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import { defineApp } from '../src/manifest';
 import { createServer } from '../src/server';
 import { mintDevToken } from '../src/identity';
+import { pristineDatabases } from './pristine-database';
+
+// A database of its own for each test that wants one, started from one that
+// was initialised once for this file (./pristine-database.ts says why).
+const freshDatabase = pristineDatabases();
 
 // ═══════════════════════════════════════════════════════════════
 // A ROUTE THE APP ADDS KNOWS WHO IS ASKING. The server is a hono app, and an
@@ -31,7 +36,7 @@ const quietly = async <T>(run: () => Promise<T>): Promise<T> => {
 };
 
 const boot = async () => {
-  const pool = createPglitePool(new PGlite());
+  const pool = createPglitePool(freshDatabase());
   const app = defineApp({ charter: { public: [], staff: [] }, assignments: { usr_staff: ['staff'] }, actions: {} });
   const server = await quietly(() => createServer(app, { pool, db: pool, session: 'dev-open' }));
   const reached = { times: 0 };
