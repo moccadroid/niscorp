@@ -625,9 +625,10 @@ describe('a frame grant, with two processes behind one address', () => {
       }
       return [];
     };
-    const process = async () => {
+    // One process, serving people who hold `holding` of the actions in force.
+    const process = async (holding: readonly string[] = ['ext.desk.belts.pay']) => {
       const started = await world({ replay, who: () => ({ roles: ['desk'], installed: ['belts'] }) });
-      await createIntegrations().start({ ...started.seams, grantedActionIds: () => ['ext.desk.belts.pay'] });
+      await createIntegrations().start({ ...started.seams, grantedActionIds: () => [...holding] });
       return started;
     };
     return { grants, process };
@@ -668,6 +669,39 @@ describe('a frame grant, with two processes behind one address', () => {
       expect([...grants.keys()]).toHaveLength(1);
       expect(JSON.stringify([...grants])).not.toContain(token);
     });
+  });
+
+  // THE DECLARATION IS THE PERIMETER, AND THE SCREEN THAT OWNS THE PAGE IS WHO
+  // IT IS FOR. Signed in and installed was once all this door asked: a member
+  // of a studio was handed the page that mounts a payment provider's
+  // onboarding form against the studio's merchant account.
+  const askFor = (one: Awaited<ReturnType<typeof world>>, path: string): Promise<Response> =>
+    Promise.resolve(one.server.request('/api/integrations/frame', { method: 'POST', body: JSON.stringify({ path }), headers: { 'content-type': 'application/json' } }));
+
+  it('a grant is minted for somebody who holds the action that owns the page, and for nobody else', async () => {
+    const { grants, process } = deployment();
+    // Signed in, at a tenant that installed the integration, and holding
+    // another of its actions: not the one this page is the screen of.
+    const member = await process(['ext.member.belts.card']);
+    member.caller.principal = 'm_juno';
+    const refused = await askFor(member, PAGE_PATH);
+    expect(refused.status).toBe(404);
+    expect(await refused.json()).toEqual({ message: 'No such frame.' });
+    expect(grants.size).toBe(0);
+  });
+
+  it('a grant is minted for a page the bundle declared, and for no other path of the integration', async () => {
+    const { grants, process } = deployment();
+    const desk = await process();
+    desk.caller.principal = 'i_mara';
+    // A path the integration may well serve, and never declared as a frame.
+    const refused = await askFor(desk, '/integrations/belts/embed/admin');
+    expect(refused.status).toBe(404);
+    expect(await refused.json()).toEqual({ message: 'No such frame.' });
+    expect(grants.size).toBe(0);
+    // The page it did declare, for the same person: minted.
+    expect((await askFor(desk, PAGE_PATH)).status).toBe(200);
+    expect(grants.size).toBe(1);
   });
 
   it('a grant is for one integration, and for half an hour', async () => {

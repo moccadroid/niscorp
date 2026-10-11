@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { Hono } from 'hono';
 import { scopeGrants } from '@niscorp/vex';
 import { dataOver } from '../src/data/data';
 import { featureTablesOf } from '../src/data/feature-tables';
 import { createGrammarUpgrader } from '../src/data/grammar';
+import type { Feature, FeatureEnv } from '../src/feature';
 import type { NiscApp } from '../src/manifest';
+import type { NiscRuntime } from '../src/runtime';
 import { assembleServer } from '../src/server/assemble';
 import { engineDouble } from './data-double';
 
@@ -29,13 +32,13 @@ const appWith = (more: Partial<NiscApp>): NiscApp => ({
   ...more,
 });
 
-const assemble = async (app: NiscApp) => {
+const assemble = async (app: NiscApp, more: Partial<NiscRuntime> = {}) => {
   const double = await engineDouble();
   const data = dataOver(
     { engine: double.engine, adapter: double.adapter, grants: scopeGrants(['notes', 'tags']), grammars: await createGrammarUpgrader({}), upgradeStore: async () => undefined },
     { db: double.db, charter: app.charter, featureTables: featureTablesOf(app) },
   );
-  return assembleServer({ app, runtime: { pool: { query: async () => ({ rows: [] }) }, db: double.db, session: 'dev-open' }, session: () => null, revokeSessions: undefined, data });
+  return assembleServer({ app, runtime: { pool: { query: async () => ({ rows: [] }) }, db: double.db, session: 'dev-open', ...more }, session: () => null, revokeSessions: undefined, data });
 };
 
 // Every interval made while `run` ran, and which of them were cleared.
@@ -85,5 +88,71 @@ describe('the server, assembled — a boot that fails stops what it started', ()
     expect(outcome).toMatchObject({ close: expect.any(Function) });
     if (outcome !== null && typeof outcome === 'object' && 'close' in outcome && typeof outcome.close === 'function') outcome.close();
     expect(new Set(clear.mock.calls.map(([handle]) => handle))).toEqual(new Set(made));
+  });
+});
+
+// TWO THINGS THE ASSEMBLY DOES IN AN ORDER, OR AT A MOMENT, THAT NOTHING ELSE
+// SAYS. Both were found by taking the line out and running every test: none
+// failed.
+describe('the server, assembled — what holds only because of where a line stands', () => {
+  // The pointer is read once the server stands, and the database here has no
+  // such row: what the poll says of that is not these tests'.
+  const quiet = (): void => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  };
+
+  // A PREFIX'S ROUTES ARE TAKEN WHEN IT IS MOUNTED. A feature adds its
+  // operator routes while it starts, so the prefix is mounted after every
+  // feature has started. Mounted before, the prefix was empty when it was
+  // taken: the operator's own key was answered 404, the same answer a stranger
+  // gets, on every route a feature had.
+  it('a route a feature adds to the operator prefix answers the operator’s key, and nobody else', async () => {
+    quiet();
+    const listing: Feature = {
+      name: 'listing',
+      start: (seams) => {
+        const routes = new Hono<FeatureEnv>();
+        routes.get('/things', (c) => c.json({ things: ['one'] }));
+        seams.mountOperatorRoutes(routes);
+      },
+    };
+    const server = await assemble(appWith({ features: [listing] }), { operatorKey: 'the-operators-key' });
+    try {
+      const asked = await server.request('/operator/things', { headers: { 'x-operator-key': 'the-operators-key' } });
+      expect(asked.status).toBe(200);
+      expect(await asked.json()).toEqual({ things: ['one'] });
+      expect((await server.request('/operator/things', { headers: { 'x-operator-key': 'another-key' } })).status).toBe(404);
+      expect((await server.request('/operator/things')).status).toBe(404);
+    } finally {
+      server.close();
+    }
+  });
+
+  // WHO SOMEBODY IS WAS DERIVED FROM WHAT THE APP CONSISTED OF: a role, an
+  // install, an approval. When that changes, the records go with the policies
+  // compiled from them. Kept, a promoted instructor held their old rung until
+  // the record went stale on its own clock, a minute by default.
+  it('a change to what the app consists of drops every identity record: who somebody is, is asked again', async () => {
+    quiet();
+    const now = { roles: ['public'] };
+    const app = appWith({
+      charter: { public: ['home'], staff: ['home'] },
+      identity: { resolve: async () => ({ roles: now.roles, scope: {} }) },
+    });
+    const server = await assemble(app);
+    try {
+      expect((await server.identity('i_mara')).roles).toEqual(['public']);
+      // The record is held: what the app would answer now is not asked.
+      now.roles = ['staff'];
+      expect((await server.identity('i_mara')).roles).toEqual(['public']);
+      server.refresh();
+      expect((await server.identity('i_mara')).roles).toEqual(['staff']);
+      // And a set of actions handed over is such a change too.
+      now.roles = ['public'];
+      server.replaceActions('extras', { extra: { id: 'extra' } });
+      expect((await server.identity('i_mara')).roles).toEqual(['public']);
+    } finally {
+      server.close();
+    }
   });
 });
