@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { ActionDefinition, FetchFn } from '@niscorp/nova';
+import type { DocumentStore } from '@niscorp/strata/postgres';
 import { createGrammarUpgrader } from '../src/data/grammar';
 import type { CredentialAnswer, FeatureEnv, FeatureSeams, Replay, Whoever } from '../src/feature';
 import { createIntegrations, integrationOfAction } from '../src/integrations';
@@ -39,7 +40,12 @@ const desk: ActionDefinition = { id: 'ext.desk.belts.roster' };
 // set of actions would be refused with, by `refusalOf` when it is asked and by
 // `replaceActions` when the set is handed over.
 const world = async (
-  over: { replay?: Replay; who?: (principal: string | null) => Whoever; refuses?: (actions: Readonly<Record<string, ActionDefinition>>) => string | undefined } = {},
+  over: {
+    replay?: Replay;
+    who?: (principal: string | null) => Whoever;
+    refuses?: (actions: Readonly<Record<string, ActionDefinition>>) => string | undefined;
+    upgradeStore?: FeatureSeams['upgradeStore'];
+  } = {},
 ) => {
   const said = {
     credentials: new Map<string, (token: string, request: Request) => Promise<CredentialAnswer>>(),
@@ -48,6 +54,10 @@ const world = async (
     wraps: [] as ((inner: FetchFn) => FetchFn)[],
     replaced: [] as [string, Record<string, ActionDefinition>][],
     owned: [] as Parameters<FeatureSeams['ownEntries']>[0][],
+    // The stores whose documents the feature asked to have brought current,
+    // and, in order, that asking and every entry it replayed.
+    upgraded: [] as DocumentStore[],
+    order: [] as string[],
   };
   // The server's side of the two mounts: every route behind a line that says
   // who is calling, as the server's authentication would have.
@@ -88,10 +98,18 @@ const world = async (
     components: { Text: {} },
     ownEntries: async (own) => {
       said.owned.push(own);
-      return over.replay ?? replayOver({});
+      const replay = over.replay ?? replayOver({});
+      return async (fingerprint, context) => {
+        said.order.push(fingerprint);
+        return replay(fingerprint, context);
+      };
     },
     grammars: await createGrammarUpgrader({}),
-    upgradeStore: async () => undefined,
+    upgradeStore: async (store) => {
+      said.order.push('upgradeStore');
+      said.upgraded.push(store);
+      await over.upgradeStore?.(store);
+    },
     fingerprints: async () => ['deals/open'],
     fingerprintsFor: async () => ['deals/open'],
     onWrite: () => () => undefined,
@@ -124,6 +142,30 @@ describe('createIntegrations — before a server has started it', () => {
     expect(integrations.tables?.names).toEqual(['integrations', 'integration_actions', 'integration_frame_grants']);
     expect((integrations.tables?.sequences ?? []).map((sequence) => sequence.id)).toEqual(['nisc.moss.integrations']);
     expect(typeof integrations.start).toBe('function');
+  });
+});
+
+// THE DOCUMENTS IN ITS ROWS ARE ITS OWN TO BRING CURRENT. The core did it, at
+// every boot, for `integration_actions`, whether or not the app named this
+// feature: one module rewriting another's rows.
+describe('createIntegrations — the stored actions', () => {
+  it('are brought to this code\'s grammars by the feature when it starts, before one is read', async () => {
+    const { seams, said } = await world();
+    await createIntegrations().start(seams);
+    expect(said.upgraded).toEqual([{ table: 'integration_actions', column: 'definition', stamp: 'grammar', kind: 'nisc.nova/action', key: ['integration_id', 'action_id'] }]);
+    expect(said.order.indexOf('upgradeStore')).toBe(0);
+    expect(said.order).toContain('integrations/stored-actions');
+  });
+
+  it('a row that cannot be brought current refuses the start, and so the boot', async () => {
+    const tooNew = new Error('integration_actions (integration_id="belts"): written by newer code');
+    const { seams, said } = await world({
+      upgradeStore: async () => {
+        throw tooNew;
+      },
+    });
+    await expect(createIntegrations().start(seams)).rejects.toBe(tooNew);
+    expect(said.replaced).toEqual([]);
   });
 });
 

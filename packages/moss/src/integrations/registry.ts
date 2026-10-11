@@ -339,8 +339,8 @@ export const listIntegrations = async (replay: Replay): Promise<IntegrationRow[]
 };
 
 // Every approved integration's actions, as the manifest wants them.
-// With an upgrader, each definition is read in the host's grammar: boot brings
-// the table current (upgradeStore), but a row another process wrote since — one
+// With an upgrader, each definition is read in the host's grammar: the feature
+// brings the table current when it starts (upgradeStore), but a row another process wrote since — one
 // running older code — is upgraded here. A row written by NEWER code is not
 // served: the action is left out with a sentence, never rendered half-read.
 // And what is served is an action: a stored definition is read by nova's

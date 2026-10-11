@@ -23,7 +23,6 @@ import { createPolicies, resolvePolicyForRoles } from './policy';
 import { POINTER, pointerOver } from './pointer';
 import { createVexRoutes } from './routes';
 import { vexRecordToSpan } from './span';
-import { INTEGRATION_ACTIONS_STORE } from './tables';
 import { createWriteLane } from './writes';
 import type { WriteListener } from './writes';
 
@@ -172,14 +171,14 @@ export type StoodUp = Pick<Data, 'engine' | 'grants' | 'grammars'> & { adapter: 
 // was edited or written by newer code. The engine's `cache.init()` then finds
 // its sequence already applied.
 //
-// THEN THE DOCUMENTS IN THOSE TABLES, brought to this code's grammars
-// (./grammar.ts). Rows carry the stamp they were written at; what they have
-// not seen runs now, once, and they are written back current. A row written
-// by newer code refuses the boot, as a ledger written by newer code does.
+// THEN THE GRAMMARS this code reads documents in (./grammar.ts). NO ROW IS
+// BROUGHT TO THEM HERE. The documents stored in a table are its owner's to
+// bring current, and the only tables that hold any are a feature's: it asks
+// when it starts (`Data.upgradeStore`). This used to rewrite the integrations'
+// stored actions at every boot, whether or not the app named that feature.
 const standUp = async (config: DataConfig): Promise<StoodUp> => {
   await migrate(config.pool, tableSequencesOf(config), { mode: config.migrations ?? 'apply' });
   const grammars = await createGrammarUpgrader({ grammars: config.grammars });
-  await upgradeStore(config.pool, INTEGRATION_ACTIONS_STORE, grammars);
   const layer = await createDataLayer(config);
   return {
     grammars,

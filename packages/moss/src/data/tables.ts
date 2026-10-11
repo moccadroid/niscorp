@@ -1,5 +1,4 @@
 import type { Sequence } from '@niscorp/strata';
-import type { DocumentStore } from '@niscorp/strata/postgres';
 
 // ═══════════════════════════════════════════════════════════════
 // THE TABLES MOSS OWNS, and the documents stored in them.
@@ -170,16 +169,4 @@ export const MOSS_SEQUENCE: Sequence = {
       steps: [{ kind: 'sql', sql: `CREATE UNIQUE INDEX integrations_key_hash_unique ON integrations (key_hash) WHERE key_hash IS NOT NULL` }],
     },
   ],
-};
-
-// The rows that hold documents: every integration action's definition is a
-// nova action, stamped with the grammars it was written in (`{}` — a row from
-// before stamps — reads as the start of every grammar). Brought current at boot
-// by strata's upgradeStore; see ./grammar.ts.
-export const INTEGRATION_ACTIONS_STORE: DocumentStore = {
-  table: 'integration_actions',
-  column: 'definition',
-  stamp: 'grammar',
-  kind: 'nisc.nova/action',
-  key: ['integration_id', 'action_id'],
 };

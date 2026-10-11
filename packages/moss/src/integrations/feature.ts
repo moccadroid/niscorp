@@ -14,7 +14,7 @@ import { operatorRoutes } from './operator';
 import type { StorePress } from './press';
 import { proxyRoutes } from './proxy';
 import { findIntegration, integrationByKey, listAttachments, listPlacements, loadIntegrationActions } from './registry';
-import { INTEGRATIONS_SEQUENCE } from './tables';
+import { INTEGRATIONS_SEQUENCE, STORED_ACTIONS } from './tables';
 
 // ═══════════════════════════════════════════════════════════════
 // THE FEATURE — integrations as one object an app creates, configures and
@@ -139,6 +139,10 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
   // own: seeded where no route serves them, and replayed from here on by
   // `replay` (./registry.ts, ./entries.ts).
   const replay = await seams.ownEntries(REGISTRY_ENTRIES);
+  // THE STORED ACTIONS, BROUGHT TO THIS CODE'S GRAMMARS before one is read
+  // (./tables.ts). The rows are this feature's, so the asking is: the core
+  // upgrades no row of its own accord.
+  await seams.upgradeStore(STORED_ACTIONS);
   const find = (id: string): ReturnType<typeof findIntegration> => findIntegration(replay, id);
   // THE DEPLOYMENT'S SIGNING IDENTITY — how an integration knows a call is
   // ours. The public half is served; verifying is all anybody can do with it

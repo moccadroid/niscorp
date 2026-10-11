@@ -981,6 +981,7 @@ its own, and the core never imports it.
   | `components` | the kit's component contracts by name: a description, and the props' schema |
   | `ownEntries(entries)` | hand over the feature's own reads and writes, on the tables it named as its own, and get back how one is replayed |
   | `grammars` | read a stored document in this code's grammars, and stamp one that is written |
+  | `upgradeStore(store)` | bring the documents stored in one of the feature's own tables to this code's grammars, in one transaction; a row written by newer code throws |
   | `fingerprints()` | every fingerprint the app serves |
   | `fingerprintsFor(principal)` | the fingerprints that principal's own policy lets them replay |
   | `onWrite(listener)` | hear every write the routes serve, once it is committed: what vex reports of it, and the place in a chain the request named; answers the way to stop hearing |

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import type { Sequence } from '@niscorp/strata';
+import { createIntegrations } from '../src/integrations';
 import { createServer } from '../src/server';
 import { runIntake, type IntakeContext } from '../src/integrations/intake';
 import { createGrammarUpgrader } from '../src/data/grammar';
@@ -80,10 +81,14 @@ const deploymentWith = async (stamp: Record<string, number>) => {
   return pool;
 };
 
-describe('stored documents — upgraded at boot', () => {
+// The rows are the integrations feature's, and it is the feature that has them
+// brought current, when a server starts it: these boots name it. (That it
+// asks, and before it reads one, is held with no database in
+// ./integrations-feature.test.ts.)
+describe('stored documents — upgraded at boot, by the feature that keeps them', () => {
   it('a row written before the rename is rewritten at every depth and stamped current', async () => {
     const pool = await deploymentWith({ 'nisc.nova': 0, 'nisc.prism': 0 });
-    await quietly(() => createServer({ charter: {}, actions: {}, grammars: [kit] }, { pool, db: pool, session: 'dev-open' }));
+    await quietly(() => createServer({ charter: {}, actions: {}, grammars: [kit], features: [createIntegrations()] }, { pool, db: pool, session: 'dev-open' }));
     const { rows } = await pool.query(`SELECT definition, grammar FROM integration_actions`);
     const stored = JSON.stringify(rows[0]?.['definition']);
     expect(stored).toContain('"text":"Add"');
@@ -94,14 +99,14 @@ describe('stored documents — upgraded at boot', () => {
 
   it('a row from before stamps (`{}`) is read as the start of every grammar', async () => {
     const pool = await deploymentWith({});
-    await quietly(() => createServer({ charter: {}, actions: {}, grammars: [kit] }, { pool, db: pool, session: 'dev-open' }));
+    await quietly(() => createServer({ charter: {}, actions: {}, grammars: [kit], features: [createIntegrations()] }, { pool, db: pool, session: 'dev-open' }));
     const { rows } = await pool.query(`SELECT grammar FROM integration_actions`);
     expect(rows[0]?.['grammar']).toEqual(await currentStamp());
   });
 
   it('a row written by newer code refuses the boot — TOO_NEW, and the row is left as it was', async () => {
     const pool = await deploymentWith({ 'acme.kit': 4 });
-    const error = await quietly(() => createServer({ charter: {}, actions: {}, grammars: [kit] }, { pool, db: pool, session: 'dev-open' })).catch((e: unknown) => e);
+    const error = await quietly(() => createServer({ charter: {}, actions: {}, grammars: [kit], features: [createIntegrations()] }, { pool, db: pool, session: 'dev-open' })).catch((e: unknown) => e);
     expect(error).toMatchObject({ code: 'TOO_NEW' });
     const { rows } = await pool.query(`SELECT grammar FROM integration_actions`);
     expect(rows[0]?.['grammar']).toEqual({ 'acme.kit': 4 });
