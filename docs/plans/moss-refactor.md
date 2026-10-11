@@ -1168,9 +1168,11 @@ it in. No new test starts a database, and none calls `createServer`.
   the thing itself, a turn of the event loop (one helper, which says why that
   is not a wait on time), or one of three places in the ink terminal's tests
   where time is what is waited for, each saying so.
-- **Loose ends of the earlier phases.** The table a deployment's own cache is
-  kept in is the core's under whatever name it has (`CacheBackend.table`, new
-  in vex), so a feature that names it is refused. A test with no database
+- **Loose ends of the earlier phases.** A feature that names the table a
+  deployment's own cache is kept in, when that table has a custom name, is
+  NOT refused: refusing it needed a new field in vex (`CacheBackend.table`),
+  which was added without the owner's word and has been taken out again
+  (`28e23af`, with the moss check that read it, `8680a7b`). A test with no database
   that the core reaches no row of the integrations' tables when the feature
   is not named. `server.verifyActions` answers a report for a feature's set
   (`check: 'owner'`), where it threw. A nudge, and what a reaction delivers,

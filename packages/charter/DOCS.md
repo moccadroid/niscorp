@@ -182,10 +182,10 @@ type ClosureAuditor = (grantedIds: readonly string[], layoutIds?: readonly strin
 
 Given a role's resolved action ids (and, when the app governs layouts, its
 granted variant ids), return the cross-action wiring problems inside that
-closure. Supplied by the consumer that owns actions. Moss supplies its own
-whenever it verifies an app, at boot and in `verifyApp(app, grants)`: built on
-Nova's `auditAction`, it substitutes granted variants so the audit sees each
-role's effective definitions. Absent, every role's `issues` is empty.
+closure. Supplied by the consumer that owns actions (moss exports
+`auditClosure(definitions, variants?)`, built on Nova's `auditAction`; it
+substitutes granted variants so the audit sees each role's effective
+definitions). Absent, every role's `issues` is empty.
 
 ### `VerifyReport`
 
@@ -220,17 +220,16 @@ type RoleClosure = { role: string; actions: string[]; data: string[]; layouts: s
 
 ```typescript
 import { resolvePrincipal, verifyCharter } from '@niscorp/charter';
+import { auditClosure } from '@niscorp/moss';
 import { createScopePolicy, scopeGrants } from '@niscorp/vex';
 
 // 1. Boot: derive the universes from the governed targets, refuse incoherence.
-//    (An app served by moss does not write this step: moss runs it at boot,
-//    with its closure auditor, and `verifyApp(app, grants)` runs it for a check.)
 const universes = {
   actions: Object.keys(app.actions),        // the shell's dialect
   data: scopeGrants(tableNames),             // vex's dialect — `table.verb` leaves
 };
 const wearable = Object.values(app.assignments);   // the role combinations in use
-const report = verifyCharter(app.charter, universes, wearable);
+const report = verifyCharter(app.charter, universes, wearable, auditClosure(app.actions));
 if (report.errors.length > 0) {
   throw new Error(report.errors.map((e) => `${e.rule}: ${e.detail}`).join('\n'));
 }

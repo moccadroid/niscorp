@@ -77,14 +77,8 @@ it replaced were. Two consequences, named rather than discovered later:
   check builds the universe the way boot does, and `*.read` roles deny the
   engine's tables. Any app granting a data wildcard should do the same.
 - `initIntegrations`, `initSessions`, `cache.init()` and the tide store's
-  `migrate` kept their names and went through the ledger from then on, so a
-  host that is not moss's server gets the same guarantees. (Since then
-  `initIntegrations` and `initSessions` have gone from what moss exports: the
-  integration tables are part of `MOSS_SEQUENCE`, and the sessions table is
-  made where a deployment keeps moss's stored sessions (`session:
-  'sessions'`); `createServer` and `migrateTables` run both. The other two
-  are as they were, and the tide store is tide's own,
-  `@niscorp/tide/postgres`.)
+  `migrate` keep their names and now go through the ledger, so a host that is
+  not moss's server gets the same guarantees.
 
 ## Documents (S2)
 
