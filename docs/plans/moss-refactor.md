@@ -11,7 +11,11 @@ items were met then, and the sixth is since (the boundary that was read
 without a schema is parsed); the lab apps' checks pass at 126 of 133, each of
 the seven for a reason outside moss that Part 9 names. Of the 21 defects one
 is half fixed by decision (10: the webhook limit is per process) and none is
-open; a 22nd was found on a real Postgres and fixed (4.3). Part 11 is what
+open; a 22nd was found on a real Postgres and fixed (4.3). A review of the
+whole, the same day, found three places where a document said more than the
+code did (one owner for what a shell loads, defect 5 for every living shell,
+what another process follows after `replaceActions`); Part 11, "After a
+review", says what closed each. Part 11 is what
 moss is now, in numbers, what ran on a real Postgres, and what is left. Not
 done here: Midas and the two websites, which are other repositories, and the
 release. Next: Part 10.**
@@ -183,7 +187,7 @@ again here.
 | 2 | fixed | `bb6a2a8`: a bundle lands in one transaction |
 | 3 | fixed | `3dec693`: one shell is built for a principal at a time |
 | 4 | fixed | `812372e`: a shell is reset one reset at a time, from what it was opened with |
-| 5 | fixed | `3f3923e`: a living shell holds what its principal holds now |
+| 5 | fixed, in two steps | `3f3923e`: a living shell holds what its principal holds now. That covered the shells a host keeps, one for each signed-in principal, and only the app's own host was asked. A shell built for one connection (a visitor's; every shell of a page's host) kept what it was built with. Since 2026-10-11 it is every living shell: a host holds each shell it built until it ends (`src/shells/live.ts`, `living`), `adopt` walks those and the builds under way, and a change is asked of every host, the app's and each page's (`src/server/hosts.ts`, `adopt`). Part 11, "After a review". |
 | 6 | fixed | `1fbe5a7`: a connection that closed before its session was ready leaves nothing attached |
 | 7 | fixed | `6d7d054`: a message the shell throws on is one message |
 | 8 | fixed | `d424c3a`: a refused terminal is not sent the error that refused it |
@@ -504,13 +508,13 @@ Not here: stopping the seeding of `vex_cache`. That belongs to the artifactory.
    `IdentityConfig`, `ShellHostConfig`, `SocketConfig`, `DocumentConfig`,
    `IntegrationsConfig`, `TideFactsConfig`). Inside `server`, the module that
    may hold both, `standData(app: NiscApp, runtime: NiscRuntime)`
-   (`src/server/data.ts:13`) and `standManifest(app: NiscApp, …)`
+   (`src/server/data.ts:14`) and `standManifest(app: NiscApp, …)`
    (`src/server/manifest.ts:15`) take the whole manifest and hand on its
    fields; the other steps take a `Pick`. Two functions that are not factories
    take the whole manifest because the whole of it is their subject:
    `defineApp` and `receiveManifest` (`src/manifest/handover.ts:49`), which
    parses and freezes it. `migrateTables` takes four fields of the runtime and
-   two of the manifest (`src/data/migrate.ts:159`).
+   two of the manifest (`src/data/migrate.ts:160`).
 3. **No SQL statement outside the two declared places. Met, with one more
    place, declared.** The two were the credential and tide's store. The six
    credential statements are in `src/identity/sessions.ts`; tide's seven are in
@@ -552,9 +556,9 @@ Not here: stopping the seeding of `vex_cache`. That belongs to the artifactory.
      the deployment's own object, typed, and each refusal is said where the
      field is read.
 5. **`createServer` builds, wires and mounts, and holds no route body. Met.**
-   `src/server/server.ts:33–154`: thirteen numbered steps, each a call to a
+   `src/server/server.ts:33–158`: thirteen numbered steps, each a call to a
    file beside it. The routes are in `src/server/routes.ts` and in the
-   features. It spans 122 lines with its comments; it was 1,345.
+   features. It spans 126 lines with its comments; it was 1,345.
 6. **Every gate in Part 6 is in CI and green. Met here; CI has not run.** The
    four are steps of `verify.yml` and of `pnpm verify`, and pass on this
    branch. The branch is not pushed. What Part 6 asked of `check:api` for
@@ -581,6 +585,31 @@ The artifactory is its own plan. What is decided about it:
 
 - It is a sub-module of moss that every load goes through. It is asked; it is
   not handed around. In the map above it is what `manifest` grows into.
+  **Where it will be asked is built (2026-10-11), and no more than that.**
+  The running manifest (`src/manifest/running.ts`) is the one owner of the
+  four kinds while a server runs:
+  - An action, a layout and a fragment reach a shell in one answer,
+    `artifactsFor(shell, roles, installed)`: the definitions those roles hold
+    with their layout variant in place, the shell's canvases, frame and layout
+    store, its fragments, the entries by fingerprint, and the component names.
+    A shell host asks it once for each build and once for each adopt, and the
+    server's wiring reads none of the four off the app
+    (`src/server/hosts.ts`). The variant is put in its place by one function,
+    which the closure audit reads through too (`src/manifest/roles.ts`,
+    `withVariants`).
+  - The entries are held there (`entries()`). What vex replays from is seeded
+    with what it hands over (`Data.seed`, from `src/server/manifest.ts`), a
+    verification is handed them, and a shell's liveness reads the ones its
+    composition answered. Where no server stands (`migrateTables`,
+    `verifyApp`), one pure function says what an app's entries are:
+    `entriesOf` (`src/manifest/entries.ts`), which the running manifest reads
+    too.
+
+  Not built, on purpose: nothing is stored or published, `vex_cache` is still
+  seeded, and a replay still resolves its entry in vex's cache. An adopt
+  brings a living shell's actions, component names and entries level; its
+  frame, layout store and fragments are the ones it was built with, and
+  nothing changes those while a server runs.
 - An id resolves to what is shipped, published, made by a person, or held in a
   draft in the shell. Developers publish new defaults without deploying.
 - Several layouts may exist for one action; which is in use is separate. A
@@ -624,6 +653,14 @@ four rows they moved (the others were not measured again): 149 source files
 `parse` or `safeParse`; moss has 64 test files and 987 tests, and tide the 12
 and 232 it had. The gates pass as they did: 103 names in `api.txt`, 14 modules,
 no statement outside vex without a reason.
+
+Counted once more after the review below, the same day, for the rows it
+moved: 151 source files (two more, `manifest/entries.ts` and
+`manifest/artifacts.ts`); moss has 66 test files and 1,018 tests. Of the five
+functions that span more than 120 lines with their comments, `createServer`
+is 126 now and `createShellHost` 130, and none is over 100 lines of code. The
+gates pass as they did: 103 names in `api.txt`, 14 modules under the same
+table of who may import whom, no statement outside vex without a reason.
 
 **What is left.** None of it stops the artifactory; each is somebody's to
 decide.
@@ -684,6 +721,67 @@ limit was not changed: it got tests that hold it to what the documents say.
   first fails, again when what it says changes, and once when it is followed.
 - **Defect 10, the webhook limit** (4.3): decided to stay a limit per
   process, and said to be one where it is written and documented.
+
+**After a review (2026-10-11).** Two reviewers held the whole against what the
+owner asked for. They found three places where a document said more than the
+code did. Each is closed, with tests that stand a shell host, the server's
+wiring or a running manifest up and start no database and no server.
+
+- **Only an action had one owner that was asked.** An action reached a shell
+  through the running manifest. The frame, the layout store and the fragments
+  were read off the shell's manifest by the server's wiring; the variant
+  substitution was written twice (`manifest/roles.ts`, `manifest/closure.ts`);
+  and the entries had two holders, vex's cache seeded from `app.entries` by
+  one step of the wiring and a map the running manifest made from the same
+  field. The next thing to decide what an id resolves to would have had four
+  modules to change. It has one now: Part 10, "Where it will be asked", says
+  what was built. A hosts' test fails against the old wiring on the frame, the
+  layout store and the fragments (they were the app's, whatever the running
+  manifest answered); the entries a shell reads were already the running
+  manifest's, and what was not is what was seeded, which
+  `test/server-manifest.test.ts` holds (`expected [] to deeply equal …`:
+  nothing was handed over). The order of a boot moved with it: the entries are
+  seeded after the boot check, so a manifest that is refused has written no
+  row.
+- **Defect 5 held for the shells a host keeps, in the app's own host.** The
+  changeset, `DOCS.md` and 4.3 said "every living shell". The reviewer ran
+  the package's own adopt test against `session(null, null)` and against a
+  host that keeps none, with a principal: both kept `extra`
+  (`expected ['home','extra'] to deeply equal ['home']`). Those are the tests
+  now, with the same failure first, for three kinds of shell that is not kept,
+  for builds under way, and for two tabs of one principal. One more was found
+  on the way, and it held for kept shells too: a shell a reset was replacing
+  when the app changed came back holding what its principal had held before,
+  because the shell that still stood adopted and its replacement, built from
+  the earlier answer, then took its place. A replacement is a build under way
+  now, and its cell adopts when it lands. A host holds every
+  shell it built until it ends, and `endShell` (`src/shells/live.ts`) is the
+  one place a shell is marked ended and let go. That an ended shell is let go
+  is asked of the collector for four ways of ending: with the removal taken
+  out, all four fail. What it costs is said in the changeset and held by a
+  test: a shell that is not kept is the host's until it ends, so one that
+  code opened in process, attached nothing to and dropped is no longer
+  collected; it is ended by a detach, as the socket ends one. A change, and a
+  principal's reset
+  (`invalidateIdentity`), are asked of every host, the app's and each page's.
+  Not moved: `deliver` and `nudge` still reach the shell the app's host keeps
+  for a principal and no shell of a page's.
+- **"Every other process follows" after `replaceActions`.** The pointer
+  moves and every process follows it, but a set handed to one process is in
+  no other: the reviewer ran two servers on one database, both reached the
+  same generation, and the second served the old set. Nothing was built for
+  it, because a set every process reads is what Part 10 is. The changeset,
+  `DOCS.md`, `DESIGN.md` and the comments on `replaceActions`, `generation`
+  and `loadActionsFrom` say what crosses (a process reads again the sets it
+  has a loader for, drops what it derived, and its shells adopt), what does
+  not (a set with no loader), and what an app that runs several processes
+  does today (keeps the set in rows and names how it is read, in a feature of
+  its own). Two tests hold the two halves, with two running manifests over
+  one pointer. Two servers on one database were not run again here.
+
+The lab apps' checks were run again on the built result, each as its own
+process, one at a time: 126 of 133, the same seven failing as in Part 9 (encore
+13 of 13, lyceum 17 of 18, atrium 18 of 19, relay 28 of 32, lyra 50 of 51).
 
 **Run on a real Postgres (2026-10-11).** Everything before this ran on PGlite,
 which has one connection. These ran once on PostgreSQL 18.4 (the
