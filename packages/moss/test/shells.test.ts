@@ -250,6 +250,56 @@ describe('shells — the session app code is handed', () => {
 // reattaches to the same wreck; only the server can throw it away.
 // ═══════════════════════════════════════════════════════════════
 
+// WHAT A PRINCIPAL HOLDS, ANSWERED WHEN THE TEST SAYS. A build asks once. The
+// first asking is answered at once; each one after it waits until the test
+// answers it, with what was held when it asked. The test is told when a build
+// has asked, so it waits on the build and not on a clock.
+const answeredByHand = (first: readonly string[]) => {
+  const held = { ids: first, asked: 0 };
+  const unanswered: (() => void)[] = [];
+  const told: { count: number; tell: () => void }[] = [];
+  const resolve: HostSetup['resolve'] = async () => {
+    const ids = held.ids;
+    held.asked += 1;
+    for (const one of told.splice(0)) {
+      if (one.count <= held.asked) one.tell();
+      else told.push(one);
+    }
+    if (held.asked > 1) await new Promise<void>((answer) => unanswered.push(answer));
+    return { roles: ['public'], scope: {}, catalog: { ids }, variants: new Map() };
+  };
+  return {
+    resolve,
+    hold: (ids: readonly string[]): void => void (held.ids = ids),
+    asked: (): number => held.asked,
+    askedBy: (count: number): Promise<void> => (held.asked >= count ? Promise.resolve() : new Promise<void>((tell) => told.push({ count, tell }))),
+    // The build that has waited longest is answered.
+    answer: (): void => unanswered.shift()?.(),
+  };
+};
+
+// A terminal that tells when it has been served: a shell sends its frame to a
+// terminal when it is attached, so a terminal is served once when it joins
+// and once for each shell a reset carries it to.
+const servedTerminal = () => {
+  const connection = fakeConnection();
+  const count = { served: 0 };
+  const told: { count: number; tell: () => void }[] = [];
+  return {
+    ...connection,
+    send: (text: string): void => {
+      connection.send(text);
+      if (connection.sent.at(-1)?.['type'] !== 'frame') return;
+      count.served += 1;
+      for (const one of told.splice(0)) {
+        if (one.count <= count.served) one.tell();
+        else told.push(one);
+      }
+    },
+    servedBy: (wanted: number): Promise<void> => (count.served >= wanted ? Promise.resolve() : new Promise<void>((tell) => told.push({ count: wanted, tell }))),
+  };
+};
+
 describe('shells — reset', () => {
   it('builds a new shell and the session addresses it (the old state is gone)', async () => {
     const host = createShellHost(hostConfig(ctx));
@@ -334,22 +384,93 @@ describe('shells — reset', () => {
     expect(connection.sent.some((m) => m['type'] === 'render' && m['canvas'] === 'main')).toBe(true);
   });
 
-  it('a shell that ended while its replacement was built is not replaced', async () => {
+  // THE THREE THINGS A RESET CHECKS, EACH BY THE CASE ONLY IT COVERS. The test
+  // above passes with the turn taken away, because a reset whose shell was
+  // replaced under it finds that out when it lands; and one test stood for the
+  // two checks below, which passed with either of them taken away. What a
+  // principal holds is answered by hand here (`answeredByHand`), so a build
+  // stands still where the test needs it to.
+
+  // EACH RESET IN TURN. The second reset is asked for a reason: something
+  // changed after the first had read what it builds from. So the second reads
+  // only once the first has landed, and its shell is the one that stands.
+  // Begun together, whichever build was answered last stood, whatever it had
+  // read.
+  it('two resets happen in turn: the second reads what it builds from once the first has landed, and its shell stands', async () => {
+    const extra = { id: 'extra', data: {} };
+    const who = answeredByHand(['counter']);
+    const host = createShellHost(hostConfig({ ...ctx, app: { ...app, actions: { counter, extra } } as unknown as NiscApp, resolve: who.resolve }));
+    const session = await host.session('t', 'usr_1');
+    const terminal = servedTerminal();
+    session.attach(terminal);
+    await terminal.servedBy(1);
+
+    session.reset();
+    await who.askedBy(2);
+    // What they hold changes after the first reset read it, and a second reset
+    // is asked because of that.
+    who.hold(['counter', 'extra']);
+    session.reset();
+
+    who.answer();
+    await terminal.servedBy(2);
+    // The first has landed and the terminal is on its shell. Only the first
+    // session and the first reset have asked: the second has not begun.
+    expect(who.asked()).toBe(2);
+    expect(() => session.shell.push('main', 'extra')).toThrow();
+
+    await who.askedBy(3);
+    who.answer();
+    await terminal.servedBy(3);
+    // What stands was built from what was so when the second's turn came.
+    expect(session.shell.push('main', 'extra')).toEqual(expect.any(String));
+    expect(host.list()).toEqual([expect.objectContaining({ principal: 'usr_1', connections: 1 })]);
+    expect(terminal.closes).toEqual([]);
+  });
+
+  // A BUILD AWAITS, AND THE SHELL IT REPLACES CAN END MEANWHILE: its last
+  // terminal leaves, its principal signs out, the sweep takes it. The
+  // replacement is then nobody's. Put in the cell, it was a living shell that
+  // nothing was attached to and nothing would end.
+  it('a shell that ended while its replacement was being built is not replaced', async () => {
+    const who = answeredByHand(['counter']);
     // Nobody in particular: the shell goes when its last terminal does.
-    const session = await createShellHost(hostConfig(ctx)).session(null, null);
+    const session = await createShellHost(hostConfig({ ...ctx, resolve: who.resolve })).session(null, null);
     const connection = fakeConnection();
     session.attach(connection);
-    await tick();
     const stood = session.shell;
 
     session.reset();
+    // The replacement is being built: it has asked, and waits for its answer.
+    await who.askedBy(2);
     session.detach(connection);
-    for (let i = 0; i < 4; i += 1) await tick();
+    who.answer();
+    // A turn of the event loop: the build has its answer and runs to its end.
+    await tick();
 
     // No shell was stood up for nobody: what the session addresses is the one
     // that ended, and it is disposed.
     expect(session.shell).toBe(stood);
     expect(() => session.shell.push('main', 'counter')).toThrow();
+  });
+
+  // A BUILD RUNS THE APP'S CODE (`inputs`, `functions`, `onSession`) and asks
+  // who somebody is. For a shell that has already ended there is nobody to run
+  // it for, so nothing is built to be thrown away.
+  it('a reset asked of a shell that has already ended builds nothing', async () => {
+    const who = answeredByHand(['counter']);
+    const session = await createShellHost(hostConfig({ ...ctx, resolve: who.resolve })).session(null, null);
+    const connection = fakeConnection();
+    session.attach(connection);
+    const stood = session.shell;
+    session.detach(connection);
+
+    session.reset();
+    // A turn of the event loop: a reset that was going to build has asked.
+    await tick();
+
+    expect(who.asked()).toBe(1);
+    expect(session.shell).toBe(stood);
   });
 
   // What a shell was opened with is part of what it is rebuilt from. A reset
