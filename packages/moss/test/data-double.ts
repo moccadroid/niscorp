@@ -44,15 +44,31 @@ export type EngineDouble = {
   written: { sql: string; params: readonly unknown[] }[];
   // What the adapter was asked to run for a read: the bound parameters.
   read: (readonly unknown[])[];
+  // Every table a read named, in the order the reads were compiled: whoever
+  // made the read, an app's entry or a feature's own.
+  tablesRead: string[];
 };
 
-export const engineDouble = async (rows: Record<string, unknown>[] = [{ id: 1, body: 'first' }]): Promise<EngineDouble> => {
+// One more table for the schema of a double: a key, and nothing else.
+export const tableNamed = (name: string): DatabaseSchema['entities'][number] => ({
+  name,
+  table: name,
+  fields: [{ name: 'id', type: 'text', normalizedType: 'string', nullable: false, primaryKey: true }],
+  relations: [],
+  indexes: [{ name: `${name}_pkey`, fields: ['id'], unique: true, type: 'btree' }],
+});
+
+export const engineDouble = async (rows: Record<string, unknown>[] = [{ id: 1, body: 'first' }], schema: DatabaseSchema = NOTES_SCHEMA): Promise<EngineDouble> => {
   const read: (readonly unknown[])[] = [];
+  const tablesRead: string[] = [];
   const written: EngineDouble['written'] = [];
   const adapter: DatabaseAdapter = {
     id: 'double',
-    introspect: async () => NOTES_SCHEMA,
-    compile: () => ({ sql: 'SELECT 1', paramSlots: [], contextContract: {} }),
+    introspect: async () => schema,
+    compile: (resolved) => {
+      for (const source of resolved.sources) if (source.entity !== undefined) tablesRead.push(source.entity.table);
+      return { sql: 'SELECT 1', paramSlots: [], contextContract: {} };
+    },
     execute: async (_query, params) => {
       read.push(params);
       return rows;
@@ -78,5 +94,5 @@ export const engineDouble = async (rows: Record<string, unknown>[] = [{ id: 1, b
       return { rows: [{ id: 7, body: 'written' }] };
     },
   };
-  return { engine, adapter, db, written, read };
+  return { engine, adapter, db, written, read, tablesRead };
 };
