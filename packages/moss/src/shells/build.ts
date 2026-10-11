@@ -1,8 +1,10 @@
 import { createComponentRegistry, createLayoutStore, createShell } from '@niscorp/nova';
 import type { CanvasConfig } from '@niscorp/nova';
+import type { Phrasebook } from '@niscorp/nova/i18n';
 import { evaluate } from '@niscorp/prism';
 import type { CanvasSeed, ShellCanvas } from '../manifest';
 import { spanClock } from '../runtime';
+import type { ShellComposition } from './config';
 import { functionSessionFor, instrumentFunctions } from './function-session';
 import type { ShellRef } from './function-session';
 import { layoutsOf } from './host-state';
@@ -10,9 +12,11 @@ import type { HostState, Live } from './host-state';
 import { follow } from './stream';
 import type { ShellOpening } from './types';
 
-// THE BUILD OF ONE SHELL: who it is for, what mounts on its canvases, the
-// session its app code is handed, the words it wears, the shell itself, and
-// what is pushed onto it once it stands.
+// THE BUILD OF ONE SHELL, IN TWO PARTS. What it asks first (`prepareShell`):
+// who it is for, what mounts on its canvases, the words it wears. Every await
+// of a build is there. And the shell, stood up from those answers with
+// nothing awaited (`standShell`): the session its app code is handed, the
+// shell itself, and what is pushed onto it once it stands.
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
@@ -85,17 +89,32 @@ const seedCanvases = (
     });
 };
 
+// WHAT A BUILD HAS BEEN ANSWERED, before its shell stands: what it was asked
+// for, the one answer the shell is made of, and what the app's own code
+// derived from it.
+type PreparedShell = {
+  token: string | null;
+  principal: string | null;
+  reset: boolean;
+  idSeed: string | undefined;
+  made: ShellComposition;
+  canvases: CanvasConfig[];
+  phrases: Phrasebook;
+  // When the build began, for its span. Undefined: the host has no sink.
+  buildClock: ReturnType<typeof spanClock> | undefined;
+};
+
 // `reset`: this build replaces a shell that stood (the span says so).
 // `idSeed` and `given`: how the shell was opened (`ShellOpening`).
-export const buildShell = async (
+export const prepareShell = async (
   host: HostState,
   token: string | null,
   principal: string | null,
   reset = false,
   idSeed?: string,
   given?: ShellOpening['inputs'],
-): Promise<Live> => {
-  const { config, emit, kept, delta } = host;
+): Promise<PreparedShell> => {
+  const { config, emit } = host;
   const { hooks } = config;
   const buildClock = emit === undefined ? undefined : spanClock();
   // ONE answer for everything a shell is made of. Which actions this
@@ -103,14 +122,34 @@ export const buildShell = async (
   // decided where it was answered: what is in `made.actions` is what exists.
   const made = await config.composition(principal);
   const ids = Object.keys(made.actions);
-  const granted = new Set(ids);
   // ASYNC AND WIRE-BEARING, matching `seeds`. This file's own manifest called
   // the two twins while handing one the governed wire and not the other, and
   // that asymmetry is the whole origin of the resident directory: a hook that
   // cannot await, asked a question about rows, has exactly one implementation
   // available to it.
   const inputs = (await hooks.inputs?.({ principal, actions: ids, roles: made.roles, identity: made.scope, wire: config.wire(token) })) ?? {};
-  const canvases = mountedCanvases(made.canvases, granted, inputs, given);
+  const canvases = mountedCanvases(made.canvases, new Set(ids), inputs, given);
+
+  // THE WORDS THIS SHELL WEARS, resolved before it exists — because they are
+  // a property of the shell now, not of the frames it emits. Nova's renderer
+  // applies them where a RenderNode is minted, so moss hands the book over
+  // once and never touches a tree again.
+  //
+  // Resolved with the rest of the per-principal derivation. A principal whose
+  // language changes gets a `rebuild`, which re-reads this alongside their
+  // catalog and inputs — one path, so a language can never be a release
+  // behind the screen it is painting.
+  const phrases = (await hooks.phrases?.({ principal, identity: made.scope, wire: config.wire(token) })) ?? {};
+  return { token, principal, reset, idSeed, made, canvases, phrases, buildClock };
+};
+
+// THE SHELL, STOOD UP FROM WHAT ITS BUILD WAS ANSWERED. Nothing here awaits.
+export const standShell = (host: HostState, prepared: PreparedShell): Live => {
+  const { config, emit, kept, delta } = host;
+  const { hooks } = config;
+  const { token, principal, reset, idSeed, made, canvases, phrases, buildClock } = prepared;
+  const ids = Object.keys(made.actions);
+  const granted = new Set(ids);
 
   const wire = config.wrapWire === undefined ? config.wire(token) : config.wrapWire(config.wire(token));
   const userId = principal ?? 'anonymous';
@@ -124,17 +163,6 @@ export const buildShell = async (
   const shellRef: ShellRef = {};
   const session = functionSessionFor(host, { principal, roles: made.roles, scope: made.scope, actions: ids }, wire, shellRef);
 
-  // THE WORDS THIS SHELL WEARS, resolved before it exists — because they are
-  // a property of the shell now, not of the frames it emits. Nova's renderer
-  // applies them where a RenderNode is minted, so moss hands the book over
-  // once and never touches a tree again.
-  //
-  // Resolved with the rest of the per-principal derivation. A principal whose
-  // language changes gets a `rebuild`, which re-reads this alongside their
-  // catalog and inputs — one path, so a language can never be a release
-  // behind the screen it is painting.
-  const phrases = (await hooks.phrases?.({ principal, identity: made.scope, wire: config.wire(token) })) ?? {};
-
   // NOTHING AWAITS BETWEEN THESE SEAMS AND `shellRef.shell = shell`. Both run
   // before the shell exists, so app code defers its first touch of
   // `session.shell` — and the cheapest deferral, a microtask, has to be
@@ -143,7 +171,7 @@ export const buildShell = async (
   // without missing them. The phrases used to be awaited right here, after
   // `onSession`; a microtask landed inside that await, the getter threw, and
   // an observer written to the documented contract watched nothing. Every
-  // await of this build belongs above this line or below the shell.
+  // await of a build belongs in `prepareShell`, or below the shell.
   //
   // Endpoints first, then the non-endpoints. Both get the same session; only
   // the first produces handlers. Wrapped for telemetry when a sink is present
@@ -229,3 +257,13 @@ export const buildShell = async (
 
   return live;
 };
+
+// A BUILD FROM ITS FIRST QUESTION TO THE SHELL THAT STANDS.
+export const buildShell = async (
+  host: HostState,
+  token: string | null,
+  principal: string | null,
+  reset = false,
+  idSeed?: string,
+  given?: ShellOpening['inputs'],
+): Promise<Live> => standShell(host, await prepareShell(host, token, principal, reset, idSeed, given));
