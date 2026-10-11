@@ -77,7 +77,42 @@ const POLL_MS = 50;
 // adds no dependency of its own to the workspace.
 const requireFromVex = createRequire(join(root, 'packages/vex/package.json'));
 const pg: PgModule = requireFromVex('pg');
-const built = (path: string): Promise<Record<string, any>> => import(pathToFileURL(join(root, path)).href);
+
+// WHAT IS USED OF EACH BUILT PACKAGE, described here: this script is no
+// workspace's, so it has no package's types to import. A built file is read as
+// what is written here once each name it is asked for is there.
+type TideStore = {
+  ready: Promise<void>;
+  appendIfAbsent: (table: string, row: Record<string, unknown>) => Promise<unknown>;
+  claim: (spec: Record<string, unknown>) => Promise<{ id: string }[]>;
+  query: (spec: Record<string, unknown>) => Promise<unknown[]>;
+  cas: (table: string, id: string, from: Record<string, unknown>, to: Record<string, unknown>) => Promise<unknown>;
+};
+type TideModule = { createTideStore: (pool: Pool) => TideStore; TIDE_TABLES: readonly string[] };
+type TideTestingModule = { STORE_CONTRACT: readonly { name: string; run: (store: TideStore) => Promise<void> }[] };
+type Server = {
+  request: (path: string, init?: RequestInit) => Response | Promise<Response>;
+  refresh: () => void;
+  generation: () => number;
+  actions: () => Record<string, unknown>;
+  close: () => void;
+};
+type TablesReport = { applied: { ref: string }[]; removed: unknown[]; retyped: unknown[] };
+type MossModule = {
+  createServer: (app: unknown, runtime: Record<string, unknown>) => Promise<Server>;
+  defineApp: (app: Record<string, unknown>) => unknown;
+  migrateTables: (runtime: Record<string, unknown>, app: unknown) => Promise<TablesReport>;
+};
+type IntegrationsModule = { createIntegrations: (config: Record<string, unknown>) => unknown };
+
+const built = async <Module,>(path: string, names: readonly (keyof Module & string)[]): Promise<Module> => {
+  const loaded: Record<string, unknown> = await import(pathToFileURL(join(root, path)).href);
+  for (const name of names) {
+    if (loaded[name] === undefined) throw new Error(`${path} does not export \`${name}\`. Was the package built (\`pnpm build\`)?`);
+  }
+  // The one place a built file is taken for what the types above say of it.
+  return Object.assign(Object.create(null), loaded);
+};
 
 type Rows = { rows: Record<string, unknown>[]; fields?: { name: string; dataTypeID: number }[] };
 type PgClient = { query: (text: string | { text: string; values?: unknown[] }, values?: unknown[]) => Promise<Rows>; release: () => void };
@@ -171,8 +206,8 @@ const until = async (holds: () => boolean | Promise<boolean>, ms = 10_000): Prom
 // ═══════════════════════════════════════════════════════════════
 
 const tideStore = async (): Promise<void> => {
-  const { createTideStore, TIDE_TABLES } = await built('packages/tide/dist/postgres.js');
-  const { STORE_CONTRACT } = await built('packages/tide/dist/testing.js');
+  const { createTideStore, TIDE_TABLES } = await built<TideModule>('packages/tide/dist/postgres.js', ['createTideStore', 'TIDE_TABLES']);
+  const { STORE_CONTRACT } = await built<TideTestingModule>('packages/tide/dist/testing.js', ['STORE_CONTRACT']);
 
   const contract = poolOn(await createDatabase());
   await createTideStore(tidePool(contract)).ready;
@@ -196,7 +231,7 @@ const tideStore = async (): Promise<void> => {
 
   const run = (id: string, reflexId: string) => ({ id, reflexId, version: 'v_0', cause: `occurrence:${id}`, state: 'fanned', depth: 0, total: 2, done: 0, failed: 0, dueAt: 0, createdAt: 0 });
   const task = (runId: string, reflexId: string, unit: string) => ({ runId, reflexId, unit, cause: `occurrence:${runId}`, env: {}, depth: 0, state: 'pending', attempt: 0, claimedUntil: 0, notBefore: 0, createdAt: 0 });
-  const claimBy = (store: any, group: string, token: string): Promise<{ id: string }[]> =>
+  const claimBy = (store: TideStore, group: string, token: string): Promise<{ id: string }[]> =>
     store.claim({
       table: 'task',
       where: { state: { in: ['pending', 'retrying'] }, notBefore: { lte: 100 } },
@@ -208,7 +243,7 @@ const tideStore = async (): Promise<void> => {
 
   // `rounds` serial groups, each with two tasks due, each claimed by every
   // claimer at once.
-  const contend = async (label: string, claimers: readonly any[], rounds: number): Promise<void> => {
+  const contend = async (label: string, claimers: readonly TideStore[], rounds: number): Promise<void> => {
     const count = { twoHeld: 0, noneHeld: 0, stuck: 0, toldOtherwise: 0 };
     for (let round = 0; round < rounds; round += 1) {
       const group = `${label.replace(/\W+/g, '-')}-${round}`;
@@ -248,10 +283,10 @@ const tideStore = async (): Promise<void> => {
 // ═══════════════════════════════════════════════════════════════
 
 const generationPointer = async (): Promise<void> => {
-  const { createServer, defineApp } = await built('packages/moss/dist/index.js');
+  const { createServer, defineApp } = await built<MossModule>('packages/moss/dist/index.js', ['createServer', 'defineApp']);
   const database = await createDatabase();
   const reader = poolOn(database, 2);
-  const serverOn = (): Promise<any> => {
+  const serverOn = (): Promise<Server> => {
     const pool = vexPool(poolOn(database));
     return quietly(() => createServer(defineApp({ charter: { public: [] }, actions: {} }), { pool, db: pool, session: 'dev-open', sessionRevalidateMs: POLL_MS }));
   };
@@ -299,8 +334,8 @@ const generationPointer = async (): Promise<void> => {
 // ═══════════════════════════════════════════════════════════════
 
 const registry = async (): Promise<void> => {
-  const { createServer, defineApp, migrateTables } = await built('packages/moss/dist/index.js');
-  const { createIntegrations } = await built('packages/moss/dist/integrations.js');
+  const { createServer, defineApp, migrateTables } = await built<MossModule>('packages/moss/dist/index.js', ['createServer', 'defineApp', 'migrateTables']);
+  const { createIntegrations } = await built<IntegrationsModule>('packages/moss/dist/integrations.js', ['createIntegrations']);
   const OPERATOR = { 'x-operator-key': 'operator', 'content-type': 'application/json' };
   const appOf = (): unknown => defineApp({ charter: { public: [], desk: { actions: ['ext.desk.*'] } }, assignments: {}, actions: {}, features: [createIntegrations({})] });
   const runtimeOf = (pool: PgPool, more: Record<string, unknown> = {}): Record<string, unknown> => ({ pool: vexPool(pool), db: vexPool(pool), session: 'dev-open', operatorKey: 'operator', sessionRevalidateMs: POLL_MS, ...more });
@@ -328,7 +363,7 @@ const registry = async (): Promise<void> => {
     const database = await createDatabase();
     const migrating = poolOn(database, 4);
     const first = await quietly(() => migrateTables(runtimeOf(migrating), appOf()));
-    check('`migrateTables` on an empty database applies the tables', first.applied.length > 0, `${first.applied.length} migrations: ${first.applied.map((migration: { ref: string }) => migration.ref).join(', ')}`);
+    check('`migrateTables` on an empty database applies the tables', first.applied.length > 0, `${first.applied.length} migrations: ${first.applied.map((migration) => migration.ref).join(', ')}`);
     const second = await quietly(() => migrateTables(runtimeOf(migrating), appOf()));
     check('`migrateTables` again, on the migrated database, applies nothing', second.applied.length === 0 && second.removed.length === 0 && second.retyped.length === 0, `${second.applied.length} applied`);
 
@@ -360,7 +395,7 @@ const registry = async (): Promise<void> => {
       const actions = (await reader.query('SELECT action_id FROM integration_actions WHERE integration_id = $1 ORDER BY 1', [id])).rows.map((line) => String(line['action_id']));
       return { title: row?.['title'], status: row?.['status'], keyHash: row?.['key_hash'], actions };
     };
-    const register = async (server: any, id: string, version: string): Promise<{ status: number; key: unknown }> => {
+    const register = async (server: Server, id: string, version: string): Promise<{ status: number; key: unknown }> => {
       const response = await server.request('/operator/integrations', { method: 'POST', headers: OPERATOR, body: JSON.stringify({ id, url: bundleUrl(id, version) }) });
       const body: unknown = await response.json().catch(() => ({}));
       return { status: response.status, key: body !== null && typeof body === 'object' && 'key' in body ? body.key : undefined };
@@ -406,7 +441,7 @@ const registry = async (): Promise<void> => {
 
     // ── an approval by one process is served by the other ──
     const approved = await quietly(() => a.request('/operator/integrations/belts/approve', { method: 'POST', headers: OPERATOR }));
-    const served = (server: any): string => Object.keys(server.actions()).join(', ');
+    const served = (server: Server): string => Object.keys(server.actions()).join(', ');
     check('an approval is answered 200, and the process that took it serves the actions', approved.status === 200 && served(a) === 'ext.desk.belts.a1, ext.desk.belts.a2', `${approved.status}; it serves ${served(a) || 'nothing'}`);
     const followed = await quietly(() => until(() => served(b) === 'ext.desk.belts.a1, ext.desk.belts.a2', 5_000));
     check('the other process serves them too, within its poll', followed, `it serves ${served(b) || 'nothing'}`);
