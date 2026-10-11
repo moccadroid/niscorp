@@ -4,7 +4,7 @@ The nisc application server. A principal logs in, a charter resolves, and what a
 
 Moss does not host code and guard it. It serves *existence*: a resolved catalog **is** the application. The warehouse kiosk granted two actions is not a locked-down app; it is a two-action app. There is nothing else to render, invoke, or attack.
 
-> On npm, and still early. The data/policy plane, the socket, per-principal server shells, ring-2 served layout variants, the in-process function seam, server-drawn documents and pages, and the canvas terminal (the wire plus swappable render targets) are built and tested — except the ink render target, which has no tests yet. The fn *host* (`/fns`), the artifact library, the projection model, and scale-out are specified and pending. See [DESIGN.md](DESIGN.md) for the thesis and the unbuilt ladder.
+> On npm, and still early. The data/policy plane, the socket, per-principal server shells, ring-2 served layout variants, the in-process function seam, server-drawn documents and pages, and the canvas terminal (the wire plus five swappable render targets) are built and tested. The fn *host* (`/fns`), the artifact library, the projection model, and scale-out are specified and pending. See [DESIGN.md](DESIGN.md) for the thesis, how the code is laid out, and the unbuilt ladder.
 
 ## Install
 
@@ -24,7 +24,7 @@ Node ≥ 22.12.
 
 ## The shape
 
-An app hands moss its **artifacts** (`defineApp`) and an **environment** (`NiscRuntime` — a database and how a session token is verified, optionally a cache). Everything mechanical is derived: the data layer from the schema, per-principal policy and catalogs from the charter, the server shells from the manifest. The server refuses to boot on an incoherent charter.
+An app hands moss its **artifacts** (`defineApp`) and an **environment** (`NiscRuntime` — a database and how a session token is verified, optionally a cache). Everything mechanical is derived: the data layer from the schema, per-principal policy and catalogs from the charter, the server shells from the manifest. The manifest is read by a schema and frozen when it is handed over, and the server refuses to boot on one that does not parse, or on an incoherent charter.
 
 ```typescript
 import { defineApp } from '@niscorp/moss';
@@ -74,7 +74,7 @@ server.get('*', async (c) => {
   const page = await renderDocument({
     server,
     template: indexHtml,
-    request: { path: c.req.path, cookie: c.req.header('cookie') },
+    request: { path: c.req.path, cookie: c.req.header('cookie'), host: c.req.header('host') },
     draw: (snapshot) => renderSnapshot({ snapshot, registry, slotWrapper }),
   });
   return c.html(page.html, 200, page.headers);
@@ -87,9 +87,12 @@ const drawn = readDocumentSnapshot();
 createWire({ env: browserEnv(), ...(drawn ? { initial: drawn } : {}) });
 ```
 
-Who may keep the page follows from who asked: drawn for nobody it is the same
-for everybody; drawn for somebody it is `private, no-store`. A page that cannot
-be drawn goes out undrawn.
+Who is asking is read off the browser's session cookie. Its name ends with the
+port a page is on, so the request's `Host` is how a page on a port finds it;
+`mountSite` (`@niscorp/moss/node`) and the dev plugin are this route, written
+once. Who may keep the page follows from who asked: drawn for nobody it is the
+same for everybody; drawn for somebody it is `private, no-store`. A page that
+cannot be drawn goes out undrawn.
 
 The page's `<head>` is a node in a layout too — nova's `nova:head`, holding
 the elements a head holds, bound to the action's data. It is read off the
@@ -148,12 +151,12 @@ never in moss core.
 
 ## Subpaths
 
-- **`@niscorp/moss`** — the server: `defineApp`, `createServer`, the resolution and shell-host internals, the socket protocol types.
+- **`@niscorp/moss`** — the server: `defineApp`, `createServer`, the drawn document (`renderDocument`, `exportDocuments`), moss's stored session credential (`mintSession`), `migrateTables`, and the types an app names (`NiscApp`, `NiscRuntime`, `MossServer`, `FunctionSession`, `Feature`). [DOCS.md](DOCS.md) documents every name each entry exports; the list itself is `packages/moss/api.txt` in the repository, which a build holds the entries to.
 - **`@niscorp/moss/node`** — the Node listener: `serve` + `attachSocket` (raw `ws`), and `mountSite(server, { dist, draw })` — the built terminal served by the same process, every page drawn. Bun swaps this file, never the app.
 - **`@niscorp/moss/integrations`** — a feature, not part of the core: `createIntegrations(config)` makes the object an app puts in its manifest's `features` to take in separate services that add screens (registration, approval, the proxy, frames, webhooks), and carries the calls the app makes on it afterwards.
 - **`@niscorp/moss/tide`** — a feature too: `createTideFacts({ tide, identity, chain })` mints each committed write into [tide](../tide/README.md) as a fact, for the identity the write's own scope names. It is what moss keeps of hosting tide: the Postgres store (`@niscorp/tide/postgres`) and the driver (`createTideDriver`) are tide's own, and `@niscorp/tide` is an optional peer.
 - **`@niscorp/moss/vite`** — `mossDev({ app })`: the app server inside vite's dev process — loaded through vite (an edit re-boots it), the socket attached once, pages drawn, moss's paths answered, a dev-only `/dev/as/<who>`. `nisc dev` adds it for an app behind moss; `vite` is an optional peer.
-- **`@niscorp/moss/client`** — the wire: `createWire()`, the app end of the socket. Plain TypeScript, zero React, zero globals — the host comes in as a `WireEnv` (default: `browserEnv()`, localStorage + location).
+- **`@niscorp/moss/client`** — the wire: `createWire()`, the app end of the socket. Plain TypeScript, zero React, zero globals — the host comes in as a `WireEnv` (default: `browserEnv()`: the page's location, and the session kept by the browser in a cookie the page cannot read, or in localStorage where the page is not served by its app).
 - **`@niscorp/moss/client/node`** — the Node host env: `nodeEnv({ url, tokenFile? })` runs the same wire on a plain Node (or Bun) process — token in a file, the runtime's WHATWG WebSocket.
 - **`@niscorp/moss/terminal`** — the terminal: `createTerminal` (one target, one wire) and `mountTerminal` (hot-swaps render targets on a hotkey over one wire; the session survives the swap). Framework-blind, surface-blind.
 - **`@niscorp/moss/terminal/react`** — the React render target: `reactTarget({ root, registry, slotWrapper? })` binds the app's component registry to the wire via nova's React adapter.
@@ -171,9 +174,10 @@ never in moss core.
 
 ## Tables and documents, versioned
 
-moss creates no table on its own: its tables (`MOSS_SEQUENCE`, plus
-`SESSIONS_SEQUENCE` when the runtime's `session` is `'sessions'`) and the vex
-cache's go through one [strata](../strata/README.md) ledger run at boot — once,
+moss creates no table on its own: its tables (`MOSS_SEQUENCE`, plus the
+sessions table's sequence when the runtime's `session` is `'sessions'`), the
+vex cache's and the ones the app's features keep go through one
+[strata](../strata/README.md) ledger run at boot — once,
 recorded, refused if the ledger was edited or written by newer code. Tide's
 tables are tide's (`TIDE_SEQUENCE`, from `@niscorp/tide/postgres`): they go
 through the same ledger when `createTideStore(pool)` is called, or in moss's

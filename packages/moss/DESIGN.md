@@ -51,11 +51,15 @@ Consequences:
   UI are closed data, a publish can render its consequences in concrete terms —
   *"crm.quotes → gained by: sales, intern, ray."* A human approves that.
 
-Today the manifest is a compiled constant, seeded as generation 0; the artifact
-library that makes publish a runtime write is specified and unbuilt (see below).
-The mechanism is already the pure function it needs to be: resolution and shell
-construction are derived from an immutable manifest, so a new generation is a new
-manifest, and the per-principal memos die with it — no invalidation protocol.
+Today the manifest is what the app handed `createServer`: read by a schema,
+then frozen, so an edit to it throws. One part of it changes while a server
+runs, through one door: a set of actions is handed over
+(`server.replaceActions`) and verified before it is taken. The artifact library
+that makes publish a runtime write for every artifact is specified and unbuilt
+(see below). The mechanism is already the function it needs to be: what a set
+of roles holds, and the policy it reads and writes under, are derived from what
+is in force and dropped when that changes, so there is no invalidation
+protocol; a pointer in the database tells every other process that it did.
 
 ### 3. One gate, every kind of principal
 
@@ -82,10 +86,13 @@ wait for it: the terminal never overwrites the value of the focused input when a
 new tree arrives (bound inputs are identified by `model.path`), and `ui:model`
 events debounce. A canvas — or a whole app — may also opt *out* and run its shell
 in the browser, with vex as the enforcement floor: this is where offline and
-zero-backend PGlite live. It is an explicit per-canvas degrade, not a mode menu;
-one screen can mix client-side chrome with authoritative server canvases —
-**authority islands**. The frame doesn't care: a canvas slot renders a tree and
-is indifferent to whether it came from a local shell or a socket.
+zero-backend PGlite live. It is an explicit degrade, not a mode menu. What is
+built is the whole app: an app with its own shell, which moss does not serve.
+One screen mixing client-side canvases with authoritative server ones —
+**authority islands** — is what the design allows, because a canvas slot
+renders a tree and is indifferent to whether it came from a local shell or a
+socket; no render target of moss's does it today, each registers its slots
+against the wire alone (`src/terminal/slots.ts`).
 
 ---
 
@@ -98,23 +105,32 @@ The organizing principle: an app hands over **artifacts** and an
   `vex_cache` is the API surface (nothing is generated), and the grantable set
   is the introspected schema × vex's verb leaves. No table list is authored.
 - **Per-principal resolution** is the charter applied at login: roles from the
-  assignment rows, granted action ids (with a content-hash version token), the
-  compiled vex scope policy, and the granted layout variants (ring 2). Pure;
-  memoized because the documents are static per process.
+  app's `identity` seam or its assignment rows, granted action ids (with a
+  content-hash version token), the compiled vex scope policy, and the granted
+  layout variants (ring 2). Pure; kept for each set of roles, not for each
+  person, until what the app consists of changes.
 - The **component registry** on the server is name-only stubs, derived by
-  walking the manifest's layouts (variants included, nova/reflect's
-  `componentsOf` — the walk is shared, not re-derived) — the actual components
-  live in the terminal.
-- **Coherence is refused, not documented.** `createServer` runs `verifyCharter`
-  (with nova's closure audit injected over effective definitions) and
-  `verifyVariants`, and throws on errors. The closure audit's findings are not
-  errors: they are filed under each role's `issues` in the report, and boot
-  neither refuses on them nor prints them. If it boots, the charter and the
-  variants are coherent; a push to an ungranted action can still be in it.
+  walking what mentions a component: the actions in force, the layout
+  variants, the shell's canvases, frame, layout store and fragments
+  (nova/reflect's `componentsOf` — the walk is shared, not re-derived) — the
+  actual components live in the terminal.
+- **Coherence is refused, not documented.** Whether an app may be served is
+  one verification (`src/manifest/verify.ts`): every action is one nova reads,
+  the charter verifies (`verifyCharter`, with nova's closure audit over the
+  definitions in force), every entry's `reach` names a profile the behaviors
+  declare, and nobody holds two layout variants of one action. It is asked at
+  boot, at every change (`refresh`, `replaceActions`), and of a candidate that
+  has not been taken (`server.verifyActions`, `verifyApp`); a boot or a change
+  that fails it throws. The closure audit's findings are not errors: they are
+  filed under each role's `issues` in the report, and boot neither refuses on
+  them nor prints them. If it boots, the charter and the variants are
+  coherent; a push to an ungranted action can still be in it.
 
-The test of the principle: moss adds no new vocabulary. Reads are vex, writes are
-vex, compute is functions, UI is actions, permissions are the charter. The server
-is the composition, not a fifth language.
+The test of the principle: moss's core adds no new vocabulary. Reads are vex,
+writes are vex, compute is functions, UI is actions, permissions are the
+charter. The server is the composition, not a fifth language. (The integrations
+feature does read a document of its own, the bundle a separate service
+publishes about itself. That is one reason it is a feature, and not the core.)
 
 ### Ring 2 — served layout variants
 
@@ -129,6 +145,98 @@ and serialize is already per-principal and the terminal renders what it is serve
 `extends` composes them and a forgotten grant fails closed. This is the charter's
 extensibility paying off: one `Section` value, moss hands the universe in and
 compiles it.
+
+---
+
+## How the code is laid out
+
+Moss answers five questions about one request, in this order, and each
+question has one module that owns it. A module is a directory under `src/`
+with an `index.ts`, and nothing else sits at the top of `src/` but the main
+entry.
+
+1. **Who is calling?** `identity`: a token is a principal (the deployment's
+   verifier, moss's stored credential, the browser's cookie and its seal), and
+   a principal is a record (roles, scope values, what is installed for them).
+2. **What exists for them?** `manifest`: what the app handed over, read by a
+   schema and frozen; what it consists of right now, with one writer; whether
+   that may be served; and what a set of roles holds of it.
+3. **What may they read and write?** `data`: the vex engine, the policy a set
+   of roles reads and writes under, the routes, a seeded entry run as a
+   charter role, and the tables with their migration.
+4. **What are they looking at?** `shells`: the shell host, one shell's build,
+   the stream of frames, and the screen read without attaching.
+5. **How does it reach them?** `socket` for the live wire, `documents` for a
+   screen drawn into a page.
+
+Under them sit two modules every other may import: `runtime`, what a
+deployment supplies (the database, the verifier, the limits, the telemetry
+sink), and `protocol`, what both ends of the wire agree on (the messages, the
+close codes, the delta codec, the snapshot a drawn page carries). Over them
+sits `server`, which answers none of the five: `createServer` constructs the
+modules, hands each the narrow things it needs, starts the features and mounts
+the routes, one step to a line.
+
+A **feature** owns none of the five. It lives in a directory of its own, ships
+from an entry point of its own, and the core never imports it: the app creates
+it and names it in its manifest's `features`, and the server starts it with
+the seams (`FeatureSeams`: every member one function or one narrow value of
+the module that owns it). `feature` is the module that says what a feature and
+its seams are: types, and no code. There are two features: `integrations`
+(`@niscorp/moss/integrations`), and `tide` (`@niscorp/moss/tide`), a committed
+write minted into tide as a fact. A feature that needs something the seams do
+not offer does not reach for it: the seam is added to the module that owns
+the answer first, as a change of its own.
+
+The terminal side is two more modules, built and shipped apart from the
+server: `client`, the wire, which imports `protocol` and nothing else of moss,
+and `terminal`, the conductor and the render targets, which imports `client`.
+
+Which module may import which is written down once, as a table a build reads:
+`scripts/check-modules.mts` in the repository. That table is the truth, and
+this is a copy of it:
+
+| Module | May import |
+|---|---|
+| `runtime` | nothing of moss |
+| `protocol` | nothing of moss |
+| `feature` | `runtime` |
+| `identity` | `runtime`, `protocol` |
+| `manifest` | `identity`, `feature` |
+| `data` | `runtime`, `identity`, `manifest` |
+| `shells` | `runtime`, `protocol`, `manifest`, `data` |
+| `socket` | `runtime`, `protocol`, `identity`, `shells` |
+| `documents` | `protocol`, `identity`, `shells` |
+| `server` | every module above, and no feature |
+| `integrations` (a feature) | `runtime`, `feature`, `manifest` |
+| `tide` (a feature) | `feature` |
+| `client` | `protocol` |
+| `terminal` | `client` |
+
+The table has no cycle, and what it leaves out is as deliberate as what it
+names. `shells` does not import `identity`: who somebody is, it is told.
+`socket` does not import `manifest`: what somebody holds is a function it is
+handed. `integrations` does not import `data`: what it reads and writes it
+authors as vex entries and replays through a seam. A module imports another by
+its `index.ts` and never a file inside it.
+
+Four rules go with the table. A module's factory is handed a typed object of
+the functions and values it needs, never the whole manifest and never the
+whole runtime: those two are handed to `createServer`, and the wiring hands on
+the parts. Each table and each long-lived piece of state has one module that
+writes it. What crosses a boundary (a manifest, a socket message, a route's
+body, a row, a token) is parsed by a schema in the module where it enters, and
+no module holds a type assertion. And a function is at most 100 lines, a file
+at most 400 lines of code.
+
+What holds them is a build that fails, not this page: `pnpm check:modules`
+(the table, the doors, nothing flat, no feature in the core), `pnpm check:api`
+(an export is a line in `api.txt`), `pnpm check:raw-sql` (a statement outside
+vex is counted, with its reason) and `pnpm lint` (no type assertion, the two
+sizes). Narrow inputs and one writer are not counted by any of the four; they
+are read for in review. The rules as somebody changing a package follows them
+are in the application guide, "Changing a package"
+(`packages/nisc/AGENTS.md`).
 
 ---
 
@@ -354,8 +462,8 @@ attached connections receive the same frames: shared canvases are the same
 mechanism). Anonymous connections get a throwaway shell, disposed on detach.
 
 **Lifetime.** A durable shell lives until sign-out, an operator reset, or the
-idle sweep: nothing attached for `idleMs` (default 30 minutes) and it is
-disposed, rebuilt on the next connection. Only the idle clock is swept —
+idle sweep: nothing attached for `runtime.shellIdleMs` (default 30 minutes) and
+it is disposed, rebuilt on the next connection. Only the idle clock is swept —
 deliberately no absolute cap, because that would discard the state of somebody
 who is working. There is no TTL on the session behind it; a shell going away is
 not a person being signed out.
@@ -528,7 +636,7 @@ an action — a `ui:` trigger, a two-way binding, a channel it waits on, a read
 that keeps answering — so the question is decidable from the definitions
 actually mounted, without running anything. Nova reports those facts
 (`livenessOf`); moss, which holds the entries behind each fingerprint, composes
-the verdict (`shellNeedOf`) and puts it on the snapshot as `live`. A page that
+the verdict (`src/shells/liveness.ts`) and puts it on the snapshot as `live`. A page that
 is not live is served as markup and its terminal opens no socket at all. A page
 that is live gets a shell for as long as its connection lasts — per connection,
 never per person. The one thing counted live without being read is code: a `fn:`
@@ -556,9 +664,12 @@ the application guide puts it — shell state is the truth.
 
 The `fn:` escape hatch runs server-side, in-process, next to the durable shell.
 The manifest's `functions(session)` builds handlers once per session, closing
-over the living shell, the caller's compiled scope policy, the environment, and
-`grant`/`revoke`. Agents live here (their reads run under the caller's policy —
-they see what the caller sees); keys are `.env`. This is deliberately the *side-
+over the living shell, who is calling (the principal, their roles, what they
+hold), the server's own surfaces as that session (`wire`), and `grant`/`revoke`.
+A session says who is calling and holds no key: it carries no database pool, no
+operator key and no policy object, and what app code needs of those has a call
+(DOCS.md, `FunctionSession`). Agents live here (their reads run under the
+caller's policy — they see what the caller sees); keys are `.env`. This is deliberately the *side-
 effect-ful, session-bound* half. The canonical, side-effect-free function — an
 independently deployable endpoint under `/fns` — is specified and pending.
 
@@ -635,11 +746,11 @@ nothing.
 
 | Temptation | Refusal |
 |---|---|
-| An auth provider | BYO identity. The server consumes a session token, never mints one; magic link is the default strategy. |
-| A framework | An assembly point. The intelligence lives in the artifacts; the server resolves, serves, pushes, enforces. Component count stays single-digit. |
+| An auth provider | BYO identity. Who somebody is, the app decides at its own door (magic link is the default strategy); the server only asks who a token is. Moss does keep a credential an app may use for that: `mintSession` stores a token by its hash once the app has decided, and `'dev-open'` trusts an unsigned one for a harness. Neither decides anything. |
+| A framework | An assembly point. The intelligence lives in the artifacts; the server resolves, serves, pushes, enforces. Its core is ten modules, each one question or the wiring (*How the code is laid out*). |
 | A place where policy hides | Every opinion it enforces is a readable artifact: charter, scope policy, assertion. No annotations, no interceptor magic. |
-| A second way to do anything | Reads are vex, writes are vex, compute is functions, UI is actions, permissions are the charter. Moss adds no vocabulary of its own. |
-| A web framework | A page is a shell manifest at a path; a drawn document is a first frame delivered early. No file-system routes, no layouts-of-layouts, no loaders, no middleware, no head management: the template, the route and the kit are the app's. |
+| A second way to do anything | Reads are vex, writes are vex, compute is functions, UI is actions, permissions are the charter. Moss's core adds no vocabulary of its own, and holds itself to the same: the rows it keeps it reads and writes through vex entries, and the statements left outside vex are counted, each with its reason (`pnpm check:raw-sql`). |
+| A web framework | A page is a shell manifest at a path; a drawn document is a first frame delivered early. No file-system routes, no layouts-of-layouts, no loaders, and no chain of middleware for an app to configure (one gate may be laid over the operator prefix, `runtime.operatorGate`). A page's `<head>` is not managed either: it is a node in a layout, written into the document like the rest of the screen. The template, the route and the kit are the app's. |
 
 ## Deliberately unbuilt
 

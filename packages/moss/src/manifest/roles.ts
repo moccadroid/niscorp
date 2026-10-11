@@ -68,7 +68,7 @@ export const resolveVariantsForRoles = (app: Pick<NiscApp, 'charter' | 'layouts'
 // layout (ring 2). Grants come from the charter's `layouts` section over
 // the variant-id universe. Two granted variants of one action is
 // incoherence the boot check refused (./verify.ts), so resolution never picks.
-export const resolveVariants = (app: NiscApp, principal: string | null): ReadonlyMap<string, LayoutNode> =>
+export const resolveVariants = (app: Pick<NiscApp, 'charter' | 'layouts' | 'assignments'>, principal: string | null): ReadonlyMap<string, LayoutNode> =>
   resolveVariantsForRoles(app, assignedRoles(app.assignments, principal));
 
 // The action definitions a set of roles holds, by id, in the catalog's order:

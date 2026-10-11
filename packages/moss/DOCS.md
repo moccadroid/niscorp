@@ -10,6 +10,17 @@ host), `@niscorp/moss/terminal` (the terminal), and the render targets:
 that draws to a string), `terminal/tty` and `terminal/ink`. The version is below 1.0 and
 the package is live on npm all the same: what is documented here keeps working
 from one release to the next, and what should go is deprecated, not removed.
+0.5.0 is the one release that did not keep to that, with the maintainer's
+approval: moss was rebuilt as modules and its entries were cut to what an app
+calls. Its entry in `CHANGELOG.md` says what an app changes.
+
+**What is exported is a file.** Every name an entry point exports is one line
+of `packages/moss/api.txt` in the repository (it is not in the published
+package), and `pnpm check:api` fails when the file and the entry points
+differ. Each of those names is documented below, under its entry point. Where this document names a type, a constant or a file that
+is not in `api.txt`, it says so: the name is there so a shape can be read, and
+an app reaches the shape through the exported type that carries it
+(`NiscRuntime['fabric']`, `Awaited<ReturnType<ShellHost['session']>>`).
 
 The nisc packages (`charter`, `nova`, `prism`, `strata`, `vex`) and
 `zod` are required peers. `react`/`react-dom`, `vue`, `ink`, `vite` and
@@ -118,7 +129,10 @@ session's governed `wire`. `inputs` derives boot **data** (nav flags, user
 chips), merged over each canvas's static seed. `seeds` derives boot
 **instances**: by canvas id, the actions to push, in order, ring-1-filtered
 like every other mount — a seed the principal is not granted does not mount.
-A `CanvasSeed` is an action id or `{ action, input?, with? }`.
+A `CanvasSeed` is an action id or `{ action, input?, with? }`, and a
+`ShellCanvas` is nova's canvas config with `initial` widened to one seed or a
+list of candidates. Neither type is exported by name: `ShellManifest['canvases']`
+carries both.
 
 #### `PageManifest` — `app.pages`
 
@@ -248,6 +262,7 @@ type NiscRuntime = {
   cache?: CacheBackend;            // defaults to vex's postgres cache on `pool`
   vexConfig?: QueryEngineConfig['config'];  // the query engine's settings (limits, read timeout); default vex's own
   session: SessionVerifier | 'sessions' | 'dev-open';  // REQUIRED — no default
+  origins?: readonly string[];     // origins that are the app's own page, beside the host a request names (a proxy that rewrites `Host`)
   migrations?: 'apply' | 'verify'; // the boot's ledgered run; default 'apply'
   tables?: readonly Sequence[];    // the app's own table sequences, in that same run
   shellIdleMs?: number;            // idle shell eviction; default 30 min, `0` disables
@@ -257,7 +272,7 @@ type NiscRuntime = {
   identityMax?: number;            // resident identity records; default 10,000; 0 or less refuses the boot
   identityIdleMs?: number;         // drop an unread identity record; default 30 min, `0` disables
   shellFrameDelta?: boolean;       // send changed canvases as deltas; default off
-  socketCompression?: boolean | Record<string, unknown>;  // permessage-deflate; default on
+  socketCompression?: boolean | Record<string, unknown>;  // permessage-deflate; default on (read by `serve`)
   socketMaxMessageBytes?: number;  // the largest message a connection may send; default 256 KiB (read by `serve`)
   operatorKey?: string;            // enables `/operator/*`; absent, every route there is 404
   operatorGate?: (c: Context, next: Next) => Response | void | Promise<Response | void>;
@@ -267,7 +282,15 @@ type NiscRuntime = {
 };
 ```
 
-`SessionVerifier` is `(token: string) => string | null | Promise<string | null>`.
+`SessionVerifier` is `(token: string) => string | null | Promise<string | null>`:
+the function form of `session`. The type is not exported by name.
+
+`socketCompression` and `socketMaxMessageBytes` are settings of the Node
+transport, and `serve` (`@niscorp/moss/node`) is what reads them. A host that
+attaches the socket itself says them to `attachSocket`, as its options;
+`nisc start` and the dev plugin attach with no options, so under those two the
+transport runs on its defaults (compression on, 256 KiB) whatever the runtime
+says.
 
 `session` is required, deliberately — authentication is the one door that must
 not default open, and it used to. Three answers: `'sessions'` uses moss's own
@@ -306,30 +329,39 @@ given 512 MB. A deployment with a public screen and more visitors at once than
 that raises it from those numbers and its own memory, and turns compression off
 or down first.
 
-#### `mintSession(pool, principal, ttlMs)` / `sessionOf(pool, token)` / `revokeSession(pool, token)` / `revokeAllFor(pool, principal)`
+#### `mintSession(pool, principal, ttlMs)` / `sessionOf(pool, token)` / `revokeAllFor(pool, principal)` / `initSessions(pool)`
 
 The stored credential behind `session: 'sessions'` — the integration key's
 standard, one table over: 256 bits behind an `st_` prefix, the row keeps only
 the hash, `expires_at` is enforced on every read, and revocation is deleting
-the row (one token, or every token a principal holds). The app mints at its
-own door after its own identity check and hands the token to the terminal;
-its table (`SESSIONS_SEQUENCE`) rides `createServer` boot automatically under
-`'sessions'`. Expired rows are swept on every mint — no timer to run.
-`sessionVerifierOf(runtime)` resolves the three-way `session` choice to a
-`SessionVerifier`, and throws when the field is unset.
+the row.
+
+- `mintSession` answers the token, once. The app mints at its own door after
+  its own identity check and hands the token to the terminal (or sets it as
+  the browser's cookie, [`sessionCookies`](#sessioncookiespage-token-options)).
+  Expired rows are swept on every mint — no timer to run.
+- `sessionOf` answers the principal a token resolves to, or `null`. Under
+  `session: 'sessions'` the server asks it for you (`server.principalOf`); it
+  is exported for an app whose own verifier function is built on it.
+- `revokeAllFor` deletes every token a principal holds: signed out everywhere.
+  `session.revoke()` in a function calls it for the session's own principal.
+  No exported call deletes one token and leaves the principal's others.
+- `initSessions` creates the table, through the ledger below. `createServer`
+  does that itself under `session: 'sessions'` and only then, so it is for a
+  host that is not moss's server, and for an app whose `session` is a function
+  built on `sessionOf`.
 
 **Tables go through a ledger.** moss creates no table on its own: its tables are
-[strata](../strata/README.md) sequences — `MOSS_SEQUENCE` (integrations, their
-actions, the generation pointer) and `SESSIONS_SEQUENCE` — and `createServer`
-applies them with the vex cache's sequence in
+[strata](../strata/README.md) sequences — `MOSS_SEQUENCE` (`nisc.moss`:
+integrations, their actions, the generation pointer) and the sessions table's
+(`nisc.moss.sessions`; the sequence itself is not exported, `initSessions` runs
+it) — and `createServer` applies them with the vex cache's sequence in
 one ledgered run before introspection: once, recorded in `strata_ledger`, and
 refused if the ledger was edited or written by newer code. `migrations` on the
 runtime picks the posture: `'apply'` (default) runs what is pending; `'verify'`
 refuses to boot if anything is, for a deployment that migrates as a deploy step.
-`initSessions` remains for a host that is not moss's server, and goes through
-the same ledger.
 
-The run's order is: `MOSS_SEQUENCE`, `SESSIONS_SEQUENCE` under
+The run's order is: `MOSS_SEQUENCE`, the sessions table's under
 `session: 'sessions'`, the vex cache's, the tables the app's features keep
 (`Feature.tables`, in the order the app named the features), then
 `runtime.tables`.
@@ -370,7 +402,7 @@ It sees entries and nothing else: not SQL written by hand, not a column a scope
 rule stamps, not what a value means.
 
 **Documents are read in this code's grammars.** Stored integration actions
-carry a `grammar` stamp (`INTEGRATION_ACTIONS_STORE`). At boot, after the
+carry a `grammar` stamp. At boot, after the
 tables, moss upgrades every stored action that is behind — through nova's and
 Prism's grammar sequences plus the app's own (`NiscApp.grammars`: sequences
 whose document steps are Prism configs, e.g. a kit renaming a component's
@@ -539,13 +571,13 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
 - `actions(): Readonly<Record<string, ActionDefinition>>` — the actions in
   force now, by id: what the app shipped, then each set handed over. To read;
   a set changes through `replaceActions`.
-- `catalogOf(principal): Promise<Catalog>` — what a principal holds of the
+- `catalogOf(principal): Promise<{ ids, hash }>` — what a principal holds of the
   actions in force: `{ ids, hash }`, the granted action ids sorted, with a
   content-hash version token (equal hash, equal application). The principal is
   resolved the way a request resolves it (the `identity` seam, or
   `assignments`), so an integration's actions are there only where it is
   installed. `null` is nobody signed in.
-- `catalogForRoles(roles, installed?): Catalog` — the same for a caller that
+- `catalogForRoles(roles, installed?): { ids, hash }` — the same for a caller that
   already knows the roles. `installed` is the integration ids live for them;
   left out, every integration is live.
 - `policyForRoles(roles): ScopePolicy` — what a set of roles may read and
@@ -572,16 +604,20 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
 - `invalidateTenant(tag): number` — forget every identity record wearing the
   tag the app put on it (`IdentityRecord.tag`); answers how many. Forgets, does
   not reset shells.
-- `identity(principal): Promise<IdentityRecord>` — the resolved record for one
-  principal, through the same cache the request path uses.
-- `identities?: { list(): IdentityReport[]; meter() }` — the resident identity
+- `identity(principal): Promise<IdentityRecord>` — who one principal is,
+  resolved the way a request resolves it: `{ roles, scope, installed? }`,
+  through the same cache the request path uses. `null` is nobody signed in.
+  With no `identity` seam the roles are the ones `assignments` names, and
+  `scope` is empty.
+- `identities?: { list(); meter() }` — the resident identity
   roster (`{ principal, since, lastSeen }`) and what the cache costs
   (`{ size, max, resolved, evicted, expired }`). Present only when the app
   declares `identity`.
 - `executeAs(role, fingerprint, context, scope?): Promise<unknown>` — execute a
   seeded entry as a declared charter role, for surfaces with no principal by
   nature. In-process only, replay-only, policy compiled from that role, scope
-  values supplied by server code.
+  values supplied by server code. Its type is exported as `ExecuteAs`, for
+  code that is handed the function and no server.
 - `nudge(principal, channel): void` — publish, payload-less, onto one
   principal's living shell, in whichever process holds it (local `deliver`,
   then the fabric).
@@ -633,7 +669,7 @@ the attached connections' baseline is untouched.
 - `options.inputs` — input for canvas seeds, by canvas id, merged over the
   manifest's `inputs`. A page's path parameters arrive here.
 
-#### `live`, and `shellNeedOf(definition, entries): ShellNeed`
+#### `live` — can anything on this screen still happen
 
 `live` is asked of the instances actually mounted for this principal. A screen
 is live when something on it can still happen:
@@ -650,7 +686,9 @@ A read made while the action opened is **finished**: its answer is in the tree
 (and listed in `drawnWith`). The app's own shell is always live for a signed-in
 principal — it is the thing that is kept. nova supplies the facts
 (`livenessOf`, `@niscorp/nova/reflect`); moss composes the verdict, because it
-holds the entries behind each fingerprint.
+holds the entries behind each fingerprint (`src/shells/liveness.ts`; the
+function is not exported, its answer is `live`, `why` and `drawnWith` on the
+snapshot).
 
 When `live` is false the trees are the whole of the screen, and the terminal
 opens no socket.
@@ -668,6 +706,8 @@ const page = await renderDocument({
 });
 // → { html, headers, drawn, principal, page?, head?, live?, why?, drawnWith?, settled? }
 ```
+
+What it is handed is `DocumentConfig`, and what it answers is `DrawnDocument`.
 
 - **Which shell**: the page `server.page(path)` names, else the app's.
 - **For whom**: the principal behind the browser's session cookie for the
@@ -736,7 +776,8 @@ somebody is theirs. No page declares which it is.
 The same draw, for nobody, once per path in `config.paths` — what a static host
 serves. There is no credential to pass and no way to pass one: a file is the
 page as nobody in particular sees it, which is the only page that may be kept.
-Each result carries `{ path, html, page?, drawn, live, why, drawnWith, settled }`.
+`config` is `DocumentConfig` without its `request`, and `paths`. Each result
+(`ExportedDocument`) carries `{ path, html, page?, head?, drawn, live, why, drawnWith, settled }`.
 A page that is `live` is still written, and says why — its file is a true first
 screen and its terminal will look for a socket. Whether that is acceptable (a
 server stands beside the files) or a mistake (there is none) is the build's to
@@ -774,10 +815,15 @@ server.get('/login', async (c) => {
 browser closes. A sign-in made over the socket (`session.grant`) needs none of
 this: the answer to the terminal's next upgrade writes the same cookie.
 
-#### `createPageRouter(pages): PageRouter`
+#### `createPageRouter(pages)`
 
-`{ match(path): { name, params } | undefined }` — the matching rule above, for a
-tool that needs it without a server.
+Answers `{ match(path): { name, params } | undefined }` — the matching rule
+above, for a tool that needs it without a server. `pages` is a record of what
+the rule reads of a page: `{ path, params?, canvases: { id }[] }`, by name. A
+record of `PageManifest` is one. It refuses what a boot refuses: two pages
+that could answer one path, a `params` canvas the page does not have, a
+parameter named twice. A server makes one router from its manifest's pages,
+and `server.page(path)` asks it.
 
 ### Reacting to writes
 
@@ -932,8 +978,11 @@ lets them replay, as vex's discovery lists them.
 
 ### Many processes
 
-- `runtime.fabric: Fabric` — `{ publish(message), subscribe(apply) }`, the
-  host's transport (Postgres `LISTEN/NOTIFY` is the expected one). It carries
+- `runtime.fabric` — `{ publish(message), subscribe(apply) }`, the
+  host's transport (Postgres `LISTEN/NOTIFY` is the expected one; the type is
+  `NiscRuntime['fabric']`, and is not exported by a name of its own). A
+  message is one of the three signals below with `origin`, the process that
+  sent it, which moss stamps and checks. It carries
   three signals to the other processes: `invalidate-identity`,
   `invalidate-tenant` and `nudge` — what `server.invalidateIdentity`,
   `invalidateTenant` and `nudge` publish after applying locally. Best-effort:
@@ -951,24 +1000,33 @@ lets them replay, as vex's discovery lists them.
   read, and read again where it is not. A move a process could not follow is
   logged as that and tried again at the next poll; `server.generation()` is
   the last one it followed.
-- `createIdentityCache(ctx): IdentityCache` — the cache behind `app.identity`:
-  `{ get, invalidate, invalidateAll, invalidateTag, list, meter, stop }`.
-  Defaults `DEFAULT_IDENTITY_MAX` and `DEFAULT_IDENTITY_IDLE_MS`.
+- The identity cache — what holds the records `app.identity` resolves. It is
+  the server's own (`src/identity/cache.ts`) and is not exported. Its limits
+  are `runtime.identityMax` (default 10,000) and `runtime.identityIdleMs`
+  (default 30 minutes); a record is forgotten with `server.invalidateIdentity`,
+  `invalidateTenant` and `refresh`, and what is held is read through
+  `server.identities`.
 
 ### Telemetry
 
-`runtime.telemetry: { emit(span) }` — one sink, off by default. A
-`TelemetrySpan` is `{ name, startUnixNano, endUnixNano, status: 'ok' | 'error' |
-'refused', attributes, traceId?, spanId?, parentSpanId? }`. Moss emits one per
-vex execution, fn call, integration call, shell build, and socket upgrade and
-close. A `socket.upgrade` is `ok` (admitted), `refused` (the token offered is
-nobody's) or `error` (the session could not be opened: the verifier threw,
-what somebody holds could not be asked, their shell could not be built).
-`emitterOf(telemetry)` wraps a sink so a throwing one costs the caller
-nothing (`undefined` when there is none); `spanClock()` stamps a start and
-measures the end.
+`runtime.telemetry` is a `Telemetry`, `{ emit(span) }` — one sink, off by
+default. A `TelemetrySpan` is `{ name, startUnixNano, endUnixNano, status: 'ok'
+| 'error' | 'refused', attributes, traceId?, spanId?, parentSpanId? }`. Moss
+emits one per vex execution, fn call, integration call, shell build, and socket
+upgrade and close. A `socket.upgrade` is `ok` (admitted), `refused` (the token
+offered is nobody's) or `error` (the session could not be opened: the verifier
+threw, what somebody holds could not be asked, their shell could not be built).
+`emit` is never awaited, and a sink that throws costs the caller nothing: the
+throw is caught where the span is emitted, and logged.
 
 ### Resolution (exposed for tools)
+
+Three functions for a tool that holds a manifest and no server:
+`resolveRoles`, `resolvePolicy` and `resolveVariants`. Each reads `assignments`
+and nothing else, so for an app that resolves people through `identity` they
+answer as `public` for everybody the assignments do not name. A running server
+is asked instead: `(await server.identity(principal)).roles`,
+`server.policyForRoles(roles)`, `server.catalogOf(principal)`.
 
 - `resolveRoles(app, principal): readonly string[]` — assignment rows; anonymous/
   unassigned wears `['public']`. The name is fixed, and the charter has to
@@ -985,13 +1043,9 @@ measures the end.
   it themselves; it narrows rows, never widens verbs.
 - `resolveVariants(app, principal): ReadonlyMap<string, LayoutNode>` — action id →
   the granted variant's layout (ring 2; empty map = every action serves its base).
-- What a set of roles may read and write is asked of the server, for a caller
-  that already resolved who somebody is (the `identity` seam):
-  `server.policyForRoles(roles)`. `resolveRoles`, `resolvePolicy` and
-  `resolveVariants` read `assignments` only.
 - What somebody holds is asked of the server, which answers from the actions
   in force: `server.catalogOf(principal)`, `server.catalogForRoles(roles,
-  installed?)`.
+  installed?)`. There is no function for it without a server.
 - `verifyApp(app, grants): ManifestReport` — the check boot runs, for an app
   that is not booted (a check, a build step): the charter with each role's
   closure audited, every entry's reach, the layout variants. It reads `charter`,
@@ -1002,10 +1056,13 @@ measures the end.
   a boot refuses on `errors`. A running server answers for what is in force
   with `server.charterReport()`. It verifies and does nothing else: what it is
   handed is not read by the manifest's schema and is not frozen.
+
+### The shell host
+
 - `ShellHost` — `{ session, snapshot, adopt, deliver, list, reset, stop }`:
   the durable per-principal shell host, as `server.shells` and
-  `server.page(path).host`. The server creates it (`src/shells/`,
-  `createShellHost(config)`; not exported). It is handed no manifest and no
+  `server.page(path).host`. The server creates it (`src/shells/`; the factory
+  is not exported). It is handed no manifest and no
   runtime, but a typed object of what it needs: one function that answers what
   a principal's shell is made of (who they are, the action definitions they
   hold with their roles' layout variant in place, the canvases, the frame, the
@@ -1013,8 +1070,9 @@ measures the end.
   shell calls (`inputs`, `seeds`, `phrases`, `functions`, `onSession`,
   `runs`), the wire for a token, and its limits. A shell may sit unattached for
   `runtime.shellIdleMs` (default 30 minutes; `0` disables the sweep).
-  - `session(token, principal, options?)` — `options = { seed?, inputs? }`
-    (`ShellOpening`); `snapshot` is described under [The document](#the-document).
+  - `session(token, principal, options?)` — `options = { seed?, inputs? }`;
+    `snapshot` is described under [The document](#the-document), and what it
+    answers is exported as `ShellSnapshot`.
     Two first arrivals for one principal in the same moment are handed one
     shell: one is built.
   - `adopt()` — every living durable shell is brought level with what its
@@ -1026,7 +1084,7 @@ measures the end.
   - `deliver(principal, channel, payload?): boolean` — publish into one
     principal's living durable shell. `false` = they have no living shell;
     nothing is built.
-  - `list(): ShellReport[]` — every durable shell alive right now:
+  - `list()` — every durable shell alive right now, each as
     `{ principal, connections, since, idleSince, canvases }`. moss owns the map,
     so moss enumerates it; an app keeping its own note beside it can only drift.
   - `reset(principal): boolean` — dispose that principal's shell and stand its
@@ -1037,7 +1095,8 @@ measures the end.
     after another.
   - `stop()` — stop the idle sweep (the timer is unref'd, so a plain process
     needn't call it).
-- `ShellSession` — what `ShellHost.session(token, principal)` returns:
+- What `ShellHost.session(token, principal)` returns (a type that is not
+  exported by name: `Awaited<ReturnType<ShellHost['session']>>`):
   `{ shell, attach, detach, resync, dispatch, publish, back, popTo, reset }`. The living nova `Shell`,
   for in-process hosts (dev checks, embedded tools) that drive it directly;
   remote clients ride `attach`/`dispatch`. `shell` is a **getter** — `reset`
@@ -1053,15 +1112,16 @@ measures the end.
 
 ### The socket protocol
 
-- `server.socket` is a `SocketAccept`: one `accept(url, connection)` per
-  connection, fed by the runtime's transport; `accept.stop()` ends revalidation
-  (the timer is unref'd, so a plain process needn't call it). `createServer`
-  builds it (`src/socket/`), handed who a token is, what somebody holds, and
-  where a session comes from for the app and for each page. It is not
-  exported.
-- **Identity is asked twice.** At upgrade, and then every `revalidateMs`
-  (default `DEFAULT_REVALIDATE_MS`, 60s; `0` disables) for as long as the
-  connection lives. A token that stops resolving — or starts resolving to
+- `server.socket` is called once for each connection, by the runtime's
+  transport: `server.socket(url, connection)`. `server.socket.stop()` ends
+  revalidation (the timer is unref'd, so a plain process needn't call it).
+  `createServer` builds it (`src/socket/`), handed who a token is, what
+  somebody holds, and where a session comes from for the app and for each
+  page. Neither its factory nor its type is exported by name: the type is
+  `MossServer['socket']`.
+- **Identity is asked twice.** At upgrade, and then every
+  `runtime.sessionRevalidateMs` (default 60 seconds; `0` disables) for as long
+  as the connection lives. A token that stops resolving — or starts resolving to
   somebody else — gets an `invalid_token` error frame and a `4401` close, which
   is the recovery the terminal already performs: drop the token, reconnect
   anonymous, land on the served lock screen.
@@ -1083,8 +1143,12 @@ measures the end.
   `hello`: a connection that closes while its session is being opened (its
   catalog asked, its shell built) is not attached to a shell, so a kept shell
   idles and one built for that connection alone is disposed.
-- `ServerMessage` — `hello | catalog | frame | render | render-delta | session | error`.
-- `ClientMessage` — `event | publish | resync | reset | back | popTo`.
+- `ServerMessage` — what the server sends: `hello | catalog | frame | render |
+  render-delta | session | error`.
+- What a terminal sends is `event | publish | resync | reset | back | popTo`,
+  each with exactly the fields the protocol names (`src/protocol/messages.ts`;
+  the type of these is not exported, a terminal written by hand sends the
+  object).
 - **A message a terminal sends is at most 256 KB**, counted as it is once
   inflated. One over that closes the connection with `1009` — the transport's
   own close, not one of moss's — and what it carried did not arrive: the
@@ -1121,17 +1185,21 @@ measures the end.
 - `popTo` names a canvas and an instance already on its stack
   (`{ type: 'popTo', canvas, instance }`): unmount everything above it, in one
   step — a breadcrumb's jump, which several `back`s would race.
-- `CLOSE_AT_CAPACITY = 4503`: the server is serving as many terminals with
-  nobody signed in as `runtime.anonymousShellMax` allows, and built no shell
-  for this one. An `at_capacity` error frame, then the close. Not a recovery:
-  the terminal keeps what it holds and reconnects with its usual backoff.
-- `CLOSE_INVALID_TOKEN = 4401`, `CLOSE_SIGNED_OUT = 4403`,
-  `CLOSE_SHELL_FAILED = 4500`, `CLOSE_PROTOCOL_MISMATCH = 4426`. `4500` means
-  the server could not open a session for this connection (commonly a
-  definition failing validation): a `session_failed` error frame, then the
-  close. The frame names the failing definitions when that is the cause; of any
-  other cause it says nothing, and the error is in the server's log. The
-  refusal is that terminal's alone, and reconnecting later is reasonable.
+- **The close codes.** Two are exported, because they are the two a terminal
+  recovers from by dropping its token: `CLOSE_INVALID_TOKEN = 4401` and
+  `CLOSE_SIGNED_OUT = 4403`. Three more are numbers a terminal written by hand
+  names itself (their constants are in `src/protocol/connection.ts` and are
+  not exported):
+  - `4500`: the server could not open a session for this connection (commonly
+    a definition failing validation). A `session_failed` error frame, then the
+    close. The frame names the failing definitions when that is the cause; of
+    any other cause it says nothing, and the error is in the server's log. The
+    refusal is that terminal's alone, and reconnecting later is reasonable.
+  - `4503`: the server is serving as many terminals with nobody signed in as
+    `runtime.anonymousShellMax` allows, and built no shell for this one. An
+    `at_capacity` error frame, then the close. Not a recovery: the terminal
+    keeps what it holds and reconnects with its usual backoff.
+  - `4426`: the two ends speak protocols the other cannot (below).
 - `error` codes: `invalid_token`, `session_failed`, `at_capacity`,
   `client_too_old`, `server_too_old`, `no_shell` (the app serves no shell),
   `invalid_message`
@@ -1231,6 +1299,11 @@ served. Turn it off — or tune `zlibDeflateOptions.memLevel` / `windowBits`
 through the object form — when connection count matters more than bandwidth.
 An object is handed to `ws` verbatim; see its `perMessageDeflate` options.
 
+The setting is the Node transport's, and `serve` is what reads it off the
+runtime. A host that attaches the socket itself says it to `attachSocket`
+(`{ compression }`); `nisc start` and the dev plugin do not, and run with
+compression on.
+
 #### Frame deltas — `runtime.shellFrameDelta`, default **off**
 
 A changed canvas, described against the frame that connection already holds:
@@ -1274,8 +1347,9 @@ Correctness, which matters more than the saving:
   base carried across a reconnect is one the server never assumed.
 - A `reset` carries the capability across to the replacement shell.
 - `src/protocol/delta.ts` is the whole implementation — `encodeDelta`, `applyDelta`,
-  `frameHash` — with no dependency, small enough to read in full. A delta layer
-  that cannot be audited is a desync you cannot diagnose.
+  `frameHash`, none of them exported — with no dependency, small enough to
+  read in full. A delta layer that cannot be audited is a desync you cannot
+  diagnose.
 
 ## `@niscorp/moss/node`
 
@@ -1291,8 +1365,8 @@ Correctness, which matters more than the saving:
   with vite HMR). `path` defaults to `/socket`. `options = { compression?,
   maxMessageBytes? }`. `compression` is the same value as
   `runtime.socketCompression` and defaults to `true`; `serve()` passes the
-  runtime's through for you, so only a host running its own listener (a vite
-  plugin, a dev check) ever needs it. `maxMessageBytes` is the largest message
+  runtime's through for you, and a host running its own listener says it here
+  or runs on the default. `maxMessageBytes` is the largest message
   a connection may send, in bytes, and defaults to 256 KB (`256 * 1024`); a
   message over it closes that connection with `1009`. It is handed to `ws` as
   `maxPayload`, whose own default was 100 MiB. `serve()` passes
@@ -1306,7 +1380,8 @@ Correctness, which matters more than the saving:
   connection is touched.
 
 - `mountSite(server, { dist, draw, htmlAttributes?, site?, tokenKey?, waitMs?, owned? })`
-  — the built terminal, served by the same process as the app. Every GET that
+  — the built terminal, served by the same process as the app (the second
+  argument is `SiteConfig`). Every GET that
   nothing registered earlier answers is a file from `dist`, or a page:
   `index.html` with the caller's screen drawn into it (`renderDocument`) — the
   app's own for `/`, one of the manifest's pages for a path that leads to one.
@@ -1329,8 +1404,8 @@ Correctness, which matters more than the saving:
 
 Requires the optional `vite` peer.
 
-- `mossDev(options): Plugin` — the app server inside vite's dev process
-  (serve only): no proxy and no second process. The socket is attached once to
+- `mossDev(options: MossDevOptions): Plugin` — the app server inside vite's
+  dev process (serve only): no proxy and no second process. The socket is attached once to
   vite's own http server; `/` and any path a page answers go out as
   `index.html` through `transformIndexHtml` with the screen drawn in
   (`renderDocument`); `MOSS_PATHS` go to the app server; the rest is vite's.
@@ -1507,8 +1582,8 @@ that names it, as a type: an app that imports this entry has tide installed.
 
 ## `@niscorp/moss/client`
 
-- `createWire(config?): Wire` — the app end of the socket. `config = { url?,
-  env?, delta?, initial?, path? }`. Plain TypeScript, no React, no globals — everything
+- `createWire(config?): Wire` — the app end of the socket. `config` is a
+  `WireConfig`: `{ url?, env?, delta?, initial?, path? }`. Plain TypeScript, no React, no globals — everything
   host-shaped comes in as a `WireEnv`. `delta` (default `false`) advertises
   that this terminal can rebuild frame deltas; the snapshot it produces is
   identical either way. See [Wire size](#wire-size).
@@ -1548,8 +1623,10 @@ that names it, as a type: an app that imports this entry has tide installed.
   is `false`, the wire does not connect and `status()` is `'static'`. `reset()`,
   or a token arriving, connects after all.
 - `Wire` — `{ subscribe, snapshot, status, dispatch(canvas, event), publish,
-  reset, back, popTo(canvas, instance), dispose }`. `snapshot()` is `{ frame, trees }`; `status()` is
-  `'connecting' | 'open' | 'closed' | 'incompatible' | 'static'` and changes notify subscribers like
+  reset, back, popTo(canvas, instance), dispose }`. `snapshot()` is a
+  `WireSnapshot`, `{ frame, trees }`, where `trees` is a map from a canvas's id
+  to its tree. `status()` is a `WireStatus`,
+  `'connecting' | 'open' | 'closed' | 'incompatible' | 'static'`, and changes notify subscribers like
   snapshot changes do (a renderer must be able to tell a dead socket from an
   empty app). Hand it to a renderer.
 
@@ -1625,8 +1702,8 @@ in the subpaths.
   events back.
 - `mountTerminal(config): { swap, reset, back, destroy }` — the switcher:
   hot-swaps render targets over ONE wire, so the socket, session, and current
-  trees survive the swap. `config = { targets, swapKey?, resetKey?, trapBack?,
-  initial?, wire?, url? }` — targets by name, cycled in insertion order;
+  trees survive the swap. `config` is a `MountTerminalConfig`: `{ targets,
+  swapKey?, resetKey?, trapBack?, initial?, wire?, url? }` — targets by name, cycled in insertion order;
   `swapKey` (e.g. `"ctrl+shift+y"`) binds the hotkey, and `swap` is returned for
   a host's own control. Omit `wire` and the terminal makes (and owns) one; `url`
   seeds it. `resetKey` binds `wire.reset()` — the escape hatch, on a keystroke
@@ -1707,8 +1784,9 @@ Requires the optional `react`/`react-dom` peers.
   the component is drawn again on every update.
 - `TerminalSlotWrapper` — an app component wrapping each action instance at
   the `ActionSlot` boundary; the terminal twin of nova's client-shell
-  SlotWrapper. Served trees carry identity only, so the props are
-  `{ canvasId, instanceId, definitionId }` — `definitionId`, not `action`.
+  SlotWrapper. Served trees carry identity only, so its props
+  (`TerminalSlotWrapperProps`) are `{ canvasId, instanceId, definitionId }`
+  and the content as `children` — `definitionId`, not `action`.
 - **Adoption.** A `root` that already holds elements, on a wire that has a
   frame, was drawn on the server from the snapshot the wire started from: the
   target adopts those elements (`hydrateRoot`) instead of replacing them. An
@@ -1718,7 +1796,8 @@ Requires the optional `react`/`react-dom` peers.
 ### `@niscorp/moss/terminal/react/server`
 
 - `renderSnapshot({ snapshot, registry, slotWrapper? }): string` — the React
-  target, drawing to a string: the same registry, the same wire slots and the
+  target, drawing to a string (its argument is this entry's
+  `RenderSnapshotConfig`): the same registry, the same wire slots and the
   same frame as the browser's target, so what a server writes is what the browser
   adopts. Its own entry, so a browser bundle never carries `react-dom/server`.
   `snapshot` is `{ frame, trees, live? }` — what `shells.snapshot` answers is
@@ -1747,7 +1826,8 @@ wire and target, and assert React said nothing (atrium's and lyra's `ssr-check`)
 Requires the optional `vue` peer.
 
 - `vueTarget({ root, registry, slotWrapper? }): Target` — the app's Vue
-  component registry bound to the wire via nova's Vue adapter, mounted on
+  component registry bound to the wire via nova's Vue adapter (its argument is
+  `VueTargetConfig`), mounted on
   `root` with `createApp`. Registers wire-backed `CanvasSlot` and
   `ActionSlot` — the same origin rule as the react target (an event from
   inside an instance boundary carries that instance as `origin` unless it
@@ -1759,7 +1839,7 @@ Requires the optional `vue` peer.
   re-renders on wire updates).
 - `TerminalSlotWrapper` — a Vue component wrapping each action instance at
   the `ActionSlot` boundary, handed `{ canvasId, instanceId, definitionId }`
-  as props and the content as its default slot.
+  as props (`TerminalSlotWrapperProps`) and the content as its default slot.
 - **Adoption**, as the react target: a root that holds server-drawn elements,
   on a wire with a frame, is mounted with `createSSRApp` and adopted.
 
@@ -1767,7 +1847,8 @@ Requires the optional `vue` peer.
 
 - `renderSnapshot({ snapshot, registry, slotWrapper? }): Promise<string>` — the
   Vue target, drawing to a string through Vue's own server renderer (which is
-  asynchronous, so this is).
+  asynchronous, so this is). Its argument is this entry's
+  `RenderSnapshotConfig`.
 
 ## `@niscorp/moss/terminal/dom`
 
@@ -1785,7 +1866,7 @@ Requires the optional `vue` peer.
 ### `@niscorp/moss/terminal/dom/server`
 
 - `renderSnapshot({ snapshot, registry?, window }): string` — the DOM target,
-  drawing to a string. A DOM kit builds real elements, so the host hands in a
+  drawing to a string (its argument is this entry's `RenderSnapshotConfig`). A DOM kit builds real elements, so the host hands in a
   DOM to build them in (`window`: jsdom, happy-dom, linkedom — moss depends on
   none). A kit's components name `document` as a global, so for the length of
   one draw — synchronous, start to end — the window's names are lent to the
@@ -1794,7 +1875,8 @@ Requires the optional `vue` peer.
 ## `@niscorp/moss/terminal/tty`
 
 - `ttyTarget({ input, output, registry?, fallback?, onQuit?, debounceMs?,
-  prompt? }): Target` — the line-terminal target: a REPL over the wire. It
+  prompt? }): Target` — the line-terminal target: a REPL over the wire (its
+  argument is `TtyTargetConfig`). It
   reports the connection's status (`… connecting`, `✓ connected`,
   `× connection lost — retrying`) — once per real transition, never the
   backoff flap.
@@ -1825,7 +1907,8 @@ createTerminal({ target: ttyTarget({ input: process.stdin, output: process.stdou
 ## `@niscorp/moss/terminal/ink`
 
 - `inkTarget({ registry?, slotWrapper?, stdin?, stdout?, onQuit?, patchConsole? }):
-  Target` — the full-screen terminal target: nova's Ink kit
+  Target` — the full-screen terminal target (its argument is
+  `InkTargetConfig`, every field optional): nova's Ink kit
   (`@niscorp/nova/adapters/ink`) on the React adapter's walker, mounted with
   ink's renderer. Interaction is the TTY REPL's numbered addressing plus
   live focus: every interactive shows a `[n]` marker (the numbering is the
