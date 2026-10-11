@@ -98,10 +98,9 @@ export const createAssertionSigner = (seedB64?: string): AssertionSigner => {
   };
 };
 
-// The other end of `mint` — exported for checks and for any service written in
-// this workspace. A service in its own repository implements these same lines
-// against its own runtime's crypto; the contract is the token format, not this
-// function.
+// The other end of `mint`, for moss's own tests: the package does not export
+// it. An integration's service implements these same lines against its own
+// runtime's crypto; the contract is the token format, not this function.
 export const verifyAssertion = (token: string, verifyKey: string, now: number = Date.now()): Assertion | undefined => {
   const dot = token.indexOf('.');
   if (dot <= 0) return undefined;
