@@ -1294,11 +1294,18 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
     for one connection, which for the app's host is each visitor's and for a
     page's host is everybody's. Definitions that arrived or changed are
     registered and mounted instances keep their state; one that left, or is no
-    longer granted, is removed and its instances unmounted. A shell that
-    cannot adopt is logged and keeps what it held; the rest go on. A shell
-    whose build was under way adopts when it lands, and so does one a reset
-    was replacing; no change waits for a build, or for another change. One
-    built for the length of a `snapshot` is read and ended, and adopts
+    longer granted, is removed and its instances unmounted. The shell's own
+    layouts are taken from the same answer: the frame, each `{ ref }` of the
+    layout store and each fragment that is answered differently from the last
+    time is put in place, and every attached terminal is sent the frame. One
+    that is answered as it was is left alone, so a ref the shell's own code
+    set since (`shell.setLayout`) stands through a change that did not touch
+    it. What a shell's canvases are, and what is mounted on them, is the
+    shell's own state and is not taken again: a reset builds that afresh. A
+    shell that cannot adopt is logged and keeps what it held; the rest go on.
+    A shell whose build was under way adopts when it lands, and so does one a
+    reset was replacing; no change waits for a build, or for another change.
+    One built for the length of a `snapshot` is read and ended, and adopts
     nothing.
     **So is stopping.** `server.close()` stops every host's idle sweep, with
     everything else the server started.

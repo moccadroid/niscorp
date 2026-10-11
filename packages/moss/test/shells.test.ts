@@ -5,6 +5,7 @@ import { applyDelta, frameHash } from '../src/protocol';
 import type { DeltaOp } from '../src/protocol';
 import { hostConfig, standHost } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
+import type { ActionFragment, LayoutNode } from '@niscorp/nova';
 import type { FunctionSession, NiscApp } from '../src/manifest';
 import type { Connection } from '../src/socket';
 import { turn } from './turn';
@@ -1597,6 +1598,88 @@ describe('shells — adopt', () => {
 
     expect(session.shell).not.toBe(stood);
     expect(() => session.shell.push('main', 'extra')).toThrow();
+  });
+
+  // AN ADOPT TAKES WHAT A BUILD TAKES, OF THE SAME ANSWER: the frame, what
+  // each `{ ref }` in it resolves to, and the fragments, beside the actions.
+  // And of those it takes what the answer says differently now, and nothing
+  // else: a ref the shell's own code has set since (somebody's own
+  // arrangement, `shell.setLayout`) is not set back by a change that did not
+  // touch it.
+  describe('the shell’s own layouts', () => {
+    const text = (children: string): LayoutNode => ({ component: 'Text', children });
+    const framed = (name: string): LayoutNode => ({ component: 'Frame', props: { name }, children: [{ component: 'CanvasSlot', props: { canvasId: 'main' } }, { ref: 'dock' }, { ref: 'rail' }] });
+    const sheet = (title: string): ActionFragment => ({ kind: 'fragment', id: 'sheet', layout: { component: 'Sheet', props: { title }, children: [{ slot: 'body' }] } });
+    // What the composition answers of the three, by hand: a copy at each
+    // asking, as an owner that reads rows would answer.
+    const layoutsWorld = () => {
+      const answer = { frame: framed('first'), layoutStore: { dock: text('the dock, first'), rail: text('the rail, first') }, fragments: { sheet: sheet('first') } };
+      const config = hostConfig({ ...ctx, app: base, resolve: async () => ({ roles: ['member'], scope: {}, catalog: { ids: ['home'] }, variants: new Map() }) });
+      const host = standHost({
+        ...config,
+        composition: async (principal) => {
+          const made = await config.composition(principal);
+          return { ...made, ...structuredClone(answer), components: { ...made.components, Frame: {}, Sheet: {}, Text: {} } };
+        },
+      });
+      return { host, answer };
+    };
+    const lastFrame = (connection: ReturnType<typeof fakeConnection>): string => JSON.stringify(connection.sent.filter((message) => message['type'] === 'frame').at(-1));
+
+    it('the frame, a ref and a fragment that are answered differently after a change are put in place: the terminal is sent the frame, and the next push wears the fragment', async () => {
+      const { host, answer } = layoutsWorld();
+      const session = await host.session('t', 'usr_1');
+      const connection = fakeConnection();
+      session.attach(connection);
+      await settle();
+      expect(lastFrame(connection)).toContain('"name":"first"');
+
+      answer.frame = framed('second');
+      answer.layoutStore.dock = text('the dock, second');
+      answer.fragments.sheet = sheet('second');
+      host.adopt();
+      await settle();
+
+      expect(lastFrame(connection)).toContain('"name":"second"');
+      expect(lastFrame(connection)).toContain('the dock, second');
+      expect(lastFrame(connection)).toContain('the rail, first');
+      session.shell.push('main', 'home', undefined, ['sheet']);
+      await settle();
+      expect(JSON.stringify(connection.sent.filter((message) => message['type'] === 'render').at(-1))).toContain('"title":"second"');
+    });
+
+    it('what is answered as it was is not put in place again: a ref the shell’s own code set since stands, and no frame is sent', async () => {
+      const { host } = layoutsWorld();
+      const session = await host.session('t', 'usr_1');
+      const connection = fakeConnection();
+      session.attach(connection);
+      session.shell.setLayout('dock', text('the dock, as this person arranged it'));
+      await settle();
+      const sent = connection.sent.length;
+
+      host.adopt();
+      await settle();
+
+      expect(lastFrame(connection)).toContain('the dock, as this person arranged it');
+      expect(connection.sent).toHaveLength(sent);
+    });
+
+    it('one ref is answered differently: that one is set, and another the shell’s own code set stands', async () => {
+      const { host, answer } = layoutsWorld();
+      const session = await host.session('t', 'usr_1');
+      const connection = fakeConnection();
+      session.attach(connection);
+      session.shell.setLayout('dock', text('the dock, as this person arranged it'));
+      await settle();
+
+      answer.layoutStore.rail = text('the rail, second');
+      host.adopt();
+      await settle();
+
+      expect(lastFrame(connection)).toContain('the rail, second');
+      expect(lastFrame(connection)).toContain('the dock, as this person arranged it');
+      expect(lastFrame(connection)).toContain('"name":"first"');
+    });
   });
 
   it('every shell of one principal on a host that keeps none adopts, each for itself', async () => {

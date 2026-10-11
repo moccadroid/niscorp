@@ -69,7 +69,10 @@ And there is one place it will be asked. Everything a shell loads that
 somebody authored (its actions, its frame and layout store, its fragments, the
 entries its reads replay) is answered by the running manifest in one function,
 for a shell and a set of roles (`src/manifest/artifacts.ts`). A shell is built
-from that answer and adopts it; the entries vex replays are seeded from what
+from that answer and adopts it, all of it both times: an adopt puts in place
+the actions that are held now, and the frame, each `{ ref }` of the layout
+store and each fragment that the answer says differently from the last time.
+The entries vex replays are seeded from what
 the running manifest holds; nothing else in moss reads one of the four off
 what the app handed over.
 

@@ -627,10 +627,15 @@ The artifactory is its own plan. What is decided about it:
     too.
 
   Not built, on purpose: nothing is stored or published, `vex_cache` is still
-  seeded, and a replay still resolves its entry in vex's cache. An adopt
-  brings a living shell's actions, component names and entries level; its
-  frame, layout store and fragments are the ones it was built with, and
-  nothing changes those while a server runs.
+  seeded, and a replay still resolves its entry in vex's cache. An adopt takes
+  of that answer what a build takes: a living shell's actions, component
+  names and entries are brought level, and so are its frame, each `{ ref }`
+  of its layout store and each fragment, where the answer says one of them
+  differently from the last time it was taken (`src/shells/host.ts`,
+  `takeLayouts`). Nothing changes those three while a server runs yet; the
+  path is there for what will. Not taken again: the canvases, which are what
+  a shell starts with, and a fragment or a ref that is no longer answered,
+  which nova has no way to take out of a shell.
 - An id resolves to what is shipped, published, made by a person, or held in a
   draft in the shell. Developers publish new defaults without deploying.
 - Several layouts may exist for one action; which is in use is separate. A

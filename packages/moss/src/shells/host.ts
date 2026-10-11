@@ -2,8 +2,8 @@ import { randomBytes } from 'node:crypto';
 import { snapshotShell } from '@niscorp/nova/reflect';
 import { emitterOf } from '../runtime';
 import { buildShell } from './build';
-import type { ShellHostConfig } from './config';
-import { endShell } from './live';
+import type { ShellComposition, ShellHostConfig } from './config';
+import { endShell, layoutsOf } from './live';
 import type { Cell, HostParts, Live } from './live';
 import { sessionOn } from './shell-session';
 import { DEFAULT_SNAPSHOT_WAIT_MS, needOf, read, settle } from './snapshot';
@@ -98,6 +98,50 @@ const rosterOf = (durable: ReadonlyMap<string, Cell>): ShellReport[] => {
   return reports;
 };
 
+// Two documents that say the same thing: the one object, or two that
+// serialize alike. A layout and a fragment are JSON (the manifest's schema
+// read them), and an owner may answer a copy at each asking.
+const sameDocument = (one: unknown, other: unknown): boolean => one === other || JSON.stringify(one) === JSON.stringify(other);
+
+// THE SHELL'S OWN LAYOUTS, BROUGHT LEVEL: the frame, each `{ ref }` of the
+// layout store and each fragment, of the same answer the actions are taken
+// from.
+//
+// A BUILD TAKES ALL OF THAT ANSWER, AND AN ADOPT TOOK HALF: the actions, the
+// component names and the entries. The frame, the layout store and the
+// fragments stayed the ones a shell was built with. Nothing changes those
+// while a server runs yet, and what comes to (a layout published without a
+// deploy) would have reached the next shell that is built and no living one:
+// two paths from one answer. There is one.
+//
+// ONLY WHAT IS ANSWERED DIFFERENTLY NOW IS PUT IN PLACE, against what was last
+// taken (`Live.layouts`). A shell's own code changes these while it runs
+// (`shell.setLayout` is how somebody's own arrangement of a region is
+// shown), and an adopt happens for every change to what the app consists of:
+// an integration approved must not set every person's dock back to the one
+// the app ships.
+//
+// WHAT IS NO LONGER ANSWERED STAYS. Nova has no way to take a fragment or a
+// ref out of a shell, nor a frame away from one: one that left is held and
+// named by nothing new. THE CANVASES ARE NOT TAKEN AGAIN EITHER: which
+// canvases a shell has, and what is mounted on each, is the shell's own state
+// from the moment it is built (./live.ts, `canvasesOf`), and what a canvas
+// mounts first is derived with `inputs`, which an adopt has never run again.
+// A reset does all of it afresh.
+const takeLayouts = (live: Live, made: ShellComposition): void => {
+  const taken = live.layouts;
+  const answered = layoutsOf(made);
+  for (const [ref, layout] of Object.entries(answered.layoutStore)) {
+    if (!sameDocument(taken.layoutStore[ref], layout)) live.shell.setLayout(ref, layout);
+  }
+  for (const [id, fragment] of Object.entries(answered.fragments)) {
+    // Under the name it is answered by, as a build registers it.
+    if (!sameDocument(taken.fragments[id], fragment)) live.shell.registerFragment({ ...fragment, id });
+  }
+  if (answered.frame !== undefined && !sameDocument(taken.frame, answered.frame)) live.shell.setCanvasLayout(answered.frame);
+  live.layouts = answered;
+};
+
 // ONE LIVING SHELL, BROUGHT LEVEL WITH WHAT ITS PRINCIPAL HOLDS NOW.
 //
 // ASKED AGAIN, not read off the cell. Adopting happens because something
@@ -138,6 +182,7 @@ const adoptInto = async (host: HostParts, cell: Cell): Promise<void> => {
   for (const definition of Object.values(made.actions)) live.shell.registerAction(definition);
   live.held = new Set(Object.keys(made.actions));
   live.entries = made.entries;
+  takeLayouts(live, made);
 };
 
 // ONE CHANGE, ASKED OF EVERY LIVING SHELL OF THIS HOST, whoever it is for and

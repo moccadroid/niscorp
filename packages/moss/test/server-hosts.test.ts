@@ -183,6 +183,55 @@ describe('the shell hosts — a change reaches the living shells of every host',
     }
   });
 
+  // THE ANSWER A SHELL IS BUILT FROM IS THE ANSWER IT ADOPTS, ALL OF IT. An
+  // adopt took the actions, the component names and the entries of it, and
+  // left the frame, the layout store and the fragments as the shell was built
+  // with them. Nothing changes those three while a server runs yet; whatever
+  // comes to would have reached the next shell that is built and no living
+  // one. Here the running manifest is a stand-in that answers others once
+  // something was published.
+  it('a living shell whose frame, layout store and fragments the running manifest answers differently after a change shows the change', async () => {
+    const answering = { published: false };
+    const hosts = buildShellHosts(
+      partsWith({
+        artifactsFor: (shell, roles, installed) => {
+          const made = shipped.artifactsFor(shell, roles, installed);
+          if (!answering.published) return made;
+          return { ...made, frame: frameNamed('as published', true), layoutStore: { dock: dockSaying('the dock, as published') }, fragments: { sheet: sheetNamed('as published') } };
+        },
+      }),
+    );
+    try {
+      const session = await hosts.shells?.session('t', 'usr_1');
+      const sent: string[] = [];
+      session?.attach({ send: (text) => void sent.push(text), close: () => undefined });
+      await settle();
+      const frames = (): string[] => sent.filter((text) => text.startsWith('{"type":"frame"'));
+      expect(frames().at(-1)).toContain('"name":"as shipped"');
+      expect(frames().at(-1)).toContain('the dock, as shipped');
+      const before = frames().length;
+
+      answering.published = true;
+      hosts.adopt();
+      await settle();
+
+      // The terminal that is attached is sent the frame, with what its
+      // `{ ref }` resolves to now.
+      expect(frames().length).toBeGreaterThan(before);
+      expect(frames().at(-1)).toContain('"name":"as published"');
+      expect(frames().at(-1)).toContain('the dock, as published');
+      expect(frames().at(-1)).not.toContain('as shipped');
+      // A fragment is laid around an action when it is pushed: what is on
+      // screen keeps the one it was pushed with, and the next push wears the
+      // one in force.
+      session?.shell.push('main', 'words', undefined, ['sheet']);
+      await settle();
+      expect(sent.filter((text) => text.startsWith('{"type":"render"')).at(-1)).toContain('"title":"as published"');
+    } finally {
+      hosts.stop();
+    }
+  });
+
   it('a principal’s reset reaches their shell in the app’s host and the ones a page built for them, and nobody else’s', async () => {
     const hosts = buildShellHosts(partsWith(shipped));
     try {

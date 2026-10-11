@@ -1,12 +1,28 @@
-import type { Shell } from '@niscorp/nova';
+import type { ActionFragment, LayoutNode, Shell } from '@niscorp/nova';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Emit } from '../runtime';
-import type { ShellHostConfig } from './config';
+import type { ShellComposition, ShellHostConfig } from './config';
 import type { ShellConnection, ShellOpening } from './types';
 
 // What one host holds while it stands: each living shell with what is attached
 // to it, the cell a principal's shell is addressed through, and what every
 // part of the host reads. The files beside this one do the work.
+
+// THE SHELL'S OWN LAYOUTS, as a composition answers them: the frame that
+// arranges its canvases, what each `{ ref }` in the frame resolves to before
+// anything sets it, and the fragments an action may be composed with. An
+// empty record where the composition named none.
+export type ShellLayouts = {
+  frame?: LayoutNode;
+  layoutStore: Readonly<Record<string, LayoutNode>>;
+  fragments: Readonly<Record<string, ActionFragment>>;
+};
+
+export const layoutsOf = (made: Pick<ShellComposition, 'frame' | 'layoutStore' | 'fragments'>): ShellLayouts => ({
+  ...(made.frame !== undefined ? { frame: made.frame } : {}),
+  layoutStore: made.layoutStore ?? {},
+  fragments: made.fragments ?? {},
+});
 
 export type Live = {
   shell: Shell;
@@ -20,6 +36,10 @@ export type Live = {
   // keeps answering). Undefined: the composition named none, and nothing is
   // concluded from that.
   entries: ReadonlyMap<string, SeedEntry | SeedMutation> | undefined;
+  // Its own layouts as its composition last answered them: what it was built
+  // with, or what it last adopted. An adopt puts in place the ones that are
+  // answered differently now, and compares against these to know which.
+  layouts: ShellLayouts;
   connections: Set<ShellConnection>;
   // last frame per canvas — only changes are sent
   sent: Map<string, string>;

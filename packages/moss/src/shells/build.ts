@@ -5,6 +5,7 @@ import type { CanvasSeed, ShellCanvas } from '../manifest';
 import { spanClock } from '../runtime';
 import { functionSessionFor, instrumentFunctions } from './function-session';
 import type { Standing } from './function-session';
+import { layoutsOf } from './live';
 import type { HostParts, Live } from './live';
 import { follow } from './stream';
 import type { ShellOpening } from './types';
@@ -204,6 +205,7 @@ export const buildShell = async (
     shell,
     held: granted,
     entries: made.entries,
+    layouts: layoutsOf(made),
     connections: new Set(),
     sent: new Map(),
     deltaReady: new Set(),
