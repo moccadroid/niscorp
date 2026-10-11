@@ -151,7 +151,7 @@ describe('the dev server’s sign-in', () => {
       expect(answer.asked).toEqual([]);
     });
 
-    it('nor with `signInFromNetwork`, which is about which devices ask and not which pages', async () => {
+    it('nor with `signInFromNetwork`: where a browser sends the header, it is read', async () => {
       const answer = await signInAt('ada', { host: 'localhost:5173', 'sec-fetch-site': 'cross-site' }, { options: { signInFromNetwork: true } });
       expect(answer.status).toBe(403);
       expect(answer.asked).toEqual([]);

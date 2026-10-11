@@ -1753,16 +1753,29 @@ Requires the optional `vite` peer.
     behind a proxy on the same machine every request is the proxy's, and is
     this machine's. **And it is not answered to a page of another site**: a
     request a browser marks `Sec-Fetch-Site: cross-site` is answered `403`
-    too, whatever `signInFromNetwork` says. A page open in the developer's
-    browser asks from this machine, and sent there by one, the browser came
-    back signed in as whoever that page named. An address that is typed,
-    pasted, bookmarked or linked from the app's own page is answered; one
-    clicked on another site's page is pasted into the address bar instead.
+    too. A page open in the developer's browser asks from this machine, and
+    sent there by one, the browser came back signed in as whoever that page
+    named. An address that is typed, pasted, bookmarked or linked from the
+    app's own page is answered; one clicked on another site's page is pasted
+    into the address bar instead. A browser sends that header only to an
+    address it trusts: https, and this machine's own names (`localhost`,
+    `127.0.0.1`, `[::1]`). To the machine's network address over plain http
+    it sends none, and such a request is refused by the first rule instead:
+    it does not arrive from loopback, the machine's own browser included. So
+    the two rules together hold for as long as the first one stands.
   - `signInFromNetwork?: boolean` (default `false`) answers the sign-in to
     every device that can reach the dev server, for trying a signed-in screen
     on a phone. It hands out a session for whoever the address names: with it
     on and vite listening on a network (`--host`), anybody on that network
-    signs in as anybody.
+    signs in as anybody. **It opens the sign-in to pages of other sites
+    too.** At the dev server's network address (`http://192.168.1.20:5173`,
+    how another device reaches it) a browser marks no request, so with this
+    on a page of any site, open in a browser on any device that can reach
+    the dev server, the developer's own included, can send that browser to
+    `/dev/as/<who>` there and leave it signed in as whoever it names. The
+    refusal of a cross-site request still holds at `localhost`, where the
+    header is sent. Turn it on for as long as the phone needs it, on a
+    network you trust, and not while browsing elsewhere.
   - `watch?: RegExp` (default: `src/app`, `src/server`, `src/db`, `src/ui` and
     the nisc config), `index?` (default `index.html`), `owned?` (default
     `MOSS_PATHS`), `label?` (default `moss`).

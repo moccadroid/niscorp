@@ -75,6 +75,16 @@ export type MossDevOptions = {
   // out a session for whoever the address names, so with this on and vite
   // listening on a network (`--host`), anybody on that network signs in as
   // anybody. For trying a signed-in screen on a phone, on a network you trust.
+  //
+  // IT ALSO OPENS THE SIGN-IN TO ANY PAGE, OF ANY SITE, in a browser on a
+  // device that can reach the dev server, the developer's own included. The
+  // refusal of another site's page (`signInRefusal`, below) reads a header a
+  // browser sends only to an address it trusts: https, or this machine's own
+  // names. To the dev server's network address over plain http, which is how
+  // another device reaches it, a browser sends none, so a request a page of
+  // another site started there is not told from one that was typed. With
+  // this off that request is refused anyway: it does not arrive from this
+  // machine's loopback address.
   signInFromNetwork?: boolean;
 };
 
@@ -113,6 +123,22 @@ const isFromThisMachine = (address: string | undefined): boolean =>
 //     (`Sec-Fetch-Site`), and a page cannot write that header. An address that
 //     is typed, pasted, bookmarked, or linked from the app's own page is not
 //     another site's, and something that is not a browser sends no such header.
+//
+// WHERE THE SECOND RULE DOES NOT HOLD. A browser sends `Sec-Fetch-Site` only
+// to an address it trusts: https, and this machine's own names (`localhost`,
+// `127.0.0.1`, `[::1]`). To any other name or address over plain http it sends
+// none, whichever page started the request (run in Chrome: a request to
+// `localhost` from another origin carried `cross-site`; the same request to
+// the machine's network address carried no such header). Those requests are
+// stopped by the first rule, because one made to the network address arrives
+// from that address and not from loopback, this machine's own browser
+// included. So the second rule is whole while the first one stands, and with
+// `signInFromNetwork` on it does not cover the network address: there a page
+// of another site signs a browser in as whoever it names. No check is made
+// for it, because none that reads what a browser sends would be complete:
+// run the same way, that request carried no `Origin`, and no `Referer` once
+// the page asked for it to be left off. The option's own comment and DOCS.md
+// say what it opens.
 const signInRefusal = (req: Connect.IncomingMessage, fromNetwork: boolean): string | undefined => {
   if (!fromNetwork && !isFromThisMachine(req.socket.remoteAddress)) {
     return (
