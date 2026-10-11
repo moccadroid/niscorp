@@ -30,6 +30,9 @@
 //   ./node.ts   `@niscorp/moss/node`: the `ws` transport, the built site, `serve`
 //   ./vite.ts   `@niscorp/moss/vite`: the app server inside vite's dev process
 //
+// and one file is what those two share and neither exports: ./transport.ts,
+// the `ws` half of the transport seam.
+//
 // This module may import every core module. It imports no feature.
 // ═══════════════════════════════════════════════════════════════
 

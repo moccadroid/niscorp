@@ -131,7 +131,7 @@ export type NiscRuntime = {
   // `false` disables it; an object is passed through to `ws` for tuning.
   socketCompression?: boolean | Record<string, unknown>;
   // THE LARGEST MESSAGE A CONNECTION MAY SEND, in bytes, counted once inflated
-  // (default: 256 KiB, the Node transport's own; ../server, node.ts says why
+  // (default: 256 KiB, the Node transport's own; ../server, transport.ts says why
   // that number). A message over it closes that connection with 1009. What a
   // terminal sends is an event, a few KB; a deployment whose screens hand back
   // more in one message raises this, and its memory for each connection with
