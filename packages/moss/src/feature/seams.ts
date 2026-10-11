@@ -10,13 +10,12 @@ import type { Telemetry } from '../runtime';
 // THE SEAMS — everything of the core a feature may touch, as one object the
 // server hands it when it starts.
 //
-// MADE FOR THE FEATURE IT IS HANDED TO. `Feature` and this type are public,
-// so anybody can write a feature, and what one is handed decides what it can
-// do. So the members that reach something owned are bound to their feature:
-// its own entries reach the tables it named on itself, its set of actions is
-// the one under its name, the store it has upgraded is in a table of its own.
-// None of them takes the name of a table or of a set, and no member carries a
-// secret of the deployment's or of another feature's.
+// MADE FOR THE FEATURE IT IS HANDED TO. The members that reach something owned
+// are bound to their feature: its own entries reach the tables it named on
+// itself, its set of actions is the one under its name, the store it has
+// upgraded is in a table of its own. None of them takes the name of a table
+// or of a set, and no member carries a secret of the deployment's or of
+// another feature's.
 //
 // Each member is a function or one narrow value, and each belongs to the
 // module that answers that question: who is calling (identity), what exists
@@ -181,10 +180,8 @@ export type Feature = {
   // whoever puts it in a manifest, without running it.
   tables?: {
     // THE TABLES THAT ARE ITS OWN, by name: every table its own entries read
-    // and write (the `ownEntries` seam), and all they may. A table has one
-    // owner: a feature that names one of the core's (sessions, the generation
-    // pointer, the vex cache, the migration ledger), or one another feature
-    // names, refuses the boot with a sentence that says which and why.
+    // and write (the `ownEntries` seam), and all they may. Moss does not check
+    // that a table named here is nobody else's.
     names: readonly string[];
     // The strata sequences of its own that make them. They go through the one
     // ledgered run every owner's tables go through, after moss's and before

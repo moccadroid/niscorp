@@ -31,8 +31,7 @@
 // feature makes on the tables it keeps: seeded into a cache no route serves,
 // and replayed in process under a policy that admits those tables alone.
 // WHICH TABLES ARE A FEATURE'S (./migrate.ts) is read off the app's
-// features before any of them runs: a table has one owner, and one of the
-// core's is no feature's.
+// features before any of them runs.
 //
 // AN INTENT ANSWERED BY A QUERY WRITTEN FOR IT (./routes.ts) is the one
 // place a query is written while the app runs: with the app's writers, under

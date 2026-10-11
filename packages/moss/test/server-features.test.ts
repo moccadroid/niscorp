@@ -22,8 +22,8 @@ import { engineDouble } from './data-double';
 // module stands over an engine with nothing behind it (./data-double.ts), and
 // who somebody is is a function written here.
 //
-// `Feature` and `FeatureSeams` are public, so anybody can write a feature.
-// What one is handed decides what it can do, whatever it was written to do.
+// What a feature is handed decides what it can do, whatever it was written
+// to do.
 
 const charter: Charter = { public: ['home'] };
 

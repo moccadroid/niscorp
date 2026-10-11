@@ -100,10 +100,9 @@ const seamsFor = (feature: Pick<Feature, 'name'>, owned: OwnedActions, { app, ru
   },
 });
 
-// THE FEATURES ARE STARTED, in the order the app named them. EACH WITH SEAMS
-// OF ITS OWN: anybody can write a feature, so what one is handed is made for
-// that feature and is no other's to reach through. One that throws refuses
-// the boot.
+// THE FEATURES ARE STARTED, in the order the app named them, each with seams
+// of its own: what one is handed is made for that feature and is no other's
+// to reach through. One that throws refuses the boot.
 export const startFeatures = async (features: readonly Feature[], deps: SeamDeps): Promise<void> => {
   for (const feature of features) await feature.start(seamsOf(feature, deps));
 };
