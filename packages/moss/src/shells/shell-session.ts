@@ -1,5 +1,6 @@
 import { NovaEventSchema } from '@niscorp/nova';
 import type { Shell } from '@niscorp/nova';
+import { endShell } from './live';
 import type { Cell, HostParts } from './live';
 import { attach, resync } from './stream';
 import type { ShellSession } from './types';
@@ -25,7 +26,7 @@ export const sessionOn = (host: HostParts, cell: Cell, ephemeral: boolean, rebui
     if (live.connections.size > 0) return;
     live.idleSince = Date.now();
     if (!ephemeral) return;
-    live.ended = true;
+    endShell(host, live);
     live.shell.dispose();
   },
   // Transport → shell addressing: the wire tags the canvas, and nova's own

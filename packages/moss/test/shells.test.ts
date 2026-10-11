@@ -1,3 +1,5 @@
+import { setFlagsFromString } from 'node:v8';
+import { runInNewContext } from 'node:vm';
 import { describe, it, expect, vi } from 'vitest';
 import { applyDelta, frameHash } from '../src/protocol';
 import type { DeltaOp } from '../src/protocol';
@@ -381,6 +383,50 @@ describe('shells — reset', () => {
     expect(host.reset('usr_nobody')).toBe(false);
     await host.session('t', 'usr_1');
     expect(host.reset('usr_1')).toBe(true);
+  });
+
+  // A HOST THAT KEEPS NO SHELL (a page's) builds one for each connection, so
+  // somebody signed in may have several living at once. A reset by principal
+  // found none of them: it looked where kept shells are, and answered `false`
+  // for somebody with two tabs open.
+  it('reaches every living shell of the principal on a host that keeps none, and nobody else’s', async () => {
+    const host = createShellHost(hostConfig({ ...ctx, kept: false }));
+    const mine = [await host.session('t', 'usr_1'), await host.session('t', 'usr_1')];
+    const theirs = await host.session('t', 'usr_2');
+    const nobodys = await host.session(null, null);
+    const connections = mine.map((session) => {
+      const connection = fakeConnection();
+      session.attach(connection);
+      return connection;
+    });
+    await tick();
+    const before = [...mine, theirs, nobodys].map((session) => session.shell);
+    for (const connection of connections) connection.sent.length = 0;
+
+    expect(host.reset('usr_1')).toBe(true);
+    for (let i = 0; i < 4; i += 1) await tick();
+
+    expect(mine.map((session) => session.shell === before[mine.indexOf(session)])).toEqual([false, false]);
+    expect(theirs.shell).toBe(before[2]);
+    expect(nobodys.shell).toBe(before[3]);
+    // Each terminal was carried across to its own shell's replacement, and
+    // served what a reconnect brings.
+    for (const connection of connections) {
+      expect(connection.sent[0]?.['type']).toBe('frame');
+      expect(connection.sent.some((m) => m['type'] === 'render' && m['canvas'] === 'main')).toBe(true);
+      expect(connection.closes).toEqual([]);
+    }
+  });
+
+  it('a shell that ended is not one a reset finds', async () => {
+    const host = createShellHost(hostConfig({ ...ctx, kept: false }));
+    const session = await host.session('t', 'usr_1');
+    const connection = fakeConnection();
+    session.attach(connection);
+    expect(host.reset('usr_nobody')).toBe(false);
+    // Its last terminal left: a shell that is not kept ends there.
+    session.detach(connection);
+    expect(host.reset('usr_1')).toBe(false);
   });
 
   it('a reset that cannot build leaves the old shell standing — never nothing at all', async () => {
@@ -1129,13 +1175,15 @@ describe('shells — adopt', () => {
   const base = { ...app, actions: { home }, shell: { canvases: [{ id: 'main', initial: 'home' }] } } as unknown as NiscApp;
 
   // A world whose actions in force, and what each principal holds of them, are
-  // the test's to change.
-  const world = (): { host: ReturnType<typeof createShellHost>; force: (actions: Record<string, unknown>) => void; hold: (principal: string, ids: string[] | Error) => void } => {
+  // the test's to change. `setup`: what the host is beside that (whether it
+  // keeps a principal's shell).
+  const world = (setup: Partial<HostSetup> = {}): { host: ReturnType<typeof createShellHost>; force: (actions: Record<string, unknown>) => void; hold: (principal: string, ids: string[] | Error) => void } => {
     let inForce: Record<string, unknown> = { home, extra };
     const held = new Map<string, string[] | Error>();
     const host = createShellHost(
       hostConfig({
         ...ctx,
+        ...setup,
         app: base,
         actions: () => inForce as ReturnType<NonNullable<HostSetup['actions']>>,
         resolve: async (principal) => {
@@ -1272,6 +1320,169 @@ describe('shells — adopt', () => {
 
     session.shell.push('main', 'ledger');
     expect(mounted(session)).toEqual(['home', 'ledger']);
+  });
+
+  // EVERY LIVING SHELL ADOPTS, WHOEVER IT IS FOR AND WHETHER IT IS KEPT. The
+  // walk went over the shells a host keeps, which is one for each signed-in
+  // principal of the app's own host. A shell built for one connection kept
+  // what it was built with for as long as it lived: a visitor's on the app's
+  // host, and everybody's on a host that keeps none (a page's).
+  const everyKind = [
+    ['nobody signed in, on a host that keeps its principals’ shells', {}, null],
+    ['somebody signed in, on a host that keeps none (a page’s)', { kept: false }, 'usr_1'],
+    ['nobody signed in, on a host that keeps none', { kept: false }, null],
+  ] as const;
+
+  it.each(everyKind)('the shell of %s adopts: what left is unmounted, and what arrived is pushable', async (_whose, setup, principal) => {
+    const { host, force } = world(setup);
+    const session = await host.session(principal === null ? null : 't', principal);
+    session.shell.push('main', 'extra');
+    await settle();
+    expect(mounted(session)).toEqual(['home', 'extra']);
+
+    force({ home, ledger });
+    host.adopt();
+    await settle();
+
+    expect(mounted(session)).toEqual(['home']);
+    expect(() => session.shell.push('main', 'extra')).toThrow();
+    session.shell.push('main', 'ledger');
+    expect(mounted(session)).toEqual(['home', 'ledger']);
+  });
+
+  it.each(everyKind)('the shell of %s, whose build was under way when the app changed, adopts when it lands', async (_whose, setup, principal) => {
+    const { host, force } = world(setup);
+    const arriving = host.session(principal === null ? null : 't', principal);
+    force({ home, extra, ledger });
+    host.adopt();
+    const session = await arriving;
+    await settle();
+
+    session.shell.push('main', 'ledger');
+    expect(mounted(session)).toEqual(['home', 'ledger']);
+  });
+
+  it('every shell of one principal on a host that keeps none adopts, each for itself', async () => {
+    const { host, hold } = world({ kept: false });
+    const tabs = [await host.session('t', 'usr_1'), await host.session('t', 'usr_1')];
+    const other = await host.session('t', 'usr_2');
+    for (const session of [...tabs, other]) session.shell.push('main', 'extra');
+    await settle();
+
+    hold('usr_1', ['home']);
+    host.adopt();
+    await settle();
+
+    expect(tabs.map(mounted)).toEqual([['home'], ['home']]);
+    expect(mounted(other)).toEqual(['home', 'extra']);
+  });
+
+  it('a shell that ended is not asked about again', async () => {
+    const asked: (string | null)[] = [];
+    const host = createShellHost(
+      hostConfig({ ...ctx, app: base, kept: false, resolve: async (principal) => (asked.push(principal), { roles: ['member'], scope: {}, catalog: { ids: ['home'] }, variants: new Map() }) }),
+    );
+    const connection = fakeConnection();
+    const leaving = await host.session('t', 'usr_1');
+    leaving.attach(connection);
+    await host.session('t', 'usr_2');
+    // Its last terminal left: a shell that is not kept ends there.
+    leaving.detach(connection);
+    asked.length = 0;
+
+    host.adopt();
+    await settle();
+
+    expect(asked).toEqual(['usr_2']);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// A SHELL THAT ENDED IS LET GO. To bring every living shell level, a host has
+// to know every living shell: it holds each one it built until that shell
+// ends. Held any longer, an ended shell is memory nothing can reach for, and
+// a host builds a shell for every visitor's connection. So this is asked of
+// the collector itself: once a shell has ended and whoever held its session
+// has dropped it, nothing of the host keeps it, while the host goes on.
+// ═══════════════════════════════════════════════════════════════
+
+describe('shells — a shell that ended is let go', () => {
+  // The collector, asked to run. Node keeps `gc` out of reach unless it is
+  // started with a flag, and the flag can be set while it runs.
+  setFlagsFromString('--expose-gc');
+  const collect: () => void = runInNewContext('gc');
+  // Whether what a reference pointed at is gone. A reference that was read
+  // keeps its target until the turn that read it ends, so each look waits a
+  // turn before the collector is asked.
+  const collected = async (ref: WeakRef<object>): Promise<boolean> => {
+    for (let look = 0; look < 20 && ref.deref() !== undefined; look += 1) {
+      await tick();
+      collect();
+    }
+    return ref.deref() === undefined;
+  };
+  const settle = async (): Promise<void> => {
+    for (let i = 0; i < 4; i += 1) await tick();
+  };
+
+  it.each([
+    ['nobody signed in, on a host that keeps its principals’ shells', {}, null],
+    ['somebody signed in, on a host that keeps none (a page’s)', { kept: false }, 'usr_1'],
+  ] as const)('the shell of %s, once its last terminal has left', async (_whose, setup, principal) => {
+    const host = createShellHost(hostConfig({ ...ctx, ...setup }));
+    const ended = await (async (): Promise<WeakRef<object>> => {
+      const session = await host.session(principal === null ? null : 't', principal);
+      const connection = fakeConnection();
+      session.attach(connection);
+      await settle();
+      session.detach(connection);
+      return new WeakRef(session.shell);
+    })();
+
+    expect(await collected(ended)).toBe(true);
+    // The host stands, and a change still finds the shells that live.
+    const living = await host.session(principal === null ? null : 't', principal);
+    host.adopt();
+    await settle();
+    expect(living.shell.getCanvasState('main').stack).toHaveLength(1);
+  });
+
+  it('a shell that was reset: the one it replaced is let go, and the session goes on', async () => {
+    const host = createShellHost(hostConfig({ ...ctx, kept: false }));
+    const session = await host.session('t', 'usr_1');
+    const connection = fakeConnection();
+    session.attach(connection);
+    const replaced = await (async (): Promise<WeakRef<object>> => {
+      const before = new WeakRef(session.shell);
+      expect(host.reset('usr_1')).toBe(true);
+      await settle();
+      return before;
+    })();
+
+    expect(await collected(replaced)).toBe(true);
+    // The replacement is the one the host knows now.
+    const standing = session.shell;
+    expect(host.reset('usr_1')).toBe(true);
+    await settle();
+    expect(session.shell).not.toBe(standing);
+  });
+
+  it('a kept shell whose principal signed out', async () => {
+    const seen: { fn?: FunctionSession } = {};
+    const signing = { ...app, functions: (fn: FunctionSession) => ((seen.fn = fn), {}) } as unknown as NiscApp;
+    const host = createShellHost(hostConfig({ ...ctx, app: signing }));
+    const ended = await (async (): Promise<WeakRef<object>> => {
+      const session = await host.session('t', 'usr_1');
+      await settle();
+      await seen.fn?.revoke();
+      await settle();
+      // The session app code was handed holds its shell: it is dropped with it.
+      delete seen.fn;
+      return new WeakRef(session.shell);
+    })();
+
+    expect(host.list()).toEqual([]);
+    expect(await collected(ended)).toBe(true);
   });
 });
 

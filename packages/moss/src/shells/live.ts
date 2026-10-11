@@ -32,8 +32,9 @@ export type Live = {
   // connection that has NOT asked still gets whole frames from the same pass.
   deltaReady: Set<ShellConnection>;
   flushing: boolean;
-  // set when the session ends (sign-out, reset, eviction) — pending flush
-  // passes must not render a disposed shell
+  // set when the session ends (sign-out, reset, eviction, the last terminal of
+  // a shell that is not kept leaving) — pending flush passes must not render
+  // a disposed shell. Set by `endShell`, below, and by nothing else.
   ended: boolean;
   // built at; and when the last connection left (null while attached)
   since: number;
@@ -83,4 +84,25 @@ export type HostParts = {
   delta: boolean;
   // principal → the one living shell
   durable: Map<string, Cell>;
+  // EVERY LIVING SHELL THIS HOST BUILT, each with the cell it is addressed
+  // through: the kept ones, which `durable` also finds by principal, and the
+  // ones built for one connection, which nothing else of the host holds. A
+  // shell is put here when its build lands and taken out where it ends
+  // (`endShell`). So what is walked to bring every shell level with a change,
+  // or to reset somebody's, is the shells that live and no other.
+  living: Map<Live, Cell>;
+  // EVERY BUILD UNDER WAY, of a shell that will be kept and of one that will
+  // not, each until it lands or fails. What lands after a change was built
+  // from what its principal held before it, and adopts when it lands.
+  underWay: Set<Promise<Cell>>;
+};
+
+// A SHELL ENDS HERE, AND NOTHING ELSE SETS `ended`. It is marked, so a pass
+// that is pending does not render a shell that is gone; and it is let go, so
+// the host holds nothing of a shell that has ended. Disposing the shell stays
+// with whoever ends it: a session that signs out nobody is disposed by its
+// last terminal leaving, not here.
+export const endShell = (host: HostParts, live: Live): void => {
+  live.ended = true;
+  host.living.delete(live);
 };

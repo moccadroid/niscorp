@@ -3,7 +3,8 @@ import { snapshotShell } from '@niscorp/nova/reflect';
 import { emitterOf } from '../runtime';
 import { buildShell } from './build';
 import type { ShellHostConfig } from './config';
-import type { Cell, HostParts } from './live';
+import { endShell } from './live';
+import type { Cell, HostParts, Live } from './live';
 import { sessionOn } from './shell-session';
 import { DEFAULT_SNAPSHOT_WAIT_MS, needOf, read, settle } from './snapshot';
 import { attach } from './stream';
@@ -16,7 +17,10 @@ import type { ShellHost, ShellReport } from './types';
 // shell survives — reattach just re-sends current trees, and N attached
 // connections receive the same frames: shared canvases are the same
 // mechanism). Anonymous connections get a throwaway shell, disposed with
-// the connection.
+// the connection; so does every connection of a host that keeps none (a
+// page's). Kept or not, a shell is one of the host's living shells from when
+// its build lands until it ends (./live.ts, `living`), which is how a change
+// to what the app consists of, and a reset of one principal, reach every one.
 //
 // The shell is built from what its principal's composition says (./config.ts):
 // canvases and fragments are data, and the actions they hold arrive already
@@ -55,7 +59,8 @@ const SWEEP_EVERY_MS = 60 * 1000;
 // database is durable, a shell is a warm cache, and the next connection
 // rebuilds it from definitions and rows. The clock is the IDLE one — a shell
 // somebody is looking at is never collected, however old.
-const sweep = (durable: Map<string, Cell>, idleMs: number): void => {
+const sweep = (host: HostParts, idleMs: number): void => {
+  const { durable } = host;
   const now = Date.now();
   for (const [principal, cell] of [...durable]) {
     const live = cell.live;
@@ -65,7 +70,7 @@ const sweep = (durable: Map<string, Cell>, idleMs: number): void => {
     }
     if (live.connections.size > 0 || live.idleSince === null) continue;
     if (now - live.idleSince < idleMs) continue;
-    live.ended = true;
+    endShell(host, live);
     live.shell.dispose();
     durable.delete(principal);
   }
@@ -124,8 +129,13 @@ const adoptInto = async (host: HostParts, cell: Cell): Promise<void> => {
   live.entries = made.entries;
 };
 
-// Every living shell, and each one whose build was under way when this was
-// asked: it was built from what its principal held before the change.
+// EVERY LIVING SHELL OF THIS HOST, whoever it is for and whether it is kept,
+// and each one whose build was under way when this was asked: it was built
+// from what its principal held before the change. The walk went over the
+// kept shells alone, so a shell built for one connection (a visitor's, and
+// everybody's on a host that keeps none) held what it was built with for as
+// long as it lived.
+//
 // Asynchronous and unawaited: definitions landing a tick late simply
 // register, which is the same progressive path `seeds` already takes. One
 // at a time, so a change does not resolve every principal at once.
@@ -141,7 +151,7 @@ const adoptAll = async (host: HostParts, underWay: readonly Promise<Cell>[]): Pr
       console.error(`[moss/shells] the shell of ${cell.principal ?? 'nobody'} could not adopt what changed, and keeps what it held:`, error);
     }
   };
-  for (const cell of [...host.durable.values()]) await adopting(cell);
+  for (const cell of [...host.living.values()]) await adopting(cell);
   for (const build of underWay) {
     // A build that fails is its caller's to hear of; there is nothing to adopt.
     const cell = await build.catch(() => undefined);
@@ -175,21 +185,49 @@ const replaceShell = async (host: HostParts, cell: Cell): Promise<void> => {
   const old = cell.live;
   // It ended while its replacement was built. The replacement is nobody's.
   if (old.ended) {
-    next.ended = true;
+    endShell(host, next);
     next.shell.dispose();
     return;
   }
   const carried = [...old.connections].map((connection) => ({ connection, wants: old.deltaReady.has(connection) }));
-  old.ended = true;
+  endShell(host, old);
   old.connections.clear();
   old.shell.dispose();
   cell.live = next;
+  // The cell's living shell is the replacement from here on.
+  host.living.set(next, cell);
   for (const { connection, wants } of carried) attach(next, connection, host.delta && wants);
+};
+
+// A BUILD, FROM WHEN IT STARTS UNTIL ITS SHELL IS ONE OF THE LIVING. While it
+// runs it is among the builds under way, so a change that happens meanwhile
+// is adopted when it lands. `cellOf` makes the cell the shell is addressed
+// through. A shell that ended on the way (app code that signed out while its
+// session was being built) is not put among the living: nothing would take
+// it out again.
+const landing = (host: HostParts, build: Promise<Live>, cellOf: (live: Live) => Cell): Promise<Cell> => {
+  const landed = build.then((live) => {
+    const cell = cellOf(live);
+    if (!live.ended) host.living.set(live, cell);
+    return cell;
+  });
+  host.underWay.add(landed);
+  const over = (): void => void host.underWay.delete(landed);
+  landed.then(over, over);
+  return landed;
+};
+
+// EVERY LIVING SHELL OF ONE PRINCIPAL: the one this host keeps for them; or,
+// on a host that keeps none, the one built for each of their connections.
+const shellsOf = (host: HostParts, principal: string): Cell[] => {
+  if (!host.kept) return [...host.living.values()].filter((cell) => cell.principal === principal);
+  const cell = host.durable.get(principal);
+  return cell === undefined || cell.live.ended ? [] : [cell];
 };
 
 export const createShellHost = (config: ShellHostConfig): ShellHost => {
   const durable = new Map<string, Cell>();
-  const host: HostParts = { config, emit: emitterOf(config.telemetry), kept: config.kept ?? true, delta: config.limits?.delta ?? false, durable };
+  const host: HostParts = { config, emit: emitterOf(config.telemetry), kept: config.kept ?? true, delta: config.limits?.delta ?? false, durable, living: new Map(), underWay: new Set() };
   const { kept } = host;
 
   // ONE RESET OF A CELL AT A TIME, each after the one before it. A reset
@@ -223,15 +261,13 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
     };
     const existing = durable.get(principal);
     if (existing !== undefined) return Promise.resolve(newest(existing));
-    const underWay = building.get(principal);
-    if (underWay !== undefined) return underWay.then(newest);
-    const started = buildShell(host, token, principal)
-      .then((live) => {
-        const cell: Cell = { live, token, principal };
-        durable.set(principal, cell);
-        return cell;
-      })
-      .finally(() => building.delete(principal));
+    const arriving = building.get(principal);
+    if (arriving !== undefined) return arriving.then(newest);
+    const started = landing(host, buildShell(host, token, principal), (live) => {
+      const cell: Cell = { live, token, principal };
+      durable.set(principal, cell);
+      return cell;
+    }).finally(() => building.delete(principal));
     building.set(principal, started);
     return started;
   };
@@ -242,7 +278,7 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
   const idleMs = config.limits?.idleMs ?? DEFAULT_IDLE_MS;
   let sweeper: ReturnType<typeof setInterval> | undefined;
   if (idleMs > 0 && Number.isFinite(idleMs)) {
-    sweeper = setInterval(() => sweep(durable, idleMs), Math.min(idleMs, SWEEP_EVERY_MS));
+    sweeper = setInterval(() => sweep(host, idleMs), Math.min(idleMs, SWEEP_EVERY_MS));
     // The sweep must never be the reason a process stays alive.
     sweeper.unref?.();
   }
@@ -250,8 +286,10 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
   return {
     session: async (token, principal, options) => {
       if (principal === null || !kept) {
-        const live = await buildShell(host, token, principal, false, options?.seed, options?.inputs);
-        return sessionOn(host, { live, token, principal, ...(options !== undefined ? { opening: options } : {}) }, true, rebuild);
+        // Built for this session alone, and nobody's to keep: it ends when
+        // its last terminal leaves. Until then it is one of the living.
+        const build = buildShell(host, token, principal, false, options?.seed, options?.inputs);
+        return sessionOn(host, await landing(host, build, (live) => ({ live, token, principal, ...(options !== undefined ? { opening: options } : {}) })), true, rebuild);
       }
       return sessionOn(host, await durableCell(token, principal), false, rebuild);
     },
@@ -269,7 +307,9 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
         const settled = await settle(live, waitMs);
         return { ...read(live), seed, settled, ...needOf(live, principal, kept) };
       } finally {
-        live.ended = true;
+        // Never one of the living: it is read and ended before anything
+        // could ask it to adopt.
+        endShell(host, live);
         live.shell.dispose();
       }
     },
@@ -277,8 +317,8 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
     // one, however long each takes to be answered, so what a shell ends up
     // holding is what the last change left its principal with.
     adopt: () => {
-      const underWay = [...building.values()];
-      adopted = adopted.then(() => adoptAll(host, underWay));
+      const arriving = [...host.underWay];
+      adopted = adopted.then(() => adoptAll(host, arriving));
     },
     deliver: (principal, channel, payload) => {
       // Into the LIVE shell only. A principal with no durable shell hears
@@ -298,10 +338,9 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
     },
     list: () => rosterOf(durable),
     reset: (principal) => {
-      const cell = durable.get(principal);
-      if (cell === undefined || cell.live.ended) return false;
-      void rebuild(cell).catch((err: unknown) => console.error('[moss/shells] a reset failed to rebuild', err));
-      return true;
+      const theirs = shellsOf(host, principal);
+      for (const cell of theirs) void rebuild(cell).catch((err: unknown) => console.error('[moss/shells] a reset failed to rebuild', err));
+      return theirs.length > 0;
     },
     stop: () => {
       if (sweeper !== undefined) clearInterval(sweeper);

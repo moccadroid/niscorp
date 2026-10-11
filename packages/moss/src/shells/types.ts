@@ -107,12 +107,16 @@ export type ShellHost = {
   // still mounting — for at most `waitMs`, then serves what is there.
   snapshot: (token: string | null, principal: string | null, options?: { waitMs?: number; inputs?: ShellOpening['inputs'] }) => Promise<ShellSnapshot>;
   // What the app consists of changed (the actions in force are others now, a
-  // role moved, an integration was installed or removed): every LIVING durable
-  // shell is brought level with what its principal holds now, in place.
-  // Definitions that arrived or changed are registered, mounted instances keep
-  // their state, and new actions become pushable without a rebuild. One that
-  // left, or is no longer granted, is removed: its instances are unmounted. A
-  // shell that cannot adopt is logged and keeps what it held; the rest go on.
+  // role moved, an integration was installed or removed): EVERY LIVING SHELL
+  // this host built is brought level with what its principal holds now, in
+  // place. The kept ones, and the ones built for one connection: a visitor's,
+  // and on a host that keeps none (a page's) everybody's. Definitions that
+  // arrived or changed are registered, mounted instances keep their state,
+  // and new actions become pushable without a rebuild. One that left, or is no
+  // longer granted, is removed: its instances are unmounted. A shell that
+  // cannot adopt is logged and keeps what it held; the rest go on. A shell
+  // built for the length of one read (`snapshot`) is read and ended, and
+  // adopts nothing.
   adopt: () => void;
   // Publish a message into one principal's LIVE durable shell — the push half
   // of the socket the shells already run. Whatever action is mounted and
@@ -125,11 +129,12 @@ export type ShellHost = {
   // so moss is the only thing that can enumerate it without keeping a
   // second, drifting note beside it.
   list: () => ShellReport[];
-  // Reset one principal's durable shell. `false` if they hold none — which is
-  // not an error, it is the answer to "is Rosa's shell stuck?" when Rosa is
-  // not connected. Anonymous shells are not addressable here (they are
-  // per-connection and die on detach); a terminal resets its own via the
-  // session's `reset`.
+  // Reset every living shell of one principal: the one this host keeps for
+  // them, or, on a host that keeps none (a page's), the one built for each of
+  // their connections. `false` if they hold none — which is not an error, it
+  // is the answer to "is Rosa's shell stuck?" when Rosa is not connected. A
+  // shell for nobody signed in is not addressable here (there is no principal
+  // to name); a terminal resets its own via the session's `reset`.
   reset: (principal: string) => boolean;
   // Stop the idle sweep. For hosts that outlive their server (dev checks,
   // embedded tools); the timer is unref'd, so a plain process needn't call it.

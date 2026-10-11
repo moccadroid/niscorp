@@ -4,6 +4,7 @@ import { CLOSE_SIGNED_OUT } from '../protocol';
 import type { ServerMessage } from '../protocol';
 import { spanClock } from '../runtime';
 import type { Emit } from '../runtime';
+import { endShell } from './live';
 import type { HostParts, Live } from './live';
 
 // THE SESSION APP CODE IS HANDED (`functions`, `onSession`), made for one
@@ -79,7 +80,7 @@ const revoke = (host: HostParts, standing: Standing, principal: string | null): 
   queueMicrotask(() => {
     const live = standing.live;
     if (live === undefined) return;
-    live.ended = true;
+    endShell(host, live);
     // Only if the map still holds THIS shell — a reset between the
     // sign-out and this microtask has already replaced it, and the
     // replacement belongs to whoever caused it.
