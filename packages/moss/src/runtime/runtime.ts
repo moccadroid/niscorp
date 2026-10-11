@@ -87,7 +87,9 @@ export type NiscRuntime = {
   // How long a server shell's endpoint call waits for its reply before it
   // fails to the action's `onError` (default: nova's, 30 seconds). An
   // endpoint that is slow by nature says so itself (`timeoutMs`); this is the
-  // deployment's floor for everything else.
+  // deployment's floor for everything else. It is also how long the build of
+  // a shell may take: one whose app code has not answered by then fails, so a
+  // call that hangs costs that one build and nobody waits on it for ever.
   endpointTimeoutMs?: number;
   // How often a live socket's credential is re-verified through `session`
   // (default: 60 seconds; `0` disables it). The HTTP surfaces re-ask on every
