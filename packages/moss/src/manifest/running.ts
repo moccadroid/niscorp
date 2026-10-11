@@ -186,6 +186,37 @@ const createSetOwners = (): { claim: (source: string, owner: string, handedOver:
   };
 };
 
+// REFUSE TO START INCOHERENT. What is only said is said first, here and at no
+// later switch: a boot is when somebody reads the log.
+const verifiedAtBoot = (candidate: ManifestCandidate): ReturnType<typeof verifyManifest> => {
+  const report = verifyManifest(candidate);
+  for (const line of report.said) console.error(`[moss] ${line}`);
+  const refused = refusalOf(report, 'boot');
+  if (refused !== undefined) throw new Error(refused);
+  return report;
+};
+
+// THE COMPONENT NAMES A SHELL MAY MENTION, kept by the shell manifest asked
+// for: the app's own and each page's are objects that live as long as the app
+// does. `read` reads them off what is in force; `drop` forgets what was kept,
+// for when that changes.
+type ComponentNames = ReturnType<typeof shellComponents>;
+const createComponentNames = (read: (shell: ShellManifest) => ComponentNames): { of: (shell: ShellManifest) => ComponentNames; drop: () => void } => {
+  let components = new WeakMap<ShellManifest, ComponentNames>();
+  return {
+    of: (shell) => {
+      const kept = components.get(shell);
+      if (kept !== undefined) return kept;
+      const names = read(shell);
+      components.set(shell, names);
+      return names;
+    },
+    drop: () => {
+      components = new WeakMap();
+    },
+  };
+};
+
 export const createRunningManifest = (config: RunningManifestConfig): RunningManifest => {
   const { shipped } = config;
   // THE ENTRIES THE APP SERVES, read off what it shipped once (./entries.ts)
@@ -203,12 +234,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   let sets: ReadonlyMap<string, Actions> = new Map();
   let inForce = laidOver(own, sets);
 
-  // REFUSE TO START INCOHERENT. What is only said is said first, here and at no
-  // later switch: a boot is when somebody reads the log.
-  let report = verifyManifest(candidate(inForce));
-  for (const line of report.said) console.error(`[moss] ${line}`);
-  const refused = refusalOf(report, 'boot');
-  if (refused !== undefined) throw new Error(refused);
+  let report = verifiedAtBoot(candidate(inForce));
 
   // The rules for what is there for an install list, each applied to what the
   // one before it kept.
@@ -217,16 +243,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     manifest: () => ({ charter: shipped.charter, actions: inForce, layouts: shipped.layouts }),
     installedOnly: (ids, installed) => narrowings.reduce((kept, narrow) => narrow(kept, installed), ids),
   });
-  // Kept by the shell manifest asked for: the app's own and each page's are
-  // objects that live as long as the app does.
-  let components = new WeakMap<ShellManifest, ReturnType<typeof shellComponents>>();
-  const componentsFor = (shell: ShellManifest): ReturnType<typeof shellComponents> => {
-    const kept = components.get(shell);
-    if (kept !== undefined) return kept;
-    const read = shellComponents({ actions: inForce, layouts: shipped.layouts }, shell);
-    components.set(shell, read);
-    return read;
-  };
+  const components = createComponentNames((shell) => shellComponents({ actions: inForce, layouts: shipped.layouts }, shell));
   const byFingerprint: ShellArtifacts['entries'] = new Map(entries.map((entry) => [entry.fingerprint, entry]));
   const listeners = new Set<() => void>();
   let pointer: Generation | undefined;
@@ -247,7 +264,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     inForce = actions;
     report = verified;
     holdings.drop();
-    components = new WeakMap();
+    components.drop();
     for (const listener of [...listeners]) tell(listener);
     if (move) pointer?.bump();
   };
@@ -300,7 +317,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       ...(shell.layoutStore !== undefined ? { layoutStore: shell.layoutStore } : {}),
       ...(shell.fragments !== undefined ? { fragments: shell.fragments } : {}),
       entries: byFingerprint,
-      components: componentsFor(shell),
+      components: components.of(shell),
     }),
     generation: () => pointer?.current() ?? -1,
     stop: () => pointer?.stop(),
