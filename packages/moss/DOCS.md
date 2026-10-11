@@ -568,8 +568,12 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   ([Many processes](#many-processes), "The pointer carries no set"). Every definition of the
   set is read by nova's schema first: one nova does not read refuses the set
   (`Refresh refused — actions nova does not read:`, naming the action and what
-  is wrong with it). `'integrations'` is the integrations feature's set, read
-  from its tables.
+  is wrong with it). **A set has one writer.** Each feature the app names
+  keeps a set of its own under its own name (`'integrations'` is the
+  integrations feature's, read from its tables) and is the only one that
+  replaces it: handing a set over under a feature's name throws (`moss: the
+  set of actions "integrations" is the feature "integrations"'s, and only its
+  owner replaces it. …`).
 - `verifyActions(source, actions): ManifestReport` — the dry run of
   `replaceActions`: the same verification over the same candidate (the app's
   actions, then each set, with `actions` in place of the set called `source`),
@@ -578,7 +582,8 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   `'charter'`, `'reach'`, `'variants'`; empty means `replaceActions` would
   accept the set. `said` is what a boot only says (a
   chain of steps that never ends), and `charter` is the charter engine's whole
-  report for the candidate.
+  report for the candidate. For a `source` that is a feature's it throws, as
+  `replaceActions` does.
 - `actions(): Readonly<Record<string, ActionDefinition>>` — the actions in
   force now, by id: what the app shipped, then each set handed over. To read;
   a set changes through `replaceActions`.
@@ -972,9 +977,9 @@ its own, and the core never imports it.
   | `scopeOf(principal)` | the scope values a principal carries, which the engine pins rows by |
   | `holds(roles, installed)` | the action ids a set of roles holds of the actions in force |
   | `actions()` | the actions in force: what the app shipped, then each set handed over |
-  | `replaceActions(source, actions)` | put a set of actions in place of the one of that name, in this process; throws when the app could not be served so |
+  | `replaceActions(actions)` | put a set of actions in place of the feature's own, in this process; throws when the app could not be served so. A feature has one set, kept under its name, and is its only writer |
   | `refusalOf(actions)` | the sentence the app would be refused with if exactly these were in force, or `undefined` |
-  | `loadActionsFrom(source, load)` | how a set kept in rows is read again when another process moved the generation pointer; a set with no loader is not carried to another process |
+  | `setActionsLoader(load)` | how the feature's set, kept in rows, is read again when another process moved the generation pointer; a set with no loader is not carried to another process |
   | `narrowCatalogs(filter)` | one more rule for which granted actions are there for an install list |
   | `charter` | the charter the app shipped: role names, and what each selects |
   | `components` | the kit's component contracts by name: a description, and the props' schema |
@@ -1036,8 +1041,8 @@ lets them replay, as vex's discovery lists them.
   policies, the identity records) and has its living shells adopt.
   **The pointer carries no set.** It says that something changed, and a
   process learns what by reading rows. The sets that have a loader are the
-  integrations feature's (`'integrations'`) and any a feature of the app's
-  own named with `seams.loadActionsFrom(source, load)`. A set handed to
+  integrations feature's (`'integrations'`) and that of any feature of the
+  app's own that said one with `seams.setActionsLoader(load)`. A set handed to
   `server.replaceActions` in one process, with no loader, is in that
   process's memory: every other process reaches the same generation and goes
   on serving the set of that name it was last handed itself, or none.
@@ -1045,22 +1050,29 @@ lets them replay, as vex's discovery lists them.
   tables, says how they are read, in a feature of its own:
 
   ```ts
-  const bundles: Feature = {
-    name: 'bundles',
-    start: async (seams) => {
-      // every process reads the rows again when the pointer moves
-      seams.loadActionsFrom('bundles', loadBundles);
-      // what the rows hold when this process starts
-      seams.replaceActions('bundles', await loadBundles());
-    },
+  const createBundles = (): Feature & { reload: () => Promise<void> } => {
+    let replace: FeatureSeams['replaceActions'] | undefined;
+    return {
+      name: 'bundles',
+      start: async (seams) => {
+        replace = seams.replaceActions;
+        // every process reads the rows again when the pointer moves
+        seams.setActionsLoader(loadBundles);
+        // what the rows hold when this process starts
+        seams.replaceActions(await loadBundles());
+      },
+      // ...and where the app has changed the rows, in the process that did:
+      reload: async () => replace?.(await loadBundles()),
+    };
   };
-  // ...and where the app has changed the rows, in the process that did:
-  server.replaceActions('bundles', await loadBundles());
   ```
 
-  The call moves the pointer, and each other process reads the rows through
-  its loader within one poll. An app that names no loader calls
-  `replaceActions` in each of its processes itself, on a signal of its own.
+  The set is the feature's, under the feature's name, and the feature is its
+  one writer: `server.replaceActions('bundles', …)` throws in an app that
+  names it. `reload` moves the pointer, and each other process reads the rows
+  through its loader within one poll. An app that keeps a set in no feature
+  calls `server.replaceActions` in each of its processes itself, on a signal
+  of its own.
   The row is read and moved through vex, by two
   entries of moss's own that no route serves (`src/data/pointer.ts`);
   `src/manifest/generation.ts` holds the clock and no SQL. A move is a compare

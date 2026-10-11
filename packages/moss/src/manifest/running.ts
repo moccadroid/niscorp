@@ -52,15 +52,26 @@ export type RunningManifestConfig = {
   // Absent: every granted action is there, whatever is installed, until
   // somebody says otherwise (`narrowCatalogs`).
   installedOnly?: InstalledOnly;
-  // The named sets that live in rows, each with how it is read again when
-  // another process says something changed. A set with no loader is whatever
-  // THIS process last replaced it with: no other process is handed it, and
-  // none can read it.
-  loaders?: Readonly<Record<string, ActionLoader>>;
   // The generation pointer (./generation.ts): how its row is read and moved,
   // and how often it is read, once `watch` is called. Absent: this manifest
   // tells no other process that it changed, and hears from none.
   pointer?: Pointer & { everyMs?: number };
+};
+
+// A SET OF ACTIONS THAT HAS AN OWNER, as its owner holds it: the two ways the
+// set is written, and nobody else has either.
+export type OwnedActions = {
+  // Put `actions` in place of the set, as `RunningManifest.replace` does for a
+  // set of the app's. Throws, and changes nothing, when the app could not be
+  // served that way.
+  replace: (actions: Record<string, ActionDefinition>) => void;
+  // THE SET LIVES IN ROWS: how it is read again when another process says
+  // something changed. It is what carries a set to the other processes of a
+  // deployment: a set with no loader is whatever THIS process last replaced it
+  // with, and no other process is handed it or can read it. The set takes its
+  // place among the sets when this is said, empty until it is replaced, so
+  // nothing is switched and nobody is told.
+  setLoader: (load: ActionLoader) => void;
 };
 
 export type RunningManifest = {
@@ -77,7 +88,8 @@ export type RunningManifest = {
   verify: (actions: Actions) => ManifestReport;
   // Would the app be served with `actions` in place of the set called `source`,
   // everything else as it stands? What `replace` would be told, and nothing
-  // is switched: the set that is in force stays in force.
+  // is switched: the set that is in force stays in force. Throws for a set
+  // that has an owner, as `replace` does.
   verifyReplace: (source: string, actions: Record<string, ActionDefinition>) => ManifestReport;
   // The report the manifest in force was verified by.
   report: () => ManifestReport;
@@ -88,7 +100,16 @@ export type RunningManifest = {
   // force is not edited, it is replaced. Taken HERE: the pointer this moves
   // tells the other processes that something changed, and each reads again
   // the sets it has a loader for. A set with none is in no other process.
+  // FOR A SET OF THE APP'S: one that has an owner (`claim`) is its owner's to
+  // replace, and this throws, saying whose it is.
   replace: (source: string, actions: Record<string, ActionDefinition>) => void;
+  // ONE WRITER FOR A SET. Whoever keeps a set of its own (a feature, started
+  // once the manifest stands) claims it by name, once, and is handed the two
+  // ways it is written. From then on `replace` and `verifyReplace` refuse that
+  // name, and a second claim of it throws: two writers of one set leave it as
+  // whichever wrote last, and nobody verified that. `owner` is how a refusal
+  // names the claimant (`the feature "integrations"`).
+  claim: (source: string, owner: string) => OwnedActions;
   // Something derived from the manifest went stale where this module cannot
   // see (a role moved, an install landed): verify what is in force again, drop
   // what was derived from it and tell whoever listens.
@@ -105,12 +126,6 @@ export type RunningManifest = {
   // Told once each time the manifest is switched, after what was derived from
   // the old one is dropped. Returns the way to stop being told.
   onChange: (listener: () => void) => () => void;
-  // A SET THAT LIVES IN ROWS, NAMED AFTER THE MANIFEST STANDS: how it is read
-  // again when another process says something changed. What the config's
-  // `loaders` say, said later, by whoever starts once the manifest is there (a
-  // feature). The set takes its place among the sets when it is named, empty
-  // until it is replaced, so nothing is switched and nobody is told.
-  loadFrom: (source: string, load: ActionLoader) => void;
   // ONE MORE RULE FOR WHICH GRANTED ACTIONS ARE THERE FOR AN INSTALL LIST, laid
   // after the ones already said. What was remembered for each set of roles is
   // dropped, so the next answer is made with it.
@@ -150,6 +165,27 @@ const tell = (listener: () => void): void => {
   }
 };
 
+// WHOSE EACH CLAIMED SET IS, as a refusal names its owner.
+const createSetOwners = (): { claim: (source: string, owner: string, handedOver: boolean) => void; appSource: (source: string) => string } => {
+  const owners = new Map<string, string>();
+  return {
+    // `handedOver`: the app already handed a set over under that name.
+    claim: (source, owner, handedOver) => {
+      const held = owners.get(source);
+      if (held !== undefined) throw new Error(`moss: the set of actions "${source}" is ${held}'s, and ${owner} claims it too. A set of actions has one writer.`);
+      if (handedOver) throw new Error(`moss: the set of actions "${source}" was handed over by the app, and ${owner} claims it. A set of actions has one writer.`);
+      owners.set(source, owner);
+    },
+    // The name, where it names a set of the app's. A set that has an owner is
+    // not the app's to hand over, or to try: this throws.
+    appSource: (source) => {
+      const owner = owners.get(source);
+      if (owner !== undefined) throw new Error(`moss: the set of actions "${source}" is ${owner}'s, and only its owner replaces it. An app hands a set over under a name of its own.`);
+      return source;
+    },
+  };
+};
+
 export const createRunningManifest = (config: RunningManifestConfig): RunningManifest => {
   const { shipped } = config;
   // THE ENTRIES THE APP SERVES, read off what it shipped once (./entries.ts)
@@ -159,11 +195,12 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   const candidate = (actions: Actions): ManifestCandidate => candidateOf(shipped, { actions, entries }, config.grants);
 
   // What the app ships, and the named sets in the order they are laid over it.
-  // A set with a loader has its place from the start, so the order does not
+  // A set has its place from when its loader is named, so the order does not
   // depend on which change happened to come first.
   const own: Actions = shipped.actions;
-  const loaders = new Map(Object.entries(config.loaders ?? {}));
-  let sets: ReadonlyMap<string, Actions> = new Map([...loaders.keys()].map((source) => [source, {}]));
+  const loaders = new Map<string, ActionLoader>();
+  const owners = createSetOwners();
+  let sets: ReadonlyMap<string, Actions> = new Map();
   let inForce = laidOver(own, sets);
 
   // REFUSE TO START INCOHERENT. What is only said is said first, here and at no
@@ -226,9 +263,19 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     actions: () => inForce,
     entries: () => entries,
     verify: (actions) => verifyManifest(candidate(actions)),
-    verifyReplace: (source, actions) => verifyManifest(candidate(laidOver(own, new Map(sets).set(source, actions)))),
+    verifyReplace: (source, actions) => verifyManifest(candidate(laidOver(own, new Map(sets).set(owners.appSource(source), actions)))),
     report: () => report,
-    replace: (source, actions) => take(new Map([[source, actions]]), true),
+    replace: (source, actions) => take(new Map([[owners.appSource(source), actions]]), true),
+    claim: (source, owner) => {
+      owners.claim(source, owner, sets.has(source));
+      return {
+        replace: (actions) => take(new Map([[source, actions]]), true),
+        setLoader: (load) => {
+          loaders.set(source, load);
+          if (!sets.has(source)) sets = new Map([...sets, [source, {}]]);
+        },
+      };
+    },
     refresh: () => take(new Map(), true),
     watch: () => {
       const where = config.pointer;
@@ -240,10 +287,6 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       return () => {
         listeners.delete(listener);
       };
-    },
-    loadFrom: (source, load) => {
-      loaders.set(source, load);
-      if (!sets.has(source)) sets = new Map([...sets, [source, {}]]);
     },
     narrowCatalogs: (filter) => {
       narrowings.push(filter);

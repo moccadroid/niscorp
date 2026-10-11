@@ -4,7 +4,7 @@ import type { Data } from '../data';
 import type { Feature, FeatureSeams } from '../feature';
 import type { Identity } from '../identity';
 import { refusalOf } from '../manifest';
-import type { NiscApp, RunningManifest } from '../manifest';
+import type { NiscApp, OwnedActions, RunningManifest } from '../manifest';
 import type { NiscRuntime } from '../runtime';
 import type { FeatureCredential } from './authenticate';
 import type { Env } from './moss-server';
@@ -42,11 +42,19 @@ export type SeamParts = {
   operator: Hono<Env>;
   registered: Registered;
   identity: Pick<Identity, 'resolve' | 'scopeValuesFor'>;
-  running: Pick<RunningManifest, 'catalogFor' | 'actions' | 'replace' | 'verify' | 'loadFrom' | 'narrowCatalogs'>;
+  running: Pick<RunningManifest, 'catalogFor' | 'actions' | 'claim' | 'verify' | 'narrowCatalogs'>;
   data: Pick<Data, 'ownEntries' | 'grammars' | 'upgradeStore' | 'engine' | 'fingerprintsFor' | 'onWrite'>;
 };
 
-export const seamsOf = (feature: Pick<Feature, 'name'>, { app, runtime, server, operator, registered, identity, running, data }: SeamParts): FeatureSeams => ({
+export const seamsOf = (feature: Pick<Feature, 'name'>, { app, runtime, server, operator, registered, identity, running, data }: SeamParts): FeatureSeams => {
+  // THE FEATURE'S OWN SET OF ACTIONS, claimed under its name before it starts:
+  // from here on it has one writer. A second feature of that name is refused
+  // here, and so is the app handing a set over under it.
+  const actions = running.claim(feature.name, `the feature "${feature.name}"`);
+  return seamsFor(feature, actions, { app, runtime, server, operator, registered, identity, running, data });
+};
+
+const seamsFor = (feature: Pick<Feature, 'name'>, owned: OwnedActions, { app, runtime, server, operator, registered, identity, running, data }: SeamParts): FeatureSeams => ({
   routes: (routes) => {
     server.route('/', routes);
   },
@@ -60,9 +68,9 @@ export const seamsOf = (feature: Pick<Feature, 'name'>, { app, runtime, server, 
   scopeOf: identity.scopeValuesFor,
   holds: (roles, installed) => running.catalogFor(roles, installed).ids,
   actions: running.actions,
-  replaceActions: running.replace,
+  replaceActions: owned.replace,
   refusalOf: (actions) => refusalOf(running.verify(actions), 'refresh'),
-  loadActionsFrom: running.loadFrom,
+  setActionsLoader: owned.setLoader,
   narrowCatalogs: running.narrowCatalogs,
   charter: app.charter,
   components: app.shell?.components ?? {},

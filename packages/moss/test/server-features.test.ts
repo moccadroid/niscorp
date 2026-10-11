@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
+import type { ActionDefinition } from '@niscorp/nova';
 import { scopeGrants } from '@niscorp/vex';
 import type { SeedEntry } from '@niscorp/vex';
 import type { Charter } from '@niscorp/charter';
@@ -9,6 +10,7 @@ import { createGrammarUpgrader } from '../src/data/grammar';
 import type { Feature, FeatureSeams } from '../src/feature';
 import { memoKey } from '../src/identity';
 import { createRunningManifest } from '../src/manifest';
+import type { RunningManifest } from '../src/manifest';
 import { emptyRegister, startFeatures } from '../src/server/features';
 import type { SeamParts } from '../src/server/features';
 import type { Env } from '../src/server/moss-server';
@@ -28,7 +30,7 @@ const charter: Charter = { public: ['home'] };
 // row to answer any read with (./data-double.ts). `features` is what the app
 // named: the data module is told which tables each one named as its own, as
 // the server tells it.
-const world = async (features: readonly Feature[] = []): Promise<{ parts: SeamParts; server: Hono<Env>; operator: Hono<Env>; start: () => Promise<void> }> => {
+const world = async (features: readonly Feature[] = []): Promise<{ parts: SeamParts; server: Hono<Env>; operator: Hono<Env>; running: RunningManifest; start: () => Promise<void> }> => {
   const double = await engineDouble();
   const grants = scopeGrants(['notes', 'tags']);
   const data = dataOver(
@@ -49,7 +51,7 @@ const world = async (features: readonly Feature[] = []): Promise<{ parts: SeamPa
     running,
     data,
   };
-  return { server, operator, parts, start: () => startFeatures(features, parts) };
+  return { server, operator, parts, running, start: () => startFeatures(features, parts) };
 };
 
 // A feature that keeps what it was started with, and does nothing else.
@@ -121,5 +123,49 @@ describe("the features — a feature's own entries", () => {
     await start();
     await expect(probe.seams().ownEntries([TAGS])).rejects.toThrow(/the feature "probe" handed over an entry that reads or writes a table that is not its own: "tagging\/all"/);
     await expect(tagging.seams().ownEntries([NOTES])).rejects.toThrow(/the feature "tagging" handed over an entry/);
+  });
+});
+
+const roster: ActionDefinition = { id: 'ext.desk.belts.roster' };
+const checkout: ActionDefinition = { id: 'ext.desk.pay.checkout' };
+
+// ONE WRITER FOR A SET OF ACTIONS. A feature's set is kept under the feature's
+// name and written through that feature's seams, which name no set: it was
+// `replaceActions(source, actions)`, and any feature wrote any set by naming
+// it, the app's and another feature's alike.
+describe("the features — a feature's set of actions", () => {
+  it('is its own: the seam names no set, and what one feature hands over leaves another feature\'s set alone', async () => {
+    const belts = keeping('belts');
+    const pay = keeping('pay');
+    const { start, running } = await world([belts.feature, pay.feature]);
+    await start();
+    belts.seams().replaceActions({ [roster.id]: roster });
+    pay.seams().replaceActions({ [checkout.id]: checkout });
+    expect(Object.keys(running.actions())).toEqual(['home', roster.id, checkout.id]);
+    // Handing over another set of its own replaces its own, and nothing else.
+    pay.seams().replaceActions({});
+    expect(Object.keys(running.actions())).toEqual(['home', roster.id]);
+  });
+
+  it('is not the app\'s to replace, or to try: both are refused, naming whose it is', async () => {
+    const belts = keeping('belts');
+    const { start, running } = await world([belts.feature]);
+    await start();
+    belts.seams().replaceActions({ [roster.id]: roster });
+    // `server.replaceActions` and `server.verifyActions` are these two.
+    expect(() => running.replace('belts', {})).toThrow(/^moss: the set of actions "belts" is the feature "belts"'s, and only its owner replaces it\./);
+    expect(() => running.verifyReplace('belts', {})).toThrow(/the set of actions "belts" is the feature "belts"'s/);
+    expect(Object.keys(running.actions())).toEqual(['home', roster.id]);
+  });
+
+  it('is read again through the loader that feature named, when another process says something changed', async () => {
+    const belts = keeping('belts');
+    const { start, parts } = await world([belts.feature]);
+    await start();
+    const rows: { now: Record<string, ActionDefinition> } = { now: { [roster.id]: roster } };
+    belts.seams().setActionsLoader(async () => rows.now);
+    // A second feature of that name cannot be started beside it: the name is
+    // what the set is kept under.
+    await expect(startFeatures([keeping('belts').feature], parts)).rejects.toThrow(/^moss: the set of actions "belts" is the feature "belts"'s, and the feature "belts" claims it too\./);
   });
 });

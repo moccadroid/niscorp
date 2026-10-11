@@ -50,9 +50,9 @@ const world = async (
   const said = {
     credentials: new Map<string, (token: string, request: Request) => Promise<CredentialAnswer>>(),
     narrowings: [] as Parameters<FeatureSeams['narrowCatalogs']>[0][],
-    loaders: new Map<string, () => Promise<Record<string, ActionDefinition>>>(),
+    loaders: [] as (() => Promise<Record<string, ActionDefinition>>)[],
     wraps: [] as ((inner: FetchFn) => FetchFn)[],
-    replaced: [] as [string, Record<string, ActionDefinition>][],
+    replaced: [] as Record<string, ActionDefinition>[],
     owned: [] as Parameters<FeatureSeams['ownEntries']>[0][],
     // The stores whose documents the feature asked to have brought current,
     // and, in order, that asking and every entry it replayed.
@@ -82,14 +82,14 @@ const world = async (
     scopeOf: async (principal) => ({ userId: principal }),
     holds: () => [],
     actions: () => ({}),
-    replaceActions: (source, actions) => {
+    replaceActions: (actions) => {
       const refusal = over.refuses?.(actions);
       if (refusal !== undefined) throw new Error(refusal);
-      said.replaced.push([source, actions]);
+      said.replaced.push(actions);
     },
     refusalOf: (actions) => over.refuses?.(actions),
-    loadActionsFrom: (source, load) => {
-      said.loaders.set(source, load);
+    setActionsLoader: (load) => {
+      said.loaders.push(load);
     },
     narrowCatalogs: (filter) => {
       said.narrowings.push(filter);
@@ -180,7 +180,7 @@ describe('createIntegrations — started with the seams', () => {
     expect(fingerprints.every((fingerprint) => fingerprint.startsWith('integrations/'))).toBe(true);
     expect(new Set(fingerprints).size).toBe(fingerprints.length);
     expect([...said.credentials.keys()]).toEqual(['ik_']);
-    expect([...said.loaders.keys()]).toEqual(['integrations']);
+    expect(said.loaders).toHaveLength(1);
     expect(said.wraps).toHaveLength(1);
     // The rule: an integration's action is there only where it is installed,
     // and an action that is nobody's is always there.
@@ -244,9 +244,9 @@ describe('createIntegrations — started with the seams', () => {
 
     const approved = await world({ replay: replayOver({ stored: [{ integration_id: 'belts', action_id: desk.id, definition: desk, grammar: {} }] }) });
     await createIntegrations().start(approved.seams);
-    expect(approved.said.replaced).toEqual([['integrations', { [desk.id]: desk }]]);
+    expect(approved.said.replaced).toEqual([{ [desk.id]: desk }]);
     // ...and the loader it named reads the same rows again.
-    expect(await approved.said.loaders.get('integrations')?.()).toEqual({ [desk.id]: desk });
+    expect(await approved.said.loaders[0]?.()).toEqual({ [desk.id]: desk });
   });
 
   it('a stored definition nova does not read is left out, and the rest is served', async () => {
@@ -261,7 +261,7 @@ describe('createIntegrations — started with the seams', () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
       await createIntegrations().start(seams);
-      expect(said.replaced).toEqual([['integrations', { [desk.id]: desk }]]);
+      expect(said.replaced).toEqual([{ [desk.id]: desk }]);
       // With a line that names it, as one in a newer grammar gets.
       expect(logged.mock.calls.map(([line]) => String(line))).toEqual([expect.stringMatching(/^\[moss\] integration action "ext\.desk\.belts\.broken" is not served: it is not an action nova reads/)]);
     } finally {
@@ -363,7 +363,7 @@ describe('the operator approves an integration', () => {
     expect(answered.status).toBe(200);
     expect(await answered.json()).toEqual({ id: 'belts', status: 'approved', granted: ['people.read'] });
     expect(held.writes).toEqual(['integrations/approve']);
-    expect(said.replaced).toEqual([['integrations', { [desk.id]: desk }]]);
+    expect(said.replaced).toEqual([{ [desk.id]: desk }]);
   });
 
   it('one that is not there is a 404, and nothing is written', async () => {

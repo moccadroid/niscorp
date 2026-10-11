@@ -183,7 +183,7 @@ describe('createTideFacts — the feature', () => {
       actions: notAsked('actions'),
       replaceActions: notAsked('replaceActions'),
       refusalOf: notAsked('refusalOf'),
-      loadActionsFrom: notAsked('loadActionsFrom'),
+      setActionsLoader: notAsked('setActionsLoader'),
       narrowCatalogs: notAsked('narrowCatalogs'),
       charter: {},
       components: {},

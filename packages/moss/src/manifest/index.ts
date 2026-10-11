@@ -68,6 +68,6 @@ export type { KitComponents } from './layout';
 export { resolveVariants } from './roles';
 export type { Catalog, InstalledOnly } from './roles';
 export { createRunningManifest } from './running';
-export type { ActionLoader, RunningManifest, RunningManifestConfig } from './running';
+export type { ActionLoader, OwnedActions, RunningManifest, RunningManifestConfig } from './running';
 export { endlessChains, refusalOf, verifyApp } from './verify';
 export type { EndlessChain, ManifestReport, ShippedManifest } from './verify';

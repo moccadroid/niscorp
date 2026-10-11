@@ -47,9 +47,12 @@ export type MossServer = Hono<Env> & {
   // first. Refused, this throws with the sentence `refresh` throws and nothing
   // changed; accepted, it does what `refresh` does in this process, and the
   // set is frozen where it stands: to change it, hand over another. The
-  // actions in force are what the app shipped, then each set. `'integrations'`
-  // is taken: the integrations feature hands the approved integrations'
-  // actions over under that name, read from its tables.
+  // actions in force are what the app shipped, then each set.
+  //
+  // A SET HAS ONE WRITER. Each feature the app names keeps a set of its own
+  // under its own name (`'integrations'`: the approved integrations' actions,
+  // read from its tables), and only that feature replaces it. Handing a set
+  // over under a feature's name throws, saying whose it is.
   //
   // THE SET IS HANDED TO THIS PROCESS, AND NO OTHER PROCESS IS HANDED IT. The
   // call moves the generation pointer, and another process that follows it
@@ -57,14 +60,16 @@ export type MossServer = Hono<Env> & {
   // its shells adopt. A set that arrived here and nowhere else it cannot
   // read: it goes on serving the set of this name it was last handed itself.
   // An app that runs several processes keeps the set in rows and names how it
-  // is read, in a feature of its own (`FeatureSeams.loadActionsFrom`), or
+  // is read, in a feature of its own (`FeatureSeams.setActionsLoader`), or
   // calls this in each process.
   replaceActions: (source: string, actions: Record<string, ActionDefinition>) => void;
   // WOULD THAT SET BE TAKEN — the dry run of `replaceActions`: the same
   // verification over the same candidate, answered as a report, and nothing is
   // changed. `errors` empty: `replaceActions` would accept it. Otherwise each
   // error names the check that refuses and why: `actions` (a definition nova
-  // does not read), `charter`, `reach`, `variants`.
+  // does not read), `charter`, `reach`, `variants`. For a set that is a
+  // feature's it throws, as `replaceActions` does: it is not the caller's to
+  // hand over.
   verifyActions: (source: string, actions: Record<string, ActionDefinition>) => ManifestReport;
   // THE ACTIONS IN FORCE NOW, by id: what the app shipped, then each set that
   // was handed over. To read, never to write: a set changes through

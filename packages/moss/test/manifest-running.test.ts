@@ -483,9 +483,11 @@ describe('watch — the pointer the other processes poll', () => {
     const { pointer, poke, moves } = pointerRow();
     const rows: { now: Record<string, ActionDefinition> } = { now: { [desk.id]: desk } };
     const shipped = shippedApp();
-    const manifest = running(shipped, { loaders: { integrations: async () => rows.now }, pointer: { ...pointer, everyMs: 1 } });
+    const manifest = running(shipped, { pointer: { ...pointer, everyMs: 1 } });
     try {
-      manifest.replace('integrations', rows.now);
+      const integrations = manifest.claim('integrations', 'the feature "integrations"');
+      integrations.setLoader(async () => rows.now);
+      integrations.replace(rows.now);
       manifest.replace('bundles', { [pay.id]: pay });
       manifest.watch();
       await aMoment();
@@ -512,20 +514,21 @@ describe('watch — the pointer the other processes poll', () => {
     }
   });
 
-  it('a set named after the manifest stands is read again the same way, and has its place from when it was named', async () => {
+  it('a set has its place from when its loader was named, whichever set was replaced first', async () => {
     const { pointer, poke, moves } = pointerRow();
     const rows: { now: Record<string, ActionDefinition> } = { now: { [desk.id]: desk } };
     const manifest = running(shippedApp(), { pointer: { ...pointer, everyMs: 1 } });
     try {
       const told = vi.fn();
       manifest.onChange(told);
-      manifest.loadFrom('integrations', async () => rows.now);
+      const integrations = manifest.claim('integrations', 'the feature "integrations"');
+      integrations.setLoader(async () => rows.now);
       // Naming it switched nothing: it is empty until it is replaced.
       expect(Object.keys(manifest.actions())).toEqual(['home', 'panel']);
       expect(told).not.toHaveBeenCalled();
 
       manifest.replace('bundles', { [pay.id]: pay });
-      manifest.replace('integrations', rows.now);
+      integrations.replace(rows.now);
       manifest.watch();
       await aMoment();
 
@@ -587,16 +590,18 @@ describe('watch — the pointer the other processes poll', () => {
     try {
       // As a feature does when it starts, in each process: how the set is
       // read, and what the rows hold now.
-      for (const manifest of [here, there]) {
-        manifest.loadFrom('bundles', load);
-        manifest.replace('bundles', await load());
-        manifest.watch();
+      const owned = [here, there].map((manifest) => manifest.claim('bundles', 'the feature "bundles"'));
+      for (const set of owned) {
+        set.setLoader(load);
+        set.replace(await load());
       }
+      here.watch();
+      there.watch();
       await aMoment();
 
       // One process changes the rows and hands over what they hold.
       rows.now = { [desk.id]: desk, [pay.id]: pay };
-      here.replace('bundles', await load());
+      owned[0]?.replace(await load());
       await aMoment();
 
       expect(Object.keys(here.actions())).toEqual(['home', 'panel', desk.id, pay.id]);
@@ -605,6 +610,42 @@ describe('watch — the pointer the other processes poll', () => {
       here.stop();
       there.stop();
     }
+  });
+
+  // ONE WRITER FOR A SET OF ACTIONS. Whoever claims a set is handed the two
+  // ways it is written, and nobody else has either. A reviewer's server took
+  // `server.replaceActions('integrations', …)` from the app while the
+  // integrations feature wrote the same set from its rows: two writers, and the
+  // later one won until the next reload.
+  it('a set that was claimed is replaced by whoever claimed it, and by nobody else', () => {
+    const manifest = running(shippedApp());
+    const integrations = manifest.claim('integrations', 'the feature "integrations"');
+    integrations.replace({ [desk.id]: desk });
+    expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id]);
+
+    const sentence = /^moss: the set of actions "integrations" is the feature "integrations"'s, and only its owner replaces it\. An app hands a set over under a name of its own\.$/;
+    expect(() => manifest.replace('integrations', {})).toThrow(sentence);
+    expect(() => manifest.replace('integrations', { [pay.id]: pay })).toThrow(sentence);
+    // The dry run of that call is refused the same way: it is not a set the
+    // caller could hand over.
+    expect(() => manifest.verifyReplace('integrations', {})).toThrow(sentence);
+    expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id]);
+
+    // A set of the app's own is the app's, as it was.
+    manifest.replace('bundles', { [pay.id]: pay });
+    expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id, pay.id]);
+  });
+
+  it('a set is claimed once: a second claim is refused, and both claimants are said', () => {
+    const manifest = running(shippedApp());
+    manifest.claim('bundles', 'the feature "bundles"');
+    expect(() => manifest.claim('bundles', 'the feature "imports"')).toThrow(/^moss: the set of actions "bundles" is the feature "bundles"'s, and the feature "imports" claims it too\. A set of actions has one writer\.$/);
+  });
+
+  it('a name the app already handed a set over under cannot be claimed afterwards', () => {
+    const manifest = running(shippedApp());
+    manifest.replace('bundles', { [pay.id]: pay });
+    expect(() => manifest.claim('bundles', 'the feature "bundles"')).toThrow(/^moss: the set of actions "bundles" was handed over by the app, and the feature "bundles" claims it\. A set of actions has one writer\.$/);
   });
 
   it('stopping ends the watching', async () => {

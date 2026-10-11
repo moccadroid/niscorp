@@ -76,16 +76,20 @@ export type FeatureSeams = {
   holds: (roles: readonly string[], installed: readonly string[] | undefined) => readonly string[];
   // The actions in force: what the app shipped, then each set handed over.
   actions: () => Actions;
-  // Put a set of actions in place of the one of that name, in this process.
-  // Throws, and changes nothing, when the app could not be served that way.
-  replaceActions: (source: string, actions: Record<string, ActionDefinition>) => void;
+  // THIS FEATURE'S OWN SET OF ACTIONS, put in place of the one it handed over
+  // before, in this process. Throws, and changes nothing, when the app could
+  // not be served that way. A feature has one set, kept under its name, and
+  // this is the one way it is written: the app cannot hand a set over under a
+  // feature's name (`server.replaceActions` refuses it), and no other feature
+  // reaches it.
+  replaceActions: (actions: Record<string, ActionDefinition>) => void;
   // Could the app be served with exactly these actions in force? The sentence
   // it would be refused with, or `undefined`. Nothing is switched.
   refusalOf: (actions: Actions) => string | undefined;
-  // How a set that lives in rows is read again when another process says that
-  // something changed. It is what carries a set to the other processes of a
-  // deployment: a set with no loader stays in the process it was handed to.
-  loadActionsFrom: (source: string, load: () => Promise<Record<string, ActionDefinition>>) => void;
+  // THAT SET LIVES IN ROWS: how it is read again when another process says
+  // that something changed. It is what carries the set to the other processes
+  // of a deployment: with no loader it stays in the process it was handed to.
+  setActionsLoader: (load: () => Promise<Record<string, ActionDefinition>>) => void;
   // One more rule for which granted actions are there for an install list.
   narrowCatalogs: (filter: (ids: readonly string[], installed: ReadonlySet<string> | undefined) => readonly string[]) => void;
   // The charter the app shipped: role names, and what each selects.

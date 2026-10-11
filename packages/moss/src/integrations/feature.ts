@@ -139,10 +139,6 @@ export type Integrations = Feature & {
   integrationOfAction: (actionId: string) => string | undefined;
 };
 
-// The name the integrations' actions are handed to the running manifest
-// under, and read again by.
-const SOURCE = 'integrations';
-
 // What the calls an app makes are made of, once a server has started the
 // feature.
 type Started = { replay: Replay; call: CallIntegration };
@@ -167,10 +163,10 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
   // manifest after an import, an approval and a removal: the set is verified
   // with everything else, and only then is it served.
   const stored = (): ReturnType<typeof loadIntegrationActions> => loadIntegrationActions(replay, seams.grammars);
-  const reload = async (): Promise<void> => seams.replaceActions(SOURCE, await stored());
+  const reload = async (): Promise<void> => seams.replaceActions(await stored());
 
   seams.narrowCatalogs(filterInstalled);
-  seams.loadActionsFrom(SOURCE, stored);
+  seams.setActionsLoader(stored);
   seams.credential(KEY_PREFIX, keyCredential({ byKey: (key) => integrationByKey(replay, key), actor: config.integrationActor, who: seams.who }));
   seams.wrapWire(flooredWire);
 
@@ -215,7 +211,7 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
   // application, so it is folded in before anything is served — not on first
   // request and not on a timer.
   const approved = await stored();
-  if (Object.keys(approved).length > 0) seams.replaceActions(SOURCE, approved);
+  if (Object.keys(approved).length > 0) seams.replaceActions(approved);
 
   return { replay, call: callIntegrationWith({ forward, ...(seams.telemetry === undefined ? {} : { telemetry: seams.telemetry }) }) };
 };
