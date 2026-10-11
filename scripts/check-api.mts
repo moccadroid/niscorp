@@ -5,11 +5,62 @@
 // each added because some file needed it (docs/plans/moss-refactor.md). Nothing
 // made adding one a decision.
 //
-// So the names a package exports are a file in the repository: `api.txt`
-// beside its `package.json`, one line per name per entry point. This check
-// reads the entry points and compares. A name that is exported and not in the
-// file fails, and so does a name in the file that is no longer exported: the
-// file changes in the same diff as the export, where somebody reads it.
+// So what a package exports is a file in the repository: `api.txt` beside its
+// `package.json`. This check reads the entry points and compares. Something
+// exported that is not in the file fails, and so does a line in the file that
+// is no longer exported: the file changes in the same diff as the export,
+// where somebody reads it.
+//
+// WHAT A LINE IS.
+//
+//   `<entry> <name>`           a name the entry point exports
+//   `<entry> <name>.<member>`  a member of it, one level down
+//
+// Members are recorded because `MossServer` is one name and twenty things an
+// app calls: adding the twenty-first is as much a decision as adding a name. A
+// name has members when it is a type alias, an interface or a class whose type
+// is an object, or a `const` that holds one. A union has none (it is several
+// shapes), and neither has a function or a list. Only members THIS PACKAGE declares are
+// recorded: what a type takes from another package or from the language
+// (`Hono`'s methods on `MossServer`, an array's `length`) is that one's
+// decision.
+//
+// IT ASKS THE COMPILER, and does not read the entry file's syntax. The first
+// version read the statements of the entry file, so `export const { a } = x`
+// exported a name it did not count. Asked of the type checker, every form an
+// export can be written in is a name: destructured, declared (`export declare
+// const`), renamed, re-exported through any number of doors. Members are read
+// off the type the name resolves to, wherever it is declared.
+//
+// FOUR FORMS ARE REFUSED, because each exports something this file could not
+// list by name:
+//
+//   - `export *` and `export type *`: the API is whatever another file exports
+//   - a namespace, however it is written or reached: `export namespace`,
+//     `export * as ns`, `import * as ns` then `export { ns }`, or one of those
+//     behind a door
+//   - a default export and `export =`: a name the importer chooses
+//   - an enum (rule 16 has none)
+//
+// IT NEEDS THE PACKAGES INSTALLED AND BUILT. A type that comes from another
+// package of this repository is read from that package's `dist`. `pnpm verify`
+// and CI build first; run alone on a tree that is not built, the check says
+// which import did not resolve rather than report members that went missing.
+//
+// WHAT THIS CANNOT SEE.
+//   - A signature. A member whose type changes, a function that gains a
+//     parameter, a member that stops being optional: the name is the same and
+//     no line moves.
+//   - More than one level. `NiscRuntime.limits` is a line; what `limits`
+//     holds is not.
+//   - What an exported function takes or answers, when that type is not
+//     itself exported.
+//   - A class's static members, and types added to somebody else's module
+//     (`declare module`, `declare global`).
+//   - Whether a name is a type or a value.
+//
+// The check tests itself on every run: each form above is an entry point of a
+// small package in memory that must fail, beside a twin that must pass.
 //
 // `pnpm check:api`. `--write` records what is exported now. Exits non-zero on
 // any failure.
@@ -42,6 +93,112 @@ const ENTRIES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   },
 };
 
+// ─── what an entry point exports ─────────────────────────────
+
+// TypeScript's own file names: forward slashes, whatever the machine.
+const slashed = (path: string): string => path.split('\\').join('/');
+
+type Described = {
+  // `<entry> <name>` and `<entry> <name>.<member>`, sorted
+  lines: string[];
+  // what an entry exports that cannot be listed by name
+  refused: string[];
+  // imports the entries reach that resolve to nothing: the tree is not built
+  unresolved: string[];
+};
+
+const describe = (program: ts.Program, root: string, entries: Readonly<Record<string, string>>): Described => {
+  const checker = program.getTypeChecker();
+  const src = `${slashed(root).toLowerCase()}/src/`;
+  const ours = (file: ts.SourceFile): boolean => slashed(file.fileName).toLowerCase().startsWith(src);
+
+  // A member this package declares, or one no file declares (the keys of a
+  // `Record<'a' | 'b', …>`). One that only another package or the language
+  // declares is theirs.
+  const declaredHere = (member: ts.Symbol): boolean => {
+    const declarations = member.getDeclarations() ?? [];
+    return declarations.length === 0 || declarations.some((declaration) => ours(declaration.getSourceFile()));
+  };
+  const membersOfType = (type: ts.Type): string[] =>
+    (type.flags & ts.TypeFlags.Union) !== 0 || checker.isArrayLikeType(type)
+      ? []
+      : checker
+          .getPropertiesOfType(type)
+          .filter(declaredHere)
+          .map((member) => member.getName());
+  const membersOf = (symbol: ts.Symbol): string[] => {
+    const asType = (symbol.flags & (ts.SymbolFlags.TypeAlias | ts.SymbolFlags.Interface | ts.SymbolFlags.Class)) !== 0 ? membersOfType(checker.getDeclaredTypeOfSymbol(symbol)) : [];
+    const asValue = (symbol.flags & ts.SymbolFlags.Variable) !== 0 ? membersOfType(checker.getTypeOfSymbol(symbol)) : [];
+    return [...new Set([...asType, ...asValue])];
+  };
+
+  const lines: string[] = [];
+  const refused: string[] = [];
+  for (const [entry, file] of Object.entries(entries)) {
+    const source = program.getSourceFile(join(root, file));
+    if (source === undefined) {
+      refused.push(`${entry}: ${file} is not there`);
+      continue;
+    }
+    for (const statement of source.statements) {
+      if (ts.isExportDeclaration(statement) && statement.exportClause === undefined) refused.push(`${entry}: \`export *\` in ${file}`);
+      if (ts.isExportAssignment(statement)) refused.push(`${entry}: ${statement.isExportEquals === true ? '`export =`' : 'a default export'} in ${file}`);
+      if (ts.isNamespaceExportDeclaration(statement)) refused.push(`${entry}: \`export as namespace\` in ${file}`);
+    }
+    const module = checker.getSymbolAtLocation(source);
+    for (const exported of module === undefined ? [] : checker.getExportsOfModule(module)) {
+      const name = exported.getName();
+      const target = (exported.flags & ts.SymbolFlags.Alias) !== 0 ? checker.getAliasedSymbol(exported) : exported;
+      if (name === 'default' || name === 'export=') refused.push(`${entry}: a default export in ${file}`);
+      else if (checker.isUnknownSymbol(target)) refused.push(`${entry}: ${name} resolves to nothing`);
+      else if ((target.flags & ts.SymbolFlags.Module) !== 0) refused.push(`${entry}: ${name} is a namespace`);
+      else if ((target.flags & ts.SymbolFlags.Enum) !== 0) refused.push(`${entry}: ${name} is an enum`);
+      else lines.push(`${entry} ${name}`, ...membersOf(target).map((member) => `${entry} ${name}.${member}`));
+    }
+  }
+
+  const unresolved: string[] = [];
+  for (const file of program.getSourceFiles()) {
+    if (!ours(file)) continue;
+    for (const statement of file.statements) {
+      if (!(ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)) || statement.moduleSpecifier === undefined) continue;
+      if (checker.getSymbolAtLocation(statement.moduleSpecifier) === undefined) unresolved.push(`${slashed(file.fileName).slice(src.length)} imports ${statement.moduleSpecifier.getText(file)}`);
+    }
+  }
+  return { lines: [...new Set(lines)].sort(), refused: [...new Set(refused)], unresolved };
+};
+
+// ─── the rules ───────────────────────────────────────────────
+
+type Held = { label: string; passed: boolean; detail: string };
+
+const few = (found: readonly string[]): string => `${found.slice(0, 8).join(', ')}${found.length > 8 ? `, and ${found.length - 8} more` : ''}`;
+const isMember = (line: string): boolean => (line.split(' ')[1] ?? '').includes('.');
+
+const judge = (described: Described, recorded: readonly string[]): Held[] => {
+  const added = described.lines.filter((line) => !recorded.includes(line));
+  const removed = recorded.filter((line) => !described.lines.includes(line));
+  const members = described.lines.filter(isMember).length;
+  return [
+    {
+      label: 'every import its entries reach resolves',
+      passed: described.unresolved.length === 0,
+      detail: described.unresolved.length === 0 ? '' : `${few(described.unresolved)} — a type from another package is read from where it is installed and built: run \`pnpm install\` and \`pnpm build\` first`,
+    },
+    {
+      label: 'every export is a name: no `export *`, no namespace, no default, no enum',
+      passed: described.refused.length === 0,
+      detail: described.refused.length === 0 ? '' : `${few(described.refused)} — export each thing by its name`,
+    },
+    {
+      label: 'every exported name, and every member of one, is in api.txt',
+      passed: added.length === 0,
+      detail: added.length === 0 ? `${described.lines.length - members} names, ${members} members` : `${few(added)} — a new export is a decision: add it to api.txt in this change, or do not export it`,
+    },
+    { label: 'api.txt names only what is exported', passed: removed.length === 0, detail: removed.length === 0 ? '' : `${few(removed)} — take ${removed.length === 1 ? 'it' : 'them'} out of api.txt in this change` },
+  ];
+};
+
 const lines: string[] = [];
 let failed = false;
 const ok = (label: string, passed: boolean, detail = ''): void => {
@@ -49,62 +206,143 @@ const ok = (label: string, passed: boolean, detail = ''): void => {
   if (!passed) failed = true;
 };
 
-// Every name an entry file exports. `export *` is refused: it makes the API
-// whatever another file happens to export.
-const exportedBy = (text: string): { names: string[]; stars: number } => {
-  const source = ts.createSourceFile('x.ts', text, ts.ScriptTarget.Latest, true);
-  const names: string[] = [];
-  let stars = 0;
-  const exported = (node: ts.Node): boolean => ts.canHaveModifiers(node) && (ts.getModifiers(node) ?? []).some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword);
-  for (const statement of source.statements) {
-    if (ts.isExportDeclaration(statement)) {
-      if (statement.exportClause === undefined) stars += 1;
-      else if (ts.isNamedExports(statement.exportClause)) for (const element of statement.exportClause.elements) names.push(element.name.text);
-      else stars += 1;
-      continue;
-    }
-    if (!exported(statement)) continue;
-    if (ts.isVariableStatement(statement)) {
-      for (const declaration of statement.declarationList.declarations) if (ts.isIdentifier(declaration.name)) names.push(declaration.name.text);
-    } else if ((ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement) || ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.name !== undefined) {
-      names.push(statement.name.text);
-    }
-  }
-  return { names: [...new Set(names)].sort(), stars };
+// ─── falsifiable: the check fails on what it says it fails on ─
+//
+// One small package, in memory, compiled once. Each case is two entry points
+// of it. `bad` must fail against `recorded`, and `good` must pass against it.
+// Where `recorded` is left out, each is held against what it exports itself,
+// so only a refusal can fail it: that is what a refused form is.
+
+const FIXTURE = '/fixture';
+const INNER = `
+export type Server = { close: () => void; port: number };
+export interface Seams { mount: () => void }
+export const made = { one: 1, two: 2 };
+export const plain = 1;
+`;
+const SHARED: Readonly<Record<string, string>> = {
+  'inner.ts': INNER,
+  'grown.ts': INNER.replace('port: number', 'port: number; added: () => void').replace('mount: () => void', 'mount: () => void; added: () => void').replace('two: 2', 'two: 2, added: 3'),
+  'door.ts': "export type { Server, Seams } from './inner';\nexport { made } from './inner';\n",
+  'grown-door.ts': "export type { Server, Seams } from './grown';\nexport { made } from './grown';\n",
+  'all-door.ts': "export * as everything from './inner';\n",
 };
+
+type Case = { what: string; bad: string; good: string; recorded?: readonly string[] };
+
+const CASES: readonly Case[] = [
+  {
+    what: 'a destructured export',
+    bad: "import * as inner from './inner';\nexport const { made, plain: renamed } = inner;\n",
+    good: 'export {};\n',
+    recorded: [],
+  },
+  { what: 'a declared export: `export declare const`', bad: 'export declare const hidden: number;\n', good: 'export {};\n', recorded: [] },
+  { what: 'a namespace written in the entry', bad: 'export namespace internals {\n  export const x = 1;\n}\n', good: 'export const x = 1;\n' },
+  { what: '`export * as`', bad: "export * as everything from './inner';\n", good: "export { made, plain } from './inner';\n" },
+  { what: '`export *`', bad: "export * from './inner';\n", good: "export { made, plain } from './inner';\nexport type { Server, Seams } from './inner';\n" },
+  { what: '`export type *`', bad: "export type * from './inner';\n", good: "export type { Server, Seams } from './inner';\n" },
+  { what: 'a namespace imported whole and exported by name', bad: "import * as everything from './inner';\nexport { everything };\n", good: "import { made } from './inner';\nexport { made };\n" },
+  { what: 'a namespace behind a door', bad: "export { everything } from './all-door';\n", good: "export { made } from './door';\n" },
+  { what: '`export import x = require(…)`', bad: "export import everything = require('./inner');\n", good: "export { plain } from './inner';\n" },
+  { what: 'a default export', bad: 'const everything = { a: 1 };\nexport default everything;\n', good: 'export const everything = { a: 1 };\n' },
+  { what: 'a default export by renaming', bad: "export { made as default } from './inner';\n", good: "export { made as renamed } from './inner';\n" },
+  { what: '`export =`', bad: 'const everything = { a: 1 };\nexport = everything;\n', good: 'export const everything = { a: 1 };\n' },
+  { what: 'an enum', bad: 'export enum Kind {\n  One,\n  Two,\n}\n', good: "export type Kind = 'one' | 'two';\n" },
+  {
+    what: 'a member added to an exported type',
+    bad: 'export type Server = { close: () => void; added: () => void };\n',
+    good: 'export type Server = { close: () => void };\n',
+    recorded: ['x Server', 'x Server.close'],
+  },
+  {
+    what: 'a member taken off an exported type',
+    bad: 'export type Server = { close: () => void };\n',
+    good: 'export type Server = { close: () => void; port?: number };\n',
+    recorded: ['x Server', 'x Server.close', 'x Server.port'],
+  },
+  {
+    what: 'a member added to a type, an interface and a const that are declared behind a door',
+    bad: "export type { Server, Seams } from './grown-door';\nexport { made } from './grown-door';\n",
+    good: "export type { Server, Seams } from './door';\nexport { made } from './door';\n",
+    recorded: ['x Seams', 'x Seams.mount', 'x Server', 'x Server.close', 'x Server.port', 'x made', 'x made.one', 'x made.two'],
+  },
+  {
+    what: 'a member added beside what another package declares',
+    bad: "export type Kept = Map<string, number> & { ours: true; added: true };\nexport type Many = string[];\nexport const LIST = ['a', 'b'] as const;\n",
+    good: "export type Kept = Map<string, number> & { ours: true };\nexport type Many = string[];\nexport const LIST = ['a', 'b'] as const;\n",
+    recorded: ['x Kept', 'x Kept.ours', 'x LIST', 'x Many'],
+  },
+];
+
+const fixtureProgram = (): ts.Program => {
+  const files = new Map<string, string>(Object.entries(SHARED).map(([name, text]) => [`${FIXTURE}/src/${name}`, text]));
+  for (const [index, one] of CASES.entries()) {
+    files.set(`${FIXTURE}/src/bad-${index}.ts`, one.bad);
+    files.set(`${FIXTURE}/src/good-${index}.ts`, one.good);
+  }
+  const options: ts.CompilerOptions = { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler, strict: true, noEmit: true, types: [] };
+  const host = ts.createCompilerHost(options);
+  const real = { fileExists: host.fileExists, readFile: host.readFile, getSourceFile: host.getSourceFile, directoryExists: host.directoryExists };
+  host.fileExists = (name) => files.has(name) || real.fileExists(name);
+  host.readFile = (name) => files.get(name) ?? real.readFile(name);
+  host.directoryExists = (name) => [...files.keys()].some((file) => file.startsWith(`${name}/`)) || real.directoryExists?.(name) === true;
+  host.getSourceFile = (name, version, onError, fresh) => {
+    const text = files.get(name);
+    return text === undefined ? real.getSourceFile(name, version, onError, fresh) : ts.createSourceFile(name, text, version, true);
+  };
+  return ts.createProgram({ rootNames: [...files.keys()], options, host });
+};
+
+const fixture = fixtureProgram();
+const failing = (file: string, recorded: readonly string[] | undefined): string[] => {
+  const described = describe(fixture, FIXTURE, { x: `src/${file}` });
+  return judge(described, recorded ?? described.lines)
+    .filter((held) => !held.passed)
+    .map((held) => `${held.label}: ${held.detail}`);
+};
+for (const [index, one] of CASES.entries()) {
+  const bad = failing(`bad-${index}.ts`, one.recorded);
+  const good = failing(`good-${index}.ts`, one.recorded);
+  ok(
+    `self-test: fails on ${one.what}, and passes on its twin`,
+    bad.length > 0 && good.length === 0,
+    bad.length > 0 && good.length === 0 ? '' : `${bad.length > 0 ? '' : 'the bad one passed. '}${good.length === 0 ? '' : `the twin failed: ${good.join('; ')}`}`,
+  );
+}
+
+// ─── the packages ────────────────────────────────────────────
+
+const programOf = (root: string, entries: Readonly<Record<string, string>>): ts.Program => {
+  const config = ts.parseJsonConfigFileContent(ts.readConfigFile(join(root, 'tsconfig.json'), ts.sys.readFile).config, ts.sys, root);
+  return ts.createProgram({ rootNames: Object.values(entries).map((file) => join(root, file)), options: { ...config.options, noEmit: true } });
+};
+
+const exportsOf = (manifest: unknown): string[] =>
+  typeof manifest === 'object' && manifest !== null && 'exports' in manifest && typeof manifest.exports === 'object' && manifest.exports !== null ? Object.keys(manifest.exports) : [];
 
 const write = process.argv.includes('--write');
 
 for (const [name, entries] of Object.entries(ENTRIES)) {
   const root = join(packages, name);
-  const declared = Object.keys(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).exports ?? {}).filter((key) => key !== './package.json');
+  const declared = exportsOf(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).filter((key) => key !== './package.json');
   const missing = declared.filter((key) => entries[key] === undefined);
   const extra = Object.keys(entries).filter((key) => !declared.includes(key));
   ok(`${name}: this check knows every entry point its package.json exports`, missing.length === 0 && extra.length === 0, [...missing.map((key) => `${key} is not listed here`), ...extra.map((key) => `${key} is no longer exported`)].join('; '));
 
-  const now: string[] = [];
-  for (const [entry, file] of Object.entries(entries)) {
-    const { names, stars } = exportedBy(readFileSync(join(root, file), 'utf8'));
-    ok(`${name} ${entry}: no \`export *\``, stars === 0, stars === 0 ? '' : `${file} re-exports everything from ${stars} file${stars === 1 ? '' : 's'}`);
-    for (const exportedName of names) now.push(`${entry} ${exportedName}`);
-  }
-  now.sort();
-
+  const described = describe(programOf(root, entries), root, entries);
   const recordFile = join(root, 'api.txt');
   if (write) {
-    writeFileSync(recordFile, `${now.join('\n')}\n`);
-    lines.push(`${name}: recorded ${now.length} names in api.txt`);
-    continue;
+    writeFileSync(recordFile, `${described.lines.join('\n')}\n`);
+    lines.push(`${name}: recorded ${described.lines.length} lines in api.txt`);
   }
-  const recorded = existsSync(recordFile) ? readFileSync(recordFile, 'utf8').split('\n').map((line) => line.trim()).filter((line) => line !== '') : [];
-  const added = now.filter((line) => !recorded.includes(line));
-  const removed = recorded.filter((line) => !now.includes(line));
-  ok(
-    `${name}: every exported name is in api.txt`,
-    added.length === 0,
-    added.length === 0 ? `${now.length} names` : `${added.slice(0, 8).join(', ')}${added.length > 8 ? `, and ${added.length - 8} more` : ''} — a new export is a decision: add it to api.txt in this change, or do not export it`,
-  );
-  ok(`${name}: api.txt names only what is exported`, removed.length === 0, removed.length === 0 ? '' : `${removed.slice(0, 8).join(', ')}${removed.length > 8 ? `, and ${removed.length - 8} more` : ''} — take ${removed.length === 1 ? 'it' : 'them'} out of api.txt in this change`);
+  const recorded = existsSync(recordFile)
+    ? readFileSync(recordFile, 'utf8')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line !== '')
+    : [];
+  for (const held of judge(described, recorded)) ok(`${name}: ${held.label}`, held.passed, held.detail);
 }
 
 for (const line of lines) console.log(line);
