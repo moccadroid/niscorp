@@ -1074,10 +1074,7 @@ its own, and the core never imports it.
   `tables.names` is the tables that are the feature's own: every table its own
   entries read and write, and all they may. It is said on the feature, so
   whoever puts one in a manifest can read which tables it addresses outside
-  the app's policy without running it. A table has one owner: a feature that
-  names one of the core's (`sessions`, `moss_generation`, `vex_cache`,
-  `strata_ledger`), or a table another feature names, refuses the boot (and
-  `migrateTables`) with a sentence that says which table and why.
+  the app's policy without running it.
   `tables.sequences` is the strata sequences that make them: they are
   migrated in the one ledgered run, before the feature starts, and
   `migrateTables` runs them too.

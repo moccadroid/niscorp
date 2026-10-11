@@ -8,27 +8,6 @@ import type { Sequence } from '@niscorp/strata';
 // the shape is not application knowledge.
 // ═══════════════════════════════════════════════════════════════
 
-// THE TABLES THAT ARE THE CORE'S OWN, each with what it holds. No feature may
-// name one as its own (./feature-tables.ts): a feature's entries run outside
-// the app's policy, and what is in these is every session, the pointer every
-// process follows, the surface vex replays and the record of what was
-// migrated. By the names they have on a deployment that changed none of them:
-// `sessions` is the identity module's (migrated here when the deployment keeps
-// moss's credential), `vex_cache` is vex's default cache, and `strata_ledger`
-// is strata's.
-//
-// `integrations` and `integration_actions` are NOT here, though migration 1
-// below makes them. They are older than features and stayed where every
-// deployment's ledger has them; in code they are the integrations feature's
-// (../integrations, which names them as its own), and nothing in this module
-// reads or writes a row of either.
-export const CORE_TABLES: ReadonlyMap<string, string> = new Map([
-  ['moss_generation', 'the generation pointer every process polls'],
-  ['sessions', 'the stored session credentials'],
-  ['vex_cache', 'the entries vex replays'],
-  ['strata_ledger', 'the record of every migration that ran'],
-]);
-
 // THE GENERATION POINTER'S TABLE, AND ITS ONE ROW. History: these two
 // statements are the last two steps of migration 1 below, and every database
 // has run them. They were declared beside the code that polls the pointer

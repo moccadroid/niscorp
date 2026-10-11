@@ -476,32 +476,9 @@ describe('the data module — the tables a run covers', () => {
 });
 
 // WHICH TABLES ARE A FEATURE'S OWN (../src/data/feature-tables.ts), read off
-// the features before any of them runs. A feature's own entries run outside
-// the app's policy, so a table has one owner, and it is said before a table
-// is made.
+// the features before any of them runs.
 describe("the data module — the tables a feature names as its own", () => {
   const naming = (name: string, ...names: string[]) => ({ name, tables: { names }, start: () => undefined });
-
-  it("a table of the core's is no feature's: naming one is refused, with the table and what it holds", () => {
-    const refused = (table: string): string => {
-      try {
-        featureTablesOf({ features: [naming('probe', 'probe_rows', table)] });
-        return 'accepted';
-      } catch (error) {
-        return error instanceof Error ? error.message : String(error);
-      }
-    };
-    expect(refused('sessions')).toMatch(/^moss: the feature "probe" names the table "sessions" as its own, and it is the core's: the stored session credentials\. A feature's own entries run outside the app's policy/);
-    expect(refused('moss_generation')).toMatch(/names the table "moss_generation" as its own, and it is the core's: the generation pointer every process polls\./);
-    expect(refused('vex_cache')).toMatch(/names the table "vex_cache" as its own, and it is the core's: the entries vex replays\./);
-    expect(refused('strata_ledger')).toMatch(/names the table "strata_ledger" as its own, and it is the core's: the record of every migration that ran\./);
-    // A name every object answers to is a table name like any other.
-    expect(refused('constructor')).toBe('accepted');
-  });
-
-  it('a table has one owner: two features that name one are refused, and both are said', () => {
-    expect(() => featureTablesOf({ features: [naming('one', 'grants'), naming('two', 'notes', 'grants')] })).toThrow(/^moss: the features "one" and "two" both name the table "grants" as their own\. A table has one owner\.$/);
-  });
 
   it('two features of one name are refused: the name is what a table is kept under', () => {
     expect(() => featureTablesOf({ features: [naming('one', 'grants'), naming('one', 'notes')] })).toThrow(/^moss: two features are named "one"\./);
