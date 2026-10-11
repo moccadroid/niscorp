@@ -21,7 +21,7 @@ export default defineConfig({
   // eleven ways nothing could have caught. This one is the store that replaced
   // it, written and tested in moss, and it runs STORE_CONTRACT against a real
   // database (test/postgres-store.test.ts).
-  entry: { index: 'src/index.ts', testing: 'src/testing.ts', agent: 'src/agent/index.ts', postgres: 'src/store/postgres.ts' },
+  entry: { index: 'src/index.ts', testing: 'src/testing.ts', agent: 'src/agent/index.ts', postgres: 'src/store/postgres/index.ts' },
   format: ['esm', 'cjs'],
   dts: true,
   sourcemap: true,

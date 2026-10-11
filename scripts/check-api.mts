@@ -96,7 +96,7 @@ const ENTRIES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
     '.': 'src/index.ts',
     './agent': 'src/agent/index.ts',
     './testing': 'src/testing.ts',
-    './postgres': 'src/store/postgres.ts',
+    './postgres': 'src/store/postgres/index.ts',
   },
 };
 

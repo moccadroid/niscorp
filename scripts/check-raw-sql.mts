@@ -16,8 +16,8 @@
 // the same change, so the count goes down in a diff somebody reads and never
 // up without one.
 //
-// TIDE IS SWEPT, with one file in the ledger: its Postgres store
-// (`store/postgres.ts`, the `@niscorp/tide/postgres` entry), which was in moss
+// TIDE IS SWEPT, with its Postgres store in the ledger (`store/postgres/`,
+// the `@niscorp/tide/postgres` entry: three of its files), which was in moss
 // until tide's hosting left it. Tide is an engine, and it is not listed with
 // vex and strata, on purpose. Those two are SQL all the way through. Tide's
 // engine holds none: it reaches storage through a contract of six
@@ -364,7 +364,12 @@ const LEDGER: Readonly<Record<string, Readonly<Record<string, Entry>>>> = {
     // claiming its own task has no principal to run a policy for. The seventh
     // statement reads and writes no row: it is the advisory lock a serial
     // group is claimed behind, so two instances cannot both claim in it.
-    'store/postgres.ts': { doors: 7, statements: 7, tables: 3, why: 'store', note: "tide's Postgres store: the engine's own rows, behind the store contract, and one advisory lock" },
+    // It was one file, `store/postgres.ts`, with 7 doors, 7 statements and 3
+    // tables. It is a directory of six now, and the same numbers are in three
+    // of them.
+    'store/postgres/store.ts': { doors: 4, statements: 4, tables: 0, why: 'store', note: "tide's Postgres store: the engine's own rows, behind the store contract: read, append, compare-and-set, remove" },
+    'store/postgres/claim.ts': { doors: 3, statements: 3, tables: 0, why: 'store', note: "tide's Postgres store: the claim, the question whether a serial group is held, and the advisory lock the two run behind" },
+    'store/postgres/tables.ts': { doors: 0, statements: 0, tables: 3, why: 'tables', note: "tide's own table sequence (`nisc.moss.tide`): the DDL that is migration 1, and the two columns migration 2 adds" },
   },
 };
 

@@ -908,7 +908,14 @@ src/
 
   store/
     memory.ts              createMemoryStore — the reference implementation + snapshot()
-    postgres.ts            createTideStore, TIDE_SEQUENCE — the ./postgres entry; the only file that imports strata
+    postgres/              the Postgres store — the ./postgres entry; the only directory that imports strata
+      index.ts             the door: createTideStore, TIDE_SEQUENCE, TIDE_TABLES, TIDE_DDL, TidePool
+      pool.ts              the pool the store runs on, as much of one as it uses
+      tables.ts            the four tables, and the strata sequence that makes them
+      rows.ts              a row and an entity, both directions, read by a schema
+      compile.ts           a where, an order and a set, compiled to SQL
+      claim.ts             the claim: one statement, and one instance at a time in a serial group
+      store.ts             createTideStore: the six capabilities over a pool
 
   agent/
     reflex-agent.ts        createReflexAgent — the ./agent entry; the only file that imports cortex
@@ -935,7 +942,7 @@ test/
 orchestrator. There is no `verbs.ts`: `fire` is four lines of sugar over `ingest`,
 and `retry` belongs beside the executor whose invariants it rewinds.
 
-`store/postgres.ts` is here, and **tide still imports no host**. Persistence is where
+`store/postgres/` is here, and **tide still imports no host**. Persistence is where
 that rule earns its keep, and the store keeps it: the pool it runs on is a type it
 writes out itself (`TidePool`), the one package it imports is strata, for the ledger
 its tables are migrated through, and it sits on an entry point of its own so that
