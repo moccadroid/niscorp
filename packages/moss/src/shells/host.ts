@@ -230,40 +230,40 @@ const shellsOf = (host: HostParts, principal: string): Cell[] => {
   return cell === undefined || cell.live.ended ? [] : [cell];
 };
 
-export const createShellHost = (config: ShellHostConfig): ShellHost => {
-  const durable = new Map<string, Cell>();
-  const host: HostParts = { config, emit: emitterOf(config.telemetry), kept: config.kept ?? true, delta: config.limits?.delta ?? false, durable, living: new Map(), underWay: new Set() };
-  const { kept } = host;
+// ONE RESET OF A CELL AT A TIME, each after the one before it. A reset
+// builds and then swaps, so two that overlapped each began from the shell
+// that stood then: the first to land carried the terminals to its shell and
+// the second, finding none left to carry, took the cell. The terminals were
+// left on a shell nothing addressed and nothing would dispose. Each reset
+// that was asked for still happens, in turn: the second may be for a reason
+// that arrived after the first had read what it builds from.
+const rebuildCell = (host: HostParts, cell: Cell): Promise<void> => {
+  const turn = (cell.resetting ?? Promise.resolve()).then(() => replaceShell(host, cell));
+  // The next one waits for this one whether it lands or fails.
+  cell.resetting = turn.catch(() => undefined);
+  // A replacement is a build under way like a first one: it is made from
+  // what its principal held when it began, so a change that happens before
+  // it lands is adopted by the cell once it has.
+  void whileUnderWay(
+    host,
+    turn.then(() => cell),
+  );
+  return turn;
+};
 
-  // ONE RESET OF A CELL AT A TIME, each after the one before it. A reset
-  // builds and then swaps, so two that overlapped each began from the shell
-  // that stood then: the first to land carried the terminals to its shell and
-  // the second, finding none left to carry, took the cell. The terminals were
-  // left on a shell nothing addressed and nothing would dispose. Each reset
-  // that was asked for still happens, in turn: the second may be for a reason
-  // that arrived after the first had read what it builds from.
-  const rebuild = (cell: Cell): Promise<void> => {
-    const turn = (cell.resetting ?? Promise.resolve()).then(() => replaceShell(host, cell));
-    // The next one waits for this one whether it lands or fails.
-    cell.resetting = turn.catch(() => undefined);
-    // A replacement is a build under way like a first one: it is made from
-    // what its principal held when it began, so a change that happens before
-    // it lands is adopted by the cell once it has.
-    void whileUnderWay(
-      host,
-      turn.then(() => cell),
-    );
-    return turn;
-  };
+// The cell a host keeps for a principal, built if there is none yet.
+type DurableCell = (token: string | null, principal: string) => Promise<Cell>;
 
-  // ONE BUILD FOR A PRINCIPAL AT A TIME. A build awaits (who they are, their
-  // inputs, their words), so two arrivals in one moment — a page's read and
-  // its socket, two tabs — would each find no shell and each build one. The
-  // second took the first's place in the map and the first stood for ever,
-  // held by whoever arrived first. So a build under way is kept by principal,
-  // and whoever arrives while it runs is handed its cell when it lands. One
-  // that fails is refused to all of them and keeps nothing: the next arrival
-  // builds afresh.
+// ONE BUILD FOR A PRINCIPAL AT A TIME. A build awaits (who they are, their
+// inputs, their words), so two arrivals in one moment — a page's read and
+// its socket, two tabs — would each find no shell and each build one. The
+// second took the first's place in the map and the first stood for ever,
+// held by whoever arrived first. So a build under way is kept by principal,
+// and whoever arrives while it runs is handed its cell when it lands. One
+// that fails is refused to all of them and keeps nothing: the next arrival
+// builds afresh.
+const createDurableCells = (host: HostParts): DurableCell => {
+  const { durable } = host;
   const building = new Map<string, Promise<Cell>>();
   const durableCell = (token: string | null, principal: string): Promise<Cell> => {
     // a rebuild should re-authorize as the newest session
@@ -283,17 +283,80 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
     building.set(principal, started);
     return started;
   };
+  return durableCell;
+};
 
-  // The adopt that is under way, or the last one that ran (it never rejects).
-  let adopted: Promise<void> = Promise.resolve();
-
-  const idleMs = config.limits?.idleMs ?? DEFAULT_IDLE_MS;
+// THE SWEEP, STARTED: on a beat for as long as the host stands. Answers how
+// it is stopped.
+const startSweep = (host: HostParts): (() => void) => {
+  const idleMs = host.config.limits?.idleMs ?? DEFAULT_IDLE_MS;
   let sweeper: ReturnType<typeof setInterval> | undefined;
   if (idleMs > 0 && Number.isFinite(idleMs)) {
     sweeper = setInterval(() => sweep(host, idleMs), Math.min(idleMs, SWEEP_EVERY_MS));
     // The sweep must never be the reason a process stays alive.
     sweeper.unref?.();
   }
+  return () => {
+    if (sweeper !== undefined) clearInterval(sweeper);
+    sweeper = undefined;
+  };
+};
+
+// WHAT SOMEBODY IS LOOKING AT, READ ONCE: off the shell the host keeps for
+// them, or off one built for the length of the read.
+const snapshotOf =
+  (host: HostParts, durableCell: DurableCell): ShellHost['snapshot'] =>
+  async (token, principal, options) => {
+    const { kept } = host;
+    const waitMs = options?.waitMs ?? DEFAULT_SNAPSHOT_WAIT_MS;
+    if (principal !== null && kept) {
+      const cell = await durableCell(token, principal);
+      const settled = await settle(cell.live, waitMs);
+      return { ...read(cell.live), settled, ...needOf(cell.live, principal, kept) };
+    }
+    // Nobody in particular, or a page: a shell for the length of one read.
+    const seed = randomBytes(9).toString('hex');
+    const live = await buildShell(host, token, principal, false, seed, options?.inputs);
+    try {
+      const settled = await settle(live, waitMs);
+      return { ...read(live), seed, settled, ...needOf(live, principal, kept) };
+    } finally {
+      // Never one of the living: it is read and ended before anything
+      // could ask it to adopt.
+      endShell(host, live);
+      live.shell.dispose();
+    }
+  };
+
+// A MESSAGE, PUT TO THE SHELL A HOST KEEPS FOR SOMEBODY.
+const deliverTo =
+  (durable: ReadonlyMap<string, Cell>): ShellHost['deliver'] =>
+  (principal, channel, payload) => {
+    // Into the LIVE shell only. A principal with no durable shell hears
+    // nothing and that is correct — this is push over shells that already
+    // exist, never a reason to build one for somebody who is not there. The
+    // rows the message points at are still in the database; their screen
+    // reads them the next time it opens.
+    const cell = durable.get(principal);
+    if (cell === undefined || cell.live.ended) return false;
+    try {
+      cell.live.shell.publish(channel, payload);
+      return true;
+    } catch (error) {
+      console.error(`[moss/shells] a delivery on "${channel}" to the shell of ${principal} failed:`, error);
+      return false;
+    }
+  };
+
+export const createShellHost = (config: ShellHostConfig): ShellHost => {
+  const durable = new Map<string, Cell>();
+  const host: HostParts = { config, emit: emitterOf(config.telemetry), kept: config.kept ?? true, delta: config.limits?.delta ?? false, durable, living: new Map(), underWay: new Set() };
+  const { kept } = host;
+  const rebuild = (cell: Cell): Promise<void> => rebuildCell(host, cell);
+  const durableCell = createDurableCells(host);
+
+  // The adopt that is under way, or the last one that ran (it never rejects).
+  let adopted: Promise<void> = Promise.resolve();
 
   return {
     session: async (token, principal, options) => {
@@ -305,26 +368,7 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
       }
       return sessionOn(host, await durableCell(token, principal), false, rebuild);
     },
-    snapshot: async (token, principal, options) => {
-      const waitMs = options?.waitMs ?? DEFAULT_SNAPSHOT_WAIT_MS;
-      if (principal !== null && kept) {
-        const cell = await durableCell(token, principal);
-        const settled = await settle(cell.live, waitMs);
-        return { ...read(cell.live), settled, ...needOf(cell.live, principal, kept) };
-      }
-      // Nobody in particular, or a page: a shell for the length of one read.
-      const seed = randomBytes(9).toString('hex');
-      const live = await buildShell(host, token, principal, false, seed, options?.inputs);
-      try {
-        const settled = await settle(live, waitMs);
-        return { ...read(live), seed, settled, ...needOf(live, principal, kept) };
-      } finally {
-        // Never one of the living: it is read and ended before anything
-        // could ask it to adopt.
-        endShell(host, live);
-        live.shell.dispose();
-      }
-    },
+    snapshot: snapshotOf(host, durableCell),
     // One adopt after another: a later change is adopted after an earlier
     // one, however long each takes to be answered, so what a shell ends up
     // holding is what the last change left its principal with.
@@ -332,31 +376,13 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
       const arriving = [...host.underWay];
       adopted = adopted.then(() => adoptAll(host, arriving));
     },
-    deliver: (principal, channel, payload) => {
-      // Into the LIVE shell only. A principal with no durable shell hears
-      // nothing and that is correct — this is push over shells that already
-      // exist, never a reason to build one for somebody who is not there. The
-      // rows the message points at are still in the database; their screen
-      // reads them the next time it opens.
-      const cell = durable.get(principal);
-      if (cell === undefined || cell.live.ended) return false;
-      try {
-        cell.live.shell.publish(channel, payload);
-        return true;
-      } catch (error) {
-        console.error(`[moss/shells] a delivery on "${channel}" to the shell of ${principal} failed:`, error);
-        return false;
-      }
-    },
+    deliver: deliverTo(durable),
     list: () => rosterOf(durable),
     reset: (principal) => {
       const theirs = shellsOf(host, principal);
       for (const cell of theirs) void rebuild(cell).catch((err: unknown) => console.error('[moss/shells] a reset failed to rebuild', err));
       return theirs.length > 0;
     },
-    stop: () => {
-      if (sweeper !== undefined) clearInterval(sweeper);
-      sweeper = undefined;
-    },
+    stop: startSweep(host),
   };
 };
