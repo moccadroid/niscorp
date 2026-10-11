@@ -341,6 +341,17 @@ describe('the data module — the fingerprints somebody may be told of', () => {
     expect(await data.fingerprintsFor(who('public', 'writer'))).toEqual(['notes/add', 'notes/all', 'notes/mine']);
   });
 
+  // EVERY FINGERPRINT THE APP SERVES is the data module's to answer. The
+  // server's wiring reached through `data.engine` for the cache's keys: the
+  // whole engine handed out, for one list.
+  it('every fingerprint the app serves is answered by the data module, which hands out no engine', async () => {
+    const { data } = await world();
+    expect([...(await data.fingerprints())].sort()).toEqual(['notes/add', 'notes/all', 'notes/mine']);
+    await data.ownEntries('tagging', [TAGS, ADD_TAG]);
+    expect([...(await data.fingerprints())].sort()).toEqual(['notes/add', 'notes/all', 'notes/mine']);
+    expect(Object.keys(data)).not.toContain('engine');
+  });
+
   it("are never a feature's own entries, whatever the caller holds", async () => {
     const { data } = await world();
     await data.ownEntries('tagging', [TAGS, ADD_TAG]);

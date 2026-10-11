@@ -84,7 +84,6 @@ export type DataRoutesConfig<E extends Env> = {
 };
 
 export type Data = {
-  engine: QueryEngine;
   // every `<table>.<verb>` the database can carry: what a charter's `data`
   // section is resolved over
   grants: readonly string[];
@@ -109,6 +108,10 @@ export type Data = {
   // caller's own, so nothing it does to the answer reaches a policy a request
   // is served under.
   policyForRoles: (roles: readonly string[]) => ScopePolicy;
+  // Every fingerprint the app serves: the keys of what vex replays from. THE
+  // ENGINE ITSELF IS HANDED TO NOBODY: whoever needs something of it asks this
+  // module the question.
+  fingerprints: () => Promise<readonly string[]>;
   // The fingerprints somebody may be told of, sorted: of the reads and writes
   // the app serves, the ones their own policy lets them replay, as vex's
   // discovery lists them for that policy (a read by the tables it reads, a
@@ -157,7 +160,7 @@ const machinery = (roles: readonly string[]): Caller => ({ key: memoKey(roles, u
 // granted, the grammars, the adapter the engine reads through, and how the
 // documents of one store are brought to those grammars (strata's own, over the
 // pool).
-export type StoodUp = Pick<Data, 'engine' | 'grants' | 'grammars'> & { adapter: DatabaseAdapter; upgradeStore: (store: DocumentStore) => Promise<void> };
+export type StoodUp = Pick<Data, 'grants' | 'grammars'> & { engine: QueryEngine; adapter: DatabaseAdapter; upgradeStore: (store: DocumentStore) => Promise<void> };
 
 // THE TABLES EXIST BEFORE INTROSPECTION. The engine's introspected schema is
 // the grant universe policies compile from — a table created after it is a
@@ -249,10 +252,10 @@ export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charte
   };
 
   return {
-    engine,
     grants,
     grammars,
     seed: (entries) => seedCache(engine.cache, entries),
+    fingerprints: async () => (await engine.cache.keys?.()) ?? [],
     policyOf: policies.of,
     policyForRoles: (roles) => resolvePolicyForRoles(governed, grants, roles),
     // Vex's own discovery, asked under the caller's policy: it lists an entry
