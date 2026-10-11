@@ -191,15 +191,15 @@ which fixes no test held and what holds them now.
 
 | | Now | Where |
 |---|---|---|
-| 1 | fixed | `2fc4154`: an approval is verified before it is written |
+| 1 | fixed | `2fc4154`: an approval is verified before it is written. That fix let a hand-over that throws AFTER the write out as a 500, with the row left approved; since 2026-10-11 such an approval is taken back, as it was before `2fc4154` (Part 11, "After a review against the plan"). |
 | 2 | fixed | `bb6a2a8`: a bundle lands in one transaction |
 | 3 | fixed | `3dec693`: one shell is built for a principal at a time |
 | 4 | fixed | `812372e`: a shell is reset one reset at a time, from what it was opened with. One test stood for the turn and for two other lines of `replaceShell` and passed with any one of them out. Since 2026-10-11 each has a test red without it: the turn (the order of two resets, which was not tested), the check after the build, the check before it. The second read of the cell, after the build, covered no case the turn does not, and is gone (`641ee17`, `33ca092`). |
-| 5 | fixed, in two steps | `3f3923e`: a living shell holds what its principal holds now. That covered the shells a host keeps, one for each signed-in principal, and only the app's own host was asked. A shell built for one connection (a visitor's; every shell of a page's host) kept what it was built with. Since 2026-10-11 it is every living shell: a host holds each shell it built until it ends (`src/shells/live.ts`, `living`), `adopt` walks those and the builds under way, and a change is asked of every host, the app's and each page's (`src/server/hosts.ts`, `adopt`). Part 11, "After a review". |
+| 5 | fixed, in two steps | `3f3923e`: a living shell holds what its principal holds now. That covered the shells a host keeps, one for each signed-in principal, and only the app's own host was asked. A shell built for one connection (a visitor's; every shell of a page's host) kept what it was built with. Since 2026-10-11 it is every living shell: a host holds each shell it built until it ends (`src/shells/live.ts`, `living`), `adopt` walks those and the builds under way, and a change is asked of every host, the app's and each page's (`src/server/hosts.ts`, `adopt`). Part 11, "After a review". Two more of the same day, Part 11, "After a review against the plan": the adopts were one chain that waited for every build under way, so one build that never landed ended it for the whole host (each change walks on its own now, and each build is followed on its own); and an adopt took the actions of the answer a shell is made of and not its frame, layout store and fragments (it takes those too). |
 | 6 | fixed | `1fbe5a7`: a connection that closed before its session was ready leaves nothing attached |
 | 7 | fixed | `6d7d054`: a message the shell throws on is one message |
 | 8 | fixed | `d424c3a`: a refused terminal is not sent the error that refused it |
-| 9 | fixed | `52ba2d1`: `runtime.anonymousShellMax`, default 1,000, from a measurement |
+| 9 | fixed | `52ba2d1`: `runtime.anonymousShellMax`, default 1,000, from a measurement. The terminal it refuses came back every half second to a second for as long as it was refused, because the wire forgot its backoff when the socket opened; since 2026-10-11 it is forgotten at the first frame, and a refused terminal waits longer each time (Part 11, "After a review against the plan"). |
 | 10 | half, and decided to stay so | `bcec37f`: a frame grant is a row, so any process redeems it. The webhook limit is a limit per process, by decision (2026-10-11): 240 calls a minute for each integration, counted in the memory of the process that takes them (`src/integrations/proxy.ts`). With N processes a vendor is let through up to N × 240 a minute, and nothing is lost. One limit across processes needs a store they share and a write for every call; none was built. The constant's comment and `DOCS.md` say what it is, and `test/integrations-hook-limit.test.ts` holds it to that. |
 | 11 | fixed | after the build order, which did not name it: a seed that is given and decodes to fewer than 32 bytes throws when the signer is made (`src/integrations/credentials.ts`), which for a server is while it boots. The sentence says the seed's length, never the seed. No seed still generates a key. |
 | 12 | fixed | `3f95b94`: `outboundTimeoutMs` (30 s) and `pressMaxBytes` (5 MiB, a number nobody measured) |
@@ -1132,3 +1132,114 @@ held. The lab apps' checks were run again, each as its own process, one at a
 time: 126 of 133, the same seven failing as in Part 9 (encore 13 of 13,
 lyceum 17 of 18, atrium 18 of 19, relay 28 of 32, lyra 50 of 51). Atrium's
 dev check is one of its 18: it runs `nisc dev` now, and asks one thing more.
+
+**After a review against the plan (2026-10-11).** Two reviewers held the work
+against this plan and against what the owner asked for, and both said it was
+not done, by a small margin. They ran what they found on copies outside the
+tree. Each defect below was reproduced here first, by a test that was red
+(the first also by a server on PGlite in a copy), then fixed, and then the
+fix was taken out of a copy and the whole suite run: the new test is what
+fails. The two that are not defects of behaviour were read: the feature's
+import of the core is one line, and what holds it now is `check:modules`;
+the three unlisted changes are in the commits that made them. No new test
+starts a database or calls `createServer`.
+
+Four regressions, each something 0.4.0 did not do:
+
+- **`runtime.vexConfig.entities` broke moss's own entries.** The engines the
+  generation pointer's entries and a feature's own run on were handed the
+  schema the app's engine had read, which that list had cut down: the pointer
+  could not be read or moved, and an app that names the integrations feature
+  was refused at boot. Each of those engines asks the adapter for its owner's
+  tables and knows no other (`src/data/own-entries.ts`).
+- **One build that never landed ended every later adopt of its host.** The
+  adopts were one chain and each waited for every build under way. Each
+  change walks on its own now and each build is followed on its own; what
+  kept two changes in order is a number taken at each asking, and an answer
+  to an earlier asking that arrives late is dropped (`src/shells/host.ts`).
+- **An approval whose hand-over threw stayed approved**, with a 500. It is
+  set back to pending with the reason and answered 422, as before the
+  refactor (`integrations/set-back-to-pending`).
+- **A terminal refused at capacity came back at full speed.** The wire forgot
+  its backoff when the socket opened, and a server opens a connection to
+  refuse it. It is forgotten at the first frame (`src/client/wire.ts`): seven
+  refusals wait 0.5, 1, 2, 4, 8, 15 and 15 seconds, where they waited 0.5
+  each.
+
+Four holes:
+
+- **A catalog filter could grant.** What a filter answered was the catalog.
+  Each is held to what it was handed (`src/manifest/roles.ts`, `narrowedBy`).
+- **A credential's prefix was whatever a feature said.** An empty one would
+  have been handed every token. Refused at boot, with a sentence: an empty
+  prefix, one that is the start of another feature's or starts with it, and
+  one that shares a start with `st_`, which moss's stored sessions carry
+  (`src/server/authenticate.ts`).
+- **The integrations feature imported the core.** Its intake called two
+  functions of `manifest`. They are two seams (`layoutMisfits`,
+  `endlessChains`: 23 members), the feature imports `feature` and `runtime`
+  and nothing else of moss, and the edge to `manifest` is out of the table
+  `check:modules` holds.
+- **The exported shell host had two second ways.** `adopt()` was
+  `server.refresh()` for one host, and `stop()` was `server.close()` for one.
+  Both are off `ShellHost`; whoever makes a host is handed them beside it
+  (`OwnedShellHost`). encore's boot and relay's expiry check call
+  `server.close()`.
+
+One path: **an adopt takes what a build takes** of the one answer a shell is
+made of. It took the actions, component names and entries; it puts in place
+the frame, each `{ ref }` of the layout store and each fragment that is
+answered differently from the last time too, and leaves the ones answered as
+they were, so a ref a shell's own code set stands. Held over a stand-in
+running manifest that answers others after a change. Not taken again: the
+canvases, which are derived with `inputs` when a shell is built; and what is
+no longer answered, which nova cannot take out of a shell.
+
+Four changes an app notices that the changeset did not list. Three are how
+the code was meant to be (the commit that made each says so), and are listed
+now with what an app does: the registry's reads and writes are `vex.execute`
+spans; `installed` narrows `ext.…` actions only where the integrations
+feature is named; an event tagged with a canvas the shell does not have is
+dropped. The fourth was a replacement that could not work: the changeset
+offered `server.principalOf(token)` for `sessionOf`, which for a verifier of
+the app's own is the verifier asking itself. The stored sessions are what
+`session: 'sessions'` verifies with, as the documents said before the
+refactor, and `mintSession` and `revokeAllFor` say so in a sentence on a
+database that has no `sessions` table.
+
+And one test broke the rule it sits under: `manifest-schema.test.ts` called
+`createServer`, over a pool that fails if asked, to hold that a manifest is
+read before the database is. The boot's order is a function over the step
+that brings the data module up (`serverOver`; `createServer` is it over
+`buildData`), and the test holds the order on that.
+
+Where a reviewer's finding was not as read: none. Each was reproduced as
+described.
+
+Left by this round, each seen on the way and none of them asked for:
+
+- Within one change's walk the living shells are asked one after another, so
+  a principal whose roles are never answered holds the shells after theirs
+  for that change. The next change walks all of them again. Asking all at
+  once would resolve every principal of a host in one moment, which is what
+  the walk is one at a time to avoid.
+- `initSessions`, `revokeSession` and `sessionOf` are still in
+  `src/identity/sessions.ts`. The verifier calls the third; only the tests
+  call the first two.
+- `mintSession` on a database that still has a `sessions` table from an
+  earlier time, under a verifier of the app's own, succeeds, and mints a token
+  nobody verifies. The call is handed a pool and cannot know what the runtime
+  chose: it is told by the table.
+- Each of moss's own engines asks the database for its owner's tables when it
+  is made: one more introspection for the generation pointer and one for each
+  feature that hands entries over, at boot. Measured on PGlite, for three
+  tables of a database of 35: 14 ms each (the median of ten).
+
+Counted after it, for the rows it moved: moss has 154 source files as before,
+75 test files as before and 1,160 tests (35 more); `api.txt` holds the 89
+names it held and 304 members, two more of `FeatureSeams` and two fewer of
+`ShellHost`; 14 modules, with one edge fewer in the table of who may import
+whom. Tide has the 13 files and 235 tests it had. The lab apps' checks were
+run again on the built result, each as its own process, one at a time: 126 of
+133, the same seven failing as in Part 9 (encore 13 of 13, lyceum 17 of 18,
+atrium 18 of 19, relay 28 of 32, lyra 50 of 51).

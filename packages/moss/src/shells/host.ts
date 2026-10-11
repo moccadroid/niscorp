@@ -203,7 +203,10 @@ const adoptInto = async (host: HostParts, cell: Cell): Promise<void> => {
 // waited for every build under way: one build that never landed (somebody
 // whose `inputs` never answers) ended the chain, and no shell of the host
 // adopted anything again. Which of two changes a shell ends up with is not
-// decided by the order they finish in (`adoptInto`).
+// decided by the order they finish in (`adoptInto`). What one walk still
+// waits for is its own askings, one after another: a principal who is never
+// answered holds the shells after theirs for that change, and the next
+// change walks all of them again.
 //
 // A SHELL THAT CANNOT ADOPT IS SAID, AND THE REST GO ON. One throw (a
 // principal that no longer resolves) used to end the walk, and every
