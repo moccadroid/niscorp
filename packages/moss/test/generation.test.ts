@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createGeneration } from '../src/manifest/generation';
 import type { Pointer } from '../src/manifest/generation';
 
@@ -99,8 +99,11 @@ describe('generation pointer', () => {
   it('a move it could not follow is said to be that, and is followed at the next look', async () => {
     const pool = fakePool();
     const errors: string[] = [];
+    const told: string[] = [];
     const original = console.error;
+    const originalLog = console.log;
     console.error = (...args: unknown[]) => errors.push(String(args[0]));
+    console.log = (...args: unknown[]) => told.push(String(args[0]));
     let tries = 0;
     let followed = 0;
     const gen = createGeneration(pool, {
@@ -116,6 +119,7 @@ describe('generation pointer', () => {
     await new Promise((r) => setTimeout(r, 40));
     gen.stop();
     console.error = original;
+    console.log = originalLog;
 
     // Tried, failed, tried again at the next look, and then it was seen.
     expect(followed).toBe(1);
@@ -124,6 +128,91 @@ describe('generation pointer', () => {
     // The pointer was read each time. What failed was following it.
     expect(errors.filter((line) => line.includes('could not follow'))).toHaveLength(1);
     expect(errors.filter((line) => line.includes('could not read'))).toEqual([]);
+    // And that it was followed after all is said, once.
+    expect(told).toEqual(['[moss:generation] followed the generation pointer to 1, after 1 look that failed — this process serves what the rows say again']);
+  });
+
+  // A MOVE THAT CANNOT BE FOLLOWED, FOR A LONG TIME. It is tried again at every
+  // look, which is right, and every try said so in the log, which was a line
+  // each poll for as long as a set this process refuses sat in the rows.
+  it('a move that cannot be followed is said when it first fails, again when what it says changes, and once when it is followed', async () => {
+    const pool = fakePool();
+    const said: string[] = [];
+    const originals = { error: console.error, log: console.log };
+    console.error = (...args: unknown[]) => void said.push(String(args[0]));
+    console.log = (...args: unknown[]) => void said.push(String(args[0]));
+    const notFollowed = (): string[] => said.filter((line) => line.includes('could not follow'));
+    const recovered = (): string[] => said.filter((line) => line.includes('[moss:generation]') && line.includes('followed') && !line.includes('could not'));
+    let why: string | undefined = 'a set this process refuses';
+    let tries = 0;
+    // Three more looks that tried to follow, however long the clock takes over them.
+    const threeMoreTries = async (): Promise<void> => {
+      const from = tries;
+      await vi.waitFor(() => expect(tries).toBeGreaterThanOrEqual(from + 3), { timeout: 2000, interval: 2 });
+    };
+    const gen = createGeneration(pool, {
+      onMoved: () => {
+        tries += 1;
+        if (why !== undefined) throw new Error(why);
+      },
+      everyMs: 1,
+    });
+    try {
+      await settle();
+      pool.poke();
+      await threeMoreTries();
+      // tried at every look, and said once
+      expect(notFollowed()).toHaveLength(1);
+      expect(notFollowed()[0]).toContain('a set this process refuses');
+      expect(gen.current()).toBe(0);
+
+      // it fails another way: that is news
+      why = 'the database is out of reach';
+      await threeMoreTries();
+      expect(notFollowed()).toHaveLength(2);
+      expect(notFollowed()[1]).toContain('the database is out of reach');
+
+      // another process moves the pointer again: what could not be followed is another move
+      pool.poke();
+      await threeMoreTries();
+      expect(notFollowed()).toHaveLength(3);
+      expect(notFollowed()[2]).toContain('0 → 2');
+      expect(recovered()).toEqual([]);
+
+      // and then it can be followed: said once, and nothing is left to try
+      why = undefined;
+      await vi.waitFor(() => expect(gen.current()).toBe(2), { timeout: 2000, interval: 2 });
+      expect(recovered()).toHaveLength(1);
+      const triesThen = tries;
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(tries).toBe(triesThen);
+      expect(notFollowed()).toHaveLength(3);
+      expect(recovered()).toHaveLength(1);
+    } finally {
+      gen.stop();
+      console.error = originals.error;
+      console.log = originals.log;
+    }
+  });
+
+  it('a move that is followed at once says nothing', async () => {
+    const pool = fakePool();
+    const said: string[] = [];
+    const originals = { error: console.error, log: console.log };
+    console.error = (...args: unknown[]) => void said.push(String(args[0]));
+    console.log = (...args: unknown[]) => void said.push(String(args[0]));
+    const gen = createGeneration(pool, { onMoved: () => undefined, everyMs: 1 });
+    try {
+      await settle();
+      pool.poke();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(gen.current()).toBe(1);
+      expect(said).toEqual([]);
+    } finally {
+      gen.stop();
+      console.error = originals.error;
+      console.log = originals.log;
+    }
   });
 
   // SOMEBODY ELSE'S MOVE, PASSED OVER BY ITS OWN. Another process moved the

@@ -101,18 +101,34 @@ export const createGeneration = (pointer: Pointer, ctx: { onMoved: () => void | 
     }
   };
 
-  // Do what a move asks for. `false`: it could not be done, and the log says so.
+  // What was last said of a move this process cannot follow, and how often it
+  // has been tried. Undefined: nothing is waiting to be followed.
+  let unfollowed: { said: string; tries: number } | undefined;
+
+  // Do what a move asks for. `false`: it could not be done.
+  //
+  // TRIED AT EVERY LOOK, SAID WHEN IT IS NEWS. A move that cannot be followed
+  // (a set in the rows that this process refuses, a database out of reach) is
+  // tried again at each look for as long as that lasts, and a line for each
+  // try was one a poll with nothing new in it. So it is said when it first
+  // fails, again when what it says changes (the pointer moved on, or the
+  // reload fails another way), and once when it is followed at last.
   const followed = async (n: number): Promise<boolean> => {
     try {
       await ctx.onMoved();
-      return true;
     } catch (err) {
-      console.error(
-        `[moss:generation] the generation pointer moved (${seen} → ${n}) and this process could not follow it — it is serving what it had, and tries again at its next look`,
-        err,
-      );
+      const what = `the generation pointer moved (${seen} → ${n}) and this process could not follow it: ${err instanceof Error ? err.message : String(err)}`;
+      if (unfollowed?.said !== what) {
+        console.error(`[moss:generation] ${what} — it is serving what it had, and tries again at every look; this is said again only when it changes`, err);
+      }
+      unfollowed = { said: what, tries: (unfollowed?.tries ?? 0) + 1 };
       return false;
     }
+    if (unfollowed !== undefined) {
+      console.log(`[moss:generation] followed the generation pointer to ${n}, after ${unfollowed.tries} ${unfollowed.tries === 1 ? 'look' : 'looks'} that failed — this process serves what the rows say again`);
+      unfollowed = undefined;
+    }
+    return true;
   };
 
   // ONE STEP ON, FROM WHERE IT IS. The counter cannot be told to add one: the

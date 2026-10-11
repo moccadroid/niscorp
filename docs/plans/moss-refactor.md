@@ -188,7 +188,7 @@ again here.
 | 12 | fixed | `3f95b94`: `outboundTimeoutMs` (30 s) and `pressMaxBytes` (5 MiB, a number nobody measured) |
 | 13 | fixed | `cec2c66`: the dev verifier is not exported, and a verifier of the app's own is said at boot |
 | 14 | fixed | `7707fa8`: an invalidation is not undone by the resolve it interrupted |
-| 15 | fixed | `7439637`, `e1e4cf3`: a move this process could not follow is tried again, and its own move does not pass over another's |
+| 15 | fixed | `7439637`, `e1e4cf3`: a move this process could not follow is tried again, and its own move does not pass over another's. The retry logged a line at every poll; since 2026-10-11 it is said when it first fails, again when what it says changes, and once when it is followed (`src/manifest/generation.ts`). |
 | 16 | fixed | `fd2ee02`, in tide: an advisory lock in the claim's transaction |
 | 17 | fixed | `98bb60b`, in tide: a wait longer than a timer can hold |
 | 18 | fixed | `e6f7c0b`: a reset while connecting leaves one socket |

@@ -1007,8 +1007,13 @@ lets them replay, as vex's discovery lists them.
   `src/manifest/generation.ts` holds the clock and no SQL. A move is a compare
   and a set: the next number is written where the counter is still what was
   read, and read again where it is not. A move a process could not follow is
-  logged as that and tried again at the next poll; `server.generation()` is
-  the last one it followed.
+  tried again at every poll until it is followed, and logged when that is
+  news: when it first fails (`[moss:generation] the generation pointer moved
+  (3 → 4) and this process could not follow it: …`), again when the pointer
+  has moved on or the reload fails another way, and once when it is followed
+  (`followed the generation pointer to 4, after 12 looks that failed`). A
+  reload that fails the same way for an hour is one line, not sixty.
+  `server.generation()` is the last move it followed.
 - The identity cache — what holds the records `app.identity` resolves. It is
   the server's own (`src/identity/cache.ts`) and is not exported. Its limits
   are `runtime.identityMax` (default 10,000) and `runtime.identityIdleMs`
