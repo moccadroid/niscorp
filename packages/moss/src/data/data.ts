@@ -2,6 +2,7 @@ import type { Context, Env, Hono } from 'hono';
 import { migrate, upgradeStore } from '@niscorp/strata/postgres';
 import { handleDiscovery, seedCache } from '@niscorp/vex';
 import type { Sequence, Upgrader } from '@niscorp/strata';
+import type { DocumentStore } from '@niscorp/strata/postgres';
 import type { CacheBackend, DatabaseAdapter, ExecuteRecord, MutationClient, PgPool, QueryEngine, QueryEngineConfig, QueryResponse, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { memoKey } from '../identity';
 import type { ResolvedIdentity } from '../identity';
@@ -128,6 +129,13 @@ export type Data = {
   ownEntries: (feature: string, entries: OwnEntries['entries']) => Promise<Replay>;
   // The vex surfaces, for the server to mount at its root (./routes.ts).
   routes: <E extends Env>(config: DataRoutesConfig<E>) => Hono<E>;
+  // BRING THE DOCUMENTS STORED IN A FEATURE'S TABLE TO THIS CODE'S GRAMMARS
+  // (strata's `upgradeStore`, over `grammars`): every row that is behind is
+  // rewritten and stamped current, in one transaction, and a row written by
+  // newer code refuses the whole run. Asked by the feature of that name, for a
+  // table that is its own; for any other table it is refused, and nothing is
+  // read. This module upgrades no feature's rows by itself.
+  upgradeStore: (feature: string, store: DocumentStore) => Promise<void>;
   // Hear every write those surfaces serve (./writes.ts). Returns the way to
   // stop hearing.
   onWrite: (listener: WriteListener) => () => void;
@@ -147,8 +155,10 @@ export type Data = {
 const machinery = (roles: readonly string[]): Caller => ({ key: memoKey(roles, undefined), roles });
 
 // What stands once the database has been brought up: the engine, what can be
-// granted, the grammars, and the adapter the engine reads through.
-export type StoodUp = Pick<Data, 'engine' | 'grants' | 'grammars'> & { adapter: DatabaseAdapter };
+// granted, the grammars, the adapter the engine reads through, and how the
+// documents of one store are brought to those grammars (strata's own, over the
+// pool).
+export type StoodUp = Pick<Data, 'engine' | 'grants' | 'grammars'> & { adapter: DatabaseAdapter; upgradeStore: (store: DocumentStore) => Promise<void> };
 
 // THE TABLES EXIST BEFORE INTROSPECTION. The engine's introspected schema is
 // the grant universe policies compile from — a table created after it is a
@@ -171,7 +181,15 @@ const standUp = async (config: DataConfig): Promise<StoodUp> => {
   const grammars = await createGrammarUpgrader({ grammars: config.grammars });
   await upgradeStore(config.pool, INTEGRATION_ACTIONS_STORE, grammars);
   const layer = await createDataLayer(config);
-  return { grammars, engine: layer.engine, grants: layer.grants, adapter: layer.adapter };
+  return {
+    grammars,
+    engine: layer.engine,
+    grants: layer.grants,
+    adapter: layer.adapter,
+    upgradeStore: async (store) => {
+      await upgradeStore(config.pool, store, grammars);
+    },
+  };
 };
 
 // EVERYTHING ELSE, over what stood up. Nothing here touches the database but
@@ -267,6 +285,14 @@ export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charte
         ...(onExecute !== undefined ? { onExecute } : {}),
         writes,
       }),
+    upgradeStore: async (feature, store) => {
+      const own = tablesOf(feature);
+      if (store.schema !== undefined) throw new Error(`moss: the feature "${feature}" asked for the documents of a store in the schema "${store.schema}" to be upgraded. To a feature a store is named by its table alone: one of its own.`);
+      if (!own.includes(store.table)) {
+        throw new Error(`moss: the feature "${feature}" asked for the documents stored in "${store.table}" to be upgraded, and that table is not its own (its own: ${own.join(', ') || 'none'}).`);
+      }
+      await stood.upgradeStore(store);
+    },
     onWrite: writes.subscribe,
     pointer: pointerOver(pointerReplay),
     dropOnChange: (changed) => {

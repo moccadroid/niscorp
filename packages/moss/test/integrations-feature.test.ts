@@ -91,6 +91,7 @@ const world = async (
       return over.replay ?? replayOver({});
     },
     grammars: await createGrammarUpgrader({}),
+    upgradeStore: async () => undefined,
     fingerprints: async () => ['deals/open'],
     fingerprintsFor: async () => ['deals/open'],
     onWrite: () => () => undefined,

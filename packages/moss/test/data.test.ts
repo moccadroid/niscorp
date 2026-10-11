@@ -5,6 +5,7 @@ import { createMemoryCache, scopeGrants } from '@niscorp/vex';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Charter } from '@niscorp/charter';
 import type { Sequence } from '@niscorp/strata';
+import type { DocumentStore } from '@niscorp/strata/postgres';
 import { memoKey } from '../src/identity';
 import type { TelemetrySpan } from '../src/runtime';
 import { dataOver } from '../src/data/data';
@@ -32,8 +33,19 @@ const who = (...roles: string[]) => ({ key: memoKey(roles, undefined), roles });
 
 const world = async (telemetry?: { emit: (span: TelemetrySpan) => void }, governing: Charter = charter) => {
   const double = await engineDouble();
+  // The stores whose documents were asked to be brought current: what would
+  // have been handed to strata, over the pool.
+  const upgraded: DocumentStore[] = [];
   const data = dataOver(
-    { engine: double.engine, adapter: double.adapter, grants: scopeGrants(['notes', 'tags']), grammars: await createGrammarUpgrader({}) },
+    {
+      engine: double.engine,
+      adapter: double.adapter,
+      grants: scopeGrants(['notes', 'tags']),
+      grammars: await createGrammarUpgrader({}),
+      upgradeStore: async (store) => {
+        upgraded.push(store);
+      },
+    },
     // One feature, `tagging`, which named `tags` as its own.
     { db: double.db, charter: governing, featureTables: [{ feature: 'tagging', names: ['tags'], sequences: [] }], ...(telemetry !== undefined ? { telemetry } : {}) },
   );
@@ -48,7 +60,7 @@ const world = async (telemetry?: { emit: (span: TelemetrySpan) => void }, govern
     const response = await server.request('/api/notes/vex', { method: 'POST', headers: { 'content-type': 'application/json', 'x-test-role': role, ...headers }, body: JSON.stringify(body) });
     return response.json();
   };
-  return { ...double, data, post, server };
+  return { ...double, data, post, server, upgraded };
 };
 
 const READ = { fingerprint: 'notes/all', context: {} };
@@ -290,6 +302,30 @@ describe("the data module — a feature's own entries", () => {
     const replay = await data.ownEntries('tagging', own);
     await replay('tags/all', {});
     expect(spans.map((span) => [span.name, span.status, span.attributes['fingerprint'], span.attributes['hasPrincipal']])).toEqual([['vex.execute', 'ok', 'tags/all', false]]);
+  });
+});
+
+// THE DOCUMENTS A FEATURE KEEPS IN ITS ROWS are brought to this code's
+// grammars when the feature asks, and only in a table that is its own. The
+// core did it at every boot for one feature's table, whether or not the app
+// named that feature.
+describe("the data module — the documents stored in a feature's table", () => {
+  const store = (table: string): DocumentStore => ({ table, column: 'definition', stamp: 'grammar', kind: 'nisc.nova/action', key: ['id'] });
+
+  it('are upgraded when the feature that keeps the table asks', async () => {
+    const { data, upgraded } = await world();
+    await data.upgradeStore('tagging', store('tags'));
+    expect(upgraded).toEqual([store('tags')]);
+  });
+
+  it("are not touched in a table that is not the feature's own: the asking is refused, with the table", async () => {
+    const { data, upgraded } = await world();
+    await expect(data.upgradeStore('tagging', store('notes'))).rejects.toThrow(
+      /^moss: the feature "tagging" asked for the documents stored in "notes" to be upgraded, and that table is not its own \(its own: tags\)\./,
+    );
+    await expect(data.upgradeStore('tagging', { ...store('tags'), schema: 'other' })).rejects.toThrow(/a store is named by its table alone/);
+    await expect(data.upgradeStore('somebody-else', store('tags'))).rejects.toThrow(/never told of \("somebody-else"\)/);
+    expect(upgraded).toEqual([]);
   });
 });
 

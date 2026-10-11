@@ -32,7 +32,7 @@ const world = async (features: readonly Feature[] = []): Promise<{ parts: SeamPa
   const double = await engineDouble();
   const grants = scopeGrants(['notes', 'tags']);
   const data = dataOver(
-    { engine: double.engine, adapter: double.adapter, grants, grammars: await createGrammarUpgrader({}) },
+    { engine: double.engine, adapter: double.adapter, grants, grammars: await createGrammarUpgrader({}), upgradeStore: async () => undefined },
     { db: double.db, charter, featureTables: featureTablesOf({ features }) },
   );
   const running = createRunningManifest({ shipped: { charter, actions: { home: { id: 'home' } } }, grants });

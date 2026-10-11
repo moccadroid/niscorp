@@ -2,6 +2,7 @@ import type { Hono } from 'hono';
 import type { Charter } from '@niscorp/charter';
 import type { ActionDefinition, FetchFn } from '@niscorp/nova';
 import type { Sequence, Upgrader } from '@niscorp/strata';
+import type { DocumentStore } from '@niscorp/strata/postgres';
 import type { SeedEntry, SeedMutation, WriteEvent } from '@niscorp/vex';
 import type { Telemetry } from '../runtime';
 
@@ -104,6 +105,13 @@ export type FeatureSeams = {
   ownEntries: (entries: readonly (SeedEntry | SeedMutation)[]) => Promise<Replay>;
   // Reads a stored document in this code's grammars, and stamps one it writes.
   grammars: Upgrader;
+  // BRING THE DOCUMENTS STORED IN ONE OF ITS OWN TABLES TO THIS CODE'S
+  // GRAMMARS: every row that is behind is rewritten and stamped current, in
+  // one transaction, and a row written by newer code throws (strata's
+  // `TOO_NEW`). For a feature that keeps documents in rows, asked while it
+  // starts, so that reading one upgrades nothing in the common case. A store
+  // in a table that is not this feature's own is refused.
+  upgradeStore: (store: DocumentStore) => Promise<void>;
   // Every fingerprint the app serves.
   fingerprints: () => Promise<readonly string[]>;
   // The fingerprints somebody may be told of: the reads and writes their own

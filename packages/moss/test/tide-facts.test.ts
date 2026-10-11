@@ -189,6 +189,7 @@ describe('createTideFacts — the feature', () => {
       components: {},
       ownEntries: notAsked('ownEntries'),
       grammars: await createGrammarUpgrader({}),
+      upgradeStore: notAsked('upgradeStore'),
       fingerprints: notAsked('fingerprints'),
       fingerprintsFor: notAsked('fingerprintsFor'),
       onWrite,

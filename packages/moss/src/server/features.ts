@@ -43,7 +43,7 @@ export type SeamParts = {
   registered: Registered;
   identity: Pick<Identity, 'resolve' | 'scopeValuesFor'>;
   running: Pick<RunningManifest, 'catalogFor' | 'actions' | 'replace' | 'verify' | 'loadFrom' | 'narrowCatalogs'>;
-  data: Pick<Data, 'ownEntries' | 'grammars' | 'engine' | 'fingerprintsFor' | 'onWrite'>;
+  data: Pick<Data, 'ownEntries' | 'grammars' | 'upgradeStore' | 'engine' | 'fingerprintsFor' | 'onWrite'>;
 };
 
 export const seamsOf = (feature: Pick<Feature, 'name'>, { app, runtime, server, operator, registered, identity, running, data }: SeamParts): FeatureSeams => ({
@@ -70,6 +70,7 @@ export const seamsOf = (feature: Pick<Feature, 'name'>, { app, runtime, server, 
   // otherwise here.
   ownEntries: (entries) => data.ownEntries(feature.name, entries),
   grammars: data.grammars,
+  upgradeStore: (store) => data.upgradeStore(feature.name, store),
   fingerprints: async () => (await data.engine.cache.keys?.()) ?? [],
   // A principal the charter cannot resolve is refused here, as it is on
   // every other route.
