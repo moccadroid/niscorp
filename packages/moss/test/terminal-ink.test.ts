@@ -219,10 +219,12 @@ describe('the ink target — typed numbers', () => {
     await t.press('2');
     await t.sent(1);
     expect(t.dispatched).toEqual([{ canvas: 'main', event: { type: 'ui:click', ref: 'b12' } }]);
+    // [1] could be the start of [10], [11] or [12]: it acts when no second
+    // digit came, which is not at once
     await t.press('1');
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    expect(t.dispatched).toHaveLength(1); // still waiting for a second digit
+    const pressed = Date.now();
     await t.sent(2);
+    expect(Date.now() - pressed).toBeGreaterThanOrEqual(400);
     expect(t.dispatched.at(-1)).toEqual({ canvas: 'main', event: { type: 'ui:click', ref: 'b1' } });
   });
 
@@ -290,7 +292,8 @@ describe('the ink target — the focus ring and leaving', () => {
     });
     const t = harness({ main: [component('Broken')] }, { registry });
     await t.shows('the kit broke'); // ink's own account of it, on the screen it is leaving
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await until(() => t.quit.mock.calls.length + unhandled.mock.calls.length > 0, 'the terminal ended, one way or the other');
+    await new Promise((resolve) => setTimeout(resolve, 50));
     process.off('unhandledRejection', unhandled);
     expect(unhandled).not.toHaveBeenCalled();
     expect(t.quit).toHaveBeenCalledOnce();
