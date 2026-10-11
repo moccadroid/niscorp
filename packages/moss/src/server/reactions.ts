@@ -20,7 +20,7 @@ import type { NiscApp } from '../manifest';
 // Nothing here knows what tide is.
 // ═══════════════════════════════════════════════════════════════
 
-export type ReactionParts = {
+export type ReactionDeps = {
   app: Pick<NiscApp, 'reactions'>;
   onWrite: Data['onWrite'];
   // Push onto one principal's living shell, in this process and every other
@@ -28,7 +28,7 @@ export type ReactionParts = {
   deliver: (principal: string, channel: string, payload?: unknown) => boolean;
 };
 
-export const subscribeReactions = ({ app, onWrite, deliver }: ReactionParts): void => {
+export const subscribeReactions = ({ app, onWrite, deliver }: ReactionDeps): void => {
   const reactions = app.reactions;
   if (reactions === undefined) return;
   onWrite((event) => {

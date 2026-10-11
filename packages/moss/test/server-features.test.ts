@@ -14,7 +14,7 @@ import { createRunningManifest } from '../src/manifest';
 import type { RunningManifest } from '../src/manifest';
 import { buildData } from '../src/server/data';
 import { emptyRegister, startFeatures } from '../src/server/features';
-import type { SeamParts } from '../src/server/features';
+import type { SeamDeps } from '../src/server/features';
 import type { Env } from '../src/server/moss-server';
 import { engineDouble } from './data-double';
 
@@ -32,7 +32,7 @@ const charter: Charter = { public: ['home'] };
 // row to answer any read with (./data-double.ts). `features` is what the app
 // named: the data module is told which tables each one named as its own, as
 // the server tells it.
-const world = async (features: readonly Feature[] = []): Promise<{ parts: SeamParts; server: Hono<Env>; operator: Hono<Env>; running: RunningManifest; start: () => Promise<void> }> => {
+const world = async (features: readonly Feature[] = []): Promise<{ deps: SeamDeps; server: Hono<Env>; operator: Hono<Env>; running: RunningManifest; start: () => Promise<void> }> => {
   const double = await engineDouble();
   const grants = scopeGrants(['notes', 'tags']);
   const data = createDataWith(
@@ -43,7 +43,7 @@ const world = async (features: readonly Feature[] = []): Promise<{ parts: SeamPa
   const server = new Hono<Env>();
   const operator = new Hono<Env>();
   const resolved = { roles: ['public'], scope: {}, installed: undefined, key: memoKey(['public'], undefined) };
-  const parts: SeamParts = {
+  const deps: SeamDeps = {
     app: { charter },
     runtime: {},
     server,
@@ -53,7 +53,7 @@ const world = async (features: readonly Feature[] = []): Promise<{ parts: SeamPa
     running,
     data,
   };
-  return { server, operator, parts, running, start: () => startFeatures(features, parts) };
+  return { server, operator, deps, running, start: () => startFeatures(features, deps) };
 };
 
 // A feature that keeps what it was started with, and does nothing else.
@@ -104,8 +104,8 @@ describe('the features — what somebody else wrote', () => {
   const kit = { Badge: { meta: { propsSchema: z.object({ tone: z.enum(['calm', 'loud']) }).strict() } }, Text: {} };
   const started = async (): Promise<FeatureSeams> => {
     const probe = keeping('probe');
-    const { start, parts } = await world([probe.feature]);
-    parts.app = { charter, shell: { canvases: [], components: kit } };
+    const { start, deps } = await world([probe.feature]);
+    deps.app = { charter, shell: { canvases: [], components: kit } };
     await start();
     return probe.seams();
   };
@@ -142,9 +142,9 @@ describe('the features — a credential of a feature’s own', () => {
   });
 
   it('is registered under the prefix its tokens carry, one for each feature that has one', async () => {
-    const { start, parts } = await world([reading('keys', 'ik_'), reading('hooks', 'wh_')]);
+    const { start, deps } = await world([reading('keys', 'ik_'), reading('hooks', 'wh_')]);
     await start();
-    expect(parts.registered.credentials.map((credential) => [credential.feature, credential.prefix])).toEqual([
+    expect(deps.registered.credentials.map((credential) => [credential.feature, credential.prefix])).toEqual([
       ['keys', 'ik_'],
       ['hooks', 'wh_'],
     ]);
@@ -153,11 +153,11 @@ describe('the features — a credential of a feature’s own', () => {
   // Every token starts with nothing: the feature would be handed every token
   // there is, each person's session included, and decide who it is.
   it('an empty prefix refuses the boot', async () => {
-    const { start, parts } = await world([reading('greedy', '')]);
+    const { start, deps } = await world([reading('greedy', '')]);
     await expect(start()).rejects.toThrow(
       /^moss: the feature "greedy" registered a credential with an empty prefix\. A token is handed to the credential whose prefix it starts with, and every token starts with nothing: this one would be handed every token there is, each person's session included\./,
     );
-    expect(parts.registered.credentials).toEqual([]);
+    expect(deps.registered.credentials).toEqual([]);
   });
 
   // Which of two features reads a token would be whichever started first.
@@ -166,12 +166,12 @@ describe('the features — a credential of a feature’s own', () => {
     ['one that another feature’s prefix starts with', 'ik_', 'ik'],
     ['one that starts with another feature’s prefix', 'ik_', 'ik_live_'],
   ])('%s refuses the boot', async (_what, first, second) => {
-    const { start, parts } = await world([reading('keys', first), reading('other', second)]);
+    const { start, deps } = await world([reading('keys', first), reading('other', second)]);
     await expect(start()).rejects.toThrow(
       `moss: the feature "other" registered a credential for tokens that start with "${second}", and the feature "keys" reads the ones that start with "${first}". ` +
         'One is the start of the other, so which of the two a token is handed to would be decided by the order the features start in.',
     );
-    expect(parts.registered.credentials.map((credential) => credential.prefix)).toEqual([first]);
+    expect(deps.registered.credentials.map((credential) => credential.prefix)).toEqual([first]);
   });
 
   it('a feature that registers one prefix twice is refused the same way', async () => {
@@ -293,12 +293,12 @@ describe("the features — a feature's set of actions", () => {
 
   it('is read again through the loader that feature named, when another process says something changed', async () => {
     const belts = keeping('belts');
-    const { start, parts } = await world([belts.feature]);
+    const { start, deps } = await world([belts.feature]);
     await start();
     const rows: { now: Record<string, ActionDefinition> } = { now: { [roster.id]: roster } };
     belts.seams().setActionsLoader(async () => rows.now);
     // A second feature of that name cannot be started beside it: the name is
     // what the set is kept under.
-    await expect(startFeatures([keeping('belts').feature], parts)).rejects.toThrow(/^moss: the set of actions "belts" is the feature "belts"'s, and the feature "belts" claims it too\./);
+    await expect(startFeatures([keeping('belts').feature], deps)).rejects.toThrow(/^moss: the set of actions "belts" is the feature "belts"'s, and the feature "belts" claims it too\./);
   });
 });

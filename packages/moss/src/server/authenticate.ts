@@ -70,7 +70,7 @@ export const registerCredential = (held: FeatureCredential[], credential: Featur
   held.push(credential);
 };
 
-export type AuthenticationConfig = {
+export type AuthenticationDeps = {
   // Who a token is (`runtime.session`, ../identity): null is a refusal.
   session: SessionVerifier;
   // The credentials features registered. Read at each request: a feature
@@ -87,26 +87,26 @@ const INVALID_TOKEN = { refused: { status: 401, error: 'invalid_token', message:
 
 // WHO IS CALLING, from the `Authorization` header. ONE resolution, here, for
 // everything downstream.
-const whoIsCalling = async (config: AuthenticationConfig, header: string | undefined, request: Request): Promise<Found> => {
-  if (header === undefined) return { principal: null, resolved: await config.resolve(null) };
+const whoIsCalling = async (deps: AuthenticationDeps, header: string | undefined, request: Request): Promise<Found> => {
+  if (header === undefined) return { principal: null, resolved: await deps.resolve(null) };
   const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : header;
-  const credential = config.credentials.find(({ prefix }) => token.startsWith(prefix));
+  const credential = deps.credentials.find(({ prefix }) => token.startsWith(prefix));
   if (credential !== undefined) {
     const answer = await credential.principalOf(token, request);
     if ('refused' in answer) return answer;
-    return { principal: answer.principal, resolved: await config.resolve(answer.principal) };
+    return { principal: answer.principal, resolved: await deps.resolve(answer.principal) };
   }
-  const principal = await config.session(token);
+  const principal = await deps.session(token);
   if (principal === null) return INVALID_TOKEN;
-  return { principal, resolved: await config.resolve(principal) };
+  return { principal, resolved: await deps.resolve(principal) };
 };
 
 export const authentication =
-  (config: AuthenticationConfig): MiddlewareHandler<Env> =>
+  (deps: AuthenticationDeps): MiddlewareHandler<Env> =>
   async (c, next) => {
     let found: Found;
     try {
-      found = await whoIsCalling(config, c.req.header('Authorization'), c.req.raw);
+      found = await whoIsCalling(deps, c.req.header('Authorization'), c.req.raw);
     } catch (error) {
       // AN UNKNOWN PRINCIPAL IS A FAILED SIGN-IN. A FAILURE TO FIND OUT IS NOT.
       // The verifier says a token is nobody's by answering null, and that is

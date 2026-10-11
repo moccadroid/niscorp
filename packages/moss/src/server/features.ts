@@ -35,7 +35,7 @@ export const composeWireWraps =
   (inner: FetchFn): FetchFn =>
     registered.wireWraps.reduce((wire, wrap) => wrap(wire), inner);
 
-export type SeamParts = {
+export type SeamDeps = {
   app: Pick<NiscApp, 'charter' | 'shell'>;
   runtime: Pick<NiscRuntime, 'telemetry'>;
   // The server's root and its operator prefix: where a feature's routes go.
@@ -47,7 +47,7 @@ export type SeamParts = {
   data: Pick<Data, 'ownEntries' | 'grammars' | 'upgradeStore' | 'fingerprints' | 'fingerprintsFor' | 'onWrite'>;
 };
 
-export const seamsOf = (feature: Pick<Feature, 'name'>, { app, runtime, server, operator, registered, identity, running, data }: SeamParts): FeatureSeams => {
+export const seamsOf = (feature: Pick<Feature, 'name'>, { app, runtime, server, operator, registered, identity, running, data }: SeamDeps): FeatureSeams => {
   // THE FEATURE'S OWN SET OF ACTIONS, claimed under its name before it starts:
   // from here on it has one writer. A second feature of that name is refused
   // here, and so is the app handing a set over under it.
@@ -60,7 +60,7 @@ export const seamsOf = (feature: Pick<Feature, 'name'>, { app, runtime, server, 
 // where the app carried one.
 const kitOf = (app: Pick<NiscApp, 'shell'>): KitComponents => new Map(Object.entries(app.shell?.components ?? {}).map(([name, contract]) => [name, { propsSchema: contract.meta?.propsSchema }]));
 
-const seamsFor = (feature: Pick<Feature, 'name'>, owned: OwnedActions, { app, runtime, server, operator, registered, identity, running, data }: SeamParts): FeatureSeams => ({
+const seamsFor = (feature: Pick<Feature, 'name'>, owned: OwnedActions, { app, runtime, server, operator, registered, identity, running, data }: SeamDeps): FeatureSeams => ({
   mountRoutes: (routes) => {
     server.route('/', routes);
   },
@@ -107,6 +107,6 @@ const seamsFor = (feature: Pick<Feature, 'name'>, owned: OwnedActions, { app, ru
 // OF ITS OWN: anybody can write a feature, so what one is handed is made for
 // that feature and is no other's to reach through. One that throws refuses
 // the boot.
-export const startFeatures = async (features: readonly Feature[], parts: SeamParts): Promise<void> => {
-  for (const feature of features) await feature.start(seamsOf(feature, parts));
+export const startFeatures = async (features: readonly Feature[], deps: SeamDeps): Promise<void> => {
+  for (const feature of features) await feature.start(seamsOf(feature, deps));
 };

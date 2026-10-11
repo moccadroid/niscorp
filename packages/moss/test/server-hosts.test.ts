@@ -5,7 +5,7 @@ import type { SeedEntry } from '@niscorp/vex';
 import { createRunningManifest } from '../src/manifest';
 import type { FunctionSession, NiscApp, ShellManifest } from '../src/manifest';
 import { buildShellHosts } from '../src/server/hosts';
-import type { HostParts } from '../src/server/hosts';
+import type { ShellHostsDeps } from '../src/server/hosts';
 import { buildSignals } from '../src/server/signals';
 import { turn } from './turn';
 
@@ -58,7 +58,7 @@ const shipped = createRunningManifest({ shipped: app, grants: scopeGrants(['word
 
 // Everything a host is handed but the running manifest, the same for every
 // case: who somebody is, the wire, and no code of the app's.
-const partsWith = (running: HostParts['running']): HostParts => ({
+const depsWith = (running: ShellHostsDeps['running']): ShellHostsDeps => ({
   app,
   runtime: {},
   identity: {
@@ -74,7 +74,7 @@ const partsWith = (running: HostParts['running']): HostParts => ({
 
 describe('the shell hosts — what a shell is made of is asked of the running manifest', () => {
   it('shows what the app shipped, when that is what the running manifest answers', async () => {
-    const hosts = buildShellHosts(partsWith(shipped));
+    const hosts = buildShellHosts(depsWith(shipped));
     try {
       const snapshot = await hosts.shells?.snapshot(null, null);
       expect(JSON.stringify(snapshot?.frame)).toContain('"name":"as shipped"');
@@ -92,7 +92,7 @@ describe('the shell hosts — what a shell is made of is asked of the running ma
   it('shows another frame, other fragments and other entries when the running manifest answers those, with nothing else changed', async () => {
     const asked: ShellManifest[] = [];
     const hosts = buildShellHosts(
-      partsWith({
+      depsWith({
         artifactsFor: (shell, roles, installed) => {
           asked.push(shell);
           return {
@@ -129,7 +129,7 @@ describe('the shell hosts — what a shell is made of is asked of the running ma
   it('a page’s host is asked for by the page’s own shell manifest', async () => {
     const asked: ShellManifest[] = [];
     const hosts = buildShellHosts(
-      partsWith({
+      depsWith({
         artifactsFor: (shell, roles, installed) => {
           asked.push(shell);
           return { ...shipped.artifactsFor(shell, roles, installed), frame: frameNamed('the page, as published') };
@@ -164,7 +164,7 @@ describe('the shell hosts — a change reaches the living shells of every host',
 
   it('when what the app consists of changes, the shells of the app’s host and of each page’s adopt', async () => {
     const running = createRunningManifest({ shipped: granting, grants: scopeGrants(['words']) });
-    const hosts = buildShellHosts({ ...partsWith(running), app: granting });
+    const hosts = buildShellHosts({ ...depsWith(running), app: granting });
     try {
       const mine = await hosts.shells?.session('t', 'usr_1');
       const onPage = await hosts.pageAt('/docs')?.host.session(null, null);
@@ -193,7 +193,7 @@ describe('the shell hosts — a change reaches the living shells of every host',
   it('a living shell whose frame, layout store and fragments the running manifest answers differently after a change shows the change', async () => {
     const answering = { published: false };
     const hosts = buildShellHosts(
-      partsWith({
+      depsWith({
         artifactsFor: (shell, roles, installed) => {
           const made = shipped.artifactsFor(shell, roles, installed);
           if (!answering.published) return made;
@@ -233,7 +233,7 @@ describe('the shell hosts — a change reaches the living shells of every host',
   });
 
   it('a principal’s reset reaches their shell in the app’s host and the ones a page built for them, and nobody else’s', async () => {
-    const hosts = buildShellHosts(partsWith(shipped));
+    const hosts = buildShellHosts(depsWith(shipped));
     try {
       const signals = buildSignals({ fabric: undefined, identity: { invalidate: () => true, invalidateTag: () => [] }, reset: hosts.reset, deliver: hosts.deliver });
       const page = hosts.pageAt('/docs')?.host;
@@ -263,7 +263,7 @@ describe('the shell hosts — what each host is told', () => {
   });
 
   it('the app’s host keeps one shell for a principal; a page’s keeps none, and builds one for each asking', async () => {
-    const hosts = buildShellHosts(partsWith(shipped));
+    const hosts = buildShellHosts(depsWith(shipped));
     try {
       const page = hosts.pageAt('/docs')?.host;
       expect((await hosts.shells?.session('t', 'usr_1'))?.shell).toBe((await hosts.shells?.session('t', 'usr_1'))?.shell);
@@ -282,7 +282,7 @@ describe('the shell hosts — what each host is told', () => {
   // application; the second was `server.close` for one host. Both are the
   // wiring's alone (`hosts.adopt`, `hosts.stop`).
   it('a host that is handed out has no way to adopt and none to stop: those are asked of all of them at once', () => {
-    const hosts = buildShellHosts(partsWith(shipped));
+    const hosts = buildShellHosts(depsWith(shipped));
     try {
       const handedOut = ['session', 'snapshot', 'deliver', 'list', 'reset'];
       expect(Object.keys(hosts.shells ?? {})).toEqual(handedOut);
@@ -295,7 +295,7 @@ describe('the shell hosts — what each host is told', () => {
   it('stopping stops every host’s sweep: the app’s, and each page’s', () => {
     const set = vi.spyOn(globalThis, 'setInterval');
     const clear = vi.spyOn(globalThis, 'clearInterval');
-    const hosts = buildShellHosts(partsWith(shipped));
+    const hosts = buildShellHosts(depsWith(shipped));
     const made = set.mock.results.map((result) => result.value);
     // One for the app's own host and one for the page `docs`.
     expect(made).toHaveLength(2);
@@ -305,7 +305,7 @@ describe('the shell hosts — what each host is told', () => {
 
   it('`runtime.shellIdleMs` is how long a kept shell nobody is attached to stands', async () => {
     vi.useFakeTimers();
-    const hosts = buildShellHosts({ ...partsWith(shipped), runtime: { shellIdleMs: 5_000 } });
+    const hosts = buildShellHosts({ ...depsWith(shipped), runtime: { shellIdleMs: 5_000 } });
     try {
       await hosts.shells?.session('t', 'usr_1');
       await vi.advanceTimersByTimeAsync(4_000);
@@ -323,12 +323,12 @@ describe('the shell hosts — what each host is told', () => {
     const signals: (AbortSignal | undefined)[] = [];
     // The app's own surfaces, never answering: the call is ended by the
     // signal it was made with, and by nothing else.
-    const unanswered: HostParts['wire'] = () => (_url, init) =>
+    const unanswered: ShellHostsDeps['wire'] = () => (_url, init) =>
       new Promise((_resolve, reject) => {
         signals.push(init?.signal);
         init?.signal?.addEventListener('abort', () => reject(new Error('given up on')));
       });
-    const hosts = buildShellHosts({ ...partsWith(shipped), runtime: { endpointTimeoutMs: 2_000 }, wire: unanswered });
+    const hosts = buildShellHosts({ ...depsWith(shipped), runtime: { endpointTimeoutMs: 2_000 }, wire: unanswered });
     try {
       // The action reads when it opens.
       await hosts.shells?.session('t', 'usr_1');
@@ -345,7 +345,7 @@ describe('the shell hosts — what each host is told', () => {
     const forgotten: string[] = [];
     const sessions: FunctionSession[] = [];
     const hosts = buildShellHosts({
-      ...partsWith(shipped),
+      ...depsWith(shipped),
       app: { ...app, functions: (session) => (sessions.push(session), {}) },
       revokeSessions: async (principal) => void forgotten.push(principal),
     });

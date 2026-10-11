@@ -18,7 +18,7 @@ import type { WriteNotifier } from './writes';
 // that fill a `to:` in a behavior, and the compiled policy.
 // ═══════════════════════════════════════════════════════════════
 
-export type VexRoutesConfig<E extends Env> = {
+export type VexRoutesDeps<E extends Env> = {
   engine: QueryEngine;
   // The client a write is replayed on.
   db: MutationClient;
@@ -45,7 +45,7 @@ export type VexRoutesConfig<E extends Env> = {
 // A sub-app, for the server to mount at its root behind the authentication
 // every route gets. It holds the paths: a shell's wire and the client both
 // tell a vex surface by where it is.
-export const createVexRoutes = <E extends Env>(config: VexRoutesConfig<E>): Hono<E> => {
+export const createVexRoutes = <E extends Env>(deps: VexRoutesDeps<E>): Hono<E> => {
   const routes = new Hono<E>();
 
   // WHAT THE REQUEST SAID RIDES WITH IT, for whoever hears a write it makes:
@@ -54,7 +54,7 @@ export const createVexRoutes = <E extends Env>(config: VexRoutesConfig<E>): Hono
   // feature's own (`x-tide-cause`, `x-tide-depth`) and hand on what it made of
   // them; the feature that mints a write into tide reads them itself now.
   routes.use('/api/*', (c, next) =>
-    config.writes.within(
+    deps.writes.within(
       writeRequestOf((name) => c.req.header(name)),
       () => next(),
     ),
@@ -64,21 +64,21 @@ export const createVexRoutes = <E extends Env>(config: VexRoutesConfig<E>): Hono
     routes.route(
       path,
       vex<E>({
-        engine: config.engine,
+        engine: deps.engine,
         ...(entities !== undefined ? { entities: [...entities] } : {}),
         locked: true,
-        getScope: config.scope,
-        getPolicy: config.policy,
-        getPolicyForReach: config.policyAtReach,
-        ...(config.onExecute !== undefined ? { onExecute: config.onExecute } : {}),
+        getScope: deps.scope,
+        getPolicy: deps.policy,
+        getPolicyForReach: deps.policyAtReach,
+        ...(deps.onExecute !== undefined ? { onExecute: deps.onExecute } : {}),
         // Vex's write observer, fired once per committed mutation with
         // per-statement writes: handed on to the lane, whoever listens there.
-        mutations: { client: config.db, onWrite: config.writes.report },
+        mutations: { client: deps.db, onWrite: deps.writes.report },
       }),
     );
   };
   mount('/api/vex');
-  for (const [name, resource] of Object.entries(config.resources ?? {})) {
+  for (const [name, resource] of Object.entries(deps.resources ?? {})) {
     mount(`/api/${name}/vex`, 'entities' in resource ? resource.entities : resource);
   }
   return routes;

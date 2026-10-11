@@ -21,7 +21,7 @@ import type { Env } from './moss-server';
 // operator prefix is the last thing mounted (./operator.ts).
 // ═══════════════════════════════════════════════════════════════
 
-export type RouteParts = {
+export type RouteDeps = {
   app: Pick<NiscApp, 'resources'>;
   session: SessionVerifier;
   // The credentials features register, read at each request.
@@ -31,7 +31,7 @@ export type RouteParts = {
   data: Pick<Data, 'routes'>;
 };
 
-export const mountRoutes = (server: Hono<Env>, { app, session, credentials, identity, running, data }: RouteParts): void => {
+export const mountRoutes = (server: Hono<Env>, { app, session, credentials, identity, running, data }: RouteDeps): void => {
   server.use('*', authentication({ session, credentials, resolve: identity.resolve }));
 
   // /catalog — the application, resolved for YOU.

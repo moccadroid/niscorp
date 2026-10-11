@@ -38,7 +38,7 @@ export type Signals = {
   deliver: (principal: string, channel: string, payload?: unknown) => boolean;
 };
 
-export type SignalParts = {
+export type SignalDeps = {
   fabric: Fabric | undefined;
   identity: Pick<Identity, 'invalidate' | 'invalidateTag'>;
   // Reset every living shell of one principal, in every host: the app's own
@@ -49,7 +49,7 @@ export type SignalParts = {
   deliver: (principal: string, channel: string, payload?: unknown) => boolean;
 };
 
-export const buildSignals = ({ fabric, identity, reset, deliver }: SignalParts): Signals => {
+export const buildSignals = ({ fabric, identity, reset, deliver }: SignalDeps): Signals => {
   const origin = randomBytes(8).toString('hex');
   // Who somebody is changed: what is held of them is forgotten, and every
   // shell built for them is rebuilt, whichever host built it. It was the app's

@@ -225,7 +225,7 @@ const addressOf = (url: string, said: { credential: Credential; delta: boolean; 
 // who the terminal is between connects, the screen its messages are written
 // to, the page's own snapshot when the wire starts from one, and whom to tell
 // when its status changes.
-type ConnectionParts = {
+type ConnectionDeps = {
   config: WireConfig;
   env: WireEnv;
   credential: Credential;
@@ -239,7 +239,7 @@ type ConnectionParts = {
 // What a wire's own members are made of.
 type Connection = Pick<Wire, 'status' | 'reset' | 'dispose'> & { send: (message: ClientMessage) => void };
 
-const createConnection = ({ config, env, credential, screen, delta, initial, notify }: ConnectionParts): Connection => {
+const createConnection = ({ config, env, credential, screen, delta, initial, notify }: ConnectionDeps): Connection => {
   // Named on the FIRST connect only: it belongs to the page's own shell, and a
   // later connect (a retry, another principal) is not that shell.
   let seed = initial?.seed;

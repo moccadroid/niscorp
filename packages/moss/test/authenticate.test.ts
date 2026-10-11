@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
 import { authentication } from '../src/server/authenticate';
-import type { AuthenticationConfig } from '../src/server/authenticate';
+import type { AuthenticationDeps } from '../src/server/authenticate';
 import type { Env } from '../src/server/moss-server';
 import type { ResolvedIdentity } from '../src/identity';
 
@@ -13,7 +13,7 @@ import type { ResolvedIdentity } from '../src/identity';
 
 const resolved = (roles: readonly string[]): ResolvedIdentity => ({ roles, scope: {}, installed: undefined, key: roles.join(',') });
 
-const serverWith = (over: Partial<AuthenticationConfig> = {}): Hono<Env> => {
+const serverWith = (over: Partial<AuthenticationDeps> = {}): Hono<Env> => {
   const server = new Hono<Env>();
   server.use(
     '*',
@@ -51,7 +51,7 @@ describe('authentication — who is calling', () => {
   });
 
   it('a feature’s own credential says who its token is, or what to answer instead', async () => {
-    const credentials: AuthenticationConfig['credentials'] = [
+    const credentials: AuthenticationDeps['credentials'] = [
       { feature: 'integrations', prefix: 'ik_', principalOf: async (token) => (token === 'ik_live' ? { principal: 'integration@studio' } : { refused: { status: 403, error: 'forbidden', message: 'No.' } }) },
     ];
     const admitted = await asked(serverWith({ credentials }), 'ik_live');

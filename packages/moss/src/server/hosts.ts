@@ -20,7 +20,7 @@ import type { MossServer } from './moss-server';
 // the running manifest.
 // ═══════════════════════════════════════════════════════════════
 
-export type HostParts = {
+export type ShellHostsDeps = {
   app: Pick<NiscApp, 'shell' | 'pages' | 'phrases' | 'functions' | 'onSession' | 'runs' | 'phraseKeys'>;
   runtime: Pick<NiscRuntime, 'telemetry' | 'shellIdleMs' | 'shellFrameDelta' | 'endpointTimeoutMs'>;
   identity: Pick<Identity, 'resolve' | 'composeScope'>;
@@ -57,8 +57,8 @@ export type Hosts = {
   stop: () => void;
 };
 
-const hostConfig = (parts: HostParts, shell: ShellManifest, kept: boolean): ShellHostConfig => {
-  const { app, runtime, identity, running, data } = parts;
+const hostConfig = (deps: ShellHostsDeps, shell: ShellManifest, kept: boolean): ShellHostConfig => {
+  const { app, runtime, identity, running, data } = deps;
   return {
     // WHAT A PRINCIPAL'S SHELL IS MADE OF: who they are (../identity), and
     // everything of the shell that somebody authored, for the roles they hold
@@ -89,8 +89,8 @@ const hostConfig = (parts: HostParts, shell: ShellManifest, kept: boolean): Shel
     },
     ...(app.phraseKeys !== undefined ? { phraseKeys: app.phraseKeys } : {}),
     kept,
-    wire: parts.wire,
-    wrapWire: parts.wrapWire,
+    wire: deps.wire,
+    wrapWire: deps.wrapWire,
     // Asked by a session for its own principal. Who that is, is resolved
     // again here: the policy and the scope values are the ones a request
     // of theirs would be served under now.
@@ -98,7 +98,7 @@ const hostConfig = (parts: HostParts, shell: ShellManifest, kept: boolean): Shel
       const resolved = await identity.resolve(principal);
       return data.answerIntent(writers, asked, resolved, identity.composeScope(principal, resolved));
     },
-    ...(parts.revokeSessions !== undefined ? { revokeSessions: parts.revokeSessions } : {}),
+    ...(deps.revokeSessions !== undefined ? { revokeSessions: deps.revokeSessions } : {}),
     ...(runtime.telemetry !== undefined ? { telemetry: runtime.telemetry } : {}),
     limits: {
       ...(runtime.shellIdleMs !== undefined ? { idleMs: runtime.shellIdleMs } : {}),
@@ -108,8 +108,8 @@ const hostConfig = (parts: HostParts, shell: ShellManifest, kept: boolean): Shel
   };
 };
 
-export const buildShellHosts = (parts: HostParts): Hosts => {
-  const { app } = parts;
+export const buildShellHosts = (deps: ShellHostsDeps): Hosts => {
+  const { app } = deps;
   // PAGES: a host each, built from the page's own manifest and keeping nothing
   // (../manifest, app.ts § pages). The router refuses two pages that could
   // answer one path, here, at boot — like every other incoherence. BEFORE ANY
@@ -118,8 +118,8 @@ export const buildShellHosts = (parts: HostParts): Hosts => {
   // it by.
   const pageManifests = app.pages ?? {};
   const pageRouter = createPageRouter(pageManifests);
-  const shells = app.shell !== undefined ? createShellHost(hostConfig(parts, app.shell, true)) : undefined;
-  const pageHosts = new Map(Object.entries(pageManifests).map(([name, manifest]) => [name, createShellHost(hostConfig(parts, manifest, false))]));
+  const shells = app.shell !== undefined ? createShellHost(hostConfig(deps, app.shell, true)) : undefined;
+  const pageHosts = new Map(Object.entries(pageManifests).map(([name, manifest]) => [name, createShellHost(hostConfig(deps, manifest, false))]));
   // Every host there is, as this file holds each: with how it adopts and how
   // its sweep is stopped, which the host that is handed out does not have.
   // What is asked of "every living shell" is asked of each of these, never of

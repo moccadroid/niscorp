@@ -23,7 +23,7 @@ export type DataLayer = {
   grants: string[];
 };
 
-export type DataLayerConfig = {
+export type DataLayerDeps = {
   pool: PgPool;
   // Absent: vex's Postgres cache on the pool.
   cache?: CacheBackend;
@@ -31,11 +31,11 @@ export type DataLayerConfig = {
   vexConfig?: QueryEngineConfig['config'];
 };
 
-export const createDataLayer = async (config: DataLayerConfig): Promise<DataLayer> => {
-  const adapter = createPostgresAdapter({ pool: config.pool });
-  const cache = config.cache ?? createPostgresCache({ pool: config.pool });
+export const createDataLayer = async (deps: DataLayerDeps): Promise<DataLayer> => {
+  const adapter = createPostgresAdapter({ pool: deps.pool });
+  const cache = deps.cache ?? createPostgresCache({ pool: deps.pool });
   await cache.init?.();
-  const engine = createQueryEngine({ adapter, cache, ...(config.vexConfig !== undefined ? { config: config.vexConfig } : {}) });
+  const engine = createQueryEngine({ adapter, cache, ...(deps.vexConfig !== undefined ? { config: deps.vexConfig } : {}) });
   const schema = await engine.introspect();
 
   // THE ENGINE'S OWN TABLES ARE ORDINARY TABLES, and it is worth saying why

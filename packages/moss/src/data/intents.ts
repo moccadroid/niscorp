@@ -28,7 +28,7 @@ export type QueryWriters = { generateDsl: GenerateDsl; mapToShape: MapToShape };
 // values that vary from one asking to the next.
 export type Intent = { intent: string; shape: unknown; context?: Record<string, unknown> };
 
-export type IntentAnswersConfig = {
+export type IntentAnswersDeps = {
   // What the app's own engine reads through, and the tables it found there:
   // a query is written over the tables a replay can read.
   adapter: DatabaseAdapter;
@@ -46,23 +46,23 @@ export type IntentAnswersConfig = {
 // query that reaches past the caller's policy.
 export type AnswerIntent = (writers: QueryWriters, asked: Intent, caller: { policy: ScopePolicy; scope: Record<string, unknown> }) => Promise<QueryResponse>;
 
-export const createIntentAnswers = (config: IntentAnswersConfig): AnswerIntent => {
+export const createIntentAnswers = (deps: IntentAnswersDeps): AnswerIntent => {
   // ONE ENGINE FOR EACH PAIR OF WRITERS, kept for as long as the app keeps the
   // object it handed over. An app has one pair, made when it starts.
   const engines = new WeakMap<QueryWriters, Promise<QueryEngine>>();
   const engineFor = (writers: QueryWriters): Promise<QueryEngine> => {
     const kept = engines.get(writers);
     if (kept !== undefined) return kept;
-    const { adapter, schema } = config;
+    const { adapter, schema } = deps;
     const created = (async (): Promise<QueryEngine> => {
       const engine = createQueryEngine({
         // It introspects nothing: the tables are the ones the app's engine found.
         adapter: { id: adapter.id, compile: adapter.compile, execute: adapter.execute, capabilities: adapter.capabilities, introspect: async () => schema },
-        cache: config.cache,
+        cache: deps.cache,
         generateDsl: writers.generateDsl,
         mapToShape: writers.mapToShape,
-        ...(config.behaviors !== undefined ? { behaviors: config.behaviors } : {}),
-        ...(config.vexConfig !== undefined ? { config: config.vexConfig } : {}),
+        ...(deps.behaviors !== undefined ? { behaviors: deps.behaviors } : {}),
+        ...(deps.vexConfig !== undefined ? { config: deps.vexConfig } : {}),
       });
       await engine.introspect();
       return engine;

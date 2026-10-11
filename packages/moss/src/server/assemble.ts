@@ -24,7 +24,7 @@ import { createInternalWire } from './wire';
 // data module with no database behind it.
 // ═══════════════════════════════════════════════════════════════
 
-export type ServerParts = {
+export type ServerDeps = {
   app: NiscApp;
   runtime: NiscRuntime;
   // Who a token is (step 2), and how every session a principal holds is
@@ -43,17 +43,17 @@ export type ServerParts = {
 // nobody holding anything to stop them by: so each step that starts something
 // says here how it is stopped, and a throw stops them before it goes on up.
 // `close` on the server that IS returned runs the same list.
-export const assembleServer = async (parts: ServerParts): Promise<MossServer> => {
+export const assembleServer = async (deps: ServerDeps): Promise<MossServer> => {
   const stops: (() => void)[] = [];
   try {
-    return await assemble(parts, stops);
+    return await assemble(deps, stops);
   } catch (error) {
     for (const stop of stops) stop();
     throw error;
   }
 };
 
-const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerParts, stops: (() => void)[]): Promise<MossServer> => {
+const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerDeps, stops: (() => void)[]): Promise<MossServer> => {
   // 4. The running manifest: creating it is the boot check, and it hands the
   // data module the entries to seed (./manifest.ts).
   const running = await buildRunningManifest(app, runtime, data);

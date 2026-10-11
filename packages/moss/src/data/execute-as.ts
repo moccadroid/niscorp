@@ -6,7 +6,7 @@ import type { ExecuteRecord, MutationClient, QueryEngine, ScopePolicy } from '@n
 // it tighter than the raw SQL it replaces.
 export type ExecuteAs = (role: string, fingerprint: string, context: Record<string, unknown>, scope?: Record<string, unknown>) => Promise<unknown>;
 
-export type ExecuteAsConfig = {
+export type ExecuteAsDeps = {
   engine: QueryEngine;
   // The client a seeded write is replayed on.
   db: MutationClient;
@@ -29,24 +29,24 @@ export type ExecuteAsConfig = {
 // values are supplied by server code, never by a request. Widening what a
 // machinery role can touch is a charter diff somebody reviews.
 export const createExecuteAs =
-  (config: ExecuteAsConfig): ExecuteAs =>
+  (deps: ExecuteAsDeps): ExecuteAs =>
   async (role, fingerprint, context, scope = {}) => {
     const roles = [role];
     // Asked for once: a read and a write are under the one policy.
-    const policy = config.policyFor(roles);
+    const policy = deps.policyFor(roles);
     const outcome = await handleQuery(
       {
-        engine: config.engine,
+        engine: deps.engine,
         locked: true,
         scopePolicy: policy,
-        policyForReach: (reach) => config.policyAtReach(roles, reach),
+        policyForReach: (reach) => deps.policyAtReach(roles, reach),
         // Mutation replay under the same role policy — write gates and scope
         // pins apply exactly as they would for a person.
-        mutations: { client: config.db, policy },
+        mutations: { client: deps.db, policy },
         // Machinery is observed too: a seeded entry run as a charter role is a
         // vex execution, and its scope carries no principal, so it reports as
         // `hasPrincipal: false` — which is the truth about it.
-        ...(config.onExecute !== undefined ? { onExecute: config.onExecute } : {}),
+        ...(deps.onExecute !== undefined ? { onExecute: deps.onExecute } : {}),
       },
       { fingerprint, context },
       scope,

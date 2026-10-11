@@ -41,7 +41,7 @@ export type OwnEntries = {
 // vex refuses it.
 export type Replay = (fingerprint: string, context: Record<string, unknown>) => Promise<unknown>;
 
-export type OwnEntriesConfig = {
+export type OwnEntriesDeps = {
   // The adapter the app's own engine reads through: a read of theirs is
   // bounded as an app's is, and the tables that are their owner's are asked
   // of the database through it.
@@ -62,7 +62,7 @@ const messageOf = (body: unknown): string =>
   body !== null && typeof body === 'object' && 'message' in body && typeof body.message === 'string' ? body.message : 'no reason given';
 
 export const createOwnEntries =
-  (config: OwnEntriesConfig) =>
+  (deps: OwnEntriesDeps) =>
   async (own: OwnEntries): Promise<Replay> => {
     const cache = createMemoryCache();
     await seedCache(cache, own.entries);
@@ -75,11 +75,11 @@ export const createOwnEntries =
     // refused its start. So the list an app gives vex says nothing here, and
     // neither does anything else of the app's engine. What this engine knows
     // is the tables that are its owner's, which is also all it may serve.
-    const schema = await config.adapter.introspect({ entities: [...own.tables] });
+    const schema = await deps.adapter.introspect({ entities: [...own.tables] });
     // An engine beside the app's, over the same database, through the same
     // adapter.
     const engine = createQueryEngine({
-      adapter: { id: config.adapter.id, compile: config.adapter.compile, execute: config.adapter.execute, capabilities: config.adapter.capabilities, introspect: async () => schema },
+      adapter: { id: deps.adapter.id, compile: deps.adapter.compile, execute: deps.adapter.execute, capabilities: deps.adapter.capabilities, introspect: async () => schema },
       cache,
     });
     await engine.introspect();
@@ -106,8 +106,8 @@ export const createOwnEntries =
           engine,
           locked: true,
           scopePolicy: policy,
-          mutations: { client: config.db, policy, onWrite: (event) => config.engine.invalidate(tablesChangedBy(event.writes, schema)) },
-          ...(config.onExecute !== undefined ? { onExecute: config.onExecute } : {}),
+          mutations: { client: deps.db, policy, onWrite: (event) => deps.engine.invalidate(tablesChangedBy(event.writes, schema)) },
+          ...(deps.onExecute !== undefined ? { onExecute: deps.onExecute } : {}),
         },
         { fingerprint, context },
         {},

@@ -11,7 +11,7 @@ import type { Hosts } from './hosts';
 // When the manifest declares a shell, server shells stand behind it: it is
 // handed where a session comes from, for the app and for each page, and
 // nothing else of a shell host.
-export type SocketParts = {
+export type SocketDeps = {
   runtime: Pick<NiscRuntime, 'pool' | 'session' | 'sessionRevalidateMs' | 'anonymousShellMax' | 'telemetry' | 'origins' | 'socketCompression' | 'socketMaxMessageBytes'>;
   session: SessionVerifier;
   identity: Pick<Identity, 'resolve'>;
@@ -19,7 +19,7 @@ export type SocketParts = {
   hosts: Pick<Hosts, 'shells' | 'pageAt'>;
 };
 
-export const buildSocket = ({ runtime, session, identity, running, hosts }: SocketParts): SocketAccept => {
+export const buildSocket = ({ runtime, session, identity, running, hosts }: SocketDeps): SocketAccept => {
   const socket = createSocket({
     session,
     catalog: async (principal) => {
