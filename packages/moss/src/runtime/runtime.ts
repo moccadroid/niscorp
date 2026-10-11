@@ -74,6 +74,14 @@ export type NiscRuntime = {
   // compression is on. A thousand of them fit a process given 512 MB. A
   // deployment with a public screen and more visitors at once than that raises
   // it, from those numbers and its own memory.
+  //
+  // IT IS ONE COUNT FOR EVERYBODY WITH NOBODY SIGNED IN, IN THIS PROCESS. It
+  // bounds memory. It is not a limit for each visitor: one client that holds
+  // this many connections has every place, and every other visitor with
+  // nobody signed in is refused until one closes; and each process of a
+  // deployment counts its own. A deployment that faces the internet limits
+  // the connections one address may hold at its proxy, which is where the
+  // address is known; moss sees the proxy's.
   anonymousShellMax?: number;
   // How long a server shell's endpoint call waits for its reply before it
   // fails to the action's `onError` (default: nova's, 30 seconds). An

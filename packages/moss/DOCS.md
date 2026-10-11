@@ -324,6 +324,29 @@ built for it, and its terminal tries again later, as after any other close.
 Somebody signed in is served whatever the count is, and a shell one of the
 manifest's pages builds for somebody signed in takes no place.
 
+**What the limit is, exactly.** One count, for everybody with nobody signed
+in, in one process. It bounds what that process holds in memory for them, and
+it does nothing else:
+
+- It is not a limit for each visitor. Whoever holds the places holds them:
+  one client that opens `anonymousShellMax` connections and keeps them open
+  has every place, and every other visitor with nobody signed in is sent
+  `at_capacity` until one of those closes. People who are signed in go on
+  being served.
+- It is counted by the process that takes the connection. A deployment of N
+  processes holds up to N times the limit.
+- Moss builds no limit for each address, because the address is not moss's
+  to know: behind a proxy every connection comes from the proxy, and which
+  header says where the visitor is, is the proxy's to say.
+
+**A deployment that faces the internet** limits how many connections one
+address may hold where the address is known: at its proxy or load balancer,
+on the socket's path (`/socket`). With that in place, `anonymousShellMax` is
+what it is sized for here, memory. Two things an app can do on its own: a
+first screen for nobody that is a page which is not live opens no socket and
+takes no place (`nisc build` says which pages are), and a screen that needs
+nobody signed in to press anything is such a page.
+
 The default is from a measurement (2026-10-10, Node 24): lyceum's real boot,
 2,000 connections for nobody opened through `server.socket` and held, the heap
 read after a forced collection before and after, with a transport that drops

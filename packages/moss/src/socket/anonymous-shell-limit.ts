@@ -13,6 +13,22 @@ import type { Connection } from './connection';
 //
 // A shell a page builds for somebody SIGNED IN is one for each connection too,
 // and takes no place: it takes a credential to open one.
+//
+// WHAT THE LIMIT IS: ONE COUNT, FOR EVERYBODY WITH NOBODY SIGNED IN, IN ONE
+// PROCESS. It bounds what this process holds in memory for them, and that is
+// all it does. It is not a limit for each visitor: whoever holds the places
+// holds them, so one client that opens as many connections as the limit and
+// keeps them has every place, and every other visitor with nobody signed in
+// is told `at_capacity` until one of those closes. A process counts its own
+// connections: N processes hold N times the limit between them.
+//
+// WHY NOT ONE FOR EACH ADDRESS. The address a connection comes from is not
+// moss's to know: behind a proxy every connection comes from the proxy, and
+// which header carries the visitor's is the proxy's to say. A deployment that
+// faces the internet limits how many connections one address may hold where
+// the address is known, at its proxy or load balancer, on the socket's path;
+// this limit is then what keeps the process inside its memory, and is sized
+// to that.
 // ═══════════════════════════════════════════════════════════════
 
 // THE DEFAULT, FROM A MEASUREMENT (2026-10-10, Node 24, this repository).
