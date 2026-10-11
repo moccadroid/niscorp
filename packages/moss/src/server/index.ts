@@ -9,7 +9,8 @@
 // things it needs, starts the features and mounts the routes.
 //
 // `createServer` (./server.ts) is the list of steps, each a function in a
-// file beside it:
+// file beside it; the steps that stand over the data module are assembled in
+// ./assemble.ts:
 //
 //   ./data.ts, ./manifest.ts, ./identity.ts   the three modules every surface asks
 //   ./routes.ts          the server's own surfaces, in the order a request meets them
