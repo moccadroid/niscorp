@@ -27,6 +27,6 @@ export type { IdentityRecord } from './record';
 export { assignedRoles, createIdentity } from './resolution';
 export type { Identity, IdentityConfig, IdentitySeam, ResolvedIdentity } from './resolution';
 export { newSeal, openSealed, sealCookie, sealOf, sealSession } from './seal';
-export { isOwnOrigin, sessionCookies, sessionTokenOf, tokenFromCookie } from './session-cookie';
+export { ownOriginOf, sessionCookies, sessionTokenOf, tokenFromCookie } from './session-cookie';
 export { SESSIONS_SEQUENCE, initSessions, mintSession, revokeAllFor, sessionOf, sessionRemainingMs } from './sessions';
 export { sessionRevokerOf, sessionVerifierOf } from './verifier';

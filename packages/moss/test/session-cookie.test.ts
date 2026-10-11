@@ -10,7 +10,7 @@ import { createShellHost } from '../src/shells';
 import { hostConfig } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import { renderDocument } from '../src/documents';
-import { isOwnOrigin, openSealed, sealSession, sessionCookies } from '../src/identity';
+import { openSealed, ownOriginOf, sealSession, sessionCookies } from '../src/identity';
 import { createSocket } from '../src/socket';
 import { offerToken, PROTOCOL } from '../src/protocol';
 import { browserEnv, createWire } from '../src/client';
@@ -360,7 +360,7 @@ describe('sessionCookies — for a sign-in the app answers over HTTP', () => {
   });
 });
 
-describe('isOwnOrigin', () => {
+describe('ownOriginOf', () => {
   it.each([
     ['the page and the server are one name', 'https://app.example.com', 'app.example.com', [], true],
     ['…on a port', 'http://localhost:5173', 'localhost:5173', [], true],
@@ -373,7 +373,7 @@ describe('isOwnOrigin', () => {
     ['listing one origin does not admit its sibling', 'https://evil.example.com', 'moss:8787', ['https://app.example.com'], false],
     ['…nor the same host over another scheme', 'http://app.example.com', 'moss:8787', ['https://app.example.com'], false],
   ] as const)('%s', (_label, origin, host, listed, own) => {
-    expect(isOwnOrigin(origin, host, listed)).toBe(own);
+    expect(ownOriginOf(origin, host, listed)?.origin).toBe(own ? new URL(origin ?? '').origin : undefined);
   });
 });
 

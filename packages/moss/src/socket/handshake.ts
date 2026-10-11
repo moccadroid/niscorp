@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isOwnOrigin, newSeal, openSealed, sealCookie, sealOf, sessionCookies, sessionTokenOf } from '../identity';
+import { newSeal, openSealed, sealCookie, sealOf, ownOriginOf, sessionCookies, sessionTokenOf } from '../identity';
 import { DEFAULT_TOKEN_KEY, PROTOCOL, PROTOCOL_MIN, offeredSealed, offeredToken } from '../protocol';
 import type { ServerMessage } from '../protocol';
 import type { SocketConfig } from './config';
@@ -97,7 +97,7 @@ export const whoIsAsking = async (url: string, upgrade: Connection['upgrade'], c
   // browser sends it with a stranger's page all the same. `key` is which of
   // the browser's sessions this terminal is (a seat); a name, not a secret.
   const key = parameters.key ?? DEFAULT_TOKEN_KEY;
-  const page = upgrade !== undefined && isOwnOrigin(upgrade.origin, upgrade.host, config.origins) ? new URL(upgrade.origin) : undefined;
+  const page = upgrade === undefined ? undefined : ownOriginOf(upgrade.origin, upgrade.host, config.origins);
   const secure = page?.protocol === 'https:';
   const held = page === undefined ? null : sessionTokenOf(upgrade?.cookie, { port: page.port, secure }, key);
   // A SIGN-IN OVER THE SOCKET REACHES THAT COOKIE SEALED. A terminal whose

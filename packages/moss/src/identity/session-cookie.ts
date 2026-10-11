@@ -48,10 +48,12 @@ export const tokenFromCookie = (header: string | null | undefined, name = DEFAUL
 // Is this the app's own page asking? Its origin's host is the host the request
 // was addressed to — or one the deployment lists, behind a proxy that rewrites
 // `Host`. A sibling subdomain, another port, an opaque origin: not it.
-export const isOwnOrigin = (origin: string | null | undefined, host: string | null | undefined, listed: readonly string[] = []): origin is string => {
-  if (origin === undefined || origin === null || !URL.canParse(origin)) return false;
+// Answers the origin, read, when it is the app's own; undefined when it is not.
+export const ownOriginOf = (origin: string | null | undefined, host: string | null | undefined, listed: readonly string[] = []): URL | undefined => {
+  if (origin === undefined || origin === null || !URL.canParse(origin)) return undefined;
   const asked = new URL(origin);
-  return asked.host === host?.toLowerCase() || listed.some((entry) => URL.canParse(entry) && new URL(entry).origin === asked.origin);
+  const own = asked.host === host?.toLowerCase() || listed.some((entry) => URL.canParse(entry) && new URL(entry).origin === asked.origin);
+  return own ? asked : undefined;
 };
 
 const cookiesAt = (where: { port: string; secure: boolean }, key: string, token: string | null, lastsMs?: number | null): string[] => {

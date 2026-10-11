@@ -184,6 +184,16 @@ export default tseslint.config(
         { selector: "ClassDeclaration:not([superClass.name='Error'])", message: 'rule 16: no class (an Error subclass is the one exception).' },
         { selector: 'ExportDefaultDeclaration', message: 'rule 16: no default export.' },
         {
+          // A WRITTEN PREDICATE IS A CAST THE COMPILER DOES NOT CHECK:
+          // `(v): v is Row => true` compiles. One the compiler works out for
+          // itself is checked, and needs no syntax: `(v: unknown) => typeof
+          // v === 'string'` narrows where it is called, and so does a
+          // `filter` on `row !== undefined`. So the written form is not
+          // needed where the narrowing is real, and is forbidden.
+          selector: 'TSTypePredicate',
+          message: 'rule 16: no written type predicate (`x is T`, `asserts x`). It is a cast the compiler does not check. Narrow where the value is used, or leave the return type off and let the compiler infer the predicate.',
+        },
+        {
           selector: "TSAsExpression:not([typeAnnotation.type='TSTypeReference'][typeAnnotation.typeName.name='const'])",
           message: 'rule 16: no type assertion. What comes from outside is parsed by a schema; what is inside is typed so it needs no cast.',
         },

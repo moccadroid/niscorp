@@ -23,8 +23,7 @@ import type { ManifestSchema } from './schema';
 // seam, and an instance of a class is somebody's machinery (a kit hands a
 // component's props over as a zod schema, which fills itself in as it is
 // used): neither is frozen, and neither is looked inside.
-const isData = (value: unknown): value is object => {
-  if (typeof value !== 'object' || value === null) return false;
+const isData = (value: object): boolean => {
   if (Array.isArray(value)) return true;
   const made: unknown = Object.getPrototypeOf(value);
   return made === Object.prototype || made === null;
@@ -39,7 +38,7 @@ export const freezeDeep = (data: unknown): void => {
   const pending: unknown[] = [data];
   while (pending.length > 0) {
     const value = pending.pop();
-    if (!isData(value) || seen.has(value)) continue;
+    if (typeof value !== 'object' || value === null || !isData(value) || seen.has(value)) continue;
     seen.add(value);
     Object.freeze(value);
     for (const inner of Object.values(value)) pending.push(inner);
