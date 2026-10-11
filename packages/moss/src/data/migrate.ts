@@ -3,6 +3,7 @@ import type { CacheBackend, DatabaseSchema, PgPool, SeedEntry, SeedMutation } fr
 import { migrate } from '@niscorp/strata/postgres';
 import type { MigrateReport } from '@niscorp/strata/postgres';
 import type { Sequence } from '@niscorp/strata';
+import { entriesOf } from '../manifest';
 import type { NiscApp } from '../manifest';
 import type { NiscRuntime } from '../runtime';
 import { SESSIONS_SEQUENCE } from '../identity';
@@ -161,7 +162,10 @@ export const migrateTables = async (
   app: Pick<NiscApp, 'entries' | 'features'>,
   options: { dryRun?: boolean } = {},
 ): Promise<TablesReport> => {
-  const entries = app.entries ?? [];
+  // Asked of the manifest module, which is the one place that says what an
+  // app's entries are: no server stands here, so no running manifest holds
+  // them.
+  const entries = entriesOf(app);
   const cache = runtime.cache ?? createPostgresCache({ pool: runtime.pool });
 
   // As the database stands now — read before the run, on the pool: a single-

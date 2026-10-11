@@ -14,6 +14,10 @@
 // and the sets of actions that arrive while it runs, changed in one place and
 // only to something that may be served.
 //
+// WHICH ENTRIES AN APP SERVES is said by one function (./entries.ts). The
+// running manifest holds what it answers while a server runs; the step that
+// migrates before one starts asks the function itself.
+//
 // WHETHER IT MAY BE SERVED is one verification (./verify.ts), asked at boot, at
 // every change and before a bundle is let in: the charter, with what each
 // role's actions reach audited (./closure.ts), every entry's reach, the layout
@@ -47,6 +51,7 @@ export type {
   ShellCanvas,
   ShellManifest,
 } from './app';
+export { entriesOf } from './entries';
 export type { Pointer } from './generation';
 export { receiveManifest } from './handover';
 export { layoutMisfits } from './layout';

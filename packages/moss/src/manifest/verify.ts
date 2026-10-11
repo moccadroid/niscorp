@@ -8,6 +8,7 @@ import { scopeProfiles } from '@niscorp/vex';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { LayoutVariant, NiscApp } from './app';
 import { auditClosure } from './closure';
+import { entriesOf } from './entries';
 import { wearableOf } from './roles';
 
 // ═══════════════════════════════════════════════════════════════
@@ -46,15 +47,17 @@ export type ManifestCandidate = {
 // manifest, and nothing of how it is served.
 export type ShippedManifest = Pick<NiscApp, 'charter' | 'actions' | 'layouts' | 'wearable' | 'assignments' | 'entries' | 'behaviors'>;
 
-// The candidate an app would be with `actions` in force: its own, or its own
-// with the sets that arrived while it runs laid over them.
-export const candidateOf = (shipped: ShippedManifest, actions: ManifestCandidate['actions'], grants: readonly string[]): ManifestCandidate => ({
+// The candidate an app would be with `actions` and `entries` in force. The
+// actions are its own, or its own with the sets that arrived while it runs
+// laid over them. The entries are handed in by whoever holds them (the running
+// manifest; `verifyApp` where there is none) and are not read off `shipped`.
+export const candidateOf = (shipped: ShippedManifest, inForce: Pick<ManifestCandidate, 'actions' | 'entries'>, grants: readonly string[]): ManifestCandidate => ({
   charter: shipped.charter,
-  actions,
+  actions: inForce.actions,
   layouts: shipped.layouts ?? {},
   wearable: wearableOf(shipped),
   grants,
-  entries: shipped.entries ?? [],
+  entries: inForce.entries,
   profiles: scopeProfiles(shipped.behaviors ?? {}),
 });
 
@@ -159,7 +162,8 @@ export const verifyManifest = (candidate: ManifestCandidate): ManifestReport => 
 // (`errors`), what a boot only says (`said`), and carries the charter engine's
 // own report whole (`charter`). A running server answers the same for what is
 // in force: `charterReport()`, and `verifyActions` for a set it has not taken.
-export const verifyApp = (app: ShippedManifest, grants: readonly string[]): ManifestReport => verifyManifest(candidateOf(app, app.actions, grants));
+export const verifyApp = (app: ShippedManifest, grants: readonly string[]): ManifestReport =>
+  verifyManifest(candidateOf(app, { actions: app.actions, entries: entriesOf(app) }, grants));
 
 // The sentence a refusal is thrown with, or undefined when nothing refuses.
 // One check's findings at a time, the first that failed: a manifest whose

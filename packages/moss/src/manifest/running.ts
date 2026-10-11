@@ -2,6 +2,7 @@ import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
 import type { ShellManifest } from './app';
 import { shellComponents } from './components';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
+import { entriesOf } from './entries';
 import { createGeneration } from './generation';
 import type { Generation, Pointer } from './generation';
 import { freezeDeep } from './handover';
@@ -137,7 +138,11 @@ const tell = (listener: () => void): void => {
 
 export const createRunningManifest = (config: RunningManifestConfig): RunningManifest => {
   const { shipped } = config;
-  const candidate = (actions: Actions): ManifestCandidate => candidateOf(shipped, actions, config.grants);
+  // THE ENTRIES THE APP SERVES, read off what it shipped once (./entries.ts)
+  // and held here: a verification is handed these, and so is whoever looks one
+  // up. Nothing else reads them off the app while it runs.
+  const entries = entriesOf(shipped);
+  const candidate = (actions: Actions): ManifestCandidate => candidateOf(shipped, { actions, entries }, config.grants);
 
   // What the app ships, and the named sets in the order they are laid over it.
   // A set with a loader has its place from the start, so the order does not
@@ -197,7 +202,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
 
   return {
     actions: () => inForce,
-    entries: new Map((shipped.entries ?? []).map((entry) => [entry.fingerprint, entry])),
+    entries: new Map(entries.map((entry) => [entry.fingerprint, entry])),
     verify: (actions) => verifyManifest(candidate(actions)),
     verifyReplace: (source, actions) => verifyManifest(candidate(laidOver(own, new Map(sets).set(source, actions)))),
     report: () => report,
