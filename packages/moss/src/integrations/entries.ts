@@ -7,7 +7,7 @@ import type { Filter, Mutation, SeedEntry, SeedMutation } from '@niscorp/vex';
 //
 // They are the feature's own (../feature, the `ownEntries` seam): seeded where
 // no route serves them and replayed in process by ./registry.ts, under a
-// policy that admits the tables below and no other. So what guards an act
+// policy that admits the feature's tables and no other. So what guards an act
 // stays what guarded it (an approval is behind the operator key), and a data
 // grant on these tables opens none of them.
 //
@@ -15,8 +15,9 @@ import type { Filter, Mutation, SeedEntry, SeedMutation } from '@niscorp/vex';
 // `last_import_at` is a value in the context, not `now()`.
 // ═══════════════════════════════════════════════════════════════
 
-// The tables these entries touch: all the policy they run under admits. The
-// first two are moss's own (../data); the third is the feature's (./tables.ts).
+// THE TABLES THAT ARE THE FEATURE'S OWN: what it names on itself
+// (`Feature.tables.names`, ./feature.ts), so all the policy its entries run
+// under admits. ./tables.ts says which sequence makes each.
 export const REGISTRY_TABLES: readonly string[] = ['integrations', 'integration_actions', 'integration_frame_grants'];
 
 // EVERY LIST IS READ A PAGE AT A TIME, in the order of its key, each page

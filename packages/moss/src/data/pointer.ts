@@ -46,7 +46,7 @@ const move: SeedMutation = {
 };
 
 // The two entries, and the one table the policy they run under admits.
-export const POINTER: OwnEntries = { entries: [read, move], tables: [TABLE] };
+export const POINTER: OwnEntries = { owner: 'the generation pointer', entries: [read, move], tables: [TABLE] };
 
 // What a replay answers. A BIGINT is handed over as a number by one driver and
 // as the text of one by another.

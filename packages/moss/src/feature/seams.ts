@@ -95,11 +95,13 @@ export type FeatureSeams = {
 
   // ── what they may read and write ──
   // THE FEATURE'S OWN READS AND WRITES, on the tables it keeps: entries
-  // authored as an app authors its own, and the tables they touch. Answers how
-  // one is replayed, in process. No route serves them, whatever the charter
-  // grants whoever asks, and they run under a policy that admits those tables
-  // and no other.
-  ownEntries: (own: { entries: readonly (SeedEntry | SeedMutation)[]; tables: readonly string[] }) => Promise<Replay>;
+  // authored as an app authors its own. Answers how one is replayed, in
+  // process. No route serves them, whatever the charter grants whoever asks,
+  // and they run under a policy that admits the tables this feature named as
+  // its own (`Feature.tables.names`) and no other. Which tables is not said
+  // here: an entry that reads or writes any other table is refused when it is
+  // handed over.
+  ownEntries: (entries: readonly (SeedEntry | SeedMutation)[]) => Promise<Replay>;
   // Reads a stored document in this code's grammars, and stamps one it writes.
   grammars: Upgrader;
   // Every fingerprint the app serves.
@@ -135,14 +137,26 @@ export type FeatureSeams = {
 // registers and loads through the seams and nothing else. One that throws
 // refuses the boot.
 export type Feature = {
-  // What it is called, for whoever reads a refusal.
+  // What it is called. Its tables are kept under this name, and a refusal
+  // says it: no two features of an app share one.
   name: string;
-  // THE TABLES IT KEEPS, as strata sequences of its own. Said here and not
-  // through a seam, because tables exist before anything starts: they go
-  // through the one ledgered run every owner's tables go through, after moss's
-  // and before the app's, so they are there when `start` is called. They are
-  // tables like any other from then on: the charter's `data` universe holds
-  // them, and the step that migrates before a deployment starts runs them.
-  tables?: readonly Sequence[];
+  // THE TABLES IT KEEPS. Said here and not through a seam, for two reasons.
+  // Tables exist before anything starts. And which tables a feature reads and
+  // writes outside the app's policy has to be readable off the feature by
+  // whoever puts it in a manifest, without running it.
+  tables?: {
+    // THE TABLES THAT ARE ITS OWN, by name: every table its own entries read
+    // and write (the `ownEntries` seam), and all they may. A table has one
+    // owner: a feature that names one of the core's (sessions, the generation
+    // pointer, the vex cache, the migration ledger), or one another feature
+    // names, refuses the boot with a sentence that says which and why.
+    names: readonly string[];
+    // The strata sequences of its own that make them. They go through the one
+    // ledgered run every owner's tables go through, after moss's and before
+    // the app's, so the tables are there when `start` is called. They are
+    // tables like any other from then on: the charter's `data` universe holds
+    // them, and the step that migrates before a deployment starts runs them.
+    sequences?: readonly Sequence[];
+  };
   start: (seams: FeatureSeams) => void | Promise<void>;
 };

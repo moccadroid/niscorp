@@ -46,7 +46,7 @@ export type SeamParts = {
   data: Pick<Data, 'ownEntries' | 'grammars' | 'engine' | 'fingerprintsFor' | 'onWrite'>;
 };
 
-export const seamsOf = ({ app, runtime, server, operator, registered, identity, running, data }: SeamParts): FeatureSeams => ({
+export const seamsOf = (feature: Pick<Feature, 'name'>, { app, runtime, server, operator, registered, identity, running, data }: SeamParts): FeatureSeams => ({
   routes: (routes) => {
     server.route('/', routes);
   },
@@ -66,7 +66,9 @@ export const seamsOf = ({ app, runtime, server, operator, registered, identity, 
   narrowCatalogs: running.narrowCatalogs,
   charter: app.charter,
   components: app.shell?.components ?? {},
-  ownEntries: data.ownEntries,
+  // The tables are the ones this feature named as its own, and it cannot say
+  // otherwise here.
+  ownEntries: (entries) => data.ownEntries(feature.name, entries),
   grammars: data.grammars,
   fingerprints: async () => (await data.engine.cache.keys?.()) ?? [],
   // A principal the charter cannot resolve is refused here, as it is on
@@ -85,5 +87,5 @@ export const seamsOf = ({ app, runtime, server, operator, registered, identity, 
 // that feature and is no other's to reach through. One that throws refuses
 // the boot.
 export const startFeatures = async (features: readonly Feature[], parts: SeamParts): Promise<void> => {
-  for (const feature of features) await feature.start(seamsOf(parts));
+  for (const feature of features) await feature.start(seamsOf(feature, parts));
 };

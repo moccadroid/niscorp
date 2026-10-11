@@ -118,8 +118,10 @@ describe('createIntegrations — before a server has started it', () => {
   it('is what a manifest holds in `features`: a name, the tables it keeps, and a function to start it with', () => {
     const integrations = createIntegrations();
     expect(integrations.name).toBe('integrations');
-    // One sequence of its own, for the table frame grants are kept in.
-    expect((integrations.tables ?? []).map((sequence) => sequence.id)).toEqual(['nisc.moss.integrations']);
+    // The three tables that are its own, said before anything runs, and one
+    // sequence of its own, for the table frame grants are kept in.
+    expect(integrations.tables?.names).toEqual(['integrations', 'integration_actions', 'integration_frame_grants']);
+    expect((integrations.tables?.sequences ?? []).map((sequence) => sequence.id)).toEqual(['nisc.moss.integrations']);
     expect(typeof integrations.start).toBe('function');
   });
 });
@@ -129,11 +131,10 @@ describe('createIntegrations — started with the seams', () => {
     const { seams, said, server, operator } = await world();
     await createIntegrations().start(seams);
 
-    // Its reads and writes are entries it hands over once, with the tables
-    // they touch: every one is named under `integrations/`, and no two alike.
+    // Its reads and writes are entries it hands over once, and names no table
+    // with them: every one is named under `integrations/`, and no two alike.
     expect(said.owned).toHaveLength(1);
-    expect(said.owned[0]?.tables).toEqual(['integrations', 'integration_actions', 'integration_frame_grants']);
-    const fingerprints = (said.owned[0]?.entries ?? []).map((entry) => entry.fingerprint);
+    const fingerprints = (said.owned[0] ?? []).map((entry) => entry.fingerprint);
     expect(fingerprints.every((fingerprint) => fingerprint.startsWith('integrations/'))).toBe(true);
     expect(new Set(fingerprints).size).toBe(fingerprints.length);
     expect([...said.credentials.keys()]).toEqual(['ik_']);

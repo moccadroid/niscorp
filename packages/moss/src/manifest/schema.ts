@@ -98,11 +98,15 @@ const ReadEntrySchema = z
   .strict();
 const WriteEntrySchema = z.object({ ...entry, mutation: document(MutationDefinitionSchema) }).strict();
 
-// A feature is the app's code: a name, the tables it keeps (strata sequences,
-// read by strata's schema), and the function the server starts it with. What
-// else it carries is its own (the calls an app makes on it), so it is read
-// loosely and never looked inside.
-const FeatureSchema = z.looseObject({ name: z.string(), tables: z.array(SequenceSchema).readonly().optional(), start: seam });
+// A feature is the app's code: a name, the tables it keeps (their names, and
+// the strata sequences that make them, read by strata's schema), and the
+// function the server starts it with. What else it carries is its own (the
+// calls an app makes on it), so it is read loosely and never looked inside.
+const FeatureSchema = z.looseObject({
+  name: z.string(),
+  tables: z.object({ names: strings, sequences: z.array(SequenceSchema).readonly().optional() }).strict().optional(),
+  start: seam,
+});
 
 const ReactionSchema = z.object({ table: z.string(), op: z.enum(['insert', 'update', 'delete']).optional(), run: seam }).strict();
 

@@ -363,7 +363,7 @@ refuses to boot if anything is, for a deployment that migrates as a deploy step.
 
 The run's order is: `MOSS_SEQUENCE`, the sessions table's under
 `session: 'sessions'`, the vex cache's, the tables the app's features keep
-(`Feature.tables`, in the order the app named the features), then
+(`Feature.tables.sequences`, in the order the app named the features), then
 `runtime.tables`.
 
 `tables` on the runtime hands over the app's own table sequences. They join
@@ -942,17 +942,27 @@ answers (who is calling, what exists for them, what they may read and write,
 what they are looking at, how it reaches them). It ships from an entry point of
 its own, and the core never imports it.
 
-- `Feature` — `{ name: string; tables?: readonly Sequence[]; start(seams:
-  FeatureSeams): void | Promise<void> }`. The app puts features in
-  `NiscApp.features`. `createServer` starts each one, in order, once its core
-  stands and before anything is served; one that throws refuses the boot.
-  `tables` is the strata sequences of the tables the feature keeps: they are
+- `Feature` — `{ name: string; tables?: { names: readonly string[];
+  sequences?: readonly Sequence[] }; start(seams: FeatureSeams): void |
+  Promise<void> }`. The app puts features in `NiscApp.features`.
+  `createServer` starts each one, in order, once its core stands and before
+  anything is served; one that throws refuses the boot. No two features of an
+  app share a `name`.
+  `tables.names` is the tables that are the feature's own: every table its own
+  entries read and write, and all they may. It is said on the feature, so
+  whoever puts one in a manifest can read which tables it addresses outside
+  the app's policy without running it. A table has one owner: a feature that
+  names one of the core's (`sessions`, `moss_generation`, `vex_cache`,
+  `strata_ledger`), or a table another feature names, refuses the boot (and
+  `migrateTables`) with a sentence that says which table and why.
+  `tables.sequences` is the strata sequences that make them: they are
   migrated in the one ledgered run, before the feature starts, and
   `migrateTables` runs them too.
 - `FeatureSeams` — everything of the core a feature may touch, each member one
-  function or one narrow value. Twenty-one members, and each is one a feature
-  uses: one that stops being used is taken out. A route a feature mounts reads
-  who is calling as `c.get('principal')`.
+  function or one narrow value. Each feature is started with seams made for
+  it: what they reach is that feature's. Twenty-one members, and each is one a
+  feature uses: one that stops being used is taken out. A route a feature
+  mounts reads who is calling as `c.get('principal')`.
 
   | Member | What it is for |
   |---|---|
@@ -969,7 +979,7 @@ its own, and the core never imports it.
   | `narrowCatalogs(filter)` | one more rule for which granted actions are there for an install list |
   | `charter` | the charter the app shipped: role names, and what each selects |
   | `components` | the kit's component contracts by name: a description, and the props' schema |
-  | `ownEntries({ entries, tables })` | hand over the feature's own reads and writes, and get back how one is replayed |
+  | `ownEntries(entries)` | hand over the feature's own reads and writes, on the tables it named as its own, and get back how one is replayed |
   | `grammars` | read a stored document in this code's grammars, and stamp one that is written |
   | `fingerprints()` | every fingerprint the app serves |
   | `fingerprintsFor(principal)` | the fingerprints that principal's own policy lets them replay |
@@ -979,15 +989,20 @@ its own, and the core never imports it.
   | `wrapWire(wrap)` | lay a function around the wire a session's screens call through |
 
 A feature is handed no pool. What it reads and writes on its own tables it
-authors as vex entries, as an app does, and hands over with the tables they
-touch: `ownEntries({ entries, tables })` answers `replay(fingerprint, context)`,
+authors as vex entries, as an app does, and hands over:
+`ownEntries(entries)` answers `replay(fingerprint, context)`,
 which replays one in process (a read answers its rows, a write the row it
 wrote; a refusal throws). Those entries are seeded into a cache of their own,
 held by an engine no route is handed, so `/api/vex` answers `cache_miss` for
 one of them whatever the charter grants whoever asks, and no surface lists it.
-They run under a policy that admits the tables the feature named and no other,
-and asks for no principal. A write of theirs tells the app's engine which
-tables changed, so a reactive read over one of them answers again.
+They run under a policy that admits the tables the feature named as its own
+(`Feature.tables.names`) and no other, and asks for no principal. Which tables
+is not said when the entries are handed over: an entry that reads or writes
+any other table refuses the hand-over, and so the boot (`moss: the feature
+"…" handed over an entry that reads or writes a table that is not its own:
+"…"`). What another table holds, a feature reads as the app does: through the
+app's entries, under the charter. A write of theirs tells the app's engine
+which tables changed, so a reactive read over one of them answers again.
 `fingerprintsFor(principal)` is the fingerprints that principal's own policy
 lets them replay, as vex's discovery lists them.
 
@@ -1661,7 +1676,7 @@ hash of one key (a unique index on `integrations.key_hash`).
 **Its tables.** `integrations` and `integration_actions` are part of
 `MOSS_SEQUENCE` (`@niscorp/moss`). `integration_frame_grants` is the feature's
 own sequence, `nisc.moss.integrations`, which it names on itself
-(`Feature.tables`), so the server runs it with the rest and `migrateTables`
+(`Feature.tables.sequences`), so the server runs it with the rest and `migrateTables`
 does too. All three are tables like any other in the charter's `data`
 universe: a role granted a data wildcard denies them (`integrations.*`,
 `integration_actions.*`, `integration_frame_grants.*`).

@@ -138,7 +138,7 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
   // THE REGISTRY'S READS AND WRITES, handed over as entries of the feature's
   // own: seeded where no route serves them, and replayed from here on by
   // `replay` (./registry.ts, ./entries.ts).
-  const replay = await seams.ownEntries({ entries: REGISTRY_ENTRIES, tables: REGISTRY_TABLES });
+  const replay = await seams.ownEntries(REGISTRY_ENTRIES);
   const find = (id: string): ReturnType<typeof findIntegration> => findIntegration(replay, id);
   // THE DEPLOYMENT'S SIGNING IDENTITY — how an integration knows a call is
   // ours. The public half is served; verifying is all anybody can do with it
@@ -218,8 +218,9 @@ export const createIntegrations = (config: IntegrationsConfig = {}): Integration
   };
   return {
     name: 'integrations',
-    // The table it keeps beside moss's own: frame grants (./tables.ts).
-    tables: [INTEGRATIONS_SEQUENCE],
+    // The three tables that are its own, and the sequence that makes the
+    // third (./tables.ts says where the first two are made).
+    tables: { names: REGISTRY_TABLES, sequences: [INTEGRATIONS_SEQUENCE] },
     start: async (seams) => {
       started = await start(config, seams);
     },

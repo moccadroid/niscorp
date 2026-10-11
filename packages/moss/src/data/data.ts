@@ -10,6 +10,7 @@ import { emitterOf } from '../runtime';
 import type { Telemetry } from '../runtime';
 import { createDataLayer } from './engine';
 import { createExecuteAs } from './execute-as';
+import type { FeatureTables } from './feature-tables';
 import type { ExecuteAs } from './execute-as';
 import { createGrammarUpgrader } from './grammar';
 import { createIntentAnswers } from './intents';
@@ -53,9 +54,10 @@ export type DataConfig = {
   // The deployment keeps moss's own credential (`session: 'sessions'`), so its
   // table is one of the run's.
   storesSessions: boolean;
-  // The tables the app's features keep (./migrate.ts, `featureTablesOf`):
-  // after moss's and the cache's, in the same run.
-  featureTables?: readonly Sequence[];
+  // The tables the app's features keep (./feature-tables.ts): their
+  // sequences run after moss's and the cache's, in the same run, and their
+  // names are all a feature's own entries may address.
+  featureTables?: readonly FeatureTables[];
   // The app's own tables (`runtime.tables`): last, in the same run.
   tables?: readonly Sequence[];
   // The app's own grammars (`NiscApp.grammars`): after nova's and Prism's.
@@ -119,9 +121,11 @@ export type Data = {
   // resolved: under their policy, with the scope values the server says they
   // carry (./intents.ts). The one place a query is written; the routes replay.
   answerIntent: (writers: QueryWriters, asked: Intent, who: Caller, scope: Record<string, unknown>) => Promise<QueryResponse>;
-  // Take a feature's own entries, and answer how one is replayed
-  // (./own-entries.ts). No route serves them.
-  ownEntries: (own: OwnEntries) => Promise<Replay>;
+  // Take the own entries of the feature of that name, and answer how one is
+  // replayed (./own-entries.ts). No route serves them, and they reach the
+  // tables that feature named as its own and no other: one that addresses
+  // another table is refused here.
+  ownEntries: (feature: string, entries: OwnEntries['entries']) => Promise<Replay>;
   // The vex surfaces, for the server to mount at its root (./routes.ts).
   routes: <E extends Env>(config: DataRoutesConfig<E>) => Hono<E>;
   // Hear every write those surfaces serve (./writes.ts). Returns the way to
@@ -173,7 +177,7 @@ const standUp = async (config: DataConfig): Promise<StoodUp> => {
 // EVERYTHING ELSE, over what stood up. Nothing here touches the database but
 // through the engine and the write client, which is why it is a function of
 // its own: it can be held against an engine with nothing behind it.
-export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charter' | 'behaviors' | 'telemetry' | 'vexConfig'>): Data => {
+export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charter' | 'behaviors' | 'telemetry' | 'vexConfig' | 'featureTables'>): Data => {
   const { grammars, engine, grants } = stood;
   const governed = { charter: config.charter, behaviors: config.behaviors };
   const policies = createPolicies({ ...governed, grants });
@@ -207,6 +211,14 @@ export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charte
     const schema = engine.getSchema();
     if (schema === undefined) throw new Error('moss: entries of its own were handed over before the engine had read the database.');
     return createOwnEntries({ adapter: stood.adapter, schema, db: config.db, engine, ...(told !== undefined ? { onExecute: told } : {}) })(own);
+  };
+
+  // The tables a feature named as its own. One that is asked for and was never
+  // read off the manifest is a fault of the wiring, and is said.
+  const tablesOf = (feature: string): readonly string[] => {
+    const kept = (config.featureTables ?? []).find((tables) => tables.feature === feature);
+    if (kept === undefined) throw new Error(`moss: the data module was asked for the tables of a feature it was never told of ("${feature}").`);
+    return kept.names;
   };
 
   // The pointer's two entries, seeded when the pointer is first asked. NO SPAN
@@ -243,7 +255,7 @@ export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charte
       ...(onExecute !== undefined ? { onExecute } : {}),
     }),
     answerIntent: async (writers, asked, who, scope) => answering()(writers, asked, { policy: policies.of(who), scope }),
-    ownEntries: (own) => ownEntries(own, onExecute),
+    ownEntries: async (feature, entries) => ownEntries({ owner: `the feature "${feature}"`, entries, tables: tablesOf(feature) }, onExecute),
     routes: <E extends Env>(routing: DataRoutesConfig<E>): Hono<E> =>
       createVexRoutes<E>({
         engine,

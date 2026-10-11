@@ -1,14 +1,19 @@
 import type { Sequence } from '@niscorp/strata';
 
 // ═══════════════════════════════════════════════════════════════
-// THE TABLES THE FEATURE KEEPS, as a strata sequence of its own.
+// THE TABLES THE FEATURE KEEPS: three, and the sequence of its own that makes
+// the third.
 //
-// It is named on the feature (`Feature.tables`), so the server runs it in the
-// one ledgered run every owner's tables go through, after moss's own: the
-// table below points at `integrations`, which is moss's.
+// `integrations` and `integration_actions` are older than the feature. The
+// core's sequence made them (`nisc.moss`, ../data), every deployment's ledger
+// has them there, and a migration that has run is never moved or edited: their
+// DDL stays where it is. In code they are this feature's, like the third: it
+// names all three as its own (./entries.ts, `REGISTRY_TABLES`), and nothing
+// in the core reads or writes a row of them.
 //
-// (`integrations` and `integration_actions` are older than the feature and
-// stayed where every deployment's ledger has them, in `nisc.moss`.)
+// The sequence below is named on the feature (`Feature.tables.sequences`), so
+// the server runs it in the one ledgered run every owner's tables go through,
+// after `nisc.moss`: its table points at `integrations`.
 //
 // HISTORY: a migration that has run is never edited. Append one
 // (test/baselines.test.ts pins the checksum of each).

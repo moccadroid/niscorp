@@ -27,6 +27,9 @@
 // A FEATURE'S OWN ENTRIES (./own-entries.ts) are the reads and writes a
 // feature makes on the tables it keeps: seeded into a cache no route serves,
 // and replayed in process under a policy that admits those tables alone.
+// WHICH TABLES ARE A FEATURE'S (./feature-tables.ts) is read off the app's
+// features before any of them runs: a table has one owner, and one of the
+// core's is no feature's.
 //
 // AN INTENT ANSWERED BY A QUERY WRITTEN FOR IT (./intents.ts) is the one
 // place a query is written while the app runs: with the app's writers, under
@@ -54,7 +57,9 @@ export type { Data, DataConfig, DataRoutesConfig } from './data';
 export type { ExecuteAs } from './execute-as';
 export { createWireFollower } from './follow';
 export type { Intent, QueryWriters } from './intents';
-export { featureTablesOf, migrateTables } from './migrate';
+export { featureTablesOf } from './feature-tables';
+export type { FeatureTables } from './feature-tables';
+export { migrateTables } from './migrate';
 export type { TablesReport } from './migrate';
 export { resolvePolicy } from './policy';
 export { MOSS_SEQUENCE } from './tables';

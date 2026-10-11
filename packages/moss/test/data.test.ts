@@ -9,7 +9,8 @@ import { memoKey } from '../src/identity';
 import type { TelemetrySpan } from '../src/runtime';
 import { dataOver } from '../src/data/data';
 import { createGrammarUpgrader } from '../src/data/grammar';
-import { featureTablesOf, tableSequencesOf } from '../src/data/migrate';
+import { featureTablesOf } from '../src/data/feature-tables';
+import { tableSequencesOf } from '../src/data/migrate';
 import { engineDouble } from './data-double';
 
 // WHAT SOMEBODY MAY READ AND WRITE, as the one object a server builds: the
@@ -33,7 +34,8 @@ const world = async (telemetry?: { emit: (span: TelemetrySpan) => void }, govern
   const double = await engineDouble();
   const data = dataOver(
     { engine: double.engine, adapter: double.adapter, grants: scopeGrants(['notes', 'tags']), grammars: await createGrammarUpgrader({}) },
-    { db: double.db, charter: governing, ...(telemetry !== undefined ? { telemetry } : {}) },
+    // One feature, `tagging`, which named `tags` as its own.
+    { db: double.db, charter: governing, featureTables: [{ feature: 'tagging', names: ['tags'], sequences: [] }], ...(telemetry !== undefined ? { telemetry } : {}) },
   );
   const server = new Hono<Env>();
   // The server's part: who this request is. A header stands in for a session.
@@ -212,11 +214,11 @@ const NOTES_BY_THE_FEATURE: SeedEntry = { fingerprint: 'tags/notes', dsl: { from
 const ADD_NOTE_BY_THE_FEATURE: SeedMutation = { fingerprint: 'tags/add-note', mutation: { op: 'insert', table: 'notes', values: { body: { $context: 'body' } } } };
 
 describe("the data module — a feature's own entries", () => {
-  const own = { entries: [TAGS, ADD_TAG, NOTES_BY_THE_FEATURE, ADD_NOTE_BY_THE_FEATURE], tables: ['tags'] };
+  const own = [TAGS, ADD_TAG];
 
   it('are replayed in process, a read and a write, with no role asked for', async () => {
     const { data, written } = await world();
-    const replay = await data.ownEntries(own);
+    const replay = await data.ownEntries('tagging', own);
     expect(await replay('tags/all', {})).toEqual([{ id: 1, body: 'first' }]);
     expect(await replay('tags/add', { id: 4 })).toEqual({ id: 7, body: 'written' });
     expect(written).toHaveLength(1);
@@ -226,7 +228,7 @@ describe("the data module — a feature's own entries", () => {
 
   it('are served by no route: whoever holds every grant is told the fingerprint is unknown, and no surface lists it', async () => {
     const { data, server, written, read } = await world();
-    await data.ownEntries(own);
+    await data.ownEntries('tagging', own);
     const asOwner = { 'content-type': 'application/json', 'x-test-role': 'owner' };
     for (const path of ['/api/vex', '/api/notes/vex']) {
       for (const fingerprint of ['tags/all', 'tags/add']) {
@@ -245,18 +247,29 @@ describe("the data module — a feature's own entries", () => {
     expect(read).toHaveLength(0);
   });
 
-  it('reach the tables the feature named and no other', async () => {
+  // WHICH TABLES IS NOT THE ASKER'S TO SAY. It was: the seam took a list of
+  // tables beside the entries, and admitted whatever was in it, so a feature
+  // somebody else wrote read `sessions` by naming it. The tables are the ones
+  // the feature named on itself, and an entry over any other is refused when
+  // it is handed over, a read and a write alike.
+  it('reach the tables the feature named as its own and no other: an entry over another table is refused when it is handed over', async () => {
     const { data, written, read } = await world();
-    const replay = await data.ownEntries(own);
-    await expect(replay('tags/notes', {})).rejects.toThrow(/^moss: the entry "tags\/notes" was refused \(\d+\): .*notes/);
-    await expect(replay('tags/add-note', { body: 'hello' })).rejects.toThrow(/"tags\/add-note" was refused/);
+    await expect(data.ownEntries('tagging', [TAGS, NOTES_BY_THE_FEATURE])).rejects.toThrow(
+      /^moss: the feature "tagging" handed over an entry that reads or writes a table that is not its own: "tags\/notes"\. Its own entries run outside the app's policy, so they reach the tables that are its own \(tags\) and no other\./,
+    );
+    await expect(data.ownEntries('tagging', [ADD_NOTE_BY_THE_FEATURE, NOTES_BY_THE_FEATURE])).rejects.toThrow(/handed over entries that read or write a table that is not its own: "tags\/add-note", "tags\/notes"/);
     expect(read).toHaveLength(0);
     expect(written).toHaveLength(0);
   });
 
+  it('a feature the data module was never told of has no tables to ask for', async () => {
+    const { data } = await world();
+    await expect(data.ownEntries('somebody-else', [TAGS])).rejects.toThrow(/was asked for the tables of a feature it was never told of \("somebody-else"\)/);
+  });
+
   it('replay only what the feature handed over: an entry of the app is unknown to it', async () => {
     const { data } = await world();
-    const replay = await data.ownEntries(own);
+    const replay = await data.ownEntries('tagging', own);
     await expect(replay('notes/all', {})).rejects.toThrow(/"notes\/all" was refused \(404\)/);
   });
 
@@ -265,7 +278,7 @@ describe("the data module — a feature's own entries", () => {
     const invalidated = vi.spyOn(engine, 'invalidate');
     const heard: string[] = [];
     data.onWrite((event) => heard.push(event.fingerprint));
-    const replay = await data.ownEntries(own);
+    const replay = await data.ownEntries('tagging', own);
     await replay('tags/add', { id: 4 });
     expect(invalidated.mock.calls).toEqual([[['tags']]]);
     expect(heard).toEqual([]);
@@ -274,7 +287,7 @@ describe("the data module — a feature's own entries", () => {
   it('emits a span for each execution, as machinery does', async () => {
     const spans: TelemetrySpan[] = [];
     const { data } = await world({ emit: (span) => spans.push(span) });
-    const replay = await data.ownEntries(own);
+    const replay = await data.ownEntries('tagging', own);
     await replay('tags/all', {});
     expect(spans.map((span) => [span.name, span.status, span.attributes['fingerprint'], span.attributes['hasPrincipal']])).toEqual([['vex.execute', 'ok', 'tags/all', false]]);
   });
@@ -294,7 +307,7 @@ describe('the data module — the fingerprints somebody may be told of', () => {
 
   it("are never a feature's own entries, whatever the caller holds", async () => {
     const { data } = await world();
-    await data.ownEntries({ entries: [TAGS, ADD_TAG], tables: ['tags'] });
+    await data.ownEntries('tagging', [TAGS, ADD_TAG]);
     expect(await data.fingerprintsFor(who('owner'))).toEqual(['notes/add', 'notes/all', 'notes/mine']);
   });
 
@@ -340,13 +353,49 @@ describe('the data module — the tables a run covers', () => {
   it("a feature's tables are run with the others: after moss's own, before the app's", () => {
     const grants = sequence('feature.grants');
     const notes = sequence('app.notes');
-    const features = [{ name: 'one', tables: [grants], start: () => undefined }, { name: 'none', start: () => undefined }];
-    expect(featureTablesOf({ features })).toEqual([grants]);
+    const features = [{ name: 'one', tables: { names: ['grants'], sequences: [grants] }, start: () => undefined }, { name: 'none', start: () => undefined }];
+    expect(featureTablesOf({ features })).toEqual([
+      { feature: 'one', names: ['grants'], sequences: [grants] },
+      { feature: 'none', names: [], sequences: [] },
+    ]);
     expect(tableSequencesOf({ ...owners, featureTables: featureTablesOf({ features }), tables: [notes] }).map((owned) => owned.id)).toEqual(['nisc.moss', 'feature.grants', 'app.notes']);
   });
 
   it('an app with no feature, or one that keeps no table, adds none', () => {
     expect(featureTablesOf({})).toEqual([]);
     expect(tableSequencesOf({ ...owners, storesSessions: true }).map((owned) => owned.id)).toEqual(['nisc.moss', 'nisc.moss.sessions']);
+  });
+});
+
+// WHICH TABLES ARE A FEATURE'S OWN (../src/data/feature-tables.ts), read off
+// the features before any of them runs. A feature's own entries run outside
+// the app's policy, so a table has one owner, and it is said before a table
+// is made.
+describe("the data module — the tables a feature names as its own", () => {
+  const naming = (name: string, ...names: string[]) => ({ name, tables: { names }, start: () => undefined });
+
+  it("a table of the core's is no feature's: naming one is refused, with the table and what it holds", () => {
+    const refused = (table: string): string => {
+      try {
+        featureTablesOf({ features: [naming('probe', 'probe_rows', table)] });
+        return 'accepted';
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+      }
+    };
+    expect(refused('sessions')).toMatch(/^moss: the feature "probe" names the table "sessions" as its own, and it is the core's: the stored session credentials\. A feature's own entries run outside the app's policy/);
+    expect(refused('moss_generation')).toMatch(/names the table "moss_generation" as its own, and it is the core's: the generation pointer every process polls\./);
+    expect(refused('vex_cache')).toMatch(/names the table "vex_cache" as its own, and it is the core's: the entries vex replays\./);
+    expect(refused('strata_ledger')).toMatch(/names the table "strata_ledger" as its own, and it is the core's: the record of every migration that ran\./);
+    // A name every object answers to is a table name like any other.
+    expect(refused('constructor')).toBe('accepted');
+  });
+
+  it('a table has one owner: two features that name one are refused, and both are said', () => {
+    expect(() => featureTablesOf({ features: [naming('one', 'grants'), naming('two', 'notes', 'grants')] })).toThrow(/^moss: the features "one" and "two" both name the table "grants" as their own\. A table has one owner\.$/);
+  });
+
+  it('two features of one name are refused: the name is what a table is kept under', () => {
+    expect(() => featureTablesOf({ features: [naming('one', 'grants'), naming('one', 'notes')] })).toThrow(/^moss: two features are named "one"\./);
   });
 });

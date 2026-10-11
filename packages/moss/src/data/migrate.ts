@@ -7,6 +7,8 @@ import { entriesOf } from '../manifest';
 import type { NiscApp } from '../manifest';
 import type { NiscRuntime } from '../runtime';
 import { SESSIONS_SEQUENCE } from '../identity';
+import { featureTablesOf } from './feature-tables';
+import type { FeatureTables } from './feature-tables';
 import { MOSS_SEQUENCE } from './tables';
 
 // ═══════════════════════════════════════════════════════════════
@@ -40,17 +42,11 @@ export type TableOwners = {
   cache?: CacheBackend;
   // The deployment keeps moss's own credential (`session: 'sessions'`).
   storesSessions: boolean;
-  // The tables the app's features keep (`featureTablesOf`).
-  featureTables?: readonly Sequence[];
+  // The tables the app's features keep (./feature-tables.ts).
+  featureTables?: readonly FeatureTables[];
   // The app's own tables (`runtime.tables`).
   tables?: readonly Sequence[];
 };
-
-// The tables an app's features keep, in the order the app named the features.
-// One function, for the server and for the step that migrates before it
-// starts: the two must run the same sequences, or a boot that only verifies
-// (`migrations: 'verify'`) finds one pending that the step never applied.
-export const featureTablesOf = (app: Pick<NiscApp, 'features'>): readonly Sequence[] => (app.features ?? []).flatMap((feature) => feature.tables ?? []);
 
 // Every table sequence a boot runs, in the order it runs them: moss's own, the
 // sessions table when the deployment chose moss's credential, the vex cache's,
@@ -62,7 +58,7 @@ export const tableSequencesOf = (owners: TableOwners): readonly Sequence[] => {
     MOSS_SEQUENCE,
     ...(owners.storesSessions ? [SESSIONS_SEQUENCE] : []),
     ...(cacheSequence === undefined ? [] : [cacheSequence]),
-    ...(owners.featureTables ?? []),
+    ...(owners.featureTables ?? []).flatMap((kept) => kept.sequences),
     ...(owners.tables ?? []),
   ];
 };
