@@ -1,6 +1,7 @@
 import { PGlite } from '@electric-sql/pglite';
-import { afterAll, beforeAll } from 'vitest';
+import { afterAll, beforeAll, inject } from 'vitest';
 import type { Row, TransformFn } from '../src/index';
+import { initialisedDirectory } from './initialised-database';
 import { TIDE_TABLES, createTideStore } from '../src/store/postgres';
 import type { TidePool } from '../src/store/postgres';
 
@@ -75,13 +76,15 @@ export const pglitePool = (db: PGlite): TidePool => ({
 // that is a TRUNCATE on a database that is already up.
 //
 // Call it once at the top of a test file. The database starts in a
-// `beforeAll`, and the store's own migration makes the tables there, once.
-// Each test asks `emptied()` first, so no test reads what another wrote and
-// the order they run in is not part of what they mean.
+// `beforeAll`, from the directory the run initialised before any test
+// (./initialised-database.ts), so the hook does not pay for `initdb`; the
+// store's own migration makes the tables there, once. Each test asks
+// `emptied()` first, so no test reads what another wrote and the order they
+// run in is not part of what they mean.
 export const oneDatabase = (): { emptied: () => Promise<{ db: PGlite; pool: TidePool }> } => {
   const held: { db?: PGlite } = {};
   beforeAll(async () => {
-    held.db = new PGlite();
+    held.db = new PGlite({ loadDataDir: initialisedDirectory(inject('initialisedDatabase')) });
     await createTideStore(pglitePool(held.db)).ready;
   });
   afterAll(async () => {

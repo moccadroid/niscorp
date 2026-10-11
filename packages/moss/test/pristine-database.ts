@@ -1,5 +1,6 @@
 import { PGlite } from '@electric-sql/pglite';
-import { beforeAll } from 'vitest';
+import { inject } from 'vitest';
+import { initialisedDirectory } from './initialised-database';
 
 // A DATABASE OF ITS OWN FOR A TEST, WITHOUT INITIALISING ONE EACH TIME.
 //
@@ -13,22 +14,18 @@ import { beforeAll } from 'vitest';
 //
 // A database that has been initialised once can be handed on as its data
 // directory. A PGlite started from that directory skips `initdb`: 140 ms
-// (measured the same way). So a file initialises one database, in a hook,
-// keeps its directory, and each test starts its own from it. A test still has
-// a database nobody else touches, with nothing in it but what Postgres puts
-// there; it does not pay for making one from nothing.
+// (measured the same way). The run initialises one database before any test
+// file (./initialised-database.ts), and each test starts its own from that
+// directory. A test still has a database nobody else touches, with nothing in
+// it but what Postgres puts there; it does not pay for making one from
+// nothing, and no hook does either.
 //
 // Call it once at the top of a test file, and call what it answers wherever
 // the file wrote `new PGlite()`.
 export const pristineDatabases = (): (() => PGlite) => {
-  const held: { directory?: Awaited<ReturnType<PGlite['dumpDataDir']>> } = {};
-  beforeAll(async () => {
-    const initialised = new PGlite();
-    held.directory = await initialised.dumpDataDir('none');
-    await initialised.close();
-  });
+  const held: { directory?: Blob } = {};
   return () => {
-    if (held.directory === undefined) throw new Error("pristineDatabases: asked for a database before the file's beforeAll had initialised one");
+    held.directory ??= initialisedDirectory(inject('initialisedDatabase'));
     return new PGlite({ loadDataDir: held.directory });
   };
 };

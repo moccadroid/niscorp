@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, inject } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { STORE_CONTRACT } from '../src/testing';
 import { createTideStore, TIDE_TABLES } from '../src/store/postgres';
 import type { TidePool } from '../src/store/postgres';
+import { initialisedDirectory } from './initialised-database';
 import { oneDatabase, pglitePool } from './support';
 
 // THE SAME CHECKS THE MEMORY STORE RUNS, against a real database.
@@ -124,11 +125,12 @@ describe('a serial group, claimed by two instances at once', () => {
 // is the host's to prove: moss does, in its test/tide-tables.test.ts.
 describe('the engine tables are not application data', () => {
   // The one case that is about a database with no table of tide's in it, so
-  // the one that starts a database of its own. It starts in a hook: the start
-  // is the slow part, and it is not what the case is timed for.
+  // the one that starts a database of its own: from the directory the run
+  // initialised (./initialised-database.ts), which holds nothing but what
+  // Postgres puts there.
   const empty: { db?: PGlite } = {};
   beforeAll(async () => {
-    empty.db = new PGlite();
+    empty.db = new PGlite({ loadDataDir: initialisedDirectory(inject('initialisedDatabase')) });
     await empty.db.waitReady;
   });
   afterAll(async () => {
