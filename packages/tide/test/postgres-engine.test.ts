@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { PGlite } from '@electric-sql/pglite';
 import { createTide } from '../src/index';
 import type { EffectRegistry, ReflexInput, Row, Tide, TideConfig, TideEvent } from '../src/index';
 import { createTideStore } from '../src/store/postgres';
 import type { TidePool } from '../src/store/postgres';
-import { pglitePool } from './support';
+import { oneDatabase } from './support';
 
 // THE ENGINE, ON A REAL DATABASE.
 //
@@ -42,8 +41,12 @@ const transform = (config: unknown, source: Row): unknown => {
 
 type Harness = { tide: Tide; calls: unknown[]; events: TideEvent[]; pool: TidePool };
 
+// One database for the file, emptied for each engine that is stood up
+// (./support.ts says why: a database for each test was 26 starts).
+const database = oneDatabase();
+
 const harness = async (reflexes: readonly ReflexInput[], effects: EffectRegistry, extra?: Partial<TideConfig>): Promise<Harness> => {
-  const pool = pglitePool(new PGlite());
+  const { pool } = await database.emptied();
   const store = createTideStore(pool);
   await store.ready;
 

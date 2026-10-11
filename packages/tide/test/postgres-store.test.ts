@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { STORE_CONTRACT } from '../src/testing';
 import { createTideStore, TIDE_TABLES } from '../src/store/postgres';
 import type { TidePool } from '../src/store/postgres';
-import { pglitePool } from './support';
+import { oneDatabase, pglitePool } from './support';
 
 // THE SAME CHECKS THE MEMORY STORE RUNS, against a real database.
 //
@@ -18,9 +18,13 @@ import { pglitePool } from './support';
 // so there is one definition of the contract and not two readings of a
 // comment.
 
+// One database for the file, emptied before each store is made (./support.ts
+// says why: a database for each test was 45 starts, and most of the suite).
+const database = oneDatabase();
+
 const freshStore = async () => {
-  const db = new PGlite();
-  const store = createTideStore(pglitePool(db));
+  const { pool } = await database.emptied();
+  const store = createTideStore(pool);
   await store.ready;
   return store;
 };
@@ -37,8 +41,7 @@ describe('the store contract — postgres', () => {
 // checked-out `pg` client. The store took `query` off the transaction once,
 // and on such a pool every transaction failed inside the driver.
 const storeOverClient = async () => {
-  const db = new PGlite();
-  const pool = pglitePool(db);
+  const { db, pool } = await database.emptied();
   const clientOver = (inner: { query: TidePool['query'] }) => ({
     inner,
     query(this: { inner: { query: TidePool['query'] } }, text: string, values?: unknown[]) {
@@ -70,7 +73,7 @@ describe('the store contract — a transaction that hands its client through', (
 // at every await, as two processes' do.
 describe('a serial group, claimed by two instances at once', () => {
   it('is held by one of them', async () => {
-    const pool = pglitePool(new PGlite());
+    const { pool } = await database.emptied();
     const one = createTideStore(pool);
     const other = createTideStore(pool);
     await one.appendIfAbsent('run', { id: 'run_1', reflexId: 'serial', version: 'v_0', cause: 'occurrence:1', state: 'fanned', depth: 0, total: 2, done: 0, failed: 0, dueAt: 0, createdAt: 0 });
@@ -97,7 +100,7 @@ describe('a serial group, claimed by two instances at once', () => {
   });
 
   it('inside a transaction of the caller, the claim is part of it', async () => {
-    const store = createTideStore(pglitePool(new PGlite()));
+    const store = createTideStore((await database.emptied()).pool);
     await store.appendIfAbsent('run', { id: 'run_1', reflexId: 'serial', version: 'v_0', cause: 'occurrence:1', state: 'fanned', depth: 0, total: 1, done: 0, failed: 0, dueAt: 0, createdAt: 0 });
     await store.appendIfAbsent('task', { runId: 'run_1', reflexId: 'serial', unit: 'u1', cause: 'occurrence:1', env: {}, depth: 0, state: 'pending', attempt: 0, claimedUntil: 0, notBefore: 0, createdAt: 0 });
 
@@ -120,9 +123,23 @@ describe('a serial group, claimed by two instances at once', () => {
 // That they are ordinary tables to a host (introspected, grantable, scopeable)
 // is the host's to prove: moss does, in its test/tide-tables.test.ts.
 describe('the engine tables are not application data', () => {
+  // The one case that is about a database with no table of tide's in it, so
+  // the one that starts a database of its own. It starts in a hook: the start
+  // is the slow part, and it is not what the case is timed for.
+  const empty: { db?: PGlite } = {};
+  beforeAll(async () => {
+    empty.db = new PGlite();
+    await empty.db.waitReady;
+  });
+  afterAll(async () => {
+    await empty.db?.close();
+  });
+
   it('a store creates its own schema, idempotently', async () => {
-    const db = new PGlite();
+    const db = empty.db;
+    if (db === undefined) throw new Error('the database of this case was not started');
     const pool = pglitePool(db);
+    expect((await pool.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`)).rows).toEqual([]);
     await createTideStore(pool).ready;
     // Twice, because a boot that has already run must not be a boot that
     // fails — every statement in the DDL is IF NOT EXISTS for this reason.

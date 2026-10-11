@@ -3,11 +3,12 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     include: ['test/**/*.test.ts'],
-    // The Postgres store's tests each boot their own PGlite — a WASM Postgres,
-    // compiled and initdb'd per case. That is ~800ms on a dev machine and
-    // several seconds on a two-core CI runner under worker contention, so the
-    // default 5s budget reads honest work as a hang. 30s still catches a real
-    // one. (The same number, for the same tests, as when they ran in moss.)
-    testTimeout: 30_000,
+    // No `testTimeout`: a test has vitest's own 5 s. It was 30 s, because the
+    // two files that run on Postgres started a PGlite for each test (45 and
+    // 26; 660 ms each on an idle machine, several seconds on a loaded one).
+    // They start one for a file now, in a hook, and empty its tables for each
+    // test (test/support.ts, `oneDatabase`). Measured after: the slowest test
+    // of the package takes about 200 ms, and the two files take 2 s between
+    // them where they took 55.
   },
 });
