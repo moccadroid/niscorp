@@ -94,7 +94,7 @@ engine.cache;                     // CacheBackend — the live cache
 | Writes | Mutation entries in the same cache — a closed grammar, replay-only by fingerprint, never generated; `lintMutation` checks a statement at seed |
 | Seeding and freshness | `seedCache` turns authored `SeedEntry` / `SeedMutation` rows into protected cache entries; an entry's `refresh` is `'snapshot'` or `'reactive'` |
 | Safety | Server-side scope policies, query analyzer (cartesian/nesting/index checks), parameterized SQL only |
-| Its own table | The Postgres cache's table is a [strata](../strata/README.md) sequence (`cache.sequence`, `nisc.vex.cache`): `cache.init()` applies it through the ledger once, instead of `IF NOT EXISTS` on every boot. Requires a pool with `transaction` (the PGlite pool has one). |
+| Its own table | The Postgres cache's table is a [strata](../strata/README.md) sequence (`cache.sequence`, `nisc.vex.cache`): `cache.init()` applies it through the ledger once, instead of `IF NOT EXISTS` on every boot. Requires a pool with `transaction` (the PGlite pool has one). The cache says which table that is (`cache.table`: `{ schema, name }`), so a host that hands tables out one by one can refuse it to everybody else under whatever name a deployment gave it. |
 
 ## License
 

@@ -133,4 +133,12 @@ describe('createTieredCache', () => {
     const cache = createTieredCache({ l1: createMemoryCache(), l2: createMemoryCache() });
     expect(await cache.get('missing')).toBeUndefined();
   });
+
+  // What the durable tier keeps in a database is the tiered cache's to say: a
+  // host asks the cache it was handed, and that is this one.
+  it('says the table its durable tier keeps, and none when that tier keeps none', () => {
+    const table = { schema: 'public', name: 'query_cache' };
+    expect(createTieredCache({ l1: createMemoryCache(), l2: { ...createMemoryCache(), table } }).table).toEqual(table);
+    expect(createTieredCache({ l1: createMemoryCache(), l2: createMemoryCache() }).table).toBeUndefined();
+  });
 });

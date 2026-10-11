@@ -151,5 +151,12 @@ export type CacheBackend = {
   // migrates several owners in one run (moss) collects it; `init` applies it
   // alone for everyone else. Either way it goes through the ledger.
   sequence?: Sequence;
+  // WHERE A BACKEND THAT KEEPS ITS ENTRIES IN A TABLE KEEPS THEM (Postgres):
+  // the schema and the table, as the database names them. What is in that
+  // table is every entry the engine replays, so a host that hands out access
+  // table by table (moss, to a feature's own entries) reads this to refuse
+  // the table to anybody else, under whatever name a deployment gave it.
+  // Absent: the backend keeps no table (memory).
+  table?: { schema: string; name: string };
   entries?: () => Promise<Array<{ key: string; entry: CacheEntry }>>;
 };

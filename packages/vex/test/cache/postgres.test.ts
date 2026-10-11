@@ -350,4 +350,12 @@ describe('createPostgresCache — the table, through the ledger', () => {
     expect(createPostgresCache({ pool }).sequence.id).toBe('nisc.vex.cache');
     expect(createPostgresCache({ pool, schema: 'ops', table: 'Query_Cache' }).sequence.id).toBe('nisc.vex.cache.ops-query-cache');
   });
+
+  // A host that hands tables out one by one has to refuse this one to
+  // everybody else, and a deployment may have named it.
+  it('says which table it keeps its entries in, as the database names it', () => {
+    const pool = createPglitePool(new PGlite());
+    expect(createPostgresCache({ pool }).table).toEqual({ schema: 'public', name: 'vex_cache' });
+    expect(createPostgresCache({ pool, schema: 'ops', table: 'Query_Cache' }).table).toEqual({ schema: 'ops', name: 'Query_Cache' });
+  });
 });

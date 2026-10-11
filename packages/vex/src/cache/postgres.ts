@@ -42,6 +42,7 @@ export type PostgresCacheConfig = {
 export type PostgresCache = CacheBackend & {
   init: () => Promise<void>;
   sequence: Sequence;
+  table: { schema: string; name: string };
   entries: () => Promise<Array<{ key: string; entry: CacheEntry }>>;
 };
 
@@ -271,5 +272,5 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
     return out;
   };
 
-  return { init, sequence, get, set, delete: del, clear, keys, entries };
+  return { init, sequence, table: { schema: config.schema ?? 'public', name: config.table ?? 'vex_cache' }, get, set, delete: del, clear, keys, entries };
 };
