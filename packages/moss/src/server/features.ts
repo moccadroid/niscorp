@@ -80,9 +80,10 @@ export const seamsOf = ({ app, runtime, server, operator, registered, identity, 
   },
 });
 
-// THE FEATURES ARE STARTED, in the order the app named them, each with the
-// seams. One that throws refuses the boot.
+// THE FEATURES ARE STARTED, in the order the app named them. EACH WITH SEAMS
+// OF ITS OWN: anybody can write a feature, so what one is handed is made for
+// that feature and is no other's to reach through. One that throws refuses
+// the boot.
 export const startFeatures = async (features: readonly Feature[], parts: SeamParts): Promise<void> => {
-  const seams = seamsOf(parts);
-  for (const feature of features) await feature.start(seams);
+  for (const feature of features) await feature.start(seamsOf(parts));
 };
