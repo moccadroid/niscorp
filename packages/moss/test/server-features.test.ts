@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
 import type { ActionDefinition } from '@niscorp/nova';
-import { scopeGrants } from '@niscorp/vex';
+import { createPostgresCache, scopeGrants } from '@niscorp/vex';
 import type { SeedEntry } from '@niscorp/vex';
 import type { Charter } from '@niscorp/charter';
 import { dataOver } from '../src/data/data';
@@ -11,6 +11,7 @@ import type { Feature, FeatureSeams } from '../src/feature';
 import { memoKey } from '../src/identity';
 import { createRunningManifest } from '../src/manifest';
 import type { RunningManifest } from '../src/manifest';
+import { buildData } from '../src/server/data';
 import { emptyRegister, startFeatures } from '../src/server/features';
 import type { SeamParts } from '../src/server/features';
 import type { Env } from '../src/server/moss-server';
@@ -123,6 +124,21 @@ describe("the features — a feature's own entries", () => {
     await start();
     await expect(probe.seams().ownEntries([TAGS])).rejects.toThrow(/the feature "probe" handed over an entry that reads or writes a table that is not its own: "tagging\/all"/);
     await expect(tagging.seams().ownEntries([NOTES])).rejects.toThrow(/the feature "tagging" handed over an entry/);
+  });
+
+  // The server asks with the cache the deployment handed its runtime: the
+  // table that one keeps vex's entries in is the core's, whatever it is
+  // called (data.test.ts). Refused while the data module is being put
+  // together, so the database has been asked nothing.
+  it('a feature that names the table the deployment’s own cache is kept in refuses the boot, before the database is asked anything', () => {
+    const asked: string[] = [];
+    const pool = { query: async (text: string) => (asked.push(text), { rows: [] }) };
+    const probe = keeping('probe');
+    const app = { charter, actions: {}, features: [{ ...probe.feature, tables: { names: ['replayed_entries'] } }] };
+    expect(() => buildData(app, { pool, db: pool, session: 'dev-open', cache: createPostgresCache({ pool, table: 'replayed_entries' }) })).toThrow(
+      /^moss: the feature "probe" names the table "replayed_entries" as its own, and it is the core's: the entries vex replays\./,
+    );
+    expect(asked).toEqual([]);
   });
 });
 

@@ -20,7 +20,9 @@ export const buildData = (app: NiscApp, runtime: NiscRuntime): Promise<Data> =>
     migrations: runtime.migrations,
     storesSessions: runtime.session === 'sessions',
     // The tables the features keep, so they are there before a feature starts.
-    featureTables: featureTablesOf(app),
+    // Asked with the cache the deployment handed over: the table that one
+    // keeps is the core's under whatever name it has.
+    featureTables: featureTablesOf(app, runtime.cache),
     tables: runtime.tables,
     grammars: app.grammars,
     charter: app.charter,

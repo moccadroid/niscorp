@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
 import { compile, execute } from '@niscorp/prism';
-import { createMemoryCache, scopeGrants } from '@niscorp/vex';
+import { createMemoryCache, createPostgresCache, scopeGrants } from '@niscorp/vex';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Charter } from '@niscorp/charter';
 import type { Sequence } from '@niscorp/strata';
@@ -11,7 +11,7 @@ import type { TelemetrySpan } from '../src/runtime';
 import { dataOver } from '../src/data/data';
 import { createGrammarUpgrader } from '../src/data/grammar';
 import { featureTablesOf } from '../src/data/feature-tables';
-import { tableSequencesOf } from '../src/data/migrate';
+import { migrateTables, tableSequencesOf } from '../src/data/migrate';
 import { engineDouble } from './data-double';
 
 // WHAT SOMEBODY MAY READ AND WRITE, as the one object a server builds: the
@@ -436,6 +436,39 @@ describe("the data module — the tables a feature names as its own", () => {
     expect(refused('strata_ledger')).toMatch(/names the table "strata_ledger" as its own, and it is the core's: the record of every migration that ran\./);
     // A name every object answers to is a table name like any other.
     expect(refused('constructor')).toBe('accepted');
+  });
+
+  // THE CORE'S TABLES ARE NAMED BY WHAT A DEPLOYMENT CALLS THEM. Vex's cache
+  // is `vex_cache` unless the deployment hands the runtime a cache of its own
+  // under another name; and what is in it is every entry the engine replays.
+  // The refusal knew the default name alone, so on such a deployment a
+  // feature could name the cache's table as its own and rewrite the app's
+  // entries outside any policy.
+  describe('the table a deployment keeps vex’s entries in', () => {
+    const asked: string[] = [];
+    const pool = { query: async (text: string) => (asked.push(text), { rows: [] }) };
+    const probing = { features: [naming('probe', 'probe_rows', 'replayed_entries')] };
+    const refusal = /^moss: the feature "probe" names the table "replayed_entries" as its own, and it is the core's: the entries vex replays\./;
+
+    it('is the core’s under the name the deployment gave it, and no feature’s', () => {
+      expect(() => featureTablesOf(probing, createPostgresCache({ pool, table: 'replayed_entries' }))).toThrow(refusal);
+      // With the cache where it is by default, that name is a table like any other.
+      expect(featureTablesOf(probing, createPostgresCache({ pool }))).toHaveLength(1);
+      expect(featureTablesOf(probing)).toHaveLength(1);
+      // A cache that keeps no table refuses nothing more.
+      expect(featureTablesOf(probing, createMemoryCache())).toHaveLength(1);
+    });
+
+    it('kept in another schema, it is a table no entry reaches: the name is free', () => {
+      expect(featureTablesOf(probing, createPostgresCache({ pool, schema: 'internal', table: 'replayed_entries' }))).toHaveLength(1);
+    });
+
+    it('the step that migrates refuses it too, before the database is asked anything', async () => {
+      asked.length = 0;
+      const runtime = { pool, session: 'dev-open' as const, cache: createPostgresCache({ pool, table: 'replayed_entries' }) };
+      await expect(migrateTables(runtime, probing)).rejects.toThrow(refusal);
+      expect(asked).toEqual([]);
+    });
   });
 
   it('a table has one owner: two features that name one are refused, and both are said', () => {
