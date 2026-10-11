@@ -98,7 +98,9 @@ export type ShellOpening = {
 export type ShellHost = {
   // `options.seed`: build an EPHEMERAL session's shell under this id seed (see
   // ShellSnapshot). Ignored for a kept shell — it is durable, and the one a
-  // document was rendered from is the one the socket attaches to.
+  // document was rendered from is the one the socket attaches to. Rejects when
+  // the shell cannot be built, or is not built within the endpoint timeout
+  // (`ShellLimits.endpointTimeoutMs`); so does `snapshot`.
   session: (token: string | null, principal: string | null, options?: ShellOpening) => Promise<ShellSession>;
   // The current screen for whoever this is, without attaching anything. A
   // principal's durable shell is built if it is not standing (the socket would

@@ -89,7 +89,9 @@ export type ShellLimits = {
   // received, instead of whole. Default off; a connection is only ever sent one
   // if it asked at attach. See `runtime.shellFrameDelta` and DOCS.md.
   delta?: boolean;
-  // How long an endpoint call of a shell waits for its reply. Default nova's.
+  // How long an endpoint call of a shell waits for its reply, and how long the
+  // build of a shell may take: one that has not landed by then fails for
+  // whoever waited on it (./host.ts, `build`). Default nova's, 30 seconds.
   endpointTimeoutMs?: number;
 };
 

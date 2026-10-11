@@ -597,6 +597,161 @@ describe('shells — reset', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// A BUILD IS BOUNDED. A build runs the app's code (who somebody is, `inputs`,
+// the words a shell wears), and that code can hang for one call. That costs
+// the one call: a build that has not landed when the endpoint timeout runs
+// out fails for whoever waited on it, and nothing of the host waits on it
+// afterwards. The clock is the test's.
+// ═══════════════════════════════════════════════════════════════
+
+// What became of a call, read without waiting for it.
+const outcomeOf = (call: Promise<unknown>): { state: 'waiting' | 'served' | 'refused' } => {
+  const outcome: { state: 'waiting' | 'served' | 'refused' } = { state: 'waiting' };
+  call.then(
+    () => void (outcome.state = 'served'),
+    () => void (outcome.state = 'refused'),
+  );
+  return outcome;
+};
+
+// WHO SOMEBODY IS, ANSWERED FOR EVERYBODY BUT THE ONES THE TEST NAMES: an
+// asking about one of those is never answered. One that is asked after the
+// name was taken out is answered like anybody's.
+const neverAnsweredFor =
+  (stuck: ReadonlySet<string>): HostSetup['resolve'] =>
+  async (principal) => {
+    if (principal !== null && stuck.has(principal)) await new Promise<never>(() => undefined);
+    return ctx.resolve(principal);
+  };
+
+describe('shells — a build is bounded by the endpoint timeout', () => {
+  const TIMEOUT = 2_000;
+  // The test's clock. `pass(0)` runs what is ready, and no time goes by.
+  const clocked = async (run: (pass: (ms: number) => Promise<void>) => Promise<void>): Promise<void> => {
+    vi.useFakeTimers();
+    try {
+      await run(async (ms) => void (await vi.advanceTimersByTimeAsync(ms)));
+    } finally {
+      vi.useRealTimers();
+    }
+  };
+
+  it('a first build that never lands is refused at the timeout to whoever waited on it; their next arrival, snapshot and reset are served, and nobody else waited', () =>
+    clocked(async (pass) => {
+      const stuck = new Set(['usr_1']);
+      const host = standHost(hostConfig({ ...ctx, endpointTimeoutMs: TIMEOUT, resolve: neverAnsweredFor(stuck) }));
+      // Two arrivals and a document's read, all for the one build.
+      const waited = [host.session('t', 'usr_1'), host.session('t', 'usr_1'), host.snapshot('t', 'usr_1')].map(outcomeOf);
+      const theirs = outcomeOf(host.session('t', 'usr_2'));
+
+      await pass(TIMEOUT - 1);
+      expect(theirs.state).toBe('served');
+      expect(waited.map((call) => call.state)).toEqual(['waiting', 'waiting', 'waiting']);
+      await pass(1);
+      expect(waited.map((call) => call.state)).toEqual(['refused', 'refused', 'refused']);
+      expect(host.list().map((shell) => shell.principal)).toEqual(['usr_2']);
+
+      // Whoever is asked about them answers again: the next arrival builds
+      // afresh, and nothing of the build that failed is in its way.
+      stuck.clear();
+      const session = await host.session('t', 'usr_1');
+      expect(session.shell.getState().canvases['main']?.active).toBeDefined();
+      const read = outcomeOf(host.snapshot('t', 'usr_1'));
+      await pass(TIMEOUT - 1);
+      expect(read.state).toBe('served');
+      expect(host.reset('usr_1')).toBe(true);
+      host.stop();
+    }));
+
+  it('a reset whose build never lands holds up no later reset of that shell beyond the timeout, and nobody else’s at all', () =>
+    clocked(async (pass) => {
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const stuck = new Set<string>();
+        const host = standHost(hostConfig({ ...ctx, app: wide, endpointTimeoutMs: TIMEOUT, resolve: neverAnsweredFor(stuck) }));
+        const session = await host.session('t', 'usr_1');
+        const theirs = await host.session('t', 'usr_2');
+        const connection = fakeConnection();
+        session.attach(connection);
+        await pass(0);
+        const stood = { mine: session.shell, theirs: theirs.shell };
+
+        // This reset's build asks who usr_1 is, and is never answered.
+        stuck.add('usr_1');
+        session.reset();
+        await pass(0);
+        stuck.clear();
+
+        // Somebody else's reset waits on nothing.
+        expect(host.reset('usr_2')).toBe(true);
+        await pass(0);
+        expect(theirs.shell).not.toBe(stood.theirs);
+        // Their own later resets, by principal and from a terminal, are served
+        // by the time the timeout has run out.
+        expect(host.reset('usr_1')).toBe(true);
+        session.reset();
+        await pass(TIMEOUT);
+        expect(session.shell).not.toBe(stood.mine);
+        expect(host.list().find((shell) => shell.principal === 'usr_1')?.connections).toBe(1);
+        // The terminal is on the shell that stands.
+        connection.sent.length = 0;
+        session.dispatch('main', { type: 'ui:click', ref: 'bump' });
+        await pass(0);
+        expect(connection.sent.some((m) => m['type'] === 'render' && m['canvas'] === 'main')).toBe(true);
+        expect(connection.closes).toEqual([]);
+        // The reset that never landed failed, and that is said.
+        expect(errors.mock.calls.some((call) => String(call[0]).includes('a reset failed to rebuild'))).toBe(true);
+        host.stop();
+      } finally {
+        errors.mockRestore();
+      }
+    }));
+
+  // A BUILD THAT IS ANSWERED AFTER ITS TIME RAN OUT STOPS THERE. Whoever waited
+  // on it was refused, so the rest of it would be the app's code run for
+  // nobody (`functions`, `onSession`, `seeds`) and a shell nothing would end.
+  it.each([
+    ['who its principal is', 'composition'],
+    ['their `inputs`', 'inputs'],
+  ] as const)('a build that hears %s after its time ran out runs none of the app’s code after that, and is kept by nothing', (_what, hangs) =>
+    clocked(async (pass) => {
+      const ran: string[] = [];
+      const answers: (() => void)[] = [];
+      const answering = { byHand: true };
+      const answered = (at: string): Promise<void> => (answering.byHand && at === hangs ? new Promise<void>((answer) => void answers.push(answer)) : Promise.resolve());
+      const counting = {
+        ...app,
+        functions: () => (ran.push('functions'), {}),
+        onSession: () => void ran.push('onSession'),
+        shell: {
+          canvases: [{ id: 'main', initial: 'counter' }],
+          inputs: async () => (ran.push('inputs'), await answered('inputs'), {}),
+          seeds: () => (ran.push('seeds'), {}),
+        },
+      } as unknown as NiscApp;
+      const host = standHost(
+        hostConfig({ ...ctx, app: counting, endpointTimeoutMs: TIMEOUT, resolve: async (principal) => (await answered('composition'), ctx.resolve(principal)) }),
+      );
+      const arriving = outcomeOf(host.session('t', 'usr_1'));
+      await pass(TIMEOUT);
+      expect(arriving.state).toBe('refused');
+      const ranInTime = [...ran];
+
+      answers[0]?.();
+      await pass(0);
+      expect(ran).toEqual(ranInTime);
+      expect(host.list()).toEqual([]);
+
+      // The next arrival builds its own, whole.
+      answering.byHand = false;
+      await host.session('t', 'usr_1');
+      expect(ran.slice(ranInTime.length)).toEqual(['inputs', 'functions', 'onSession', 'seeds']);
+      expect(host.list()).toHaveLength(1);
+      host.stop();
+    }));
+});
+
+// ═══════════════════════════════════════════════════════════════
 // LIST — moss's own enumeration of its own map. The roster an operator
 // needs to find the shell to reset, and the reason an app need not keep a
 // second, drifting note beside it.
@@ -1455,7 +1610,8 @@ describe('shells — adopt', () => {
   it('a build that never lands holds no later change back from anybody else', async () => {
     const { host, force } = world({ app: stuck() });
     const session = await host.session('t', 'usr_1');
-    void host.session('t', 'usr_stuck');
+    // Refused when the endpoint timeout runs out, which nobody here waits for.
+    host.session('t', 'usr_stuck').catch(() => undefined);
     await settle();
 
     force({ home, extra, ledger });
@@ -1664,6 +1820,31 @@ describe('shells — adopt', () => {
 
     expect(session.shell).not.toBe(stood);
     expect(() => session.shell.push('main', 'extra')).toThrow();
+  });
+
+  // THE SHELL THAT STANDS ADOPTS, WHATEVER IS BEING BUILT TO REPLACE IT. A
+  // replacement may never land (an `inputs` that hangs for the reset), and
+  // until one does the shell that stands is the one its terminals are on.
+  it('a shell whose replacement never lands adopts a change all the same', async () => {
+    const hanging = { inputs: false };
+    const slow: NiscApp = { ...base, shell: { canvases: [{ id: 'main', initial: 'home' }], inputs: () => (hanging.inputs ? new Promise<never>(() => undefined) : {}) } };
+    const { host, force } = world({ app: slow });
+    const session = await host.session('t', 'usr_1');
+    session.shell.push('main', 'extra');
+    await settle();
+    const stood = session.shell;
+
+    hanging.inputs = true;
+    session.reset();
+    await settle();
+    force({ home, ledger });
+    host.adopt();
+    await settle();
+
+    expect(session.shell).toBe(stood);
+    expect(mounted(session)).toEqual(['home']);
+    session.shell.push('main', 'ledger');
+    expect(mounted(session)).toEqual(['home', 'ledger']);
   });
 
   // AN ADOPT TAKES WHAT A BUILD TAKES, OF THE SAME ANSWER: the frame, what

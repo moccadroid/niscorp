@@ -303,7 +303,7 @@ type NiscRuntime = {
   tables?: readonly Sequence[];    // the app's own table sequences, in that same run
   shellIdleMs?: number;            // idle shell eviction; default 30 min, `0` disables
   anonymousShellMax?: number;      // shells for nobody signed in alive at once; default 1,000, `Infinity` is no limit
-  endpointTimeoutMs?: number;      // a server shell's endpoint call; default nova's, 30s
+  endpointTimeoutMs?: number;      // a server shell's endpoint call, and the build of a shell; default nova's, 30s
   sessionRevalidateMs?: number;    // live-socket re-verify; default 60s, `0` disables
   identityMax?: number;            // resident identity records; default 10,000; 0 or less refuses the boot
   identityIdleMs?: number;         // drop an unread identity record; default 30 min, `0` disables
@@ -1258,6 +1258,13 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
     answers is exported as `ShellSnapshot`.
     Two first arrivals for one principal in the same moment are handed one
     shell: one is built.
+    A build is bounded by `runtime.endpointTimeoutMs` (30 seconds when
+    unset). It runs the app's code (`identity`, `inputs`, `phrases`), and
+    code that hangs for one call costs that call: a build that has not
+    landed by then fails, `session` and `snapshot` reject for whoever waited
+    on it, and the next arrival builds afresh. What the app's code answers
+    after that is not used: the build stops there, calls none of
+    `functions`, `onSession` and `seeds`, and makes no shell.
     A session whose shell is not kept is the host's until that shell ends,
     so that a change can reach it. The socket ends it when the connection
     closes. Code that opens one in process and attaches nothing ends it
@@ -1311,7 +1318,9 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
     `false` = they hold no shell, which is an answer, not an error. The
     replacement is built from what the shell was opened with (for a page's,
     the inputs of its path and its id seed), and a shell's resets run one
-    after another.
+    after another. A reset whose build throws, or has not landed within
+    `runtime.endpointTimeoutMs`, is logged and leaves the shell that stood;
+    the reset after it goes ahead.
 - What `ShellHost.session(token, principal)` returns (a type that is not
   exported by name: `Awaited<ReturnType<ShellHost['session']>>`):
   `{ shell, attach, detach, resync, dispatch, publish, back, popTo, reset }`. The living nova `Shell`,

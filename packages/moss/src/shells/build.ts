@@ -86,29 +86,39 @@ const seedCanvases = (
     });
 };
 
-// `reset`: this build replaces a shell that stood (the span says so).
-// `idSeed` and `given`: how the shell was opened (`ShellOpening`).
-export const buildShell = async (
-  host: HostState,
-  token: string | null,
-  principal: string | null,
-  reset = false,
-  idSeed?: string,
-  given?: ShellOpening['inputs'],
-): Promise<Live> => {
+// WHAT ONE BUILD IS ASKED FOR: who the shell is for, and how it is opened.
+export type BuildRequest = {
+  token: string | null;
+  principal: string | null;
+  // The id seed, and the inputs a page's path carries (`ShellOpening`).
+  opening?: ShellOpening;
+  // This build replaces a shell that stood (the span says so).
+  reset: boolean;
+  // WHETHER ANYBODY STILL WAITS FOR THIS BUILD. A build waits on the app's
+  // code three times (who the principal is, their `inputs`, their words), and
+  // each wait may be as long as that code takes. It asks after each one. A
+  // build nobody waits for any more stops there: it runs none of the app's
+  // code that comes after, makes no shell, and answers `undefined`.
+  wanted: () => boolean;
+};
+
+export const buildShell = async (host: HostState, asked: BuildRequest): Promise<Live | undefined> => {
   const { config, emit, kept, delta } = host;
   const { hooks } = config;
+  const { token, principal, opening, reset, wanted } = asked;
   const buildClock = emit === undefined ? undefined : spanClock();
   // ONE answer for everything a shell is made of. Which actions this
   // principal is granted, and which layout their roles hold of each, was
   // decided where it was answered: what is in `made.actions` is what exists.
   const made = await config.composition(principal);
+  if (!wanted()) return undefined;
   const ids = Object.keys(made.actions);
   const granted = new Set(ids);
   // ASYNC AND WIRE-BEARING, matching `seeds`: a hook that can await the
   // governed wire can ask a question about rows.
   const inputs = (await hooks.inputs?.({ principal, actions: ids, roles: made.roles, identity: made.scope, wire: config.wire(token) })) ?? {};
-  const canvases = mountedCanvases(made.canvases, granted, inputs, given);
+  if (!wanted()) return undefined;
+  const canvases = mountedCanvases(made.canvases, granted, inputs, opening?.inputs);
 
   const wire = config.wrapWire === undefined ? config.wire(token) : config.wrapWire(config.wire(token));
   const userId = principal ?? 'anonymous';
@@ -132,6 +142,7 @@ export const buildShell = async (
   // catalog and inputs — one path, so a language can never be a release
   // behind the screen it is painting.
   const phrases = (await hooks.phrases?.({ principal, identity: made.scope, wire: config.wire(token) })) ?? {};
+  if (!wanted()) return undefined;
 
   // NOTHING AWAITS BETWEEN THESE SEAMS AND `shellRef.shell = shell`. Both run
   // before the shell exists, so app code defers its first touch of
@@ -164,6 +175,7 @@ export const buildShell = async (
   // the same anonymous visitor. The seed is random per document, so ids stay
   // unguessable and a stale origin from another shell still names nothing.
   let minted = 0;
+  const idSeed = opening?.seed;
   const shell = createShell({
     registry,
     canvases,

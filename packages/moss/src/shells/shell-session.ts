@@ -10,8 +10,9 @@ import type { ShellSession } from './types';
 // cell, so a reset reaches whoever holds it.
 //
 // `ephemeral`: the shell is nobody's to keep, and goes when its last
-// connection does. `rebuild`: how the host replaces the shell in a cell.
-export const sessionOn = (host: HostState, cell: Cell, ephemeral: boolean, rebuild: (cell: Cell) => Promise<void>): ShellSession => ({
+// connection does. `reset`: how the host replaces the shell in a cell. It
+// answers at once, and says so itself when the replacement cannot be built.
+export const sessionOn = (host: HostState, cell: Cell, ephemeral: boolean, reset: (cell: Cell) => void): ShellSession => ({
   // Read through the cell, always: after a reset the shell behind this
   // session is a different object.
   get shell(): Shell {
@@ -65,5 +66,5 @@ export const sessionOn = (host: HostState, cell: Cell, ephemeral: boolean, rebui
   publish: (channel, payload) => cell.live.shell.publish(channel, payload),
   back: () => cell.live.shell.back(),
   popTo: (canvas: string, instance: string) => cell.live.shell.popTo(canvas, instance),
-  reset: () => void rebuild(cell).catch((err: unknown) => console.error('[moss/shells] a reset failed to rebuild', err)),
+  reset: () => reset(cell),
 });

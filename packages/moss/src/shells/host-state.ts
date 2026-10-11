@@ -91,12 +91,12 @@ export type Cell = {
   // The reset of this cell that is under way, or the last one that ran. The
   // next one waits for it.
   resetting?: Promise<void>;
-  // WHICH ASKING ITS SHELL IS LEVEL WITH: the place, among every asking of
-  // what a principal holds that the host made for an adopt (`HostState.asked`),
-  // of the one whose answer was last put in place. An answer to an earlier
-  // asking that arrives afterwards is older, and is not put in its place.
-  // Undefined: the cell has adopted nothing yet.
-  level?: number;
+  // THE NUMBER ITS SHELL REFLECTS (`HostState.lastNumber`): the number of the
+  // build the shell came from, or of the change it last adopted. What a
+  // principal holds, answered for a lower number, is older than what the
+  // shell holds and is dropped; a cell below `HostState.changeNumber` has a
+  // change to adopt.
+  number: number;
 };
 
 // WHAT EVERY PART OF ONE HOST READS, settled once when the host is created:
@@ -112,6 +112,11 @@ export type HostState = {
   delta: boolean;
   // principal → the one living shell
   durable: Map<string, Cell>;
+  // principal → THE FIRST BUILD OF THE SHELL THIS HOST WILL KEEP FOR THEM,
+  // while it runs. Whoever arrives for them meanwhile is handed the same
+  // build, so one shell is built however many arrive. A build is bounded
+  // (./host.ts, `build`), so nobody waits here longer than the timeout.
+  building: Map<string, Promise<Cell>>;
   // EVERY LIVING SHELL THIS HOST BUILT, each with the cell it is addressed
   // through: the kept ones, which `durable` also finds by principal, and the
   // ones built for one connection, which nothing else of the host holds. A
@@ -119,14 +124,13 @@ export type HostState = {
   // (`endShell`). So what is walked to bring every shell level with a change,
   // or to reset somebody's, is the shells that live and no other.
   living: Map<Live, Cell>;
-  // EVERY BUILD UNDER WAY, of a shell that will be kept and of one that will
-  // not, each until it lands or fails. What lands after a change was built
-  // from what its principal held before it, and adopts when it lands.
-  underWay: Set<Promise<Cell>>;
-  // HOW MANY TIMES THE HOST HAS ASKED WHAT A PRINCIPAL HOLDS, FOR AN ADOPT.
-  // Each asking takes the next number, so of two answers for one cell the one
-  // with the higher number was asked later (`Cell.level`).
-  asked: number;
+  // THE ONE COUNTER: the last number given out. A first build, a reset and a
+  // change of what is in force each take the next one, so of two pieces of
+  // work the one with the higher number began later.
+  lastNumber: number;
+  // THE NUMBER THE LATEST CHANGE OF WHAT IS IN FORCE TOOK. A shell whose
+  // number is lower was built, or last brought level, before that change.
+  changeNumber: number;
 };
 
 // A SHELL ENDS HERE, AND NOTHING ELSE SETS `ended`. It is marked, so a pass

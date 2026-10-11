@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { snapshotShell } from '@niscorp/nova/reflect';
 import { emitterOf } from '../runtime';
 import { buildShell } from './build';
+import type { BuildRequest } from './build';
 import type { ShellComposition, ShellHostConfig } from './config';
 import { endShell, layoutsOf } from './host-state';
 import type { Cell, HostState, Live } from './host-state';
@@ -42,6 +43,27 @@ import type { OwnedShellHost, ShellHost, ShellReport } from './types';
 // that makes an operator able to find the shell to reset; the idle sweep is
 // the same disposal on a timer, and safe for the reason DESIGN.md gives —
 // the database is the durable thing, a shell is a warm cache.
+//
+// WHAT THE HOST KEEPS (./host-state.ts), AND WHAT ORDERS IT. Every piece of
+// work on a shell carries a number: a first build, a reset and a change of
+// what is in force each take the next one of one counter. Work waits on the
+// app's code, so what a principal holds may be answered for two changes in
+// either order; a shell takes the answer with the higher number, and the
+// order they arrive in decides nothing.
+//   `lastNumber`      the one counter.
+//   `changeNumber`    the number the latest change took. A shell that lands
+//                     with a lower one adopts.
+//   `Cell.number`     the number a cell's shell reflects: of its build, or of
+//                     the change it last adopted.
+//   `durable`         principal → the cell of the shell the host keeps for them.
+//   `building`        principal → the first build of that shell while it
+//                     runs, shared by whoever arrives meanwhile.
+//   `living`          every living shell → its cell: what a change, a reset
+//                     and a delivery walk.
+//   `Cell.resetting`  the reset of a cell that is under way: the next one
+//                     waits for it.
+// A build is bounded (`build`), so whoever waits on one, an arrival or the
+// next reset, waits for the endpoint timeout at most.
 // ═══════════════════════════════════════════════════════════════
 
 // A shell nobody has been attached to for half an hour is a warm cache with no
@@ -51,6 +73,11 @@ export const DEFAULT_IDLE_MS = 30 * 60 * 1000;
 // The sweep never runs less often than this, so a short `idleMs` is honoured
 // closely and a long one doesn't cost a wakeup per minute.
 const SWEEP_EVERY_MS = 60 * 1000;
+
+// How long a build may take where the deployment names no endpoint timeout
+// (`ShellLimits.endpointTimeoutMs`): the wait nova gives an endpoint call it
+// was told nothing about.
+const DEFAULT_BUILD_TIMEOUT_MS = 30_000;
 
 // ── the idle sweep ──
 // A durable shell with nothing attached for `idleMs` is disposed. Safe by
@@ -152,70 +179,150 @@ const takeLayouts = (live: Live, made: ShellComposition): void => {
 // ways. An action that is gone (an integration uninstalled, a set replaced)
 // or is no longer granted is REMOVED: nova unmounts its instances and forgets
 // it, so it is neither on screen nor pushable.
-const adoptInto = async (host: HostState, cell: Cell): Promise<void> => {
-  if (cell.live.ended) return;
-  // The place of this asking among every one this host made. Taken before
-  // the question is put, so a later number was asked later.
-  host.asked += 1;
-  const asked = host.asked;
-  const made = await host.config.composition(cell.principal);
-  // Read after the answer: a reset may have put another shell in the cell
-  // while it was asked for.
-  const live = cell.live;
-  if (live.ended) return;
-  // WHAT WAS ASKED LAST IS WHAT A SHELL HOLDS. Two changes are two askings,
-  // and nothing makes the first be answered first (who somebody is, is read
-  // from the app, as slowly as it reads). An answer that arrives after a
-  // later asking was already put in place is the older of the two: it is
-  // dropped, and the shell holds what the last change left its principal with.
-  if (cell.level !== undefined && asked < cell.level) return;
-  cell.level = asked;
-  // A definition that arrived may mention a component nothing mentioned
-  // when the shell was built.
-  for (const [name, contract] of Object.entries(made.components)) {
-    if (!live.shell.registry.has(name)) live.shell.registry.register(name, contract);
-  }
-  for (const id of live.held) if (!Object.hasOwn(made.actions, id)) live.shell.removeAction(id);
-  for (const definition of Object.values(made.actions)) live.shell.registerAction(definition);
-  live.held = new Set(Object.keys(made.actions));
-  live.entries = made.entries;
-  takeLayouts(live, made);
+//
+// EACH SHELL ADOPTS ON ITS OWN, unawaited. No shell waits for another and no
+// change waits for another change, so somebody whose composition is never
+// answered holds up nobody else. A SHELL THAT CANNOT ADOPT IS SAID, and keeps
+// what it held: one that throws (a principal that no longer resolves) stops
+// no other.
+const adopt = (host: HostState, cell: Cell): void => {
+  const adopting = async (): Promise<void> => {
+    if (cell.live.ended) return;
+    // The change this asking answers for: the latest, read before the
+    // question is put, so the answer says at least what that change left.
+    const number = host.changeNumber;
+    const made = await host.config.composition(cell.principal);
+    // Read after the answer: a reset may have put another shell in the cell
+    // while it was asked for.
+    const live = cell.live;
+    // THE HIGHEST NUMBER IS WHAT A SHELL HOLDS. Two changes are two askings,
+    // and nothing makes the first be answered first (who somebody is, is read
+    // from the app, as slowly as it reads). An answer that arrives when the
+    // shell already reflects its number or a higher one (a later change's
+    // answer was put in place, or the shell was built since) is the older of
+    // the two, and is dropped.
+    if (live.ended || number <= cell.number) return;
+    cell.number = number;
+    // A definition that arrived may mention a component nothing mentioned
+    // when the shell was built.
+    for (const [name, contract] of Object.entries(made.components)) {
+      if (!live.shell.registry.has(name)) live.shell.registry.register(name, contract);
+    }
+    for (const id of live.held) if (!Object.hasOwn(made.actions, id)) live.shell.removeAction(id);
+    for (const definition of Object.values(made.actions)) live.shell.registerAction(definition);
+    live.held = new Set(Object.keys(made.actions));
+    live.entries = made.entries;
+    takeLayouts(live, made);
+  };
+  adopting().catch((error: unknown) => {
+    console.error(`[moss/shells] the shell of ${cell.principal ?? 'nobody'} could not adopt what changed, and keeps what it held:`, error);
+  });
 };
 
-// ONE CHANGE, ASKED OF EVERY LIVING SHELL OF THIS HOST, whoever it is for and
-// whether it is kept, and of each one whose build was under way when the
-// change happened: it was built from what its principal held before it. That
-// takes in a shell built for one connection (a visitor's, and everybody's on a
-// host that keeps none) as well as the kept ones.
+// ONE CHANGE OF WHAT IS IN FORCE, GIVEN TO EVERY LIVING SHELL OF THIS HOST,
+// whoever it is for and whether it is kept: a visitor's, and everybody's on a
+// host that keeps none, as well as the kept ones. The change takes the next
+// number, and every shell that lives adopts.
 //
-// Asynchronous and unawaited: definitions landing a tick late simply
-// register, which is the same progressive path `seeds` takes.
-//
-// EACH SHELL ADOPTS ON ITS OWN. A change waits for no other change, for no
-// build, and no shell waits for another shell: a build that never lands
-// (somebody whose `inputs` never answers) holds up nobody else. Each build
-// under way is followed on its own: its cell adopts when it lands, whenever
-// that is. Which of two changes a shell ends up with is not decided by the
-// order they finish in (`adoptInto`).
+// A SHELL WHOSE BUILD IS UNDER WAY IS NOT WALKED, AND NEEDS NO LIST: it was
+// built from what its principal held before the change, so it lands with a
+// number below the change's, and adopts then (`settleIn`).
 //
 // WHAT THAT COSTS: every living shell's composition is asked in the same
 // moment. Who a principal is, is asked once for all the shells of that
 // principal and remembered (the identity module), so a change is as many
 // resolutions at once as the host has principals whose record is not held.
-//
-// A SHELL THAT CANNOT ADOPT IS SAID, AND THE REST GO ON: one that throws (a
-// principal that no longer resolves) does not stop the others adopting.
 const adoptAll = (host: HostState): void => {
-  const adopting = async (cell: Cell): Promise<void> => {
-    try {
-      await adoptInto(host, cell);
-    } catch (error) {
-      console.error(`[moss/shells] the shell of ${cell.principal ?? 'nobody'} could not adopt what changed, and keeps what it held:`, error);
-    }
+  host.lastNumber += 1;
+  host.changeNumber = host.lastNumber;
+  for (const cell of [...host.living.values()]) adopt(host, cell);
+};
+
+type Built = { live: Live; number: number };
+
+// ONE BUILD: it takes the next number, and it is bounded.
+//
+// BOUNDED, because a build runs the app's code (who the principal is, their
+// `inputs`, their words) and that code can hang for one call. A build that
+// has not landed when the endpoint timeout runs out fails: whoever waited on
+// it is refused then, and nothing of the host waits on it afterwards. If the
+// app's code answers later, the build stops where it hears of it (./build.ts,
+// `wanted`), having made no shell.
+//
+// `wanted`: whether the build is still one somebody waits for, beside being
+// in time (a reset's is not, once the shell it would replace has ended). A
+// build that stops for that reason alone answers `undefined`: nobody is
+// refused, because nobody waited.
+const build = (host: HostState, asked: Omit<BuildRequest, 'wanted'>, wanted: () => boolean = () => true): Promise<Built | undefined> => {
+  host.lastNumber += 1;
+  const number = host.lastNumber;
+  const limit = host.config.limits?.endpointTimeoutMs ?? DEFAULT_BUILD_TIMEOUT_MS;
+  return new Promise((resolve, reject) => {
+    let inTime = true;
+    const timer = setTimeout(() => {
+      inTime = false;
+      reject(new Error(`moss: the shell of ${asked.principal ?? 'nobody'} was not built within ${limit}ms.`));
+    }, limit);
+    // A build under way must never be the reason a process stays alive.
+    timer.unref?.();
+    buildShell(host, { ...asked, wanted: () => inTime && wanted() })
+      .then((live) => resolve(live === undefined ? undefined : { live, number }), reject)
+      .finally(() => clearTimeout(timer));
+  });
+};
+
+// A build that replaces nothing is stopped by its time running out and by
+// nothing else, and whoever waited on it was refused when it did.
+const whole = (built: Built | undefined): Built => {
+  if (built === undefined) throw new Error('moss: a build stopped without a shell, and without having run out of time.');
+  return built;
+};
+
+// A SHELL THAT LANDED IN ITS CELL is one of the living from here on, and is
+// brought level if what is in force changed while it was built: it was made
+// from what its principal held when the build began. One that ended on the
+// way (app code that signed out while its session was being built) is not put
+// among the living: nothing would take it out again.
+const settleIn = (host: HostState, cell: Cell): void => {
+  if (cell.live.ended) return;
+  host.living.set(cell.live, cell);
+  if (cell.number < host.changeNumber) adopt(host, cell);
+};
+
+// A FIRST BUILD, AND THE CELL ITS SHELL IS ADDRESSED THROUGH. `keep`: the
+// cell is the one this host keeps for the principal.
+const open = async (host: HostState, asked: Omit<BuildRequest, 'reset' | 'wanted'>, keep: boolean): Promise<Cell> => {
+  const { live, number } = whole(await build(host, { ...asked, reset: false }));
+  const cell: Cell = { live, token: asked.token, principal: asked.principal, ...(asked.opening !== undefined ? { opening: asked.opening } : {}), number };
+  if (keep && asked.principal !== null) host.durable.set(asked.principal, cell);
+  settleIn(host, cell);
+  return cell;
+};
+
+// THE CELL A HOST KEEPS FOR A PRINCIPAL, built if there is none yet.
+//
+// ONE BUILD FOR A PRINCIPAL AT A TIME. A build awaits (who they are, their
+// inputs, their words), so two arrivals in one moment — a page's read and
+// its socket, two tabs — would each find no shell and each build one. The
+// second would take the first's place in the map and the first would stand
+// for ever, held by whoever arrived first. So a build under way is kept by
+// principal (`building`), and whoever arrives while it runs is handed its
+// cell when it lands. One that fails, or runs out of time, is refused to all
+// of them and keeps nothing: the next arrival builds afresh.
+const keptCell = (host: HostState, token: string | null, principal: string): Promise<Cell> => {
+  const { durable, building } = host;
+  // a rebuild should re-authorize as the newest session
+  const newest = (cell: Cell): Cell => {
+    cell.token = token;
+    return cell;
   };
-  // A build that fails is its caller's to hear of; there is nothing to adopt.
-  for (const build of host.underWay) void build.then(adopting, () => undefined);
-  for (const cell of [...host.living.values()]) void adopting(cell);
+  const existing = durable.get(principal);
+  if (existing !== undefined) return Promise.resolve(newest(existing));
+  const arriving = building.get(principal);
+  if (arriving !== undefined) return arriving.then(newest);
+  const started = open(host, { token, principal }, true).finally(() => building.delete(principal));
+  building.set(principal, started);
+  return started;
 };
 
 // Dispose a shell and stand its replacement in the same cell, carrying the
@@ -224,21 +331,13 @@ const adoptAll = (host: HostState): void => {
 // comes back is the screen boot would have served this principal now. The
 // terminals are not told anything: they receive a frame and current trees,
 // the same two messages a reconnect brings.
-// ASYNC, and its callers deliberately do not await it. `reset` answers "did
-// they hold a shell", which is knowable at once; the replacement lands a tick
-// later and every attached terminal receives a fresh frame when it does —
-// exactly as `seeds` behaves. A reset that blocked its caller on a
-// round trip would make a role change slower than the write that caused it.
 const replaceShell = async (host: HostState, cell: Cell): Promise<void> => {
-  // THE SHELL THIS RESET REPLACES is the one that stands when its turn comes.
-  // Read once: one reset of a cell runs at a time (`rebuildCell`) and nothing
-  // else puts a shell in a cell, so no other can stand there when the build
-  // lands.
-  const old = cell.live;
   // Signed out, swept, or left by its last terminal since the reset was
   // asked for: there is nobody to rebuild it for, and no app code is run to
-  // build what would be thrown away.
-  if (old.ended) return;
+  // build what would be thrown away. Asked again at each wait of the build,
+  // and where it lands.
+  const stands = (): boolean => !cell.live.ended;
+  if (!stands()) return;
   // The replacement is built BEFORE the old one is torn down. The build runs
   // app code — `inputs`, `functions`, `onSession` — and if that throws, a
   // reset that had already disposed the old shell would leave the session
@@ -246,45 +345,44 @@ const replaceShell = async (host: HostState, cell: Cell): Promise<void> => {
   // called to fix. Built first, a failed reset changes nothing. It is built
   // from everything the shell was opened with: the principal, the newest
   // token, and the id seed and the inputs a page's path carried.
-  const next = await buildShell(host, cell.token, cell.principal, true, cell.opening?.seed, cell.opening?.inputs);
+  const built = await build(host, { token: cell.token, principal: cell.principal, ...(cell.opening !== undefined ? { opening: cell.opening } : {}), reset: true }, stands);
+  if (built === undefined) return;
+  // THE SHELL THIS RESET REPLACES is the one that stands when it lands.
+  const old = cell.live;
   // It ended while its replacement was built. The replacement is nobody's.
-  if (old.ended) {
-    endShell(host, next);
-    next.shell.dispose();
+  if (!stands()) {
+    endShell(host, built.live);
+    built.live.shell.dispose();
     return;
   }
   const carried = [...old.connections].map((connection) => ({ connection, wants: old.deltaReady.has(connection) }));
   endShell(host, old);
   old.connections.clear();
   old.shell.dispose();
-  cell.live = next;
-  // The cell's living shell is the replacement from here on.
-  host.living.set(next, cell);
-  for (const { connection, wants } of carried) attach(next, connection, host.delta && wants);
+  cell.live = built.live;
+  cell.number = built.number;
+  // The cell's living shell is the replacement from here on. A change that
+  // happened while it was built was adopted by the shell that stood, and the
+  // replacement, made from what was held before it, adopts it too.
+  settleIn(host, cell);
+  for (const { connection, wants } of carried) attach(built.live, connection, host.delta && wants);
 };
 
-// AMONG THE BUILDS UNDER WAY, from now until it lands or fails: a change that
-// happens meanwhile is adopted by its cell when it lands (`adoptAll`).
-const whileUnderWay = (host: HostState, build: Promise<Cell>): Promise<Cell> => {
-  host.underWay.add(build);
-  const over = (): void => void host.underWay.delete(build);
-  build.then(over, over);
-  return build;
+// A RESET OF ONE CELL, ASKED FOR AND NOT WAITED ON. Whoever asks is answered
+// at once ("did they hold a shell" is knowable then); the replacement lands a
+// tick later and every attached terminal receives a fresh frame when it does,
+// exactly as `seeds` behaves. A reset that blocked its caller on a round trip
+// would make a role change slower than the write that caused it. One that
+// cannot build is said, and the shell that stood stays.
+//
+// ONE RESET OF A CELL AT A TIME, each after the one before it has landed or
+// failed. Each reset that is asked for still happens, in turn: the second may
+// be for a reason that arrived after the first had read what it builds from.
+// A build is bounded, so a reset waits for the endpoint timeout at most.
+const resetCell = (host: HostState, cell: Cell): void => {
+  const turn = (cell.resetting ?? Promise.resolve()).then(() => replaceShell(host, cell));
+  cell.resetting = turn.catch((error: unknown) => console.error('[moss/shells] a reset failed to rebuild', error));
 };
-
-// A BUILD, FROM WHEN IT STARTS UNTIL ITS SHELL IS ONE OF THE LIVING. `cellOf`
-// makes the cell the shell is addressed through. A shell that ended on the
-// way (app code that signed out while its session was being built) is not put
-// among the living: nothing would take it out again.
-const trackBuild = (host: HostState, build: Promise<Live>, cellOf: (live: Live) => Cell): Promise<Cell> =>
-  whileUnderWay(
-    host,
-    build.then((live) => {
-      const cell = cellOf(live);
-      if (!live.ended) host.living.set(live, cell);
-      return cell;
-    }),
-  );
 
 // EVERY LIVING SHELL OF ONE PRINCIPAL: the one this host keeps for them; or,
 // on a host that keeps none, the one built for each of their connections.
@@ -292,62 +390,6 @@ const shellsOf = (host: HostState, principal: string): Cell[] => {
   if (!host.kept) return [...host.living.values()].filter((cell) => cell.principal === principal);
   const cell = host.durable.get(principal);
   return cell === undefined || cell.live.ended ? [] : [cell];
-};
-
-// ONE RESET OF A CELL AT A TIME, each after the one before it. A reset
-// builds and then swaps, so two that overlapped would each begin from the
-// shell that stands then: the first to land would carry the terminals to its
-// shell and the second, finding none left to carry, would take the cell and
-// leave the terminals on a shell nothing addresses and nothing disposes. Each
-// reset that is asked for still happens, in turn: the second may be for a
-// reason that arrived after the first had read what it builds from.
-const rebuildCell = (host: HostState, cell: Cell): Promise<void> => {
-  const turn = (cell.resetting ?? Promise.resolve()).then(() => replaceShell(host, cell));
-  // The next one waits for this one whether it lands or fails.
-  cell.resetting = turn.catch(() => undefined);
-  // A replacement is a build under way like a first one: it is made from
-  // what its principal held when it began, so a change that happens before
-  // it lands is adopted by the cell once it has.
-  void whileUnderWay(
-    host,
-    turn.then(() => cell),
-  );
-  return turn;
-};
-
-// The cell a host keeps for a principal, built if there is none yet.
-type DurableCell = (token: string | null, principal: string) => Promise<Cell>;
-
-// ONE BUILD FOR A PRINCIPAL AT A TIME. A build awaits (who they are, their
-// inputs, their words), so two arrivals in one moment — a page's read and
-// its socket, two tabs — would each find no shell and each build one. The
-// second would take the first's place in the map and the first would stand
-// for ever, held by whoever arrived first. So a build under way is kept by principal,
-// and whoever arrives while it runs is handed its cell when it lands. One
-// that fails is refused to all of them and keeps nothing: the next arrival
-// builds afresh.
-const createDurableCells = (host: HostState): DurableCell => {
-  const { durable } = host;
-  const building = new Map<string, Promise<Cell>>();
-  const durableCell = (token: string | null, principal: string): Promise<Cell> => {
-    // a rebuild should re-authorize as the newest session
-    const newest = (cell: Cell): Cell => {
-      cell.token = token;
-      return cell;
-    };
-    const existing = durable.get(principal);
-    if (existing !== undefined) return Promise.resolve(newest(existing));
-    const arriving = building.get(principal);
-    if (arriving !== undefined) return arriving.then(newest);
-    const started = trackBuild(host, buildShell(host, token, principal), (live) => {
-      const cell: Cell = { live, token, principal };
-      durable.set(principal, cell);
-      return cell;
-    }).finally(() => building.delete(principal));
-    building.set(principal, started);
-    return started;
-  };
-  return durableCell;
 };
 
 // THE SWEEP, STARTED: on a beat for as long as the host stands. Answers how
@@ -369,18 +411,19 @@ const startSweep = (host: HostState): (() => void) => {
 // WHAT SOMEBODY IS LOOKING AT, READ ONCE: off the shell the host keeps for
 // them, or off one built for the length of the read.
 const snapshotOf =
-  (host: HostState, durableCell: DurableCell): ShellHost['snapshot'] =>
+  (host: HostState): ShellHost['snapshot'] =>
   async (token, principal, options) => {
     const { kept } = host;
     const waitMs = options?.waitMs ?? DEFAULT_SNAPSHOT_WAIT_MS;
     if (principal !== null && kept) {
-      const cell = await durableCell(token, principal);
+      const cell = await keptCell(host, token, principal);
       const settled = await settle(cell.live, waitMs);
       return { ...read(cell.live), settled, ...needOf(cell.live, principal, kept) };
     }
     // Nobody in particular, or a page: a shell for the length of one read.
     const seed = randomBytes(9).toString('hex');
-    const live = await buildShell(host, token, principal, false, seed, options?.inputs);
+    const opening = { seed, ...(options?.inputs !== undefined ? { inputs: options.inputs } : {}) };
+    const { live } = whole(await build(host, { token, principal, opening, reset: false }));
     try {
       const settled = await settle(live, waitMs);
       return { ...read(live), seed, settled, ...needOf(live, principal, kept) };
@@ -416,37 +459,34 @@ const deliverTo =
   };
 
 export const createShellHost = (config: ShellHostConfig): OwnedShellHost => {
-  const durable = new Map<string, Cell>();
   const host: HostState = {
     config,
     emit: emitterOf(config.telemetry),
     kept: config.kept ?? true,
     delta: config.limits?.delta ?? false,
-    durable,
+    durable: new Map(),
+    building: new Map(),
     living: new Map(),
-    underWay: new Set(),
-    asked: 0,
+    lastNumber: 0,
+    changeNumber: 0,
   };
-  const { kept } = host;
-  const rebuild = (cell: Cell): Promise<void> => rebuildCell(host, cell);
-  const durableCell = createDurableCells(host);
+  const reset = (cell: Cell): void => resetCell(host, cell);
 
   const handedOut: ShellHost = {
     session: async (token, principal, options) => {
-      if (principal === null || !kept) {
+      if (principal === null || !host.kept) {
         // Built for this session alone, and nobody's to keep: it ends when
         // its last terminal leaves. Until then it is one of the living.
-        const build = buildShell(host, token, principal, false, options?.seed, options?.inputs);
-        return sessionOn(host, await trackBuild(host, build, (live) => ({ live, token, principal, ...(options !== undefined ? { opening: options } : {}) })), true, rebuild);
+        return sessionOn(host, await open(host, { token, principal, ...(options !== undefined ? { opening: options } : {}) }, false), true, reset);
       }
-      return sessionOn(host, await durableCell(token, principal), false, rebuild);
+      return sessionOn(host, await keptCell(host, token, principal), false, reset);
     },
-    snapshot: snapshotOf(host, durableCell),
+    snapshot: snapshotOf(host),
     deliver: deliverTo(host),
-    list: () => rosterOf(durable),
+    list: () => rosterOf(host.durable),
     reset: (principal) => {
       const theirs = shellsOf(host, principal);
-      for (const cell of theirs) void rebuild(cell).catch((err: unknown) => console.error('[moss/shells] a reset failed to rebuild', err));
+      for (const cell of theirs) reset(cell);
       return theirs.length > 0;
     },
   };
