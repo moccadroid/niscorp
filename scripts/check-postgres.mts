@@ -330,7 +330,8 @@ const generationPointer = async (): Promise<void> => {
 //
 // With the fix for defect 22 taken out (a key answered whether or not it was
 // the one kept), both registrations were answered a key and one of the two was
-// dead in 99 rounds of 100 (run on a copy, 2026-10-11, PostgreSQL 18.4).
+// dead in 99 rounds of 100, and in 100 of 100 when it was run again (on a copy,
+// 2026-10-11, PostgreSQL 18.4).
 // ═══════════════════════════════════════════════════════════════
 
 const registry = async (): Promise<void> => {
