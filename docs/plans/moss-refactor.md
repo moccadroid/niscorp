@@ -185,14 +185,16 @@ Read, not reproduced. Each needs a failing test before it is fixed.
 **What became of each (checked 2026-10-11).** Each number against the commit
 that fixed it, read from the log and from the code where it is named. Whether
 each fix's test failed first was checked by the phase that wrote it, and not
-again here.
+again here. A reviewer then took guards out one at a time and ran the suites,
+and that was done again, wider: Part 11, "After a review of the tests", says
+which fixes no test held and what holds them now.
 
 | | Now | Where |
 |---|---|---|
 | 1 | fixed | `2fc4154`: an approval is verified before it is written |
 | 2 | fixed | `bb6a2a8`: a bundle lands in one transaction |
 | 3 | fixed | `3dec693`: one shell is built for a principal at a time |
-| 4 | fixed | `812372e`: a shell is reset one reset at a time, from what it was opened with |
+| 4 | fixed | `812372e`: a shell is reset one reset at a time, from what it was opened with. One test stood for the turn and for two other lines of `replaceShell` and passed with any one of them out. Since 2026-10-11 each has a test red without it: the turn (the order of two resets, which was not tested), the check after the build, the check before it. The second read of the cell, after the build, covered no case the turn does not, and is gone (`641ee17`, `33ca092`). |
 | 5 | fixed, in two steps | `3f3923e`: a living shell holds what its principal holds now. That covered the shells a host keeps, one for each signed-in principal, and only the app's own host was asked. A shell built for one connection (a visitor's; every shell of a page's host) kept what it was built with. Since 2026-10-11 it is every living shell: a host holds each shell it built until it ends (`src/shells/live.ts`, `living`), `adopt` walks those and the builds under way, and a change is asked of every host, the app's and each page's (`src/server/hosts.ts`, `adopt`). Part 11, "After a review". |
 | 6 | fixed | `1fbe5a7`: a connection that closed before its session was ready leaves nothing attached |
 | 7 | fixed | `6d7d054`: a message the shell throws on is one message |
@@ -204,7 +206,7 @@ again here.
 | 13 | fixed | `cec2c66`: the dev verifier is not exported, and a verifier of the app's own is said at boot |
 | 14 | fixed | `7707fa8`: an invalidation is not undone by the resolve it interrupted |
 | 15 | fixed | `7439637`, `e1e4cf3`: a move this process could not follow is tried again, and its own move does not pass over another's. The retry logged a line at every poll; since 2026-10-11 it is said when it first fails, again when what it says changes, and once when it is followed (`src/manifest/generation.ts`). |
-| 16 | fixed | `fd2ee02`, in tide: an advisory lock in the claim's transaction |
+| 16 | fixed | `fd2ee02`, in tide: an advisory lock in the claim's transaction. No test in the repository held it: on PGlite, which has one connection, all of tide's tests pass with the lock taken out. It is held by `pnpm check:postgres` since 2026-10-11, on a real Postgres: with the lock out of a copy, two tasks of one group are held in 299 rounds of 300. |
 | 17 | fixed | `98bb60b`, in tide: a wait longer than a timer can hold |
 | 18 | fixed | `e6f7c0b`: a reset while connecting leaves one socket |
 | 19 | fixed | `edfb856`: every render target is told the connection's status |
@@ -785,8 +787,9 @@ wiring or a running manifest up and start no database and no server.
   collected; it is ended by a detach, as the socket ends one. A change, and a
   principal's reset
   (`invalidateIdentity`), are asked of every host, the app's and each page's.
-  Not moved: `deliver` and `nudge` still reach the shell the app's host keeps
-  for a principal and no shell of a page's.
+  Not moved then: `deliver` and `nudge` reached the shell the app's host keeps
+  for a principal and no shell of a page's. Moved since ("After a review of
+  the tests", below): a nudge reaches every living shell of a principal.
 - **"Every other process follows" after `replaceActions`.** The pointer
   moves and every process follows it, but a set handed to one process is in
   no other: the reviewer ran two servers on one database, both reached the
@@ -1010,3 +1013,113 @@ the repository: no package has a place for a test that needs a server.
   dead, every round. After the fix, the same 200 rounds: every key answered
   is the key the row holds, and never two.
 
+Those runs are a check of the repository since the same day:
+`pnpm check:postgres` (below, "After a review of the tests").
+
+**After a review of the tests (2026-10-11).** A reviewer took guards out of
+a copy one at a time and ran the suites: a fix no test fails without is not
+held. Four of the 26 lines they tried survived, defect 16's fix had no test
+in the repository, one test stood for three guards of defect 4, and three of
+seven tests they ran alone failed. Everything below was reproduced first, on
+a copy under the system's temp directory, and every new test was seen red
+with its line out and green with it in. No new test starts a database, and
+none calls `createServer`.
+
+- **The four survivors are held.** The operator prefix is mounted after the
+  features start (a feature's operator route answered the right key 404), and
+  identity records go when what the app consists of changes: both asked of
+  the assembled server over a data module with no database. A frame grant is
+  minted for a declared page and for somebody who holds the action that owns
+  it. The webhook hands on the vendor's headers without `Authorization` and
+  `Host`, and the body byte for byte.
+- **The pass, done again and wider.** 215 more lines that refuse, check,
+  strip, limit or order something, in `src/server`, `src/identity`,
+  `src/socket`, `src/data/routes.ts` and the doors of `src/integrations`: each
+  taken out or weakened in the copy, and all 1,043 tests run. 154 were caught.
+  61 were not. 58 of those have a test now that is red without the line, and
+  three are left because nothing can depend on them: which of a feature and
+  the app's reactions hears a write first (nothing reads the order); the
+  escaping of a name the dev sign-in echoes (the pattern that matched the
+  name admits none of the characters it removes); and an empty token not
+  being held for revalidation (only a verifier that answers a principal for
+  the empty string gets there). Most of the 61 were in the wiring: each
+  module's tests hand it its settings themselves, and nothing asked whether
+  `src/server` hands them over. The signals had no test over the real wiring
+  at all (the fabric's tests wire a process by hand), nor had the server's
+  own wire or the app's reactions. At the end, all 65 lines that had
+  survived (the reviewer's four and the 61) were taken out once more, of a
+  copy of the tree as it stands, and the whole suite run for each: 62 are
+  caught and the three named above are not.
+- **Defect 4** (4.3): each guard by the case only it covers, the order of two
+  resets tested, and the guard that covered none removed.
+- **Tests that depended on their order.** The eighteen cases of the registry's
+  entries shared one database; four failed when run alone, each as its own
+  process. Each writes the rows it reads now, and the six that read a list
+  read from a database of their own, written once. Both suites were then run
+  in six shuffled orders (seeds 1 to 6): at the commit this started from,
+  moss failed one or two tests in every one of the six, all among those four;
+  after, 1,125 of 1,125 each time. Tide passed all six before and after.
+- **The long timeouts are gone, with their cause.** Both packages had
+  `testTimeout: 30_000`. Measured: a PGlite start is 660 ms on an idle machine
+  and 1.0 to 2.7 s with every core busy. Tide's two Postgres files started one
+  for each test, 45 and 26: 55 s of file time in a suite of 35 s. They start
+  one for a file, in a hook, and empty its tables for each test: 235 tests in
+  3.0 s, the slowest 207 ms. Moss's ten files started 62 between them, and 35
+  tests took over a second, the slowest 3.5 s; a file initialises one database
+  and each test starts its own from that data directory in 140 ms: 9.6 s for
+  the suite where it took 19.8, and one test over a second (1.1 s, and it
+  starts no database). Both configs have vitest's own 5 s.
+- **Clocks.** The generation pointer's tests, the running manifest's, two of a
+  snapshot's and the dev plugin's edit tests hold the clock; tide's driver
+  tests do too. Every other timer in the two test directories is a wait on
+  the thing itself, a turn of the event loop (one helper, which says why that
+  is not a wait on time), or one of three places in the ink terminal's tests
+  where time is what is waited for, each saying so.
+- **Loose ends of the earlier phases.** The table a deployment's own cache is
+  kept in is the core's under whatever name it has (`CacheBackend.table`, new
+  in vex), so a feature that names it is refused. A test with no database
+  that the core reaches no row of the integrations' tables when the feature
+  is not named. `server.verifyActions` answers a report for a feature's set
+  (`check: 'owner'`), where it threw. A nudge, and what a reaction delivers,
+  reach every living shell of a principal, a page's included;
+  `server.shells.deliver` is another thing (one host, this process, with a
+  payload and an answer) and stays, and `DOCS.md` says which is for what. The
+  limit on shells for nobody is said to be what it is: one count for
+  everybody in one process, which bounds memory and is not a limit for each
+  visitor; a deployment that faces the internet limits connections for each
+  address at its proxy. Tide's changeset says the driver's log prefix changed.
+- **The dev servers of the lab apps.** Atrium and lyra run `nisc dev`, which
+  adds moss's dev plugin, and each also kept a plugin of its own in
+  `vite.config.ts`; vite ran both, and the app's own sign-in answered first,
+  with neither the loopback check nor the cross-site check (run: a sign-in
+  marked `Sec-Fetch-Site: cross-site` was answered 302 with a cookie). The
+  two plugins are gone and the sign-in is `dev.signIn` in `nisc.config.ts`.
+  Lyceum is not changed, because `mossDev` does not give what its sign-in
+  needs: a seat for each principal (the cookie's key depends on who signs
+  in; `DevApp.tokenKey` is one for the app), where the browser is sent
+  afterwards (`/?seat=<who>`; the plugin sends it to `/`), and the cookie's
+  life. And `nisc dev` passes no `watch` to the plugin, so atrium's
+  `src/integrations` no longer re-boots the app on an edit. Both are findings
+  about the API, and neither was built.
+- **A real Postgres, as a check.** `pnpm check:postgres`
+  (`scripts/check-postgres.mts`) runs what "Run on a real Postgres" above ran
+  by hand, on the built packages, against the server `CHECK_POSTGRES_URL`
+  names: tide's store contract and a serial group claimed by two pools (300
+  rounds) and by four claims from each (150); the generation pointer moved
+  through two servers, two moves each at once (200 rounds, 800 moves, each
+  one step of the counter); and the registry: `migrateTables` on an empty
+  database and again, a registration as one transaction, two first
+  registrations of one integration at once (100 rounds), an approval served
+  by the other process. 13 checks, 8.4 s on PostgreSQL 18.4. On a copy with
+  the advisory lock out, two tasks of one group were held in 299 rounds of
+  300 and 150 of 150; with defect 22's fix out, a dead key was answered in 99
+  rounds of 100, and in 100 of 100 when it was run again. Without the
+  variable it says it did not run and exits 0, and in that form it is in
+  `pnpm verify`; the workflow gains a Postgres service and sets the variable.
+  The workflow was not run from here.
+
+Counted after it, for the rows it moved: moss has 154 source files as
+before, 75 test files and 1,125 tests (seven files and 82 tests more); tide
+has 13 test files and 235 tests, as before. `api.txt` holds the 89 names it
+held. The lab apps' checks were run again, each as its own process, one at a
+time: 126 of 133, the same seven failing as in Part 9 (encore 13 of 13, lyceum 17 of 18, atrium 18 of 19, relay 28 of 32, lyra 50 of 51). Atrium's dev check is one of the 18: it runs `nisc dev` now, and asks one thing more.
