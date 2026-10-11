@@ -23,7 +23,7 @@ import { dirname, resolve } from 'node:path';
 // fresh seed, fresh shells, then a full reload), attaches the socket with the
 // settings the app's runtime says, draws `/` and the pages, and answers the
 // dev sign-in (`/dev/as/<email>`, nisc.config.ts `dev.signIn`) to this machine
-// and to no page of another site.
+// only.
 //
 // This file held a plugin of its own that did all of that a second time, and
 // answered first: its sign-in asked nothing about where a request came from.

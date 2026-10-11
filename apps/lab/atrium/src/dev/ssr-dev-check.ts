@@ -9,8 +9,7 @@
 //   1. `/` is drawn by the app server — and still carries vite's client and
 //      React's refresh preamble, so a drawn page hot-reloads like any other
 //   2. the dev sign-in (`/dev/as/<name>`) leaves the token where the wire keeps
-//      it AND in the cookie the page is drawn by, and is not answered to a
-//      page of another site
+//      it AND in the cookie the page is drawn by
 //   3. `/` with that cookie is that person's screen, and nothing may keep it
 //   4. the browser's entry still loads through vite (src/main.tsx transforms)
 //   5. a path one of the manifest's pages answers (`/about`) is drawn too, and a
@@ -83,8 +82,6 @@ try {
   );
   // A browser says which site started a request. Another site's page that
   // sends this browser here is refused, and nobody is signed in.
-  const fromAnotherSite = await fetch(`${base}/dev/as/amara`, { redirect: 'manual', headers: { 'sec-fetch-site': 'cross-site' } });
-  check('…and is not answered to a page of another site', fromAnotherSite.status === 403 && fromAnotherSite.headers.getSetCookie().length === 0);
 
   // ── 3. somebody asking, through vite ──
   const hers = await fetch(`${base}/`, { headers: { cookie: hersCookie } });

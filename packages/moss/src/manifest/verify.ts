@@ -171,14 +171,12 @@ export const verifyApp = (app: ShippedManifest, grants: readonly string[]): Mani
 // and a change that is refused leaves what was being served.
 const HEADLINES = {
   boot: {
-    owner: 'A set of actions is not its asker’s to hand over — refusing to serve:',
     actions: 'Actions are not ones nova reads — refusing to serve:',
     charter: 'Charter is incoherent — refusing to serve:',
     reach: 'Entries declare a reach no table offers — refusing to serve:',
     variants: 'Layout variants are incoherent — refusing to serve:',
   },
   refresh: {
-    owner: 'Refresh refused — a set of actions is not its asker’s to hand over:',
     actions: 'Refresh refused — actions nova does not read:',
     charter: 'Refresh refused — charter incoherent over the new artifacts:',
     reach: 'Refresh refused — entries declare a reach no table offers:',
