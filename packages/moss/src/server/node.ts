@@ -2,12 +2,13 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, relative } from 'node:path';
 import { serve as listen } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
+import type { Context } from 'hono';
 import { renderDocument } from '../documents';
 import type { DocumentConfig } from '../documents';
 import type { NiscApp } from '../manifest';
 import type { NiscRuntime } from '../runtime';
 import type { SocketAccept, TransportSettings } from '../socket';
-import type { MossServer } from './moss-server';
+import type { Env, MossServer } from './moss-server';
 import { createServer } from './server';
 import { createTransport, hearUpgrades } from './transport';
 import type { Upgradeable } from './transport';
@@ -85,7 +86,9 @@ export const mountSite = (server: MossServer, config: SiteConfig): void => {
   // serveStatic resolves `root` against the working directory.
   const root = relative(process.cwd(), dist) || '.';
   const files = serveStatic({ root });
-  server.use('/*', async (c, next) => {
+  // The context is typed here because Hono leaves what a route was handed as
+  // `any`, and it is handed on to the static server.
+  server.use('/*', async (c: Context<Env, string>, next) => {
     const path = c.req.path;
     if (owned.test(path) || path === '/' || path === '/index.html' || server.page(path) !== undefined) return next();
     return files(c, next);

@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import type { NiscRuntime } from '../runtime';
 import type { Env } from './moss-server';
 
@@ -38,7 +39,9 @@ export const secretsEqual = (a: string, b: string): boolean =>
 // attempts.
 export const guardOperator = (operator: Hono<Env>, opts: { key: string; gate?: NiscRuntime['operatorGate'] }): void => {
   const gate = opts.gate;
-  if (gate !== undefined) operator.use('*', (c, next) => Promise.resolve(gate(c, next)));
+  // The context is typed here because Hono leaves what a route was handed as
+  // `any`, and it is handed on to the app's gate.
+  if (gate !== undefined) operator.use('*', (c: Context<Env>, next) => Promise.resolve(gate(c, next)));
   operator.use('*', async (c, next) => {
     const presented = c.req.header('x-operator-key') ?? '';
     if (opts.key === '' || !secretsEqual(presented, opts.key)) return c.json({ message: 'Not found.' }, 404);

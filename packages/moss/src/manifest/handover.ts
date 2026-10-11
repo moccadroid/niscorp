@@ -26,7 +26,7 @@ import type { ManifestSchema } from './schema';
 const isData = (value: unknown): value is object => {
   if (typeof value !== 'object' || value === null) return false;
   if (Array.isArray(value)) return true;
-  const made = Object.getPrototypeOf(value);
+  const made: unknown = Object.getPrototypeOf(value);
   return made === Object.prototype || made === null;
 };
 

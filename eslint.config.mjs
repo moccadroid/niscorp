@@ -151,9 +151,29 @@ export default tseslint.config(
   // what crosses a boundary is parsed, not cast — no non-null assertion, no
   // `function` declaration, and no function or file that has stopped being one
   // thing. `createServer` reached 1,345 lines with nothing counting.
+  //
+  // WITH TYPES. A rule that reads syntax sees `as Row` and does not see
+  // `const row: Row = JSON.parse(text)`, which is the same cast with nothing
+  // written: `JSON.parse` answers `any`, and `any` becomes whatever it is
+  // assigned to. So these files are linted with the compiler's types (each by
+  // its package's own tsconfig), and an `any` may not be written, assigned,
+  // passed, returned, called or read from. What arrives as `any` is given to
+  // `unknown` and parsed. This needs the packages built: a type from another
+  // package of the repository is read from its `dist`, and is `any` without.
   {
     files: ['packages/moss/src/*/**/*.ts', 'packages/moss/src/*/**/*.tsx'],
+    languageOptions: { parser: tseslint.parser, parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname } },
     rules: {
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unsafe-argument': 'error',
+      '@typescript-eslint/no-unsafe-assignment': 'error',
+      '@typescript-eslint/no-unsafe-call': 'error',
+      '@typescript-eslint/no-unsafe-member-access': 'error',
+      '@typescript-eslint/no-unsafe-return': 'error',
+      '@typescript-eslint/no-unsafe-declaration-merging': 'error',
+      '@typescript-eslint/no-unsafe-enum-comparison': 'error',
+      '@typescript-eslint/no-unsafe-function-type': 'error',
+      '@typescript-eslint/no-unsafe-unary-minus': 'error',
       'no-restricted-syntax': [
         'error',
         {
