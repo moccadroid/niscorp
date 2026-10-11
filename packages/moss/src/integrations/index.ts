@@ -41,8 +41,7 @@
 //   the feature
 //     feature.ts           — createIntegrations: what an app says about itself,
 //                            and everything the feature adds through its seams
-//     tables.ts            — the three tables it keeps, and the sequence of its
-//                            own that makes the third
+//     tables.ts            — the two tables it keeps, and the documents in them
 //     entries.ts           — every read and write on those tables, as vex entries
 //     registry.ts          — each thing asked of those tables, as a function that
 //                            replays an entry and reads the rows by a schema
@@ -67,7 +66,6 @@
 //   a call crossing
 //     forward.ts           — the one way out to an integration's own service
 //     proxy.ts             — a screen calling out, and a vendor's webhook coming in
-//     frame.ts             — a framed page of the integration's own, and its grant
 //     call.ts              — the deployment's own call, when nobody is driving
 //     fallback-message.ts  — the sentence put under a call that failed with none
 //

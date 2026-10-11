@@ -8,13 +8,12 @@ import { createAssertionSigner } from './credentials';
 import { REGISTRY_ENTRIES, REGISTRY_TABLES } from './entries';
 import { withFallbackMessage } from './fallback-message';
 import { createForwarder } from './forward';
-import { frameRoutes } from './frame';
 import { filterInstalled, integrationOfAction } from './installed';
 import { operatorRoutes } from './operator';
 import type { StorePress } from './press';
 import { proxyRoutes } from './proxy';
 import { findIntegration, integrationByKey, listAttachments, listPlacements, loadIntegrationActions } from './registry';
-import { INTEGRATIONS_SEQUENCE, STORED_ACTIONS } from './tables';
+import { STORED_ACTIONS } from './tables';
 
 // ═══════════════════════════════════════════════════════════════
 // THE FEATURE — integrations as one object an app creates, configures and
@@ -100,8 +99,8 @@ export type IntegrationsConfig = {
   signingSeed?: string;
   // HOW LONG A CALL OUT TO AN INTEGRATION'S SERVICE MAY TAKE, in ms, its
   // answer and its body together. Every call: a screen's through the proxy, a
-  // framed page and its callback, a vendor's webhook, `callIntegration`, the
-  // bundle fetched at registration, the operator's probe, one press image.
+  // vendor's webhook, `callIntegration`, the bundle fetched at registration,
+  // the operator's probe, one press image.
   // Past it the call is given up on, and reads as a service that is
   // unreachable. Default 30000, nova's default wait for an endpoint's reply.
   // The shorter of the two ends a call: an integration whose endpoint is slow
@@ -204,9 +203,6 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
       pressMaxBytes: config.pressMaxBytes ?? DEFAULT_PRESS_MAX_BYTES,
     }),
   );
-  // The frame doors, then the webhook, then the proxy: the proxy's pattern
-  // matches every path the other three serve.
-  seams.mountRoutes(frameRoutes({ replay, resolveIdentity: seams.resolveIdentity, grantedActionIds: seams.grantedActionIds, forward }));
   seams.mountRoutes(proxyRoutes({ grantedActionIds: seams.grantedActionIds, forward }));
 
   // WHATEVER WAS APPROVED BEFORE THIS PROCESS STARTED is part of the
@@ -233,9 +229,8 @@ export const createIntegrations = (config: IntegrationsConfig = {}): Integration
   };
   return {
     name: 'integrations',
-    // The three tables that are its own, and the sequence that makes the
-    // third (./tables.ts says where the first two are made).
-    tables: { names: REGISTRY_TABLES, sequences: [INTEGRATIONS_SEQUENCE] },
+    // The two tables that are its own (./tables.ts says where they are made).
+    tables: { names: REGISTRY_TABLES },
     start: async (seams) => {
       started = await start(config, seams);
     },

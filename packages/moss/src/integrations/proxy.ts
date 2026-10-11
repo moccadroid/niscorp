@@ -5,12 +5,11 @@ import type { Forwarder } from './forward';
 import { reachAdmits } from './reach';
 
 // ═══════════════════════════════════════════════════════════════
-// THE WEBHOOK DOOR, AND THE PROXY — everything under `/integrations/<id>/`
-// that is not a frame: a vendor calling in, and a screen calling out.
+// THE WEBHOOK DOOR, AND THE PROXY — everything under `/integrations/<id>/`:
+// a vendor calling in, and a screen calling out.
 //
 // The webhook is mounted first, because the proxy's `/integrations/:id/*`
-// would otherwise match first and demand a principal. (The frame routes are
-// mounted before both, for the same reason: ./frame.ts.)
+// would otherwise match first and demand a principal.
 // ═══════════════════════════════════════════════════════════════
 
 // A DOOR WE DID NOT LOCK NEEDS A LIMIT. Every other surface is bounded by a

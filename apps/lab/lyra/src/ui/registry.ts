@@ -11,7 +11,6 @@ import { Rows } from './components/rows';
 import { Links, Cards } from './components/lists';
 import { Skeleton, Empty, Spinner } from './components/feedback';
 import { Theme } from './components/theme';
-import { Frame } from './components/frame';
 
 const LYRA_PRIMITIVES = {
   // arrangement
@@ -71,8 +70,6 @@ const LYRA_PRIMITIVES = {
   Spinner,
   // the surface half of theming: writes a studio's tokens, renders nothing
   Theme,
-  // the one component whose contents this app does not validate — see frame.tsx
-  Frame,
 };
 
 // nova's own slot markers are not ours and are not optional — the frame

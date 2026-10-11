@@ -483,14 +483,5 @@ export const BELTS_BUNDLE = {
   // the contract advertised; intake refuses anything else with a sentence.
   attachments: { [panelAction.id]: { to: 'people.detail', preview: '/integrations/belts/preview' } },
   placements: { [rosterAction.id]: 'hub.people', [mineAction.id]: 'hub.me' },
-  // Pages the host may FRAME — declared here for the same reason a preview is:
-  // the host will not open one it was not told about. Belts serves this to
-  // exercise the seam; an integration whose screens are ordinary layouts needs
-  // none.
-  //
-  // The value names the screen the page belongs to, so the grant can be checked
-  // against the charter rather than only against the install. The roster is a
-  // desk screen, so this summary is a desk page — a member holds neither.
-  frames: { '/integrations/belts/embed/summary': rosterAction.id },
   settings: settingsAction.id,
 };

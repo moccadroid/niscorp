@@ -4,7 +4,6 @@ import { checksumOf, type Sequence } from '@niscorp/strata';
 import { readLedger } from '@niscorp/strata/postgres';
 import { MOSS_SEQUENCE } from '../src/data';
 import { SESSIONS_SEQUENCE } from '../src/identity';
-import { INTEGRATIONS_SEQUENCE } from '../src/integrations/tables';
 import { createServer } from '../src/server';
 import { pristineDatabases } from './pristine-database';
 
@@ -31,8 +30,6 @@ const PINNED: ReadonlyArray<[Sequence, number, string]> = [
   // The unique index on an integration's key hash.
   [MOSS_SEQUENCE, 3, 'b05aa252f4f3b70dad03282552ac6b94c5d4e5012d964c23cb32fedbb4f8b60f'],
   [SESSIONS_SEQUENCE, 1, '83a62e0217940bfe62136052c18f730947355d20e481d9aceb76463251b33700'],
-  // The integrations feature's own sequence: frame grants.
-  [INTEGRATIONS_SEQUENCE, 1, 'd2f51c7b98fb171f5c961f0a51157dbe48c36ee2e9a1d719cde07739bf6062c6'],
 ];
 
 describe('baselines — applied migrations are history', () => {

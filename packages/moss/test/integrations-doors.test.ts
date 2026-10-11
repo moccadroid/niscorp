@@ -5,15 +5,14 @@ import { createGrammarUpgrader } from '../src/data/engine';
 import type { FeatureEnv, Replay } from '../src/feature';
 import { BundleSchema } from '../src/integrations/bundle';
 import { createForwarder } from '../src/integrations/forward';
-import { frameRoutes } from '../src/integrations/frame';
 import { operatorRoutes } from '../src/integrations/operator';
 import type { OperatorDeps } from '../src/integrations/operator';
 import { proxyRoutes } from '../src/integrations/proxy';
 import { reachOf } from '../src/integrations/reach';
 
-// THE DOORS OF THE INTEGRATIONS FEATURE, each asked what it refuses: the frame
-// door, the operator's routes and the proxy, mounted over a registry that is a
-// map and a service that is a function. No database, and nothing leaves the
+// THE DOORS OF THE INTEGRATIONS FEATURE, each asked what it refuses: the
+// operator's routes and the proxy, mounted over a registry that is a map and a
+// service that is a function. No database, and nothing leaves the
 // process.
 
 type Row = Record<string, unknown>;
@@ -28,135 +27,6 @@ const serviceAnswering = (answer: (url: string) => Response = () => new Response
   };
   return { asked, fetch: fetchIt };
 };
-
-// ═══════════════════════════════════════════════════════════════
-// THE FRAME DOOR
-// ═══════════════════════════════════════════════════════════════
-
-describe('the frame door', () => {
-  const PAGE = '/integrations/belts/embed/pay';
-  // `belts` is approved and declares one framed page; `pay` is approved and
-  // declares none; `draft` declares one and nobody approved it.
-  const registered: Record<string, Row> = {
-    belts: { url: 'https://belts.example', status: 'approved', reach: {}, frames: { [PAGE]: 'ext.desk.belts.pay' } },
-    pay: { url: 'https://pay.example', status: 'approved', reach: {}, frames: {} },
-    draft: { url: 'https://draft.example', status: 'pending', reach: {}, frames: { '/integrations/draft/embed/pay': 'ext.desk.draft.pay' } },
-  };
-
-  // The door, for whoever `caller.principal` says is signed in. `installed` is
-  // what is live for their tenant, and the test's to change.
-  const door = () => {
-    const grants = new Map<string, Row>();
-    const caller: { principal: string | null } = { principal: 'i_mara' };
-    const tenant: { installed: readonly string[] | undefined } = { installed: ['belts', 'pay', 'draft'] };
-    const service = serviceAnswering();
-    const replay: Replay = async (fingerprint, context) => {
-      if (fingerprint === 'integrations/find') return [registered[String(context['id'])]].filter((row) => row !== undefined);
-      if (fingerprint === 'integrations/keep-frame-grant') {
-        grants.set(String(context['grant_hash']), { integration_id: context['integration_id'], principal: context['principal'], path: context['path'] });
-        return [];
-      }
-      if (fingerprint === 'integrations/frame-grant') {
-        const row = grants.get(String(context['grant_hash']));
-        return row !== undefined && row['integration_id'] === context['integration_id'] ? [row] : [];
-      }
-      return [];
-    };
-    const resolveIdentity = async (): Promise<{ roles: readonly string[]; installed: readonly string[] | undefined }> => ({ roles: ['desk'], installed: tenant.installed });
-    const routes = frameRoutes({
-      replay,
-      resolveIdentity,
-      grantedActionIds: () => ['ext.desk.belts.pay', 'ext.desk.draft.pay'],
-      forward: createForwarder({
-        find: async (id) => z.object({ url: z.string(), status: z.string(), reach: z.record(z.string(), z.array(z.string())), frames: z.record(z.string(), z.string()) }).optional().parse(registered[id]),
-        resolveIdentity,
-        scopeOf: async () => ({}),
-        mint: () => 'an-assertion',
-        timeoutMs: 30_000,
-        fetch: service.fetch,
-      }),
-    });
-    const server = new Hono<FeatureEnv>();
-    server.use('*', async (c, next) => {
-      c.set('principal', caller.principal);
-      return next();
-    });
-    server.route('/', routes);
-    const askFor = (path: string): Promise<Response> => Promise.resolve(server.request('/api/integrations/frame', { method: 'POST', headers: json, body: JSON.stringify({ path }) }));
-    const granted = async (): Promise<string> => z.object({ src: z.string() }).parse(await (await askFor(PAGE)).json()).src;
-    return { server, caller, tenant, grants, asked: service.asked, askFor, granted };
-  };
-
-  it('mints for nobody who is not signed in', async () => {
-    const { caller, askFor, grants } = door();
-    caller.principal = null;
-    const refused = await askFor(PAGE);
-    expect(refused.status).toBe(401);
-    expect(await refused.json()).toEqual({ message: 'Sign in first.' });
-    expect(grants.size).toBe(0);
-  });
-
-  it('mints for no integration that is not approved, and says no more of one that is pending than of one that is not there', async () => {
-    const { askFor, grants } = door();
-    const pending = await askFor('/integrations/draft/embed/pay');
-    const unknown = await askFor('/integrations/ghost/embed/pay');
-    expect([pending.status, unknown.status]).toEqual([404, 404]);
-    expect(await pending.json()).toEqual(await unknown.json());
-    expect(grants.size).toBe(0);
-  });
-
-  it('mints for no integration that is not installed for the caller’s tenant', async () => {
-    const { tenant, askFor, grants } = door();
-    tenant.installed = ['pay'];
-    const refused = await askFor(PAGE);
-    expect(refused.status).toBe(404);
-    expect(await refused.json()).toEqual({ message: 'Not installed here.' });
-    expect(grants.size).toBe(0);
-    // A deployment that keeps no install list has every integration live.
-    tenant.installed = undefined;
-    expect((await askFor(PAGE)).status).toBe(200);
-  });
-
-  // Checked again when the grant is spent, not only when it was minted: an
-  // uninstall between the two is the moment a tab that is still open stops.
-  it('a grant is asked about again when it is spent: uninstalled since, it opens nothing and the integration is not called', async () => {
-    const { server, tenant, asked, granted } = door();
-    const src = await granted();
-    expect((await server.request(src)).status).toBe(200);
-    expect(asked).toEqual([{ url: 'https://belts.example/embed/pay', method: 'GET' }]);
-
-    tenant.installed = ['pay'];
-    const stale = await server.request(src);
-    expect(stale.status).toBe(404);
-    expect(await stale.json()).toEqual({ message: 'Not found.' });
-    expect(asked).toHaveLength(1);
-  });
-
-  it('a grant opens its own integration’s page: at another approved integration’s address it opens nothing, and that one is not called', async () => {
-    const { server, asked, granted } = door();
-    const src = await granted();
-    const elsewhere = await server.request(src.replace('/integrations/belts/', '/integrations/pay/'));
-    expect(elsewhere.status).toBe(404);
-    expect(asked).toEqual([]);
-  });
-
-  // A framed page may call back on its grant, BESIDE itself and nowhere else:
-  // one segment, in the directory the page is in. No dots, no slashes, no
-  // capitals: nothing that could name a file, a parent or a deeper path.
-  it('a page’s call back goes to a sibling of the page: one plain segment, in its own directory', async () => {
-    const { server, asked, granted } = door();
-    const src = await granted();
-    const called = await server.request(`${src}/session`, { method: 'POST', body: '{"n":1}' });
-    expect(called.status).toBe(200);
-    expect(asked).toEqual([{ url: 'https://belts.example/embed/session', method: 'POST' }]);
-
-    for (const call of ['admin.php', 'deeper%2Fpath', 'Session', '-flag', '.env']) {
-      const refused = await server.request(`${src}/${call}`, { method: 'POST', body: '{}' });
-      expect([call, refused.status]).toEqual([call, 404]);
-    }
-    expect(asked).toHaveLength(1);
-  });
-});
 
 // ═══════════════════════════════════════════════════════════════
 // THE OPERATOR'S ROUTES
@@ -250,7 +120,7 @@ describe('the operator’s routes', () => {
   });
 
   describe('the probe', () => {
-    const found = { url: 'https://belts.example/', status: 'approved', reach: { '/integrations/belts/roster': [roster.id] }, frames: {} };
+    const found = { url: 'https://belts.example/', status: 'approved', reach: { '/integrations/belts/roster': [roster.id] } };
     const probe = (operator: Hono<FeatureEnv>, path?: string): Promise<Response> =>
       Promise.resolve(operator.request('/integrations/belts/probe', { method: 'POST', headers: json, body: JSON.stringify(path === undefined ? {} : { path }) }));
 
@@ -281,7 +151,7 @@ describe('the operator’s routes', () => {
 describe('the proxy — a declared path is for whoever holds the action that declared it', () => {
   // Two screens of one integration, each declaring its own endpoint. The
   // union of what a bundle declares is not what one caller may reach.
-  const found = { url: 'https://belts.example', status: 'approved', reach: { '/integrations/belts/roster': ['ext.member.belts.card'], '/integrations/belts/payouts': ['ext.desk.belts.payouts'] }, frames: {} };
+  const found = { url: 'https://belts.example', status: 'approved', reach: { '/integrations/belts/roster': ['ext.member.belts.card'], '/integrations/belts/payouts': ['ext.desk.belts.payouts'] } };
   const door = (held: readonly string[]) => {
     const service = serviceAnswering(() => new Response('{"rows":[]}', { status: 200, headers: json }));
     const proxied = proxyRoutes({

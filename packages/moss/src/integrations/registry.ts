@@ -10,8 +10,8 @@ import { PAGE } from './entries';
 import { reachOf } from './reach';
 
 // ═══════════════════════════════════════════════════════════════
-// THE REGISTRY — everything asked of `integrations`, `integration_actions` and
-// `integration_frame_grants`, each behind a function named for what it does.
+// THE REGISTRY — everything asked of `integrations` and `integration_actions`,
+// each behind a function named for what it does.
 //
 // None of it is SQL. Each function replays one of the feature's own entries
 // (./entries.ts) through vex, by the `replay` the server hands the feature
@@ -44,13 +44,11 @@ const text = z
 const strings = z.array(z.string()).catch([]);
 const carried = z.array(z.record(z.string(), z.unknown())).catch([]);
 
-// What the proxy may forward and which pages may be framed, as the row holds
-// them. A row from before either column held this shape admits nothing, which
-// is what an empty one says.
+// What the proxy may forward, as the row holds it. A row whose column holds
+// another shape admits nothing, which is what an empty one says.
 const ReachSchema = z.record(z.string(), z.array(z.string())).catch({});
-const FramesSchema = z.record(z.string(), z.string()).catch({});
 
-const FoundRowSchema = z.object({ url: z.string(), status: z.string(), reach: ReachSchema, frames: FramesSchema });
+const FoundRowSchema = z.object({ url: z.string(), status: z.string(), reach: ReachSchema });
 const RegistrationRowSchema = z.object({ status: z.string(), key_hash: z.string().nullish() });
 // What a landing that came with a key wrote: the rows of two tables, of which
 // only an integration's carries `key_hash`. One row alone is answered as
@@ -130,7 +128,7 @@ export type IntegrationRow = z.infer<typeof ListedRowSchema> & { actionCount: nu
 
 // An integration as it is found by its id: where its service is, whether it
 // has been approved ('approved', or it is served nothing), and what the proxy
-// and the frame door may let through for it.
+// may let through for it.
 export type FoundIntegration = z.infer<typeof FoundRowSchema>;
 
 // Written once. Every door that forwards to an integration starts here, and so
@@ -188,7 +186,6 @@ const importedRow = ({ id, url, bundle, adds, press }: BundleImport): Record<str
   // endpoint's reach with it. An allow-list that only ever grows is a
   // list of everything the integration has ever been able to do.
   reach: reachOf(bundle, id),
-  frames: bundle.frames,
   // The integration's own words, in the languages it speaks — stored beside
   // its actions so the app's language pass can reach them, and
   // re-imported whole like everything else about a bundle.
@@ -276,33 +273,6 @@ export const setBackToPending = async (replay: Replay, id: string, why: string):
 // the row the key that was hashed on it.
 export const removeIntegration = async (replay: Replay, id: string): Promise<void> => {
   await replay('integrations/remove', { id });
-};
-
-// ── frame grants ─────────────────────────────────────────────
-
-// What a frame grant opens: one page of one integration, for one principal.
-export type FrameGrant = { integration: string; principal: string; path: string };
-
-const FrameGrantRowSchema = z.object({ principal: z.string(), path: z.string() });
-
-// Keep a grant, by its hash, until `expires`. The grants whose time was over
-// at `now` go in the same transaction.
-export const keepFrameGrant = async (replay: Replay, grantHash: string, grant: FrameGrant, now: Date, expires: Date): Promise<void> => {
-  await replay('integrations/keep-frame-grant', {
-    grant_hash: grantHash,
-    integration_id: grant.integration,
-    principal: grant.principal,
-    path: grant.path,
-    expires_at: expires.toISOString(),
-    now: now.toISOString(),
-  });
-};
-
-// The grant a hash stands for, if it is this integration's and its time is not
-// over at `now`. One answer for unknown, expired and another integration's.
-export const frameGrantHeld = async (replay: Replay, grantHash: string, integration: string, now: Date): Promise<FrameGrant | undefined> => {
-  const row = FrameGrantRowSchema.optional().parse(rowsOf(await replay('integrations/frame-grant', { grant_hash: grantHash, integration_id: integration, now: now.toISOString() }))[0]);
-  return row === undefined ? undefined : { integration, principal: row.principal, path: row.path };
 };
 
 // ── the bindings, read back for the host's derivations ───────

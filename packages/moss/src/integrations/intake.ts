@@ -4,7 +4,6 @@ import { isRecord } from '@niscorp/nova/reflect';
 import type { FeatureSeams } from '../feature';
 import { BundleSchema } from './bundle';
 import type { AssistantDeclaration, Bundle, DocumentDeclaration } from './bundle';
-import { FRAME_GRANT_URL } from './reach';
 
 // ── the gate ──────────────────────────────────────────────────
 //
@@ -145,12 +144,6 @@ const endpointReasons = (id: string, action: ActionDefinition, ctx: IntakeContex
     }
     const url = endpoint.url;
     const own = `/integrations/${ctx.integrationId}/`;
-    // The one HOST surface an action may name without a fingerprint: asking
-    // for a frame grant. It reads nothing and writes nothing — it hands back
-    // a URL the integration's own page is served at — so there is no fingerprint for
-    // it to name, and the alternative is every integration inventing its own way to
-    // reach a door that already exists.
-    if (url === FRAME_GRANT_URL) continue;
     if (url.startsWith(own)) {
       // `/hook/` IS RESERVED. It is the one path on this server that requires
       // no principal (the webhook door) — a vendor calling in has
@@ -159,12 +152,6 @@ const endpointReasons = (id: string, action: ActionDefinition, ctx: IntakeContex
       // how a door meant for one thing becomes a way around everything else.
       if (url.startsWith(`${own}hook/`)) {
         reasons.push(`action ${id}: endpoint "${name}" is under /hook/, which is the unauthenticated webhook path`);
-      }
-      // `/frame/` is where a grant is REDEEMED — a browser GET carrying a
-      // token instead of a session. An action endpoint there would be a
-      // screen's call spending a credential meant for a document.
-      if (url.startsWith(`${own}frame/`)) {
-        reasons.push(`action ${id}: endpoint "${name}" is under /frame/, which redeems frame grants`);
       }
       continue;
     }
@@ -239,33 +226,16 @@ const bindingReasons = (bundle: Bundle, ctx: IntakeContext): string[] => {
     if (bundle.actions[actionId] === undefined) reasons.push(`placement ${actionId}: no such action in this bundle`);
     if (!ctx.menuSlots.has(hub)) reasons.push(`placement ${actionId}: targets "${hub}", which accepts no integrations`);
   }
-  // A FRAMED PAGE IS STILL THE INTEGRATION'S OWN GROUND. Same prefix rule as a
-  // preview, and neither reserved door: `/hook/` needs no principal and
-  // `/frame/` is where a grant is spent, so a page served at either would be
-  // reachable by something other than the grant that was minted for it.
   const ownPrefix = `/integrations/${ctx.integrationId}/`;
-  for (const [path, actionId] of Object.entries(bundle.frames)) {
-    if (!path.startsWith(ownPrefix)) {
-      reasons.push(`frame "${path}": not under this integration's own prefix`);
-    } else if (path.startsWith(`${ownPrefix}hook/`) || path.startsWith(`${ownPrefix}frame/`)) {
-      reasons.push(`frame "${path}": /hook/ and /frame/ are reserved`);
-    }
-    // The owner has to be real, or the grant check below it can never pass and
-    // the page is simply unreachable — a refusal at intake beats a screen that
-    // opens onto nothing.
-    if (bundle.actions[actionId] === undefined) {
-      reasons.push(`frame "${path}": belongs to "${actionId}", which is not an action in this bundle`);
-    }
-  }
   // PRESS IS FETCHED ONCE, AT INTAKE — it is never reach (reachOf sweeps
   // declarations; these are deliberately not among them) and the proxy never
   // forwards it. The paths still obey the same fences as every other
-  // declaration: the integration's own ground, neither reserved door.
+  // declaration: the integration's own ground, and not the webhook's door.
   for (const path of bundle.meta.press) {
     if (!path.startsWith(ownPrefix)) {
       reasons.push(`press "${path}": not under this integration's own prefix`);
-    } else if (path.startsWith(`${ownPrefix}hook/`) || path.startsWith(`${ownPrefix}frame/`)) {
-      reasons.push(`press "${path}": /hook/ and /frame/ are reserved`);
+    } else if (path.startsWith(`${ownPrefix}hook/`)) {
+      reasons.push(`press "${path}": /hook/ is reserved`);
     }
   }
   // TWO CAPABILITIES WITH ONE ID compose to the same grant string, so the

@@ -43,7 +43,7 @@ process.env['LYRA_BASE'] = `http://127.0.0.1:${LYRA_PORT}`;
 const service = startIntegrations(PORT);
 
 // SIGNED BY HAND, and deliberately so. Lyra depends on no payment SDK —
-// frame-check asserts it, because a host that carried one would carry that
+// stripe-check asserts it, because a host that carried one would carry that
 // dependency into every app that ever installs this integration. So this check writes
 // the wire contract itself, exactly as the integrations service writes the
 // assertion format rather than importing moss's signer.

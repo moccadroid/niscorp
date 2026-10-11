@@ -10,7 +10,7 @@ import type { FoundIntegration } from '../src/integrations/registry';
 // No database: the registry is a map, and the vendor's call is kept here
 // instead of sent.
 
-const approved: FoundIntegration = { url: 'https://vendor.example/', status: 'approved', reach: {}, frames: {} };
+const approved: FoundIntegration = { url: 'https://vendor.example/', status: 'approved', reach: {} };
 
 // The door, and every call it made to the integration's service.
 const door = () => {

@@ -8,7 +8,7 @@ import { neverAnswers } from './never-answers';
 // is a map, who somebody is and what they carry are said here, and nothing is
 // sent anywhere. What each door does with the answer is the door's.
 
-const acme: FoundIntegration = { url: 'https://acme.example/', status: 'approved', reach: {}, frames: {} };
+const acme: FoundIntegration = { url: 'https://acme.example/', status: 'approved', reach: {} };
 
 const world = (over: Partial<ForwardDeps> & { rows?: Record<string, FoundIntegration> } = {}) => {
   const rows = over.rows ?? { acme };

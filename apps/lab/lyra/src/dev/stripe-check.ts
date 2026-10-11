@@ -1,12 +1,10 @@
 // THE PAYMENTS INTEGRATION, up to the point where money would move.
 //
 // Everything here runs WITHOUT a Stripe key, on purpose. The live path — create
-// a connected account, mint an account session, mount Stripe's own onboarding
-// form — was verified against the sandbox by hand and cannot live in a suite:
-// it is a network call that creates a real object at a vendor. What a check can
-// hold is everything around it, which is where the mistakes actually are: what
-// the bundle is allowed to declare, which page may be framed, how far a framed
-// page may reach back, and what the integration says when it has no key.
+// a connected account, send its owner to Stripe's own hosted onboarding — is a
+// network call that creates a real object at a vendor, and cannot live in a
+// suite. What a check can hold is everything around it: what the bundle is
+// allowed to declare, and what the integration says when it has no key.
 //
 // An integration that refuses cleanly with no key is not a detail. It is the state every
 // deployment is in before an operator pastes one, and "it crashed" and "it says
@@ -24,7 +22,6 @@ const PORT = 8795;
 
 // No key, deliberately — see above. `.env` on a developer's machine has one.
 delete process.env['STRIPE_SECRET'];
-delete process.env['STRIPE_PUBLISHABLE'];
 // AND NO DATABASE. The checks each boot an isolated world in-process; pointing
 // them at the shared Postgres would make them order-dependent and flaky, and
 // that isolation is what has caught most of the bugs here. The .env file carries a
@@ -89,53 +86,24 @@ try {
   const connect = await asOwner('/integrations/stripe/connect');
   ok('...and connecting without a key refuses, in a sentence', connect.status === 503 && connect.text.includes('no Stripe key'), `${connect.status} ${connect.text.slice(0, 60)}`);
 
-  // ── the frame: declared, granted, and nothing else ───────────
-  const grant = await asOwner('/api/integrations/frame', { path: '/integrations/stripe/embed/onboarding' });
-  const src = String((JSON.parse(grant.text) as { src?: string }).src ?? '');
-  ok('the onboarding page can be granted', grant.status === 200 && src.startsWith('/integrations/stripe/frame/'), src || grant.text.slice(0, 80));
-
-  const undeclared = await asOwner('/api/integrations/frame', { path: '/integrations/stripe/embed/secret' });
-  ok('...and a page it did not declare cannot', undeclared.status === 404, String(undeclared.status));
-
-  const page = await server.request(src);
-  const html = await page.text();
-  ok('spending the grant serves the integration’s own document', page.status === 200 && (page.headers.get('content-type') ?? '').includes('text/html'), page.headers.get('content-type') ?? '');
-  // Not the key message: with no account there is nothing to onboard yet, and
-  // the page says THAT. Either way it is a sentence rather than a blank frame.
-  ok('...which says where the studio stands', html.includes('not been connected'), 'a page that explains beats a page that is blank');
-
-  // ── A FRAMED PAGE MAY CALL BACK, AND ONLY BESIDE ITSELF ──────
-  //
-  // The page is sandboxed without `allow-same-origin`, so it has no session and
-  // nothing to authenticate with but the grant it was opened by. That callback
-  // is real reach, so it is bounded to one plain segment in the declared page's
-  // own directory: `embed/onboarding` may call `embed/session` and nothing else.
-  const token = src.split('/').pop() ?? '';
-  const beside = await server.request(`/integrations/stripe/frame/${token}/session`, { method: 'POST', body: '{}' });
-  const besideBody = await beside.text();
-  // The INTEGRATION's own words, not the host's. Both answer 404 here — the integration
-  // because this studio has no account, the host when it refuses to forward —
-  // so the status alone would not tell them apart, and asserting on it would
-  // have passed just as well if the callback had never been wired.
-  ok('a framed page may call back beside itself', besideBody.includes('Not connected'), `${beside.status} ${besideBody.slice(0, 40)} — the integration answered, so the callback reached it`);
-
-  const climbing = await server.request(`/integrations/stripe/frame/${token}/..`, { method: 'POST', body: '{}' });
-  // Refused before it is even a callback: the URL collapses and lands on the
-  // proxy, which wants a principal an iframe does not have. Two fences, and
-  // this one happens to be the outer.
-  ok('...but cannot climb', climbing.status >= 400, `${climbing.status} — normalised away before the segment rule even runs`);
-
-  const dotted = await server.request(`/integrations/stripe/frame/${token}/embed.session`, { method: 'POST', body: '{}' });
-  ok('...nor reach a path of its own choosing', dotted.status === 404, 'one plain segment, in one directory');
-
-  const forgedToken = await server.request('/integrations/stripe/frame/deadbeefdeadbeefdeadbeef/session', { method: 'POST', body: '{}' });
-  ok('...and an invented grant calls back nothing', forgedToken.status === 404, String(forgedToken.status));
-
   // ── the SDK stays on this side of the wire ───────────────────
-  const manifest = await import('node:fs').then((fs) => fs.readFileSync('package.json', 'utf8'));
-  ok('lyra depends on no payment SDK', !/stripe/i.test(manifest), 'the integration carries it; frame-check asserts the same for imports');
+  //
+  // A host that imported a payment provider's SDK would carry that dependency
+  // into every app that installs the integration, so the absence is asserted:
+  // in what this app imports, and in what it depends on.
+  const { readFileSync, readdirSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const sourcesUnder = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) return entry.name === 'dev' ? [] : sourcesUnder(full);
+      return /\.(ts|tsx)$/.test(entry.name) ? [full] : [];
+    });
+  const vendorRefs = sourcesUnder(join(process.cwd(), 'src')).filter((file) => /@stripe\/|from ['"]stripe['"]|require\(['"]stripe['"]\)/.test(readFileSync(file, 'utf8')));
+  ok('this app imports no payment SDK', vendorRefs.length === 0, vendorRefs.join(', ') || 'the integration carries it');
+  ok('...and depends on none', !/stripe/i.test(readFileSync('package.json', 'utf8')), 'a dependency here is a dependency for every app that installs the integration');
 } finally {
   await service.close();
 }
 
-report('payments arrive as an integration: declared, placed, framed — and honest about having no key.');
+report('payments arrive as an integration: declared, placed — and honest about having no key.');

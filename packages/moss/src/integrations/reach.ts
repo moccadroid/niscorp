@@ -73,16 +73,3 @@ export const reachAdmits = (reach: Reach, path: string, held: ReadonlySet<string
 // their diagnostic by a member's screens would make "the screen is empty"
 // harder to answer rather than safer.
 export const reachDeclares = (reach: Reach, path: string): boolean => reach[normalizeReach(path)] !== undefined;
-
-// The same question at the other door. A frame names one owner rather than a
-// list: a page is served by the screen that opens it, and two screens wanting
-// one page is a bundle that should say so twice.
-export const frameAdmits = (frames: Readonly<Record<string, string>>, path: string, held: ReadonlySet<string>): boolean => {
-  const owner = frames[path];
-  return owner !== undefined && held.has(owner);
-};
-
-// The host surface a screen calls to be handed a framed page's URL. Named once
-// here because intake admits it and the frame route serves it, and two spellings
-// of the same path is how a seam stops working for one caller.
-export const FRAME_GRANT_URL = '/api/integrations/frame';

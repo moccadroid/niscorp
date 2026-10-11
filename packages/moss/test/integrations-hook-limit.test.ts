@@ -9,7 +9,7 @@ import type { FoundIntegration } from '../src/integrations/registry';
 //
 // No database: the registry is a map, and the vendor's call goes nowhere.
 
-const approved: FoundIntegration = { url: 'https://vendor.example/', status: 'approved', reach: {}, frames: {} };
+const approved: FoundIntegration = { url: 'https://vendor.example/', status: 'approved', reach: {} };
 
 // One process's door: the routes, over a forwarder of its own.
 const door = (): { hook: (id: string) => Promise<number>; sent: () => number } => {

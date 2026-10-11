@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
-import { z } from 'zod';
 import type { ActionDefinition, FetchFn } from '@niscorp/nova';
 import type { DocumentStore } from '@niscorp/strata/postgres';
 import { createPostgresAdapter } from '@niscorp/vex';
@@ -144,10 +143,10 @@ describe('createIntegrations — before a server has started it', () => {
   it('is what a manifest holds in `features`: a name, the tables it keeps, and a function to start it with', () => {
     const integrations = createIntegrations();
     expect(integrations.name).toBe('integrations');
-    // The three tables that are its own, said before anything runs, and one
-    // sequence of its own, for the table frame grants are kept in.
-    expect(integrations.tables?.names).toEqual(['integrations', 'integration_actions', 'integration_frame_grants']);
-    expect((integrations.tables?.sequences ?? []).map((sequence) => sequence.id)).toEqual(['nisc.moss.integrations']);
+    // The two tables that are its own, said before anything runs. Moss's own
+    // sequence makes them, so it names none.
+    expect(integrations.tables?.names).toEqual(['integrations', 'integration_actions']);
+    expect(integrations.tables?.sequences).toBeUndefined();
     expect(typeof integrations.start).toBe('function');
   });
 });
@@ -198,9 +197,6 @@ describe('createIntegrations — started with the seams', () => {
     expect(server.routes.map((route) => `${route.method} ${route.path}`).filter((route) => !route.startsWith('ALL /*'))).toEqual([
       'GET /api/integrations/contract',
       'GET /api/integrations/verify-key',
-      'POST /api/integrations/frame',
-      'GET /integrations/:id/frame/:token',
-      'POST /integrations/:id/frame/:token/:call',
       // The webhook before the proxy, whose pattern would take it.
       'POST /integrations/:id/hook/*',
       'ALL /integrations/:id/*',
@@ -597,7 +593,7 @@ describe('the routes the feature mounts, asked through the server it mounted the
       return new Response('{"rows":[]}', { status: 200, headers: { 'content-type': 'application/json' } });
     }) as typeof fetch;
     try {
-      const found = { url: 'https://belts.example', status: 'approved', reach: { '/integrations/belts/roster': ['ext.desk.belts.roster'] }, frames: {} };
+      const found = { url: 'https://belts.example', status: 'approved', reach: { '/integrations/belts/roster': ['ext.desk.belts.roster'] } };
       const { seams, server, caller } = await world({ replay: replayOver({ found: { belts: found } }), who: () => ({ roles: ['desk'], installed: ['belts'] }) });
       await createIntegrations().start({ ...seams, grantedActionIds: (roles) => (roles.includes('desk') ? ['ext.desk.belts.roster'] : []) });
       caller.principal = 'i_mara';
@@ -614,7 +610,7 @@ describe('the routes the feature mounts, asked through the server it mounted the
 // NO CALL OUT WAITS FOR EVER. The service here never answers (./never-answers.ts),
 // and the deployment allows a call 20 ms (`outboundTimeoutMs`).
 describe('a service that never answers', () => {
-  const found = { url: 'https://belts.example', status: 'approved', reach: { '/integrations/belts/roster': ['ext.desk.belts.roster'] }, frames: {} };
+  const found = { url: 'https://belts.example', status: 'approved', reach: { '/integrations/belts/roster': ['ext.desk.belts.roster'] } };
   const against = async <Answer>(run: (started: Awaited<ReturnType<typeof world>>, signals: (AbortSignal | undefined)[]) => Promise<Answer>): Promise<Answer> => {
     const service = neverAnswers();
     const real = globalThis.fetch;
@@ -653,125 +649,5 @@ describe('a service that never answers', () => {
       expect(answered.status).toBe(502);
       expect(signals.map(endedBy)).toEqual([expect.stringMatching(/^TimeoutError/)]);
     });
-  });
-});
-
-// A FRAME GRANT IS A ROW. Two processes of one deployment are two features
-// started over one registry: the map here stands in for the table both read
-// and write, keyed as the table is, by the hash of the grant.
-describe('a frame grant, with two processes behind one address', () => {
-  const PAGE_PATH = '/integrations/belts/embed/pay';
-  const found = { url: 'https://belts.example', status: 'approved', reach: {}, frames: { [PAGE_PATH]: 'ext.desk.belts.pay' } };
-  const deployment = () => {
-    const grants = new Map<string, Row>();
-    const replay: Replay = async (fingerprint, context) => {
-      if (fingerprint === 'integrations/find') return context['id'] === 'belts' ? [found] : [];
-      if (fingerprint === 'integrations/keep-frame-grant') {
-        for (const [hash, row] of grants) if (String(row['expires_at']) <= String(context['now'])) grants.delete(hash);
-        grants.set(String(context['grant_hash']), { integration_id: context['integration_id'], principal: context['principal'], path: context['path'], expires_at: context['expires_at'] });
-        return [];
-      }
-      if (fingerprint === 'integrations/frame-grant') {
-        const row = grants.get(String(context['grant_hash']));
-        return row !== undefined && row['integration_id'] === context['integration_id'] && String(row['expires_at']) > String(context['now']) ? [row] : [];
-      }
-      return [];
-    };
-    // One process, serving people who hold `holding` of the actions in force.
-    const process = async (holding: readonly string[] = ['ext.desk.belts.pay']) => {
-      const started = await world({ replay, who: () => ({ roles: ['desk'], installed: ['belts'] }) });
-      await createIntegrations().start({ ...started.seams, grantedActionIds: () => [...holding] });
-      return started;
-    };
-    return { grants, process };
-  };
-  // The page the integration serves, whoever asks for it.
-  const serving = async <Answer>(run: () => Promise<Answer>): Promise<Answer> => {
-    const real = globalThis.fetch;
-    globalThis.fetch = async () => new Response('<html>pay</html>', { status: 200, headers: { 'content-type': 'text/html' } });
-    try {
-      return await run();
-    } finally {
-      globalThis.fetch = real;
-    }
-  };
-  const grantFrom = async (one: Awaited<ReturnType<typeof world>>): Promise<string> => {
-    one.caller.principal = 'i_mara';
-    const minted = await one.server.request('/api/integrations/frame', { method: 'POST', body: JSON.stringify({ path: PAGE_PATH }), headers: { 'content-type': 'application/json' } });
-    expect(minted.status).toBe(200);
-    return z.object({ src: z.string() }).parse(await minted.json()).src;
-  };
-
-  it('a grant one process minted is redeemed by the other', async () => {
-    await serving(async () => {
-      const { grants, process } = deployment();
-      const [one, other] = [await process(), await process()];
-      const src = await grantFrom(one);
-
-      const page = await other.server.request(src);
-      expect(page.status).toBe(200);
-      expect(await page.text()).toBe('<html>pay</html>');
-      // ...and the page's call back, on the same grant.
-      expect((await other.server.request(`${src}/session`, { method: 'POST', body: '{}' })).status).toBe(200);
-
-      // What is kept is the hash: the grant itself is in no row, so a copy of
-      // the table opens nothing.
-      const token = src.split('/').at(-1) ?? '';
-      expect(token).toMatch(/^[0-9a-f]{48}$/);
-      expect([...grants.keys()]).toHaveLength(1);
-      expect(JSON.stringify([...grants])).not.toContain(token);
-    });
-  });
-
-  // THE DECLARATION IS THE PERIMETER, AND THE SCREEN THAT OWNS THE PAGE IS WHO
-  // IT IS FOR. Signed in and installed is not enough: a member of a studio must
-  // not be handed the page that mounts a payment provider's onboarding form
-  // against the studio's merchant account.
-  const askFor = (one: Awaited<ReturnType<typeof world>>, path: string): Promise<Response> =>
-    Promise.resolve(one.server.request('/api/integrations/frame', { method: 'POST', body: JSON.stringify({ path }), headers: { 'content-type': 'application/json' } }));
-
-  it('a grant is minted for somebody who holds the action that owns the page, and for nobody else', async () => {
-    const { grants, process } = deployment();
-    // Signed in, at a tenant that installed the integration, and holding
-    // another of its actions: not the one this page is the screen of.
-    const member = await process(['ext.member.belts.card']);
-    member.caller.principal = 'm_juno';
-    const refused = await askFor(member, PAGE_PATH);
-    expect(refused.status).toBe(404);
-    expect(await refused.json()).toEqual({ message: 'No such frame.' });
-    expect(grants.size).toBe(0);
-  });
-
-  it('a grant is minted for a page the bundle declared, and for no other path of the integration', async () => {
-    const { grants, process } = deployment();
-    const desk = await process();
-    desk.caller.principal = 'i_mara';
-    // A path the integration may well serve, and never declared as a frame.
-    const refused = await askFor(desk, '/integrations/belts/embed/admin');
-    expect(refused.status).toBe(404);
-    expect(await refused.json()).toEqual({ message: 'No such frame.' });
-    expect(grants.size).toBe(0);
-    // The page it did declare, for the same person: minted.
-    expect((await askFor(desk, PAGE_PATH)).status).toBe(200);
-    expect(grants.size).toBe(1);
-  });
-
-  it('a grant is for one integration, and for half an hour', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    try {
-      await serving(async () => {
-        const { process } = deployment();
-        const [one, other] = [await process(), await process()];
-        const src = await grantFrom(one);
-        // Presented under another integration's address, it opens nothing.
-        expect((await other.server.request(src.replace('/belts/', '/pay/'))).status).toBe(404);
-        vi.setSystemTime(Date.now() + 29 * 60_000);
-        expect((await other.server.request(src)).status).toBe(200);
-        vi.setSystemTime(Date.now() + 2 * 60_000);
-        expect((await other.server.request(src)).status).toBe(404);
-      });
-    } finally {
-      vi.useRealTimers();
-    }
   });
 });

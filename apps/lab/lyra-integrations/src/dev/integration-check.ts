@@ -41,7 +41,7 @@ const NORTHROCK = { principal: 'p_omar', scope: { studioId: 'st_northrock', pers
 
 // ── every integration answers at its own prefix, and nowhere else ───
 const bundle = await integrationsApp.request('/belts/bundle');
-const bundleJson = (await bundle.json()) as { integration?: string; frames?: Record<string, string> };
+const bundleJson = (await bundle.json()) as { integration?: string };
 ok('an integration is served at its own prefix', bundle.status === 200 && bundleJson.integration === 'belts', `${bundle.status} · ${bundleJson.integration}`);
 ok('...and the prefix is applied by the mounting, not written into the route', (await integrationsApp.request('/bundle')).status === 404, 'an integration mounts /bundle; only one place turns that into /belts/bundle');
 ok('...so a second integration does not collide with the first', (await integrationsApp.request('/hookclaim/bundle')).status === 200, 'two integrations, two prefixes, one process');
@@ -255,13 +255,5 @@ ok('no integration names another integration’s table', strayTables.length === 
 // The rule has to be able to see one, or it is a comment.
 const CAUGHT = [...'SELECT * FROM belts_records'.matchAll(TABLE_IN_SQL)].map((m) => (m[1] ?? '').split('_')[0]);
 ok('...and the rule would catch one', CAUGHT.includes('belts'), 'a bare table name carrying somebody else’s prefix');
-
-// ── what the bundle promises about itself ────────────────────
-const frames = Object.entries(bundleJson.frames ?? {});
-ok('a framed page is declared, not conjured', frames.every(([path]) => path.startsWith('/integrations/belts/')), JSON.stringify(bundleJson.frames ?? {}));
-// A page with no owning screen is one the host can only gate on "signed in and
-// installed" — which is what let a member reach a desk page. The owner is the
-// declaration that makes the grant answerable to the charter.
-ok('...and belongs to a screen, so a grant can be refused', frames.every(([, actionId]) => actionId.startsWith('ext.')), frames.map(([, a]) => a).join(', ') || 'none declared');
 
 report('one process, several integrations: each at its own prefix, with its own audience, its own env, and its own door.');

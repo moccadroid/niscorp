@@ -5,15 +5,14 @@ import { MOSS_SEQUENCE } from '../src/data';
 import { createOwnEntries } from '../src/data/own-entries';
 import type { Replay } from '../src/data/own-entries';
 import { REGISTRY_ENTRIES, REGISTRY_TABLES } from '../src/integrations/entries';
-import { INTEGRATIONS_SEQUENCE } from '../src/integrations/tables';
 
 // THE REGISTRY'S ENTRIES OVER A REAL DATABASE, for the tests that already
-// start one: moss's tables and the feature's through the ledger, then the entries seeded and
+// start one: moss's tables through the ledger, then the entries seeded and
 // replayed the way a server replays them for the feature (../src/data,
 // own-entries.ts), with no server. `db` is the client writes are replayed on:
 // the pool, unless a test hands one of its own.
 export const registryOver = async (pool: PgPool, db: PgPool = pool): Promise<Replay> => {
-  await migrate(pool, [MOSS_SEQUENCE, INTEGRATIONS_SEQUENCE]);
+  await migrate(pool, [MOSS_SEQUENCE]);
   const adapter = createPostgresAdapter({ pool });
   return createOwnEntries({ adapter, db, engine: { invalidate: () => undefined } })({ owner: 'the feature "integrations"', entries: REGISTRY_ENTRIES, tables: REGISTRY_TABLES });
 };

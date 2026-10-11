@@ -101,7 +101,7 @@ describe('fn.call', () => {
 // ── integration.call: the outbound seam, refusals included. ──────────────────
 describe('integration.call', () => {
   const world = async (over: { status?: string; telemetry?: SocketConfig['telemetry'] } = {}) => {
-    const acme: FoundIntegration = { url: 'https://acme.example', status: over.status ?? 'approved', reach: {}, frames: {} };
+    const acme: FoundIntegration = { url: 'https://acme.example', status: over.status ?? 'approved', reach: {} };
     const signer = createAssertionSigner();
     const call = callIntegrationWith({
       forward: createForwarder({

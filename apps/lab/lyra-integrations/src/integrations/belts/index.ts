@@ -213,45 +213,6 @@ export const beltsIntegration: Integration = {
       return c.json(rankRows());
     });
 
-    // ── A FRAMED PAGE, from this side ──────────────────────────
-    //
-    // The integration serves HTML and the host frames it. Belts does not need this —
-    // its screens are ordinary nova layouts, which is the right way — so what
-    // this exists to prove is the SEAM: that a declared page is reachable only
-    // through a grant, that the assertion still arrives, and that the host
-    // renders a document it never validated.
-    //
-    // SELF-CONTAINED, deliberately. Relative subresources would resolve against
-    // the HOST's origin and arrive at the proxy with no session, so a framed
-    // page loads nothing of its own — everything inline, and anything external
-    // (a vendor's SDK) straight from the vendor.
-    r.get('/embed/summary', (c) => {
-      const who = ctx.identity(c);
-      if (who === undefined) return c.html('<!doctype html><title>Belts</title><p>Who are you?</p>', 401);
-      const rows = BELTS.filter((b) => b.studioId === who.studioId)
-        .map((b) => `<li><span class="bar" style="background:${RANKS.find((r2) => r2.name === b.belt)?.color ?? '#888'}"></span>${labelFor(b.belt, b.stripes)}</li>`)
-        .join('');
-      return c.html(`<!doctype html>
-<html><head><meta charset="utf-8"><title>Belts</title><style>
-  body { margin:0; font: 14px/1.5 system-ui, sans-serif; color: #1b1b1f; background: transparent; }
-  ul { list-style:none; margin:0; padding:0 }
-  li { display:flex; align-items:center; gap:10px; padding:8px 0 }
-  .bar { width:26px; height:10px; border-radius:2px; display:inline-block }
-</style></head>
-<body>
-  <ul>${rows === '' ? '<li>Nobody graded yet.</li>' : rows}</ul>
-  <script>
-    // THE HEIGHT HANDSHAKE, the integration's half. The host cannot know how tall this
-    // is, so the page says — and keeps saying, because content moves.
-    var tell = function () {
-      parent.postMessage({ type: 'frame:height', height: document.documentElement.scrollHeight }, '*');
-    };
-    tell();
-    if (window.ResizeObserver) new ResizeObserver(tell).observe(document.body);
-  </script>
-</body></html>`);
-    });
-
     // A checkable statement about the tenancy rule above, without a running Lyra.
     //
     // NOT DECLARED in the bundle, on purpose: it is the undeclared route the

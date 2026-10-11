@@ -6,12 +6,8 @@ import type { ActionDefinition } from '@niscorp/nova';
 // fingerprint constant: the contract arrives over the wire
 // (`GET /api/integrations/contract`) and separation-check asserts the absence.
 //
-// Everything here is ordinary nova. The `Frame` seam and the `embed/onboarding`
-// page it declares (below) are still built and still declared — the embedded
-// Connect components are the intended path — but the setup screen uses HOSTED
-// onboarding today, because the embed needs platform-side Connect config that is
-// not yet in place and renders blank without it. The declared frame stays so the
-// embed lights up the day that config lands, with no bundle change.
+// Everything here is ordinary nova. Onboarding and checkout are HOSTED pages
+// of Stripe's own that the person is sent to, and comes back from.
 
 const OWN = '/integrations/stripe';
 
@@ -23,13 +19,8 @@ const heading = (title: string, lead: string) => ({ component: 'Hero', props: { 
 // one), connected but incomplete (a link to Stripe's hosted onboarding), or
 // ready.
 //
-// HOSTED ONBOARDING, not the embedded frame. The embed needs the platform's
-// Connect embedded-components profile configured before Stripe will render it,
-// which is not done — so it returns an `api_error` and a blank box, and the
-// owner cannot enter anything. A hosted Account Link works today with no
-// platform setup, so that is the owner's real path in. The redirect is off
-// lyra, which S1 held at arm's length; a working redirect beats an embed nobody
-// can fill, and the embed returns the day the platform profile is set up.
+// HOSTED ONBOARDING. A hosted Account Link needs no platform setup, so that is
+// the owner's path in: a redirect off lyra, and back when it is done.
 const setupAction: ActionDefinition = {
   id: 'ext.desk.stripe.setup',
   title: 'Stripe',
@@ -720,17 +711,8 @@ export const STRIPE_BUNDLE = {
     [memberPanelAction.id]: memberPanelAction,
   },
   placements: { [ledgerAction.id]: 'hub.money', [payAction.id]: 'hub.me', [buyAction.id]: 'hub.me' },
-  // PAGES THE HOST MAY FRAME. Declared, so lyra will not open one this
-  // integration did not publish — including a path it happens to serve.
-  //
-  // NAMED AGAINST THE SCREEN THAT OPENS IT. The onboarding page belongs to the
-  // setup screen, which is a desk action, so a grant for it is mintable by
-  // somebody who holds that screen and by nobody else. Without the owner, a
-  // member of the studio could be served the form that changes where this
-  // studio's money is paid out.
   // A PANEL ON A HOST SCREEN. The host advertised `people.detail` as attachable;
   // this rides it, and the preview is what paints the strip before it opens.
   attachments: { [memberPanelAction.id]: { to: 'people.detail', preview: `${OWN}/preview/member` } },
-  frames: { [`${OWN}/embed/onboarding`]: setupAction.id },
   settings: setupAction.id,
 };

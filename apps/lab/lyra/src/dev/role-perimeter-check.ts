@@ -10,8 +10,7 @@
 // endpoint in a bundle, so the charter's `ext.desk.*` / `ext.member.*` fence
 // decided which SCREENS rendered and nothing about which endpoints answered.
 // A member of a gym could call the payments integration's merchant onboarding
-// endpoint, and mint a frame grant for the page that changes where the studio's
-// money is paid out. Both were 200s.
+// endpoint, which changes where the studio's money is paid out.
 //
 // So this check runs the whole thing from both sides. Refusals alone would pass
 // against an integration that was simply broken, so every refusal here is paired
@@ -33,7 +32,6 @@ const PORT = 8798;
 // through the host's door, which is decided before the integration is reached
 // at all — so an integration with nothing configured answers them perfectly well.
 delete process.env['STRIPE_SECRET'];
-delete process.env['STRIPE_PUBLISHABLE'];
 delete process.env['DATABASE_URL'];
 
 const verifyKey = (await (await server.request('/api/integrations/verify-key')).json()) as { key: string };
@@ -65,15 +63,6 @@ const call = async (email: string, path: string): Promise<{ status: number; body
     body: '{}',
   });
   return { status: response.status, body: (await response.text()).slice(0, 90) };
-};
-
-const grantFor = async (email: string, path: string): Promise<number> => {
-  const response = await server.request('/api/integrations/frame', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${String(await mintToken(email))}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ path }),
-  });
-  return response.status;
 };
 
 // REFUSED AT THE HOST, and the status is the whole assertion. 404 rather than
@@ -152,16 +141,6 @@ try {
   const ownPortal = await call(member, '/integrations/stripe/portal');
   ok('...and a member reaches their own', reached(ownPortal), `${ownPortal.status} ${ownPortal.body}`);
 
-  // ── THE FRAME DOOR ASKS THE SAME QUESTION ────────────────────
-  //
-  // It used to ask a weaker one. `frames` was a bare list of paths with no
-  // owning screen, so a grant was mintable by anybody signed in at a studio with
-  // the integration installed — and spending it served the page that mounts the
-  // provider's own onboarding form.
-  const SETUP_PAGE = '/integrations/stripe/embed/onboarding';
-  ok('a member cannot be granted the setup page', (await grantFor(member, SETUP_PAGE)) === 404, 'a page belongs to the screen that opens it');
-  ok('...and an owner can', (await grantFor(owner, SETUP_PAGE)) === 200, 'the same grant, for somebody who holds the screen');
-
   // ── ONE INTEGRATION IS NOT A SPECIAL CASE ────────────────────
   //
   // This is a property of the host's door, not of the payments integration, so
@@ -175,7 +154,6 @@ try {
   // nothing" rule would have broken silently.
   const ownBelt = await call(member, '/integrations/belts/mine');
   ok('...and a member still holds their own rank screen', reached(ownBelt), `${ownBelt.status} ${ownBelt.body}`);
-  ok('a member cannot be granted the belts summary page', (await grantFor(member, '/integrations/belts/embed/summary')) === 404, 'the roster is a desk screen, so its page is a desk page');
 
   // ── THE OPERATOR IS NOT A PRINCIPAL ──────────────────────────
   //

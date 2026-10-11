@@ -20,7 +20,7 @@ import { NOTES_SCHEMA, engineDouble, tableNamed } from './data-double';
 // No database: the engine reads through a double (./data-double.ts), and the
 // server is the one `createServer` assembles once a database is up.
 
-const THEIRS = ['integrations', 'integration_actions', 'integration_frame_grants'];
+const THEIRS = ['integrations', 'integration_actions'];
 const schema: DatabaseSchema = { entities: [...NOTES_SCHEMA.entities, ...THEIRS.map(tableNamed)] };
 const whoseToken = (token: string): string | null => (token.startsWith('t_') ? token.slice(2) : null);
 

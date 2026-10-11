@@ -104,12 +104,10 @@ describe('the listing vocabulary', () => {
     if (!result.ok) expect(result.reasons[0]).toMatch(/press .*own prefix/);
   });
 
-  it('press at a reserved door is refused', () => {
-    for (const path of ['/integrations/acme/hook/x.png', '/integrations/acme/frame/x.png']) {
-      const result = runIntake(bundle({ press: [path] }), ctx());
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.reasons[0]).toMatch(/reserved/);
-    }
+  it('press at the webhook\'s door is refused', () => {
+    const result = runIntake(bundle({ press: ['/integrations/acme/hook/x.png'] }), ctx());
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reasons[0]).toMatch(/reserved/);
   });
 
   it('press never widens reach — it is fetched once at intake, not forwarded', () => {
@@ -870,7 +868,6 @@ describe('the registry as vex entries — each statement, against a database', (
     requested_actions: ['ext.desk.*'],
     requested_data: ['members.read'],
     reach: { [`/integrations/${id}/roster`]: [`ext.desk.${id}.roster`] },
-    frames: { [`/integrations/${id}/embed/pay`]: `ext.desk.${id}.pay` },
     phrasebook: { de: { Hello: 'Hallo' } },
     story: [{ heading: 'How it started', prose: 'In a garage.' }],
     highlights: ['Belt colors, live'],
@@ -899,10 +896,9 @@ describe('the registry as vex entries — each statement, against a database', (
 
   it('1 · find: one integration by its id, and no row for an id that is not there', async () => {
     const reach = { '/integrations/found/roster': ['ext.desk.found.roster'] };
-    const frames = { '/integrations/found/embed/pay': 'ext.desk.found.pay' };
-    await pool.query(`INSERT INTO integrations (id, url, status, reach, frames) VALUES ('found', 'https://found.example', 'approved', $1::jsonb, $2::jsonb)`, [json(reach), json(frames)]);
-    expect(await replay('integrations/find', { id: 'found' })).toEqual([{ url: 'https://found.example', status: 'approved', reach, frames }]);
-    expect(await replay('integrations/find', { id: 'found' })).toEqual(await rows('SELECT url, status, reach, frames FROM integrations WHERE id = $1', ['found']));
+    await pool.query(`INSERT INTO integrations (id, url, status, reach) VALUES ('found', 'https://found.example', 'approved', $1::jsonb)`, [json(reach)]);
+    expect(await replay('integrations/find', { id: 'found' })).toEqual([{ url: 'https://found.example', status: 'approved', reach }]);
+    expect(await replay('integrations/find', { id: 'found' })).toEqual(await rows('SELECT url, status, reach FROM integrations WHERE id = $1', ['found']));
     expect(await replay('integrations/find', { id: 'ghost' })).toEqual([]);
   });
 
@@ -1050,31 +1046,6 @@ describe('the registry as vex entries — each statement, against a database', (
     await replay('integrations/write-bundle', { ...landing('keyless-a'), actions: [] });
     await replay('integrations/write-bundle', { ...landing('keyless-b'), actions: [] });
     expect(await rows(`SELECT id FROM integrations WHERE id IN ('keyless-a', 'keyless-b') AND key_hash IS NULL ORDER BY id`)).toEqual([{ id: 'keyless-a' }, { id: 'keyless-b' }]);
-  });
-
-  // Frame grants are rows of a table of the feature's own, read and written
-  // through vex like the rest.
-  it('a frame grant: kept by its hash until its time is over, read back for its own integration, and let go when the next is kept', async () => {
-    await replay('integrations/write-bundle', { ...landing('framed'), actions: [] });
-    const page = '/integrations/framed/embed/pay';
-    const kept = (hash: string, now: string, expires: string): Record<string, unknown> => ({ grant_hash: hash, integration_id: 'framed', principal: 'i_mara', path: page, now, expires_at: expires });
-    const asked = (over: Record<string, unknown> = {}): Promise<unknown> => replay('integrations/frame-grant', { grant_hash: 'hash-one', integration_id: 'framed', now: '2026-10-10T08:59:59.000Z', ...over });
-
-    await replay('integrations/keep-frame-grant', kept('hash-one', '2026-10-10T08:30:00.000Z', '2026-10-10T09:00:00.000Z'));
-    expect(await asked()).toEqual([{ principal: 'i_mara', path: page }]);
-    // One answer for a hash nobody kept, another integration's address, and a
-    // grant whose time is over: no row.
-    expect(await asked({ grant_hash: 'hash-nobody-kept' })).toEqual([]);
-    await replay('integrations/write-bundle', { ...landing('framed-too'), actions: [] });
-    expect(await asked({ integration_id: 'framed-too' })).toEqual([]);
-    expect(await asked({ now: '2026-10-10T09:00:00.000Z' })).toEqual([]);
-
-    // Kept after the first one's time: the first is let go in the same write.
-    await replay('integrations/keep-frame-grant', kept('hash-two', '2026-10-10T09:30:00.000Z', '2026-10-10T10:00:00.000Z'));
-    expect(await rows(`SELECT grant_hash FROM integration_frame_grants WHERE integration_id = 'framed' ORDER BY grant_hash`)).toEqual([{ grant_hash: 'hash-two' }]);
-    // A grant is its integration's, and goes when the integration does.
-    await replay('integrations/remove', { id: 'framed' });
-    expect(await rows(`SELECT grant_hash FROM integration_frame_grants WHERE integration_id = 'framed'`)).toEqual([]);
   });
 
   describe('the lists', () => {

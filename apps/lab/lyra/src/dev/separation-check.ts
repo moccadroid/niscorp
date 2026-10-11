@@ -99,7 +99,6 @@ const reachingIn = lyraFiles
         'src/dev/admin-check.ts',
         'src/dev/perimeter-check.ts',
         'src/dev/webhook-check.ts',
-        'src/dev/frame-check.ts',
         'src/dev/stripe-check.ts',
         'src/dev/billing-check.ts',
         'src/dev/role-perimeter-check.ts',

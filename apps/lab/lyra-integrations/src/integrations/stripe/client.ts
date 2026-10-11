@@ -7,7 +7,7 @@ import type { IntegrationEnv } from '../../integration';
 // Not a style rule. Lyra validates every layout against a fixed component
 // vocabulary and every action against a fixed set of endpoints — a host that
 // imported a payment provider's SDK would carry that dependency into every app
-// that ever installs this integration, and `frame-check` asserts it never does. Keeping
+// that ever installs this integration, and lyra's `stripe-check` asserts it never does. Keeping
 // the import to one file here is the same discipline one level down: the rest of
 // the integration talks about accounts and sessions, not about a vendor's client.
 //
@@ -70,21 +70,12 @@ export const createConnectedAccount = async (stripe: Stripe, args: OnboardArgs):
   return account.id;
 };
 
-// ── HOSTED ONBOARDING, which is the one that WORKS TODAY ─────
+// ── HOSTED ONBOARDING ────────────────────────────────────────
 //
-// The embedded onboarding component (below) needs the PLATFORM's Connect
-// embedded-components profile configured before Stripe will render it — a
-// one-time setup that is not done here, so the embed comes back with an
-// `api_error` and a blank frame. Verified against the sandbox: the connected
-// account is fully onboardable, and an Account Link produces a working hosted
-// form for it right now, with no platform-side setup at all.
-//
-// So this is the owner's real path to entering their business details: a
-// short-lived redirect to Stripe's own hosted onboarding, back to lyra when
-// done. It is "hosted" rather than "embedded" — a redirect off lyra — which S1
-// held at arm's length, but a working redirect beats an embed nobody can fill.
-// The embed becomes the default the day the platform profile is set up; nothing
-// here has to change for that.
+// An Account Link produces a working hosted form for a connected account with
+// no platform-side setup at all. So this is the owner's path to entering their
+// business details: a short-lived redirect to Stripe's own hosted onboarding,
+// back to lyra when done.
 export const createOnboardingLink = async (stripe: Stripe, accountId: string, returnUrl: string): Promise<string> => {
   const link = await stripe.accountLinks.create({
     account: accountId,
@@ -96,25 +87,6 @@ export const createOnboardingLink = async (stripe: Stripe, accountId: string, re
     type: 'account_onboarding',
   });
   return link.url;
-};
-
-// ── THE SERVER-SIDE GRANT FOR THE EMBEDDED UI ────────────────
-//
-// STILL v1. Stripe is mid-migration and the namespaces do not move together:
-// accounts are v2, account sessions are `/v1/account_sessions`. Verified live
-// against a v2-created account — the id space is shared, so a v2 account takes a
-// v1 session and all three components enable.
-//
-// A component NOT named here cannot render, whatever the page asks for. The
-// session is short-lived, so the page refreshes it rather than holding one.
-const COMPELLED = ['account_onboarding', 'account_management', 'notification_banner'] as const;
-
-export const createAccountSession = async (stripe: Stripe, accountId: string): Promise<string> => {
-  const session = await stripe.accountSessions.create({
-    account: accountId,
-    components: Object.fromEntries(COMPELLED.map((name) => [name, { enabled: true }])) as Stripe.AccountSessionCreateParams.Components,
-  });
-  return session.client_secret;
 };
 
 // ── WHERE THE STUDIO STANDS, in the one detail that changes what the screen

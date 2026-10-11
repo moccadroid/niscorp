@@ -3,10 +3,9 @@ import type { AssertionSigner } from './credentials';
 import type { FoundIntegration } from './registry';
 
 // ═══════════════════════════════════════════════════════════════
-// ONE WAY OUT. Five doors reach an integration's own service: a framed page
-// being opened, that page calling back, a vendor's webhook, a screen's call
-// through the proxy, and the deployment's own call when nobody is driving.
-// Each wrote the same steps out for itself, in the same order:
+// ONE WAY OUT. Three doors reach an integration's own service: a vendor's
+// webhook, a screen's call through the proxy, and the deployment's own call
+// when nobody is driving. Each takes the same steps, in the same order:
 //
 //   find the integration; refuse unless it is approved; refuse unless it is
 //   installed for whoever the call is for; say who that is in an assertion;

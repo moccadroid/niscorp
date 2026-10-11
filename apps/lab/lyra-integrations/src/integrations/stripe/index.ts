@@ -1,8 +1,7 @@
 import type { Integration } from '../../integration';
 import { STRIPE_BUNDLE } from './bundle';
 import { accountFor, rememberAccount, storeIsDurable, stripeSubscriptionFor } from './store';
-import { accountStanding, balanceFor, createAccountSession, createConnectedAccount, createOnboardingLink, createPortalSession, notReadyToCharge, payoutsFor, refundInvoice, stripeFor } from './client';
-import { embedPage, notOnboardedPage, unavailablePage } from './onboarding';
+import { accountStanding, balanceFor, createConnectedAccount, createOnboardingLink, createPortalSession, notReadyToCharge, payoutsFor, refundInvoice, stripeFor } from './client';
 import { createCheckout, createPurchase, customerFor } from './checkout';
 import { billableFor, namesForSubscriptions, purchaseFor, subscriptionsOfPerson } from './lyra';
 import { handleStripeEvent } from './hooks';
@@ -30,7 +29,7 @@ export const stripeIntegration: Integration = {
   id: 'stripe',
   // Named, and therefore fenced: this integration cannot read another's secret even
   // knowing its name, and Belts cannot read STRIPE_SECRET (integration.ts).
-  env: ['STRIPE_SECRET', 'STRIPE_PUBLISHABLE', 'STRIPE_WEBHOOK_SECRET', 'LYRA_BASE', 'STRIPE_KEY', 'STRIPE_SWEEP_MS'],
+  env: ['STRIPE_SECRET', 'STRIPE_WEBHOOK_SECRET', 'LYRA_BASE', 'STRIPE_KEY', 'STRIPE_SWEEP_MS'],
   bundle: () => STRIPE_BUNDLE,
 
   mount: (r, ctx) => {
@@ -84,9 +83,7 @@ export const stripeIntegration: Integration = {
     // ── HOSTED ONBOARDING: the owner's way to enter their details ──
     //
     // A short-lived redirect to Stripe's own hosted onboarding form, returning
-    // to lyra when done. This is the path that works TODAY — the embedded
-    // component needs platform-side Connect config that is not in place, so it
-    // renders blank; hosted onboarding needs none.
+    // to lyra when done. It needs no platform-side Connect config.
     //
     // The return address is the HOST's, and neither this integration nor its caller
     // chooses it — a caller-supplied return on a payment onboarding flow is an
@@ -446,55 +443,6 @@ export const stripeIntegration: Integration = {
         return c.json({ refunded, message: 'Refunded. It will show here once Stripe confirms.' });
       } catch (err) {
         return c.json({ message: `Stripe refused: ${String(err).slice(0, 200)}` }, 502);
-      }
-    });
-
-    // ── THE FRAMED PAGE ────────────────────────────────────────
-    //
-    // Reached only through a grant lyra minted for a path this bundle declared
-    // (moss: the frames seam). The assertion still arrives, so this is scoped
-    // exactly like every other route here.
-    r.get('/embed/onboarding', async (c) => {
-      const who = ctx.identity(c);
-      if (who === undefined) return c.html(unavailablePage('Who are you?'), 401);
-      const held = await accountFor(ctx.db, who.studioId);
-      if (held === undefined) return c.html(notOnboardedPage());
-
-      const stripe = stripeFor(ctx.env);
-      const publishable = ctx.env('STRIPE_PUBLISHABLE');
-      if (stripe === undefined || publishable === '') return c.html(unavailablePage('This deployment holds no Stripe key.'));
-
-      try {
-        const clientSecret = await createAccountSession(stripe, held.accountId);
-        return c.html(
-          embedPage({
-            publishableKey: publishable,
-            clientSecret,
-            component: 'account-onboarding',
-            // Relative to THIS document, which lyra serves at its own origin —
-            // so the refresh rides the grant already spent rather than needing
-            // one of its own.
-            refreshPath: 'session',
-          }),
-        );
-      } catch (err) {
-        return c.html(unavailablePage(`Stripe did not answer: ${String(err).slice(0, 160)}`));
-      }
-    });
-
-    // The embedded component asks for a fresh session when the one it holds is
-    // about to expire. Same identity as everything else — a session is minted
-    // for the studio in the token and no other.
-    r.post('/embed/session', async (c) => {
-      const who = ctx.identity(c);
-      if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
-      const held = await accountFor(ctx.db, who.studioId);
-      const stripe = stripeFor(ctx.env);
-      if (held === undefined || stripe === undefined) return c.json({ message: 'Not connected.' }, 404);
-      try {
-        return c.json({ client_secret: await createAccountSession(stripe, held.accountId) });
-      } catch (err) {
-        return c.json({ message: String(err).slice(0, 200) }, 502);
       }
     });
   },
