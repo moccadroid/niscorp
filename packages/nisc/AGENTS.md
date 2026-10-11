@@ -486,7 +486,7 @@ Report violations by rule number. A change that makes the app less declarative, 
 **How something new gets in.** In this order, and before any of it is written:
 
 1. Name the question it answers. It goes in the module that owns that question (a package's `DESIGN.md` says which module owns what; moss's is "How the code is laid out").
-2. If it answers none of them, it is a **feature**: a directory of its own, an entry point of its own, and it reaches the core only through a seam. The core never imports it.
+2. If it answers none of them, it is a **feature**: a directory of its own, an entry point of its own, and it reaches the core only through a seam. The core never imports it, reads or writes no row of its tables, and holds no setting of its own for it. The tables that are a feature's it names on itself, and its seams reach those and no other.
 3. If the seam it needs is not there, the seam is the first change, on its own, added to the module that owns the answer.
 4. A new export is a decision, not a side effect of a file needing a name: it is a line in the package's `api.txt` in the same change, and it is documented under its entry point.
 5. A statement outside vex is an entry in the ledger of `scripts/check-raw-sql.mts`, with its reason, or it does not exist. The reasons that hold are a credential read before anybody is signed in, an engine's own store, and a migration.

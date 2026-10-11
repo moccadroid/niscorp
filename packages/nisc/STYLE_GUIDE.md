@@ -172,7 +172,7 @@ A package that holds more than one concern is made of modules. The rules, and ho
 
 **What a factory is handed is a type in its own module.** Each member is one function or one value, named for what it answers, with a comment that says who supplies it (`shells/config.ts`, `socket/config.ts`). Not the manifest, not the runtime, not an object carrying either. When the type needs a shape another module owns and may not import that module, the shape is written out where it is needed, and the wiring holds the two to each other where it hands one over.
 
-**A seam belongs to the module that answers the question.** A feature reaches the core through one object it is handed when it starts. Each member is one function or one narrow value, and each is there because a feature uses it; one that stops being used is taken out, and one is not added for a feature that might want it.
+**A seam belongs to the module that answers the question.** A feature reaches the core through one object it is handed when it starts. Each member is one function or one narrow value, and each is there because a feature uses it; one that stops being used is taken out, and one is not added for a feature that might want it. The object is made for the feature it is handed to. A member that reaches something owned (a table, a set of actions, the documents in a row) is bound to that feature and takes no name of one, so a feature cannot ask for what is another's; what a feature owns it says on itself, where it can be read before it runs (`Feature.tables`). No member carries a secret: a setting only one feature needs is that feature's own configuration.
 
 **What each gate counts, and how a package joins it.**
 
