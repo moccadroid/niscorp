@@ -1,10 +1,15 @@
 # Moss: the audit, and the refactor that follows from it
 
-**Status: Audit done (2026-10-09), refactor proposed. Built: the first gate,
-`check:raw-sql`, in `pnpm verify` and CI. No phase of the refactor has a go.
-Decided: the public API may break and is to be refactored; an app editing the
-manifest it handed over is not kept working. Open: Part 8. Branch
-`worktree-moss-refactor`, base `9e88009` (moss 0.4.0).**
+**Status: Built (2026-10-11), with what Part 9 lists as not met. The go was the
+owner's, on 2026-10-09: "we'll break it... go do the refactor". Every item of
+the build order is built (Part 7 gives the commits): 154 commits on branch
+`worktree-moss-refactor`, base `9e88009` (moss 0.4.0), not pushed and not
+merged. The four gates are in `pnpm verify` and in `verify.yml`, and pass. Part
+9 was checked item by item against the code on 2026-10-11: five of its seven
+items are met; one boundary is still read without a schema, and the lab apps'
+checks pass at 126 of 133. Two of the 21 defects are open (4.3). Part 11 is
+what moss is now, in numbers, and what is left. Not done here: Midas and the
+two websites, which are other repositories, and the release. Next: Part 10.**
 
 This replaces the first version of this file, which planned a tidy-up. The
 audit found that the problem is larger than structure.
@@ -73,6 +78,9 @@ What sits in the three largest files:
 - **`shells.ts`**: one function that builds shells, streams frames, encodes
   deltas, answers snapshots, sweeps idle shells, adopts new definitions,
   revokes sessions, and words integration errors for a "studio".
+
+This part is moss on 2026-10-09, before anything was built. Part 11 has the
+same table for moss on 2026-10-11.
 
 ## 4. How it fails
 
@@ -159,6 +167,35 @@ Read, not reproduced. Each needs a failing test before it is fixed.
 | 20 | `integrations.ts:299`, `1147` | An integration id has no character rule; `key_hash` has no unique constraint. |
 | 21 | `vite.ts:136–155` | The dev server signs anybody in as anybody, with no loopback check. |
 
+**What became of each (checked 2026-10-11).** Each number against the commit
+that fixed it, read from the log and from the code where it is named. Whether
+each fix's test failed first was checked by the phase that wrote it, and not
+again here.
+
+| | Now | Where |
+|---|---|---|
+| 1 | fixed | `2fc4154`: an approval is verified before it is written |
+| 2 | fixed | `bb6a2a8`: a bundle lands in one transaction |
+| 3 | fixed | `3dec693`: one shell is built for a principal at a time |
+| 4 | fixed | `812372e`: a shell is reset one reset at a time, from what it was opened with |
+| 5 | fixed | `3f3923e`: a living shell holds what its principal holds now |
+| 6 | fixed | `1fbe5a7`: a connection that closed before its session was ready leaves nothing attached |
+| 7 | fixed | `6d7d054`: a message the shell throws on is one message |
+| 8 | fixed | `d424c3a`: a refused terminal is not sent the error that refused it |
+| 9 | fixed | `52ba2d1`: `runtime.anonymousShellMax`, default 1,000, from a measurement |
+| 10 | half | `bcec37f`: a frame grant is a row, so any process redeems it. The webhook limit is still kept by each process (`src/integrations/proxy.ts:16–33`): with two processes a vendor is allowed twice as many calls a minute, and nothing is lost. |
+| 11 | **open** | `src/integrations/credentials.ts:89`: a seed under 32 bytes still becomes a random key, with nothing said. No phase of the build order named it. |
+| 12 | fixed | `3f95b94`: `outboundTimeoutMs` (30 s) and `pressMaxBytes` (5 MiB, a number nobody measured) |
+| 13 | fixed | `cec2c66`: the dev verifier is not exported, and a verifier of the app's own is said at boot |
+| 14 | fixed | `7707fa8`: an invalidation is not undone by the resolve it interrupted |
+| 15 | fixed | `7439637`, `e1e4cf3`: a move this process could not follow is tried again, and its own move does not pass over another's |
+| 16 | fixed | `fd2ee02`, in tide: an advisory lock in the claim's transaction |
+| 17 | fixed | `98bb60b`, in tide: a wait longer than a timer can hold |
+| 18 | fixed | `e6f7c0b`: a reset while connecting leaves one socket |
+| 19 | fixed | `edfb856`: every render target is told the connection's status |
+| 20 | fixed | `2b7b321`: an id is a name, and a unique index on `integrations.key_hash` |
+| 21 | **open** | `src/server/vite.ts:90–115`: `/dev/as/<who>` still checks nothing about where the request came from. No phase of the build order named it. |
+
 ## 5. The architecture
 
 ### 5.1 The idea every module shares
@@ -229,6 +266,24 @@ And the terminal side, which imports `protocol` and nothing else of moss:
 Without the two features the core is about 7,550 of today's 10,554 lines, and
 tide stops being a peer every app must install.
 
+**As built (2026-10-11).** Three things differ from the tables above.
+
+- The core is ten modules, not nine. `feature` was added beneath `manifest`:
+  it holds what a feature is and the seams it is started with, as types and
+  no code, because the manifest names a feature (`NiscApp.features`) and so
+  cannot be imported by what says what one is.
+- `identity` was built before `manifest`, and `manifest` imports it (who
+  somebody is by the assignments is identity's answer). The table of who may
+  import whom is `scripts/check-modules.mts`, and moss's `DESIGN.md` ("How the
+  code is laid out") carries a copy.
+- Tide's hosting did move to tide (`@niscorp/tide/postgres`, and the driver in
+  tide's main entry). What moss kept of it is a second feature, `tide`: three
+  files that mint a committed write into tide as a fact, on one seam,
+  `onWrite`. `@niscorp/tide` is an optional peer of moss.
+
+The terminal side is two modules: `client` imports `protocol`, and `terminal`
+imports `client`.
+
 ### 5.4 The seams a feature uses
 
 A feature never reaches into a module. It uses these, and if one is missing,
@@ -238,6 +293,11 @@ adding it to its owner is the first change, on its own:
 - `data`: declare tables, declare entries of its own, hear a write.
 - `server`: mount routes behind the authentication every route gets.
 - `shells`: wrap the wire a shell calls through.
+
+As built these are the 21 members of `FeatureSeams` (`src/feature/seams.ts`),
+each used by one of the two features: twenty by integrations, `onWrite` by
+tide. A feature's tables are not a seam: it names them on itself
+(`Feature.tables`), because they exist before anything starts.
 
 ### 5.5 How something new gets in
 
@@ -301,6 +361,21 @@ written down is the failure this audit found.
 The numbers the counting gates start from are today's. They may go down, never
 up.
 
+**As built (2026-10-11).** All four are in `pnpm verify` and in
+`.github/workflows/verify.yml`. The branch has not been pushed, so CI has not
+run them; they pass here.
+
+| Gate | Built in | What it holds now |
+|---|---|---|
+| `check:raw-sql` | `bb04ed7` | Every package but vex and strata. 0 statements with no reason, 6 credential (`moss/identity/sessions.ts`), 7 in tide's own store (`tide/store/postgres.ts`), and one row a migration writes (`moss/data/tables.ts`). |
+| `check:modules` | `0f3f059`; a finished module imports nothing flat, `45a5093`; the core imports no feature, `b9979b1` | Moss: 14 modules, no cycle, nothing flat in `src/` since `fed4ac1`. It holds two things this part gave to the lint: no import of another module's inner file, and the terminal side importing nothing of moss but `protocol`. |
+| `check:api` | `0f3f059` | Moss: 103 names across 16 entry points, in `packages/moss/api.txt`. "Each package's" is not built: no other package has an `api.txt`. |
+| `pnpm lint` | in `verify` since `0f3f059`; the block for moss's modules, `8ccbd40`; the client under it, `28a78cb`; the terminal, `bbb4fb3` | For every file under `packages/moss/src/<module>/`: no type assertion but `as const`, no non-null assertion, no `function` declaration, no `let` at the top of a file, 100 lines to a function and 400 to a file. |
+| `AGENTS.md` | the last phase | "Changing a package": 5.2, 5.5 and the gates, in 39 lines; `STYLE_GUIDE.md`, "Modules", for what is longer. |
+
+Rules 3 and 4 of 5.2 (one owner; narrow inputs) have no gate. They were read
+for, phase by phase, and Part 9 says what a reading of the whole finds.
+
 ## 7. Build order
 
 Each phase is its own go and lands alone. A commit moves code or changes
@@ -335,6 +410,27 @@ behaviour, never both. Every defect in 4.3 gets a failing test first.
 11. **The documents**: `DESIGN.md` and `README.md` say what the code does; the
     last internals our apps import are removed.
 
+**As built.** The go for all of it was one go (2026-10-09). The order moved in
+two places: `identity` and `runtime` were built before `manifest`, and `server`
+was built with `socket` and `documents`, before tide's hosting left.
+
+| | Commits | What landed |
+|---|---|---|
+| 0 | `bb04ed7`, `0f3f059`, `8ccbd40` | The gates. |
+| 1 | `0b25acc` | The main entry: 135 names to 66. |
+| 2 | `b5a5d1a` to `45a5093` (6) | `protocol`; both ends parse. Defects 7, 8. |
+| 4 | `e0a2bce` to `176c9e5` (9) | `identity`, and `runtime` with it. Defects 13, 14. |
+| 3 | `66e2f81` to `46af1e2` (20) | `manifest`: one verification, one writer, parsed and frozen at hand-over; `replaceActions`, `catalogOf`, `verifyActions`, `verifyApp`. Atrium moved to the set of actions. |
+| 5 | `04562cf` to `00a8e0f` (11) | `data`; `server.policyForRoles`. |
+| 6 | `4161221` to `9161ce1` (30) | `integrations` as a feature, from `@niscorp/moss/integrations`; the probe (`5185f38`), then every statement a vex entry; one forwarder with a timeout. Defects 1, 2, 12, 20, and the grants of 10. |
+| 7 | `da13673` to `2671d8e` (17), `03265b0` to `52ba2d1` (6) | `shells`, then `socket`. Defects 3, 4, 5, then 6, 9. Streaming stayed in `shells` (`src/shells/stream.ts`): the last frame sent is kept per shell and shared by its connections. |
+| 8 | `6bf2768` to `af23297` (4), `5e40012` to `333c799` (13) | `documents`; tide's store and driver to tide, the write-fact feature, the generation counter through vex. Defects 15, 16, 17. |
+| 9 | `63c8a54` to `5315a0e` (9), and `da13673` to `5e7ae28` in 7 | `server` as the wiring; `FunctionSession` without `runtime` and `policy`, with `answerIntent`. |
+| 10 | `a7831db` to `fba90ea` (17) | `client` and `terminal` under the lint; one set of wire slots, one frame. Defects 18, 19. |
+| 11 | `ceae73d` to the commit that wrote this | The three documents read against the code; `memoKeyOf` out of the main entry; `AGENTS.md`, "Changing a package"; this file; the changeset as one document. |
+
+Two defects were in no item's list and are open: 11 and 21 (4.3).
+
 ## 8. Decisions
 
 Taken:
@@ -344,17 +440,30 @@ Taken:
 - An app editing the manifest it handed over is not supported. The API makes
   it impossible rather than tolerating it (2026-10-09).
 
-Open, each a breaking change for an app:
+- The go, and with it the four below (2026-10-09, the owner: "we'll break
+  it... go do the refactor"). Each was open when this file was written, and
+  each is a breaking change for an app. The changeset
+  (`.changeset/moss-in-modules.md`) carries the approval and says what an app
+  writes instead.
 
-1. **`FunctionSession.runtime` goes.** Lyceum reads the pool and the cache from
-   it to build its own query engine. It needs a named capability in its place.
+1. **`FunctionSession.runtime` goes.** Done (`5e7ae28`), and `policy` went
+   with it. The named capability is `session.answerIntent(writers, asked)`
+   (`da13673`, `010675e`): lyceum asks there, and no longer builds an engine
+   over the session's pool. What a caller's roles may read is
+   `server.policyForRoles(session.roles)`.
 2. **`devSession` leaves the public API**, and a verifier passed as a function
-   is named as such at boot.
-3. **Tide's DDL split cannot be corrected for migrations that have run**; their
-   checksums are in every ledger. It can only be corrected for new ones.
-
-4. **Integrations ships from `@niscorp/moss/integrations`** and tide's store
-   from tide. Lyra, lyceum and Midas change their imports.
+   is named as such at boot. Done (`cec2c66`). `session: 'dev-open'` is the
+   same verifier, and says so.
+3. **Tide's DDL split cannot be corrected for migrations that have run.**
+   Nothing was corrected: migration 1 of `nisc.moss.tide` is split as it was,
+   and the store moved to tide with the sequence unchanged (`7fb8322`): the
+   checksum tide's test pins for migration 1 is the one moss's test pinned at
+   `9e88009`. A comment over the split says nothing new is split this way
+   (`packages/tide/src/store/postgres.ts`).
+4. **Integrations ships from `@niscorp/moss/integrations`** (`b9979b1`) and
+   tide's store from tide (`7fb8322`). Lyra and lyceum changed their imports
+   in the same commits. Midas did not: it is another repository, and the
+   changeset's last part is the list it follows.
 
 Not here: stopping the seeding of `vex_cache`. That belongs to the artifactory.
 
@@ -367,6 +476,76 @@ Not here: stopping the seeding of `vex_cache`. That belongs to the artifactory.
 - `createServer` builds, wires and mounts, and holds no route body.
 - Every gate in Part 6 is in CI and green.
 - Lyceum's, relay's, lyra's, atrium's and encore's checks pass.
+
+**Checked 2026-10-11, each against the code.**
+
+1. **`src/` holds `index.ts` and directories. Met.** `packages/moss/src` holds
+   `index.ts` and 14 directories, each with an `index.ts`; `check:modules`
+   fails on anything else.
+2. **No factory takes `NiscApp` or `NiscRuntime` but `createServer` and
+   `serve`. Met for every factory; two steps of the wiring are typed on the
+   whole of them.** Every `create…` function outside `server` is handed a
+   typed object of its own (`DataConfig`, `RunningManifestConfig`,
+   `IdentityConfig`, `ShellHostConfig`, `SocketConfig`, `DocumentConfig`,
+   `IntegrationsConfig`, `TideFactsConfig`). Inside `server`, the module that
+   may hold both, `standData(app: NiscApp, runtime: NiscRuntime)`
+   (`src/server/data.ts:13`) and `standManifest(app: NiscApp, …)`
+   (`src/server/manifest.ts:15`) take the whole manifest and hand on its
+   fields; the other steps take a `Pick`. Two functions that are not factories
+   take the whole manifest because the whole of it is their subject:
+   `defineApp` and `receiveManifest` (`src/manifest/handover.ts:49`), which
+   parses and freezes it. `migrateTables` takes four fields of the runtime and
+   two of the manifest (`src/data/migrate.ts:159`).
+3. **No SQL statement outside the two declared places. Met, with one more
+   place, declared.** The two were the credential and tide's store. The six
+   credential statements are in `src/identity/sessions.ts`; tide's seven are in
+   tide. A third kind is in the gate's ledger as `tables`: the seed row of the
+   generation counter, an `INSERT` that is a step of migration 1
+   (`src/data/tables.ts:25`). Nothing else: the integration key's hash is
+   looked up through vex.
+4. **No boundary without a schema; no type assertion. The second is met. The
+   first is not, in one place.**
+   - No type assertion, no non-null assertion and no `function` declaration in
+     148 files, counted from the syntax tree; the lint holds it.
+   - Parsed by a schema where it enters: the manifest, a set of actions, a
+     socket message on both ends, the snapshot a drawn page carries, an event,
+     the integrations' route bodies, their rows, the bundle, a press image's
+     type, the assertion's payload, the identity record, a session row, the
+     dev token, a sealed sign-in, the counter's row. 19 files import zod and
+     hold 33 calls of `parse` or `safeParse`, where there was one file and two.
+   - **Not parsed: a message from another process.**
+     `src/server/fabric.ts:57–79` switches on `message.kind` and reads
+     `principal`, `tag` and `channel` as the type the host's transport gave
+     them. 4.1 named this one (`fabric.ts:82`), and no phase took it.
+   - Held by hand, not by a schema: the parameters of an upgrade
+     (`src/socket/handshake.ts:25`, an integer in a range;
+     `src/socket/socket.ts:63`, a regular expression), an integration's error
+     body (`src/integrations/floor.ts:34`), vex's own reply over the internal
+     wire (`src/server/wire.ts:36`), and the runtime, whose fields are checked
+     where each is read (`session` unset, `identityMax` of zero).
+5. **`createServer` builds, wires and mounts, and holds no route body. Met.**
+   `src/server/server.ts:33–154`: thirteen numbered steps, each a call to a
+   file beside it. The routes are in `src/server/routes.ts` and in the
+   features. It spans 122 lines with its comments; it was 1,345.
+6. **Every gate in Part 6 is in CI and green. Met here; CI has not run.** The
+   four are steps of `verify.yml` and of `pnpm verify`, and pass on this
+   branch. The branch is not pushed. What Part 6 asked of `check:api` for
+   "each package" holds for moss alone.
+7. **Lyceum's, relay's, lyra's, atrium's and encore's checks pass. Not met:
+   126 of 133.** Each `src/dev/*-check.ts`, run one at a time on 2026-10-11:
+   encore 13 of 13, lyceum 17 of 18, atrium 18 of 19, relay 28 of 32, lyra 50
+   of 51. Each of the seven that fail was run again alone, to read why. Three
+   need a model's key this machine does not
+   have (lyceum `model-check`, relay `architect-check` and
+   `architect-edit-check`). Relay's `console-terminal-check` opens
+   `apps/lab/relay/dist/console.js`, which no build here makes. Atrium's
+   `nisc-check` spawns `node_modules/.bin/nisc` itself, which Windows cannot.
+   Relay's `harness-check` fails three assertions of its architect harness, a
+   failure `verify.yml` names as older than the workflow. Lyra's
+   `scoping-check` fails one: a seeded person has no booking of his own on
+   this date. The counts are the ones each phase recorded before this one;
+   whether the last two fail for a reason in moss was not traced here. The
+   apps' checks are not in CI.
 
 ## 10. After this
 
@@ -387,3 +566,55 @@ unchanged, answers shipped and saved entries from a cache that asks somebody
 else first; a nova shell reads its layouts through a store that asks somebody
 else, and an open screen follows; every action of the five moss lab apps (185)
 draws the same with its layout held by reference.
+
+## 11. What moss is now
+
+Measured on 2026-10-11, by one script over `packages/moss/src` and by the
+gates. "Lines of code" leaves out blank lines and lines that hold only a
+comment, as the lint's two sizes do.
+
+| | 2026-10-09 | 2026-10-11 |
+|---|---|---|
+| Source files | 43, of which 28 flat in `src/` | 148, of which one at the top of `src/`: `index.ts` |
+| Directories | two | 14, each a module with an `index.ts` |
+| Lines | 10,554 (5,868 code, 4,017 comment) | 14,878 (7,775 code, 6,140 comment-only) |
+| Names exported from the main entry | 135; imported by something outside moss: 64; by nothing: 71 | 49; imported by something in this repository outside moss: 34; by nothing here: 15 |
+| Names exported, every entry point | 185 across 14 | 103 across 16 (`api.txt`): main 49, `client` 9, `integrations` 7, `terminal` 6, `node` 5, `terminal/vue` 5, `terminal/react` 4, `tide` 3, `vite` 3, each `/server` 2, `tty` 2, `ink` 2, `dom` 1, `client/node` 1 |
+| Functions over the size | ten over 120 lines as written | none over 100 lines of code. The largest is `createWire`, 98 (`client/wire.ts:221`). Five still span more than 120 lines with their comments: `createWire` 141, `createSocket` 134, `buildShell` 129, `createServer` 122, `createShellHost` 122 |
+| Files over the size | three | none over 400 lines of code. The largest is `integrations/intake.ts`, 290 (428 lines) |
+| Type assertions | about 110 | 0 |
+| Files that import zod | one, with two parses | 19, with 33 |
+| SQL statements outside vex | 40 that read or write rows | 7 in moss: 6 credential, 1 a migration's seed row. 7 in tide's store, which is tide's now |
+| Tests | 43 files, 546 cases | moss: 61 files, 920 tests. Tide, which took the store's and the driver's: 12 files, 232 tests |
+
+The largest module is `integrations`: 20 files and 1,838 lines of code, more
+than `server` (867), `data` (784), `manifest` (758) and `shells` (758).
+
+**What is left.** None of it stops the artifactory; each is somebody's to
+decide.
+
+- **A boundary without a schema**, and **two defects**: the fabric's message
+  (Part 9, item 4), the signing seed, and the dev sign-in (4.3, 11 and 21).
+- **`runtime.socketMaxMessageBytes` and `runtime.socketCompression` reach the
+  socket under `serve` and nowhere else.** `nisc start`
+  (`packages/cli/src/commands.ts:238`) and the dev plugin
+  (`src/server/vite.ts:171`) call `attachSocket` with no options, and neither
+  is handed the runtime: the transport runs on its defaults there, 256 KiB and
+  compression on. The documents say so. A fix is not a few lines: the dev
+  plugin attaches once, before any app has booted, and swaps servers on an
+  edit, so it cannot be told a setting when it attaches.
+- **Names that stayed in the main entry and that nothing in this repository
+  imports**, each in doubt, not decided: `resolveRoles`, `resolvePolicy`,
+  `resolveVariants` (three resolvers that read `assignments` only; the server
+  answers the first two, and nothing answers the third);
+  `createPageRouter`; `documentHeaders` and `tokenFromCookie` (the parts of
+  `renderDocument`, for a host that assembles its own page; atrium imports the
+  third, `embedSnapshot`); `initSessions`, `sessionOf`, `revokeAllFor` (the
+  stored credential; lyceum imports `mintSession`).
+- **The gates list one package.** `check:modules`, `check:api` and the module
+  block of the lint hold moss. `check:raw-sql` sweeps the others.
+- **The webhook limit is per process** (4.3, 10).
+- **Midas, nisc-website and moccadroid-website** import moss and are other
+  repositories. The changeset's last part, "What an app changes", is what each
+  follows.
+
