@@ -48,10 +48,12 @@
 . FeatureSeams.addCatalogFilter
 . FeatureSeams.charter
 . FeatureSeams.components
+. FeatureSeams.endlessChains
 . FeatureSeams.fingerprints
 . FeatureSeams.fingerprintsFor
 . FeatureSeams.grammars
 . FeatureSeams.grantedActionIds
+. FeatureSeams.layoutMisfits
 . FeatureSeams.mountOperatorRoutes
 . FeatureSeams.mountRoutes
 . FeatureSeams.onWrite

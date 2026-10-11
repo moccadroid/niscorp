@@ -234,6 +234,8 @@ describe('createTideFacts — the feature', () => {
       addCatalogFilter: notAsked('addCatalogFilter'),
       charter: {},
       components: {},
+      layoutMisfits: notAsked('layoutMisfits'),
+      endlessChains: notAsked('endlessChains'),
       ownEntries: notAsked('ownEntries'),
       grammars: await createGrammarUpgrader({}),
       upgradeStore: notAsked('upgradeStore'),

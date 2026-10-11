@@ -3,8 +3,8 @@ import type { FetchFn } from '@niscorp/nova';
 import type { Data } from '../data';
 import type { Feature, FeatureSeams } from '../feature';
 import type { Identity } from '../identity';
-import { refusalOf } from '../manifest';
-import type { NiscApp, OwnedActions, RunningManifest } from '../manifest';
+import { endlessChains, layoutMisfits, refusalOf } from '../manifest';
+import type { KitComponents, NiscApp, OwnedActions, RunningManifest } from '../manifest';
 import type { NiscRuntime } from '../runtime';
 import { registerCredential } from './authenticate';
 import type { FeatureCredential } from './authenticate';
@@ -55,6 +55,11 @@ export const seamsOf = (feature: Pick<Feature, 'name'>, { app, runtime, server, 
   return seamsFor(feature, actions, { app, runtime, server, operator, registered, identity, running, data });
 };
 
+// The kit as the manifest's own check of a layout reads it (../manifest,
+// layout.ts): each component of the app's shell, with the schema of its props
+// where the app carried one.
+const kitOf = (app: Pick<NiscApp, 'shell'>): KitComponents => new Map(Object.entries(app.shell?.components ?? {}).map(([name, contract]) => [name, { propsSchema: contract.meta?.propsSchema }]));
+
 const seamsFor = (feature: Pick<Feature, 'name'>, owned: OwnedActions, { app, runtime, server, operator, registered, identity, running, data }: SeamParts): FeatureSeams => ({
   mountRoutes: (routes) => {
     server.route('/', routes);
@@ -77,6 +82,11 @@ const seamsFor = (feature: Pick<Feature, 'name'>, owned: OwnedActions, { app, ru
   addCatalogFilter: running.addCatalogFilter,
   charter: app.charter,
   components: app.shell?.components ?? {},
+  // The manifest's own two answers about what somebody else wrote: asked of
+  // the app's kit, which a feature does not get to name; and of the actions
+  // it is handed.
+  layoutMisfits: (layout) => layoutMisfits(layout, kitOf(app)),
+  endlessChains,
   // The tables are the ones this feature named as its own, and it cannot say
   // otherwise here.
   ownEntries: (entries) => data.ownEntries(feature.name, entries),

@@ -320,9 +320,11 @@ adding it to its owner is the first change, on its own:
 - `server`: mount routes behind the authentication every route gets.
 - `shells`: wrap the wire a shell calls through.
 
-As built these are the 21 members of `FeatureSeams` (`src/feature/seams.ts`),
-each used by one of the two features: twenty by integrations, `onWrite` by
-tide. A feature's tables are not a seam: it names them on itself
+As built these are the 23 members of `FeatureSeams` (`src/feature/seams.ts`),
+each used by one of the two features: twenty-two by integrations, `onWrite` by
+tide. (Twenty-one until a review found the integrations feature importing two
+functions of `manifest` that were no seam: `layoutMisfits` and
+`endlessChains`, which are the two more.) A feature's tables are not a seam: it names them on itself
 (`Feature.tables`: their names, and the sequences that make them), because
 they exist before anything starts, and because which tables a feature
 addresses outside the app's policy has to be readable without running it.

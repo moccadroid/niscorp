@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
+import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { createPostgresCache, scopeGrants } from '@niscorp/vex';
 import type { SeedEntry } from '@niscorp/vex';
@@ -90,6 +91,39 @@ describe('the features, as the server starts them', () => {
     const { start } = await world([probe.feature]);
     await start();
     expect(Object.keys(probe.seams())).not.toContain('signingSeed');
+  });
+});
+
+// WHAT A FEATURE ASKS ABOUT SOMETHING SOMEBODY ELSE WROTE, before it lets it
+// in. The integrations feature asked the manifest module itself, by importing
+// two of its functions: a feature somebody else writes has the seams and
+// nothing else, and could not ask. Both are seams.
+describe('the features — what somebody else wrote', () => {
+  // The app's kit: a component with a strict schema of its props, and one
+  // with none.
+  const kit = { Badge: { meta: { propsSchema: z.object({ tone: z.enum(['calm', 'loud']) }).strict() } }, Text: {} };
+  const started = async (): Promise<FeatureSeams> => {
+    const probe = keeping('probe');
+    const { start, parts } = await world([probe.feature]);
+    parts.app = { charter, shell: { canvases: [], components: kit } };
+    await start();
+    return probe.seams();
+  };
+
+  it('a layout is held to the app’s kit: a component it has none for, a prop the component has no place for, a value its schema refuses', async () => {
+    const seams = await started();
+    expect(seams.layoutMisfits({ component: 'Text', children: [{ component: 'Badge', props: { tone: 'calm' } }] })).toEqual([]);
+    expect(
+      seams.layoutMisfits({ component: 'Text', children: [{ component: 'Chart' }, { component: 'Badge', props: { tone: 'shrill', size: 2 } }, { component: 'Badge', props: { tone: '$.tone' } }] }),
+    ).toEqual(['layout uses "Chart", which this app has no component for', expect.stringMatching(/^"Badge" prop "tone" — /), '"Badge" has no prop "size"']);
+  });
+
+  it('the chains of steps that never end among a set of actions are named, each with the actions it runs through', async () => {
+    const seams = await started();
+    const quiet: ActionDefinition = { id: 'quiet' };
+    const loud: ActionDefinition = { id: 'loud', triggers: [{ message: 'again', do: [{ emit: { channel: 'again' } }] }] };
+    expect(seams.endlessChains({ quiet })).toEqual([]);
+    expect(seams.endlessChains({ quiet, loud })).toEqual([{ path: 'again —emit (loud)→ again', through: ['loud'] }]);
   });
 });
 

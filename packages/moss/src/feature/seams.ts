@@ -26,10 +26,10 @@ import type { Telemetry } from '../runtime';
 // module's whole answer. A feature that needs something that is not here does
 // not reach for it: the seam is added to its owner first, on its own.
 //
-// TWENTY-ONE MEMBERS, AND EACH IS ONE A FEATURE USES (counted 2026-10-11
-// against the two features there are: twenty by ../integrations, `onWrite` by
-// ../tide, and none is unused). A member that stops being used is taken out;
-// one is not added for a feature that might want it.
+// TWENTY-THREE MEMBERS, AND EACH IS ONE A FEATURE USES (counted 2026-10-11
+// against the two features there are: twenty-two by ../integrations, `onWrite`
+// by ../tide, and none is unused). A member that stops being used is taken
+// out; one is not added for a feature that might want it.
 //
 // The types are written out here rather than imported from their owners,
 // because the manifest names a feature (`NiscApp.features`) and so this module
@@ -112,6 +112,21 @@ export type FeatureSeams = {
   // The kit's component contracts, by name: a description, and the schema of
   // the props, where the app carried them.
   components: Readonly<Record<string, { meta?: { description?: string; propsSchema?: unknown } }>>;
+  // DOES A LAYOUT COMPOSE WHAT THE APP'S KIT HAS? Each place it does not, as a
+  // sentence, once: a component the app has none for, a prop the component has
+  // no place for, a value its schema refuses (a value that resolves when it
+  // is drawn has its key held and is not read). Empty: it fits. For a layout
+  // somebody else wrote, asked before it is let in: a component the terminal
+  // cannot draw shows nothing, and at the moment somebody opens the screen.
+  layoutMisfits: (layout: unknown) => string[];
+  // THE CHAINS OF STEPS THAT NEVER END among a set of actions: a trigger that
+  // emits the channel it listens on, a mount that loads itself, and every
+  // longer loop through other actions. Each as the one line that names it,
+  // with the ids of the actions its steps run through, so that whoever asks
+  // about actions somebody else wrote, laid over the app's (`actions()`),
+  // keeps the chains that run through those. Nova stops such a chain at its
+  // budget when it runs; this is how one is refused before it does.
+  endlessChains: (actions: Actions) => { path: string; through: readonly string[] }[];
 
   // ── what they may read and write ──
   // THE FEATURE'S OWN READS AND WRITES, on the tables it keeps: entries

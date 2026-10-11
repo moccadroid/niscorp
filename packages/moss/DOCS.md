@@ -1049,7 +1049,7 @@ its own, and the core never imports it.
   `migrateTables` runs them too.
 - `FeatureSeams` — everything of the core a feature may touch, each member one
   function or one narrow value. Each feature is started with seams made for
-  it: what they reach is that feature's. Twenty-one members, and each is one a
+  it: what they reach is that feature's. Twenty-three members, and each is one a
   feature uses: one that stops being used is taken out. A route a feature
   mounts reads who is calling as `c.get('principal')`.
 
@@ -1068,6 +1068,8 @@ its own, and the core never imports it.
   | `addCatalogFilter(filter)` | one more rule for which granted actions are there for an install list. A filter narrows: an id it answers that it was not handed is dropped, so it grants nothing |
   | `charter` | the charter the app shipped: role names, and what each selects |
   | `components` | the kit's component contracts by name: a description, and the props' schema |
+  | `layoutMisfits(layout)` | each place a layout somebody else wrote does not fit the app's kit, as a sentence: a component the app has none for, a prop the component has no place for, a value its schema refuses. Empty: it fits |
+  | `endlessChains(actions)` | the chains of steps that never end among a set of actions, each as `{ path, through }`: the line that names it, and the ids of the actions its steps run through |
   | `ownEntries(entries)` | hand over the feature's own reads and writes, on the tables it named as its own, and get back how one is replayed |
   | `grammars` | read a stored document in this code's grammars, and stamp one that is written |
   | `upgradeStore(store)` | bring the documents stored in one of the feature's own tables to this code's grammars, in one transaction; a row written by newer code throws |

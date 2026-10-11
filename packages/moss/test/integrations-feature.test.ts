@@ -8,6 +8,7 @@ import type { DatabaseSchema, MutationClient } from '@niscorp/vex';
 import { createGrammarUpgrader } from '../src/data/grammar';
 import { createOwnEntries } from '../src/data/own-entries';
 import type { CredentialAnswer, FeatureEnv, FeatureSeams, Replay, PrincipalIdentity } from '../src/feature';
+import { endlessChains, layoutMisfits } from '../src/manifest';
 import { createIntegrations } from '../src/integrations';
 import { integrationOfAction } from '../src/integrations/installed';
 import { hashIntegrationKey } from '../src/integrations/credentials';
@@ -101,6 +102,8 @@ const world = async (
     },
     charter: { desk: { actions: ['desk.*', 'ext.desk.*'] }, member: { actions: { allow: ['ext.member.*'] } } },
     components: { Text: {} },
+    layoutMisfits: (layout) => layoutMisfits(layout, new Map([['Text', {}]])),
+    endlessChains,
     ownEntries: async (own) => {
       said.owned.push(own);
       const replay = over.replay ?? replayOver({});
