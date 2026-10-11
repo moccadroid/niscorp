@@ -160,10 +160,26 @@ export default tseslint.config(
   // passed, returned, called or read from. What arrives as `any` is given to
   // `unknown` and parsed. This needs the packages built: a type from another
   // package of the repository is read from its `dist`, and is `any` without.
+  //
+  // EVERY FILE UNDER `src/`, the one at the top included, and whatever its
+  // extension: the pattern used to begin one directory down and name `.ts` and
+  // `.tsx`, so `src/index.ts` and a `.mts` file were held by nothing. (The
+  // module check refuses a file that is not `.ts` or `.tsx`; this is so that
+  // the lint does not depend on it.)
+  //
+  // NO COMMENT SWITCHES A RULE OFF. `/* eslint-disable */` and the rest are
+  // not read in these files (`noInlineConfig`), and the lint script fails on
+  // the warning eslint gives for one, so none can sit there looking as if it
+  // did something. `@ts-ignore`, `@ts-expect-error` and `@ts-nocheck` switch
+  // the compiler off for a line or a file, which is where an `any` comes from:
+  // they are errors too.
   {
-    files: ['packages/moss/src/*/**/*.ts', 'packages/moss/src/*/**/*.tsx'],
+    files: ['packages/moss/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}'],
     languageOptions: { parser: tseslint.parser, parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname } },
+    plugins: { '@typescript-eslint': tseslint.plugin },
+    linterOptions: { noInlineConfig: true },
     rules: {
+      '@typescript-eslint/ban-ts-comment': ['error', { 'ts-expect-error': true, 'ts-ignore': true, 'ts-nocheck': true, 'ts-check': false }],
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unsafe-argument': 'error',
       '@typescript-eslint/no-unsafe-assignment': 'error',
@@ -177,7 +193,8 @@ export default tseslint.config(
       'no-restricted-syntax': [
         'error',
         {
-          selector: 'Program > VariableDeclaration[kind="let"]',
+          // Exported or not: `export let` is the same state with a door on it.
+          selector: 'Program > VariableDeclaration[kind=/^(let|var)$/], Program > ExportNamedDeclaration > VariableDeclaration[kind=/^(let|var)$/]',
           message: 'module-level `let` in a library is process-global state. Put it in the closure that owns it.',
         },
         { selector: 'TSEnumDeclaration', message: 'rule 16: no enum.' },
@@ -199,6 +216,7 @@ export default tseslint.config(
         },
         { selector: 'TSTypeAssertion', message: 'rule 16: no type assertion.' },
         { selector: 'TSNonNullExpression', message: 'rule 16: no non-null assertion. Narrow it.' },
+        { selector: 'VariableDeclarator[definite=true], PropertyDefinition[definite=true]', message: 'rule 16: no `!` on a declaration. It says a value is there before anything has put it there.' },
         { selector: 'FunctionDeclaration', message: 'rule 16: no `function` declaration. An arrow function in a `const`.' },
       ],
       'max-lines-per-function': ['error', { max: 100, skipBlankLines: true, skipComments: true }],
