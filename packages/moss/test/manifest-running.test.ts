@@ -179,38 +179,13 @@ describe('replace — a named set of actions that arrived while the app runs', (
   });
 });
 
-describe('verifyReplace — what `replace` would be told, with nothing switched', () => {
-  it('says why a set would be refused, and that another would be taken, and changes nothing', () => {
-    const manifest = running(shippedApp());
-    manifest.replace('bundles', { [desk.id]: desk });
-    const told = vi.fn();
-    manifest.onChange(told);
-    const inForce = manifest.actions();
-    const held = manifest.catalogFor(['member'], undefined);
-    const verifiedBy = manifest.report();
-
-    const refused = manifest.verifyReplace('bundles', unservable);
-    expect(refused.errors.map((error) => error.check)).toEqual(['charter']);
-    expect(refused.errors[0]?.detail).toMatch(/^leaves-only: id "home" is a namespace of "home.sub"/);
-    expect(manifest.verifyReplace('bundles', { [grades.id]: grades }).errors).toEqual([]);
-
-    expect(manifest.actions()).toBe(inForce);
-    expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id]);
-    expect(manifest.catalogFor(['member'], undefined)).toBe(held);
-    expect(manifest.report()).toBe(verifiedBy);
-    expect(told).not.toHaveBeenCalled();
-    // What it answered is what `replace` then does.
-    expect(() => manifest.replace('bundles', unservable)).toThrow(/^Refresh refused/);
-    expect(() => manifest.replace('bundles', { [grades.id]: grades })).not.toThrow();
-  });
-
-  it('a set holding a definition nova does not read is refused with a sentence, tried or handed over, and nothing is switched', () => {
+describe('replace — a set that is refused, and what a set is tried against', () => {
+  it('a set holding a definition nova does not read is refused with a sentence, and nothing is switched', () => {
     const manifest = running(shippedApp());
     // As it arrives from rows: the compiler is told it is an action.
     const typo: Record<string, ActionDefinition> = { [desk.id]: JSON.parse('{"id":"ext.belts.desk","tittle":"A typo"}') };
     const inForce = manifest.actions();
 
-    expect(manifest.verifyReplace('bundles', typo).errors).toEqual([{ check: 'actions', detail: '"ext.belts.desk" is not an action nova reads: (root): Unrecognized key: "tittle"' }]);
     expect(() => manifest.replace('bundles', typo)).toThrow(/^Refresh refused — actions nova does not read:\n {2}"ext\.belts\.desk" is not an action nova reads: \(root\): Unrecognized key: "tittle"$/);
     expect(manifest.actions()).toBe(inForce);
     // Not frozen either: it was not taken.
@@ -226,9 +201,11 @@ describe('verifyReplace — what `replace` would be told, with nothing switched'
     const issuesOf = (report: ReturnType<typeof manifest.report>): string[] => report.charter.perRole.find((entry) => entry.role === 'member')?.issues ?? [];
     expect(issuesOf(manifest.report())).toEqual([]);
 
-    expect(issuesOf(manifest.verifyReplace('bundles', { [grades.id]: grades })).join(' ')).toContain(desk.id);
     // Another name is another set: the one in force stays in the candidate.
-    expect(issuesOf(manifest.verifyReplace('payments', { [pay.id]: pay }))).toEqual([]);
+    manifest.replace('payments', { [pay.id]: pay });
+    expect(issuesOf(manifest.report())).toEqual([]);
+    manifest.replace('bundles', { [grades.id]: grades });
+    expect(issuesOf(manifest.report()).join(' ')).toContain(desk.id);
   });
 });
 
@@ -450,17 +427,13 @@ describe('what the app shipped, and a set that was taken', () => {
     expect(manifest.actions()[desk.id]?.title).toBe('Front desk');
   });
 
-  it('a set that is refused, or only tried, is left as the caller wrote it', () => {
+  it('a set that is refused is left as the caller wrote it', () => {
     const manifest = running(shippedApp());
     const refused: Record<string, ActionDefinition> = { 'home.sub': { id: 'home.sub' } };
-    const tried: Record<string, ActionDefinition> = { [desk.id]: { id: desk.id } };
 
     expect(() => manifest.replace('bundles', refused)).toThrow(/^Refresh refused/);
-    manifest.verifyReplace('bundles', tried);
 
     expect(Object.isFrozen(refused)).toBe(false);
-    expect(Object.isFrozen(tried)).toBe(false);
-    expect(Object.isFrozen(tried[desk.id])).toBe(false);
   });
 });
 
@@ -669,11 +642,6 @@ describe('watch — the pointer the other processes poll', () => {
     const sentence = /^moss: the set of actions "integrations" is the feature "integrations"'s, and only its owner replaces it\. An app hands a set over under a name of its own\.$/;
     expect(() => manifest.replace('integrations', {})).toThrow(sentence);
     expect(() => manifest.replace('integrations', { [pay.id]: pay })).toThrow(sentence);
-    // The dry run of that call says the same, as what it answers: it is not a
-    // set the caller could hand over, and the sentence is the door's.
-    const tried = manifest.verifyReplace('integrations', {});
-    expect(tried.errors.map((error) => error.check)).toEqual(['owner']);
-    expect(`moss: ${tried.errors[0]?.detail}`).toMatch(sentence);
     expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id]);
 
     // A set of the app's own is the app's, as it was.

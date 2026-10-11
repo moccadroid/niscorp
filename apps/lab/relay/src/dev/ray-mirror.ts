@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import type { CortexEvent } from '@niscorp/cortex';
 import { createServer as createHttpServer } from 'node:http';
 import { attachSocket } from '@niscorp/moss/node';
-import { offerToken, PROTOCOL } from '@niscorp/moss';
+import { offerToken, PROTOCOL } from '@niscorp/moss/protocol';
 import { shell, runtime, server } from './check-shell';
 import { mintToken } from '../server/users';
 import { rayAgent } from '@relay/server/functions/ray/agent';

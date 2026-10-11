@@ -32,16 +32,12 @@ export { createServer } from './server';
 export type { MossServer } from './server';
 export type { ExecuteAs } from './data';
 export { MOSS_SEQUENCE } from './data';
-export type { Feature, FeatureSeams } from './feature';
 export { verifyApp } from './manifest';
-export { CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, PROTOCOL, offerToken } from './protocol';
 export type { IdentityRecord } from './identity';
 export type { ShellHost, ShellSnapshot } from './shells';
 export { renderDocument, exportDocuments } from './documents';
 export { sessionCookies } from './identity';
 export type { DocumentConfig, DrawnDocument, ExportedDocument } from './documents';
-export type { Connection } from './socket';
-export type { ServerMessage } from './protocol';
 export { migrateTables } from './data';
 // A FEATURE is not exported here: it ships from an entry point of its own, and
 // nothing this entry reaches imports one. Integrations are

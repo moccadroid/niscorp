@@ -42,7 +42,7 @@ export const instrumentFunctions = (
 
 // What a session reads that does not exist yet when it is made: the shell, and
 // what is attached to it. The build fills both in once the shell stands.
-export type ShellRef = { shell?: Shell; live?: Live };
+export type ShellRef = { shell?: Shell; sessionShell?: Shell; live?: Live };
 
 // GRANT: the minted token to every terminal of this session — they
 // reconnect as the new principal; this (anonymous) session stays
@@ -113,8 +113,8 @@ export const functionSessionFor = (
     actions: who.actions,
     wire,
     get shell(): Shell {
-      if (shellRef.shell === undefined) throw new Error('moss: a function touched the shell before the session finished building.');
-      return shellRef.shell;
+      if (shellRef.sessionShell === undefined) throw new Error('moss: a function touched the shell before the session finished building.');
+      return shellRef.sessionShell;
     },
     grant: (token) => grant(shellRef, token),
     revoke: () => revoke(host, shellRef, principal),

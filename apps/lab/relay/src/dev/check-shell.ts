@@ -8,6 +8,7 @@
 import type { Shell } from '@niscorp/nova';
 import { boot } from '../server/boot';
 import { mintToken, userByUsername } from '../server/users';
+import { unverifiedShell } from '@niscorp/moss/unverified';
 
 const booted = await boot();
 export const runtime = booted.runtime;
@@ -46,7 +47,7 @@ export const login = async (username: string): Promise<Shell> => {
   currentToken = token;
   const session = await server.shells?.session(token, user.id);
   if (session === undefined) throw new Error('check-shell: the app serves no shell');
-  return session.shell;
+  return unverifiedShell(session);
 };
 
 export const shell = await login('alex');

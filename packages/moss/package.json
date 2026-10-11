@@ -61,6 +61,26 @@
         "default": "./dist/tide.cjs"
       }
     },
+    "./protocol": {
+      "import": {
+        "types": "./dist/protocol.d.ts",
+        "default": "./dist/protocol.js"
+      },
+      "require": {
+        "types": "./dist/protocol.d.cts",
+        "default": "./dist/protocol.cjs"
+      }
+    },
+    "./unverified": {
+      "import": {
+        "types": "./dist/unverified.d.ts",
+        "default": "./dist/unverified.js"
+      },
+      "require": {
+        "types": "./dist/unverified.d.cts",
+        "default": "./dist/unverified.cjs"
+      }
+    },
     "./client": {
       "import": {
         "types": "./dist/client.d.ts",

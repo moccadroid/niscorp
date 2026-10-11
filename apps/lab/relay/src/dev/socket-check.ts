@@ -7,8 +7,8 @@
 // frames only; host-check owns the canvas streams.
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
-import { CLOSE_INVALID_TOKEN, offerToken, PROTOCOL } from '@niscorp/moss';
-import type { ServerMessage } from '@niscorp/moss';
+import { CLOSE_INVALID_TOKEN, offerToken, PROTOCOL } from '@niscorp/moss/protocol';
+import type { ServerMessage } from '@niscorp/moss/protocol';
 import { boot } from '../server/boot';
 import { mintToken } from '../server/users';
 

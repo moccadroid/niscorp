@@ -1,12 +1,7 @@
-. CLOSE_INVALID_TOKEN
-. CLOSE_SIGNED_OUT
-. Connection
 . DocumentConfig
 . DrawnDocument
 . ExecuteAs
 . ExportedDocument
-. Feature
-. FeatureSeams
 . FunctionSession
 . IdentityRecord
 . LayoutVariant
@@ -14,12 +9,10 @@
 . MossServer
 . NiscApp
 . NiscRuntime
-. PROTOCOL
 . PageManifest
 . RunRecord
 . RunSink
 . RunTurn
-. ServerMessage
 . ShellHost
 . ShellManifest
 . ShellSnapshot
@@ -31,7 +24,6 @@
 . migrateTables
 . mintDevToken
 . mintSession
-. offerToken
 . renderDocument
 . revokeAllFor
 . sessionCookies
@@ -56,6 +48,12 @@
 ./node attachSocket
 ./node mountSite
 ./node serve
+./protocol CLOSE_INVALID_TOKEN
+./protocol CLOSE_SIGNED_OUT
+./protocol Connection
+./protocol PROTOCOL
+./protocol ServerMessage
+./protocol offerToken
 ./terminal MountTerminalConfig
 ./terminal Target
 ./terminal TerminalApi
@@ -84,6 +82,7 @@
 ./terminal/vue/server renderSnapshot
 ./tide TideFactsConfig
 ./tide createTideFacts
+./unverified unverifiedShell
 ./vite DevApp
 ./vite MossDevOptions
 ./vite mossDev

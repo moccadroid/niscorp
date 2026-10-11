@@ -14,7 +14,7 @@
 //   5. a press before the socket is open is dropped, not thrown and not queued
 //   6. a dead cookie is the lock screen, and the cookie is taken back
 //   7. nothing in a tree can break out of the element the snapshot rides in
-import { PROTOCOL } from '@niscorp/moss';
+import { PROTOCOL } from '@niscorp/moss/protocol';
 import type { RenderNode } from '@niscorp/nova';
 import { mintToken } from '@atrium/server/users';
 import { renderPage } from '@atrium/server/document';

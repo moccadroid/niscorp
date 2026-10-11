@@ -8,6 +8,7 @@ import { llmFor } from '@relay/server/llm';
 import { traceWiring, type TraceStep } from './trace';
 import { sessionStore, type ChatMessage } from './sessions';
 import { rayEngine, type RayContext, type RaySeams } from './engine';
+import { unverifiedShell } from '@niscorp/moss/unverified';
 
 // The channel the chat's live trace listens on. Named here because the server
 // is what announces on it; the action names the same string in its trigger.
@@ -43,7 +44,7 @@ export const rayFunctions = (session: FunctionSession, seams: RaySeams): Record<
   const ray: RayContext = {
     // lazy: moss hands the shell just after the session finishes building
     get shell() {
-      return session.shell;
+      return unverifiedShell(session);
     },
     userId,
     get policy() {

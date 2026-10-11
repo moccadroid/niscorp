@@ -1,4 +1,5 @@
 import type { Shell } from '@niscorp/nova';
+import { unverifiedShell } from '@niscorp/moss/unverified';
 // THE LAB'S SIGN-IN TRANSPORT. Clicking a name is how a nonce reaches the
 // browser here, exactly as a mail link is in a deployment. Set before the app
 // is built, because `shell.inputs` reads it when it composes the login screen.
@@ -57,13 +58,13 @@ export const sessionFor = async (email: string): Promise<Awaited<ReturnType<NonN
   return session;
 };
 
-export const login = async (email: string): Promise<Shell> => (await sessionFor(email)).shell;
+export const login = async (email: string): Promise<Shell> => unverifiedShell(await sessionFor(email));
 
 /** The anonymous principal's shell — what somebody with no credential is served. */
 export const anonymous = async (): Promise<Shell> => {
   const session = await server.shells?.session(null, null);
   if (session === undefined) throw new Error('world: the app serves no shell');
-  return session.shell;
+  return unverifiedShell(session);
 };
 
 

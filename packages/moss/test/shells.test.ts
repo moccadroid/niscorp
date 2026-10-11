@@ -7,6 +7,7 @@ import { hostConfig, standHost } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import type { ActionFragment, LayoutNode } from '@niscorp/nova';
 import type { FunctionSession, NiscApp } from '../src/manifest';
+import { unverifiedShell } from '../src/server/unverified';
 import type { Connection } from '../src/socket';
 import { turn } from './turn';
 
@@ -998,7 +999,7 @@ describe('shells — a canvas that fails to render', () => {
       await tick();
 
       // The narrowest possible break: this one canvas throws while rendering.
-      const shell = session.shell as unknown as { getCanvasRenderTree: (id: string) => unknown };
+      const shell = unverifiedShell(session) as unknown as { getCanvasRenderTree: (id: string) => unknown };
       const original = shell.getCanvasRenderTree.bind(shell);
       shell.getCanvasRenderTree = (id: string) => {
         if (id === 'left') throw new Error('a poisoned tree');
@@ -1032,7 +1033,7 @@ describe('shells — a canvas that fails to render', () => {
       const host = standHost(hostConfig({ ...ctx, app: twoCanvas }));
       const session = await host.session('t', 'usr_1');
       await tick();
-      const shell = session.shell as unknown as { getCanvasRenderTree: (id: string) => unknown };
+      const shell = unverifiedShell(session) as unknown as { getCanvasRenderTree: (id: string) => unknown };
       shell.getCanvasRenderTree = () => {
         throw new Error('every canvas is poisoned');
       };
@@ -1072,7 +1073,7 @@ describe('shells — the canvases a shell has', () => {
     await tick();
     first.sent.length = 0;
 
-    session.shell.addCanvas({ id: 'late', initial: { action: 'counter' } });
+    unverifiedShell(session).addCanvas({ id: 'late', initial: { action: 'counter' } });
     await tick();
     await tick();
 
@@ -1097,7 +1098,7 @@ describe('shells — the canvases a shell has', () => {
     await tick();
     conn.sent.length = 0;
 
-    session.shell.removeCanvas('left');
+    unverifiedShell(session).removeCanvas('left');
     await tick();
     await tick();
     expect(conn.sent.filter((m) => m['type'] === 'render' && m['canvas'] === 'left')).toEqual([{ type: 'render', canvas: 'left', tree: [] }]);
@@ -1141,7 +1142,7 @@ describe('shells — the frame layout store and re-send', () => {
     session.attach(conn);
     const afterAttach = frames(conn).length;
 
-    session.shell.setLayout('r', { component: 'Text', children: 'swapped-dock' });
+    unverifiedShell(session).setLayout('r', { component: 'Text', children: 'swapped-dock' });
     await tick();
     await tick();
     const afterSwap = frames(conn);
@@ -1151,7 +1152,7 @@ describe('shells — the frame layout store and re-send', () => {
     // Re-setting the same layout changes nothing — the frame is diffed, so no
     // second frame message goes out.
     const settled = afterSwap.length;
-    session.shell.setLayout('r', { component: 'Text', children: 'swapped-dock' });
+    unverifiedShell(session).setLayout('r', { component: 'Text', children: 'swapped-dock' });
     await tick();
     await tick();
     expect(frames(conn).length).toBe(settled);
@@ -1168,7 +1169,7 @@ describe('shells — the frame layout store and re-send', () => {
     await tick();
     await tick();
 
-    session.shell.setLayout('r', { component: 'Text', children: 'swapped-dock' });
+    unverifiedShell(session).setLayout('r', { component: 'Text', children: 'swapped-dock' });
     // Before the flush runs: somebody else attaches.
     const second = fakeConnection();
     session.attach(second);
@@ -1192,7 +1193,7 @@ describe('shells — the frame layout store and re-send', () => {
       const held = frames(first).length;
 
       const render = session.shell.getShellRenderTree.bind(session.shell);
-      session.shell.getShellRenderTree = () => {
+      unverifiedShell(session).getShellRenderTree = () => {
         throw new Error('the frame is poisoned, this once');
       };
       const second = fakeConnection();
@@ -1202,7 +1203,7 @@ describe('shells — the frame layout store and re-send', () => {
       expect(frames(first)).toHaveLength(held);
 
       // It renders again: the newcomer is sent the frame it never had.
-      session.shell.getShellRenderTree = render;
+      unverifiedShell(session).getShellRenderTree = render;
       session.dispatch('main', { type: 'ui:click', ref: 'bump' });
       await tick();
       await tick();
@@ -1722,7 +1723,7 @@ describe('shells — adopt', () => {
       const session = await host.session('t', 'usr_1');
       const connection = fakeConnection();
       session.attach(connection);
-      session.shell.setLayout('dock', text('the dock, as this person arranged it'));
+      unverifiedShell(session).setLayout('dock', text('the dock, as this person arranged it'));
       await settle();
       const sent = connection.sent.length;
 
@@ -1738,7 +1739,7 @@ describe('shells — adopt', () => {
       const session = await host.session('t', 'usr_1');
       const connection = fakeConnection();
       session.attach(connection);
-      session.shell.setLayout('dock', text('the dock, as this person arranged it'));
+      unverifiedShell(session).setLayout('dock', text('the dock, as this person arranged it'));
       await settle();
 
       answer.layoutStore.rail = text('the rail, second');
@@ -1940,7 +1941,7 @@ describe('shells — what fails is said', () => {
   it('a delivery the shell throws on answers false, and says so', async () => {
     const host = standHost(hostConfig(ctx));
     const session = await host.session('t', 'usr_1');
-    session.shell.publish = () => {
+    unverifiedShell(session).publish = () => {
       throw new Error('the bus is gone');
     };
     let delivered: boolean | undefined;
@@ -1955,7 +1956,7 @@ describe('shells — what fails is said', () => {
     const host = standHost(hostConfig(ctx));
     const broken = await host.session('t', 'usr_1');
     await host.session('t', 'usr_2');
-    broken.shell.getState = () => {
+    unverifiedShell(broken).getState = () => {
       throw new Error('disposed under us');
     };
     let roster: string[] = [];
@@ -2131,5 +2132,21 @@ describe('shells — a message delivered to a principal', () => {
     // Its last terminal left: a shell that is not kept ends there.
     session.detach(connection);
     expect(host.deliver('usr_1', 'news')).toBe(false);
+  });
+});
+
+describe('shells — what a session hands out of its shell', () => {
+  it('a member that changes what the shell is made of throws there, and works on the whole shell', async () => {
+    const host = standHost(hostConfig(ctx));
+    const session = await host.session('t', 'usr_1');
+    const late = { id: 'late', initial: { action: 'counter' } };
+
+    expect(() => session.shell.addCanvas(late)).toThrow(/^moss: addCanvas was called on a session's shell\. .* `unverifiedShell\(session\)`, from `@niscorp\/moss\/unverified`\.$/);
+    expect(() => session.shell.registerAction({ id: 'made' })).toThrow(/^moss: registerAction was called on a session's shell\./);
+    expect(Object.keys(session.shell.getState().canvases)).not.toContain('late');
+
+    unverifiedShell(session).addCanvas(late);
+    // Reads, on the shell a session hands out, see what the whole shell holds.
+    expect(Object.keys(session.shell.getState().canvases)).toContain('late');
   });
 });

@@ -7,8 +7,8 @@
 // surfaces under the session's token — same wire, same enforcement.
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
-import { CLOSE_SIGNED_OUT, offerToken, PROTOCOL } from '@niscorp/moss';
-import type { ServerMessage } from '@niscorp/moss';
+import { CLOSE_SIGNED_OUT, offerToken, PROTOCOL } from '@niscorp/moss/protocol';
+import type { ServerMessage } from '@niscorp/moss/protocol';
 import type { RenderNode } from '@niscorp/nova';
 import { boot } from '../server/boot';
 import { mintToken } from '../server/users';

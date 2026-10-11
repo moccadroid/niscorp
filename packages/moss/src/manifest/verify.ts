@@ -64,7 +64,7 @@ export const candidateOf = (shipped: ShippedManifest, inForce: Pick<ManifestCand
 // `owner` is not a check of the candidate: it is said of a set that was
 // tried under a name its asker may not hand it over by (./running.ts,
 // `verifyReplace`), and it comes first.
-export type ManifestCheck = 'owner' | 'actions' | 'charter' | 'reach' | 'variants';
+export type ManifestCheck = 'actions' | 'charter' | 'reach' | 'variants';
 
 export type ManifestReport = {
   // WHAT REFUSES, one finding each, in the order the checks run. Empty: the

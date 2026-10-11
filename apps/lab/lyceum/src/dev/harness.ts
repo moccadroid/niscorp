@@ -2,7 +2,8 @@
 // boot, reading trees as a terminal would. Shared so each check says only
 // what it asserts.
 import { z } from 'zod';
-import { mintSession, offerToken, PROTOCOL } from '@niscorp/moss';
+import { mintSession } from '@niscorp/moss';
+import { offerToken, PROTOCOL } from '@niscorp/moss/protocol';
 import type { MossServer } from '@niscorp/moss';
 import type { PgPool } from '@niscorp/vex';
 import { assistantGive, EVERYBODY } from '@lyceum/app/vex/grant.entries';

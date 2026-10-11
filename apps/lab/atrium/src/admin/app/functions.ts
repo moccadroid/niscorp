@@ -4,6 +4,7 @@ import type { FunctionSession } from '@niscorp/moss';
 import { componentsOf } from '@niscorp/nova/reflect';
 import type { Seam } from '@atrium/admin/seam';
 import { sampleData } from './sample';
+import { unverifiedShell } from '@niscorp/moss/unverified';
 
 // Every read and write this tool makes, and all of them go through the seam.
 //
@@ -198,7 +199,7 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
       session.shell.registry.register(name, {} as Parameters<typeof session.shell.registry.register>[1]);
     }
 
-    session.shell.registerAction({
+    unverifiedShell(session).registerAction({
       id: 'admin.preview',
       title: definition.title ?? id,
       data: { ...sampleData(definition), previewTitle: '', previewId: '' },

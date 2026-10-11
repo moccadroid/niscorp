@@ -31,6 +31,8 @@ export default defineConfig([
       // reaches imports one (scripts/check-modules.mts).
       integrations: 'src/integrations/index.ts',
       tide: 'src/tide/index.ts',
+      protocol: 'src/server/protocol.ts',
+      unverified: 'src/server/unverified.ts',
       client: 'src/client/index.ts',
       'client/node': 'src/client/node.ts',
       'terminal/index': 'src/terminal/index.ts',

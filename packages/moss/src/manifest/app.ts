@@ -319,10 +319,6 @@ export type RunRecord = {
 // A sink that wants a plain in-process array can ignore it.
 export type RunSink = (record: RunRecord, session: FunctionSession) => void;
 
-// What a session's functions close over: the living shell (durable per
-// principal), who is calling, the server's own surfaces as the session, and
-// what a session may ask for by name.
-//
 // IT SAYS WHO IS CALLING AND HOLDS NO KEY. It used to carry `runtime`, the
 // whole environment (the database pool, the operator key),
 // and `policy`, the very object the routes enforce for everybody holding
@@ -336,6 +332,9 @@ export type RunSink = (record: RunRecord, session: FunctionSession) => void;
 //   the app's own database               the runtime the app created, closed
 //                                        over where the app builds its manifest
 export type FunctionSession = {
+  // The session's nova shell. The members that change what a shell is made of
+  // (`registerAction`, `setLayout`, `addCanvas` and their kin) throw on it:
+  // the whole shell is `unverifiedShell(session)` from `@niscorp/moss/unverified`.
   shell: Shell;
   principal: string | null;
   roles: readonly string[];

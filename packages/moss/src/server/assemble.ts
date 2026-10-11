@@ -135,7 +135,6 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerD
     ...(hosts.shells !== undefined ? { shells: hosts.shells } : {}),
     refresh: running.refresh,
     replaceActions: running.replace,
-    verifyActions: running.verifyReplace,
     actions: running.actions,
     catalogOf: async (principal: string | null) => {
       const resolved = await identity.resolve(principal);
@@ -143,7 +142,6 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerD
     },
     policyForRoles: data.policyForRoles,
     charterReport: () => running.report().charter,
-    generation: running.generation,
     // Every timer this server owns, stopped once. See the type for why this is
     // one call and not four. The list a boot that fails runs.
     close: () => {

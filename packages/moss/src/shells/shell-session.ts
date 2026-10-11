@@ -15,7 +15,7 @@ export const sessionOn = (host: HostState, cell: Cell, ephemeral: boolean, rebui
   // Read through the cell, always: after a reset the shell behind this
   // session is a different object.
   get shell(): Shell {
-    return cell.live.shell;
+    return cell.live.sessionShell;
   },
   attach: (connection, options) => attach(cell.live, connection, host.delta && options?.delta === true),
   resync: (connection) => resync(cell.live, connection),

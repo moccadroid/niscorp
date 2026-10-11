@@ -26,6 +26,8 @@ export const layoutsOf = (made: Pick<ShellComposition, 'frame' | 'layoutStore' |
 
 export type Live = {
   shell: Shell;
+  // What a session hands out of it (./whole-shell.ts).
+  sessionShell: Shell;
   // The ids of the actions this host registered on the shell: what its
   // principal held when it was built, or when it last adopted. An adopt
   // removes the ones that left. What app code registered on the shell itself

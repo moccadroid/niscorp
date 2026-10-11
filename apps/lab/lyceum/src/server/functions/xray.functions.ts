@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { FunctionSession } from '@niscorp/moss';
 import type { FunctionHandler } from '@niscorp/nova';
 import { XRAY_REF } from '@lyceum/app/shell/frame.layout';
+import { unverifiedShell } from '@niscorp/moss/unverified';
 
 // THE X-RAY, for a person the speaker gave it to (the `xray` role; without it
 // these refuse). Both act on the caller's own shell and nobody else's.
@@ -26,7 +27,7 @@ export const xrayFunctions = (session: FunctionSession): Record<string, Function
     'xray.set': async (body) => {
       given();
       const { xray } = SetSchema.parse(body);
-      session.shell.setLayout(XRAY_REF, { component: 'Xray', props: { on: xray } });
+      unverifiedShell(session).setLayout(XRAY_REF, { component: 'Xray', props: { on: xray } });
       return { on: xray };
     },
     'xray.document': async (body) => {

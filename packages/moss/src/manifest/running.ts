@@ -91,15 +91,6 @@ export type RunningManifest = {
   // Would the app serve THESE actions, everything else as it stands? Nothing
   // is switched: this is how a bundle is tried before any of it is written.
   verify: (actions: Actions) => ManifestReport;
-  // Would the app be served with `actions` in place of the set called `source`,
-  // everything else as it stands? What `replace` would be told, and nothing
-  // is switched: the set that is in force stays in force. ALWAYS A REPORT. A
-  // set that has an owner is not the caller's to hand over, and `replace`
-  // throws for it; asked whether it would be taken, that is the first error of
-  // the answer (`check: 'owner'`, with the sentence `replace` throws), and
-  // the candidate is verified like any other. It threw, so the one question
-  // whose answer is "no" had to be caught to be heard.
-  verifyReplace: (source: string, actions: Record<string, ActionDefinition>) => ManifestReport;
   // The report the manifest in force was verified by.
   report: () => ManifestReport;
   // Put `actions` in place of the set called `source` (a set that was not there
@@ -114,8 +105,8 @@ export type RunningManifest = {
   replace: (source: string, actions: Record<string, ActionDefinition>) => void;
   // ONE WRITER FOR A SET. Whoever keeps a set of its own (a feature, started
   // once the manifest stands) claims it by name, once, and is handed the two
-  // ways it is written. From then on `replace` refuses that name,
-  // `verifyReplace` answers that it would, and a second claim of it throws: two writers of one set leave it as
+  // ways it is written. From then on `replace` refuses that name, and a
+  // second claim of it throws: two writers of one set leave it as
   // whichever wrote last, and nobody verified that. `owner` is how a refusal
   // names the claimant (`the feature "integrations"`).
   claim: (source: string, owner: string) => OwnedActions;
@@ -307,11 +298,6 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     actions: () => inForce,
     entries: () => entries,
     verify: (actions) => verifyManifest(candidate(actions)),
-    verifyReplace: (source, actions) => {
-      const verified = verifyManifest(candidate(mergedActions(own, new Map(sets).set(source, actions))));
-      const refusal = owners.notTheApps(source);
-      return refusal === undefined ? verified : { ...verified, errors: [{ check: 'owner', detail: refusal }, ...verified.errors] };
-    },
     report: () => report,
     replace: (source, actions) => take(new Map([[owners.appSource(source), actions]]), true),
     claim: (source, owner) => {

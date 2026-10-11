@@ -2,6 +2,7 @@ import type { FunctionSession, NiscApp } from '@niscorp/moss';
 import { RENDERER_REF } from '@lyceum/app/shell/frame.layout';
 import { surfaceRenderer } from '@lyceum/app/vex/renderer.entries';
 import { vexOver } from './vex-over';
+import { unverifiedShell } from '@niscorp/moss/unverified';
 
 // WHICH RENDERER DRAWS A SCREEN — not an action on it. The frame carries a
 // `{ ref }` for it (app/shell/frame.layout.ts); this sets what that ref draws,
@@ -30,7 +31,7 @@ export const followRenderers = (): { onSession: NonNullable<NiscApp['onSession']
     }
     const answer: unknown = await vexOver(session.wire)(surfaceRenderer.fingerprint, { surface: surfaceOf(session.roles) });
     const look = typeof answer === 'object' && answer !== null ? Reflect.get(answer, 'renderer') : undefined;
-    session.shell.setLayout(RENDERER_REF, { component: 'Look', props: { look: typeof look === 'string' ? look : 'dom' } });
+    unverifiedShell(session).setLayout(RENDERER_REF, { component: 'Look', props: { look: typeof look === 'string' ? look : 'dom' } });
   };
   const paintAll = (): void => {
     for (const session of living) void paint(session).catch(() => living.delete(session));

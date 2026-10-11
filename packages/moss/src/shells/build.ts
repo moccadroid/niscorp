@@ -9,6 +9,7 @@ import { layoutsOf } from './host-state';
 import type { HostState, Live } from './host-state';
 import { follow } from './stream';
 import type { ShellOpening } from './types';
+import { sessionShellOf } from './whole-shell';
 
 // THE BUILD OF ONE SHELL: who it is for, what mounts on its canvases, the
 // session its app code is handed, the words it wears, the shell itself, and
@@ -197,12 +198,15 @@ export const buildShell = async (
     ...(Object.keys(phrases).length === 0 ? {} : { phrases }),
     ...(config.phraseKeys === undefined ? {} : { phraseKeys: config.phraseKeys }),
   });
+  const sessionShell = sessionShellOf(shell);
   shellRef.shell = shell;
+  shellRef.sessionShell = sessionShell;
 
   // Born idle: a shell exists before anything attaches to it, and a shell
   // nothing ever attaches to is exactly what the sweep should collect.
   const live: Live = {
     shell,
+    sessionShell,
     held: granted,
     entries: made.entries,
     layouts: layoutsOf(made),

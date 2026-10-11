@@ -63,15 +63,6 @@ export type MossServer = Hono<Env> & {
   // is read, in a feature of its own (`FeatureSeams.setActionsLoader`), or
   // calls this in each process.
   replaceActions: (source: string, actions: Record<string, ActionDefinition>) => void;
-  // WOULD THAT SET BE TAKEN — the dry run of `replaceActions`: the same
-  // verification over the same candidate, answered as a report, and nothing is
-  // changed. `errors` empty: `replaceActions` would accept it. Otherwise each
-  // error names the check that refuses and why: `actions` (a definition nova
-  // does not read), `charter`, `reach`, `variants`; and, first of them,
-  // `owner` for a set that is a feature's: it is not the caller's to hand
-  // over, which `replaceActions` says by throwing that sentence. This
-  // answers and never throws: it is asked in order to find out.
-  verifyActions: (source: string, actions: Record<string, ActionDefinition>) => ManifestReport;
   // THE ACTIONS IN FORCE NOW, by id: what the app shipped, then each set that
   // was handed over. To read, never to write: a set changes through
   // `replaceActions`.
@@ -136,13 +127,6 @@ export type MossServer = Hono<Env> & {
   // one. A reaction's `deliver` is this nudge, carrying its payload to the
   // shells that live here.
   nudge: (principal: string, channel: string) => void;
-  // The generation this process has followed. It moves when any process calls
-  // `refresh` or `replaceActions`; every process, within one poll of it, reads
-  // again the sets of actions it has a loader for and drops what it derived.
-  // Two processes at one generation have followed the same moves. They serve
-  // the same actions only where every set reached both: one handed to a single
-  // process with no loader did not.
-  generation: () => number;
   // RETIRE EVERYTHING THIS SERVER STARTED that outlives a request — the
   // generation poll, the identity idle sweep, the socket's revalidation, the
   // shell idle sweep. ONE call, because the alternative is what leaked: a host

@@ -105,12 +105,6 @@ describe('charterReport — the report the server booted on', () => {
     const inForce = server.actions();
     const held = await server.catalogOf(null);
 
-    // The dry run says why, and that another set would be taken.
-    const dry = server.verifyActions('reports', unservable);
-    expect(dry.errors.map((error) => error.check)).toEqual(['charter']);
-    expect(dry.errors[0]?.detail).toMatch(/^leaves-only: id "home" is a namespace of "home.sub"/);
-    expect(server.verifyActions('reports', {}).errors).toEqual([]);
-
     // The door refuses with the same finding.
     expect(() => server.replaceActions('reports', unservable)).toThrow(/^Refresh refused — charter incoherent over the new artifacts:\n {2}leaves-only: id "home" is a namespace of "home.sub"/);
 

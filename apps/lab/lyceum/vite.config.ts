@@ -4,7 +4,7 @@ import { defineConfig, type Plugin, type ViteDevServer } from 'vite';
 import { getRequestListener } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { mintSession, sessionCookies } from '@niscorp/moss';
-import type { Connection } from '@niscorp/moss';
+import type { Connection } from '@niscorp/moss/protocol';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
