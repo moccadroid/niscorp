@@ -20,10 +20,10 @@ import { tableSequencesOf } from './migrate';
 import { createOwnEntries } from './own-entries';
 import type { OwnEntries, Replay } from './own-entries';
 import { createPolicies, resolvePolicyForRoles } from './policy';
-import { POINTER, pointerOver } from './pointer';
+import { POINTER, createPointer } from './pointer';
 import { createVexRoutes } from './routes';
 import { vexRecordToSpan } from './span';
-import { createWriteLane } from './writes';
+import { createWriteNotifier } from './writes';
 import type { WriteListener } from './writes';
 
 // ═══════════════════════════════════════════════════════════════
@@ -245,7 +245,7 @@ const upgradeStoreOver =
 // EVERYTHING ELSE, over the engine that was prepared. Nothing here touches the database but
 // through the engine and the write client, which is why it is a function of
 // its own: it can be held against an engine with nothing behind it.
-export const dataOver = (prepared: PreparedEngine, config: Pick<DataConfig, 'db' | 'charter' | 'behaviors' | 'telemetry' | 'vexConfig' | 'featureTables'>): Data => {
+export const createDataWith = (prepared: PreparedEngine, config: Pick<DataConfig, 'db' | 'charter' | 'behaviors' | 'telemetry' | 'vexConfig' | 'featureTables'>): Data => {
   const { grammars, engine, grants } = prepared;
   const governed = { charter: config.charter, behaviors: config.behaviors };
   const policies = createPolicies({ ...governed, grants });
@@ -255,7 +255,7 @@ export const dataOver = (prepared: PreparedEngine, config: Pick<DataConfig, 'db'
   const emit = emitterOf(config.telemetry);
   const onExecute = emit === undefined ? undefined : (record: ExecuteRecord) => emit(vexRecordToSpan(record));
 
-  const writes = createWriteLane();
+  const writes = createWriteNotifier();
 
   const answering = intentAnswersOver(prepared, config);
 
@@ -314,11 +314,11 @@ export const dataOver = (prepared: PreparedEngine, config: Pick<DataConfig, 'db'
       }),
     upgradeStore: upgradeStoreOver(prepared, tablesOf),
     onWrite: writes.subscribe,
-    pointer: pointerOver(pointerReplay),
+    pointer: createPointer(pointerReplay),
     dropOnChange: (changed) => {
       changed(policies.drop);
     },
   };
 };
 
-export const createData = async (config: DataConfig): Promise<Data> => dataOver(await prepareEngine(config), config);
+export const createData = async (config: DataConfig): Promise<Data> => createDataWith(await prepareEngine(config), config);

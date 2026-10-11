@@ -2,8 +2,8 @@ import { canvasTreeOf } from '@niscorp/nova';
 import type { RenderNode } from '@niscorp/nova';
 import { encodeDelta, frameHash } from '../protocol';
 import type { ServerMessage } from '../protocol';
-import { canvasesOf } from './live';
-import type { Live } from './live';
+import { canvasesOf } from './host-state';
+import type { Live } from './host-state';
 import type { ShellConnection } from './types';
 
 // ═══════════════════════════════════════════════════════════════

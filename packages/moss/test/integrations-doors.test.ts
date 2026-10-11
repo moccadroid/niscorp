@@ -175,14 +175,14 @@ describe('the operator’s routes', () => {
 
   // The routes over a registry that keeps how `belts` stands and every entry
   // that was replayed; the service answers what the test says.
-  const routes = async (over: Partial<OperatorDeps> & { standing?: Row; found?: Row; service?: (url: string) => Response } = {}) => {
+  const routes = async (over: Partial<OperatorDeps> & { registration?: Row; found?: Row; service?: (url: string) => Response } = {}) => {
     const replayed: { fingerprint: string; context: Record<string, unknown> }[] = [];
     const reloads = { count: 0 };
     const service = serviceAnswering(over.service ?? (() => new Response(JSON.stringify(bundle), { status: 200, headers: json })));
     globalThis.fetch = service.fetch;
     const replay: Replay = async (fingerprint, context) => {
       replayed.push({ fingerprint, context });
-      if (fingerprint === 'integrations/standing') return over.standing === undefined ? [] : [over.standing];
+      if (fingerprint === 'integrations/registration') return over.registration === undefined ? [] : [over.registration];
       if (fingerprint === 'integrations/find') return over.found === undefined ? [] : [over.found];
       return [];
     };
@@ -201,7 +201,7 @@ describe('the operator’s routes', () => {
       ...over,
     });
     const register = (): Promise<Response> => Promise.resolve(operator.request('/integrations', { method: 'POST', headers: json, body: JSON.stringify({ id: 'belts', url: 'https://belts.example' }) }));
-    const written = (): string[] => replayed.map((entry) => entry.fingerprint).filter((fingerprint) => fingerprint !== 'integrations/standing' && fingerprint !== 'integrations/find');
+    const written = (): string[] => replayed.map((entry) => entry.fingerprint).filter((fingerprint) => fingerprint !== 'integrations/registration' && fingerprint !== 'integrations/find');
     return { operator, register, replayed, written, reloads, asked: service.asked };
   };
 
@@ -228,7 +228,7 @@ describe('the operator’s routes', () => {
   // approval is: one the app would not serve is refused and nothing lands.
   it('a new import of an approved integration that the app would not serve is refused before anything is written', async () => {
     const REFUSAL = 'Refresh refused — charter incoherent over the new artifacts:\n  no role grants "ext.desk.belts.roster"';
-    const { register, written, reloads } = await routes({ standing: { status: 'approved', key_hash: 'held' }, refusalOf: (actions) => (roster.id in actions ? REFUSAL : undefined) });
+    const { register, written, reloads } = await routes({ registration: { status: 'approved', key_hash: 'held' }, refusalOf: (actions) => (roster.id in actions ? REFUSAL : undefined) });
     const answered = await register();
     expect(answered.status).toBe(422);
     expect(await answered.json()).toEqual({ message: 'Refused — the app would not serve this.', reasons: [`Error: ${REFUSAL}`] });
@@ -237,11 +237,11 @@ describe('the operator’s routes', () => {
   });
 
   it('…and one that is still pending lands unverified: nothing of it is served until it is approved', async () => {
-    const { register, written } = await routes({ standing: { status: 'pending', key_hash: 'held' }, refusalOf: () => 'the app would not serve this' });
+    const { register, written } = await routes({ registration: { status: 'pending', key_hash: 'held' }, refusalOf: () => 'the app would not serve this' });
     const answered = await register();
     expect(answered.status).toBe(200);
     expect(await answered.json()).toEqual({ id: 'belts', status: 'pending', actions: 1 });
-    expect(written()).toEqual(['integrations/land']);
+    expect(written()).toEqual(['integrations/write-bundle']);
   });
 
   it('removing an integration takes its actions out of what the app serves, there and then', async () => {

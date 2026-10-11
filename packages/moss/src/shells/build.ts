@@ -4,9 +4,9 @@ import { evaluate } from '@niscorp/prism';
 import type { CanvasSeed, ShellCanvas } from '../manifest';
 import { spanClock } from '../runtime';
 import { functionSessionFor, instrumentFunctions } from './function-session';
-import type { Standing } from './function-session';
-import { layoutsOf } from './live';
-import type { HostParts, Live } from './live';
+import type { ShellRef } from './function-session';
+import { layoutsOf } from './host-state';
+import type { HostState, Live } from './host-state';
 import { follow } from './stream';
 import type { ShellOpening } from './types';
 
@@ -88,7 +88,7 @@ const seedCanvases = (
 // `reset`: this build replaces a shell that stood (the span says so).
 // `idSeed` and `given`: how the shell was opened (`ShellOpening`).
 export const buildShell = async (
-  host: HostParts,
+  host: HostState,
   token: string | null,
   principal: string | null,
   reset = false,
@@ -121,8 +121,8 @@ export const buildShell = async (
   const registry = createComponentRegistry();
   for (const [name, contract] of Object.entries(made.components)) registry.register(name, contract);
 
-  const standing: Standing = {};
-  const session = functionSessionFor(host, { principal, roles: made.roles, scope: made.scope, actions: ids }, wire, standing);
+  const shellRef: ShellRef = {};
+  const session = functionSessionFor(host, { principal, roles: made.roles, scope: made.scope, actions: ids }, wire, shellRef);
 
   // THE WORDS THIS SHELL WEARS, resolved before it exists — because they are
   // a property of the shell now, not of the frames it emits. Nova's renderer
@@ -135,7 +135,7 @@ export const buildShell = async (
   // behind the screen it is painting.
   const phrases = (await hooks.phrases?.({ principal, identity: made.scope, wire: config.wire(token) })) ?? {};
 
-  // NOTHING AWAITS BETWEEN THESE SEAMS AND `standing.shell = shell`. Both run
+  // NOTHING AWAITS BETWEEN THESE SEAMS AND `shellRef.shell = shell`. Both run
   // before the shell exists, so app code defers its first touch of
   // `session.shell` — and the cheapest deferral, a microtask, has to be
   // enough: it is the only one that lands before the shell's mount calls
@@ -197,7 +197,7 @@ export const buildShell = async (
     ...(Object.keys(phrases).length === 0 ? {} : { phrases }),
     ...(config.phraseKeys === undefined ? {} : { phraseKeys: config.phraseKeys }),
   });
-  standing.shell = shell;
+  shellRef.shell = shell;
 
   // Born idle: a shell exists before anything attaches to it, and a shell
   // nothing ever attaches to is exactly what the sweep should collect.
@@ -215,7 +215,7 @@ export const buildShell = async (
     idleSince: Date.now(),
     seeded: Promise.resolve(),
   };
-  standing.live = live;
+  shellRef.live = live;
 
   seedCanvases(live, hooks.seeds?.({ principal, actions: ids, roles: made.roles, wire }), granted);
   follow(live, delta);

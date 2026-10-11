@@ -55,7 +55,7 @@ const world = async (
 ) => {
   const said = {
     credentials: new Map<string, (token: string, request: Request) => Promise<CredentialAnswer>>(),
-    narrowings: [] as Parameters<FeatureSeams['addCatalogFilter']>[0][],
+    catalogFilters: [] as Parameters<FeatureSeams['addCatalogFilter']>[0][],
     loaders: [] as (() => Promise<Record<string, ActionDefinition>>)[],
     wraps: [] as ((inner: FetchFn) => FetchFn)[],
     replaced: [] as Record<string, ActionDefinition>[],
@@ -98,7 +98,7 @@ const world = async (
       said.loaders.push(load);
     },
     addCatalogFilter: (filter) => {
-      said.narrowings.push(filter);
+      said.catalogFilters.push(filter);
     },
     charter: { desk: { actions: ['desk.*', 'ext.desk.*'] }, member: { actions: { allow: ['ext.member.*'] } } },
     components: { Text: {} },
@@ -192,8 +192,8 @@ describe('createIntegrations — started with the seams', () => {
     expect(said.wraps).toHaveLength(1);
     // The rule: an integration's action is there only where it is installed,
     // and an action that is nobody's is always there.
-    const [installedOnly] = said.narrowings;
-    expect(said.narrowings).toHaveLength(1);
+    const [installedOnly] = said.catalogFilters;
+    expect(said.catalogFilters).toHaveLength(1);
     expect(installedOnly?.(['home', 'ext.desk.belts.roster', 'ext.desk.pay.checkout'], new Set(['belts']))).toEqual(['home', 'ext.desk.belts.roster']);
     expect(installedOnly?.(['home', 'ext.desk.belts.roster'], undefined)).toEqual(['home', 'ext.desk.belts.roster']);
 
@@ -546,9 +546,9 @@ describe('the routes the feature mounts, asked through the server it mounted the
     const landed = new Set<string>();
     const registry: Replay = async (fingerprint, context) => {
       const id = String(context['id']);
-      if (fingerprint === 'integrations/standing') return landed.has(id) ? [{ status: 'pending', key_hash: kept.get(id) ?? null }] : [];
-      if (fingerprint === 'integrations/land') return void landed.add(id);
-      if (fingerprint === 'integrations/land-and-keep-key') {
+      if (fingerprint === 'integrations/registration') return landed.has(id) ? [{ status: 'pending', key_hash: kept.get(id) ?? null }] : [];
+      if (fingerprint === 'integrations/write-bundle') return void landed.add(id);
+      if (fingerprint === 'integrations/write-bundle-and-keep-key') {
         landed.add(id);
         const row = { id, key_hash: kept.get(id) ?? null };
         if (kept.has(id)) return row;

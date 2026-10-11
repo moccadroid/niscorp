@@ -56,7 +56,7 @@ const RowsSchema = z.array(z.unknown());
 // The pointer the manifest module is handed, over a replay of the two entries.
 // The replay is asked for at each use: it is made once, when it is first
 // wanted, by whoever hands it over.
-export const pointerOver = (replay: () => Promise<Replay>): Pointer => ({
+export const createPointer = (replay: () => Promise<Replay>): Pointer => ({
   // A pointer with no row reads as zero. One whose `n` is not a number is not
   // a reading: this throws, and whoever polls says that it could not read.
   read: async () => {

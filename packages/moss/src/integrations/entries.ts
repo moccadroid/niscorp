@@ -53,8 +53,8 @@ const find: SeedEntry = {
   dsl: { from: ['integrations'], fields: ['integrations.url', 'integrations.status', 'integrations.reach', 'integrations.frames'], filter: byId, limit: 1 },
 };
 
-const standing: SeedEntry = {
-  fingerprint: 'integrations/standing',
+const registration: SeedEntry = {
+  fingerprint: 'integrations/registration',
   intent: 'Whether an integration is approved, and whether it was issued a key',
   dsl: { from: ['integrations'], fields: ['integrations.status', 'integrations.key_hash'], filter: byId, limit: 1 },
 };
@@ -138,8 +138,8 @@ const landing: Mutation[] = [
   },
 ];
 
-const land: SeedMutation = {
-  fingerprint: 'integrations/land',
+const writeBundle: SeedMutation = {
+  fingerprint: 'integrations/write-bundle',
   intent: 'Land a bundle: the row of its integration as the bundle says it is now, and its actions in place of the ones before',
   mutation: landing,
 };
@@ -157,8 +157,8 @@ const land: SeedMutation = {
 // transaction waits for the earlier one's row, finds a key on it, and writes
 // none. The row that statement answers carries the hash, so whoever landed
 // reads off the reply whether its key is the one that was kept (./registry.ts).
-const landAndKeepKey: SeedMutation = {
-  fingerprint: 'integrations/land-and-keep-key',
+const writeBundleAndKeepKey: SeedMutation = {
+  fingerprint: 'integrations/write-bundle-and-keep-key',
   intent: 'Land a bundle, and keep the hash of the key its integration is issued with it, where it holds none',
   mutation: [...landing, { op: 'update', table: 'integrations', set: fromContext(['key_hash']), where: { and: [byId, { isNull: 'integrations.key_hash' }] } }],
 };
@@ -321,12 +321,12 @@ const frameGrant: SeedEntry = {
 
 export const REGISTRY_ENTRIES: readonly (SeedEntry | SeedMutation)[] = [
   find,
-  standing,
+  registration,
   requested,
   byKey,
   recordFailedImport,
-  land,
-  landAndKeepKey,
+  writeBundle,
+  writeBundleAndKeepKey,
   approve,
   setBackToPending,
   remove,

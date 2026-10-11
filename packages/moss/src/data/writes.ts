@@ -37,7 +37,7 @@ export const writeRequestOf = (header: (name: string) => string | undefined): Wr
 // A write no request made says nothing.
 const SAID_NOTHING: WriteRequest = { header: () => undefined };
 
-export type WriteLane = {
+export type WriteNotifier = {
   // Hear every write the routes serve. Returns the way to stop hearing.
   subscribe: (listener: WriteListener) => () => void;
   // Run a request with what it said kept for whoever hears a write it makes.
@@ -49,7 +49,7 @@ export type WriteLane = {
   report: (event: WriteEvent) => void;
 };
 
-export const createWriteLane = (): WriteLane => {
+export const createWriteNotifier = (): WriteNotifier => {
   const requests = new AsyncLocalStorage<WriteRequest>();
   const listeners = new Set<WriteListener>();
   return {

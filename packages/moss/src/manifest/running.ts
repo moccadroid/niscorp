@@ -7,7 +7,7 @@ import { entriesOf } from './entries';
 import { createGeneration } from './generation';
 import type { Generation, Pointer } from './generation';
 import { freezeDeep } from './handover';
-import { createRoleHoldings, narrowedBy } from './roles';
+import { createRoleMemo, narrowedBy } from './roles';
 import type { Catalog, InstalledOnly } from './roles';
 import { candidateOf, refusalOf, verifyManifest } from './verify';
 import type { ManifestCandidate, ManifestReport, ShippedManifest } from './verify';
@@ -159,7 +159,7 @@ export type RunningManifest = {
   stop: () => void;
 };
 
-const laidOver = (own: Actions, sets: ReadonlyMap<string, Actions>): Actions =>
+const mergedActions = (own: Actions, sets: ReadonlyMap<string, Actions>): Actions =>
   Object.freeze([...sets.values()].reduce<Record<string, ActionDefinition>>((all, set) => ({ ...all, ...set }), { ...own }));
 
 // A listener that throws must not stop the others being told, nor undo a
@@ -252,17 +252,17 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   const loaders = new Map<string, ActionLoader>();
   const owners = createSetOwners();
   let sets: ReadonlyMap<string, Actions> = new Map();
-  let inForce = laidOver(own, sets);
+  let inForce = mergedActions(own, sets);
 
   let report = verifiedAtBoot(candidate(inForce));
 
   // The rules for what is there for an install list, each applied to what the
   // one before it kept, and each held to narrowing it (./roles.ts,
   // `narrowedBy`): none of them can put an id there.
-  const narrowings: InstalledOnly[] = config.installedOnly === undefined ? [] : [config.installedOnly];
-  const holdings = createRoleHoldings({
+  const catalogFilters: InstalledOnly[] = config.installedOnly === undefined ? [] : [config.installedOnly];
+  const roleMemo = createRoleMemo({
     manifest: () => ({ charter: shipped.charter, actions: inForce, layouts: shipped.layouts }),
-    installedOnly: (ids, installed) => narrowings.reduce((kept, narrow) => narrowedBy(narrow, kept, installed), ids),
+    installedOnly: (ids, installed) => catalogFilters.reduce((kept, narrow) => narrowedBy(narrow, kept, installed), ids),
   });
   const components = createComponentNames((shell) => shellComponents({ actions: inForce, layouts: shipped.layouts }, shell));
   const byFingerprint: ShellArtifacts['entries'] = new Map(entries.map((entry) => [entry.fingerprint, entry]));
@@ -275,7 +275,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   // leaves every piece as it was, the caller's own record included.
   const take = (arrived: ReadonlyMap<string, Actions>, move: boolean): void => {
     const next = new Map([...sets, ...arrived]);
-    const actions = laidOver(own, next);
+    const actions = mergedActions(own, next);
     const verified = verifyManifest(candidate(actions));
     const refusal = refusalOf(verified, 'refresh');
     if (refusal !== undefined) throw new Error(refusal);
@@ -284,7 +284,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     sets = next;
     inForce = actions;
     report = verified;
-    holdings.drop();
+    roleMemo.drop();
     components.drop();
     for (const listener of [...listeners]) tell(listener);
     if (move) pointer?.bump();
@@ -302,7 +302,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     entries: () => entries,
     verify: (actions) => verifyManifest(candidate(actions)),
     verifyReplace: (source, actions) => {
-      const verified = verifyManifest(candidate(laidOver(own, new Map(sets).set(source, actions))));
+      const verified = verifyManifest(candidate(mergedActions(own, new Map(sets).set(source, actions))));
       const refusal = owners.notTheApps(source);
       return refusal === undefined ? verified : { ...verified, errors: [{ check: 'owner', detail: refusal }, ...verified.errors] };
     },
@@ -331,12 +331,12 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       };
     },
     addCatalogFilter: (filter) => {
-      narrowings.push(filter);
-      holdings.drop();
+      catalogFilters.push(filter);
+      roleMemo.drop();
     },
-    catalogFor: holdings.catalogFor,
+    catalogFor: roleMemo.catalogFor,
     artifactsFor: (shell, roles, installed) => ({
-      actions: holdings.definitionsFor(roles, installed),
+      actions: roleMemo.definitionsFor(roles, installed),
       canvases: shell.canvases,
       ...(shell.layout !== undefined ? { frame: shell.layout } : {}),
       ...(shell.layoutStore !== undefined ? { layoutStore: shell.layoutStore } : {}),

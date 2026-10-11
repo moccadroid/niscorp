@@ -5,7 +5,7 @@ import type { ActionDefinition } from '@niscorp/nova';
 import { createPostgresCache, scopeGrants } from '@niscorp/vex';
 import type { SeedEntry } from '@niscorp/vex';
 import type { Charter } from '@niscorp/charter';
-import { dataOver } from '../src/data/data';
+import { createDataWith } from '../src/data/data';
 import { featureTablesOf } from '../src/data/feature-tables';
 import { createGrammarUpgrader } from '../src/data/grammar';
 import type { Feature, FeatureSeams } from '../src/feature';
@@ -35,7 +35,7 @@ const charter: Charter = { public: ['home'] };
 const world = async (features: readonly Feature[] = []): Promise<{ parts: SeamParts; server: Hono<Env>; operator: Hono<Env>; running: RunningManifest; start: () => Promise<void> }> => {
   const double = await engineDouble();
   const grants = scopeGrants(['notes', 'tags']);
-  const data = dataOver(
+  const data = createDataWith(
     { engine: double.engine, adapter: double.adapter, grants, grammars: await createGrammarUpgrader({}), upgradeStore: async () => undefined },
     { db: double.db, charter, featureTables: featureTablesOf({ features }) },
   );

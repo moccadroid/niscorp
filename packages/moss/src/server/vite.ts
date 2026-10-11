@@ -8,7 +8,7 @@ import type { DocumentConfig } from '../documents';
 import { sessionCookies } from '../identity';
 import type { MossServer } from './moss-server';
 import { MOSS_PATHS } from './node';
-import { createTransport, hearUpgrades } from './transport';
+import { createTransport, listenForUpgrades } from './transport';
 import type { Transport } from './transport';
 
 // ═══════════════════════════════════════════════════════════════
@@ -252,7 +252,7 @@ export const mossDev = (options: MossDevOptions): Plugin => ({
     // that arrives during a boot waits for it, as a page does. An app that did
     // not boot has no socket: the request is refused, as its routes are.
     if (httpServer !== null) {
-      hearUpgrades(httpServer, '/socket', (req, socket, head) => {
+      listenForUpgrades(httpServer, '/socket', (req, socket, head) => {
         void current.then(
           ({ transport }) => transport?.upgrade(req, socket, head),
           () => socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'),

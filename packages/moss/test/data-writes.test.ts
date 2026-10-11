@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { WriteEvent } from '@niscorp/vex';
-import { createWriteLane } from '../src/data/writes';
+import { createWriteNotifier } from '../src/data/writes';
 import type { WriteRequest } from '../src/data/writes';
 import { turn } from './turn';
 
@@ -18,7 +18,7 @@ const event = (fingerprint: string): WriteEvent => ({
 
 describe('the write lane', () => {
   it('tells every subscriber of each write, in the order they subscribed', () => {
-    const lane = createWriteLane();
+    const lane = createWriteNotifier();
     const heard: string[] = [];
     lane.subscribe((write) => heard.push(`first:${write.fingerprint}`));
     lane.subscribe((write) => heard.push(`second:${write.fingerprint}`));
@@ -28,7 +28,7 @@ describe('the write lane', () => {
   });
 
   it('hands over what vex reported, as it was reported', () => {
-    const lane = createWriteLane();
+    const lane = createWriteNotifier();
     const heard: WriteEvent[] = [];
     lane.subscribe((write) => heard.push(write));
     const reported = event('notes/add');
@@ -37,7 +37,7 @@ describe('the write lane', () => {
   });
 
   it('a write made inside no request is told with a request that said nothing', () => {
-    const lane = createWriteLane();
+    const lane = createWriteNotifier();
     const said: (string | undefined)[] = [];
     lane.subscribe((_write, request) => said.push(request.header('x-said')));
     lane.report(event('notes/add'));
@@ -45,7 +45,7 @@ describe('the write lane', () => {
   });
 
   it('a write made inside a request is told with what that request said, across what the request awaits', async () => {
-    const lane = createWriteLane();
+    const lane = createWriteNotifier();
     const said: (string | undefined)[] = [];
     lane.subscribe((_write, request) => said.push(request.header('x-said')));
     await lane.within(saying({ 'x-said': 'this' }), async () => {
@@ -58,7 +58,7 @@ describe('the write lane', () => {
   });
 
   it('two requests at once are each told with their own', async () => {
-    const lane = createWriteLane();
+    const lane = createWriteNotifier();
     const said: Record<string, string | undefined> = {};
     lane.subscribe((write, request) => {
       said[write.fingerprint] = request.header('x-said');
@@ -81,7 +81,7 @@ describe('the write lane', () => {
   });
 
   it('a subscriber that stops is told no more', () => {
-    const lane = createWriteLane();
+    const lane = createWriteNotifier();
     const heard: string[] = [];
     const stop = lane.subscribe((write) => heard.push(write.fingerprint));
     lane.report(event('notes/add'));
@@ -97,7 +97,7 @@ describe('the write lane', () => {
   // it is logged here, the others are told, and nothing reaches the reporter.
   it('a subscriber that throws is logged, and the others are still told of that write', () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const lane = createWriteLane();
+    const lane = createWriteNotifier();
     const heard: string[] = [];
     lane.subscribe((write) => heard.push(`before:${write.fingerprint}`));
     lane.subscribe(() => {

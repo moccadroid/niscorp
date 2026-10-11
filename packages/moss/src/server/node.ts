@@ -10,7 +10,7 @@ import type { NiscRuntime } from '../runtime';
 import type { SocketAccept, TransportSettings } from '../socket';
 import type { Env, MossServer } from './moss-server';
 import { createServer } from './server';
-import { createTransport, hearUpgrades } from './transport';
+import { createTransport, listenForUpgrades } from './transport';
 import type { Upgradeable } from './transport';
 
 // ═══════════════════════════════════════════════════════════════
@@ -38,7 +38,7 @@ export const attachSocket = (
   options?: TransportSettings,
 ): { close: () => void } => {
   const transport = createTransport(accept, options);
-  hearUpgrades(httpServer, path, transport.upgrade);
+  listenForUpgrades(httpServer, path, transport.upgrade);
   return { close: transport.close };
 };
 

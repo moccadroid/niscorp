@@ -4,8 +4,8 @@ import { CLOSE_SIGNED_OUT } from '../protocol';
 import type { ServerMessage } from '../protocol';
 import { spanClock } from '../runtime';
 import type { Emit } from '../runtime';
-import { endShell } from './live';
-import type { HostParts, Live } from './live';
+import { endShell } from './host-state';
+import type { HostState, Live } from './host-state';
 
 // THE SESSION APP CODE IS HANDED (`functions`, `onSession`), made for one
 // shell: who is calling, the wire as them, and what a session may do by name
@@ -42,14 +42,14 @@ export const instrumentFunctions = (
 
 // What a session reads that does not exist yet when it is made: the shell, and
 // what is attached to it. The build fills both in once the shell stands.
-export type Standing = { shell?: Shell; live?: Live };
+export type ShellRef = { shell?: Shell; live?: Live };
 
 // GRANT: the minted token to every terminal of this session — they
 // reconnect as the new principal; this (anonymous) session stays
 // ephemeral and dies on detach.
-const grant = (standing: Standing, token: string): void => {
+const grant = (shellRef: ShellRef, token: string): void => {
   const message = JSON.stringify({ type: 'session', token } satisfies ServerMessage);
-  for (const connection of standing.live?.connections ?? []) {
+  for (const connection of shellRef.live?.connections ?? []) {
     if (connection.seal === undefined) connection.send(message);
     // its browser keeps the session: sealed, so the page that carries it back cannot open it (../socket)
     else {
@@ -69,7 +69,7 @@ const grant = (standing: Standing, token: string): void => {
 // every session the principal holds is deleted, not only the one this
 // shell was built with. The teardown is deferred a microtask so the
 // calling trigger finishes before its own shell is disposed.
-const revoke = (host: HostParts, standing: Standing, principal: string | null): Promise<void> => {
+const revoke = (host: HostState, shellRef: ShellRef, principal: string | null): Promise<void> => {
   const { config, durable } = host;
   const forgotten = config.revokeSessions !== undefined && principal !== null ? config.revokeSessions(principal) : Promise.resolve();
   // Loud when it fails — a sign-out that left the credential alive is
@@ -78,7 +78,7 @@ const revoke = (host: HostParts, standing: Standing, principal: string | null): 
   // the failure.
   forgotten.catch((error: unknown) => console.error(`[moss] sign-out of ${principal ?? 'anonymous'} did not revoke its sessions:`, error));
   queueMicrotask(() => {
-    const live = standing.live;
+    const live = shellRef.live;
     if (live === undefined) return;
     endShell(host, live);
     // Only if the map still holds THIS shell — a reset between the
@@ -93,16 +93,16 @@ const revoke = (host: HostParts, standing: Standing, principal: string | null): 
 };
 
 // The manifest's in-process functions close over this, made for THIS
-// session — the shell and the live connection set land in `standing` just
+// session — the shell and the live connection set land in `shellRef` just
 // after creation (a function that somehow runs before then fails loudly).
 //
 // `who`: the principal with what their composition says of them, and the ids
 // of the actions they hold.
 export const functionSessionFor = (
-  host: HostParts,
+  host: HostState,
   who: { principal: string | null; roles: readonly string[]; scope: Record<string, unknown>; actions: readonly string[] },
   wire: FetchFn,
-  standing: Standing,
+  shellRef: ShellRef,
 ): FunctionSession => {
   const { config } = host;
   const { principal } = who;
@@ -113,11 +113,11 @@ export const functionSessionFor = (
     actions: who.actions,
     wire,
     get shell(): Shell {
-      if (standing.shell === undefined) throw new Error('moss: a function touched the shell before the session finished building.');
-      return standing.shell;
+      if (shellRef.shell === undefined) throw new Error('moss: a function touched the shell before the session finished building.');
+      return shellRef.shell;
     },
-    grant: (token) => grant(standing, token),
-    revoke: () => revoke(host, standing, principal),
+    grant: (token) => grant(shellRef, token),
+    revoke: () => revoke(host, shellRef, principal),
     answerIntent: (writers, asked) =>
       config.answerIntent === undefined
         ? Promise.reject(new Error('moss: this shell host was given no way to answer an intent.'))
@@ -126,7 +126,7 @@ export const functionSessionFor = (
     // wrong, and the shell id is read lazily — a run cannot happen before
     // the shell exists, but this object is built before it does.
     recordRun: (run) => {
-      config.hooks.runs?.({ ...run, at: Date.now(), principal, shellId: standing.shell?.id ?? '' }, session);
+      config.hooks.runs?.({ ...run, at: Date.now(), principal, shellId: shellRef.shell?.id ?? '' }, session);
     },
   };
   return session;

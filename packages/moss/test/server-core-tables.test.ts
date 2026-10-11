@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
 import type { DatabaseSchema } from '@niscorp/vex';
-import { dataOver } from '../src/data/data';
+import { createDataWith } from '../src/data/data';
 import { featureTablesOf } from '../src/data/feature-tables';
 import { createGrammarUpgrader } from '../src/data/grammar';
 import type { Feature } from '../src/feature';
@@ -36,7 +36,7 @@ const standing = async (features: readonly Feature[]) => {
     identity: { resolve: async () => ({ roles: ['member'], scope: {} }) },
     features: [...features],
   };
-  const data = dataOver(
+  const data = createDataWith(
     {
       engine: double.engine,
       adapter: double.adapter,

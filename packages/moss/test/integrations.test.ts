@@ -11,8 +11,8 @@ import { reachOf } from '../src/integrations/reach';
 import { copyPress } from '../src/integrations/press';
 import { callIntegrationWith } from '../src/integrations/call';
 import { createForwarder } from '../src/integrations/forward';
-import { findIntegration, landBundle, listIntegrations } from '../src/integrations/registry';
-import type { Landing } from '../src/integrations/registry';
+import { findIntegration, writeBundle, listIntegrations } from '../src/integrations/registry';
+import type { BundleImport } from '../src/integrations/registry';
 import type { HostVocabulary, IntakeContext } from '../src/integrations/intake';
 import { BundleSchema } from '../src/integrations/bundle';
 import type { Bundle } from '../src/integrations/bundle';
@@ -919,17 +919,17 @@ describe('the registry as vex entries — each statement, against a database', (
     ]);
   });
 
-  it('3 · standing: what the row says of approval and of a key', async () => {
+  it('3 · registration: what the row says of approval and of a key', async () => {
     await pool.query(`INSERT INTO integrations (id, url, status, key_hash) VALUES ('keyed', 'https://keyed.example', 'approved', 'abc'), ('unkeyed', 'https://unkeyed.example', 'pending', NULL)`);
-    expect(await replay('integrations/standing', { id: 'keyed' })).toEqual([{ status: 'approved', key_hash: 'abc' }]);
-    expect(await replay('integrations/standing', { id: 'unkeyed' })).toEqual([{ status: 'pending', key_hash: null }]);
-    expect(await replay('integrations/standing', { id: 'ghost' })).toEqual([]);
+    expect(await replay('integrations/registration', { id: 'keyed' })).toEqual([{ status: 'approved', key_hash: 'abc' }]);
+    expect(await replay('integrations/registration', { id: 'unkeyed' })).toEqual([{ status: 'pending', key_hash: null }]);
+    expect(await replay('integrations/registration', { id: 'ghost' })).toEqual([]);
   });
 
   // 4, 5, 6 and 7 were four statements, run one after the other. They are one
   // batch now (the case after these holds that it lands whole or not at all).
   it('4 · land a bundle: every column the bundle says, the instant it was handed, and no error', async () => {
-    await replay('integrations/land', { ...landing('landed'), actions: [] });
+    await replay('integrations/write-bundle', { ...landing('landed'), actions: [] });
     const { id: _id, last_import_at: _at, ...said } = landing('landed');
     const [first] = await rows(`SELECT * FROM integrations WHERE id = 'landed'`);
     expect(first).toMatchObject({ ...said, id: 'landed', status: 'pending', key_hash: null, approved_data: [], last_error: null });
@@ -939,7 +939,7 @@ describe('the registry as vex entries — each statement, against a database', (
     // lands as an empty list), and what the bundle does not say stays.
     await pool.query(`UPDATE integrations SET status = 'approved', key_hash = 'hash-of-landed', approved_data = '["members.read"]'::jsonb, last_error = 'old' WHERE id = 'landed'`);
     const again = landing('landed', { title: 'Belts 2', requested_data: [], reach: {}, story: [], offers: [], capabilities: [], last_import_at: '2026-10-11T09:30:00.000Z' });
-    await replay('integrations/land', { ...again, actions: [] });
+    await replay('integrations/write-bundle', { ...again, actions: [] });
     const [second] = await rows(`SELECT * FROM integrations WHERE id = 'landed'`);
     expect(second).toMatchObject({ title: 'Belts 2', requested_data: [], reach: {}, story: [], offers: [], capabilities: [], needs: ['booking'] });
     expect(second).toMatchObject({ status: 'approved', key_hash: 'hash-of-landed', approved_data: ['members.read'], last_error: null });
@@ -950,26 +950,26 @@ describe('the registry as vex entries — each statement, against a database', (
   it('5, 6 · ...with its actions, in place of the ones it shipped before, and of no other integration’s', async () => {
     const riding = action('landed', 'roster', { attach_to: 'people.detail', preview: '/integrations/landed/preview' });
     const placed = action('landed', 'board', { place_in: 'people.hub' });
-    await replay('integrations/land', { ...landing('landed'), actions: [riding, placed] });
-    await replay('integrations/land', { ...landing('other'), actions: [action('other', 'roster')] });
+    await replay('integrations/write-bundle', { ...landing('landed'), actions: [riding, placed] });
+    await replay('integrations/write-bundle', { ...landing('other'), actions: [action('other', 'roster')] });
     expect(await actionsOf('landed')).toEqual([{ integration_id: 'landed', ...placed }, { integration_id: 'landed', ...riding }]);
 
     // The next import ships one action: the two before it leave.
-    await replay('integrations/land', { ...landing('landed'), actions: [action('landed', 'solo')] });
+    await replay('integrations/write-bundle', { ...landing('landed'), actions: [action('landed', 'solo')] });
     expect(await actionsOf('landed')).toEqual([{ integration_id: 'landed', ...action('landed', 'solo') }]);
     // ...and one that ships none leaves none.
-    await replay('integrations/land', { ...landing('landed'), actions: [] });
+    await replay('integrations/write-bundle', { ...landing('landed'), actions: [] });
     expect(await actionsOf('landed')).toEqual([]);
     expect(await actionsOf('other')).toEqual([{ integration_id: 'other', ...action('other', 'roster') }]);
   });
 
   it('7 · ...and with the hash of its key, on the import a key is issued with', async () => {
-    await replay('integrations/land-and-keep-key', { ...landing('issued'), key_hash: 'deadbeef', actions: [] });
+    await replay('integrations/write-bundle-and-keep-key', { ...landing('issued'), key_hash: 'deadbeef', actions: [] });
     expect(await rows(`SELECT id, key_hash FROM integrations WHERE key_hash = 'deadbeef'`)).toEqual([{ id: 'issued', key_hash: 'deadbeef' }]);
     // A row that is there with no key (an import that failed came first) is
     // issued one the same way, with the actions the bundle ships.
     await replay('integrations/record-failed-import', { id: 'late', url: 'https://late.example', last_error: 'Refused.' });
-    await replay('integrations/land-and-keep-key', { ...landing('late'), key_hash: 'cafe', actions: [action('late', 'roster')] });
+    await replay('integrations/write-bundle-and-keep-key', { ...landing('late'), key_hash: 'cafe', actions: [action('late', 'roster')] });
     expect(await rows(`SELECT key_hash, title, last_error FROM integrations WHERE id = 'late'`)).toEqual([{ key_hash: 'cafe', title: 'Belts', last_error: null }]);
     expect(await actionsOf('late')).toEqual([{ integration_id: 'late', ...action('late', 'roster') }]);
   });
@@ -984,10 +984,10 @@ describe('the registry as vex entries — each statement, against a database', (
     const rowsIn = (answered: unknown): unknown[] => (Array.isArray(answered) ? answered : [answered]);
     const keptIn = (answered: unknown, hash: string): boolean => rowsIn(answered).some((row) => typeof row === 'object' && row !== null && 'key_hash' in row && row.key_hash === hash);
 
-    const first = await replay('integrations/land-and-keep-key', { ...landing('raced'), key_hash: 'first-key', actions: [action('raced', 'one')] });
+    const first = await replay('integrations/write-bundle-and-keep-key', { ...landing('raced'), key_hash: 'first-key', actions: [action('raced', 'one')] });
     expect(keptIn(first, 'first-key')).toBe(true);
 
-    const second = await replay('integrations/land-and-keep-key', { ...landing('raced', { title: 'Belts, again' }), key_hash: 'second-key', actions: [action('raced', 'two')] });
+    const second = await replay('integrations/write-bundle-and-keep-key', { ...landing('raced', { title: 'Belts, again' }), key_hash: 'second-key', actions: [action('raced', 'two')] });
     // The bundle landed: it is the later import.
     expect(await rows(`SELECT title, key_hash FROM integrations WHERE id = 'raced'`)).toEqual([{ title: 'Belts, again', key_hash: 'first-key' }]);
     expect(await actionsOf('raced')).toEqual([{ integration_id: 'raced', ...action('raced', 'two') }]);
@@ -1013,8 +1013,8 @@ describe('the registry as vex entries — each statement, against a database', (
   // it is written, from what `integrations/actions-of` reads (below).
 
   it('11 · remove: the row goes, and its actions with it', async () => {
-    await replay('integrations/land', { ...landing('leaving'), actions: [action('leaving', 'roster')] });
-    await replay('integrations/land', { ...landing('staying'), actions: [action('staying', 'roster')] });
+    await replay('integrations/write-bundle', { ...landing('leaving'), actions: [action('leaving', 'roster')] });
+    await replay('integrations/write-bundle', { ...landing('staying'), actions: [action('staying', 'roster')] });
     expect(await rows(`SELECT count(*)::int AS n FROM integration_actions WHERE integration_id = 'leaving'`)).toEqual([{ n: 1 }]);
     await replay('integrations/remove', { id: 'leaving' });
     expect(await rows(`SELECT id FROM integrations WHERE id = 'leaving'`)).toEqual([]);
@@ -1028,13 +1028,13 @@ describe('the registry as vex entries — each statement, against a database', (
   it('landing a bundle is all or nothing: a failure part-way leaves the rows of the import before it whole', async () => {
     const bundleOf = (title: string, names: readonly string[]): Bundle =>
       BundleSchema.parse({ integration: 'atomic', meta: { title }, actions: Object.fromEntries(names.map((name) => [`ext.desk.atomic.${name}`, { id: `ext.desk.atomic.${name}`, title: name }])) });
-    const landingOf = (bundle: Bundle): Landing => ({ id: 'atomic', url: 'https://atomic.example', bundle, adds: '', press: [], stamp: { 'nisc.nova': 3 } });
+    const landingOf = (bundle: Bundle): BundleImport => ({ id: 'atomic', url: 'https://atomic.example', bundle, adds: '', press: [], stamp: { 'nisc.nova': 3 } });
     const held = async (): Promise<unknown> => ({
       row: await rows(`SELECT * FROM integrations WHERE id = 'atomic'`),
       actions: await rows(`SELECT * FROM integration_actions WHERE integration_id = 'atomic' ORDER BY action_id`),
     });
 
-    await landBundle(replay, landingOf(bundleOf('First', ['one', 'two'])));
+    await writeBundle(replay, landingOf(bundleOf('First', ['one', 'two'])));
     const before = await held();
     expect(before).toMatchObject({ row: [{ title: 'First' }], actions: [{ action_id: 'ext.desk.atomic.one' }, { action_id: 'ext.desk.atomic.two' }] });
 
@@ -1042,21 +1042,21 @@ describe('the registry as vex entries — each statement, against a database', (
     // the actions fails: the row has been written and the old actions taken
     // out by then.
     const broken = await registryOver(pool, failingAt(pool, /^INSERT INTO integration_actions/));
-    await expect(landBundle(broken, landingOf(bundleOf('Second', ['three'])))).rejects.toThrow(/the database went away/);
+    await expect(writeBundle(broken, landingOf(bundleOf('Second', ['three'])))).rejects.toThrow(/the database went away/);
     expect(await held()).toEqual(before);
 
     // ...and the same import lands whole on a client that works.
-    await landBundle(replay, landingOf(bundleOf('Second', ['three'])));
+    await writeBundle(replay, landingOf(bundleOf('Second', ['three'])));
     expect(await held()).toMatchObject({ row: [{ title: 'Second' }], actions: [{ action_id: 'ext.desk.atomic.three' }] });
   });
 
   it('two integrations cannot hold the hash of one key, and any number can hold none', async () => {
-    await replay('integrations/land-and-keep-key', { ...landing('twin-a'), key_hash: 'one-hash', actions: [] });
-    await expect(replay('integrations/land-and-keep-key', { ...landing('twin-b'), key_hash: 'one-hash', actions: [] })).rejects.toThrow(/integrations_key_hash_unique/);
+    await replay('integrations/write-bundle-and-keep-key', { ...landing('twin-a'), key_hash: 'one-hash', actions: [] });
+    await expect(replay('integrations/write-bundle-and-keep-key', { ...landing('twin-b'), key_hash: 'one-hash', actions: [] })).rejects.toThrow(/integrations_key_hash_unique/);
     expect(await rows(`SELECT id FROM integrations WHERE key_hash = 'one-hash' OR id = 'twin-b'`)).toEqual([{ id: 'twin-a' }]);
     // A row that holds no key is not held to it: two land with none.
-    await replay('integrations/land', { ...landing('keyless-a'), actions: [] });
-    await replay('integrations/land', { ...landing('keyless-b'), actions: [] });
+    await replay('integrations/write-bundle', { ...landing('keyless-a'), actions: [] });
+    await replay('integrations/write-bundle', { ...landing('keyless-b'), actions: [] });
     expect(await rows(`SELECT id FROM integrations WHERE id IN ('keyless-a', 'keyless-b') AND key_hash IS NULL ORDER BY id`)).toEqual([{ id: 'keyless-a' }, { id: 'keyless-b' }]);
   });
 
@@ -1064,7 +1064,7 @@ describe('the registry as vex entries — each statement, against a database', (
   // them. They are rows of a table of the feature's own, read and written
   // through vex like the rest.
   it('a frame grant: kept by its hash until its time is over, read back for its own integration, and let go when the next is kept', async () => {
-    await replay('integrations/land', { ...landing('framed'), actions: [] });
+    await replay('integrations/write-bundle', { ...landing('framed'), actions: [] });
     const page = '/integrations/framed/embed/pay';
     const kept = (hash: string, now: string, expires: string): Record<string, unknown> => ({ grant_hash: hash, integration_id: 'framed', principal: 'i_mara', path: page, now, expires_at: expires });
     const asked = (over: Record<string, unknown> = {}): Promise<unknown> => replay('integrations/frame-grant', { grant_hash: 'hash-one', integration_id: 'framed', now: '2026-10-10T08:59:59.000Z', ...over });
@@ -1074,7 +1074,7 @@ describe('the registry as vex entries — each statement, against a database', (
     // One answer for a hash nobody kept, another integration's address, and a
     // grant whose time is over: no row.
     expect(await asked({ grant_hash: 'hash-nobody-kept' })).toEqual([]);
-    await replay('integrations/land', { ...landing('framed-too'), actions: [] });
+    await replay('integrations/write-bundle', { ...landing('framed-too'), actions: [] });
     expect(await asked({ integration_id: 'framed-too' })).toEqual([]);
     expect(await asked({ now: '2026-10-10T09:00:00.000Z' })).toEqual([]);
 
@@ -1108,7 +1108,7 @@ describe('the registry as vex entries — each statement, against a database', (
         delta: [],
       };
       for (const [id, status] of [['alpha', 'approved'], ['beta', 'approved'], ['gamma', 'pending'], ['delta', 'approved']] as const) {
-        await replay('integrations/land-and-keep-key', { ...landing(id), key_hash: `hash-of-${id}`, actions: shipped[id] ?? [] });
+        await replay('integrations/write-bundle-and-keep-key', { ...landing(id), key_hash: `hash-of-${id}`, actions: shipped[id] ?? [] });
         await pool.query('UPDATE integrations SET status = $2 WHERE id = $1', [id, status]);
       }
     });

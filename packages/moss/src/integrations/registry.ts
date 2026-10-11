@@ -51,7 +51,7 @@ const ReachSchema = z.record(z.string(), z.array(z.string())).catch({});
 const FramesSchema = z.record(z.string(), z.string()).catch({});
 
 const FoundRowSchema = z.object({ url: z.string(), status: z.string(), reach: ReachSchema, frames: FramesSchema });
-const StandingRowSchema = z.object({ status: z.string(), key_hash: z.string().nullish() });
+const RegistrationRowSchema = z.object({ status: z.string(), key_hash: z.string().nullish() });
 // What a landing that came with a key wrote: the rows of two tables, of which
 // only an integration's carries `key_hash`. One row alone is answered as
 // itself, and a write that answers nothing as nothing.
@@ -148,12 +148,12 @@ export const recordFailedImport = async (replay: Replay, id: string, url: string
 // How an integration stands when a bundle for it arrives again: whether it
 // was approved, so its actions are being served; and whether it was already
 // issued a key, so none is minted. One that was never registered is neither.
-export const standingOf = async (replay: Replay, id: string): Promise<{ approved: boolean; holdsKey: boolean }> => {
-  const row = StandingRowSchema.optional().parse(rowsOf(await replay('integrations/standing', { id }))[0]);
+export const registrationOf = async (replay: Replay, id: string): Promise<{ approved: boolean; holdsKey: boolean }> => {
+  const row = RegistrationRowSchema.optional().parse(rowsOf(await replay('integrations/registration', { id }))[0]);
   return { approved: row?.status === 'approved', holdsKey: typeof row?.key_hash === 'string' && row.key_hash !== '' };
 };
 
-export type Landing = {
+export type BundleImport = {
   id: string;
   url: string;
   // the bundle intake let in
@@ -174,7 +174,7 @@ export type Landing = {
 
 // The row a bundle is kept as: each column under its own name, as the entry
 // reads them.
-const landedRow = ({ id, url, bundle, adds, press }: Landing): Record<string, unknown> => ({
+const importedRow = ({ id, url, bundle, adds, press }: BundleImport): Record<string, unknown> => ({
   id,
   url,
   title: bundle.meta.title,
@@ -227,8 +227,8 @@ const landedRow = ({ id, url, bundle, adds, press }: Landing): Record<string, un
 // key is kept where the row held none (./entries.ts): `false` when the import
 // came with no key, and when another registration of the same integration, in
 // the same moment, had its key kept first. The bundle landed either way.
-export const landBundle = async (replay: Replay, landing: Landing): Promise<{ keptKey: boolean }> => {
-  const { bundle } = landing;
+export const writeBundle = async (replay: Replay, imported: BundleImport): Promise<{ keptKey: boolean }> => {
+  const { bundle } = imported;
   const actions = Object.entries(bundle.actions).map(([actionId, definition]) => {
     const binding = bundle.attachments[actionId];
     return {
@@ -238,20 +238,20 @@ export const landBundle = async (replay: Replay, landing: Landing): Promise<{ ke
       preview: binding === undefined || typeof binding === 'string' ? '' : binding.preview,
       place_in: bundle.placements[actionId] ?? '',
       // Stamped current: intake upgraded every definition to this code's grammars.
-      grammar: landing.stamp,
+      grammar: imported.stamp,
     };
   });
-  const said = { ...landedRow(landing), actions };
-  if (landing.keyHash === undefined) {
-    await replay('integrations/land', said);
+  const said = { ...importedRow(imported), actions };
+  if (imported.keyHash === undefined) {
+    await replay('integrations/write-bundle', said);
     return { keptKey: false };
   }
   // A batch answers every row its statements wrote, and one row alone as that
   // row. The statement that keeps the key answers the integration's row with
   // the hash on it, and writes no row where a key was held already: so the key
   // was kept exactly when a row that carries its hash came back.
-  const written = WrittenSchema.parse(await replay('integrations/land-and-keep-key', { ...said, key_hash: landing.keyHash }));
-  return { keptKey: written.some((row) => row.key_hash === landing.keyHash) };
+  const written = WrittenSchema.parse(await replay('integrations/write-bundle-and-keep-key', { ...said, key_hash: imported.keyHash }));
+  return { keptKey: written.some((row) => row.key_hash === imported.keyHash) };
 };
 
 // APPROVE: what it asked to read and write becomes what it is granted, and it

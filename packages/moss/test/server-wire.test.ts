@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
 import { VEX_LIVE_ENV } from '@niscorp/vex/hono';
 import type { Env } from '../src/server/moss-server';
-import { wireOver } from '../src/server/wire';
+import { createInternalWire } from '../src/server/wire';
 
 // THE WIRE A SERVER SHELL'S ENDPOINT CALLS RIDE (../src/server/wire.ts): the
 // server's own surfaces, asked in process as the session whose token it was
@@ -30,7 +30,7 @@ const serverSaying = () => {
     followed.push(liveOf(c.env));
     return c.json({ error: 'forbidden', message: 'Not yours to read.' }, 403);
   });
-  return { wire: wireOver(server), followed };
+  return { wire: createInternalWire(server), followed };
 };
 
 describe('the server’s own wire — who a call is made as', () => {

@@ -90,7 +90,7 @@ export type Cell = {
   // next one waits for it.
   resetting?: Promise<void>;
   // WHICH ASKING ITS SHELL IS LEVEL WITH: the place, among every asking of
-  // what a principal holds that the host made for an adopt (`HostParts.asked`),
+  // what a principal holds that the host made for an adopt (`HostState.asked`),
   // of the one whose answer was last put in place. An answer to an earlier
   // asking that arrives afterwards is older, and is not put in its place.
   // Undefined: the cell has adopted nothing yet.
@@ -99,7 +99,7 @@ export type Cell = {
 
 // WHAT EVERY PART OF ONE HOST READS, settled once when the host is created:
 // what it was handed, and what it worked out from that.
-export type HostParts = {
+export type HostState = {
   config: ShellHostConfig;
   // Where a span goes. Undefined when the host was handed no sink: then none
   // is built.
@@ -132,7 +132,7 @@ export type HostParts = {
 // the host holds nothing of a shell that has ended. Disposing the shell stays
 // with whoever ends it: a session that signs out nobody is disposed by its
 // last terminal leaving, not here.
-export const endShell = (host: HostParts, live: Live): void => {
+export const endShell = (host: HostState, live: Live): void => {
   live.ended = true;
   host.living.delete(live);
 };

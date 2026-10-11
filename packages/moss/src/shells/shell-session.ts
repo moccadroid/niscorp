@@ -1,7 +1,7 @@
 import { NovaEventSchema } from '@niscorp/nova';
 import type { Shell } from '@niscorp/nova';
-import { endShell } from './live';
-import type { Cell, HostParts } from './live';
+import { endShell } from './host-state';
+import type { Cell, HostState } from './host-state';
 import { attach, resync } from './stream';
 import type { ShellSession } from './types';
 
@@ -11,7 +11,7 @@ import type { ShellSession } from './types';
 //
 // `ephemeral`: the shell is nobody's to keep, and goes when its last
 // connection does. `rebuild`: how the host replaces the shell in a cell.
-export const sessionOn = (host: HostParts, cell: Cell, ephemeral: boolean, rebuild: (cell: Cell) => Promise<void>): ShellSession => ({
+export const sessionOn = (host: HostState, cell: Cell, ephemeral: boolean, rebuild: (cell: Cell) => Promise<void>): ShellSession => ({
   // Read through the cell, always: after a reset the shell behind this
   // session is a different object.
   get shell(): Shell {

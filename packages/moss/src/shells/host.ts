@@ -3,8 +3,8 @@ import { snapshotShell } from '@niscorp/nova/reflect';
 import { emitterOf } from '../runtime';
 import { buildShell } from './build';
 import type { ShellComposition, ShellHostConfig } from './config';
-import { endShell, layoutsOf } from './live';
-import type { Cell, HostParts, Live } from './live';
+import { endShell, layoutsOf } from './host-state';
+import type { Cell, HostState, Live } from './host-state';
 import { sessionOn } from './shell-session';
 import { DEFAULT_SNAPSHOT_WAIT_MS, needOf, read, settle } from './snapshot';
 import { attach } from './stream';
@@ -19,7 +19,7 @@ import type { OwnedShellHost, ShellHost, ShellReport } from './types';
 // mechanism). Anonymous connections get a throwaway shell, disposed with
 // the connection; so does every connection of a host that keeps none (a
 // page's). Kept or not, a shell is one of the host's living shells from when
-// its build lands until it ends (./live.ts, `living`), which is how a change
+// its build lands until it ends (./host-state.ts, `living`), which is how a change
 // to what the app consists of, and a reset of one principal, reach every one.
 //
 // The shell is built from what its principal's composition says (./config.ts):
@@ -59,7 +59,7 @@ const SWEEP_EVERY_MS = 60 * 1000;
 // database is durable, a shell is a warm cache, and the next connection
 // rebuilds it from definitions and rows. The clock is the IDLE one — a shell
 // somebody is looking at is never collected, however old.
-const sweep = (host: HostParts, idleMs: number): void => {
+const sweep = (host: HostState, idleMs: number): void => {
   const { durable } = host;
   const now = Date.now();
   for (const [principal, cell] of [...durable]) {
@@ -125,7 +125,7 @@ const sameDocument = (one: unknown, other: unknown): boolean => one === other ||
 // ref out of a shell, nor a frame away from one: one that left is held and
 // named by nothing new. THE CANVASES ARE NOT TAKEN AGAIN EITHER: which
 // canvases a shell has, and what is mounted on each, is the shell's own state
-// from the moment it is built (./live.ts, `canvasesOf`), and what a canvas
+// from the moment it is built (./host-state.ts, `canvasesOf`), and what a canvas
 // mounts first is derived with `inputs`, which an adopt has never run again.
 // A reset does all of it afresh.
 const takeLayouts = (live: Live, made: ShellComposition): void => {
@@ -155,7 +155,7 @@ const takeLayouts = (live: Live, made: ShellComposition): void => {
 // or is no longer granted is REMOVED: nova unmounts its instances and forgets
 // it, so it is neither on screen nor pushable. It used to stay in every shell
 // that had it, for as long as the shell lived.
-const adoptInto = async (host: HostParts, cell: Cell): Promise<void> => {
+const adoptInto = async (host: HostState, cell: Cell): Promise<void> => {
   if (cell.live.ended) return;
   // The place of this asking among every one this host made. Taken before
   // the question is put, so a later number was asked later.
@@ -211,7 +211,7 @@ const adoptInto = async (host: HostParts, cell: Cell): Promise<void> => {
 // A SHELL THAT CANNOT ADOPT IS SAID, AND THE REST GO ON. One throw (a
 // principal that no longer resolves) used to end the walk, and every
 // principal after it kept the old application until something else changed.
-const adoptAll = (host: HostParts): void => {
+const adoptAll = (host: HostState): void => {
   const adopting = async (cell: Cell): Promise<void> => {
     try {
       await adoptInto(host, cell);
@@ -238,7 +238,7 @@ const adoptAll = (host: HostParts): void => {
 // later and every attached terminal receives a fresh frame when it does —
 // exactly as `seeds` already behaves. A reset that blocked its caller on a
 // round trip would make a role change slower than the write that caused it.
-const replaceShell = async (host: HostParts, cell: Cell): Promise<void> => {
+const replaceShell = async (host: HostState, cell: Cell): Promise<void> => {
   // THE SHELL THIS RESET REPLACES is the one that stands when its turn comes.
   // Read once: one reset of a cell runs at a time (`rebuildCell`) and nothing
   // else puts a shell in a cell, so no other can stand there when the build
@@ -275,7 +275,7 @@ const replaceShell = async (host: HostParts, cell: Cell): Promise<void> => {
 
 // AMONG THE BUILDS UNDER WAY, from now until it lands or fails: a change that
 // happens meanwhile is adopted by its cell when it lands (`adoptAll`).
-const whileUnderWay = (host: HostParts, build: Promise<Cell>): Promise<Cell> => {
+const whileUnderWay = (host: HostState, build: Promise<Cell>): Promise<Cell> => {
   host.underWay.add(build);
   const over = (): void => void host.underWay.delete(build);
   build.then(over, over);
@@ -286,7 +286,7 @@ const whileUnderWay = (host: HostParts, build: Promise<Cell>): Promise<Cell> => 
 // makes the cell the shell is addressed through. A shell that ended on the
 // way (app code that signed out while its session was being built) is not put
 // among the living: nothing would take it out again.
-const landing = (host: HostParts, build: Promise<Live>, cellOf: (live: Live) => Cell): Promise<Cell> =>
+const landing = (host: HostState, build: Promise<Live>, cellOf: (live: Live) => Cell): Promise<Cell> =>
   whileUnderWay(
     host,
     build.then((live) => {
@@ -298,7 +298,7 @@ const landing = (host: HostParts, build: Promise<Live>, cellOf: (live: Live) => 
 
 // EVERY LIVING SHELL OF ONE PRINCIPAL: the one this host keeps for them; or,
 // on a host that keeps none, the one built for each of their connections.
-const shellsOf = (host: HostParts, principal: string): Cell[] => {
+const shellsOf = (host: HostState, principal: string): Cell[] => {
   if (!host.kept) return [...host.living.values()].filter((cell) => cell.principal === principal);
   const cell = host.durable.get(principal);
   return cell === undefined || cell.live.ended ? [] : [cell];
@@ -311,7 +311,7 @@ const shellsOf = (host: HostParts, principal: string): Cell[] => {
 // left on a shell nothing addressed and nothing would dispose. Each reset
 // that was asked for still happens, in turn: the second may be for a reason
 // that arrived after the first had read what it builds from.
-const rebuildCell = (host: HostParts, cell: Cell): Promise<void> => {
+const rebuildCell = (host: HostState, cell: Cell): Promise<void> => {
   const turn = (cell.resetting ?? Promise.resolve()).then(() => replaceShell(host, cell));
   // The next one waits for this one whether it lands or fails.
   cell.resetting = turn.catch(() => undefined);
@@ -336,7 +336,7 @@ type DurableCell = (token: string | null, principal: string) => Promise<Cell>;
 // and whoever arrives while it runs is handed its cell when it lands. One
 // that fails is refused to all of them and keeps nothing: the next arrival
 // builds afresh.
-const createDurableCells = (host: HostParts): DurableCell => {
+const createDurableCells = (host: HostState): DurableCell => {
   const { durable } = host;
   const building = new Map<string, Promise<Cell>>();
   const durableCell = (token: string | null, principal: string): Promise<Cell> => {
@@ -362,7 +362,7 @@ const createDurableCells = (host: HostParts): DurableCell => {
 
 // THE SWEEP, STARTED: on a beat for as long as the host stands. Answers how
 // it is stopped.
-const startSweep = (host: HostParts): (() => void) => {
+const startSweep = (host: HostState): (() => void) => {
   const idleMs = host.config.limits?.idleMs ?? DEFAULT_IDLE_MS;
   let sweeper: ReturnType<typeof setInterval> | undefined;
   if (idleMs > 0 && Number.isFinite(idleMs)) {
@@ -379,7 +379,7 @@ const startSweep = (host: HostParts): (() => void) => {
 // WHAT SOMEBODY IS LOOKING AT, READ ONCE: off the shell the host keeps for
 // them, or off one built for the length of the read.
 const snapshotOf =
-  (host: HostParts, durableCell: DurableCell): ShellHost['snapshot'] =>
+  (host: HostState, durableCell: DurableCell): ShellHost['snapshot'] =>
   async (token, principal, options) => {
     const { kept } = host;
     const waitMs = options?.waitMs ?? DEFAULT_SNAPSHOT_WAIT_MS;
@@ -408,7 +408,7 @@ const snapshotOf =
 // where kept shells are, so a page's host answered `false` for somebody with
 // the page open, and their screen heard nothing.
 const deliverTo =
-  (host: HostParts): ShellHost['deliver'] =>
+  (host: HostState): ShellHost['deliver'] =>
   (principal, channel, payload) => {
     // Into LIVING shells only. A principal with none hears nothing and that
     // is correct — this is push over shells that already exist, never a
@@ -429,7 +429,7 @@ const deliverTo =
 
 export const createShellHost = (config: ShellHostConfig): OwnedShellHost => {
   const durable = new Map<string, Cell>();
-  const host: HostParts = {
+  const host: HostState = {
     config,
     emit: emitterOf(config.telemetry),
     kept: config.kept ?? true,

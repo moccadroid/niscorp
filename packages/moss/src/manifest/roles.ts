@@ -118,7 +118,7 @@ export const definitionsFor = (
 // entry per combination, about ten in a real deployment, where a key per
 // principal was one per person — until the manifest changes. Whoever changes
 // the manifest drops them (./running.ts); nobody else has to remember to.
-export type RoleHoldings = {
+export type RoleMemo = {
   catalogFor: (roles: readonly string[], installed: readonly string[] | undefined) => Catalog;
   variantsFor: (roles: readonly string[]) => ReadonlyMap<string, LayoutNode>;
   // The definitions themselves, granted and with the variant in place.
@@ -126,12 +126,12 @@ export type RoleHoldings = {
   drop: () => void;
 };
 
-export const createRoleHoldings = (config: {
+export const createRoleMemo = (config: {
   // The charter, the actions and the layout variants as they are now: read at
   // each miss, never held, because they are what changes.
   manifest: () => Pick<NiscApp, 'charter' | 'actions' | 'layouts'>;
   installedOnly: InstalledOnly;
-}): RoleHoldings => {
+}): RoleMemo => {
   const catalogs = new Map<string, Catalog>();
   const variants = new Map<string, ReadonlyMap<string, LayoutNode>>();
   const definitions = new Map<string, Readonly<Record<string, ActionDefinition>>>();
@@ -142,19 +142,19 @@ export const createRoleHoldings = (config: {
     memo.set(key, resolved);
     return resolved;
   };
-  const holdings: RoleHoldings = {
+  const roleMemo: RoleMemo = {
     catalogFor: (roles, installed) => kept(catalogs, memoKey(roles, installed), () => catalogFor(config.manifest(), roles, installed, config.installedOnly)),
     // Which variant is held does not depend on what is installed.
     variantsFor: (roles) => kept(variants, memoKey(roles, undefined), () => resolveVariantsForRoles(config.manifest(), roles)),
     definitionsFor: (roles, installed) =>
-      kept(definitions, memoKey(roles, installed), () => definitionsFor(config.manifest().actions, holdings.catalogFor(roles, installed).ids, holdings.variantsFor(roles))),
+      kept(definitions, memoKey(roles, installed), () => definitionsFor(config.manifest().actions, roleMemo.catalogFor(roles, installed).ids, roleMemo.variantsFor(roles))),
     drop: () => {
       catalogs.clear();
       variants.clear();
       definitions.clear();
     },
   };
-  return holdings;
+  return roleMemo;
 };
 
 // A content hash of the resolved id set — identity, not cryptography

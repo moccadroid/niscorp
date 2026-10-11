@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Data } from '../data';
 import type { NiscApp } from '../manifest';
 import type { NiscRuntime, SessionVerifier } from '../runtime';
-import { emptyRegister, startFeatures, wrappedBy } from './features';
+import { emptyRegister, startFeatures, composeWireWraps } from './features';
 import { buildShellHosts } from './hosts';
 import { buildIdentity } from './identity';
 import { subscribeReactions } from './reactions';
@@ -12,7 +12,7 @@ import { operatorPrefix } from './operator';
 import { mountRoutes } from './routes';
 import { buildSignals } from './signals';
 import { buildSocket } from './socket';
-import { wireOver } from './wire';
+import { createInternalWire } from './wire';
 
 // ═══════════════════════════════════════════════════════════════
 // THE SERVER, ASSEMBLED OVER THE DATA MODULE — steps 4 to 13 of `createServer`
@@ -73,7 +73,7 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerP
   // 7. The shell hosts, the app's and each page's (./hosts.ts). Their
   // endpoint calls ride the server's OWN surfaces with the session's token
   // (./wire.ts): same wire, same enforcement.
-  const hosts = buildShellHosts({ app, runtime, identity, running, data, wire: wireOver(server), wrapWire: wrappedBy(registered), revokeSessions });
+  const hosts = buildShellHosts({ app, runtime, identity, running, data, wire: createInternalWire(server), wrapWire: composeWireWraps(registered), revokeSessions });
   stops.push(hosts.stop);
 
   // 8. What crosses processes (./signals.ts).

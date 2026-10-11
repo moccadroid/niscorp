@@ -30,7 +30,7 @@ export const emptyRegister = (): Registered => ({ credentials: [], wireWraps: []
 
 // The wire with every wrap a feature registered laid around it, in the order
 // they were registered.
-export const wrappedBy =
+export const composeWireWraps =
   (registered: Registered) =>
   (inner: FetchFn): FetchFn =>
     registered.wireWraps.reduce((wire, wrap) => wrap(wire), inner);

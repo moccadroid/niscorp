@@ -88,14 +88,14 @@ export type Admission = {
 
 // Said once for a socket: nothing else would tell a deployment that its pages
 // are being read as somebody else's.
-export type SaidOnce = { said: boolean };
+export type WarnedOnce = { warned: boolean };
 
 // The answer `'invalid_token'`: the terminal offered a token and it is nobody's.
-export const whoIsAsking = async (
+export const authenticateUpgrade = async (
   url: string,
   upgrade: Connection['upgrade'],
   config: Pick<SocketConfig, 'session' | 'origins' | 'sessionLastsMs'>,
-  notOwn: SaidOnce,
+  notOwn: WarnedOnce,
 ): Promise<Admission | 'invalid_token'> => {
   const parameters = parametersOf(url);
   // THE APP'S OWN PAGE does not hold its session: its browser does, in a
@@ -117,8 +117,8 @@ export const whoIsAsking = async (
   // did, holding its own token — which is right for a page served from
   // somewhere else, and is what a proxy that rewrites `Host` looks like too.
   // Said once: nothing else would tell a deployment it is in the second case.
-  if (page === undefined && parameters.sealed === '1' && typeof upgrade?.origin === 'string' && !notOwn.said) {
-    notOwn.said = true;
+  if (page === undefined && parameters.sealed === '1' && typeof upgrade?.origin === 'string' && !notOwn.warned) {
+    notOwn.warned = true;
     console.warn(
       `[moss] a terminal on ${upgrade.origin} holds its own session token: this server was addressed as ${upgrade.host ?? 'nothing'}, so that is not the app’s own page. ` +
         'If the app is served there, behind a proxy that rewrites Host, list it in runtime.origins.',

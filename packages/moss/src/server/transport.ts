@@ -133,7 +133,7 @@ export const createTransport = (accept: SocketAccept, told?: TransportSettings):
 // WHICH UPGRADE REQUESTS OF A LISTENER ARE THE SOCKET'S: the ones made to
 // `path`. Each is handed to `upgrade`; any other is left for whichever other
 // listener owns it (vite's HMR upgrade rides the same server in dev).
-export const hearUpgrades = (httpServer: Upgradeable, path: string, upgrade: Transport['upgrade']): void => {
+export const listenForUpgrades = (httpServer: Upgradeable, path: string, upgrade: Transport['upgrade']): void => {
   httpServer.on('upgrade', (req, socket, head) => {
     if (new URL(req.url ?? '/', 'http://nisc.local').pathname !== path) return;
     // THE REQUEST IS ANSWERED ONCE MOSS HAS DECIDED WHO IS ASKING, because the

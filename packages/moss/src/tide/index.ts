@@ -15,7 +15,10 @@
 // ═══════════════════════════════════════════════════════════════
 
 // THIS FILE IS AN ENTRY POINT: `@niscorp/moss/tide`. What it exports is what
-// an app calls, and `packages/moss/api.txt` lists it.
+// an app calls, and `packages/moss/api.txt` lists it. The module is named for
+// that entry point, which is named as `./node` and `./vite` are, for what
+// stands on the other side of it: apps import the path, and a directory under
+// another name would be one more word for the same thing.
 //
 // This module imports `feature`, and nothing else of moss: it hears a write
 // through the seam it is handed. Of `@niscorp/tide` it imports one type, so

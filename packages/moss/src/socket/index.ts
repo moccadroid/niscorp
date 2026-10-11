@@ -24,8 +24,9 @@
 // hash, equal application), and the canvas streams (`render` down, `event` up)
 // fed by the shell the connection is attached to.
 //
-// WHEN A CONNECTION ENDS (./ending.ts) is heard once, before anything awaits,
-// and kept: whatever is opened for a connection is told, however late it asks.
+// WHEN A CONNECTION ENDS (./connection-close.ts) is heard once, before
+// anything awaits, and kept: whatever is opened for a connection is told,
+// however late it asks.
 //
 // THE MESSAGES A TERMINAL SENDS (./routing.ts) are read by the protocol's
 // schema and routed into that session. An app whose manifest declares no shell

@@ -3,7 +3,7 @@ import type { Context, Env } from 'hono';
 import { vex } from '@niscorp/vex/hono';
 import type { ExecuteRecord, MutationClient, QueryEngine, ScopePolicy } from '@niscorp/vex';
 import { writeRequestOf } from './writes';
-import type { WriteLane } from './writes';
+import type { WriteNotifier } from './writes';
 
 // ═══════════════════════════════════════════════════════════════
 // THE VEX SURFACES — where a request reads and writes.
@@ -39,7 +39,7 @@ export type VexRoutesConfig<E extends Env> = {
   onExecute?: (record: ExecuteRecord) => void;
   // Where a committed write is reported, and how a request is run with what
   // it said kept for whoever hears a write it makes (./writes.ts).
-  writes: Pick<WriteLane, 'within' | 'report'>;
+  writes: Pick<WriteNotifier, 'within' | 'report'>;
 };
 
 // A sub-app, for the server to mount at its root behind the authentication

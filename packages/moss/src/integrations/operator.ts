@@ -12,7 +12,7 @@ import { describePlacements } from './placements';
 import { copyPress } from './press';
 import type { StorePress } from './press';
 import { reachDeclares } from './reach';
-import { approveIntegration, findIntegration, landBundle, listIntegrations, recordFailedImport, removeIntegration, setBackToPending, standingOf, storedActionsOf } from './registry';
+import { approveIntegration, findIntegration, writeBundle, listIntegrations, recordFailedImport, removeIntegration, setBackToPending, registrationOf, storedActionsOf } from './registry';
 
 // ═══════════════════════════════════════════════════════════════
 // THE OPERATOR SEAM — everything that decides WHICH integrations this
@@ -123,7 +123,7 @@ const register = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
     }
 
     // The candidate manifest, verified BEFORE anything is written.
-    const { approved: wasApproved, holdsKey } = await standingOf(deps.replay, id);
+    const { approved: wasApproved, holdsKey } = await registrationOf(deps.replay, id);
     if (wasApproved) {
       // TRIED, NOT PUT IN. The bundle's actions over the actions in force are
       // a candidate the running manifest verifies without switching to it, so
@@ -142,7 +142,7 @@ const register = (deps: OperatorDeps, routes: Hono<FeatureEnv>): void => {
     const key = holdsKey ? undefined : mintIntegrationKey();
 
     // The row, the actions and the hash of the key land together or not at all.
-    const { keptKey } = await landBundle(deps.replay, {
+    const { keptKey } = await writeBundle(deps.replay, {
       id,
       url,
       bundle: taken.bundle,

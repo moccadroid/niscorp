@@ -21,8 +21,8 @@
 // THE HOST (./host.ts) keeps one shell for each signed-in principal and builds
 // a throwaway one for anybody else: the cells, the idle sweep, the roster, a
 // reset, a delivery, and adopting definitions that changed. What it holds
-// while it stands (./live.ts) is each living shell with what is attached to
-// it, and the one place a shell is marked ended and let go.
+// while it stands (./host-state.ts) is each living shell with what is
+// attached to it, and the one place a shell is marked ended and let go.
 //
 // THE BUILD OF ONE SHELL (./build.ts) is who it is for, what mounts on its
 // canvases, the words it wears, and the session its app code is handed

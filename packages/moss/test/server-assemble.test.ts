@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Hono } from 'hono';
 import { scopeGrants } from '@niscorp/vex';
-import { dataOver } from '../src/data/data';
+import { createDataWith } from '../src/data/data';
 import { featureTablesOf } from '../src/data/feature-tables';
 import { createGrammarUpgrader } from '../src/data/grammar';
 import type { Feature, FeatureEnv } from '../src/feature';
@@ -34,7 +34,7 @@ const appWith = (more: Partial<NiscApp>): NiscApp => ({
 
 const assemble = async (app: NiscApp, more: Partial<NiscRuntime> = {}) => {
   const double = await engineDouble();
-  const data = dataOver(
+  const data = createDataWith(
     { engine: double.engine, adapter: double.adapter, grants: scopeGrants(['notes', 'tags']), grammars: await createGrammarUpgrader({}), upgradeStore: async () => undefined },
     { db: double.db, charter: app.charter, featureTables: featureTablesOf(app) },
   );

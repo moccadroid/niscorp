@@ -8,7 +8,7 @@ import type { Sequence } from '@niscorp/strata';
 import type { DocumentStore } from '@niscorp/strata/postgres';
 import { memoKey } from '../src/identity';
 import type { TelemetrySpan } from '../src/runtime';
-import { dataOver } from '../src/data/data';
+import { createDataWith } from '../src/data/data';
 import { createGrammarUpgrader } from '../src/data/grammar';
 import { featureTablesOf } from '../src/data/feature-tables';
 import { migrateTables, tableSequencesOf } from '../src/data/migrate';
@@ -36,7 +36,7 @@ const world = async (telemetry?: { emit: (span: TelemetrySpan) => void }, govern
   // The stores whose documents were asked to be brought current: what would
   // have been handed to strata, over the pool.
   const upgraded: DocumentStore[] = [];
-  const data = dataOver(
+  const data = createDataWith(
     {
       engine: double.engine,
       adapter: double.adapter,
@@ -328,7 +328,7 @@ describe("the data module — moss's own entries, where the app gave vex a list 
   // list names `notes` alone.
   const listed = async () => {
     const double = await engineDouble([{ n: 3 }], { entities: [...NOTES_SCHEMA.entities, generation] }, ['notes']);
-    const data = dataOver(
+    const data = createDataWith(
       { engine: double.engine, adapter: double.adapter, grants: scopeGrants(['notes']), grammars: await createGrammarUpgrader({}), upgradeStore: async () => undefined },
       { db: double.db, charter, featureTables: [{ feature: 'tagging', names: ['tags'], sequences: [] }] },
     );

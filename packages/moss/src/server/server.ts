@@ -24,10 +24,10 @@ import type { MossServer } from './moss-server';
 
 // THE BOOT, IN ITS ORDER, over whatever brings the data module up. It is what
 // `createServer` does, with the one step that asks a database handed in, for
-// the reason `dataOver` and `assembleServer` are functions of their own: the
+// the reason `createDataWith` and `assembleServer` are functions of their own: the
 // order of these steps can be held with nothing behind it. A manifest that
 // does not parse refuses before `dataOf` is called at all.
-export const serverOver = async (app: NiscApp, runtime: NiscRuntime, dataOf: (app: NiscApp, runtime: NiscRuntime) => Promise<Data>): Promise<MossServer> => {
+export const createServerWith = async (app: NiscApp, runtime: NiscRuntime, dataOf: (app: NiscApp, runtime: NiscRuntime) => Promise<Data>): Promise<MossServer> => {
   // 1. WHAT WAS HANDED OVER IS READ FIRST, AND THEN FROZEN (../manifest, the
   // hand-over): nothing below may meet a manifest no schema has read, and
   // nothing after may write one. One that does not parse refuses here, before
@@ -50,4 +50,4 @@ export const serverOver = async (app: NiscApp, runtime: NiscRuntime, dataOf: (ap
   return assembleServer({ app, runtime, session, revokeSessions, data });
 };
 
-export const createServer = (app: NiscApp, runtime: NiscRuntime): Promise<MossServer> => serverOver(app, runtime, buildData);
+export const createServer = (app: NiscApp, runtime: NiscRuntime): Promise<MossServer> => createServerWith(app, runtime, buildData);

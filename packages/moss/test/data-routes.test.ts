@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { createScopePolicy } from '@niscorp/vex';
 import type { ExecuteRecord, ScopePolicy, WriteEvent } from '@niscorp/vex';
 import { createVexRoutes } from '../src/data/routes';
-import { createWriteLane } from '../src/data/writes';
+import { createWriteNotifier } from '../src/data/writes';
 import type { WriteRequest } from '../src/data/writes';
 import { engineDouble } from './data-double';
 
@@ -21,7 +21,7 @@ const NOTHING = createScopePolicy(new Set());
 
 const world = async (resources: Record<string, readonly string[] | { entities: readonly string[] }> = { notes: ['notes'] }) => {
   const double = await engineDouble();
-  const writes = createWriteLane();
+  const writes = createWriteNotifier();
   const heard: { event: WriteEvent; request: WriteRequest }[] = [];
   writes.subscribe((event, request) => heard.push({ event, request }));
   const reaches: string[] = [];

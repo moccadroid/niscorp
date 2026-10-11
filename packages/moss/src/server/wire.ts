@@ -7,7 +7,7 @@ import type { Env } from './moss-server';
 // THE INTERNAL WIRE: the server's own surfaces, asked in process as the
 // session whose token this is. A server shell's endpoint calls ride it — same
 // wire, same enforcement: the shell is just another client.
-export const wireOver =
+export const createInternalWire =
   (server: Hono<Env>) =>
   (token: string | null): FetchFn =>
   async (url, init) => {

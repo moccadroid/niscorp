@@ -5,13 +5,13 @@ import type { PgPool, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { receiveManifest } from '../src/manifest';
 import type { NiscApp } from '../src/manifest';
 import { manifestMisfits } from '../src/manifest/schema';
-import { serverOver } from '../src/server/server';
+import { createServerWith } from '../src/server/server';
 
 // THE MANIFEST IS READ BY A SCHEMA WHEN IT IS HANDED OVER, AND THEN FROZEN.
 // Every case but the last is the schema, or the hand-over, over a small object:
 // no database and no server. The last one is the order of a boot: that a
 // manifest is read before the database is asked anything. It is held on the
-// boot itself (`serverOver`, which is `createServer` with the step that
+// boot itself (`createServerWith`, which is `createServer` with the step that
 // brings the data module up handed in), with a step that says it was reached
 // and a pool that says it was asked. No server is created and no database is
 // started. (That an edit throws once `createServer` has RETURNED is proved
@@ -264,7 +264,7 @@ describe('a boot — a manifest that does not parse', () => {
       }),
     );
 
-    const booting = serverOver(handed, { pool, db: pool, session: 'dev-open' }, async () => {
+    const booting = createServerWith(handed, { pool, db: pool, session: 'dev-open' }, async () => {
       reached.push('the data module was brought up');
       throw new Error('the data module was brought up before the manifest was read');
     });
@@ -280,7 +280,7 @@ describe('a boot — a manifest that does not parse', () => {
     const pool: PgPool = { query: async () => ({ rows: [] }) };
     const said = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
-      const booting = serverOver({ charter: { public: ['home'] }, actions: { home, panel } }, { pool, db: pool, session: 'dev-open' }, async () => {
+      const booting = createServerWith({ charter: { public: ['home'] }, actions: { home, panel } }, { pool, db: pool, session: 'dev-open' }, async () => {
         reached.push('the data module was brought up');
         throw new Error('and that is as far as this goes');
       });

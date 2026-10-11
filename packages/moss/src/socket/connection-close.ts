@@ -13,12 +13,12 @@ import type { Connection } from './connection';
 // So the close is listened for once, before the first of those awaits, and
 // remembered. What has to be undone when the connection ends is said here as
 // each thing is done: it runs when the close arrives, or at once if it has.
-export type Ending = {
+export type ConnectionClose = {
   ended: () => boolean;
   then: (undo: () => void) => void;
 };
 
-export const endingOf = (connection: Connection): Ending => {
+export const closeOf = (connection: Connection): ConnectionClose => {
   let ended = false;
   const undoing: (() => void)[] = [];
   connection.onClose(() => {

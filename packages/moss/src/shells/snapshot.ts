@@ -1,8 +1,8 @@
 import { shellSettled } from '@niscorp/nova';
 import type { RenderNode } from '@niscorp/nova';
 import { shellNeedOf } from './liveness';
-import { canvasesOf } from './live';
-import type { Live } from './live';
+import { canvasesOf } from './host-state';
+import type { Live } from './host-state';
 import { treeOf } from './stream';
 import type { ShellSnapshot } from './types';
 
