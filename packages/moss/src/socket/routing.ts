@@ -1,7 +1,7 @@
 import { ClientMessageSchema, PROTOCOL } from '../protocol';
 import type { ClientMessage, ServerMessage } from '../protocol';
 import type { ShellSession } from '../shells';
-import type { Connection } from './connection';
+import type { Connection } from './types';
 
 // ═══════════════════════════════════════════════════════════════
 // THE MESSAGES A TERMINAL SENDS, read as the protocol says them (../protocol)

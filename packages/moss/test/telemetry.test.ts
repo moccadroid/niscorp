@@ -22,7 +22,7 @@ import type { FoundIntegration } from '../src/integrations/registry';
 import { createAssertionSigner } from '../src/integrations/credentials';
 import { createSocket } from '../src/socket';
 import type { Connection } from '../src/socket';
-import type { SocketConfig } from '../src/socket/config';
+import type { SocketConfig } from '../src/socket/types';
 import { PROTOCOL, offerToken } from '../src/protocol';
 import type { ServerMessage } from '../src/protocol';
 import type { NiscApp } from '../src/manifest';

@@ -6,17 +6,105 @@ import type { ServerMessage } from '../protocol';
 import { emitterOf, spanClock } from '../runtime';
 import type { Emit, TelemetrySpan } from '../runtime';
 import type { ShellSession } from '../shells';
-import type { SocketConfig } from './config';
-import type { Connection, SocketAccept } from './connection';
-import { closeOf } from './connection-close';
-import type { ConnectionClose } from './connection-close';
-import { parametersOf, protocolRefusal, authenticateUpgrade } from './handshake';
-import type { WarnedOnce, UpgradeParameters } from './handshake';
-import { DEFAULT_ANONYMOUS_SHELL_MAX, createAnonymousShellLimit } from './anonymous-shell-limit';
-import type { AnonymousShellLimit } from './anonymous-shell-limit';
+import type { Connection, SocketAccept, SocketConfig } from './types';
+import { authenticateUpgrade, parametersOf, protocolRefusal } from './handshake';
+import type { UpgradeParameters, WarnedOnce } from './handshake';
 import { createRevalidation } from './revalidation';
 import type { Revalidation } from './revalidation';
 import { messageHandler } from './routing';
+
+// WHEN A CONNECTION ENDS, heard once and kept.
+//
+// A transport tells a close to whoever is listening when it happens (on Node,
+// `ws` emits it), and to nobody who starts listening afterwards. Opening a
+// session awaits: what somebody holds is asked, their shell is built. A
+// listener registered after one of those, on a connection that closed
+// meanwhile, would never be called — the connection would stay attached to its
+// shell for ever. A kept shell would never idle; a throwaway one would never
+// be disposed.
+//
+// So the close is listened for once, before the first of those awaits, and
+// remembered. What has to be undone when the connection ends is said here as
+// each thing is done: it runs when the close arrives, or at once if it has.
+type ConnectionClose = {
+  ended: () => boolean;
+  then: (undo: () => void) => void;
+};
+
+const closeOf = (connection: Connection): ConnectionClose => {
+  let ended = false;
+  const undoing: (() => void)[] = [];
+  connection.onClose(() => {
+    ended = true;
+    for (const undo of undoing.splice(0)) undo();
+  });
+  return {
+    ended: () => ended,
+    then: (undo) => {
+      if (ended) undo();
+      else undoing.push(undo);
+    },
+  };
+};
+
+// THE SHELLS FOR NOBODY ALIVE AT ONCE, and their limit.
+//
+// Somebody signed in has one shell, however many terminals they open. Nobody
+// signed in has a shell for each connection, built for it and disposed with
+// it — and a connection costs whoever opens it nothing: no account, no token.
+// Unlimited, the memory of the process would be anybody's to fill. So each
+// connection for nobody that is served a shell takes a place here, and gives
+// it back when it ends. One over the limit is told so and closed
+// (`CLOSE_AT_CAPACITY`, ../protocol), and no shell is built for it.
+//
+// A shell a page builds for somebody SIGNED IN is one for each connection too,
+// and takes no place: it takes a credential to open one.
+//
+// WHAT THE LIMIT IS: ONE COUNT, FOR EVERYBODY WITH NOBODY SIGNED IN, IN ONE
+// PROCESS. It bounds what this process holds in memory for them, and that is
+// all it does. It is not a limit for each visitor: whoever holds the places
+// holds them, so one client that opens as many connections as the limit and
+// keeps them has every place, and every other visitor with nobody signed in
+// is told `at_capacity` until one of those closes. A process counts its own
+// connections: N processes hold N times the limit between them.
+//
+// WHY NOT ONE FOR EACH ADDRESS. The address a connection comes from is not
+// moss's to know: behind a proxy every connection comes from the proxy, and
+// which header carries the visitor's is the proxy's to say. A deployment that
+// faces the internet limits how many connections one address may hold where
+// the address is known, at its proxy or load balancer, on the socket's path;
+// this limit is then what keeps the process inside its memory, and is sized
+// to that.
+
+// THE DEFAULT is the largest round number at which the terminals of nobody, at
+// their limit, still fit a process given 512 MB. The per-shell figures it comes
+// from are in DOCS.md (`NiscRuntime`, `anonymousShellMax`). A deployment that
+// expects more of them at once says so (`runtime.anonymousShellMax`), from
+// those numbers and its own memory.
+export const DEFAULT_ANONYMOUS_SHELL_MAX = 1000;
+
+type AnonymousShellLimit = {
+  // Take a place for a connection. False: there is none left.
+  acquire: (connection: Connection) => boolean;
+  // Give it back: the connection ended, or its shell could not be built.
+  release: (connection: Connection) => void;
+};
+
+const createAnonymousShellLimit = (max: number): AnonymousShellLimit => {
+  // The connections, and not a count of them: giving a place back twice (a
+  // refusal, then the close it causes) is then giving it back once.
+  const taken = new Set<Connection>();
+  return {
+    acquire: (connection) => {
+      if (taken.size >= max) return false;
+      taken.add(connection);
+      return true;
+    },
+    release: (connection) => {
+      taken.delete(connection);
+    },
+  };
+};
 
 // The definitions a build refused, by id. Nova's error carries them in its
 // context, which is typed as any record: read here, where it is used.
@@ -142,8 +230,9 @@ const open = async (held: Held, url: string, connection: Connection, send: (mess
     send({ type: 'error', code: 'seal_not_kept', message: 'This browser did not keep the cookie a sealed sign-in is opened with. Sign in again: it will be handed over as a token.' });
   }
 
-  // A SHELL FOR NOBODY TAKES A PLACE (./anonymous-shell-limit.ts), before anything is asked
-  // for it: arrivals in one moment each find the count the one before left.
+  // A SHELL FOR NOBODY TAKES A PLACE (`createAnonymousShellLimit`, above),
+  // before anything is asked for it: arrivals in one moment each find the
+  // count the one before left.
   // With none left the terminal is told so and closed, and no shell is built.
   const session = openingOf(config, params);
   if (principal === null && session !== undefined && !anonymousShells.acquire(connection)) {
@@ -154,7 +243,7 @@ const open = async (held: Held, url: string, connection: Connection, send: (mess
   }
 
   revalidation.hold(connection, token !== null && token !== '' && principal !== null ? { token, principal } : null);
-  // Listened for here, before anything below awaits (./connection-close.ts).
+  // Listened for here, before anything below awaits (`closeOf`, above).
   const close = closeOf(connection);
   close.then(() => revalidation.release(connection));
   close.then(() => anonymousShells.release(connection));

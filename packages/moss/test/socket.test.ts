@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DefinitionValidationError } from '@niscorp/nova';
 import { createSocket } from '../src/socket';
-import { DEFAULT_ANONYMOUS_SHELL_MAX } from '../src/socket/anonymous-shell-limit';
+import { DEFAULT_ANONYMOUS_SHELL_MAX } from '../src/socket/socket';
 import type { Connection } from '../src/socket';
-import type { SocketConfig } from '../src/socket/config';
+import type { SocketConfig } from '../src/socket/types';
 import { CLOSE_AT_CAPACITY, CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, CLOSE_SHELL_FAILED, CLOSE_PROTOCOL_MISMATCH, PROTOCOL, PROTOCOL_MIN, ServerMessageSchema, offerToken } from '../src/protocol';
 import type { ServerMessage } from '../src/protocol';
 import type { ShellHost, ShellSession } from '../src/shells';

@@ -6,13 +6,13 @@
 // nothing: JSON frames, every canvas-bound message carries its canvas id,
 // reconnect just re-sends current state.
 //
-// IT IS TRANSPORT-BLIND (./connection.ts). It speaks through the four-function
+// IT IS TRANSPORT-BLIND (./types.ts). It speaks through the four-function
 // `Connection` seam; the RFC 6455 plumbing lives with each runtime's entry
 // (`ws` on Node in ../server, transport.ts) and is never hand-written.
 //
-// WHAT IT IS HANDED (./config.ts) is a typed object of the functions and
-// values it needs: who a token is, what somebody holds, where a session comes
-// from. No manifest, no runtime and no shell host.
+// WHAT IT IS HANDED (`SocketConfig`, ./types.ts) is a typed object of the
+// functions and values it needs: who a token is, what somebody holds, where a
+// session comes from. No manifest, no runtime and no shell host.
 //
 // THE HANDSHAKE (./handshake.ts) decides who is asking on the upgrade request:
 // the protocol spoken, the token offered, the cookie and the seal the app's
@@ -23,7 +23,7 @@
 // hash, equal application), and the canvas streams (`render` down, `event` up)
 // fed by the shell the connection is attached to.
 //
-// WHEN A CONNECTION ENDS (./connection-close.ts) is heard once, before
+// WHEN A CONNECTION ENDS (`closeOf`, ./socket.ts) is heard once, before
 // anything awaits, and kept: whatever is opened for a connection is told,
 // however late it asks.
 //
@@ -32,7 +32,7 @@
 // has no streams, and a message aimed at one is answered honestly with
 // `no_shell` rather than silently dropped.
 //
-// A SHELL FOR NOBODY TAKES A PLACE (./anonymous-shell-limit.ts): somebody signed in has one
+// A SHELL FOR NOBODY TAKES A PLACE (./socket.ts): somebody signed in has one
 // shell, nobody signed in has one for each connection, and how many of those
 // are alive at once has a limit.
 //
@@ -46,6 +46,6 @@
 // nothing else of moss.
 // ═══════════════════════════════════════════════════════════════
 
-export type { Connection, SocketAccept, TransportSettings } from './connection';
+export type { Connection, SocketAccept, TransportSettings } from './types';
 export { DEFAULT_REVALIDATE_MS } from './revalidation';
 export { createSocket } from './socket';

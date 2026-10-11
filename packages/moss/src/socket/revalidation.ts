@@ -1,7 +1,6 @@
 import { CLOSE_INVALID_TOKEN } from '../protocol';
 import type { ServerMessage } from '../protocol';
-import type { SocketConfig } from './config';
-import type { Connection } from './connection';
+import type { Connection, SocketConfig } from './types';
 
 // ── Revalidation ──
 // The HTTP surfaces re-ask "who is this" on every request; the socket asks at

@@ -2,8 +2,7 @@ import { z } from 'zod';
 import { newSeal, openSealed, sealCookie, sealOf, ownOriginOf, sessionCookies, sessionTokenOf } from '../identity';
 import { DEFAULT_TOKEN_KEY, PROTOCOL, PROTOCOL_MIN, offeredSealed, offeredToken } from '../protocol';
 import type { ServerMessage } from '../protocol';
-import type { SocketConfig } from './config';
-import type { Connection } from './connection';
+import type { Connection, SocketConfig } from './types';
 
 // ═══════════════════════════════════════════════════════════════
 // THE HANDSHAKE — who is asking, decided on the upgrade request and before
