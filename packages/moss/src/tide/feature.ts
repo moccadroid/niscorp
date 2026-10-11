@@ -1,5 +1,6 @@
 import type { Tide } from '@niscorp/tide';
 import type { Feature, FeatureSeams } from '../feature';
+import { chainHintsOf } from './chain';
 import { mintWrites } from './mint';
 
 // ═══════════════════════════════════════════════════════════════
@@ -51,12 +52,13 @@ export type TideFactsConfig = {
 // so it can be held against that seam and nothing else. Returns the way to
 // stop hearing.
 export const mintFromWrites = (config: TideFactsConfig, seams: Pick<FeatureSeams, 'onWrite'>): (() => void) =>
-  seams.onWrite((event, hints) => {
+  seams.onWrite((event, request) => {
     const tide = config.tide();
     const as = tide !== undefined ? config.identity(event.scope) : undefined;
     if (tide === undefined || as === undefined) return;
-    // The chain position the request named, if the app's gate takes that
-    // caller's word for it.
+    // The chain position the request named in this feature's own two headers
+    // (./chain.ts), if the app's gate takes that caller's word for it.
+    const hints = chainHintsOf(request);
     const chain = hints === undefined ? undefined : config.chain?.(event.scope, hints);
     mintWrites(tide, event, as, Date.now(), chain).catch((err) => console.error('[moss:facts]', err));
   });

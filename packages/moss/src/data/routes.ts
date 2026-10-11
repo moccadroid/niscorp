@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Context, Env } from 'hono';
 import { vex } from '@niscorp/vex/hono';
 import type { ExecuteRecord, MutationClient, QueryEngine, ScopePolicy } from '@niscorp/vex';
+import { writeRequestOf } from './writes';
 import type { WriteLane } from './writes';
 
 // ═══════════════════════════════════════════════════════════════
@@ -36,21 +37,9 @@ export type VexRoutesConfig<E extends Env> = {
   // One record per read and write on these surfaces: the busiest emission
   // point, and the reason vex has an observer at all.
   onExecute?: (record: ExecuteRecord) => void;
-  // Where a committed write is reported, and how a request is run inside the
-  // chain position it named (./writes.ts).
+  // Where a committed write is reported, and how a request is run with what
+  // it said kept for whoever hears a write it makes (./writes.ts).
   writes: Pick<WriteLane, 'within' | 'report'>;
-};
-
-// HOW DEEP IN A CHAIN A REQUEST SAYS IT IS: a whole number that is not
-// negative, written as `String(depth)` writes one — digits and nothing else.
-// Read by its form and not with `Number()`, which reads more than a number:
-// an empty header is 0 to it, and 0 is the start of a chain, so a chain whose
-// depth was lost on the way was counted from the beginning again, under a
-// ceiling that exists to stop it. Undefined: the header names no depth.
-const depthOf = (header: string | undefined): number | undefined => {
-  if (header === undefined || !/^\d+$/.test(header)) return undefined;
-  const depth = Number(header);
-  return Number.isSafeInteger(depth) ? depth : undefined;
 };
 
 // A sub-app, for the server to mount at its root behind the authentication
@@ -59,17 +48,17 @@ const depthOf = (header: string | undefined): number | undefined => {
 export const createVexRoutes = <E extends Env>(config: VexRoutesConfig<E>): Hono<E> => {
   const routes = new Hono<E>();
 
-  // THE CHAIN CHANNEL. A tide effect writing back through vex names its chain
-  // position in two headers; they ride the write lane's context so whoever
-  // hears the write can read them. Untrusted at this point: whoever hears
-  // them decides whether the caller's word is good (the feature that mints a
-  // write into tide asks the app's `chain` gate).
-  routes.use('/api/*', async (c, next) => {
-    const cause = c.req.header('x-tide-cause');
-    const depth = depthOf(c.req.header('x-tide-depth'));
-    if (cause === undefined || cause === '' || depth === undefined) return next();
-    return config.writes.within({ cause, depth }, () => next());
-  });
+  // WHAT THE REQUEST SAID RIDES WITH IT, for whoever hears a write it makes:
+  // its headers, asked by name, without the credential it carried. No header
+  // is read here and none is known by name. This used to read two of a
+  // feature's own (`x-tide-cause`, `x-tide-depth`) and hand on what it made of
+  // them; the feature that mints a write into tide reads them itself now.
+  routes.use('/api/*', (c, next) =>
+    config.writes.within(
+      writeRequestOf((name) => c.req.header(name)),
+      () => next(),
+    ),
+  );
 
   const mount = (path: string, entities?: readonly string[]): void => {
     routes.route(

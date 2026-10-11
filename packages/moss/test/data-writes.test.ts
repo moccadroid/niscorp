@@ -1,10 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { WriteEvent } from '@niscorp/vex';
 import { createWriteLane } from '../src/data/writes';
-import type { ChainHints } from '../src/data/writes';
+import type { WriteRequest } from '../src/data/writes';
 
 // THE WRITE LANE: what vex reports of a write, handed to whoever subscribed,
-// with the chain position of the request that wrote.
+// with what the request that wrote said in its headers. The lane knows no
+// header by name: whoever hears a write asks for the ones that are its own.
+
+const saying = (headers: Record<string, string>): WriteRequest => ({ header: (name) => headers[name] });
 
 const event = (fingerprint: string): WriteEvent => ({
   fingerprint,
@@ -32,39 +35,39 @@ describe('the write lane', () => {
     expect(heard[0]).toBe(reported);
   });
 
-  it('a write made outside any chain carries no position', () => {
+  it('a write made inside no request is told with a request that said nothing', () => {
     const lane = createWriteLane();
-    const chains: (ChainHints | undefined)[] = [];
-    lane.subscribe((_write, chain) => chains.push(chain));
+    const said: (string | undefined)[] = [];
+    lane.subscribe((_write, request) => said.push(request.header('x-said')));
     lane.report(event('notes/add'));
-    expect(chains).toEqual([undefined]);
+    expect(said).toEqual([undefined]);
   });
 
-  it('a write made inside a request that named its position carries it, across what the request awaits', async () => {
+  it('a write made inside a request is told with what that request said, across what the request awaits', async () => {
     const lane = createWriteLane();
-    const chains: (ChainHints | undefined)[] = [];
-    lane.subscribe((_write, chain) => chains.push(chain));
-    await lane.within({ cause: 'f_1', depth: 2 }, async () => {
+    const said: (string | undefined)[] = [];
+    lane.subscribe((_write, request) => said.push(request.header('x-said')));
+    await lane.within(saying({ 'x-said': 'this' }), async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
       lane.report(event('notes/add'));
     });
     lane.report(event('notes/edit'));
-    expect(chains).toEqual([{ cause: 'f_1', depth: 2 }, undefined]);
+    expect(said).toEqual(['this', undefined]);
   });
 
-  it('two requests at once each carry their own position', async () => {
+  it('two requests at once are each told with their own', async () => {
     const lane = createWriteLane();
-    const chains: Record<string, ChainHints | undefined> = {};
-    lane.subscribe((write, chain) => {
-      chains[write.fingerprint] = chain;
+    const said: Record<string, string | undefined> = {};
+    lane.subscribe((write, request) => {
+      said[write.fingerprint] = request.header('x-said');
     });
-    const request = (cause: string, waits: number) =>
-      lane.within({ cause, depth: 0 }, async () => {
+    const request = (name: string, waits: number) =>
+      lane.within(saying({ 'x-said': name }), async () => {
         await new Promise((resolve) => setTimeout(resolve, waits));
-        lane.report(event(cause));
+        lane.report(event(name));
       });
     await Promise.all([request('slow', 10), request('fast', 0)]);
-    expect(chains).toEqual({ slow: { cause: 'slow', depth: 0 }, fast: { cause: 'fast', depth: 0 } });
+    expect(said).toEqual({ slow: 'slow', fast: 'fast' });
   });
 
   it('a subscriber that stops is told no more', () => {

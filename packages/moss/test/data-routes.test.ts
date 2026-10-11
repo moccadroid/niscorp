@@ -4,7 +4,7 @@ import { createScopePolicy } from '@niscorp/vex';
 import type { ExecuteRecord, ScopePolicy, WriteEvent } from '@niscorp/vex';
 import { createVexRoutes } from '../src/data/routes';
 import { createWriteLane } from '../src/data/writes';
-import type { ChainHints } from '../src/data/writes';
+import type { WriteRequest } from '../src/data/writes';
 import { engineDouble } from './data-double';
 
 // THE VEX SURFACES, mounted the way the server mounts them: a sub-app at the
@@ -22,8 +22,8 @@ const NOTHING = createScopePolicy(new Set());
 const world = async (resources: Record<string, readonly string[] | { entities: readonly string[] }> = { notes: ['notes'] }) => {
   const double = await engineDouble();
   const writes = createWriteLane();
-  const heard: { event: WriteEvent; chain: ChainHints | undefined }[] = [];
-  writes.subscribe((event, chain) => heard.push({ event, chain }));
+  const heard: { event: WriteEvent; request: WriteRequest }[] = [];
+  writes.subscribe((event, request) => heard.push({ event, request }));
   const reaches: string[] = [];
   const records: ExecuteRecord[] = [];
 
@@ -124,7 +124,6 @@ describe('the vex surfaces', () => {
       writes: [{ table: 'notes', op: 'insert', rows: [{ id: 7, body: 'written' }] }],
       scope: { userId: 'usr_writer' },
     });
-    expect(heard[0]?.chain).toBeUndefined();
   });
 
   it('a write that is refused is not reported', async () => {
@@ -134,44 +133,24 @@ describe('the vex surfaces', () => {
     expect(heard).toHaveLength(0);
   });
 
-  it('a write carries the chain position its request named in the two headers', async () => {
+  // WHAT THE REQUEST SAID IS HANDED ON, AND NO HEADER IS READ HERE. The routes
+  // read two headers by name, `x-tide-cause` and `x-tide-depth`, and handed on
+  // what they made of them: the core knew a feature's header names. Whoever
+  // hears a write asks for the headers that are its own.
+  it('a write is told with what its request said in its headers, asked by name', async () => {
     const { post, heard } = await world();
-    await post('/api/vex', 'writer', { fingerprint: 'notes/add', context: { body: 'hello' } }, { 'x-tide-cause': 'f_1', 'x-tide-depth': '2' });
-    expect(heard[0]?.chain).toEqual({ cause: 'f_1', depth: 2 });
+    await post('/api/vex', 'writer', { fingerprint: 'notes/add', context: { body: 'hello' } }, { 'x-of-a-feature': 'f_1', 'x-another': '' });
+    expect(heard[0]?.request.header('x-of-a-feature')).toBe('f_1');
+    expect(heard[0]?.request.header('X-Of-A-Feature')).toBe('f_1');
+    expect(heard[0]?.request.header('x-another')).toBe('');
+    expect(heard[0]?.request.header('x-never-sent')).toBeUndefined();
+    expect(heard[0]?.request.header('content-type')).toBe('application/json');
   });
 
-  it('a position that does not read as one is no position', async () => {
+  it('…but never with the credential the request carried: who wrote is the scope of the write', async () => {
     const { post, heard } = await world();
-    const add = { fingerprint: 'notes/add', context: { body: 'hello' } };
-    await post('/api/vex', 'writer', add, { 'x-tide-depth': '2' });
-    await post('/api/vex', 'writer', add, { 'x-tide-cause': '', 'x-tide-depth': '2' });
-    await post('/api/vex', 'writer', add, { 'x-tide-cause': 'f_1' });
-    await post('/api/vex', 'writer', add, { 'x-tide-cause': 'f_1', 'x-tide-depth': '-1' });
-    await post('/api/vex', 'writer', add, { 'x-tide-cause': 'f_1', 'x-tide-depth': '1.5' });
-    await post('/api/vex', 'writer', add, { 'x-tide-cause': 'f_1', 'x-tide-depth': 'deep' });
-    expect(heard.map((write) => write.chain)).toEqual([undefined, undefined, undefined, undefined, undefined, undefined]);
-  });
-
-  // The depth was read with `Number()`, which reads more than a number: an
-  // empty header is 0, and so is one of spaces. A request that named a cause
-  // and an empty depth was then heard at depth 0, the start of a chain: a
-  // chain whose depth was lost on the way was counted from the beginning.
-  it.each([
-    ['empty', ''],
-    ['spaces', '  '],
-    ['written in hex', '0x2'],
-    ['written with an exponent', '1e1'],
-    ['signed', '+2'],
-    ['more than a whole number can hold', '9'.repeat(30)],
-  ])('a depth that is %s is no position', async (_label, depth) => {
-    const { post, heard } = await world();
-    await post('/api/vex', 'writer', { fingerprint: 'notes/add', context: { body: 'hello' } }, { 'x-tide-cause': 'f_1', 'x-tide-depth': depth });
-    expect(heard.map((write) => write.chain)).toEqual([undefined]);
-  });
-
-  it('a depth of 0 is a position, written as String(depth) writes it', async () => {
-    const { post, heard } = await world();
-    await post('/api/vex', 'writer', { fingerprint: 'notes/add', context: { body: 'hello' } }, { 'x-tide-cause': 'f_1', 'x-tide-depth': '0' });
-    expect(heard[0]?.chain).toEqual({ cause: 'f_1', depth: 0 });
+    await post('/api/vex', 'writer', { fingerprint: 'notes/add', context: { body: 'hello' } }, { authorization: 'Bearer the-session', cookie: 'nisc.token=the-session' });
+    for (const name of ['authorization', 'Authorization', 'AUTHORIZATION', 'cookie', 'Cookie']) expect([name, heard[0]?.request.header(name)]).toEqual([name, undefined]);
+    expect(heard[0]?.event.scope).toEqual({ userId: 'usr_writer' });
   });
 });

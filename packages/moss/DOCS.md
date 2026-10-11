@@ -915,7 +915,9 @@ who may be woken by it. Returning `undefined` mints nothing (an operator
 surface, a write with no tenant).
 
 `chain` is the causality gate. A tide effect writing back through vex names
-its chain position in `x-tide-cause` / `x-tide-depth`; this decides whether
+its chain position in `x-tide-cause` / `x-tide-depth`. The two headers are
+this feature's: the core's routes read no header by name, and hand whoever
+hears a write what its request said. `chain` decides whether
 that caller's word is good, so the chain-depth ceiling survives the trip
 through the database. Absent = hints are always dropped, which is the safe
 default: a forged depth could park an innocent chain. A position is a cause
@@ -988,7 +990,7 @@ its own, and the core never imports it.
   | `upgradeStore(store)` | bring the documents stored in one of the feature's own tables to this code's grammars, in one transaction; a row written by newer code throws |
   | `fingerprints()` | every fingerprint the app serves |
   | `fingerprintsFor(principal)` | the fingerprints that principal's own policy lets them replay |
-  | `onWrite(listener)` | hear every write the routes serve, once it is committed: what vex reports of it, and the place in a chain the request named; answers the way to stop hearing |
+  | `onWrite(listener)` | hear every write the routes serve, once it is committed: `listener(event, request)` is handed what vex reports of it, and what the request that wrote said in its headers, asked by name (`request.header('x-…')`; never the credential it carried); answers the way to stop hearing |
   | `telemetry` | where a span goes; absent, none is built |
   | `wrapWire(wrap)` | lay a function around the wire a session's screens call through |
 

@@ -123,13 +123,16 @@ export type FeatureSeams = {
   fingerprintsFor: (principal: string | null) => Promise<readonly string[]>;
   // HEAR EVERY WRITE THE ROUTES SERVE, once it is committed: what vex reports
   // of it (the statements that ran, the rows the database returned, the scope
-  // the request could not forge), and the place in a chain of effects the
-  // request that wrote said it was at, when it said one. That place is the
-  // caller's word and nothing more: whoever hears it decides whether to
-  // believe it. Told after the commit, and on its own: a listener that throws
-  // is logged, and neither the write nor the next listener is touched.
-  // Returns the way to stop hearing.
-  onWrite: (listener: (event: WriteEvent, chain: { cause: string; depth: number } | undefined) => void) => () => void;
+  // the request could not forge), and what the request that wrote said in its
+  // headers, asked by name (`request.header('x-…')`). The core reads none of
+  // them: a header a feature's callers send is that feature's to name and to
+  // check. What a header says is the caller's word and nothing more: whoever
+  // asks decides whether to believe it. The credential the request carried is
+  // not answered (`Authorization`, `Cookie`): who wrote is the event's scope.
+  // Told after the commit, and on its own: a listener that throws is logged,
+  // and neither the write nor the next listener is touched. Returns the way
+  // to stop hearing.
+  onWrite: (listener: (event: WriteEvent, request: { header: (name: string) => string | undefined }) => void) => () => void;
 
   // ── what the deployment supplies ──
   // Where a span goes. Absent: none is built.

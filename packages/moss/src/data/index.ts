@@ -63,4 +63,4 @@ export { migrateTables } from './migrate';
 export type { TablesReport } from './migrate';
 export { resolvePolicy } from './policy';
 export { MOSS_SEQUENCE } from './tables';
-export type { ChainHints, WriteListener } from './writes';
+export type { WriteListener, WriteRequest } from './writes';

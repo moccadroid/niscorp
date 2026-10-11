@@ -111,16 +111,16 @@ describe('the data module, over an engine', () => {
     expect(after).toEqual(before);
   });
 
-  it('tells each subscriber of a write the routes served, in the order they subscribed, with its chain position', async () => {
+  it('tells each subscriber of a write the routes served, in the order they subscribed, with what its request said', async () => {
     const { data, post } = await world();
     const heard: string[] = [];
-    data.onWrite((event, chain) => heard.push(`first ${event.fingerprint} ${event.writes[0]?.table ?? ''} ${chain?.cause ?? 'no chain'}`));
+    data.onWrite((event, request) => heard.push(`first ${event.fingerprint} ${event.writes[0]?.table ?? ''} ${request.header('x-said') ?? 'nothing said'}`));
     const stop = data.onWrite((event) => heard.push(`second ${event.fingerprint}`));
-    await post('writer', ADD, { 'x-tide-cause': 'f_1', 'x-tide-depth': '0' });
+    await post('writer', ADD, { 'x-said': 'f_1' });
     stop();
     await post('writer', ADD);
     await post('reader', ADD);
-    expect(heard).toEqual(['first notes/add notes f_1', 'second notes/add', 'first notes/add notes no chain']);
+    expect(heard).toEqual(['first notes/add notes f_1', 'second notes/add', 'first notes/add notes nothing said']);
   });
 
   // A role machinery runs as is a set of roles like any other, and its policy

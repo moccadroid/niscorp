@@ -22,8 +22,9 @@ const writes = () => {
       listeners.delete(listener);
     };
   };
-  const report = (event: WriteEvent, chain?: { cause: string; depth: number }): void => {
-    for (const listener of listeners) listener(event, chain);
+  // `headers`: what the request that wrote said, as the core hands it on.
+  const report = (event: WriteEvent, headers: Record<string, string> = {}): void => {
+    for (const listener of listeners) listener(event, { header: (name) => headers[name] });
   };
   return { onWrite, report, listening: () => listeners.size };
 };
@@ -106,14 +107,19 @@ describe('a write, minted into tide as facts', () => {
   });
 });
 
+// THE FEATURE READS ITS OWN HEADERS. A tide effect that writes back through
+// vex names its place in two headers, and they are this feature's: the core's
+// routes read them by name and handed on what they made of them. The core
+// hands on what the request said now, and the reading is here.
 describe('the place in a chain a request named', () => {
   const named = { cause: 'task:t_1', depth: 2 };
+  const headers = { 'x-tide-cause': 'task:t_1', 'x-tide-depth': '2' };
 
   it('is dropped when the app has no gate', async () => {
     const lane = writes();
     const { tide, minted } = intake();
     mintFromWrites({ tide: () => tide, identity: studioOf }, lane);
-    lane.report(twoStatements, named);
+    lane.report(twoStatements, headers);
     await settled();
     expect(minted[0]?.options).toEqual({ as: 'automation@north' });
   });
@@ -122,7 +128,7 @@ describe('the place in a chain a request named', () => {
     const lane = writes();
     const { tide, minted } = intake();
     mintFromWrites({ tide: () => tide, identity: studioOf, chain: () => undefined }, lane);
-    lane.report(twoStatements, named);
+    lane.report(twoStatements, headers);
     await settled();
     expect(minted[0]?.options).toEqual({ as: 'automation@north' });
   });
@@ -132,7 +138,7 @@ describe('the place in a chain a request named', () => {
     const { tide, minted } = intake();
     const chain = vi.fn<NonNullable<TideFactsConfig['chain']>>((_scope, hints) => hints);
     mintFromWrites({ tide: () => tide, identity: studioOf, chain }, lane);
-    lane.report(twoStatements, named);
+    lane.report(twoStatements, headers);
     await settled();
     expect(chain).toHaveBeenCalledWith(twoStatements.scope, named);
     expect(minted.map(({ options }) => options)).toEqual(Array.from({ length: 3 }, () => ({ as: 'automation@north', cause: 'task:t_1', depth: 3 })));
@@ -146,6 +152,45 @@ describe('the place in a chain a request named', () => {
     lane.report(twoStatements);
     await settled();
     expect(chain).not.toHaveBeenCalled();
+  });
+
+  // What the gate is asked about, for what a request said in the two headers.
+  const askedAbout = async (said: Record<string, string>): Promise<unknown> => {
+    const lane = writes();
+    const { tide } = intake();
+    const chain = vi.fn<NonNullable<TideFactsConfig['chain']>>((_scope, hints) => hints);
+    mintFromWrites({ tide: () => tide, identity: studioOf, chain }, lane);
+    lane.report(twoStatements, said);
+    await settled();
+    return chain.mock.calls[0]?.[1];
+  };
+
+  it('a position that does not read as one is no position: the gate is not asked', async () => {
+    expect(await askedAbout({ 'x-tide-depth': '2' })).toBeUndefined();
+    expect(await askedAbout({ 'x-tide-cause': '', 'x-tide-depth': '2' })).toBeUndefined();
+    expect(await askedAbout({ 'x-tide-cause': 'f_1' })).toBeUndefined();
+    expect(await askedAbout({ 'x-tide-cause': 'f_1', 'x-tide-depth': '-1' })).toBeUndefined();
+    expect(await askedAbout({ 'x-tide-cause': 'f_1', 'x-tide-depth': '1.5' })).toBeUndefined();
+    expect(await askedAbout({ 'x-tide-cause': 'f_1', 'x-tide-depth': 'deep' })).toBeUndefined();
+  });
+
+  // The depth was read with `Number()`, which reads more than a number: an
+  // empty header is 0, and so is one of spaces. A request that named a cause
+  // and an empty depth was then heard at depth 0, the start of a chain: a
+  // chain whose depth was lost on the way was counted from the beginning.
+  it.each([
+    ['empty', ''],
+    ['spaces', '  '],
+    ['written in hex', '0x2'],
+    ['written with an exponent', '1e1'],
+    ['signed', '+2'],
+    ['more than a whole number can hold', '9'.repeat(30)],
+  ])('a depth that is %s is no position', async (_label, depth) => {
+    expect(await askedAbout({ 'x-tide-cause': 'f_1', 'x-tide-depth': depth })).toBeUndefined();
+  });
+
+  it('a depth of 0 is a position, written as String(depth) writes it', async () => {
+    expect(await askedAbout({ 'x-tide-cause': 'f_1', 'x-tide-depth': '0' })).toEqual({ cause: 'f_1', depth: 0 });
   });
 });
 
