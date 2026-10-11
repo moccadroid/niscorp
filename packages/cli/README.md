@@ -328,7 +328,10 @@ and `start` do:
   re-boots the app (a fresh database, fresh shells) and reloads the page — the
   old server answers until the new one is up;
 - `dev.signIn(server, who)` in the config, if the app gives one, makes
-  `/dev/as/<who>` a signed-in URL — in the dev server and nowhere else.
+  `/dev/as/<who>` a signed-in URL — in the dev server and nowhere else, and
+  for a request from this machine only: one from another device is answered
+  `403` (moss's dev plugin, `signInFromNetwork`; `nisc dev` does not turn it
+  on).
 
 The app's `vite.config.ts` holds its framework's plugin and nothing about the
 server. An app with its own shell is a vite app and nothing more.
@@ -368,7 +371,8 @@ will take, for as long.
 tables it changes itself are changed before the step can check them, and
 `--check` would then change the database. Every table an entry reads or writes
 comes from a sequence in the run — the app's own go in `runtime.tables`, and so
-does tide's (`TIDE_SEQUENCE`) when the app keeps tide's tables.
+does tide's (`TIDE_SEQUENCE`, from `@niscorp/tide/postgres`) when the app keeps
+tide's tables.
 
 It checks entries. It does not see SQL written by hand, and it does not know
 what a value means.
