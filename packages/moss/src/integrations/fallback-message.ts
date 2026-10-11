@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { FetchFn } from '@niscorp/nova';
 
-// ── THE FLOOR UNDER A FAILING INTEGRATION ───────────────────────────
+// ── THE MESSAGE UNDER A FAILING INTEGRATION ─────────────────────────
 //
 // A third-party service being down is the steady state of a marketplace, and
 // the screen in front of it belongs to a studio owner, not an operator. A
@@ -18,11 +18,11 @@ const INTEGRATION_PATH = /^\/integrations\/([a-z][a-z0-9-]*)\//;
 // is text; whatever else it carries is its own, and is served on as it came.
 const SaidSchema = z.looseObject({ message: z.string() });
 
-export const flooredWire = (inner: FetchFn): FetchFn => async (url, init) => {
+export const withFallbackMessage = (inner: FetchFn): FetchFn => async (url, init) => {
   const integration = INTEGRATION_PATH.exec(url)?.[1];
   if (integration === undefined) return inner(url, init);
 
-  const floor = (status: number): Awaited<ReturnType<FetchFn>> => {
+  const fallback = (status: number): Awaited<ReturnType<FetchFn>> => {
     const body = { message: `The ${integration} add-on is not answering right now. The rest of the studio is unaffected.` };
     return { ok: false, status, json: async () => body, text: async () => JSON.stringify(body) };
   };
@@ -31,7 +31,7 @@ export const flooredWire = (inner: FetchFn): FetchFn => async (url, init) => {
   try {
     reply = await inner(url, init);
   } catch {
-    return floor(502);
+    return fallback(502);
   }
   if (reply.ok) return reply;
 
@@ -47,5 +47,5 @@ export const flooredWire = (inner: FetchFn): FetchFn => async (url, init) => {
   } catch {
     // Unparseable is the same case as silent.
   }
-  return floor(reply.status);
+  return fallback(reply.status);
 };

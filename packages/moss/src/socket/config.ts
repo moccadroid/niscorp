@@ -30,7 +30,7 @@ export type SocketConfig = {
   // carries, or undefined for a path that is the app's. Absent: every
   // connection is the app's, as before pages existed.
   page?: (path: string) => { host: SessionSource; inputs: Record<string, Record<string, unknown>> } | undefined;
-  // How many shells for nobody signed in may be alive at once (./places.ts).
+  // How many shells for nobody signed in may be alive at once (./anonymous-shell-limit.ts).
   // Default `DEFAULT_ANONYMOUS_SHELL_MAX`; `Infinity` is no limit.
   anonymousShellMax?: number;
   // How often a LIVE connection's credential is re-verified. Default

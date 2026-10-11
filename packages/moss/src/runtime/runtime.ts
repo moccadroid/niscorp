@@ -68,7 +68,7 @@ export type NiscRuntime = {
   // anybody's to fill. A connection over it is told so (`at_capacity`) and
   // closed with 4503, and its terminal tries again later like after any close.
   //
-  // The default comes from a measurement (../socket, places.ts): a shell for
+  // The default comes from a measurement (../socket, anonymous-shell-limit.ts): a shell for
   // nobody costs about 53 KB of heap in lyceum and 27 KB for an app of one
   // screen, and the Node transport about 260 KB more for each connection while
   // compression is on. A thousand of them fit a process given 512 MB. A

@@ -4,9 +4,9 @@ import type { ActionDefinition, ActionFragment, LayoutNode } from '@niscorp/nova
 import type { SeedEntry } from '@niscorp/vex';
 import { createRunningManifest } from '../src/manifest';
 import type { NiscApp, ShellManifest } from '../src/manifest';
-import { standHosts } from '../src/server/hosts';
+import { buildShellHosts } from '../src/server/hosts';
 import type { HostParts } from '../src/server/hosts';
-import { standSignals } from '../src/server/signals';
+import { buildSignals } from '../src/server/signals';
 
 // THE SHELL HOSTS AS THE SERVER STANDS THEM UP (../src/server/hosts.ts), with
 // no server and no database: the wiring is handed an app, a running manifest
@@ -73,7 +73,7 @@ const partsWith = (running: HostParts['running']): HostParts => ({
 
 describe('the shell hosts — what a shell is made of is asked of the running manifest', () => {
   it('shows what the app shipped, when that is what the running manifest answers', async () => {
-    const hosts = standHosts(partsWith(shipped));
+    const hosts = buildShellHosts(partsWith(shipped));
     try {
       const snapshot = await hosts.shells?.snapshot(null, null);
       expect(JSON.stringify(snapshot?.frame)).toContain('"name":"as shipped"');
@@ -90,7 +90,7 @@ describe('the shell hosts — what a shell is made of is asked of the running ma
 
   it('shows another frame, other fragments and other entries when the running manifest answers those, with nothing else changed', async () => {
     const asked: ShellManifest[] = [];
-    const hosts = standHosts(
+    const hosts = buildShellHosts(
       partsWith({
         artifactsFor: (shell, roles, installed) => {
           asked.push(shell);
@@ -127,7 +127,7 @@ describe('the shell hosts — what a shell is made of is asked of the running ma
 
   it('a page’s host is asked for by the page’s own shell manifest', async () => {
     const asked: ShellManifest[] = [];
-    const hosts = standHosts(
+    const hosts = buildShellHosts(
       partsWith({
         artifactsFor: (shell, roles, installed) => {
           asked.push(shell);
@@ -161,7 +161,7 @@ describe('the shell hosts — a change reaches the living shells of every host',
 
   it('when what the app consists of changes, the shells of the app’s host and of each page’s adopt', async () => {
     const running = createRunningManifest({ shipped: granting, grants: scopeGrants(['words']) });
-    const hosts = standHosts({ ...partsWith(running), app: granting });
+    const hosts = buildShellHosts({ ...partsWith(running), app: granting });
     try {
       const mine = await hosts.shells?.session('t', 'usr_1');
       const onPage = await hosts.pageAt('/docs')?.host.session(null, null);
@@ -181,9 +181,9 @@ describe('the shell hosts — a change reaches the living shells of every host',
   });
 
   it('a principal’s reset reaches their shell in the app’s host and the ones a page built for them, and nobody else’s', async () => {
-    const hosts = standHosts(partsWith(shipped));
+    const hosts = buildShellHosts(partsWith(shipped));
     try {
-      const signals = standSignals({ fabric: undefined, identity: { invalidate: () => true, invalidateTag: () => [] }, reset: hosts.reset, shells: hosts.shells });
+      const signals = buildSignals({ fabric: undefined, identity: { invalidate: () => true, invalidateTag: () => [] }, reset: hosts.reset, shells: hosts.shells });
       const page = hosts.pageAt('/docs')?.host;
       const sessions = [await hosts.shells?.session('t', 'usr_1'), await page?.session('t', 'usr_1'), await page?.session('t', 'usr_2')];
       const before = sessions.map((session) => session?.shell);

@@ -42,24 +42,24 @@ import type { Connection } from './connection';
 // (`runtime.anonymousShellMax`), from those numbers and its own memory.
 export const DEFAULT_ANONYMOUS_SHELL_MAX = 1000;
 
-export type Places = {
+export type AnonymousShellLimit = {
   // Take a place for a connection. False: there is none left.
-  take: (connection: Connection) => boolean;
-  // The connection ended, or its shell could not be built.
-  give: (connection: Connection) => void;
+  acquire: (connection: Connection) => boolean;
+  // Give it back: the connection ended, or its shell could not be built.
+  release: (connection: Connection) => void;
 };
 
-export const createPlaces = (max: number): Places => {
+export const createAnonymousShellLimit = (max: number): AnonymousShellLimit => {
   // The connections, and not a count of them: giving a place back twice (a
   // refusal, then the close it causes) is then giving it back once.
   const taken = new Set<Connection>();
   return {
-    take: (connection) => {
+    acquire: (connection) => {
       if (taken.size >= max) return false;
       taken.add(connection);
       return true;
     },
-    give: (connection) => {
+    release: (connection) => {
       taken.delete(connection);
     },
   };

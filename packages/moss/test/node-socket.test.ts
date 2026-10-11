@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocket } from 'ws';
 import { attachSocket } from '../src/server/node';
-import { standSocket } from '../src/server/socket';
+import { buildSocket } from '../src/server/socket';
 import { createSocket } from '../src/socket';
 import { offerToken, PROTOCOL } from '../src/protocol';
 import type { SocketAccept } from '../src/socket';
@@ -176,7 +176,7 @@ describe('the ws transport', () => {
 // real transport, attached the way `nisc start` attaches it: with no options.
 describe('the ws transport — a server’s socket says how it is to be attached', () => {
   const serving = async (settings: { socketMaxMessageBytes?: number; socketCompression?: boolean }): Promise<string> => {
-    const socket = standSocket({
+    const socket = buildSocket({
       runtime: { pool: { query: async () => ({ rows: [] }) }, session: 'dev-open', sessionRevalidateMs: 0, ...settings },
       session: () => null,
       identity: { resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, key: 'public' }) },

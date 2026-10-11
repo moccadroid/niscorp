@@ -3,15 +3,15 @@ import type { Data } from '../data';
 import type { NiscApp } from '../manifest';
 import type { NiscRuntime, SessionVerifier } from '../runtime';
 import { emptyRegister, startFeatures, wrappedBy } from './features';
-import { standHosts } from './hosts';
-import { standIdentity } from './identity';
-import { hearWrites } from './lanes';
-import { standManifest } from './manifest';
+import { buildShellHosts } from './hosts';
+import { buildIdentity } from './identity';
+import { subscribeReactions } from './reactions';
+import { buildRunningManifest } from './manifest';
 import type { Env, MossServer } from './moss-server';
 import { operatorPrefix } from './operator';
 import { mountRoutes } from './routes';
-import { standSignals } from './signals';
-import { standSocket } from './socket';
+import { buildSignals } from './signals';
+import { buildSocket } from './socket';
 import { wireOver } from './wire';
 
 // ═══════════════════════════════════════════════════════════════
@@ -56,11 +56,11 @@ export const assembleServer = async (parts: ServerParts): Promise<MossServer> =>
 const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerParts, stops: (() => void)[]): Promise<MossServer> => {
   // 4. The running manifest: creating it is the boot check, and it hands the
   // data module the entries to seed (./manifest.ts).
-  const running = await standManifest(app, runtime, data);
+  const running = await buildRunningManifest(app, runtime, data);
   stops.push(running.stop);
 
   // 5. Identity (./identity.ts).
-  const identity = standIdentity(app, runtime, data);
+  const identity = buildIdentity(app, runtime, data);
   stops.push(identity.stop);
 
   // 6. The server's own surfaces (./routes.ts): the authentication, the
@@ -73,11 +73,11 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerP
   // 7. The shell hosts, the app's and each page's (./hosts.ts). Their
   // endpoint calls ride the server's OWN surfaces with the session's token
   // (./wire.ts): same wire, same enforcement.
-  const hosts = standHosts({ app, runtime, identity, running, data, wire: wireOver(server), wrapWire: wrappedBy(registered), revokeSessions });
+  const hosts = buildShellHosts({ app, runtime, identity, running, data, wire: wireOver(server), wrapWire: wrappedBy(registered), revokeSessions });
   stops.push(hosts.stop);
 
   // 8. What crosses processes (./signals.ts).
-  const signals = standSignals({ fabric: runtime.fabric, identity, reset: hosts.reset, shells: hosts.shells });
+  const signals = buildSignals({ fabric: runtime.fabric, identity, reset: hosts.reset, shells: hosts.shells });
 
   // 9. WHEN WHAT THE APP CONSISTS OF CHANGES — a set of actions replaced, a
   // `refresh`, a move another process made — what this server derived from the
@@ -110,9 +110,9 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerP
   const operator = operatorPrefix(runtime);
   await startFeatures(app.features ?? [], { app, runtime, server, operator, registered, identity, running, data });
   server.route('/operator', operator);
-  // And the app's reactions hear a write (./lanes.ts), after the features: one
+  // And the app's reactions hear a write (./reactions.ts), after the features: one
   // that hears writes too subscribed while it started, and is told first.
-  hearWrites({ app, onWrite: data.onWrite, deliver: signals.deliver });
+  subscribeReactions({ app, onWrite: data.onWrite, deliver: signals.deliver });
 
   // 11. From here on a change moves the generation pointer, so every other
   // process drops what it derived within one poll; and a move one of them
@@ -123,7 +123,7 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerP
   running.watch();
 
   // 12. The socket (./socket.ts).
-  const socket = standSocket({ runtime, session, identity, running, hosts });
+  const socket = buildSocket({ runtime, session, identity, running, hosts });
   stops.push(socket.stop);
 
   // 13. The server: hono, and what `MossServer` adds to it (./moss-server.ts).

@@ -11,7 +11,7 @@ import type { NiscRuntime } from '../runtime';
 // row behaviors, and where a span goes; who a request is, it is told for each
 // request. The entries it serves are not read off the app here: the running
 // manifest holds them and hands them over when it stands (./manifest.ts).
-export const standData = (app: NiscApp, runtime: NiscRuntime): Promise<Data> =>
+export const buildData = (app: NiscApp, runtime: NiscRuntime): Promise<Data> =>
   createData({
     pool: runtime.pool,
     db: runtime.db,

@@ -160,7 +160,7 @@ const machinery = (roles: readonly string[]): Caller => ({ key: memoKey(roles, u
 // granted, the grammars, the adapter the engine reads through, and how the
 // documents of one store are brought to those grammars (strata's own, over the
 // pool).
-export type StoodUp = Pick<Data, 'grants' | 'grammars'> & { engine: QueryEngine; adapter: DatabaseAdapter; upgradeStore: (store: DocumentStore) => Promise<void> };
+export type PreparedEngine = Pick<Data, 'grants' | 'grammars'> & { engine: QueryEngine; adapter: DatabaseAdapter; upgradeStore: (store: DocumentStore) => Promise<void> };
 
 // THE TABLES EXIST BEFORE INTROSPECTION. The engine's introspected schema is
 // the grant universe policies compile from — a table created after it is a
@@ -179,7 +179,7 @@ export type StoodUp = Pick<Data, 'grants' | 'grammars'> & { engine: QueryEngine;
 // bring current, and the only tables that hold any are a feature's: it asks
 // when it starts (`Data.upgradeStore`). This used to rewrite the integrations'
 // stored actions at every boot, whether or not the app named that feature.
-const standUp = async (config: DataConfig): Promise<StoodUp> => {
+const prepareEngine = async (config: DataConfig): Promise<PreparedEngine> => {
   await migrate(config.pool, tableSequencesOf(config), { mode: config.migrations ?? 'apply' });
   const grammars = await createGrammarUpgrader({ grammars: config.grammars });
   const layer = await createDataLayer(config);
@@ -194,11 +194,11 @@ const standUp = async (config: DataConfig): Promise<StoodUp> => {
   };
 };
 
-// EVERYTHING ELSE, over what stood up. Nothing here touches the database but
+// EVERYTHING ELSE, over the engine that was prepared. Nothing here touches the database but
 // through the engine and the write client, which is why it is a function of
 // its own: it can be held against an engine with nothing behind it.
-export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charter' | 'behaviors' | 'telemetry' | 'vexConfig' | 'featureTables'>): Data => {
-  const { grammars, engine, grants } = stood;
+export const dataOver = (prepared: PreparedEngine, config: Pick<DataConfig, 'db' | 'charter' | 'behaviors' | 'telemetry' | 'vexConfig' | 'featureTables'>): Data => {
+  const { grammars, engine, grants } = prepared;
   const governed = { charter: config.charter, behaviors: config.behaviors };
   const policies = createPolicies({ ...governed, grants });
 
@@ -216,7 +216,7 @@ export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charte
     const schema = engine.getSchema();
     if (schema === undefined) throw new Error('moss: an intent was asked before the engine had read the database.');
     answers = createIntentAnswers({
-      adapter: stood.adapter,
+      adapter: prepared.adapter,
       schema,
       cache: engine.cache,
       ...(config.behaviors !== undefined ? { behaviors: config.behaviors } : {}),
@@ -230,7 +230,7 @@ export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charte
   const ownEntries = async (own: OwnEntries, told: ((record: ExecuteRecord) => void) | undefined): Promise<Replay> => {
     const schema = engine.getSchema();
     if (schema === undefined) throw new Error('moss: entries of its own were handed over before the engine had read the database.');
-    return createOwnEntries({ adapter: stood.adapter, schema, db: config.db, engine, ...(told !== undefined ? { onExecute: told } : {}) })(own);
+    return createOwnEntries({ adapter: prepared.adapter, schema, db: config.db, engine, ...(told !== undefined ? { onExecute: told } : {}) })(own);
   };
 
   // The tables a feature named as its own. One that is asked for and was never
@@ -293,7 +293,7 @@ export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charte
       if (!own.includes(store.table)) {
         throw new Error(`moss: the feature "${feature}" asked for the documents stored in "${store.table}" to be upgraded, and that table is not its own (its own: ${own.join(', ') || 'none'}).`);
       }
-      await stood.upgradeStore(store);
+      await prepared.upgradeStore(store);
     },
     onWrite: writes.subscribe,
     pointer: pointerOver(pointerReplay),
@@ -303,4 +303,4 @@ export const dataOver = (stood: StoodUp, config: Pick<DataConfig, 'db' | 'charte
   };
 };
 
-export const createData = async (config: DataConfig): Promise<Data> => dataOver(await standUp(config), config);
+export const createData = async (config: DataConfig): Promise<Data> => dataOver(await prepareEngine(config), config);

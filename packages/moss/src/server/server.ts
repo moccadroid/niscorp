@@ -3,7 +3,7 @@ import { receiveManifest } from '../manifest';
 import type { NiscApp } from '../manifest';
 import type { NiscRuntime } from '../runtime';
 import { assembleServer } from './assemble';
-import { standData } from './data';
+import { buildData } from './data';
 import type { MossServer } from './moss-server';
 
 // ═══════════════════════════════════════════════════════════════
@@ -38,7 +38,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   const revokeSessions = sessionRevokerOf(runtime);
 
   // 3. The tables are migrated and `data` stands (./data.ts).
-  const data = await standData(app, runtime);
+  const data = await buildData(app, runtime);
 
   // 4 to 13. Everything that stands over the data module (./assemble.ts).
   return assembleServer({ app, runtime, session, revokeSessions, data });

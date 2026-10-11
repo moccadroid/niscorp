@@ -8,7 +8,7 @@ import { DEFAULT_REVALIDATE_MS } from '../socket';
 // WHO A PRINCIPAL IS, for every surface (../identity). It is handed the app's
 // three seams and the limits, and reaches rows only through `executeAs`: an
 // identity entry is a seeded entry like any other.
-export const standIdentity = (
+export const buildIdentity = (
   app: Pick<NiscApp, 'identity' | 'assignments' | 'scope'>,
   runtime: Pick<NiscRuntime, 'identityMax' | 'identityIdleMs' | 'sessionRevalidateMs'>,
   data: Pick<Data, 'executeAs'>,

@@ -104,7 +104,7 @@ const hostConfig = (parts: HostParts, shell: ShellManifest, kept: boolean): Shel
   };
 };
 
-export const standHosts = (parts: HostParts): Hosts => {
+export const buildShellHosts = (parts: HostParts): Hosts => {
   const { app } = parts;
   // PAGES: a host each, built from the page's own manifest and keeping nothing
   // (../manifest, app.ts § pages). The router refuses two pages that could

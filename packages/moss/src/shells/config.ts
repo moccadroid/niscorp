@@ -108,7 +108,7 @@ export type ShellHostConfig = {
   wire: (token: string | null) => FetchFn;
   // LAID AROUND THE WIRE A SESSION'S SCREENS CALL THROUGH, by whoever has a
   // reason to answer for a call that failed (an integration that is down gets
-  // a sentence under it; ../integrations, floor.ts). It wraps the wire the
+  // a sentence under it; ../integrations, fallback-message.ts). It wraps the wire the
   // shell's endpoints and functions are handed, and not the one `inputs` and
   // `phrases` read through. Absent: the wire as it is.
   wrapWire?: (inner: FetchFn) => FetchFn;

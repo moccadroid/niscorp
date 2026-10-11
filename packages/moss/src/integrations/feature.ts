@@ -6,7 +6,7 @@ import type { CallIntegration } from './call';
 import { contractRoutes } from './contract';
 import { createAssertionSigner } from './credentials';
 import { REGISTRY_ENTRIES, REGISTRY_TABLES } from './entries';
-import { flooredWire } from './floor';
+import { withFallbackMessage } from './fallback-message';
 import { createForwarder } from './forward';
 import { frameRoutes } from './frame';
 import { filterInstalled, integrationOfAction } from './installed';
@@ -168,7 +168,7 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
   seams.addCatalogFilter(filterInstalled);
   seams.setActionsLoader(stored);
   seams.registerCredential(KEY_PREFIX, keyCredential({ byKey: (key) => integrationByKey(replay, key), actor: config.integrationActor, resolveIdentity: seams.resolveIdentity }));
-  seams.wrapWire(flooredWire);
+  seams.wrapWire(withFallbackMessage);
 
   // What the host offers a bundle to name: the kit's components, which the
   // server knows, and what the app said when it created the feature.

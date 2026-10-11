@@ -18,7 +18,7 @@
 //   ./hosts.ts           the shell hosts, the app's and each page's
 //   ./wire.ts            the internal wire a server shell calls through
 //   ./signals.ts         what crosses processes, over the fabric (./fabric.ts)
-//   ./lanes.ts           what the app declared it wants to hear of a write: the reactions
+//   ./reactions.ts           what the app declared it wants to hear of a write: the reactions
 //   ./features.ts        the seams a feature is started with
 //   ./operator.ts        the operator prefix and its two gates
 //   ./socket.ts          the socket, handed what it needs

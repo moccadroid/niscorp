@@ -19,7 +19,7 @@ export type SocketParts = {
   hosts: Pick<Hosts, 'shells' | 'pageAt'>;
 };
 
-export const standSocket = ({ runtime, session, identity, running, hosts }: SocketParts): SocketAccept => {
+export const buildSocket = ({ runtime, session, identity, running, hosts }: SocketParts): SocketAccept => {
   const socket = createSocket({
     session,
     catalog: async (principal) => {

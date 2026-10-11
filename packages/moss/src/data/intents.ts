@@ -54,7 +54,7 @@ export const createIntentAnswers = (config: IntentAnswersConfig): AnswerIntent =
     const kept = engines.get(writers);
     if (kept !== undefined) return kept;
     const { adapter, schema } = config;
-    const stood = (async (): Promise<QueryEngine> => {
+    const created = (async (): Promise<QueryEngine> => {
       const engine = createQueryEngine({
         // It introspects nothing: the tables are the ones the app's engine found.
         adapter: { id: adapter.id, compile: adapter.compile, execute: adapter.execute, capabilities: adapter.capabilities, introspect: async () => schema },
@@ -67,8 +67,8 @@ export const createIntentAnswers = (config: IntentAnswersConfig): AnswerIntent =
       await engine.introspect();
       return engine;
     })();
-    engines.set(writers, stood);
-    return stood;
+    engines.set(writers, created);
+    return created;
   };
 
   // No policy of its own: every asking is handed the caller's.

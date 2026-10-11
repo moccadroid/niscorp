@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import type { FetchFn } from '@niscorp/nova';
-import { flooredWire } from '../src/integrations/floor';
+import { withFallbackMessage } from '../src/integrations/fallback-message';
 
-// The sentence under a failing integration call (../src/integrations/floor.ts).
+// The sentence under a failing integration call (../src/integrations/fallback-message.ts).
 // What an integration's service answered is another process's JSON: these hold
-// which of its replies are its own words, and which get the floor.
+// which of its replies are its own words, and which get the fallback.
 const FLOOR = { message: 'The belts add-on is not answering right now. The rest of the studio is unaffected.' };
 
 type Reply = Awaited<ReturnType<FetchFn>>;
@@ -15,11 +15,11 @@ const replying = (reply: Reply | Error): FetchFn => async () => {
 const failing = (status: number, body: unknown): Reply => ({ ok: false, status, json: async () => body, text: async () => JSON.stringify(body) });
 
 const answered = async (inner: FetchFn, url = '/integrations/belts/api/stock'): Promise<{ ok: boolean; status: number; body: unknown }> => {
-  const reply = await flooredWire(inner)(url);
+  const reply = await withFallbackMessage(inner)(url);
   return { ok: reply.ok, status: reply.status, body: await reply.json() };
 };
 
-describe('the floor under a failing integration', () => {
+describe('the message under a failing integration', () => {
   it('a reply that carries a message is the integration’s own words, whole', async () => {
     const body = { message: 'Out of stock until Friday.', code: 'stock' };
     expect(await answered(replying(failing(409, body)))).toEqual({ ok: false, status: 409, body });

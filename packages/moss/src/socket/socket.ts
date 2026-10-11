@@ -12,7 +12,7 @@ import { endingOf } from './ending';
 import type { Ending } from './ending';
 import { parametersOf, protocolRefusal, whoIsAsking } from './handshake';
 import type { SaidOnce, UpgradeParameters } from './handshake';
-import { DEFAULT_ANONYMOUS_SHELL_MAX, createPlaces } from './places';
+import { DEFAULT_ANONYMOUS_SHELL_MAX, createAnonymousShellLimit } from './anonymous-shell-limit';
 import { createRevalidation } from './revalidation';
 import { messageHandler } from './routing';
 
@@ -77,7 +77,7 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
   const emit = emitterOf(config.telemetry);
   const notOwn: SaidOnce = { said: false };
   const revalidation = createRevalidation(config);
-  const places = createPlaces(config.anonymousShellMax ?? DEFAULT_ANONYMOUS_SHELL_MAX);
+  const anonymousShells = createAnonymousShellLimit(config.anonymousShellMax ?? DEFAULT_ANONYMOUS_SHELL_MAX);
 
   // WHAT AN ADMITTED CONNECTION IS SERVED: `hello`, then the session it is
   // attached to (undefined when the app serves no shell). Both are awaited,
@@ -135,7 +135,7 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
       // verifier down, upgrades did not turn into errors, they went missing.
       span?.('socket.upgrade', 'error', found.principal);
       revalidation.release(connection);
-      places.give(connection);
+      anonymousShells.release(connection);
       try {
         send(refusalOf(error));
         connection.close(CLOSE_SHELL_FAILED, 'session failed');
@@ -170,11 +170,11 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
       send({ type: 'error', code: 'seal_not_kept', message: 'This browser did not keep the cookie a sealed sign-in is opened with. Sign in again: it will be handed over as a token.' });
     }
 
-    // A SHELL FOR NOBODY TAKES A PLACE (./places.ts), before anything is asked
+    // A SHELL FOR NOBODY TAKES A PLACE (./anonymous-shell-limit.ts), before anything is asked
     // for it: arrivals in one moment each find the count the one before left.
     // With none left the terminal is told so and closed, and no shell is built.
     const session = openingOf(config, params);
-    if (principal === null && session !== undefined && !places.take(connection)) {
+    if (principal === null && session !== undefined && !anonymousShells.acquire(connection)) {
       span?.('socket.upgrade', 'refused', false);
       send(AT_CAPACITY);
       connection.close(CLOSE_AT_CAPACITY, 'at capacity');
@@ -185,7 +185,7 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
     // Listened for here, before anything below awaits (./ending.ts).
     const ending = endingOf(connection);
     ending.then(() => revalidation.release(connection));
-    ending.then(() => places.give(connection));
+    ending.then(() => anonymousShells.release(connection));
     // The connection's whole life, closed by the same clock — how long
     // terminals stay, and under a principal or anonymous. Registered here so it
     // fires however the connection ends (graceful, expiry, transport drop).

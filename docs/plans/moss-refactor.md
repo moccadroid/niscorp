@@ -507,8 +507,8 @@ Not here: stopping the seeding of `vex_cache`. That belongs to the artifactory.
    typed object of its own (`DataConfig`, `RunningManifestConfig`,
    `IdentityConfig`, `ShellHostConfig`, `SocketConfig`, `DocumentConfig`,
    `IntegrationsConfig`, `TideFactsConfig`). Inside `server`, the module that
-   may hold both, `standData(app: NiscApp, runtime: NiscRuntime)`
-   (`src/server/data.ts:14`) and `standManifest(app: NiscApp, …)`
+   may hold both, `buildData(app: NiscApp, runtime: NiscRuntime)`
+   (`src/server/data.ts:14`) and `buildRunningManifest(app: NiscApp, …)`
    (`src/server/manifest.ts:15`) take the whole manifest and hand on its
    fields; the other steps take a `Pick`. Two functions that are not factories
    take the whole manifest because the whole of it is their subject:
@@ -543,13 +543,13 @@ Not here: stopping the seeding of `vex_cache`. That belongs to the artifactory.
    - Held by hand, not by a schema: the parameters of an upgrade
      (`src/socket/handshake.ts:25`, an integer in a range;
      `src/socket/socket.ts:63`, a regular expression), an integration's error
-     body (`src/integrations/floor.ts:34`), vex's own reply over the internal
+     body (`src/integrations/fallback-message.ts:34`), vex's own reply over the internal
      wire (`src/server/wire.ts:36`), and the runtime, whose fields are checked
      where each is read (`session` unset, `identityMax` of zero).
      *Since (2026-10-11):* the parameters of an upgrade are read by one schema
      (`UpgradeParametersSchema`, `src/socket/handshake.ts`), and a protocol is
      digits: `Number()` had read `0x2` as 2. An integration's error body is
-     read by a schema (`src/integrations/floor.ts`), accepting what the hand
+     read by a schema (`src/integrations/fallback-message.ts`), accepting what the hand
      check accepted. Vex's reply over the internal wire is left as it is: it
      is the server's own surface answering inside the process, and nothing
      from outside reaches that line unparsed. The runtime is left too: it is

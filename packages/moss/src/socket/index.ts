@@ -29,7 +29,7 @@
 // has no streams, and a message aimed at one is answered honestly with
 // `no_shell` rather than silently dropped.
 //
-// A SHELL FOR NOBODY TAKES A PLACE (./places.ts): somebody signed in has one
+// A SHELL FOR NOBODY TAKES A PLACE (./anonymous-shell-limit.ts): somebody signed in has one
 // shell, nobody signed in has one for each connection, and how many of those
 // are alive at once has a limit.
 //
@@ -45,6 +45,6 @@
 
 export type { HeldCatalog, SessionSource, SocketConfig } from './config';
 export type { Connection, SocketAccept, TransportSettings } from './connection';
-export { DEFAULT_ANONYMOUS_SHELL_MAX } from './places';
+export { DEFAULT_ANONYMOUS_SHELL_MAX } from './anonymous-shell-limit';
 export { DEFAULT_REVALIDATE_MS } from './revalidation';
 export { createSocket } from './socket';

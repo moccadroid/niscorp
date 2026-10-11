@@ -12,7 +12,7 @@ import type { NiscRuntime } from '../runtime';
 // Creating it IS the boot check: an incoherent manifest refuses here, before
 // anything else stands (the charter with each role's closure audited, every
 // entry's reach, the layout variants).
-export const standManifest = async (
+export const buildRunningManifest = async (
   app: NiscApp,
   runtime: Pick<NiscRuntime, 'sessionRevalidateMs'>,
   data: Pick<Data, 'grants' | 'dropOnChange' | 'pointer' | 'seed'>,

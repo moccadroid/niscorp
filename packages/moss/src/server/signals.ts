@@ -40,7 +40,7 @@ export type SignalParts = {
   shells: Pick<ShellHost, 'deliver'> | undefined;
 };
 
-export const standSignals = ({ fabric, identity, reset, shells }: SignalParts): Signals => {
+export const buildSignals = ({ fabric, identity, reset, shells }: SignalParts): Signals => {
   const origin = randomBytes(8).toString('hex');
   // Who somebody is changed: what is held of them is forgotten, and every
   // shell built for them is rebuilt, whichever host built it. It was the app's
