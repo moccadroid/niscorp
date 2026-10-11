@@ -135,9 +135,8 @@ The organizing principle: an app hands over **artifacts** and an
   the charter verifies (`verifyCharter`, with nova's closure audit over the
   definitions in force), every entry's `reach` names a profile the behaviors
   declare, and nobody holds two layout variants of one action. It is asked at
-  boot, at every change (`refresh`, `replaceActions`), and of a candidate that
-  has not been taken (`server.verifyActions`, `verifyApp`); a boot or a change
-  that fails it throws. The closure audit's findings are not errors: they are
+  boot, at every change (`refresh`, `replaceActions`), and of a manifest that
+  is not served (`verifyApp`); a boot or a change that fails it throws. The closure audit's findings are not errors: they are
   filed under each role's `issues` in the report, and boot neither refuses on
   them nor prints them. If it boots, the charter and the variants are
   coherent; a push to an ungranted action can still be in it.
@@ -208,11 +207,12 @@ A **feature** owns none of the five. It lives in a directory of its own, ships
 from an entry point of its own, and the core never imports it: the app creates
 it and names it in its manifest's `features`, and the server starts it with
 the seams (`FeatureSeams`: every member one function or one narrow value of
-the module that owns it). **The seams are made for the feature they are handed
+the module that owns it). `Feature` and `FeatureSeams` are the contract between
+moss and its two features, and are not exported: an app names a feature and
+cannot write one. **The seams are made for the feature they are handed
 to, and what they reach is that feature's**: its own tables, which it names on
-itself before it runs (`Feature.tables.names`) and which are no other
-feature's and never the core's; its own set of actions, kept under its name,
-which it alone writes; the documents in its own rows. The core reads and
+itself before it runs (`Feature.tables.names`); its own set of actions, kept
+under its name, which it alone writes; the documents in its own rows. The core reads and
 writes no row of a feature, reads no header of one, and holds no setting of
 one (the key the integrations feature signs with is that feature's own).
 `feature` is the module that says what a feature and
@@ -253,8 +253,7 @@ names. `shells` does not import `identity`: who somebody is, it is told.
 handed. `integrations` does not import `data`: what it reads and writes it
 authors as vex entries and replays through a seam. Nor `manifest`: what it
 asks about a bundle before letting it in (does a layout fit the kit, which
-chains of steps never end) it asks through two seams, as a feature somebody
-else writes would. A feature imports `feature`, and `runtime` for where a span
+chains of steps never end) it asks through two seams. A feature imports `feature`, and `runtime` for where a span
 goes, and nothing else of moss. A module imports another by its `index.ts`
 and never a file inside it.
 
@@ -286,18 +285,15 @@ keeps them, are migrated in the same run (`runtime.tables`) and are the app's
 and tide's.
 
 What holds the rules is a build that fails, not this page: `pnpm
-check:modules` (the table above, the doors, nothing flat, no feature in the
-core, and no way round them by a type-only import, the package's own name or a
-file of another extension, and a door exports no name that no other module
-takes), `pnpm check:api` (an exported name, each member of an exported type,
-and each member of a type that something exported takes or answers, is a line
-in `api.txt`), `pnpm check:raw-sql` (a
-statement outside vex is counted, with its reason, whatever sends it and
-however it is cased) and `pnpm lint` (no type assertion, no `any` that becomes
-a typed value, no written type predicate, the two sizes and the width).
+check:modules` (the table above, the doors, nothing flat, no cycle, and no
+feature in the core), `pnpm check:api` (an exported name is a line in
+`api.txt`, and a line there is an exported name), `pnpm check:raw-sql` (a
+statement outside vex is counted, with its reason) and `pnpm lint` (no type
+assertion, no `any` that becomes a typed value, no written type predicate, the
+two sizes and the width).
 **Narrow inputs and one owner are held by none of the four**: they are read
 for in review, and the table above is what a review found, not what a build
-checks. What each gate cannot see is said at the top of its script. The rules
+checks. What each gate holds is said at the top of its script. The rules
 as somebody changing a package follows them are in the application guide,
 "Changing a package" (`packages/nisc/AGENTS.md`).
 

@@ -1,9 +1,11 @@
 # Moss — API Reference
 
-Sixteen entry points: `@niscorp/moss` (the server), `@niscorp/moss/node` (the
+Eighteen entry points: `@niscorp/moss` (the server), `@niscorp/moss/node` (the
 Node listener and the built site), `@niscorp/moss/vite` (the dev plugin),
 `@niscorp/moss/integrations` (a feature: services that add screens),
 `@niscorp/moss/tide` (a feature: a write minted into tide as a fact),
+`@niscorp/moss/protocol` (the names of code that speaks the wire itself),
+`@niscorp/moss/unverified` (the whole shell of a session),
 `@niscorp/moss/client` and `@niscorp/moss/client/node` (the wire and its Node
 host), `@niscorp/moss/terminal` (the terminal), and the render targets:
 `terminal/react`, `terminal/vue`, `terminal/dom` (each with a `/server` entry
@@ -16,12 +18,9 @@ calls. Its entry in `CHANGELOG.md` says what an app changes.
 
 **What is exported is a file.** Every name an entry point exports is one line
 of `packages/moss/api.txt` in the repository (it is not in the published
-package), and so is each member of an exported type or object, one level down
-(`. MossServer.replaceActions`). A type that no entry exports by name, and
-that something exported takes or answers, has its members there in brackets
-(`. (ShellSession).attach`: what `ShellHost.session` answers). `pnpm
-check:api` fails when the file and the entry points differ. What the file
-does not record is a signature: a member whose type changes moves no line.
+package): the entry point and the name (`. MossServer`). `pnpm check:api`
+fails when the file and the entry points differ. What the file does not record
+is a member or a signature: a member whose type changes moves no line.
 Each exported name is documented below, under its entry point. Where this
 document names a type, a constant or a file that no entry exports, it says
 so: the name is there so a shape can be read, and an app reaches the shape
@@ -69,7 +68,7 @@ type NiscApp = {
   onSession?: (session: FunctionSession) => void;
   runs?: RunSink;
   reactions?: readonly { table; op?; run }[];         // see "Reacting to writes"
-  // what is added to moss that is not its core (see "Features")
+  // what is added to moss that is not its core (see "Features"); `Feature` is not exported
   features?: readonly Feature[];
 };
 ```
@@ -212,7 +211,7 @@ What the manifest's in-process functions close over:
 
 ```typescript
 type FunctionSession = {
-  shell: Shell;                    // the session's living, durable shell (a getter — a reset replaces it)
+  shell: Shell;                    // the session's living, durable shell (a getter — a reset replaces it); nine members throw
   principal: string | null;
   roles: readonly string[];
   identity: Record<string, unknown>;  // the scope half of the resolved identity
@@ -231,6 +230,26 @@ type FunctionSession = {
 `revoke` settles when the credential is gone: under `session: 'sessions'` it
 deletes every session the principal has (`revokeAllFor`). `recordRun` is a
 no-op when the manifest declares no `runs` sink.
+
+**`shell` refuses the nine members that change what a shell is made of**:
+`registerAction`, `removeAction`, `registerFragment`, `addCanvas`,
+`removeCanvas`, `setCanvasLayout`, `setLayout`, `setPhrases` and `dispose`
+throw. An action, a fragment, a canvas, a layout and the phrases reach a shell
+through moss, which verifies them and decides who holds them; added on the
+shell directly they are not verified, are in nobody's catalog and are gone
+when the shell is rebuilt. Everything else (reads, navigation, `dispatch`,
+`publish`, the observers) works as on nova's `Shell`, which is still the
+type. Code that goes around moss anyway takes the whole shell from
+`@niscorp/moss/unverified`, so the file that does it says so in its imports.
+The shell of what `server.shells.session(…)` answers is the same shell.
+
+```typescript
+import type { FunctionSession } from '@niscorp/moss';
+import { unverifiedShell } from '@niscorp/moss/unverified';
+import type { ActionDefinition } from '@niscorp/nova';
+
+const register = (session: FunctionSession, definition: ActionDefinition): void => unverifiedShell(session).registerAction(definition);
+```
 
 **A session says who is calling and holds no key.** It carries no `runtime`
 (the database pool, the operator key) and no `policy` (the
@@ -428,9 +447,8 @@ runtime picks the posture: `'apply'` (default) runs what is pending; `'verify'`
 refuses to boot if anything is, for a deployment that migrates as a deploy step.
 
 The run's order is: `MOSS_SEQUENCE`, the sessions table's under
-`session: 'sessions'`, the vex cache's, the tables the app's features keep
-(`Feature.tables.sequences`, in the order the app named the features), then
-`runtime.tables`.
+`session: 'sessions'`, the vex cache's, the tables the app's features keep (in
+the order the app named the features), then `runtime.tables`.
 
 `tables` on the runtime hands over the app's own table sequences. They join
 that run last — one transaction, one lock, one posture, so `'verify'`
@@ -522,7 +540,7 @@ the tables are migrated and the data module stands; the running manifest is
 created, which is the boot check, and the entries it holds are seeded where
 vex replays from; identity; the server's own routes (the
 authentication, `/catalog`, vex); the shell hosts, the app's and each page's;
-what crosses processes; the features, each started with the seams; the
+what crosses processes; the features, each started with seams made for it; the
 operator prefix; the app's reactions hear a write; the generation pointer is
 watched; the socket.
 A step that refuses is the boot's refusal.
@@ -610,9 +628,9 @@ and does not throw.
 #### `MossServer`
 
 `Hono<Env> & { socket; shells?: ShellHost; principalOf; page; pages;
-refresh; replaceActions; verifyActions; actions; catalogOf;
+refresh; replaceActions; actions; catalogOf;
 policyForRoles; charterReport; invalidateIdentity; invalidateTenant; identity;
-executeAs; nudge; generation; close; identities? }`.
+executeAs; nudge; close; identities? }`.
 It's a Hono app — mount it, extend it, or hand it to a listener.
 
 - `principalOf(token): Promise<string | null>` — the deployment's own session
@@ -654,8 +672,7 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   **The set is handed to this process, and no other process is handed it.**
   Another process follows the pointer the call moved, as after a `refresh`,
   and goes on serving the set of that name it was last handed itself, or
-  none. An app that runs several processes keeps the set in rows and says
-  how it is read, in a feature of its own
+  none. An app that runs several processes hands the set to each of them
   ([Many processes](#many-processes), "The pointer carries no set"). Every definition of the
   set is read by nova's schema first: one nova does not read refuses the set
   (`Refresh refused — actions nova does not read:`, naming the action and what
@@ -665,18 +682,6 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   replaces it: handing a set over under a feature's name throws (`moss: the
   set of actions "integrations" is the feature "integrations"'s, and only its
   owner replaces it. …`).
-- `verifyActions(source, actions)` — the dry run of
-  `replaceActions`: the same verification over the same candidate (the app's
-  actions, then each set, with `actions` in place of the set called `source`),
-  answered as a report. Nothing changes. `errors` is `{ check, detail }[]`,
-  `check` one of `'actions'` (a definition nova's schema does not read),
-  `'charter'`, `'reach'`, `'variants'`, and `'owner'`; empty means
-  `replaceActions` would accept the set. `said` is what a boot only says (a
-  chain of steps that never ends), and `charter` is the charter engine's whole
-  report for the candidate. For a `source` that is a feature's, the first
-  error is `{ check: 'owner', detail }`: the set is not the app's to hand
-  over, and `detail` is the sentence `replaceActions` throws for it. It
-  answers that and throws nothing: it is asked in order to find out.
 - `actions(): Readonly<Record<string, ActionDefinition>>` — the actions in
   force now, by id: what the app shipped, then each set handed over. To read;
   a set changes through `replaceActions`.
@@ -705,8 +710,6 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   always empty here. A push whose target is a binding (`@event.payload`,
   `$.target`) is listed among the `issues` as "not in the catalog", though it is
   resolved when the step runs; a `{{…}}` target is not listed.
-- `generation(): number` — the generation this process last observed (`-1`
-  before the first read).
 - `invalidateIdentity(principal): boolean` — forget one principal's identity
   record and reset every living shell of theirs (a role change): the one the
   app keeps for them, and the one a page built for each connection of theirs.
@@ -964,8 +967,8 @@ Vex is the choke point every application write passes through, so its write
 observer is where a host learns about all of them. Moss hears it once and
 offers each write down two lanes with deliberately different privileges: the
 app's reactions, which are part of the manifest and are handed no row, and a
-feature that asks to hear writes (`FeatureSeams.onWrite`), which is handed
-them. The one feature that does is the tide lane, `createTideFacts`. Features
+feature that hears writes, which is handed them. The one feature that does is
+the tide lane, `createTideFacts`. Features
 are told first, in the order the app named them, then the reactions, and each
 on its own: a listener that throws (an app's `identity`, say) is logged, and
 the others still hear of that write. The write was committed before any is
@@ -1060,73 +1063,34 @@ and scoped by a behavior like any other.
 
 ### Features
 
-A feature is something an app adds to moss that owns none of what the core
-answers (who is calling, what exists for them, what they may read and write,
-what they are looking at, how it reaches them). It ships from an entry point of
-its own, and the core never imports it.
+A feature is something moss adds to its core and keeps apart from it: it owns
+none of what the core answers (who is calling, what exists for them, what they
+may read and write, what they are looking at, how it reaches them). It ships
+from an entry point of its own, and the core never imports it. There are two,
+[`@niscorp/moss/integrations`](#niscorpmossintegrations) and
+[`@niscorp/moss/tide`](#niscorpmosstide), and they are moss's own: an app
+cannot write one, and `Feature` and `FeatureSeams`, the types moss and its
+features meet at, are not exported. An app creates the ones it wants and names
+them in `features: [createIntegrations(...), createTideFacts(...)]`.
 
-- `Feature` — `{ name: string; tables?: { names: readonly string[];
-  sequences?: readonly Sequence[] }; start(seams: FeatureSeams): void |
-  Promise<void> }`. The app puts features in `NiscApp.features`.
-  `createServer` starts each one, in order, once its core stands and before
-  anything is served; one that throws refuses the boot. No two features of an
-  app share a `name`.
-  `tables.names` is the tables that are the feature's own: every table its own
-  entries read and write, and all they may. It is said on the feature, so
-  whoever puts one in a manifest can read which tables it addresses outside
-  the app's policy without running it.
-  `tables.sequences` is the strata sequences that make them: they are
-  migrated in the one ledgered run, before the feature starts, and
-  `migrateTables` runs them too.
-- `FeatureSeams` — everything of the core a feature may touch, each member one
-  function or one narrow value. Each feature is started with seams made for
-  it: what they reach is that feature's. Twenty-three members, and each is one a
-  feature uses: one that stops being used is taken out. A route a feature
-  mounts reads who is calling as `c.get('principal')`.
+`createServer` starts each one, in order, once its core stands and before
+anything is served; one that throws refuses the boot. No two features of an
+app share a name. What a feature routes, keeps and serves is documented under
+its entry point.
 
-  | Member | What it is for |
-  |---|---|
-  | `mountRoutes(hono)` | mount routes at the server's root, behind the authentication every route gets |
-  | `mountOperatorRoutes(hono)` | mount routes under `/operator`, behind the operator key and the app's gate |
-  | `registerCredential(prefix, principalOf)` | read a bearer token that starts with the feature's own prefix, and say who it is |
-  | `resolveIdentity(principal)` | who a principal is: their roles, and the integrations live for them |
-  | `scopeOf(principal)` | the scope values a principal carries, which the engine pins rows by |
-  | `grantedActionIds(roles, installed)` | the action ids a set of roles holds of the actions in force |
-  | `actions()` | the actions in force: what the app shipped, then each set handed over |
-  | `replaceActions(actions)` | put a set of actions in place of the feature's own, in this process; throws when the app could not be served so. A feature has one set, kept under its name, and is its only writer |
-  | `refusalOf(actions)` | the sentence the app would be refused with if exactly these were in force, or `undefined` |
-  | `setActionsLoader(load)` | how the feature's set, kept in rows, is read again when another process moved the generation pointer; a set with no loader is not carried to another process |
-  | `addCatalogFilter(filter)` | one more rule for which granted actions are there for an install list. A filter narrows: an id it answers that it was not handed is dropped, so it grants nothing |
-  | `charter` | the charter the app shipped: role names, and what each selects |
-  | `components` | the kit's component contracts by name: a description, and the props' schema |
-  | `layoutMisfits(layout)` | each place a layout somebody else wrote does not fit the app's kit, as a sentence: a component the app has none for, a prop the component has no place for, a value its schema refuses. Empty: it fits |
-  | `endlessChains(actions)` | the chains of steps that never end among a set of actions, each as `{ path, through }`: the line that names it, and the ids of the actions its steps run through |
-  | `ownEntries(entries)` | hand over the feature's own reads and writes, on the tables it named as its own, and get back how one is replayed |
-  | `grammars` | read a stored document in this code's grammars, and stamp one that is written |
-  | `upgradeStore(store)` | bring the documents stored in one of the feature's own tables to this code's grammars, in one transaction; a row written by newer code throws |
-  | `fingerprints()` | every fingerprint the app serves |
-  | `fingerprintsFor(principal)` | the fingerprints that principal's own policy lets them replay |
-  | `onWrite(listener)` | hear every write the routes serve, once it is committed: `listener(event, request)` is handed what vex reports of it, and what the request that wrote said in its headers, asked by name (`request.header('x-…')`; never the credential it carried); answers the way to stop hearing |
-  | `telemetry` | where a span goes; absent, none is built |
-  | `wrapWire(wrap)` | lay a function around the wire a session's screens call through |
-
-A feature is handed no pool. What it reads and writes on its own tables it
-authors as vex entries, as an app does, and hands over:
-`ownEntries(entries)` answers `replay(fingerprint, context)`,
-which replays one in process (a read answers its rows, a write the row it
-wrote; a refusal throws). Those entries are seeded into a cache of their own,
-held by an engine no route is handed, so `/api/vex` answers `cache_miss` for
-one of them whatever the charter grants whoever asks, and no surface lists it.
-They run under a policy that admits the tables the feature named as its own
-(`Feature.tables.names`) and no other, and asks for no principal. Which tables
-is not said when the entries are handed over: an entry that reads or writes
-any other table refuses the hand-over, and so the boot (`moss: the feature
-"…" handed over an entry that reads or writes a table that is not its own:
-"…"`). What another table holds, a feature reads as the app does: through the
-app's entries, under the charter. A write of theirs tells the app's engine
-which tables changed, so a reactive read over one of them answers again.
-`fingerprintsFor(principal)` is the fingerprints that principal's own policy
-lets them replay, as vex's discovery lists them.
+A feature names the tables that are its own and the strata sequences that make
+them. The sequences are migrated in the one ledgered run, before the feature
+starts, and `migrateTables` runs them too. A feature reads and writes those
+tables through vex, as an app does, with entries of its own: they are seeded into a
+cache of their own, held by an engine no route is handed, so `/api/vex`
+answers `cache_miss` for one of them whatever the charter grants whoever asks,
+and no surface lists it. They run under a policy that admits the tables the
+feature named as its own and no other, and asks for no principal. An entry
+that reads or writes any other table refuses the boot (`moss: the feature "…"
+handed over an entry that reads or writes a table that is not its own: "…"`).
+What another table holds, a feature reads as the app does: through the app's
+entries, under the charter. A write by a feature tells the app's engine which
+tables changed, so a reactive read over one of them answers again.
 
 ### Many processes
 
@@ -1158,39 +1122,14 @@ lets them replay, as vex's discovery lists them.
   serve, drops what it derived (what each set of roles holds, the compiled
   policies, the identity records) and has its living shells adopt.
   **The pointer carries no set.** It says that something changed, and a
-  process learns what by reading rows. The sets that have a loader are the
-  integrations feature's (`'integrations'`) and that of any feature of the
-  app's own that said one with `seams.setActionsLoader(load)`. A set handed to
-  `server.replaceActions` in one process, with no loader, is in that
-  process's memory: every other process reaches the same generation and goes
-  on serving the set of that name it was last handed itself, or none.
-  So an app that runs several processes, and loads actions from its own
-  tables, says how they are read, in a feature of its own:
-
-  ```ts
-  const createBundles = (): Feature & { reload: () => Promise<void> } => {
-    let replace: FeatureSeams['replaceActions'] | undefined;
-    return {
-      name: 'bundles',
-      start: async (seams) => {
-        replace = seams.replaceActions;
-        // every process reads the rows again when the pointer moves
-        seams.setActionsLoader(loadBundles);
-        // what the rows hold when this process starts
-        seams.replaceActions(await loadBundles());
-      },
-      // ...and where the app has changed the rows, in the process that did:
-      reload: async () => replace?.(await loadBundles()),
-    };
-  };
-  ```
-
-  The set is the feature's, under the feature's name, and the feature is its
-  one writer: `server.replaceActions('bundles', …)` throws in an app that
-  names it. `reload` moves the pointer, and each other process reads the rows
-  through its loader within one poll. An app that keeps a set in no feature
-  calls `server.replaceActions` in each of its processes itself, on a signal
-  of its own.
+  process learns what by reading rows. The only set that has a loader is the
+  integrations feature's (`'integrations'`). A set handed to
+  `server.replaceActions` in one process is in that process's memory: every
+  other process reaches the same generation and goes on serving the set of
+  that name it was last handed itself, or none. So an app that runs several
+  processes hands the set to each of them with `server.replaceActions`, on a
+  signal of its own. Each call moves the pointer once more, and the others drop
+  what they derived and adopt again.
   The row is read and moved through vex, by two
   entries of moss's own that no route serves (`src/data/pointer.ts`);
   `src/manifest/generation.ts` holds the clock and no SQL. A move is a compare
@@ -1202,7 +1141,6 @@ lets them replay, as vex's discovery lists them.
   has moved on or the reload fails another way, and once when it is followed
   (`followed the generation pointer to 4, after 12 looks that failed`). A
   reload that fails the same way for an hour is one line, not sixty.
-  `server.generation()` is the last move it followed.
 - The identity cache — what holds the records `app.identity` resolves. It is
   the server's own (`src/identity/cache.ts`) and is not exported. Its limits
   are `runtime.identityMax` (default 10,000) and `runtime.identityIdleMs`
@@ -1265,10 +1203,13 @@ app that resolves people through `identity`.
   `actions`, `layouts`, `wearable`, `assignments`, `entries` and `behaviors`
   of what it is handed, so a check may hand it those alone. `grants` is every
   `<table>.<verb>` the database can carry (vex's `scopeGrants(tables)`). The
-  report is `{ errors, said, charter }`, as `server.verifyActions` answers it;
-  a boot refuses on `errors`. A running server answers for what is in force
-  with `server.charterReport()`. It verifies and does nothing else: what it is
-  handed is not read by the manifest's schema and is not frozen.
+  report is `{ errors, said, charter }`: `errors` is `{ check, detail }[]`,
+  `check` one of `'actions'` (a definition nova's schema does not read),
+  `'charter'`, `'reach'` and `'variants'`; `said` is what a boot only says (a
+  chain of steps that never ends), and `charter` is the charter engine's whole
+  report. A boot refuses on `errors`. A running server answers for what is in
+  force with `server.charterReport()`. It verifies and does nothing else: what
+  it is handed is not read by the manifest's schema and is not frozen.
 
 A charter check that boots no server builds the universe a boot resolves
 `data` over (the app's tables and the engine's own, AGENTS.md rule 10a) and
@@ -1375,7 +1316,9 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
   exported by name: `Awaited<ReturnType<ShellHost['session']>>`):
   `{ shell, attach, detach, resync, dispatch, publish, back, popTo, reset }`. The living nova `Shell`,
   for in-process hosts (dev checks, embedded tools) that drive it directly;
-  remote clients ride `attach`/`dispatch`. `shell` is a **getter** — `reset`
+  remote clients ride `attach`/`dispatch`. Nine members of `shell` throw, as
+  on [`FunctionSession`](#functionsession): the whole shell is
+  `unverifiedShell(session)`. `shell` is a **getter** — `reset`
   replaces the shell under a session already held, so a snapshot of the field
   would go on addressing the disposed one.
   `dispatch(canvas, event)` holds what a terminal sent to the shell: the
@@ -1390,8 +1333,10 @@ A check that connects in process hands the socket a `Connection` of its own,
 and reaches the app's shell host as `server.shells`:
 
 ```typescript
-import { PROTOCOL, mintDevToken, offerToken } from '@niscorp/moss';
-import type { Connection, ShellHost } from '@niscorp/moss';
+import { mintDevToken } from '@niscorp/moss';
+import type { ShellHost } from '@niscorp/moss';
+import { PROTOCOL, offerToken } from '@niscorp/moss/protocol';
+import type { Connection } from '@niscorp/moss/protocol';
 
 const frames: string[] = [];
 const connection: Connection = {
@@ -1438,12 +1383,12 @@ server.nudge('usr_ada', 'notes-changed');
     every request, so an expired credential left the socket open and rendering
     while every endpoint the server shell called came back 401 — a live
     interface whose every load silently fails.
-- `Connection` — the transport seam: `{ send, close, onMessage, onClose }`.
+- `Connection` (`@niscorp/moss/protocol`) — the transport seam: `{ send, close, onMessage, onClose }`.
   `onClose` is called once, as soon as who is asking is decided and before
   `hello`: a connection that closes while its session is being opened (its
   catalog asked, its shell built) is not attached to a shell, so a kept shell
   idles and one built for that connection alone is disposed.
-- `ServerMessage` — what the server sends: `hello | catalog | frame | render |
+- `ServerMessage` (`@niscorp/moss/protocol`) — what the server sends: `hello | catalog | frame | render |
   render-delta | session | error`.
 - What a terminal sends is `event | publish | resync | reset | back | popTo`,
   each with exactly the fields the protocol names (`src/protocol/messages.ts`;
@@ -1485,8 +1430,9 @@ server.nudge('usr_ada', 'notes-changed');
 - `popTo` names a canvas and an instance already on its stack
   (`{ type: 'popTo', canvas, instance }`): unmount everything above it, in one
   step — a breadcrumb's jump, which several `back`s would race.
-- **The close codes.** Two are exported, because they are the two a terminal
-  recovers from by dropping its token: `CLOSE_INVALID_TOKEN = 4401` and
+- **The close codes.** Two are exported, by `@niscorp/moss/protocol`, because
+  they are the two a terminal recovers from by dropping its token:
+  `CLOSE_INVALID_TOKEN = 4401` and
   `CLOSE_SIGNED_OUT = 4403`. Three more are numbers a terminal written by hand
   names itself (their constants are in `src/protocol/connection.ts` and are
   not exported):
@@ -1557,8 +1503,8 @@ server.nudge('usr_ada', 'notes-changed');
   a message changes shape; raise `PROTOCOL_MIN` only when the server stops
   speaking an old one. Both are `2` today: at `1` the token rode the address,
   and a server that went on reading it there would keep that open. `PROTOCOL`
-  and `offerToken` are exported from the package root, for a terminal written
-  by hand; `PROTOCOL_MIN` and `CLOSE_PROTOCOL_MISMATCH` are defined in
+  and `offerToken` are exported from `@niscorp/moss/protocol`, for a terminal
+  written by hand; `PROTOCOL_MIN` and `CLOSE_PROTOCOL_MISMATCH` are defined in
   `src/protocol/connection.ts` and are not.
 - **`?path=`** — the path the terminal is on. A path that leads to a page is
   served that page's shell, built for this connection alone and seeded with the
@@ -1578,8 +1524,8 @@ server.nudge('usr_ada', 'notes-changed');
 A terminal written by hand, with the four things it takes from this entry:
 
 ```typescript
-import { CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, PROTOCOL, offerToken } from '@niscorp/moss';
-import type { ServerMessage } from '@niscorp/moss';
+import { CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, PROTOCOL, offerToken } from '@niscorp/moss/protocol';
+import type { ServerMessage } from '@niscorp/moss/protocol';
 
 const socket = new WebSocket(`wss://app.example/socket?protocol=${PROTOCOL}`, offerToken(token));
 socket.addEventListener('message', (event) => {
@@ -1858,7 +1804,7 @@ letter: it is a segment of every path the integration is served under and a
 part of every action it ships. A registration under any other id is a `400`,
 and a bundle that calls itself anything else is refused at intake.
 
-`Integrations` is a `Feature` that also carries the calls an app makes. They
+`Integrations` is a feature that also carries the calls an app makes. They
 work once a server has started the feature, and reject with a sentence before
 that:
 
@@ -1942,9 +1888,8 @@ hash of one key (a unique index on `integrations.key_hash`).
 
 **Its tables.** `integrations` and `integration_actions` are part of
 `MOSS_SEQUENCE` (`@niscorp/moss`). `integration_frame_grants` is the feature's
-own sequence, `nisc.moss.integrations`, which it names on itself
-(`Feature.tables.sequences`), so the server runs it with the rest and `migrateTables`
-does too. All three are tables like any other in the charter's `data`
+own sequence, `nisc.moss.integrations`, which it names on itself, so the
+server runs it with the rest and `migrateTables` does too. All three are tables like any other in the charter's `data`
 universe: a role granted a data wildcard denies them (`integrations.*`,
 `integration_actions.*`, `integration_frame_grants.*`).
 
@@ -2005,8 +1950,9 @@ import { createTideFacts } from '@niscorp/moss/tide';
 const app = defineApp({ charter, actions, features: [createTideFacts({ tide: () => driver, identity, chain })] });
 ```
 
-- `createTideFacts(config: TideFactsConfig): Feature` — started by the server
-  with the seams, of which it uses one: `onWrite`. It keeps no table.
+- `createTideFacts(config: TideFactsConfig)` — the feature an app names in
+  `features`. The server starts it; it hears each committed write, and keeps no
+  table.
 - `TideFactsConfig` — `{ tide: () => Pick<Tide, 'ingest'> | undefined;
   identity: (scope) => string | undefined; chain?: (scope, hints) => hints |
   undefined }`. What each is asked, and when, is under
@@ -2026,6 +1972,21 @@ const facts: TideFactsConfig = {
 };
 const app = defineApp({ charter, actions, features: [createTideFacts(facts)] });
 ```
+
+## `@niscorp/moss/protocol`
+
+For code that speaks the wire itself: a client written by hand (a check that
+opens a socket and reads frames), or a transport other than the one in
+`@niscorp/moss/node`. A terminal uses `@niscorp/moss/client`, and an app
+served by `nisc` or `serve` needs none of this. It exports `PROTOCOL`,
+`offerToken`, `CLOSE_INVALID_TOKEN`, `CLOSE_SIGNED_OUT` and the types
+`ServerMessage` and `Connection`, each described under
+[The socket protocol](#the-socket-protocol).
+
+## `@niscorp/moss/unverified`
+
+`unverifiedShell(session)` — the whole nova `Shell` of a session, for code that
+goes around moss: see [`FunctionSession`](#functionsession).
 
 ## `@niscorp/moss/client`
 
