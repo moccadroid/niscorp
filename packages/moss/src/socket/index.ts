@@ -44,7 +44,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 export type { HeldCatalog, SessionSource, SocketConfig } from './config';
-export type { Connection, SocketAccept } from './connection';
+export type { Connection, SocketAccept, TransportSettings } from './connection';
 export { DEFAULT_ANONYMOUS_SHELL_MAX } from './places';
 export { DEFAULT_REVALIDATE_MS } from './revalidation';
 export { createSocket } from './socket';

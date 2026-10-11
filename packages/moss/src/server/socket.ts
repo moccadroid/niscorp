@@ -12,15 +12,15 @@ import type { Hosts } from './hosts';
 // handed where a session comes from, for the app and for each page, and
 // nothing else of a shell host.
 export type SocketParts = {
-  runtime: Pick<NiscRuntime, 'pool' | 'session' | 'sessionRevalidateMs' | 'anonymousShellMax' | 'telemetry' | 'origins'>;
+  runtime: Pick<NiscRuntime, 'pool' | 'session' | 'sessionRevalidateMs' | 'anonymousShellMax' | 'telemetry' | 'origins' | 'socketCompression' | 'socketMaxMessageBytes'>;
   session: SessionVerifier;
   identity: Pick<Identity, 'resolve'>;
   running: Pick<RunningManifest, 'catalogFor'>;
   hosts: Pick<Hosts, 'shells' | 'pageAt'>;
 };
 
-export const standSocket = ({ runtime, session, identity, running, hosts }: SocketParts): SocketAccept =>
-  createSocket({
+export const standSocket = ({ runtime, session, identity, running, hosts }: SocketParts): SocketAccept => {
+  const socket = createSocket({
     session,
     catalog: async (principal) => {
       const resolved = await identity.resolve(principal);
@@ -36,3 +36,15 @@ export const standSocket = ({ runtime, session, identity, running, hosts }: Sock
     // the deployment keeps moss's own credential.
     ...(runtime.session === 'sessions' ? { sessionLastsMs: (token: string) => sessionRemainingMs(runtime.pool, token) } : {}),
   });
+  // HOW THE SOCKET IS TO BE ATTACHED, said here and nowhere else. The two
+  // settings of the transport are the deployment's, and the socket carries
+  // them to whichever transport is handed it (./transport.ts): `serve`,
+  // `nisc start` and the dev plugin all attach `server.socket`, and none of
+  // them is handed the runtime or has to be.
+  return Object.assign(socket, {
+    transport: {
+      ...(runtime.socketCompression !== undefined ? { compression: runtime.socketCompression } : {}),
+      ...(runtime.socketMaxMessageBytes !== undefined ? { maxMessageBytes: runtime.socketMaxMessageBytes } : {}),
+    },
+  });
+};

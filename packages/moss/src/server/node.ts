@@ -6,7 +6,7 @@ import { renderDocument } from '../documents';
 import type { DocumentConfig } from '../documents';
 import type { NiscApp } from '../manifest';
 import type { NiscRuntime } from '../runtime';
-import type { SocketAccept } from '../socket';
+import type { SocketAccept, TransportSettings } from '../socket';
 import type { MossServer } from './moss-server';
 import { createServer } from './server';
 import { createTransport, hearUpgrades } from './transport';
@@ -22,6 +22,11 @@ import type { Upgradeable } from './transport';
 // The websocket transport on a listener of the host's own: the upgrade
 // requests made to `path` are answered through `accept` (./transport.ts).
 //
+// A HOST THAT ATTACHES A SERVER'S SOCKET SAYS NOTHING MORE. How its
+// connections are set (compression, the largest message) is the deployment's,
+// and `server.socket` carries it from the runtime. `options` is for a host
+// that means otherwise, and for an accept of its own that says nothing.
+//
 // Answers how the transport is retired: `close()` ends every connection it
 // opened (1001, going away) and takes no more. For a host that stops its
 // listener while the process goes on; one that exits needs none of it.
@@ -29,7 +34,7 @@ export const attachSocket = (
   httpServer: Upgradeable,
   accept: SocketAccept,
   path = '/socket',
-  options?: { compression?: boolean | Record<string, unknown>; maxMessageBytes?: number },
+  options?: TransportSettings,
 ): { close: () => void } => {
   const transport = createTransport(accept, options);
   hearUpgrades(httpServer, path, transport.upgrade);
@@ -98,10 +103,7 @@ export const serve = async (app: NiscApp, runtime: NiscRuntime & { port?: number
   const server = await createServer(app, runtime);
   const port = runtime.port ?? 8787;
   const httpServer = listen({ fetch: server.fetch, port });
-  const sockets = attachSocket(httpServer, server.socket, '/socket', {
-    ...(runtime.socketCompression !== undefined ? { compression: runtime.socketCompression } : {}),
-    ...(runtime.socketMaxMessageBytes !== undefined ? { maxMessageBytes: runtime.socketMaxMessageBytes } : {}),
-  });
+  const sockets = attachSocket(httpServer, server.socket);
   console.log(`moss serving http://localhost:${port}`);
   console.log(`surfaces: GET /catalog · GET|POST /api/vex · GET|POST /api/<resource>/vex · ws://localhost:${port}/socket`);
   const retire = server.close;

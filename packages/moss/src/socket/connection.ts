@@ -33,10 +33,23 @@ export type Connection = {
   seal?: (token: string) => Promise<string>;
 };
 
+// WHAT A TRANSPORT IS TOLD ABOUT THE CONNECTIONS IT OPENS: whether their frames
+// are compressed (permessage-deflate; an object is the library's own tuning),
+// and the largest message one may send, in bytes, counted once inflated. Both
+// are the deployment's (`runtime.socketCompression`,
+// `runtime.socketMaxMessageBytes`); one that is not said is the transport's
+// default.
+export type TransportSettings = { compression?: boolean | Record<string, unknown>; maxMessageBytes?: number };
+
 // One accept per new connection: authenticate (who a terminal is rides the
 // upgrade request; absent = the anonymous principal, invalid = closed with
 // 4401), then say hello with the resolved catalog and settle into the message
 // loop. `stop` ends revalidation, for hosts that outlive their server (dev
 // checks, embedded tools) — the timer is unref'd, so a plain process needn't
 // call it.
-export type SocketAccept = ((url: string, connection: Connection) => Promise<void>) & { stop: () => void };
+//
+// `transport`: HOW IT IS TO BE ATTACHED. Whoever stands the socket up says it
+// (../server, socket.ts, from the runtime), and a runtime's transport reads it
+// when it is handed the accept, so a host that attaches the socket has nothing
+// to say and cannot forget to. Absent: the transport's defaults.
+export type SocketAccept = ((url: string, connection: Connection) => Promise<void>) & { stop: () => void; transport?: TransportSettings };

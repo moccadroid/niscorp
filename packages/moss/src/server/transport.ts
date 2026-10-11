@@ -3,7 +3,7 @@ import type { WebSocket as ServerSocket } from 'ws';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { SUBPROTOCOL } from '../protocol';
-import type { SocketAccept } from '../socket';
+import type { SocketAccept, TransportSettings } from '../socket';
 
 // ═══════════════════════════════════════════════════════════════
 // The `ws` half of the transport seam: RFC 6455 stays library-handled
@@ -23,8 +23,8 @@ export type Upgradeable = {
   on: (event: 'upgrade', handler: (req: IncomingMessage, socket: Duplex, head: Buffer) => void) => unknown;
 };
 
-// THE LARGEST MESSAGE A CONNECTION MAY SEND, in bytes, unless the host says
-// otherwise (`options.maxMessageBytes`). Told nothing, `ws` takes 100 MiB — and
+// THE LARGEST MESSAGE A CONNECTION MAY SEND, in bytes, unless the deployment
+// says otherwise (`runtime.socketMaxMessageBytes`). Told nothing, `ws` takes 100 MiB — and
 // what a terminal sends is an event: a press, a typed value, one row handed
 // back. A few KB. Whatever a message carries, the server then keeps (the value
 // in the shell, and again in the last frame it sent) and sends back down in
@@ -44,11 +44,16 @@ export type Transport = {
   close: () => void;
 };
 
-export const createTransport = (accept: SocketAccept, options?: { compression?: boolean | Record<string, unknown>; maxMessageBytes?: number }): Transport => {
+// HOW ITS CONNECTIONS ARE SET IS THE ACCEPT'S TO SAY (`accept.transport`: the
+// socket a server hands out carries its deployment's two settings). `told` is
+// a host saying otherwise, setting by setting; what neither says is the
+// default: compressed, and `MAX_MESSAGE_BYTES`.
+export const createTransport = (accept: SocketAccept, told?: TransportSettings): Transport => {
+  const settings: TransportSettings = { ...accept.transport, ...told };
   const wss = new WebSocketServer({
     noServer: true,
-    perMessageDeflate: options?.compression ?? true,
-    maxPayload: options?.maxMessageBytes ?? MAX_MESSAGE_BYTES,
+    perMessageDeflate: settings.compression ?? true,
+    maxPayload: settings.maxMessageBytes ?? MAX_MESSAGE_BYTES,
     // Of what a terminal offers, `nisc` is answered and nothing else: the
     // other entry is its token (../socket), which is not said back.
     handleProtocols: (offered) => (offered.has(SUBPROTOCOL) ? SUBPROTOCOL : false),

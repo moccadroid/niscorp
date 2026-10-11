@@ -17,13 +17,18 @@ import type { SocketAccept } from '../src/socket';
 
 const mossClosed = vi.fn();
 
+// How the stood-in server's socket says it is to be attached: what the real
+// one fills from the runtime (../src/server/socket.ts; held in
+// node-socket.test.ts). Set by a test before it serves.
+const said: { transport?: SocketAccept['transport'] } = {};
+
 vi.mock('../src/server/server', () => ({
   createServer: async (): Promise<MossServer> => {
     const accept: SocketAccept = Object.assign(
       async (_url: string, connection: Parameters<SocketAccept>[1]): Promise<void> => {
         connection.onMessage((text) => connection.send(String(text.length)));
       },
-      { stop: (): void => {} },
+      { stop: (): void => {}, ...said },
     );
     return Object.assign(new Hono(), { socket: accept, close: mossClosed }) as unknown as MossServer;
   },
@@ -64,10 +69,10 @@ const within = <T>(ms: number, work: Promise<T>): Promise<T | 'never'> => Promis
 
 const served: MossServer[] = [];
 const serving = async (runtime: Partial<NiscRuntime> = {}): Promise<{ server: MossServer; port: number }> => {
-  const said = vi.spyOn(console, 'log').mockImplementation(() => {});
+  const logged = vi.spyOn(console, 'log').mockImplementation(() => {});
   const port = await freePort();
   const server = await serve({} as NiscApp, { ...(runtime as NiscRuntime), port });
-  said.mockRestore();
+  logged.mockRestore();
   served.push(server);
   await vi.waitFor(async () => expect(await accepts(port)).toBe(true));
   return { server, port };
@@ -76,6 +81,7 @@ const serving = async (runtime: Partial<NiscRuntime> = {}): Promise<{ server: Mo
 afterEach(() => {
   for (const server of served.splice(0)) server.close();
   mossClosed.mockClear();
+  delete said.transport;
 });
 
 describe('serve', () => {
@@ -96,10 +102,14 @@ describe('serve', () => {
   });
 
   // The largest message a connection may send could be said to `attachSocket`
-  // and not to `serve`, which called it.
-  it('`runtime.socketMaxMessageBytes` is the largest message a connection may send', async () => {
+  // and not to `serve`, which called it. Then `serve` read the runtime for it,
+  // and the two other hosts that attach a socket did not. The server's socket
+  // says it now (from the runtime: node-socket.test.ts), and `serve` attaches
+  // the socket as it says, like every host.
+  it('the largest message a connection may send is what the server’s socket says', async () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const { port } = await serving({ socketMaxMessageBytes: 1024 });
+    said.transport = { maxMessageBytes: 1024 };
+    const { port } = await serving();
     const client = await opened(`ws://127.0.0.1:${port}/socket`);
     const answer = new Promise<string>((resolve) => client.once('message', (data) => resolve(String(data))));
     const closed = new Promise<number>((resolve) => client.once('close', (code) => resolve(code)));

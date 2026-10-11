@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocket } from 'ws';
 import { attachSocket } from '../src/server/node';
+import { standSocket } from '../src/server/socket';
 import { createSocket } from '../src/socket';
 import { offerToken, PROTOCOL } from '../src/protocol';
 import type { SocketAccept } from '../src/socket';
@@ -23,12 +24,15 @@ const servers: Server[] = [];
 
 // A server that answers every message with how long it was — enough to prove a
 // connection is being served, and that a message arrived whole.
-const listening = async (options?: Parameters<typeof attachSocket>[3]): Promise<string> => {
+//
+// `transport` is what the accept itself says of how it is to be attached, as
+// the socket a server hands out does; `options` is the host saying otherwise.
+const listening = async (options?: Parameters<typeof attachSocket>[3], transport?: SocketAccept['transport']): Promise<string> => {
   const accept: SocketAccept = Object.assign(
     async (_url: string, connection: Parameters<SocketAccept>[1]): Promise<void> => {
       connection.onMessage((text) => connection.send(String(text.length)));
     },
-    { stop: (): void => {} },
+    { stop: (): void => {}, ...(transport !== undefined ? { transport } : {}) },
   );
   const httpServer = createHttp((_req, res) => res.end('ok'));
   attachSocket(httpServer, accept, '/socket', options);
@@ -137,6 +141,90 @@ describe('the ws transport', () => {
   it('a host that takes larger messages says so: maxMessageBytes', async () => {
     const client = await opened(await listening({ maxMessageBytes: 4 * LIMIT }));
     expect(await answered(client, 'a'.repeat(LIMIT + 1))).toBe(String(LIMIT + 1));
+    client.close();
+  });
+
+  // The two settings of the transport are the deployment's
+  // (`runtime.socketMaxMessageBytes`, `runtime.socketCompression`), and the
+  // socket a server hands out carries them. A host that attached it and said
+  // nothing (`nisc start`, the dev plugin) got the defaults, whatever the
+  // runtime said.
+  it('an accept that says how it is to be attached is attached that way by a host that says nothing', async () => {
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const client = await opened(await listening(undefined, { maxMessageBytes: 1024, compression: false }));
+      expect(client.extensions).not.toContain('permessage-deflate');
+      expect(await answered(client, 'a'.repeat(1024))).toBe('1024');
+      const closed = new Promise<number>((resolve) => client.once('close', (code) => resolve(code)));
+      const answer = new Promise<string>((resolve) => client.once('message', (data) => resolve(String(data))));
+      client.send('a'.repeat(1025));
+      expect(await Promise.race([closed, answer])).toBe(1009);
+    } finally {
+      warned.mockRestore();
+    }
+  });
+
+  it('and a host that says otherwise is the one heard, for the setting it names', async () => {
+    const client = await opened(await listening({ maxMessageBytes: 4096 }, { maxMessageBytes: 1024, compression: false }));
+    expect(await answered(client, 'a'.repeat(2000))).toBe('2000');
+    expect(client.extensions).not.toContain('permessage-deflate');
+    client.close();
+  });
+});
+
+// The socket as the server stands it up (../src/server/socket.ts), behind the
+// real transport, attached the way `nisc start` attaches it: with no options.
+describe('the ws transport — a server’s socket says how it is to be attached', () => {
+  const serving = async (settings: { socketMaxMessageBytes?: number; socketCompression?: boolean }): Promise<string> => {
+    const socket = standSocket({
+      runtime: { pool: { query: async () => ({ rows: [] }) }, session: 'dev-open', sessionRevalidateMs: 0, ...settings },
+      session: () => null,
+      identity: { resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, key: 'public' }) },
+      running: { catalogFor: () => ({ ids: [], hash: 'h' }) },
+      hosts: { shells: undefined, pageAt: () => undefined },
+    });
+    const httpServer = createHttp((_req, res) => res.end('ok'));
+    attachSocket(httpServer, socket);
+    await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve));
+    servers.push(httpServer);
+    const address = httpServer.address();
+    if (address === null || typeof address === 'string') throw new Error('no port');
+    return `ws://127.0.0.1:${address.port}/socket?protocol=${PROTOCOL}`;
+  };
+
+  // A client that has been said hello to: the connection is being served.
+  const greeted = (url: string): Promise<WebSocket> =>
+    new Promise((resolve, reject) => {
+      const client = new WebSocket(url);
+      client.once('message', () => resolve(client));
+      client.once('error', reject);
+    });
+
+  it('`runtime.socketMaxMessageBytes` is the largest message a connection may send', async () => {
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const client = await greeted(await serving({ socketMaxMessageBytes: 1024 }));
+      const closed = new Promise<number>((resolve) => client.once('close', (code) => resolve(code)));
+      const answer = new Promise<string>((resolve) => client.once('message', (data) => resolve(String(data))));
+      client.send('a'.repeat(2000));
+      expect(await Promise.race([closed, answer])).toBe(1009);
+    } finally {
+      warned.mockRestore();
+    }
+  });
+
+  it('`runtime.socketCompression: false` is a connection that is not compressed', async () => {
+    const client = await greeted(await serving({ socketCompression: false }));
+    expect(client.extensions).not.toContain('permessage-deflate');
+    client.close();
+  });
+
+  it('a runtime that says neither is served on the transport’s own: 256 KB, compressed', async () => {
+    const client = await greeted(await serving({}));
+    expect(client.extensions).toContain('permessage-deflate');
+    const answer = new Promise<string>((resolve) => client.once('message', (data) => resolve(String(data))));
+    client.send('a'.repeat(2000));
+    expect(JSON.parse(await answer)).toMatchObject({ type: 'error', code: 'invalid_message' });
     client.close();
   });
 });
