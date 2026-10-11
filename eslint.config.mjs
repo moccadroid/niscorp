@@ -245,6 +245,10 @@ export default tseslint.config(
       // the 100 `.prettierrc` names. Prettier is configured and enforced on no
       // package; whether the repository is formatted to it is its owner's to
       // decide, and this is not that. Comments and strings count like code.
+      // (`max-len` is one of the formatting rules eslint keeps and no longer
+      // develops. Should a later major drop it, the same rule is
+      // `@stylistic/max-len`, and `scripts/check-lint.mts` fails until it is
+      // back: its case for a line of 201 would raise nothing.)
       'max-len': ['error', { code: 200 }],
     },
   },

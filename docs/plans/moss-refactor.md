@@ -955,10 +955,11 @@ of 104, and held by nothing. It is `src/store/postgres/`, six files and a
 door, the largest 134 lines of code (`a9503b1`), under the lint with the
 driver (`9b32289`).
 
-**What the gates cost.** Timed on this machine, each three times:
-`check:modules` 0.8 s before and after; `check:api` 0.7 s and 2.5 s (it
-builds a program for each package); `check:raw-sql` 1.2 s before and after;
-`pnpm lint` 2.5 s and 8.6 s (the types, and 3.1 s of trying itself).
+**What the gates cost.** Timed on this machine, once before and three times
+after: `check:modules` 0.8 s, and 0.8 s; `check:api` 0.7 s, and 2.7 s (it
+compiles a program for each package); `check:raw-sql` 1.2 s, and 1.1 s;
+`pnpm lint` 2.5 s, and 8.6 s (the types, and 3.1 s of trying itself). The
+four together took 5.2 s and take 13.2 s.
 
 Counted after it, for the rows it moved: moss has 154 source files, 68 test
 files and 1,043 tests, as before; tide has 13 test files and 235 tests (one

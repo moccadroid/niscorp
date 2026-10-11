@@ -58,6 +58,9 @@
 //   - A class's static members, and types added to somebody else's module
 //     (`declare module`, `declare global`).
 //   - Whether a name is a type or a value.
+//   - That `ENTRIES` names the file each entry is built from. The keys are
+//     held to `exports` in `package.json`; the file beside each key is
+//     written here by hand, and the bundler's own configuration is not read.
 //
 // The check tests itself on every run: each form above is an entry point of a
 // small package in memory that must fail, beside a twin that must pass.
