@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { isOwnOrigin, newSeal, openSealed, sealCookie, sealOf, sessionCookies, sessionTokenOf } from '../identity';
 import { DEFAULT_TOKEN_KEY, PROTOCOL, PROTOCOL_MIN, offeredSealed, offeredToken } from '../protocol';
 import type { ServerMessage } from '../protocol';
@@ -16,19 +17,54 @@ import type { Connection } from './connection';
 // to the upgrade is to carry.
 // ═══════════════════════════════════════════════════════════════
 
-// The address an upgrade was made to, as its parameters.
-export const parametersOf = (url: string): URLSearchParams => new URL(url, 'http://nisc.local').searchParams;
+// WHAT THE ADDRESS OF AN UPGRADE SAYS, read by a schema: it is written by
+// whoever opens the connection. Each parameter is held to its shape here and
+// nowhere else. One that does not fit is one that was not said (a terminal is
+// never refused over a seat or a seed it misspelt), the protocol excepted:
+// that one is judged, and answered (`protocolRefusal`).
+const flag = z.literal('1').optional().catch(undefined);
+const UpgradeParametersSchema = z.object({
+  // The protocol the terminal speaks, as it wrote it. Absent: 1, what every
+  // terminal built before the parameter existed speaks.
+  protocol: z.string().default('1'),
+  // Which of the browser's sessions this terminal is (a seat): a name, not a
+  // secret.
+  key: z.string().regex(/^[\w.-]{1,64}$/).optional().catch(undefined),
+  // The id seed a drawn page's shell was built under. It only ever names ids
+  // inside the caller's own shell.
+  seed: z.string().regex(/^[0-9a-f]{8,40}$/).optional().catch(undefined),
+  // The path the terminal is on.
+  path: z.string().optional(),
+  // `delta`: it takes frames as deltas. `sealed`: its browser can keep a
+  // session, and it wants sign-ins handed over sealed. `leave`: it was signed
+  // out, and what its browser holds is not who it is.
+  delta: flag,
+  sealed: flag,
+  leave: flag,
+});
+export type UpgradeParameters = z.infer<typeof UpgradeParametersSchema>;
+
+// The address an upgrade was made to, as its parameters. A name said twice is
+// what it was said as first.
+export const parametersOf = (url: string): UpgradeParameters => {
+  const written = new URL(url, 'http://nisc.local').searchParams;
+  return UpgradeParametersSchema.parse(Object.fromEntries(Object.keys(UpgradeParametersSchema.shape).map((name) => [name, written.get(name) ?? undefined])));
+};
+
+// A PROTOCOL IS DIGITS, and nothing else. Read with `Number()`, `0x2`, `2.0`,
+// `2e0` and ` 2` were all protocol 2, and a terminal that wrote one was served.
+const SpokenProtocolSchema = z.string().regex(/^\d{1,15}$/).transform(Number);
 
 // A terminal that speaks a protocol this server does not is told which side
 // is behind, and is served nothing. Undefined: it speaks one this server does.
-export const protocolRefusal = (params: URLSearchParams): ServerMessage | undefined => {
-  const spoken = Number(params.get('protocol') ?? '1');
-  if (Number.isInteger(spoken) && spoken >= PROTOCOL_MIN && spoken <= PROTOCOL) return undefined;
-  const behind = spoken > PROTOCOL ? 'server' : 'client';
+export const protocolRefusal = (parameters: UpgradeParameters): ServerMessage | undefined => {
+  const spoken = SpokenProtocolSchema.safeParse(parameters.protocol);
+  if (spoken.success && spoken.data >= PROTOCOL_MIN && spoken.data <= PROTOCOL) return undefined;
+  const behind = spoken.success && spoken.data > PROTOCOL ? 'server' : 'client';
   return {
     type: 'error',
     code: `${behind}_too_old`,
-    message: `This terminal speaks protocol ${params.get('protocol') ?? '1'}; this server speaks ${PROTOCOL_MIN}–${PROTOCOL}. ${behind === 'client' ? 'Reload the terminal to get the current build.' : 'The server has not been updated yet.'}`,
+    message: `This terminal speaks protocol ${parameters.protocol}; this server speaks ${PROTOCOL_MIN}–${PROTOCOL}. ${behind === 'client' ? 'Reload the terminal to get the current build.' : 'The server has not been updated yet.'}`,
   };
 };
 
@@ -54,14 +90,13 @@ export type SaidOnce = { said: boolean };
 
 // The answer `'invalid_token'`: the terminal offered a token and it is nobody's.
 export const whoIsAsking = async (url: string, upgrade: Connection['upgrade'], config: Pick<SocketConfig, 'session' | 'origins' | 'sessionLastsMs'>, notOwn: SaidOnce): Promise<Admission | 'invalid_token'> => {
-  const params = parametersOf(url);
+  const parameters = parametersOf(url);
   // THE APP'S OWN PAGE does not hold its session: its browser does, in a
   // cookie the page cannot read (../identity, session-cookie.ts), and sent it
   // with this request. From any other origin the cookie is not looked at — a
   // browser sends it with a stranger's page all the same. `key` is which of
   // the browser's sessions this terminal is (a seat); a name, not a secret.
-  const named = params.get('key');
-  const key = named !== null && /^[\w.-]{1,64}$/.test(named) ? named : DEFAULT_TOKEN_KEY;
+  const key = parameters.key ?? DEFAULT_TOKEN_KEY;
   const page = upgrade !== undefined && isOwnOrigin(upgrade.origin, upgrade.host, config.origins) ? new URL(upgrade.origin) : undefined;
   const secure = page?.protocol === 'https:';
   const held = page === undefined ? null : sessionTokenOf(upgrade?.cookie, { port: page.port, secure }, key);
@@ -70,12 +105,12 @@ export const whoIsAsking = async (url: string, upgrade: Connection['upgrade'], c
   // a seal — a key in a second cookie no script can read — by the answer to
   // its first upgrade. A sign-in is then handed to the page sealed with it;
   // the page offers it back here, and only this browser's seal opens it.
-  const sealing = page !== undefined && params.get('sealed') === '1';
+  const sealing = page !== undefined && parameters.sealed === '1';
   // A browser terminal that is not on the app's own page works as it always
   // did, holding its own token — which is right for a page served from
   // somewhere else, and is what a proxy that rewrites `Host` looks like too.
   // Said once: nothing else would tell a deployment it is in the second case.
-  if (page === undefined && params.get('sealed') === '1' && typeof upgrade?.origin === 'string' && !notOwn.said) {
+  if (page === undefined && parameters.sealed === '1' && typeof upgrade?.origin === 'string' && !notOwn.said) {
     notOwn.said = true;
     console.warn(`[moss] a terminal on ${upgrade.origin} holds its own session token: this server was addressed as ${upgrade.host ?? 'nothing'}, so that is not the app’s own page. If the app is served there, behind a proxy that rewrites Host, list it in runtime.origins.`);
   }
@@ -89,7 +124,7 @@ export const whoIsAsking = async (url: string, upgrade: Connection['upgrade'], c
   // A token the terminal offers comes first. `leave`: it was signed out, and
   // says so because what its browser holds may be a token that still
   // resolves — an app's own provider's is not moss's to revoke.
-  const carried = offered ?? (params.get('leave') === '1' ? null : (held?.token ?? null));
+  const carried = offered ?? (parameters.leave === '1' ? null : (held?.token ?? null));
   const principal = carried === null ? null : await config.session(carried);
   if (offered !== null && principal === null) return 'invalid_token';
   // What the browser held and no longer resolves is nobody — not a refusal:

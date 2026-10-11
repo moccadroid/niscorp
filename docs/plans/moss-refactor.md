@@ -527,6 +527,9 @@ Not here: stopping the seeding of `vex_cache`. That belongs to the artifactory.
      body (`src/integrations/floor.ts:34`), vex's own reply over the internal
      wire (`src/server/wire.ts:36`), and the runtime, whose fields are checked
      where each is read (`session` unset, `identityMax` of zero).
+     *Since (2026-10-11):* the parameters of an upgrade are read by one schema
+     (`UpgradeParametersSchema`, `src/socket/handshake.ts`), and a protocol is
+     digits: `Number()` had read `0x2` as 2.
 5. **`createServer` builds, wires and mounts, and holds no route body. Met.**
    `src/server/server.ts:33–154`: thirteen numbered steps, each a call to a
    file beside it. The routes are in `src/server/routes.ts` and in the

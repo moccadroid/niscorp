@@ -172,6 +172,12 @@ describe('socket — the authority channel', () => {
     ['older than the server serves', String(PROTOCOL_MIN - 1), 'client_too_old'],
     ['newer than the server speaks', String(PROTOCOL + 1), 'server_too_old'],
     ['not a protocol at all', 'banana', 'client_too_old'],
+    // A protocol is digits. Read with `Number()`, each of these was the
+    // protocol this server speaks, and its terminal was served.
+    ['whose protocol is written in hex', `0x${PROTOCOL.toString(16)}`, 'client_too_old'],
+    ['whose protocol is written with a fraction', `${PROTOCOL}.0`, 'client_too_old'],
+    ['whose protocol is written with an exponent', `${PROTOCOL}e0`, 'client_too_old'],
+    ['whose protocol is written with a space', `%20${PROTOCOL}`, 'client_too_old'],
   ])('a terminal %s is refused before anything is served: error then close 4426', async (_label, spoken, code) => {
     const session = recordingSession();
     const accept = createSocket(ctxWith({ shells: hostFor(session) }));

@@ -274,6 +274,12 @@ Where the right column says there is nothing to call and an app did call it, say
 - `readDocumentSnapshot` answers `undefined` for a snapshot that does not parse whole. It used to drop a `seed`, `path` or `live` of the wrong type and start from the rest.
 - The terminal now runs zod in the page. Zod was already a peer every app installs; a page whose content security policy forbids `eval` may see zod's one probe for it reported, and sets `z.config({ jitless: true })` in its entry to skip the probe.
 
+**The address of an upgrade is read by a schema, and a protocol is digits.**
+
+- What a terminal writes in the address it connects to (`protocol`, `key`, `seed`, `path`, `delta`, `sealed`, `leave`) was read where each was used, each with a test of its own. One schema reads them now, where the handshake begins. What each accepts is what it accepted, with one difference.
+- `protocol` was read with `Number()`: `0x2`, `2.0`, `2e0` and ` 2` were all protocol 2, and a terminal that wrote one was served. A protocol is digits and nothing else. Anything else is answered `client_too_old` and closed `4426`, as `banana` always was.
+- A terminal built on `@niscorp/moss/client` writes the number, and has nothing to change.
+
 **An event a terminal sends is read by nova's schema before a shell is handed it.**
 
 - The socket holds `event` to being an object and no more; the shell it is dispatched into took whatever arrived. It is now parsed by nova's `NovaEventSchema` first: one of `ui:click`, `ui:submit`, `ui:input`, `ui:focus`, `ui:blur`, `ui:model`, `ui:key`, `ui:drop`, with `ref`, `payload`, `origin` (and `key` on `ui:key`) and no other field. One that does not parse is dropped, as an event naming an instance that is not on its canvas is.

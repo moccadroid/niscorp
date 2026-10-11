@@ -11,7 +11,7 @@ import type { Connection, SocketAccept } from './connection';
 import { endingOf } from './ending';
 import type { Ending } from './ending';
 import { parametersOf, protocolRefusal, whoIsAsking } from './handshake';
-import type { SaidOnce } from './handshake';
+import type { SaidOnce, UpgradeParameters } from './handshake';
 import { DEFAULT_ANONYMOUS_SHELL_MAX, createPlaces } from './places';
 import { createRevalidation } from './revalidation';
 import { messageHandler } from './routing';
@@ -54,19 +54,16 @@ const spanOf = (emit: Emit | undefined): Span | undefined => {
 // address leads to, asked with what the address says of the shell to open.
 // Undefined: the app serves no shell.
 type Opening = (token: string | null, principal: string | null) => Promise<ShellSession>;
-const openingOf = (config: Pick<SocketConfig, 'shells' | 'page'>, params: URLSearchParams): Opening | undefined => {
+const openingOf = (config: Pick<SocketConfig, 'shells' | 'page'>, { seed, path }: UpgradeParameters): Opening | undefined => {
   // An anonymous terminal whose page was rendered server-side names the id
   // seed that page's shell was built under, so this connection's throwaway
   // shell mints the same instance ids and its first frames match the page.
-  // Shape-checked, never trusted further: it only ever names ids inside the
-  // caller's own shell.
-  const named = params.get('seed');
-  const seed = named !== null && /^[0-9a-f]{8,40}$/.test(named) ? named : undefined;
+  // Held to its shape where the address is read (./handshake.ts), never
+  // trusted further: it only ever names ids inside the caller's own shell.
 
   // The path the terminal is on decides which shell it is served: a page's,
   // built for this connection alone, or the app's.
-  const path = params.get('path');
-  const route = path === null ? undefined : config.page?.(path);
+  const route = path === undefined ? undefined : config.page?.(path);
   const host = route?.host ?? config.shells;
   if (host === undefined) return undefined;
 
@@ -198,7 +195,7 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
     // capability has to be known before the first frame is sent. A terminal
     // that says nothing is served whole frames forever, which is what every
     // terminal built before this existed does.
-    const attached = await served(connection, send, ending, { session, delta: params.get('delta') === '1' }, { token, principal });
+    const attached = await served(connection, send, ending, { session, delta: params.delta === '1' }, { token, principal });
 
     // Admitted: the handshake resolved a principal, said hello, and attached a
     // shell. The span measures that, not the connection's life (that is
