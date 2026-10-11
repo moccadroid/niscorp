@@ -1,7 +1,7 @@
 import { resolvePrincipal } from '@niscorp/charter';
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
 import { assignedRoles, memoKey } from '../identity';
-import type { NiscApp } from './app';
+import type { LayoutVariant, NiscApp } from './app';
 
 // ═══════════════════════════════════════════════════════════════
 // WHAT A SET OF ROLES HOLDS — the charter applied to the manifest: the
@@ -53,15 +53,20 @@ export const catalogFor = (
   return { ids, hash: versionToken(ids) };
 };
 
+// THE LAYOUT EACH ACTION IS GIVEN BY A LIST OF VARIANT IDS: action id → that
+// variant's layout. An id that names no variant gives nothing.
+export const variantLayouts = (variants: Readonly<Record<string, LayoutVariant>>, held: Iterable<string>): ReadonlyMap<string, LayoutNode> => {
+  const layouts = new Map<string, LayoutNode>();
+  for (const id of held) {
+    const variant = variants[id];
+    if (variant !== undefined) layouts.set(variant.action, variant.layout);
+  }
+  return layouts;
+};
+
 export const resolveVariantsForRoles = (app: Pick<NiscApp, 'charter' | 'layouts'>, roles: readonly string[]): ReadonlyMap<string, LayoutNode> => {
   const variants = app.layouts ?? {};
-  const granted = resolvePrincipal(app.charter, Object.keys(variants), roles, 'layouts');
-  const bindings = new Map<string, LayoutNode>();
-  for (const id of granted) {
-    const variant = variants[id];
-    if (variant !== undefined) bindings.set(variant.action, variant.layout);
-  }
-  return bindings;
+  return variantLayouts(variants, resolvePrincipal(app.charter, Object.keys(variants), roles, 'layouts'));
 };
 
 // The principal's layout bindings — action id → the granted variant's
@@ -71,26 +76,32 @@ export const resolveVariantsForRoles = (app: Pick<NiscApp, 'charter' | 'layouts'
 export const resolveVariants = (app: Pick<NiscApp, 'charter' | 'layouts' | 'assignments'>, principal: string | null): ReadonlyMap<string, LayoutNode> =>
   resolveVariantsForRoles(app, assignedRoles(app.assignments, principal));
 
-// The action definitions a set of roles holds, by id, in the catalog's order:
-// each as the manifest has it, or with the layout variant those roles hold of
-// it in its place. The base is never edited: a variant is a copy that differs
-// in its layout. This is the one place the grant and the variant are applied
-// to a definition; a shell is built from the answer and adopts it.
+// THE VARIANT IN ITS PLACE, written once: the definitions a list of ids names,
+// in the list's order, each as the manifest has it or with the layout
+// `layouts` gives its action. The base is never edited: a variant is a copy
+// that differs in its layout. An id that names no action gives nothing. Who
+// builds a shell (`definitionsFor`, below) and who audits what a role's
+// actions reach (./closure.ts) both read the definitions through this.
+export const withVariants = (
+  actions: Readonly<Record<string, ActionDefinition>>,
+  ids: readonly string[],
+  layouts: ReadonlyMap<string, LayoutNode>,
+): [string, ActionDefinition][] =>
+  ids.flatMap((id): [string, ActionDefinition][] => {
+    const definition = actions[id];
+    if (definition === undefined) return [];
+    const layout = layouts.get(id);
+    return [[id, layout === undefined ? definition : { ...definition, layout }]];
+  });
+
+// The action definitions a set of roles holds, by id, in the catalog's order,
+// each with the layout variant those roles hold of it in its place. A shell is
+// built from the answer and adopts it.
 export const definitionsFor = (
   actions: Readonly<Record<string, ActionDefinition>>,
   ids: readonly string[],
   variants: ReadonlyMap<string, LayoutNode>,
-): Readonly<Record<string, ActionDefinition>> =>
-  Object.freeze(
-    Object.fromEntries(
-      ids.flatMap((id): [string, ActionDefinition][] => {
-        const definition = actions[id];
-        if (definition === undefined) return [];
-        const layout = variants.get(id);
-        return [[id, layout === undefined ? definition : { ...definition, layout }]];
-      }),
-    ),
-  );
+): Readonly<Record<string, ActionDefinition>> => Object.freeze(Object.fromEntries(withVariants(actions, ids, variants)));
 
 // WHAT EACH SET OF ROLES HOLDS, REMEMBERED.
 //

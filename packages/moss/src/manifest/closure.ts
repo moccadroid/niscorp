@@ -2,6 +2,7 @@ import { auditAction, collectChannels } from '@niscorp/nova';
 import type { ActionDefinition } from '@niscorp/nova';
 import type { ClosureAuditor } from '@niscorp/charter';
 import type { LayoutVariant } from './app';
+import { variantLayouts, withVariants } from './roles';
 
 // The per-role closure auditor — nova's own action audit, run over a
 // role's granted set: each granted definition is checked against a world
@@ -15,22 +16,12 @@ import type { LayoutVariant } from './app';
 // The role's granted variant ids ride in as the auditor's second argument
 // (the charter verifier passes them): substituted before auditing, so the
 // closure sees the role's EFFECTIVE definitions — a variant's push targets
-// and channels are audited for exactly the roles that hold it.
+// and channels are audited for exactly the roles that hold it. The
+// substitution is the one a shell's definitions are made by (./roles.ts,
+// `withVariants`): it is written there and nowhere else.
 export const auditClosure = (definitions: Record<string, ActionDefinition>, variants: Record<string, LayoutVariant> = {}): ClosureAuditor => {
   return (grantedIds, layoutIds = []) => {
-    const bindings = new Map<string, ActionDefinition['layout']>();
-    for (const id of layoutIds) {
-      const variant = variants[id];
-      if (variant !== undefined) bindings.set(variant.action, variant.layout);
-    }
-    const granted = grantedIds
-      .map((id) => {
-        const definition = definitions[id];
-        if (definition === undefined) return undefined;
-        const layout = bindings.get(id);
-        return layout === undefined ? definition : { ...definition, layout };
-      })
-      .filter((definition): definition is ActionDefinition => definition !== undefined);
+    const granted = withVariants(definitions, grantedIds, variantLayouts(variants, layoutIds)).map(([, definition]) => definition);
     const catalog = granted.map((definition) => ({ id: definition.id, input: definition.input ?? {} }));
     const channels = [
       ...new Set(
