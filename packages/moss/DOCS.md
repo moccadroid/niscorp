@@ -632,9 +632,10 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   nature. In-process only, replay-only, policy compiled from that role, scope
   values supplied by server code. Its type is exported as `ExecuteAs`, for
   code that is handed the function and no server.
-- `nudge(principal, channel): void` — publish, payload-less, onto one
-  principal's living shell, in whichever process holds it (local `deliver`,
-  then the fabric).
+- `nudge(principal, channel): void` — publish, payload-less, onto the shell
+  the app keeps for one principal, in whichever process holds it (local
+  `deliver`, then the fabric). A shell a page built for them is not reached:
+  `deliver` goes into the kept shell alone.
 - `close(): void` — stop every timer the server started (the generation poll,
   the identity sweep, socket revalidation, the shell idle sweeps). For a host
   that retires a server in-process; every timer is unref'd, so a process that
@@ -1141,6 +1142,11 @@ is asked instead: `(await server.identity(principal)).roles`,
     answers is exported as `ShellSnapshot`.
     Two first arrivals for one principal in the same moment are handed one
     shell: one is built.
+    A session whose shell is not kept is the host's until that shell ends,
+    so that a change can reach it. The socket ends it when the connection
+    closes. Code that opens one in process and attaches nothing ends it
+    itself, with `session.detach(connection)` (any connection: none was
+    attached); until then the host holds the shell.
   - `adopt()` — every living shell this host built is brought level with what
     its principal holds now, in place (what `server.refresh()` and
     `server.replaceActions()` cause, in every host: the app's and each

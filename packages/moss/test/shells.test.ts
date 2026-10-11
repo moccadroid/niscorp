@@ -1485,6 +1485,24 @@ describe('shells — a shell that ended is let go', () => {
     expect(living.shell.getCanvasState('main').stack).toHaveLength(1);
   });
 
+  // What holding every living shell costs, said as it is: a shell that is not
+  // kept and has not ended is the host's, whether or not anybody still holds
+  // its session. Code that opens one in process and attaches nothing ends it
+  // by detaching, as the socket does for a connection that closed early.
+  it('a shell that is not kept and has not ended is held, and one that attached nothing is ended by a detach', async () => {
+    const host = createShellHost(hostConfig(ctx));
+    const dropped = await (async (): Promise<WeakRef<object>> => new WeakRef((await host.session(null, null)).shell))();
+    const detached = await (async (): Promise<WeakRef<object>> => {
+      const session = await host.session(null, null);
+      session.detach(fakeConnection());
+      return new WeakRef(session.shell);
+    })();
+
+    expect(await collected(detached)).toBe(true);
+    expect(await collected(dropped)).toBe(false);
+    host.stop();
+  });
+
   it('a shell that was reset: the one it replaced is let go, and the session goes on', async () => {
     const host = createShellHost(hostConfig({ ...ctx, kept: false }));
     const session = await host.session('t', 'usr_1');
