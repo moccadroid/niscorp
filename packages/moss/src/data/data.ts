@@ -196,7 +196,7 @@ const prepareEngine = async (config: DataConfig): Promise<PreparedEngine> => {
 
 // THE ANSWERS TO AN INTENT, stood up at the first asking: an app that writes
 // no query pays for none.
-const intentAnswersOver = (prepared: PreparedEngine, config: Pick<DataConfig, 'behaviors' | 'vexConfig'>): (() => AnswerIntent) => {
+const lazyIntentAnswers = (prepared: PreparedEngine, config: Pick<DataConfig, 'behaviors' | 'vexConfig'>): (() => AnswerIntent) => {
   const { engine } = prepared;
   let answers: AnswerIntent | undefined;
   const answering = (): AnswerIntent => {
@@ -217,7 +217,7 @@ const intentAnswersOver = (prepared: PreparedEngine, config: Pick<DataConfig, 'b
 
 // The tables a feature named as its own. One that is asked for and was never
 // read off the manifest is a fault of the wiring, and is said.
-const featureTablesOver =
+const tablesByFeature =
   (config: Pick<DataConfig, 'featureTables'>) =>
   (feature: string): readonly string[] => {
     const kept = (config.featureTables ?? []).find((tables) => tables.feature === feature);
@@ -227,7 +227,7 @@ const featureTablesOver =
 
 // THE DOCUMENTS A FEATURE STORED, BROUGHT TO THE GRAMMARS: of a table that is
 // its own, and of no other.
-const upgradeStoreOver =
+const createUpgradeStore =
   (prepared: PreparedEngine, tablesOf: (feature: string) => readonly string[]): Data['upgradeStore'] =>
   async (feature, store) => {
     const own = tablesOf(feature);
@@ -257,14 +257,14 @@ export const createDataWith = (prepared: PreparedEngine, config: Pick<DataConfig
 
   const writes = createWriteNotifier();
 
-  const answering = intentAnswersOver(prepared, config);
+  const answering = lazyIntentAnswers(prepared, config);
 
   // ENTRIES THAT ARE NOT THE APP'S, over the engine that stood up: seeded where
   // no route serves them, and replayed in process (./own-entries.ts).
   const ownEntries = (own: OwnEntries, told: ((record: ExecuteRecord) => void) | undefined): Promise<Replay> =>
     createOwnEntries({ adapter: prepared.adapter, db: config.db, engine, ...(told !== undefined ? { onExecute: told } : {}) })(own);
 
-  const tablesOf = featureTablesOver(config);
+  const tablesOf = tablesByFeature(config);
 
   // The pointer's two entries, seeded when the pointer is first asked. NO SPAN
   // for them: a poll is not something a request did, and one every interval
@@ -312,7 +312,7 @@ export const createDataWith = (prepared: PreparedEngine, config: Pick<DataConfig
         ...(onExecute !== undefined ? { onExecute } : {}),
         writes,
       }),
-    upgradeStore: upgradeStoreOver(prepared, tablesOf),
+    upgradeStore: createUpgradeStore(prepared, tablesOf),
     onWrite: writes.subscribe,
     pointer: createPointer(pointerReplay),
     dropOnChange: (changed) => {

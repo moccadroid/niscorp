@@ -86,7 +86,7 @@ const recordFailedImport: SeedMutation = {
 
 // What a bundle says of its integration. The row is written whole on every
 // import: on a row that is there, each of these replaces what it held.
-const landed = {
+const importedColumns = {
   ...fromContext([
     'url',
     'title',
@@ -119,8 +119,8 @@ const landed = {
 // definition, where it is attached and placed, the grammars it is written in).
 // A statement that fails takes the ones before it back, so a bundle lands
 // whole or the import before it stays whole.
-const landing: Mutation[] = [
-  { op: 'insert', table: 'integrations', values: { ...fromContext(['id']), ...landed }, onConflict: { target: ['id'], set: landed } },
+const writeBundleStatements: Mutation[] = [
+  { op: 'insert', table: 'integrations', values: { ...fromContext(['id']), ...importedColumns }, onConflict: { target: ['id'], set: importedColumns } },
   { op: 'delete', table: 'integration_actions', where: { eq: ['integration_actions.integration_id', { $context: 'id' }] } },
   {
     op: 'insertEach',
@@ -141,7 +141,7 @@ const landing: Mutation[] = [
 const writeBundle: SeedMutation = {
   fingerprint: 'integrations/write-bundle',
   intent: 'Land a bundle: the row of its integration as the bundle says it is now, and its actions in place of the ones before',
-  mutation: landing,
+  mutation: writeBundleStatements,
 };
 
 // The same, for the import a key is issued with: the hash of the key is on the
@@ -160,7 +160,7 @@ const writeBundle: SeedMutation = {
 const writeBundleAndKeepKey: SeedMutation = {
   fingerprint: 'integrations/write-bundle-and-keep-key',
   intent: 'Land a bundle, and keep the hash of the key its integration is issued with it, where it holds none',
-  mutation: [...landing, { op: 'update', table: 'integrations', set: fromContext(['key_hash']), where: { and: [byId, { isNull: 'integrations.key_hash' }] } }],
+  mutation: [...writeBundleStatements, { op: 'update', table: 'integrations', set: fromContext(['key_hash']), where: { and: [byId, { isNull: 'integrations.key_hash' }] } }],
 };
 
 const approve: SeedMutation = {

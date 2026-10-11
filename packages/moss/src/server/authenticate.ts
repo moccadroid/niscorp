@@ -28,7 +28,7 @@ export type FeatureCredential = { feature: string; prefix: string; principalOf: 
 const overlap = (one: string, other: string): boolean => one.startsWith(other) || other.startsWith(one);
 
 // A CREDENTIAL IS REACHED BY ITS PREFIX, SO A PREFIX IS HELD TO BEING ONE.
-// The door (`whoIsCalling`, below) hands a token to the credential whose
+// The door (`authenticateRequest`, below) hands a token to the credential whose
 // prefix the token starts with, and to the session verifier when none does.
 // So what is registered decides whose tokens a feature is handed, and a
 // feature anybody writes registers one. Three things are refused, here, where
@@ -87,7 +87,7 @@ const INVALID_TOKEN = { refused: { status: 401, error: 'invalid_token', message:
 
 // WHO IS CALLING, from the `Authorization` header. ONE resolution, here, for
 // everything downstream.
-const whoIsCalling = async (deps: AuthenticationDeps, header: string | undefined, request: Request): Promise<Found> => {
+const authenticateRequest = async (deps: AuthenticationDeps, header: string | undefined, request: Request): Promise<Found> => {
   if (header === undefined) return { principal: null, resolved: await deps.resolve(null) };
   const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : header;
   const credential = deps.credentials.find(({ prefix }) => token.startsWith(prefix));
@@ -106,7 +106,7 @@ export const authentication =
   async (c, next) => {
     let found: Found;
     try {
-      found = await whoIsCalling(deps, c.req.header('Authorization'), c.req.raw);
+      found = await authenticateRequest(deps, c.req.header('Authorization'), c.req.raw);
     } catch (error) {
       // AN UNKNOWN PRINCIPAL IS A FAILED SIGN-IN. A FAILURE TO FIND OUT IS NOT.
       // The verifier says a token is nobody's by answering null, and that is

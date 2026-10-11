@@ -286,7 +286,7 @@ const whileUnderWay = (host: HostState, build: Promise<Cell>): Promise<Cell> => 
 // makes the cell the shell is addressed through. A shell that ended on the
 // way (app code that signed out while its session was being built) is not put
 // among the living: nothing would take it out again.
-const landing = (host: HostState, build: Promise<Live>, cellOf: (live: Live) => Cell): Promise<Cell> =>
+const trackBuild = (host: HostState, build: Promise<Live>, cellOf: (live: Live) => Cell): Promise<Cell> =>
   whileUnderWay(
     host,
     build.then((live) => {
@@ -349,7 +349,7 @@ const createDurableCells = (host: HostState): DurableCell => {
     if (existing !== undefined) return Promise.resolve(newest(existing));
     const arriving = building.get(principal);
     if (arriving !== undefined) return arriving.then(newest);
-    const started = landing(host, buildShell(host, token, principal), (live) => {
+    const started = trackBuild(host, buildShell(host, token, principal), (live) => {
       const cell: Cell = { live, token, principal };
       durable.set(principal, cell);
       return cell;
@@ -449,7 +449,7 @@ export const createShellHost = (config: ShellHostConfig): OwnedShellHost => {
         // Built for this session alone, and nobody's to keep: it ends when
         // its last terminal leaves. Until then it is one of the living.
         const build = buildShell(host, token, principal, false, options?.seed, options?.inputs);
-        return sessionOn(host, await landing(host, build, (live) => ({ live, token, principal, ...(options !== undefined ? { opening: options } : {}) })), true, rebuild);
+        return sessionOn(host, await trackBuild(host, build, (live) => ({ live, token, principal, ...(options !== undefined ? { opening: options } : {}) })), true, rebuild);
       }
       return sessionOn(host, await durableCell(token, principal), false, rebuild);
     },
