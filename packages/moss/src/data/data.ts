@@ -194,6 +194,54 @@ const prepareEngine = async (config: DataConfig): Promise<PreparedEngine> => {
   };
 };
 
+// THE ANSWERS TO AN INTENT, stood up at the first asking: an app that writes
+// no query pays for none.
+const intentAnswersOver = (prepared: PreparedEngine, config: Pick<DataConfig, 'behaviors' | 'vexConfig'>): (() => AnswerIntent) => {
+  const { engine } = prepared;
+  let answers: AnswerIntent | undefined;
+  const answering = (): AnswerIntent => {
+    if (answers !== undefined) return answers;
+    const schema = engine.getSchema();
+    if (schema === undefined) throw new Error('moss: an intent was asked before the engine had read the database.');
+    answers = createIntentAnswers({
+      adapter: prepared.adapter,
+      schema,
+      cache: engine.cache,
+      ...(config.behaviors !== undefined ? { behaviors: config.behaviors } : {}),
+      ...(config.vexConfig !== undefined ? { vexConfig: config.vexConfig } : {}),
+    });
+    return answers;
+  };
+  return answering;
+};
+
+// The tables a feature named as its own. One that is asked for and was never
+// read off the manifest is a fault of the wiring, and is said.
+const featureTablesOver =
+  (config: Pick<DataConfig, 'featureTables'>) =>
+  (feature: string): readonly string[] => {
+    const kept = (config.featureTables ?? []).find((tables) => tables.feature === feature);
+    if (kept === undefined) throw new Error(`moss: the data module was asked for the tables of a feature it was never told of ("${feature}").`);
+    return kept.names;
+  };
+
+// THE DOCUMENTS A FEATURE STORED, BROUGHT TO THE GRAMMARS: of a table that is
+// its own, and of no other.
+const upgradeStoreOver =
+  (prepared: PreparedEngine, tablesOf: (feature: string) => readonly string[]): Data['upgradeStore'] =>
+  async (feature, store) => {
+    const own = tablesOf(feature);
+    if (store.schema !== undefined) {
+      throw new Error(
+        `moss: the feature "${feature}" asked for the documents of a store in the schema "${store.schema}" to be upgraded. ` + 'To a feature a store is named by its table alone: one of its own.',
+      );
+    }
+    if (!own.includes(store.table)) {
+      throw new Error(`moss: the feature "${feature}" asked for the documents stored in "${store.table}" to be upgraded, and that table is not its own (its own: ${own.join(', ') || 'none'}).`);
+    }
+    await prepared.upgradeStore(store);
+  };
+
 // EVERYTHING ELSE, over the engine that was prepared. Nothing here touches the database but
 // through the engine and the write client, which is why it is a function of
 // its own: it can be held against an engine with nothing behind it.
@@ -209,21 +257,7 @@ export const dataOver = (prepared: PreparedEngine, config: Pick<DataConfig, 'db'
 
   const writes = createWriteLane();
 
-  // Stood up at the first asking: an app that writes no query pays for none.
-  let answers: AnswerIntent | undefined;
-  const answering = (): AnswerIntent => {
-    if (answers !== undefined) return answers;
-    const schema = engine.getSchema();
-    if (schema === undefined) throw new Error('moss: an intent was asked before the engine had read the database.');
-    answers = createIntentAnswers({
-      adapter: prepared.adapter,
-      schema,
-      cache: engine.cache,
-      ...(config.behaviors !== undefined ? { behaviors: config.behaviors } : {}),
-      ...(config.vexConfig !== undefined ? { vexConfig: config.vexConfig } : {}),
-    });
-    return answers;
-  };
+  const answering = intentAnswersOver(prepared, config);
 
   // ENTRIES THAT ARE NOT THE APP'S, over the engine that stood up: seeded where
   // no route serves them, and replayed in process (./own-entries.ts).
@@ -233,13 +267,7 @@ export const dataOver = (prepared: PreparedEngine, config: Pick<DataConfig, 'db'
     return createOwnEntries({ adapter: prepared.adapter, schema, db: config.db, engine, ...(told !== undefined ? { onExecute: told } : {}) })(own);
   };
 
-  // The tables a feature named as its own. One that is asked for and was never
-  // read off the manifest is a fault of the wiring, and is said.
-  const tablesOf = (feature: string): readonly string[] => {
-    const kept = (config.featureTables ?? []).find((tables) => tables.feature === feature);
-    if (kept === undefined) throw new Error(`moss: the data module was asked for the tables of a feature it was never told of ("${feature}").`);
-    return kept.names;
-  };
+  const tablesOf = featureTablesOver(config);
 
   // The pointer's two entries, seeded when the pointer is first asked. NO SPAN
   // for them: a poll is not something a request did, and one every interval
@@ -287,18 +315,7 @@ export const dataOver = (prepared: PreparedEngine, config: Pick<DataConfig, 'db'
         ...(onExecute !== undefined ? { onExecute } : {}),
         writes,
       }),
-    upgradeStore: async (feature, store) => {
-      const own = tablesOf(feature);
-      if (store.schema !== undefined) {
-        throw new Error(
-          `moss: the feature "${feature}" asked for the documents of a store in the schema "${store.schema}" to be upgraded. ` + 'To a feature a store is named by its table alone: one of its own.',
-        );
-      }
-      if (!own.includes(store.table)) {
-        throw new Error(`moss: the feature "${feature}" asked for the documents stored in "${store.table}" to be upgraded, and that table is not its own (its own: ${own.join(', ') || 'none'}).`);
-      }
-      await prepared.upgradeStore(store);
-    },
+    upgradeStore: upgradeStoreOver(prepared, tablesOf),
     onWrite: writes.subscribe,
     pointer: pointerOver(pointerReplay),
     dropOnChange: (changed) => {
