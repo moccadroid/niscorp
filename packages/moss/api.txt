@@ -34,7 +34,6 @@
 . embedSnapshot
 . exportDocuments
 . initSessions
-. memoKeyOf
 . migrateTables
 . mintDevToken
 . mintSession

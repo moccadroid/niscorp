@@ -1002,8 +1002,6 @@ measures the end.
   a boot refuses on `errors`. A running server answers for what is in force
   with `server.charterReport()`. It verifies and does nothing else: what it is
   handed is not read by the manifest's schema and is not frozen.
-- `memoKeyOf(app, principal): string` — the key the per-principal memos depend
-  on (roles + installed set), from `assignments` with no install list.
 - `ShellHost` — `{ session, snapshot, adopt, deliver, list, reset, stop }`:
   the durable per-principal shell host, as `server.shells` and
   `server.page(path).host`. The server creates it (`src/shells/`,

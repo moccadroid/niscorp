@@ -10,7 +10,7 @@ BREAKING — approved by moccadroid, 2026-10-09: import only what `@niscorp/moss
 
 Moss had grown to twenty-eight files flat in `src/`, one of them a single function of 1,345 lines, and it exported 135 names of which 71 were imported by nothing outside the package. `docs/plans/moss-refactor.md` is the audit and the plan.
 
-**The main entry exports 50 names, not 135.**
+**The main entry exports 49 names, not 135.**
 
 - Gone, and never part of what an app calls: `createShellHost`, `createSocket`, `createDataLayer`, `createGeneration`, `createIdentityCache`, `wireFabric`, `runIntake`, `copyPress`, `callIntegrationWith`, `initIntegrations`, `listIntegrations`, `loadIntegrationActions`, `filterInstalled`, `buildContract`, `contractAsMarkdown`, `describePlacements`, `verifyAssertion`, `mintIntegrationKey`, `hashIntegrationKey`, `mintWrites`, `revokeSession`, `sessionVerifierOf`, `shellNeedOf`, `emitterOf`, `spanClock`, `resolvePolicyAtReach`, `resolveVariantsForRoles`, the constants `GENERATION_DDL`, `SESSIONS_SEQUENCE`, `SNAPSHOT_ELEMENT_ID`, `CLOSE_SHELL_FAILED`, `DEFAULT_GENERATION_POLL_MS`, `DEFAULT_IDENTITY_IDLE_MS`, `DEFAULT_IDENTITY_MAX`, `DEFAULT_IDLE_MS`, `DEFAULT_REVALIDATE_MS`, and the types that went with them.
 - An app that imported one of these was reaching into moss. Say which and why in an issue; the answer is a call that is meant to be public, not the name coming back.
@@ -85,6 +85,7 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 - `resolveCatalogForRoles(app, roles, installed)` → `server.catalogForRoles(roles, installed)`.
 - `auditClosure`, `wearableOf`, `verifyVariants`: the three pieces an app put together to run the boot check by hand → `server.charterReport()` for what a running server is serving, `server.verifyActions(source, actions)` for a set it has not taken, and `verifyApp(app, grants)` where there is no server (`report.charter` is what `verifyCharter` answered, closure issues included; `report.errors.filter((error) => error.check === 'variants')` is what `verifyVariants` returned).
 - Code running in a session that wants what its own caller holds asks `GET /catalog` over the session's wire, as before.
+- `memoKeyOf(app, principal)` is gone, with nothing in its place: it was the key the server keeps its own memos under, and nothing outside the server can address one. Code that compared two keys to learn whether two principals are served the same application compares `(await server.catalogOf(principal)).hash`.
 
 **`resolvePolicyForRoles` leaves the main entry, for `server.policyForRoles(roles)`.**
 
@@ -349,4 +350,4 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 - `@niscorp/moss/client` loses `SNAPSHOT_ELEMENT_ID` and the type `WireTokenStore`. The id is read by `readDocumentSnapshot()` and written by `embedSnapshot` (main entry): call those. The type is `WireEnv['tokens']`.
 - `@niscorp/moss/terminal/react` loses `registerWireSlots` and the type `WireSlotOptions`. `reactTarget`, `renderSnapshot` (`/terminal/react/server`) and `inkTarget` register the wire slots on the registry they are handed: call one of those. A kit that wants its own element around a canvas wraps the slot moss registered, read back with `registry.get('CanvasSlot')` once the target is made, as lyceum's does.
 - `@niscorp/moss/terminal/vue` loses `registerWireSlots` and `terminalFrame`: `vueTarget` and `renderSnapshot` (`/terminal/vue/server`) are the two things they were for.
-- Nothing in this repository imported any of the six. What each entry exports now is in `packages/moss/api.txt`: 104 names across moss's entries, where there were 110.
+- Nothing in this repository imported any of the six. What each entry exports now is in `packages/moss/api.txt`: 103 names across moss's entries.
