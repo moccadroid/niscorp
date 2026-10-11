@@ -14,8 +14,7 @@ import { createServerWith } from '../src/server/server';
 // boot itself (`createServerWith`, which is `createServer` with the step that
 // brings the data module up handed in), with a step that says it was reached
 // and a pool that says it was asked. No server is created and no database is
-// started. (That an edit throws once `createServer` has RETURNED is proved
-// where a server is booted anyway: charter-report.test.ts.)
+// started.
 
 const plain: LayoutNode = { component: 'Text', children: 'plain' };
 const home: ActionDefinition = { id: 'home', layout: plain, triggers: [{ event: 'ui:click', ref: 'open', do: [{ push: { action: 'panel' } }] }] };
