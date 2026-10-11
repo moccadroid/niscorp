@@ -289,7 +289,11 @@ export const dataOver = (prepared: PreparedEngine, config: Pick<DataConfig, 'db'
       }),
     upgradeStore: async (feature, store) => {
       const own = tablesOf(feature);
-      if (store.schema !== undefined) throw new Error(`moss: the feature "${feature}" asked for the documents of a store in the schema "${store.schema}" to be upgraded. To a feature a store is named by its table alone: one of its own.`);
+      if (store.schema !== undefined) {
+        throw new Error(
+          `moss: the feature "${feature}" asked for the documents of a store in the schema "${store.schema}" to be upgraded. ` + 'To a feature a store is named by its table alone: one of its own.',
+        );
+      }
       if (!own.includes(store.table)) {
         throw new Error(`moss: the feature "${feature}" asked for the documents stored in "${store.table}" to be upgraded, and that table is not its own (its own: ${own.join(', ') || 'none'}).`);
       }

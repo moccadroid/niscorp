@@ -84,8 +84,10 @@ export const createOwnEntries =
     const outside = own.entries.map((entry) => entry.fingerprint).filter((fingerprint) => !reachable.has(fingerprint));
     if (outside.length > 0) {
       throw new Error(
-        `moss: ${own.owner} handed over ${outside.length === 1 ? 'an entry that reads or writes' : 'entries that read or write'} a table that is not its own: ${outside.map((fingerprint) => `"${fingerprint}"`).join(', ')}. ` +
-          `Its own entries run outside the app's policy, so they reach ${own.tables.length === 0 ? 'no table, because it names none as its own' : `the tables that are its own (${own.tables.join(', ')}) and no other`}. ` +
+        `moss: ${own.owner} handed over ${outside.length === 1 ? 'an entry that reads or writes' : 'entries that read or write'} a table that is not its own: ` +
+          `${outside.map((fingerprint) => `"${fingerprint}"`).join(', ')}. ` +
+          "Its own entries run outside the app's policy, so they reach " +
+          `${own.tables.length === 0 ? 'no table, because it names none as its own' : `the tables that are its own (${own.tables.join(', ')}) and no other`}. ` +
           `What another table holds is read through the app's entries, under the charter.`,
       );
     }

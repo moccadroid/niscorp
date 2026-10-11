@@ -121,7 +121,10 @@ const signInRefusal = (req: Connect.IncomingMessage, fromNetwork: boolean): stri
     );
   }
   if (req.headers['sec-fetch-site'] === 'cross-site') {
-    return 'The dev sign-in (/dev/as/…) was asked for by a page of another site, and is not answered to one: it would sign this browser in as whoever that page named. Open the address yourself, from the address bar.';
+    return (
+      'The dev sign-in (/dev/as/…) was asked for by a page of another site, and is not answered to one: it would sign this browser in as whoever that page named. ' +
+      'Open the address yourself, from the address bar.'
+    );
   }
   return undefined;
 };

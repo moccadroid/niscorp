@@ -69,7 +69,9 @@ const configurationSchema = z
         if (new Set(values).size !== values.length) ctx.addIssue({ code: 'custom', path: [i, 'options'], message: `configuration "${field.key}": option values repeat` });
         if (!values.includes(field.default)) ctx.addIssue({ code: 'custom', path: [i, 'default'], message: `configuration "${field.key}": default "${field.default}" is not one of its options` });
       } else if (field.kind === 'line') {
-        if (field.default.length > field.maxLength) ctx.addIssue({ code: 'custom', path: [i, 'default'], message: `configuration "${field.key}": default is longer than maxLength ${field.maxLength}` });
+        if (field.default.length > field.maxLength) {
+          ctx.addIssue({ code: 'custom', path: [i, 'default'], message: `configuration "${field.key}": default is longer than maxLength ${field.maxLength}` });
+        }
       }
     });
   })

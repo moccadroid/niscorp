@@ -221,6 +221,13 @@ export default tseslint.config(
       ],
       'max-lines-per-function': ['error', { max: 100, skipBlankLines: true, skipComments: true }],
       'max-lines': ['error', { max: 400, skipBlankLines: true, skipComments: true }],
+      // A LINE HAS A WIDTH, or the two sizes above count nothing: a function of
+      // a hundred lines holds what its lines hold. 200, counted on 2026-10-11:
+      // of moss's 15,930 source lines sixteen were wider, and 706 are wider than
+      // the 100 `.prettierrc` names. Prettier is configured and enforced on no
+      // package; whether the repository is formatted to it is its owner's to
+      // decide, and this is not that. Comments and strings count like code.
+      'max-len': ['error', { code: 200 }],
     },
   },
 

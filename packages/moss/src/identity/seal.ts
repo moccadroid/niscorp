@@ -33,14 +33,16 @@ const SealedSchema = z.object({ token: z.string(), until: z.number() });
 const sealName = (secure: boolean): string => `${secure ? '__Http-' : ''}nisc.seal`;
 const toBase64Url = (bytes: Uint8Array): string => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const fromBase64Url = (text: string): Uint8Array<ArrayBuffer> => Uint8Array.from(atob(text.replace(/-/g, '+').replace(/_/g, '/')), (char) => char.charCodeAt(0));
-const keyOf = async (seal: string): Promise<CryptoKey> => crypto.subtle.importKey('raw', await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seal)), 'AES-GCM', false, ['encrypt', 'decrypt']);
+const keyOf = async (seal: string): Promise<CryptoKey> =>
+  crypto.subtle.importKey('raw', await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seal)), 'AES-GCM', false, ['encrypt', 'decrypt']);
 
 export const newSeal = (): string => toBase64Url(crypto.getRandomValues(new Uint8Array(32)));
 
 // The seal a browser sent with an upgrade, and the `Set-Cookie` value that
 // gives it one: for the socket's own `path` only, unreadable to script.
 export const sealOf = (cookies: string | null | undefined, secure: boolean): string | null => tokenFromCookie(cookies, sealName(secure));
-export const sealCookie = (seal: string, where: { secure: boolean; path: string }): string => `${sealName(where.secure)}=${seal}; HttpOnly; Path=${where.path}; SameSite=Lax${where.secure ? '; Secure' : ''}`;
+export const sealCookie = (seal: string, where: { secure: boolean; path: string }): string =>
+  `${sealName(where.secure)}=${seal}; HttpOnly; Path=${where.path}; SameSite=Lax${where.secure ? '; Secure' : ''}`;
 
 export const sealSession = async (seal: string, token: string, forMs = SEALED_FOR_MS): Promise<string> => {
   const iv = crypto.getRandomValues(new Uint8Array(12));

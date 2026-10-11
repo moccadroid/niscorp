@@ -107,7 +107,8 @@ const IdentityRecordSchema = z.looseObject({
 // is somebody's roles and tenant.
 const recordRefusal = (issues: readonly z.core.$ZodIssue[]): Error =>
   new Error(
-    `moss: \`identity.resolve\` did not answer an identity record (${issues.map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`).join('; ')}). A record is { roles: string[], scope: {…}, installed?: string[], tag?: string }.`,
+    `moss: \`identity.resolve\` did not answer an identity record (${issues.map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`).join('; ')}). ` +
+      'A record is { roles: string[], scope: {…}, installed?: string[], tag?: string }.',
   );
 
 // ONE RESOLUTION, TWO HALVES. The app's `resolve` answers what cannot be read

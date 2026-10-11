@@ -353,7 +353,10 @@ const storedAction = (id: string, definition: unknown): ActionDefinition | undef
   const read = ActionDefinitionSchema.safeParse(definition);
   if (read.success) return read.data;
   const first = read.error.issues[0];
-  console.error(`[moss] integration action "${id}" is not served: it is not an action nova reads (${first === undefined ? 'no reason given' : `${first.path.join('.') || '(root)'}: ${first.message}`})`);
+  console.error(
+    `[moss] integration action "${id}" is not served: it is not an action nova reads ` +
+      `(${first === undefined ? 'no reason given' : `${first.path.join('.') || '(root)'}: ${first.message}`})`,
+  );
   return undefined;
 };
 

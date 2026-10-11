@@ -125,7 +125,10 @@ export const createGeneration = (pointer: Pointer, ctx: { onMoved: () => void | 
       return false;
     }
     if (unfollowed !== undefined) {
-      console.log(`[moss:generation] followed the generation pointer to ${n}, after ${unfollowed.tries} ${unfollowed.tries === 1 ? 'look' : 'looks'} that failed — this process serves what the rows say again`);
+      console.log(
+        `[moss:generation] followed the generation pointer to ${n}, after ${unfollowed.tries} ${unfollowed.tries === 1 ? 'look' : 'looks'} that failed` +
+          ' — this process serves what the rows say again',
+      );
       unfollowed = undefined;
     }
     return true;

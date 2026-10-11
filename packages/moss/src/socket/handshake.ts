@@ -64,7 +64,9 @@ export const protocolRefusal = (parameters: UpgradeParameters): ServerMessage | 
   return {
     type: 'error',
     code: `${behind}_too_old`,
-    message: `This terminal speaks protocol ${parameters.protocol}; this server speaks ${PROTOCOL_MIN}–${PROTOCOL}. ${behind === 'client' ? 'Reload the terminal to get the current build.' : 'The server has not been updated yet.'}`,
+    message:
+      `This terminal speaks protocol ${parameters.protocol}; this server speaks ${PROTOCOL_MIN}–${PROTOCOL}. ` +
+      (behind === 'client' ? 'Reload the terminal to get the current build.' : 'The server has not been updated yet.'),
   };
 };
 
@@ -89,7 +91,12 @@ export type Admission = {
 export type SaidOnce = { said: boolean };
 
 // The answer `'invalid_token'`: the terminal offered a token and it is nobody's.
-export const whoIsAsking = async (url: string, upgrade: Connection['upgrade'], config: Pick<SocketConfig, 'session' | 'origins' | 'sessionLastsMs'>, notOwn: SaidOnce): Promise<Admission | 'invalid_token'> => {
+export const whoIsAsking = async (
+  url: string,
+  upgrade: Connection['upgrade'],
+  config: Pick<SocketConfig, 'session' | 'origins' | 'sessionLastsMs'>,
+  notOwn: SaidOnce,
+): Promise<Admission | 'invalid_token'> => {
   const parameters = parametersOf(url);
   // THE APP'S OWN PAGE does not hold its session: its browser does, in a
   // cookie the page cannot read (../identity, session-cookie.ts), and sent it
@@ -112,7 +119,10 @@ export const whoIsAsking = async (url: string, upgrade: Connection['upgrade'], c
   // Said once: nothing else would tell a deployment it is in the second case.
   if (page === undefined && parameters.sealed === '1' && typeof upgrade?.origin === 'string' && !notOwn.said) {
     notOwn.said = true;
-    console.warn(`[moss] a terminal on ${upgrade.origin} holds its own session token: this server was addressed as ${upgrade.host ?? 'nothing'}, so that is not the app’s own page. If the app is served there, behind a proxy that rewrites Host, list it in runtime.origins.`);
+    console.warn(
+      `[moss] a terminal on ${upgrade.origin} holds its own session token: this server was addressed as ${upgrade.host ?? 'nothing'}, so that is not the app’s own page. ` +
+        'If the app is served there, behind a proxy that rewrites Host, list it in runtime.origins.',
+    );
   }
   const hadSeal = sealing ? sealOf(upgrade?.cookie, secure) : null;
   const sealedOffer = offeredSealed(upgrade?.offered);
@@ -139,7 +149,11 @@ export const whoIsAsking = async (url: string, upgrade: Connection['upgrade'], c
   // default port the copy an earlier build kept, readable by script, has
   // this cookie's name.
   const cookies = [
-    ...(page === undefined || (offered === null && (held?.token ?? null) === token) ? [] : token === null ? (held?.clear ?? []) : sessionCookies(page.origin, token, { key, lastsMs: (await config.sessionLastsMs?.(token)) ?? null })),
+    ...(page === undefined || (offered === null && (held?.token ?? null) === token)
+      ? []
+      : token === null
+        ? (held?.clear ?? [])
+        : sessionCookies(page.origin, token, { key, lastsMs: (await config.sessionLastsMs?.(token)) ?? null })),
     ...(seal !== null && hadSeal === null ? [sealCookie(seal, { secure, path: new URL(url, 'http://nisc.local').pathname })] : []),
   ];
   return { token, principal, cookies, seal, sealLost };
