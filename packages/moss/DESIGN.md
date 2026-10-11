@@ -196,7 +196,14 @@ A **feature** owns none of the five. It lives in a directory of its own, ships
 from an entry point of its own, and the core never imports it: the app creates
 it and names it in its manifest's `features`, and the server starts it with
 the seams (`FeatureSeams`: every member one function or one narrow value of
-the module that owns it). `feature` is the module that says what a feature and
+the module that owns it). **The seams are made for the feature they are handed
+to, and what they reach is that feature's**: its own tables, which it names on
+itself before it runs (`Feature.tables.names`) and which are no other
+feature's and never the core's; its own set of actions, kept under its name,
+which it alone writes; the documents in its own rows. The core reads and
+writes no row of a feature, reads no header of one, and holds no setting of
+one (the key the integrations feature signs with is that feature's own).
+`feature` is the module that says what a feature and
 its seams are: types, and no code. There are two features: `integrations`
 (`@niscorp/moss/integrations`), and `tide` (`@niscorp/moss/tide`), a committed
 write minted into tide as a fact. A feature that needs something the seams do

@@ -10,6 +10,14 @@ import type { Telemetry } from '../runtime';
 // THE SEAMS — everything of the core a feature may touch, as one object the
 // server hands it when it starts.
 //
+// MADE FOR THE FEATURE IT IS HANDED TO. `Feature` and this type are public,
+// so anybody can write a feature, and what one is handed decides what it can
+// do. So the members that reach something owned are bound to their feature:
+// its own entries reach the tables it named on itself, its set of actions is
+// the one under its name, the store it has upgraded is in a table of its own.
+// None of them takes the name of a table or of a set, and no member carries a
+// secret of the deployment's or of another feature's.
+//
 // Each member is a function or one narrow value, and each belongs to the
 // module that answers that question: who is calling (identity), what exists
 // for them (manifest), what they may read and write (data), what they are

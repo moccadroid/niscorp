@@ -227,7 +227,7 @@ deletes every session the principal has (`revokeAllFor`). `recordRun` is a
 no-op when the manifest declares no `runs` sink.
 
 **A session says who is calling and holds no key.** It carries no `runtime`
-(the database pool, the operator key, the signing seed) and no `policy` (the
+(the database pool, the operator key) and no `policy` (the
 object the routes enforce for everybody holding those roles). What app code
 needs of either has a call:
 

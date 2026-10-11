@@ -15,7 +15,10 @@ open; a 22nd was found on a real Postgres and fixed (4.3). A review of the
 whole, the same day, found three places where a document said more than the
 code did (one owner for what a shell loads, defect 5 for every living shell,
 what another process follows after `replaceActions`); Part 11, "After a
-review", says what closed each. Part 11 is what
+review", says what closed each. A second review, the same day, held the
+feature seam and the public API against one owner for each table and each
+piece of state, and against one way to do a thing; Part 11, "After a second
+review", says what it found and what closed each. Part 11 is what
 moss is now, in numbers, what ran on a real Postgres, and what is left. Not
 done here: Midas and the two websites, which are other repositories, and the
 release. Next: Part 10.**
@@ -315,7 +318,13 @@ adding it to its owner is the first change, on its own:
 As built these are the 21 members of `FeatureSeams` (`src/feature/seams.ts`),
 each used by one of the two features: twenty by integrations, `onWrite` by
 tide. A feature's tables are not a seam: it names them on itself
-(`Feature.tables`), because they exist before anything starts.
+(`Feature.tables`: their names, and the sequences that make them), because
+they exist before anything starts, and because which tables a feature
+addresses outside the app's policy has to be readable without running it.
+Each feature is handed seams made for it, and the members that reach
+something owned (its tables, its set of actions, the documents in its rows)
+are bound to that feature and take no name (Part 11, "After a second
+review").
 
 ### 5.5 How something new gets in
 
@@ -666,13 +675,9 @@ table of who may import whom, no statement outside vex without a reason.
 decide.
 
 - **Names that stayed in the main entry and that nothing in this repository
-  imports**, each in doubt, not decided: `resolveRoles`, `resolvePolicy`,
-  `resolveVariants` (three resolvers that read `assignments` only; the server
-  answers the first two, and nothing answers the third);
-  `createPageRouter`; `documentHeaders` and `tokenFromCookie` (the parts of
-  `renderDocument`, for a host that assembles its own page; atrium imports the
-  third, `embedSnapshot`); `initSessions`, `sessionOf`, `revokeAllFor` (the
-  stored credential; lyceum imports `mintSession`).
+  imports** were decided by the second review, below: of the fifteen, nine
+  left, and `Feature`, `FeatureSeams`, `Telemetry`, `TelemetrySpan` and
+  `revokeAllFor` stay, each shown in use in `DOCS.md`.
 - **The gates list one package.** `check:modules`, `check:api` and the module
   block of the lint hold moss. `check:raw-sql` sweeps the others.
 - **The webhook limit is per process** (4.3, 10), and the documents say so.
@@ -782,6 +787,67 @@ wiring or a running manifest up and start no database and no server.
 The lab apps' checks were run again on the built result, each as its own
 process, one at a time: 126 of 133, the same seven failing as in Part 9 (encore
 13 of 13, lyceum 17 of 18, atrium 18 of 19, relay 28 of 32, lyra 50 of 51).
+
+**After a second review (2026-10-11).** A reviewer booted a server with a
+feature of its own, and read the public API against "one way to do a thing".
+Each finding was checked by reading and, where it could be, by running it
+against the wiring with no database: every one held. Each fix got a test that
+failed first; none of the new tests starts a database or calls `createServer`.
+
+- **The feature seam handed out what rule 3 forbids.** A feature somebody
+  else wrote read an app's table by naming it to `ownEntries`, was handed the
+  seed the deployment signs with, and wrote the integrations' set of actions;
+  every feature held one and the same seams object. Seams are made for each
+  feature now (`src/server/features.ts`). A feature names its own tables on
+  itself (`Feature.tables.names`); the data module is told them when it is
+  built, refuses a table of the core's (`CORE_TABLES`, `src/data/tables.ts`)
+  or one two features name, before a table is made, and refuses an entry over
+  any other table when it is handed over (`src/data/feature-tables.ts`,
+  `own-entries.ts`). `integrations` and `integration_actions` stay in
+  `nisc.moss`, byte for byte, and are the integrations feature's in code. The
+  signing seed is `createIntegrations({ signingSeed })` and is on neither the
+  runtime nor the seams. A set of actions has one writer: it is claimed by
+  name in the running manifest (`claim`), a feature's is claimed under the
+  feature's name before the feature starts, and `server.replaceActions` and
+  `server.verifyActions` throw for it.
+- **The core rewrote a feature's rows at every boot.** `upgradeStore` over
+  `integration_actions` ran in the data module whether or not the app named
+  the feature. It is a seam (`upgradeStore`, bound to the feature's own
+  tables) and the integrations feature asks when it starts.
+- **A boot that failed left timers running.** A feature that threw in `start`
+  left two intervals; so did a page the router refused, because the app's own
+  host was made first. `assembleServer` (`src/server/assemble.ts`, steps 4 to
+  13 of `createServer`) keeps one list of what was started and runs it on a
+  throw; `close` runs the same list.
+- **The core read a feature's headers.** The vex routes read `x-tide-cause`
+  and `x-tide-depth`. They hand on what the request said, by header name and
+  without its credential; the tide feature reads its own two
+  (`src/tide/chain.ts`). `data` answers the fingerprints itself and hands out
+  no engine.
+- **The API kept second ways.** `resolveRoles`, `resolvePolicy` and
+  `resolveVariants` are gone (they answered `public` for an app that uses
+  `identity`), with ten more names of three entries and
+  `MossServer.catalogForRoles`. The main entry exports 38 names and the
+  sixteen entries 89; `DOCS.md` shows every name the main entry, `./node`,
+  `./vite`, `./integrations` and `./tide` keep in a code block.
+- **Coined names.** `who`, `holds` and `Whoever` in the seam type, `flooredWire`,
+  `createPlaces`, and the six `stand…` functions are renamed, with three files,
+  in commits that only rename.
+
+**Left by that review, each for a reason.** `MOSS_PATHS` (`src/server/node.ts`)
+still names `integrations`: the comment on it says why its three readers
+cannot all ask a server instead. Names that read as this codebase's voice and
+were outside what the review named stay as they are: `dataOver`, `wireOver`,
+`pointerOver`, `wrappedBy`, `WriteLane`, `mintWrites`, `ShellHostConfig.kept`,
+`MossServer.nudge` (published in 0.4.0, and the fabric's message kind between
+processes has the same name), `storePress` and `pressMaxBytes` (`press` is the
+bundle grammar's own field).
+
+Counted after it, for the rows it moved: 154 source files (three more:
+`data/feature-tables.ts`, `server/assemble.ts`, `tide/chain.ts`); moss has 68
+test files and 1,043 tests; `api.txt` holds 89 names, 38 of them the main
+entry's. The gates pass as they did, 14 modules under the same table of who
+may import whom, no statement outside vex without a reason.
 
 **Run on a real Postgres (2026-10-11).** Everything before this ran on PGlite,
 which has one connection. These ran once on PostgreSQL 18.4 (the
