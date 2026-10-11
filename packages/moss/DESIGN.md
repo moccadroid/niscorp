@@ -145,7 +145,14 @@ The test of the principle: moss's core adds no new vocabulary. Reads are vex,
 writes are vex, compute is functions, UI is actions, permissions are the
 charter. The server is the composition, not a fifth language. (The integrations
 feature does read a document of its own, the bundle a separate service
-publishes about itself. That is one reason it is a feature, and not the core.)
+publishes about itself. That is one reason it is a feature, and not the core.
+Of a bundle it reads the fields that are nisc's own: the integration's id, what
+it asks to be allowed, its grammar stamps, its actions and its phrases. What a
+product adds to those (a store listing, where a screen is placed, a document a
+person edits) is the host app's vocabulary: a bundle carries it under
+`extension`, the app supplies the schema that reads it, and moss keeps it
+without reading inside. A package does not own a closed vocabulary for what is
+open.)
 
 ### Ring 2 — served layout variants
 
@@ -276,7 +283,6 @@ that made the table:
 | `sessions` | `identity` | `identity/sessions.ts`: five statements straight to the pool, before anybody is signed in | Its table is made in `data`'s one migration run, from a sequence `identity` declares |
 | `moss_generation` | `data` | `data/own-entries.ts`: two entries, one that reads and one that moves | `manifest` decides when it moves (`manifest/generation.ts`), through a function `data` hands over |
 | `integrations`, `integration_actions` | the `integrations` feature | `integrations/entries.ts`: vex entries, replayed through the seam the feature is handed | The two tables are made by the core's own sequence (`data/tables.ts`, `nisc.moss`): that is the history every database has run, and it is not edited. The documents stored in `integration_actions` are brought to the current grammars by `data`, which holds the pool, when the feature asks through its seam |
-| `integration_frame_grants` | the `integrations` feature | `integrations/entries.ts`, and its own sequence in `integrations/tables.ts` | nothing |
 
 `data` holds the engine and the one ledgered migration run, so every owner's
 entries and every owner's migrations run through it. It authors no statement

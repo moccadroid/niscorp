@@ -1752,36 +1752,79 @@ actions join the manifest once an operator approves them. It is a feature: an
 app that wants integrations creates it and names it in `features`.
 
 ```typescript
+import { z } from 'zod';
 import { createIntegrations } from '@niscorp/moss/integrations';
+
+// What this app lets a bundle say beyond nisc's own fields.
+const Listing = z.object({ title: z.string(), placedUnder: z.string().optional() }).strict();
 
 const integrations = createIntegrations({
   integrationActor: (integration, actsFor) => `ig_${integration}@${actsFor}`,
-  attachable: { 'people.detail': { person_id: 'personId' } },
-  menuSlots: ['hub.people'],
+  extension: {
+    schema: Listing,
+    check: (listing) => (listing.placedUnder === undefined || listing.placedUnder === 'hub.people' ? [] : [`placedUnder: "${listing.placedUnder}" is not a hub of this app`]),
+    contract: { title: 'the store tile’s title', placedUnder: ['hub.people'] },
+  },
 });
 const app = defineApp({ charter, actions, features: [integrations] });
 const server = await createServer(app, runtime);
 
-await integrations.listAttachments('people.detail');
+const registered = await integrations.listIntegrations();
+const titles = registered.map((integration) => integration.extension?.title);
 ```
 
-#### `createIntegrations(config?: IntegrationsConfig): Integrations`
+**A bundle** is what an integration publishes at `<url>/bundle`. Five fields
+are nisc's own, and moss reads them; a sixth is the host app's.
+
+| Field | What |
+|---|---|
+| `integration` | its id |
+| `grants` | `{ actions, data }`: what it asks to be allowed. The operator's approval grants it |
+| `grammar` | the grammar stamps its documents are written at (optional) |
+| `actions` | its action definitions, by id |
+| `phrasebook` | its phrases, by language (`de`, never `de-AT`) |
+| `extension` | whatever the host app's own vocabulary is (optional). Moss does not read inside it |
+
+The schema is strict. Any other top-level key refuses the bundle: `"meta" is
+not a field of a bundle. What belongs to the host app’s own vocabulary goes
+under `extension`.` A store listing, where a screen is placed, a setting a
+person may change, a capability, a document a person edits: each is one app's
+vocabulary, and the app that has it defines it.
+
+#### `createIntegrations(config?: IntegrationsConfig<Extension>): Integrations<Extension>`
 
 `IntegrationsConfig`, every field optional:
 
 - `integrationActor(integration, actsFor): string | null | Promise<string | null>`
   — the principal a call made with an integration's key acts as; `actsFor` is
   the request's `x-nisc-acts-for`. `null`, or absent, refuses (`403`).
-- `attachable: Record<hostAction, Record<offeredKey, hostDataPath>>` and
-  `menuSlots: string[]` — where an integration's actions may appear. A bundle
-  that names anything else is refused at intake.
-- `assistantTools`, `publishChecks`, `editorRegions` — the names a bundle's
-  `assistants` and `documents` declarations may use.
-- `placementNames: Record<id, words>` — the host's words for its hubs and
-  screens, for the placement sentence stored with an integration.
-- `storePress(integrationId, name, bytes, contentType): Promise<string>`
-  (`StorePress`) — where a bundle's listing images land; it answers the URL
-  they are served from. Absent, a bundle that declares press is refused.
+- `extension: ExtensionConfig<Extension>` — the app's own vocabulary for a
+  bundle. Absent, a bundle that carries an `extension` is refused. Its four
+  members:
+  - `schema: z.ZodType<Extension>` — what a bundle's `extension` may be. It
+    reads whatever the bundle carries there, a bundle that carries nothing
+    included: a schema that takes `undefined` (`.optional()`, `.prefault({})`)
+    makes the extension optional. Each place it does not read is a reason
+    under `extension`. It also reads back what was stored, so it takes what it
+    answers.
+  - `check(extension, bundle): string[]` — the reasons the app refuses an
+    extension the schema read, each a sentence. They are reported with moss's
+    own, and any one refuses the bundle.
+  - `prepare(extension, bundle): Extension | Promise<Extension>` — run once
+    for an import that passed every check, before the row is written: what it
+    answers is what is stored. For what must not depend on the vendor's
+    service being reachable later (an image copied to the app's own store).
+    Throwing refuses the bundle whole. Not called for an extension that reads
+    as `undefined`.
+  - `contract: unknown` — what the app tells vendors about its vocabulary: a
+    plain value, served with the contract as it is.
+
+  `check` and `prepare` are handed, as `bundle` (`ExtensionContext`), what moss
+  knows of the bundle: `integration` (its id), `url` (where its service
+  lives), `actions` (its action definitions, each already held to its
+  namespace, its endpoints and the kit), `fingerprints` (the ones the app
+  serves), and `layoutMisfits(layout)` (each place a layout does not fit the
+  app's kit, for a vocabulary that lets a bundle carry one).
 - `signingSeed: string` — a fixed seed for the keypair assertions are signed
   with: 32 bytes, as base64 (`node -e
   "console.log(require('node:crypto').randomBytes(32).toString('base64'))"`).
@@ -1794,19 +1837,14 @@ await integrations.listAttachments('people.detail');
 - `outboundTimeoutMs: number` — how long a call out to an integration's
   service may take, its answer and its body together. Default `30000`, nova's
   default wait for an endpoint's reply. It bounds every call: a screen's
-  through the proxy, a framed page and its callback, a vendor's webhook,
-  `callIntegration`, the bundle fetched at registration, the operator's probe,
-  and each press image. A call that is given up on reads as a service that is
-  unreachable: `502` from the proxy, the frame door, the webhook and a
+  through the proxy, a vendor's webhook, `callIntegration`, the bundle fetched
+  at registration, and the operator's probe. A call that is given up on reads
+  as a service that is unreachable: `502` from the proxy, the webhook and a
   registration whose bundle did not arrive; `callIntegration` rejects; the
-  probe answers `status: 0`; a press image that did not arrive refuses its
-  bundle (`422`). The shorter of this and an action's own `timeoutMs`
-  ends a call, so an integration whose endpoint is slow by nature needs this
-  raised as well; an answer that streams for longer than this is cut.
-- `pressMaxBytes: number` — how large one press image may be. Default
-  `5 * 1024 * 1024`, a number nobody measured. It is held to while the image
-  is read: a larger one is given up on where it crosses the line, and the
-  bundle is refused naming the path.
+  probe answers `status: 0`. The shorter of this and an action's own
+  `timeoutMs` ends a call, so an integration whose endpoint is slow by nature
+  needs this raised as well; an answer that streams for longer than this is
+  cut.
 
 An integration's id is lower-case letters, digits and hyphens, starting with a
 letter: it is a segment of every path the integration is served under and a
@@ -1817,14 +1855,19 @@ and a bundle that calls itself anything else is refused at intake.
 work once a server has started the feature, and reject with a sentence before
 that:
 
+- `listIntegrations(): Promise<RegisteredIntegration<Extension>[]>` — every
+  registered integration, in the order of the ids: `{ id, status, url,
+  extension }`. `status` is `'pending'` or `'approved'`; `extension` is what
+  the row holds, read by the app's schema and so typed by it (`undefined`: the
+  bundle carried none, the app supplied no schema, or the schema no longer
+  reads what was stored, which is logged with the integration's id). An app
+  builds its placements, its listing and anything else from this.
 - `callIntegration(id, path, { principal, method?, body?, scope? }):
   Promise<Response>` — call an installed integration when
   nobody is driving; throws unless it is approved and installed for the
-  principal's tenant.
-- `listAttachments(hostAction): Promise<{ actionId, preview }[]>` — the approved
-  integrations' actions that ride a host action.
-- `listPlacements(): Promise<Record<actionId, hub>>` — the ones placed under a
-  menu hub.
+  principal's tenant. It is not held to the integration's reach: an app calls
+  an endpoint its own vocabulary names (a preview, a page it mounts on a route
+  of its own) with this.
 - `integrationByKey(key): Promise<string | undefined>` — the approved
   integration a presented key belongs to.
 - `integrationOfAction(actionId): string | undefined` — which integration an
@@ -1843,8 +1886,8 @@ What the feature serves once it is started:
 
 | Path | What |
 |---|---|
-| `/api/integrations/*` | `GET contract` (`?id=`, `?format=md`), `GET verify-key`, `POST frame` (mint a frame grant) |
-| `/integrations/:id/*` | the proxy to an approved integration, as the signed-in caller; plus `frame/:token` (and `frame/:token/:call`) and `hook/*`, which take no session |
+| `/api/integrations/*` | `GET contract` (`?id=`, `?format=md`), `GET verify-key` |
+| `/integrations/:id/*` | the proxy to an approved integration, as the signed-in caller; plus `hook/*`, which takes no session |
 | `/operator/integrations` | list, register (`POST`), `:id/approve`, `:id/probe`, `DELETE :id` — keyed by `x-operator-key`, so only when `runtime.operatorKey` is set |
 
 A bearer token with the `ik_` prefix is an integration key: it is resolved to
@@ -1852,17 +1895,28 @@ the integration it was issued to and, through `integrationActor`, to a
 principal (`401` unknown key, `403` no actor). No two integrations hold the
 hash of one key (a unique index on `integrations.key_hash`).
 
+**What intake holds a bundle to**, before any of it is kept. It is upgraded by
+its grammar stamps and read by the bundle's schema. Each action is named
+`ext.<audience>.<integration>.<name>` under the integration's own id; each of
+its endpoints is a fingerprint the app serves or a URL under
+`/integrations/<id>/` (and not under `hook/`, the door that asks for no
+session), and none is `fn:`; its layout composes what the app's kit has; and no
+chain of its steps, laid over the app's own actions, runs for ever. Then
+`extension` is read by the app's schema and held to the app's `check`. Every
+reason, moss's and the app's, is reported together, and any one refuses the
+bundle whole: the last good import keeps serving.
+
 **What the routes do, in order.**
 
 - *Register* (`POST /operator/integrations`, `{ id, url }`) fetches the
-  bundle, runs intake, copies the press, and for an integration that is
-  already approved asks whether the app could be served with the new actions.
-  Then the bundle lands in one transaction: the integration's row, its actions
-  in place of the ones it shipped before, and the hash of its key on the import
-  a key is issued with. It lands whole, or the import before it is still
-  there, whole. The answer carries `key` once, on the registration whose key
-  the row holds: the hash is written where the row holds none, so of two
-  registrations of one new integration in the same moment one is answered
+  bundle, runs intake, runs the app's `prepare`, and for an integration that
+  is already approved asks whether the app could be served with the new
+  actions. Then the bundle lands in one transaction: the integration's row,
+  its actions in place of the ones it shipped before, and the hash of its key
+  on the import a key is issued with. It lands whole, or the import before it
+  is still there, whole. The answer carries `key` once, on the registration
+  whose key the row holds: the hash is written where the row holds none, so of
+  two registrations of one new integration in the same moment one is answered
   the key and the other is answered as a later import is, with none.
 - *Approve* (`POST /operator/integrations/:id/approve`) reads what the
   integration shipped, asks whether the app could be served with it, and only
@@ -1872,14 +1926,23 @@ hash of one key (a unique index on `integrations.key_hash`).
   else changed what it consists of in between), the approval is taken back:
   the row is pending again with the reason in `lastError`, and the answer is
   the same `422`.
-- *The contract* (`GET /api/integrations/contract`) lists, under
+- *The list* (`GET /operator/integrations`) answers each integration as `{ id,
+  url, status, requestedActions, requestedData, approvedData, extension,
+  lastImportAt, lastError, actionCount }`. `extension` is the stored value,
+  as it is (`null`: none).
+- *The contract* (`GET /api/integrations/contract`) carries the kit's
+  components with their props, the audiences the charter drew an `ext.` fence
+  for, the namespace, the key assertions are verified with, and, under
   `fingerprints`, the reads and writes the caller's own policy lets them
   replay: an integration asking with its key reads what its actor's rung
-  reaches, and nobody signed in reads what `public` reaches.
-- *A frame grant* (`POST /api/integrations/frame`) is an opaque random string,
-  kept by its hash in a table with what it opens and when it expires (thirty
-  minutes). Any process of the deployment redeems it, and it survives a
-  restart. It goes when its time is over, and when its integration is removed.
+  reaches, and nobody signed in reads what `public` reaches. Under `extension`
+  it carries the app's `extension.contract`, as the app handed it over; the
+  key is absent when the app handed none.
+- *The proxy* (`/integrations/:id/*`) forwards a signed-in caller's call to an
+  approved integration that is installed for them, with an assertion that
+  says who they are. It forwards the paths the integration's actions declare
+  as endpoints, each for whoever holds an action that declares it, and
+  answers `404` for any other path.
 - *A webhook* (`POST /integrations/:id/hook/*`) takes no session and no
   assertion is minted for it: the body goes on to the integration's service
   byte for byte, with the vendor's headers but `authorization` and `host`,
@@ -1895,30 +1958,57 @@ hash of one key (a unique index on `integrations.key_hash`).
   deployment, and neither number is a setting: a deployment that needs one
   ceiling across its processes sets it where they meet, at its proxy.
 
+**A vendor's own page inside the app** is the app's to mount. Moss frames
+none: an app that wants one serves a route of its own (`routes(server)` in
+`nisc.config.ts`), decides there who may open it, and fetches the page from the
+integration's service with `callIntegration`, which signs the call as the
+person looking.
+
 **Its tables.** `integrations` and `integration_actions` are part of
-`MOSS_SEQUENCE` (`@niscorp/moss`). `integration_frame_grants` is the feature's
-own sequence, `nisc.moss.integrations`, which it names on itself, so the
-server runs it with the rest and `migrateTables` does too. All three are tables like any other in the charter's `data`
-universe: a role granted a data wildcard denies them (`integrations.*`,
-`integration_actions.*`, `integration_frame_grants.*`).
+`MOSS_SEQUENCE` (`@niscorp/moss`), and the feature names both as its own. They
+are tables like any other in the charter's `data` universe: a role granted a
+data wildcard denies them (`integrations.*`, `integration_actions.*`). An
+app's own vex entry reads `integrations.extension` as it reads any column.
+
+| Column of `integrations` | What |
+|---|---|
+| `id`, `url`, `status` | which it is, where its service lives, `pending` or `approved` |
+| `key_hash` | the hash of the key it was issued; never the key |
+| `requested_actions`, `requested_data`, `approved_data` | what it asked to be allowed, and what the approval granted |
+| `reach` | every path the proxy forwards, with the actions that declare it |
+| `phrasebook` | its phrases, by language |
+| `extension` | what its bundle said in the app's own vocabulary, as the app's `prepare` answered it |
+| `last_import_at`, `last_error` | when the last good import landed, and why the last one did not |
+
+`integration_actions` holds one row for each action: `integration_id`,
+`action_id`, `definition`, and `grammar`, the stamps the definition is written
+at.
 
 The feature reads and writes them through vex, with entries of its own that no
-route serves (see [Features](#features)); it holds no SQL. Landing a bundle and
-minting a frame grant are batches, so `runtime.db` has to have `transaction`,
-as it does for any batch an app writes.
+route serves (see [Features](#features)); it holds no SQL. Landing a bundle is
+a batch, so `runtime.db` has to have `transaction`, as it does for any batch an
+app writes.
 
 The configuration, built apart from the call:
 
 ```typescript
+import { z } from 'zod';
 import { createIntegrations } from '@niscorp/moss/integrations';
-import type { Integrations, IntegrationsConfig, StorePress } from '@niscorp/moss/integrations';
+import type { ExtensionConfig, Integrations, IntegrationsConfig, RegisteredIntegration } from '@niscorp/moss/integrations';
 
-const storePress: StorePress = async (integrationId, name, bytes, contentType) => {
-  await blobs.put(`press/${integrationId}/${name}`, bytes, contentType);
-  return `https://cdn.app.example/press/${integrationId}/${name}`;
+const Listing = z.object({ title: z.string(), press: z.array(z.string()).default([]) }).strict();
+type Listing = z.infer<typeof Listing>;
+
+const extension: ExtensionConfig<Listing> = {
+  schema: Listing,
+  // A press image is a path of the integration's own.
+  check: (listing, bundle) => listing.press.filter((path) => !path.startsWith(`/integrations/${bundle.integration}/`)).map((path) => `press "${path}": not under this integration's own prefix`),
+  // Copied once, at import: the listing never depends on the vendor's service again.
+  prepare: async (listing, bundle) => ({ ...listing, press: await Promise.all(listing.press.map((path) => copyToOwnStore(bundle.url, path))) }),
 };
-const config: IntegrationsConfig = { menuSlots: ['hub.people'], storePress, signingSeed: process.env['SIGNING_SEED'] };
-const integrations: Integrations = createIntegrations(config);
+const config: IntegrationsConfig<Listing> = { extension, signingSeed: process.env['SIGNING_SEED'] };
+const integrations: Integrations<Listing> = createIntegrations(config);
+const approved = async (): Promise<RegisteredIntegration<Listing>[]> => (await integrations.listIntegrations()).filter((integration) => integration.status === 'approved');
 ```
 
 #### `createAssertionSigner(seed?)`
