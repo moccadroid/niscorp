@@ -1,34 +1,18 @@
 // Does a package above the engines run SQL of its own?
 //
-// nisc tells an application that its reads and writes are vex, and lyra is
-// held to it by a check of its own (`apps/lab/lyra/src/dev/reads-are-vex-check.ts`:
-// one raw statement in the whole app, "a count, not a negotiation"). Nothing
-// held a PACKAGE to it. Moss said "reads are vex, writes are vex" in its design
-// document and grew thirty-nine statements against its own tables, and no
-// build went red, because the rule was checked in one app and nowhere else.
-//
-// This is that check, for the packages. Vex and strata are where SQL lives:
-// one compiles and runs it, the other keeps the ledger of what ran. Every
-// other package is swept, and every file in it that holds a door to the pool
-// or a statement is in the LEDGER below, with its exact numbers and why it is
+// nisc tells an application that its reads and writes are vex. This holds the
+// packages to the same rule. Vex and strata are where SQL lives: one compiles
+// and runs it, the other keeps the ledger of what ran. Every other package is
+// swept, and every file in it that holds a call on a database pool or a
+// statement is in the LEDGER below, with its exact numbers and why it is
 // there. A file that is not in the ledger fails. A number that is off fails,
-// in either direction: a statement taken out has to come out of the ledger in
-// the same change, so the count goes down in a diff somebody reads and never
-// up without one.
+// in either direction: a statement taken out comes out of the ledger in the
+// same change.
 //
-// TIDE IS SWEPT, with one file in the ledger: its Postgres store
-// (`store/postgres.ts`, the `@niscorp/tide/postgres` entry), which was in moss
-// until tide's hosting left it. Tide is an engine, and it is not listed with
-// vex and strata, on purpose. Those two are SQL all the way through. Tide's
-// engine holds none: it reaches storage through a contract of six
-// capabilities, and is handed a store. Listing the whole package as a place
-// SQL lives would stop this check seeing a statement written into the engine,
-// which is the one thing about tide's SQL worth catching. So the store's
-// numbers are held like any other file's, and a statement anywhere else in
-// tide fails as a file outside the ledger.
-//
-// A repo script, like check-fact-door: reading a package's source is a repo
-// concern, not something a package ships.
+// Tide is swept, with its Postgres store in the ledger. Tide's engine holds no
+// SQL: it reaches storage through the store contract. Listing the whole
+// package as a place SQL lives would stop this check seeing a statement
+// written into the engine.
 //
 // `pnpm check:raw-sql`. `--measure` prints what it finds and judges nothing.
 // Exits non-zero on any failure.
@@ -135,30 +119,11 @@ type Entry = Found & { why: 'credential' | 'store' | 'debt' | 'tables'; note: st
 const LEDGER: Readonly<Record<string, Readonly<Record<string, Entry>>>> = {
   moss: {
     'identity/sessions.ts': { doors: 5, statements: 5, tables: 1, why: 'credential', note: 'the session credential: a token hash is looked up before anybody is signed in' },
-    // `integrations/registry.ts` is not here any more. It held every statement
-    // on `integrations` and `integration_actions`, sixteen of them, and each is
-    // a vex entry now (`integrations/entries.ts`), replayed through the seam a
-    // feature's own entries go through. The key-hash lookup went with the rest:
-    // the policy those entries run under asks for no principal.
     'integrations/tables.ts': { doors: 0, statements: 0, tables: 1, why: 'tables', note: "the integrations feature's own table sequence: frame grants, read and written through vex" },
-    // `manifest/generation.ts` is not here any more. It held the last four
-    // statements with no reason. Three read and moved the generation counter,
-    // and are two vex entries now (`data/pointer.ts`), replayed the way a
-    // feature's own are. The fourth was the counter's seed row, which is a
-    // step of migration 1: it is declared with that migration now, and is the
-    // one statement counted below.
-    'data/tables.ts': { doors: 0, statements: 1, tables: 17, why: 'tables', note: "moss's own table sequence, as it stood in integrations.ts: history, checksummed in every ledger; the sixteenth is the unique index on an integration's key hash, appended; the seventeenth and the one statement are the generation pointer's table and its seed row, the last two steps of migration 1, declared here and not beside the code that polls" },
+    'data/tables.ts': { doors: 0, statements: 1, tables: 17, why: 'tables', note: "moss's own table sequence (`nisc.moss`): migrations that have run are history, checksummed in every ledger; the one statement is the generation pointer's seed row, a step of migration 1" },
     'data/migrate.ts': { doors: 1, statements: 0, tables: 0, why: 'tables', note: "hands the migration's own transaction to vex's adapter to read the schema" },
   },
   tide: {
-    // Was `moss/tide.ts`, with six statements. The engine's own bookkeeping
-    // goes through the pool and not through a host's write path: an engine
-    // claiming its own task has no principal to run a policy for. The seventh
-    // statement reads and writes no row: it is the advisory lock a serial
-    // group is claimed behind, so two instances cannot both claim in it.
-    // It was one file, `store/postgres.ts`, with 7 doors, 7 statements and 3
-    // tables. It is a directory of six now, and the same numbers are in three
-    // of them.
     'store/postgres/store.ts': { doors: 4, statements: 4, tables: 0, why: 'store', note: "tide's Postgres store: the engine's own rows, behind the store contract: read, append, compare-and-set, remove" },
     'store/postgres/claim.ts': { doors: 3, statements: 3, tables: 0, why: 'store', note: "tide's Postgres store: the claim, the question whether a serial group is held, and the advisory lock the two run behind" },
     'store/postgres/tables.ts': { doors: 0, statements: 0, tables: 3, why: 'tables', note: "tide's own table sequence (`nisc.moss.tide`): the DDL that is migration 1, and the two columns migration 2 adds" },

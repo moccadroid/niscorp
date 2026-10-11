@@ -1,15 +1,10 @@
-// Is a package's public API what somebody decided it is?
+// Is what a package exports what somebody decided it exports?
 //
-// Moss's main entry exported 135 names, and 71 of them were imported by nothing
-// outside the package: its insides had become its API one export at a time,
-// each added because some file needed it (docs/plans/moss-refactor.md). Nothing
-// made adding one a decision.
-//
-// So the names a package exports are a file in the repository: `api.txt`
-// beside its `package.json`, one line per name per entry point. This check
-// reads the entry points and compares. A name that is exported and not in the
-// file fails, and so does a name in the file that is no longer exported: the
-// file changes in the same diff as the export, where somebody reads it.
+// The names a package exports are a file in the repository: `api.txt` beside
+// its `package.json`, one line per name per entry point. This check reads the
+// entry points and compares. A name that is exported and not in the file
+// fails, and so does a name in the file that is not exported: the file
+// changes in the same diff as the export, where somebody reads it.
 //
 // `pnpm check:api`. `--write` records what is exported now. Exits non-zero on
 // any failure.
