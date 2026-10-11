@@ -456,13 +456,6 @@ export const BELTS_BUNDLE = {
         'Gürtel, Graduierungsdaten und Kurszahlen, im eigenen Speicher des Add-ons. Graduierungen landen in den Mitteilungen des Studios.',
     },
   },
-  // WORDS, for the store tile and the approval card. Never parsed, never
-  // trusted for anything but reading.
-  meta: {
-    title: 'Belts',
-    tagline: 'Rank tracking for grappling gyms',
-    description: 'Belts, promotion dates and class counts, kept in the add-on’s own storage. Promotions land in the studio’s notifications.',
-  },
   // WHAT WE NEED, which somebody approves once. Asking is not getting: until an
   // operator says yes, nothing here is served and the data grants are not held.
   grants: {
@@ -479,9 +472,21 @@ export const BELTS_BUNDLE = {
     [mineAction.id]: mineAction,
     [settingsAction.id]: settingsAction,
   },
-  // THE BINDINGS — beside the artifacts, never on them. Each names a target
-  // the contract advertised; intake refuses anything else with a sentence.
-  attachments: { [panelAction.id]: { to: 'people.detail', preview: '/integrations/belts/preview' } },
-  placements: { [rosterAction.id]: 'hub.people', [mineAction.id]: 'hub.me' },
-  settings: settingsAction.id,
+  // WHAT LYRA'S OWN VOCABULARY ADDS TO A BUNDLE. Everything above is nisc's;
+  // what is under `extension` is the host app's to read, and its contract
+  // (`GET /api/integrations/contract`) says what it takes.
+  extension: {
+    // WORDS, for the store tile and the approval card. Never parsed, never
+    // trusted for anything but reading.
+    meta: {
+      title: 'Belts',
+      tagline: 'Rank tracking for grappling gyms',
+      description: 'Belts, promotion dates and class counts, kept in the add-on’s own storage. Promotions land in the studio’s notifications.',
+    },
+    // THE BINDINGS — beside the artifacts, never on them. Each names a target
+    // the contract advertised; the host refuses anything else with a sentence.
+    attachments: { [panelAction.id]: { to: 'people.detail', preview: '/integrations/belts/preview' } },
+    placements: { [rosterAction.id]: 'hub.people', [mineAction.id]: 'hub.me' },
+    settings: settingsAction.id,
+  },
 };

@@ -146,7 +146,7 @@ try {
   // spelling. Which side covers a word is printed rather than implied: one
   // leaning on the host is one that goes English the day the host stops saying
   // it, and that is worth being able to read off a check.
-  const SHIPPED: { integration: string; phrasebook: Record<string, Record<string, string>>; meta: Record<string, string>; actions: Record<string, ActionDefinition> }[] = [
+  const SHIPPED: { integration: string; phrasebook: Record<string, Record<string, string>>; extension: { meta: Record<string, string> }; actions: Record<string, ActionDefinition> }[] = [
     BELTS_BUNDLE,
     STRIPE_BUNDLE,
   ];
@@ -154,12 +154,12 @@ try {
     const own = bundle.phrasebook['de'] ?? {};
     // The store tile is prose too — what a studio reads BEFORE installing, and
     // the one screen an integration shows to somebody who has not got it yet.
-    const shown = [...harvestDefinitions(bundle.actions, PHRASE_KEYS).map((entry) => entry.phrase), bundle.meta['tagline'] ?? '', bundle.meta['description'] ?? ''];
+    const shown = [...harvestDefinitions(bundle.actions, PHRASE_KEYS).map((entry) => entry.phrase), bundle.extension.meta['tagline'] ?? '', bundle.extension.meta['description'] ?? ''];
     // Its own product name reads the same in every language. Translating one is
     // allowed — Belts does, because a belt is a common noun — but never asked
     // for, because demanding `Stripe: 'Stripe'` is demanding a row that says
     // nothing and invites somebody to "fix" it later.
-    const needed = shown.filter((phrase) => phrase !== '' && phrase !== bundle.meta['title']);
+    const needed = shown.filter((phrase) => phrase !== '' && phrase !== bundle.extension.meta['title']);
     const missing = needed.filter((phrase) => own[phrase] === undefined && GERMAN[phrase] === undefined);
     const leaning = needed.filter((phrase) => own[phrase] === undefined && GERMAN[phrase] !== undefined);
     ok(

@@ -15,8 +15,8 @@ import type { ActionDefinition } from '@niscorp/nova';
 //                               moderator made of it — fit, not fit, not yet
 //   ext.stage.qa.questions    the last slide: the questions fit to show
 //
-// Where each goes is declared here (`attachments`) and checked at intake
-// against the seats lyceum offers; until the integration is installed and
+// Where each goes is declared here (`extension.attachments`, lyceum's own
+// vocabulary) and checked at install against the seats lyceum offers; until the integration is installed and
 // approved there is nothing by these names to place.
 
 const send = [
@@ -177,14 +177,11 @@ export const QA_BUNDLE = {
   // The grammars these documents are written in; the host upgrades from here.
   // lyceum.kit 9: the check and the x.
   grammar: { 'nisc.nova': 2, 'nisc.prism': 1, 'lyceum.kit': 9 },
-  meta: {
-    title: 'QA Company Ask Anything',
-    tagline: 'Questions for whoever is on stage.',
-    description: 'A question box from the QA Company. It sends through the host\'s own Q&A, as you.',
-  },
   actions: { [ask.id]: ask, [everyQuestion.id]: everyQuestion, [fitQuestions.id]: fitQuestions },
-  // Which of lyceum's seats each screen rides.
-  attachments: { [ask.id]: 'member.phone', [everyQuestion.id]: 'speaker.console', [fitQuestions.id]: 'slide.end' },
+  // What lyceum's own vocabulary adds: which of its seats each screen rides.
+  extension: {
+    attachments: { [ask.id]: 'member.phone', [everyQuestion.id]: 'speaker.console', [fitQuestions.id]: 'slide.end' },
+  },
 };
 
 // THE SAME BUNDLE, BROKEN: a trigger that re-emits its own channel. Valid

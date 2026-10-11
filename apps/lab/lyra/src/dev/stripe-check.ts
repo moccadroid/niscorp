@@ -65,10 +65,10 @@ try {
   ok('...with its five screens', registered.json['actions'] === 5, `${String(registered.json['actions'])} actions`);
 
   // `hub.money` had to be OFFERED by lyra before this bundle could name it —
-  // intake refuses a placement into a hub the host does not advertise. This is
-  // the assertion that the two halves agree.
-  const row = await runtime.db.query("SELECT place_in, preview FROM integration_actions WHERE action_id = 'ext.desk.stripe.ledger'");
-  ok('...and the money screen is placed in the money hub', (row.rows[0] as { place_in?: string } | undefined)?.place_in === 'hub.money', 'a hub the host offers, or the bundle is refused whole');
+  // lyra's own check of a bundle's `extension` refuses a placement into a hub
+  // it does not offer. This is the assertion that the two halves agree.
+  const row = await runtime.db.query("SELECT extension->'placements'->>'ext.desk.stripe.ledger' AS placed FROM integrations WHERE id = 'stripe'");
+  ok('...and the money screen is placed in the money hub', (row.rows[0] as { placed?: string } | undefined)?.placed === 'hub.money', 'a hub the host offers, or the bundle is refused whole');
 
   await operator('/operator/integrations/stripe/approve', {});
   const owner = await login(CAST.northrock.owner);

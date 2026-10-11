@@ -1,5 +1,6 @@
 import type { ShellManifest } from '@niscorp/moss';
 import type { Integrations } from '@niscorp/moss/integrations';
+import type { Seats } from '@lyceum/app/attachable';
 import { attachedTo } from './attached';
 
 // THE PHONE'S LIST for one person, as boot data (`inputs`): the actions they
@@ -12,7 +13,7 @@ import { attachedTo } from './attached';
 //                            attached to `member.phone` (The QA Company's Q&A)
 //   the button               for the three the speaker gave it to
 //   the X-ray                once the speaker gave it
-export const phoneInputs = (integrations: Integrations): NonNullable<ShellManifest['inputs']> => async ({ actions }): Promise<Record<string, Record<string, unknown>>> => {
+export const phoneInputs = (integrations: Integrations<Seats>): NonNullable<ShellManifest['inputs']> => async ({ actions }): Promise<Record<string, Record<string, unknown>>> => {
   if (!actions.includes('member.phone')) return {};
   const onThePhone = [
     ...actions.filter((action) => action === 'assistant.thread'),

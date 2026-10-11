@@ -3,7 +3,7 @@ import { createServer } from '@niscorp/moss';
 import type { MossServer, NiscApp } from '@niscorp/moss';
 import { createIntegrations } from '@niscorp/moss/integrations';
 import { buildLyceum } from '@lyceum/app/app';
-import { ATTACHABLE } from '@lyceum/app/attachable';
+import { seatsExtension } from '@lyceum/app/attachable';
 import { lyceumIdentity } from './identity';
 import { lyceumReactions } from './reactions';
 import { doorFunctions } from './functions/door.functions';
@@ -107,10 +107,10 @@ export const bootOn = async <R extends LyceumRuntime>(runtime: R, options: BootO
   const vendor = vendorAddresses(process.env);
 
   const renderers = followRenderers();
-  // Integrations are a feature added to moss: created here with the seats this
-  // app offers a bundle, handed over in the manifest, and asked afterwards
-  // which screens ride which seat (./attached.ts).
-  const integrations = createIntegrations({ attachable: ATTACHABLE });
+  // Integrations are a feature added to moss: created here with what this app
+  // lets a bundle say of its seats, handed over in the manifest, and asked
+  // afterwards which screens ride which seat (./attached.ts).
+  const integrations = createIntegrations({ extension: seatsExtension });
   const app = buildLyceum({
     features: [integrations],
     identity: lyceumIdentity,

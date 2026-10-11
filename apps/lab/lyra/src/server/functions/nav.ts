@@ -2,17 +2,26 @@ import type { FunctionHandler } from '@niscorp/nova';
 import type { FunctionSession, MossServer } from '@niscorp/moss';
 import type { Integrations } from '@niscorp/moss/integrations';
 import { contextFor } from '@lyra/app/nav/sections';
+import { pathOnService } from '@lyra/app/integration-extension';
+import type { IntegrationExtension } from '@lyra/app/integration-extension';
 import { bookOverWire } from '@lyra/app/app';
 import { greetingFrom } from '../phrases';
 import { dayIn } from '../clock';
 
 export const navFunctions = (
   session: FunctionSession,
-  // `integrations` is the feature the app created (app/app.ts): what rides a
-  // host action and what is placed under a hub are asked of it. `attachable`
-  // is what each host action offers a rider, as the app said it there.
-  deps: { server: () => MossServer; integrations: Integrations; attachable: Readonly<Record<string, Readonly<Record<string, string>>>> },
+  // `integrations` is the feature the app created (app/app.ts): it answers the
+  // registered integrations, each with what its bundle said in this app's own
+  // vocabulary (app/integration-extension.ts). What rides a host action and
+  // what is placed under a hub are read off that. `attachable` is what each
+  // host action offers a rider, as the app said it there.
+  deps: { server: () => MossServer; integrations: Integrations<IntegrationExtension>; attachable: Readonly<Record<string, Readonly<Record<string, string>>>> },
 ): Record<string, FunctionHandler> => {
+  // What the approved integrations said, each with the integration it is of.
+  // One that is pending places nothing.
+  const approved = async (): Promise<{ integration: string; extension: IntegrationExtension }[]> =>
+    (await deps.integrations.listIntegrations()).flatMap(({ id, status, extension }) => (status === 'approved' && extension !== undefined ? [{ integration: id, extension }] : []));
+
   // An integration's screen is not part of what the app shipped: it is among
   // the actions in force, which the server answers.
   const titleOf = (actionId: string): string => deps.server().actions()[actionId]?.title ?? actionId;
@@ -80,7 +89,7 @@ export const navFunctions = (
     const context = contextFor(action, granted);
     if (context.areaId === '') return { areaId: action, areaLabel: '', tabs: [], moreValue: '' };
 
-    const placements = await deps.integrations.listPlacements();
+    const placements: Record<string, string> = Object.assign({}, ...(await approved()).map(({ extension }) => extension.placements));
     const placed = granted
       .filter((id) => placements[id] === context.areaId)
       .map((id) => ({ action: id, label: titleOf(id), icon: 'addons' }))
@@ -102,7 +111,11 @@ export const navFunctions = (
     if (host === '') return [];
     // The session's own catalog — installs already filtered by the record.
     const granted = await grantedNow();
-    const attached = await deps.integrations.listAttachments(host);
+    // In the order of the action ids, whichever integration each belongs to.
+    const attached = (await approved())
+      .flatMap(({ integration, extension }) => Object.entries(extension.attachments).map(([actionId, binding]) => ({ integration, actionId, ...binding })))
+      .filter((binding) => binding.to === host)
+      .sort((a, b) => (a.actionId < b.actionId ? -1 : a.actionId > b.actionId ? 1 : 0));
 
     const offers = deps.attachable[host] ?? {};
     const offered: Record<string, unknown> = {};
@@ -113,11 +126,14 @@ export const navFunctions = (
     return Promise.all(
       attached
         .filter(({ actionId }) => granted.includes(actionId))
-        .map(async ({ actionId, preview }) => {
+        .map(async ({ integration, actionId, preview }) => {
           const row: Record<string, unknown> = { action: actionId, label: titleOf(actionId), bands: [], hint: '' };
-          if (preview === '') return row;
+          if (preview === '' || session.principal === null) return row;
           try {
-            const res = await session.wire(preview, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(offered) });
+            // The app's own signed call, as the person looking: a preview is
+            // no endpoint of an action, so it is not among what the proxy
+            // forwards for a screen.
+            const res = await deps.integrations.callIntegration(integration, pathOnService(integration, preview), { principal: session.principal, body: offered });
             if (res.ok) {
               const atoms = (await res.json()) as { bands?: unknown; hint?: unknown };
               if (Array.isArray(atoms.bands)) row['bands'] = atoms.bands;

@@ -39,8 +39,9 @@ export type VendorState = { id: string; url: string; status: string; reasons: { 
 const asRows = (reasons: readonly string[]): { reason: string }[] => reasons.map((reason) => ({ reason }));
 
 // WHAT THE INSTALL CHECK TESTS, and how to tell from its reasons which test a
-// bundle failed. The reasons are moss's own sentences (runIntake); a check with
-// no reason against it passed — intake reports every fault, not the first.
+// bundle failed. The reasons are moss's own sentences and this app's
+// (app/attachable.ts); a check with no reason against it passed — every fault
+// is reported, not the first.
 const CHECKS: readonly { check: string; failedBy: RegExp }[] = [
   { check: 'Only components this app has', failedBy: /component|prop /i },
   { check: 'Only queries this app has', failedBy: /endpoint/i },

@@ -1,6 +1,6 @@
 import type { CacheEntry, MutationEntry } from './index';
 
-const row = (name: string) => ({ $get: { from: { $var: 'a' }, path: [name] } });
+const row = (...path: string[]) => ({ $get: { from: { $var: 'a' }, path } });
 
 export const addonsList: CacheEntry = {
   fingerprint: 'addons/list',
@@ -8,9 +8,10 @@ export const addonsList: CacheEntry = {
   shape: [{ integration_id: '', title: '', tagline: '', description: '', adds: '', settings_action: '', installed: false, state_label: '', state_tone: '' }],
   dsl: {
     from: ['integrations'],
-    // The tile's words come off the row, where intake put them from the
-    // bundle's meta — the store never parses a bundle.
-    fields: ['integrations.id', 'integrations.status', 'integrations.title', 'integrations.tagline', 'integrations.description', 'integrations.adds', 'integrations.settings_action'],
+    // The tile's words come off the row: `extension` is what the bundle said in
+    // this app's own vocabulary (../integration-extension.ts), as it was kept
+    // at import. The store never parses a bundle.
+    fields: ['integrations.id', 'integrations.status', 'integrations.extension'],
     // Only what an operator has approved is on sale. A pending integration is
     // one nobody has looked at yet, and it should not appear in a shop.
     filter: { eq: ['integrations.status', 'approved'] },
@@ -24,11 +25,11 @@ export const addonsList: CacheEntry = {
         integration_id: row('id'),
         // The id-or-title fallback happens in the store's stitch derivation —
         // a bundle that shipped no meta still gets a tile named by its id.
-        title: row('title'),
-        tagline: row('tagline'),
-        description: row('description'),
-        adds: row('adds'),
-        settings_action: row('settings_action'),
+        title: row('extension', 'meta', 'title'),
+        tagline: row('extension', 'meta', 'tagline'),
+        description: row('extension', 'meta', 'description'),
+        adds: row('extension', 'adds'),
+        settings_action: row('extension', 'settings'),
       },
     },
   },

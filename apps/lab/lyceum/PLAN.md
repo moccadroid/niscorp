@@ -97,7 +97,7 @@ installs it through moss's operator routes: moss fetches the bundle and intake c
 — every component and prop is one lyceum's kit has, every endpoint a fingerprint lyceum
 serves, no chain of steps that never ends. Its broken twin (`LYCEUM_VENDOR_BROKEN_URL`)
 is refused with the loop's path. Acme ships three screens and says where each goes
-(moss `attachments`), against the seats lyceum offers (`app/attachable.ts`), and intake
+(`extension.attachments`, lyceum's own vocabulary for a bundle), against the seats lyceum offers (`app/attachable.ts`), and intake
 refuses any other: `ext.member.acme.ask` on the phone (ask, and see what you asked);
 `ext.speaker.acme.questions` on the controller, a region of its own on every slide
 (every question, its sender, and fit / not fit / not checked yet — two of lyceum's reads

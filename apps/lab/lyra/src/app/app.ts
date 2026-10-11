@@ -1,6 +1,7 @@
 import { defineApp } from '@niscorp/moss';
 import type { NiscApp } from '@niscorp/moss';
 import { createIntegrations } from '@niscorp/moss/integrations';
+import { integrationExtension } from './integration-extension';
 import { createTideFacts } from '@niscorp/moss/tide';
 import { CHARTER } from './charter/charter';
 import { AREAS, areasFor, landingFor } from './nav/sections';
@@ -196,9 +197,9 @@ const DUAL = ['owner', 'manager', 'instructor', 'desk'] as const;
 const WEARABLE: readonly (readonly string[])[] = DUAL.map((role) => [role, 'member']);
 
 // WHERE AN INTEGRATION'S PANEL MAY RIDE: host action → what it hands a rider,
-// as {offered key: the path it is read from on this app's own data}. Said to
-// the integrations feature below, and read by `nav.attachments`, which is the
-// implementation of the offer.
+// as {offered key: the path it is read from on this app's own data}. Part of
+// what this app offers an integration (./integration-extension.ts), and read
+// by `nav.attachments`, which is the implementation of the offer.
 const ATTACHABLE = { 'people.detail': { person_id: 'personId', person_name: 'member.person_name' } };
 
 export const buildLyra = (deps: ServerDeps): NiscApp => {
@@ -216,15 +217,20 @@ export const buildLyra = (deps: ServerDeps): NiscApp => {
     // `identity/actor` answers it when the record resolves, and moss refuses
     // the keyed call at the door when it answers nobody.
     integrationActor: (integration, actsFor) => (integration === '' || actsFor === '' ? null : `ig_${integration}@${actsFor}`),
-    attachable: ATTACHABLE,
-    // An integration may place a screen into these and nowhere else — intake refuses a
-    // placement naming anything absent here. `hub.money` is offered because a
-    // payments integration has somewhere to belong that is not somebody's roster.
-    menuSlots: ['hub.people', 'hub.me', 'hub.money'],
-    // The same ids, in the words this studio's own navigation uses — so the
-    // approval card and the store tile say "under Money" rather than
-    // "under hub.money". Derived from the nav rather than typed twice.
-    placementNames: { ...Object.fromEntries(AREAS.map((area) => [area.id, area.label])), 'people.detail': 'a member’s record' },
+    // THIS APP'S OWN VOCABULARY for an integration: its store tile's words,
+    // and where its screens appear (./integration-extension.ts).
+    extension: integrationExtension({
+      attachable: ATTACHABLE,
+      // An integration may place a screen into these and nowhere else: a
+      // placement naming anything absent here refuses the bundle. `hub.money`
+      // is offered because a payments integration has somewhere to belong that
+      // is not somebody's roster.
+      menuSlots: ['hub.people', 'hub.me', 'hub.money'],
+      // The same ids, in the words this studio's own navigation uses — so the
+      // store tile says "under Money" rather than "under hub.money". Derived
+      // from the nav rather than typed twice.
+      names: { ...Object.fromEntries(AREAS.map((area) => [area.id, area.label])), 'people.detail': 'a member’s record' },
+    }),
     ...(deps.signingSeed === undefined ? {} : { signingSeed: deps.signingSeed }),
   });
 

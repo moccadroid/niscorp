@@ -675,15 +675,6 @@ export const STRIPE_BUNDLE = {
         'Karten- und SEPA-Zahlungen für Mitgliedschaften, mit dem Studio als Händler. Rechnungen und Erstattungen bleiben bei Stripe; das Studio behält den Status.',
     },
   },
-  meta: {
-    // THE PROVIDER, not the function. A studio installs "Stripe", and one day
-    // "PayPal" or "Mollie" beside it — the store lists WHO processes the money,
-    // because that is the choice being made. What they all DO (take payments for
-    // memberships) is the tagline, shared across them.
-    title: 'Stripe',
-    tagline: 'Card and SEPA payments for memberships',
-    description: 'Card and SEPA payments for memberships, with the studio as the merchant. Invoices and refunds stay with Stripe; this studio keeps standing.',
-  },
   // What it ASKS for. The rung above it (lyra's charter) is the ceiling
   // regardless, and an operator approves this list once at registration.
   grants: {
@@ -710,9 +701,22 @@ export const STRIPE_BUNDLE = {
     [buyAction.id]: buyAction,
     [memberPanelAction.id]: memberPanelAction,
   },
-  placements: { [ledgerAction.id]: 'hub.money', [payAction.id]: 'hub.me', [buyAction.id]: 'hub.me' },
-  // A PANEL ON A HOST SCREEN. The host advertised `people.detail` as attachable;
-  // this rides it, and the preview is what paints the strip before it opens.
-  attachments: { [memberPanelAction.id]: { to: 'people.detail', preview: `${OWN}/preview/member` } },
-  settings: setupAction.id,
+  // WHAT LYRA'S OWN VOCABULARY ADDS TO A BUNDLE: read by the host app, not by
+  // nisc. Its contract (`GET /api/integrations/contract`) says what it takes.
+  extension: {
+    meta: {
+      // THE PROVIDER, not the function. A studio installs "Stripe", and one day
+      // "PayPal" or "Mollie" beside it — the store lists WHO processes the money,
+      // because that is the choice being made. What they all DO (take payments for
+      // memberships) is the tagline, shared across them.
+      title: 'Stripe',
+      tagline: 'Card and SEPA payments for memberships',
+      description: 'Card and SEPA payments for memberships, with the studio as the merchant. Invoices and refunds stay with Stripe; this studio keeps standing.',
+    },
+    placements: { [ledgerAction.id]: 'hub.money', [payAction.id]: 'hub.me', [buyAction.id]: 'hub.me' },
+    // A PANEL ON A HOST SCREEN. The host advertised `people.detail` as attachable;
+    // this rides it, and the preview is what paints the strip before it opens.
+    attachments: { [memberPanelAction.id]: { to: 'people.detail', preview: `${OWN}/preview/member` } },
+    settings: setupAction.id,
+  },
 };
