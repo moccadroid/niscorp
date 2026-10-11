@@ -64,6 +64,20 @@ export type SiteConfig = Pick<DocumentConfig, 'draw' | 'htmlAttributes' | 'site'
 };
 
 // The paths the app server answers itself; everything else is the site's.
+//
+// A CONSTANT, AND IT NAMES A FEATURE'S PREFIX (`integrations`: the proxy, the
+// frames and the webhooks of ../integrations). That is the core knowing where
+// a feature mounts, and it is left so on purpose, because the three that read
+// this cannot all ask a server instead. The dev plugin (./vite.ts) answers an
+// owned path `503` when the app did not boot, and a server that did not boot
+// cannot say what it owns. `socket` is where a host attached the transport,
+// which no server is told. And what is mounted on a server includes the app's
+// own routes, which are not owned: a page may share a first segment with one.
+// A feature that mounts under a prefix of its own that is not here is served
+// by `mountSite` all the same (its routes are registered before the
+// catch-all); what it loses is the 404 for an unknown path under that prefix,
+// and under the dev plugin its requests go to vite, so an app that names such
+// a feature says the prefixes itself (`owned`, here and on `mossDev`).
 export const MOSS_PATHS = /^\/(api|catalog|socket|operator|integrations)(\/|$)/;
 
 export const mountSite = (server: MossServer, config: SiteConfig): void => {
