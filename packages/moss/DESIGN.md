@@ -610,7 +610,8 @@ Six things had to be true, and each is a small, separate decision:
 - **Who may keep a page follows from who asked.** Drawn for nobody, a page is
   the same for everybody and may be cached or written to a file; drawn for
   somebody, it is theirs (`private, no-store`). That is one function
-  (`documentHeaders`), keyed on whether a principal resolved. No page, route or
+  (in `src/documents/document.ts`; `renderDocument` answers what it says as
+  the page's `headers`), keyed on whether a principal resolved. No page, route or
   app declares which kind it is, so none can declare it wrong.
 - **Nothing here can fail a page.** A kit component that throws, a shell that
   will not build, a template without a root: the template goes out as it is and

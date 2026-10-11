@@ -3,7 +3,8 @@ import type { WriteEvent } from '@niscorp/vex';
 import { createGrammarUpgrader } from '../src/data/grammar';
 import type { FeatureSeams } from '../src/feature';
 import { createTideFacts } from '../src/tide';
-import type { FactIntake, TideFactsConfig } from '../src/tide';
+import type { TideFactsConfig } from '../src/tide';
+import type { FactIntake } from '../src/tide/feature';
 import { mintFromWrites } from '../src/tide/feature';
 
 // THE WRITE-FACT BRIDGE, AS A FEATURE: handed the one seam it uses, a write

@@ -14,7 +14,7 @@
 //   5. a press before the socket is open is dropped, not thrown and not queued
 //   6. a dead cookie is the lock screen, and the cookie is taken back
 //   7. nothing in a tree can break out of the element the snapshot rides in
-import { embedSnapshot, PROTOCOL } from '@niscorp/moss';
+import { PROTOCOL } from '@niscorp/moss';
 import type { RenderNode } from '@niscorp/nova';
 import { mintToken } from '@atrium/server/users';
 import { renderPage } from '@atrium/server/document';
@@ -80,8 +80,15 @@ check('a dead cookie is the lock screen', snapshotIn(dead.html).principal === fa
 check('…and a page request writes no cookie: the upgrade is where one is set and taken back', dead.headers['set-cookie'] === undefined);
 
 // ── 7. the snapshot cannot break out of its element ──
-const hostile = embedSnapshot({ frame: [{ type: 'text', value: '</script><script>alert(1)</script>\u2028' }], trees: {}, settled: true, live: false, why: [], drawnWith: [] }, null);
-check('a tree cannot close the element its snapshot rides in', (hostile.match(/<\/script>/g) ?? []).length === 1 && !hostile.includes('\u2028'));
+// Asked of the document as it is drawn, with the one thing in a snapshot a
+// stranger writes: the path the page was asked for.
+const hostilePath = '/</script><script>alert(1)</script>\u2028';
+const hostile = await renderPage({ server, template: TEMPLATE, path: hostilePath, cookie: null });
+const closings = (html: string): number => (html.match(/<\/script>/g) ?? []).length;
+check(
+  'a path cannot close the element its snapshot rides in',
+  hostile.drawn && snapshotIn(hostile.html).path === hostilePath && closings(hostile.html) === closings(anonymous.html) && !hostile.html.includes('\u2028'),
+);
 
 await integrations.close();
 report('the page, drawn on the server');

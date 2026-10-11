@@ -76,13 +76,12 @@ export type MossServer = Hono<Env> & {
   // `replaceActions`.
   actions: () => Readonly<Record<string, ActionDefinition>>;
   // WHAT SOMEBODY HOLDS of the actions in force: the granted ids, sorted, and
-  // the version token of that set (equal hash, equal application). `catalogOf`
+  // the version token of that set (equal hash, equal application). It
   // resolves who the principal is the way a request does (`null` is nobody
-  // signed in); `catalogForRoles` is for a caller that already knows the
-  // roles, with the integrations installed where they stand (`undefined`:
-  // every one is live).
+  // signed in), installs included. The one way to ask: a second, by roles and
+  // an install list the caller wrote down, answered for somebody no request
+  // was ever served as.
   catalogOf: (principal: string | null) => Promise<Catalog>;
-  catalogForRoles: (roles: readonly string[], installed?: readonly string[]) => Catalog;
   // WHAT A SET OF ROLES MAY READ AND WRITE: the vex policy a request by
   // somebody holding exactly these roles is served under, compiled from the
   // charter and the row behaviors over every table the database has. One

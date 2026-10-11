@@ -17,30 +17,32 @@
 //                   never the app. server/vite.ts is the `./vite` entry: the dev plugin.)
 //
 // This file is the main entry, `@niscorp/moss`: what it exports is what an app
-// calls, and `packages/moss/api.txt` lists it.
+// calls, and `packages/moss/api.txt` lists it. A NAME IS HERE WHEN IT IS THE
+// ONE WAY TO DO SOMETHING AN APP IS MEANT TO DO, or the type of something an
+// app writes or is handed, and DOCS.md shows it in use. A second way to what
+// the server answers, a part of something exported whole, and a type that
+// only names what an exported function takes or answers are not exported.
 export { defineApp } from './manifest';
 export type { NiscApp, ShellManifest, PageManifest, FunctionSession, LayoutVariant, RunRecord, RunTurn, RunSink } from './manifest';
 export { mintDevToken } from './identity';
 export type { NiscRuntime } from './runtime';
 export type { Telemetry, TelemetrySpan } from './runtime';
-export { initSessions, mintSession, sessionOf, revokeAllFor } from './identity';
+export { mintSession, revokeAllFor } from './identity';
 export { createServer } from './server';
 export type { MossServer } from './server';
 export type { ExecuteAs } from './data';
 export { MOSS_SEQUENCE } from './data';
 export type { Feature, FeatureSeams } from './feature';
 export { verifyApp } from './manifest';
-export type { ManifestReport } from './manifest';
 export { CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, PROTOCOL, offerToken } from './protocol';
 export type { IdentityRecord } from './identity';
 export type { ShellHost, ShellSnapshot } from './shells';
-export { createPageRouter, embedSnapshot, documentHeaders, renderDocument, exportDocuments } from './documents';
-export { sessionCookies, tokenFromCookie } from './identity';
+export { renderDocument, exportDocuments } from './documents';
+export { sessionCookies } from './identity';
 export type { DocumentConfig, DrawnDocument, ExportedDocument } from './documents';
 export type { Connection } from './socket';
 export type { ServerMessage } from './protocol';
 export { migrateTables } from './data';
-export type { TablesReport } from './data';
 // A FEATURE is not exported here: it ships from an entry point of its own, and
 // nothing this entry reaches imports one. Integrations are
 // `@niscorp/moss/integrations` (src/integrations/); a write minted into tide as

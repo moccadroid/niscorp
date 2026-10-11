@@ -41,9 +41,7 @@
 // and replays through the seam it is handed. Nothing of moss's core imports
 // it: `pnpm check:modules` fails if something does.
 
-export type { CallIntegration } from './call';
 export { createAssertionSigner } from './credentials';
 export { createIntegrations } from './feature';
 export type { Integrations, IntegrationsConfig } from './feature';
-export { integrationOfAction } from './installed';
 export type { StorePress } from './press';

@@ -24,4 +24,4 @@
 // does.
 
 export { createTideFacts } from './feature';
-export type { FactIntake, TideFactsConfig } from './feature';
+export type { TideFactsConfig } from './feature';

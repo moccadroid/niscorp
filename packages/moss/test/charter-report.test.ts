@@ -35,7 +35,7 @@ const charter = { public: ['home', 'reports.*'], admin: ['home', 'admin.panel'] 
 const manifest = () =>
   defineApp({
     charter,
-    assignments: { usr_admin: ['admin'] },
+    assignments: { usr_admin: ['admin'], usr_both: ['public', 'admin'] },
     actions: { home, 'admin.panel': panel, stray },
   });
 
@@ -88,7 +88,8 @@ describe('charterReport — the report the server booted on', () => {
     expect(Object.keys(server.actions())).toEqual(['home', 'admin.panel', 'stray', 'reports.daily']);
     expect((await server.catalogOf(null)).ids).toEqual(['home', 'reports.daily']);
     expect((await server.catalogOf('usr_admin')).ids).toEqual(['admin.panel', 'home']);
-    expect(server.catalogForRoles(['public', 'admin']).ids).toEqual(['admin.panel', 'home', 'reports.daily']);
+    // Somebody who holds two roles holds what either grants.
+    expect((await server.catalogOf('usr_both')).ids).toEqual(['admin.panel', 'home', 'reports.daily']);
     server.close();
   });
 

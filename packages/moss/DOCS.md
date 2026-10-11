@@ -168,7 +168,7 @@ does not have, and a path that names one parameter twice (`/docs/:id/versions/:i
 the parameters are handed over by name). Any path no page answers is the app's.
 
 Whether a page may be kept by a cache, or written to a file, is not a property
-of the page: see [`documentHeaders`](#the-document).
+of the page: see [who may keep a page](#who-may-keep-a-page).
 
 #### `phrases` / `phraseKeys` — the words a shell wears
 
@@ -251,6 +251,17 @@ needs of either has a call:
   created and handed to `createServer`, closed over where the app builds its
   manifest. Moss does not hand it back.
 
+The run sink, with what a record carries:
+
+```typescript
+import type { RunSink, RunTurn } from '@niscorp/moss';
+
+const runs: RunSink = (record) => {
+  const turns: readonly RunTurn[] = record.turns ?? [];
+  console.log(record.agentId, record.totalTokens, turns.length);
+};
+```
+
 ### The environment
 
 #### `NiscRuntime`
@@ -328,7 +339,7 @@ given 512 MB. A deployment with a public screen and more visitors at once than
 that raises it from those numbers and its own memory, and turns compression off
 or down first.
 
-#### `mintSession(pool, principal, ttlMs)` / `sessionOf(pool, token)` / `revokeAllFor(pool, principal)` / `initSessions(pool)`
+#### `mintSession(pool, principal, ttlMs)` / `revokeAllFor(pool, principal)`
 
 The stored credential behind `session: 'sessions'` — the integration key's
 standard, one table over: 256 bits behind an `st_` prefix, the row keeps only
@@ -339,22 +350,27 @@ the row.
   its own identity check and hands the token to the terminal (or sets it as
   the browser's cookie, [`sessionCookies`](#sessioncookiespage-token-options)).
   Expired rows are swept on every mint — no timer to run.
-- `sessionOf` answers the principal a token resolves to, or `null`. Under
-  `session: 'sessions'` the server asks it for you (`server.principalOf`); it
-  is exported for an app whose own verifier function is built on it.
 - `revokeAllFor` deletes every token a principal holds: signed out everywhere.
-  `session.revoke()` in a function calls it for the session's own principal.
+  `session.revoke()` in a function calls it for the session's own principal;
+  this is for signing out somebody else (an owner removes a member).
   No exported call deletes one token and leaves the principal's others.
-- `initSessions` creates the table, through the ledger below. `createServer`
-  does that itself under `session: 'sessions'` and only then, so it is for a
-  host that is not moss's server, and for an app whose `session` is a function
-  built on `sessionOf`.
+- Who a token is, is asked of the server: `server.principalOf(token)`. The
+  table is made by `createServer`, and by `migrateTables`, under
+  `session: 'sessions'` and only then. Nothing else is exported of the stored
+  credential.
+
+```typescript
+// the app's own door: who they are is the app's to establish, then a session
+const token = await mintSession(runtime.pool, 'usr_ada', 30 * 24 * 60 * 60 * 1000);
+// ...and an owner removing a member signs them out everywhere
+await revokeAllFor(runtime.pool, 'usr_ada');
+```
 
 **Tables go through a ledger.** moss creates no table on its own: its tables are
 [strata](../strata/README.md) sequences — `MOSS_SEQUENCE` (`nisc.moss`:
 integrations, their actions, the generation pointer) and the sessions table's
-(`nisc.moss.sessions`; the sequence itself is not exported, `initSessions` runs
-it) — and `createServer` applies them with the vex cache's sequence in
+(`nisc.moss.sessions`; the sequence itself is not exported) — and
+`createServer` applies them with the vex cache's sequence in
 one ledgered run before introspection: once, recorded in `strata_ledger`, and
 refused if the ledger was edited or written by newer code. `migrations` on the
 runtime picks the posture: `'apply'` (default) runs what is pending; `'verify'`
@@ -372,7 +388,7 @@ owner's tables the app keeps go in the same list (tide's: `TIDE_SEQUENCE`,
 from `@niscorp/tide/postgres`), and a
 runtime that hands tables over does not also migrate them itself.
 
-#### `migrateTables(runtime, app, { dryRun? }): Promise<TablesReport>`
+#### `migrateTables(runtime, app, { dryRun? })`
 
 The step that changes tables, for a deployment that migrates before it starts
 (`nisc migrate` calls it). It applies everything pending in the one run,
@@ -392,7 +408,7 @@ One kind of entry is said and not refused: one that already did not fit before
 the run and that the database already holds seeded exactly as it is. That is an
 old fault, not this run's. A new or changed entry gets no such pass.
 
-`TablesReport` is strata's `{ applied, plan }` plus `removed` (tables and
+What it answers is strata's `{ applied, plan }` plus `removed` (tables and
 columns the run takes away), `retyped` (columns whose type it changes, as
 `table.column (was → now)`) and `alreadyBroken`. `dryRun` does all of it and
 rolls it back.
@@ -417,6 +433,14 @@ boots used to run, so a database from before the ledger adopts on its next boot.
 environment settings, not manifest ones — an operational decision about a
 deployment, never something an application is written against. See
 [Wire size](#wire-size).
+
+```typescript
+import { migrateTables } from '@niscorp/moss';
+
+// what a run would apply, and nothing applied
+const report = await migrateTables(runtime, app, { dryRun: true });
+console.log(report.applied.length, report.removed, report.retyped);
+```
 
 #### `mintDevToken(sub, claims?) : string`
 
@@ -521,15 +545,16 @@ and does not throw.
 #### `MossServer`
 
 `Hono<Env> & { socket; shells?: ShellHost; principalOf; page; pages;
-refresh; replaceActions; verifyActions; actions; catalogOf; catalogForRoles;
+refresh; replaceActions; verifyActions; actions; catalogOf;
 policyForRoles; charterReport; invalidateIdentity; invalidateTenant; identity;
 executeAs; nudge; generation; close; identities? }`.
 It's a Hono app — mount it, extend it, or hand it to a listener.
 
 - `principalOf(token): Promise<string | null>` — the deployment's own session
-  verifier, the one every surface already asks. For an app's route that receives
-  a credential some other way than a Bearer header (a page request carries a
-  cookie). `null` is a refusal.
+  verifier, the one every surface already asks. For an app's own code that is
+  handed a token some other way than a Bearer header (a link it is redeeming,
+  a terminal that is not a page). `null` is a refusal. It is what
+  `renderDocument` asks for the session a page request carries.
 - `pages: readonly { name, path }[]` — every page the manifest declares, with
   the path it is drawn at: what a build walks to know which paths exist besides
   the app's own.
@@ -574,7 +599,7 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   replaces it: handing a set over under a feature's name throws (`moss: the
   set of actions "integrations" is the feature "integrations"'s, and only its
   owner replaces it. …`).
-- `verifyActions(source, actions): ManifestReport` — the dry run of
+- `verifyActions(source, actions)` — the dry run of
   `replaceActions`: the same verification over the same candidate (the app's
   actions, then each set, with `actions` in place of the set called `source`),
   answered as a report. Nothing changes. `errors` is `{ check, detail }[]`,
@@ -593,9 +618,8 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   resolved the way a request resolves it (the `identity` seam, or
   `assignments`), so an integration's actions are there only where it is
   installed. `null` is nobody signed in.
-- `catalogForRoles(roles, installed?): { ids, hash }` — the same for a caller that
-  already knows the roles. `installed` is the integration ids live for them;
-  left out, every integration is live.
+  There is no asking by a list of roles: what somebody holds depends on who
+  they are resolved to be, installs included, and the server resolves it.
 - `policyForRoles(roles): ScopePolicy` — what a set of roles may read and
   write: the vex policy a request by somebody holding exactly these roles is
   served under, compiled from the charter and `behaviors` over every table the
@@ -644,6 +668,17 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   the identity sweep, socket revalidation, the shell idle sweeps). For a host
   that retires a server in-process; every timer is unref'd, so a process that
   boots once needs none of it.
+
+`executeAs`, for machinery that has no principal (its type is `ExecuteAs`):
+
+```typescript
+import type { ExecuteAs } from '@niscorp/moss';
+
+const dueReminders = (executeAs: ExecuteAs, studioId: string): Promise<unknown> =>
+  executeAs('automation', 'reminders/due', {}, { studioId });
+
+await dueReminders(server.executeAs, 'st_north');
+```
 
 ### The document
 
@@ -779,7 +814,10 @@ The route is the app's own — in production `mountSite` from `@niscorp/moss/nod
 `index.html` through `transformIndexHtml` first so the drawn page still carries
 vite's client.
 
-#### `documentHeaders(principal)` — who may keep a page
+#### Who may keep a page
+
+`renderDocument` answers the headers its page goes out with (`page.headers`),
+and they follow from who it was drawn for:
 
 | Drawn for | `Cache-Control` | `Vary` |
 |---|---|---|
@@ -804,13 +842,24 @@ decide, from the report. Writing the files, and listing a parameterised page's
 paths (`server.executeAs` runs a seeded read as a charter role), are the
 caller's.
 
-#### `embedSnapshot(snapshot, principal, path?)`, `tokenFromCookie(header, tokenKey?)`
-
-The two halves `renderDocument` is made of, for a host that assembles its own
-page. `embedSnapshot` writes the snapshot as a
+`renderDocument` is the one way a page is drawn, and its parts are not
+exported. It reads the session the browser holds off the request's cookie, and
+it writes the snapshot into the page as a
 `<script type="application/json" id="nisc-snapshot">` element with every `<`
-(and U+2028/2029) escaped: a tree carries what people typed, and nothing in it
-can close the element or open another.
+(and U+2028/2029) escaped: a tree carries what people typed, and a path is
+whatever was asked for, and nothing in either can close the element or open
+another.
+
+One page drawn for whoever asks, and the same pages written out for nobody:
+
+```typescript
+import { exportDocuments, renderDocument } from '@niscorp/moss';
+import type { DocumentConfig, DrawnDocument, ExportedDocument } from '@niscorp/moss';
+
+const drawing: Pick<DocumentConfig, 'server' | 'template' | 'draw' | 'site'> = { server, template, draw, site: 'https://app.example' };
+const page: DrawnDocument = await renderDocument({ ...drawing, request: { path: '/docs/intro', cookie, host: 'app.example' } });
+const files: ExportedDocument[] = await exportDocuments({ ...drawing, paths: ['/', '/docs/intro'] });
+```
 
 #### `sessionCookies(page, token, options?)`
 
@@ -833,16 +882,6 @@ server.get('/login', async (c) => {
 `options.lastsMs` is how long the browser keeps it — left out, until the
 browser closes. A sign-in made over the socket (`session.grant`) needs none of
 this: the answer to the terminal's next upgrade writes the same cookie.
-
-#### `createPageRouter(pages)`
-
-Answers `{ match(path): { name, params } | undefined }` — the matching rule
-above, for a tool that needs it without a server. `pages` is a record of what
-the rule reads of a page: `{ path, params?, canvases: { id }[] }`, by name. A
-record of `PageManifest` is one. It refuses what a boot refuses: two pages
-that could answer one path, a `params` canvas the page does not have, a
-parameter named twice. A server makes one router from its manifest's pages,
-and `server.page(path)` asks it.
 
 ### Reacting to writes
 
@@ -1106,34 +1145,40 @@ threw, what somebody holds could not be asked, their shell could not be built).
 `emit` is never awaited, and a sink that throws costs the caller nothing: the
 throw is caught where the span is emitted, and logged.
 
-### Resolution (exposed for tools)
+```typescript
+import type { Telemetry, TelemetrySpan } from '@niscorp/moss';
 
-Three functions for a tool that holds a manifest and no server:
-`resolveRoles`, `resolvePolicy` and `resolveVariants`. Each reads `assignments`
-and nothing else, so for an app that resolves people through `identity` they
-answer as `public` for everybody the assignments do not name. A running server
-is asked instead: `(await server.identity(principal)).roles`,
-`server.policyForRoles(roles)`, `server.catalogOf(principal)`.
+const spans: TelemetrySpan[] = [];
+const telemetry: Telemetry = { emit: (span) => void spans.push(span) };
+// ...and `telemetry` on the runtime handed to createServer
+```
 
-- `resolveRoles(app, principal): readonly string[]` — assignment rows; anonymous/
-  unassigned wears `['public']`. The name is fixed, and the charter has to
+### Resolution
+
+Who somebody is, what they hold and what they may read and write are asked of
+the server, which resolves a principal the way a request does (the `identity`
+seam, or `assignments`): `(await server.identity(principal)).roles`,
+`server.catalogOf(principal)`, `server.policyForRoles(roles)`. Nothing is
+exported that answers them from a manifest alone: three functions did, read
+`assignments` and nothing else, and so answered `public` for everybody in an
+app that resolves people through `identity`.
+
+- Nobody signed in, and a signed-in principal with no role, wears
+  `['public']`. The name is fixed, and the charter has to
   define it (`public: []` grants nothing). Where it does not, the server still
   boots and nothing is said; then every request with no session, and every
   signed-in principal with no assignment, fails with `Unknown role "public"` —
   a 500, a socket closed `4500`, a page served undrawn.
-- `resolvePolicy(app, grants, principal): ScopePolicy` — the compiled vex policy
-  this principal reads and writes under. **One policy per role, merged** — a
+- A policy is compiled **one per role, merged** — a
   person may wear several (an instructor who also trains here), and reach belongs
   to the role rather than to the person. The merge is a union: broadest wins.
 - An entry that declares a `reach` (vex) is served under the same roles'
   grants recompiled at that named profile. The vex surfaces and `executeAs` do
   it themselves; it narrows rows, never widens verbs.
-- `resolveVariants(app, principal): ReadonlyMap<string, LayoutNode>` — action id →
-  the granted variant's layout (ring 2; empty map = every action serves its base).
-- What somebody holds is asked of the server, which answers from the actions
-  in force: `server.catalogOf(principal)`, `server.catalogForRoles(roles,
-  installed?)`. There is no function for it without a server.
-- `verifyApp(app, grants): ManifestReport` — the check boot runs, for an app
+- A layout variant a set of roles holds (ring 2) is put in place of its
+  action's layout where a shell is built. Nothing answers the variants by
+  themselves.
+- `verifyApp(app, grants)` — the check boot runs, for an app
   that is not booted (a check, a build step): the charter with each role's
   closure audited, every entry's reach, the layout variants. It reads `charter`,
   `actions`, `layouts`, `wearable`, `assignments`, `entries` and `behaviors`
@@ -1143,6 +1188,24 @@ is asked instead: `(await server.identity(principal)).roles`,
   a boot refuses on `errors`. A running server answers for what is in force
   with `server.charterReport()`. It verifies and does nothing else: what it is
   handed is not read by the manifest's schema and is not frozen.
+
+A charter check that boots no server builds the universe a boot resolves
+`data` over (the app's tables and the engine's own, AGENTS.md rule 10a) and
+asks `verifyApp`:
+
+```typescript
+import { PGlite } from '@electric-sql/pglite';
+import { MOSS_SEQUENCE, verifyApp } from '@niscorp/moss';
+import { migrate } from '@niscorp/strata/postgres';
+import { createPostgresCache, scopeGrants } from '@niscorp/vex';
+import { createPglitePool } from '@niscorp/vex/pglite';
+
+const scratch = createPglitePool(new PGlite());
+await migrate(scratch, [MOSS_SEQUENCE, createPostgresCache({ pool: scratch }).sequence]);
+const { rows } = await scratch.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`);
+const report = verifyApp(app, scopeGrants([...tables, ...rows.map((row) => String(row['table_name']))]));
+for (const error of report.errors) console.error(`${error.check}: ${error.detail}`);
+```
 
 ### The shell host
 
@@ -1218,6 +1281,27 @@ is asked instead: `(await server.identity(principal)).roles`,
   `ui:click`, `ui:submit`, `ui:input`, `ui:focus`, `ui:blur`, `ui:model`,
   `ui:key`, `ui:drop`, with their fields and no others). One that fails any
   of the three is dropped.
+
+A check that connects in process hands the socket a `Connection` of its own,
+and reaches the app's shell host as `server.shells`:
+
+```typescript
+import { PROTOCOL, mintDevToken, offerToken } from '@niscorp/moss';
+import type { Connection, ShellHost } from '@niscorp/moss';
+
+const frames: string[] = [];
+const connection: Connection = {
+  send: (text) => void frames.push(text),
+  close: () => undefined,
+  onMessage: () => undefined,
+  onClose: () => undefined,
+  // who is asking, as a transport reads it off the upgrade (`session: 'dev-open'`)
+  upgrade: { offered: offerToken(mintDevToken('usr_ada')) },
+};
+await server.socket(`/socket?protocol=${PROTOCOL}`, connection);
+const shells: ShellHost | undefined = server.shells;
+shells?.deliver('usr_ada', 'notes-changed');
+```
 
 ### The socket protocol
 
@@ -1383,6 +1467,23 @@ is asked instead: `(await server.identity(principal)).roles`,
   `ActionSlot` is a boundary, not content — visibility is decided by what's
   inside it.
 
+A terminal written by hand, with the four things it takes from this entry:
+
+```typescript
+import { CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, PROTOCOL, offerToken } from '@niscorp/moss';
+import type { ServerMessage } from '@niscorp/moss';
+
+const socket = new WebSocket(`wss://app.example/socket?protocol=${PROTOCOL}`, offerToken(token));
+socket.addEventListener('message', (event) => {
+  const message: ServerMessage = JSON.parse(String(event.data));
+  if (message.type === 'render') show(message.canvas, message.tree);
+});
+socket.addEventListener('close', (event) => {
+  // the token is nobody's, or its session ended: do not offer it again
+  if (event.code === CLOSE_INVALID_TOKEN || event.code === CLOSE_SIGNED_OUT) forgetToken();
+});
+```
+
 ### Wire size
 
 Two independent reductions, both optional, both invisible to an application.
@@ -1509,6 +1610,23 @@ Correctness, which matters more than the saving:
   `/^\/(api|catalog|socket|operator|integrations)(\/|$)/`. The default `owned`
   here and in the dev plugin.
 
+A host with a listener of its own does by hand what `serve` does:
+
+```typescript
+import { serve as listen } from '@hono/node-server';
+import { MOSS_PATHS, attachSocket, mountSite } from '@niscorp/moss/node';
+import type { SiteConfig } from '@niscorp/moss/node';
+
+const site: SiteConfig = { dist: 'dist', draw };
+mountSite(server, site);
+const httpServer = listen({ fetch: server.fetch, port: 8787 });
+const sockets = attachSocket(httpServer, server.socket);
+// ...and to stop: server.close(); sockets.close(); httpServer.close();
+
+// is a path one the app server answers itself?
+MOSS_PATHS.test('/api/vex');
+```
+
 ## `@niscorp/moss/vite`
 
 Requires the optional `vite` peer.
@@ -1552,6 +1670,22 @@ Requires the optional `vite` peer.
   - `watch?: RegExp` (default: `src/app`, `src/server`, `src/db`, `src/ui` and
     the nisc config), `index?` (default `index.html`), `owned?` (default
     `MOSS_PATHS`), `label?` (default `moss`).
+
+```typescript
+import { mintDevToken } from '@niscorp/moss';
+import type { MossServer } from '@niscorp/moss';
+import { mossDev } from '@niscorp/moss/vite';
+import type { DevApp, MossDevOptions } from '@niscorp/moss/vite';
+
+const app: MossDevOptions['app'] = async (load): Promise<DevApp> => {
+  const { boot } = await load('/src/server/boot.ts');
+  if (typeof boot !== 'function') throw new Error('src/server/boot.ts exports no boot');
+  const server: MossServer = await boot();
+  return { server, signIn: (who) => mintDevToken(who) };
+};
+
+export const plugins = [mossDev({ app })];
+```
 
 ## `@niscorp/moss/integrations`
 
@@ -1626,7 +1760,7 @@ work once a server has started the feature, and reject with a sentence before
 that:
 
 - `callIntegration(id, path, { principal, method?, body?, scope? }):
-  Promise<Response>` (`CallIntegration`) — call an installed integration when
+  Promise<Response>` — call an installed integration when
   nobody is driving; throws unless it is approved and installed for the
   principal's tenant.
 - `listAttachments(hostAction): Promise<{ actionId, preview }[]>` — the approved
@@ -1636,8 +1770,8 @@ that:
 - `integrationByKey(key): Promise<string | undefined>` — the approved
   integration a presented key belongs to.
 - `integrationOfAction(actionId): string | undefined` — which integration an
-  `ext.<audience>.<integration>.<name>` action belongs to. Also exported by
-  itself; it reads nothing and needs no server.
+  `ext.<audience>.<integration>.<name>` action belongs to. It reads nothing,
+  and answers before a server has started the feature.
 
 Which integrations are live for a principal is `installed` on the record the
 app's `identity.resolve` answers; absent, every approved integration is live
@@ -1708,6 +1842,20 @@ route serves (see [Features](#features)); it holds no SQL. Landing a bundle and
 minting a frame grant are batches, so `runtime.db` has to have `transaction`,
 as it does for any batch an app writes.
 
+The configuration, built apart from the call:
+
+```typescript
+import { createIntegrations } from '@niscorp/moss/integrations';
+import type { Integrations, IntegrationsConfig, StorePress } from '@niscorp/moss/integrations';
+
+const storePress: StorePress = async (integrationId, name, bytes, contentType) => {
+  await blobs.put(`press/${integrationId}/${name}`, bytes, contentType);
+  return `https://cdn.app.example/press/${integrationId}/${name}`;
+};
+const config: IntegrationsConfig = { menuSlots: ['hub.people'], storePress, signingSeed: process.env['SIGNING_SEED'] };
+const integrations: Integrations = createIntegrations(config);
+```
+
 #### `createAssertionSigner(seed?)`
 
 `{ verifyKey, mint(claims, ttlMs?) }` — the ed25519 assertion the feature signs
@@ -1724,6 +1872,16 @@ bytes, and a signing key is 32. …` The sentence says the length and never the
 seed. It used to be dropped without a word and a random key made in its place.
 A seed longer than 32 bytes is its first 32.
 
+```typescript
+import { createAssertionSigner } from '@niscorp/moss/integrations';
+
+// a check of an integration's own service: it is given the public half, and
+// is then called with what a deployment would have signed
+const signer = createAssertionSigner();
+process.env['VERIFY_KEY'] = signer.verifyKey;
+const assertion = signer.mint({ integration: 'belts', principal: 'usr_ada', scope: { studioId: 'st_north' } });
+```
+
 ## `@niscorp/moss/tide`
 
 A committed write, minted into [tide](../tide/README.md) as a fact. A feature:
@@ -1738,14 +1896,25 @@ const app = defineApp({ charter, actions, features: [createTideFacts({ tide: () 
 
 - `createTideFacts(config: TideFactsConfig): Feature` — started by the server
   with the seams, of which it uses one: `onWrite`. It keeps no table.
-- `TideFactsConfig` — `{ tide: () => FactIntake | undefined; identity: (scope)
-  => string | undefined; chain?: (scope, hints) => hints | undefined }`. What
-  each is asked, and when, is under [Reacting to writes](#reacting-to-writes).
-- `FactIntake` — `Pick<Tide, 'ingest'>`: the one verb the feature calls. A
-  `Tide` and a `TideDriver` are each one.
+- `TideFactsConfig` — `{ tide: () => Pick<Tide, 'ingest'> | undefined;
+  identity: (scope) => string | undefined; chain?: (scope, hints) => hints |
+  undefined }`. What each is asked, and when, is under
+  [Reacting to writes](#reacting-to-writes). `ingest` is the one verb the
+  feature calls: a `Tide` and a `TideDriver` each have it.
 
 `@niscorp/tide` is an optional peer of moss, and this entry is the only one
 that names it, as a type: an app that imports this entry has tide installed.
+
+```typescript
+import { createTideFacts } from '@niscorp/moss/tide';
+import type { TideFactsConfig } from '@niscorp/moss/tide';
+
+const facts: TideFactsConfig = {
+  tide: () => driver,
+  identity: (scope) => (typeof scope['studioId'] === 'string' ? `automation@${scope['studioId']}` : undefined),
+};
+const app = defineApp({ charter, actions, features: [createTideFacts(facts)] });
+```
 
 ## `@niscorp/moss/client`
 

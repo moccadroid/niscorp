@@ -141,7 +141,6 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerP
       const resolved = await identity.resolve(principal);
       return running.catalogFor(resolved.roles, resolved.installed);
     },
-    catalogForRoles: (roles: readonly string[], installed?: readonly string[]) => running.catalogFor(roles, installed),
     policyForRoles: data.policyForRoles,
     charterReport: () => running.report().charter,
     generation: running.generation,

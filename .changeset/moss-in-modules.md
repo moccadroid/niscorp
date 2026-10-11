@@ -14,16 +14,18 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 
 **(1) WHAT IS IMPORTED FROM WHERE**
 
-**The main entry exports 49 names, not 135. All sixteen entries together export 103, where fourteen exported 185.**
+**The main entry exports 38 names, not 135. All sixteen entries together export 89, where fourteen exported 185.**
 
-90 names left the main entry and four arrived (`Feature`, `FeatureSeams`, `verifyApp`, `ManifestReport`). Every name that left is in this table, with what to write instead.
+100 names left the main entry and three arrived (`Feature`, `FeatureSeams`, `verifyApp`). Every name that left is in this table, with what to write instead. A name stays where it is the one way to do something an app is meant to do, or the type of something an app writes; a second way to what the server answers, a part of something exported whole, and a type that only names what an exported function takes or answers and that nothing imports, left.
 
 | Was imported from `@niscorp/moss` | Write instead |
 | --- | --- |
-| `createAssertionSigner`, `integrationOfAction`, the types `StorePress`, `CallIntegration` | the same name, from `@niscorp/moss/integrations` |
+| `createAssertionSigner`, the type `StorePress` | the same name, from `@niscorp/moss/integrations` |
+| `integrationOfAction(actionId)` | `integrations.integrationOfAction(actionId)`, on the object `createIntegrations` answers |
+| the type `CallIntegration` | `Integrations['callIntegration']`, with `Integrations` from `@niscorp/moss/integrations` |
 | `createTideStore`, `TIDE_SEQUENCE`, `TIDE_TABLES`, `TIDE_DDL`, the type `TideStoreOptions` | the same name, from `@niscorp/tide/postgres` |
 | `createTideDriver`, the types `TideDriver`, `TideDriverConfig` | the same name, from `@niscorp/tide` |
-| the type `FactIntake` | the same name, from `@niscorp/moss/tide` |
+| the type `FactIntake` | `Pick<Tide, 'ingest'>`, with `Tide` from `@niscorp/tide`: what `tide` in `createTideFacts` answers |
 | `listAttachments(pool, hostAction)`, `listPlacements(pool)`, `integrationByKey(pool, key)` | `integrations.listAttachments(hostAction)`, `integrations.listPlacements()`, `integrations.integrationByKey(key)`, on the object `createIntegrations` answers ("Integrations are a feature", below) |
 | `callIntegrationWith` | `integrations.callIntegration(id, path, init)` |
 | `listIntegrations(pool)`, the type `IntegrationRow` | `GET /operator/integrations` with the operator key answers `{ integrations }` |
@@ -34,7 +36,7 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 | `verifyAssertion`, the type `Assertion` | an integration's service verifies an assertion itself. The token is `<body>.<signature>`, both base64url; the signature is ed25519 over the body's bytes, under the key `GET /api/integrations/verify-key` answers (SPKI DER, base64); the body is JSON, `{ integration, principal, scope, iat, exp }` |
 | the type `AssertionSigner` | `ReturnType<typeof createAssertionSigner>` |
 | `resolveCatalog(app, principal)` | `(await server.catalogOf(principal)).ids` |
-| `resolveCatalogForRoles(app, roles, installed)`, `filterInstalled` | `server.catalogForRoles(roles, installed).ids` |
+| `resolveCatalogForRoles(app, roles, installed)`, `filterInstalled` | `(await server.catalogOf(principal)).ids`, for a principal who holds those roles: the server resolves their roles and their installs the way a request does. There is no asking by roles and a list of installs the caller wrote down |
 | the type `Catalog` | `Awaited<ReturnType<MossServer['catalogOf']>>` |
 | `resolvePolicyForRoles(app, grants, roles)` | `server.policyForRoles(roles)` |
 | `resolvePolicyAtReach` | nothing to call. The routes and `server.executeAs` serve an entry at the reach it declares: replay the entry |
@@ -58,12 +60,16 @@ Moss had grown to twenty-eight files flat in `src/`, one of them a single functi
 | `sessionVerifierOf(runtime)` | `server.principalOf(token)` |
 | the type `SessionVerifier` | `Exclude<NiscRuntime['session'], string>` |
 | `revokeSession(pool, token)` | `revokeAllFor(pool, principal)`, or `session.revoke()` in a function: both sign the principal out everywhere. No exported call deletes one token and leaves the principal's others |
-| `SESSIONS_SEQUENCE` | `initSessions(pool)` runs it |
+| `SESSIONS_SEQUENCE`, `initSessions(pool)` | nothing to call. With `session: 'sessions'`, `createServer` and `migrateTables` make the table, in the one ledgered run |
+| `sessionOf(pool, token)` | `server.principalOf(token)` |
 | `wireFabric`, the types `Fabric`, `FabricSignal`, `FabricMessage`, `FabricApply` | set `runtime.fabric`. Its type is `NonNullable<NiscRuntime['fabric']>`, and a message is what its `publish` is handed |
 | `emitterOf`, `spanClock`, the types `Emit`, `SpanClock` | nothing to call. A sink goes in `runtime.telemetry` (`Telemetry`), and moss catches what it throws |
 | `mintWrites` | name `createTideFacts(...)` in `features` ("Tide's hosting is tide's", below) |
-| `SNAPSHOT_ELEMENT_ID` | `readDocumentSnapshot()` reads the element and `embedSnapshot` writes it. Its id is `nisc-snapshot` |
-| the types `PageRouter`, `PageMatch` | `ReturnType<typeof createPageRouter>`, and what its `match` answers |
+| `SNAPSHOT_ELEMENT_ID`, `embedSnapshot(snapshot, principal, path?)` | `readDocumentSnapshot()` reads the element and `renderDocument` writes it, in the page it draws. Its id is `nisc-snapshot` |
+| `documentHeaders(principal)` | `(await renderDocument(config)).headers` |
+| `tokenFromCookie(header, key?)` | nothing to call. No route of an app answers to the session cookie: `renderDocument` reads it to choose whose screen to draw, the socket's upgrade reads it, and a sign-in the app answers sets it with `sessionCookies` |
+| `createPageRouter(pages)`, the types `PageRouter`, `PageMatch` | `server.page(path)`: the page a path leads to, its host and the input its path carries |
+| the type `TablesReport` | `Awaited<ReturnType<typeof migrateTables>>` |
 
 Where the right column says there is nothing to call and an app did call it, say which and why in an issue: the answer is a call that is meant to be public, not the name coming back.
 
@@ -101,11 +107,11 @@ Where the right column says there is nothing to call and an app did call it, say
   `tide`, `identity` and `chain` are the three functions `facts` held, under the names they had, and each is asked what it was asked. A manifest that still names `facts` is refused at boot: `(the manifest): Unrecognized key: "facts"`.
 - **An app that does not name the feature mints nothing.** No write becomes a fact, and a reflex with a `write` trigger is never woken by one.
 - A write is told to the features that hear writes, in the order the app named them, and then to `reactions`. That is the order it was told in while the bridge was part of the server.
-- New from `@niscorp/moss/tide`: `createTideFacts`, and the types `TideFactsConfig` and `FactIntake`.
+- New from `@niscorp/moss/tide`: `createTideFacts`, and the type `TideFactsConfig`.
 
 **The client and terminal entries export what an app calls: six names leave.**
 
-- `@niscorp/moss/client` loses `SNAPSHOT_ELEMENT_ID` and the type `WireTokenStore`. The id is read by `readDocumentSnapshot()` and written by `embedSnapshot` (main entry): call those. The type is `WireEnv['tokens']`.
+- `@niscorp/moss/client` loses `SNAPSHOT_ELEMENT_ID` and the type `WireTokenStore`. The id is read by `readDocumentSnapshot()` and written by `renderDocument` (main entry): call those. The type is `WireEnv['tokens']`.
 - `@niscorp/moss/terminal/react` loses `registerWireSlots` and the type `WireSlotOptions`. `reactTarget`, `renderSnapshot` (`/terminal/react/server`) and `inkTarget` register the wire slots on the registry they are handed: call one of those. A kit that wants its own element around a canvas wraps the slot moss registered, read back with `registry.get('CanvasSlot')` once the target is made, as lyceum's does.
 - `@niscorp/moss/terminal/vue` loses `registerWireSlots` and `terminalFrame`: `vueTarget` and `renderSnapshot` (`/terminal/vue/server`) are the two things they were for.
 - Nothing in this repository imported any of the six.
@@ -134,8 +140,8 @@ Where the right column says there is nothing to call and an app did call it, say
 
 **A server answers what somebody holds, which actions are in force, what a set of roles may read, and whether a set would be taken.**
 
-- New on `MossServer`: `catalogOf(principal)` and `catalogForRoles(roles, installed?)` answer `{ ids, hash }` from the actions in force; `actions()` is the actions in force, by id; `policyForRoles(roles)` is the vex policy a request by somebody holding exactly those roles is served under; `verifyActions(source, actions)` is the dry run of `replaceActions`, answered as a report, changing nothing.
-- New in the main entry: `verifyApp(app, grants)`, the check boot runs for an app that is not booted, and the type of its report, `ManifestReport`: `{ errors, said, charter }`. `errors[].check` is one of `'actions'`, `'charter'`, `'reach'`, `'variants'`. `report.charter` is what `verifyCharter` answered, closure issues included, and `report.errors.filter((error) => error.check === 'variants')` is what `verifyVariants` returned.
+- New on `MossServer`: `catalogOf(principal)` answers `{ ids, hash }` from the actions in force; `actions()` is the actions in force, by id; `policyForRoles(roles)` is the vex policy a request by somebody holding exactly those roles is served under; `verifyActions(source, actions)` is the dry run of `replaceActions`, answered as a report, changing nothing.
+- New in the main entry: `verifyApp(app, grants)`, the check boot runs for an app that is not booted. Its report is `{ errors, said, charter }`, which is what `server.verifyActions` answers too (its type is `ReturnType<typeof verifyApp>`). `errors[].check` is one of `'actions'`, `'charter'`, `'reach'`, `'variants'`. `report.charter` is what `verifyCharter` answered, closure issues included, and `report.errors.filter((error) => error.check === 'variants')` is what `verifyVariants` returned.
 - These are what the functions they replace should have been. `resolveCatalog` read `assignments` and nothing else, so in an app that resolves people through `identity` it answered as `public` for everybody the assignments did not name; the server resolves who somebody is the way a request does. `resolvePolicyForRoles` compiled from whatever manifest and whatever list of grants it was handed, so a check that wrote the grants down itself read a policy no request was served under; the server compiles from the charter and the `behaviors` in force, over every table the database has. What `policyForRoles` answers is compiled for the asking and is the caller's own: nothing done to it reaches a request.
 - **`resolveRoles`, `resolvePolicy` and `resolveVariants` are gone too.** Each read `assignments` and nothing else, so for an app that resolves people through `identity` each answered as `public` for everybody: a wrong answer, handed to whoever picked that way beside `server.identity` and `server.policyForRoles`. Who somebody is, is asked of the server, which resolves them the way a request does; a check that has no server boots one, as the checks of the lab apps do.
 - Code running in a session that wants what its own caller holds asks `GET /catalog` over the session's wire, as before.
@@ -157,7 +163,7 @@ Where the right column says there is nothing to call and an app did call it, say
 
 **A page whose path names one parameter twice refuses the boot.**
 
-- `path: '/docs/:id/versions/:id'` was accepted, and the canvas its parameters go to was handed one `id`: the later segment's. The first was matched and lost. `createServer` and `createPageRouter` refuse it now: `moss: page "…" names the parameter ":id" twice in "…" — give each parameter of a path its own name.`
+- `path: '/docs/:id/versions/:id'` was accepted, and the canvas its parameters go to was handed one `id`: the later segment's. The first was matched and lost. `createServer` refuses it now: `moss: page "…" names the parameter ":id" twice in "…" — give each parameter of a path its own name.`
 - An app with such a path names the second parameter something else. No lab app has one.
 
 **(3) THE SESSION, AND WHO IS CALLING**
@@ -362,10 +368,9 @@ Where the right column says there is nothing to call and an app did call it, say
 - A `root` with no inside (an opening tag alone, an element that holds something, one closed in its own tag) is answered as a template that does not hold the root always was: the template as it is, `drawn: false`, and one line in the log that names the root.
 - An app that passes no `root`, or one that is an empty `div`, sees no difference.
 
-**`DocumentConfig.server` is the three things a document asks, and `createPageRouter` takes what it reads of a page.**
+**`DocumentConfig.server` is the three things a document asks.**
 
 - `renderDocument` and `exportDocuments` took a `MossServer` and called `principalOf`, `page` and `shells` on it. `server` is typed as those three now, and of each shell host as `snapshot` alone. A `MossServer` is one of them: a caller that passes its server has nothing to change, and a check that stood a server up to draw a page can hand over the three.
-- `createPageRouter(pages)` took `Record<string, PageManifest>` and read `path`, `params` and each canvas's `id`. It takes a record of those. A record of `PageManifest` is one.
 
 **`serve` stops what it started.**
 
@@ -431,7 +436,7 @@ In this order. An app that uses no integrations and no tide skips steps 3 and 4,
 5. **The manifest.** Remove any field `NiscApp` does not have. Where code edited the manifest after `createServer` (most often `app.actions`, then `refresh()`), hand the actions over with `server.replaceActions(name, actions)`, and read the actions in force from `server.actions()`. Where the app runs several processes, keep that set in rows and name how it is read in a feature of the app's own (`seams.setActionsLoader(load)`): a set handed to one process is not handed to the others. Hand no set over under a feature's name: it is that feature's.
 6. **Functions.** Replace `session.runtime` with the runtime the app created, `session.policy` with `server.policyForRoles(session.roles)`, and an engine built from the two with `session.answerIntent(writers, asked)`.
 7. **Who is calling.** Replace `session: devSession` with `session: 'dev-open'`. Have `identity.resolve` answer `{ roles: ['public'], scope: {} }` for a principal it does not know, where it threw. Where code matched `401` `no_identity`, match `500` `identity_failed`. Give `runtime.identityMax` 1 or more, or leave it unset. Where a deployment has a `runtime.fabric`, have its transport hand `apply` the object that was published, parsed, with nothing added to it.
-8. **Checks.** Replace `resolveCatalog`, `resolveCatalogForRoles` and `resolvePolicyForRoles` with `server.catalogOf`, `server.catalogForRoles` and `server.policyForRoles`; replace a boot check put together by hand with `server.charterReport()` or `verifyApp(app, grants)`.
+8. **Checks.** Replace `resolveCatalog` and `resolveCatalogForRoles` with `server.catalogOf(principal)`, `resolvePolicyForRoles` and `resolvePolicy` with `server.policyForRoles(roles)`, and `resolveRoles` with `(await server.identity(principal)).roles`; replace a boot check put together by hand with `server.charterReport()` or `verifyApp(app, grants)`.
 9. **The terminal.** Delete `status: wire.status` from `ttyTarget` and `inkTarget`. Add `status: () => 'open'` where a test builds a `TerminalApi` by hand. Style `[data-wire-status='closed']` if a lost connection should show.
 10. **A terminal written by hand.** Send the six messages with exactly their fields, and nova's events with exactly theirs; treat a `4503` close as one to retry later.
 11. **Before the first start.** A deployment that boots with `migrations: 'verify'` runs `nisc migrate`: `nisc.moss` has a third migration and `nisc.moss.integrations` is new. A page that more than a thousand visitors have open at once, none signed in, sets `runtime.anonymousShellMax`. A host that calls `server.close()` on what `serve` answered expects the port to be let go. A host that passed `runtime.socketCompression` to `attachSocket` itself deletes the argument: the server's socket carries it.
