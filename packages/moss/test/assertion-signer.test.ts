@@ -51,3 +51,44 @@ describe('createAssertionSigner — the seed', () => {
     expect(createAssertionSigner(bytes.toString('base64')).verifyKey).toBe(createAssertionSigner(bytes.subarray(0, 32).toString('base64')).verifyKey);
   });
 });
+
+// WHAT THE OTHER END DOES WITH AN ASSERTION. `verifyAssertion` is no part of
+// what moss exports: an integration's service verifies for itself. It is the
+// verification the changeset describes, kept so that the tests which ask "can
+// the other end verify what this deployment signed" ask something: an oracle
+// that passed a forged or an expired assertion would have made every one of
+// them pass on anything.
+describe('verifyAssertion — what an integration’s service accepts as identity', () => {
+  const b64url = (text: string): string => Buffer.from(text).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+  it('what this deployment signed, read back as it was said', () => {
+    const signer = createAssertionSigner();
+    const read = verifyAssertion(signer.mint({ ...claims, scope: { studioId: 's_1' } }), signer.verifyKey);
+    expect(read).toMatchObject({ integration: 'belts', principal: 'i_mara', scope: { studioId: 's_1' } });
+  });
+
+  it('a body that was altered after it was signed, and one signed by another key, are nobody', () => {
+    const signer = createAssertionSigner();
+    const [body, signature] = signer.mint(claims).split('.');
+    const now = Date.now();
+    // The same signature under a body that names somebody else.
+    const altered = `${b64url(JSON.stringify({ ...claims, principal: 'i_owner', iat: now, exp: now + 30_000 }))}.${signature}`;
+    expect(verifyAssertion(altered, signer.verifyKey)).toBeUndefined();
+    expect(verifyAssertion(`${body}.${signature}`, createAssertionSigner().verifyKey)).toBeUndefined();
+    expect(verifyAssertion(createAssertionSigner().mint(claims), signer.verifyKey)).toBeUndefined();
+    // With no signature, or none that is one.
+    expect(verifyAssertion(String(body), signer.verifyKey)).toBeUndefined();
+    expect(verifyAssertion(`${body}.`, signer.verifyKey)).toBeUndefined();
+  });
+
+  it('is good until the instant it says, and nobody from then on', () => {
+    const signer = createAssertionSigner();
+    const minted = Date.now();
+    const token = signer.mint(claims, 30_000);
+    const expires = verifyAssertion(token, signer.verifyKey, minted)?.exp ?? 0;
+    expect(expires - minted).toBeGreaterThanOrEqual(30_000);
+    expect(verifyAssertion(token, signer.verifyKey, expires - 1)?.principal).toBe('i_mara');
+    expect(verifyAssertion(token, signer.verifyKey, expires)).toBeUndefined();
+    expect(verifyAssertion(token, signer.verifyKey, expires + 60_000)).toBeUndefined();
+  });
+});

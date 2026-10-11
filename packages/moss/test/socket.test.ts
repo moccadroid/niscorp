@@ -485,6 +485,7 @@ describe('socket — revalidating a live connection', () => {
 
   it('anonymous connections are never revalidated — nothing they hold can expire', async () => {
     vi.useFakeTimers();
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       const auth = expiring();
       const accept = createSocket(ctxWith({ session: auth.verify, revalidateMs: 1000 }));
@@ -494,8 +495,12 @@ describe('socket — revalidating a live connection', () => {
       await vi.advanceTimersByTimeAsync(10_000);
       expect(auth.asked()).toBe(before);
       expect(conn.closed).toBeUndefined();
+      // And a pass has nothing to say of them: asked about all the same, each
+      // one was a line in the log at every pass, for a verifier nobody asked.
+      expect(logged).not.toHaveBeenCalled();
       accept.stop();
     } finally {
+      logged.mockRestore();
       vi.useRealTimers();
     }
   });
@@ -641,6 +646,64 @@ describe('socket — revalidating a live connection', () => {
       accept.stop();
     } finally {
       logged.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  // The transport above still said the connection closed, which is what let
+  // go of it. One whose transport throws on the close as well says nothing
+  // afterwards: it is forgotten because it expired, not because it closed.
+  it('a connection that can be neither told nor closed is forgotten all the same, and is not asked about again', async () => {
+    vi.useFakeTimers();
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const auth = expiring();
+      const accept = createSocket(ctxWith({ session: auth.verify, revalidateMs: 1000 }));
+      const gone = new FakeConnection();
+      await accept(SOCKET, gone.offering('good'));
+      const dead = (): never => {
+        throw new Error('the socket is not open');
+      };
+      gone.send = dead;
+      gone.close = dead;
+
+      auth.expire();
+      await vi.advanceTimersByTimeAsync(1000);
+      const before = auth.asked();
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(auth.asked()).toBe(before);
+      accept.stop();
+    } finally {
+      logged.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  // Asking takes a round trip, and a terminal can leave during it. What it
+  // was asked about is then nobody's: it is not told, and not closed again.
+  it('a connection that closed while it was being asked about is left alone', async () => {
+    vi.useFakeTimers();
+    try {
+      const answers: ((principal: string | null) => void)[] = [];
+      const asking = { held: false };
+      const session: SocketConfig['session'] = () => (asking.held ? new Promise<string | null>((answer) => answers.push(answer)) : 'usr_1');
+      const accept = createSocket(ctxWith({ session, revalidateMs: 1000 }));
+      const conn = new FakeConnection();
+      await accept(SOCKET, conn.offering('good'));
+
+      asking.held = true;
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(answers).toHaveLength(1);
+      conn.close(1000, 'the terminal left');
+      conn.sent.length = 0;
+      // The verifier answers: the token is nobody's any more.
+      answers[0]?.(null);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(conn.sent).toEqual([]);
+      expect(conn.closed).toEqual({ code: 1000, reason: 'the terminal left' });
+      accept.stop();
+    } finally {
       vi.useRealTimers();
     }
   });
@@ -905,6 +968,23 @@ describe('socket — a browser on the app’s own page', () => {
     expect(signingIn.answered?.map((cookie) => cookie.split('=')[0])).toEqual(['__Host-nisc.token.speaker', 'nisc.token.speaker.held']);
   });
 
+  // A seat is a name: letters, digits, `_`, `.` and `-`, at most 64 of them.
+  // What a terminal writes there becomes the name of a cookie this server
+  // sets, so one that is not a name was not said: the terminal is in the seat
+  // every terminal is in when it names none.
+  it.each([
+    ['holds what a name does not', 'not a name;'],
+    ['is longer than a name', 'k'.repeat(65)],
+  ])('a seat that %s is no seat: the terminal is in the default one', async (_why, key) => {
+    const asked = `${SOCKET}&key=${encodeURIComponent(key)}`;
+    const held = new FakeConnection().from({ ...HERE, cookie: '__Host-nisc.token=good' });
+    await createSocket(ctxWith())(asked, held);
+    expect(held.first('hello')?.principal).toBe('usr_1');
+    const signingIn = new FakeConnection().from(HERE).offering('good');
+    await createSocket(ctxWith())(asked, signingIn);
+    expect(signingIn.answered?.map((cookie) => cookie.split('=')[0])).toEqual(['__Host-nisc.token', 'nisc.token.held']);
+  });
+
   // A browser keeps cookies by host and not by port, so a page on a port names
   // it — or two apps on localhost would sign each other out.
   it('on a port, over plain http: the name ends with the port, and another app’s cookie is neither read nor touched', async () => {
@@ -1147,6 +1227,31 @@ describe('socket — a connection that closed before its session was ready', () 
     host.stop();
   });
 
+  // Attached and then detached leaves nothing attached either, which is all
+  // the two cases above ask. But attaching sends: the frame and every canvas,
+  // to a connection that has gone, on a transport that throws for it.
+  it('…and is never attached on the way: nothing is sent to a connection that has gone', async () => {
+    const session = recordingSession();
+    const building = { started: (): void => {}, finish: (): void => {} };
+    const started = new Promise<void>((resolve) => void (building.started = resolve));
+    const finished = new Promise<void>((resolve) => void (building.finish = resolve));
+    const shells: Pick<ShellHost, 'session'> = { session: async () => (building.started(), await finished, session) };
+    const accept = createSocket(ctxWith({ shells, revalidateMs: 0 }));
+    const { connection, drop } = droppable();
+    const sent: string[] = [];
+    connection.send = (text) => void sent.push(text);
+    const accepting = accept(SOCKET, connection);
+    await started;
+    const saidBefore = sent.length;
+
+    drop();
+    building.finish();
+    await accepting;
+
+    expect(session.calls.filter((call) => call.startsWith('attach'))).toEqual([]);
+    expect(sent.slice(saidBefore)).toEqual([]);
+  });
+
   it('a connection that closes while what it holds is being asked is not handed to a shell host at all', async () => {
     const session = recordingSession();
     const asked = vi.fn(async () => session);
@@ -1235,6 +1340,61 @@ describe('socket — shells for nobody alive at once', () => {
     await accept(SOCKET, next);
     expect(next.closed).toBeUndefined();
     logged.mockRestore();
+  });
+
+  // A TRANSPORT SAYS A CONNECTION CLOSED WHEN THE CLOSE HAS FINISHED, not when
+  // it was asked for: over a real socket that is a round trip, and with a peer
+  // that never answers it, as long as the library waits. A refused session is
+  // let go of when it is refused. The connection here never says it closed.
+  const neverSaysClosed = (offered?: string): FakeConnection => {
+    const connection = new FakeConnection();
+    connection.close = (code, reason) => void (connection.closed = { code, reason });
+    return offered === undefined ? connection : connection.offering(offered);
+  };
+  const failingOnce = (): Pick<ShellHost, 'session'> => {
+    const state = { failing: true };
+    return {
+      session: async () => {
+        if (!state.failing) return recordingSession();
+        state.failing = false;
+        throw new Error('a definition failed');
+      },
+    };
+  };
+
+  it('a refused session gives its place back when it is refused, without waiting to be told the connection closed', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const accept = createSocket(ctxWith({ shells: failingOnce(), anonymousShellMax: 1 }));
+      const refused = neverSaysClosed();
+      await accept(SOCKET, refused);
+      expect(refused.closed?.code).toBe(CLOSE_SHELL_FAILED);
+      const next = new FakeConnection();
+      await accept(SOCKET, next);
+      expect(next.first('error')).toBeUndefined();
+      expect(next.first('hello')?.principal).toBeNull();
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
+  it('…and is not asked about again: a session that was refused holds no credential', async () => {
+    vi.useFakeTimers();
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const asked = { times: 0 };
+      const accept = createSocket(ctxWith({ shells: failingOnce(), session: (token) => ((asked.times += 1), token === 'good' ? 'usr_1' : null), revalidateMs: 1000 }));
+      const refused = neverSaysClosed('good');
+      await accept(SOCKET, refused);
+      expect(refused.closed?.code).toBe(CLOSE_SHELL_FAILED);
+      const before = asked.times;
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(asked.times).toBe(before);
+      accept.stop();
+    } finally {
+      logged.mockRestore();
+      vi.useRealTimers();
+    }
   });
 
   it('arrivals in one moment do not get past it together', async () => {
