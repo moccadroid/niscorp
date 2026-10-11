@@ -46,6 +46,7 @@ export default defineConfig([
       vite: 'src/server/vite.ts',
     },
     format: ['esm', 'cjs'],
+    splitting: true, // cjs too: entries share chunks, so module state exists once, not once per entry
     dts: true,
     sourcemap: true,
     // Array configs build in PARALLEL — a `clean: true` here races the other

@@ -38,6 +38,8 @@ export const sessionShellOf = (shell: Shell): Shell => {
     dispose: refuse('dispose'),
   };
   whole.set(guarded, shell);
+  // Asked of the whole shell itself, the answer is that shell.
+  whole.set(shell, shell);
   return guarded;
 };
 

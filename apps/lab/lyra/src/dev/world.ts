@@ -142,12 +142,14 @@ export const envelopeOf = async (email: string, path: string, body: unknown): Pr
  *  person SEE" should never have been reading this function. That one is
  *  `servedTo`. */
 export const treeOf = (shell: Shell): string => {
-  const held = shell.getPhrases();
-  shell.setPhrases(undefined);
+  // Setting the phrases goes around moss, so it takes the whole shell.
+  const whole = unverifiedShell({ shell });
+  const held = whole.getPhrases();
+  whole.setPhrases(undefined);
   try {
-    return JSON.stringify(shell.flattenRenderTree(shell.getShellRenderTree()));
+    return JSON.stringify(whole.flattenRenderTree(whole.getShellRenderTree()));
   } finally {
-    shell.setPhrases(held);
+    whole.setPhrases(held);
   }
 };
 
