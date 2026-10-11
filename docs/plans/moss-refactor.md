@@ -194,7 +194,7 @@ again here.
 | 18 | fixed | `e6f7c0b`: a reset while connecting leaves one socket |
 | 19 | fixed | `edfb856`: every render target is told the connection's status |
 | 20 | fixed | `2b7b321`: an id is a name, and a unique index on `integrations.key_hash` |
-| 21 | **open** | `src/server/vite.ts:90–115`: `/dev/as/<who>` still checks nothing about where the request came from. No phase of the build order named it. |
+| 21 | fixed | after the build order, which did not name it: `/dev/as/<who>` answers a request whose socket ends on this machine (`127.0.0.0/8`, `::1`, the IPv4-mapped form) and answers any other `403`, with why (`src/server/vite.ts`). `signInFromNetwork: true` on `mossDev` opens it to other devices. No forwarded-for header is read. |
 
 ## 5. The architecture
 
@@ -429,8 +429,8 @@ was built with `socket` and `documents`, before tide's hosting left.
 | 10 | `a7831db` to `fba90ea` (17) | `client` and `terminal` under the lint; one set of wire slots, one frame. Defects 18, 19. |
 | 11 | `ceae73d` to the commit that wrote this | The three documents read against the code; `memoKeyOf` out of the main entry; `AGENTS.md`, "Changing a package"; this file; the changeset as one document. |
 
-Two defects were in no item's list: 11, fixed after the build order, and 21,
-open (4.3).
+Two defects were in no item's list, 11 and 21. Both were fixed after the build
+order (4.3).
 
 ## 8. Decisions
 
@@ -607,7 +607,6 @@ than `server` (867), `data` (784), `manifest` (758) and `shells` (758).
 **What is left.** None of it stops the artifactory; each is somebody's to
 decide.
 
-- **One defect**: the dev sign-in (4.3, 21).
 - **Names that stayed in the main entry and that nothing in this repository
   imports**, each in doubt, not decided: `resolveRoles`, `resolvePolicy`,
   `resolveVariants` (three resolvers that read `assignments` only; the server
@@ -643,4 +642,9 @@ written, and each got a test that failed first.
   variable to a word, after the app has booted, for lyra's own unsubscribe
   signature, and moss never sees it. Booted with the word in the environment,
   lyra is refused with the sentence; with 32 bytes it boots.
+- **Defect 21, the dev sign-in** (4.3). It answers this machine only; one
+  option on `mossDev`, `signInFromNetwork`, opens it to other devices.
+  `nisc dev` builds the plugin itself and does not pass that option on: an
+  app under `nisc dev` that wants the sign-in on a phone has no way to say so
+  yet, and no app in this repository gives `dev.signIn` at all.
 

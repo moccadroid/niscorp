@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { BlockList, isIPv4, isIPv6 } from 'node:net';
 import { resolve } from 'node:path';
 import type { Connect, Plugin, ViteDevServer } from 'vite';
 import { getRequestListener } from '@hono/node-server';
@@ -50,6 +51,8 @@ export type DevApp = {
   // the browser's own session cookie (../identity, session-cookie.ts) — as a sign-in the
   // app answers over HTTP would — and goes to `/`. `null` is nobody of that
   // name. It lives in vite's middleware and nowhere else, so it cannot ship.
+  // It answers requests from this machine only, unless the plugin was told
+  // otherwise (`MossDevOptions.signInFromNetwork`).
   signIn?: (who: string) => string | null | Promise<string | null>;
 };
 
@@ -67,10 +70,34 @@ export type MossDevOptions = {
   owned?: RegExp;
   // The name in vite's log (default `moss`).
   label?: string;
+  // ANSWER THE SIGN-IN URL (`/dev/as/<who>`) TO EVERY DEVICE THAT CAN REACH THE
+  // DEV SERVER, where it answers this machine only (default `false`). It hands
+  // out a session for whoever the address names, so with this on and vite
+  // listening on a network (`--host`), anybody on that network signs in as
+  // anybody. For trying a signed-in screen on a phone, on a network you trust.
+  signInFromNetwork?: boolean;
 };
 
 const DEFAULT_WATCH = /([\\/]src[\\/](app|server|db|ui)[\\/])|([\\/]nisc\.config\.[cm]?[jt]s$)/;
 const REBOOT_DEBOUNCE_MS = 200;
+
+// THIS MACHINE'S OWN ADDRESSES: 127.0.0.0/8 and ::1. An IPv4 address written
+// as an IPv6 one (`::ffff:127.0.0.1`, what a listener on both families reports)
+// is held to the IPv4 rule.
+const loopback = (): BlockList => {
+  const addresses = new BlockList();
+  addresses.addSubnet('127.0.0.0', 8, 'ipv4');
+  addresses.addAddress('::1', 'ipv6');
+  return addresses;
+};
+const LOOPBACK = loopback();
+
+// Whether a request came from this machine, by the address at the other end of
+// its socket and by nothing else: what a header says of where a request came
+// from (`X-Forwarded-For`) is written by whoever sent it. A socket with no
+// address left is nobody's.
+const isFromThisMachine = (address: string | undefined): boolean =>
+  address !== undefined && (isIPv4(address) ? LOOPBACK.check(address, 'ipv4') : isIPv6(address) && LOOPBACK.check(address, 'ipv6'));
 
 // An app that is booted, and what answers for it. `transport` is the one its
 // connections are opened by: made for this app, set as its server's socket
@@ -105,6 +132,18 @@ const devMiddleware =
         .then(async ({ app }) => {
           if (app.signIn === undefined) {
             next();
+            return;
+          }
+          // IT SIGNS WHOEVER ASKS IN AS WHOEVER THE ADDRESS NAMES, so it answers
+          // the developer's own machine and nobody else, unless the host opened
+          // it (`signInFromNetwork`). Refused before the app is asked anything.
+          if (options.signInFromNetwork !== true && !isFromThisMachine(req.socket.remoteAddress)) {
+            res.statusCode = 403;
+            res.setHeader('content-type', 'text/plain; charset=utf-8');
+            res.end(
+              `The dev sign-in (/dev/as/…) answers requests from this machine only, and this one came from ${req.socket.remoteAddress ?? 'an address the server cannot see'}. ` +
+                'It hands out a session for whoever the address names. To sign in from another device, set `signInFromNetwork: true` on mossDev: anybody who can reach this dev server then signs in as anybody.',
+            );
             return;
           }
           const token = await app.signIn(decodeURIComponent(who));

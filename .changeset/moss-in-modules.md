@@ -363,6 +363,14 @@ Where the right column says there is nothing to call and an app did call it, say
 - `attachSocket`'s `options` are for a host that means otherwise, and for an accept of its own that says nothing: a setting named there wins, and one that is not named stays what the socket says. A host that passed `{ compression: runtime.socketCompression }` itself deletes the argument.
 - **In the dev plugin, the connections of an app that an edit replaced are closed (`1001`).** The plugin kept one transport for as long as vite ran, and a terminal that was connected when an edit re-booted the app stayed attached to the server that had been let go. There is one transport for each app that is booted now, set as that app's runtime says and retired with it: a page is reloaded as before, and a terminal that is not a page (a console) connects again, to the app that is booted. An upgrade that meets an app that did not boot is answered `503`, where it was opened and closed with `1011`.
 
+**The dev sign-in answers this machine only.**
+
+- `/dev/as/<who>` (the dev plugin's `signIn`, `dev.signIn` in `nisc.config.ts`) puts a session for whoever the address names in the browser that asks. It asked nothing about where the request came from: with vite listening on a network (`vite --host`), every device on that network could sign in as anybody.
+- It answers a request whose socket ends on this machine: `127.0.0.0/8`, `::1`, or either written as an IPv4-mapped IPv6 address. Any other is answered `403` with a sentence that says why, and the app's `signIn` is not called. What a header says of where a request came from (`X-Forwarded-For`) is not read.
+- New on `mossDev`: `signInFromNetwork: true` answers it to every device that can reach the dev server, for trying a signed-in screen on a phone on a network you trust. The name says what it opens: the sign-in, to the network.
+- **A developer who opened `/dev/as/<who>` from a second device** sets `signInFromNetwork: true` where the app adds `mossDev` itself. `nisc dev` adds the plugin for the app and does not turn it on: under `nisc dev` the sign-in is this machine's.
+- A dev server behind a proxy on the same machine sees every request as the proxy's, which is this machine: the check cannot tell those apart, and a proxy that listens on a network is its owner's to close.
+
 **(8) THE TERMINAL**
 
 **Every render target is told the connection's status, the same way.**

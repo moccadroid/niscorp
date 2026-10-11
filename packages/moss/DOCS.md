@@ -1431,6 +1431,18 @@ Requires the optional `vite` peer.
     site?, tokenKey?, signIn? }`; absent `draw`, pages go out undrawn.
   - `signIn(who)` enables `/dev/as/<who>`: it puts the returned token in the
     browser's session cookie and goes to `/`. `null` is nobody of that name.
+    **It answers requests from this machine only**: the address at the other
+    end of the request's socket is loopback (`127.0.0.0/8`, `::1`, or either
+    written as an IPv4-mapped IPv6 address). Any other request is answered
+    `403` with a sentence that says why, and the app is not asked. What a
+    header says of where a request came from (`X-Forwarded-For`) is not read;
+    behind a proxy on the same machine every request is the proxy's, and is
+    this machine's.
+  - `signInFromNetwork?: boolean` (default `false`) answers the sign-in to
+    every device that can reach the dev server, for trying a signed-in screen
+    on a phone. It hands out a session for whoever the address names: with it
+    on and vite listening on a network (`--host`), anybody on that network
+    signs in as anybody.
   - `watch?: RegExp` (default: `src/app`, `src/server`, `src/db`, `src/ui` and
     the nisc config), `index?` (default `index.html`), `owned?` (default
     `MOSS_PATHS`), `label?` (default `moss`).
