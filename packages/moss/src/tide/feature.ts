@@ -17,10 +17,9 @@ import { mintWrites } from './mint';
 // Rows travel HERE and into tide's ledger only: host plumbing on one side,
 // the identity fence on the other.
 //
-// It was three functions on the manifest (`NiscApp.facts`), read by the
-// server. It needs one thing of the core, to hear a write (../feature, the
-// `onWrite` seam), so it is a feature: an app that runs no tide names none,
-// and moss's core imports nothing of tide.
+// It needs one thing of the core, to hear a write (../feature, the `onWrite`
+// seam), so it is a feature: an app that runs no tide names none, and moss's
+// core imports nothing of tide.
 // ═══════════════════════════════════════════════════════════════
 
 // The one verb the bridge needs. Both `Tide` and `TideDriver` satisfy it;

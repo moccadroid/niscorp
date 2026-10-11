@@ -1,15 +1,15 @@
 // ═══════════════════════════════════════════════════════════════
 // The browser's back button, caught.
 //
-// ⟲ IT USED TO UNLOAD THE APPLICATION. A moss terminal never touched the URL,
-// so a tab held exactly one history entry and back meant "leave the page" —
-// the socket dropped, the shell went unattended, and somebody who wanted to
-// close a screen got a blank tab instead. Nothing was lost (the shell is
+// ⟲ WITHOUT IT, BACK UNLOADS THE APPLICATION. A moss terminal never touches the
+// URL, so a tab holds exactly one history entry and back means "leave the
+// page" — the socket drops, the shell goes unattended, and somebody who wants
+// to close a screen gets a blank tab instead. Nothing is lost (the shell is
 // durable, keyed by principal, and a reload reattaches to it) but nobody
 // pressing back is thinking about that.
 //
-// What it does instead: keep ONE spare history entry ahead of the page and
-// spend it on every press. Back consumes the spare, this puts another one
+// What it does: keep ONE spare history entry ahead of the page and spend it on
+// every press. Back consumes the spare, this puts another one
 // straight back, and the gesture is handed to the terminal — which sends it up
 // the wire, where the shell that owns the navigation decides what back means.
 //
@@ -23,7 +23,7 @@
 export type BackTrapDisposer = () => void;
 
 // Marks the entry as ours, so a host that keeps its own history state can tell
-// this one apart. Nothing reads it yet; a debugger looking at `history.state`
+// this one apart. Nothing reads it; a debugger looking at `history.state`
 // deserves to find a name rather than an empty object.
 const SENTINEL = { nisc: 'terminal-back' } as const;
 
@@ -45,8 +45,8 @@ export const trapBack = (handler: () => void): BackTrapDisposer => {
     try {
       history.pushState(SENTINEL, '');
     } catch {
-      // A sandboxed document can refuse this. Back then behaves as it always
-      // did rather than throwing on the way out of a keypress.
+      // A sandboxed document can refuse this. Back then keeps the browser's
+      // default rather than throwing on the way out of a keypress.
     }
   };
 

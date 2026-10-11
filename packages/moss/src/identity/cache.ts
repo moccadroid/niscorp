@@ -5,24 +5,21 @@
 // principal's roles; roles come from identity. The read that RESOLVES a
 // principal therefore cannot be authorised, because authorisation needs its
 // answer. Every system has this, and it is the only honest reason for a lookup
-// that does not pass through the engine (DESIGN Part 4).
+// that does not pass through the engine.
 //
 // What that licenses is exactly one row, on demand, for the principal
-// presenting a token. It does not license a resident copy of the population,
-// which is what six synchronous seams forced on Lyra: a hook that cannot await
-// has exactly one implementation available to it, and that implementation is a
-// map of everybody.
+// presenting a token. It does not license a resident copy of the population:
+// a hook that cannot await has exactly one implementation available to it, and
+// that implementation is a map of everybody.
 //
-// So the seam is async, and the cache lives HERE rather than in eight
-// module-level maps across three application files. Moss already holds four
-// per-principal caches of compiled objects it never interprets; this is that
-// responsibility, held with bounds and a roster it did not have.
+// So the seam is async, and the cache lives HERE, held with bounds and an
+// operator roster.
 //
 // WHAT THIS DELIBERATELY DOES NOT HAVE:
 //
 //   - an enumerator for application code. `get` takes a principal and returns
-//     one record. There is no `everyone()`, because size was never what made
-//     the directory a database — being listable was. You cannot scan what you
+//     one record. There is no `everyone()`, because being listable is what
+//     makes a directory a database, not its size. You cannot scan what you
 //     cannot list. `list()` below is an OPERATOR surface, on the same model as
 //     the shell roster, and it returns structural facts rather than records.
 //   - a secondary index you can READ through. No by-email, no by-tenant lookup.
@@ -51,8 +48,8 @@ export type IdentityCache = {
   // THE ONLY WAY IN. One principal, one record.
   get: (principal: string) => Promise<IdentityRecord>;
   // Forget one principal. `false` if they were not held — an answer, not an
-  // error. Called wherever a shell is reset today: a role change, a language
-  // change, an install landing.
+  // error. Called wherever a shell is reset: a role change, a language change,
+  // an install landing.
   invalidate: (principal: string) => boolean;
   // Forget everybody. The generation pointer moved, or an artifact changed
   // under the whole deployment.
@@ -99,8 +96,7 @@ export type IdentityCacheContext = {
 export const DEFAULT_IDENTITY_MAX = 10_000;
 
 // A record nobody has read for half an hour is a warm answer with no reader.
-// Re-resolving costs one round trip on their next request. Same number and same
-// reasoning as the durable-shell sweep.
+// Re-resolving costs one round trip on their next request.
 export const DEFAULT_IDENTITY_IDLE_MS = 30 * 60 * 1000;
 
 // The sweep never runs less often than this, so a short `idleMs` is honoured

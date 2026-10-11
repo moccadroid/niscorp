@@ -33,5 +33,5 @@ export const drawnApi = (snapshot: DrawnSnapshot): TerminalApi => ({
 // of replacing them. Only when there is a frame to adopt them WITH: a wire
 // that did not start from the page's snapshot (it was drawn for somebody else)
 // has nothing that matches, and the elements are replaced as on any other
-// page. An empty root is the client-rendered page it always was.
+// page. An empty root is a client-rendered page.
 export const holdsDrawnScreen = (root: HTMLElement, api: TerminalApi): boolean => root.firstElementChild !== null && api.frame().length > 0;

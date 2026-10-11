@@ -84,8 +84,9 @@ export const createTransport = (accept: SocketAccept, told?: TransportSettings):
         // already closed it with the status that says why (1002, 1009). An
         // 'error' nobody listens for is thrown by Node, out of the socket's own
         // data handler where nothing can catch it: one bad frame from one
-        // client took the process, and every session on it, down. Heard here it
-        // is that connection's alone, and the close it already got is the answer.
+        // client would take the process, and every session on it, down. Heard
+        // here it is that connection's alone, and the close it already got is
+        // the answer.
         opened.on('error', (error) => {
           console.warn(`[moss/node] a connection was closed on what it sent: ${error.message}`);
         });

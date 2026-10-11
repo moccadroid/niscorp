@@ -36,8 +36,7 @@ export const createServerWith = async (app: NiscApp, runtime: NiscRuntime, dataO
 
   // 2. WHO A TOKEN IS, resolved before anything else boots: an unset verifier
   // refuses HERE, with a sentence, instead of serving every forged principal
-  // silently (which is what the old `?? devSession` default did, for every
-  // app that never set the field). 'dev-open' announces itself on this line.
+  // silently. 'dev-open' announces itself on this line.
   // And how every session a principal holds is forgotten at a sign-out, where
   // the deployment keeps the credential itself.
   const session = sessionVerifierOf(runtime);

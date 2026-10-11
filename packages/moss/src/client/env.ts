@@ -18,8 +18,8 @@ export type WireTokenStore = {
   // A host whose BROWSER may keep the session itself, in a cookie the page
   // cannot read (../identity/session-cookie.ts): whether it does, right now. Asked
   // after an upgrade is answered — if it does, the wire lets go of the token
-  // it offered and nothing is stored; if not, the token is stored as ever. A
-  // host without this (a process) always keeps its own.
+  // it offered and nothing is stored; if not, the token is stored. A host
+  // without this (a process) always keeps its own.
   held?: () => boolean;
   // Which of the browser's sessions this terminal is, when not the default one
   // — a seat. Named in the socket's address; it is the cookie's name.
@@ -60,7 +60,7 @@ const browserTokens = (tokenKey: string, named: boolean): WireTokenStore => ({
     } catch {
       /* nothing stored, nothing to clear */
     }
-    // the copy an earlier build kept beside it, where script could read it
+    // a cookie of the same name, which script can read, is expired too
     try {
       document.cookie = `${encodeURIComponent(tokenKey)}=; Path=/; Max-Age=0; SameSite=Lax${window.location.protocol === 'https:' ? '; Secure' : ''}`;
     } catch {
@@ -86,11 +86,10 @@ const browserTokens = (tokenKey: string, named: boolean): WireTokenStore => ({
 // token this page is handed is offered once and let go of; nothing is stored.
 //
 // ANYWHERE ELSE — another origin, a browser that refuses cookies — the token
-// is in localStorage, as it always was.
+// is in localStorage.
 //
-// `cookie` did one thing — keep a script-readable copy of the token for the
-// server to draw the page from — and is no longer needed: the page is drawn
-// from the browser's own cookie. It is accepted and does nothing.
+// `cookie` is accepted and does nothing: the page is drawn from the browser's
+// own cookie.
 export const browserEnv = (config: { tokenKey?: string; cookie?: boolean } = {}): WireEnv => ({
   tokens: browserTokens(config.tokenKey ?? DEFAULT_TOKEN_KEY, config.tokenKey !== undefined),
   socket: ({ url, offered }) => new WebSocket(url, offered),

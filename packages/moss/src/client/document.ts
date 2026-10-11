@@ -7,7 +7,7 @@ import type { DocumentSnapshot } from '../protocol';
 
 // Read the snapshot out of the page, if it has one. Never throws: a page
 // without one, or with one that does not parse, is a page that was not
-// server-rendered, and the terminal starts the way it always has.
+// server-rendered, and the terminal starts without a screen.
 export const readDocumentSnapshot = (doc: Pick<Document, 'getElementById'> = document): DocumentSnapshot | undefined => {
   try {
     const text = doc.getElementById(SNAPSHOT_ELEMENT_ID)?.textContent;

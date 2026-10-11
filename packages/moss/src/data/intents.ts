@@ -15,9 +15,7 @@ import type { CacheBackend, DatabaseAdapter, DatabaseSchema, GenerateDsl, MapToS
 //
 // It is an engine beside the app's own, over the same adapter, the same
 // tables and the same cache, with the app's writers in it. Neither the
-// adapter nor the cache is handed out: an app used to build this engine
-// itself, from the database pool and the cache it was given back on every
-// session.
+// adapter nor the cache is handed out of the data module.
 // ═══════════════════════════════════════════════════════════════
 
 // The two seams that write: an intent and a shape into a query, and rows into

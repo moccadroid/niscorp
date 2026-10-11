@@ -16,7 +16,7 @@ export type Credential = {
   // The upgrade has been answered, so a browser that keeps the session itself
   // now does: the token this terminal offered is let go of, and the page holds
   // it no longer. One that does not (another origin, cookies refused) leaves
-  // it with the terminal, stored as it always was.
+  // it with the terminal, stored.
   answered: () => void;
   // A different principal, possibly none: as a token, or as a sign-in handed
   // over SEALED, which is nothing this page can read and is carried to the

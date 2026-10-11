@@ -13,9 +13,7 @@ import type { NiscApp } from '../manifest';
 
 // What a policy is compiled from, of the manifest: the charter and the row
 // behaviors. Never the assignments: who somebody is, is asked of ../identity,
-// and what reaches here is the roles they were resolved to. (Two forms took a
-// principal and read `assignments` themselves. For an app that resolves people
-// through its identity seam they compiled the policy of `public`.)
+// and what reaches here is the roles they were resolved to.
 type Governed = Pick<NiscApp, 'charter' | 'behaviors'>;
 
 // THE COMPILED ScopePolicy A SET OF ROLES READS AND WRITES UNDER: their
@@ -23,14 +21,11 @@ type Governed = Pick<NiscApp, 'charter' | 'behaviors'>;
 // absent, and vex's default-deny refuses it.
 //
 // ONE POLICY PER ROLE, then merged — because somebody may hold several, and
-// reach belongs to the role rather than to the person.
-//
-// Compiling once for all of them assumed one role each. That holds until
-// somebody is two things at once: an instructor who also trains is staff on
-// the roster and a member in the class, and no single reach describes both —
-// studio-wide on the read they do as staff, their own rows on the write they
-// do as a member. Per role, each with its own scoping, and the union is what
-// they may do.
+// reach belongs to the role rather than to the person. An instructor who also
+// trains is staff on the roster and a member in the class, and no single reach
+// describes both — studio-wide on the read they do as staff, their own rows on
+// the write they do as a member. Per role, each with its own scoping, and the
+// union is what they may do.
 export const resolvePolicyForRoles = (app: Governed, grants: readonly string[], roles: readonly string[]): ScopePolicy => {
   const behaviors = app.behaviors ?? {};
   return mergeScopePolicies(
@@ -107,10 +102,8 @@ export const createPolicies = (config: {
     },
     drop: () => {
       policies.clear();
-      // `reachPolicies` too — it is compiled from the same grants as `policies`
-      // and went stale with it. Leaving it standing meant an approval or a role
-      // change was honoured at the caller's own reach and ignored at every reach
-      // an entry declared, for the life of the process.
+      // `reachPolicies` too: it is compiled from the same grants as `policies`
+      // and goes stale with it.
       reachPolicies.clear();
     },
   };

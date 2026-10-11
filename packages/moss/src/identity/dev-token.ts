@@ -3,9 +3,8 @@ import { z } from 'zod';
 // The dev token pair — mint on the client stub, verify on the server;
 // base64url JSON, `sub` is the principal. No signature, no expiry: anybody
 // who can spell a principal's id can be them. Reachable ONLY through
-// `session: 'dev-open'`, which announces itself at boot — this used to be
-// the silent default, and one app ran production on it for its whole life
-// before a review noticed. Real credentials live in ./sessions.ts.
+// `session: 'dev-open'`, which announces itself at boot. Real credentials
+// live in ./sessions.ts.
 export const mintDevToken = (sub: string, claims: Record<string, unknown> = {}): string =>
   btoa(JSON.stringify({ sub, ...claims, iat: Date.now() }))
     .replace(/\+/g, '-')

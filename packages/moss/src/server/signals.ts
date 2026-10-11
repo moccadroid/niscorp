@@ -52,8 +52,7 @@ export type SignalDeps = {
 export const buildSignals = ({ fabric, identity, reset, deliver }: SignalDeps): Signals => {
   const origin = randomBytes(8).toString('hex');
   // Who somebody is changed: what is held of them is forgotten, and every
-  // shell built for them is rebuilt, whichever host built it. It was the app's
-  // own host alone, so a page they had open went on as who they had been.
+  // shell built for them is rebuilt, whichever host built it.
   const applyInvalidateIdentity = (principal: string): boolean => {
     const held = identity.invalidate(principal);
     reset(principal);
@@ -62,12 +61,10 @@ export const buildSignals = ({ fabric, identity, reset, deliver }: SignalDeps): 
   const applyInvalidateTenant = (tag: string): number => identity.invalidateTag(tag).length;
   // Tell every living shell of one principal that a channel changed,
   // payload-less — each reads again. EVERY ONE: the shell the app keeps for
-  // them, and the one a page built for each connection they have to it. It
-  // was the kept shell alone, so a page somebody had open went on showing
-  // what it had read. If none of theirs lives here this does nothing, and the
-  // process that holds them applies the same signal. No tag lookup: a
-  // delivery is per-principal, and the identity cache is deliberately not a
-  // by-tenant index.
+  // them, and the one a page built for each connection they have to it. If
+  // none of theirs lives here this does nothing, and the process that holds
+  // them applies the same signal. No tag lookup: a delivery is per-principal,
+  // and the identity cache is deliberately not a by-tenant index.
   const applyNudge = (principal: string, channel: string): void => {
     deliver(principal, channel);
   };

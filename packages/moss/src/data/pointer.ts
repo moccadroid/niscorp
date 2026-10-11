@@ -10,11 +10,9 @@ import type { OwnEntries, Replay } from './own-entries';
 // counter, which every process polls to learn that another one changed what
 // the app consists of (../manifest, generation.ts, which holds the clock).
 //
-// It was read and moved by three statements sent straight to the pool, the
-// last SQL in moss with no reason to be outside vex. They are two entries now,
-// authored like any other and replayed the way a feature's own entries are
-// (./own-entries.ts): seeded where no route serves them, under a policy that
-// admits this one table. So a data grant on `moss_generation` moves nothing,
+// It is read and moved by two entries, authored like any other and replayed
+// the way a feature's own entries are (./own-entries.ts): seeded where no
+// route serves them, under a policy that admits this one table. So a data grant on `moss_generation` moves nothing,
 // and nobody's charter needs to name it for the server to poll.
 //
 // THE MOVE IS A COMPARE AND A SET, NOT AN ADDITION. Vex's write grammar sets a

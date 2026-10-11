@@ -114,8 +114,7 @@ export const mountSite = (server: MossServer, config: SiteConfig): void => {
 // websocket transport and hands back neither, so `close()` on what it does
 // hand back is the one way to stop them: moss's own timers (`MossServer`'s
 // `close`), then every connection, then the listener. The thing that started
-// a listener owns stopping it. It used to stop the timers and leave the port
-// bound and every terminal connected.
+// a listener owns stopping it.
 export const serve = async (app: NiscApp, runtime: NiscRuntime & { port?: number }): Promise<MossServer> => {
   const server = await createServer(app, runtime);
   const port = runtime.port ?? 8787;

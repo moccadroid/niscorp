@@ -12,8 +12,8 @@ import { hideStatus, showStatus } from '../status';
 // the intelligence is server-side. Bring a `root`; omit `registry` for the
 // batteries — nova's reference kit AND its stylesheet, with its class on the
 // root. Pass your own `registry` and the look is yours too: nothing is injected
-// and the root gets no class. (The reference stylesheet used to come along
-// either way, and restyled an app's own kit over the app's own CSS.)
+// and the root gets no class, so the reference stylesheet never restyles an
+// app's own kit.
 // ═══════════════════════════════════════════════════════════
 
 // One stylesheet per document (a page may host more than one root, and a swap

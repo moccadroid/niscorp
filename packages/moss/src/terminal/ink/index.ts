@@ -21,7 +21,7 @@ import { navOf } from './nav';
 // focused input claims digits as text, so number navigation stands down).
 // The numbering comes from the TTY adapter's walker run over the SAME served
 // trees (./marks.ts), and what a number sends is the REPL's (../numbered.ts).
-// Tab/Shift+Tab and ↑/↓ still walk the focus ring (./nav.ts); Enter
+// Tab/Shift+Tab and ↑/↓ walk the focus ring (./nav.ts); Enter
 // activates; Ctrl+C leaves. ESM only, like ink. Node-shaped and react-shaped
 // code lives here, never in moss core.
 // ═══════════════════════════════════════════════════════════

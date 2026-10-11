@@ -20,7 +20,7 @@ export type MossServer = Hono<Env> & {
   socket: SocketAccept;
   shells?: ShellHost;
   // WHO A TOKEN IS — the deployment's own verifier, the one every surface here
-  // already asks. For an app's own route that receives a credential some other
+  // asks. For an app's own route that receives a credential some other
   // way than a Bearer header (a page request carries a cookie): null is a
   // refusal, exactly as it is everywhere else.
   principalOf: (token: string) => Promise<string | null>;
@@ -109,7 +109,7 @@ export type MossServer = Hono<Env> & {
   // record it resolves (`IdentityRecord.tag`); this drops every record wearing
   // one and answers how many it held. Moss never interprets the tag.
   //
-  // This is what makes a tenant-local write tenant-local. `refresh()` is still
+  // This is what makes a tenant-local write tenant-local. `refresh()` is
   // the right hammer for a changed ARTIFACT, because artifacts are deployment
   // -wide; a tenant installing an integration is not.
   invalidateTenant: (tag: string) => number;
@@ -129,14 +129,11 @@ export type MossServer = Hono<Env> & {
   nudge: (principal: string, channel: string) => void;
   // RETIRE EVERYTHING THIS SERVER STARTED that outlives a request — the
   // generation poll, the identity idle sweep, the socket's revalidation, the
-  // shell idle sweep. ONE call, because the alternative is what leaked: a host
-  // retiring a runtime IN-PROCESS (a dev floor rebuilding on a server-file
-  // edit) had to enumerate moss's timers by reaching into each handle, and
-  // could only ever stop the ones it could see — the poller and the identity
-  // sweep were never surfaced, so a rebuild left them polling an ended pool.
-  // The thing that started a timer owns stopping it; the host calls this and
-  // learns nothing about how many there are. A deployment that boots ONCE
-  // needs none of this: nothing retires it in-process, and every timer here is
+  // shell idle sweep. ONE call: a host that retires a runtime IN-PROCESS (a
+  // dev floor rebuilding on a server-file edit) learns nothing about how many
+  // timers there are, and none is left polling an ended pool. The thing that
+  // started a timer owns stopping it. A deployment that boots ONCE needs none
+  // of this: nothing retires it in-process, and every timer here is
   // `unref`'d, so the process carries them off on its own exit.
   close: () => void;
   // Every identity resident right now, and what the cache is costing —

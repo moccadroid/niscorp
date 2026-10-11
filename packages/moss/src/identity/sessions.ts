@@ -6,21 +6,16 @@ import type { PgPool } from '@niscorp/vex';
 // ═══════════════════════════════════════════════════════════════
 // SESSIONS — the human credential, at the standard the machine one set.
 //
-// This server already answers "who is calling" three ways: an integration
-// presents a 256-bit key stored hashed (../integrations, registry.ts), a deployment signs
-// 30-second assertions with ed25519 (../integrations, credentials.ts) — and until this file, a
-// person presented a JSON field anybody could author. Nothing about a person
-// makes the weaker answer appropriate; this is the same credential the
-// integration key is, one table over:
+// A person's credential is the same one an integration's key is (a 256-bit
+// key stored hashed, ../integrations, registry.ts), one table over:
 //
 //   MINTED ONCE, SHOWN ONCE. 256 bits of CSPRNG behind an `st_` prefix; the
 //   row keeps only the hash, so a stolen database does not hold a live
 //   session. Presenting the token is the only way to produce the hash again.
 //
 //   EXPIRING. `expires_at` is written at mint and enforced on every read.
-//   The socket already re-asks the verifier on a timer (sessionRevalidateMs)
-//   precisely so an expiry can mean something on a held-open connection —
-//   this is the verifier that gives that clock something to say.
+//   The socket re-asks the verifier on a timer (sessionRevalidateMs) so an
+//   expiry means something on a held-open connection.
 //
 //   REVOKED BY DELETING THE ROW: every token a principal holds (sign out
 //   everywhere, a role change, an offboarding). No second mechanism to
@@ -54,8 +49,9 @@ const RemainingRowSchema = z.object({ remaining: z.coerce.number() });
 
 // The sessions table, as a strata sequence. Its own sequence rather than part of
 // `nisc.moss` because it exists only for a deployment that chose moss's own
-// credential (`runtime.session: 'sessions'`). HISTORY: an applied migration is
-// never edited — change the table by appending one (see test/baselines.test.ts).
+// credential (`runtime.session: 'sessions'`). An applied migration is never
+// edited, its SQL text is checksummed: change the table by appending one (see
+// test/baselines.test.ts).
 export const SESSIONS_SEQUENCE: Sequence = {
   id: 'nisc.moss.sessions',
   migrations: [

@@ -50,9 +50,7 @@ export const createVexRoutes = <E extends Env>(deps: VexRoutesDeps<E>): Hono<E> 
 
   // WHAT THE REQUEST SAID RIDES WITH IT, for whoever hears a write it makes:
   // its headers, asked by name, without the credential it carried. No header
-  // is read here and none is known by name. This used to read two of a
-  // feature's own (`x-tide-cause`, `x-tide-depth`) and hand on what it made of
-  // them; the feature that mints a write into tide reads them itself now.
+  // is read here and none is known by name.
   routes.use('/api/*', (c, next) =>
     deps.writes.within(
       writeRequestOf((name) => c.req.header(name)),

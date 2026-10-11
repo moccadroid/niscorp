@@ -23,7 +23,7 @@ import type { DatabaseAdapter, ExecuteRecord, MutationClient, QueryEngine, Scope
 //
 // Modelled on `executeAs` (./execute-as.ts): replay only, in process, the
 // policy said by server code. Where that one logs a refusal and answers
-// nothing, this one throws: the statement it stands in for threw.
+// nothing, this one throws.
 // ═══════════════════════════════════════════════════════════════
 
 export type OwnEntries = {
@@ -67,14 +67,13 @@ export const createOwnEntries =
     const cache = createMemoryCache();
     await seedCache(cache, own.entries);
     // ITS OWNER'S TABLES, READ OFF THE DATABASE FOR THIS ENGINE, AND NO OTHER
-    // TABLE. It used to be handed the schema the app's engine had read, and
-    // that one is the app's to cut down: with `runtime.vexConfig.entities`
-    // set, it holds the tables of that list, moss's own are not among them,
-    // and every entry here answered `Entity "…" not found in schema`: the
-    // generation pointer could not be read or moved, and a feature's entries
-    // refused its start. So the list an app gives vex says nothing here, and
-    // neither does anything else of the app's engine. What this engine knows
-    // is the tables that are its owner's, which is also all it may serve.
+    // TABLE. The schema the app's engine read is the app's to cut down: with
+    // `runtime.vexConfig.entities` set, it holds the tables of that list and
+    // moss's own are not among them, so every entry here would answer
+    // `Entity "…" not found in schema`. So the list an app gives vex says
+    // nothing here, and neither does anything else of the app's engine. What
+    // this engine knows is the tables that are its owner's, which is also all
+    // it may serve.
     const schema = await deps.adapter.introspect({ entities: [...own.tables] });
     // An engine beside the app's, over the same database, through the same
     // adapter.

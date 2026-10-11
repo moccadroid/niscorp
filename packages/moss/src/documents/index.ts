@@ -40,7 +40,7 @@
 //
 //   NOTHING HERE CAN FAIL A PAGE. Whatever goes wrong — a kit component that
 //   throws, a shell that will not build — the answer is the template as it is,
-//   and the terminal paints it the way it did before any of this existed.
+//   and the terminal paints it as it would a page with no drawn screen.
 //
 // This module imports `protocol`, `identity` and `shells`, and nothing else of
 // moss.

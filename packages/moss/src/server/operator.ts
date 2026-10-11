@@ -17,8 +17,8 @@ import type { Env } from './moss-server';
 // key's length), and `timingSafeEqual` — which throws on a length mismatch — is
 // always handed two equal-width digests. The timing signal a REMOTE attacker
 // could read here is nanoseconds under microseconds of network jitter and is not
-// the point; D6 co-locates add-on containers on a shared network, and the least
-// -trusted code in the deployment facing far less jitter is.
+// the point; add-on containers are co-located on a shared network, and the least
+// -trusted code in the deployment, facing far less jitter, is.
 export const secretsEqual = (a: string, b: string): boolean =>
   timingSafeEqual(createHash('sha256').update(a).digest(), createHash('sha256').update(b).digest());
 
@@ -26,9 +26,9 @@ export const secretsEqual = (a: string, b: string): boolean =>
 // run. Registration order IS the security property: Hono composes matched
 // handlers in the order they were added, so the app's gate has to be added
 // before moss's key check to run before it, and both before the routes to wrap
-// them. Without this, an app that mounted its own `/operator/*` middleware got a
-// gate that ran AFTER moss's and, on moss's own routes, never — moss answered
-// every refusal and the app's gate was unreachable on the one path that matters.
+// them. Added in any other order, an app's own `/operator/*` middleware would run
+// AFTER moss's and, on moss's own routes, never: moss would answer every refusal
+// and the app's gate would be unreachable on the one path that matters.
 //
 // The app's gate (if any) runs first: returning a Response refuses; calling
 // `next()` and returning falls through to moss's key check. Either way moss's

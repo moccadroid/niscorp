@@ -8,13 +8,11 @@ import type { Sequence } from '@niscorp/strata';
 // the shape is not application knowledge.
 // ═══════════════════════════════════════════════════════════════
 
-// THE GENERATION POINTER'S TABLE, AND ITS ONE ROW. History: these two
-// statements are the last two steps of migration 1 below, and every database
-// has run them. They were declared beside the code that polls the pointer
-// (../manifest, generation.ts) and are here now, byte for byte, with the rest
-// of what moss migrates: that file holds no SQL any more. The row is written
-// by the migration, in the same transaction as its table (rule 17), and is
-// read and moved through vex from then on (./pointer.ts).
+// THE GENERATION POINTER'S TABLE, AND ITS ONE ROW: the last two steps of
+// migration 1 below. Every database has run them, so their text is
+// checksummed and must never be edited. The row is written by the migration,
+// in the same transaction as its table (rule 17), and is read and moved
+// through vex (./pointer.ts).
 //
 // TWO STATEMENTS, SENT SEPARATELY. A driver that prepares its statements refuses
 // a string carrying more than one command, and the failure arrives as a
@@ -24,13 +22,12 @@ const GENERATION_DDL: readonly string[] = [
   /* sql */ `INSERT INTO moss_generation (id, n) VALUES (1, 0) ON CONFLICT (id) DO NOTHING`,
 ];
 
-// THE TABLES MOSS OWNS, as one strata sequence. Migration 1 is the DDL every
-// boot used to run, verbatim and in order — CREATE … IF NOT EXISTS, then the
-// ADD COLUMN IF NOT EXISTS that caught older tables up — so it converges any
-// earlier deployment to the current shape, once, and the ledger remembers.
-// The generation pointer rides the same migration: it too existed on every
-// boot. HISTORY: never edit an applied migration; append one (see
-// test/baselines.test.ts, which pins the checksum).
+// THE TABLES MOSS OWNS, as one strata sequence. Migration 1 is CREATE … IF NOT
+// EXISTS followed by the ADD COLUMN IF NOT EXISTS steps that catch an older
+// table up, so it converges any earlier deployment to the current shape,
+// once, and the ledger remembers. The generation pointer rides the same
+// migration. A migration that has run is never edited: its checksum is in
+// every ledger (test/baselines.test.ts pins it). Append one instead.
 export const MOSS_SEQUENCE: Sequence = {
   id: 'nisc.moss',
   migrations: [
@@ -140,9 +137,9 @@ export const MOSS_SEQUENCE: Sequence = {
       steps: [{ kind: 'sql', sql: `ALTER TABLE integration_actions ADD COLUMN grammar jsonb NOT NULL DEFAULT '{}'::jsonb` }],
     },
     // A KEY IS ONE INTEGRATION'S. A presented key is resolved to "the" row that
-    // holds its hash, and nothing said there was only one. Rows that hold no
-    // key (never issued one) are as many as there are, so the index leaves
-    // them out.
+    // holds its hash, so no two rows may hold one hash. Rows that hold no key
+    // (never issued one) are as many as there are, so the index leaves them
+    // out.
     {
       description: 'No two integrations hold the hash of one key',
       steps: [{ kind: 'sql', sql: `CREATE UNIQUE INDEX integrations_key_hash_unique ON integrations (key_hash) WHERE key_hash IS NOT NULL` }],

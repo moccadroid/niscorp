@@ -103,9 +103,7 @@ export type Data = {
   // else: a request's fingerprint resolves in the cache, and so does
   // `fingerprints` below. So the entries have two holders, the manifest's
   // list and this copy, and the copy is not only the list: a query written
-  // for an intent while the app runs is stored there too (./intents.ts). What
-  // the cache holds, and who decides it, is the next module's to change
-  // (docs/plans/moss-refactor.md, Part 10).
+  // for an intent while the app runs is stored there too (./intents.ts).
   seed: (entries: readonly (SeedEntry | SeedMutation)[]) => Promise<void>;
   // The policy somebody reads and writes under: compiled once for each set of
   // roles, and kept until the manifest changes.
@@ -171,9 +169,7 @@ export type PreparedEngine = Pick<Data, 'grants' | 'grammars'> & { engine: Query
 
 // THE TABLES EXIST BEFORE INTROSPECTION. The engine's introspected schema is
 // the grant universe policies compile from — a table created after it is a
-// table no grant can reach, silently: an app granting `integrations.read`
-// compiled a policy that denied the very screen the grant existed for, and
-// nothing said so until somebody opened it.
+// table no grant can reach, and nothing says so.
 //
 // ONE LEDGERED RUN (strata) for every owner's tables: moss's own, the
 // sessions table when the deployment chose moss's credential, the vex
@@ -184,8 +180,7 @@ export type PreparedEngine = Pick<Data, 'grants' | 'grammars'> & { engine: Query
 // THEN THE GRAMMARS this code reads documents in (./grammar.ts). NO ROW IS
 // BROUGHT TO THEM HERE. The documents stored in a table are its owner's to
 // bring current, and the only tables that hold any are a feature's: it asks
-// when it starts (`Data.upgradeStore`). This used to rewrite the integrations'
-// stored actions at every boot, whether or not the app named that feature.
+// when it starts (`Data.upgradeStore`).
 const prepareEngine = async (config: DataConfig): Promise<PreparedEngine> => {
   await migrate(config.pool, tableSequencesOf(config), { mode: config.migrations ?? 'apply' });
   const grammars = await createGrammarUpgrader({ grammars: config.grammars });
@@ -275,8 +270,7 @@ export const createDataWith = (prepared: PreparedEngine, config: Pick<DataConfig
 
   // The pointer's two entries, seeded when the pointer is first asked. NO SPAN
   // for them: a poll is not something a request did, and one every interval
-  // from every process would be a line in every sink that says nothing. The
-  // statements they stand in for made none.
+  // from every process would be a line in every sink that says nothing.
   let pointerEntries: Promise<Replay> | undefined;
   const pointerReplay = (): Promise<Replay> => {
     pointerEntries ??= ownEntries(POINTER, undefined);
@@ -292,13 +286,11 @@ export const createDataWith = (prepared: PreparedEngine, config: Pick<DataConfig
     policyForRoles: (roles) => resolvePolicyForRoles(governed, grants, roles),
     // Vex's own discovery, asked under the caller's policy: it lists an entry
     // only when the policy can touch every table the entry reads, or writes.
-    // This compiled the policy and then kept every fingerprint whatever it
-    // said, so somebody granted nothing was told the whole surface.
     fingerprintsFor: async (who) => (await handleDiscovery({ engine, locked: true, scopePolicy: policies.of(who) })).fingerprints.map((entry) => entry.fingerprint).sort(),
     // A ROLE MACHINERY RUNS AS IS A SET OF ROLES LIKE ANY OTHER: its policy is
     // the kept one for that set, compiled at first sight and dropped when the
     // manifest changes, and the same one a request by somebody holding exactly
-    // that role is served under. It was compiled afresh, twice, for each call.
+    // that role is served under.
     executeAs: createExecuteAs({
       engine,
       db: config.db,

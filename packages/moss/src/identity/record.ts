@@ -14,12 +14,11 @@ export type IdentityRecord = {
   // WHAT THIS PRINCIPAL SHARES A FATE WITH — an opaque string the application
   // chooses, and the only reason moss keeps a second map.
   //
-  // This is NOT the secondary index invariant 2 bans, and the difference is the
-  // whole justification: `BY_EMAIL` was a way to FIND somebody, and a way to
+  // This is NOT a secondary index, and the difference is the whole
+  // justification: a by-email index is a way to FIND somebody, and a way to
   // find somebody is a query planner. This supports exactly one operation —
   // FORGET everyone wearing this tag — and no operation that returns a record.
-  // You cannot read anything through it, which is what invariant 1 is actually
-  // protecting.
+  // You cannot read anything through it.
   //
   // It exists because "a tenant-local write invalidates that tenant, not the
   // deployment" is otherwise unachievable: dropping one tenant's records means

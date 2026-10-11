@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // THE CLUSTER FABRIC — invalidations and nudges that travel between
-// processes. Additive, off by default: no hook, and every path behaves
-// exactly as it does in one process today.
+// processes. Off by default: with no hook, every path behaves as it does in
+// one process.
 //
 // Moss holds per-process state that is a feature, not an accident — durable
 // shells, the identity cache, nudge channels. Three calls mutate it from the

@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
 // TIDE'S FACTS — a committed write, minted into tide.
 //
-// What is left in moss of hosting tide, and it is a FEATURE: an app that runs
-// tide creates it and names it in its manifest's `features`.
+// What moss has of hosting tide is a FEATURE: an app that runs tide creates it
+// and names it in its manifest's `features`.
 //
 //   features: [createTideFacts({ tide: () => driver, identity, chain })]
 //

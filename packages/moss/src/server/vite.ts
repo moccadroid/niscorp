@@ -42,7 +42,7 @@ export type DevApp = {
   // how to let it go (default: `server.close()`)
   close?: () => void | Promise<void>;
   // How one of its screens is drawn. Absent: pages go out as vite's index.html,
-  // undrawn, and the terminal paints them as it always did.
+  // undrawn, and the terminal paints them.
   draw?: DocumentConfig['draw'];
   htmlAttributes?: DocumentConfig['htmlAttributes'];
   site?: DocumentConfig['site'];
@@ -208,7 +208,7 @@ const devMiddleware =
         for (const [name, value] of Object.entries(page.headers)) res.setHeader(name, value);
         res.end(page.html);
       })
-      // not drawn is not broken: vite serves index.html as it always did
+      // not drawn is not broken: vite serves index.html
       .catch(() => next());
   };
 

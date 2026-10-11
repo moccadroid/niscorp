@@ -9,7 +9,7 @@ import { DEFAULT_TOKEN_KEY, sessionNameOf } from '../protocol';
 // upgrade that opens the socket. The server writes it in its answer to that
 // upgrade (../socket), or to a sign-in the app answers over HTTP
 // (`sessionCookies`, below). Any other terminal — a process, a page served
-// from somewhere else — holds its own token and offers it, as before.
+// from somewhere else — holds its own token and offers it.
 //
 // THE NAME is the terminal's token key (`nisc.token`, or a seat's own), so
 // several people can be signed in on one origin, each in a seat. It ends with

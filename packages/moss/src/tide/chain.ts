@@ -18,7 +18,7 @@ export type ChainHints = { cause: string; depth: number };
 // negative, written as `String(depth)` writes one — digits and nothing else.
 // Read by its form and not with `Number()`, which reads more than a number:
 // an empty header is 0 to it, and 0 is the start of a chain, so a chain whose
-// depth was lost on the way was counted from the beginning again, under a
+// depth is lost on the way would be counted from the beginning again, under a
 // ceiling that exists to stop it. Undefined: the header names no depth.
 const depthOf = (header: string | undefined): number | undefined => {
   if (header === undefined || !/^\d+$/.test(header)) return undefined;

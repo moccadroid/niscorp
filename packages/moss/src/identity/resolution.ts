@@ -16,13 +16,11 @@ import type { IdentityRecord } from './record';
 
 // WHO THIS REQUEST IS, resolved ONCE at the door.
 //
-// `principal` alone was never enough: every consumer downstream immediately
-// asked the application three more questions to turn it into roles, scope
-// values and an install list — per request, and twice per request for anything
-// that compiled a policy at a reach. Resolving it here and carrying it means
-// the seams are asked once per SESSION, which is the whole point of the cache
-// behind them. `key` is the memo key, derived once with the record rather than
-// recomputed by every lookup.
+// `principal` alone is not enough: turning it into roles, scope values and an
+// install list takes three more questions of the application. Resolving it
+// here and carrying it means the seams are asked once per SESSION, which is
+// the whole point of the cache behind them. `key` is the memo key, derived once
+// with the record rather than recomputed by every lookup.
 export type ResolvedIdentity = {
   roles: readonly string[];
   scope: Record<string, unknown>;
@@ -153,8 +151,8 @@ export const createIdentity = (config: IdentityConfig): Identity => {
     return key;
   };
 
-  // The older seam: the answer for an application that has not declared
-  // `identity`, and for nobody signed in.
+  // The answer for an application that has not declared `identity`, and for
+  // nobody signed in.
   const fromAssignments = (principal: string | null): ResolvedIdentity => {
     const roles = assignedRoles(config.assignments, principal);
     // `scope` is EMPTY here rather than the scope hook's answer, because the
@@ -174,10 +172,8 @@ export const createIdentity = (config: IdentityConfig): Identity => {
 
   // One spelling, used everywhere. The session's stable half from the identity
   // record, then the clock's from the `scope` hook, applied last and per
-  // request. There used to be four spellings of this composition — one at the
-  // vex mount and three around the integration surfaces — and a value that
-  // reached one but not the others is exactly how an integration learns a
-  // member's studio on one route and nothing on the next.
+  // request. A second spelling would let a value reach one route and not
+  // another.
   const composeScope = (principal: string | null, resolved: ResolvedIdentity): Record<string, unknown> => ({
     userId: principal ?? 'anonymous',
     ...resolved.scope,

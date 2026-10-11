@@ -2,8 +2,7 @@ import { handleQuery } from '@niscorp/vex';
 import type { ExecuteRecord, MutationClient, QueryEngine, ScopePolicy } from '@niscorp/vex';
 
 // The capability lent to no-principal machinery: execute a seeded entry as a
-// declared charter role. See `createExecuteAs` for the four bounds that make
-// it tighter than the raw SQL it replaces.
+// declared charter role. See `createExecuteAs` for the four bounds on it.
 export type ExecuteAs = (role: string, fingerprint: string, context: Record<string, unknown>, scope?: Record<string, unknown>) => Promise<unknown>;
 
 export type ExecuteAsDeps = {
@@ -22,12 +21,12 @@ export type ExecuteAsDeps = {
 // every surface that has no principal by nature: identity resolution, the
 // sign-in credential, a mail provider's callback, the lab's picker.
 //
-// Strictly tighter than the raw SQL it replaces, on four counts: in-process
-// only (never a route); locked to REPLAY (only seeded entries run — no
-// caller-authored query); the policy is compiled from a charter role with
-// declared grants and a declared reach, like any principal's; and the scope
-// values are supplied by server code, never by a request. Widening what a
-// machinery role can touch is a charter diff somebody reviews.
+// Four bounds: in-process only (never a route); locked to REPLAY (only seeded
+// entries run — no caller-authored query); the policy is compiled from a
+// charter role with declared grants and a declared reach, like any
+// principal's; and the scope values are supplied by server code, never by a
+// request. Widening what a machinery role can touch is a charter diff
+// somebody reviews.
 export const createExecuteAs =
   (deps: ExecuteAsDeps): ExecuteAs =>
   async (role, fingerprint, context, scope = {}) => {

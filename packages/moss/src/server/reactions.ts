@@ -13,8 +13,8 @@ import type { NiscApp } from '../manifest';
 // Subscribed once the shells stand, which a reaction delivers into, and after
 // the features have started: a feature that hears writes (the one that mints
 // them into tide as facts, ../feature's `onWrite` seam) subscribed first, so
-// it is told of a write before the reactions are, as it was when that lane
-// was part of this file. Each is told on its own either way.
+// it is told of a write before the reactions are. Each is told on its own
+// either way.
 //
 // The rows of a write go to a feature that asks for them and nowhere else.
 // Nothing here knows what tide is.

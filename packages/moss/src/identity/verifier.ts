@@ -23,8 +23,7 @@ export const sessionVerifierOf = (runtime: Pick<NiscRuntime, 'session' | 'pool'>
     return devSession;
   }
   // SAID, as dev-open is. A function is the app's own door, and moss cannot
-  // tell an identity provider from a stub that trusts whatever it is shown:
-  // the dev verifier, handed over as a function, used to boot without a word.
+  // tell an identity provider from a stub that trusts whatever it is shown.
   // One line names the choice, so it is in the log of every deployment that
   // made it.
   console.info(`[moss] session: a function the app supplied${chosen.name === '' ? '' : ` (\`${chosen.name}\`)`} decides who a token is.`);

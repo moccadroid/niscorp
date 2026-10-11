@@ -4,7 +4,7 @@ import type { TerminalApi } from './index';
 // ═══════════════════════════════════════════════════════════════
 // The page's <head>, kept on the screen.
 //
-// A drawn page arrives with its head written (../document). From then on the
+// A drawn page arrives with its head written (../documents). From then on the
 // screen moves over the wire and the page is never fetched again, so the head
 // is read off the trees the wire holds, whenever they change: the elements the
 // screen's head holds go into the page's, and the page's own tags give way to

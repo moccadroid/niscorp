@@ -39,8 +39,7 @@ export type WireConfig = {
   // document carries (`readDocumentSnapshot`). The wire starts from it instead
   // of from nothing, so the first render matches the HTML and the first frames
   // off the socket confirm it rather than paint it. Absent, or made for
-  // somebody else (see `DocumentSnapshot.principal`): the wire starts empty, as
-  // it always has.
+  // somebody else (see `DocumentSnapshot.principal`): the wire starts empty.
   initial?: DocumentSnapshot;
   // The path this terminal is on, named on the socket so the server can tell a
   // page's terminal from the app's (a page is served a shell of its own, for
@@ -270,8 +269,8 @@ const createConnection = ({ config, env, credential, screen, delta, initial, not
   // ONE SOCKET AT A TIME. Whatever socket there was is let go of before
   // another is made. It may be one that has closed, one that carried another
   // principal, or one whose connect was still in flight when somebody pressed
-  // reset — left listened to, that one opened beside its replacement, and two
-  // sockets wrote one snapshot.
+  // reset — left listened to, that one would open beside its replacement, and
+  // two sockets would write one snapshot.
   const connect = (): void => {
     if (disposed) return;
     letGoOf(socket);
@@ -294,7 +293,7 @@ const createConnection = ({ config, env, credential, screen, delta, initial, not
     // server that refuses a connection opens it first, because a refusal is a
     // message and a close code: no place left for a shell for nobody
     // (`4503`), a session it could not open (`4500`). Forgotten at the open,
-    // every refusal was followed by a connect half a second to a second
+    // every refusal would be followed by a connect half a second to a second
     // later, for as long as the server went on refusing.
     const hearing: Hearing = { screen, credential, send, become, refuse, served: retry.forget };
     ws.onopen = () => setStatus('open');

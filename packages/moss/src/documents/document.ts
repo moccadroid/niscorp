@@ -35,9 +35,7 @@ export const documentHeaders = (principal: string | null): Record<string, string
 // opening tag and, at once, its closing tag. Answers the root with a screen
 // in it, or undefined for a root with no inside (an opening tag alone, one
 // that holds something, one closed in its own tag): there is no place for a
-// screen then. The place used to be found by looking for `></div>`, so a root
-// that was another element was written back as it was, with the snapshot
-// beside it and no screen, and the page was reported as drawn.
+// screen then.
 const rootHolding = (root: string): ((screen: string) => string) | undefined => {
   const closing = root.lastIndexOf('</');
   if (closing <= 0 || !root.startsWith('<') || root[closing - 1] !== '>' || !root.endsWith('>')) return undefined;

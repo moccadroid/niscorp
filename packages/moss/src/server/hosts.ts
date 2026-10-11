@@ -114,8 +114,8 @@ export const buildShellHosts = (deps: ShellHostsDeps): Hosts => {
   // (../manifest, app.ts § pages). The router refuses two pages that could
   // answer one path, here, at boot — like every other incoherence. BEFORE ANY
   // HOST IS MADE: a host starts its idle sweep when it is made, and a refusal
-  // after the app's own was made left that sweep running with nothing to stop
-  // it by.
+  // after the app's own was made would leave that sweep running with nothing
+  // to stop it by.
   const pageManifests = app.pages ?? {};
   const pageRouter = createPageRouter(pageManifests);
   const shells = app.shell !== undefined ? createShellHost(hostConfig(deps, app.shell, true)) : undefined;

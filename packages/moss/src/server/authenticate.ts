@@ -64,10 +64,10 @@ export const authentication =
       // The verifier says a token is nobody's by answering null, and that is
       // the 401 above. What THROWS on the way is the server's own trouble: the
       // database is down, the app's identity record does not parse, a
-      // feature's credential cannot be read. Answered 401 it told a client to
-      // throw its session away over a fault that was never its own, and
-      // nothing was logged. It is said here and answered as what it is. None
-      // of the error's text is sent: it can name a host, a table, a user.
+      // feature's credential cannot be read. A 401 would tell a client to throw
+      // its session away over a fault that is not its own, so it is logged here
+      // and answered as what it is. None of the error's text is sent: it can
+      // name a host, a table, a user.
       console.error('[moss] who is calling could not be found out — answering 500:', error);
       return c.json({ error: 'identity_failed', message: 'The server could not find out who is calling. Why is in its log, not here.' }, 500);
     }
