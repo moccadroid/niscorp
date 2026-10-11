@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createPglitePool } from '@niscorp/vex/pglite';
-import { initSessions, sessionOf } from '../src/identity';
+import { initSessions, sessionOf } from '../src/identity/sessions';
 import { integrationByKey } from '../src/integrations/registry';
 import { registryOver } from './registry-db';
 import { pristineDatabases } from './pristine-database';

@@ -53,13 +53,10 @@
 // ═══════════════════════════════════════════════════════════════
 
 export { createData } from './data';
-export type { Data, DataConfig, DataRoutesConfig } from './data';
+export type { Data } from './data';
 export type { ExecuteAs } from './execute-as';
 export { createWireFollower } from './follow';
 export type { Intent, QueryWriters } from './intents';
 export { featureTablesOf } from './feature-tables';
-export type { FeatureTables } from './feature-tables';
 export { migrateTables } from './migrate';
-export type { TablesReport } from './migrate';
 export { MOSS_SEQUENCE } from './tables';
-export type { WriteListener, WriteRequest } from './writes';

@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
 import type { ActionDefinition } from '@niscorp/nova';
 import { createRunningManifest } from '../src/manifest';
-import type { Pointer, RunningManifest, RunningManifestConfig, ShellManifest, ShippedManifest } from '../src/manifest';
+import type { Pointer, RunningManifest, ShellManifest } from '../src/manifest';
+import type { RunningManifestConfig } from '../src/manifest/running';
+import type { ShippedManifest } from '../src/manifest/verify';
 
 // THE RUNNING MANIFEST: what the app consists of right now, changed in one
 // place and only to something that may be served. Driven directly, with small

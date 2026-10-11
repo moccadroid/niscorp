@@ -13,7 +13,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { ExecuteRecord } from '@niscorp/vex';
 import { vexRecordToSpan } from '../src/data/span';
-import { instrumentFunctions } from '../src/shells';
+import { instrumentFunctions } from '../src/shells/function-session';
 import { hostConfig, standHost } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import { callIntegrationWith } from '../src/integrations/call';
@@ -21,7 +21,8 @@ import { createForwarder } from '../src/integrations/forward';
 import type { FoundIntegration } from '../src/integrations/registry';
 import { createAssertionSigner } from '../src/integrations/credentials';
 import { createSocket } from '../src/socket';
-import type { Connection, SocketConfig } from '../src/socket';
+import type { Connection } from '../src/socket';
+import type { SocketConfig } from '../src/socket/config';
 import { PROTOCOL, offerToken } from '../src/protocol';
 import type { ServerMessage } from '../src/protocol';
 import type { NiscApp } from '../src/manifest';

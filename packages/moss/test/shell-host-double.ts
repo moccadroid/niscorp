@@ -3,7 +3,9 @@ import { shellComponents } from '../src/manifest/components';
 import { definitionsFor } from '../src/manifest/roles';
 import type { NiscApp, ShellManifest } from '../src/manifest';
 import { createShellHost } from '../src/shells';
-import type { OwnedShellHost, ShellComposition, ShellHost, ShellHostConfig } from '../src/shells';
+import type { ShellHost, ShellHostConfig } from '../src/shells';
+import type { ShellComposition } from '../src/shells/config';
+import type { OwnedShellHost } from '../src/shells/types';
 
 // A SHELL HOST'S CONFIG, ASSEMBLED AS A SERVER ASSEMBLES IT, for the tests that
 // stand a host up with no server: from an app, and from who the test says a

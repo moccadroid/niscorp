@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createIdentity } from '../src/identity';
-import type { IdentityConfig, IdentityRecord } from '../src/identity';
+import type { IdentityRecord } from '../src/identity';
+import type { IdentityConfig } from '../src/identity/resolution';
 
 // Who a principal is, as the server asks it: through the app's identity seam
 // when it declares one, through its assignments when it does not. Nothing here

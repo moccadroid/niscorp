@@ -63,14 +63,13 @@ export type {
   ShellCanvas,
   ShellManifest,
 } from './app';
-export type { ShellArtifacts } from './artifacts';
 export { entriesOf } from './entries';
 export type { Pointer } from './generation';
 export { receiveManifest } from './handover';
 export { layoutMisfits } from './layout';
 export type { KitComponents } from './layout';
-export type { Catalog, InstalledOnly } from './roles';
+export type { Catalog } from './roles';
 export { createRunningManifest } from './running';
-export type { ActionLoader, OwnedActions, RunningManifest, RunningManifestConfig } from './running';
+export type { OwnedActions, RunningManifest } from './running';
 export { endlessChains, refusalOf, verifyApp } from './verify';
-export type { EndlessChain, ManifestReport, ShippedManifest } from './verify';
+export type { ManifestReport } from './verify';

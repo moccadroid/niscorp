@@ -44,9 +44,6 @@
 // handed was resolved by the identity module, where the server stands.
 // ═══════════════════════════════════════════════════════════════
 
-export { instrumentFunctions } from './function-session';
-export { DEFAULT_IDLE_MS, createShellHost } from './host';
-export { shellNeedOf } from './liveness';
-export type { ShellNeed } from './liveness';
-export type { ComponentContract, ShellComposition, ShellHooks, ShellHostConfig, ShellLimits } from './config';
-export type { OwnedShellHost, ShellConnection, ShellHost, ShellOpening, ShellReport, ShellSession, ShellSnapshot } from './types';
+export { createShellHost } from './host';
+export type { ShellHostConfig } from './config';
+export type { ShellHost, ShellSession, ShellSnapshot } from './types';

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { ActionDefinition } from '@niscorp/nova';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { createPageRouter } from '../src/documents';
-import { shellNeedOf } from '../src/shells';
+import { shellNeedOf } from '../src/shells/liveness';
 import type { PageManifest } from '../src/manifest';
 
 const page = (path: string, extra: Partial<PageManifest> = {}): PageManifest => ({ path, canvases: [{ id: 'main' }], ...extra });
