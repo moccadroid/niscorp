@@ -481,7 +481,7 @@ Report violations by rule number. A change that makes the app less declarative, 
 4. **Narrow inputs.** A factory takes a typed object of the functions and values it needs. Never the whole manifest, never the whole runtime, never an object that stands in for either.
 5. **Parse where it enters.** A body, a socket message, a row, a fetched payload, a message from another process, a token: parsed by a schema in the module where it enters. No type assertion.
 6. **Nothing flat.** Only `index.ts` sits at the top of `src/`.
-7. **Limits.** A function is at most 100 lines, a file at most 400 lines of code, a line at most 200 wide. One that grows past the first two has stopped being one thing; the third is so that a line is something the first two can count.
+7. **Limits.** A function of up to 200 lines is fine; 300 is the ceiling, for the rare one that reads better whole than cut up. A file is at most 400 lines of code, a line at most 200 wide. Do not split a function or a file to satisfy a number: split it when it has stopped being one thing.
 
 **How something new gets in.** In this order, and before any of it is written:
 
@@ -501,7 +501,7 @@ A defect found on the way gets a test that fails first. A commit moves code or c
 | `pnpm check:modules` | a file other than `index.ts` sits at the top of `src/`; a module imports a file inside another module instead of its door; a module imports one the table does not give it; the table has a cycle; the core imports a feature |
 | `pnpm check:api` | an entry point exports a name that is not in the package's `api.txt`, or `api.txt` names one that is no longer exported; an entry writes `export *` |
 | `pnpm check:raw-sql` | a file outside the script's ledger holds a statement or a call on a database pool, or a file in the ledger holds more or fewer than its line says |
-| `pnpm lint` | in moss's `src/`, or tide's Postgres store or driver: a type assertion other than `as const`; an `any` that becomes a typed value; a written type predicate; a non-null `!`; a `function` declaration; a function over 100 lines, a file over 400 lines of code, a line over 200 wide; an inline directive that switches a rule off |
+| `pnpm lint` | in moss's `src/`, or tide's Postgres store or driver: a type assertion other than `as const`; an `any` that becomes a typed value; a written type predicate; a non-null `!`; a `function` declaration; a function over 300 lines, a file over 400 lines of code, a line over 200 wide; an inline directive that switches a rule off |
 
 The lint reads types, and a type from another package of the repository is read from its `dist`: `pnpm build` first, as `pnpm verify` and CI do.
 

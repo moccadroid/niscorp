@@ -233,10 +233,12 @@ export default tseslint.config(
         { selector: 'VariableDeclarator[definite=true], PropertyDefinition[definite=true]', message: 'rule 16: no `!` on a declaration. It says a value is there before anything has put it there.' },
         { selector: 'FunctionDeclaration', message: 'rule 16: no `function` declaration. An arrow function in a `const`.' },
       ],
-      'max-lines-per-function': ['error', { max: 100, skipBlankLines: true, skipComments: true }],
+      // 200 lines is fine for a function; 300 is the ceiling, for the rare one
+      // that reads better whole than cut up.
+      'max-lines-per-function': ['error', { max: 300, skipBlankLines: true, skipComments: true }],
       'max-lines': ['error', { max: 400, skipBlankLines: true, skipComments: true }],
       // A line has a width, or the two sizes above count nothing: a function of
-      // a hundred lines holds what its lines hold. This is not prettier's 100,
+      // some lines holds what its lines hold. This is not prettier's 100,
       // which nothing enforces. Comments and strings count like code. Should a
       // later eslint drop `max-len`, the same rule is `@stylistic/max-len`.
       'max-len': ['error', { code: 200 }],

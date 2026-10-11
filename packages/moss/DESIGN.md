@@ -264,8 +264,8 @@ the parts. Each table and each long-lived piece of state has one owner, and
 nobody else authors what is written to it. What crosses a boundary (a
 manifest, a socket message, a route's body, a row, a token) is parsed by a
 schema in the module where it enters, and no module holds a type assertion.
-And a function is at most 100 lines, a file at most 400 lines of code, a line
-at most 200 wide.
+And a function is at most 300 lines (200 is fine; 300 is the ceiling), a file
+at most 400 lines of code, a line at most 200 wide.
 
 **One owner, as the code has it.** The owner of a table authors every
 statement on its rows. It is not always the module that runs them, or the one
