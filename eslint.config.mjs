@@ -174,7 +174,7 @@ export default tseslint.config(
   // the compiler off for a line or a file, which is where an `any` comes from:
   // they are errors too.
   {
-    files: ['packages/moss/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}'],
+    files: ['packages/moss/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}', 'packages/tide/src/store/postgres/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}', 'packages/tide/src/driver.ts'],
     languageOptions: { parser: tseslint.parser, parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname } },
     plugins: { '@typescript-eslint': tseslint.plugin },
     linterOptions: { noInlineConfig: true },

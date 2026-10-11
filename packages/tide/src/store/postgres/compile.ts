@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { Comparison, Order } from '../../types';
 import { snake, toColumn } from './rows';
 
@@ -18,9 +19,29 @@ const COMPARATORS = [
   ['gte', '>='],
 ] as const;
 
-// Anything that is an object and not a list is a comparison: `{ gt: 3 }`,
-// `{ in: [...] }`. Every other value is what the column must equal.
-const isComparison = (test: unknown): test is Comparison<unknown> => test !== null && typeof test === 'object' && !Array.isArray(test);
+// A COMPARISON, AS IT IS READ: `{ gt: 3 }`, `{ in: [...] }`. The compilers take
+// fields by name and what each holds is unknown, so what says it is a
+// comparison is read by a schema. `satisfies` holds the schema to the engine's
+// own type, so the two cannot drift. A member the schema does not name is
+// left out, as it was not read before.
+const ComparisonSchema = z.object({
+  eq: z.unknown().optional(),
+  ne: z.unknown().optional(),
+  lt: z.unknown().optional(),
+  lte: z.unknown().optional(),
+  gt: z.unknown().optional(),
+  gte: z.unknown().optional(),
+  in: z.array(z.unknown()).readonly().optional(),
+  notIn: z.array(z.unknown()).readonly().optional(),
+  isNull: z.boolean().optional(),
+}) satisfies z.ZodType<Comparison<unknown>>;
+
+const comparisonOn = (field: string, test: object): Comparison<unknown> => {
+  const read = ComparisonSchema.safeParse(test);
+  if (read.success) return read.data;
+  const misfits = read.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
+  throw new Error(`tide store: what "${field}" is compared with does not read as a comparison (${misfits})`);
+};
 
 type Bind = { sql: string; params: unknown[] };
 
@@ -36,14 +57,16 @@ export const compileWhere = (where: Fields | undefined, start: number, alias = '
   for (const [field, test] of Object.entries(where ?? {})) {
     const column = `${prefix}${snake(field)}`;
     const bare = snake(field);
-    if (!isComparison(test)) {
+    // Anything that is an object and not a list is a comparison. Every other
+    // value is what the column must equal.
+    if (test === null || typeof test !== 'object' || Array.isArray(test)) {
       // An equality on `undefined` means IS NULL, which is what the engine
       // means when it filters on a column it just cleared.
       clauses.push(test === undefined ? `${column} IS NULL` : `${column} = ${slot(toColumn(bare, test))}`);
       continue;
     }
 
-    const comparison = test;
+    const comparison = comparisonOn(field, test);
     for (const [op, symbol] of COMPARATORS) {
       const operand = comparison[op];
       if (operand === undefined) continue;

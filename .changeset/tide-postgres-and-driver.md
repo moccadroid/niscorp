@@ -11,6 +11,7 @@ Tide's Postgres store and its driver ship from tide. They were in `@niscorp/moss
 - `@niscorp/strata` is a new peer, and it is OPTIONAL: only this entry point imports it. An app that uses `@niscorp/tide/postgres` installs strata; an app on the memory store or a store of its own does not.
 - The sequence is the one every database that kept tide's tables under moss has run: its id is still `nisc.moss.tide`, and its migrations, their order and their steps are unchanged. A database migrated by an earlier release finds nothing pending.
 - A row the store reads back is read by a schema, one for each table. A row that does not fit (a state the engine has no name for, a number where text belongs) throws where it is read, naming the table and the field. It used to be handed to the engine as it was.
+- What a `where` compares a field with (`{ lte: 5 }`, `{ in: [...] }`) is read by a schema too. One that does not fit (`in` that is not a list, `isNull` that is not a boolean) throws, naming the field. The types of `Where` already refuse such a call, so nothing written against them changes.
 
 **New in the main entry: the driver.**
 

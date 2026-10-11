@@ -75,9 +75,13 @@ const waitable = (ms: number): number => Math.min(ms, LONGEST_TIMER_MS);
 
 // LET THE PROCESS END WITH A TIMER STILL PENDING. Node's timers can be told so
 // (`unref`); a timer anywhere else is a number and holds nothing open. Asked of
-// the value and not of its type, so this file needs no runtime's types.
+// the value and not of its type, so this file needs no runtime's types. What
+// is found is a function nothing here knows the type of, so it is applied as
+// one: on the timer, with nothing.
 const letProcessEnd = (timer: unknown): void => {
-  if (typeof timer === 'object' && timer !== null && 'unref' in timer && typeof timer.unref === 'function') timer.unref();
+  if (typeof timer !== 'object' || timer === null || !('unref' in timer)) return;
+  const unref: unknown = timer.unref;
+  if (typeof unref === 'function') Reflect.apply(unref, timer, []);
 };
 
 const progressOf = (report: AdvanceReport): number =>
