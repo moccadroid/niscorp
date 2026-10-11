@@ -7,14 +7,11 @@ import type { ShellCanvas, ShellManifest } from './app';
 // loads that somebody authored, answered whole, by one owner: the running
 // manifest (./running.ts, `artifactsFor`).
 //
-// Four kinds: the actions, the layouts, the fragments and the entries. Each
-// was read where it was needed. The actions were asked of the running
-// manifest; the frame, the layout store and the fragments were read off the
-// shell's manifest by the server's wiring; the entries were held in a map of
-// their own. So whatever is to decide which action, layout, fragment or entry
-// an id resolves to had four modules to change. For what a SHELL IS HANDED it
-// has one function now: a shell is built from this answer and adopts it, and
-// nothing else of moss reads one of the four off what the app handed over.
+// Four kinds: the actions, the layouts, the fragments and the entries. A shell
+// is built from this answer and adopts it, and nothing else of moss reads one
+// of the four off what the app handed over. So whatever decides which action,
+// layout, fragment or entry an id resolves to, for what a SHELL IS HANDED, has
+// this one function to change.
 //
 // FOR AN ENTRY THAT IS HALF OF IT. The entries in this answer are what a
 // shell is told of the reads on its screens (whether one keeps answering).

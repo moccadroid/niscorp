@@ -6,9 +6,9 @@ import type { Connection } from './connection';
 // `ws` emits it), and to nobody who starts listening afterwards. Opening a
 // session awaits: what somebody holds is asked, their shell is built. A
 // listener registered after one of those, on a connection that closed
-// meanwhile, was never called — so the connection stayed attached to its
-// shell for ever. A kept shell never idled; a throwaway one was never
-// disposed.
+// meanwhile, would never be called — the connection would stay attached to its
+// shell for ever. A kept shell would never idle; a throwaway one would never
+// be disposed.
 //
 // So the close is listened for once, before the first of those awaits, and
 // remembered. What has to be undone when the connection ends is said here as

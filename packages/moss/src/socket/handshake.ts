@@ -24,8 +24,8 @@ import type { Connection } from './connection';
 // that one is judged, and answered (`protocolRefusal`).
 const flag = z.literal('1').optional().catch(undefined);
 const UpgradeParametersSchema = z.object({
-  // The protocol the terminal speaks, as it wrote it. Absent: 1, what every
-  // terminal built before the parameter existed speaks.
+  // The protocol the terminal speaks, as it wrote it. Absent: 1, what a
+  // terminal that names no protocol speaks.
   protocol: z.string().default('1'),
   // Which of the browser's sessions this terminal is (a seat): a name, not a
   // secret.
@@ -52,7 +52,8 @@ export const parametersOf = (url: string): UpgradeParameters => {
 };
 
 // A PROTOCOL IS DIGITS, and nothing else. Read with `Number()`, `0x2`, `2.0`,
-// `2e0` and ` 2` were all protocol 2, and a terminal that wrote one was served.
+// `2e0` and ` 2` would all be protocol 2, and a terminal that wrote one would
+// be served.
 const SpokenProtocolSchema = z.string().regex(/^\d{1,15}$/).transform(Number);
 
 // A terminal that speaks a protocol this server does not is told which side
@@ -113,9 +114,9 @@ export const authenticateUpgrade = async (
   // its first upgrade. A sign-in is then handed to the page sealed with it;
   // the page offers it back here, and only this browser's seal opens it.
   const sealing = page !== undefined && parameters.sealed === '1';
-  // A browser terminal that is not on the app's own page works as it always
-  // did, holding its own token — which is right for a page served from
-  // somewhere else, and is what a proxy that rewrites `Host` looks like too.
+  // A browser terminal that is not on the app's own page holds its own token —
+  // which is right for a page served from somewhere else, and is what a proxy
+  // that rewrites `Host` looks like too.
   // Said once: nothing else would tell a deployment it is in the second case.
   if (page === undefined && parameters.sealed === '1' && typeof upgrade?.origin === 'string' && !notOwn.warned) {
     notOwn.warned = true;
@@ -142,12 +143,11 @@ export const authenticateUpgrade = async (
   // never stop getting.
   const token = principal === null ? null : carried;
   // THE ANSWER makes the browser hold who this turned out to be. A token the
-  // page offered — left in storage by an earlier build, or just handed to it
-  // at sign-in — is moved into the cookie, and that was the last time the
-  // page held it; a session that ended is taken back. An offered token is
-  // written even when the browser sent the same one: over plain http on the
-  // default port the copy an earlier build kept, readable by script, has
-  // this cookie's name.
+  // page offered — held in its storage, or just handed to it at sign-in — is
+  // moved into the cookie, and that is the last time the page holds it; a
+  // session that ended is taken back. An offered token is written even when
+  // the browser sent the same one: over plain http on the default port a
+  // copy readable by script has this cookie's name.
   const cookies = [
     ...(page === undefined || (offered === null && (held?.token ?? null) === token)
       ? []

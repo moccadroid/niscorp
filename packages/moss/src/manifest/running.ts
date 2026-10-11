@@ -40,8 +40,8 @@ type Actions = Readonly<Record<string, ActionDefinition>>;
 export type ActionLoader = () => Promise<Record<string, ActionDefinition>>;
 
 export type RunningManifestConfig = {
-  // WHAT THE APP SHIPPED: the seven fields of its manifest a verification
-  // reads. Read and never written. A server hands over the app's own record,
+  // WHAT THE APP SHIPPED: the fields of its manifest a verification reads.
+  // Read and never written. A server hands over the app's own record,
   // which the hand-over has frozen.
   shipped: ShippedManifest;
   // every `<table>.<verb>` the database can carry: the universe the charter's
@@ -144,11 +144,10 @@ export type RunningManifest = {
   // THE ONE QUESTION A SHELL ASKS OF WHAT EXISTS: once to be built, and once
   // more each time it adopts. An action, a layout, a fragment and an entry
   // reach a shell through this answer and through nothing else, so whatever
-  // comes to decide what a shell is handed for an id decides it here. (What a
-  // read REPLAYS is decided elsewhere: its fingerprint resolves in vex's
-  // cache, `entries` above.) The definitions
-  // are remembered for each set of roles and the component names for each
-  // shell manifest, both until the next switch.
+  // decides what a shell is handed for an id decides it here. (What a read
+  // REPLAYS is decided elsewhere: its fingerprint resolves in vex's cache,
+  // `entries` above.) The definitions are remembered for each set of roles and
+  // the component names for each shell manifest, both until the next switch.
   artifactsFor: (shell: ShellManifest, roles: readonly string[], installed: readonly string[] | undefined) => ShellArtifacts;
   // The generation this process has seen; -1 until it watches and has read it.
   generation: () => number;
@@ -276,7 +275,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     const verified = verifyManifest(candidate(actions));
     const refusal = refusalOf(verified, 'refresh');
     if (refusal !== undefined) throw new Error(refusal);
-    // Taken: what arrived is part of the manifest now, and nobody's to write.
+    // Taken: what arrived is part of the manifest, and nobody's to write.
     for (const set of arrived.values()) freezeDeep(set);
     sets = next;
     inForce = actions;

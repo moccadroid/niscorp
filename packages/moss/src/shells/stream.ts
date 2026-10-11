@@ -22,12 +22,11 @@ import type { ShellConnection } from './types';
 // on `length` alone. The rule is nova's (`canvasTreeOf`): a canvas is handed to
 // an adapter the same way whether it is served from here or lives beside it.
 
-// Flatten, then serialize. No language step here any more: the shell was
-// built with its book, and nova applies it where a RenderNode is minted, so
-// what comes out of `getCanvasRenderTree` is already in the reader's
-// language. Everything downstream — the delta encoder, the socket, the
-// terminal — is handed a finished frame and never learns a language was
-// involved, exactly as before; there is simply one fewer walk to get there.
+// The shell was built with its book of phrases, and nova applies it where a
+// RenderNode is minted, so what comes out of `canvasTreeOf` is already in the
+// reader's language. Everything downstream — the delta encoder, the socket,
+// the terminal — is handed a finished frame and never learns a language was
+// involved.
 export const treeOf = (live: Live, canvasId: string): RenderNode[] => canvasTreeOf(live.shell, canvasId);
 
 const frame = (live: Live, canvasId: string): string => {
@@ -36,13 +35,14 @@ const frame = (live: Live, canvasId: string): string => {
 };
 
 // A canvas whose tree throws while rendering must not take the session with
-// it. Unguarded, one bad tree killed the entire flush pass: every canvas
-// after it never rendered, the throw escaped a microtask with nobody to
-// catch it, and — because `sent` was never updated for the canvas that threw
-// — every later pass hit the same node again. That is a shell wedged for the
-// life of the process, and no reconnect could clear it, since reattaching a
-// durable shell finds the same wreck. Now the failing canvas holds its last
-// good tree, its neighbours keep rendering, and `reset` is the way out.
+// it. Unguarded, one bad tree would end the entire flush pass: every canvas
+// after it would never render, the throw would escape a microtask with nobody
+// to catch it, and — because `sent` would not be updated for the canvas that
+// threw — every later pass would hit the same node again. That is a shell
+// wedged for the life of the process, and no reconnect clears it, since
+// reattaching a durable shell finds the same wreck. So the failing canvas
+// holds its last good tree, its neighbours keep rendering, and `reset` is the
+// way out.
 export const frameOf = (live: Live, canvasId: string): string | null => {
   try {
     return frame(live, canvasId);
@@ -55,18 +55,17 @@ export const frameOf = (live: Live, canvasId: string): string | null => {
 // A delta is only worth sending when it is DECISIVELY smaller. The transport
 // compresses whatever it is handed, and a delta that saves 20% of the bytes
 // saves nothing once both go through deflate — while still costing the
-// terminal a rebuild and a checksum. Measured on Lyra: an in-place update
-// (keystroke, one row's badge) lands at 1–4% and is far under this; a
-// navigation lands near 80% and is deliberately left whole.
+// terminal a rebuild and a checksum. An in-place update (keystroke, one row's
+// badge) is a small fraction of the frame and far under this; a navigation
+// replaces most of it and is deliberately left whole.
 const DELTA_CEILING = 0.6;
 
 // And only between frames small enough to be worth comparing. The encode's
 // cost follows the size of the frames, not of the change, and it is paid on
-// the thread every session shares: about 7 ms for an in-place change at
-// 64 KB, a second at 2.7 MB, and at 20 MB eight seconds and a gigabyte to
-// fail and send the frame whole anyway. Past this length — of the frame the
-// connections hold, or of the one replacing it — the answer is "whole"
-// before anything is spent on finding out.
+// the thread every session shares; on a very large frame it takes seconds and
+// a great deal of memory, and can fail and send the frame whole anyway. Past this length — of
+// the frame the connections hold, or of the one replacing it — the answer is
+// "whole" before anything is spent on finding out.
 const DELTA_MAX_FRAME = 64 * 1024;
 
 // The delta message, or null to send the frame whole. Never throws: a frame
@@ -176,8 +175,9 @@ export const attach = (live: Live, connection: ShellConnection, wantsDelta: bool
     // The newcomer joins the frame's shared baseline the same way it joins
     // each canvas's below, and for the same reason the others are sent it
     // when it moved: attaching RENDERS, and can pick up a change the flush
-    // has not sent yet. The baseline then moved to a frame only the newcomer
-    // held, and the flush, finding nothing changed, sent it to nobody else.
+    // has not sent yet. Otherwise the baseline would move to a frame only the
+    // newcomer holds, and the flush, finding nothing changed, would send it to
+    // nobody else.
     if (live.sentFrame !== frameMessage) {
       for (const other of live.connections) if (other !== connection) other.send(frameMessage);
     }

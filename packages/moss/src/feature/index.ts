@@ -7,7 +7,7 @@
 // of its own, and the core never imports it. What it needs of the core it is
 // handed (./seams.ts), by the server, when the server starts it.
 //
-// This module is two types and no code. It imports `runtime`, and nothing else
+// This module is types and no code. It imports `runtime`, and nothing else
 // of moss; the manifest imports it, to say what `NiscApp.features` holds.
 // ═══════════════════════════════════════════════════════════════
 

@@ -26,9 +26,7 @@ import type { Telemetry } from '../runtime';
 // module's whole answer. A feature that needs something that is not here does
 // not reach for it: the seam is added to its owner first, on its own.
 //
-// TWENTY-THREE MEMBERS, AND EACH IS ONE A FEATURE USES (counted 2026-10-11
-// against the two features there are: twenty-two by ../integrations, `onWrite`
-// by ../tide, and none is unused). A member that stops being used is taken
+// EACH MEMBER IS ONE A FEATURE USES. A member that stops being used is taken
 // out; one is not added for a feature that might want it.
 //
 // The types are written out here rather than imported from their owners,

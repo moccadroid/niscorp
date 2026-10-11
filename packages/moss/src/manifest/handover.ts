@@ -11,12 +11,11 @@ import type { ManifestSchema } from './schema';
 // and a manifest that cannot be read refuses the boot, naming every place that
 // does not fit.
 //
-// THEN IT IS FROZEN, deep and in place. An app that edited its manifest after
-// handing it over used to be half served: the edit reached whatever read the
-// record next and nothing that had already been derived from it, and no check
-// had seen it. Now the edit throws where it is written (a module is strict
-// code), so there is one way an app changes while it runs, and it is a call
-// that verifies first: `replaceActions` (./running.ts).
+// THEN IT IS FROZEN, deep and in place. An edit after the hand-over would
+// reach whatever read the record next and nothing already derived from it, and
+// no check would have seen it. So the edit throws where it is written (a
+// module is strict code), and there is one way an app changes while it runs: a
+// call that verifies first, `replaceActions` (./running.ts).
 // ═══════════════════════════════════════════════════════════════
 
 // What is data: an array, or an object nobody constructed. A function is a

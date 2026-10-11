@@ -19,7 +19,7 @@ const catalogActions = z.array(z.string()).readonly();
 const ServerMessageByTypeSchema = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal('hello'),
-    // A server built before the question existed sends none, and speaks 1.
+    // A server that names none speaks 1.
     protocol: z.number().default(1),
     principal: z.string().nullable(),
     catalog: z.strictObject({ actions: catalogActions, hash: z.string() }),
@@ -76,9 +76,9 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('back') }),
   // POP TO: jump straight to an ancestor already on a canvas's stack. Back
   // undoes ONE navigation; a breadcrumb that names a screen three levels down
-  // is one intention, not three gestures. Sending three `back`s instead raced
-  // the browser's own history repair and dropped presses — the shell can walk
-  // its own stack atomically, so it should be asked to.
+  // is one intention, not three gestures. Three `back`s in a row race the
+  // browser's own history repair and drop presses; the shell walks its own
+  // stack atomically, so it is asked to.
   z.strictObject({ type: z.literal('popTo'), canvas: z.string(), instance: z.string() }),
   // RESET: throw this session's shell away and serve its replacement. The one
   // message that names no canvas, deliberately — it is the recovery for a

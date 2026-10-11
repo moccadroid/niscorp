@@ -1,7 +1,7 @@
 import type { Shell } from '@niscorp/nova';
 
-// THE SHELL A SESSION HANDS OUT is the nova shell with nine members refusing:
-// the ones that change what a shell is made of. An action, a fragment, a
+// THE SHELL A SESSION HANDS OUT is the nova shell with the members that change
+// what a shell is made of refusing. An action, a fragment, a
 // canvas, a layout and the phrases reach a shell through moss, which verifies
 // them and decides who holds them; added on the shell itself they are not
 // verified, are in nobody's catalog, and are gone when the shell is rebuilt.

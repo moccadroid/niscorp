@@ -4,22 +4,17 @@ import type { SocketConfig } from './config';
 import type { Connection } from './connection';
 
 // ── Revalidation ──
-// The HTTP surfaces re-ask "who is this" on every request; the socket asked
-// once, at upgrade, and never again. That asymmetry is why an app could not
-// give its tokens an expiry that meant anything: the verifier seam is
-// perfectly able to say a token has died (return null), but on a live socket
-// nobody was listening for the answer.
+// The HTTP surfaces re-ask "who is this" on every request; the socket asks at
+// upgrade and then on this timer. The verifier seam can say a token has died
+// (return null), and on a live socket something has to be listening for the
+// answer: the server shell's own wire rides the HTTP middleware carrying the
+// session's token, so an expired credential would leave the socket open —
+// frames flowing, screen alive — while every endpoint the shell called came
+// back 401. A live interface whose every load silently fails is strictly worse
+// than a lock screen.
 //
-// It also failed in a shape worth naming. The server shell's own wire rides
-// the HTTP middleware carrying the session's token, so an expired credential
-// used to leave the socket open and cheerful — frames flowing, screen alive —
-// while every endpoint the shell called came back 401. A live interface whose
-// every load silently fails is strictly worse than a lock screen.
-//
-// The recovery for this already existed and is untouched: a `4401` close is a
-// recovery, not a retry, and the terminal drops its token and reconnects
-// anonymous onto the served lock screen. All that was missing was something
-// asking the question. This is that.
+// A `4401` close is a recovery, not a retry: the terminal drops its token and
+// reconnects anonymous onto the served lock screen.
 export const DEFAULT_REVALIDATE_MS = 60 * 1000;
 
 // What a connection was admitted on: the token it carried and who that was.
@@ -39,8 +34,7 @@ export type Revalidation = {
 
 export const createRevalidation = (config: Pick<SocketConfig, 'session' | 'revalidateMs'>): Revalidation => {
   // Every live connection, with the credential it authenticated under (null =
-  // anonymous, which has nothing that can expire). One structure: the future
-  // catalog-push fan-out wants the keys, revalidation wants the values.
+  // anonymous, which has nothing that can expire).
   const live = new Map<Connection, Credential>();
 
   const expire = (connection: Connection): void => {
@@ -98,8 +92,8 @@ export const createRevalidation = (config: Pick<SocketConfig, 'session' | 'reval
 
   // ONE PASS AT A TIME. A pass asks about every connection in turn, and takes
   // as long as the verifier does. The timer does not wait for it: a pass begun
-  // while one was still asking doubled what a slow verifier was asked, and the
-  // one after that tripled it. A pass that is due while one runs is skipped;
+  // while one is still asking would double what a slow verifier is asked, and
+  // the one after that triple it. A pass that is due while one runs is skipped;
   // the next tick asks again.
   let passing = false;
   const pass = async (): Promise<void> => {

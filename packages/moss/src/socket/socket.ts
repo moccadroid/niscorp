@@ -165,8 +165,7 @@ const open = async (held: Held, url: string, connection: Connection, send: (mess
 
   // Frame deltas are OPT-IN by the terminal, on the upgrade URL — the
   // capability has to be known before the first frame is sent. A terminal
-  // that says nothing is served whole frames forever, which is what every
-  // terminal built before this existed does.
+  // that says nothing is served whole frames.
   const attached = await served(config, connection, send, close, { session, delta: params.delta === '1' }, { token, principal });
 
   // Admitted: the handshake resolved a principal, said hello, and attached a
@@ -203,8 +202,8 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
       await open(held, url, connection, send, span, found);
     } catch (error) {
       console.error('[moss/socket] refused a session:', error);
-      // A fault, and counted as one. It used to leave no span at all: with the
-      // verifier down, upgrades did not turn into errors, they went missing.
+      // A fault, and counted as one: with the verifier down, upgrades show as
+      // errors and not as upgrades that went missing.
       span?.('socket.upgrade', 'error', found.principal);
       revalidation.release(connection);
       anonymousShells.release(connection);

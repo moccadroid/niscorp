@@ -38,8 +38,8 @@ export type TelemetrySpan = {
   // Identifiers and measurements. Never a payload, name, address, or context
   // value; a principal appears only as `hasPrincipal`.
   attributes: Record<string, string | number | boolean>;
-  // Trace stitching — unused in v1 (no cross-process traceparent yet), carried
-  // so a sampler and a propagator can arrive without a shape change.
+  // Trace stitching: nothing sets these. They are carried so a sampler and a
+  // propagator can arrive without a shape change.
   traceId?: string;
   spanId?: string;
   parentSpanId?: string;

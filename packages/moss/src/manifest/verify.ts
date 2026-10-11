@@ -19,9 +19,8 @@ import { wearableOf } from './roles';
 // It reads a CANDIDATE, as values: what the app would consist of, which is
 // not always what it consists of now. That is what lets a bundle be tried
 // without being put into the manifest that is serving. And it is one
-// function because it was two: the copy that ran on a change was shorter than
-// the one that ran at boot, so a change could be accepted that a boot of the
-// same manifest refuses.
+// function, so that a change cannot be accepted that a boot of the same
+// manifest refuses.
 //
 // Pure. It answers a report and throws nothing; who asked decides what a
 // refusal does (`refusalOf` writes the sentence).
@@ -43,7 +42,7 @@ export type ManifestCandidate = {
   profiles: ReadonlySet<string>;
 };
 
-// WHAT A VERIFICATION READS OF WHAT AN APP SHIPPED: seven fields of its
+// WHAT A VERIFICATION READS OF WHAT AN APP SHIPPED: these fields of its
 // manifest, and nothing of how it is served.
 export type ShippedManifest = Pick<NiscApp, 'charter' | 'actions' | 'layouts' | 'wearable' | 'assignments' | 'entries' | 'behaviors'>;
 
@@ -61,9 +60,6 @@ export const candidateOf = (shipped: ShippedManifest, inForce: Pick<ManifestCand
   profiles: scopeProfiles(shipped.behaviors ?? {}),
 });
 
-// `owner` is not a check of the candidate: it is said of a set that was
-// tried under a name its asker may not hand it over by (./running.ts,
-// `verifyReplace`), and it comes first.
 export type ManifestCheck = 'actions' | 'charter' | 'reach' | 'variants';
 
 export type ManifestReport = {
@@ -85,9 +81,9 @@ export type ManifestReport = {
 // What the app shipped was read by nova's schema when it was handed over
 // (./schema.ts). A set that arrives while the app runs was not: it comes from
 // rows, or over a wire, typed as actions by whoever handed it in. One that nova
-// refuses used to be taken, frozen and served, and was found when a shell that
-// holds it was built, for whoever connected first. So every definition of a
-// candidate is read here, where the question "may this be served" is asked,
+// refuses would otherwise be taken, frozen and served, and found when a shell
+// that holds it is built, for whoever connected first. So every definition of
+// a candidate is read here, where the question "may this be served" is asked,
 // and one that is not an action is the first thing that refuses.
 //
 // Asked how deep it nests before the schema reads it, as a manifest's
@@ -123,7 +119,7 @@ export type EndlessChain = { path: string; through: readonly string[] };
 export const endlessChains = (actions: Readonly<Record<string, ActionDefinition>>): EndlessChain[] =>
   chainCycles(actions).map((cycle) => ({ path: cycle.path, through: cycle.steps.map((step) => step.action) }));
 
-// The five things a boot refuses or says, over one candidate: every definition
+// The things a boot refuses or says, over one candidate: every definition
 // is an action nova reads, the charter engine verifies (nova auditing each
 // role's closure over its effective definitions, granted variants substituted;
 // closure findings sit under `charter.perRole[].issues` and refuse nothing),
@@ -214,9 +210,8 @@ export const verifyVariants = (app: Pick<NiscApp, 'charter' | 'actions' | 'layou
   const wearers = new Map<string, readonly string[]>();
   for (const role of Object.keys(app.charter)) wearers.set(`role "${role}"`, [role]);
   // COMBINATIONS, not people. This gate asks "can anything wearable resolve to
-  // two variants of one action" — a question about the set of combinations,
-  // which walking the population answered only by accident. `wearable` declares
-  // them; absent, they are derived from the assignment map exactly as before.
+  // two variants of one action" — a question about the set of combinations.
+  // `wearable` declares them; absent, they are derived from the assignment map.
   for (const roles of wearableOf(app)) wearers.set(`the combination [${[...roles].join(', ')}]`, roles);
   wearers.set('the anonymous principal', ['public']);
   for (const [who, roles] of wearers) {

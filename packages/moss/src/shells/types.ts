@@ -23,7 +23,7 @@ export type ShellSession = {
   // addressing the disposed one.
   readonly shell: Shell;
   // `options.delta` is the terminal declaring it can apply frame deltas. Absent
-  // means whole frames, which is what every terminal predating them expects.
+  // means whole frames, which every terminal can apply.
   attach: (connection: ShellConnection, options?: { delta?: boolean }) => void;
   detach: (connection: ShellConnection) => void;
   // This connection's copy of a canvas drifted from the server's — send whole
@@ -136,10 +136,9 @@ export type ShellHost = {
 // once: it has every host adopt when what the app consists of changes
 // (`MossServer.refresh`, `replaceActions`, a change another process made), and
 // it stops every host's sweep when it closes (`MossServer.close`). On the
-// host that is handed out (`server.shells`, a page's `host`) they were a
+// host that is handed out (`server.shells`, a page's `host`) they would be a
 // second way to each, for one host: an `adopt` that left the other hosts on
-// the old application, and a `stop` kept "for hosts that outlive their
-// server", which nothing can make any more.
+// the old application, and a `stop` for a host that outlives its server.
 export type OwnedShellHost = {
   host: ShellHost;
   // What the app consists of changed (the actions in force are others now, a

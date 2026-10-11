@@ -8,8 +8,7 @@
 //
 // IT IS TRANSPORT-BLIND (./connection.ts). It speaks through the four-function
 // `Connection` seam; the RFC 6455 plumbing lives with each runtime's entry
-// (`ws` on Node in ../server, transport.ts; Bun-native later) and is never
-// hand-written.
+// (`ws` on Node in ../server, transport.ts) and is never hand-written.
 //
 // WHAT IT IS HANDED (./config.ts) is a typed object of the functions and
 // values it needs: who a token is, what somebody holds, where a session comes

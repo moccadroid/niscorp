@@ -11,7 +11,7 @@ import type { IdentityRecord } from '../identity';
 // authored — never machinery: the server derives everything mechanical
 // from these plus a database (DESIGN.md § Derivation over
 // configuration). `assignments` stands in for the artifact library's
-// assignment table until that exists. The code an app supplies is the seams
+// assignment table. The code an app supplies is the seams
 // (functions it fills in) and `features`.
 // ═══════════════════════════════════════════════════════════════
 
@@ -33,30 +33,22 @@ export type LayoutVariant = { action: string; layout: LayoutNode };
 
 export type NiscApp = {
   charter: Charter;
-  // THE ASSIGNMENT MAP — one entry per principal, and the reason a resident
-  // copy of the population had to exist at all: an eager `Record` cannot be
-  // filled without enumerating everybody.
-  //
-  // OPTIONAL now. An app that declares `identity` answers this per principal,
-  // asynchronously, one row at a time, and never builds the map. What remains
-  // here is for apps whose assignments are AUTHORED — a handful of static
+  // THE ASSIGNMENT MAP — one entry per principal. An eager `Record` cannot be
+  // filled without enumerating everybody, so an app that declares `identity`
+  // answers this per principal, one row at a time, and never builds the map.
+  // This field is for apps whose assignments are AUTHORED — a handful of static
   // rungs in a demo — where a literal is the honest shape.
   assignments?: Record<string, readonly string[]>;
   // WHICH ROLE COMBINATIONS A PRINCIPAL MAY HOLD — declared, not counted.
   //
-  // The two coherence gates below (`verifyCharter`'s subtractive-assigned rule,
-  // `verifyVariants`' one-variant-per-action rule) never wanted principals; they
-  // wanted the distinct COMBINATIONS somebody could wear. Reading them off
-  // `assignments` is the only reason that map has to be eager — and enumerating
-  // the population to learn that `['instructor','member']` exists is a strange
-  // way to learn it.
+  // The two coherence gates (`verifyCharter`'s subtractive-assigned rule,
+  // `verifyVariants`' one-variant-per-action rule) need the distinct
+  // COMBINATIONS somebody could wear, not the principals. The charter cannot
+  // supply them: it defines roles, and which of them coincide on one person is a
+  // fact about the application's schema (staff row AND membership row), not
+  // about the grant graph.
   //
-  // The charter cannot supply this. It defines roles; it does not know which of
-  // them coincide on one person, because that is a fact about the application's
-  // schema (staff row AND membership row), not about the grant graph.
-  //
-  // Absent = derived from `assignments`, which is what every app did before this
-  // existed and is correct while the map is still eager.
+  // Absent = derived from `assignments`, which is correct while that map is eager.
   wearable?: readonly (readonly string[])[];
   actions: Record<string, ActionDefinition>;
   // layout variants by variant id — the `layouts` universe the charter
@@ -74,13 +66,11 @@ export type NiscApp = {
   // so the app supplies it. Values are injected server-side and are
   // unreferenceable by a request — the enforcement is engine-side and unforgeable.
   //
-  // VOLATILE VALUES ONLY, once `identity` below exists. A resolved identity is
-  // held for a session; anything derived from the CLOCK must not be, or a
-  // session opened before midnight serves yesterday's date to every query that
-  // compares a DATE column against it. So this seam survives beside `identity`
-  // and is asked per request — and it stays synchronous on purpose, because the
-  // values that belong here are COMPUTED rather than read. A sync signature is
-  // only a trap when the answer lives in rows.
+  // VOLATILE VALUES ONLY. A resolved identity is held for a session; anything
+  // derived from the CLOCK must not be, or a session opened before midnight
+  // serves yesterday's date to every query that compares a DATE column against
+  // it. So this seam is asked per request, and it stays synchronous on purpose:
+  // the values that belong here are COMPUTED rather than read.
   //
   // The resolved record is handed in so the computation has what it needs
   // without a lookup: the day is derived from the timezone the record already
@@ -90,12 +80,9 @@ export type NiscApp = {
   // per request — one async answer for roles, scope and the install list
   // (`installed`: which integrations are live for this principal's tenant).
   //
-  // The three seams around this one are synchronous, and that is not a detail:
-  // a hook that cannot await has exactly one implementation available to it
-  // when the answer lives in rows, and that implementation is a resident map of
-  // the whole population. Lyra grew eight of them across three files, and every
-  // one exists to satisfy a signature rather than a decision. This is the same
-  // question asked in a tense that permits the obvious answer — read the row.
+  // `assignments` and `scope` are synchronous: a hook that cannot await has one
+  // implementation when the answer lives in rows, a resident map of the whole
+  // population. This seam is async, so the answer is a row read.
   //
   // Moss OWNS the resulting cache: bounded, evicted, revalidated on
   // `sessionRevalidateMs`, and enumerable only by an operator (see identity/cache.ts,
@@ -105,7 +92,7 @@ export type NiscApp = {
   // pass-through. The moment moss reads `.studioId` off one of these, moss has
   // learned what a tenant is and the boundary is gone.
   //
-  // Absent = the three older seams answer, exactly as before.
+  // Absent = `assignments` answers roles and `scope` answers scope values.
   //
   // `resolve` is the pre-authorisation half: roles, the invalidation tag, and
   // whatever scope the app can only establish before a policy exists (an
@@ -137,11 +124,11 @@ export type NiscApp = {
   // delta encoder, the terminal — learns that a language exists.
   //
   // Returning undefined or an empty book is the SOURCE language, and costs
-  // nothing: the pass returns the same tree object and the frame serializes to
-  // the bytes it always did.
+  // nothing: the pass returns the same tree object and the frame serializes
+  // unchanged.
   //
   // Per PRINCIPAL, because a shell is per principal. Two people at the same
-  // tenant reading different languages get two shells, which they already had.
+  // tenant reading different languages get two shells.
   // Resolved once when the shell is built — a change to a principal's language
   // is a `reset`/rebuild, exactly like a change to their catalog.
   // Async and wire-bearing, for the same reason `seeds` and `inputs` are: a
@@ -204,7 +191,7 @@ export type NiscApp = {
   // to the session's durable shell (Ray lives here). Built once per
   // session — handlers close over the session context, so keys and code
   // never reach a browser. Side-effect-free computation deploys as server
-  // functions behind plain `url:` endpoints instead (/fns, later).
+  // functions behind plain `url:` endpoints instead.
   functions?: (session: FunctionSession) => Record<string, FunctionHandler>;
   // Called once per living shell, with the same session, for app code that is
   // NOT an endpoint: a per-session observer, a roster, an agent watching the
@@ -247,9 +234,9 @@ export type NiscApp = {
       tools: { deliver: (principal: string, channel: string, payload?: unknown) => boolean },
     ) => void;
   }[];
-  // (A write minted into tide as a fact is not a field here. It is a feature:
-  // `createTideFacts` from `@niscorp/moss/tide`, named in `features`. The
-  // rows of a write travel there and nowhere else.)
+  // A write minted into tide as a fact is a feature: `createTideFacts` from
+  // `@niscorp/moss/tide`, named in `features`. The rows of a write travel there
+  // and nowhere else.
 };
 
 // One turn of an exchange with a model, in order. Provider-blind and
@@ -319,11 +306,9 @@ export type RunRecord = {
 // A sink that wants a plain in-process array can ignore it.
 export type RunSink = (record: RunRecord, session: FunctionSession) => void;
 
-// IT SAYS WHO IS CALLING AND HOLDS NO KEY. It used to carry `runtime`, the
-// whole environment (the database pool, the operator key),
-// and `policy`, the very object the routes enforce for everybody holding
-// those roles. Code that runs for one person was handed what reaches every
-// person's rows. What an app read them for has a call of its own:
+// IT SAYS WHO IS CALLING AND HOLDS NO KEY: no database pool, no operator key,
+// and no policy object that reaches every person's rows. What an app needs
+// instead has a call of its own:
 //
 //   a read or a write as the caller      `wire` (the routes, enforced)
 //   a query written for an intent        `answerIntent` below
@@ -396,7 +381,7 @@ export type ShellManifest = {
   // THE INITIAL LAYOUT STORE — what a `{ ref: id }` in the frame resolves to
   // before anything calls `setLayout`. A dynamic region embeds `{ ref: 'dock' }`
   // in `layout` above and this seeds what it draws; `shell.setLayout('dock', …)`
-  // then swaps it and the change re-sends the frame. NOT `layouts` (below, on
+  // then swaps it and the change re-sends the frame. NOT `layouts` (above, on
   // NiscApp) — those are per-role variants of ACTION layouts; this seeds the
   // shell's layout STORE, mirroring nova's own `createShell({ layoutStore })`.
   layoutStore?: Record<string, LayoutNode>;
@@ -421,21 +406,18 @@ export type ShellManifest = {
   // server-side. Names listed here are registered even when no authored
   // layout mentions them (generated layouts may).
   components?: Record<string, { meta?: { description?: string; propsSchema?: unknown } }>;
+  // Per-principal boot DATA, merged over each canvas's static seed.
   //
-  // ASYNC AND WIRE-BEARING, matching `seeds`. These two are called twins a few
-  // lines apart, and one was handed the governed internal wire while the other
-  // was not. That asymmetry is the origin of every resident cache in this repo:
-  // a hook that cannot await, asked a question about rows, has exactly one
-  // implementation available to it, and that implementation is a map of
-  // everybody (docs/plans/lyra-identity.md, Part 1). A synchronous
-  // implementation still satisfies this — the widening is the point.
+  // ASYNC AND WIRE-BEARING, matching `seeds`: a hook that cannot await, asked a
+  // question about rows, has one implementation available to it, a map of
+  // everybody. A synchronous implementation still satisfies this.
   inputs?: (session: {
     principal: string | null;
     actions: readonly string[];
     roles: readonly string[];
     // The scope values the app's own `identity` seam returned — handed straight
     // back so a shell can be composed from the record the session already
-    // resolved, instead of reaching into a directory for the same four facts.
+    // resolved, instead of reaching into a directory for the same facts.
     identity: Record<string, unknown>;
     wire: FetchFn;
   }) => Record<string, Record<string, unknown>> | Promise<Record<string, Record<string, unknown>>>;

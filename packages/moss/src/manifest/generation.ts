@@ -5,9 +5,9 @@
 // integrations a tenant has installed, what rung somebody stands on, what a
 // studio's theme is. A write changes those rows and the writing process drops
 // its memos. Every OTHER process goes on serving the old answer until it is
-// restarted, which at two processes is a correctness bug rather than a scaling
-// concern: an integration installed via A leaves B refusing that integration's keyed calls,
-// and nothing says so.
+// told, which at two processes is a correctness bug rather than a scaling
+// concern: an integration installed via A leaves B refusing that integration's
+// keyed calls, and nothing says so.
 //
 // This is a counter and a clock, deliberately, and NOT `LISTEN/NOTIFY`:
 //
@@ -18,14 +18,10 @@
 //   - A dropped listener stops invalidating and says nothing. That is a SILENT
 //     correctness failure, which is the failure mode this whole design refuses
 //     ("breaks rather than degrades"). A counter that cannot be read raises.
-//   - It converges on where the plan is going instead of being thrown away by
-//     it: "a new generation is a new manifest, and other processes observe a
-//     pointer move" (moss DESIGN.md) IS this counter, and Move 4 replaces what
-//     the pointer points AT rather than the mechanism.
 //
-// The cost is that staleness is bounded by a poll rather than instant. It is
-// bounded by `sessionRevalidateMs`, a knob already being tuned for exactly this
-// class of question. Today it is bounded by nothing.
+// The cost is that staleness is bounded by a poll rather than instant: by
+// `sessionRevalidateMs`, or by DEFAULT_GENERATION_POLL_MS when the runtime sets
+// none.
 //
 // THIS FILE HOLDS THE CLOCK AND NO SQL. The counter is one row of a table the
 // data module owns, read and moved there, through vex (../data, pointer.ts).
@@ -55,7 +51,7 @@ export const DEFAULT_GENERATION_POLL_MS = 60 * 1000;
 
 // How often a move is tried again when the counter moved between reading it
 // and writing the next number. Each failure is another process's move landing
-// in that instant, so more than a few in a row is not contention any more.
+// in that instant, so more than a few in a row is not contention.
 const MOVE_ATTEMPTS = 5;
 
 export const createGeneration = (pointer: Pointer, ctx: { onMoved: () => void | Promise<void>; everyMs?: number }): Generation => {
@@ -76,10 +72,8 @@ export const createGeneration = (pointer: Pointer, ctx: { onMoved: () => void | 
       if (n === undefined || n === seen) return;
       // SEEN ONLY ONCE IT IS FOLLOWED. A move is news that the rows changed,
       // and it has been heard when what was derived from them has been read
-      // again. Counted as seen before that, a reload that threw was never
-      // tried again: the next look found nothing new, and this process went on
-      // serving what it had. So a move that could not be followed is left
-      // unseen, said to be what it is, and found again at the next look.
+      // again. A move that could not be followed is left unseen, said to be
+      // what it is, and found again at the next look.
       if (seen !== -1 && !(await followed(n))) return;
       seen = n;
     } finally {
@@ -109,10 +103,10 @@ export const createGeneration = (pointer: Pointer, ctx: { onMoved: () => void | 
   //
   // TRIED AT EVERY LOOK, SAID WHEN IT IS NEWS. A move that cannot be followed
   // (a set in the rows that this process refuses, a database out of reach) is
-  // tried again at each look for as long as that lasts, and a line for each
-  // try was one a poll with nothing new in it. So it is said when it first
-  // fails, again when what it says changes (the pointer moved on, or the
-  // reload fails another way), and once when it is followed at last.
+  // tried again at each look for as long as that lasts. It is said when it
+  // first fails, again when what it says changes (the pointer moved on, or the
+  // reload fails another way), and once when it is followed at last, so a poll
+  // with nothing new in it stays quiet.
   const followed = async (n: number): Promise<boolean> => {
     try {
       await ctx.onMoved();

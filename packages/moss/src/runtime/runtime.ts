@@ -32,8 +32,7 @@ export type NiscRuntime = {
   // know the tables that are theirs whatever it names (../data, own-entries.ts).
   vexConfig?: QueryEngineConfig['config'];
   // WHO A TOKEN IS. Required, deliberately — every other door in moss fails
-  // closed, and this is the one where forgetting a field used to open it for
-  // everyone. Three answers:
+  // closed, and a default here would open this one for everyone. Three answers:
   //   'sessions' — moss's own stored credential (../identity/sessions.ts): 256-bit token,
   //                hashed at rest, expiring, revoked by deleting its row.
   //   'dev-open' — the dev stub (../identity/dev-token.ts): every well-formed token is trusted and
@@ -55,7 +54,7 @@ export type NiscRuntime = {
   // the engine's: one transaction, one lock, one `migrations` posture — so
   // 'verify' covers them, and the step that migrates (`migrateTables`) checks
   // the app's entries against what THEY leave. Absent, the app migrates its own
-  // tables itself, as before.
+  // tables itself.
   tables?: readonly Sequence[];
   // How long a durable server shell may sit with no terminal attached before
   // it is disposed (default: 30 minutes; `0` disables the sweep). An
@@ -72,12 +71,10 @@ export type NiscRuntime = {
   // anybody's to fill. A connection over it is told so (`at_capacity`) and
   // closed with 4503, and its terminal tries again later like after any close.
   //
-  // The default comes from a measurement (../socket, anonymous-shell-limit.ts): a shell for
-  // nobody costs about 53 KB of heap in lyceum and 27 KB for an app of one
-  // screen, and the Node transport about 260 KB more for each connection while
-  // compression is on. A thousand of them fit a process given 512 MB. A
-  // deployment with a public screen and more visitors at once than that raises
-  // it, from those numbers and its own memory.
+  // The default is sized to what a shell for nobody and its connection hold
+  // (../socket, anonymous-shell-limit.ts has the numbers): a thousand of them
+  // fit a process given 512 MB. A deployment with a public screen and more
+  // visitors at once than that raises it, from those numbers and its own memory.
   //
   // IT IS ONE COUNT FOR EVERYBODY WITH NOBODY SIGNED IN, IN THIS PROCESS. It
   // bounds memory. It is not a limit for each visitor: one client that holds
@@ -121,12 +118,12 @@ export type NiscRuntime = {
   //
   // A shell re-sends a canvas whenever its tree changes, and most changes are
   // small against a large tree — a keystroke filtering a list rewrites a few
-  // hundred bytes of several thousand. Measured on Lyra: an in-place update
-  // falls to 1–4% of the frame, a navigation to about 80% before the
-  // transport's own compression. It costs one encode per changed canvas per
-  // flush and one previous frame held per canvas, which the host keeps anyway
-  // for its unchanged-frame check. The encode's cost follows the frame's size,
-  // so a canvas whose frame is over 64 KB is sent whole and never encoded.
+  // hundred bytes of several thousand. An in-place update falls to a small part
+  // of the frame, a navigation to most of it, before the transport's own
+  // compression. It costs one encode per changed canvas per flush and one
+  // previous frame held per canvas, which the host keeps anyway for its
+  // unchanged-frame check. The encode's cost follows the frame's size, so a
+  // canvas whose frame is over 64 KB is sent whole and never encoded.
   //
   // Off by default because it is a protocol change: a terminal that does not
   // advertise support keeps receiving whole frames, and a delta that fails its
@@ -135,11 +132,11 @@ export type NiscRuntime = {
   shellFrameDelta?: boolean;
   // WebSocket permessage-deflate (default: on).
   //
-  // Compresses every frame — roughly 3–4× on rendered trees, which are mostly
-  // repeated keys. The cost is memory, and it is not small: measured at ~260 KB
-  // of resident memory per connection at the `ws` defaults, against ~43 KB for
-  // the shell being served. That trade is right at hundreds of connections and
-  // wrong at a hundred thousand, which is why it is a knob and not a constant.
+  // Compresses every frame, and rendered trees are mostly repeated keys. The
+  // cost is memory, and it is not small: at the `ws` defaults a connection holds
+  // several times the memory of the shell being served. That trade is right at
+  // hundreds of connections and wrong at a hundred thousand, which is why it is
+  // a knob and not a constant.
   // `false` disables it; an object is passed through to `ws` for tuning.
   socketCompression?: boolean | Record<string, unknown>;
   // THE LARGEST MESSAGE A CONNECTION MAY SEND, in bytes, counted once inflated
@@ -172,7 +169,7 @@ export type NiscRuntime = {
   //
   // It can only HARDEN the prefix: moss's key check still runs on every path the
   // gate lets through, so a gate adds a second lock and never removes moss's.
-  // Absent, moss's key check is the only gate and the prefix behaves as it did.
+  // Absent, moss's key check is the only gate.
   operatorGate?: (c: Context, next: Next) => Response | void | Promise<Response | void>;
 
   // THE CLUSTER FABRIC — how an invalidation or a nudge reaches a SECOND moss

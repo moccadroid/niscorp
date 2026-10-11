@@ -14,8 +14,7 @@ import type { LayoutVariant, NiscApp } from './app';
 // The role combinations this application can produce — declared if the app says
 // so, derived from the assignment map if it does not. Deduplicated, because the
 // derived form yields one entry per PERSON and every consumer wants one entry
-// per COMBINATION: at Lyra's scale that is 600k entries collapsing to about a
-// dozen, and it is the same dozen either way.
+// per COMBINATION.
 export const wearableOf = (app: Pick<NiscApp, 'wearable' | 'assignments'>): readonly (readonly string[])[] => {
   const declared = app.wearable;
   const source = declared ?? Object.values(app.assignments ?? {});
@@ -38,10 +37,9 @@ export type InstalledOnly = (ids: readonly string[], installed: ReadonlySet<stri
 
 // A FILTER NARROWS, AND IS HELD TO IT: what it answers, of the ids it was
 // handed, in the order they were handed. An id it names that it was not
-// handed is not in the answer. What a filter answered used to BE the catalog,
-// so one that named an id nobody had granted gave that action to whoever
-// asked, with the definition a shell is built from; and a feature anybody
-// writes adds a filter. Only the charter grants.
+// handed is not in the answer, so a filter cannot give an action nobody
+// granted to whoever asks. A feature anybody writes adds a filter; only the
+// charter grants.
 export const narrowedBy = (filter: InstalledOnly, ids: readonly string[], installed: ReadonlySet<string> | undefined): readonly string[] => {
   const answered = new Set(filter(ids, installed));
   return ids.filter((id) => answered.has(id));
@@ -51,8 +49,7 @@ export const narrowedBy = (filter: InstalledOnly, ids: readonly string[], instal
 // the version token (equal hash, equal application; pushed over the
 // socket as the catalog-change signal).
 // GIVEN ROLES rather than a principal — for callers that have already resolved
-// who somebody is. The principal was only ever a way to reach `roles` (and,
-// for the catalog, the tenant's install list).
+// who somebody is.
 export const catalogFor = (
   app: Pick<NiscApp, 'charter' | 'actions'>,
   roles: readonly string[],
@@ -78,7 +75,7 @@ export const variantLayouts = (variants: Readonly<Record<string, LayoutVariant>>
 // The layout bindings of a set of roles — action id → the granted variant's
 // layout (ring 2). Grants come from the charter's `layouts` section over
 // the variant-id universe. Two granted variants of one action is
-// incoherence the boot check refused (./verify.ts), so resolution never picks.
+// incoherence the boot check refuses (./verify.ts), so resolution never picks.
 export const resolveVariantsForRoles = (app: Pick<NiscApp, 'charter' | 'layouts'>, roles: readonly string[]): ReadonlyMap<string, LayoutNode> => {
   const variants = app.layouts ?? {};
   return variantLayouts(variants, resolvePrincipal(app.charter, Object.keys(variants), roles, 'layouts'));
@@ -115,9 +112,9 @@ export const definitionsFor = (
 //
 // Every answer is a function of the manifest and of (roles + install list),
 // and of nothing about the person asking. So they are kept by that key — one
-// entry per combination, about ten in a real deployment, where a key per
-// principal was one per person — until the manifest changes. Whoever changes
-// the manifest drops them (./running.ts); nobody else has to remember to.
+// entry per combination, not one per person — until the manifest changes.
+// Whoever changes the manifest drops them (./running.ts); nobody else has to
+// remember to.
 export type RoleMemo = {
   catalogFor: (roles: readonly string[], installed: readonly string[] | undefined) => Catalog;
   variantsFor: (roles: readonly string[]) => ReadonlyMap<string, LayoutNode>;

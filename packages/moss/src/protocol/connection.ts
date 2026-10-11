@@ -4,16 +4,16 @@
 
 // The wire protocol this server speaks, and the oldest a terminal may speak to
 // it. A terminal says which it speaks on the upgrade (`?protocol=N` — known
-// before the first frame is sent); one that says nothing speaks 1, which is
-// every terminal built before the question existed. Outside the range the
-// connection is refused with a sentence and CLOSE_PROTOCOL_MISMATCH, never
-// served frames it would misread. Bump PROTOCOL when a message changes shape;
-// raise PROTOCOL_MIN only when the server stops speaking an old one.
+// before the first frame is sent); one that says nothing speaks 1. Outside the
+// range the connection is refused with a sentence and CLOSE_PROTOCOL_MISMATCH,
+// never served frames it would misread. Bump PROTOCOL when a message changes
+// shape; raise PROTOCOL_MIN only when the server stops speaking an old one.
 //
-// 2: the token left the address. A terminal at 1 put it in `?token=`, and an
-// address is what every proxy on the way writes into its log. A server that
-// went on reading it there would keep that open for as long as anything used
-// it, so 1 is no longer spoken: a terminal built before is told to reload.
+// The token never rides the address, because an address is what every proxy on
+// the way writes into its log. A terminal at 1 put it in `?token=`; a server
+// that still read it there would keep that open for as long as anything used
+// it, so 1 is not spoken (PROTOCOL_MIN is 2) and a terminal built before is
+// told to reload.
 export const PROTOCOL = 2;
 export const PROTOCOL_MIN = 2;
 

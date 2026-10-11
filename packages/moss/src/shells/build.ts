@@ -105,11 +105,8 @@ export const buildShell = async (
   const made = await config.composition(principal);
   const ids = Object.keys(made.actions);
   const granted = new Set(ids);
-  // ASYNC AND WIRE-BEARING, matching `seeds`. This file's own manifest called
-  // the two twins while handing one the governed wire and not the other, and
-  // that asymmetry is the whole origin of the resident directory: a hook that
-  // cannot await, asked a question about rows, has exactly one implementation
-  // available to it.
+  // ASYNC AND WIRE-BEARING, matching `seeds`: a hook that can await the
+  // governed wire can ask a question about rows.
   const inputs = (await hooks.inputs?.({ principal, actions: ids, roles: made.roles, identity: made.scope, wire: config.wire(token) })) ?? {};
   const canvases = mountedCanvases(made.canvases, granted, inputs, given);
 
@@ -126,7 +123,7 @@ export const buildShell = async (
   const session = functionSessionFor(host, { principal, roles: made.roles, scope: made.scope, actions: ids }, wire, shellRef);
 
   // THE WORDS THIS SHELL WEARS, resolved before it exists — because they are
-  // a property of the shell now, not of the frames it emits. Nova's renderer
+  // a property of the shell, not of the frames it emits. Nova's renderer
   // applies them where a RenderNode is minted, so moss hands the book over
   // once and never touches a tree again.
   //
@@ -141,10 +138,8 @@ export const buildShell = async (
   // `session.shell` — and the cheapest deferral, a microtask, has to be
   // enough: it is the only one that lands before the shell's mount calls
   // answer, so it is the only one an observer (`shell.onEndpoint`) can use
-  // without missing them. The phrases used to be awaited right here, after
-  // `onSession`; a microtask landed inside that await, the getter threw, and
-  // an observer written to the documented contract watched nothing. Every
-  // await of this build belongs above this line or below the shell.
+  // without missing them. Every await of this build belongs above this line
+  // or below the shell.
   //
   // Endpoints first, then the non-endpoints. Both get the same session; only
   // the first produces handlers. Wrapped for telemetry when a sink is present
@@ -181,7 +176,7 @@ export const buildShell = async (
     // already per-principal.
     actions: { ...made.actions },
     ...(made.fragments !== undefined ? { fragments: { ...made.fragments } } : {}),
-    // The same seam the client shell used: prism evaluates endpoint
+    // The same seam the client shell has: prism evaluates endpoint
     // request/response transforms; `$.userId` and `$.today` are ambient,
     // never authorable by a request. The config is the action's own object
     // on every call, so evaluate checks it once (the source is new each time).
@@ -224,9 +219,8 @@ export const buildShell = async (
   seedCanvases(live, hooks.seeds?.({ principal, actions: ids, roles: made.roles, wire }), granted);
   follow(live, delta);
 
-  // Built — the per-principal derivation, inputs, phrases and shell all stood
-  // up. `reset` distinguishes a recovery rebuild from a first build; residency
-  // and eviction counts come from the identity/shell meters, not from here.
+  // `reset` distinguishes a recovery rebuild from a first build; residency and
+  // eviction counts come from the identity/shell meters, not from here.
   if (emit !== undefined && buildClock !== undefined) {
     emit({ name: 'shell.build', startUnixNano: buildClock.startUnixNano, endUnixNano: buildClock.endUnixNano(), status: 'ok', attributes: { reset, hasPrincipal: principal !== null } });
   }

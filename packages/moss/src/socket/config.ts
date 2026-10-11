@@ -28,7 +28,7 @@ export type SocketConfig = {
   // WHICH HOST A PATH LEADS TO. A terminal on a page names the path it is on
   // (`?path=`); this answers with that page's host and the input its path
   // carries, or undefined for a path that is the app's. Absent: every
-  // connection is the app's, as before pages existed.
+  // connection is the app's.
   page?: (path: string) => { host: SessionSource; inputs: Record<string, Record<string, unknown>> } | undefined;
   // How many shells for nobody signed in may be alive at once (./anonymous-shell-limit.ts).
   // Default `DEFAULT_ANONYMOUS_SHELL_MAX`; `Infinity` is no limit.

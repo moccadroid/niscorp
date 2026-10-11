@@ -8,7 +8,7 @@
 // layout variants, the shell and the pages, and the seams an app fills in. It
 // is read by a schema when it is handed over (./handover.ts, ./schema.ts), and
 // a manifest that does not parse refuses the boot. Then it is frozen: it is
-// not the app's to edit any more.
+// not the app's to edit.
 //
 // WHAT IT CONSISTS OF RIGHT NOW has one owner (./running.ts): what was shipped
 // and the sets of actions that arrive while it runs, changed in one place and
@@ -18,7 +18,7 @@
 // (./artifacts.ts): the actions they hold, the shell's frame and layout store,
 // its fragments, and the entries. An action, a layout, a fragment and an entry
 // reach a shell through that answer and through nothing else, so for those it
-// is where whatever decides what an id resolves to will be asked.
+// is where whatever decides what an id resolves to is asked.
 //
 // EVERY COMPONENT NAME A SHELL'S TREES MAY MENTION is read off the same
 // artifacts (./components.ts), each with the contract declared for it.

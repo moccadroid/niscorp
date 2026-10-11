@@ -43,9 +43,9 @@ export const sessionOn = (host: HostState, cell: Cell, ephemeral: boolean, rebui
   //
   // The CANVAS is a claim off the wire too. One the shell does not have is
   // nowhere an event can have come from: a terminal tags an event with the
-  // canvas it drew it in. It is dropped. Dispatched, it had no canvas to be
-  // held to and no instance to be stamped with, so it went to every instance
-  // of the shell at once.
+  // canvas it drew it in. It is dropped: dispatched, it would have no canvas
+  // to be held to and no instance to be stamped with, and would go to every
+  // instance of the shell at once.
   dispatch: (canvas, event) => {
     const { shell } = cell.live;
     const state = shell.getState().canvases[canvas];

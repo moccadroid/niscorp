@@ -12,11 +12,9 @@ import type { HostState, Live } from './host-state';
 // (grant, revoke, answerIntent, recordRun).
 
 // Each in-process function wrapped to emit one `fn.call` span — the fn name,
-// principal presence, duration, and whether it threw. The in-process dispatch
-// is where server functions run today (`/fns`, the URL layer, is still
-// unbuilt); a service written against either is observed the same way. Built
-// only when a sink is present (the caller guards), so an unobserved session
-// pays nothing per call. The span names the function, never its data.
+// principal presence, duration, and whether it threw. Built only when a sink
+// is present (the caller guards), so an unobserved session pays nothing per
+// call. The span names the function, never its data.
 export const instrumentFunctions = (
   fns: Record<string, FunctionHandler>,
   emit: Emit,

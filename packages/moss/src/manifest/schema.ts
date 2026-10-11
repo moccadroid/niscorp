@@ -10,12 +10,11 @@ import type { NiscApp } from './app';
 //
 // `NiscApp` is a type, and a type is a promise the compiler checks only where
 // the manifest is written. What reaches `createServer` may have come out of
-// `JSON.parse`, through a cast, or from a file with no types at all — and it
-// was used as it stood: a definition nova refuses was found when a shell that
-// holds it was built, for whoever connected first, and a seam that was not a
-// function when it was first called. So the manifest is read by a schema once,
-// before anything is derived from it, and a boot that cannot read it refuses
-// with every place that does not fit.
+// `JSON.parse`, through a cast, or from a file with no types at all. So the
+// manifest is read by a schema once, before anything is derived from it (a
+// definition nova refuses would otherwise be found when a shell that holds it
+// is built, for whoever connected first), and a boot that cannot read it
+// refuses with every place that does not fit.
 //
 // Each grammar is read by the schema of the package that owns it: an action, a
 // fragment and a layout by nova's, a query and a mutation by vex's, a mapping
@@ -142,7 +141,7 @@ export const ManifestSchema = z.object(fields).strict();
 type Issue = z.core.$ZodIssue;
 type Place = { path: readonly PropertyKey[]; message: string };
 
-// WHICH OF A UNION'S REASONS TO SAY. A layout node is one of seven things and
+// WHICH OF A UNION'S REASONS TO SAY. A layout node is one of several things and
 // an entry one of two, so what does not fit comes back as one issue where the
 // union stands, carrying every branch's reasons. The branch somebody meant is
 // the one that got furthest into the value before it failed; on a tie, the
