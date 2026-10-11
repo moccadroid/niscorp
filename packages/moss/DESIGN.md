@@ -280,8 +280,10 @@ and tide's.
 What holds the rules is a build that fails, not this page: `pnpm
 check:modules` (the table above, the doors, nothing flat, no feature in the
 core, and no way round them by a type-only import, the package's own name or a
-file of another extension), `pnpm check:api` (an exported name, and each
-member of an exported type, is a line in `api.txt`), `pnpm check:raw-sql` (a
+file of another extension, and a door exports no name that no other module
+takes), `pnpm check:api` (an exported name, each member of an exported type,
+and each member of a type that something exported takes or answers, is a line
+in `api.txt`), `pnpm check:raw-sql` (a
 statement outside vex is counted, with its reason, whatever sends it and
 however it is cased) and `pnpm lint` (no type assertion, no `any` that becomes
 a typed value, no written type predicate, the two sizes and the width).

@@ -13,8 +13,11 @@
 //
 // WHAT A LINE IS.
 //
-//   `<entry> <name>`           a name the entry point exports
-//   `<entry> <name>.<member>`  a member of it, one level down
+//   `<entry> <name>`             a name the entry point exports
+//   `<entry> <name>.<member>`    a member of it, one level down
+//   `<entry> (<type>).<member>`  a member of a type no entry exports by name,
+//                                which something this entry exports takes or
+//                                answers
 //
 // Members are recorded because `MossServer` is one name and twenty things an
 // app calls: adding the twenty-first is as much a decision as adding a name. A
@@ -24,6 +27,20 @@
 // recorded: what a type takes from another package or from the language
 // (`Hono`'s methods on `MossServer`, an array's `length`) is that one's
 // decision.
+//
+// THE THIRD FORM is for a type that is part of the API without being a name
+// of it. `ShellHost.session` answers a `ShellSession`, `MossServer.socket` is
+// a `SocketAccept`, `migrateTables` answers a `TablesReport`: an app calls
+// their members, no entry exports the three names, and a member added to one
+// moved no line. So for each exported name the check follows its signature:
+// what a function takes and answers, the type of each member this package
+// declares, through a union, a promise, a list or any other generic, and
+// through an object written in place. Each type it meets that this package
+// declares under a name, and that no entry of the package exports by that
+// name, has its members recorded in brackets under that name, for each entry
+// that reaches it. A type some entry does export has its lines there, once.
+// Two types of one name reached from one entry are told apart by the file
+// that declares each (`(Name@dir/file.ts)`).
 //
 // IT ASKS THE COMPILER, and does not read the entry file's syntax. The first
 // version read the statements of the entry file, so `export const { a } = x`
@@ -52,9 +69,14 @@
 //     parameter, a member that stops being optional: the name is the same and
 //     no line moves.
 //   - More than one level. `NiscRuntime.limits` is a line; what `limits`
-//     holds is not.
-//   - What an exported function takes or answers, when that type is not
-//     itself exported.
+//     holds is not. The same holds of a type in brackets: its members are
+//     lines, and a type one of THEM takes or answers is not followed
+//     (`ShellSession.attach` takes a `ShellConnection`, which has no lines).
+//   - A type with no name of its own that is not written out in this
+//     package: `Pick<Data, 'a'>`, `Omit<…>`, what a schema of another package
+//     infers. Its members are computed, and there is no name to record them
+//     under.
+//   - What a type parameter is held to (`<E extends Env>`).
 //   - A class's static members, and types added to somebody else's module
 //     (`declare module`, `declare global`).
 //   - Whether a name is a type or a value.
@@ -108,6 +130,10 @@ const ENTRIES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
 // TypeScript's own file names: forward slashes, whatever the machine.
 const slashed = (path: string): string => path.split('\\').join('/');
 
+// `Promise<T>`, `Map<K, V>`, `T[]`: a generic with what it was given.
+const isReference = (type: ts.Type): type is ts.TypeReference =>
+  (type.flags & ts.TypeFlags.Object) !== 0 && 'target' in type && 'objectFlags' in type && typeof type.objectFlags === 'number' && (type.objectFlags & ts.ObjectFlags.Reference) !== 0;
+
 type Described = {
   // `<entry> <name>` and `<entry> <name>.<member>`, sorted
   lines: string[];
@@ -142,14 +168,91 @@ const describe = (program: ts.Program, root: string, entries: Readonly<Record<st
     return [...new Set([...asType, ...asValue])];
   };
 
+  // ── the types an exported signature refers to ──
+  //
+  // `ShellHost.session` answers a `ShellSession`, and no entry exports that
+  // name: its members were lines of nothing, so one more was seen by nobody.
+
+  // The type's own name, when this package declares it as a type alias, an
+  // interface or a class.
+  const namedHere = (type: ts.Type): ts.Symbol | undefined => {
+    const symbol = type.aliasSymbol ?? type.getSymbol();
+    const declared = (symbol?.getDeclarations() ?? []).some(
+      (declaration) => (ts.isTypeAliasDeclaration(declaration) || ts.isInterfaceDeclaration(declaration) || ts.isClassDeclaration(declaration)) && ours(declaration.getSourceFile()),
+    );
+    return declared ? symbol : undefined;
+  };
+  // An object written in place in this package: `{ host: ShellHost }` as a
+  // type, or as a value. It has no name, so what it holds is looked through.
+  const writtenInPlace = (type: ts.Type): boolean => {
+    const symbol = type.getSymbol();
+    return (
+      type.aliasSymbol === undefined &&
+      symbol !== undefined &&
+      (symbol.flags & (ts.SymbolFlags.TypeLiteral | ts.SymbolFlags.ObjectLiteral)) !== 0 &&
+      (symbol.getDeclarations() ?? []).some((declaration) => ours(declaration.getSourceFile()))
+    );
+  };
+  // Every named type of this package that `type` refers to: itself, or
+  // through a union, a promise, a list or any other generic, a function's
+  // parameters and what it answers, or an object written in place. A named
+  // type is not looked inside: that would be a second level.
+  const refer = (type: ts.Type, found: Map<ts.Symbol, ts.Type>, seen: Set<ts.Type>): void => {
+    if (seen.has(type)) return;
+    seen.add(type);
+    // Named first: `A & { more }` under a name of its own is that name's, and
+    // a union under a name has no members and is looked through.
+    const named = namedHere(type);
+    if (named !== undefined && membersOfType(type).length > 0) {
+      found.set(named, type);
+      return;
+    }
+    if (type.isUnionOrIntersection()) {
+      for (const part of type.types) refer(part, found, seen);
+      return;
+    }
+    for (const argument of type.aliasTypeArguments ?? []) refer(argument, found, seen);
+    if (isReference(type)) for (const argument of checker.getTypeArguments(type)) refer(argument, found, seen);
+    for (const signature of type.getCallSignatures()) {
+      for (const parameter of signature.getParameters()) refer(checker.getTypeOfSymbol(parameter), found, seen);
+      refer(signature.getReturnType(), found, seen);
+    }
+    if (writtenInPlace(type)) for (const property of checker.getPropertiesOfType(type)) refer(checker.getTypeOfSymbol(property), found, seen);
+  };
+  // What an exported name's own signature refers to: for a type, through each
+  // member this package declares and through what it takes and answers when
+  // it is a function; for a value, through its type.
+  const referredBy = (symbol: ts.Symbol, found: Map<ts.Symbol, ts.Type>, seen: Set<ts.Type>): void => {
+    const inside = (type: ts.Type): void => {
+      if (type.isUnion()) for (const part of type.types) inside(part);
+      for (const member of checker.getPropertiesOfType(type).filter(declaredHere)) refer(checker.getTypeOfSymbol(member), found, seen);
+      for (const signature of type.getCallSignatures()) {
+        for (const parameter of signature.getParameters()) refer(checker.getTypeOfSymbol(parameter), found, seen);
+        refer(signature.getReturnType(), found, seen);
+      }
+    };
+    if ((symbol.flags & (ts.SymbolFlags.TypeAlias | ts.SymbolFlags.Interface | ts.SymbolFlags.Class)) !== 0) inside(checker.getDeclaredTypeOfSymbol(symbol));
+    if ((symbol.flags & (ts.SymbolFlags.Variable | ts.SymbolFlags.Function)) !== 0) inside(checker.getTypeOfSymbol(symbol));
+  };
+  // Where a type is declared, for the one case its name is not enough: two
+  // types of one name reached from one entry.
+  const declaredIn = (symbol: ts.Symbol): string => slashed(symbol.getDeclarations()?.[0]?.getSourceFile().fileName ?? '').slice(src.length);
+
   const lines: string[] = [];
   const refused: string[] = [];
+  // What some entry of the package exports by name, and for each entry what
+  // its exports refer to.
+  const exportedByName = new Set<ts.Symbol>();
+  const referredFrom = new Map<string, Map<ts.Symbol, ts.Type>>();
   for (const [entry, file] of Object.entries(entries)) {
     const source = program.getSourceFile(join(root, file));
     if (source === undefined) {
       refused.push(`${entry}: ${file} is not there`);
       continue;
     }
+    const referred = new Map<ts.Symbol, ts.Type>();
+    const seen = new Set<ts.Type>();
+    referredFrom.set(entry, referred);
     for (const statement of source.statements) {
       if (ts.isExportDeclaration(statement) && statement.exportClause === undefined) refused.push(`${entry}: \`export *\` in ${file}`);
       if (ts.isExportAssignment(statement)) refused.push(`${entry}: ${statement.isExportEquals === true ? '`export =`' : 'a default export'} in ${file}`);
@@ -163,7 +266,22 @@ const describe = (program: ts.Program, root: string, entries: Readonly<Record<st
       else if (checker.isUnknownSymbol(target)) refused.push(`${entry}: ${name} resolves to nothing`);
       else if ((target.flags & ts.SymbolFlags.Module) !== 0) refused.push(`${entry}: ${name} is a namespace`);
       else if ((target.flags & ts.SymbolFlags.Enum) !== 0) refused.push(`${entry}: ${name} is an enum`);
-      else lines.push(`${entry} ${name}`, ...membersOf(target).map((member) => `${entry} ${name}.${member}`));
+      else {
+        lines.push(`${entry} ${name}`, ...membersOf(target).map((member) => `${entry} ${name}.${member}`));
+        exportedByName.add(target);
+        referredBy(target, referred, seen);
+      }
+    }
+  }
+  // A type that an entry of the package exports by name has its lines already,
+  // under that entry. Any other is recorded in brackets under its own name,
+  // for each entry that reaches it: `. (ShellSession).attach`.
+  for (const [entry, referred] of referredFrom) {
+    const unexported = [...referred].filter(([symbol]) => !exportedByName.has(symbol));
+    for (const [symbol, type] of unexported) {
+      const twin = unexported.some(([other]) => other !== symbol && other.getName() === symbol.getName());
+      const name = twin ? `${symbol.getName()}@${declaredIn(symbol)}` : symbol.getName();
+      lines.push(...membersOfType(type).map((member) => `${entry} (${name}).${member}`));
     }
   }
 
@@ -184,11 +302,15 @@ type Held = { label: string; passed: boolean; detail: string };
 
 const few = (found: readonly string[]): string => `${found.slice(0, 8).join(', ')}${found.length > 8 ? `, and ${found.length - 8} more` : ''}`;
 const isMember = (line: string): boolean => (line.split(' ')[1] ?? '').includes('.');
+// `<entry> (<type>).<member>`: a member of a type no entry exports by name.
+const isReached = (line: string): boolean => (line.split(' ')[1] ?? '').startsWith('(');
 
 const judge = (described: Described, recorded: readonly string[]): Held[] => {
   const added = described.lines.filter((line) => !recorded.includes(line));
   const removed = recorded.filter((line) => !described.lines.includes(line));
-  const members = described.lines.filter(isMember).length;
+  const reached = described.lines.filter(isReached);
+  const members = described.lines.filter(isMember).length - reached.length;
+  const reachedTypes = new Set(reached.map((line) => line.slice(0, line.indexOf(').')))).size;
   return [
     {
       label: 'every import its entries reach resolves',
@@ -203,7 +325,10 @@ const judge = (described: Described, recorded: readonly string[]): Held[] => {
     {
       label: 'every exported name, and every member of one, is in api.txt',
       passed: added.length === 0,
-      detail: added.length === 0 ? `${described.lines.length - members} names, ${members} members` : `${few(added)} — a new export is a decision: add it to api.txt in this change, or do not export it`,
+      detail:
+        added.length === 0
+          ? `${described.lines.length - members - reached.length} names, ${members} members, and ${reached.length} members of ${reachedTypes} types reached and not exported by name (a type counted for each entry that reaches it)`
+          : `${few(added)} — a new export is a decision: add it to api.txt in this change, or do not export it`,
     },
     { label: 'api.txt names only what is exported', passed: removed.length === 0, detail: removed.length === 0 ? '' : `${few(removed)} — take ${removed.length === 1 ? 'it' : 'them'} out of api.txt in this change` },
   ];
@@ -230,12 +355,25 @@ export interface Seams { mount: () => void }
 export const made = { one: 1, two: 2 };
 export const plain = 1;
 `;
+const REACHED = `
+export type Report = { ok: boolean };
+export type Wide = Report & { more: number };
+export type Host = { list: () => Promise<Report[]> };
+export type Pages = { page: (path: string) => { found: Report } | undefined };
+export const make = (): Report => ({ ok: true });
+export const widen = (wide: Wide): number => wide.more;
+`;
 const SHARED: Readonly<Record<string, string>> = {
   'inner.ts': INNER,
   'grown.ts': INNER.replace('port: number', 'port: number; added: () => void').replace('mount: () => void', 'mount: () => void; added: () => void').replace('two: 2', 'two: 2, added: 3'),
   'door.ts': "export type { Server, Seams } from './inner';\nexport { made } from './inner';\n",
   'grown-door.ts': "export type { Server, Seams } from './grown';\nexport { made } from './grown';\n",
   'all-door.ts': "export * as everything from './inner';\n",
+  // `Report` is exported by no entry. `make` answers one; `Host` answers a
+  // promise of a list of them; `Pages` holds one inside an object written in
+  // place; and `Wide` is an intersection under a name of its own.
+  'reached.ts': REACHED,
+  'reached-grown.ts': REACHED.replace('ok: boolean', 'ok: boolean; added: string'),
 };
 
 type Case = { what: string; bad: string; good: string; recorded?: readonly string[] };
@@ -282,6 +420,36 @@ const CASES: readonly Case[] = [
     bad: "export type Kept = Map<string, number> & { ours: true; added: true };\nexport type Many = string[];\nexport const LIST = ['a', 'b'] as const;\n",
     good: "export type Kept = Map<string, number> & { ours: true };\nexport type Many = string[];\nexport const LIST = ['a', 'b'] as const;\n",
     recorded: ['x Kept', 'x Kept.ours', 'x LIST', 'x Many'],
+  },
+  {
+    what: 'a member added to a type an exported function answers, which no entry exports by name',
+    bad: "export { make } from './reached-grown';\n",
+    good: "export { make } from './reached';\n",
+    recorded: ['x make', 'x (Report).ok'],
+  },
+  {
+    what: 'a member added to a type an exported member answers a promise of a list of',
+    bad: "export type { Host } from './reached-grown';\n",
+    good: "export type { Host } from './reached';\n",
+    recorded: ['x Host', 'x Host.list', 'x (Report).ok'],
+  },
+  {
+    what: 'a member added to a type held by an object written in place',
+    bad: "export type { Pages } from './reached-grown';\n",
+    good: "export type { Pages } from './reached';\n",
+    recorded: ['x Pages', 'x Pages.page', 'x (Report).ok'],
+  },
+  {
+    what: 'a member added to an intersection, under its own name, that an exported function takes',
+    bad: "export { widen } from './reached-grown';\n",
+    good: "export { widen } from './reached';\n",
+    recorded: ['x widen', 'x (Wide).more', 'x (Wide).ok'],
+  },
+  {
+    what: 'a type recorded as an exported name, which the entry reaches and does not export',
+    bad: "export { make } from './reached';\n",
+    good: "export { make } from './reached';\nexport type { Report } from './reached';\n",
+    recorded: ['x make', 'x Report', 'x Report.ok'],
   },
 ];
 
