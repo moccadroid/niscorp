@@ -69,15 +69,17 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
   const hosts = standHosts({ app, runtime, identity, running, data, wire: wireOver(server), wrapWire: wrappedBy(registered), revokeSessions });
 
   // 8. What crosses processes (./signals.ts).
-  const signals = standSignals({ fabric: runtime.fabric, identity, shells: hosts.shells });
+  const signals = standSignals({ fabric: runtime.fabric, identity, reset: hosts.reset, shells: hosts.shells });
 
   // 9. WHEN WHAT THE APP CONSISTS OF CHANGES — a set of actions replaced, a
   // `refresh`, a move another process made — what this server derived from the
   // old manifest goes with it, and each living shell is brought level with
   // what its principal holds now, in place: no rebuild, no lost canvas state,
   // new actions become pushable, and one that left or is no longer granted is
-  // unmounted. The manifest has already dropped what each set of roles holds.
-  // A change that was refused never gets here.
+  // unmounted. EVERY living shell: the ones the app's host keeps, the ones it
+  // built for nobody signed in, and the ones each page's host built
+  // (./hosts.ts, `adopt`). The manifest has already dropped what each set of
+  // roles holds. A change that was refused never gets here.
   running.onChange(() => {
     // IDENTITY GOES WITH THEM. A change means something the resolutions were
     // derived FROM changed — an approval, a role, an artifact. Dropping the
@@ -86,7 +88,7 @@ export const createServer = async (app: NiscApp, runtime: NiscRuntime): Promise<
     // instructor would hold their old rung until the record expired on its own
     // clock.
     identity.invalidateAll();
-    hosts.shells?.adopt();
+    hosts.adopt();
   });
 
   // 10. THE FEATURES, started once the core stands and before anything is

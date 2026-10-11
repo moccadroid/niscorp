@@ -6,6 +6,7 @@ import { createRunningManifest } from '../src/manifest';
 import type { NiscApp, ShellManifest } from '../src/manifest';
 import { standHosts } from '../src/server/hosts';
 import type { HostParts } from '../src/server/hosts';
+import { standSignals } from '../src/server/signals';
 
 // THE SHELL HOSTS AS THE SERVER STANDS THEM UP (../src/server/hosts.ts), with
 // no server and no database: the wiring is handed an app, a running manifest
@@ -124,7 +125,7 @@ describe('the shell hosts — what a shell is made of is asked of the running ma
     }
   });
 
-  it('a page is asked for by its own shell manifest', async () => {
+  it('a page’s host is asked for by the page’s own shell manifest', async () => {
     const asked: ShellManifest[] = [];
     const hosts = standHosts(
       partsWith({
@@ -138,6 +139,61 @@ describe('the shell hosts — what a shell is made of is asked of the running ma
       const snapshot = await hosts.pageAt('/docs')?.host.snapshot(null, null);
       expect(JSON.stringify(snapshot?.frame)).toContain('the page, as published');
       expect(asked).toEqual([docs]);
+    } finally {
+      hosts.stop();
+    }
+  });
+});
+
+// EVERY HOST IS ASKED. When what the app consists of changed, the server had
+// its own host adopt and no page's: a page somebody had open kept the actions
+// it was built with. And a principal's reset (`invalidateIdentity`) reached
+// the shell the app's host keeps for them, and no shell a page had built for
+// them.
+describe('the shell hosts — a change reaches the living shells of every host', () => {
+  const settle = async (): Promise<void> => {
+    for (let i = 0; i < 6; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+  const notes: ActionDefinition = { id: 'ext.notes', data: {}, layout: { component: 'Text', children: 'notes' } };
+  const granting: NiscApp = { ...app, charter: { public: ['words', 'ext.*'] } };
+  const top = (session: { shell: { getCanvasState: (canvas: string) => { stack: { definitionId: string }[] } } } | undefined): string | undefined =>
+    session?.shell.getCanvasState('main').stack.at(-1)?.definitionId;
+
+  it('when what the app consists of changes, the shells of the app’s host and of each page’s adopt', async () => {
+    const running = createRunningManifest({ shipped: granting, grants: scopeGrants(['words']) });
+    const hosts = standHosts({ ...partsWith(running), app: granting });
+    try {
+      const mine = await hosts.shells?.session('t', 'usr_1');
+      const onPage = await hosts.pageAt('/docs')?.host.session(null, null);
+      expect(() => mine?.shell.push('main', 'ext.notes')).toThrow();
+      expect(() => onPage?.shell.push('main', 'ext.notes')).toThrow();
+
+      running.replace('bundles', { 'ext.notes': notes });
+      hosts.adopt();
+      await settle();
+
+      mine?.shell.push('main', 'ext.notes');
+      onPage?.shell.push('main', 'ext.notes');
+      expect([top(mine), top(onPage)]).toEqual(['ext.notes', 'ext.notes']);
+    } finally {
+      hosts.stop();
+    }
+  });
+
+  it('a principal’s reset reaches their shell in the app’s host and the ones a page built for them, and nobody else’s', async () => {
+    const hosts = standHosts(partsWith(shipped));
+    try {
+      const signals = standSignals({ fabric: undefined, identity: { invalidate: () => true, invalidateTag: () => [] }, reset: hosts.reset, shells: hosts.shells });
+      const page = hosts.pageAt('/docs')?.host;
+      const sessions = [await hosts.shells?.session('t', 'usr_1'), await page?.session('t', 'usr_1'), await page?.session('t', 'usr_2')];
+      const before = sessions.map((session) => session?.shell);
+
+      expect(signals.invalidateIdentity('usr_1')).toBe(true);
+      await settle();
+
+      expect(sessions.map((session, index) => session?.shell === before[index])).toEqual([false, false, true]);
+      // Somebody who holds no shell anywhere is answered for, and nothing is built.
+      expect(hosts.reset('usr_nobody')).toBe(false);
     } finally {
       hosts.stop();
     }

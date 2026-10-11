@@ -41,6 +41,14 @@ export type Hosts = {
   // The page a path leads to, and every page by name (`MossServer`).
   pageAt: MossServer['page'];
   pages: MossServer['pages'];
+  // WHAT THE APP CONSISTS OF CHANGED: every host has its living shells adopt,
+  // the app's own and each page's (../shells, `ShellHost.adopt`). A page
+  // somebody has open is a living shell like any other.
+  adopt: () => void;
+  // Reset every living shell of one principal, in every host: the one the
+  // app's host keeps for them, and each one a page built for a connection of
+  // theirs. `false`: they hold none anywhere.
+  reset: (principal: string) => boolean;
   // Stop every host's idle sweep.
   stop: () => void;
 };
@@ -106,6 +114,9 @@ export const standHosts = (parts: HostParts): Hosts => {
   const pageManifests = app.pages ?? {};
   const pageRouter = createPageRouter(pageManifests);
   const pageHosts = new Map(Object.entries(pageManifests).map(([name, manifest]) => [name, createShellHost(hostConfig(parts, manifest, false))]));
+  // Every host there is. What is asked of "every living shell" is asked of
+  // each of these, never of the app's own alone.
+  const every = [...(shells !== undefined ? [shells] : []), ...pageHosts.values()];
 
   return {
     shells,
@@ -118,9 +129,13 @@ export const standHosts = (parts: HostParts): Hosts => {
       return { name: matched.name, host, inputs: manifest.params === undefined ? {} : { [manifest.params]: matched.params } };
     },
     pages: Object.entries(pageManifests).map(([name, manifest]) => ({ name, path: manifest.path })),
+    adopt: () => {
+      for (const host of every) host.adopt();
+    },
+    // Each host is asked, whatever the one before it answered.
+    reset: (principal) => every.map((host) => host.reset(principal)).includes(true),
     stop: () => {
-      shells?.stop();
-      for (const host of pageHosts.values()) host.stop();
+      for (const host of every) host.stop();
     },
   };
 };

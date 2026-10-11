@@ -32,15 +32,22 @@ export type Signals = {
 export type SignalParts = {
   fabric: Fabric | undefined;
   identity: Pick<Identity, 'invalidate' | 'invalidateTag'>;
-  // The app's own shell host, when the manifest declares a shell.
-  shells: Pick<ShellHost, 'reset' | 'deliver'> | undefined;
+  // Reset every living shell of one principal, in every host: the app's own
+  // and each page's (./hosts.ts, `Hosts.reset`).
+  reset: (principal: string) => boolean;
+  // The app's own shell host, when the manifest declares a shell: a delivery
+  // goes into the shell it keeps for a principal.
+  shells: Pick<ShellHost, 'deliver'> | undefined;
 };
 
-export const standSignals = ({ fabric, identity, shells }: SignalParts): Signals => {
+export const standSignals = ({ fabric, identity, reset, shells }: SignalParts): Signals => {
   const origin = randomBytes(8).toString('hex');
+  // Who somebody is changed: what is held of them is forgotten, and every
+  // shell built for them is rebuilt, whichever host built it. It was the app's
+  // own host alone, so a page they had open went on as who they had been.
   const applyInvalidateIdentity = (principal: string): boolean => {
     const held = identity.invalidate(principal);
-    shells?.reset(principal);
+    reset(principal);
     return held;
   };
   const applyInvalidateTenant = (tag: string): number => identity.invalidateTag(tag).length;
