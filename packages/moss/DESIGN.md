@@ -266,7 +266,7 @@ that made the table:
 
 | Table | Whose | Where its statements are written | What is somewhere else, and why |
 |---|---|---|---|
-| `sessions` | `identity` | `identity/sessions.ts`: six statements straight to the pool, before anybody is signed in | Its table is made in `data`'s one migration run, from a sequence `identity` declares |
+| `sessions` | `identity` | `identity/sessions.ts`: five statements straight to the pool, before anybody is signed in | Its table is made in `data`'s one migration run, from a sequence `identity` declares |
 | `moss_generation` | `data` | `data/pointer.ts`: two entries, one that reads and one that moves | `manifest` decides when it moves (`manifest/generation.ts`), through a function `data` hands over |
 | `integrations`, `integration_actions` | the `integrations` feature | `integrations/entries.ts`: vex entries, replayed through the seam the feature is handed | The two tables are made by the core's own sequence (`data/tables.ts`, `nisc.moss`): that is the history every database has run, and it is not edited. The documents stored in `integration_actions` are brought to the current grammars by `data`, which holds the pool, when the feature asks through its seam |
 | `integration_frame_grants` | the `integrations` feature | `integrations/entries.ts`, and its own sequence in `integrations/tables.ts` | nothing |

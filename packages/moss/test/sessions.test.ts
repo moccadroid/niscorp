@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
+import { migrate } from '@niscorp/strata/postgres';
 import { createPglitePool } from '@niscorp/vex/pglite';
-import { initSessions, mintSession, sessionOf, sessionRemainingMs, revokeSession, revokeAllFor } from '../src/identity/sessions';
+import { SESSIONS_SEQUENCE, mintSession, sessionOf, sessionRemainingMs, revokeAllFor } from '../src/identity/sessions';
 import { sessionRevokerOf, sessionVerifierOf } from '../src/identity/verifier';
 import { mintDevToken } from '../src/identity';
 import type { ShellHost } from '../src/shells';
@@ -24,7 +25,8 @@ const freshDatabase = pristineDatabases();
 
 const freshPool = async () => {
   const pool = createPglitePool(freshDatabase());
-  await initSessions(pool);
+  // The table as a server makes it: its sequence, through the ledger.
+  await migrate(pool, [SESSIONS_SEQUENCE]);
   return pool;
 };
 
@@ -66,15 +68,6 @@ describe('sessions — the human credential', () => {
     expect(await sessionRemainingMs(pool, token)).toBeNull();
   });
 
-  it("revokes one token without touching the principal's other sessions", async () => {
-    const pool = await freshPool();
-    const here = await mintSession(pool, 'i_mara', 60_000);
-    const there = await mintSession(pool, 'i_mara', 60_000);
-    await revokeSession(pool, here);
-    expect(await sessionOf(pool, here)).toBeNull();
-    expect(await sessionOf(pool, there)).toBe('i_mara');
-  });
-
   it('revokeAllFor signs a principal out everywhere, and nobody else', async () => {
     const pool = await freshPool();
     const mara1 = await mintSession(pool, 'i_mara', 60_000);
@@ -103,14 +96,6 @@ describe('sessions — the human credential', () => {
     await mintSession(pool, 'i_kade', 60_000);
     const rows = await pool.query('SELECT principal FROM sessions');
     expect(rows.rows.map((r) => (r as { principal: string }).principal)).toEqual(['i_kade']);
-  });
-
-  it('initSessions is a boot that can run twice', async () => {
-    const pool = createPglitePool(freshDatabase());
-    await initSessions(pool);
-    await initSessions(pool);
-    const token = await mintSession(pool, 'i_mara', 60_000);
-    expect(await sessionOf(pool, token)).toBe('i_mara');
   });
 });
 

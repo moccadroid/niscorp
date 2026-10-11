@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { migrate } from '@niscorp/strata/postgres';
 import { createPglitePool } from '@niscorp/vex/pglite';
-import { initSessions, sessionOf } from '../src/identity/sessions';
+import { SESSIONS_SEQUENCE, sessionOf } from '../src/identity/sessions';
 import { integrationByKey } from '../src/integrations/registry';
 import { registryOver } from './registry-db';
 import { pristineDatabases } from './pristine-database';
@@ -26,7 +27,7 @@ const freshDatabase = pristineDatabases();
 describe('golden — credentials stored by earlier versions still resolve', () => {
   it('a session row keyed by sha256(token), hex', async () => {
     const pool = createPglitePool(freshDatabase());
-    await initSessions(pool);
+    await migrate(pool, [SESSIONS_SEQUENCE]);
     await pool.query(
       `INSERT INTO sessions (token_hash, principal, expires_at) VALUES ($1, 'i_golden', now() + interval '1 hour')`,
       ['a2a1d51d2dea2a8e985d643dd415b41255117100f69ae9ad588d4e185ca1ad97'],

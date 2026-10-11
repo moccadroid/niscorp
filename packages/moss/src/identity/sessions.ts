@@ -1,7 +1,6 @@
 import { randomBytes, createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { Sequence } from '@niscorp/strata';
-import { migrate } from '@niscorp/strata/postgres';
 import type { PgPool } from '@niscorp/vex';
 
 // ═══════════════════════════════════════════════════════════════
@@ -23,9 +22,10 @@ import type { PgPool } from '@niscorp/vex';
 //   precisely so an expiry can mean something on a held-open connection —
 //   this is the verifier that gives that clock something to say.
 //
-//   REVOKED BY DELETING THE ROW. One token (sign out here) or every token a
-//   principal holds (sign out everywhere, a role change, an offboarding).
-//   No second mechanism to forget.
+//   REVOKED BY DELETING THE ROW: every token a principal holds (sign out
+//   everywhere, a role change, an offboarding). No second mechanism to
+//   forget. Nothing deletes one token and leaves the principal's others: a
+//   sign-out closes every terminal of the principal, so it ends every session.
 //
 // The app mints at its own door (after ITS identity check — a password, an
 // SSO callback, a magic link) and hands the token to the terminal. Moss
@@ -82,14 +82,6 @@ export const SESSIONS_SEQUENCE: Sequence = {
   ],
 };
 
-// The table alone, through the ledger. A server makes it in the one pass that
-// runs every owner's sequence (../data, migrate.ts), and the package exports
-// no way to make it by itself: this is how the tests of this file stand one
-// up.
-export const initSessions = async (pool: PgPool): Promise<void> => {
-  await migrate(pool, [SESSIONS_SEQUENCE]);
-};
-
 // What Postgres says of a table that is not there (`undefined_table`), as a
 // driver hands it over: an error that carries the code.
 const UNDEFINED_TABLE = '42P01';
@@ -139,10 +131,6 @@ export const sessionRemainingMs = async (pool: PgPool, token: string): Promise<n
   const res = await pool.query('SELECT extract(epoch from expires_at - now()) * 1000 AS remaining FROM sessions WHERE token_hash = $1 AND expires_at > now()', [hashSessionToken(token)]);
   const row = RemainingRowSchema.safeParse(res.rows[0]);
   return row.success ? row.data.remaining : null;
-};
-
-export const revokeSession = async (pool: PgPool, token: string): Promise<void> => {
-  await pool.query('DELETE FROM sessions WHERE token_hash = $1', [hashSessionToken(token)]);
 };
 
 export const revokeAllFor = (pool: PgPool, principal: string): Promise<void> =>

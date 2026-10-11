@@ -342,7 +342,7 @@ type Entry = Found & { why: 'credential' | 'store' | 'debt' | 'tables'; note: st
 
 const LEDGER: Readonly<Record<string, Readonly<Record<string, Entry>>>> = {
   moss: {
-    'identity/sessions.ts': { doors: 6, statements: 6, tables: 1, why: 'credential', note: 'the session credential: a token hash is looked up before anybody is signed in' },
+    'identity/sessions.ts': { doors: 5, statements: 5, tables: 1, why: 'credential', note: 'the session credential: a token hash is looked up before anybody is signed in' },
     // `integrations/registry.ts` is not here any more. It held every statement
     // on `integrations` and `integration_actions`, sixteen of them, and each is
     // a vex entry now (`integrations/entries.ts`), replayed through the seam a
