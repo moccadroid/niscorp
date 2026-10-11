@@ -959,7 +959,15 @@ driver (`9b32289`).
 after: `check:modules` 0.8 s, and 0.8 s; `check:api` 0.7 s, and 2.7 s (it
 compiles a program for each package); `check:raw-sql` 1.2 s, and 1.1 s;
 `pnpm lint` 2.5 s, and 8.6 s (the types, and 3.1 s of trying itself). The
-four together took 5.2 s and take 13.2 s.
+four together took 5.2 s and take 13.2 s. `pnpm verify` took 161 s before,
+with 91 of turbo's 105 tasks cached and 29.5 s of turbo's own work; after, it
+takes 141 s with all 105 cached, and took 225 s on the first run, when the
+tasks of moss, tide and what depends on them were built and tested again.
+
+The lab apps' checks were run again on the built result, each as its own
+process, one at a time: 126 of 133, the same seven failing as in Part 9
+(encore 13 of 13, lyceum 17 of 18, atrium 18 of 19, relay 28 of 32, lyra 50 of
+51).
 
 Counted after it, for the rows it moved: moss has 154 source files, 68 test
 files and 1,043 tests, as before; tide has 13 test files and 235 tests (one
