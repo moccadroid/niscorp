@@ -14,6 +14,9 @@
 //
 // WHAT A HOST ANSWERS (./types.ts) is a type too: the host, what a transport
 // holds of one session, and what a shell needs of a connection attached to it.
+// And the host as whoever made it holds it: with the two things a server does
+// to every host at once (adopt what changed, stop its sweep), which are not on
+// the host that is handed out.
 //
 // THE HOST (./host.ts) keeps one shell for each signed-in principal and builds
 // a throwaway one for anybody else: the cells, the idle sweep, the roster, a
@@ -46,4 +49,4 @@ export { DEFAULT_IDLE_MS, createShellHost } from './host';
 export { shellNeedOf } from './liveness';
 export type { ShellNeed } from './liveness';
 export type { ComponentContract, ShellComposition, ShellHooks, ShellHostConfig, ShellLimits } from './config';
-export type { ShellConnection, ShellHost, ShellOpening, ShellReport, ShellSession, ShellSnapshot } from './types';
+export type { OwnedShellHost, ShellConnection, ShellHost, ShellOpening, ShellReport, ShellSession, ShellSnapshot } from './types';

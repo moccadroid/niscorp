@@ -2,7 +2,8 @@ import type { ActionDefinition, FetchFn, LayoutNode } from '@niscorp/nova';
 import { shellComponents } from '../src/manifest/components';
 import { definitionsFor } from '../src/manifest/roles';
 import type { NiscApp, ShellManifest } from '../src/manifest';
-import type { ShellComposition, ShellHostConfig } from '../src/shells';
+import { createShellHost } from '../src/shells';
+import type { OwnedShellHost, ShellComposition, ShellHost, ShellHostConfig } from '../src/shells';
 
 // A SHELL HOST'S CONFIG, ASSEMBLED AS A SERVER ASSEMBLES IT, for the tests that
 // stand a host up with no server: from an app, and from who the test says a
@@ -83,4 +84,13 @@ export const hostConfig = (setup: HostSetup): ShellHostConfig => {
       ...(setup.endpointTimeoutMs !== undefined ? { endpointTimeoutMs: setup.endpointTimeoutMs } : {}),
     },
   };
+};
+
+// A HOST AS A TEST HOLDS ONE: the host a server hands out, with the two things
+// only whoever made it does to it on the same object (`adopt` what changed,
+// `stop` its sweep), because here the test is whoever made it. The host a
+// server hands out has neither (../src/shells/types.ts, `OwnedShellHost`).
+export const standHost = (config: ShellHostConfig): ShellHost & Pick<OwnedShellHost, 'adopt' | 'stop'> => {
+  const { host, adopt, stop } = createShellHost(config);
+  return { ...host, adopt, stop };
 };

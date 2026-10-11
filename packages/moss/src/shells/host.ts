@@ -8,7 +8,7 @@ import type { Cell, HostParts, Live } from './live';
 import { sessionOn } from './shell-session';
 import { DEFAULT_SNAPSHOT_WAIT_MS, needOf, read, settle } from './snapshot';
 import { attach } from './stream';
-import type { ShellHost, ShellReport } from './types';
+import type { OwnedShellHost, ShellHost, ShellReport } from './types';
 
 // ═══════════════════════════════════════════════════════════════
 // The shell host (DESIGN.md § The shell runs on the server): the shell
@@ -379,7 +379,7 @@ const deliverTo =
     return took.includes(true);
   };
 
-export const createShellHost = (config: ShellHostConfig): ShellHost => {
+export const createShellHost = (config: ShellHostConfig): OwnedShellHost => {
   const durable = new Map<string, Cell>();
   const host: HostParts = {
     config,
@@ -395,7 +395,7 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
   const rebuild = (cell: Cell): Promise<void> => rebuildCell(host, cell);
   const durableCell = createDurableCells(host);
 
-  return {
+  const handedOut: ShellHost = {
     session: async (token, principal, options) => {
       if (principal === null || !kept) {
         // Built for this session alone, and nobody's to keep: it ends when
@@ -406,7 +406,6 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
       return sessionOn(host, await durableCell(token, principal), false, rebuild);
     },
     snapshot: snapshotOf(host, durableCell),
-    adopt: () => adoptAll(host),
     deliver: deliverTo(host),
     list: () => rosterOf(durable),
     reset: (principal) => {
@@ -414,6 +413,6 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
       for (const cell of theirs) void rebuild(cell).catch((err: unknown) => console.error('[moss/shells] a reset failed to rebuild', err));
       return theirs.length > 0;
     },
-    stop: startSweep(host),
   };
+  return { host: handedOut, adopt: () => adoptAll(host), stop: startSweep(host) };
 };

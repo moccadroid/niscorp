@@ -13,8 +13,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { ExecuteRecord } from '@niscorp/vex';
 import { vexRecordToSpan } from '../src/data/span';
-import { createShellHost, instrumentFunctions } from '../src/shells';
-import { hostConfig } from './shell-host-double';
+import { instrumentFunctions } from '../src/shells';
+import { hostConfig, standHost } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import { callIntegrationWith } from '../src/integrations/call';
 import { createForwarder } from '../src/integrations/forward';
@@ -159,7 +159,7 @@ describe('shell.build', () => {
 
   it('a principal build is one shell.build span, not a reset', async () => {
     const { spans, telemetry } = capture();
-    await createShellHost(hostConfig(ctxWith(telemetry))).session('t', 'usr_1');
+    await standHost(hostConfig(ctxWith(telemetry))).session('t', 'usr_1');
     const build = spans.filter((s) => s.name === 'shell.build');
     expect(build).toHaveLength(1);
     expect(build[0]).toMatchObject({ status: 'ok', attributes: { reset: false, hasPrincipal: true } });
@@ -167,13 +167,13 @@ describe('shell.build', () => {
 
   it('an anonymous build reads hasPrincipal false', async () => {
     const { spans, telemetry } = capture();
-    await createShellHost(hostConfig(ctxWith(telemetry))).session(null, null);
+    await standHost(hostConfig(ctxWith(telemetry))).session(null, null);
     expect(spans.find((s) => s.name === 'shell.build')?.attributes['hasPrincipal']).toBe(false);
   });
 
   it('a reset is a build marked reset', async () => {
     const { spans, telemetry } = capture();
-    const host = createShellHost(hostConfig(ctxWith(telemetry)));
+    const host = standHost(hostConfig(ctxWith(telemetry)));
     const session = await host.session('t', 'usr_1');
     session.reset();
     await tick();

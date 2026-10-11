@@ -155,8 +155,7 @@ export const boot = async (options: BootOptions = {}): Promise<Booted> => {
     director,
     close: async () => {
       director.close();
-      server.socket.stop();
-      server.shells?.stop();
+      server.close();
       await decider.close();
     },
   };

@@ -1255,7 +1255,7 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
 
 ### The shell host
 
-- `ShellHost` — `{ session, snapshot, adopt, deliver, list, reset, stop }`:
+- `ShellHost` — `{ session, snapshot, deliver, list, reset }`:
   the durable per-principal shell host, as `server.shells` and
   `server.page(path).host`. The server creates it (`src/shells/`; the factory
   is not exported). It is handed no manifest and no
@@ -1284,18 +1284,24 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
     closes. Code that opens one in process and attaches nothing ends it
     itself, with `session.detach(connection)` (any connection: none was
     attached); until then the host holds the shell.
-  - `adopt()` — every living shell this host built is brought level with what
-    its principal holds now, in place (what `server.refresh()` and
-    `server.replaceActions()` cause, in every host: the app's and each
-    page's). Every living shell: the ones the host keeps, and the ones it
-    built for one connection, which for the app's host is each visitor's and
-    for a page's host is everybody's. Definitions that arrived or changed are
+  - A host has no `adopt` and no `stop`. Each was a second way, for one
+    host, to something a server does for all of them at once.
+    **A change is the server's.** When what the app consists of changes
+    (`server.refresh()`, `server.replaceActions()`, an integration approved
+    or removed, a change another process made), every living shell of every
+    host adopts: it is brought level with what its principal holds now, in
+    place. Every living shell: the ones a host keeps, and the ones it built
+    for one connection, which for the app's host is each visitor's and for a
+    page's host is everybody's. Definitions that arrived or changed are
     registered and mounted instances keep their state; one that left, or is no
     longer granted, is removed and its instances unmounted. A shell that
     cannot adopt is logged and keeps what it held; the rest go on. A shell
     whose build was under way adopts when it lands, and so does one a reset
-    was replacing. One built for the length of a `snapshot` is read and
-    ended, and adopts nothing.
+    was replacing; no change waits for a build, or for another change. One
+    built for the length of a `snapshot` is read and ended, and adopts
+    nothing.
+    **So is stopping.** `server.close()` stops every host's idle sweep, with
+    everything else the server started.
   - `deliver(principal, channel, payload?): boolean` — publish a message,
     with what it carries, into every living shell this host has for one
     principal. `server.shells` is the app's own host, which keeps one shell
@@ -1316,8 +1322,6 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
     replacement is built from what the shell was opened with (for a page's,
     the inputs of its path and its id seed), and a shell's resets run one
     after another.
-  - `stop()` — stop the idle sweep (the timer is unref'd, so a plain process
-    needn't call it).
 - What `ShellHost.session(token, principal)` returns (a type that is not
   exported by name: `Awaited<ReturnType<ShellHost['session']>>`):
   `{ shell, attach, detach, resync, dispatch, publish, back, popTo, reset }`. The living nova `Shell`,

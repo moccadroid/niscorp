@@ -3,8 +3,7 @@ import { runInNewContext } from 'node:vm';
 import { describe, it, expect, vi } from 'vitest';
 import { applyDelta, frameHash } from '../src/protocol';
 import type { DeltaOp } from '../src/protocol';
-import { createShellHost } from '../src/shells';
-import { hostConfig } from './shell-host-double';
+import { hostConfig, standHost } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import type { FunctionSession, NiscApp } from '../src/manifest';
 import type { Connection } from '../src/socket';
@@ -51,7 +50,7 @@ const ctx: HostSetup = {
 
 describe('shells — the shell host', () => {
   it('one durable shell per principal (same principal → same shell)', async () => {
-    const host = createShellHost(hostConfig(ctx));
+    const host = standHost(hostConfig(ctx));
     const a = await host.session('t', 'usr_1');
     const b = await host.session('t', 'usr_1');
     expect(a.shell).toBe(b.shell);
@@ -62,7 +61,7 @@ describe('shells — the shell host', () => {
   // nothing then read.
   it('who somebody is and what they hold is asked once for each shell that is built', async () => {
     const asked: (string | null)[] = [];
-    const host = createShellHost(hostConfig({ ...ctx, resolve: async (principal) => (asked.push(principal), ctx.resolve(principal)) }));
+    const host = standHost(hostConfig({ ...ctx, resolve: async (principal) => (asked.push(principal), ctx.resolve(principal)) }));
     await host.session('t', 'usr_1');
     await host.session(null, null);
     await host.snapshot(null, null);
@@ -74,17 +73,17 @@ describe('shells — the shell host', () => {
   });
 
   it('a different principal is a different shell', async () => {
-    const host = createShellHost(hostConfig(ctx));
+    const host = standHost(hostConfig(ctx));
     expect((await host.session('t', 'usr_1')).shell).not.toBe((await host.session('t', 'usr_2')).shell);
   });
 
   it('anonymous sessions are ephemeral (a fresh shell each time)', async () => {
-    const host = createShellHost(hostConfig(ctx));
+    const host = standHost(hostConfig(ctx));
     expect((await host.session(null, null)).shell).not.toBe((await host.session(null, null)).shell);
   });
 
   it('dispatch(canvas, event) stamps the active instance as origin — the event is delivered', async () => {
-    const host = createShellHost(hostConfig(ctx));
+    const host = standHost(hostConfig(ctx));
     const session = await host.session('t', 'usr_1');
     await tick();
     const active = session.shell.getState().canvases['main']?.active;
@@ -96,7 +95,7 @@ describe('shells — the shell host', () => {
   });
 
   it('an ungranted initial does not mount (ring 1)', async () => {
-    const host = createShellHost(hostConfig({ ...ctx, resolve: async () => ({ roles: ['public'], scope: {}, catalog: { ids: [], hash: 'h' }, variants: new Map() }) }));
+    const host = standHost(hostConfig({ ...ctx, resolve: async () => ({ roles: ['public'], scope: {}, catalog: { ids: [], hash: 'h' }, variants: new Map() }) }));
     const session = await host.session('t', 'usr_1');
     expect(session.shell.getState().canvases['main']?.active).toBeUndefined();
   });
@@ -110,7 +109,7 @@ describe('shells — the shell host', () => {
       layouts: { 'counter.basic': { action: 'counter', layout: { component: 'Text', children: 'variant' } } },
     } as unknown as NiscApp;
     const rendered = async (principal: string, held: boolean): Promise<string> => {
-      const host = createShellHost(hostConfig({
+      const host = standHost(hostConfig({
         ...ctx,
         app: withLayouts,
         resolve: async () => ({
@@ -128,7 +127,7 @@ describe('shells — the shell host', () => {
     expect(await rendered('usr_held', true)).not.toContain('"base"');
 
     // Behavior survives the swap: the variant principal's click still bumps.
-    const host = createShellHost(hostConfig({
+    const host = standHost(hostConfig({
       ...ctx,
       app: withLayouts,
       resolve: async () => ({ roles: ['public'], scope: {}, catalog: { ids: ['counter'], hash: 'h' }, variants: new Map([['counter', { component: 'Text', children: 'variant' }]]) }),
@@ -166,7 +165,7 @@ describe('shells — two first arrivals for one principal', () => {
 
   it('one shell is built between them, and both are handed it', async () => {
     const { setup, built } = counted();
-    const host = createShellHost(hostConfig(setup));
+    const host = standHost(hostConfig(setup));
     const [first, second, read] = await Promise.all([host.session('t', 'usr_1'), host.session('t', 'usr_1'), host.snapshot('t', 'usr_1')]);
     expect(first.shell).toBe(second.shell);
     expect(built()).toBe(1);
@@ -179,7 +178,7 @@ describe('shells — two first arrivals for one principal', () => {
 
   it('somebody else arriving in the same moment gets a shell of their own', async () => {
     const { setup, built } = counted();
-    const host = createShellHost(hostConfig(setup));
+    const host = standHost(hostConfig(setup));
     const [mine, theirs] = await Promise.all([host.session('t', 'usr_1'), host.session('t', 'usr_2')]);
     expect(mine.shell).not.toBe(theirs.shell);
     expect(built()).toBe(2);
@@ -187,7 +186,7 @@ describe('shells — two first arrivals for one principal', () => {
 
   it('a build that fails is refused to both, keeps nothing, and the next arrival builds afresh', async () => {
     let broken = true;
-    const host = createShellHost(
+    const host = standHost(
       hostConfig({
         ...ctx,
         resolve: async (principal) => {
@@ -220,7 +219,7 @@ describe('shells — the session app code is handed', () => {
         return {};
       },
     } as unknown as NiscApp;
-    await createShellHost(hostConfig({ ...ctx, ...extra, app: withFunctions })).session(principal === null ? null : 't', principal);
+    await standHost(hostConfig({ ...ctx, ...extra, app: withFunctions })).session(principal === null ? null : 't', principal);
     if (seen.session === undefined) throw new Error('the functions seam was not called');
     return seen.session;
   };
@@ -304,7 +303,7 @@ const servedTerminal = () => {
 
 describe('shells — reset', () => {
   it('builds a new shell and the session addresses it (the old state is gone)', async () => {
-    const host = createShellHost(hostConfig(ctx));
+    const host = standHost(hostConfig(ctx));
     const session = await host.session('t', 'usr_1');
     await tick();
     const before = session.shell;
@@ -330,7 +329,7 @@ describe('shells — reset', () => {
   });
 
   it('carries attached connections across — every terminal is served a fresh frame and trees', async () => {
-    const host = createShellHost(hostConfig(ctx));
+    const host = standHost(hostConfig(ctx));
     const session = await host.session('t', 'usr_1');
     const a = fakeConnection();
     const b = fakeConnection();
@@ -353,7 +352,7 @@ describe('shells — reset', () => {
   });
 
   it('the durable map holds the replacement — a later connection joins it, not the disposed one', async () => {
-    const host = createShellHost(hostConfig(ctx));
+    const host = standHost(hostConfig(ctx));
     const first = await host.session('t', 'usr_1');
     await tick();
     first.reset();
@@ -366,7 +365,7 @@ describe('shells — reset', () => {
   // to land carried the terminals to its shell, the second found none left to
   // carry and took the cell. The terminals were on a shell nothing addressed.
   it('resets that overlap leave every terminal on the shell that is kept', async () => {
-    const host = createShellHost(hostConfig({ ...ctx, app: wide }));
+    const host = standHost(hostConfig({ ...ctx, app: wide }));
     const session = await host.session('t', 'usr_1');
     const connection = fakeConnection();
     session.attach(connection);
@@ -401,7 +400,7 @@ describe('shells — reset', () => {
   it('two resets happen in turn: the second reads what it builds from once the first has landed, and its shell stands', async () => {
     const extra = { id: 'extra', data: {} };
     const who = answeredByHand(['counter']);
-    const host = createShellHost(hostConfig({ ...ctx, app: { ...app, actions: { counter, extra } } as unknown as NiscApp, resolve: who.resolve }));
+    const host = standHost(hostConfig({ ...ctx, app: { ...app, actions: { counter, extra } } as unknown as NiscApp, resolve: who.resolve }));
     const session = await host.session('t', 'usr_1');
     const terminal = servedTerminal();
     session.attach(terminal);
@@ -437,7 +436,7 @@ describe('shells — reset', () => {
   it('a shell that ended while its replacement was being built is not replaced', async () => {
     const who = answeredByHand(['counter']);
     // Nobody in particular: the shell goes when its last terminal does.
-    const session = await createShellHost(hostConfig({ ...ctx, resolve: who.resolve })).session(null, null);
+    const session = await standHost(hostConfig({ ...ctx, resolve: who.resolve })).session(null, null);
     const connection = fakeConnection();
     session.attach(connection);
     const stood = session.shell;
@@ -461,7 +460,7 @@ describe('shells — reset', () => {
   // it for, so nothing is built to be thrown away.
   it('a reset asked of a shell that has already ended builds nothing', async () => {
     const who = answeredByHand(['counter']);
-    const session = await createShellHost(hostConfig({ ...ctx, resolve: who.resolve })).session(null, null);
+    const session = await standHost(hostConfig({ ...ctx, resolve: who.resolve })).session(null, null);
     const connection = fakeConnection();
     session.attach(connection);
     const stood = session.shell;
@@ -482,7 +481,7 @@ describe('shells — reset', () => {
     const words = { id: 'words', data: { slug: '' }, layout: { component: 'Text', children: '$.slug' } };
     const paged = { ...app, actions: { words } } as unknown as NiscApp;
     const page = { canvases: [{ id: 'main', initial: 'words' }] };
-    const host = createShellHost(
+    const host = standHost(
       hostConfig({ ...ctx, app: paged, manifest: page, kept: false, resolve: async () => ({ roles: ['public'], scope: {}, catalog: { ids: ['words'] }, variants: new Map() }) }),
     );
     const session = await host.session(null, null, { seed: 'abcdef0123', inputs: { main: { slug: 'intro' } } });
@@ -502,7 +501,7 @@ describe('shells — reset', () => {
   });
 
   it('resetting a principal who holds no shell answers false rather than throwing', async () => {
-    const host = createShellHost(hostConfig(ctx));
+    const host = standHost(hostConfig(ctx));
     expect(host.reset('usr_nobody')).toBe(false);
     await host.session('t', 'usr_1');
     expect(host.reset('usr_1')).toBe(true);
@@ -513,7 +512,7 @@ describe('shells — reset', () => {
   // found none of them: it looked where kept shells are, and answered `false`
   // for somebody with two tabs open.
   it('reaches every living shell of the principal on a host that keeps none, and nobody else’s', async () => {
-    const host = createShellHost(hostConfig({ ...ctx, kept: false }));
+    const host = standHost(hostConfig({ ...ctx, kept: false }));
     const mine = [await host.session('t', 'usr_1'), await host.session('t', 'usr_1')];
     const theirs = await host.session('t', 'usr_2');
     const nobodys = await host.session(null, null);
@@ -542,7 +541,7 @@ describe('shells — reset', () => {
   });
 
   it('a shell that ended is not one a reset finds', async () => {
-    const host = createShellHost(hostConfig({ ...ctx, kept: false }));
+    const host = standHost(hostConfig({ ...ctx, kept: false }));
     const session = await host.session('t', 'usr_1');
     const connection = fakeConnection();
     session.attach(connection);
@@ -567,7 +566,7 @@ describe('shells — reset', () => {
       },
     } as unknown as NiscApp;
 
-    const host = createShellHost(hostConfig({ ...ctx, app: withInputs }));
+    const host = standHost(hostConfig({ ...ctx, app: withInputs }));
     const session = await host.session('t', 'usr_1');
     await tick();
     const before = session.shell;
@@ -626,7 +625,7 @@ const twoCtx: HostSetup = {
 
 describe('shells — back', () => {
   it('undoes the session\'s last navigation and serves the result', async () => {
-    const host = createShellHost(hostConfig(twoCtx));
+    const host = standHost(hostConfig(twoCtx));
     const session = await host.session('t', 'usr_1');
     const conn = fakeConnection();
     session.attach(conn);
@@ -651,7 +650,7 @@ describe('shells — back', () => {
   });
 
   it('cannot undo the landing screen — a seeded canvas is the floor', async () => {
-    const host = createShellHost(hostConfig(ctx));
+    const host = standHost(hostConfig(ctx));
     const session = await host.session('t', 'usr_1');
     await tick();
 
@@ -660,7 +659,7 @@ describe('shells — back', () => {
   });
 
   it('reads through the cell — a reset session backs the shell standing now', async () => {
-    const host = createShellHost(hostConfig(ctx));
+    const host = standHost(hostConfig(ctx));
     const session = await host.session('t', 'usr_1');
     await tick();
     session.reset();
@@ -674,7 +673,7 @@ describe('shells — back', () => {
 
 describe('shells — list', () => {
   it('reports durable shells with their attachments and what is mounted', async () => {
-    const host = createShellHost(hostConfig(ctx));
+    const host = standHost(hostConfig(ctx));
     const session = await host.session('t', 'usr_1');
     await host.session(null, null); // an anonymous shell is not durable, so not listed
     await tick();
@@ -696,7 +695,7 @@ describe('shells — list', () => {
   });
 
   it('a signed-out shell leaves the roster at once, not when somebody next looks', async () => {
-    const host = createShellHost(hostConfig(ctx));
+    const host = standHost(hostConfig(ctx));
     await host.session('t', 'usr_1');
     await tick();
     expect(host.list()).toHaveLength(1);
@@ -715,7 +714,7 @@ describe('shells — the idle sweep', () => {
   it('disposes a shell nothing has been attached to for idleMs; the next connect rebuilds', async () => {
     vi.useFakeTimers();
     try {
-      const host = createShellHost(hostConfig({ ...ctx, idleMs: 1000 }));
+      const host = standHost(hostConfig({ ...ctx, idleMs: 1000 }));
       const session = await host.session('t', 'usr_1');
       const before = session.shell;
       await vi.advanceTimersByTimeAsync(0);
@@ -743,7 +742,7 @@ describe('shells — the idle sweep', () => {
   it('idleMs: 0 disables the sweep — shells live until sign-out or process exit', async () => {
     vi.useFakeTimers();
     try {
-      const host = createShellHost(hostConfig({ ...ctx, idleMs: 0 }));
+      const host = standHost(hostConfig({ ...ctx, idleMs: 0 }));
       await host.session('t', 'usr_1');
       await vi.advanceTimersByTimeAsync(24 * 60 * 60 * 1000);
       expect(host.list()).toHaveLength(1);
@@ -803,7 +802,7 @@ const lastOfType = (texts: string[], type: string): Record<string, unknown> | un
 
 describe('shells — frame deltas', () => {
   it('a delta rebuilds the exact frame a whole-frame terminal was sent', async () => {
-    const host = createShellHost(hostConfig({ ...ctx, app: wide, delta: true }));
+    const host = standHost(hostConfig({ ...ctx, app: wide, delta: true }));
     const session = await host.session('t', 'usr_1');
     const asked = textConnection();
     const silent = textConnection();
@@ -836,7 +835,7 @@ describe('shells — frame deltas', () => {
   });
 
   it('deltas chain — each one is written against the last frame, not the first', async () => {
-    const host = createShellHost(hostConfig({ ...ctx, app: wide, delta: true }));
+    const host = standHost(hostConfig({ ...ctx, app: wide, delta: true }));
     const session = await host.session('t', 'usr_1');
     const asked = textConnection();
     session.attach(asked, { delta: true });
@@ -858,7 +857,7 @@ describe('shells — frame deltas', () => {
   });
 
   it('off by default — a terminal that asks is still served whole frames', async () => {
-    const host = createShellHost(hostConfig({ ...ctx, app: wide }));
+    const host = standHost(hostConfig({ ...ctx, app: wide }));
     const session = await host.session('t', 'usr_1');
     const asked = textConnection();
     session.attach(asked, { delta: true });
@@ -872,7 +871,7 @@ describe('shells — frame deltas', () => {
   });
 
   it('resync serves whole frames without touching the shell', async () => {
-    const host = createShellHost(hostConfig({ ...ctx, app: wide, delta: true }));
+    const host = standHost(hostConfig({ ...ctx, app: wide, delta: true }));
     const session = await host.session('t', 'usr_1');
     const asked = textConnection();
     session.attach(asked, { delta: true });
@@ -899,7 +898,7 @@ describe('shells — frame deltas', () => {
   });
 
   it('a reset carries the capability across — the replacement still deltas', async () => {
-    const host = createShellHost(hostConfig({ ...ctx, app: wide, delta: true }));
+    const host = standHost(hostConfig({ ...ctx, app: wide, delta: true }));
     const session = await host.session('t', 'usr_1');
     const asked = textConnection();
     session.attach(asked, { delta: true });
@@ -937,7 +936,7 @@ describe('shells — frame deltas', () => {
         },
       },
     } as unknown as NiscApp;
-    const host = createShellHost(hostConfig({ ...ctx, app: padded, delta: true }));
+    const host = standHost(hostConfig({ ...ctx, app: padded, delta: true }));
     const session = await host.session('t', 'usr_1');
     const asked = textConnection();
     const silent = textConnection();
@@ -975,7 +974,7 @@ describe('shells — frame deltas', () => {
   });
 
   it('a detached connection is forgotten by both sets', async () => {
-    const host = createShellHost(hostConfig({ ...ctx, app: wide, delta: true }));
+    const host = standHost(hostConfig({ ...ctx, app: wide, delta: true }));
     const session = await host.session('t', 'usr_1');
     const asked = textConnection();
     session.attach(asked, { delta: true });
@@ -993,7 +992,7 @@ describe('shells — a canvas that fails to render', () => {
   it('does not stop its neighbours, on attach or on any later pass', async () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      const host = createShellHost(hostConfig({ ...ctx, app: twoCanvas }));
+      const host = standHost(hostConfig({ ...ctx, app: twoCanvas }));
       const session = await host.session('t', 'usr_1');
       await tick();
 
@@ -1029,7 +1028,7 @@ describe('shells — a canvas that fails to render', () => {
   it('reset is the way out — the replacement renders every canvas again', async () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      const host = createShellHost(hostConfig({ ...ctx, app: twoCanvas }));
+      const host = standHost(hostConfig({ ...ctx, app: twoCanvas }));
       const session = await host.session('t', 'usr_1');
       await tick();
       const shell = session.shell as unknown as { getCanvasRenderTree: (id: string) => unknown };
@@ -1065,7 +1064,7 @@ describe('shells — the canvases a shell has', () => {
   const canvasesSent = (conn: ReturnType<typeof fakeConnection>): unknown[] => conn.sent.filter((m) => m['type'] === 'render').map((m) => m['canvas']);
 
   it('a canvas added while the shell runs is served like the ones it was built with', async () => {
-    const host = createShellHost(hostConfig(ctx));
+    const host = standHost(hostConfig(ctx));
     const session = await host.session('t', 'usr_1');
     const first = fakeConnection();
     session.attach(first);
@@ -1090,7 +1089,7 @@ describe('shells — the canvases a shell has', () => {
 
   it('a canvas that is removed is served empty once, and then not again', async () => {
     const twoCtx = { ...ctx, app: twoCanvas };
-    const host = createShellHost(hostConfig(twoCtx));
+    const host = standHost(hostConfig(twoCtx));
     const session = await host.session('t', 'usr_1');
     const conn = fakeConnection();
     session.attach(conn);
@@ -1126,7 +1125,7 @@ describe('shells — the frame layout store and re-send', () => {
   const frames = (conn: ReturnType<typeof fakeConnection>): Record<string, unknown>[] => conn.sent.filter((m) => m['type'] === 'frame');
 
   it('a seeded ref resolves in the frame at first render', async () => {
-    const host = createShellHost(hostConfig(refCtx));
+    const host = standHost(hostConfig(refCtx));
     const conn = fakeConnection();
     (await host.session('t', 'usr_1')).attach(conn);
     const frame = frames(conn).at(-1);
@@ -1135,7 +1134,7 @@ describe('shells — the frame layout store and re-send', () => {
   });
 
   it('setLayout re-sends the frame to attached terminals; an unchanged frame sends nothing', async () => {
-    const host = createShellHost(hostConfig(refCtx));
+    const host = standHost(hostConfig(refCtx));
     const conn = fakeConnection();
     const session = await host.session('t', 'usr_1');
     session.attach(conn);
@@ -1161,7 +1160,7 @@ describe('shells — the frame layout store and re-send', () => {
   // not sent yet. The frame last sent then moved to one only the newcomer
   // held, and the flush, finding nothing changed, sent it to nobody else.
   it('a terminal that attaches while the frame has changed does not leave the others on the old one', async () => {
-    const host = createShellHost(hostConfig(refCtx));
+    const host = standHost(hostConfig(refCtx));
     const session = await host.session('t', 'usr_1');
     const first = fakeConnection();
     session.attach(first);
@@ -1184,7 +1183,7 @@ describe('shells — the frame layout store and re-send', () => {
   it('a frame that fails to render for a newcomer is not taken for the one everybody holds', async () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      const host = createShellHost(hostConfig(refCtx));
+      const host = standHost(hostConfig(refCtx));
       const session = await host.session('t', 'usr_1');
       const first = fakeConnection();
       session.attach(first);
@@ -1213,7 +1212,7 @@ describe('shells — the frame layout store and re-send', () => {
   });
 
   it('a canvas-only change on a frame with no ref sends no frame message', async () => {
-    const host = createShellHost(hostConfig(ctx)); // the plain app: default frame, no ref
+    const host = standHost(hostConfig(ctx)); // the plain app: default frame, no ref
     const conn = fakeConnection();
     const session = await host.session('t', 'usr_1');
     session.attach(conn);
@@ -1258,7 +1257,7 @@ describe('shells — a canvas placed by an action, not the frame', () => {
     JSON.stringify(conn.sent.filter((m) => m['type'] === 'render' && m['canvas'] === canvas).at(-1) ?? {});
 
   it('the outer canvas carries the marker; the inner canvas is served as itself', async () => {
-    const host = createShellHost(hostConfig(nestedCtx));
+    const host = standHost(hostConfig(nestedCtx));
     const conn = fakeConnection();
     (await host.session('t', 'usr_1')).attach(conn);
     await tick();
@@ -1270,7 +1269,7 @@ describe('shells — a canvas placed by an action, not the frame', () => {
   });
 
   it('a click tagged with the inner canvas lands on the inner action, not the one that placed it', async () => {
-    const host = createShellHost(hostConfig(nestedCtx));
+    const host = standHost(hostConfig(nestedCtx));
     const session = await host.session('t', 'usr_1');
     await tick();
     const inner = session.shell.getState().canvases['region']?.active;
@@ -1300,10 +1299,10 @@ describe('shells — adopt', () => {
   // A world whose actions in force, and what each principal holds of them, are
   // the test's to change. `setup`: what the host is beside that (whether it
   // keeps a principal's shell).
-  const world = (setup: Partial<HostSetup> = {}): { host: ReturnType<typeof createShellHost>; force: (actions: Record<string, unknown>) => void; hold: (principal: string, ids: string[] | Error) => void } => {
+  const world = (setup: Partial<HostSetup> = {}): { host: ReturnType<typeof standHost>; force: (actions: Record<string, unknown>) => void; hold: (principal: string, ids: string[] | Error) => void } => {
     let inForce: Record<string, unknown> = { home, extra };
     const held = new Map<string, string[] | Error>();
-    const host = createShellHost(
+    const host = standHost(
       hostConfig({
         ...ctx,
         ...setup,
@@ -1318,7 +1317,7 @@ describe('shells — adopt', () => {
     );
     return { host, force: (actions) => void (inForce = actions), hold: (principal, ids) => void held.set(principal, ids) };
   };
-  const mounted = (session: Awaited<ReturnType<ReturnType<typeof createShellHost>['session']>>): string[] => session.shell.getCanvasState('main').stack.map((item) => item.definitionId);
+  const mounted = (session: Awaited<ReturnType<ReturnType<typeof standHost>['session']>>): string[] => session.shell.getCanvasState('main').stack.map((item) => item.definitionId);
   const settle = async (): Promise<void> => {
     for (let i = 0; i < 4; i += 1) await tick();
   };
@@ -1405,7 +1404,7 @@ describe('shells — adopt', () => {
     // back until the second adopt's has been given.
     const answers: ((ids: string[]) => void)[] = [];
     let byHand = false;
-    const host = createShellHost(
+    const host = standHost(
       hostConfig({
         ...ctx,
         app: base,
@@ -1574,7 +1573,7 @@ describe('shells — adopt', () => {
     let waiting: Promise<void> | undefined;
     const slow = { ...base, shell: { canvases: [{ id: 'main', initial: 'home' }], inputs: async () => (await waiting, {}) } } as unknown as NiscApp;
     let inForce: Record<string, unknown> = { home, extra };
-    const host = createShellHost(
+    const host = standHost(
       hostConfig({
         ...ctx,
         ...setup,
@@ -1617,7 +1616,7 @@ describe('shells — adopt', () => {
 
   it('a shell that ended is not asked about again', async () => {
     const asked: (string | null)[] = [];
-    const host = createShellHost(
+    const host = standHost(
       hostConfig({ ...ctx, app: base, kept: false, resolve: async (principal) => (asked.push(principal), { roles: ['member'], scope: {}, catalog: { ids: ['home'] }, variants: new Map() }) }),
     );
     const connection = fakeConnection();
@@ -1667,7 +1666,7 @@ describe('shells — a shell that ended is let go', () => {
     ['nobody signed in, on a host that keeps its principals’ shells', {}, null],
     ['somebody signed in, on a host that keeps none (a page’s)', { kept: false }, 'usr_1'],
   ] as const)('the shell of %s, once its last terminal has left', async (_whose, setup, principal) => {
-    const host = createShellHost(hostConfig({ ...ctx, ...setup }));
+    const host = standHost(hostConfig({ ...ctx, ...setup }));
     const ended = await (async (): Promise<WeakRef<object>> => {
       const session = await host.session(principal === null ? null : 't', principal);
       const connection = fakeConnection();
@@ -1690,7 +1689,7 @@ describe('shells — a shell that ended is let go', () => {
   // its session. Code that opens one in process and attaches nothing ends it
   // by detaching, as the socket does for a connection that closed early.
   it('a shell that is not kept and has not ended is held, and one that attached nothing is ended by a detach', async () => {
-    const host = createShellHost(hostConfig(ctx));
+    const host = standHost(hostConfig(ctx));
     const dropped = await (async (): Promise<WeakRef<object>> => new WeakRef((await host.session(null, null)).shell))();
     const detached = await (async (): Promise<WeakRef<object>> => {
       const session = await host.session(null, null);
@@ -1704,7 +1703,7 @@ describe('shells — a shell that ended is let go', () => {
   });
 
   it('a shell that was reset: the one it replaced is let go, and the session goes on', async () => {
-    const host = createShellHost(hostConfig({ ...ctx, kept: false }));
+    const host = standHost(hostConfig({ ...ctx, kept: false }));
     const session = await host.session('t', 'usr_1');
     const connection = fakeConnection();
     session.attach(connection);
@@ -1726,7 +1725,7 @@ describe('shells — a shell that ended is let go', () => {
   it('a kept shell whose principal signed out', async () => {
     const seen: { fn?: FunctionSession } = {};
     const signing = { ...app, functions: (fn: FunctionSession) => ((seen.fn = fn), {}) } as unknown as NiscApp;
-    const host = createShellHost(hostConfig({ ...ctx, app: signing }));
+    const host = standHost(hostConfig({ ...ctx, app: signing }));
     const ended = await (async (): Promise<WeakRef<object>> => {
       const session = await host.session('t', 'usr_1');
       await settle();
@@ -1765,7 +1764,7 @@ describe('shells — what fails is said', () => {
   });
 
   it('a seed that cannot be pushed is skipped and named; the ones after it are pushed', async () => {
-    const host = createShellHost(hostConfig(seeded(() => ({ main: [{ action: 'counter', with: ['no-such-fragment'] }, 'counter'] }))));
+    const host = standHost(hostConfig(seeded(() => ({ main: [{ action: 'counter', with: ['no-such-fragment'] }, 'counter'] }))));
     let session: Awaited<ReturnType<typeof host.session>> | undefined;
     const lines = await logged(async () => {
       session = await host.session('t', 'usr_1');
@@ -1777,7 +1776,7 @@ describe('shells — what fails is said', () => {
   });
 
   it('seeds that cannot be derived leave the canvas as it was, and say so', async () => {
-    const host = createShellHost(hostConfig(seeded(async () => Promise.reject(new Error('the rows could not be read')))));
+    const host = standHost(hostConfig(seeded(async () => Promise.reject(new Error('the rows could not be read')))));
     const lines = await logged(async () => {
       const snapshot = await host.snapshot('t', 'usr_1');
       expect(snapshot.settled).toBe(true);
@@ -1787,7 +1786,7 @@ describe('shells — what fails is said', () => {
   });
 
   it('a delivery the shell throws on answers false, and says so', async () => {
-    const host = createShellHost(hostConfig(ctx));
+    const host = standHost(hostConfig(ctx));
     const session = await host.session('t', 'usr_1');
     session.shell.publish = () => {
       throw new Error('the bus is gone');
@@ -1801,7 +1800,7 @@ describe('shells — what fails is said', () => {
   });
 
   it('a shell that cannot be read is left off the roster, and said', async () => {
-    const host = createShellHost(hostConfig(ctx));
+    const host = standHost(hostConfig(ctx));
     const broken = await host.session('t', 'usr_1');
     await host.session('t', 'usr_2');
     broken.shell.getState = () => {
@@ -1821,7 +1820,7 @@ describe('shells — what fails is said', () => {
 // from: it used to be dispatched with no origin, to every instance at once.
 describe('shells — an event from a canvas the shell does not have', () => {
   it('is dropped, where one from a canvas it has still lands', async () => {
-    const host = createShellHost(hostConfig({ ...ctx, app: twoCanvas }));
+    const host = standHost(hostConfig({ ...ctx, app: twoCanvas }));
     const session = await host.session('t', 'usr_1');
     await tick();
     const n = (canvas: string): unknown => session.shell.getRuntime(session.shell.getState().canvases[canvas]?.active?.id ?? '')?.getData()['n'];
@@ -1862,7 +1861,7 @@ describe('shells — the instance a click names', () => {
   };
 
   const setup = async () => {
-    const host = createShellHost(hostConfig(trayCtx));
+    const host = standHost(hostConfig(trayCtx));
     const session = await host.session('t', 'usr_1');
     await tick();
     session.shell.push('tray', 'b');
@@ -1935,14 +1934,14 @@ describe('shells — a message delivered to a principal', () => {
   const inbox = { id: 'inbox', data: { heard: 0, said: '' }, triggers: [{ message: 'news', do: [{ increment: 'heard' }, { set: 'said', value: '@event.payload.text' }] }] };
   const listening = { ...app, actions: { inbox }, shell: { canvases: [{ id: 'main', initial: 'inbox' }] } } as unknown as NiscApp;
   const setup: HostSetup = { ...ctx, app: listening, resolve: async () => ({ roles: ['public'], scope: {}, catalog: { ids: ['inbox'] }, variants: new Map() }) };
-  type Session = Awaited<ReturnType<ReturnType<typeof createShellHost>['session']>>;
+  type Session = Awaited<ReturnType<ReturnType<typeof standHost>['session']>>;
   const heard = (session: Session): { heard: unknown; said: unknown } => {
     const data = session.shell.getRuntime(session.shell.getState().canvases['main']?.active?.id ?? '')?.getData();
     return { heard: data?.['heard'], said: data?.['said'] };
   };
 
   it('reaches the shell a host keeps for them, with its payload, and nobody else’s', async () => {
-    const host = createShellHost(hostConfig(setup));
+    const host = standHost(hostConfig(setup));
     const mine = await host.session('t', 'usr_1');
     const theirs = await host.session('t', 'usr_2');
 
@@ -1955,7 +1954,7 @@ describe('shells — a message delivered to a principal', () => {
   });
 
   it('on a host that keeps none, reaches the shell built for each of their connections, and nobody else’s', async () => {
-    const host = createShellHost(hostConfig({ ...setup, kept: false }));
+    const host = standHost(hostConfig({ ...setup, kept: false }));
     const mine = [await host.session('t', 'usr_1'), await host.session('t', 'usr_1')];
     const theirs = await host.session('t', 'usr_2');
     const nobodys = await host.session(null, null);
@@ -1973,7 +1972,7 @@ describe('shells — a message delivered to a principal', () => {
   });
 
   it('a shell that has ended hears nothing, and is not counted as one that took it', async () => {
-    const host = createShellHost(hostConfig({ ...setup, kept: false }));
+    const host = standHost(hostConfig({ ...setup, kept: false }));
     const session = await host.session('t', 'usr_1');
     const connection = fakeConnection();
     session.attach(connection);

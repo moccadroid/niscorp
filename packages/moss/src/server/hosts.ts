@@ -42,7 +42,7 @@ export type Hosts = {
   pageAt: MossServer['page'];
   pages: MossServer['pages'];
   // WHAT THE APP CONSISTS OF CHANGED: every host has its living shells adopt,
-  // the app's own and each page's (../shells, `ShellHost.adopt`). A page
+  // the app's own and each page's (../shells, `OwnedShellHost.adopt`). A page
   // somebody has open is a living shell like any other.
   adopt: () => void;
   // Reset every living shell of one principal, in every host: the one the
@@ -120,29 +120,32 @@ export const buildShellHosts = (parts: HostParts): Hosts => {
   const pageRouter = createPageRouter(pageManifests);
   const shells = app.shell !== undefined ? createShellHost(hostConfig(parts, app.shell, true)) : undefined;
   const pageHosts = new Map(Object.entries(pageManifests).map(([name, manifest]) => [name, createShellHost(hostConfig(parts, manifest, false))]));
-  // Every host there is. What is asked of "every living shell" is asked of
-  // each of these, never of the app's own alone.
-  const every = [...(shells !== undefined ? [shells] : []), ...pageHosts.values()];
+  // Every host there is, as this file holds each: with how it adopts and how
+  // its sweep is stopped, which the host that is handed out does not have.
+  // What is asked of "every living shell" is asked of each of these, never of
+  // the app's own alone.
+  const owned = [...(shells !== undefined ? [shells] : []), ...pageHosts.values()];
+  const every = owned.map((made) => made.host);
 
   return {
-    shells,
+    shells: shells?.host,
     pageAt: (path) => {
       const matched = pageRouter.match(path);
       if (matched === undefined) return undefined;
-      const host = pageHosts.get(matched.name);
+      const host = pageHosts.get(matched.name)?.host;
       const manifest = pageManifests[matched.name];
       if (host === undefined || manifest === undefined) return undefined;
       return { name: matched.name, host, inputs: manifest.params === undefined ? {} : { [manifest.params]: matched.params } };
     },
     pages: Object.entries(pageManifests).map(([name, manifest]) => ({ name, path: manifest.path })),
     adopt: () => {
-      for (const host of every) host.adopt();
+      for (const made of owned) made.adopt();
     },
     // Each host is asked, whatever the one before it answered.
     reset: (principal) => every.map((host) => host.reset(principal)).includes(true),
     deliver: (principal, channel, payload) => every.map((host) => host.deliver(principal, channel, payload)).includes(true),
     stop: () => {
-      for (const host of every) host.stop();
+      for (const made of owned) made.stop();
     },
   };
 };

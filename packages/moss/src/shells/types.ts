@@ -106,18 +106,6 @@ export type ShellHost = {
   // disposed. Waits for the screen to settle — `seeds` pushed, no instance
   // still mounting — for at most `waitMs`, then serves what is there.
   snapshot: (token: string | null, principal: string | null, options?: { waitMs?: number; inputs?: ShellOpening['inputs'] }) => Promise<ShellSnapshot>;
-  // What the app consists of changed (the actions in force are others now, a
-  // role moved, an integration was installed or removed): EVERY LIVING SHELL
-  // this host built is brought level with what its principal holds now, in
-  // place. The kept ones, and the ones built for one connection: a visitor's,
-  // and on a host that keeps none (a page's) everybody's. Definitions that
-  // arrived or changed are registered, mounted instances keep their state,
-  // and new actions become pushable without a rebuild. One that left, or is no
-  // longer granted, is removed: its instances are unmounted. A shell that
-  // cannot adopt is logged and keeps what it held; the rest go on. A shell
-  // built for the length of one read (`snapshot`) is read and ended, and
-  // adopts nothing.
-  adopt: () => void;
   // Publish a message, with what it carries, into every LIVING shell this host
   // has for one principal: the one it keeps for them, or, on a host that
   // keeps none (a page's), the one built for each of their connections — the
@@ -140,7 +128,34 @@ export type ShellHost = {
   // shell for nobody signed in is not addressable here (there is no principal
   // to name); a terminal resets its own via the session's `reset`.
   reset: (principal: string) => boolean;
-  // Stop the idle sweep. For hosts that outlive their server (dev checks,
-  // embedded tools); the timer is unref'd, so a plain process needn't call it.
+};
+
+// A HOST AS WHOEVER MADE IT HOLDS IT: the host it hands out, and the two
+// things it alone does to it. NEITHER IS ON THE HOST. A server is what makes
+// hosts, and each of the two is something a server does to all of them at
+// once: it has every host adopt when what the app consists of changes
+// (`MossServer.refresh`, `replaceActions`, a change another process made), and
+// it stops every host's sweep when it closes (`MossServer.close`). On the
+// host that is handed out (`server.shells`, a page's `host`) they were a
+// second way to each, for one host: an `adopt` that left the other hosts on
+// the old application, and a `stop` kept "for hosts that outlive their
+// server", which nothing can make any more.
+export type OwnedShellHost = {
+  host: ShellHost;
+  // What the app consists of changed (the actions in force are others now, a
+  // role moved, an integration was installed or removed): EVERY LIVING SHELL
+  // this host built is brought level with what its principal holds now, in
+  // place. The kept ones, and the ones built for one connection: a visitor's,
+  // and on a host that keeps none (a page's) everybody's. Definitions that
+  // arrived or changed are registered, mounted instances keep their state,
+  // and new actions become pushable without a rebuild. One that left, or is no
+  // longer granted, is removed: its instances are unmounted. A shell that
+  // cannot adopt is logged and keeps what it held; the rest go on. A shell
+  // built for the length of one read (`snapshot`) is read and ended, and
+  // adopts nothing.
+  adopt: () => void;
+  // Stop the idle sweep. The timer is unref'd, so it never keeps a process
+  // alive; a server that closes, or that refuses to boot, stops it all the
+  // same.
   stop: () => void;
 };

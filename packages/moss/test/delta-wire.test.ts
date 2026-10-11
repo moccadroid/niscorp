@@ -1,8 +1,7 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { createServer as createHttp } from 'node:http';
 import type { Server } from 'node:http';
-import { createShellHost } from '../src/shells';
-import { hostConfig } from './shell-host-double';
+import { hostConfig, standHost } from './shell-host-double';
 import { createSocket } from '../src/socket';
 import { attachSocket } from '../src/server/node';
 import { createWire } from '../src/client';
@@ -59,7 +58,7 @@ const servers: Server[] = [];
 
 // A live server on an ephemeral port, wired the way ./node wires one.
 const listening = async (delta: boolean): Promise<string> => {
-  const shells = createShellHost(hostConfig({
+  const shells = standHost(hostConfig({
     app,
     resolve: async () => ({ roles: ['public'], scope: {}, catalog: { ids: ['roster'], hash: 'h' }, variants: new Map() }),
     wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),

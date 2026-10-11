@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { ActionDefinition } from '@niscorp/nova';
-import { createShellHost } from '../src/shells';
 import type { ShellHost } from '../src/shells';
-import { hostConfig } from './shell-host-double';
+import { hostConfig, standHost } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import { createSocket } from '../src/socket';
 import { offerToken, offeredToken } from '../src/protocol';
@@ -34,8 +33,8 @@ const context: HostSetup = {
 };
 
 const socketOf = (): { accept: ReturnType<typeof createSocket>; shells: ShellHost; pages: ShellHost } => {
-  const shells = createShellHost(hostConfig(context));
-  const pages = createShellHost(hostConfig({ ...context, manifest: page, kept: false }));
+  const shells = standHost(hostConfig(context));
+  const pages = standHost(hostConfig({ ...context, manifest: page, kept: false }));
   const router = createPageRouter({ find: page });
   const accept = createSocket({
     session: (token) => (token === 'good' ? 'usr_1' : null),

@@ -3,9 +3,8 @@ import { createPglitePool } from '@niscorp/vex/pglite';
 import { initSessions, mintSession, sessionOf, sessionRemainingMs, revokeSession, revokeAllFor } from '../src/identity/sessions';
 import { sessionRevokerOf, sessionVerifierOf } from '../src/identity/verifier';
 import { mintDevToken } from '../src/identity';
-import { createShellHost } from '../src/shells';
 import type { ShellHost } from '../src/shells';
-import { hostConfig } from './shell-host-double';
+import { hostConfig, standHost } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import type { FunctionSession, NiscApp } from '../src/manifest';
 import type { PgPool } from '@niscorp/vex';
@@ -182,7 +181,7 @@ describe('sign-out — session.revoke() under moss sessions', () => {
     // How a server finds what a sign-out forgets: asked of the identity
     // module, for the credential the deployment chose.
     const revokeSessions = sessionRevokerOf({ pool, session });
-    return createShellHost(hostConfig({ ...ctx, ...(revokeSessions !== undefined ? { revokeSessions } : {}) }));
+    return standHost(hostConfig({ ...ctx, ...(revokeSessions !== undefined ? { revokeSessions } : {}) }));
   };
 
   it('deletes every session the principal holds — a copied token no longer signs in', async () => {
@@ -251,7 +250,7 @@ describe('onSession — a microtask is enough to reach the shell', () => {
     };
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      await createShellHost(hostConfig(ctx)).session(mintDevToken('i_mara'), 'i_mara');
+      await standHost(hostConfig(ctx)).session(mintDevToken('i_mara'), 'i_mara');
     } finally {
       spy.mockRestore();
     }

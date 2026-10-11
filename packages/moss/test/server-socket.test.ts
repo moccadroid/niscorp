@@ -44,7 +44,7 @@ const socketOf = (runtime: Partial<NiscRuntime>, tokens: Map<string, string> = n
     identity: { resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, key: 'public' }) },
     running: { catalogFor: () => ({ ids: ['home'], hash: 'h' }) },
     hosts: {
-      shells: { session: async () => ({ ...session, shell: Object.create(null) }), snapshot: () => Promise.reject(new Error('not asked here')), adopt: () => undefined, deliver: () => false, list: () => [], reset: () => false, stop: () => undefined },
+      shells: { session: async () => ({ ...session, shell: Object.create(null) }), snapshot: () => Promise.reject(new Error('not asked here')), deliver: () => false, list: () => [], reset: () => false },
       pageAt: () => undefined,
     },
   });

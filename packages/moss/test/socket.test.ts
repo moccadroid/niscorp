@@ -4,11 +4,10 @@ import { createSocket, DEFAULT_ANONYMOUS_SHELL_MAX } from '../src/socket';
 import type { Connection, SocketConfig } from '../src/socket';
 import { CLOSE_AT_CAPACITY, CLOSE_INVALID_TOKEN, CLOSE_SIGNED_OUT, CLOSE_SHELL_FAILED, CLOSE_PROTOCOL_MISMATCH, PROTOCOL, PROTOCOL_MIN, ServerMessageSchema, offerToken } from '../src/protocol';
 import type { ServerMessage } from '../src/protocol';
-import { createShellHost } from '../src/shells';
 import type { ShellHost, ShellSession } from '../src/shells';
 import { sealSession } from '../src/identity';
 import type { NiscApp } from '../src/manifest';
-import { hostConfig } from './shell-host-double';
+import { hostConfig, standHost } from './shell-host-double';
 
 // A fake transport — the four-function Connection seam, capturing everything
 // so the protocol can be driven headlessly (no websocket).
@@ -74,10 +73,8 @@ const recordingSession = (): ShellSession & { calls: string[] } => {
 const hostFor = (session: ShellSession): ShellHost => ({
   session: async () => session,
   snapshot: async () => ({ frame: [], trees: {}, settled: true, live: true, why: [], drawnWith: [] }),
-  adopt: () => {},
   list: () => [],
   reset: () => false,
-  stop: () => {},
   // `deliver` arrived with the socket fan-out and this literal did not follow —
   // exactly the drift the comment above warned about, which went unseen because
   // this directory was never typechecked. False: nothing in these tests pushes
@@ -1145,8 +1142,8 @@ describe('socket — a sign-in handed over sealed', () => {
 describe('socket — a connection that closed before its session was ready', () => {
   const counter = { id: 'counter', data: { n: 0 }, triggers: [{ event: 'ui:click', ref: 'bump', do: [{ increment: 'n' }] }] };
   const app = { charter: { public: ['counter'] }, assignments: {}, actions: { counter }, shell: { canvases: [{ id: 'main', initial: 'counter' }] } } as unknown as NiscApp;
-  const realHost = (): ShellHost =>
-    createShellHost(
+  const realHost = (): ReturnType<typeof standHost> =>
+    standHost(
       hostConfig({
         app,
         resolve: async () => ({ roles: ['public'], scope: {}, catalog: { ids: ['counter'], hash: 'h' }, variants: new Map() }),

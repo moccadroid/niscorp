@@ -188,13 +188,11 @@
 . RunTurn.role
 . ServerMessage
 . ShellHost
-. ShellHost.adopt
 . ShellHost.deliver
 . ShellHost.list
 . ShellHost.reset
 . ShellHost.session
 . ShellHost.snapshot
-. ShellHost.stop
 . ShellManifest
 . ShellManifest.canvases
 . ShellManifest.components

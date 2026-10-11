@@ -227,6 +227,22 @@ describe('the shell hosts — what each host is told', () => {
     }
   });
 
+  // ONE WAY TO EACH. A host that is handed out (`server.shells`, a page's
+  // `host`) carried `adopt` and `stop`: the first did for one host what
+  // `server.refresh` does for all of them, and left the others on the old
+  // application; the second was `server.close` for one host. Both are the
+  // wiring's alone (`hosts.adopt`, `hosts.stop`).
+  it('a host that is handed out has no way to adopt and none to stop: those are asked of all of them at once', () => {
+    const hosts = buildShellHosts(partsWith(shipped));
+    try {
+      const handedOut = ['session', 'snapshot', 'deliver', 'list', 'reset'];
+      expect(Object.keys(hosts.shells ?? {})).toEqual(handedOut);
+      expect(Object.keys(hosts.pageAt('/docs')?.host ?? {})).toEqual(handedOut);
+    } finally {
+      hosts.stop();
+    }
+  });
+
   it('stopping stops every host’s sweep: the app’s, and each page’s', () => {
     const set = vi.spyOn(globalThis, 'setInterval');
     const clear = vi.spyOn(globalThis, 'clearInterval');

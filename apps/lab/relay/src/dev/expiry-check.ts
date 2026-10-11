@@ -162,8 +162,7 @@ const main = async (): Promise<void> => {
   wire.dispose();
   alex.close();
   jordan.close();
-  server.socket.stop();
-  server.shells?.stop();
+  server.close();
   httpServer.close();
   await new Promise((r) => setTimeout(r, 150));
   await runtime.db.close();

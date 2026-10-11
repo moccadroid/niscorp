@@ -1,8 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { ActionDefinition } from '@niscorp/nova';
-import { createShellHost } from '../src/shells';
 import type { ShellSnapshot } from '../src/shells';
-import { hostConfig } from './shell-host-double';
+import { hostConfig, standHost } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import type { NiscApp, PageManifest } from '../src/manifest';
 import type { MossServer } from '../src/server';
@@ -56,10 +55,10 @@ const serverOf = (): MossServer => {
     wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
     entries: new Map(),
   };
-  const shells = createShellHost(hostConfig(context));
+  const shells = standHost(hostConfig(context));
   const hosts = new Map([
-    ['docs', createShellHost(hostConfig({ ...context, manifest: docs, kept: false }))],
-    ['posts', createShellHost(hostConfig({ ...context, manifest: posts, kept: false }))],
+    ['docs', standHost(hostConfig({ ...context, manifest: docs, kept: false }))],
+    ['posts', standHost(hostConfig({ ...context, manifest: posts, kept: false }))],
   ]);
   const router = createPageRouter({ docs, posts });
   return {

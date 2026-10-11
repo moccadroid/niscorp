@@ -2,8 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { QueryResponse } from '@niscorp/vex';
 import type { FetchFn } from '@niscorp/nova';
 import { createWireFollower } from '../src/data/follow';
-import { createShellHost } from '../src/shells';
-import { hostConfig } from './shell-host-double';
+import { hostConfig, standHost } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import type { NiscApp } from '../src/manifest';
 import type { Connection } from '../src/socket';
@@ -98,7 +97,7 @@ describe('a shell following a read', () => {
     const sent: string[] = [];
     const connection: Connection = { send: (text) => void sent.push(text), close: () => {}, onMessage: () => {}, onClose: () => {} };
 
-    const session = await createShellHost(hostConfig(ctx)).session('t', 'usr_1');
+    const session = await standHost(hostConfig(ctx)).session('t', 'usr_1');
     await tick();
     session.attach(connection);
     await tick();

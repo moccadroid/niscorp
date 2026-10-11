@@ -4,9 +4,8 @@ import { join } from 'node:path';
 import { Hono } from 'hono';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { ActionDefinition } from '@niscorp/nova';
-import { createShellHost } from '../src/shells';
 import type { ShellSnapshot } from '../src/shells';
-import { hostConfig } from './shell-host-double';
+import { hostConfig, standHost } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import type { NiscApp, PageManifest } from '../src/manifest';
 import type { MossServer } from '../src/server';
@@ -32,8 +31,8 @@ const serverOf = (): MossServer => {
     wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
     entries: new Map(),
   };
-  const shells = createShellHost(hostConfig(context));
-  const pageHost = createShellHost(hostConfig({ ...context, manifest: docs, kept: false }));
+  const shells = standHost(hostConfig(context));
+  const pageHost = standHost(hostConfig({ ...context, manifest: docs, kept: false }));
   const router = createPageRouter({ docs });
   return Object.assign(new Hono(), {
     shells,

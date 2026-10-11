@@ -6,8 +6,7 @@ import { WebSocket as Ws } from 'ws';
 import type { FunctionSession, NiscApp } from '../src/manifest';
 import type { MossServer } from '../src/server';
 import { attachSocket } from '../src/server/node';
-import { createShellHost } from '../src/shells';
-import { hostConfig } from './shell-host-double';
+import { hostConfig, standHost } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import { renderDocument } from '../src/documents';
 import { openSealed, ownOriginOf, sealSession, sessionCookies, tokenFromCookie } from '../src/identity';
@@ -66,7 +65,7 @@ const serving = async (app: NiscApp, principalOf: (token: string) => string | nu
     resolve: async (principal) => ({ roles: [principal === null ? 'public' : 'member'], scope: {}, catalog: catalogOf(principal), variants: new Map() }),
     wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
   };
-  const shells = createShellHost(hostConfig(context));
+  const shells = standHost(hostConfig(context));
   // revalidation off: whatever closes a socket here is not the timer
   const socket = createSocket({ session: principalOf, catalog: catalogOf, shells, revalidateMs: 0, ...(lastsMs === undefined ? {} : { sessionLastsMs: () => lastsMs }) });
   const http = createHttp((_request, answer) => answer.end());
