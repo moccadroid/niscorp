@@ -86,7 +86,7 @@ export const resolveVariantsForRoles = (app: Pick<NiscApp, 'charter' | 'layouts'
 // `layouts` gives its action. The base is never edited: a variant is a copy
 // that differs in its layout. An id that names no action gives nothing. Who
 // builds a shell (`definitionsFor`, below) and who audits what a role's
-// actions reach (./closure.ts) both read the definitions through this.
+// actions reach (./verify.ts) both read the definitions through this.
 export const withVariants = (
   actions: Readonly<Record<string, ActionDefinition>>,
   ids: readonly string[],

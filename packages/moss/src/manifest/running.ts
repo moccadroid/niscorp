@@ -1,12 +1,11 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import type { ShellManifest } from './app';
 import type { ShellArtifacts } from './artifacts';
-import { shellComponents } from './components';
+import { entriesOf, shellComponents } from './artifacts';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
-import { entriesOf } from './entries';
 import { createGeneration } from './generation';
 import type { Generation, Pointer } from './generation';
-import { freezeDeep } from './handover';
+import { freezeDeep } from './schema';
 import { createRoleMemo, narrowedBy } from './roles';
 import type { Catalog, InstalledOnly } from './roles';
 import { candidateOf, refusalOf, verifyManifest } from './verify';
@@ -30,7 +29,7 @@ import type { ManifestCandidate, ManifestReport, ShippedManifest } from './verif
 // by serving it means taking it out again while requests are being answered.
 //
 // What the app shipped does not change: its manifest was frozen when it was
-// handed over (./handover.ts). A set is frozen the same way when it is taken,
+// handed over (./schema.ts). A set is frozen the same way when it is taken,
 // so what is in force is what was verified, and stays it.
 // ═══════════════════════════════════════════════════════════════
 
@@ -235,7 +234,7 @@ const createComponentNames = (read: (shell: ShellManifest) => ComponentNames): {
 
 export const createRunningManifest = (config: RunningManifestConfig): RunningManifest => {
   const { shipped } = config;
-  // THE ENTRIES THE APP SERVES, read off what it shipped once (./entries.ts)
+  // THE ENTRIES THE APP SERVES, read off what it shipped once (./artifacts.ts)
   // and held here: a verification is handed these, and so is whoever looks one
   // up. Nothing else reads them off the app while it runs.
   const entries = entriesOf(shipped);

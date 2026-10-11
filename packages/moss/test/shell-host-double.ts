@@ -1,5 +1,5 @@
 import type { ActionDefinition, FetchFn, LayoutNode } from '@niscorp/nova';
-import { shellComponents } from '../src/manifest/components';
+import { shellComponents } from '../src/manifest/artifacts';
 import { definitionsFor } from '../src/manifest/roles';
 import type { NiscApp, ShellManifest } from '../src/manifest';
 import { createShellHost } from '../src/shells';

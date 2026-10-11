@@ -6,9 +6,9 @@
 //
 // WHAT AN APP HANDS OVER is a type (./app.ts): the charter, the actions, the
 // layout variants, the shell and the pages, and the seams an app fills in. It
-// is read by a schema when it is handed over (./handover.ts, ./schema.ts), and
-// a manifest that does not parse refuses the boot. Then it is frozen: it is
-// not the app's to edit.
+// is read by a schema when it is handed over (./schema.ts), and a manifest
+// that does not parse refuses the boot. Then it is frozen: it is not the app's
+// to edit.
 //
 // WHAT IT CONSISTS OF RIGHT NOW has one owner (./running.ts): what was shipped
 // and the sets of actions that arrive while it runs, changed in one place and
@@ -21,11 +21,13 @@
 // is where whatever decides what an id resolves to is asked.
 //
 // EVERY COMPONENT NAME A SHELL'S TREES MAY MENTION is read off the same
-// artifacts (./components.ts), each with the contract declared for it.
+// artifacts (`shellComponents`, ./artifacts.ts), each with the contract
+// declared for it.
 //
-// WHICH ENTRIES AN APP SHIPPED is said by one function (./entries.ts). The
-// running manifest holds what it answers while a server runs, and is their
-// source; the step that migrates before one starts asks the function itself.
+// WHICH ENTRIES AN APP SHIPPED is said by one function (`entriesOf`,
+// ./artifacts.ts). The running manifest holds what it answers while a server
+// runs, and is their source; the step that migrates before one starts asks
+// the function itself.
 // It is not the only place they are held. Its list is copied once, at boot,
 // into the cache vex replays from (../data), and a replay resolves its
 // fingerprint there and asks nothing here. That cache also holds what this
@@ -34,13 +36,14 @@
 //
 // WHETHER IT MAY BE SERVED is one verification (./verify.ts), asked at boot, at
 // every change and before a bundle is let in: the charter, with what each
-// role's actions reach audited (./closure.ts), every entry's reach, the layout
-// variants.
+// role's actions reach audited (`auditClosure`), every entry's reach, the
+// layout variants.
 //
 // WHAT SOMEBODY ELSE WROTE is asked two more things before it is let in, by
 // whoever lets it in: whether a layout composes what the kit has
-// (./layout.ts), and which chains of steps never end (./verify.ts). A feature
-// asks both through the seams the server makes of them (../feature).
+// (`layoutMisfits`), and which chains of steps never end (`endlessChains`;
+// both ./verify.ts). A feature asks both through the seams the server makes of
+// them (../feature).
 //
 // WHAT A SET OF ROLES HOLDS of it (./roles.ts) is the charter applied: the
 // action ids granted, and the layout variant held of each, remembered until
@@ -68,13 +71,11 @@ export type {
   ShellCanvas,
   ShellManifest,
 } from './app';
-export { entriesOf } from './entries';
+export { entriesOf } from './artifacts';
 export type { Pointer } from './generation';
-export { receiveManifest } from './handover';
-export { layoutMisfits } from './layout';
-export type { KitComponents } from './layout';
 export type { Catalog } from './roles';
 export { createRunningManifest } from './running';
 export type { OwnedActions, RunningManifest } from './running';
-export { endlessChains, refusalOf, verifyApp } from './verify';
-export type { ManifestReport } from './verify';
+export { receiveManifest } from './schema';
+export { endlessChains, layoutMisfits, refusalOf, verifyApp } from './verify';
+export type { KitComponents, ManifestReport } from './verify';

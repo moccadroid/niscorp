@@ -435,5 +435,5 @@ export type PageManifest = ShellManifest & {
 
 // The one name an app file needs besides its artifacts. It returns its
 // argument: a manifest is read by its schema, and frozen, where it is handed
-// over (./handover.ts), so an app may still assemble it after this call.
+// over (./schema.ts), so an app may still assemble it after this call.
 export const defineApp = (app: NiscApp): NiscApp => app;
