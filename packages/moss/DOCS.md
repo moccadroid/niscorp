@@ -989,6 +989,15 @@ lets them replay, as vex's discovery lists them.
   each targets state that heals on its own clock. Unset, every path behaves as
   in one process. The wiring is `src/server/fabric.ts` and
   `src/server/signals.ts`; it is the server's own and is not exported.
+  **What the transport hands to `apply` is read by a schema** before anything
+  of it is used: the object moss published, with exactly its fields. `apply`
+  takes whatever the transport read off its wire (`unknown`), so a transport
+  hands over what `JSON.parse` answered and casts nothing. What does not parse
+  (text that was not parsed, a field of the wrong type, a field no message
+  has, a `kind` this process does not know) is dropped, and the first one is
+  logged with what was wrong with it and nothing it carried
+  (`[moss:fabric] the transport handed over what is not a message…`); the ones
+  after it are dropped without a line.
 - The generation pointer — the persistent counter `server.refresh()` and
   `server.replaceActions()` move (`moss_generation`, one row, part of
   `MOSS_SEQUENCE`). Each process polls it (on `sessionRevalidateMs`; 60s when

@@ -7,12 +7,15 @@
 // telemetry goes (./telemetry.ts), and how a signal reaches a second process
 // (./fabric.ts).
 //
-// It is types, and the two small functions every emitter of a span shares.
-// What moss DOES with any of it belongs to the module that asks.
+// It is types, the schema of what crosses between two processes (the one
+// thing here that arrives from outside), and the two small functions every
+// emitter of a span shares. What moss DOES with any of it belongs to the
+// module that asks.
 //
 // This module imports nothing else of moss; every other module may import it.
 // ═══════════════════════════════════════════════════════════════
 
+export { FabricMessageSchema } from './fabric';
 export type { Fabric, FabricMessage, FabricSignal } from './fabric';
 export type { NiscRuntime, SessionVerifier } from './runtime';
 export { emitterOf, spanClock } from './telemetry';

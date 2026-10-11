@@ -517,6 +517,10 @@ Not here: stopping the seeding of `vex_cache`. That belongs to the artifactory.
      `src/server/fabric.ts:57–79` switches on `message.kind` and reads
      `principal`, `tag` and `channel` as the type the host's transport gave
      them. 4.1 named this one (`fabric.ts:82`), and no phase took it.
+     *Parsed since (2026-10-11):* `FabricMessageSchema`
+     (`src/runtime/fabric.ts`) is what the message's type is inferred from,
+     and `src/server/fabric.ts` reads what a transport hands over by it. What
+     does not parse is dropped, and the first one is logged.
    - Held by hand, not by a schema: the parameters of an upgrade
      (`src/socket/handshake.ts:25`, an integer in a range;
      `src/socket/socket.ts:63`, a regular expression), an integration's error
@@ -593,8 +597,7 @@ than `server` (867), `data` (784), `manifest` (758) and `shells` (758).
 **What is left.** None of it stops the artifactory; each is somebody's to
 decide.
 
-- **A boundary without a schema**, and **two defects**: the fabric's message
-  (Part 9, item 4), the signing seed, and the dev sign-in (4.3, 11 and 21).
+- **Two defects**: the signing seed, and the dev sign-in (4.3, 11 and 21).
 - **Names that stayed in the main entry and that nothing in this repository
   imports**, each in doubt, not decided: `resolveRoles`, `resolvePolicy`,
   `resolveVariants` (three resolvers that read `assignments` only; the server
@@ -622,4 +625,7 @@ written, and each got a test that failed first.
   (`src/server/transport.ts`), so no host says them. The dev plugin, which
   hears vite's listener before any app has booted and swaps apps on an edit,
   keeps one transport for each booted app and retires it with the app.
+- **The fabric's message is parsed** (Part 9, item 4). The schema is the
+  source of the type; a message that does not parse is dropped and the first
+  one is logged with what was wrong.
 

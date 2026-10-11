@@ -194,6 +194,12 @@ Where the right column says there is nothing to call and an app did call it, say
 
 - `invalidateIdentity`, `invalidateTenant` and `refresh` forget what moss holds of a principal. A record that was being resolved while one of them ran used to be held when it landed, so a role change or an install made at that moment was not seen until the record expired by itself (`sessionRevalidateMs`). It is now handed to whoever was waiting for it and not held. An app has nothing to change.
 
+**What a fabric's transport hands over is read by a schema.**
+
+- `runtime.fabric` carries three signals between the processes of one deployment. What its `subscribe` handed back was used as the type said it was: a message from another process, off a wire that is the host's, was switched on unread, and a `principal` that was not a string reached the identity cache as it came. It is parsed now: the object moss published, with exactly its fields. What does not parse is dropped, and the first one is logged with what was wrong with it and nothing it carried (`[moss:fabric] the transport handed over what is not a message…`).
+- The applier `subscribe` is handed takes `unknown` where it took a `FabricMessage`: a transport passes on what `JSON.parse` answered and casts nothing. A transport typed against the old applier still compiles.
+- **A transport that hands the message over as it was published has nothing to change.** One that handed over the text it received parses it first; one that added a field of its own to moss's message carries that field beside the message, not in it.
+
 **(4) INTEGRATIONS**
 
 **Integrations read and write through vex, and a feature is handed no pool.**

@@ -31,6 +31,7 @@
 // mechanism like generation could not have used NOTIFY, and this one can.
 // ═══════════════════════════════════════════════════════════════
 
+import { FabricMessageSchema } from '../runtime';
 import type { Fabric, FabricSignal } from '../runtime';
 
 // The three local-only appliers — what a remote signal runs, and what the
@@ -54,7 +55,25 @@ export const wireFabric = (
 ): ((signal: FabricSignal) => void) => {
   if (fabric === undefined) return () => {};
 
-  fabric.subscribe((message) => {
+  // Said once for a wiring. A transport that hands over what is not a message
+  // does it for every one, and a line for each would be the log.
+  let refusalSaid = false;
+
+  fabric.subscribe((handed) => {
+    // WHAT A TRANSPORT HANDS OVER CAME FROM ANOTHER PROCESS, off a wire that is
+    // the host's: it is read by the schema before anything of it is used
+    // (../runtime, fabric.ts). What is not a message is dropped: every signal
+    // heals by a clock of its own (above), so one that is lost costs a wait.
+    // The line says what was wrong with it and nothing it carried.
+    const read = FabricMessageSchema.safeParse(handed);
+    if (!read.success) {
+      if (refusalSaid) return;
+      refusalSaid = true;
+      const wrong = read.error.issues.map((issue) => `${issue.path.join('.') || '(the message)'}: ${issue.message}`).join('; ');
+      console.error(`[moss:fabric] the transport handed over what is not a message, and it was dropped (${wrong}). Said once: what follows it and does not parse is dropped without a line.`);
+      return;
+    }
+    const message = read.data;
     // Our own echo: this process already applied it before publishing. Dropping
     // it here means a signal is never applied twice on the process that sent it,
     // whatever the transport does with self-delivery.

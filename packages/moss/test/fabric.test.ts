@@ -7,7 +7,7 @@
 // The integration uses two real shell hosts over one in-memory bus — the same
 // `wireFabric` and the same appliers the server wires, so this exercises the
 // real plumbing, not a mock of it.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { wireFabric } from '../src/server/fabric';
 import type { FabricApply } from '../src/server/fabric';
 import type { Fabric, FabricMessage } from '../src/runtime';
@@ -39,11 +39,13 @@ describe('wireFabric', () => {
     };
     return { calls, apply };
   };
+  // `feed` is a message another moss process published; `hand` is whatever a
+  // transport read off its wire, which nothing has typed.
   const collector = () => {
     const published: FabricMessage[] = [];
-    let deliver: ((m: FabricMessage) => void) | undefined;
+    let deliver: ((m: unknown) => void) | undefined;
     const fabric: Fabric = { publish: (m) => published.push(m), subscribe: (fn) => { deliver = fn; } };
-    return { published, fabric, feed: (m: FabricMessage) => deliver?.(m) };
+    return { published, fabric, feed: (m: FabricMessage) => deliver?.(m), hand: (m: unknown) => deliver?.(m) };
   };
 
   it('publish stamps this process’s origin and hands it to the transport', () => {
@@ -85,6 +87,56 @@ describe('wireFabric', () => {
   it('no fabric: publish is a no-op and nothing subscribes', () => {
     const publish = wireFabric(undefined, 'me', spy().apply);
     expect(() => publish({ kind: 'nudge', principal: 'p', channel: 'c' })).not.toThrow();
+  });
+
+  // What a transport hands over came from another process, off a wire moss
+  // does not own. It was switched on and its fields used as the type said they
+  // were: a principal that was a number reached the identity cache as one.
+  describe('what a transport hands over is read by a schema', () => {
+    const notMessages: readonly [string, unknown][] = [
+      ['a field of the wrong type', { kind: 'nudge', principal: 7, channel: 'roster', origin: 'other' }],
+      ['a field that is missing', { kind: 'invalidate-tenant', origin: 'other' }],
+      ['no origin', { kind: 'invalidate-identity', principal: 'p1' }],
+      ['a kind this process does not know', { kind: 'reboot', origin: 'other' }],
+      ['a field no message has', { kind: 'invalidate-identity', principal: 'p1', origin: 'other', also: 'this' }],
+      ['text', '{"kind":"nudge","principal":"p1","channel":"roster","origin":"other"}'],
+      ['nothing', null],
+    ];
+
+    it.each(notMessages)('%s: nothing is applied', (_what, handed) => {
+      const said = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const { fabric, hand } = collector();
+        const { calls, apply } = spy();
+        wireFabric(fabric, 'me', apply);
+        expect(() => hand(handed)).not.toThrow();
+        expect(calls).toEqual([]);
+        expect(said).toHaveBeenCalledTimes(1);
+      } finally {
+        said.mockRestore();
+      }
+    });
+
+    it('it is said once, with what was wrong and none of what it carried; the ones after it are dropped without a line, and a message is still applied', () => {
+      const said = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const { fabric, hand, feed } = collector();
+        const { calls, apply } = spy();
+        wireFabric(fabric, 'me', apply);
+        hand({ kind: 'nudge', principal: 7, channel: 'the-secret-channel', origin: 'other' });
+        hand({ kind: 'reboot', origin: 'other' });
+        hand(null);
+        expect(said).toHaveBeenCalledTimes(1);
+        const line = said.mock.calls.flat().map(String).join(' ');
+        expect(line).toContain('[moss:fabric]');
+        expect(line).toContain('principal');
+        expect(line).not.toContain('the-secret-channel');
+        feed({ kind: 'nudge', principal: 'p1', channel: 'roster', origin: 'other' });
+        expect(calls).toEqual([['nudge', 'p1', 'roster']]);
+      } finally {
+        said.mockRestore();
+      }
+    });
   });
 });
 
