@@ -52,6 +52,8 @@ const instance = (instanceId: string, canvasId: string, children: RenderNode[]):
 
 const FRAME: RenderNode[] = [component('CanvasSlot', { canvasId: 'main' }), component('CanvasSlot', { canvasId: 'aside' })];
 
+// A wait on the thing itself (what ink has written to the screen): it is asked
+// again until it holds. `ms` is how long a failure takes to say so.
 const until = (pred: () => boolean, why: string, ms = 5_000): Promise<void> =>
   new Promise((resolve, reject) => {
     const started = Date.now();
@@ -293,6 +295,10 @@ describe('the ink target — the focus ring and leaving', () => {
     await t.shows('[1]');
     t.mount.destroy();
     mounts.splice(0);
+    // TIME IS WHAT IS WAITED FOR: ink tells its app it has ended on its own
+    // schedule, after the unmount, and nothing says when it has finished
+    // saying so. 150 ms is several of its frames; the wait is for nothing to
+    // have happened in them.
     await new Promise((resolve) => setTimeout(resolve, 150));
     expect(t.quit).not.toHaveBeenCalled();
   });
@@ -312,6 +318,10 @@ describe('the ink target — the focus ring and leaving', () => {
     const t = harness({ main: [component('Broken')] }, { registry });
     await t.shows('the kit broke'); // ink's own account of it, on the screen it is leaving
     await until(() => t.quit.mock.calls.length + unhandled.mock.calls.length > 0, 'the terminal ended, one way or the other');
+    // TIME IS WHAT IS WAITED FOR: the terminal has ended one way, and the
+    // question is whether it then also ends the other. ink's rejection and
+    // the host's quit are not the same turn; 50 ms is for the second to
+    // arrive if it is going to.
     await new Promise((resolve) => setTimeout(resolve, 50));
     process.off('unhandledRejection', unhandled);
     expect(unhandled).not.toHaveBeenCalled();
@@ -328,6 +338,9 @@ describe('the ink target — the focus ring and leaving', () => {
     t.wipe();
     t.state.trees = { main: [component('Text', {}, [text('two')])] };
     t.mount.update();
+    // TIME IS WHAT IS WAITED FOR: ink paints on a timer of its own (it holds a
+    // frame back for about 30 ms), so an update that was going to paint has
+    // painted well within 100.
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(t.shown()).not.toContain('two');
   });

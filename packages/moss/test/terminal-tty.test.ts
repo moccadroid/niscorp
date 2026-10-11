@@ -21,6 +21,8 @@ const component = (name: string, props: Record<string, unknown> = {}, children: 
 });
 const text = (value: string): RenderNode => ({ type: 'text', value });
 
+// A turn of the event loop, not a wait on a clock: the terminal reads its
+// keyboard and writes its screen on the turn after it is told to.
 const tick = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
 const harness = (trees: Record<string, RenderNode[]>, options: { status?: () => 'connecting' | 'open' | 'closed' } = {}) => {

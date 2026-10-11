@@ -41,6 +41,9 @@ const app = {
   shell: { canvases: [{ id: 'main', initial: 'roster' }] },
 } as unknown as NiscApp;
 
+// A wait on the thing itself, over a real websocket: it is asked again until
+// it holds. `ms` is how long a failure takes to say so, not a time anything
+// is given to happen in.
 const until = (pred: () => boolean, why: string, ms = 10_000): Promise<void> =>
   new Promise((resolve, reject) => {
     const started = Date.now();

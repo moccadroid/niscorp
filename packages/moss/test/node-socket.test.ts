@@ -82,15 +82,16 @@ describe('the ws transport', () => {
       const closed = new Promise<number>((resolve) => client.once('close', (code) => resolve(code)));
       client.send(Buffer.from([0xff, 0xfe, 0xfd]), { binary: false });
       expect(await closed).toBe(1007);
-      // give a throw out of the server's data handler the turn it would need
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      expect(escaped).toEqual([]);
 
       // The connection beside it is still being served, and so is a new one.
       for (const other of [bystander, await opened(url)]) {
         expect(await answered(other, 'still here')).toBe('10');
         other.close();
       }
+      // Nothing was thrown out of the server's data handler. Asked here, after
+      // the server has answered two more messages: a throw from the frame it
+      // refused would have come before either of them (it slept 50 ms for that).
+      expect(escaped).toEqual([]);
       expect(warned).toHaveBeenCalledTimes(1);
     } finally {
       process.off('uncaughtException', onEscape);
@@ -234,23 +235,31 @@ describe('the ws transport — a server’s socket says how it is to be attached
 describe('the ws transport — the upgrade says who is asking', () => {
   // the real protocol layer behind the real transport; what it was asked, and
   // every request line it was reached by (what an access log would hold)
-  const serving = async (decidingTakesMs = 0): Promise<{ url: string; requestLines: string[]; asked: string[]; served: (string | null)[] }> => {
+  // `deciding`: who a token is, is not answered until this resolves. Absent:
+  // at once. `gone` resolves when a peer's raw socket has closed under the
+  // server, which is how a test knows the server has seen it go.
+  const serving = async (deciding: Promise<void> = Promise.resolve()): Promise<{ url: string; requestLines: string[]; asked: string[]; served: (string | null)[]; gone: Promise<void> }> => {
     const requestLines: string[] = [];
     const asked: string[] = [];
     const served: (string | null)[] = [];
+    const peer = { gone: (): void => {} };
+    const gone = new Promise<void>((resolve) => void (peer.gone = resolve));
     const accept = createSocket({
-      session: async (token) => (asked.push(token), await new Promise((later) => setTimeout(later, decidingTakesMs)), token === 'tok/with+symbols=' ? 'usr_1' : null),
+      session: async (token) => (asked.push(token), await deciding, token === 'tok/with+symbols=' ? 'usr_1' : null),
       catalog: (principal) => (served.push(principal), { ids: [], hash: 'h' }),
       revalidateMs: 0,
     });
     const httpServer = createHttp((_req, res) => res.end('ok'));
-    httpServer.on('upgrade', (req) => void requestLines.push(`${req.method} ${req.url}`));
+    httpServer.on('upgrade', (req, socket) => {
+      requestLines.push(`${req.method} ${req.url}`);
+      socket.once('close', () => peer.gone());
+    });
     attachSocket(httpServer, accept);
     await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve));
     servers.push(httpServer);
     const address = httpServer.address();
     if (address === null || typeof address === 'string') throw new Error('no port');
-    return { url: `ws://127.0.0.1:${address.port}/socket`, requestLines, asked, served };
+    return { url: `ws://127.0.0.1:${address.port}/socket`, requestLines, asked, served, gone };
   };
 
   it('a terminal holding a token is served as its principal, and the token is in no request line', async () => {
@@ -327,16 +336,21 @@ describe('the ws transport — the upgrade says who is asking', () => {
   // nobody's to listen to: a peer that resets it then must be that request's
   // alone, not an 'error' thrown out of Node.
   it('a peer that is gone before it is answered takes nothing down, and leaves nothing attached', async () => {
-    const { url, asked, served } = await serving(80);
+    const verifier = { decide: (): void => {} };
+    const deciding = new Promise<void>((resolve) => void (verifier.decide = resolve));
+    const { url, asked, served, gone } = await serving(deciding);
     const { hostname, port } = new URL(url);
     const peer = connectTcp(Number(port), hostname);
     await new Promise<void>((connected) => peer.once('connect', () => connected()));
-    // it offers a token, so who it is takes the verifier's 80 ms to decide — and it is gone before that
+    // it offers a token, so who it is waits on the verifier — and it is gone before the verifier says
     peer.write(`GET /socket?protocol=${PROTOCOL} HTTP/1.1\r\nHost: ${hostname}:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Protocol: ${offerToken('tok/with+symbols=').join(', ')}\r\n\r\n`);
     await vi.waitFor(() => expect(asked).toHaveLength(1));
     peer.resetAndDestroy();
-    await new Promise((decided) => setTimeout(decided, 250));
-    expect(served).toEqual(['usr_1']); // decided after it had gone, and said to nobody
+    // The server has seen it go; only then does the verifier answer. (It slept
+    // 250 ms here, against a verifier that took 80.)
+    await gone;
+    verifier.decide();
+    await vi.waitFor(() => expect(served).toEqual(['usr_1'])); // decided after it had gone, and said to nobody
     const next = await opened(`${url}?protocol=${PROTOCOL}`);
     await vi.waitFor(() => expect(served).toEqual(['usr_1', null]));
     next.close();

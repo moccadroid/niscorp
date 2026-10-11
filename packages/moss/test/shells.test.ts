@@ -8,8 +8,10 @@ import { hostConfig } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import type { FunctionSession, NiscApp } from '../src/manifest';
 import type { Connection } from '../src/socket';
+import { turn } from './turn';
 
-const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+// A turn of the event loop (./turn.ts says why that is not a wait on a clock).
+const tick = turn;
 
 // A connection that records what it was sent. The four-function seam, faked —
 // the same shape ./node's ws transport provides.

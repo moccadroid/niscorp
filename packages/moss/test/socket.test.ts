@@ -1257,10 +1257,13 @@ describe('socket — a connection that closed before its session was ready', () 
     const asked = vi.fn(async () => session);
     let release = (): void => {};
     const gate = new Promise<void>((resolve) => void (release = resolve));
-    const accept = createSocket(ctxWith({ shells: { session: asked }, catalog: async () => (await gate, CATALOG), revalidateMs: 0 }));
+    // The catalog says when it has been asked, and answers when the test says.
+    const catalog = { asked: (): void => {} };
+    const beingAsked = new Promise<void>((resolve) => void (catalog.asked = resolve));
+    const accept = createSocket(ctxWith({ shells: { session: asked }, catalog: async () => (catalog.asked(), await gate, CATALOG), revalidateMs: 0 }));
     const { connection, drop } = droppable();
     const accepting = accept(SOCKET, connection);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await beingAsked;
 
     drop();
     release();

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
 import type { ActionDefinition } from '@niscorp/nova';
 import { createRunningManifest } from '../src/manifest';
@@ -451,11 +451,22 @@ describe('watch — the pointer the other processes poll', () => {
       moves: () => state.moves,
     };
   };
-  const aMoment = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 25));
+  // THE CLOCK IS THE TEST'S. The pointer is polled on a timer; these waited 25
+  // ms on the real one, with a poll every millisecond, for "a few looks" to
+  // have happened. A moment here is one look: the poll is a second, and the
+  // clock is moved on by one, with everything that look started run to its end.
+  const EVERY_MS = 1_000;
+  const aMoment = (): Promise<unknown> => vi.advanceTimersByTimeAsync(EVERY_MS);
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it('before it watches a switch moves nothing; after, each switch moves the pointer once', async () => {
     const { pointer, moves } = pointerRow();
-    const manifest = running(shippedApp(), { pointer: { ...pointer, everyMs: 1 } });
+    const manifest = running(shippedApp(), { pointer: { ...pointer, everyMs: EVERY_MS } });
     try {
       manifest.replace('bundles', { [desk.id]: desk });
       await aMoment();
@@ -483,7 +494,7 @@ describe('watch — the pointer the other processes poll', () => {
     const { pointer, poke, moves } = pointerRow();
     const rows: { now: Record<string, ActionDefinition> } = { now: { [desk.id]: desk } };
     const shipped = shippedApp();
-    const manifest = running(shipped, { pointer: { ...pointer, everyMs: 1 } });
+    const manifest = running(shipped, { pointer: { ...pointer, everyMs: EVERY_MS } });
     try {
       const integrations = manifest.claim('integrations', 'the feature "integrations"');
       integrations.setLoader(async () => rows.now);
@@ -517,7 +528,7 @@ describe('watch — the pointer the other processes poll', () => {
   it('a set has its place from when its loader was named, whichever set was replaced first', async () => {
     const { pointer, poke, moves } = pointerRow();
     const rows: { now: Record<string, ActionDefinition> } = { now: { [desk.id]: desk } };
-    const manifest = running(shippedApp(), { pointer: { ...pointer, everyMs: 1 } });
+    const manifest = running(shippedApp(), { pointer: { ...pointer, everyMs: EVERY_MS } });
     try {
       const told = vi.fn();
       manifest.onChange(told);
@@ -552,8 +563,8 @@ describe('watch — the pointer the other processes poll', () => {
   // the other serves the set of that name it was handed itself.
   it('a set handed to one process is that process’s: another follows the pointer, and does not have the set', async () => {
     const { pointer } = pointerRow();
-    const here = running(shippedApp(), { pointer: { ...pointer, everyMs: 1 } });
-    const there = running(shippedApp(), { pointer: { ...pointer, everyMs: 1 } });
+    const here = running(shippedApp(), { pointer: { ...pointer, everyMs: EVERY_MS } });
+    const there = running(shippedApp(), { pointer: { ...pointer, everyMs: EVERY_MS } });
     try {
       there.replace('bundles', { [desk.id]: desk });
       here.watch();
@@ -585,8 +596,8 @@ describe('watch — the pointer the other processes poll', () => {
     // The rows both read: what an app keeps a set in.
     const rows: { now: Record<string, ActionDefinition> } = { now: { [desk.id]: desk } };
     const load = async (): Promise<Record<string, ActionDefinition>> => rows.now;
-    const here = running(shippedApp(), { pointer: { ...pointer, everyMs: 1 } });
-    const there = running(shippedApp(), { pointer: { ...pointer, everyMs: 1 } });
+    const here = running(shippedApp(), { pointer: { ...pointer, everyMs: EVERY_MS } });
+    const there = running(shippedApp(), { pointer: { ...pointer, everyMs: EVERY_MS } });
     try {
       // As a feature does when it starts, in each process: how the set is
       // read, and what the rows hold now.
@@ -652,7 +663,7 @@ describe('watch — the pointer the other processes poll', () => {
 
   it('stopping ends the watching', async () => {
     const { pointer, poke } = pointerRow();
-    const manifest = running(shippedApp(), { pointer: { ...pointer, everyMs: 1 } });
+    const manifest = running(shippedApp(), { pointer: { ...pointer, everyMs: EVERY_MS } });
     manifest.watch();
     await aMoment();
     const told = vi.fn();

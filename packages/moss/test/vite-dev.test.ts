@@ -293,14 +293,20 @@ describe('the dev server’s socket', () => {
     client.send('a'.repeat(2000));
     return Promise.race([closed, answer]);
   };
-  const later = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
   it('a connection is set as the app that is booted says, one that arrived while it was booting included', async () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const { url } = await dev([async () => (await later(40), appHolding(1024))]);
+      // The boot ends when the test says, so the first connection is made
+      // while it is still booting, whatever the machine's pace (it was a boot
+      // that took 40 ms, and a connection that hoped to be quicker).
+      const boot = { finish: (): void => {} };
+      const booting = new Promise<void>((resolve) => void (boot.finish = resolve));
+      const { url } = await dev([async () => (await booting, appHolding(1024))]);
       // made before the app is up: it waits for the boot, as a page does
-      expect(await sent2000(await opened(url))).toBe(1009);
+      const early = opened(url);
+      boot.finish();
+      expect(await sent2000(await early)).toBe(1009);
       expect(await sent2000(await opened(url))).toBe(1009);
     } finally {
       warned.mockRestore();
@@ -312,9 +318,11 @@ describe('the dev server’s socket', () => {
     const before = await opened(url);
     const beforeClosed = new Promise<number>((resolve) => before.once('close', (code) => resolve(code)));
     edit('/project/src/app/app.ts');
+    // A wait on the thing itself: the plugin says when it has re-booted. Its
+    // 200 ms after the last change is real here, because the socket is.
     await vi.waitFor(() => expect(said.some((line) => line.includes('re-booted'))).toBe(true), { timeout: 2000 });
     // the app it was attached to is gone: it is told so, and its terminal connects again
-    expect(await Promise.race([beforeClosed, later(1000).then(() => 'still open')])).toBe(1001);
+    expect(await beforeClosed).toBe(1001);
     const after = await opened(url);
     expect(await sent2000(after)).toBe('2000');
     after.close();

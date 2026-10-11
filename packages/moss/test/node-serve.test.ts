@@ -65,6 +65,8 @@ const accepts = (port: number): Promise<boolean> =>
     probe.once('error', () => resolve(false));
   });
 
+// A wait on the thing itself, with a limit that turns a hang into an answer
+// (`'never'`): `ms` is how long a failure takes to say so.
 const within = <T>(ms: number, work: Promise<T>): Promise<T | 'never'> => Promise.race([work, new Promise<'never'>((resolve) => setTimeout(() => resolve('never'), ms))]);
 
 const served: MossServer[] = [];

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { WriteEvent } from '@niscorp/vex';
 import { createWriteLane } from '../src/data/writes';
 import type { WriteRequest } from '../src/data/writes';
+import { turn } from './turn';
 
 // THE WRITE LANE: what vex reports of a write, handed to whoever subscribed,
 // with what the request that wrote said in its headers. The lane knows no
@@ -48,7 +49,8 @@ describe('the write lane', () => {
     const said: (string | undefined)[] = [];
     lane.subscribe((_write, request) => said.push(request.header('x-said')));
     await lane.within(saying({ 'x-said': 'this' }), async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      // What a request awaits may be a timer: what it said has to cross one.
+      await turn();
       lane.report(event('notes/add'));
     });
     lane.report(event('notes/edit'));
@@ -61,13 +63,21 @@ describe('the write lane', () => {
     lane.subscribe((write, request) => {
       said[write.fingerprint] = request.header('x-said');
     });
-    const request = (name: string, waits: number) =>
+    // Both are inside their request before either writes, and the one that
+    // began first writes last: it waits for the other, not for 10 ms.
+    const request = (name: string, first: Promise<unknown>) =>
       lane.within(saying({ 'x-said': name }), async () => {
-        await new Promise((resolve) => setTimeout(resolve, waits));
+        await turn();
+        await first;
         lane.report(event(name));
       });
-    await Promise.all([request('slow', 10), request('fast', 0)]);
+    const order: string[] = [];
+    lane.subscribe((write) => void order.push(write.fingerprint));
+    const fast = { done: (): void => undefined };
+    const fastDone = new Promise<void>((resolve) => void (fast.done = resolve));
+    await Promise.all([request('slow', fastDone), request('fast', Promise.resolve()).then(() => fast.done())]);
     expect(said).toEqual({ slow: 'slow', fast: 'fast' });
+    expect(order).toEqual(['fast', 'slow']);
   });
 
   it('a subscriber that stops is told no more', () => {

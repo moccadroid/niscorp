@@ -11,13 +11,15 @@ import { createPageRouter } from '../src/documents';
 import { createWire } from '../src/client';
 import type { WireEnv } from '../src/client';
 import type { NiscApp, PageManifest } from '../src/manifest';
+import { turn } from './turn';
 
 // ═══════════════════════════════════════════════════════════════
 // A page's terminal, over the socket: the path it names decides which shell it
 // is served, and a page with nothing left to happen is served none at all.
 // ═══════════════════════════════════════════════════════════════
 
-const tick = (ms = 0): Promise<void> => new Promise((r) => setTimeout(r, ms));
+// A turn of the event loop (./turn.ts says why that is not a wait on a clock).
+const tick = turn;
 
 const search: ActionDefinition = { id: 'search', data: { q: '', topic: '' }, layout: { component: 'Input', model: '$.q' } };
 const counter: ActionDefinition = { id: 'counter', data: { n: 0 }, layout: { component: 'Button', ref: 'bump' }, triggers: [{ event: 'ui:click', ref: 'bump', do: [{ increment: 'n' }] }] };
@@ -52,7 +54,10 @@ const connect = async (accept: ReturnType<typeof createSocket>, url: string, tok
   const sent: Record<string, unknown>[] = [];
   const connection: Connection = { send: (text) => void sent.push(JSON.parse(text) as Record<string, unknown>), close: () => {}, onMessage: () => {}, onClose: () => {}, upgrade: { offered: offerToken(token) } };
   await accept(url, connection);
-  await tick(5);
+  // What a shell sends after it is attached goes out on its next two turns
+  // (a pass at once and one a turn later): that, and not 5 ms.
+  await tick();
+  await tick();
   return sent;
 };
 

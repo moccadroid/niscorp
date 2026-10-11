@@ -24,6 +24,9 @@ import type { Wire } from '../src/client';
 // (Origin, Cookie). Nothing here is stored: who a token is, is a map.
 // ═══════════════════════════════════════════════════════════════
 
+// A wait on the thing itself, over a real socket: it is asked again until it
+// holds. `ms` is how long a failure takes to say so, not a time anything is
+// given to happen in.
 const until = (holds: () => boolean, why: string, ms = 8000): Promise<void> =>
   new Promise((resolve, reject) => {
     const started = Date.now();
@@ -252,7 +255,12 @@ describe('a browser on the app’s own page', () => {
         socket.on('message', (data) => {
           const frame = JSON.parse(String(data)) as { type: string; principal?: unknown; code?: string };
           if (frame.type === 'error') errors.push(frame.code ?? '');
-          if (frame.type === 'hello') setTimeout(() => (resolve({ principal: frame.principal, errors }), socket.close()), 50);
+          // A seal that was not kept is said before the hello (../src/socket/socket.ts),
+          // so what was said of it is whole when the hello arrives.
+          if (frame.type === 'hello') {
+            resolve({ principal: frame.principal, errors });
+            socket.close();
+          }
         });
       });
     // another machine, saying the origin the app expects, holding no seal

@@ -17,8 +17,12 @@ import { hostConfig } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import { createIdentityCache } from '../src/identity/cache';
 import type { NiscApp } from '../src/manifest';
+import { turn } from './turn';
 
-const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+// A turn of the event loop (./turn.ts says why that is not a wait on a clock).
+const tick = turn;
+// A wait on the thing itself: it is asked again until it holds. `ms` is how
+// long a failure takes to say so.
 const until = async (pred: () => boolean | Promise<boolean>, ms = 3000): Promise<void> => {
   const start = Date.now();
   for (;;) {

@@ -7,12 +7,14 @@ import { hostConfig } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import type { NiscApp } from '../src/manifest';
 import type { Connection } from '../src/socket';
+import { turn } from './turn';
 
 // A shell's reactive read: vex calls the follower back, nova gets a later
 // body through the response's `onChange`, and a terminal receives a new frame.
 // Nobody in between knows why.
 
-const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+// A turn of the event loop (./turn.ts says why that is not a wait on a clock).
+const tick = turn;
 const answer = (result: unknown): QueryResponse => ({ result: result as QueryResponse['result'], meta: { cache: { hit: true }, context: {} } });
 
 describe('wire follower', () => {

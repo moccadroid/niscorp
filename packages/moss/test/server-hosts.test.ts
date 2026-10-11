@@ -7,6 +7,7 @@ import type { FunctionSession, NiscApp, ShellManifest } from '../src/manifest';
 import { buildShellHosts } from '../src/server/hosts';
 import type { HostParts } from '../src/server/hosts';
 import { buildSignals } from '../src/server/signals';
+import { turn } from './turn';
 
 // THE SHELL HOSTS AS THE SERVER STANDS THEM UP (../src/server/hosts.ts), with
 // no server and no database: the wiring is handed an app, a running manifest
@@ -151,8 +152,10 @@ describe('the shell hosts — what a shell is made of is asked of the running ma
 // the shell the app's host keeps for them, and no shell a page had built for
 // them.
 describe('the shell hosts — a change reaches the living shells of every host', () => {
+  // Six turns of the event loop (./turn.ts): an adopt and a reset are not
+  // waited for by whoever asked, and each is a handful of hops.
   const settle = async (): Promise<void> => {
-    for (let i = 0; i < 6; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+    for (let i = 0; i < 6; i += 1) await turn();
   };
   const notes: ActionDefinition = { id: 'ext.notes', data: {}, layout: { component: 'Text', children: 'notes' } };
   const granting: NiscApp = { ...app, charter: { public: ['words', 'ext.*'] } };

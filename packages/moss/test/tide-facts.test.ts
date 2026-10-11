@@ -6,6 +6,7 @@ import { createTideFacts } from '../src/tide';
 import type { TideFactsConfig } from '../src/tide';
 import type { FactIntake } from '../src/tide/feature';
 import { mintFromWrites } from '../src/tide/feature';
+import { turn } from './turn';
 
 // THE WRITE-FACT BRIDGE, AS A FEATURE: handed the one seam it uses, a write
 // reported to it by hand, and an intake that keeps what it is given. No
@@ -44,7 +45,7 @@ const intake = () => {
 
 // Minting is not awaited by the lane: let what was started finish.
 const settled = async (): Promise<void> => {
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await turn();
 };
 
 const twoStatements: WriteEvent = {

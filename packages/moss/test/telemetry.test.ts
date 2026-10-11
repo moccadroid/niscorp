@@ -26,8 +26,10 @@ import { PROTOCOL, offerToken } from '../src/protocol';
 import type { ServerMessage } from '../src/protocol';
 import type { NiscApp } from '../src/manifest';
 import type { TelemetrySpan } from '../src/runtime';
+import { turn } from './turn';
 
-const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+// A turn of the event loop (./turn.ts says why that is not a wait on a clock).
+const tick = turn;
 const capture = () => {
   const spans: TelemetrySpan[] = [];
   return { spans, telemetry: { emit: (s: TelemetrySpan) => spans.push(s) } };

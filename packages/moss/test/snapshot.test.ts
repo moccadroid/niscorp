@@ -5,6 +5,7 @@ import { hostConfig } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import type { NiscApp, PageManifest } from '../src/manifest';
 import type { Connection } from '../src/socket';
+import { turn } from './turn';
 
 // ═══════════════════════════════════════════════════════════════
 // The document's read (`snapshot`), and the two things built on it: an
@@ -12,7 +13,10 @@ import type { Connection } from '../src/socket';
 // host that keeps nothing (a page's).
 // ═══════════════════════════════════════════════════════════════
 
-const tick = (ms = 0): Promise<void> => new Promise((r) => setTimeout(r, ms));
+// A turn of the event loop (./turn.ts says why that is not a wait on a clock).
+const tick = turn;
+// Seeds that are answered `ms` after they are asked for, on the clock a test holds.
+const after = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 const fakeConnection = (): Connection & { sent: Record<string, unknown>[] } => {
   const sent: Record<string, unknown>[] = [];
@@ -82,26 +86,47 @@ describe('snapshot — the screen, read without attaching', () => {
     expect(a.trees['main']).not.toEqual(b.trees['main']);
   });
 
+  // HOW LONG A SNAPSHOT WAITS IS WHAT THESE TWO ARE ABOUT, so the clock is
+  // theirs: the seeds answer at an instant the test names, and the wait is
+  // over at another. They slept 30 and 80 ms of the real one against waits
+  // of 300 and 5.
   it('waits for seeds that are read a moment later', async () => {
-    const seeds = async (): Promise<Record<string, string[]>> => {
-      await tick(30);
-      return { main: ['words'] };
-    };
-    const host = createShellHost(hostConfig(contextOf(appOf({ canvases: [{ id: 'main', mode: 'list' }], seeds }))));
-    const snapshot = await host.snapshot(null, null);
-    expect(snapshot.settled).toBe(true);
-    expect(JSON.stringify(snapshot.trees['main'])).toContain('Hello');
+    vi.useFakeTimers();
+    try {
+      const seeds = async (): Promise<Record<string, string[]>> => {
+        await after(30);
+        return { main: ['words'] };
+      };
+      const host = createShellHost(hostConfig(contextOf(appOf({ canvases: [{ id: 'main', mode: 'list' }], seeds }))));
+      const taking = host.snapshot(null, null);
+      // Answered 30 ms in, of the 300 a snapshot waits when it is told nothing.
+      await vi.advanceTimersByTimeAsync(300);
+      const snapshot = await taking;
+      expect(snapshot.settled).toBe(true);
+      expect(JSON.stringify(snapshot.trees['main'])).toContain('Hello');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('past the wait, the screen goes out as it stands and says so', async () => {
-    const seeds = async (): Promise<Record<string, string[]>> => {
-      await tick(80);
-      return { main: ['words'] };
-    };
-    const host = createShellHost(hostConfig(contextOf(appOf({ canvases: [{ id: 'main', mode: 'list' }], seeds }))));
-    const snapshot = await host.snapshot(null, null, { waitMs: 5 });
-    expect(snapshot.settled).toBe(false);
-    expect(JSON.stringify(snapshot.trees['main'])).not.toContain('Hello');
+    vi.useFakeTimers();
+    try {
+      const seeds = async (): Promise<Record<string, string[]>> => {
+        await after(80);
+        return { main: ['words'] };
+      };
+      const host = createShellHost(hostConfig(contextOf(appOf({ canvases: [{ id: 'main', mode: 'list' }], seeds }))));
+      const taking = host.snapshot(null, null, { waitMs: 5 });
+      // The wait is over at 5 ms; the seeds would have answered at 80.
+      await vi.advanceTimersByTimeAsync(5);
+      const snapshot = await taking;
+      expect(snapshot.settled).toBe(false);
+      expect(JSON.stringify(snapshot.trees['main'])).not.toContain('Hello');
+      await vi.advanceTimersByTimeAsync(100);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('leaves the attached terminals’ baseline alone: the next change still reaches them', async () => {
@@ -113,7 +138,9 @@ describe('snapshot — the screen, read without attaching', () => {
 
     session.dispatch('main', { type: 'ui:click', ref: 'bump' });
     await host.snapshot('t', 'usr_1'); // reads the changed tree before the flush has sent it
-    await tick(5);
+    // The flush is a pass at once and one a turn later: two turns, not 5 ms.
+    await tick();
+    await tick();
     expect(connection.sent.filter((message) => message['type'] === 'render').length).toBeGreaterThan(0);
   });
 });

@@ -10,6 +10,7 @@ import type { HostSetup } from './shell-host-double';
 import type { FunctionSession, NiscApp } from '../src/manifest';
 import type { PgPool } from '@niscorp/vex';
 import { pristineDatabases } from './pristine-database';
+import { turn } from './turn';
 
 // A database of its own for each test that wants one, started from one that
 // was initialised once for this file (./pristine-database.ts says why).
@@ -159,7 +160,8 @@ describe('sessionVerifierOf — the three-way choice, and the refusal', () => {
 // ═══════════════════════════════════════════════════════════════
 
 describe('sign-out — session.revoke() under moss sessions', () => {
-  const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+  // A turn of the event loop (./turn.ts says why that is not a wait on a clock).
+  const tick = turn;
 
   const hostOver = (pool: PgPool, session: 'sessions' | 'dev-open', seen: { fn?: FunctionSession }): ShellHost => {
     const catalog = { ids: ['counter'], hash: 'h' };
@@ -229,7 +231,7 @@ describe('onSession — a microtask is enough to reach the shell', () => {
       actions: { counter: { id: 'counter', data: { n: 0 } } },
       shell: { canvases: [{ id: 'main', initial: 'counter' }] },
       phrases: async () => {
-        await new Promise((r) => setTimeout(r, 0));
+        await turn();
         return {};
       },
       onSession: (session: FunctionSession) => {
