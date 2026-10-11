@@ -607,11 +607,13 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   actions, then each set, with `actions` in place of the set called `source`),
   answered as a report. Nothing changes. `errors` is `{ check, detail }[]`,
   `check` one of `'actions'` (a definition nova's schema does not read),
-  `'charter'`, `'reach'`, `'variants'`; empty means `replaceActions` would
-  accept the set. `said` is what a boot only says (a
+  `'charter'`, `'reach'`, `'variants'`, and `'owner'`; empty means
+  `replaceActions` would accept the set. `said` is what a boot only says (a
   chain of steps that never ends), and `charter` is the charter engine's whole
-  report for the candidate. For a `source` that is a feature's it throws, as
-  `replaceActions` does.
+  report for the candidate. For a `source` that is a feature's, the first
+  error is `{ check: 'owner', detail }`: the set is not the app's to hand
+  over, and `detail` is the sentence `replaceActions` throws for it. It
+  answers that and throws nothing: it is asked in order to find out.
 - `actions(): Readonly<Record<string, ActionDefinition>>` — the actions in
   force now, by id: what the app shipped, then each set handed over. To read;
   a set changes through `replaceActions`.

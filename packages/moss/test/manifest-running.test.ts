@@ -626,9 +626,11 @@ describe('watch — the pointer the other processes poll', () => {
     const sentence = /^moss: the set of actions "integrations" is the feature "integrations"'s, and only its owner replaces it\. An app hands a set over under a name of its own\.$/;
     expect(() => manifest.replace('integrations', {})).toThrow(sentence);
     expect(() => manifest.replace('integrations', { [pay.id]: pay })).toThrow(sentence);
-    // The dry run of that call is refused the same way: it is not a set the
-    // caller could hand over.
-    expect(() => manifest.verifyReplace('integrations', {})).toThrow(sentence);
+    // The dry run of that call says the same, as what it answers: it is not a
+    // set the caller could hand over, and the sentence is the door's.
+    const tried = manifest.verifyReplace('integrations', {});
+    expect(tried.errors.map((error) => error.check)).toEqual(['owner']);
+    expect(`moss: ${tried.errors[0]?.detail}`).toMatch(sentence);
     expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id]);
 
     // A set of the app's own is the app's, as it was.

@@ -163,14 +163,35 @@ describe("the features — a feature's set of actions", () => {
     expect(Object.keys(running.actions())).toEqual(['home', roster.id]);
   });
 
-  it('is not the app\'s to replace, or to try: both are refused, naming whose it is', async () => {
+  // `server.replaceActions` and `server.verifyActions` are these two. The
+  // first does, so it throws. The second is asked whether the first would
+  // take a set, and that is a question with an answer: it threw too, so a
+  // caller asking "would this be taken" had to catch to learn "no".
+  it('is not the app\'s to replace: handing one over under its name throws, naming whose it is', async () => {
     const belts = keeping('belts');
     const { start, running } = await world([belts.feature]);
     await start();
     belts.seams().replaceActions({ [roster.id]: roster });
-    // `server.replaceActions` and `server.verifyActions` are these two.
     expect(() => running.replace('belts', {})).toThrow(/^moss: the set of actions "belts" is the feature "belts"'s, and only its owner replaces it\./);
-    expect(() => running.verifyReplace('belts', {})).toThrow(/the set of actions "belts" is the feature "belts"'s/);
+    expect(Object.keys(running.actions())).toEqual(['home', roster.id]);
+  });
+
+  it('…and asked whether it would be taken, the answer is a report that says the same, with whatever else would refuse', async () => {
+    const belts = keeping('belts');
+    const { start, running } = await world([belts.feature]);
+    await start();
+    belts.seams().replaceActions({ [roster.id]: roster });
+
+    const asked = running.verifyReplace('belts', {});
+    expect(asked.errors).toEqual([{ check: 'owner', detail: 'the set of actions "belts" is the feature "belts"\'s, and only its owner replaces it. An app hands a set over under a name of its own.' }]);
+    // The sentence is the one the door throws.
+    expect(() => running.replace('belts', {})).toThrow(`moss: ${asked.errors[0]?.detail}`);
+    // The candidate is verified like any other: what else would refuse it is said too.
+    const unreadable = running.verifyReplace('belts', { 'ext.broken': { id: 'ext.broken', triggers: [{ do: [] }] } });
+    expect(unreadable.errors.map((error) => error.check)).toEqual(['owner', 'actions']);
+    // A set of the app's own is answered as it was.
+    expect(running.verifyReplace('extras', {}).errors).toEqual([]);
+    // Nothing changed for the asking.
     expect(Object.keys(running.actions())).toEqual(['home', roster.id]);
   });
 

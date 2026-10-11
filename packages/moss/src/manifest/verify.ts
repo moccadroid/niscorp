@@ -61,7 +61,10 @@ export const candidateOf = (shipped: ShippedManifest, inForce: Pick<ManifestCand
   profiles: scopeProfiles(shipped.behaviors ?? {}),
 });
 
-export type ManifestCheck = 'actions' | 'charter' | 'reach' | 'variants';
+// `owner` is not a check of the candidate: it is said of a set that was
+// tried under a name its asker may not hand it over by (./running.ts,
+// `verifyReplace`), and it comes first.
+export type ManifestCheck = 'owner' | 'actions' | 'charter' | 'reach' | 'variants';
 
 export type ManifestReport = {
   // WHAT REFUSES, one finding each, in the order the checks run. Empty: the
@@ -172,12 +175,14 @@ export const verifyApp = (app: ShippedManifest, grants: readonly string[]): Mani
 // and a change that is refused leaves what was being served.
 const HEADLINES = {
   boot: {
+    owner: 'A set of actions is not its asker’s to hand over — refusing to serve:',
     actions: 'Actions are not ones nova reads — refusing to serve:',
     charter: 'Charter is incoherent — refusing to serve:',
     reach: 'Entries declare a reach no table offers — refusing to serve:',
     variants: 'Layout variants are incoherent — refusing to serve:',
   },
   refresh: {
+    owner: 'Refresh refused — a set of actions is not its asker’s to hand over:',
     actions: 'Refresh refused — actions nova does not read:',
     charter: 'Refresh refused — charter incoherent over the new artifacts:',
     reach: 'Refresh refused — entries declare a reach no table offers:',

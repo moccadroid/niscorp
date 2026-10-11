@@ -67,9 +67,10 @@ export type MossServer = Hono<Env> & {
   // verification over the same candidate, answered as a report, and nothing is
   // changed. `errors` empty: `replaceActions` would accept it. Otherwise each
   // error names the check that refuses and why: `actions` (a definition nova
-  // does not read), `charter`, `reach`, `variants`. For a set that is a
-  // feature's it throws, as `replaceActions` does: it is not the caller's to
-  // hand over.
+  // does not read), `charter`, `reach`, `variants`; and, first of them,
+  // `owner` for a set that is a feature's: it is not the caller's to hand
+  // over, which `replaceActions` says by throwing that sentence. This
+  // answers and never throws: it is asked in order to find out.
   verifyActions: (source: string, actions: Record<string, ActionDefinition>) => ManifestReport;
   // THE ACTIONS IN FORCE NOW, by id: what the app shipped, then each set that
   // was handed over. To read, never to write: a set changes through
