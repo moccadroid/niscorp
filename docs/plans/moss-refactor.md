@@ -675,7 +675,7 @@ table of who may import whom, no statement outside vex without a reason.
 decide.
 
 - **Names that stayed in the main entry and that nothing in this repository
-  imports** were decided by the second review, below: of the fifteen, nine
+  imports** were decided by the second review, below: of the fifteen, ten
   left, and `Feature`, `FeatureSeams`, `Telemetry`, `TelemetrySpan` and
   `revokeAllFor` stay, each shown in use in `DOCS.md`.
 - **The gates list one package.** `check:modules`, `check:api` and the module
@@ -826,7 +826,7 @@ failed first; none of the new tests starts a database or calls `createServer`.
   no engine.
 - **The API kept second ways.** `resolveRoles`, `resolvePolicy` and
   `resolveVariants` are gone (they answered `public` for an app that uses
-  `identity`), with ten more names of three entries and
+  `identity`), with eleven more names of three entries and
   `MossServer.catalogForRoles`. The main entry exports 38 names and the
   sixteen entries 89; `DOCS.md` shows every name the main entry, `./node`,
   `./vite`, `./integrations` and `./tide` keep in a code block.
