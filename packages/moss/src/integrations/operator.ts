@@ -140,8 +140,7 @@ const register = <Extension>(deps: OperatorDeps<Extension>, routes: Hono<Feature
     if (wasApproved) {
       // TRIED, NOT PUT IN. The bundle's actions over the actions in force are
       // a candidate the running manifest verifies without switching to it, so
-      // a bundle that is refused never touched what is serving. The reason
-      // reads as the thrown error did.
+      // a bundle that is refused never touched what is serving.
       const refusal = deps.refusalOf({ ...deps.actions(), ...taken.bundle.actions });
       if (refusal !== undefined) return c.json({ message: 'Refused — the app would not serve this.', reasons: [`Error: ${refusal}`] }, 422);
     }
@@ -188,19 +187,19 @@ const register = <Extension>(deps: OperatorDeps<Extension>, routes: Hono<Feature
 // VERIFIED, THEN WRITTEN. The actions it shipped are read from its rows and
 // laid over the actions in force, and the running manifest says whether the
 // app could be served that way, without switching to it. Refused, nothing is
-// written: the row is as it was. This used to write the approval, hand the
-// actions over, and write the row back when that threw — and a process that
-// died between the two writes left an approved row the next boot refused.
+// written: the row is as it was. Written first and taken back on a refusal, a
+// process that died between the two writes would leave an approved row the
+// next boot refuses.
 //
 // AND TAKEN BACK WHEN THE APP DOES NOT TAKE IT ALL THE SAME. Asking first makes
 // a refusal after the write rare; it does not make it impossible. Between the
 // question and the hand-over something else can change what the app consists
 // of (another approval, a set the app handed over), and the rows are read
-// again for the hand-over. When that throws, the row already says approved:
-// answered as a fault, it stayed approved, and every process that read the
-// rows next was refused them, the next boot included. So the approval is set
-// back to pending with why, what is served is read again from the rows as
-// they are then, and the answer is the refusal it is.
+// again for the hand-over. When that throws, the row already says approved,
+// and every process that reads the rows next would be refused them, the next
+// boot included. So the approval is set back to pending with why, what is
+// served is read again from the rows as they are then, and the answer is the
+// refusal it is.
 const approve = (deps: Pick<OperatorDeps, 'replay' | 'grammars' | 'actions' | 'refusalOf' | 'reload'>, routes: Hono<FeatureEnv>): void => {
   routes.post('/integrations/:id/approve', async (c) => {
     const id = c.req.param('id');
@@ -226,9 +225,9 @@ const approve = (deps: Pick<OperatorDeps, 'replay' | 'grammars' | 'actions' | 'r
 //
 // It probes what the integration DECLARED, plus `bundle` — which is the
 // answer to "the screen is empty" most of the time and is open by design
-// anyway. It used to take an operator-chosen arbitrary path, which made this
-// a second door into the integration's service beside the proxy, and one that minted
-// no assertion at all. An operator wanting a path the integration never declared is
+// anyway. A path of the operator's own choosing would make this a second door
+// into the integration's service beside the proxy, and one that mints no
+// assertion: an operator wanting a path the integration never declared is
 // asking a question about somebody else's service, not about this one.
 const probe = (deps: Pick<OperatorDeps, 'replay' | 'timeoutMs'>, routes: Hono<FeatureEnv>): void => {
   routes.post('/integrations/:id/probe', async (c) => {
@@ -285,7 +284,7 @@ export type Contract = {
   // Each component the author may compose, with its description and — where the
   // app carried one — its props as a draft-7 JSON Schema derived from the same
   // Zod schema the renderer validates against. A component the app registered
-  // with no meta appears as its name alone, exactly as the whole list used to.
+  // with no meta appears as its name alone.
   components: readonly LayoutPaletteEntry[];
   audiences: readonly string[];
   namespace: string;
@@ -381,7 +380,8 @@ const describeProp = (schema: Record<string, unknown>): string => {
 
 // One component: its name, its description, and — where it carried a schema — a
 // small table of props (name · type · required · meaning). A component with no
-// props renders as its name alone, which is what the whole list used to be.
+// props renders as its name alone.
+//
 // The two parts of a component's JSON Schema the table is made of.
 const PropsTableSchema = z.looseObject({
   properties: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),

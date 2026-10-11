@@ -14,8 +14,8 @@ import type { CredentialAnswer, FeatureSeams } from '../feature';
 //   travels INSIDE the signed token — principal, scope, expiry — so a forged
 //   header is not "refused", it is meaningless: there is no identity outside a
 //   verified envelope. A leaked token impersonates one principal for seconds,
-//   not every tenant forever, which is the whole argument against the shared
-//   secret this replaced.
+//   where a secret the deployment shared with an integration would
+//   impersonate every tenant for as long as it lived.
 //
 //   INTEGRATION KEYS (inbound — an integration acts when nobody is driving).
 //   Minted by the deployment at registration, shown once, stored only as a
@@ -76,10 +76,9 @@ export type AssertionSigner = {
 const SEED_BYTES = 32;
 
 // A SEED THAT IS GIVEN AND CANNOT BE A KEY REFUSES, when the signer is made.
-// One that decoded to fewer than 32 bytes used to be dropped without a word
-// and a random key made in its place: two processes given the same seed signed
-// with different keys, each refused what the other had signed, and nothing
-// said why. The sentence says what was given by its length. Never the seed.
+// A random key made in its place would have two processes given the same seed
+// sign with different keys, each refusing what the other signed, with nothing
+// to say why. The sentence says what was given by its length. Never the seed.
 const seedRefusal = (bytes: number): Error =>
   new Error(
     `moss: the signing seed decodes to ${bytes} ${bytes === 1 ? 'byte' : 'bytes'}, and a signing key is ${SEED_BYTES}. ` +
@@ -179,9 +178,9 @@ export const keyCredential =
     if (integration === undefined) return { refused: { status: 401, error: 'invalid_key', message: 'The integration key did not resolve.' } };
     const actor = (await deps.actor?.(integration, request.headers.get('x-nisc-acts-for') ?? '')) ?? null;
     if (actor === null) return NO_ACTOR;
-    // The app's answer may be PURE (composing the actor id from its parts) —
+    // The app's answer may be PURE (composing the actor id from its parts):
     // whether the install is live is identity's question, so an actor that
-    // resolves to nobody is refused here, where null used to be.
+    // resolves to nobody is refused here.
     const resolved = await deps.resolveIdentity(actor);
     if (resolved.roles.length === 1 && resolved.roles[0] === 'public') return NO_ACTOR;
     return { principal: actor };

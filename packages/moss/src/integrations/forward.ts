@@ -224,33 +224,30 @@ const webhook = (deps: ProxyDeps, routes: Hono<FeatureEnv>): void => {
 // A claim outside a verified envelope is not refused over there; it simply
 // is not identity, which is what makes the safe path the only path. The
 // body stays caller-controlled and untrusted, exactly as a vex `$context`
-// is: an integration reading `studio_id` from the body has reintroduced the
-// hole whatever we sign.
+// is: an integration that reads `studio_id` from the body trusts the caller,
+// whatever is signed.
 const proxy = (deps: ProxyDeps, routes: Hono<FeatureEnv>): void => {
   routes.all('/integrations/:id/*', async (c) => {
     const principal = c.get('principal');
     if (principal === null) return c.json({ message: 'Sign in first.' }, 401);
     const id = c.req.param('id');
-    // The QUERY TRAVELS. `c.req.path` drops it, so an endpoint declared with
-    // `?view=summary` arrived at the integration without it — the integration answered a
-    // different question than the screen asked, and nothing said so.
+    // THE QUERY TRAVELS. `c.req.path` drops it, and an endpoint declared with
+    // `?view=summary` that arrived without it would have the integration answer
+    // a different question than the screen asked.
     const here = new URL(c.req.url);
     const ended = await deps.forward({
       integration: id,
       principal,
-      // THE DECLARATION IS THE PERIMETER (./reach.ts). Before this,
-      // being signed in at a studio that installed an integration was permission to call
-      // ANY path the integration's service happened to serve — its internals, its
-      // admin verbs, whatever it grew next release. Now it is permission to call
-      // the paths the integration declared, and nothing is forwarded for the rest.
+      // THE DECLARATION IS THE PERIMETER (./reach.ts). Being signed in where
+      // an integration is installed is permission to call the paths its bundle
+      // declared, and nothing is forwarded for the rest of what its service
+      // serves: its internals, its admin verbs, whatever it grows next.
       //
-      // AND ONLY THE ONES THIS CALLER'S OWN SCREENS DECLARE. The path check alone
-      // was half the fence: reach is the union over every action in the bundle, so
-      // a member at a studio with payments installed reached the merchant
-      // onboarding endpoint — the charter's `ext.desk.*` fence decided which
-      // SCREENS rendered and nothing about which endpoints answered. The catalog
-      // is the same one the shell is built from, so a door and the screen that
-      // opens it can no longer disagree.
+      // AND ONLY THE ONES THIS CALLER'S OWN SCREENS DECLARE. Reach is the union
+      // over every action in the bundle, and the charter's `ext.desk.*` fence
+      // decides which screens a person has: so a path is forwarded for
+      // whoever holds an action that declares it. The catalog is the one the
+      // shell is built from, so a door and the screen that opens it agree.
       //
       // Checked BEFORE the assertion is minted: an inadmissible path gets no
       // credential, not even one that would have died at the other end.
@@ -324,10 +321,8 @@ export const callIntegrationWith = (deps: {
   // The one way out (`createForwarder` above): the two gates, the scope values with
   // `init.scope` laid over them, and the assertion are its to do.
   forward: Forwarder;
-  // The deployment's telemetry sink, if any — one `integration.call` span per
-  // outbound call, naming the add-on, the path, and the answer's status. The
-  // operator surface's ad-hoc `watchCalls` tap is the proof this seam is the
-  // right one; this generalises it.
+  // The deployment's telemetry sink, if any: one `integration.call` span per
+  // outbound call, naming the integration, the path, and the answer's status.
   telemetry?: Telemetry;
 }): CallIntegration => {
   const emit = emitterOf(deps.telemetry);
@@ -379,14 +374,13 @@ export const callIntegrationWith = (deps: {
 
 // ── THE MESSAGE UNDER A FAILING INTEGRATION ─────────────────────────
 //
-// A third-party service being down is the steady state of a marketplace, and
-// the screen in front of it belongs to a studio owner, not an operator. A
-// integration reply carrying no `message` falls through to the terminal's bare
-// `HTTP 500` — a status code in front of a customer. So the session's wire
-// puts a SENTENCE under every integration call: naming the integration, saying it
-// is the integration, saying the studio is otherwise fine. A reply that DOES carry
-// a message passes through untouched — the integration's own words always win —
-// and no other path pays anything.
+// Somebody else's service being down is an ordinary condition, and the screen
+// in front of it belongs to a person, not an operator. A reply that carries no
+// `message` falls through to the terminal's bare `HTTP 500`: a status code in
+// front of a customer. So the session's wire puts a SENTENCE under every call
+// to an integration: it names the integration and says the rest is unaffected.
+// A reply that DOES carry a message passes through untouched (the
+// integration's own words win), and no other path pays anything.
 const INTEGRATION_PATH = /^\/integrations\/([a-z][a-z0-9-]*)\//;
 
 // WHAT A FAILED REPLY SAYS FOR ITSELF, read by a schema: the body is another

@@ -8,11 +8,11 @@ import type { Filter, Mutation, SeedEntry, SeedMutation } from '@niscorp/vex';
 // They are the feature's own (../feature, the `ownEntries` seam): seeded where
 // no route serves them and replayed in process by ./registry.ts, under a
 // policy that admits the feature's tables and no other. So what guards an act
-// stays what guarded it (an approval is behind the operator key), and a data
+// is what its route asks (an approval is behind the operator key), and a data
 // grant on these tables opens none of them.
 //
-// What a statement took from the database's clock is handed in by the caller:
-// `last_import_at` is a value in the context, not `now()`.
+// An instant is handed in by the caller: `last_import_at` is a value in the
+// context, not the database's `now()`.
 // ═══════════════════════════════════════════════════════════════
 
 // THE TABLES THAT ARE THE FEATURE'S OWN: what it names on itself
@@ -125,13 +125,13 @@ const writeBundle: SeedMutation = {
 // THE KEY IS KEPT WHERE NONE IS HELD, AND ONLY THERE. Whoever registers asks
 // first how the integration stands, and mints a key when it holds none; two
 // registrations of one new integration in the same moment are both told that,
-// and both come here with a key. The hash was written with the row, so the
-// later of the two wrote over the earlier one's, and both were answered a key
-// of which one was dead. It is a statement of its own now, the last of the
-// batch, and it writes where the row still holds no key: the later
+// and both come here with a key. So the hash is a statement of its own, the
+// last of the batch, and it writes where the row still holds no key: the later
 // transaction waits for the earlier one's row, finds a key on it, and writes
-// none. The row that statement answers carries the hash, so whoever landed
-// reads off the reply whether its key is the one that was kept (./registry.ts).
+// none. Written with the row, the later hash would replace the earlier, and
+// one of the two keys answered would open nothing. The row that statement
+// answers carries the hash, so whoever landed reads off the reply whether its
+// key is the one kept (./registry.ts).
 const writeBundleAndKeepKey: SeedMutation = {
   fingerprint: 'integrations/write-bundle-and-keep-key',
   intent: 'Land a bundle, and keep the hash of the key its integration is issued with it, where it holds none',
@@ -144,9 +144,8 @@ const approve: SeedMutation = {
   mutation: { op: 'update', table: 'integrations', set: { status: 'approved', ...fromContext(['approved_data']) }, where: byId },
 };
 
-// An approval, taken back: the integration is as it was before somebody said
-// yes, and the row says why. What it was granted stays written beside the
-// status that no longer serves it, as it always did.
+// An approval, taken back: the integration is pending, and the row says why.
+// What it was granted stays written beside a status that serves none of it.
 const setBackToPending: SeedMutation = {
   fingerprint: 'integrations/set-back-to-pending',
   intent: 'Take an approval back, and keep why on the row',
