@@ -883,7 +883,8 @@ beside a twin that does the same thing by the rules and must pass.
   `src/` (`from '..'`), which reaches every module through the main entry;
   an alias into the package; a relative path that leaves `src/`; a path
   built while the program runs; `declare module` and `/// <reference>`; a
-  declaration file, which was skipped; a link. It reads every way a file
+  declaration file, which was skipped, and which the lint ignores, so it
+  is refused now; a link. It reads every way a file
   names another now, a file is `.ts` or `.tsx` or it fails, a name that is
   not relative is a package `package.json` names, and `import()` takes one
   written string. 25 pairs and one link (`93182f4`, `5c3d49c`).
@@ -925,7 +926,8 @@ beside a twin that does the same thing by the rules and must pass.
   more case (`0fc23c5` to `9b7ed95`).
   *Cannot see:* that a boundary is read by a schema (a value narrowed by hand
   passes, and a type another package claims to answer is believed); state a
-  `const` holds at the top of a file; a file the `lint` script is not handed.
+  `const` holds at the top of a file; a file the `lint` script is not handed;
+  a `.d.ts` file.
 
 What the typed lint found in moss's 154 files, counted by rule: two
 `no-unsafe-argument` (Hono types what a route was handed as `any`, and it

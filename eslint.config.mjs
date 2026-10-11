@@ -187,8 +187,10 @@ export default tseslint.config(
   // WHAT THIS CANNOT SEE. That a boundary is read by a schema: a value
   // narrowed by hand passes, and a type another package's function claims to
   // answer is believed. State a `const` holds at the top of a file (a `Map`
-  // filled in place): only `let` and `var` are told. And a file this block's
-  // `files` or the `lint` script does not name.
+  // filled in place): only `let` and `var` are told. A file this block's
+  // `files` or the `lint` script does not name. And a declaration file
+  // (`.d.ts`), which the first block ignores everywhere: the module check
+  // refuses one under `src/` of a package it holds.
   {
     files: ['packages/moss/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}', 'packages/tide/src/store/postgres/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}', 'packages/tide/src/driver.ts'],
     languageOptions: { parser: tseslint.parser, parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname } },

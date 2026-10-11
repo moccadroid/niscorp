@@ -37,7 +37,9 @@
 //
 //   5. EVERY FILE IS READ. A file under `src/` is `.ts` or `.tsx`. Anything
 //      else (`.mts`, `.js`, `.json`, a link) fails: it would be a file the
-//      rules above never looked inside.
+//      rules above never looked inside. A declaration file (`.d.ts`) fails
+//      with them: the lint ignores every one, so its types would be read by
+//      this check and held by nothing.
 //   6. THE PACKAGE IS REACHED BY A RELATIVE PATH. A name that is not relative
 //      is a Node built-in or a package the `package.json` names under
 //      `dependencies` or `peerDependencies`. So a file cannot import its own
@@ -150,8 +152,9 @@ type Source = {
   links: readonly string[];
 };
 
-// The extensions this check reads. A file with another is refused (rule 5).
-const READ = /\.tsx?$/;
+// The extensions this check reads. A file with another is refused (rule 5),
+// and so is a declaration file.
+const READ = /(?<!\.d)\.tsx?$/;
 
 const fieldsOf = (value: unknown): Record<string, unknown> => (typeof value === 'object' && value !== null ? Object.fromEntries(Object.entries(value)) : {});
 
@@ -387,7 +390,7 @@ const FIXTURE: Readonly<Record<string, string>> = {
   'index.ts': "export { high } from './high';\n",
   'low/index.ts': "// ./low.ts is the module. A case may add ./f.ts, ./f.tsx, ./t.ts or ./flat.ts beside it.\nexport { low } from './low';\nexport type { Low } from './low';\n",
   'low/low.ts': 'export type Low = { n: number };\nexport const low = (): Low => ({ n: 1 });\n',
-  'high/index.ts': "// ./high.ts is the module. A case may add ./f.ts, ./t.ts or ./t.d.ts beside it.\nexport { high } from './high';\n",
+  'high/index.ts': "// ./high.ts is the module. A case may add ./f.ts or ./t.ts beside it.\nexport { high } from './high';\n",
   'high/high.ts': "import { low } from '../low';\nexport const high = (): number => low().n;\n",
   'extra/index.ts': "import { low } from '../low';\nexport const extra = (): number => low().n;\n",
 };
@@ -467,10 +470,10 @@ const CASES: readonly Case[] = [
   },
   { what: 'a file that is not source at the top of src/', fails: READS, bad: { 'notes.json': '{}\n' }, good: {} },
   {
-    what: "a declaration file in a module, importing another's inner file",
-    fails: DOOR,
-    bad: { 'high/t.d.ts': "export type T = import('../low/low').Low;\n" },
-    good: { 'high/t.d.ts': "export type T = import('../low').Low;\n" },
+    what: 'a declaration file in a module',
+    fails: READS,
+    bad: { 'high/t.d.ts': 'export type Loose = any;\n' },
+    good: { 'high/t.ts': 'export type Tight = unknown;\n' },
   },
   {
     what: "the top index.ts importing a module's inner file",
