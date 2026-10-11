@@ -507,6 +507,8 @@ A defect found on the way gets a test that fails first. A commit moves code or c
 
 Rules 3 and 4 have no gate. They are what a review reads for.
 
+**What two processes do to each other is in no package's tests.** Those run on PGlite, which has one connection: two statements never meet there, so a fix for a race between two connections passes with the fix taken out. `pnpm check:postgres` (`scripts/check-postgres.mts`) runs those races on a real Postgres, each side on a pool of its own: a serial group claimed by two instances of tide, the generation pointer moved by two processes, two first registrations of one integration, and the tables' migration on an empty database and again. It runs the built packages against the server `CHECK_POSTGRES_URL` names. Without the variable it says in one line that it did not run, and exits 0, so `pnpm verify` stays usable on a machine with no Postgres; CI sets it. A fix for something two connections do to each other gets a round there, and is shown red on a copy with the fix taken out before it is called held.
+
 **Which package is held by which gate, and how one joins.** `check:raw-sql` sweeps every package but vex and strata, where SQL lives. `check:modules` holds moss. `check:api` holds moss and tide. The module block of the lint holds moss's `src/`, and of tide the two things that came out of moss: `src/store/postgres/` and `src/driver.ts`. A package joins one gate at a time, each a change of its own that lands green, and never as a side effect of something else:
 
 1. **`check:api`**: its entry points go into `ENTRIES` in `check-api.mts`. `pnpm check:api --write` records what it exports now; read that file before committing it, because what it records it makes the package's API.

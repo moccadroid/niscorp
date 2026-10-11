@@ -29,6 +29,22 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    # A real Postgres beside the job, for the one step that needs two
+    # connections that meet ("Check against Postgres", below). The job runs on
+    # the runner itself, so the service is reached at localhost on the port
+    # mapped here; the health check holds the steps back until it answers.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v5
         with:
@@ -117,6 +133,21 @@ jobs:
       # itself first. See scripts/check-api.mts.
       - name: Check the public API
         run: pnpm check:api
+
+      # What only a real Postgres can show. Every test of tide's store and of
+      # moss runs on PGlite, which has one connection, so a fix for something
+      # two processes do to each other passes there with the fix taken out.
+      # This runs the three such races on the service above, each side on a
+      # pool of its own: a serial group claimed by two instances of tide, the
+      # generation pointer moved by two processes, two first registrations of
+      # one integration; and the tables' migration, on an empty database and
+      # again. Without the variable the script says it did not run and exits 0
+      # (that is how `pnpm verify` stays usable on a machine with no Postgres);
+      # here it is set, so here it runs. See scripts/check-postgres.mts.
+      - name: Check against Postgres
+        env:
+          CHECK_POSTGRES_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: pnpm check:postgres
 
       # The lint existed and nothing ran it. It holds the syntax the style guide
       # bans and, for moss's source and tide's store and driver, the stricter

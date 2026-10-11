@@ -239,6 +239,7 @@ pnpm check:packages    # every package packed and installed OUTSIDE the workspac
 pnpm check:create      # each kind of app made with the built create-nisc, installed, typechecked, checked and built
 pnpm check:grammars    # nova's and Prism's schemas vs their snapshots; 157 real documents must upgrade and parse
 pnpm check:sources     # each lab app's source is written at the grammars it runs on (strata.lock.json)
+pnpm check:postgres    # what two connections do to each other, on a real Postgres named by CHECK_POSTGRES_URL; without it, says it did not run
 pnpm check:changesets  # no release breaks an app: a breaking bump is refused unless its changeset carries its approval
 ```
 
