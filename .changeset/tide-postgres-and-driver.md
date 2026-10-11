@@ -23,7 +23,7 @@ Tide's Postgres store and its driver ship from tide. They were in `@niscorp/moss
 
 - A reflex with `order: 'serial'` runs one task at a time: the store claims in its group only when no task of it is held. The Postgres store asked whether the group was held and then claimed, as two statements. With two processes on one database, both could ask before either claimed, and each took a task: two tasks of a serial reflex ran at once.
 - The two statements now run in one transaction, behind an advisory lock on the group (`pg_try_advisory_xact_lock`) that ends with the transaction. An instance that does not get the lock leaves the group to the one that has it; nothing waits.
-- Proved on PGlite, where two stores over one database interleave their statements: the test claims twice at once and was red (two held) before the change. PGlite has one connection, so two real connections under `READ COMMITTED` were not run.
+- Shown on PostgreSQL 18.4 with two pools claiming at once (300 rounds, and 150 rounds of four claims each): exactly one held every round, and two held in 299 of 300 with the lock taken out. No test in the repository holds this: PGlite has one connection, so two claimers never meet there.
 - `createTideStore` over a pool with no `transaction` now refuses a serial claim with the sentence `transact` already refused with. Such a pool could not run tide before: fan-out is a transaction.
 
 **A wait longer than a timer can hold no longer makes the driver a loop.**
