@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createWire, browserEnv, readDocumentSnapshot } from '../src/client';
 import type { WireEnv } from '../src/client';
-import { CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SIGNED_OUT, ClientMessageSchema, PROTOCOL, encodeDelta, frameHash, offeredToken } from '../src/protocol';
+import { CLOSE_AT_CAPACITY, CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SHELL_FAILED, CLOSE_SIGNED_OUT, ClientMessageSchema, PROTOCOL, encodeDelta, frameHash, offeredToken } from '../src/protocol';
 
 // ═══════════════════════════════════════════════════════════════
 // The wire — driven headlessly, the way socket.test.ts drives the server:
@@ -376,7 +376,7 @@ describe('the wire — session lifecycle (become)', () => {
 });
 
 describe('the wire — reconnect backoff', () => {
-  it('an abnormal close backs off with growing delay, and a healthy open resets it', () => {
+  it('an abnormal close backs off with growing delay, and a connection that was served a screen resets it', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0); // delay collapses to ceiling/2, deterministic
     createWire({ url: URL, env: env() });
     expect(FakeSocket.instances).toHaveLength(1);
@@ -395,11 +395,69 @@ describe('the wire — reconnect backoff', () => {
     vi.advanceTimersByTime(1);
     expect(FakeSocket.instances).toHaveLength(3);
 
-    // a connection that opens forgets the backoff — next failure is 500ms again
+    // a connection that is served its first frame forgets the backoff — next
+    // failure is 500ms again (one that only opened has been served nothing
+    // yet: a server opens a connection to refuse it, see below)
     FakeSocket.last().open();
+    FakeSocket.last().emit({ type: 'frame', tree: [] });
     FakeSocket.last().serverClose(1006);
     vi.advanceTimersByTime(500);
     expect(FakeSocket.instances).toHaveLength(4);
+  });
+
+  // A SERVER THAT REFUSES A CONNECTION OPENS IT FIRST: a refusal is a message
+  // and a close code, and both need an open socket. The backoff was forgotten
+  // when a socket opened, so a terminal that was refused every time (no place
+  // left for a shell for nobody, `4503`) came back every half second to a
+  // second, for as long as it was refused.
+  const refusedWith = (code: number, said: Record<string, unknown>[]): void => {
+    const socket = FakeSocket.last();
+    socket.open();
+    for (const message of said) socket.emit(message);
+    socket.serverClose(code);
+  };
+  // The delays a wire waits before each of its next connects, in order: the
+  // clock is moved to each connect, and how far it had to be moved is kept.
+  const waitsBefore = (connects: number, refuse: () => void): number[] => {
+    const waits: number[] = [];
+    for (let i = 0; i < connects; i += 1) {
+      refuse();
+      const before = FakeSocket.instances.length;
+      const from = Date.now();
+      while (FakeSocket.instances.length === before) vi.advanceTimersToNextTimer();
+      waits.push(Date.now() - from);
+    }
+    return waits;
+  };
+
+  it('a connection that is refused at capacity each time is tried again more and more slowly, up to the cap', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    createWire({ url: URL, env: env() });
+    const atCapacity = { type: 'error', code: 'at_capacity', message: 'This server is serving as many terminals with nobody signed in as it is set to. Try again in a moment.' };
+
+    expect(waitsBefore(7, () => refusedWith(CLOSE_AT_CAPACITY, [atCapacity]))).toEqual([500, 1000, 2000, 4000, 8000, 15_000, 15_000]);
+  });
+
+  it('so is one whose session the server could not open, though it had said hello', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    createWire({ url: URL, env: env() });
+    const hello = { type: 'hello', protocol: PROTOCOL, principal: null, catalog: { actions: [], hash: 'h' } };
+    const failed = { type: 'error', code: 'session_failed', message: 'The session was refused.' };
+
+    expect(waitsBefore(3, () => refusedWith(CLOSE_SHELL_FAILED, [hello, failed]))).toEqual([500, 1000, 2000]);
+  });
+
+  it('a connection that was served a screen and then dropped is tried again after the first, short wait, however often it had been refused before', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    createWire({ url: URL, env: env() });
+    const atCapacity = { type: 'error', code: 'at_capacity', message: 'no place' };
+    waitsBefore(4, () => refusedWith(CLOSE_AT_CAPACITY, [atCapacity]));
+
+    const served = [{ type: 'hello', protocol: PROTOCOL, principal: null, catalog: { actions: [], hash: 'h' } }, { type: 'frame', tree: [] }];
+    expect(waitsBefore(1, () => refusedWith(1006, served))).toEqual([500]);
   });
 
   it('dispose stops reconnects and closes the live socket', () => {

@@ -112,6 +112,8 @@ type Hearing = {
   send: (message: ClientMessage) => void;
   // become that principal: by a token, or by a sign-in handed over sealed
   become: (token: string | null, sealed?: string | null) => void;
+  // the server served this connection a screen
+  served: () => void;
   // the server speaks a protocol this terminal cannot: end the connection, for good
   refuse: () => void;
 };
@@ -133,6 +135,7 @@ const hear = (to: Hearing, text: string): void => {
       return;
     case 'frame':
       to.screen.frame(data.tree);
+      to.served();
       return;
     case 'session':
       // Login redeemed server-side: become that principal. Handed over
@@ -189,9 +192,9 @@ const createRetry = (connect: () => void): { schedule: () => void; forget: () =>
       attempts += 1;
       timer = setTimeout(connect, ceiling / 2 + Math.random() * (ceiling / 2));
     },
-    // Nothing scheduled, and the backoff clean: a connection that opened is a
-    // healthy one, a new principal is a fresh session, and somebody pressing
-    // reset is waiting now.
+    // Nothing scheduled, and the backoff clean: a connection that was served
+    // a screen is a healthy one, a new principal is a fresh session, and
+    // somebody pressing reset is waiting now.
     forget: () => {
       clearTimeout(timer);
       attempts = 0;
@@ -285,12 +288,16 @@ const createConnection = ({ config, env, credential, screen, delta, initial, not
       incompatible = true;
       ws.close();
     };
-    const hearing: Hearing = { screen, credential, send, become, refuse };
-    // A connection that opens is a healthy connection: forget the backoff.
-    ws.onopen = () => {
-      retry.forget();
-      setStatus('open');
-    };
+    // A CONNECTION THAT WAS SERVED A SCREEN IS A HEALTHY ONE, and that is when
+    // the backoff is forgotten: at its first frame, which is the first thing
+    // a shell sends whatever attaches to it. NOT WHEN THE SOCKET OPENS. A
+    // server that refuses a connection opens it first, because a refusal is a
+    // message and a close code: no place left for a shell for nobody
+    // (`4503`), a session it could not open (`4500`). Forgotten at the open,
+    // every refusal was followed by a connect half a second to a second
+    // later, for as long as the server went on refusing.
+    const hearing: Hearing = { screen, credential, send, become, refuse, served: retry.forget };
+    ws.onopen = () => setStatus('open');
     ws.onmessage = (e) => hear(hearing, String(e.data));
     ws.onclose = (e) => closed(e.code);
   };

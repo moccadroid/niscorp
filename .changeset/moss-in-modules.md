@@ -322,7 +322,7 @@ Where the right column says there is nothing to call and an app did call it, say
 - **The default is 1,000, from a measurement.** Lyceum's real boot, 2,000 connections for nobody opened through `server.socket` and held, the heap read after a forced collection before and after: 52.5 KB of heap for each (about 110 KB resident); 26.7 KB for an app of one canvas and one action. The Node transport holds about 260 KB resident more for each connection while compression is on. A thousand fit a process given 512 MB.
 - **An app with a public screen that more than a thousand visitors have open at once sets `anonymousShellMax`** to what its memory carries (`Infinity` is no limit, as before). A page of the manifest that is not live opens no socket and takes no place.
 - **It is one count for everybody with nobody signed in, in one process, and it bounds memory.** It is not a limit for each visitor: one client that holds that many connections has every place, and every other visitor with nobody signed in is refused until one closes. Moss does not know a visitor's address (behind a proxy it is the proxy's), so a deployment that faces the internet limits the connections one address may hold at its proxy or load balancer, on `/socket`. `DOCS.md` says this under the setting.
-- A terminal built on `@niscorp/moss/client` has nothing to change: it logs the `error`, and reconnects with its usual backoff, as after any close that is not `4401` or `4403`. A terminal written by hand treats `4503` as a close to retry later, and keeps its token.
+- A terminal built on `@niscorp/moss/client` has nothing to change: it logs the `error`, and reconnects with its usual backoff, as after any close that is not `4401` or `4403`. The backoff grows for as long as it is refused ("A connection the server refuses is tried again more slowly each time", in group 8). A terminal written by hand treats `4503` as a close to retry later, and later each time, and keeps its token.
 
 **A failure on the socket stays one terminal's, and its text stays on the server.**
 
@@ -428,6 +428,12 @@ Where the right column says there is nothing to call and an app did call it, say
 - `wire.reset()` on a socket that is not open connects again. Pressed while a connect was still in flight (the reset key held down on a slow network, a reset straight after the page loads), the socket it was waiting on was left as it was, with the wire still listening to it. Both opened: two sockets wrote one snapshot, a sign-out or a drop heard on either was taken for the connection's, and the first to close scheduled a third. The wire lets go of the socket it had before it makes another: it is no longer listened to, and it is closed.
 - A wire whose status is `incompatible` stops retrying, and `reset()` is the way to try again once the server has been updated. A connection made that way kept the mark of the one before it: when it later dropped for any reason, the status read `incompatible` again and nothing retried. Whether the two ends can speak is found out for each connection now.
 - An app has nothing to change.
+
+**A connection the server refuses is tried again more slowly each time.**
+
+- The wire waits before it connects again: half a second to a second at first, twice as long after each failure, up to thirty seconds. It forgot that count whenever a socket opened. A server opens a connection before it refuses one, because a refusal is a message and a close code: `4503` when there is no place left for a shell for nobody, `4500` when it could not open the session. So a terminal that was refused each time connected again every half second to a second, for as long as it was refused, and each of those connects had the server do the refusing again.
+- The count is forgotten when a connection is served its first frame, which is the first thing a shell sends whatever attaches to it. A connection that drops after that is tried again after the first, short wait, as before.
+- An app has nothing to change. A terminal that connects where the server serves it no shell (a path that is no page, in an app that declares no shell) is never served a frame: after each drop it waits longer, up to the thirty seconds.
 
 **In the full-screen terminal, digits that arrive together are the number they spell, and `onQuit` is the terminal ending.**
 

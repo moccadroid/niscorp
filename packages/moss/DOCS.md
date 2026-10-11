@@ -1443,7 +1443,8 @@ server.nudge('usr_ada', 'notes-changed');
   - `4503`: the server is serving as many terminals with nobody signed in as
     `runtime.anonymousShellMax` allows, and built no shell for this one. An
     `at_capacity` error frame, then the close. Not a recovery: the terminal
-    keeps what it holds and reconnects with its usual backoff.
+    keeps what it holds and reconnects with its usual backoff, which grows
+    for as long as it is refused.
   - `4426`: the two ends speak protocols the other cannot (below).
 - `error` codes: `invalid_token`, `session_failed`, `at_capacity`,
   `client_too_old`, `server_too_old`, `no_shell` (the app serves no shell),
@@ -2023,8 +2024,10 @@ const app = defineApp({ charter, actions, features: [createTideFacts(facts)] });
   empty app). Hand it to a renderer.
 
 Reconnect is exponential backoff with jitter, capped at 30s, reset when a
-connection opens and on any principal change (a session grant or a close-code
-recovery starts the backoff clean). Two close codes are recoveries, not retries: `4403`
+connection is served its first frame and on any principal change (a session
+grant or a close-code recovery starts the backoff clean). Not when the socket
+opens: a server opens a connection before it refuses it (`4503`, `4500`), so
+a terminal that is refused each time waits longer each time. Two close codes are recoveries, not retries: `4403`
 (signed out) and `4401` (invalid token) both drop the stored token and
 reconnect anonymous — retrying with a stale token would loop forever. A
 `4426` (protocol mismatch, either direction) is neither: the wire stops and
