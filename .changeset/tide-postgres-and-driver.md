@@ -17,6 +17,7 @@ Tide's Postgres store and its driver ship from tide. They were in `@niscorp/moss
 
 - `createTideDriver({ tide, now?, janitorMs?, retention? })` answers a `TideDriver`: `ingest` and `fire` that wake the engine, `wake()`, and `stop()`. It advances to quiescence on every ingest, sleeps until the instant `nextDue` names, and sweeps on a slow beat. The types `TideDriver` and `TideDriverConfig` come with it.
 - The engine still reads no clock and sets no timer. The driver is what does, for a host that does not want to write those twenty lines.
+- **What the driver logs begins `[tide:driver]`.** It began `[moss:tide-driver]` while the driver was moss's. There are four such lines, all to `console.error`: a drain that exceeded its 10,000 steps, a next-due read that failed, a wake that threw, and a sweep that failed. A deployment that searches its logs for the old prefix, or alerts on it, searches for the new one.
 
 **Two instances cannot both claim in one serial group.**
 
