@@ -171,9 +171,16 @@ const adoptAll = async (host: HostParts, underWay: readonly Promise<Cell>[]): Pr
 // exactly as `seeds` already behaves. A reset that blocked its caller on a
 // round trip would make a role change slower than the write that caused it.
 const replaceShell = async (host: HostParts, cell: Cell): Promise<void> => {
+  // THE SHELL THIS RESET REPLACES is the one that stands when its turn comes.
+  // Read once: one reset of a cell runs at a time (`rebuildCell`) and nothing
+  // else puts a shell in a cell, so no other can stand there when the build
+  // lands. It was read again after the build, which looked like a guard and
+  // covered no case the turn does not.
+  const old = cell.live;
   // Signed out, swept, or left by its last terminal since the reset was
-  // asked for: there is nobody to rebuild it for.
-  if (cell.live.ended) return;
+  // asked for: there is nobody to rebuild it for, and no app code is run to
+  // build what would be thrown away.
+  if (old.ended) return;
   // The replacement is built BEFORE the old one is torn down. The build runs
   // app code — `inputs`, `functions`, `onSession` — and if that throws, a
   // reset that had already disposed the old shell would leave the session
@@ -182,7 +189,6 @@ const replaceShell = async (host: HostParts, cell: Cell): Promise<void> => {
   // from everything the shell was opened with: the principal, the newest
   // token, and the id seed and the inputs a page's path carried.
   const next = await buildShell(host, cell.token, cell.principal, true, cell.opening?.seed, cell.opening?.inputs);
-  const old = cell.live;
   // It ended while its replacement was built. The replacement is nobody's.
   if (old.ended) {
     endShell(host, next);
