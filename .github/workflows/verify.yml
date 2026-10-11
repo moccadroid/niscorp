@@ -95,24 +95,35 @@ jobs:
       # A package above the engines runs no SQL of its own: its reads and writes
       # are vex, as an application's are. Every statement that exists today is
       # counted per file in the script's ledger; a new one, or a number that no
-      # longer matches, fails. See scripts/check-raw-sql.mts.
+      # longer matches, fails. A statement is counted whatever sends it and
+      # however it is cased. The script tests itself first, and its header says
+      # what it cannot see. See scripts/check-raw-sql.mts.
       - name: Check for SQL outside vex
         run: pnpm check:raw-sql
 
       # A package is made of modules: nothing new at the top of src/, a module is
-      # imported by its door, and it imports only the modules it declares. See
+      # imported by its door, and it imports only the modules it declares. Every
+      # way a file names another counts, a type-only one included, and the three
+      # roads round a door fail: the package's own name, an alias, a file of an
+      # extension the check does not read. The script tests itself first. See
       # scripts/check-modules.mts.
       - name: Check the modules
         run: pnpm check:modules
 
-      # A package's exported names are a file in the repository (api.txt), so a
-      # new export is a line in a diff rather than an accident. See
-      # scripts/check-api.mts.
+      # What a package exports is a file in the repository (api.txt): each name,
+      # and each member of an exported type, so a new one is a line in a diff
+      # rather than an accident. It asks the compiler, and a type from another
+      # package is read from its dist: it runs after the build. The script tests
+      # itself first. See scripts/check-api.mts.
       - name: Check the public API
         run: pnpm check:api
 
       # The lint existed and nothing ran it. It holds the syntax the style guide
-      # bans and, for each module that has been moved, the stricter rules.
+      # bans and, for moss's source and tide's store and driver, the stricter
+      # rules: with the compiler's types (so it runs after the build), no `any`
+      # that becomes a typed value, and a size for a function, a file and a line.
+      # It first tries each of those rules on a case that must fail and a twin
+      # that must pass (scripts/check-lint.mts), and it allows no warning.
       - name: Lint
         run: pnpm lint
 

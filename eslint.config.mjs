@@ -141,7 +141,13 @@ export default tseslint.config(
     },
   },
 
-  // ── moss's modules: the whole of rule 16, and a size ──
+  // ── moss's modules: the whole of rule 16, with types, and three sizes ──
+  //
+  // WHAT IT HOLDS: every file under moss's `src/`, and of tide the two things
+  // that came out of moss, its Postgres store and its driver. The rest of tide
+  // and every other package is held by the block above. A package joins by
+  // having its `src/` added to `files` here and to the `lint` script in
+  // `package.json` (packages/nisc/AGENTS.md, "Changing a package").
   //
   // The block above leaves `as` out because 132 of them existed and a rule
   // that lands red is the thing to stop doing. A MODULE is new ground: code
@@ -173,6 +179,16 @@ export default tseslint.config(
   // did something. `@ts-ignore`, `@ts-expect-error` and `@ts-nocheck` switch
   // the compiler off for a line or a file, which is where an `any` comes from:
   // they are errors too.
+  //
+  // EACH RULE IS TRIED, on every run: `scripts/check-lint.mts` lints a case
+  // that must fail and a twin that must pass for every rule below, and `pnpm
+  // lint` runs it first. A rule added here gets a pair there.
+  //
+  // WHAT THIS CANNOT SEE. That a boundary is read by a schema: a value
+  // narrowed by hand passes, and a type another package's function claims to
+  // answer is believed. State a `const` holds at the top of a file (a `Map`
+  // filled in place): only `let` and `var` are told. And a file this block's
+  // `files` or the `lint` script does not name.
   {
     files: ['packages/moss/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}', 'packages/tide/src/store/postgres/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}', 'packages/tide/src/driver.ts'],
     languageOptions: { parser: tseslint.parser, parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname } },

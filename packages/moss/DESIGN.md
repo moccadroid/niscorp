@@ -245,20 +245,43 @@ its `index.ts` and never a file inside it.
 Four rules go with the table. A module's factory is handed a typed object of
 the functions and values it needs, never the whole manifest and never the
 whole runtime: those two are handed to `createServer`, and the wiring hands on
-the parts. Each table and each long-lived piece of state has one module that
-writes it. What crosses a boundary (a manifest, a socket message, a route's
-body, a row, a token) is parsed by a schema in the module where it enters, and
-no module holds a type assertion. And a function is at most 100 lines, a file
-at most 400 lines of code.
+the parts. Each table and each long-lived piece of state has one owner, and
+nobody else authors what is written to it. What crosses a boundary (a
+manifest, a socket message, a route's body, a row, a token) is parsed by a
+schema in the module where it enters, and no module holds a type assertion.
+And a function is at most 100 lines, a file at most 400 lines of code, a line
+at most 200 wide.
 
-What holds them is a build that fails, not this page: `pnpm check:modules`
-(the table, the doors, nothing flat, no feature in the core), `pnpm check:api`
-(an export is a line in `api.txt`), `pnpm check:raw-sql` (a statement outside
-vex is counted, with its reason) and `pnpm lint` (no type assertion, the two
-sizes). Narrow inputs and one writer are not counted by any of the four; they
-are read for in review. The rules as somebody changing a package follows them
-are in the application guide, "Changing a package"
-(`packages/nisc/AGENTS.md`).
+**One owner, as the code has it.** The owner of a table authors every
+statement on its rows. It is not always the module that runs them, or the one
+that made the table:
+
+| Table | Whose | Where its statements are written | What is somewhere else, and why |
+|---|---|---|---|
+| `sessions` | `identity` | `identity/sessions.ts`: six statements straight to the pool, before anybody is signed in | Its table is made in `data`'s one migration run, from a sequence `identity` declares |
+| `moss_generation` | `data` | `data/pointer.ts`: two entries, one that reads and one that moves | `manifest` decides when it moves (`manifest/generation.ts`), through a function `data` hands over |
+| `integrations`, `integration_actions` | the `integrations` feature | `integrations/entries.ts`: vex entries, replayed through the seam the feature is handed | The two tables are made by the core's own sequence (`data/tables.ts`, `nisc.moss`): that is the history every database has run, and it is not edited. The documents stored in `integration_actions` are brought to the current grammars by `data`, which holds the pool, when the feature asks through its seam |
+| `integration_frame_grants` | the `integrations` feature | `integrations/entries.ts`, and its own sequence in `integrations/tables.ts` | nothing |
+
+`data` holds the engine and the one ledgered migration run, so every owner's
+entries and every owner's migrations run through it. It authors no statement
+on a table that is not its own. The app's own tables, and tide's when the app
+keeps them, are migrated in the same run (`runtime.tables`) and are the app's
+and tide's.
+
+What holds the rules is a build that fails, not this page: `pnpm
+check:modules` (the table above, the doors, nothing flat, no feature in the
+core, and no way round them by a type-only import, the package's own name or a
+file of another extension), `pnpm check:api` (an exported name, and each
+member of an exported type, is a line in `api.txt`), `pnpm check:raw-sql` (a
+statement outside vex is counted, with its reason, whatever sends it and
+however it is cased) and `pnpm lint` (no type assertion, no `any` that becomes
+a typed value, no written type predicate, the two sizes and the width).
+**Narrow inputs and one owner are held by none of the four**: they are read
+for in review, and the table above is what a review found, not what a build
+checks. What each gate cannot see is said at the top of its script. The rules
+as somebody changing a package follows them are in the application guide,
+"Changing a package" (`packages/nisc/AGENTS.md`).
 
 ---
 

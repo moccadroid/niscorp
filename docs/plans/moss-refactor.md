@@ -18,7 +18,10 @@ what another process follows after `replaceActions`); Part 11, "After a
 review", says what closed each. A second review, the same day, held the
 feature seam and the public API against one owner for each table and each
 piece of state, and against one way to do a thing; Part 11, "After a second
-review", says what it found and what closed each. Part 11 is what
+review", says what it found and what closed each. A third reviewer, the same
+day, read the four gates as an adversary and walked round each; Part 11,
+"After a review of the gates", says how, what closed each way round, and what
+each gate still cannot see. Part 11 is what
 moss is now, in numbers, what ran on a real Postgres, and what is left. Not
 done here: Midas and the two websites, which are other repositories, and the
 release. Next: Part 10.**
@@ -394,11 +397,14 @@ run them; they pass here.
 
 | Gate | Built in | What it holds now |
 |---|---|---|
-| `check:raw-sql` | `bb04ed7` | Every package but vex and strata. 0 statements with no reason, 6 credential (`moss/identity/sessions.ts`), 7 in tide's own store (`tide/store/postgres.ts`), and one row a migration writes (`moss/data/tables.ts`). |
-| `check:modules` | `0f3f059`; a finished module imports nothing flat, `45a5093`; the core imports no feature, `b9979b1` | Moss: 14 modules, no cycle, nothing flat in `src/` since `fed4ac1`. It holds two things this part gave to the lint: no import of another module's inner file, and the terminal side importing nothing of moss but `protocol`. |
-| `check:api` | `0f3f059` | Moss: 103 names across 16 entry points, in `packages/moss/api.txt`. "Each package's" is not built: no other package has an `api.txt`. |
-| `pnpm lint` | in `verify` since `0f3f059`; the block for moss's modules, `8ccbd40`; the client under it, `28a78cb`; the terminal, `bbb4fb3` | For every file under `packages/moss/src/<module>/`: no type assertion but `as const`, no non-null assertion, no `function` declaration, no `let` at the top of a file, 100 lines to a function and 400 to a file. |
-| `AGENTS.md` | the last phase | "Changing a package": 5.2, 5.5 and the gates, in 39 lines; `STYLE_GUIDE.md`, "Modules", for what is longer. |
+| `check:raw-sql` | `bb04ed7`; whatever sends a statement and however it is cased, `5a76069` | Every package but vex and strata. 0 statements with no reason, 6 credential (`moss/identity/sessions.ts`), 7 in tide's own store (`tide/store/postgres/`: 4 in `store.ts`, 3 in `claim.ts`), and one row a migration writes (`moss/data/tables.ts`). |
+| `check:modules` | `0f3f059`; a finished module imports nothing flat, `45a5093`; the core imports no feature, `b9979b1`; every way a file names another, `93182f4`; a door names what is behind it, `5c3d49c` | Moss: 14 modules, no cycle, nothing flat in `src/` since `fed4ac1`. It holds two things this part gave to the lint: no import of another module's inner file, and the terminal side importing nothing of moss but `protocol`. |
+| `check:api` | `0f3f059`; names asked of the compiler, and members, `5ad1130`; tide, `a88b66c` | Moss: 89 names and 304 members across 16 entry points. Tide: 127 names and 325 members across 4. "Each package's" is not built: the other twelve have no `api.txt`. |
+| `pnpm lint` | in `verify` since `0f3f059`; the block for moss's modules, `8ccbd40`; the client under it, `28a78cb`; the terminal, `bbb4fb3`; with types, `0fc23c5`; no written predicate, `83d80e9`; every file and no comment that switches it off, `f0be5d7`; the width, `534c0fb`; tide's store and driver, `9b32289`; tried on every run, `9b7ed95` | For every file under `packages/moss/src`, and tide's `src/store/postgres/` and `src/driver.ts`: no type assertion but `as const`, no `any` that becomes a typed value, no written type predicate, no non-null assertion, no `function` declaration, no `let` or `var` at the top of a file, 100 lines to a function, 400 to a file and 200 characters to a line. |
+| `AGENTS.md` | the last phase; the gates as a table of what each fails on and what it cannot see, after the review of them | "Changing a package": 5.2, 5.5 and the gates; `STYLE_GUIDE.md`, "Modules", for what is longer. |
+
+What each gate fails on, in full, and what it cannot see, is the comment at
+the top of its script, and Part 11, "After a review of the gates".
 
 Rules 3 and 4 of 5.2 (one owner; narrow inputs) have no gate. They were read
 for, phase by phase, and Part 9 says what a reading of the whole finds.
@@ -487,7 +493,8 @@ Taken:
    and the store moved to tide with the sequence unchanged (`7fb8322`): the
    checksum tide's test pins for migration 1 is the one moss's test pinned at
    `9e88009`. A comment over the split says nothing new is split this way
-   (`packages/tide/src/store/postgres.ts`).
+   (`packages/tide/src/store/postgres/tables.ts`, since the store became a
+   directory).
 4. **Integrations ships from `@niscorp/moss/integrations`** (`b9979b1`) and
    tide's store from tide (`7fb8322`). Lyra and lyceum changed their imports
    in the same commits. Midas did not: it is another repository, and the
@@ -571,7 +578,8 @@ Not here: stopping the seeding of `vex_cache`. That belongs to the artifactory.
 6. **Every gate in Part 6 is in CI and green. Met here; CI has not run.** The
    four are steps of `verify.yml` and of `pnpm verify`, and pass on this
    branch. The branch is not pushed. What Part 6 asked of `check:api` for
-   "each package" holds for moss alone.
+   "each package" held for moss alone. *Since (2026-10-11):* for moss and
+   tide; the other twelve packages have no `api.txt`.
 7. **Lyceum's, relay's, lyra's, atrium's and encore's checks pass. Not met:
    126 of 133.** Each `src/dev/*-check.ts`, run one at a time on 2026-10-11:
    encore 13 of 13, lyceum 17 of 18, atrium 18 of 19, relay 28 of 32, lyra 50
@@ -678,8 +686,16 @@ decide.
   imports** were decided by the second review, below: of the fifteen, ten
   left, and `Feature`, `FeatureSeams`, `Telemetry`, `TelemetrySpan` and
   `revokeAllFor` stay, each shown in use in `DOCS.md`.
-- **The gates list one package.** `check:modules`, `check:api` and the module
-  block of the lint hold moss. `check:raw-sql` sweeps the others.
+- **The gates list one package, and part of a second.** `check:modules` holds
+  moss. `check:api` holds moss and tide. The module block of the lint holds
+  moss, and of tide the store and the driver that came out of moss.
+  `check:raw-sql` sweeps every package but vex and strata. How a package
+  joins is in `AGENTS.md`, "Changing a package"; none was added that this
+  refactor did not touch.
+- **The repository is not formatted.** `.prettierrc` names a width of 100 and
+  nothing enforces it: by `prettier --check`, 119 of moss's 154 source files
+  differ from it. The lint holds a line to 200, which is not the same thing.
+  Formatting is a decision for the whole repository.
 - **The webhook limit is per process** (4.3, 10), and the documents say so.
   Whether a deployment of several processes wants one ceiling is its owner's
   to say; it would be a shared store, and none is built.
@@ -848,6 +864,103 @@ Counted after it, for the rows it moved: 154 source files (three more:
 test files and 1,043 tests; `api.txt` holds 89 names, 38 of them the main
 entry's. The gates pass as they did, 14 modules under the same table of who
 may import whom, no statement outside vex without a reason.
+
+**After a review of the gates (2026-10-11).** A reviewer read the four gates
+as an adversary and showed, on copies outside the tree, that each passed on
+code that breaks its rule. Every one was reproduced first, the same way: a
+copy of the gates and of moss's source under the system's temp directory, the
+walkaround written into the copy, the gate run. Then it was closed, and made a
+case the gate runs against itself every time: something small that must fail,
+beside a twin that does the same thing by the rules and must pass.
+
+- **`check:modules` read `import` and `export` declarations and literal
+  `import()` calls.** Five ways round it, all reproduced: a type taken with
+  `import('../data/engine').T` or `typeof import(…)`; the package's own name
+  (`@niscorp/moss/integrations` from the core); a file of an extension it did
+  not read (`.mts`, `.js`), flat or in a module; the top `index.ts` importing
+  a module's inner file; `require`, `createRequire` and `import x =
+  require`. Found on the way, of the same kind: a module importing the top of
+  `src/` (`from '..'`), which reaches every module through the main entry;
+  an alias into the package; a relative path that leaves `src/`; a path
+  built while the program runs; `declare module` and `/// <reference>`; a
+  declaration file, which was skipped; a link. It reads every way a file
+  names another now, a file is `.ts` or `.tsx` or it fails, a name that is
+  not relative is a package `package.json` names, and `import()` takes one
+  written string. 25 pairs and one link (`93182f4`, `5c3d49c`).
+  *Cannot see:* what a door exports from inside its module; code loaded by
+  `eval` or by reading a file; whether what a door says of a file is so.
+- **`check:api` read the statements of each entry file, and recorded names.**
+  `export const { createShellHost } = inner` and `export namespace internals`
+  both reported the old 89 names; a member added to `MossServer` moved no
+  line; tide, which this refactor gave an entry point, was not listed. The
+  names are what the type checker says an entry's module exports, so every
+  way of writing an export is a name. What has no name of its own is refused:
+  `export *`, a namespace however it is reached, a default export, an enum.
+  One level of members is recorded for each exported type, interface and
+  `const` object, where the package itself declares the member. Tide's four
+  entries are recorded. 17 pairs (`5ad1130`, `a88b66c`).
+  *Cannot see:* a signature; a second level of members; what an exported
+  function takes when that type is not exported.
+- **`check:raw-sql` told a pool by four names and a statement by its
+  capitals.** `const conn = runtime.pool; conn.query('select … from
+  sessions')` counted as nothing. Fifteen more of the kind were found:
+  `execute`, `exec` and `unsafe` on another name, a `sql` tag, a statement
+  built with `+` or joined from a list, kept in a variable, given as an
+  object's `text` (which was read as tide's store and skipped), in sentence
+  case, taken off a pool by destructuring, a table made in lower case. A door
+  is now also a name the file made from a pool or wrote a pool's type on,
+  and, under any other name, a call that is handed text that reads as SQL.
+  A statement not in capitals counts where it is sent. 19 pairs and a
+  `.sql` file (`5a76069`). The ledger's numbers did not move.
+  *Cannot see, and one of the fifteen is this:* a call under a name that says
+  nothing (`handle.query(text)`), sending text its file does not hold.
+- **The lint read syntax.** `const row: Row = JSON.parse(text)` is a cast with
+  nothing written; so is a type predicate; `export let` was not the `let`
+  the selector named; `/* eslint-disable */` worked; `src/index.ts`, a
+  `.mts` file and tide's store and driver were held by nothing; and nothing
+  held how wide a line is. The block lints with the compiler's types now
+  (`no-explicit-any` and the `no-unsafe` family), forbids a written
+  predicate, holds every file under moss's `src/` and the two of tide's,
+  reads no inline configuration, and holds a line to 200. 31 pairs, and one
+  more case (`0fc23c5` to `9b7ed95`).
+  *Cannot see:* that a boundary is read by a schema (a value narrowed by hand
+  passes, and a type another package claims to answer is believed); state a
+  `const` holds at the top of a file; a file the `lint` script is not handed.
+
+What the typed lint found in moss's 154 files, counted by rule: two
+`no-unsafe-argument` (Hono types what a route was handed as `any`, and it
+was passed on) and one `no-unsafe-assignment` (`Object.getPrototypeOf`). In
+tide's eight: one `no-unsafe-call` and one written predicate. No boundary
+was found unparsed. Written predicates in `packages/moss/src`, counted from
+the syntax tree: two, both replaced. The rule does not tell an honest
+predicate from a cast, and does not have to: the compiler infers one from a
+body that narrows, and an inferred one is checked.
+
+**The width.** Of moss's 15,930 source lines, 14,604 are at most 80 wide, 620
+are 81 to 100, 304 are 101 to 120, 207 are 121 to 140, 101 are 141 to 160, 58
+are 161 to 180, 20 are 181 to 200 and 16 were wider, the widest 273. The bound
+is 200 and those sixteen were rewrapped. Held to 100 wide instead (prettier
+over a copy, then the lint's own count), five functions were over 100 lines:
+`createShellHost` 114, `createSocket` 110, `createWire` 109, `dataOver`
+117, `createRunningManifest` 107. Each was split, in a commit that only
+moves code (`9671b2d` to `b556963`). Measured again the same way, the
+largest is `createRunningManifest` at 99, and no file is over 400. As
+written, the largest function is 86 lines of code and the largest file 290
+(`integrations/intake.ts`).
+
+**Tide's store** was one file of 690 lines, 458 of them code, with a function
+of 104, and held by nothing. It is `src/store/postgres/`, six files and a
+door, the largest 134 lines of code (`a9503b1`), under the lint with the
+driver (`9b32289`).
+
+**What the gates cost.** Timed on this machine, each three times:
+`check:modules` 0.8 s before and after; `check:api` 0.7 s and 2.5 s (it
+builds a program for each package); `check:raw-sql` 1.2 s before and after;
+`pnpm lint` 2.5 s and 8.6 s (the types, and 3.1 s of trying itself).
+
+Counted after it, for the rows it moved: moss has 154 source files, 68 test
+files and 1,043 tests, as before; tide has 13 test files and 235 tests (one
+file and three tests more, for the store's `where` compiler).
 
 **Run on a real Postgres (2026-10-11).** Everything before this ran on PGlite,
 which has one connection. These ran once on PostgreSQL 18.4 (the

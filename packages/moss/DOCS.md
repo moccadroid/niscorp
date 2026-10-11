@@ -16,8 +16,11 @@ calls. Its entry in `CHANGELOG.md` says what an app changes.
 
 **What is exported is a file.** Every name an entry point exports is one line
 of `packages/moss/api.txt` in the repository (it is not in the published
-package), and `pnpm check:api` fails when the file and the entry points
-differ. Each of those names is documented below, under its entry point. Where this document names a type, a constant or a file that
+package), and so is each member of an exported type or object, one level down
+(`. MossServer.replaceActions`). `pnpm check:api` fails when the file and the
+entry points differ. What the file does not record is a signature: a member
+whose type changes moves no line. Each of those names is documented below,
+under its entry point. Where this document names a type, a constant or a file that
 is not in `api.txt`, it says so: the name is there so a shape can be read, and
 an app reaches the shape through the exported type that carries it
 (`NiscRuntime['fabric']`, `Awaited<ReturnType<ShellHost['session']>>`).

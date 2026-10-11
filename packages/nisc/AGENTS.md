@@ -481,7 +481,7 @@ Report violations by rule number. A change that makes the app less declarative, 
 4. **Narrow inputs.** A factory takes a typed object of the functions and values it needs. Never the whole manifest, never the whole runtime, never an object that stands in for either.
 5. **Parse where it enters.** A body, a socket message, a row, a fetched payload, a message from another process, a token: parsed by a schema in the module where it enters. No type assertion.
 6. **Nothing flat.** Only `index.ts` sits at the top of `src/`.
-7. **Limits.** A function is at most 100 lines, a file at most 400 lines of code. One that grows past either has stopped being one thing.
+7. **Limits.** A function is at most 100 lines, a file at most 400 lines of code, a line at most 200 wide. One that grows past the first two has stopped being one thing; the third is so that a line is something the first two can count.
 
 **How something new gets in.** In this order, and before any of it is written:
 
@@ -494,15 +494,23 @@ Report violations by rule number. A change that makes the app less declarative, 
 
 A defect found on the way gets a test that fails first. A commit moves code or changes behaviour, never both.
 
-**The gates.** All four run in `pnpm verify` and in CI. The three checks print one `[pass]`/`[fail]` line for each thing they hold.
+**The gates.** All four run in `pnpm verify` and in CI, and each prints one `[pass]`/`[fail]` line for each thing it holds. Each tests itself on every run: for every way round it that was found, a small case that must fail beside a twin that must pass. A gate's limits are part of what it is, so they are in the table.
 
-| Run | It fails when |
-|---|---|
-| `pnpm check:modules` | a file sits flat in `src/`; a module imports a file inside another, or a module the table does not give it; the table has a cycle; the core imports a feature (rules 1, 2, 6) |
-| `pnpm check:api` | an entry point exports a name that is not in `api.txt`, or `api.txt` holds one that is no longer exported; an entry writes `export *` |
-| `pnpm check:raw-sql` | a file outside the ledger holds SQL, or a file in it holds more or fewer statements than its line says |
-| `pnpm lint` | a type assertion other than `as const`, a non-null `!`, a `function` declaration, a `let` at the top of a file; a function or a file over its size (rules 5 and 7) |
+| Run | It fails when | It cannot see |
+|---|---|---|
+| `pnpm check:modules` | a file sits flat in `src/`, or is not `.ts` or `.tsx`; a module, or the top `index.ts`, imports a file inside a module; a module imports one the table does not give it, or the top of `src/`; the table has a cycle; the core imports a feature; a file imports its own package by name or by an alias, a package its `package.json` does not name, or a path that leaves `src/`; an `import()` or `require()` is handed anything but one written path; a door's comment leaves out a file behind it. Every way a file names another counts: `import`, `export … from`, `import('…')` as a call and as a type, `require`, `declare module`, `/// <reference>` (rules 1, 2, 6) | what a door exports from inside its module; code loaded without those words (`eval`, a file read and run); whether what a door says of a file is so |
+| `pnpm check:api` | an entry point exports a name that is not in `api.txt`, or an exported type, interface or `const` object has a member that is not; `api.txt` holds a line nothing exports; an entry exports what has no name of its own: `export *`, a namespace however it is reached, a default export, an enum. The names are asked of the compiler, so every way of writing an export counts | a signature: a member whose type changes, a function that gains a parameter; a second level of members; what an exported function takes when that type is not exported; whether a name is a type or a value |
+| `pnpm check:raw-sql` | a file outside the ledger holds a door to a database or a statement, or a file in it holds more or fewer than its line says. A door is `query`, `exec`, `execute` or `unsafe` on a pool, told by its name, by a name the file made from one, or by its type; and under any other name, a call or a `sql` tag that is handed text that reads as SQL. A statement in capitals counts wherever it is written, and in any other case where it is sent | a call under a name that says nothing, sending text its file does not hold; a statement not in capitals that is kept in one file and sent from another; text no swept file writes out; anything outside `src/` |
+| `pnpm lint` | in a file of moss's `src/`, or of tide's Postgres store or its driver: a type assertion other than `as const`; an `any`, written, or assigned, handed over, returned, called or read from; a written type predicate; a non-null `!`; a `function` declaration; a `let` or `var` at the top of a file, exported or not; `@ts-ignore` and its kin; a function over 100 lines of code, a file over 400, a line over 200 wide. No comment switches a rule off there (rules 5 and 7) | that a boundary is read by a schema: a value narrowed by hand passes, and a type another package's function claims to answer is believed; state a `const` holds at the top of a file (a `Map` filled in place); a file the `lint` script in `package.json` is not handed |
+
+`check:modules` and `check:raw-sql` read source and need no build. The lint and `check:api` read types, and a type from another package of the repository is read from its `dist`: `pnpm build` first, as `pnpm verify` and CI do. Without it `check:api` says which import did not resolve, and the lint reports an `any` wherever a type went missing.
 
 Rules 3 and 4 have no gate. They are what a review reads for.
 
-`check:raw-sql` sweeps every package but vex and strata, where SQL lives. The other three hold the packages their tables list, which today is moss. A package joins them by being added to `PACKAGES` in `check-modules.mts`, `ENTRIES` in `check-api.mts`, and the module block of `eslint.config.mjs`. What each gate counts, and what a door, a factory's config and a seam look like, is `/STYLE_GUIDE.md`, "Modules".
+**Which package is held by which gate, and how one joins.** `check:raw-sql` sweeps every package but vex and strata, where SQL lives. `check:modules` holds moss. `check:api` holds moss and tide. The module block of the lint holds moss's `src/`, and of tide the two things that came out of moss: `src/store/postgres/` and `src/driver.ts`. A package joins one gate at a time, each a change of its own that lands green, and never as a side effect of something else:
+
+1. **`check:api`**: its entry points go into `ENTRIES` in `check-api.mts`. `pnpm check:api --write` records what it exports now; read that file before committing it, because what it records it makes the package's API.
+2. **The lint**: its `src/` goes into `files` of the module block in `eslint.config.mjs` and into the `lint` script in `package.json`. What is reported is fixed by parsing, never by casting. A package that cannot join whole names the directories that can, as tide does.
+3. **`check:modules`**: it is made of modules first, a directory with a door for each question it answers. Then it gets an entry in `PACKAGES` in `check-modules.mts`: which module may import which, which are features, and in `flat` the files not yet moved, a list that only gets shorter.
+
+What each gate counts, and what a door, a factory's config and a seam look like, is `/STYLE_GUIDE.md`, "Modules".
