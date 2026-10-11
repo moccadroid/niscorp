@@ -218,19 +218,25 @@ const addressOf = (url: string, said: { credential: Credential; delta: boolean; 
   return `${url}?${params.join('&')}`;
 };
 
-export const createWire = (config: WireConfig = {}): Wire => {
-  const env = config.env ?? browserEnv();
-  const credential = createCredential(env.tokens);
-  // The page's own snapshot, when it was rendered for who this terminal is —
-  // signed in (holding a token, or its browser a session), or neither.
-  // Anything else is somebody else's screen and is not started from.
-  const initial = config.initial !== undefined && config.initial.principal === credential.signedIn() ? config.initial : undefined;
-  const listeners = new Set<() => void>();
-  const notify = (): void => {
-    for (const listener of listeners) listener();
-  };
-  const delta = config.delta === true;
-  const screen = createScreen({ initial, delta, changed: notify });
+// What a connection is made from: the wire's settings, the host it runs in,
+// who the terminal is between connects, the screen its messages are written
+// to, the page's own snapshot when the wire starts from one, and whom to tell
+// when its status changes.
+type ConnectionParts = {
+  config: WireConfig;
+  env: WireEnv;
+  credential: Credential;
+  screen: Screen;
+  delta: boolean;
+  initial: DocumentSnapshot | undefined;
+  notify: () => void;
+};
+
+// THE CONNECTION: one socket at a time, its status, and when to try again.
+// What a wire's own members are made of.
+type Connection = Pick<Wire, 'status' | 'reset' | 'dispose'> & { send: (message: ClientMessage) => void };
+
+const createConnection = ({ config, env, credential, screen, delta, initial, notify }: ConnectionParts): Connection => {
   // Named on the FIRST connect only: it belongs to the page's own shell, and a
   // later connect (a retry, another principal) is not that shell.
   let seed = initial?.seed;
@@ -326,16 +332,8 @@ export const createWire = (config: WireConfig = {}): Wire => {
   else connect();
 
   return {
-    subscribe: (listener) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    snapshot: screen.snapshot,
+    send,
     status: () => status,
-    dispatch: (canvasId, event) => send({ type: 'event', canvas: canvasId, event }),
-    publish: (channel, payload) => send(payload === undefined ? { type: 'publish', channel } : { type: 'publish', channel, payload }),
-    back: () => send({ type: 'back' }),
-    popTo: (canvas, instance) => send({ type: 'popTo', canvas, instance }),
     reset: () => {
       if (disposed) return;
       // Open: ask the server, and the fresh frame arrives on this same socket.
@@ -357,5 +355,36 @@ export const createWire = (config: WireConfig = {}): Wire => {
       retry.forget();
       socket?.close();
     },
+  };
+};
+
+export const createWire = (config: WireConfig = {}): Wire => {
+  const env = config.env ?? browserEnv();
+  const credential = createCredential(env.tokens);
+  // The page's own snapshot, when it was rendered for who this terminal is —
+  // signed in (holding a token, or its browser a session), or neither.
+  // Anything else is somebody else's screen and is not started from.
+  const initial = config.initial !== undefined && config.initial.principal === credential.signedIn() ? config.initial : undefined;
+  const listeners = new Set<() => void>();
+  const notify = (): void => {
+    for (const listener of listeners) listener();
+  };
+  const delta = config.delta === true;
+  const screen = createScreen({ initial, delta, changed: notify });
+  const { send, status, reset, dispose } = createConnection({ config, env, credential, screen, delta, initial, notify });
+
+  return {
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    snapshot: screen.snapshot,
+    status,
+    dispatch: (canvasId, event) => send({ type: 'event', canvas: canvasId, event }),
+    publish: (channel, payload) => send(payload === undefined ? { type: 'publish', channel } : { type: 'publish', channel, payload }),
+    back: () => send({ type: 'back' }),
+    popTo: (canvas, instance) => send({ type: 'popTo', canvas, instance }),
+    reset,
+    dispose,
   };
 };
