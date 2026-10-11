@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
 import type { ActionDefinition } from '@niscorp/nova';
 import { createRunningManifest } from '../src/manifest';
-import type { Pointer, RunningManifestConfig, ShippedManifest } from '../src/manifest';
+import type { Pointer, RunningManifest, RunningManifestConfig, ShellManifest, ShippedManifest } from '../src/manifest';
 
 // THE RUNNING MANIFEST: what the app consists of right now, changed in one
 // place and only to something that may be served. Driven directly, with small
@@ -31,6 +31,13 @@ const installedOnly: RunningManifestConfig['installedOnly'] = (ids, installed) =
 const running = (shipped: ShippedManifest, more: Partial<RunningManifestConfig> = {}): ReturnType<typeof createRunningManifest> =>
   createRunningManifest({ shipped, grants: scopeGrants(['deals']), installedOnly, ...more });
 
+// A shell that declares nothing, for the cases that are about what a set of
+// roles holds: the definitions are asked for as a shell asks for them, through
+// `artifactsFor`, which is the one way they are answered.
+const SHELL: ShellManifest = { canvases: [] };
+const definitionsOf = (manifest: RunningManifest, roles: readonly string[], installed?: readonly string[]): Readonly<Record<string, ActionDefinition>> =>
+  manifest.artifactsFor(SHELL, roles, installed).actions;
+
 // An id that is a namespace of another is something the charter engine
 // refuses, so a set that ships `home.sub` beside the app's `home` is a set the
 // app could not be served with.
@@ -57,10 +64,13 @@ describe('createRunningManifest — creating it is the boot check', () => {
     }
   });
 
-  it('looks an entry up by its fingerprint', () => {
-    const manifest = running(shippedApp());
-    expect(manifest.entries.get('deals/open')?.fingerprint).toBe('deals/open');
-    expect(manifest.entries.get('deals/closed')).toBeUndefined();
+  it('holds the entries the app serves: the list as it shipped them, and each by its fingerprint for a shell', () => {
+    const shipped = shippedApp();
+    const manifest = running(shipped);
+    expect(manifest.entries()).toEqual(shipped.entries);
+    const byFingerprint = manifest.artifactsFor(SHELL, ['public'], undefined).entries;
+    expect(byFingerprint.get('deals/open')?.fingerprint).toBe('deals/open');
+    expect(byFingerprint.get('deals/closed')).toBeUndefined();
   });
 });
 
@@ -84,11 +94,11 @@ describe('replace — a named set of actions that arrived while the app runs', (
     const told = vi.fn();
     const stop = manifest.onChange(told);
     const before = manifest.catalogFor(['member'], undefined);
-    const variantsBefore = manifest.variantsFor(['member']);
+    const definitionsBefore = definitionsOf(manifest, ['member']);
     const verifiedBy = manifest.report();
     // Held: the same question is answered with the same object.
     expect(manifest.catalogFor(['member'], undefined)).toBe(before);
-    expect(manifest.variantsFor(['member'])).toBe(variantsBefore);
+    expect(definitionsOf(manifest, ['member'])).toBe(definitionsBefore);
     expect(before.ids).toEqual(['home', 'panel']);
 
     manifest.replace('bundles', { [desk.id]: desk });
@@ -98,7 +108,7 @@ describe('replace — a named set of actions that arrived while the app runs', (
     expect(after).not.toBe(before);
     expect(after.ids).toEqual([desk.id, 'home', 'panel']);
     expect(after.hash).not.toBe(before.hash);
-    expect(manifest.variantsFor(['member'])).not.toBe(variantsBefore);
+    expect(definitionsOf(manifest, ['member'])).not.toBe(definitionsBefore);
     expect(manifest.report()).not.toBe(verifiedBy);
 
     // ...and somebody who stopped listening is not told again.
@@ -115,7 +125,7 @@ describe('replace — a named set of actions that arrived while the app runs', (
     manifest.onChange(told);
     const inForce = manifest.actions();
     const held = manifest.catalogFor(['member'], undefined);
-    const variantsHeld = manifest.variantsFor(['member']);
+    const definitionsHeld = definitionsOf(manifest, ['member']);
     const verifiedBy = manifest.report();
     const appsRecord = shipped.actions;
 
@@ -124,7 +134,7 @@ describe('replace — a named set of actions that arrived while the app runs', (
     expect(manifest.actions()).toBe(inForce);
     expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id]);
     expect(manifest.catalogFor(['member'], undefined)).toBe(held);
-    expect(manifest.variantsFor(['member'])).toBe(variantsHeld);
+    expect(definitionsOf(manifest, ['member'])).toBe(definitionsHeld);
     expect(manifest.report()).toBe(verifiedBy);
     expect(told).not.toHaveBeenCalled();
     expect(shipped.actions).toBe(appsRecord);
@@ -264,25 +274,63 @@ describe('what a set of roles holds', () => {
     const manifest = running(shipped);
     manifest.replace('bundles', { [desk.id]: desk, [pay.id]: pay });
 
-    const member = manifest.definitionsFor(['member'], ['belts']);
+    const member = definitionsOf(manifest, ['member'], ['belts']);
     expect(Object.keys(member)).toEqual(manifest.catalogFor(['member'], ['belts']).ids);
     // Held as the manifest has them: the same objects, no copy.
     expect(member['panel']).toBe(base);
     expect(member[desk.id]).toBe(desk);
     expect(member[pay.id]).toBeUndefined();
-    expect(Object.keys(manifest.definitionsFor(['public'], undefined))).toEqual(['home']);
+    expect(Object.keys(definitionsOf(manifest, ['public']))).toEqual(['home']);
 
     // The variant is a copy that differs in its layout: the base is not edited.
-    const lead = manifest.definitionsFor(['lead'], ['belts']);
+    const lead = definitionsOf(manifest, ['lead'], ['belts']);
     expect(lead['panel']).toEqual({ id: 'panel', layout: { component: 'Text', children: 'wide' } });
     expect(base.layout).toEqual({ component: 'Text', children: 'base' });
     expect(lead['home']).toBe(home);
 
     // Kept like the catalog, and dropped with it at a switch.
-    expect(manifest.definitionsFor(['lead'], ['belts'])).toBe(lead);
+    expect(definitionsOf(manifest, ['lead'], ['belts'])).toBe(lead);
     manifest.replace('bundles', { [desk.id]: desk });
-    expect(manifest.definitionsFor(['lead'], ['belts'])).not.toBe(lead);
-    expect(Object.keys(manifest.definitionsFor(['member'], undefined))).toEqual([desk.id, 'home', 'panel']);
+    expect(definitionsOf(manifest, ['lead'], ['belts'])).not.toBe(lead);
+    expect(Object.keys(definitionsOf(manifest, ['member']))).toEqual([desk.id, 'home', 'panel']);
+  });
+
+  // The one answer a shell is built from and adopts: every kind of artifact it
+  // loads, for the shell manifest it is asked for and a set of roles.
+  it('what a shell is made of is one answer: the definitions held, the shell as its manifest says it, and the entries', () => {
+    const wide = { component: 'Text', children: 'wide' };
+    const shipped: ShippedManifest = {
+      ...shippedApp(),
+      charter: { public: ['home'], member: { actions: ['home', 'panel'], layouts: ['panel.wide'] } },
+      actions: { home, panel: { id: 'panel', layout: { component: 'Text', children: 'base' } } },
+      layouts: { 'panel.wide': { action: 'panel', layout: wide } },
+    };
+    const shell: ShellManifest = {
+      canvases: [{ id: 'main', initial: 'home' }],
+      layout: { component: 'Frame', children: [{ component: 'CanvasSlot', props: { canvasId: 'main' } }, { ref: 'dock' }] },
+      layoutStore: { dock: { component: 'Text', children: 'dock' } },
+      fragments: { sheet: { kind: 'fragment', id: 'sheet', layout: { component: 'Sheet', children: [{ slot: 'body' }] } } },
+    };
+    const page: ShellManifest = { canvases: [{ id: 'main', initial: 'panel' }] };
+    const manifest = running(shipped);
+
+    const made = manifest.artifactsFor(shell, ['member'], undefined);
+    expect(Object.keys(made.actions)).toEqual(['home', 'panel']);
+    expect(made.actions['panel']?.layout).toBe(wide);
+    expect(made.canvases).toBe(shell.canvases);
+    expect(made.frame).toBe(shell.layout);
+    expect(made.layoutStore).toBe(shell.layoutStore);
+    expect(made.fragments).toBe(shell.fragments);
+    expect([...made.entries.keys()]).toEqual(['deals/open']);
+    expect(Object.keys(made.components).sort()).toEqual(['ActionSlot', 'CanvasSlot', 'Frame', 'Sheet', 'Text']);
+
+    // Another shell manifest is another shell: what it does not declare is not
+    // answered, and the roles still decide the definitions.
+    const forPage = manifest.artifactsFor(page, ['public'], undefined);
+    expect(forPage.canvases).toBe(page.canvases);
+    expect('frame' in forPage || 'layoutStore' in forPage || 'fragments' in forPage).toBe(false);
+    expect(Object.keys(forPage.actions)).toEqual(['home']);
+    expect(forPage.entries).toBe(made.entries);
   });
 
   it('the component names a shell may mention are read off the actions in force and the shell, with the contracts it declares', () => {
@@ -293,17 +341,18 @@ describe('what a set of roles holds', () => {
       fragments: { sheet: { kind: 'fragment' as const, id: 'sheet', layout: { component: 'Sheet', children: [{ slot: 'body' }] } } },
       components: { Chart: { meta: { description: 'a chart' } } },
     };
-    const read = manifest.componentsFor(shell);
+    const componentsOf = (): Readonly<Record<string, unknown>> => manifest.artifactsFor(shell, ['public'], undefined).components;
+    const read = componentsOf();
     // nova's two slot markers, what the layouts mention, and the declared contract.
     expect(Object.keys(read).sort()).toEqual(['ActionSlot', 'CanvasSlot', 'Chart', 'Frame', 'Heading', 'Sheet']);
     expect(read['Chart']).toEqual({ meta: { description: 'a chart' } });
     expect(read['Heading']).toEqual({});
-    expect(manifest.componentsFor(shell)).toBe(read);
+    expect(componentsOf()).toBe(read);
 
     // A set that arrives mentions a component nothing shipped did: it is there
     // for the next shell that is built.
     manifest.replace('bundles', { [desk.id]: { id: desk.id, layout: { component: 'Ledger' } } });
-    expect(Object.keys(manifest.componentsFor(shell))).toContain('Ledger');
+    expect(Object.keys(componentsOf())).toContain('Ledger');
   });
 });
 

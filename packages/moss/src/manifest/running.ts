@@ -1,5 +1,6 @@
-import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
+import type { ActionDefinition } from '@niscorp/nova';
 import type { ShellManifest } from './app';
+import type { ShellArtifacts } from './artifacts';
 import { shellComponents } from './components';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { entriesOf } from './entries';
@@ -64,8 +65,12 @@ export type RunningManifestConfig = {
 export type RunningManifest = {
   // The actions in force now: what the app shipped, then each named set.
   actions: () => Actions;
-  // An entry the app serves, by its fingerprint.
-  entries: ReadonlyMap<string, SeedEntry | SeedMutation>;
+  // THE ENTRIES THE APP SERVES, in the order it shipped them. They are held
+  // here and nowhere else while a server runs: whoever seeds them where vex
+  // replays from is handed this list, a verification reads it, and a shell is
+  // handed them by fingerprint with the rest of what it is made of
+  // (`artifactsFor`).
+  entries: () => readonly (SeedEntry | SeedMutation)[];
   // Would the app serve THESE actions, everything else as it stands? Nothing
   // is switched: this is how a bundle is tried before any of it is written.
   verify: (actions: Actions) => ManifestReport;
@@ -105,18 +110,22 @@ export type RunningManifest = {
   // after the ones already said. What was remembered for each set of roles is
   // dropped, so the next answer is made with it.
   narrowCatalogs: (filter: InstalledOnly) => void;
-  // What a set of roles holds, remembered until the next switch (./roles.ts).
+  // The ids of the actions a set of roles holds, with their version token,
+  // remembered until the next switch (./roles.ts).
   catalogFor: (roles: readonly string[], installed: readonly string[] | undefined) => Catalog;
-  variantsFor: (roles: readonly string[]) => ReadonlyMap<string, LayoutNode>;
-  // The action definitions a set of roles holds, by id: granted, there for the
-  // install list, each with the layout variant those roles hold in its place
-  // (./roles.ts). Remembered like the two above.
-  definitionsFor: (roles: readonly string[], installed: readonly string[] | undefined) => Readonly<Record<string, ActionDefinition>>;
-  // Every component name a shell's trees may mention, with the contract
-  // declared for each (./components.ts): read off the actions in force and
-  // the shell manifest it is asked for, and remembered for that manifest
-  // until the next switch.
-  componentsFor: (shell: ShellManifest) => ReturnType<typeof shellComponents>;
+  // WHAT A SHELL IS MADE OF, FOR A SET OF ROLES (./artifacts.ts): the action
+  // definitions they hold, each with the layout variant those roles hold of it
+  // in its place; the shell's canvases, its frame and its layout store; its
+  // fragments; the entries; and every component name all of that may mention.
+  // `shell` is a shell manifest the app handed over, its own or a page's.
+  //
+  // THE ONE QUESTION A SHELL ASKS OF WHAT EXISTS: once to be built, and once
+  // more each time it adopts. An action, a layout, a fragment and an entry
+  // reach a shell through this answer and through nothing else, so whatever
+  // comes to decide what an id resolves to decides it here. The definitions
+  // are remembered for each set of roles and the component names for each
+  // shell manifest, both until the next switch.
+  artifactsFor: (shell: ShellManifest, roles: readonly string[], installed: readonly string[] | undefined) => ShellArtifacts;
   // The generation this process has seen; -1 until it watches and has read it.
   generation: () => number;
   // Stop watching.
@@ -169,6 +178,14 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   // Kept by the shell manifest asked for: the app's own and each page's are
   // objects that live as long as the app does.
   let components = new WeakMap<ShellManifest, ReturnType<typeof shellComponents>>();
+  const componentsFor = (shell: ShellManifest): ReturnType<typeof shellComponents> => {
+    const kept = components.get(shell);
+    if (kept !== undefined) return kept;
+    const read = shellComponents({ actions: inForce, layouts: shipped.layouts }, shell);
+    components.set(shell, read);
+    return read;
+  };
+  const byFingerprint: ShellArtifacts['entries'] = new Map(entries.map((entry) => [entry.fingerprint, entry]));
   const listeners = new Set<() => void>();
   let pointer: Generation | undefined;
 
@@ -202,7 +219,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
 
   return {
     actions: () => inForce,
-    entries: new Map(entries.map((entry) => [entry.fingerprint, entry])),
+    entries: () => entries,
     verify: (actions) => verifyManifest(candidate(actions)),
     verifyReplace: (source, actions) => verifyManifest(candidate(laidOver(own, new Map(sets).set(source, actions)))),
     report: () => report,
@@ -228,15 +245,15 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       holdings.drop();
     },
     catalogFor: holdings.catalogFor,
-    variantsFor: holdings.variantsFor,
-    definitionsFor: holdings.definitionsFor,
-    componentsFor: (shell) => {
-      const kept = components.get(shell);
-      if (kept !== undefined) return kept;
-      const read = shellComponents({ actions: inForce, layouts: shipped.layouts }, shell);
-      components.set(shell, read);
-      return read;
-    },
+    artifactsFor: (shell, roles, installed) => ({
+      actions: holdings.definitionsFor(roles, installed),
+      canvases: shell.canvases,
+      ...(shell.layout !== undefined ? { frame: shell.layout } : {}),
+      ...(shell.layoutStore !== undefined ? { layoutStore: shell.layoutStore } : {}),
+      ...(shell.fragments !== undefined ? { fragments: shell.fragments } : {}),
+      entries: byFingerprint,
+      components: componentsFor(shell),
+    }),
     generation: () => pointer?.current() ?? -1,
     stop: () => pointer?.stop(),
   };

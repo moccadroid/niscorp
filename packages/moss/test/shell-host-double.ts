@@ -2,17 +2,21 @@ import type { ActionDefinition, FetchFn, LayoutNode } from '@niscorp/nova';
 import { shellComponents } from '../src/manifest/components';
 import { definitionsFor } from '../src/manifest/roles';
 import type { NiscApp, ShellManifest } from '../src/manifest';
-import type { ShellHostConfig } from '../src/shells';
+import type { ShellComposition, ShellHostConfig } from '../src/shells';
 
 // A SHELL HOST'S CONFIG, ASSEMBLED AS A SERVER ASSEMBLES IT, for the tests that
 // stand a host up with no server: from an app, and from who the test says a
 // principal is and what they hold.
 //
-// What a principal's shell is made of is put together the way
-// ../src/server/hosts.ts does, with the manifest's own two functions: the definitions granted with
-// the layout variant in place (`definitionsFor`), and the component names
-// (`shellComponents`). A test says who somebody is; it does not say what a
-// composition looks like.
+// What a principal's shell is made of is put together from the pieces the
+// running manifest answers it from (../src/manifest/running.ts,
+// `artifactsFor`): the definitions granted with the layout variant in place
+// (`definitionsFor`), the component names (`shellComponents`), the shell as
+// its manifest says it, and the entries. It is not the running manifest
+// itself, because a test here says what each principal holds, id by id, with
+// no charter. A test says who somebody is; it does not say what a composition
+// looks like. That a server's hosts ask the running manifest is held in
+// server-hosts.test.ts.
 
 export type HostSetup = {
   app: NiscApp;
@@ -33,7 +37,10 @@ export type HostSetup = {
   idleMs?: number;
   delta?: boolean;
   endpointTimeoutMs?: number;
-} & Pick<ShellHostConfig, 'kept' | 'wrapWire' | 'answerIntent' | 'revokeSessions' | 'entries' | 'telemetry'>;
+  // The entries the app serves, by fingerprint. Absent: the composition names
+  // none, as for a host that cannot ask.
+  entries?: ShellComposition['entries'];
+} & Pick<ShellHostConfig, 'kept' | 'wrapWire' | 'answerIntent' | 'revokeSessions' | 'telemetry'>;
 
 export const hostConfig = (setup: HostSetup): ShellHostConfig => {
   const { app } = setup;
@@ -52,6 +59,7 @@ export const hostConfig = (setup: HostSetup): ShellHostConfig => {
         ...(shell.layout !== undefined ? { frame: shell.layout } : {}),
         ...(shell.layoutStore !== undefined ? { layoutStore: shell.layoutStore } : {}),
         ...(shell.fragments !== undefined ? { fragments: shell.fragments } : {}),
+        ...(setup.entries !== undefined ? { entries: setup.entries } : {}),
       };
     },
     hooks: {
@@ -68,7 +76,6 @@ export const hostConfig = (setup: HostSetup): ShellHostConfig => {
     ...(setup.wrapWire !== undefined ? { wrapWire: setup.wrapWire } : {}),
     ...(setup.answerIntent !== undefined ? { answerIntent: setup.answerIntent } : {}),
     ...(setup.revokeSessions !== undefined ? { revokeSessions: setup.revokeSessions } : {}),
-    ...(setup.entries !== undefined ? { entries: setup.entries } : {}),
     ...(setup.telemetry !== undefined ? { telemetry: setup.telemetry } : {}),
     limits: {
       ...(setup.idleMs !== undefined ? { idleMs: setup.idleMs } : {}),

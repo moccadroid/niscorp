@@ -21,6 +21,12 @@ import type { Telemetry } from '../runtime';
 // level with one. So which actions somebody is granted, and which layout
 // their roles hold of each, is decided where this is answered, once: the host
 // filters nothing and swaps nothing.
+//
+// EVERYTHING A SHELL LOADS THAT SOMEBODY AUTHORED ARRIVES HERE: its actions,
+// its frame and layout store, its fragments, and the entries its reads
+// replay. All but who somebody is comes from one owner (../manifest,
+// `RunningManifest.artifactsFor`, whose answer is one of these without `roles`
+// and `scope`), and a host reads none of it anywhere else.
 export type ShellComposition = {
   // WHO THEY ARE: the roles they hold, and the app's own scope values, handed
   // back to `inputs` and `phrases` untouched. Moss never looks inside them.
@@ -37,6 +43,11 @@ export type ShellComposition = {
   frame?: LayoutNode;
   layoutStore?: Readonly<Record<string, LayoutNode>>;
   fragments?: Readonly<Record<string, ActionFragment>>;
+  // THE ENTRIES the app serves, by fingerprint: how a drawn screen's reads
+  // are known to keep answering or not (./liveness.ts). Absent, every screen
+  // is counted live: a host that cannot ask must not conclude a page is
+  // finished.
+  entries?: ReadonlyMap<string, SeedEntry | SeedMutation>;
   // Every component name a tree of theirs may mention, each with the contract
   // declared for it (an empty one when none is). The components themselves
   // are the terminal's: the shell validates names and serializes trees.
@@ -111,11 +122,6 @@ export type ShellHostConfig = {
   // `sessionRevokerOf`). Absent: there is none to forget, and a sign-out
   // closes the terminals and disposes the shell.
   revokeSessions?: (principal: string) => Promise<void>;
-  // The entries the app serves, by fingerprint: how a drawn screen's reads
-  // are known to keep answering or not (./liveness.ts). Absent, every screen
-  // is counted live — a host that cannot ask must not conclude a page is
-  // finished.
-  entries?: ReadonlyMap<string, SeedEntry | SeedMutation>;
   // Where a span goes (`shell.build`, `fn.call`). Absent: none is built.
   telemetry?: Telemetry;
   limits?: ShellLimits;

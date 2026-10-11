@@ -14,6 +14,12 @@
 // and the sets of actions that arrive while it runs, changed in one place and
 // only to something that may be served.
 //
+// WHAT A SHELL IS MADE OF, FOR A SET OF ROLES, is that owner's one answer
+// (./artifacts.ts): the actions they hold, the shell's frame and layout store,
+// its fragments, and the entries. An action, a layout, a fragment and an entry
+// reach a shell through that answer and through nothing else, so it is where
+// whatever decides what an id resolves to will be asked.
+//
 // WHICH ENTRIES AN APP SERVES is said by one function (./entries.ts). The
 // running manifest holds what it answers while a server runs; the step that
 // migrates before one starts asks the function itself.
@@ -51,6 +57,7 @@ export type {
   ShellCanvas,
   ShellManifest,
 } from './app';
+export type { ShellArtifacts } from './artifacts';
 export { entriesOf } from './entries';
 export type { Pointer } from './generation';
 export { receiveManifest } from './handover';

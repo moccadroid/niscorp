@@ -9,6 +9,8 @@
 // WHAT A HOST IS HANDED (./config.ts) is a typed object of the functions and
 // values it needs: one that answers what a principal's shell is made of, the
 // app's code it calls, the wire, and its limits. No manifest and no runtime.
+// Every action, layout, fragment and entry a shell loads is in that one
+// answer: a host reads none of them anywhere else.
 //
 // THE HOST (./host.ts) keeps one shell for each signed-in principal and builds
 // a throwaway one for anybody else: the cells, the idle sweep, the roster, a

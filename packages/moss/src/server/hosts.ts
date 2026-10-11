@@ -14,15 +14,17 @@ import type { MossServer } from './moss-server';
 //
 // WHAT A SHELL HOST IS HANDED (../shells, config.ts), for the app's host and
 // for every page's: each member one function or one value of the module that
-// owns it. What differs between them is the shell manifest a host builds
-// from, and whether what it builds is kept.
+// owns it. What differs between them is the shell manifest a host is for, and
+// whether what it builds is kept. Of that manifest this file reads the two
+// hooks (`inputs`, `seeds`) and a page's path; what a shell is made of it asks
+// the running manifest.
 // ═══════════════════════════════════════════════════════════════
 
 export type HostParts = {
   app: Pick<NiscApp, 'shell' | 'pages' | 'phrases' | 'functions' | 'onSession' | 'runs' | 'phraseKeys'>;
   runtime: Pick<NiscRuntime, 'telemetry' | 'shellIdleMs' | 'shellFrameDelta' | 'endpointTimeoutMs'>;
   identity: Pick<Identity, 'resolve' | 'composeScope'>;
-  running: Pick<RunningManifest, 'definitionsFor' | 'componentsFor' | 'entries'>;
+  running: Pick<RunningManifest, 'artifactsFor'>;
   data: Pick<Data, 'answerIntent'>;
   // The internal wire, for a session's token (./wire.ts).
   wire: (token: string | null) => FetchFn;
@@ -46,26 +48,22 @@ export type Hosts = {
 const hostConfig = (parts: HostParts, shell: ShellManifest, kept: boolean): ShellHostConfig => {
   const { app, runtime, identity, running, data } = parts;
   return {
-    // WHAT A PRINCIPAL'S SHELL IS MADE OF: who they are (../identity), what
-    // they hold of the actions in force with their roles' layout variants in
-    // place, and which component names their trees may mention (../manifest),
-    // and the shell as its manifest says it. ONE resolution, awaited, for
-    // each build and each adopt. The record is resolved again each time,
-    // because a shell is the long-lived thing here: an identity resolved
-    // before the tenant installed an integration would leave a shell without
-    // that integration's screens for the life of the session.
+    // WHAT A PRINCIPAL'S SHELL IS MADE OF: who they are (../identity), and
+    // everything of the shell that somebody authored, for the roles they hold
+    // (../manifest, `artifactsFor`): the actions, the frame and the layout
+    // store, the fragments, the entries. THE RUNNING MANIFEST IS ASKED, AND
+    // NOTHING IS READ HERE: this file hands it the shell manifest a host is
+    // for and passes on what it answers. It reads no action, layout, fragment
+    // or entry off the app or off that manifest itself.
+    //
+    // ONE resolution, awaited, for each build and each adopt. The record is
+    // resolved again each time, because a shell is the long-lived thing here:
+    // an identity resolved before the tenant installed an integration would
+    // leave a shell without that integration's screens for the life of the
+    // session.
     composition: async (principal) => {
       const resolved = await identity.resolve(principal);
-      return {
-        roles: resolved.roles,
-        scope: resolved.scope,
-        actions: running.definitionsFor(resolved.roles, resolved.installed),
-        components: running.componentsFor(shell),
-        canvases: shell.canvases,
-        ...(shell.layout !== undefined ? { frame: shell.layout } : {}),
-        ...(shell.layoutStore !== undefined ? { layoutStore: shell.layoutStore } : {}),
-        ...(shell.fragments !== undefined ? { fragments: shell.fragments } : {}),
-      };
+      return { roles: resolved.roles, scope: resolved.scope, ...running.artifactsFor(shell, resolved.roles, resolved.installed) };
     },
     // The app's code a shell calls: the two derivations of this shell's own
     // manifest, and the four seams of the app's.
@@ -89,7 +87,6 @@ const hostConfig = (parts: HostParts, shell: ShellManifest, kept: boolean): Shel
       return data.answerIntent(writers, asked, resolved, identity.composeScope(principal, resolved));
     },
     ...(parts.revokeSessions !== undefined ? { revokeSessions: parts.revokeSessions } : {}),
-    entries: running.entries,
     ...(runtime.telemetry !== undefined ? { telemetry: runtime.telemetry } : {}),
     limits: {
       ...(runtime.shellIdleMs !== undefined ? { idleMs: runtime.shellIdleMs } : {}),

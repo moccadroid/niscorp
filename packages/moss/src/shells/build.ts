@@ -200,7 +200,7 @@ export const buildShell = async (
 
   // Born idle: a shell exists before anything attaches to it, and a shell
   // nothing ever attaches to is exactly what the sweep should collect.
-  const live: Live = { shell, held: granted, connections: new Set(), sent: new Map(), deltaReady: new Set(), flushing: false, ended: false, since: Date.now(), idleSince: Date.now(), seeded: Promise.resolve() };
+  const live: Live = { shell, held: granted, entries: made.entries, connections: new Set(), sent: new Map(), deltaReady: new Set(), flushing: false, ended: false, since: Date.now(), idleSince: Date.now(), seeded: Promise.resolve() };
   standing.live = live;
 
   seedCanvases(live, hooks.seeds?.({ principal, actions: ids, roles: made.roles, wire }), granted);

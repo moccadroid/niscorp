@@ -1,4 +1,5 @@
 import type { Shell } from '@niscorp/nova';
+import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Emit } from '../runtime';
 import type { ShellHostConfig } from './config';
 import type { ShellConnection, ShellOpening } from './types';
@@ -14,6 +15,11 @@ export type Live = {
   // removes the ones that left. What app code registered on the shell itself
   // is not among them, and is not the host's to remove.
   held: ReadonlySet<string>;
+  // The entries its composition answered, when it was built or last adopted:
+  // what a read on one of its screens replays (./snapshot.ts asks whether one
+  // keeps answering). Undefined: the composition named none, and nothing is
+  // concluded from that.
+  entries: ReadonlyMap<string, SeedEntry | SeedMutation> | undefined;
   connections: Set<ShellConnection>;
   // last frame per canvas — only changes are sent
   sent: Map<string, string>;

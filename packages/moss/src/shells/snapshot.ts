@@ -1,6 +1,5 @@
 import { shellSettled } from '@niscorp/nova';
 import type { RenderNode } from '@niscorp/nova';
-import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { shellNeedOf } from './liveness';
 import { canvasesOf } from './live';
 import type { Live } from './live';
@@ -66,16 +65,13 @@ export const read = (live: Live): Pick<ShellSnapshot, 'frame' | 'trees'> => {
 // shell alone. A fragment adds what can be pressed (a sheet's close), so the
 // definition is read where the composed one is: off the instance.
 //
-// `kept`: the host keeps a principal's shell. `entries`: the entries the
-// app serves, or undefined when the host was given no way to ask.
-export const needOf = (
-  live: Live,
-  principal: string | null,
-  kept: boolean,
-  entries: ReadonlyMap<string, SeedEntry | SeedMutation> | undefined,
-): Pick<ShellSnapshot, 'live' | 'why' | 'drawnWith'> => {
+// `kept`: the host keeps a principal's shell. The entries are the ones the
+// shell's composition answered (`live.entries`), or undefined when it named
+// none: then the host was given no way to ask.
+export const needOf = (live: Live, principal: string | null, kept: boolean): Pick<ShellSnapshot, 'live' | 'why' | 'drawnWith'> => {
   const why: string[] = [];
   const drawnWith: string[] = [];
+  const { entries } = live;
   if (entries === undefined) return { live: true, why: ['this host was given no way to ask what its actions need'], drawnWith };
   // The app's shell IS the thing that stays: whoever is signed in has one.
   if (kept && principal !== null) why.push('the app’s shell is kept for whoever is signed in');

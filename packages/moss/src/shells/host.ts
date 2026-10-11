@@ -121,6 +121,7 @@ const adoptInto = async (host: HostParts, cell: Cell): Promise<void> => {
   for (const id of live.held) if (!Object.hasOwn(made.actions, id)) live.shell.removeAction(id);
   for (const definition of Object.values(made.actions)) live.shell.registerAction(definition);
   live.held = new Set(Object.keys(made.actions));
+  live.entries = made.entries;
 };
 
 // Every living shell, and each one whose build was under way when this was
@@ -259,14 +260,14 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
       if (principal !== null && kept) {
         const cell = await durableCell(token, principal);
         const settled = await settle(cell.live, waitMs);
-        return { ...read(cell.live), settled, ...needOf(cell.live, principal, kept, config.entries) };
+        return { ...read(cell.live), settled, ...needOf(cell.live, principal, kept) };
       }
       // Nobody in particular, or a page: a shell for the length of one read.
       const seed = randomBytes(9).toString('hex');
       const live = await buildShell(host, token, principal, false, seed, options?.inputs);
       try {
         const settled = await settle(live, waitMs);
-        return { ...read(live), seed, settled, ...needOf(live, principal, kept, config.entries) };
+        return { ...read(live), seed, settled, ...needOf(live, principal, kept) };
       } finally {
         live.ended = true;
         live.shell.dispose();
