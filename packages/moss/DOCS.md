@@ -663,10 +663,14 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   nature. In-process only, replay-only, policy compiled from that role, scope
   values supplied by server code. Its type is exported as `ExecuteAs`, for
   code that is handed the function and no server.
-- `nudge(principal, channel): void` — publish, payload-less, onto the shell
-  the app keeps for one principal, in whichever process holds it (local
-  `deliver`, then the fabric). A shell a page built for them is not reached:
-  `deliver` goes into the kept shell alone.
+- `nudge(principal, channel): void` — tell one principal's screens that a
+  channel changed. It is published, payload-less, onto every living shell of
+  theirs: the one the app keeps for them, and the one a page built for each
+  connection they have to it; in this process, and over the fabric in every
+  other. What is mounted and listening reads again. It answers nothing.
+  This is the way for server code to say "something they are looking at
+  changed". `shells.deliver` is a different thing (below): a message with a
+  payload, into the shell the app's own host keeps, in this process alone.
 - `close(): void` — stop every timer the server started (the generation poll,
   the identity sweep, socket revalidation, the shell idle sweeps). For a host
   that retires a server in-process; every timer is unref'd, so a process that
@@ -913,7 +917,10 @@ Interest is **declared**, not discovered: moss routes each committed statement
 to the reactions whose `table` (and optional `op`) match, so app code never
 hears about writes it did not ask for and never string-matches a fingerprint
 to work out what happened. `deliver(principal, channel, payload?)` publishes
-onto a principal's live durable shell over the socket the shells already run.
+onto every living shell of a principal in this process, the one the app keeps
+and each one a page built for them, with the payload; every other process is
+nudged on the same channel, without it. `false`: no shell of theirs lives
+here.
 
 Two rules hold this lane honest:
 
@@ -1253,9 +1260,14 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
     whose build was under way adopts when it lands, and so does one a reset
     was replacing. One built for the length of a `snapshot` is read and
     ended, and adopts nothing.
-  - `deliver(principal, channel, payload?): boolean` — publish into one
-    principal's living durable shell. `false` = they have no living shell;
-    nothing is built.
+  - `deliver(principal, channel, payload?): boolean` — publish a message,
+    with what it carries, into every living shell this host has for one
+    principal. `server.shells` is the app's own host, which keeps one shell
+    for a principal: that one. (A page's host keeps none and reaches the one
+    it built for each of their connections.) `false` = they have no living
+    shell in this host; nothing is built. This host, in this process: it
+    reaches no page's shell and no other process. To tell somebody's screens
+    that something changed, wherever they live, a server calls `nudge`.
   - `list()` — every durable shell alive right now, each as
     `{ principal, connections, since, idleSince, canvases }`. moss owns the map,
     so moss enumerates it; an app keeping its own note beside it can only drift.
@@ -1303,7 +1315,10 @@ const connection: Connection = {
 };
 await server.socket(`/socket?protocol=${PROTOCOL}`, connection);
 const shells: ShellHost | undefined = server.shells;
-shells?.deliver('usr_ada', 'notes-changed');
+// a message with a payload, into the shell this process keeps for her
+const shown: boolean = shells?.deliver('usr_ada', 'notify', { text: 'Saved.' }) ?? false;
+// "her notes changed": every shell of hers, in every process, reads again
+server.nudge('usr_ada', 'notes-changed');
 ```
 
 ### The socket protocol

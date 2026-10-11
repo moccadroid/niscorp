@@ -77,7 +77,7 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerP
   stops.push(hosts.stop);
 
   // 8. What crosses processes (./signals.ts).
-  const signals = buildSignals({ fabric: runtime.fabric, identity, reset: hosts.reset, shells: hosts.shells });
+  const signals = buildSignals({ fabric: runtime.fabric, identity, reset: hosts.reset, deliver: hosts.deliver });
 
   // 9. WHEN WHAT THE APP CONSISTS OF CHANGES — a set of actions replaced, a
   // `refresh`, a move another process made — what this server derived from the

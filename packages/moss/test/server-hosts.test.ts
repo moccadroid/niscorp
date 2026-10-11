@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
 import type { ActionDefinition, ActionFragment, LayoutNode } from '@niscorp/nova';
 import type { SeedEntry } from '@niscorp/vex';
 import { createRunningManifest } from '../src/manifest';
-import type { NiscApp, ShellManifest } from '../src/manifest';
+import type { FunctionSession, NiscApp, ShellManifest } from '../src/manifest';
 import { buildShellHosts } from '../src/server/hosts';
 import type { HostParts } from '../src/server/hosts';
 import { buildSignals } from '../src/server/signals';
@@ -183,7 +183,7 @@ describe('the shell hosts — a change reaches the living shells of every host',
   it('a principal’s reset reaches their shell in the app’s host and the ones a page built for them, and nobody else’s', async () => {
     const hosts = buildShellHosts(partsWith(shipped));
     try {
-      const signals = buildSignals({ fabric: undefined, identity: { invalidate: () => true, invalidateTag: () => [] }, reset: hosts.reset, shells: hosts.shells });
+      const signals = buildSignals({ fabric: undefined, identity: { invalidate: () => true, invalidateTag: () => [] }, reset: hosts.reset, deliver: hosts.deliver });
       const page = hosts.pageAt('/docs')?.host;
       const sessions = [await hosts.shells?.session('t', 'usr_1'), await page?.session('t', 'usr_1'), await page?.session('t', 'usr_2')];
       const before = sessions.map((session) => session?.shell);
@@ -194,6 +194,97 @@ describe('the shell hosts — a change reaches the living shells of every host',
       expect(sessions.map((session, index) => session?.shell === before[index])).toEqual([false, false, true]);
       // Somebody who holds no shell anywhere is answered for, and nothing is built.
       expect(hosts.reset('usr_nobody')).toBe(false);
+    } finally {
+      hosts.stop();
+    }
+  });
+});
+
+// WHAT THE WIRING TELLS EACH HOST. Five lines of ../src/server/hosts.ts came
+// out of a copy one at a time and every test passed: nothing asked whether a
+// page's host keeps a shell, whether a page's sweep is stopped, or whether
+// three things the runtime says reach a host at all.
+describe('the shell hosts — what each host is told', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('the app’s host keeps one shell for a principal; a page’s keeps none, and builds one for each asking', async () => {
+    const hosts = buildShellHosts(partsWith(shipped));
+    try {
+      const page = hosts.pageAt('/docs')?.host;
+      expect((await hosts.shells?.session('t', 'usr_1'))?.shell).toBe((await hosts.shells?.session('t', 'usr_1'))?.shell);
+      expect((await page?.session('t', 'usr_1'))?.shell).not.toBe((await page?.session('t', 'usr_1'))?.shell);
+      // Kept by nothing: an operator's roster of the page's host names nobody.
+      expect(page?.list()).toEqual([]);
+      expect(hosts.shells?.list().map((shell) => shell.principal)).toEqual(['usr_1']);
+    } finally {
+      hosts.stop();
+    }
+  });
+
+  it('stopping stops every host’s sweep: the app’s, and each page’s', () => {
+    const set = vi.spyOn(globalThis, 'setInterval');
+    const clear = vi.spyOn(globalThis, 'clearInterval');
+    const hosts = buildShellHosts(partsWith(shipped));
+    const made = set.mock.results.map((result) => result.value);
+    // One for the app's own host and one for the page `docs`.
+    expect(made).toHaveLength(2);
+    hosts.stop();
+    expect(new Set(clear.mock.calls.map(([handle]) => handle))).toEqual(new Set(made));
+  });
+
+  it('`runtime.shellIdleMs` is how long a kept shell nobody is attached to stands', async () => {
+    vi.useFakeTimers();
+    const hosts = buildShellHosts({ ...partsWith(shipped), runtime: { shellIdleMs: 5_000 } });
+    try {
+      await hosts.shells?.session('t', 'usr_1');
+      await vi.advanceTimersByTimeAsync(4_000);
+      expect(hosts.shells?.list()).toHaveLength(1);
+      // Idle for as long as the deployment said: the next sweep collects it.
+      await vi.advanceTimersByTimeAsync(6_000);
+      expect(hosts.shells?.list()).toEqual([]);
+    } finally {
+      hosts.stop();
+    }
+  });
+
+  it('`runtime.endpointTimeoutMs` is how long a screen’s call waits for its reply', async () => {
+    vi.useFakeTimers();
+    const signals: (AbortSignal | undefined)[] = [];
+    // The app's own surfaces, never answering: the call is ended by the
+    // signal it was made with, and by nothing else.
+    const unanswered: HostParts['wire'] = () => (_url, init) =>
+      new Promise((_resolve, reject) => {
+        signals.push(init?.signal);
+        init?.signal?.addEventListener('abort', () => reject(new Error('given up on')));
+      });
+    const hosts = buildShellHosts({ ...partsWith(shipped), runtime: { endpointTimeoutMs: 2_000 }, wire: unanswered });
+    try {
+      // The action reads when it opens.
+      await hosts.shells?.session('t', 'usr_1');
+      await vi.advanceTimersByTimeAsync(1_900);
+      expect(signals.map((signal) => signal?.aborted)).toEqual([false]);
+      await vi.advanceTimersByTimeAsync(200);
+      expect(signals.map((signal) => signal?.aborted)).toEqual([true]);
+    } finally {
+      hosts.stop();
+    }
+  });
+
+  it('a sign-out forgets every session the principal holds, where the deployment keeps them', async () => {
+    const forgotten: string[] = [];
+    const sessions: FunctionSession[] = [];
+    const hosts = buildShellHosts({
+      ...partsWith(shipped),
+      app: { ...app, functions: (session) => (sessions.push(session), {}) },
+      revokeSessions: async (principal) => void forgotten.push(principal),
+    });
+    try {
+      await hosts.shells?.session('t', 'usr_1');
+      await sessions[0]?.revoke();
+      expect(forgotten).toEqual(['usr_1']);
     } finally {
       hosts.stop();
     }

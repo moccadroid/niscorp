@@ -121,12 +121,19 @@ export type MossServer = Hono<Env> & {
   // the right hammer for a changed ARTIFACT, because artifacts are deployment
   // -wide; a tenant installing an integration is not.
   invalidateTenant: (tag: string) => number;
-  // WAKE ONE PRINCIPAL'S SHELL ON A CHANNEL — the outward, cross-process twin
-  // of a reaction's `deliver`. The shell, wherever it is resident, is published
-  // to payload-less so it re-reads under its own policy; the nudge crosses the
-  // fabric so it lands in whichever process holds that principal. No fabric, no
-  // second process: it is just the local `deliver`. Payload-less by the
-  // row-less doctrine — a nudge says a channel changed, never what to.
+  // TELL ONE PRINCIPAL'S SCREENS THAT A CHANNEL CHANGED — every living shell
+  // of theirs: the one the app keeps for them, and the one a page built for
+  // each connection they have to it; in this process, and over the fabric in
+  // every other. Each is published to payload-less, so what is mounted and
+  // listening reads again under its own policy. Payload-less by the row-less
+  // doctrine — a nudge says a channel changed, never what to. It answers
+  // nothing: whether they are looking is not known across processes.
+  //
+  // THE ONE WAY FOR A SERVER TO SAY IT. `shells.deliver` is another thing:
+  // it puts a message WITH A PAYLOAD into the shell the app's own host keeps
+  // for somebody, in this process and no other, and answers whether there was
+  // one. A reaction's `deliver` is this nudge, carrying its payload to the
+  // shells that live here.
   nudge: (principal: string, channel: string) => void;
   // The generation this process has followed. It moves when any process calls
   // `refresh` or `replaceActions`; every process, within one poll of it, reads

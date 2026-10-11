@@ -118,12 +118,16 @@ export type ShellHost = {
   // built for the length of one read (`snapshot`) is read and ended, and
   // adopts nothing.
   adopt: () => void;
-  // Publish a message into one principal's LIVE durable shell — the push half
-  // of the socket the shells already run. Whatever action is mounted and
-  // listening on the channel reacts, re-renders, and the change fans out to
-  // every attached terminal over the existing wire. `false` when they hold no
-  // living shell, which is an answer, not an error: offline people read the
-  // rows later. Nothing here builds a shell.
+  // Publish a message, with what it carries, into every LIVING shell this host
+  // has for one principal: the one it keeps for them, or, on a host that
+  // keeps none (a page's), the one built for each of their connections — the
+  // push half of the socket the shells already run. Whatever action is
+  // mounted and listening on the channel reacts, re-renders, and the change
+  // fans out to every attached terminal over the existing wire. `false` when
+  // they hold no living shell here, which is an answer, not an error: offline
+  // people read the rows later. Nothing here builds a shell. THIS HOST, IN
+  // THIS PROCESS: a server tells somebody's screens that something changed,
+  // whichever host and whichever process holds them, with `MossServer.nudge`.
   deliver: (principal: string, channel: string, payload?: unknown) => boolean;
   // Every durable shell alive right now. The honest roster: moss owns the map,
   // so moss is the only thing that can enumerate it without keeping a

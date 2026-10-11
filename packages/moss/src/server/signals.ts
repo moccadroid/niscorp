@@ -1,11 +1,19 @@
 import { randomBytes } from 'node:crypto';
 import type { Identity } from '../identity';
 import type { Fabric } from '../runtime';
-import type { ShellHost } from '../shells';
 import { wireFabric } from './fabric';
 
 // ═══════════════════════════════════════════════════════════════
 // THE SIGNALS THAT CROSS PROCESSES, and this process's half of each.
+//
+// WHAT EACH ONE IS FOR. `invalidateIdentity`: who one person is changed;
+// they are forgotten and their shells rebuilt. `invalidateTenant`: what a
+// tenant's people may reach changed; their records are forgotten and no shell
+// is rebuilt. `nudge`: something a person is looking at changed; every living
+// shell of theirs is told the channel, and reads again. Each is applied here
+// and then said to every other process. `deliver` is the nudge a reaction
+// makes: here it carries what the reaction handed it, and to every other
+// process it is a nudge, which carries nothing.
 //
 // One origin per process, stamped on every signal so a process ignores its
 // own echoes. The three appliers are LOCAL-ONLY — they mutate what this
@@ -24,8 +32,9 @@ export type Signals = {
   invalidateIdentity: (principal: string) => boolean;
   invalidateTenant: (tag: string) => number;
   nudge: (principal: string, channel: string) => void;
-  // What a reaction is handed: delivered here with its payload, and nudged
-  // everywhere else without one.
+  // What a reaction is handed: delivered here with its payload, to every
+  // living shell of the principal, and nudged everywhere else without one.
+  // `false`: no shell of theirs lives in this process.
   deliver: (principal: string, channel: string, payload?: unknown) => boolean;
 };
 
@@ -35,12 +44,12 @@ export type SignalParts = {
   // Reset every living shell of one principal, in every host: the app's own
   // and each page's (./hosts.ts, `Hosts.reset`).
   reset: (principal: string) => boolean;
-  // The app's own shell host, when the manifest declares a shell: a delivery
-  // goes into the shell it keeps for a principal.
-  shells: Pick<ShellHost, 'deliver'> | undefined;
+  // Put a message to every living shell of one principal, in every host: the
+  // app's own and each page's (./hosts.ts, `Hosts.deliver`).
+  deliver: (principal: string, channel: string, payload?: unknown) => boolean;
 };
 
-export const buildSignals = ({ fabric, identity, reset, shells }: SignalParts): Signals => {
+export const buildSignals = ({ fabric, identity, reset, deliver }: SignalParts): Signals => {
   const origin = randomBytes(8).toString('hex');
   // Who somebody is changed: what is held of them is forgotten, and every
   // shell built for them is rebuilt, whichever host built it. It was the app's
@@ -51,12 +60,16 @@ export const buildSignals = ({ fabric, identity, reset, shells }: SignalParts): 
     return held;
   };
   const applyInvalidateTenant = (tag: string): number => identity.invalidateTag(tag).length;
-  // Wake one principal's shell, payload-less — the shell re-reads. If that
-  // principal is resident here it wakes; if not, this is a no-op and the process
-  // that holds them applies the same signal. No tag lookup: `deliver` is
-  // per-principal, and the identity cache is deliberately not a by-tenant index.
+  // Tell every living shell of one principal that a channel changed,
+  // payload-less — each reads again. EVERY ONE: the shell the app keeps for
+  // them, and the one a page built for each connection they have to it. It
+  // was the kept shell alone, so a page somebody had open went on showing
+  // what it had read. If none of theirs lives here this does nothing, and the
+  // process that holds them applies the same signal. No tag lookup: a
+  // delivery is per-principal, and the identity cache is deliberately not a
+  // by-tenant index.
   const applyNudge = (principal: string, channel: string): void => {
-    shells?.deliver(principal, channel);
+    deliver(principal, channel);
   };
   const publish = wireFabric(fabric, origin, {
     invalidateIdentity: applyInvalidateIdentity,
@@ -104,14 +117,14 @@ export const buildSignals = ({ fabric, identity, reset, shells }: SignalParts): 
       applyNudge(principal, channel);
       publish({ kind: 'nudge', principal, channel });
     },
-    // Local delivery carries the payload — an optimisation for a
-    // shell resident in THIS process. The cross-process nudge is
+    // Local delivery carries the payload — an optimisation for the
+    // shells resident in THIS process. The cross-process nudge is
     // payload-less: a shell in another process re-reads under its
     // own policy, which is the row-less doctrine and the only safe
     // thing to send off-box. No fabric → the publish is a no-op and
-    // this is exactly today's local deliver.
+    // this is a delivery to the shells that live here.
     deliver: (principal, channel, payload) => {
-      const local = shells?.deliver(principal, channel, payload) ?? false;
+      const local = deliver(principal, channel, payload);
       publish({ kind: 'nudge', principal, channel });
       return local;
     },

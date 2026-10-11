@@ -49,6 +49,10 @@ export type Hosts = {
   // app's host keeps for them, and each one a page built for a connection of
   // theirs. `false`: they hold none anywhere.
   reset: (principal: string) => boolean;
+  // Put a message to every living shell of one principal, in every host: the
+  // one the app's host keeps for them, and each one a page built for a
+  // connection of theirs. `false`: none of them lives here.
+  deliver: (principal: string, channel: string, payload?: unknown) => boolean;
   // Stop every host's idle sweep.
   stop: () => void;
 };
@@ -136,6 +140,7 @@ export const buildShellHosts = (parts: HostParts): Hosts => {
     },
     // Each host is asked, whatever the one before it answered.
     reset: (principal) => every.map((host) => host.reset(principal)).includes(true),
+    deliver: (principal, channel, payload) => every.map((host) => host.deliver(principal, channel, payload)).includes(true),
     stop: () => {
       for (const host of every) host.stop();
     },

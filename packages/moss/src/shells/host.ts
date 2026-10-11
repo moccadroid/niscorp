@@ -334,24 +334,29 @@ const snapshotOf =
     }
   };
 
-// A MESSAGE, PUT TO THE SHELL A HOST KEEPS FOR SOMEBODY.
+// A MESSAGE, PUT TO EVERY LIVING SHELL A HOST HAS FOR SOMEBODY: the one it
+// keeps for them, or, on a host that keeps none, the one built for each of
+// their connections (`shellsOf`: the shells a reset of them finds). It looked
+// where kept shells are, so a page's host answered `false` for somebody with
+// the page open, and their screen heard nothing.
 const deliverTo =
-  (durable: ReadonlyMap<string, Cell>): ShellHost['deliver'] =>
+  (host: HostParts): ShellHost['deliver'] =>
   (principal, channel, payload) => {
-    // Into the LIVE shell only. A principal with no durable shell hears
-    // nothing and that is correct — this is push over shells that already
-    // exist, never a reason to build one for somebody who is not there. The
-    // rows the message points at are still in the database; their screen
-    // reads them the next time it opens.
-    const cell = durable.get(principal);
-    if (cell === undefined || cell.live.ended) return false;
-    try {
-      cell.live.shell.publish(channel, payload);
-      return true;
-    } catch (error) {
-      console.error(`[moss/shells] a delivery on "${channel}" to the shell of ${principal} failed:`, error);
-      return false;
-    }
+    // Into LIVING shells only. A principal with none hears nothing and that
+    // is correct — this is push over shells that already exist, never a
+    // reason to build one for somebody who is not there. The rows the message
+    // points at are still in the database; their screen reads them the next
+    // time it opens.
+    const took = shellsOf(host, principal).map((cell) => {
+      try {
+        cell.live.shell.publish(channel, payload);
+        return true;
+      } catch (error) {
+        console.error(`[moss/shells] a delivery on "${channel}" to the shell of ${principal} failed:`, error);
+        return false;
+      }
+    });
+    return took.includes(true);
   };
 
 export const createShellHost = (config: ShellHostConfig): ShellHost => {
@@ -382,7 +387,7 @@ export const createShellHost = (config: ShellHostConfig): ShellHost => {
       const arriving = [...host.underWay];
       adopted = adopted.then(() => adoptAll(host, arriving));
     },
-    deliver: deliverTo(durable),
+    deliver: deliverTo(host),
     list: () => rosterOf(durable),
     reset: (principal) => {
       const theirs = shellsOf(host, principal);

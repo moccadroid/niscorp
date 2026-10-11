@@ -339,6 +339,13 @@ Where the right column says there is nothing to call and an app did call it, say
 - An action a living shell gains may mention a component no layout mentioned before: it is registered when the shell adopts. The component names a shell is built with are read off the actions in force each time they change, and were read once, when the server started.
 - An app has nothing to change. One that relied on a revoked screen staying open until the next sign-in no longer sees it.
 
+**A nudge reaches every living shell of a principal, and so does what a reaction delivers.**
+
+- `server.nudge(principal, channel)` and a reaction's `deliver(principal, channel, payload?)` published onto the shell the app keeps for that principal, and onto no other: an action on a page they had open, listening on that channel, heard nothing. Both reach every living shell of theirs now: the kept one, and the shell a page built for each connection they have to it. Between processes it is as it was: every other process is told the channel, with no payload, and tells the shells it holds.
+- **What each is for.** `server.nudge` tells somebody's screens that something changed, in whichever host and whichever process they live; it carries no payload and answers nothing. `server.shells.deliver(principal, channel, payload?)` puts a message with a payload into the shell the app's own host keeps for somebody, in this process alone, and answers whether there was one; it is as it was. Where code called `server.shells.deliver(principal, channel)` with no payload to say "this changed", `server.nudge(principal, channel)` says it to every screen they have, and to every process.
+- `deliver` on a page's host (`server.page(path).host.deliver(…)`) answered `false` and did nothing, because a page's host keeps no shell. It publishes into each shell that host built for the principal, and answers whether there was one.
+- An app has nothing to change. A page's action that listens on a channel the app nudges, or a reaction delivers on, now hears it.
+
 **One shell for a principal, one reset of it at a time, and the canvases it has are its own.**
 
 - Two first arrivals for one principal in the same moment (a drawn page's read and its socket, two tabs) each built a shell. The second took the first's place and the first was never disposed: its `functions` and `onSession` code ran for as long as the process did. One is built, and both are handed it. `functions` and `onSession` are called once for it.

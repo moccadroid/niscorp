@@ -1843,3 +1843,63 @@ describe('shells — the instance a click names', () => {
     expect([n(b), n(side)]).toEqual([0, 0]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// A MESSAGE PUT TO SOMEBODY'S SHELLS (`deliver`): whatever of theirs is
+// listening on the channel hears it, with what it carries. A host that keeps
+// one shell for a principal has one to put it to. A host that keeps none (a
+// page's) built one for each of their connections, and looked for theirs
+// where kept shells are: it found none, answered `false`, and a page somebody
+// had open in two tabs heard nothing.
+// ═══════════════════════════════════════════════════════════════
+describe('shells — a message delivered to a principal', () => {
+  const inbox = { id: 'inbox', data: { heard: 0, said: '' }, triggers: [{ message: 'news', do: [{ increment: 'heard' }, { set: 'said', value: '@event.payload.text' }] }] };
+  const listening = { ...app, actions: { inbox }, shell: { canvases: [{ id: 'main', initial: 'inbox' }] } } as unknown as NiscApp;
+  const setup: HostSetup = { ...ctx, app: listening, resolve: async () => ({ roles: ['public'], scope: {}, catalog: { ids: ['inbox'] }, variants: new Map() }) };
+  type Session = Awaited<ReturnType<ReturnType<typeof createShellHost>['session']>>;
+  const heard = (session: Session): { heard: unknown; said: unknown } => {
+    const data = session.shell.getRuntime(session.shell.getState().canvases['main']?.active?.id ?? '')?.getData();
+    return { heard: data?.['heard'], said: data?.['said'] };
+  };
+
+  it('reaches the shell a host keeps for them, with its payload, and nobody else’s', async () => {
+    const host = createShellHost(hostConfig(setup));
+    const mine = await host.session('t', 'usr_1');
+    const theirs = await host.session('t', 'usr_2');
+
+    expect(host.deliver('usr_1', 'news', { text: 'the deck moved' })).toBe(true);
+    expect(heard(mine)).toEqual({ heard: 1, said: 'the deck moved' });
+    expect(heard(theirs)).toEqual({ heard: 0, said: '' });
+    // Somebody with no living shell: an answer, and no shell is built to hear it.
+    expect(host.deliver('usr_nobody', 'news')).toBe(false);
+    expect(host.list().map((shell) => shell.principal)).toEqual(['usr_1', 'usr_2']);
+  });
+
+  it('on a host that keeps none, reaches the shell built for each of their connections, and nobody else’s', async () => {
+    const host = createShellHost(hostConfig({ ...setup, kept: false }));
+    const mine = [await host.session('t', 'usr_1'), await host.session('t', 'usr_1')];
+    const theirs = await host.session('t', 'usr_2');
+    const nobodys = await host.session(null, null);
+
+    expect(host.deliver('usr_1', 'news', { text: 'the deck moved' })).toBe(true);
+    expect(mine.map(heard)).toEqual([
+      { heard: 1, said: 'the deck moved' },
+      { heard: 1, said: 'the deck moved' },
+    ]);
+    expect([heard(theirs), heard(nobodys)]).toEqual([
+      { heard: 0, said: '' },
+      { heard: 0, said: '' },
+    ]);
+    expect(host.deliver('usr_nobody', 'news')).toBe(false);
+  });
+
+  it('a shell that has ended hears nothing, and is not counted as one that took it', async () => {
+    const host = createShellHost(hostConfig({ ...setup, kept: false }));
+    const session = await host.session('t', 'usr_1');
+    const connection = fakeConnection();
+    session.attach(connection);
+    // Its last terminal left: a shell that is not kept ends there.
+    session.detach(connection);
+    expect(host.deliver('usr_1', 'news')).toBe(false);
+  });
+});
