@@ -91,6 +91,13 @@ const ENTRIES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
     './terminal/tty': 'src/terminal/tty/index.ts',
     './terminal/ink': 'src/terminal/ink/index.ts',
   },
+  // Tide joined when the moss refactor gave it a new entry point, `./postgres`.
+  tide: {
+    '.': 'src/index.ts',
+    './agent': 'src/agent/index.ts',
+    './testing': 'src/testing.ts',
+    './postgres': 'src/store/postgres.ts',
+  },
 };
 
 // ─── what an entry point exports ─────────────────────────────
