@@ -1122,4 +1122,6 @@ Counted after it, for the rows it moved: moss has 154 source files as
 before, 75 test files and 1,125 tests (seven files and 82 tests more); tide
 has 13 test files and 235 tests, as before. `api.txt` holds the 89 names it
 held. The lab apps' checks were run again, each as its own process, one at a
-time: 126 of 133, the same seven failing as in Part 9 (encore 13 of 13, lyceum 17 of 18, atrium 18 of 19, relay 28 of 32, lyra 50 of 51). Atrium's dev check is one of the 18: it runs `nisc dev` now, and asks one thing more.
+time: 126 of 133, the same seven failing as in Part 9 (encore 13 of 13,
+lyceum 17 of 18, atrium 18 of 19, relay 28 of 32, lyra 50 of 51). Atrium's
+dev check is one of its 18: it runs `nisc dev` now, and asks one thing more.
