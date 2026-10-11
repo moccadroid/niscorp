@@ -34,7 +34,8 @@
 //
 // WHAT SOMEBODY ELSE WROTE is asked two more things before it is let in, by
 // whoever lets it in: whether a layout composes what the kit has
-// (./layout.ts), and which chains of steps never end (./verify.ts).
+// (./layout.ts), and which chains of steps never end (./verify.ts). A feature
+// asks both through the seams the server makes of them (../feature).
 //
 // WHAT A SET OF ROLES HOLDS of it (./roles.ts) is the charter applied: the
 // action ids granted, and the layout variant held of each, remembered until

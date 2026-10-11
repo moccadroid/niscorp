@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
+import { endlessChains, layoutMisfits } from '../src/manifest';
 import { runIntake } from '../src/integrations/intake';
 import type { IntakeContext } from '../src/integrations/intake';
 
@@ -24,10 +25,16 @@ const Choice = z
 
 const ctx = (): IntakeContext => ({
   integrationId: 'acme',
-  components: new Map<string, { propsSchema?: unknown }>([
-    ['Choice', { propsSchema: Choice }],
-    ['Plain', {}], // no schema — name-only, as before
-  ]),
+  // The host's answer about a layout, over a kit of two components.
+  layoutMisfits: (layout) =>
+    layoutMisfits(
+      layout,
+      new Map<string, { propsSchema?: unknown }>([
+        ['Choice', { propsSchema: Choice }],
+        ['Plain', {}], // no schema — name-only, as before
+      ]),
+    ),
+  endlessChains,
   fingerprints: new Set<string>(),
   attachable: new Set<string>(),
   menuSlots: new Set<string>(),

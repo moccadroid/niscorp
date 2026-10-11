@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { ActionDefinition } from '@niscorp/nova';
+import { endlessChains } from '../src/manifest';
 import { runIntake } from '../src/integrations/intake';
 import type { IntakeContext } from '../src/integrations/intake';
 
@@ -14,7 +15,8 @@ import type { IntakeContext } from '../src/integrations/intake';
 
 const ctx = (hostActions: Record<string, ActionDefinition> = {}): IntakeContext => ({
   integrationId: 'acme',
-  components: new Map(),
+  layoutMisfits: () => [],
+  endlessChains,
   fingerprints: new Set<string>(),
   attachable: new Set<string>(),
   menuSlots: new Set<string>(),

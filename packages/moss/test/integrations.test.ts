@@ -5,6 +5,7 @@ import type { PgPool } from '@niscorp/vex';
 import type { Replay } from '../src/data/own-entries';
 import { failingAt, registryOver } from './registry-db';
 import { neverAnswers } from './never-answers';
+import { endlessChains, layoutMisfits } from '../src/manifest';
 import { runIntake, intakeContextOf } from '../src/integrations/intake';
 import { reachOf } from '../src/integrations/reach';
 import { copyPress } from '../src/integrations/press';
@@ -29,9 +30,16 @@ const freshDatabase = pristineDatabases();
 // admits and refuses correctly, and the copy step leaves nothing pointing at
 // the service.
 
+// The host's answer about a layout, over a kit the test names.
+const misfitsOver =
+  (kit: [string, { propsSchema?: unknown }][]): IntakeContext['layoutMisfits'] =>
+  (layout) =>
+    layoutMisfits(layout, new Map(kit));
+
 const ctx = (over: Partial<IntakeContext> = {}): IntakeContext => ({
   integrationId: 'acme',
-  components: new Map<string, { propsSchema?: unknown }>(),
+  layoutMisfits: misfitsOver([]),
+  endlessChains,
   fingerprints: new Set<string>(),
   attachable: new Set<string>(),
   menuSlots: new Set<string>(),
@@ -437,7 +445,7 @@ describe('configuration — what a builder may set', () => {
 describe('documents — what an add-on lets a person edit', () => {
   const docCtx = () =>
     ctx({
-      components: new Map<string, { propsSchema?: unknown }>([
+      layoutMisfits: misfitsOver([
         ['Text', {}],
         ['Card', { propsSchema: z.object({ title: z.string() }).strict() }],
       ]),
@@ -590,7 +598,7 @@ describe('assistants — what an add-on’s assistant knows', () => {
   });
   const asstCtx = () =>
     ctx({
-      components: new Map<string, { propsSchema?: unknown }>([['Text', {}]]),
+      layoutMisfits: misfitsOver([['Text', {}]]),
       fingerprints: new Set(['deals/table']),
       tools: new Set(['floors', 'derive']),
     });
@@ -695,10 +703,11 @@ describe('assistants — what an add-on’s assistant knows', () => {
 });
 
 describe('intakeContextOf — the host vocabulary reaches intake', () => {
-  // What the host offers: the kit's components, as the server knows them, and
-  // the names the app gave when it created the feature.
+  // What the host offers: its two answers about what a bundle ships, as the
+  // server gives them, and the names the app gave when it created the feature.
   const host: HostVocabulary = {
-    components: { Text: {} },
+    layoutMisfits: misfitsOver([['Text', {}]]),
+    endlessChains,
     attachable: { 'member.detail': { membership_id: '$.membershipId' } },
     menuSlots: ['people'],
     assistantTools: ['floors', 'derive'],
@@ -713,7 +722,8 @@ describe('intakeContextOf — the host vocabulary reaches intake', () => {
     expect([...(c.regions ?? [])]).toEqual(['host-stage']);
     expect([...c.menuSlots]).toEqual(['people']);
     expect([...c.attachable]).toEqual(['member.detail']);
-    expect(c.components.has('Text')).toBe(true);
+    expect(c.layoutMisfits).toBe(host.layoutMisfits);
+    expect(c.endlessChains).toBe(host.endlessChains);
     expect(c.fingerprints.has('deals/table')).toBe(true);
   });
 

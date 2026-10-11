@@ -1,7 +1,7 @@
 import { StrataError, depthRefusal, exceedsDepth, type Upgrader } from '@niscorp/strata';
 import type { ActionDefinition } from '@niscorp/nova';
 import { isRecord } from '@niscorp/nova/reflect';
-import { endlessChains, layoutMisfits } from '../manifest';
+import type { FeatureSeams } from '../feature';
 import { BundleSchema } from './bundle';
 import type { AssistantDeclaration, Bundle, DocumentDeclaration } from './bundle';
 import { FRAME_GRANT_URL } from './reach';
@@ -15,14 +15,17 @@ import { FRAME_GRANT_URL } from './reach';
 
 export type IntakeContext = {
   integrationId: string;
-  // Component names the terminal can render, each with the props SCHEMA the app
-  // carried for it (moss's strict Zod schema, filled from the kit) when it did.
-  // The name is the floor — a layout naming anything else renders nothing, and
-  // at the moment somebody opens it rather than the moment it arrived. The
-  // schema is what lets intake refuse a prop the component has no place for (see
-  // runIntake). A component with no schema is checked by name alone, exactly as
-  // this set used to be.
-  components: ReadonlyMap<string, { propsSchema?: unknown }>;
+  // DOES A LAYOUT COMPOSE WHAT THE APP'S KIT HAS: the host's answer, each place
+  // it does not as a sentence (the `layoutMisfits` seam). The component's name
+  // is the floor — a layout naming one the terminal cannot render shows
+  // nothing, and at the moment somebody opens it rather than the moment it
+  // arrived. Where the app carried the schema of a component's props, a prop
+  // the component has no place for is a misfit too. Asked of the host, which
+  // knows its kit: this feature is not handed one to check against.
+  layoutMisfits: FeatureSeams['layoutMisfits'];
+  // THE CHAINS OF STEPS THAT NEVER END among a set of actions, each with the
+  // actions it runs through: the host's answer (the `endlessChains` seam).
+  endlessChains: FeatureSeams['endlessChains'];
   // Fingerprints the app serves. An action calling one that does not exist is a
   // typo now and a 404 in front of a customer later.
   fingerprints: ReadonlySet<string>;
@@ -52,11 +55,13 @@ export type IntakeContext = {
   hostActions?: Readonly<Record<string, ActionDefinition>>;
 };
 
-// WHAT THE HOST OFFERS A BUNDLE TO NAME: the kit's components, which the
-// server knows, and the seats, hubs, tools, checks and regions the app named
-// when it created the feature (./feature.ts).
+// WHAT THE HOST OFFERS A BUNDLE TO NAME, AND WHAT IT ANSWERS ABOUT ONE: the
+// two questions the server answers for any feature (whether a layout fits the
+// kit, which chains of steps never end), and the seats, hubs, tools, checks
+// and regions the app named when it created the feature (./feature.ts).
 export type HostVocabulary = {
-  components: Readonly<Record<string, { meta?: { propsSchema?: unknown } }>>;
+  layoutMisfits: FeatureSeams['layoutMisfits'];
+  endlessChains: FeatureSeams['endlessChains'];
   attachable?: Readonly<Record<string, unknown>>;
   menuSlots?: readonly string[];
   assistantTools?: readonly string[];
@@ -66,11 +71,11 @@ export type HostVocabulary = {
 
 // THE HOST'S VOCABULARY, gathered for one intake. The one place the
 // registration route learns what this app offers a bundle to name —
-// components, fingerprints, attachment seats, menu hubs, and the assistant
-// tools / publish checks / editor regions a `documents`/`assistants`
-// declaration is checked against. Pure over the vocabulary plus the
-// fingerprints the route reads from the engine, so it is testable without a
-// running server. The actions in force are whoever runs the intake's to say
+// fingerprints, attachment seats, menu hubs, and the assistant tools /
+// publish checks / editor regions a `documents`/`assistants` declaration is
+// checked against — with the host's two answers about a layout and about
+// chains of steps. Pure over the vocabulary plus the fingerprints the route
+// reads from the engine, so it is testable without a running server. The actions in force are whoever runs the intake's to say
 // (`hostActions` above).
 export const intakeContextOf = (
   host: HostVocabulary,
@@ -80,7 +85,8 @@ export const intakeContextOf = (
 ): IntakeContext => ({
   integrationId,
   ...(upgrader === undefined ? {} : { upgrader }),
-  components: new Map(Object.entries(host.components).map(([name, def]) => [name, { propsSchema: def.meta?.propsSchema }])),
+  layoutMisfits: host.layoutMisfits,
+  endlessChains: host.endlessChains,
   fingerprints,
   attachable: new Set(Object.keys(host.attachable ?? {})),
   menuSlots: new Set(host.menuSlots ?? []),
@@ -120,11 +126,11 @@ const upgradeBundle = (payload: unknown, upgrader: Upgrader | undefined): { ok: 
 // reasons it finds, in order. `runIntake` at the foot runs them in the order
 // the reasons have always been said in.
 
-// A layout, held to what the kit has (../manifest, layout.ts), with each misfit
+// A layout, held to what the kit has (the host's answer), with each misfit
 // said under the name of the thing the layout belongs to. Used for an action's
 // layout and for section and block fragments alike: a fragment is a layout
 // over `$.content` and earns the same refusal at the same moment.
-const layoutReasons = (layout: unknown, label: string, ctx: IntakeContext): string[] => layoutMisfits(layout, ctx.components).map((misfit) => `${label}: ${misfit}`);
+const layoutReasons = (layout: unknown, label: string, ctx: IntakeContext): string[] => ctx.layoutMisfits(layout).map((misfit) => `${label}: ${misfit}`);
 
 // ── it reaches two places and no others ──
 const endpointReasons = (id: string, action: ActionDefinition, ctx: IntakeContext): string[] => {
@@ -212,7 +218,8 @@ const actionReasons = (bundle: Bundle, ctx: IntakeContext): string[] => {
 // triggers; a loop the host has on its own is the host's to answer (boot
 // names it) and does not refuse somebody else's bundle.
 const chainReasons = (bundle: Bundle, ctx: IntakeContext): string[] =>
-  endlessChains({ ...(ctx.hostActions ?? {}), ...bundle.actions })
+  ctx
+    .endlessChains({ ...(ctx.hostActions ?? {}), ...bundle.actions })
     .filter((chain) => chain.through.some((actionId) => bundle.actions[actionId] !== undefined))
     .map((chain) => `a chain of steps that never ends: ${chain.path}`);
 

@@ -3,6 +3,7 @@ import { createPglitePool } from '@niscorp/vex/pglite';
 import type { Sequence } from '@niscorp/strata';
 import { createIntegrations } from '../src/integrations';
 import { createServer } from '../src/server';
+import { endlessChains, layoutMisfits } from '../src/manifest';
 import { runIntake, type IntakeContext } from '../src/integrations/intake';
 import { createGrammarUpgrader } from '../src/data/grammar';
 import { pristineDatabases } from './pristine-database';
@@ -120,10 +121,15 @@ describe('stored documents — upgraded at boot, by the feature that keeps them'
 describe('submitted documents — upgraded at intake', () => {
   const ctx = async (): Promise<IntakeContext> => ({
     integrationId: 'acme',
-    components: new Map<string, { propsSchema?: unknown }>([
-      ['Stack', {}],
-      ['Button', {}],
-    ]),
+    layoutMisfits: (layout) =>
+      layoutMisfits(
+        layout,
+        new Map<string, { propsSchema?: unknown }>([
+          ['Stack', {}],
+          ['Button', {}],
+        ]),
+      ),
+    endlessChains,
     fingerprints: new Set<string>(),
     attachable: new Set<string>(),
     menuSlots: new Set<string>(),

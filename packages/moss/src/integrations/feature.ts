@@ -170,10 +170,12 @@ const start = async (config: IntegrationsConfig, seams: FeatureSeams): Promise<S
   seams.registerCredential(KEY_PREFIX, keyCredential({ byKey: (key) => integrationByKey(replay, key), actor: config.integrationActor, resolveIdentity: seams.resolveIdentity }));
   seams.wrapWire(withFallbackMessage);
 
-  // What the host offers a bundle to name: the kit's components, which the
-  // server knows, and what the app said when it created the feature.
+  // What the host offers a bundle to name and answers about one: the two
+  // questions the server answers through the seams, and what the app said
+  // when it created the feature.
   const vocabulary = {
-    components: seams.components,
+    layoutMisfits: seams.layoutMisfits,
+    endlessChains: seams.endlessChains,
     attachable: config.attachable,
     menuSlots: config.menuSlots,
     assistantTools: config.assistantTools,

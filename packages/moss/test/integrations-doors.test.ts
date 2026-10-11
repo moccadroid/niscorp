@@ -190,7 +190,7 @@ describe('the operator’s routes', () => {
       replay,
       grammars: await createGrammarUpgrader({}),
       fingerprints: async () => [],
-      vocabulary: { components: { Text: {} }, attachable: undefined, menuSlots: undefined, assistantTools: undefined, publishChecks: undefined, editorRegions: undefined },
+      vocabulary: { layoutMisfits: () => [], endlessChains: () => [], attachable: undefined, menuSlots: undefined, assistantTools: undefined, publishChecks: undefined, editorRegions: undefined },
       actions: () => ({}),
       refusalOf: () => undefined,
       reload: async () => void (reloads.count += 1),

@@ -115,9 +115,12 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       // somebody is, and what a feature lays around a shell's wire, reach it
       // as functions the server hands over.
       shells: ['runtime', 'protocol', 'manifest', 'data'],
-      // Not `data`: what the feature reads and writes it hands over as entries
-      // and replays through a seam, so it imports nothing of the data module.
-      integrations: ['runtime', 'feature', 'manifest'],
+      // A feature: what it is started with (`feature`), and where a span goes
+      // (`runtime`). Not `data`: what it reads and writes it hands over as
+      // entries and replays through a seam. And not `manifest`: what it asks
+      // about a bundle (does a layout fit the kit, which chains of steps never
+      // end) it asks through two seams, as a feature anybody writes would.
+      integrations: ['runtime', 'feature'],
       // How it reaches them live. Not `manifest`: what somebody holds is a
       // function it is handed, and so is where a session comes from.
       socket: ['runtime', 'protocol', 'identity', 'shells'],

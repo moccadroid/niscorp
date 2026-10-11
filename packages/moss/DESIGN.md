@@ -230,7 +230,7 @@ this is a copy of it:
 | `socket` | `runtime`, `protocol`, `identity`, `shells` |
 | `documents` | `protocol`, `identity`, `shells` |
 | `server` | every module above, and no feature |
-| `integrations` (a feature) | `runtime`, `feature`, `manifest` |
+| `integrations` (a feature) | `runtime`, `feature` |
 | `tide` (a feature) | `feature` |
 | `client` | `protocol` |
 | `terminal` | `client` |
@@ -239,8 +239,12 @@ The table has no cycle, and what it leaves out is as deliberate as what it
 names. `shells` does not import `identity`: who somebody is, it is told.
 `socket` does not import `manifest`: what somebody holds is a function it is
 handed. `integrations` does not import `data`: what it reads and writes it
-authors as vex entries and replays through a seam. A module imports another by
-its `index.ts` and never a file inside it.
+authors as vex entries and replays through a seam. Nor `manifest`: what it
+asks about a bundle before letting it in (does a layout fit the kit, which
+chains of steps never end) it asks through two seams, as a feature somebody
+else writes would. A feature imports `feature`, and `runtime` for where a span
+goes, and nothing else of moss. A module imports another by its `index.ts`
+and never a file inside it.
 
 Four rules go with the table. A module's factory is handed a typed object of
 the functions and values it needs, never the whole manifest and never the

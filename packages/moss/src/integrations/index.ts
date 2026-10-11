@@ -71,10 +71,13 @@
 //     call.ts              — the deployment's own call, when nobody is driving
 //     fallback-message.ts  — the sentence put under a call that failed with none
 //
-// This module imports `runtime`, `feature` and `manifest`. It imports nothing
-// of `data`: what it reads and writes it authors as vex entries (./entries.ts)
-// and replays through the seam it is handed. Nothing of moss's core imports
-// it: `pnpm check:modules` fails if something does.
+// This module imports `runtime` (where a span goes) and `feature` (what it is
+// started with), and nothing else of moss: what a feature anybody writes may
+// import. Nothing of `data`: what it reads and writes it authors as vex
+// entries (./entries.ts) and replays through the seam it is handed. Nothing of
+// `manifest`: what intake asks about a bundle (does a layout fit the kit,
+// which chains of steps never end) it asks through two seams. Nothing of
+// moss's core imports it: `pnpm check:modules` fails if something does.
 
 export { createAssertionSigner } from './credentials';
 export { createIntegrations } from './feature';
