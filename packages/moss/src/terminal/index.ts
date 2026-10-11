@@ -11,8 +11,19 @@ import { followHead } from './head';
 // console, …) painting the wire's snapshot and sending events back. This
 // module is framework-blind: the conductor drives one target against the
 // wire; the switcher cycles targets on a hotkey, sharing one wire so the
-// session survives the swap. Targets live in the subpaths (./react, ./dom);
-// the framework-shaped code stays there, never here.
+// session survives the swap. Targets live in the subpaths (./react, ./vue,
+// ./dom, ./tty, ./ink); the framework-shaped code stays there, never here.
+//
+// What more than one target does is said once, beside this file:
+//
+//   ./slots.ts     what the two wire-backed slots are (react, ink, vue)
+//   ./drawn.ts     a screen drawn ahead of its terminal: handed to a target
+//                  that draws to a string, adopted by one in a browser
+//   ./status.ts    the connection's status, as a target shows it
+//   ./numbered.ts  what the interactive a typed number names is sent (tty, ink)
+//
+// and the terminal's own relationship to the surface it is painted on:
+// ./head.ts (the page's <head>), ./history.ts (the back gesture), ./hotkey.ts.
 // ═══════════════════════════════════════════════════════════════
 
 // What a target renders against — nova core's `RenderApi`: the wire's snapshot
