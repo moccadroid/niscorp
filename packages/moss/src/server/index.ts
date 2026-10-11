@@ -8,20 +8,19 @@
 // answers none of them. It constructs those modules, hands each the narrow
 // things it needs, starts the features and mounts the routes.
 //
-// `createServer` (./server.ts) is the list of steps, each a function in a
-// file beside it; the steps that stand over the data module are assembled in
-// ./assemble.ts:
+// `createServer` (./server.ts) is the list of steps. The steps that build a
+// module from the app and the runtime are functions in that file: the three
+// modules every surface asks (data, the running manifest, identity), and the
+// socket, handed what it needs. The others are a file each:
 //
-//   ./data.ts, ./manifest.ts, ./identity.ts   the three modules every surface asks
-//   ./routes.ts          the server's own surfaces, in the order a request meets them
-//   ./authenticate.ts    the authentication every route gets
-//   ./hosts.ts           the shell hosts, the app's and each page's
-//   ./wire.ts            the internal wire a server shell calls through
-//   ./signals.ts         what crosses processes, over the fabric (./fabric.ts)
+//   ./routes.ts          the server's own surfaces, in the order a request meets them,
+//                        with the authentication every route gets and the operator
+//                        prefix and its two gates
+//   ./hosts.ts           the shell hosts, the app's and each page's, and the internal
+//                        wire a server shell calls through
+//   ./signals.ts         what crosses processes, and the fabric it crosses over
 //   ./reactions.ts       what the app declared it wants to hear of a write: the reactions
 //   ./features.ts        the seams a feature is started with
-//   ./operator.ts        the operator prefix and its two gates
-//   ./socket.ts          the socket, handed what it needs
 //
 // What comes out is a `MossServer` (./moss-server.ts): hono, and what moss adds.
 //

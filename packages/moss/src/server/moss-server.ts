@@ -8,7 +8,7 @@ import type { Catalog, ManifestReport } from '../manifest';
 import type { ShellHost } from '../shells';
 import type { SocketAccept } from '../socket';
 
-// What a request carries once the authentication has run (./authenticate.ts):
+// What a request carries once the authentication has run (./routes.ts):
 // who is calling, and who that is.
 export type Env = { Variables: { principal: string | null; resolved: ResolvedIdentity } };
 

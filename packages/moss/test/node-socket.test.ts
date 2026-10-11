@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocket, WebSocketServer } from 'ws';
 import { attachSocket } from '../src/server/node';
-import { buildSocket } from '../src/server/socket';
+import { buildSocket } from '../src/server/server';
 import { createSocket } from '../src/socket';
 import { offerToken, PROTOCOL } from '../src/protocol';
 import type { SocketAccept } from '../src/socket';

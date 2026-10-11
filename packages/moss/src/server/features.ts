@@ -6,7 +6,7 @@ import type { Identity } from '../identity';
 import { endlessChains, layoutMisfits, refusalOf } from '../manifest';
 import type { KitComponents, NiscApp, OwnedActions, RunningManifest } from '../manifest';
 import type { NiscRuntime } from '../runtime';
-import type { FeatureCredential } from './authenticate';
+import type { FeatureCredential } from './routes';
 import type { Env } from './moss-server';
 
 // ═══════════════════════════════════════════════════════════════

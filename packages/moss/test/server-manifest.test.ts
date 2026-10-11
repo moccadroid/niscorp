@@ -3,7 +3,7 @@ import { scopeGrants } from '@niscorp/vex';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Data } from '../src/data';
 import type { NiscApp } from '../src/manifest';
-import { buildRunningManifest } from '../src/server/manifest';
+import { buildRunningManifest } from '../src/server/server';
 
 // THE RUNNING MANIFEST AS THE SERVER STANDS IT UP (../src/server/manifest.ts),
 // with no server and no database: the data module is a stand-in that records

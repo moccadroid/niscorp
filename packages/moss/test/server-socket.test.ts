@@ -3,7 +3,7 @@ import { sessionCookies } from '../src/identity';
 import { CLOSE_AT_CAPACITY, CLOSE_INVALID_TOKEN, PROTOCOL, ServerMessageSchema, offerToken } from '../src/protocol';
 import type { ServerMessage } from '../src/protocol';
 import type { NiscRuntime } from '../src/runtime';
-import { buildSocket } from '../src/server/socket';
+import { buildSocket } from '../src/server/server';
 import type { Connection } from '../src/socket';
 
 // THE SOCKET AS THE SERVER STANDS IT UP (../src/server/socket.ts): what the

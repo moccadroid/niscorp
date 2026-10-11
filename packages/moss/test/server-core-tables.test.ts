@@ -7,7 +7,7 @@ import { createGrammarUpgrader } from '../src/data/engine';
 import type { Feature } from '../src/feature';
 import type { NiscApp } from '../src/manifest';
 import { PROTOCOL } from '../src/protocol';
-import { assembleServer } from '../src/server/assemble';
+import { assembleServer } from '../src/server/server';
 import { NOTES_SCHEMA, engineDouble, tableNamed } from './data-double';
 
 // THE CORE READS AND WRITES NO ROW OF A FEATURE'S TABLES. The integrations'

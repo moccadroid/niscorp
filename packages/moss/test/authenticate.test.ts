@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
-import { authentication } from '../src/server/authenticate';
-import type { AuthenticationDeps } from '../src/server/authenticate';
+import { authentication } from '../src/server/routes';
+import type { AuthenticationDeps } from '../src/server/routes';
 import type { Env } from '../src/server/moss-server';
 import type { ResolvedIdentity } from '../src/identity';
 

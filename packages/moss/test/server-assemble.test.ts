@@ -7,7 +7,7 @@ import { createGrammarUpgrader } from '../src/data/engine';
 import type { Feature, FeatureEnv } from '../src/feature';
 import type { NiscApp } from '../src/manifest';
 import type { NiscRuntime } from '../src/runtime';
-import { assembleServer } from '../src/server/assemble';
+import { assembleServer } from '../src/server/server';
 import { engineDouble } from './data-double';
 
 // THE SERVER, ASSEMBLED OVER A DATA MODULE WITH NO DATABASE BEHIND IT
