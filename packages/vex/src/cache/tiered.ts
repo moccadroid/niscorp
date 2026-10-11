@@ -123,17 +123,5 @@ export const createTieredCache = (config: TieredCacheConfig): TieredCache => {
   // is the authoritative key list for the running process.
   const keys = async (): Promise<string[]> => l1.keys();
 
-  // What the durable tier owns in a database is this cache's to say: its
-  // sequence, for a host that migrates, and its table, for one that hands
-  // tables out.
-  return {
-    init,
-    get,
-    set,
-    delete: del,
-    clear,
-    keys,
-    ...(l2.sequence !== undefined ? { sequence: l2.sequence } : {}),
-    ...(l2.table !== undefined ? { table: l2.table } : {}),
-  };
+  return { init, get, set, delete: del, clear, keys, ...(l2.sequence !== undefined ? { sequence: l2.sequence } : {}) };
 };
