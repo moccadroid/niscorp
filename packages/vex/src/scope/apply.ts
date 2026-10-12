@@ -121,6 +121,8 @@ export const scopeResolved = (resolved: ResolvedQuery, policy: ScopePolicy): Res
   return resolved;
 };
 
+// Checks access only and returns the query as it came: row rules are placed by
+// `scopeResolved`, on the resolved query.
 export const applyScope = (dsl: Query, entities: Set<string>, policy: ScopePolicy): Query => {
   checkScope(entities, policy);
   return dsl;
