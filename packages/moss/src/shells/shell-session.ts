@@ -5,16 +5,7 @@ import type { Cell, HostState } from './host-state';
 import { attach, resync } from './stream';
 import type { ShellSession } from './types';
 
-// WHAT A TRANSPORT HOLDS OF ONE SESSION: what a socket attaches its connection
-// to and routes a terminal's messages into. It addresses the shell through its
-// cell, so a reset reaches whoever holds it.
-//
-// `ephemeral`: the shell is nobody's to keep, and goes when its last
-// connection does. `reset`: how the host replaces the shell in a cell. It
-// answers at once, and says so itself when the replacement cannot be built.
 export const sessionOn = (host: HostState, cell: Cell, ephemeral: boolean, reset: (cell: Cell) => void): ShellSession => ({
-  // Read through the cell, always: after a reset the shell behind this
-  // session is a different object.
   get shell(): Shell {
     return cell.live.sessionShell;
   },
@@ -30,23 +21,10 @@ export const sessionOn = (host: HostState, cell: Cell, ephemeral: boolean, reset
     endShell(host, live);
     live.shell.dispose();
   },
-  // Transport → shell addressing: the wire tags the canvas, and nova's own
-  // origin filter delivers the event to one instance's triggers alone.
-  //
-  // A terminal NAMES the instance when it knows it — a list canvas renders
-  // several live cards, and the ActionSlot around the press says which. That
-  // claim comes off the wire, so it is held to the canvas the event is
-  // tagged with: an instance that is not on it (gone since the render, or on
-  // another canvas altogether) drops the event — firing it anywhere else
-  // would run triggers the person never pressed. With no claim, the canvas's
-  // ACTIVE instance is the origin: on a card deck that is the only one
-  // rendered. A canvas with nothing mounted dispatches unstamped (global).
-  //
-  // The CANVAS is a claim off the wire too. One the shell does not have is
-  // nowhere an event can have come from: a terminal tags an event with the
-  // canvas it drew it in. It is dropped: dispatched, it would have no canvas
-  // to be held to and no instance to be stamped with, and would go to every
-  // instance of the shell at once.
+  // An event without an origin goes to every instance of the shell, so one for
+  // a canvas the shell does not have is dropped. An origin a terminal names
+  // comes off the wire and is held to that canvas; with none named, the
+  // canvas's active instance is the origin.
   dispatch: (canvas, event) => {
     const { shell } = cell.live;
     const state = shell.getState().canvases[canvas];
@@ -54,12 +32,6 @@ export const sessionOn = (host: HostState, cell: Cell, ephemeral: boolean, reset
     const claimed = event['origin'];
     if (claimed !== undefined && (typeof claimed !== 'string' || !state.stack.some((item) => item.id === claimed))) return;
     const active = state.active;
-    // WHAT AN EVENT IS belongs to nova, and nova's shell takes one of its
-    // events and nothing else. What arrived here is whatever object a
-    // terminal sent (the protocol holds it to being an object), so it is
-    // read by nova's schema where it enters the shell. One that does not
-    // parse is dropped, as an event naming an instance that is not there is:
-    // there is nothing it could have been a press on.
     const read = NovaEventSchema.safeParse(claimed !== undefined || active === undefined ? event : { ...event, origin: active.id });
     if (read.success) shell.dispatch(read.data);
   },

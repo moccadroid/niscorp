@@ -4,192 +4,31 @@ import type { Sequence } from '@niscorp/strata';
 import type { Telemetry } from './telemetry';
 import type { Fabric } from './fabric';
 
-// ═══════════════════════════════════════════════════════════════
-// What the app runs ON — the environment, not the application: a database
-// (pool for SQL, client for mutations), optionally a cache backend
-// (defaults to vex's postgres cache on the same pool — the seeded-cache
-// posture) and a session verifier, which has NO default: authentication is
-// the one door that must not default open.
-// ═══════════════════════════════════════════════════════════════
-
-// Token in, principal out — or null, which is a refusal. Asked on every HTTP
-// request and re-asked on live sockets every `sessionRevalidateMs`.
 export type SessionVerifier = (token: string) => string | null | Promise<string | null>;
 
 export type NiscRuntime = {
   pool: PgPool;
   db: MutationClient;
   cache?: CacheBackend;
-  // THE QUERY ENGINE'S OWN SETTINGS, handed to vex as its `config` and not read
-  // here: how many rows a query that states no limit gets, the most a
-  // generated one may ask for, how long a read may run. Here rather than on
-  // the manifest for the reason every knob below is: these are decisions about
-  // a deployment's database, not something an application is written against.
-  // Unset, the engine runs on its defaults. THEY ARE THE APP'S ENGINE'S: a
-  // list of tables given here (`entities`) cuts down what the app's entries
-  // and its charter's `data` universe see, and says nothing about moss's own
-  // reads and writes (the generation pointer, a feature's own entries), which
-  // know the tables that are theirs whatever it names (../data, own-entries.ts).
   vexConfig?: QueryEngineConfig['config'];
-  // WHO A TOKEN IS. Required, deliberately — every other door in moss fails
-  // closed, and a default here would open this one for everyone. Three answers:
-  //   'sessions' — moss's own stored credential (../identity/sessions.ts): 256-bit token,
-  //                hashed at rest, expiring, revoked by deleting its row.
-  //   'dev-open' — the dev stub (../identity/verifier.ts): every well-formed token is trusted and
-  //                the boot says so out loud. Harnesses and demo floors.
-  //   a function — the app's own identity provider.
   session: SessionVerifier | 'sessions' | 'dev-open';
-  // The origins that are this app's own page, beside the host a request is
-  // addressed to — for a proxy that rewrites `Host`. A browser's session
-  // cookie is read and written for the app's own page only
-  // (../identity/session-cookie.ts).
   origins?: readonly string[];
-  // The tables moss, vex and a chosen credential own go through ONE ledgered
-  // run at boot (strata), before introspection. 'apply' (default): run what is
-  // pending, once, recorded. 'verify': refuse to boot if anything is pending —
-  // for a deployment whose migrations are a deploy step, not a side effect of
-  // starting a process. Either way an edited or too-new ledger refuses.
   migrations?: 'apply' | 'verify';
-  // THE APP'S OWN TABLES, as strata sequences. They join that same run, after
-  // the engine's: one transaction, one lock, one `migrations` posture — so
-  // 'verify' covers them, and the step that migrates (`migrateTables`) checks
-  // the app's entries against what THEY leave. Absent, the app migrates its own
-  // tables itself.
   tables?: readonly Sequence[];
-  // How long a durable server shell may sit with no terminal attached before
-  // it is disposed (default: 30 minutes; `0` disables the sweep). An
-  // environment knob rather than a manifest one, because it trades memory
-  // against a rebuild on the next connect — an operational decision about a
-  // deployment, not something an application is written against.
   shellIdleMs?: number;
-  // How many shells for NOBODY SIGNED IN may be alive at once (default 1,000;
-  // `Infinity` is no limit).
-  //
-  // Somebody signed in has one shell however many terminals they open. Nobody
-  // signed in has one for each connection, and opening a connection takes no
-  // account and no token, so without a limit the memory of the process is
-  // anybody's to fill. A connection over it is told so (`at_capacity`) and
-  // closed with 4503, and its terminal tries again later like after any close.
-  //
-  // The default is sized to what a shell for nobody and its connection hold
-  // (../socket, socket.ts has the numbers): a thousand of them
-  // fit a process given 512 MB. A deployment with a public screen and more
-  // visitors at once than that raises it, from those numbers and its own memory.
-  //
-  // IT IS ONE COUNT FOR EVERYBODY WITH NOBODY SIGNED IN, IN THIS PROCESS. It
-  // bounds memory. It is not a limit for each visitor: one client that holds
-  // this many connections has every place, and every other visitor with
-  // nobody signed in is refused until one closes; and each process of a
-  // deployment counts its own. A deployment that faces the internet limits
-  // the connections one address may hold at its proxy, which is where the
-  // address is known; moss sees the proxy's.
   anonymousShellMax?: number;
-  // How long a server shell's endpoint call waits for its reply before it
-  // fails to the action's `onError` (default: nova's, 30 seconds). An
-  // endpoint that is slow by nature says so itself (`timeoutMs`); this is the
-  // deployment's floor for everything else. It is also how long the build of
-  // a shell may take: one whose app code has not answered by then fails, so a
-  // call that hangs costs that one build and nobody waits on it for ever.
   endpointTimeoutMs?: number;
-  // How often a live socket's credential is re-verified through `session`
-  // (default: 60 seconds; `0` disables it). The HTTP surfaces re-ask on every
-  // request; this is what makes the socket ask too, so a `session` that gives
-  // its tokens an expiry has that expiry mean something on a connection
-  // somebody is holding open. Costs one `session` call per authenticated
-  // connection per interval — the knob is here for a verifier that is
-  // expensive to ask.
   sessionRevalidateMs?: number;
-  // Ceiling on resident identity records (default 10,000), and how long one may
-  // sit unread before the sweep drops it (default: 30 minutes, `0` disables).
-  //
-  // Here rather than on the manifest for the reason `shellIdleMs` is: this
-  // trades memory against a re-resolution on the next request, which is an
-  // operational decision about a deployment and not something an application is
-  // written against. Reaching the ceiling evicts the least recently read and
-  // increments a meter — an unbounded map works beautifully at demo scale and
-  // dies at production scale with no signal in between, and the meter is the
-  // signal.
-  //
-  // Revalidation deliberately has no knob of its own: an identity record goes
-  // stale on exactly the clock a live socket credential does, so it reuses
-  // `sessionRevalidateMs` above.
   identityMax?: number;
   identityIdleMs?: number;
-  // Send each canvas frame as a DELTA against the last one this connection
-  // received, rather than whole (default: off).
-  //
-  // A shell re-sends a canvas whenever its tree changes, and most changes are
-  // small against a large tree — a keystroke filtering a list rewrites a few
-  // hundred bytes of several thousand. An in-place update falls to a small part
-  // of the frame, a navigation to most of it, before the transport's own
-  // compression. It costs one encode per changed canvas per flush and one
-  // previous frame held per canvas, which the host keeps anyway for its
-  // unchanged-frame check. The encode's cost follows the frame's size, so a
-  // canvas whose frame is over 64 KB is sent whole and never encoded.
-  //
-  // Off by default because it is a protocol change: a terminal that does not
-  // advertise support keeps receiving whole frames, and a delta that fails its
-  // checksum makes the terminal ask for a whole one. See DOCS.md § Frame
-  // deltas.
   shellFrameDelta?: boolean;
-  // WebSocket permessage-deflate (default: on).
-  //
-  // Compresses every frame, and rendered trees are mostly repeated keys. The
-  // cost is memory, and it is not small: at the `ws` defaults a connection holds
-  // several times the memory of the shell being served. That trade is right at
-  // hundreds of connections and wrong at a hundred thousand, which is why it is
-  // a knob and not a constant.
-  // `false` disables it; an object is passed through to `ws` for tuning.
   socketCompression?: boolean | Record<string, unknown>;
-  // THE LARGEST MESSAGE A CONNECTION MAY SEND, in bytes, counted once inflated
-  // (default: 256 KiB, the Node transport's own; ../server, transport.ts says why
-  // that number). A message over it closes that connection with 1009. What a
-  // terminal sends is an event, a few KB; a deployment whose screens hand back
-  // more in one message raises this, and its memory for each connection with
-  // it. A file never goes over the socket.
   socketMaxMessageBytes?: number;
-  // THE OPERATOR KEY — the whole authentication story for the seam below.
-  //
-  // Registering an integration is a PLATFORM act, not a tenant one: it points
-  // the deployment at a service and approves what that service may read. No
-  // principal should be able to do it, which means it cannot live on a
-  // principal-authenticated surface at all.
-  //
-  // Absent = the seam does not exist. Every route under it answers 404, which is
-  // also what a wrong key gets: a tool cannot tell an unset key from a bad one,
-  // and neither can anybody else.
   operatorKey?: string;
 
-  // A GATE THE APP RUNS OVER THE WHOLE OPERATOR PREFIX — its own authentication,
-  // rate limiting, and audit, wrapped AROUND moss's key check and its routes.
-  //
-  // It runs BEFORE the key check, so an app credential can refuse first; and it
-  // may `await next()` to observe the OUTCOME, so approving an integration —
-  // which decides what code the deployment mints assertions for — is auditable
-  // with its real result, not just the attempt. Returning a Response refuses;
-  // returning nothing falls through to the key check.
-  //
-  // It can only HARDEN the prefix: moss's key check still runs on every path the
-  // gate lets through, so a gate adds a second lock and never removes moss's.
-  // Absent, moss's key check is the only gate.
   operatorGate?: (c: Context, next: Next) => Response | void | Promise<Response | void>;
 
-  // THE CLUSTER FABRIC — how an invalidation or a nudge reaches a SECOND moss
-  // process (../server, signals.ts). Off by default, and needed only when a deployment
-  // grows past one process per service: a role change in process A resets the
-  // shell resident in B, a nudge in A wakes a channel subscriber in B. The seam
-  // takes functions, not a connection — `LISTEN/NOTIFY` on the pool moss holds
-  // is the expected implementation, but the transport (and its own dropped-
-  // connection monitoring) is the host's, never moss's. Unset, every path
-  // behaves exactly as it does in one process.
   fabric?: Fabric;
 
-  // WHERE STRUCTURED TELEMETRY GOES — the deployment's one observability sink,
-  // and off by default. moss emits one span per vex execution, fn call,
-  // integration call, shell build, and socket upgrade/close, each shaped for an
-  // OTLP backend to ingest without translation (./telemetry.ts). Unset, no span
-  // is built and no hot path pays anything; set, the substrate wires it to a
-  // ring buffer and/or an exporter. Operational, not application: a service is
-  // observed by virtue of running moss, never by anything it authors.
   telemetry?: Telemetry;
 };

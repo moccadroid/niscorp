@@ -11,79 +11,28 @@ import { MOSS_PATHS } from './node';
 import { createTransport, listenForUpgrades } from './transport';
 import type { Transport } from './transport';
 
-// ═══════════════════════════════════════════════════════════════
-// @niscorp/moss/vite — the app server inside vite's dev process.
-//
-// One `nisc dev`, no proxy, no second terminal: the app boots in vite's own
-// process, through vite's own module loading (`ssrLoadModule`), so the boot it
-// runs is the source on disk and an edit is a fresh boot. What it does, in the
-// order a request meets it:
-//
-//   the socket   heard ONCE on vite's listener; each upgrade is answered by the
-//                transport of whichever app is booted now — one for each app,
-//                set as its runtime says, and retired with it
-//   /dev/as/:who a signed-in URL, when the app can mint a dev token
-//   a page       `/`, or a path one of the manifest's pages answers: index.html
-//                through vite first (its client, the framework's refresh
-//                preamble), then the screen drawn into it (`renderDocument`)
-//   moss's paths /api, /catalog, /operator, /integrations — the app server's
-//   the rest     vite's: source files, assets, its own urls
-//
-// A change under one of the watched directories re-boots the whole app — a
-// fresh database, fresh seed, fresh shells — then reloads the page so the
-// browser reconnects to the new server. The outgoing server keeps answering
-// until the new one is up, so a broken edit does not take the dev server down,
-// and is then let go, timers included and its connections closed: a terminal
-// that is not a page (a console) connects again, to the app that is booted.
-// ═══════════════════════════════════════════════════════════════
-
 export type DevApp = {
   server: MossServer;
-  // how to let it go (default: `server.close()`)
   close?: () => void | Promise<void>;
-  // How one of its screens is drawn. Absent: pages go out as vite's index.html,
-  // undrawn, and the terminal paints them.
   draw?: DocumentConfig['draw'];
   htmlAttributes?: DocumentConfig['htmlAttributes'];
   site?: DocumentConfig['site'];
   tokenKey?: string;
-  // A dev-only signed-in URL: `/dev/as/<who>` puts the token this returns in
-  // the browser's own session cookie (../identity, session-cookie.ts) — as a sign-in the
-  // app answers over HTTP would — and goes to `/`. `null` is nobody of that
-  // name. It lives in vite's middleware and nowhere else, so it cannot ship.
-  // It answers requests from this machine only, unless the plugin was told
-  // otherwise (`MossDevOptions.signInFromNetwork`).
   signIn?: (who: string) => string | null | Promise<string | null>;
 };
 
 export type MossDevOptions = {
-  // Stand the app up. `load` is vite's own module loader: what it loads is the
-  // source as it is on disk now, with the app's aliases resolved.
   app: (load: (id: string) => Promise<Record<string, unknown>>) => Promise<DevApp>;
-  // Which edits re-boot the app (default: anything under src/app, src/server,
-  // src/db or src/ui — the kit is in it because the SERVER holds the component
-  // registry too — and the nisc config).
   watch?: RegExp;
-  // The page template, relative to vite's root (default `index.html`).
   index?: string;
-  // The paths the app server answers (default: moss's own).
   owned?: RegExp;
-  // The name in vite's log (default `moss`).
   label?: string;
-  // ANSWER THE SIGN-IN URL (`/dev/as/<who>`) TO EVERY DEVICE THAT CAN REACH THE
-  // DEV SERVER, where it answers this machine only (default `false`). It hands
-  // out a session for whoever the address names, so with this on and vite
-  // listening on a network (`--host`), anybody on that network signs in as
-  // anybody. For trying a signed-in screen on a phone, on a network you trust.
   signInFromNetwork?: boolean;
 };
 
 const DEFAULT_WATCH = /([\\/]src[\\/](app|server|db|ui)[\\/])|([\\/]nisc\.config\.[cm]?[jt]s$)/;
 const REBOOT_DEBOUNCE_MS = 200;
 
-// THIS MACHINE'S OWN ADDRESSES: 127.0.0.0/8 and ::1. An IPv4 address written
-// as an IPv6 one (`::ffff:127.0.0.1`, what a listener on both families reports)
-// is held to the IPv4 rule.
 const loopback = (): BlockList => {
   const addresses = new BlockList();
   addresses.addSubnet('127.0.0.0', 8, 'ipv4');
@@ -92,17 +41,12 @@ const loopback = (): BlockList => {
 };
 const LOOPBACK = loopback();
 
-// Whether a request came from this machine, by the address at the other end of
-// its socket and by nothing else: what a header says of where a request came
-// from (`X-Forwarded-For`) is written by whoever sent it. A socket with no
-// address left is nobody's.
+// By the socket's address alone: `X-Forwarded-For` is written by whoever sent
+// the request. `BlockList` holds an IPv4-mapped IPv6 address
+// (`::ffff:127.0.0.1`) to the IPv4 rule.
 const isFromThisMachine = (address: string | undefined): boolean =>
   address !== undefined && (isIPv4(address) ? LOOPBACK.check(address, 'ipv4') : isIPv6(address) && LOOPBACK.check(address, 'ipv6'));
 
-// The sign-in signs whoever asks in as whoever the address names, so it is
-// answered to requests from this machine only, unless the host opened it to
-// the network (`signInFromNetwork`). Answers why a request is refused, or
-// undefined when it is answered.
 const signInRefusal = (req: Connect.IncomingMessage, fromNetwork: boolean): string | undefined => {
   if (!fromNetwork && !isFromThisMachine(req.socket.remoteAddress)) {
     return (
@@ -113,15 +57,8 @@ const signInRefusal = (req: Connect.IncomingMessage, fromNetwork: boolean): stri
   return undefined;
 };
 
-// An app that is booted, and what answers for it. `transport` is the one its
-// connections are opened by: made for this app, set as its server's socket
-// says (the two settings of its runtime), and retired with it. Absent where
-// vite has no listener of its own (middleware mode): then there is no socket.
 type Booted = { app: DevApp; listener: ReturnType<typeof getRequestListener>; transport?: Transport };
 
-// Let an app go: its connections first (closed 1001 — the server they were
-// attached to is going, and a terminal that is closed connects again, to the
-// app that is booted now), then its timers, then whatever it says itself.
 const retire = async (booted: Booted): Promise<void> => {
   booted.transport?.close();
   booted.app.server.socket.stop();
@@ -130,10 +67,6 @@ const retire = async (booted: Booted): Promise<void> => {
 
 const said = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
-// WHAT A REQUEST MEETS IN DEV, in this order: the sign-in URL, the paths the
-// app server answers, then a page drawn into vite's own index.html. Anything
-// else is vite's. `current` is the app that is booted now: a re-boot swaps
-// what it answers, never this handler.
 const devMiddleware =
   (vite: ViteDevServer, options: MossDevOptions, owned: RegExp, current: () => Promise<Booted>): Connect.NextHandleFunction =>
   (req, res, next) => {
@@ -148,7 +81,6 @@ const devMiddleware =
             next();
             return;
           }
-          // Refused before the app is asked anything.
           const refusal = signInRefusal(req, options.signInFromNetwork === true);
           if (refusal !== undefined) {
             res.statusCode = 403;
@@ -208,7 +140,7 @@ const devMiddleware =
         for (const [name, value] of Object.entries(page.headers)) res.setHeader(name, value);
         res.end(page.html);
       })
-      // not drawn is not broken: vite serves index.html
+      // Not drawn is not broken: vite serves index.html.
       .catch(() => next());
   };
 
@@ -229,12 +161,6 @@ export const mossDev = (options: MossDevOptions): Plugin => ({
     let current = boot();
     current.catch((error: unknown) => vite.config.logger.error(`[${label}] the app did not boot: ${said(error)}`, { timestamp: true }));
 
-    // THE SOCKET FOLLOWS THE APP THAT IS BOOTED NOW. The listener is vite's and
-    // is heard once, before any app is up; which transport answers an upgrade
-    // is asked at each one, so a connection is set as the runtime of the app
-    // it reaches says (`socketMaxMessageBytes`, `socketCompression`), and one
-    // that arrives during a boot waits for it, as a page does. An app that did
-    // not boot has no socket: the request is refused, as its routes are.
     if (httpServer !== null) {
       listenForUpgrades(httpServer, '/socket', (req, socket, head) => {
         void current.then(
@@ -258,7 +184,6 @@ export const mossDev = (options: MossDevOptions): Plugin => ({
             vite.ws.send({ type: 'full-reload' });
           },
           (error: unknown) => {
-            // the old server goes on answering until an edit boots
             current = outgoing;
             vite.config.logger.error(`[${label}] re-boot failed: ${said(error)}`, { timestamp: true });
           },

@@ -2,34 +2,9 @@ import { livenessOf } from '@niscorp/nova/reflect';
 import type { ActionDefinition } from '@niscorp/nova';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 
-// ═══════════════════════════════════════════════════════════════
-// DOES THIS SCREEN NEED A SHELL — the verdict, composed.
-//
-// nova reports what an action can still do once it has been drawn (its
-// `livenessOf`: gestures, channels, endpoints and when each is called). It
-// cannot say what answers a url. Moss can, for an entry the app shipped: those
-// are in the manifest, by fingerprint, so "this read keeps answering" is a
-// lookup, not a guess. What a replay runs is not read here. It resolves in
-// vex's cache, which was seeded with the manifest's list and can hold more
-// (a query written while the app runs, a row from an earlier boot): a
-// fingerprint the manifest does not carry is said to be unreadable, below.
-//
-// A screen is LIVE when something on it can still happen — and then it needs a
-// shell standing behind it and a socket to reach it. Otherwise its tree is the
-// whole of it: drawn once, kept by nothing.
-//
-// Everything here is read off artifacts. The one thing that is not an artifact
-// is code — a `fn:` endpoint — and code is counted live without being read:
-// what a function does later is not written anywhere this can look.
-// ═══════════════════════════════════════════════════════════════
-
 export type ShellNeed = {
   live: boolean;
-  // one sentence per reason, for a report a person reads before choosing how a
-  // page is served ("docs.search: a person can act on it")
   why: string[];
-  // reads made while the action opened: their answers are IN the drawn tree, so
-  // a page kept after it was drawn shows them as they were then
   drawnWith: string[];
 };
 
@@ -60,16 +35,12 @@ export const shellNeedOf = (definition: ActionDefinition, entries: ReadonlyMap<s
       why.push(`its read "${use.name}" keeps answering (${entry.fingerprint} is reactive)`);
       continue;
     }
-    // A replay of something the manifest does not carry (an entry the cache
-    // holds from somewhere else: written for an intent while the app runs, or
-    // seeded by an earlier boot) may be reactive too. It cannot be read here,
-    // so it is not concluded finished.
     if (fingerprint !== undefined && entry === undefined) {
       why.push(`its read "${use.name}" replays "${fingerprint}", which the manifest does not carry — whether it keeps answering is not readable`);
       continue;
     }
-    // Called only because of something that happens later: the gesture or the
-    // channel that calls it is already a reason above.
+    // An endpoint called only later adds no reason: the gesture or the channel
+    // that calls it is already one.
     if (use.onOpen) drawnWith.push(fingerprint ?? use.url ?? use.name);
   }
 

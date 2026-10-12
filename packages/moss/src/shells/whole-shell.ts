@@ -1,17 +1,5 @@
 import type { Shell } from '@niscorp/nova';
 
-// THE SHELL A SESSION HANDS OUT is the nova shell with the members that change
-// what a shell is made of refusing. An action, a fragment, a
-// canvas, a layout and the phrases reach a shell through moss, which verifies
-// them and decides who holds them; added on the shell itself they are not
-// verified, are in nobody's catalog, and are gone when the shell is rebuilt.
-// Everything else (reads, navigation, messages, observers) works as on the
-// shell itself.
-//
-// The whole shell is handed out by one entry point,
-// `@niscorp/moss/unverified`, so code that goes around moss says so in its
-// imports. This is where it is found again: each session shell is noted with
-// the shell it stands for when it is made. The map holds nothing alive.
 const whole = new WeakMap<Shell, Shell>();
 
 const refuse =
@@ -38,7 +26,6 @@ export const sessionShellOf = (shell: Shell): Shell => {
     dispose: refuse('dispose'),
   };
   whole.set(guarded, shell);
-  // Asked of the whole shell itself, the answer is that shell.
   whole.set(shell, shell);
   return guarded;
 };
