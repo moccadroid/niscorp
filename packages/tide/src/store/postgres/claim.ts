@@ -4,14 +4,8 @@ import type { Fields } from './compile';
 import type { Atomically, Client } from './pool';
 import { SQL_TABLE, rowToEntity, snake } from './rows';
 
-// What a claim runs on: what its statements are sent on, how several land as
-// one, and the tables being there.
 type ClaimParts = { client: Client; atomically: Atomically; ready: Promise<void> };
 
-// Selection and mutation in ONE statement. `FOR UPDATE SKIP LOCKED`
-// makes N instances ticking at once ordinary contention rather than a
-// lock service — it is a throughput choice; the exactly-once promise is
-// the single statement.
 export const claimOver =
   ({ client, atomically, ready }: ClaimParts): TideStore['claim'] =>
   async <T extends TableName>(spec: ClaimSpec<T>) => {
@@ -32,40 +26,23 @@ export const claimOver =
          RETURNING *`,
         [...where.params, ...set.params],
       );
-      // RE-SORTED. `ORDER BY` inside the subquery decides WHICH rows are
-      // taken; it says nothing about the order `RETURNING` hands them back,
-      // which is the order the UPDATE happened to scan in. The engine executes
-      // tasks in the order a claim returns them, so without this a fan-out
-      // would run in heap order here and insertion order in memory.
+      // ORDER BY inside the subquery decides which rows are taken, not the order RETURNING hands them
+      // back, and the engine runs tasks in the order a claim returns them: re-sorted, a fan-out runs
+      // in insertion order here as it does in memory.
       return sortRows(result.rows.map((row) => rowToEntity(spec.table, row)), spec.order);
     };
 
     if (spec.onePer === undefined) return take(client, {}, spec.limit);
 
-    // `order: 'serial'` — at most one held row per group, counting what
-    // an earlier claim already holds.
-    //
-    // A window function would say this in one statement, and Postgres
-    // refuses to combine one with `FOR UPDATE`. So the restricted groups
-    // are claimed one at a time — there are as many of those as there are
-    // serial reflexes, which is a handful — and everything else is taken
-    // in the single bulk statement above.
-    //
-    // ONE AT A TIME, AND ONE INSTANCE AT A TIME. Asking whether a group is
-    // held and then claiming in it are two statements, and another
-    // instance's two could run between them: both would be told nothing is
-    // held, and each would take a row. So the pair runs in a transaction,
-    // behind an advisory lock on the group that ends with it. Whoever does
-    // not get the lock leaves the group to whoever has it, as SKIP LOCKED
-    // leaves a row: nothing waits. Whoever gets it next asks after the
-    // other's claim is committed, and is told the group is held. A
-    // transaction alone would not do it: under READ COMMITTED both would
-    // still be told nothing is held.
+    // At most one held row per group, counting what an earlier claim already holds. Postgres refuses
+    // a window function beside FOR UPDATE, so the restricted groups are claimed one at a time. Asking
+    // whether a group is held and then claiming in it are two statements: they run in a transaction
+    // behind an advisory lock on the group, because under READ COMMITTED two instances would both be
+    // told nothing is held. Whoever does not get the lock leaves the group, as SKIP LOCKED leaves a
+    // row.
     const { column, held, only } = spec.onePer;
     const restricted = [...only];
-    // Room is RESERVED for the serial groups before the bulk claim runs.
-    // Taking the full limit first and topping up afterwards lets a busy
-    // parallel reflex starve every serial one.
+    // Room is reserved for the serial groups before the bulk claim, or a busy parallel reflex starves them.
     const claimed = await take(client, { [column]: { notIn: restricted } }, spec.limit - restricted.length);
 
     const takeOneOf = (group: string) =>

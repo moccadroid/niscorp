@@ -1,21 +1,6 @@
-// Does a package above the engines run SQL of its own?
-//
-// nisc tells an application that its reads and writes are vex. This holds the
-// packages to the same rule. Vex and strata are where SQL lives: one compiles
-// and runs it, the other keeps the ledger of what ran. Every other package is
-// swept, and every file in it that holds a call on a database pool or a
-// statement is in the LEDGER below, with its exact numbers and why it is
-// there. A file that is not in the ledger fails. A number that is off fails,
-// in either direction: a statement taken out comes out of the ledger in the
-// same change.
-//
-// Tide is swept, with its Postgres store in the ledger. Tide's engine holds no
-// SQL: it reaches storage through the store contract. Listing the whole
-// package as a place SQL lives would stop this check seeing a statement
-// written into the engine.
-//
-// `pnpm check:raw-sql`. `--measure` prints what it finds and judges nothing.
-// Exits non-zero on any failure.
+// Fails when a package other than vex and strata holds SQL outside the ledger below, or a different
+// number of pool calls, statements or table statements than the ledger says, in either direction.
+// `--measure` prints what it finds and judges nothing.
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
@@ -23,35 +8,27 @@ import ts from 'typescript';
 
 const packages = resolve(import.meta.dirname, '..', 'packages');
 
-// Where SQL lives. Not swept.
 const ENGINES: readonly string[] = ['vex', 'strata'];
-
-// ─── what is counted ─────────────────────────────────────────
 
 type Found = { doors: number; statements: number; tables: number };
 
-// Statements are told by their shape, keywords in capitals as every statement
-// in these packages is written: a sentence that begins "Select a plan", or the
-// word 'update' naming an operation, is not one. SQL written in lower case
-// would slip past this count and still be caught at its door.
+// Statements are told by their shape, with keywords in capitals: a sentence beginning "Select a plan"
+// is not one. SQL in lower case slips past this count and is still caught at its door.
 const STATEMENT = /^\s*(?:--[^\n]*\n\s*)*(?:SELECT\s|INSERT\s+INTO\s|UPDATE\s+\S+\s+SET\s|DELETE\s+FROM\s|WITH\s+\S+\s+AS\s)/;
 const TABLE = /^\s*(?:--[^\n]*\n\s*)*(?:CREATE\s+(?:UNIQUE\s+)?(?:TABLE|INDEX|EXTENSION|TYPE)\s|ALTER\s+TABLE\s|DROP\s+(?:TABLE|INDEX)\s)/;
 
-// The names a pool goes by in these packages. A property called `query` on
-// anything else is data (tide's `select.query`, a URL's `req.query`), and
-// `exec` on anything else is a regular expression.
+// A property called `query` on anything else is data (tide's `select.query`, a URL's `req.query`),
+// and `exec` on anything else is a regular expression.
 const POOLS = /(?:^|\.)(?:pool|tx|db|client)$/i;
 
-// A template's text with each `${…}` stood in for by one word, so
-// `UPDATE ${table} SET …` still reads as the statement it is.
+// Each `${…}` is stood in for by one word, so `UPDATE ${table} SET …` still reads as a statement.
 const literalText = (node: ts.Node): string | undefined => {
   if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
   if (ts.isTemplateExpression(node)) return node.head.text + node.templateSpans.map((span) => `x${span.literal.text}`).join('');
   return undefined;
 };
 
-// `tx.query({ table: 'task', where })` is tide's own store being asked for
-// rows by description. It is handed an object, never SQL, and is not a door.
+// `tx.query({ table: 'task', where })` asks tide's store for rows by description: an object, never SQL.
 const asksAStore = (node: ts.Node): boolean => {
   const call = node.parent;
   if (call === undefined || !ts.isCallExpression(call) || call.expression !== node) return false;
@@ -63,9 +40,7 @@ const sqlIn = (text: string): Found => {
   const source = ts.createSourceFile('x.ts', text, ts.ScriptTarget.Latest, true);
   const found: Found = { doors: 0, statements: 0, tables: 0 };
   const visit = (node: ts.Node): void => {
-    // CALLED OR NOT, as lyra's check has it: `const q = pool.query` is the same
-    // door with an extra step, and `pool['query']` is the same door with its
-    // name on a string.
+    // Called or not: `const q = pool.query` is the same door, and so is `pool['query']`.
     if (
       ts.isPropertyAccessExpression(node) &&
       (node.name.text === 'query' || node.name.text === 'exec') &&
@@ -94,25 +69,8 @@ const sqlIn = (text: string): Found => {
   return found;
 };
 
-// ─── the ledger ──────────────────────────────────────────────
-//
-// `doors`: references to a pool's `query` or `exec`. `statements`: SQL that
-// reads or writes rows. `tables`: SQL that makes or changes a table, which is
-// how a strata sequence is written and is not what this check is about, but
-// is counted so a new one is seen.
-//
-// `why` says which of four things a file is:
-//   credential — runs before a principal exists, so there is no policy to run
-//                under. This is the one kind that stays.
-//   store      — an engine's own storage, in that engine's package: tide's
-//                Postgres store. The engine is handed it and holds no SQL.
-//   tables     — a strata sequence: what the owner of some tables migrates.
-//                A row a migration writes beside its table (AGENTS.md, rule
-//                17) is counted as a statement, and is part of the migration.
-//   debt       — no reason. It goes through vex or it goes. NONE IS LEFT
-//                (2026-10-11): the last four were the generation counter's.
-//                The kind stays, so that a statement somebody argues in has
-//                a name that says what it is.
+// doors: references to a pool's `query` or `exec`. statements: SQL that reads or writes rows.
+// tables: SQL that makes or changes a table, counted so that a new one is seen.
 
 type Entry = Found & { why: 'credential' | 'store' | 'debt' | 'tables'; note: string };
 
@@ -128,8 +86,6 @@ const LEDGER: Readonly<Record<string, Readonly<Record<string, Entry>>>> = {
     'store/postgres/tables.ts': { doors: 0, statements: 0, tables: 3, why: 'tables', note: "tide's own table sequence (`nisc.moss.tide`): the DDL that is migration 1, and the two columns migration 2 adds" },
   },
 };
-
-// ─── falsifiable: the sweep catches what it says it catches ──
 
 const lines: string[] = [];
 let failed = false;
@@ -155,8 +111,6 @@ ok(
   JSON.stringify(sqlIn(NOT_SQL)),
 );
 ok('...and tells making a table from reading one', sqlIn(MAKES_A_TABLE).tables === 1 && sqlIn(MAKES_A_TABLE).statements === 0, JSON.stringify(sqlIn(MAKES_A_TABLE)));
-
-// ─── the sweep ───────────────────────────────────────────────
 
 const filesIn = (dir: string): string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>

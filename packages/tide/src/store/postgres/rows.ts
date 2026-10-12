@@ -2,10 +2,6 @@ import { z } from 'zod';
 import { FactKindSchema, OpSchema } from '../../schemas';
 import type { TableName, TideTables } from '../../types';
 
-// ── the mapping ─────────────────────────────────────────────────
-//
-// One place, both directions, so the two cannot drift apart.
-
 export const SQL_TABLE: Record<TableName, string> = {
   fact: 'tide_fact',
   run: 'tide_run',
@@ -13,8 +9,7 @@ export const SQL_TABLE: Record<TableName, string> = {
   state: 'tide_reflex_state',
 };
 
-// `as` and `row` are SQL keywords; everything else is the ordinary
-// camel → snake rule.
+// `as` is an SQL keyword: the one field whose column is named otherwise.
 const COLUMN_OVERRIDES: Record<string, string> = { as: 'as_who' };
 
 export const snake = (field: string): string => COLUMN_OVERRIDES[field] ?? field.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
@@ -24,7 +19,6 @@ const camel = (column: string): string => {
   return column.replace(/_([a-z])/g, (_all, c: string) => c.toUpperCase());
 };
 
-// Which columns hold JSON. Anything else round-trips as a scalar.
 const JSON_COLUMNS = new Set(['row', 'payload', 'stats', 'fact_ids', 'env', 'input', 'output']);
 const BIGINT_COLUMNS = new Set([
   'at',
@@ -60,12 +54,6 @@ const fromColumn = (column: string, value: unknown): unknown => {
   return value;
 };
 
-// WHAT A ROW OF EACH TABLE IS, once its columns are fields again. The database
-// is outside this process, so a row is read by a schema like anything else
-// that arrives: one that does not fit is refused where it is read, with the
-// table and the field in the sentence, and never handed to the engine as
-// something it is not. Each schema is held to the engine's own type for that
-// table by the record below, so the two cannot drift.
 const FactRowSchema = z.object({
   id: z.string(),
   kind: FactKindSchema,

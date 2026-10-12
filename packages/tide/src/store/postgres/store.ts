@@ -8,9 +8,6 @@ import type { Atomically, Client, TidePool } from './pool';
 import { SQL_TABLE, rowToEntity, snake, toColumn } from './rows';
 import { TIDE_SEQUENCE } from './tables';
 
-// ── the store ───────────────────────────────────────────────────
-
-// A counter, held in a closure rather than as a bare module variable.
 const mintId = ((): ((table: TableName) => string) => {
   let sequence = 0;
   return (table) => {
@@ -20,20 +17,12 @@ const mintId = ((): ((table: TableName) => string) => {
 })();
 
 export type TideStoreOptions = {
-  // Run the DDL on construction. On by default because a store that cannot
-  // create its own tables makes the host responsible for a schema it does
-  // not author.
   migrate?: boolean;
 };
 
 export const createTideStore = (pool: TidePool, options: TideStoreOptions = {}): TideStore & { ready: Promise<void> } => {
-  // EVERY method awaits this: on a real pool a method that did not would race
-  // the DDL and throw `42P01 undefined_table` INSIDE a transaction, which the
-  // fan-out would turn into a permanently skipped run.
-  // THROUGH THE LEDGER (strata): the sequence runs once, in one transaction,
-  // and is recorded — a boot that has already run finds nothing pending. Its
-  // first migration is the DDL, IF NOT EXISTS throughout, so a store whose
-  // tables already exist converges instead of failing.
+  // Every method awaits this: on a real pool one that did not would race the DDL and throw `42P01 undefined_table`
+  // inside a transaction, which the fan-out would turn into a permanently skipped run.
   const ready: Promise<void> = options.migrate === false ? Promise.resolve() : migrateLedger(pool, [TIDE_SEQUENCE]).then(() => undefined);
   // An unhandled rejection here is process-fatal on Node ≥ 15, and the
   // failure it reports would be a database that is not up yet.
@@ -58,8 +47,7 @@ export const createTideStore = (pool: TidePool, options: TideStoreOptions = {}):
         return result.rows.map((row) => rowToEntity(spec.table, row));
       },
 
-      // ON CONFLICT DO NOTHING, which is the whole point: the refusal is the
-      // DATABASE's, decided under the constraint, not a read the caller races.
+      // The refusal is the database's, decided under the constraint, not a read the caller races.
       appendIfAbsent: async <T extends TableName>(table: T, input: Omit<TideTables[T], 'id'> & { id?: string }) => {
         await ready;
         const given: Fields = input;
@@ -68,8 +56,6 @@ export const createTideStore = (pool: TidePool, options: TideStoreOptions = {}):
         const columns = entries.map(([field]) => snake(field));
         const params = entries.map(([field, value]) => toColumn(snake(field), value));
 
-        // The conflict target is the table's declared unique key — the same
-        // constant the memory store reads, so the two cannot drift.
         const unique = UNIQUE_BY[table];
         const target =
           unique.when === undefined
@@ -110,12 +96,7 @@ export const createTideStore = (pool: TidePool, options: TideStoreOptions = {}):
 
       transact: async <T>(fn: (tx: TideStore) => Promise<T>): Promise<T> => {
         await ready;
-        // The store the caller is handed runs on the transaction itself, and
-        // `query` is called ON it, never taken off it: where the pool hands a
-        // checked-out client through, it is a method that needs its receiver,
-        // and taken off it fails inside the driver. What that store does as
-        // one step, it does inside this transaction: it opens no second one
-        // beside it.
+        // Steps this store runs as one (`atomically`) run inside this transaction; none opens a second one.
         return atomically((tx) => fn(build(tx, (inner) => inner(tx))));
       },
     };

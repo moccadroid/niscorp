@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { compileWhere } from '../src/store/postgres/compile';
 
-// What the Postgres store makes of a `where`, with no database: the compiler
-// is a function of what it is handed.
 describe('compileWhere', () => {
   it('compiles an equality, a missing value and a comparison, and numbers the parameters from where it is told', () => {
     const bound = compileWhere({ state: 'pending', token: undefined, dueAt: { lte: 5 }, reflexId: { in: ['a', 'b'] } }, 3);

@@ -3,12 +3,6 @@ import { createMemoryStore, createTide, createTideDriver } from '../src/index';
 import type { AdvanceReport, Tide } from '../src/index';
 import { testTransform } from './support';
 
-// THE DRIVER'S EDGE WITH ITS HOST: stopping. A host stops the driver and then
-// closes the database under the engine (a dev server re-booting, a test
-// ending). The next-due read that runs after every drain must not be left in
-// flight when the database closes: rejected unhandled, it would take the whole
-// process down.
-
 const idle: AdvanceReport = {
   now: 0,
   succeeded: 0,
@@ -25,7 +19,6 @@ const idle: AdvanceReport = {
   parked: 0,
 };
 
-// Just the two methods the driver's wake path calls, each held until released.
 const heldEngine = (): { tide: Tide; releaseAdvance: () => void; failNextDue: (error: Error) => void; nextDueAsked: Promise<void> } => {
   let releaseAdvance = (): void => {};
   let failNextDue = (_error: Error): void => {};
@@ -57,9 +50,8 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-// A turn of the event loop, on the real one. Not a wait on a clock: Node
-// reports a rejection nobody handled once the turn it happened in is over,
-// so one turn later it has been reported or it never will be.
+// Node reports a rejection nobody handled once the turn it happened in is over, so one turn
+// later it has been reported or it never will be.
 const aTurn = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
 describe('stopping the tide driver', () => {
@@ -71,8 +63,6 @@ describe('stopping the tide driver', () => {
     const stopping = driver.stop().then(() => {
       stopped = true;
     });
-    // The drain is held by the test and by nothing else: a turn later `stop`
-    // has had every chance to resolve early, and has not.
     await aTurn();
     expect(stopped).toBe(false);
     engine.releaseAdvance();
@@ -94,17 +84,8 @@ describe('stopping the tide driver', () => {
   });
 });
 
-// A DELAY A TIMER CANNOT HOLD. Node keeps a timer's delay in 32 bits: one over
-// 2^31 − 1 ms (24.8 days) is not refused, it is set to 1 ms, with a warning.
-// So a reflex whose next occurrence is a month off would make the driver a
-// loop: wake, find nothing to do, ask when, sleep "a month", wake a
-// millisecond later. The same for a janitor's beat set that long.
-//
-// A real engine over an empty store, with one answer replaced: nothing here is
-// cast into being a tide.
 const TOO_LONG_FOR_A_TIMER = 2 ** 31 + 60_000;
 
-// A real engine that keeps the instant of each time it was advanced.
 const countedEngine = (nextDue: Tide['nextDue']): { tide: Tide; advances: () => number; advancedAt: () => readonly number[] } => {
   const real = createTide({ store: createMemoryStore(), transform: testTransform });
   const at: number[] = [];
@@ -119,13 +100,8 @@ const countedEngine = (nextDue: Tide['nextDue']): { tide: Tide; advances: () => 
   return { tide, advances: () => at.length, advancedAt: () => at };
 };
 
-// THE CLOCK IS THE TEST'S HERE. On a clock the test moves, a minute passes with
-// no wake where a loop would make sixty thousand, and the wake that is due a
-// month off happens at that instant.
-//
-// The janitor's beat is set as long as the delay in both: by default it wakes
-// the driver every five minutes whatever is due, and these are about one
-// timer at a time.
+// The janitor's beat is set as long as the delay in both: by default it wakes the driver every
+// five minutes whatever is due, and these are about one timer at a time.
 describe('a delay longer than a timer can hold', () => {
   const A_MINUTE = 60_000;
 
@@ -139,8 +115,6 @@ describe('a delay longer than a timer can hold', () => {
     expect(engine.advances()).toBe(1);
     await vi.advanceTimersByTimeAsync(A_MINUTE);
     expect(engine.advances()).toBe(1);
-    // ...and it is not forgotten: a timer holds 24.8 days, so the driver wakes
-    // then, finds the instant still ahead, and waits out the rest of it.
     await vi.advanceTimersByTimeAsync(TOO_LONG_FOR_A_TIMER);
     expect(engine.advancedAt()).toContain(started + 2 ** 31 - 1);
     expect(engine.advancedAt()).toContain(due);
@@ -155,7 +129,6 @@ describe('a delay longer than a timer can hold', () => {
     const driver = createTideDriver({ tide: engine.tide, janitorMs: TOO_LONG_FOR_A_TIMER });
     await vi.advanceTimersByTimeAsync(A_MINUTE);
     expect(engine.advances()).toBe(0);
-    // It beats as far off as a timer can hold: 2^31 − 1 ms.
     await vi.advanceTimersByTimeAsync(2 ** 31);
     expect(engine.advancedAt()).toEqual([started + 2 ** 31 - 1]);
     await driver.stop();

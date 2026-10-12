@@ -1,18 +1,9 @@
 import type { Sequence } from '@niscorp/strata';
 
-// One table per guarantee. `tide_run` and `tide_work` are the two that grow
-// with events; `tide_fact` is the intake, swept on its own horizon; and
-// `tide_reflex_state` holds one row per reflex, forever.
-//
-// The CHECK constraints are not decoration: a run whose state is misspelled
-// (`'sttled'`) is refused by the database, not constructed and left hanging
-// with its work never claimed.
 export const TIDE_TABLES = ['tide_fact', 'tide_run', 'tide_work', 'tide_reflex_state'] as const;
 
-// HISTORY. This text is migration 1 of `nisc.moss.tide` (TIDE_SEQUENCE below),
-// and databases have run it: editing it makes every one of them refuse to boot
-// (strata: EDITED). Change the tables by appending a migration to the sequence;
-// test/baselines.test.ts pins this one's checksum so the edit is caught here.
+// Migration 1 of `nisc.moss.tide`: databases have run it, and editing it makes every one of them
+// refuse to boot (strata: EDITED). Change the tables by appending a migration to the sequence.
 export const TIDE_DDL = `
 CREATE TABLE IF NOT EXISTS tide_fact (
   id           text PRIMARY KEY,
@@ -132,17 +123,8 @@ ALTER TABLE tide_reflex_state DROP COLUMN IF EXISTS poll_seen;
 ALTER TABLE tide_reflex_state DROP COLUMN IF EXISTS polled_at;
 `;
 
-// One statement per step — a prepared statement carries exactly one command
-// (PGlite says so outright; `pg` under parameters too). The comments ride
-// along: strata hashes a step without its full-line comments, so rewording
-// one is not an edit.
-//
-// SPLIT ON EVERY `;`, AND FOR MIGRATION 1 ONLY. That is not how a sequence is
-// split: a `;` inside a statement would cut it in two, and a new sequence uses
-// strata's `sqlSteps` (nisc AGENTS.md, rule 17). It cannot be corrected here.
-// The steps this makes of TIDE_DDL have run, their checksum is in every
-// ledger, and a different split is a different history. Each `;` in TIDE_DDL
-// ends a statement. Nothing new is split this way.
+// Split on every `;`, for migration 1 only: a different split is a different history, and
+// this one's checksum is in every ledger. A new sequence uses strata's `sqlSteps`.
 const statementsOf = (ddl: string): { kind: 'sql'; sql: string }[] =>
   ddl
     .split(';')
@@ -150,17 +132,12 @@ const statementsOf = (ddl: string): { kind: 'sql'; sql: string }[] =>
     .filter((chunk) => chunk.split('\n').some((line) => line.trim() !== '' && !line.trim().startsWith('--')))
     .map((sql) => ({ kind: 'sql', sql }));
 
-// THE ID SAYS `moss`, AND STAYS. Every ledger that has run this sequence holds
-// its rows under that name. Under another id it would be a sequence no ledger
-// has seen.
+// The id says `moss` and stays: every ledger that has run this sequence holds its rows under it.
 export const TIDE_SEQUENCE: Sequence = {
   id: 'nisc.moss.tide',
   migrations: [
     { description: 'The tide store: facts, runs, work and reflex state, converged from any earlier shape', steps: statementsOf(TIDE_DDL) },
     {
-      // A fact's chain: the root it belongs to, and — on a root — how many facts
-      // the chain has minted beneath it. Nullable: every existing fact is a
-      // root nothing has been counted against yet.
       description: 'A fact carries its chain root, and a root counts what its chain minted (tide maxChainFacts)',
       steps: [
         { kind: 'sql', sql: 'ALTER TABLE tide_fact ADD COLUMN IF NOT EXISTS root text' },

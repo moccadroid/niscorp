@@ -1,83 +1,32 @@
 import type { Tide } from './tide';
 import type { AdvanceReport, Fact, Retention } from './types';
 
-// ═══════════════════════════════════════════════════════════════
-// The tide driver — wake on ingest, sleep until the next due
-// instant, and a janitor for what fell behind the couch.
-//
-// Tide reads no clocks and paces nothing; this is the thing that
-// does. Three duties:
-//
-//   WAKE — every ingest (a write fact off the vex bridge, a signal,
-//   a manual fire) advances the engine immediately, to quiescence:
-//   a chain advances one hop per committed step, so the driver
-//   loops until a step reports nothing moved. Chains stop crawling
-//   at a metronome's speed and run at the store's.
-//
-//   SLEEP — after quiescence, `nextDue` names the next instant
-//   worth waking for (a clock occurrence, a retry backoff, a lease
-//   lapse, a delayed fact) and one timer sleeps until exactly then.
-//   A new ingest preempts it. No beat, no polling for work.
-//
-//   JANITOR — a slow fallback wake plus retention sweep. It finds
-//   nothing when nothing is broken; it exists because any durable
-//   multi-worker design needs the scan that notices work committed
-//   by a process that died before its own wake ran. It is how work
-//   is RECOVERED, never how it moves.
-//
-// Concurrency: one drain at a time. A wake during a drain queues
-// exactly one more pass (facts landed mid-drain are caught by it);
-// the mutex is a flag pair, not a lock, because everything here is
-// one event loop.
-// ═══════════════════════════════════════════════════════════════
-
 export type TideDriver = {
-  // Delegates to tide, then wakes — the ingest edge a host should hand out
-  // (the vex bridge mints through this) so a fact never waits for a beat.
   ingest: Tide['ingest'];
   fire: (reflexId: string, options: { now: number; input?: unknown; by?: string }) => Promise<Fact | undefined>;
-  // Advance-to-quiescence now (idempotent, coalescing). Call after anything
-  // that changes what tide would do — a reflex reload, an arm flip. The
-  // promise resolves when the drain it triggered (or joined) reaches
-  // quiescence, so a caller that must see the settled world — a "run now"
-  // button whose screen re-reads — can await it; everyone else ignores it.
   wake: () => Promise<void>;
-  // Stop waking, and resolve once nothing the driver started is still
-  // touching the store — the drain in flight and the next-due read after it.
-  // A host awaits it before closing the database under the engine.
   stop: () => Promise<void>;
 };
 
 export type TideDriverConfig = {
   tide: Tide;
   now?: () => number;
-  // The janitor's beat. Frequent enough that a lapsed lease is not lapsed
-  // for long; rare enough to be a recovery scan rather than a heartbeat.
   janitorMs?: number;
-  // Ledger retention, swept on the janitor's beat. Absent = never swept —
-  // an honest default; how long history matters is the host's call.
+  // Absent on purpose: how long history matters is the host's call, so nothing is swept.
   retention?: Retention;
 };
 
 const DEFAULT_JANITOR_MS = 300_000;
-// A backstop against a step that always reports progress (which would be a
-// bug, not a workload) — generous enough that no real chain hits it.
 const MAX_STEPS_PER_DRAIN = 10_000;
 
-// THE LONGEST A TIMER WAITS. A runtime keeps a timer's delay in 32 bits, and
-// Node does not refuse one over 2^31 − 1 ms (24.8 days): it warns, and waits
-// 1 ms. A next occurrence a month off, or a janitor's beat set that long, would
-// therefore be a loop. Every wait is cut to this. Waking early costs one advance
-// that finds nothing and asks again when: the rest is waited out by the timer
-// set after it.
+// Node does not refuse a delay over 2^31 - 1 ms (24.8 days): it warns and waits 1 ms, which
+// would turn a far-off wake into a loop. Every wait is cut to this; waking early costs one
+// advance that finds nothing, and the timer set after it waits out the rest.
 const LONGEST_TIMER_MS = 2 ** 31 - 1;
 const waitable = (ms: number): number => Math.min(ms, LONGEST_TIMER_MS);
 
-// LET THE PROCESS END WITH A TIMER STILL PENDING. Node's timers can be told so
-// (`unref`); a timer anywhere else is a number and holds nothing open. Asked of
-// the value and not of its type, so this file needs no runtime's types. What
-// is found is a function nothing here knows the type of, so it is applied as
-// one: on the timer, with nothing.
+// Asked of the value and not of its type, so this file needs no runtime's types: Node's timers
+// have `unref`, and a timer anywhere else is a number that holds nothing open.
 const letProcessEnd = (timer: unknown): void => {
   if (typeof timer !== 'object' || timer === null || !('unref' in timer)) return;
   const unref: unknown = timer.unref;
@@ -115,32 +64,28 @@ export const createTideDriver = (config: TideDriverConfig): TideDriver => {
     console.error(`[tide:driver] a drain exceeded ${MAX_STEPS_PER_DRAIN} steps — stopping this pass; the janitor will resume it`);
   };
 
-  // Never rejects: it runs detached after every drain, and an unhandled
-  // rejection there would take the host's process down with it.
+  // Never rejects: it runs detached, and an unhandled rejection would take the host's process down.
   const schedule = async (): Promise<void> => {
     if (stopped) return;
     let due: number | undefined;
     try {
       due = await tide.nextDue(now());
     } catch (err) {
-      // Stopping mid-read (the store closing under it) is expected, not news.
       if (!stopped) console.error('[tide:driver] next due', err);
       return;
     }
     if (stopped) return;
     if (timer !== undefined) clearTimeout(timer);
-    if (due === undefined) return; // nothing scheduled — the next ingest wakes us
+    if (due === undefined) return;
     const delay = due - now();
-    // Quiescent yet still "due now" means advance cannot progress it (facts
-    // waiting for reflexes to load, say). Retry on the janitor's beat, not
-    // in a hot loop.
+    // Quiescent yet still due now means advance cannot progress it (facts waiting for reflexes
+    // to load, say): retry on the janitor's beat, not in a hot loop.
     timer = setTimeout(() => void wake(), delay > 0 ? waitable(delay) : janitorMs);
     letProcessEnd(timer);
   };
 
-  // A wake during a drain queues one more pass INSIDE the same cycle, and
-  // every waker gets the same cycle promise — so awaiting it always means
-  // "quiescence including whatever landed while we drained".
+  // A wake during a drain queues one more pass inside the same cycle, and every waker gets the
+  // same cycle promise: awaiting it means quiescence including whatever landed while draining.
   const wake = (): Promise<void> => {
     if (stopped) return Promise.resolve();
     queued = true;
@@ -187,7 +132,6 @@ export const createTideDriver = (config: TideDriverConfig): TideDriver => {
       stopped = true;
       clearInterval(janitor);
       if (timer !== undefined) clearTimeout(timer);
-      // the drain in flight (it schedules on its way out), then that schedule
       await cycle;
       await scheduling;
     },

@@ -1,22 +1,5 @@
-// Is a package made of modules, and do they keep to their doors?
-//
-// A MODULE is a directory under `src/` with an `index.ts`. For a package
-// listed below this holds:
-//
-//   1. NOTHING FLAT. Only `index.ts` sits at the top of `src/`.
-//   2. ONE DOOR. Code in one module imports another module as `../<module>`,
-//      never a file inside it.
-//   3. DECLARED DEPENDENCIES. A module imports only the modules its entry in
-//      `modules` names, and the table has no cycle.
-//   4. THE CORE DOES NOT IMPORT A FEATURE. A feature (`features`) is a module
-//      that ships from an entry point of its own and reaches the core through
-//      seams it is handed. No module that is not a feature names one in its
-//      dependencies, and `src/index.ts` imports none: what the main entry
-//      reaches would carry the feature with it.
-//
-// It reads the relative imports and re-exports of `.ts` and `.tsx` files.
-//
-// `pnpm check:modules`. Exits non-zero on any failure.
+// Fails when a package has a file flat in src/ beside index.ts, a module imports another past its door
+// or one it has not declared, the declared modules have a cycle, or the core imports a feature.
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
@@ -25,9 +8,7 @@ import ts from 'typescript';
 const packages = resolve(import.meta.dirname, '..', 'packages');
 
 type Shape = {
-  // module → the modules it may import
   modules: Readonly<Record<string, readonly string[]>>;
-  // modules the core must not import: each ships from its own entry point
   features: readonly string[];
 };
 
@@ -40,24 +21,15 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       identity: ['runtime', 'protocol'],
       manifest: ['identity', 'feature'],
       data: ['runtime', 'identity', 'manifest'],
-      // Not `identity` and not `feature`: who somebody is, and what a feature
-      // lays around a shell's wire, reach it as functions the server hands
-      // over.
+      // Not identity or feature: they reach it as functions the server hands over.
       shells: ['runtime', 'protocol', 'manifest', 'data'],
-      // A feature. Not `data` and not `manifest`: what it reads, writes and
-      // asks about a bundle goes through the seams it is started with.
+      // A feature. Not data or manifest: it goes through the seams it is started with.
       integrations: ['runtime', 'feature'],
-      // Not `manifest`: what somebody holds is a function it is handed, and so
-      // is where a session comes from.
+      // Not manifest: what somebody holds, and where a session comes from, are functions it is handed.
       socket: ['runtime', 'protocol', 'identity', 'shells'],
-      // Not `manifest` and not the server: a page's path, and what a document
-      // asks a server, are types written out in the module.
+      // Not manifest or the server: a page's path, and what a document asks a server, are types written out in the module.
       documents: ['protocol', 'identity', 'shells'],
-      // The wiring: it may import every core module, and no feature. Four of
-      // its files are entry points (`./node`, `./vite`, `./protocol`,
-      // `./unverified`).
       server: ['runtime', 'protocol', 'feature', 'identity', 'manifest', 'data', 'shells', 'socket', 'documents'],
-      // A feature: it hears a write through the seam it is handed.
       tide: ['feature'],
       client: ['protocol'],
       terminal: ['client'],
@@ -78,7 +50,6 @@ const filesIn = (dir: string): string[] =>
     entry.isDirectory() ? filesIn(join(dir, entry.name)) : /\.tsx?$/.test(entry.name) && !entry.name.endsWith('.d.ts') ? [join(dir, entry.name)] : [],
   );
 
-// Every relative module specifier a file imports or re-exports from.
 const importsOf = (text: string): string[] => {
   const source = ts.createSourceFile('x.ts', text, ts.ScriptTarget.Latest, true);
   const found: string[] = [];
@@ -148,7 +119,6 @@ for (const [name, shape] of Object.entries(PACKAGES)) {
         const other = parts[0] ?? '';
         if (other === '' || other === '..' || other === directory) continue;
         const here = relative(src, file).split(sep).join('/');
-        // A file at the top of src/ is not a module: only index.ts is there.
         if (parts.length === 1 && !(existsSync(target) && statSync(target).isDirectory())) {
           undeclaredUse.push(`${here} imports ${other} at the top of src/`);
           continue;

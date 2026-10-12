@@ -5,24 +5,9 @@ import { createTideStore } from '../src/store/postgres';
 import type { TidePool } from '../src/store/postgres';
 import { oneDatabase } from './support';
 
-// THE ENGINE, ON A REAL DATABASE.
-//
-// `postgres-store.test.ts` holds the store to its six-method contract. That is
-// necessary and it is not sufficient: the ENGINE composes those methods — a
-// claim that must see a rewound run, a lease that is taken back, a transient
-// throw that must not consume an occurrence. In memory the store is a Map and
-// a transaction is a snapshot.
-//
-// So the same scenarios run here against Postgres: real constraints, real
-// transactions, real NULLs, real bigints coming back as strings. A store that
-// passes the unit contract and fails this one is not a store the engine can
-// run on.
-
 const vienna = 'Europe/Vienna';
 const T0 = Date.UTC(2026, 2, 1, 0, 0, 0);
 
-// The five-op stand-in for the `transform` seam — tide does not know Prism, so
-// neither does this.
 const transform = (config: unknown, source: Row): unknown => {
   const walk = (node: unknown): unknown => {
     if (Array.isArray(node)) return node.map(walk);
@@ -40,8 +25,6 @@ const transform = (config: unknown, source: Row): unknown => {
 
 type Harness = { tide: Tide; calls: unknown[]; events: TideEvent[]; pool: TidePool };
 
-// One database for the file, emptied for each engine that is stood up
-// (./support.ts says why).
 const database = oneDatabase();
 
 const harness = async (reflexes: readonly ReflexInput[], effects: EffectRegistry, extra?: Partial<TideConfig>): Promise<Harness> => {
@@ -65,8 +48,6 @@ const harness = async (reflexes: readonly ReflexInput[], effects: EffectRegistry
 
 const noop = { run: () => ({ ok: true }) };
 
-// ═══════════════════════════════════════════════════════════════
-
 describe('the engine on postgres', () => {
   const daily: ReflexInput = {
     id: 'sweep.daily',
@@ -87,7 +68,6 @@ describe('the engine on postgres', () => {
     const [run] = await tide.ledger.runs();
     expect(run?.occurrence).toBe('2026-03-01');
     expect(run?.state).toBe('settled');
-    // The counters are columns, and they are what an operator's screen reads.
     expect(run?.done).toBe(1);
     expect(run?.total).toBe(1);
   });
@@ -96,8 +76,6 @@ describe('the engine on postgres', () => {
     const { tide, calls } = await harness([daily], { work: noop });
     await tide.advance({ now: Date.UTC(2026, 2, 1, 5, 0, 0) });
     await tide.advance({ now: Date.UTC(2026, 2, 1, 6, 0, 0) });
-    // UNIQUE(reflex_id, cause) refuses the second open. The idempotency is a
-    // database constraint here, not a branch.
     expect(calls).toHaveLength(1);
     expect(await tide.ledger.runs()).toHaveLength(1);
   });
@@ -160,7 +138,6 @@ describe('fan-out on postgres', () => {
     expect(events.some((event) => event.type === 'run.deferred')).toBe(true);
     expect((await tide.ledger.runs())[0]?.state).toBe('pending');
 
-    // Same occurrence, next tick. The night's work is not lost.
     await tide.advance({ now: Date.UTC(2026, 2, 1, 5, 1, 0) });
     expect(calls).toHaveLength(1);
     expect(await tide.ledger.runs()).toHaveLength(1);
@@ -200,7 +177,6 @@ describe('recovery on postgres', () => {
     expect(await tide.retry(failed?.id ?? '', T0 + 10)).toBe(true);
     const rewound = await tide.ledger.run(failed?.runId ?? '');
     expect(rewound?.state).toBe('fanned');
-    // Decremented inside the same transaction as the reopen.
     expect(rewound?.failed).toBe(0);
 
     await tide.advance({ now: T0 + 10 });
@@ -218,7 +194,6 @@ describe('recovery on postgres', () => {
     expect((await tide.ledger.facts()).filter((fact) => fact.kind === 'run')).toHaveLength(1);
   });
 
-  // Six units, a task each, and a gateway that is down for some of them.
   const texts = (policy: ReflexInput['policy']): ReflexInput => ({
     id: 'reminders.send',
     intent: 'Text each member, failing terminally on the first attempt.',
@@ -263,8 +238,6 @@ describe('recovery on postgres', () => {
   });
 
   it('a task retried while its run is still going does not settle the run a task early', async () => {
-    // One task per tick (`order: 'serial'`), so the run is unsettled when the
-    // first failure is retried.
     const { out, effects } = gateway(['a']);
     const { tide } = await harness([texts({ retry: { max: 0, backoff: 'fixed', baseMs: 1 }, overlap: 'allow', order: 'serial' })], effects, { select: members });
     await tide.fire('reminders.send', { now: T0 });
@@ -292,11 +265,8 @@ describe('recovery on postgres', () => {
     await tide.advance({ now: T0 });
     expect(calls).toHaveLength(1);
 
-    // THE STATE A CRASH LEAVES, written directly because no verb produces it on
-    // purpose: the row says claimed, a token is held, the lease is running, and
-    // the process that owned it is gone. Without the lease this task would sit
-    // here forever — its run never settled, never drained, and an
-    // `overlap: 'skip'` reflex behind it blocked for good.
+    // The state a crash leaves, written directly because no verb produces it: claimed, a token held,
+    // the lease running, and the process that owned it gone.
     const [task] = await tide.ledger.tasks();
     await pool.query(
       `UPDATE tide_work SET state = 'claimed', token = 'ghost', claimed_until = $1, settled_at = NULL WHERE id = $2`,
@@ -304,11 +274,9 @@ describe('recovery on postgres', () => {
     );
     await pool.query(`UPDATE tide_run SET state = 'fanned', done = 0, settled_at = NULL WHERE id = $1`, [task?.runId ?? '']);
 
-    // Inside the lease it is nobody else's work.
     await tide.advance({ now: T0 + 30_000 });
     expect(calls).toHaveLength(1);
 
-    // Past it the work comes back — no reaper, no heartbeat, one comparison.
     await tide.advance({ now: T0 + 90_000 });
     expect(calls).toHaveLength(2);
     expect((await tide.ledger.task(task?.id ?? ''))?.state).toBe('done');
@@ -320,7 +288,6 @@ describe('recovery on postgres', () => {
     await tide.advance({ now: T0 });
 
     const [task] = await tide.ledger.tasks();
-    // The live claim moved on; the ghost still holds the old token.
     await pool.query(`UPDATE tide_work SET state = 'claimed', token = 'fresh', claimed_until = $1 WHERE id = $2`, [T0 + 60_000, task?.id ?? '']);
     const stale = await pool.query(`UPDATE tide_work SET state = 'done' WHERE id = $1 AND token = $2 RETURNING id`, [task?.id ?? '', 'ghost']);
 
@@ -353,7 +320,6 @@ describe('chains and fan-in on postgres', () => {
     await tide.advance({ now: T0 + 1 });
 
     expect(calls).toContainEqual({ status: 'succeeded' });
-    // The jsonb round trip is the part that only a real database tests.
     const emitted = (await tide.ledger.facts()).find((fact) => fact.entity === 'charge_attempts');
     expect(emitted?.row).toEqual({ status: 'succeeded' });
     expect(emitted?.cause).toMatch(/^task:/);
@@ -382,18 +348,12 @@ describe('chains and fan-in on postgres', () => {
     for (let n = 0; n < 4; n += 1) await tide.advance({ now: T0 + n });
 
     expect(calls).toContainEqual({ done: 5, total: 5 });
-    // Exactly one digest, however many ticks pass — `drained` is a column.
     await tide.advance({ now: T0 + 10 });
     expect(calls.filter((input) => typeof input === 'object' && input !== null && 'total' in input)).toHaveLength(1);
   });
 });
 
 describe('the tenant boundary inside the engine, on postgres', () => {
-  // Tide is the one place a row travels WITHOUT being read — carried as a
-  // payload in a minted fact — so no scope policy is consulted on the way.
-  // The identity that minted it rides along, and the matcher enforces it.
-  // This is the same rule the memory store proves, held to a real column:
-  // a `text` that has to survive the round trip, or the boundary is gone.
   const pair = (tenant: string): ReflexInput[] => [
     { id: `${tenant}:writer`, intent: 'Write.', on: { manual: {} }, as: `automation@${tenant}`, effect: { name: 'write' } },
     {
@@ -522,16 +482,12 @@ describe('overlap, order and retention on postgres', () => {
     expect(await tide.ledger.tasks()).toHaveLength(1);
 
     await tide.sweep(T0 + 1_000, { runs: 0 });
-    // The foreign key does this, not a second statement somebody can forget.
     expect(await tide.ledger.runs()).toHaveLength(0);
     expect(await tide.ledger.tasks()).toHaveLength(0);
   });
 });
 
 describe('write facts on postgres', () => {
-  // The bridge lane, through the durable store: a write fact's row rides
-  // the jsonb column, its identity rides `as_who`, and the fence between
-  // them and another tenant's reflex survives the round-trip to disk.
   const watcher = (id: string, as: string | undefined, from: string): ReflexInput => ({
     id,
     intent: 'Notice new members.',
@@ -559,8 +515,6 @@ describe('write facts on postgres', () => {
 });
 
 describe('the breadth ceiling on postgres', () => {
-  // The chain's root and its count are columns (nisc.moss.tide migration 2):
-  // a reflex writing two facts per fact it sees is held to maxChainFacts.
   it('counts a chain on its root and parks past maxChainFacts', async () => {
     const split: ReflexInput = { id: 'split', intent: 'Each ping writes two more.', on: { fact: { entity: 'ping' } }, when: { always: true }, effect: { name: 'split' } };
     const effects: EffectRegistry = {

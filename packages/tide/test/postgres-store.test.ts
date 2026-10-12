@@ -6,15 +6,6 @@ import type { TidePool } from '../src/store/postgres';
 import { initialisedDirectory } from './initialised-database';
 import { oneDatabase, pglitePool } from './support';
 
-// THE SAME CHECKS THE MEMORY STORE RUNS, against a real database, so the SQL
-// store cannot diverge from the memory store unseen.
-//
-// `STORE_CONTRACT` is the list `store.test.ts` runs against the memory store,
-// so there is one definition of the contract and not two readings of a
-// comment.
-
-// One database for the file, emptied before each store is made (./support.ts
-// says why).
 const database = oneDatabase();
 
 const freshStore = async () => {
@@ -31,9 +22,7 @@ describe('the store contract — postgres', () => {
     });
 });
 
-// The same contract over a pool whose transaction hands its client through as
-// it is: `query` is a method there, and it needs its receiver — the shape of a
-// checked-out `pg` client.
+// `query` is a method that needs its receiver, as on a checked-out `pg` client.
 const storeOverClient = async () => {
   const { db, pool } = await database.emptied();
   const clientOver = (inner: { query: TidePool['query'] }) => ({
@@ -57,14 +46,6 @@ describe('the store contract — a transaction that hands its client through', (
     });
 });
 
-// TWO INSTANCES, ONE SERIAL GROUP. `onePer` promises at most one held row for a
-// group, counting what somebody else already holds. The store asks whether the
-// group is held and then claims, as two statements, and another instance's two
-// could run between them: both would ask, both would be told nothing is held,
-// and each would take a row. Two tasks of a serial reflex would run at once.
-//
-// Two stores over one database are two instances: their statements interleave
-// at every await, as two processes' do.
 describe('a serial group, claimed by two instances at once', () => {
   it('is held by one of them', async () => {
     const { pool } = await database.emptied();
@@ -87,7 +68,6 @@ describe('a serial group, claimed by two instances at once', () => {
 
     expect(first.length + second.length).toBe(1);
     expect(await one.query({ table: 'task', where: { state: 'claimed' } })).toHaveLength(1);
-    // And the group is not stuck: once that task is done, the next is claimable.
     const [held] = [...first, ...second];
     await one.cas('task', held?.id ?? '', { state: 'claimed' }, { state: 'done', claimedUntil: 0 });
     expect(await claimBy(other, 'other')).toHaveLength(1);
@@ -114,13 +94,8 @@ describe('a serial group, claimed by two instances at once', () => {
   });
 });
 
-// That they are ordinary tables to a host (introspected, grantable, scopeable)
-// is the host's to prove: moss does, in its test/tide-tables.test.ts.
 describe('the engine tables are not application data', () => {
-  // The one case that is about a database with no table of tide's in it, so
-  // the one that starts a database of its own: from the directory the run
-  // initialised (./initialised-database.ts), which holds nothing but what
-  // Postgres puts there.
+  // The one case about a database with no table of tide's in it, so it starts one of its own.
   const empty: { db?: PGlite } = {};
   beforeAll(async () => {
     empty.db = new PGlite({ loadDataDir: initialisedDirectory(inject('initialisedDatabase')) });
@@ -136,8 +111,6 @@ describe('the engine tables are not application data', () => {
     const pool = pglitePool(db);
     expect((await pool.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`)).rows).toEqual([]);
     await createTideStore(pool).ready;
-    // Twice, because a boot that has already run must not be a boot that
-    // fails — every statement in the DDL is IF NOT EXISTS for this reason.
     await createTideStore(pool).ready;
     const tables = await pool.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`);
     const names = tables.rows.map((row) => String(row['table_name']));

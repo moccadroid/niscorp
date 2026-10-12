@@ -1,13 +1,5 @@
-// Is what a package exports what somebody decided it exports?
-//
-// The names a package exports are a file in the repository: `api.txt` beside
-// its `package.json`, one line per name per entry point. This check reads the
-// entry points and compares. A name that is exported and not in the file
-// fails, and so does a name in the file that is not exported: the file
-// changes in the same diff as the export, where somebody reads it.
-//
-// `pnpm check:api`. `--write` records what is exported now. Exits non-zero on
-// any failure.
+// Fails when a package exports a name that api.txt, beside its package.json, does not list, when api.txt
+// lists a name that is not exported, or when an entry point has an `export *`. `--write` records the names.
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -15,7 +7,6 @@ import ts from 'typescript';
 
 const packages = resolve(import.meta.dirname, '..', 'packages');
 
-// package → entry point (as `exports` in its package.json spells it) → source file
 const ENTRIES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   moss: {
     '.': 'src/index.ts',
@@ -46,8 +37,6 @@ const ok = (label: string, passed: boolean, detail = ''): void => {
   if (!passed) failed = true;
 };
 
-// Every name an entry file exports. `export *` is refused: it makes the API
-// whatever another file happens to export.
 const exportedBy = (text: string): { names: string[]; stars: number } => {
   const source = ts.createSourceFile('x.ts', text, ts.ScriptTarget.Latest, true);
   const names: string[] = [];

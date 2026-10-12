@@ -2,11 +2,6 @@ import { z } from 'zod';
 import type { Comparison, Order } from '../../types';
 import { snake, toColumn } from './rows';
 
-// ── the WHERE compiler ──────────────────────────────────────────
-
-// What a store is asked with, as the compilers read it: fields by name. A
-// `Where`, an `Order` and a `Mutation` over any one table are each one of
-// these, so a compiler takes the table's own and asks for no cast.
 export type Fields = Readonly<Record<string, unknown>>;
 type Ordering = readonly { by: string; dir?: 'asc' | 'desc' }[];
 
@@ -19,11 +14,6 @@ const COMPARATORS = [
   ['gte', '>='],
 ] as const;
 
-// A COMPARISON, AS IT IS READ: `{ gt: 3 }`, `{ in: [...] }`. The compilers take
-// fields by name and what each holds is unknown, so what says it is a
-// comparison is read by a schema. `satisfies` holds the schema to the engine's
-// own type, so the two cannot drift. A member the schema does not name is
-// left out.
 const ComparisonSchema = z.object({
   eq: z.unknown().optional(),
   ne: z.unknown().optional(),
@@ -57,8 +47,6 @@ export const compileWhere = (where: Fields | undefined, start: number, alias = '
   for (const [field, test] of Object.entries(where ?? {})) {
     const column = `${prefix}${snake(field)}`;
     const bare = snake(field);
-    // Anything that is an object and not a list is a comparison. Every other
-    // value is what the column must equal.
     if (test === null || typeof test !== 'object' || Array.isArray(test)) {
       // An equality on `undefined` means IS NULL, which is what the engine
       // means when it filters on a column it just cleared.
@@ -88,8 +76,6 @@ export const compileOrder = (order: Ordering | undefined, alias = ''): string =>
   return ` ORDER BY ${order.map((key) => `${prefix}${snake(key.by)} ${key.dir === 'desc' ? 'DESC' : 'ASC'}`).join(', ')}`;
 };
 
-// The same comparison SQL made, applied to what came back. Kept beside the
-// compiler so the two cannot drift.
 export const sortRows = <R>(rows: readonly R[], order: Order<R> | undefined): R[] => {
   if (order === undefined || order.length === 0) return [...rows];
   return [...rows].sort((left, right) => {

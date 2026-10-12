@@ -2,20 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { checksumOf } from '@niscorp/strata';
 import { TIDE_SEQUENCE } from '../src/store/postgres';
 
-// ═══════════════════════════════════════════════════════════════
-// HISTORY, PINNED. Every database that keeps tide's tables has run these
-// migrations and recorded their checksums. Edit one and each of those
-// databases refuses to boot (strata: EDITED) — so the edit has to be caught
-// HERE, in CI, not there.
-//
-// Red here means an applied migration changed. Do not re-pin the checksum:
-// put the change back, and append a new migration to the sequence instead.
-// (Rewording a full-line `--` comment is fine — strata hashes without them.)
-//
-// The first pin was moss's, in its test/baselines.test.ts, while the store
-// was there. The sequence did not change when it moved: its id, its
-// migrations, their order and their steps are what they were.
-// ═══════════════════════════════════════════════════════════════
+// Red here means an applied migration changed. Do not re-pin the checksum: put the change
+// back, and append a new migration to the sequence.
 
 const PINNED: ReadonlyArray<[number, number, string]> = [
   [1, 16, '41f565e0faf179237fb6b92ca50f6266677871a4965e61bc3494a1d59d9c541b'],
