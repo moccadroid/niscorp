@@ -9,11 +9,7 @@ import { Combo } from './combobox.js';
 import { fieldStyle, controlBtn } from './styles.js';
 import type { WidgetProps } from './widget.js';
 
-// The alias -> value rows shared by `compute` and `aggregate`: one row per entry
-// (alias input + value editor + remove), plus add. Rows are keyed by index so
-// renaming an alias doesn't remount the value editor. Writes the whole object on
-// any change. `renderValue` is the per-entry value editor; `newEntry` is the
-// value an added row starts from.
+// Rows are keyed by index, so renaming an alias does not remount its value editor.
 const RecordRows: FC<{
   value: unknown;
   model: NovaModelBinding | undefined;
@@ -44,9 +40,6 @@ const RecordRows: FC<{
   );
 };
 
-// A field-or-literal operand: a column picker that also takes a typed literal
-// (numbers and booleans are coerced; everything else stays a string — a column
-// path or a string literal).
 const coerceLiteral = (text: string): unknown => {
   if (text === '') return '';
   if (text === 'true') return true;
@@ -65,7 +58,6 @@ const ValueInput: FC<{ value: unknown; columns: string[]; onChange: (value: unkn
   />
 );
 
-// aggregate value: count | sum | avg | min | max, applied to a column.
 const AGG_OPS = ['count', 'sum', 'avg', 'min', 'max'];
 
 const AggregateValue: FC<{ value: unknown; onChange: (value: unknown) => void; catalog: Catalog }> = ({ value, onChange, catalog }) => {
@@ -90,8 +82,6 @@ const AggregateValue: FC<{ value: unknown; onChange: (value: unknown) => void; c
   );
 };
 
-// compute value: arithmetic (two operands), concat/coalesce (operand list), or
-// case (the recursive filter, edited as JSON via Loom's editor).
 const ARITHMETIC = new Set(['add', 'subtract', 'multiply', 'divide']);
 const LISTS = new Set(['concat', 'coalesce']);
 const COMPUTE_OPS = ['add', 'subtract', 'multiply', 'divide', 'concat', 'coalesce', 'case'];
@@ -135,7 +125,6 @@ const ComputeValue: FC<{ value: unknown; onChange: (value: unknown) => void; cat
   );
 };
 
-// concat / coalesce: a list of operands (min 2), with add and remove.
 const OperandList: FC<{ values: unknown[]; columns: string[]; onChange: (values: unknown[]) => void }> = ({ values, columns, onChange }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 160 }}>
     {values.map((operand, index) => (
@@ -148,8 +137,6 @@ const OperandList: FC<{ values: unknown[]; columns: string[]; onChange: (values:
   </div>
 );
 
-// The role components — closures over the catalog, registered under the widget
-// roles. Each receives `{ value, novaModel }` from the compiler.
 export const aggregateWidget = (catalog: Catalog): NovaComponent<WidgetProps> =>
   ({ value, novaModel }) => (
     <RecordRows value={value} model={novaModel} newEntry={{ count: '*' }} renderValue={(v, onChange) => <AggregateValue value={v} onChange={onChange} catalog={catalog} />} />

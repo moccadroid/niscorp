@@ -1,12 +1,6 @@
 import { useEffect, useState, type CSSProperties, type FC } from 'react';
 import { inputStyle } from './shared.js';
 
-// A controlled JSON editor: a textarea with pretty-printed JSON that commits only
-// when the text parses, so mid-edit invalid JSON doesn't fight the keystrokes. An
-// external change to the value reloads the buffer; the serialized-value dep makes
-// that fire on real content changes only, not on our own commits. Exported so
-// plugins can reuse it as the fallback editor for values they don't structure.
-
 const rawStyle: CSSProperties = {
   ...inputStyle,
   margin: 0,
@@ -26,8 +20,8 @@ export const JsonEditor: FC<{ value: unknown; onChange: (value: unknown) => void
   const serialized = JSON.stringify(value ?? null);
 
   useEffect(() => {
-    // Adopt the value only when it differs from what the buffer already holds,
-    // so an external edit reloads it but our own committed edits don't churn it.
+    // The value is adopted only when it differs from what the buffer holds: an
+    // external edit reloads it, our own committed edit leaves the typed text alone.
     let mine: unknown;
     try {
       mine = JSON.parse(text);

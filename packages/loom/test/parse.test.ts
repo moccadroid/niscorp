@@ -66,7 +66,6 @@ describe('parse — Zod schema → field model', () => {
   it('parses a tuple to one field per positional slot', () => {
     const ir = parse(z.tuple([z.string(), z.number()]));
     expect(ir).toMatchObject({ kind: 'tuple', items: [{ kind: 'string' }, { kind: 'number' }] });
-    // Its default is one built value per slot, fixed length.
     expect(buildDocument(ir, {})).toEqual(['', 0]);
   });
 
@@ -85,7 +84,7 @@ describe('parse — Zod schema → field model', () => {
 
     const circle = ir.variants[0]!.field;
     if (circle.kind !== 'object') throw new Error('expected object branch');
-    expect(circle.fields.map((f) => f.key)).toEqual(['radius']); // tag excluded
+    expect(circle.fields.map((f) => f.key)).toEqual(['radius']);
   });
 
   it('distinguishes a plain object union by key presence (pattern `key`), keeping all fields', () => {
@@ -95,12 +94,12 @@ describe('parse — Zod schema → field model', () => {
     if (ir.kind !== 'union') throw new Error('expected union');
     expect(ir.variants.map((v) => v.pattern)).toEqual([
       { kind: 'key', key: 'text' },
-      { kind: 'key', key: 'image' }, // first key unique to the branch
+      { kind: 'key', key: 'image' },
     ]);
 
     const image = ir.variants[1]!.field;
     if (image.kind !== 'object') throw new Error('expected object branch');
-    expect(image.fields.map((f) => f.key)).toEqual(['image', 'alt']); // distinguishing key stays a field
+    expect(image.fields.map((f) => f.key)).toEqual(['image', 'alt']);
   });
 
   it('distinguishes a mixed union by type (pattern `type`), parsing each branch as itself', () => {
@@ -111,28 +110,21 @@ describe('parse — Zod schema → field model', () => {
       { kind: 'type', type: 'string' },
       { kind: 'type', type: 'array' },
     ]);
-    // A non-object branch is edited as itself, not forced into an object.
     expect(ir.variants[1]!.field.kind).toBe('string');
     expect(ir.variants[2]!.field).toMatchObject({ kind: 'array', item: { kind: 'string' } });
   });
 
   it('keeps a single open branch as the fallback, bailing only when two are ambiguous', () => {
-    // One branch carries a unique key (`b`), the other does not. The keyless
-    // branch is the single open catch-all: a `fallback` the widget selects when
-    // nothing else matches, so the union stays editable.
     const open = parse(z.union([z.object({ a: z.string(), b: z.string() }), z.object({ a: z.string() })]));
     expect(open.kind).toBe('union');
     if (open.kind !== 'union') throw new Error('expected union');
     expect(open.variants.map((v) => v.pattern)).toEqual([{ kind: 'key', key: 'b' }, { kind: 'fallback' }]);
 
-    // Two branches, neither tellable apart: genuinely ambiguous, raw editor.
     expect(parse(z.union([z.object({ a: z.string() }), z.object({ a: z.string() })])).kind).toBe('unknown');
     expect(parse(z.unknown()).kind).toBe('unknown');
   });
 
   it('flattens a nested union so its members are siblings of the outer branches', () => {
-    // A union of (a tagged op) and (a sub-union of primitives) flattens: the
-    // primitives become typed branches alongside the op, not one opaque member.
     const ir = parse(
       z.union([z.object({ $op: z.string() }), z.union([z.string(), z.number(), z.boolean()])]),
     );
@@ -147,9 +139,6 @@ describe('parse — Zod schema → field model', () => {
   });
 
   it('terminates flattening on a union that nests back into itself', () => {
-    // A self-referential union: flattening unwraps lazies, so the guard must
-    // stop rather than recurse forever. The self-branch is the back-edge (a
-    // `self` the fallback selects), the scalar branch keeps its type pattern.
     const Tree: z.ZodType = z.lazy(() => z.union([z.string(), Tree]));
     const ir = parse(Tree);
     expect(ir.kind).toBe('union');
@@ -169,8 +158,6 @@ describe('parse — Zod schema → field model', () => {
     });
     const ir = parse(Comment);
     if (ir.kind !== 'object') throw new Error('expected object');
-    // The object the cycle points back to is tagged, and expansion stops at a
-    // single `self` marker — finite where the schema is not.
     expect(ir.recursive).toBe(true);
     const replies = ir.fields.find((f) => f.key === 'replies')!.field;
     expect(replies).toMatchObject({ kind: 'array', item: { kind: 'self' } });

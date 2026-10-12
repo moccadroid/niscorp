@@ -3,10 +3,6 @@ import type { LayoutNode } from '@niscorp/nova';
 import { Nova, type NovaComponent } from '@niscorp/nova/adapters/react';
 import { isRecord } from '@compile/parse';
 
-// The preview component: receives the live documents and renders `layout` against
-// `data` with Nova, using the manifest's render functions. Registered under
-// PREVIEW by the surface; the plugin's mount binds the documents to it.
-
 const frame: CSSProperties = {
   padding: 24,
   borderRadius: 12,

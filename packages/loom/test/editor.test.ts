@@ -4,11 +4,8 @@ import { createComponentRegistry } from '@niscorp/nova';
 import { createLoomEditor } from '../src/index.js';
 import { prismPlugin } from '../src/plugins/prism/index.js';
 
-// The controller alone: it compiles each document's form and seeds it. Nothing
-// is drawn here, so the registry only has to say it has every component.
 const anyKit = (): ReturnType<typeof createComponentRegistry> => ({ ...createComponentRegistry(), has: () => true });
 
-// What the editor holds for one document of `schema`, straight after `open`.
 const opened = (schema: ZodType, seed?: unknown): unknown => {
   const editor = createLoomEditor({ registry: anyKit() });
   editor.loadPlugin({ name: 'test', documents: { doc: schema } });
@@ -21,8 +18,6 @@ const opened = (schema: ZodType, seed?: unknown): unknown => {
 const TUPLE = z.tuple([z.string(), z.number()]);
 const TEXT_OR_OBJECT = z.union([z.string(), z.object({ from: z.string() })]);
 
-// A document whose root is not an object is wrapped under a key of the editor's
-// own (it needs a path to bind to). Its seed is the bare value.
 const ACCEPTED: ReadonlyArray<readonly [string, ZodType, unknown]> = [
   ['a list', z.array(z.string()), ['stalls', 'circle']],
   ['a list of objects', z.array(z.object({ seat: z.string() })), [{ seat: 'C4' }, { seat: 'C5' }]],
@@ -33,8 +28,6 @@ const ACCEPTED: ReadonlyArray<readonly [string, ZodType, unknown]> = [
   ['a union on its string branch', TEXT_OR_OBJECT, 'half past seven'],
 ];
 
-// The same documents given something their schema refuses: the default opens,
-// as it did before a non-object seed was read at all.
 const REFUSED: ReadonlyArray<readonly [string, ZodType, unknown, unknown]> = [
   ['a list given a string', z.array(z.string()), 'oops', []],
   ['a list given numbers', z.array(z.string()), [1, 2], []],

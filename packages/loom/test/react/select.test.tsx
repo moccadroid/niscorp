@@ -6,11 +6,6 @@ import { LoomEditor } from '../../src/react/index.js';
 
 afterEach(cleanup);
 
-// What the README says of an enum in the built-in kit. An enum has no empty
-// value, so a new document leaves its key out; the select has no row for "none"
-// and displays its first option. `.default()` is what starts the two agreeing.
-// A change to the select changes that README passage with it.
-
 const formOf = (schema: ZodType) => {
   const onChange = vi.fn();
   render(<LoomEditor plugins={[{ name: 'test', documents: { value: schema } }]} artifact={{ type: 'test' }} onChange={onChange} />);

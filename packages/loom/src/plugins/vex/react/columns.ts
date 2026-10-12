@@ -2,10 +2,6 @@ import { getPath } from '@niscorp/nova';
 import { useLoomDocument } from '@react/hooks/document';
 import type { Catalog } from '../widgets.js';
 
-// The columns narrowed to the entities in the query's `from`, read from the live
-// document (`{ query: … }`, so the path is `query.from`). Returns the full list
-// when `from` is empty or names no known entity, so the pickers always offer
-// something.
 export const useScopedColumns = (catalog: Catalog): string[] => {
   const document = useLoomDocument();
   const from = document === undefined ? undefined : getPath(document, 'query.from');

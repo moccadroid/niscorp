@@ -4,15 +4,8 @@ import type { Shell } from '@niscorp/nova';
 import { attachValidation, createLoomEditor, parse, toNova } from '../src/index.js';
 import { collectModels, mountForm, permissiveRegistry } from './helpers.js';
 
-// WHAT `_errors` AND `validations` HOLD — DESIGN.md's "Validation", held to the
-// code. They are the messages a form shows, written after an edit, keyed by
-// field path. They are not the verdict on the document: each case below is a
-// document the schema refuses while the tree says less, or nothing. A change
-// to any of them changes that section with it.
-
 type Mounted = { shell: Shell; runtime: NonNullable<ReturnType<Shell['getRuntime']>> };
 
-// One edit through the same `ui:model` pipeline a control uses.
 const write = ({ shell, runtime }: Mounted, path: string, value: unknown): void => {
   const bound = collectModels(runtime.render()).find((model) => model.path === path);
   if (bound === undefined) throw new Error(`no control bound to ${path}`);
@@ -90,8 +83,6 @@ describe('attachValidation — what is written, and when', () => {
       }
     };
     walk(form.runtime.render());
-    // The root field gets its message; the list's own frame gets the subtree
-    // (not a string, so not drawn); the two rows' `name` frames get nothing.
     expect(handed).toEqual(['A night needs a play.', { '1': { name: 'A guest needs a name.' } }, undefined, undefined]);
   });
 });

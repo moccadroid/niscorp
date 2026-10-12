@@ -7,13 +7,6 @@ import { makePreview } from './preview.js';
 import { comparisonWidget, fieldPathWidget } from './operands.js';
 import { aggregateWidget, computeWidget } from './records.js';
 
-// @niscorp/loom/plugins/vex/react — the React surface for the Vex plugin.
-//
-// `vex(config)` assembles the core plugin with its components: the preview (which
-// runs `config.run`) and, when `config.db` is given, the field-path widget renders
-// (closures over the column catalog). The widget matchers live in the core; these
-// fill their roles.
-
 export type { VexPluginConfig, VexRunResult } from '../index.js';
 
 export const vex = (config: VexPluginConfig): LoomEditorPlugin => {

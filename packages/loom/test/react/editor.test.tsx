@@ -9,9 +9,6 @@ import { Roles } from '../../src/index.js';
 
 afterEach(cleanup);
 
-// Render the kit as a single-schema form through the editor (one document,
-// `value`), with the surface the kit tests use: schema / onChange / options.value
-// / components. The editor is the only form surface, so this stands in for it.
 const LoomForm: FC<{
   schema: ZodType;
   onChange?: (document: Record<string, unknown>) => void;
@@ -61,9 +58,6 @@ describe('LoomForm — pixels and round-trip', () => {
   });
 
   it('renders and round-trips under StrictMode (shell is not left disposed)', () => {
-    // StrictMode mounts, unmounts, then remounts. A shell created in render
-    // would be disposed by the first cleanup and never recreated, leaving a
-    // blank form. Creating it in the effect keeps the live shell paired.
     const onChange = vi.fn();
     render(
       <StrictMode>
@@ -75,8 +69,6 @@ describe('LoomForm — pixels and round-trip', () => {
   });
 
   it('keeps the document across parent re-renders with new inline props', () => {
-    // The shell owns the document; re-rendering with fresh inline `options`
-    // and `onChange` identities must not recreate it and wipe the edit.
     const { rerender } = render(<LoomForm schema={personSchema} onChange={() => {}} />);
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Ada' } });
     expect(screen.getByRole('textbox')).toHaveProperty('value', 'Ada');
@@ -108,7 +100,6 @@ describe('LoomForm — pixels and round-trip', () => {
     const onChange = vi.fn();
     render(<LoomForm schema={z.object({ tags: z.array(z.string()) })} onChange={onChange} />);
 
-    // Empty to start: no item inputs, just the add button.
     expect(screen.queryAllByRole('textbox')).toHaveLength(0);
 
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
@@ -119,12 +110,10 @@ describe('LoomForm — pixels and round-trip', () => {
     fireEvent.change(inputs[1]!, { target: { value: 'b' } });
     expect(onChange).toHaveBeenLastCalledWith({ tags: ['a', 'b'] });
 
-    // Reorder: open the first row's menu, Move down (0 → 1).
     fireEvent.click(screen.getAllByRole('button', { name: 'Actions' })[0]!);
     fireEvent.click(screen.getByText(/Move down/));
     expect(onChange).toHaveBeenLastCalledWith({ tags: ['b', 'a'] });
 
-    // Remove: open the first row's menu, Remove.
     fireEvent.click(screen.getAllByRole('button', { name: 'Actions' })[0]!);
     fireEvent.click(screen.getByText(/Remove/));
     expect(onChange).toHaveBeenLastCalledWith({ tags: ['a'] });
@@ -140,14 +129,10 @@ describe('LoomForm — pixels and round-trip', () => {
     });
     render(<LoomForm schema={schema} onChange={onChange} />);
 
-    // Starts as circle: one number field (radius).
     expect(screen.getAllByRole('spinbutton')).toHaveLength(1);
     fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '5' } });
     expect(onChange).toHaveBeenLastCalledWith({ shape: { kind: 'circle', radius: 5 } });
 
-    // Switch to rect: the document is reshaped and two fields (w, h) appear.
-    // Options are addressed by their id (the chooser tracks the active branch by
-    // its match, not by a label), so pick the rect option by its value.
     const rect = screen.getByRole('option', { name: 'rect' }) as HTMLOptionElement;
     fireEvent.change(screen.getByRole('combobox'), { target: { value: rect.value } });
     expect(onChange).toHaveBeenLastCalledWith({ shape: { kind: 'rect', w: 0, h: 0 } });
@@ -159,12 +144,10 @@ describe('LoomForm — pixels and round-trip', () => {
     const schema = z.object({
       node: z.union([z.string(), z.object({ component: z.string(), title: z.string() })]),
     });
-    // Loaded as the string branch: the widget matches the value's type and shows a text input.
     render(<LoomForm schema={schema} options={{ value: { node: 'hello' } }} onChange={onChange} />);
     expect(screen.getAllByRole('textbox')).toHaveLength(1);
     expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('hello');
 
-    // Switch to the object branch: reshaped to its defaults, two fields appear.
     const obj = screen.getByRole('option', { name: 'component' }) as HTMLOptionElement;
     fireEvent.change(screen.getByRole('combobox'), { target: { value: obj.value } });
     expect(onChange).toHaveBeenLastCalledWith({ node: { component: '', title: '' } });
@@ -194,8 +177,6 @@ describe('LoomForm — pixels and round-trip', () => {
     expect((onChange.mock.lastCall?.[0] as { layout: { children: { component: string }[] } }).layout.children.map((c) => c.component)).toEqual(['Stack', 'Text']);
   });
 
-  // A recursive layout union with two container variants (Box, Stack) and a leaf
-  // (Text) — exercises wrap / unwrap / children-preserving switch.
   const layoutUnion: z.ZodType = z.discriminatedUnion('component', [
     z.object({ component: z.literal('Box'), children: z.array(z.lazy(() => layoutUnion)) }),
     z.object({ component: z.literal('Stack'), children: z.array(z.lazy(() => layoutUnion)) }),
@@ -210,8 +191,8 @@ describe('LoomForm — pixels and round-trip', () => {
     render(<LoomForm schema={layoutSchema} options={{ value: seed }} onChange={onChange} />);
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Actions' })[0]!);
-    fireEvent.click(screen.getByRole('button', { name: /Wrap in/ })); // open the submenu
-    fireEvent.click(screen.getByRole('button', { name: 'Stack' })); // pick the variant
+    fireEvent.click(screen.getByRole('button', { name: /Wrap in/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Stack' }));
 
     const children = (onChange.mock.lastCall?.[0] as Layout).layout.children!;
     expect(children).toHaveLength(1);
@@ -231,12 +212,10 @@ describe('LoomForm — pixels and round-trip', () => {
     };
     render(<LoomForm schema={layoutSchema} options={{ value: seed }} onChange={onChange} />);
 
-    // Only the Stack's menu offers Unwrap (Text rows can't). Open menus until it
-    // appears, then unwrap — lifting its two children before 'c'.
     for (const kebab of screen.getAllByRole('button', { name: 'Actions' })) {
       fireEvent.click(kebab);
       if (screen.queryByText(/Unwrap/)) break;
-      fireEvent.click(kebab); // close and try the next
+      fireEvent.click(kebab);
     }
     fireEvent.click(screen.getByText(/Unwrap/));
 
@@ -249,7 +228,6 @@ describe('LoomForm — pixels and round-trip', () => {
     const seed = { layout: { component: 'Box', children: [{ component: 'Text', text: 'a' }, { component: 'Text', text: 'b' }] } };
     render(<LoomForm schema={layoutSchema} options={{ value: seed }} onChange={onChange} />);
 
-    // Root chooser is the first combobox; Stack is option index 1.
     fireEvent.change(screen.getAllByRole('combobox')[0]!, { target: { value: '1' } });
 
     const layout = (onChange.mock.lastCall?.[0] as Layout).layout;
@@ -263,7 +241,6 @@ describe('LoomForm — pixels and round-trip', () => {
     const seed = { layout: { component: 'Box', children: [{ component: 'Text', text: 'a' }] } };
     render(<LoomForm schema={layoutSchema} options={{ value: seed }} onChange={onChange} />);
 
-    // Switch root Box → Text (option index 2): no child-list, so confirm first.
     fireEvent.change(screen.getAllByRole('combobox')[0]!, { target: { value: '2' } });
 
     expect(confirm).toHaveBeenCalled();
@@ -274,7 +251,6 @@ describe('LoomForm — pixels and round-trip', () => {
   });
 
   it('edits a recursive union (a component tree) — nested nodes render at depth', () => {
-    // A node is a Box (with children) or a Text (leaf) — a Nova-layout shape.
     const node: z.ZodType = z.discriminatedUnion('component', [
       z.object({ component: z.literal('Box'), label: z.string(), children: z.array(z.lazy(() => node)) }),
       z.object({ component: z.literal('Text'), text: z.string() }),
@@ -285,15 +261,11 @@ describe('LoomForm — pixels and round-trip', () => {
     };
     render(<LoomForm schema={schema} options={{ value: seed }} />);
 
-    // The root Box's own field, and the nested Text child's field, both render —
-    // recursion resolves the template against the live data, at depth.
     expect(screen.getByDisplayValue('outer')).toBeTruthy();
     expect(screen.getByDisplayValue('hi')).toBeTruthy();
   });
 
   it('renders the same definition through a swapped kit', () => {
-    // Same compiled definition, a different component under the text role —
-    // the resolver seam. Identical schema, different pixels.
     const AltText: NovaComponent<{ value?: unknown }> = ({ value }) => (
       <input data-testid="alt-text" value={String(value ?? '')} readOnly />
     );
@@ -303,8 +275,6 @@ describe('LoomForm — pixels and round-trip', () => {
   });
 });
 
-// The editor reports its documents on mount. A host that saves on change stores
-// that first report — so a seed that is dropped is a stored document replaced.
 describe('LoomForm — a document whose root is not an object', () => {
   it('reports a list seed on mount and draws its items', () => {
     const onChange = vi.fn();
@@ -335,7 +305,6 @@ describe('LoomForm — a document whose root is not an object', () => {
   });
 });
 
-// A <select> speaks strings; an enum's values need not be strings.
 describe('LoomForm — an enum', () => {
   it('writes the number an option stands for, which the schema accepts', () => {
     const schema = z.object({ level: z.enum({ stalls: 1, circle: 2 }) });

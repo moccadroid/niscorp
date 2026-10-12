@@ -1,10 +1,6 @@
 import type { LayoutNode } from '@niscorp/nova';
 import { isRecord } from '@compile/parse';
 
-// The data document's editing layout — the nova plugin builds it from the data's
-// own keys (the freeform key→value map the layout binds to). One field per key,
-// each control bound to `$.<key>`, a writable path (the bare root `$` is not). A
-// string value edits as a text input; anything else as a JSON editor.
 const fieldFor = (key: string, value: unknown): LayoutNode => ({
   component: 'loom:field',
   props: { label: key },
