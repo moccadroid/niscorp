@@ -458,6 +458,12 @@ Everything below left moss. The last commit that still has all of it is `41fc894
 - A boot that throws stops everything it had started, and then throws what it threw. `close()` on a server that did boot runs the same list.
 - An app has nothing to change.
 
+**An interval Node cannot hold is off, and an operator gate that returns nothing goes on to the key check.**
+
+- `runtime.sessionRevalidateMs` is handed to a timer in two places: the poll of the generation pointer, and the pass that asks about each live connection's session. Node holds a timer's delay in 31 bits and cuts a longer one to 1 ms. So `Infinity` made the pointer be read without pause, and an interval above 2^31 − 1 ms (24.8 days) did that to both. Either is off now, as `0` is. **A deployment that set `Infinity` to mean "never" gets never.**
+- `runtime.operatorGate` may return nothing: its type says so, and it was documented as falling through to moss's key check. A gate that returned nothing without calling `next()` was answered `500`. It goes on to the key check now. A gate that returns a `Response` refuses, and one that awaits `next()` sees the outcome, as before.
+- An app has nothing to change.
+
 **The two settings of the transport hold wherever a server's socket is attached: `runtime.socketMaxMessageBytes`, `runtime.socketCompression`.**
 
 - New: `runtime.socketMaxMessageBytes`, the largest message a connection may send. It could be said to `attachSocket` (`maxMessageBytes`) and not to the runtime. Unset, the limit is the transport's 256 KiB, as before.

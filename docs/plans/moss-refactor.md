@@ -178,14 +178,6 @@ Nothing below is being worked on. Each needs its own go.
   It is handed to `AbortSignal.timeout`, which throws for anything but a whole
   number of milliseconds below 2^32, so `Infinity` or `1.5` fails every call
   out to an integration.
-- **`sessionRevalidateMs: Infinity` polls the generation pointer without
-  pause.** The socket reads `Infinity` as off, but `manifest/generation.ts`
-  hands the same number to `setInterval`, which Node cuts to 1 ms. The base
-  does the same.
-- **An `operatorGate` that returns nothing and does not call `next()` is
-  answered 500.** Its type allows returning nothing. `DOCS.md` says what the
-  code does; whether it should fall through to the key check is open. The base
-  does the same.
 - **Two fixes are held by no automated test**, because PGlite has one
   connection: tide's serial claim (an advisory lock taken inside a
   transaction), and two first registrations of one integration at once. Both

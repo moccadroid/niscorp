@@ -385,9 +385,10 @@ bounded by this number alone.
 `sessionRevalidateMs` is one clock for three things: a live socket's token is
 asked about again, an identity record older than it is resolved again when it
 is next read, and the generation pointer is polled
-([Many processes](#many-processes)). `0` turns off all three: a process then
-follows no `refresh`, `replaceActions` or approval of an integration that
-another process made.
+([Many processes](#many-processes)). `0` turns off all three, and so does
+`Infinity` or any interval above 2^31 − 1 ms (24.8 days), the longest a timer
+of Node's holds: a process then follows no `refresh`, `replaceActions` or
+approval of an integration that another process made.
 
 `operatorKey` is what a request under `/operator` presents as
 `x-operator-key`. A request with a wrong key is answered `404`, as every
@@ -397,8 +398,8 @@ runs before the key check. Returning a `Response` refuses the request.
 `await next()` lets it on to the key check and the routes, and `c.res` is
 then what they answered, so an audit records the outcome and not only the
 attempt. A gate adds a lock and removes none: the key check runs on every
-request it lets through. A gate that neither returns a `Response` nor calls
-`next()` lets nothing through, and the request is answered `500`.
+request it lets through. A gate that returns nothing has not refused: the
+request goes on to the key check, whether or not the gate called `next()`.
 
 `anonymousShellMax` — how many shells for nobody signed in may be alive at
 once. Somebody signed in has one shell however many terminals they open; nobody
