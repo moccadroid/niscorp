@@ -4,9 +4,6 @@ type Props = {
   name: string;
   description: string;
   children: ReactNode;
-  // On mobile the canvas is full-width with no adjacent panes, so
-  // the vertical borders that separate it from sidebar/inspector on
-  // desktop become stray lines against the viewport edge.
   isMobile?: boolean;
 };
 

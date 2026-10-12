@@ -5,26 +5,9 @@ import { resolveModel, type RecipeProvider } from '@showroom/modules/signal/open
 import { onScriptedReply, type ScriptedEvent } from '@showroom/lib/scripted-model/scripted-fetch';
 import { useSignalSetter } from '@showroom/modules/signal/runtime-context';
 
-// How to render structured (object) assistant responses: a
-// collapsible JSON viewer or a styled card (when the shape
-// matches CardData).
 export type StructuredRender = 'json' | 'card';
 import { JsonViewer } from '@showroom/chrome/json-viewer';
 import { CardRenderer, isCardData } from './card-renderer';
-
-// ═══════════════════════════════════════════════════════════
-// ChatView — the reusable conversation surface that powers
-// both the standalone Playground page and every recipe demo.
-//
-// Same UX everywhere: a thread of user/assistant turns, a
-// compose box, a Send button. Whatever recipe state was
-// passed in (system prompt, history, tools, schema) goes
-// straight into the signal call so the conversation continues
-// from the recipe's starting point.
-//
-// Snapshotted assistant turns are tagged with `__snapshot:
-// true` so the UI can render a small badge on them.
-// ═══════════════════════════════════════════════════════════
 
 const PROVIDER_DEFAULT_MODEL: Record<RecipeProvider, string> = {
   openai: 'gpt-4o-mini',
@@ -32,17 +15,9 @@ const PROVIDER_DEFAULT_MODEL: Record<RecipeProvider, string> = {
   groq: 'qwen/qwen3.8-27b',
 };
 
-// Conversation entries are messages plus a synthetic "snapshot"
-// flag for any turns that came from a pre-recorded snapshot
-// rather than a real API call.
 export type ChatMessage = Message & {
   __snapshot?: boolean;
-  // When the assistant returned a structured (object) response from a
-  // schema-constrained call, the parsed object is stashed here so the
-  // bubble can render it via JsonViewer / CardRenderer instead of text.
   __structured?: unknown;
-  // Who produced this turn when it was not a live model: a recording replayed,
-  // or the showroom's scripted model.
   __source?: ScriptedEvent['source'];
 };
 
@@ -54,26 +29,11 @@ export type ChatViewInitial = {
   tools?: Tool[];
   schema?: z.ZodTypeAny;
   options?: SignalOptions;
-  // Prompts offered as one-click chips. The scripted model (no API key) has
-  // an answer written for each; a live model answers them for real.
   suggestions?: readonly string[];
-  // Pre-filled compose box content (used when there's no snapshot — recipes
-  // typed an example input the user can edit and send).
   initialInput?: string;
-  // True when the user can change provider/model on the fly. Recipes lock
-  // these to whatever the recipe declared; the standalone playground unlocks.
   allowProviderChange?: boolean;
-  // How to render structured assistant responses (object .response).
   structuredRender?: StructuredRender;
-  // If the seeded snapshot's final assistant message was a structured
-  // (object) response, the parsed object goes here so the bubble can
-  // render it with JsonViewer / CardRenderer instead of stringified JSON.
   seededStructuredFinal?: unknown;
-  // Recipe mode: when provided, Send calls this function instead of
-  // building a signal chain inline. This is the `recipe.complete`
-  // from a RecipeModule — what you see in the Source tab is what runs.
-  // When absent, chat-view falls back to playground mode: it builds
-  // its own chain from provider/model/systemPrompt/tools/schema/options.
   complete?: (
     apiKey: string,
     input: string,
@@ -84,8 +44,6 @@ export type ChatViewInitial = {
 
 type Props = {
   initial: ChatViewInitial;
-  // Called whenever a new live response lands. Used by the recipe runner
-  // to publish meta into the inspector.
   onResult?: (result: SignalResult<unknown>) => void;
 };
 
@@ -129,7 +87,6 @@ const Bubble: FC<{ message: ChatMessage; structuredRender?: StructuredRender }> 
   const labelColor = ROLE_LABEL_COLOR[role] ?? '#6b7280';
   const isSnapshot = message.__snapshot === true;
 
-  // Tool result rows have a different shape — toolCallId + name.
   if (role === 'tool') {
     return (
       <div
@@ -214,8 +171,6 @@ const SnapshotBadge: FC = () => (
   </span>
 );
 
-// A turn the scripted model produced: a recording replayed, a scripted answer,
-// or a shape-only answer generated from the request's schema.
 const SourceBadge: FC<{ source: NonNullable<ChatMessage['__source']> }> = ({ source }) => (
   <span
     title={
@@ -244,14 +199,11 @@ export const ChatView: FC<Props> = ({ initial, onResult }) => {
 
   const allowProviderChange = initial.allowProviderChange ?? false;
 
-  // On story / initial change, reseed the chat from scratch.
   useEffect(() => {
     setProvider(initial.provider);
     setModel(initial.model ?? PROVIDER_DEFAULT_MODEL[initial.provider]);
     setSystemPrompt(initial.systemPrompt ?? '');
     const seeded: ChatMessage[] = (initial.history ?? []).map((m) => ({ ...m, __snapshot: true }));
-    // Tag the final assistant message with the parsed structured response,
-    // if there is one, so it renders as JsonViewer / Card instead of text.
     if (initial.seededStructuredFinal !== undefined) {
       for (let i = seeded.length - 1; i >= 0; i--) {
         const m = seeded[i];
@@ -267,9 +219,6 @@ export const ChatView: FC<Props> = ({ initial, onResult }) => {
     setLoading(false);
   }, [initial]);
 
-  // Publish the latest live result + loading state to the inspector tabs.
-  // We don't publish anything for snapshot-only state — the inspector
-  // displays setup info and the most recent live response only.
   const lastResultRef = useRef<SignalResult<unknown> | undefined>(undefined);
   useEffect(() => {
     setView({
@@ -299,15 +248,11 @@ export const ChatView: FC<Props> = ({ initial, onResult }) => {
     setLoading(true);
     setError(undefined);
 
-    // Strip the synthetic __snapshot field before sending to signal.
     const historyForApi: Message[] = conversation.map((m) => {
       const copy: Message = { ...m };
       return copy;
     });
 
-    // Recipe mode: invoke the authored recipe function. Its file IS
-    // the code that runs — nothing is duplicated here.
-    // Playground mode: build the chain inline from form state.
     const callPromise: Promise<SignalResult<unknown>> =
       initial.complete !== undefined
         ? initial.complete(key, text, historyForApi, client)
@@ -347,14 +292,12 @@ export const ChatView: FC<Props> = ({ initial, onResult }) => {
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
         setLoading(false);
-        // Roll back the user message so the user can edit and retry.
         setConversation((prev) => prev.slice(0, prev.length - 1));
         setComposeText(text);
       });
   };
 
   const handleClear = (): void => {
-    // Reset the conversation to the seeded initial state (snapshot if any).
     const seeded: ChatMessage[] = (initial.history ?? []).map((m) => ({ ...m, __snapshot: true }));
     if (initial.seededStructuredFinal !== undefined) {
       for (let i = seeded.length - 1; i >= 0; i--) {
@@ -572,8 +515,6 @@ export const ChatView: FC<Props> = ({ initial, onResult }) => {
     </div>
   );
 };
-
-// ─── styled helpers ────────────────────────────────────────
 
 const selectStyle = {
   padding: '8px 12px',

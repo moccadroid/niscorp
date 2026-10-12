@@ -3,23 +3,6 @@ import { asTool, defineAgent, defineTool, type SignalClient } from '@niscorp/cor
 import { registerScript, type ScriptedReply, type ScriptedRequest } from '@showroom/lib/scripted-model/scripted-fetch';
 import { normalize } from '@showroom/lib/scripted-model/scripts';
 
-// ═══════════════════════════════════════════════════════════
-// Acme Studio's desk — three agents and the studio they act on.
-//
-//   · the FRONT DESK answers members in the app, using the timetable, booking
-//     and the studio's policies as tools;
-//   · the INBOX READER turns members' emails into typed triage cards;
-//   · the BILLING AGENT fixes charges — and the front desk can hand it a job,
-//     because an agent can be another agent's tool.
-//
-// The agents, the tools, cortex's loop and signal's client are real. With no
-// API key, the model is the showroom's scripted provider: the scripts at the
-// bottom of this file are what it says, and each page labels it. With a key,
-// the same agents run against a live model.
-// ═══════════════════════════════════════════════════════════
-
-// ── the studio ──────────────────────────────────────────────────
-
 export type ClassRow = { name: string; time: string; instructor: string; spots: number };
 export type Charge = { id: string; member: string; amount: number; date: string; refunded: boolean };
 
@@ -53,8 +36,6 @@ const POLICIES: Record<string, string> = {
   cancellation: 'Cancel a class booking free of charge until 12 hours before it starts.',
   address: 'Acme Studio, the old tram depot, Rochusgasse 12, 1030 Vienna (U3 Rochusgasse).',
 };
-
-// ── the agents ──────────────────────────────────────────────────
 
 const deskTools = (studio: Studio, member: string) => [
   defineTool({
@@ -166,8 +147,6 @@ export const deskWithBilling = (studio: Studio, member: string, llm: SignalClien
     output: { schema: DeskAnswer },
   });
 
-// ── the emails ──────────────────────────────────────────────────
-
 export type Email = { id: string; from: string; subject: string; body: string };
 
 export const EMAILS: readonly Email[] = [
@@ -178,8 +157,6 @@ export const EMAILS: readonly Email[] = [
 ];
 
 export const emailPrompt = (e: Email): string => `From: ${e.from}\nSubject: ${e.subject}\n\n${e.body}`;
-
-// ── the scripts: what the scripted model says ───────────────────
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const rows = (v: unknown): Record<string, unknown>[] => (Array.isArray(v) ? v.filter(isRecord) : []);
@@ -240,8 +217,8 @@ const inboxReply = (request: ScriptedRequest): ScriptedReply => {
   const from = /From: (\w+)/.exec(request.lastUser)?.[1] ?? '';
   const card = TRIAGE[from];
   if (card === undefined) return envelope('Filed.', { member: from, intent: 'question', class: null, moveTo: null, urgent: false, summary: request.lastUser.slice(0, 80) });
-  // Mia's email is the messy one: the first answer invents a category the
-  // schema doesn't have. Cortex rejects it and asks again with the issues.
+  // The first answer to Mia's email holds an intent the schema does not have,
+  // so cortex rejects it and asks again with the issues.
   if (from === 'Mia' && request.correction === undefined) return envelope('Filed.', { ...card, intent: 'move' });
   return envelope('Filed.', card);
 };

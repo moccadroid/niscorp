@@ -3,18 +3,6 @@ import { ConfigSchema, evaluateSafe, type JsonObject } from '@niscorp/prism';
 import { Chip, Grid, INK, Panel } from '@showroom/chrome/stage/ui';
 import { Block, json, opsOf, shapeOf } from './parts';
 
-// ═══════════════════════════════════════════════════════════
-// PrismView — the canvas every Prism transform story renders through.
-//
-// Takes input + config, parses the config against the public ConfigSchema,
-// runs evaluateSafe, and lays the three out left to right: what comes in, the
-// config, what comes out (or why it was refused). All of it is the real
-// package, evaluated in this page on every render.
-//
-// Scoped to the showroom. Prism the library has no reason to ship a React
-// helper — this UI exists only to visualise a transform for humans.
-// ═══════════════════════════════════════════════════════════
-
 type Props = {
   input: JsonObject;
   config: unknown;

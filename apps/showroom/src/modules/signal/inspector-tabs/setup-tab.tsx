@@ -3,22 +3,12 @@ import { z } from 'zod';
 import type { Tool } from '@niscorp/signal';
 import type { Story } from '@showroom/modules/types';
 
-// ═══════════════════════════════════════════════════════════
-// Setup tab — the configuration the recipe was built with.
-// Shows provider/model/system prompt prominently, and reveals
-// the JSON schemas of any tools and the output schema. The
-// schemas are the most important part of a recipe and the
-// runner can't show them in the chat thread.
-// ═══════════════════════════════════════════════════════════
-
 const LEGEND =
   'Configuration for this recipe: provider, model, system prompt, tools (with input schemas), and output schema if any.';
 
 type Props = { story: Story };
 
-// Recipe demos spread provider/model/systemPrompt/tools/schema
-// directly onto the story via `...demo`. Pull them out with a
-// local view type — no cast chains further down.
+// A recipe's .story.ts spreads these fields onto the story with `...demo`.
 type RecipeView = {
   provider?: string;
   model?: string;
@@ -75,9 +65,6 @@ const Mono: FC<{ children: ReactNode }> = ({ children }) => (
   </pre>
 );
 
-// Convert a Zod schema to a JSON-Schema (draft-7) string for display.
-// Failures fall back to the schema's typeName so the user at least sees
-// something instead of "(zod schema)".
 const schemaToJsonString = (schema: z.ZodTypeAny): string => {
   try {
     const json = z.toJSONSchema(schema, { target: 'draft-7' });

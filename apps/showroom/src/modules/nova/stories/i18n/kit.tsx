@@ -5,24 +5,8 @@ import { Callout, INK, MONO } from '@showroom/chrome/stage/ui';
 import { Device, type DeviceSize } from '../../stage/device';
 import { LOCALES } from './books';
 
-// ═══════════════════════════════════════════════════════════
-// Shared furniture for the Language stories.
-//
-// NOTE WHAT IS NOT HERE: not one of these components looks up a phrase, holds a
-// book, or knows a second language exists. They receive props and draw them.
-// That is the whole claim of this section — the swap happens in nova's
-// RENDERER, so an adapter and the kit on top of it are downstream of it and
-// stay ignorant. Read them and check.
-// ═══════════════════════════════════════════════════════════
-
 const shell: React.CSSProperties = { fontFamily: 'system-ui, sans-serif', color: '#1f2937' };
 
-// ── the locale switcher ──────────────────────────────────────
-//
-// Plain React, outside the tree — it drives `shell.setPhrases`, which is how a
-// book is replaced on a shell that is already running. The instances on screen
-// were mounted in the old language and pick up the new one because a runtime
-// asks for the book at each render rather than holding one from spawn.
 export const LocaleBar = ({ shell: target, at, onPick }: { shell?: Shell; at: string; onPick?: (tag: string) => void }) => (
   <PickBar label="Reading in" options={LOCALES.map((locale) => ({ id: locale.tag, label: locale.label }))} at={at} onPick={(tag) => {
     target?.setPhrases(LOCALES.find((locale) => locale.tag === tag)?.book);
@@ -30,8 +14,6 @@ export const LocaleBar = ({ shell: target, at, onPick }: { shell?: Shell; at: st
   }} />
 );
 
-// The chip row every language story picks with — a locale here, a region tag
-// in the formatting story. Chrome, never part of the nova tree.
 export const PickBar = ({ label, options, at, onPick, mono = false }: { label: string; options: readonly { id: string; label: string }[]; at: string; onPick: (id: string) => void; mono?: boolean }) => (
   <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
     <span style={{ fontSize: 12, color: INK.soft, marginRight: 4 }}>{label}</span>
@@ -62,9 +44,6 @@ export const PickBar = ({ label, options, at, onPick, mono = false }: { label: s
   </div>
 );
 
-/** A note in the demo's own voice — chrome, never part of the nova tree, so
- *  nothing here is translated and that is the point of putting it beside the
- *  thing that is. */
 export const Aside = ({ children }: { children: React.ReactNode }) => (
   <div style={{ maxWidth: 620 }}>
     <Callout tone="accent" title="What to watch">
@@ -73,8 +52,6 @@ export const Aside = ({ children }: { children: React.ReactNode }) => (
   </div>
 );
 
-// The language stories' page: the picker above the device, the note below. The
-// device is the stage's phone (or tablet, for the two-card and table screens).
 export const LanguageStage = ({ bar, size = 'phone', status, aside, children }: { bar?: React.ReactNode; size?: DeviceSize; status?: string; aside?: React.ReactNode; children: React.ReactNode }) => (
   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, width: '100%' }}>
     {bar}
@@ -85,12 +62,8 @@ export const LanguageStage = ({ bar, size = 'phone', status, aside, children }: 
   </div>
 );
 
-// ── nova components ──────────────────────────────────────────
-
 const CardProps = z
   .object({
-    // `title` is in nova's DEFAULT_PHRASE_KEYS. `name` is deliberately not, and
-    // never will be — it is where a person's name lives.
     title: z.string().optional(),
     name: z.string().optional(),
     caption: z.string().optional(),
@@ -109,8 +82,6 @@ Card.meta = { description: 'A titled card. `title` and `caption` are prose; `nam
 
 const TableProps = z
   .object({
-    // A SPEC prop: the repeated structure of the screen, as data. `label` sits
-    // two levels down, which is why the swap matches at any depth.
     columns: z.array(z.object({ label: z.string(), key: z.string() }).strict()),
     rows: z.array(z.record(z.string(), z.unknown())),
     empty: z.string().optional(),
@@ -150,8 +121,6 @@ Table.meta = { description: 'Rows against a column spec. Column labels are prose
 
 const ChipsProps = z
   .object({
-    // An array of bare strings under a prose key: every element inherits the
-    // key's proseness, so `['Yes','No']` translates without becoming objects.
     options: z.array(z.string()),
   })
   .strict();
@@ -171,8 +140,6 @@ const StatProps = z
   .object({
     label: z.string(),
     value: z.string().optional(),
-    // A COUNTED phrase lands here: `{ phrase, slots }`, closed by the renderer.
-    // `caption` is a default prose key, which is what makes it a pattern site.
     caption: z.string().optional(),
   })
   .strict();

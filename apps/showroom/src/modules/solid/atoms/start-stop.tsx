@@ -1,9 +1,6 @@
 import type { FC } from 'react';
 import { Btn, Chip, type Tone } from '@showroom/chrome/stage/ui';
 
-// Start / Stop for a scripted stream, with its state as a chip. The stream is
-// a recorded payload replayed on a timer — labelled so on every story.
-
 export type DemoState = 'idle' | 'streaming' | 'done' | 'error';
 
 const STATE: Record<DemoState, { tone: Tone; label: string }> = {

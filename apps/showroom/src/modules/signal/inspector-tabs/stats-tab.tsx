@@ -1,12 +1,6 @@
 import type { FC } from 'react';
 import { useSignalView } from '@showroom/modules/signal/runtime-context';
 
-// ═══════════════════════════════════════════════════════════
-// Stats tab — meta info from the most recent live response.
-// Shows tokens, latency, model, retries, tool calls. Empty
-// state explains the user needs to send a message first.
-// ═══════════════════════════════════════════════════════════
-
 const LEGEND =
   'Token usage, latency, retries, and tool call counts from the most recent assistant response. Updates after every message you send.';
 

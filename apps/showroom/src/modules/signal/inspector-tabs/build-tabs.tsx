@@ -3,10 +3,6 @@ import { SetupTab } from './setup-tab';
 import { StatsTab } from './stats-tab';
 import { StreamSetupTab } from './stream-setup-tab';
 
-// Chrome provides the Source tab for every story. Signal adds:
-//   - Setup (recipe stories): provider/model/systemPrompt/tools/schema
-//   - Setup (stream stories): provider/model/systemPrompt/userInput/schema/initial
-//   - Stats (recipe stories only): last-run stats from SignalRuntimeProvider
 export const buildInspectorTabs = (story: Story): InspectorTabDef[] => {
   if (story.kind === 'stream') {
     return [

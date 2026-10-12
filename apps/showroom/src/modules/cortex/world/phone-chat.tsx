@@ -2,11 +2,6 @@ import { useState, type FC } from 'react';
 import { PhoneFrame, type PhoneTone } from '@showroom/chrome/stage/phone';
 import { INK } from '@showroom/chrome/stage/ui';
 
-// ═══════════════════════════════════════════════════════════
-// A chat inside a phone — the member's side of a cortex agent.
-// Bubbles, a "typing…" state, one-tap prompts and a text box.
-// ═══════════════════════════════════════════════════════════
-
 export type ChatLine = { from: 'me' | 'them' | 'note'; text: string };
 
 export const PhoneChat: FC<{

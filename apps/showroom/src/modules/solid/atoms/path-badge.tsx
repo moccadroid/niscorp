@@ -1,9 +1,6 @@
 import type { FC } from 'react';
 import { Chip } from '@showroom/chrome/stage/ui';
 
-// Path status badge — reflects a `stream.select(path).on/.onFinal`
-// subscription. Amber while streaming, green once finalized.
-
 export type PathStatus = {
   path: string;
   value: unknown;

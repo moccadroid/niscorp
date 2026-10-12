@@ -9,8 +9,6 @@ import { Delegation } from './pages/delegation';
 import delegationSrc from './pages/delegation?raw';
 import { story as preview } from './stories/preview.story';
 
-// Every page runs anywhere: with no API key the model is the showroom's scripted
-// provider (labelled on each page); with a key, the same agents run live.
 const page = (id: string, name: string, description: string, Demo: Story['Demo'], source: string): Story => ({
   id,
   name,

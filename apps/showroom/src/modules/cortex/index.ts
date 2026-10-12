@@ -6,10 +6,6 @@ import { Intro } from './pages/intro';
 import readmeContent from '../../../../../packages/cortex/README.md?raw';
 import designContent from '../../../../../packages/cortex/DESIGN.md?raw';
 
-// Cortex. Every page runs the real loop; with no API key the model is the
-// showroom's scripted provider (lib/scripted-model), labelled on each page, and
-// with a key the same agents run live. `preview` needs no model at all.
-
 const docs: readonly DocPage[] = [
   { id: 'start', title: 'What cortex is for', render: () => createElement(Intro) },
   { id: 'readme', title: 'README', content: readmeContent },

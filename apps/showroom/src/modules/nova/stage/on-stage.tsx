@@ -4,20 +4,6 @@ import { Chip, INK } from '@showroom/chrome/stage/ui';
 import type { NovaStory, NovaStoryKind } from '../story-types';
 import { Device, type DeviceSize } from './device';
 
-// ═══════════════════════════════════════════════════════════
-// Every nova story, on a device.
-//
-// Applied once, where the stories are registered: `onStage` swaps a story's
-// Demo for one that draws the original Demo inside a phone (or a tablet) on
-// the stage's light page, with a one-line caption under it. The story object
-// keeps everything else — `shell`, `layout`, `data`, `source` — so the
-// Structure, Data and Registry tabs read exactly what they read before.
-//
-// `self` is for the few demos that carry controls of their own (the language
-// switchers, the sign-in toggle): they draw their device themselves, so the
-// control sits beside the screen instead of inside it.
-// ═══════════════════════════════════════════════════════════
-
 export type StageFrame = DeviceSize | 'self';
 
 const CAPTION: Record<NovaStoryKind, string> = {
@@ -62,8 +48,6 @@ const StoryStage: FC<{ story: NovaStory; frame: StageFrame; Demo: FC }> = ({ sto
   </div>
 );
 
-// Wrap one story. The original Demo is captured, not re-exported — the Source
-// tab still shows the demo file, which is the code that matters.
 export const onStage = (story: NovaStory, frame: StageFrame): NovaStory => {
   const Original = story.Demo;
   const Staged: FC = () => <StoryStage story={story} frame={frame} Demo={Original} />;

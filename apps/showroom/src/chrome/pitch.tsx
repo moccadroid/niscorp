@@ -1,13 +1,5 @@
 import type { FC } from 'react';
 
-// ═══════════════════════════════════════════════════════════
-// Pitch — "why this matters" callout above a demo.
-//
-// Shared chrome primitive. Any module's demo can drop one at
-// the top of its content to set up the story's motivation
-// before the interactive part loads.
-// ═══════════════════════════════════════════════════════════
-
 type Props = {
   headline: string;
   body: string;

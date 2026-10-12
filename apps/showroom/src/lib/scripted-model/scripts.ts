@@ -1,9 +1,5 @@
 import { registerScript, type ScriptedReply, type ScriptedRequest } from './scripted-fetch';
 
-// ═══════════════════════════════════════════════════════════
-// Helpers pages use to teach the scripted provider what to say.
-// ═══════════════════════════════════════════════════════════
-
 export const normalize = (s: string): string =>
   s
     .toLowerCase()
@@ -23,10 +19,6 @@ const parse = (v: unknown): unknown => {
   }
 };
 
-/**
- * Replay a recorded conversation: when the visitor sends a message that was in
- * it, answer with what the live model actually said next — tool calls included.
- */
 export const replayRecorded = (id: string, history: readonly HistoryMessage[]): void =>
   registerScript({
     id,
@@ -46,7 +38,6 @@ export const replayRecorded = (id: string, history: readonly HistoryMessage[]): 
 
 export type Answer = { ask: string; reply: ScriptedReply | ((request: ScriptedRequest) => ScriptedReply) };
 
-/** Answers written for a page — replies to the prompts it offers as “Try:” chips. */
 export const answerWith = (id: string, answers: readonly Answer[]): void =>
   registerScript({
     id,

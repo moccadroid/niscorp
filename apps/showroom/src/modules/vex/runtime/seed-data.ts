@@ -1,19 +1,7 @@
 import embeddings from './product-embeddings.json';
 
-// ═══════════════════════════════════════════════════════════
-// Browser seed — a faithful port of @niscorp/vex's dev seed
-// (packages/vex/scripts/seed.ts) as plain data + SQL builders the
-// browser PGlite instance runs at boot. Deterministic UUIDs and
-// values, so shape hashes (and thus prewarmed cache entries) are
-// stable across runs.
-//
-// This is the showroom's own copy of the *data*; it deliberately
-// does not import anything from the vex package internals.
-// ═══════════════════════════════════════════════════════════
-
 const PRODUCT_EMBEDDINGS = embeddings as number[][];
 
-// Deterministic UUIDs — 00000000-0000-4000-8000-{prefix}{padded index}
 const uuid = (prefix: string, index: number): string =>
   `00000000-0000-4000-8000-${prefix}${String(index).padStart(4, '0')}`;
 
@@ -26,22 +14,16 @@ const reviewUuid = (i: number): string => uuid('0e000000', i);
 const tagUuid = (i: number): string => uuid('7a000000', i);
 const accountUuid = (i: number): string => uuid('ac000000', i);
 
-// The three tenant accounts orders are partitioned across; the scope
-// demos switch between these.
 export const ACCOUNTS: readonly string[] = [accountUuid(0), accountUuid(1), accountUuid(2)];
 
-// Stable rows the mutation demos target (ids are deterministic, so the
-// scenarios can name them). DEMO_ORDER belongs to ACCOUNTS[0] — the pin
-// demo flips the account switcher against it.
-export const DEMO_CUSTOMER_ID = customerUuid(0); // Alice Johnson
-export const DEMO_PRODUCT_ID = productUuid(0); // iPhone 16 Pro
-export const DEMO_ORDER_ID = orderUuid(0); // Account A's order
-export const DEMO_AIRPODS_ID = productUuid(6); // AirPods Pro 3 — insertEach line item
-export const DEMO_KINDLE_ID = productUuid(9); // Kindle Paperwhite — insertEach line item
+// DEMO_ORDER_ID belongs to ACCOUNTS[0]: the pin demo flips the account switcher against it.
+export const DEMO_CUSTOMER_ID = customerUuid(0);
+export const DEMO_PRODUCT_ID = productUuid(0);
+export const DEMO_ORDER_ID = orderUuid(0);
+export const DEMO_AIRPODS_ID = productUuid(6);
+export const DEMO_KINDLE_ID = productUuid(9);
 
 const sql = (s: string): string => s.replace(/'/g, "''");
-
-// ─── DDL ─────────────────────────────────────────────────────
 
 export const DDL = `
 CREATE EXTENSION IF NOT EXISTS vector;
@@ -126,8 +108,6 @@ CREATE INDEX IF NOT EXISTS idx_products_active        ON products(active);
 CREATE INDEX IF NOT EXISTS idx_products_name_trgm     ON products USING gin (name gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_products_embedding_hnsw ON products USING hnsw (embedding vector_cosine_ops);
 `;
-
-// ─── Data ────────────────────────────────────────────────────
 
 const CUSTOMER_NAMES = [
   'Alice Johnson', 'Bob Smith', 'Carol Williams', 'David Brown', 'Eve Davis',
@@ -219,8 +199,6 @@ const ORDER_STATUSES = ['pending', 'processing', 'shipped', 'delivered', 'delive
 const iso = (i: number, base: number): string => new Date(2025, 0, 1 + i * base).toISOString();
 
 const values = (rows: string[]): string => rows.join(',\n');
-
-// ─── Insert builder ──────────────────────────────────────────
 
 export const buildSeedSql = (): string => {
   const customers = CUSTOMER_NAMES.map((name, i) => {

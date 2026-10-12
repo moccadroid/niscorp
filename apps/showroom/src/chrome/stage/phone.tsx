@@ -1,10 +1,5 @@
 import type { FC, ReactNode } from 'react';
 
-// ═══════════════════════════════════════════════════════════
-// A phone — the frame every "what does a person actually see" demo draws in.
-// The ring says how to read what is inside: green is right, red is wrong.
-// ═══════════════════════════════════════════════════════════
-
 export type PhoneTone = 'ok' | 'bad' | 'plain' | 'accent';
 
 const RING: Record<PhoneTone, string> = { ok: '#10b981', bad: '#ef4444', plain: '#e5e7eb', accent: '#6366f1' };
@@ -39,8 +34,6 @@ export const PhoneFrame: FC<{ tone?: PhoneTone; width?: number; status?: ReactNo
   </div>
 );
 
-// Nova's lax renderer marks a component it cannot find instead of throwing; this
-// is how that marker looks inside a phone.
 export const PhoneStyles: FC = () => (
   <style>{`
     .stage-phone [data-nova-error] {

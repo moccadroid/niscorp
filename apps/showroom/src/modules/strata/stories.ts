@@ -9,9 +9,6 @@ import gateSrc from './pages/gate?raw';
 import { Tables } from './pages/tables';
 import tablesSrc from './pages/tables?raw';
 
-// Four pages, read in order — the landing page ("What strata is for", a doc)
-// links them. Each is full-width: the migrations and documents are on the page
-// itself, so there is no source pane beside it.
 export const stories: readonly Story[] = [
   {
     id: 'time-machine',

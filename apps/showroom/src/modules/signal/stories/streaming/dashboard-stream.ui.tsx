@@ -1,12 +1,6 @@
 import type { FC } from 'react';
 import type { Dashboard } from './dashboard-stream.demo';
 
-// ═══════════════════════════════════════════════════════════
-// Renderer for the Dashboard shape. Pure presentational — fed
-// by the live `current` value off the solid stream. Whatever
-// fields are empty (still streaming) show placeholder dashes.
-// ═══════════════════════════════════════════════════════════
-
 const SEVERITY_COLORS: Record<string, { bg: string; border: string; text: string }> = {
   critical: { bg: '#fef2f2', border: '#fecaca', text: '#991b1b' },
   warning: { bg: '#fffbeb', border: '#fde68a', text: '#92400e' },

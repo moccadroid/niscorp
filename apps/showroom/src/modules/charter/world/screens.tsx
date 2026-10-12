@@ -5,15 +5,6 @@ import type { Charter } from '@niscorp/charter';
 import { PhoneFrame, type PhoneTone } from '@showroom/chrome/stage/phone';
 import { getStudio, grantedActions, landingOf, SCREEN_READ, SCREENS, type Answer, type Person } from './studio';
 
-// ═══════════════════════════════════════════════════════════
-// The studio app, as one person sees it — a phone.
-//
-// Every screen is a nova layout (JSON) rendered by a small kit. The home screen
-// is not authored per role: it lists the screens this person's charter
-// resolves to, so a screen they are not granted is not greyed out — it is not
-// there. The data on every screen is their own answer from vex.
-// ═══════════════════════════════════════════════════════════
-
 const Open = createContext<(id: string) => void>(() => undefined);
 
 type Tile = { id: string; title: string; icon: string };
@@ -90,8 +81,6 @@ const Pill: NovaComponent = ({ children }: { children?: ReactNode }) => (
 
 const KIT: Record<string, NovaComponent> = { Stack, Title, Note, Tiles, List, Stat, Pill };
 
-// ── the screens, as layouts ─────────────────────────────────────
-
 export const LAYOUTS: Readonly<Record<string, LayoutNode>> = {
   welcome: {
     component: 'Stack',
@@ -167,8 +156,6 @@ const SETTINGS_ROWS = [
 ];
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
-
-// ── the phone ───────────────────────────────────────────────────
 
 export const StudioPhone: FC<{ person: Person; charter: Charter; tone?: PhoneTone; width?: number; ringFor?: (granted: ReadonlySet<string>) => PhoneTone }> = ({
   person,

@@ -7,14 +7,8 @@ import { createOpenAIClient } from '@showroom/modules/signal/openai-client';
 import { getLiveConfig } from './live-config';
 import { wrapForDebug } from './live-debug';
 
-// ═══════════════════════════════════════════════════════════
-// Live mode — turns a stored provider key into the engine's
-// generateDsl / mapToShape hooks using @niscorp/vex/agent (the same
-// reference agents the dev server wires). Provider + model come from
-// live-config (UI-driven, persisted). Hooks are built lazily per call
-// so a key/model change takes effect without a reboot, and so canned
-// (cache-hit) runs never touch any of this.
-// ═══════════════════════════════════════════════════════════
+// The hooks build their model client per call, so a key or model change takes
+// effect without a reboot and a canned (cache-hit) run builds none.
 
 export { hasGenerationKey, availableProviders } from './live-config';
 
@@ -37,10 +31,8 @@ const buildLlm = (): SignalClient => {
 const isPlainObject = (v: unknown): v is Record<string, unknown> =>
   v !== null && typeof v === 'object' && !Array.isArray(v);
 
-// The query agent only emits flat `entity.field` selections and rejects
-// (cannotSatisfy) a shape that nests objects. Nesting is the mapper's
-// job, so for GENERATION we hand the agent a flattened shape (leaf keys
-// only); the engine still passes the original nested shape to mapToShape.
+// The query agent rejects (cannotSatisfy) a shape that nests objects, so generation
+// gets the leaf keys only; the engine still passes the nested shape to mapToShape.
 const flattenShape = (shape: unknown): unknown => {
   const flattenObj = (obj: Record<string, unknown>): Record<string, unknown> => {
     const out: Record<string, unknown> = {};
@@ -55,7 +47,6 @@ const flattenShape = (shape: unknown): unknown => {
   return isPlainObject(shape) ? flattenObj(shape) : shape;
 };
 
-// Engine-level hook: builds the real Cortex query agent on demand.
 export const makeGenerateDsl = (queryJsonSchema: object): GenerateDsl => {
   return (request, schema: DatabaseSchema, caller) => {
     const generate = createQueryDsl({ llm: buildLlm(), queryJsonSchema });
@@ -63,9 +54,6 @@ export const makeGenerateDsl = (queryJsonSchema: object): GenerateDsl => {
   };
 };
 
-// Engine-level hook: builds Prism's mapping agent on demand. Rows that
-// already are the shape skip it — vex's mapper returns the identity for
-// them without a model call (vex/agent rowsFitShape).
 export const makeMapToShape = (): MapToShape => {
   return async (rows, shape) => createShapeMapper(buildLlm())(rows, shape);
 };

@@ -3,7 +3,6 @@ import type { InspectorTabDef } from '@showroom/modules/types';
 
 type Props = {
   tabs: InspectorTabDef[];
-  // When true, render as a fixed overlay drawer from the right.
   isMobile?: boolean;
   onClose?: () => void;
 };

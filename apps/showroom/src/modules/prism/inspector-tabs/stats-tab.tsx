@@ -5,11 +5,6 @@ import type { PrismStory } from '@showroom/modules/prism/story-types';
 import { useCompiledIr } from '@showroom/modules/prism/use-compiled-ir';
 import { Block } from '@showroom/modules/prism/parts';
 
-// ═══════════════════════════════════════════════════════════
-// Stats — what the real compiler says about this story's config: how many
-// nodes, how deep, which operators, which source paths it reads.
-// ═══════════════════════════════════════════════════════════
-
 const LEGEND = 'What the compiler found in this config: how many nodes, how deep, which operators, and which paths of the input it reads.';
 
 type Props = { story: PrismStory };

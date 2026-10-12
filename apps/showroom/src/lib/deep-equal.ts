@@ -1,6 +1,3 @@
-// Library-agnostic deep equality. No casts, no `any`.
-// Used by the prism module's evaluator to compare actual vs expected output.
-
 const isObject = (v: unknown): v is Record<string, unknown> =>
   v !== null && typeof v === 'object' && !Array.isArray(v);
 

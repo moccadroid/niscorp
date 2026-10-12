@@ -3,20 +3,6 @@ import { createPglitePool } from '@niscorp/vex/pglite';
 import { createMemoryCache, createPostgresAdapter, createQueryEngine, seedCache, type QueryEngine, type SeedEntry } from '@niscorp/vex';
 import { makeGenerateDsl, makeMapToShape } from '../runtime/live';
 
-// ═══════════════════════════════════════════════════════════
-// Acme Studio's database, and the questions its owner asks it.
-//
-// Real: Postgres in the page (PGlite), a real vex engine over it, the DSL →
-// SQL compiler, the Prism mappings, the cache. Every answer on the landing
-// page is this engine replaying an entry by its fingerprint.
-//
-// Authored here: the studio's rows, and the DSL of each seeded question. In an
-// app that DSL is written once — by a model the first time somebody asks, or by
-// hand — and stored under a name. These were written by hand. When a model key
-// is set in Signal → Settings the page can also ask the question fresh, and then
-// the DSL really comes from the model (makeGenerateDsl, the showroom's live hook).
-// ═══════════════════════════════════════════════════════════
-
 const DDL = `
 CREATE TABLE members (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL);
 CREATE TABLE subscriptions (member_id text PRIMARY KEY REFERENCES members(id), plan text NOT NULL, price_cents integer NOT NULL);
@@ -59,13 +45,9 @@ const SEED = [
   `INSERT INTO bookings (id, class_id, member_id) VALUES ${BOOKINGS.map(([c, m], i) => `('b${i + 1}', ${q(c)}, ${q(m)})`).join(', ')};`,
 ].join('\n');
 
-// ── Olivia's questions ──────────────────────────────────────────
-
 export type Question = {
   entry: SeedEntry & { intent: string; shape: unknown };
-  // Context the replay carries — the values, never the query.
   context: Record<string, unknown>;
-  // The phone's title for the answer.
   screen: string;
 };
 
@@ -91,7 +73,6 @@ export const QUESTIONS: readonly Question[] = [
         groupBy: ['classes.name', 'classes.starts_at', 'classes.capacity', 'classes.slot'],
         sort: [{ field: 'classes.slot', dir: 'asc' }],
       },
-      // The SQL answers numbers; the phone wants "5 of 6".
       mapping: {
         $map: {
           over: { $ref: '$.result' },
@@ -141,11 +122,8 @@ export const QUESTIONS: readonly Question[] = [
 
 export const CLASS_NAMES: readonly string[] = CLASSES.map(([, name]) => name);
 
-// ── the studio's server ─────────────────────────────────────────
-
 export type Asked = {
   ok: boolean;
-  // Where the DSL came from on THIS ask.
   source: 'replayed' | 'generated';
   dsl?: unknown;
   sql?: string;
@@ -164,7 +142,6 @@ const boot = async (): Promise<Studio> => {
   await db.exec(DDL);
   await db.exec(SEED);
 
-  // What happened during the current ask, caught off the engine's own events.
   let seen: { dsl?: unknown; sql?: string; rowCount?: number } = {};
   const adapter = createPostgresAdapter({ pool: createPglitePool(db) });
   const probe = createQueryEngine({ adapter });
@@ -172,7 +149,6 @@ const boot = async (): Promise<Studio> => {
   const engine: QueryEngine = createQueryEngine({
     adapter,
     cache: createMemoryCache(),
-    // Only called when a question is asked fresh with a model key present.
     generateDsl: makeGenerateDsl(probe.getDslSchema()),
     mapToShape: makeMapToShape(),
     onEvent: (e) => {
@@ -196,14 +172,12 @@ const boot = async (): Promise<Studio> => {
       const { entry } = question;
       try {
         if (live) {
-          // A fresh name, emptied first: the engine has never seen this
-          // question, so it must generate — the model writes the DSL.
+          // A fresh name, emptied first: the engine generates for a fingerprint it has never seen.
           const fingerprint = `${entry.fingerprint}/fresh`;
           await engine.cache.delete(fingerprint);
           const res = await engine.execute({ fingerprint, intent: entry.intent, shape: entry.shape, context });
           return { ok: true, source: 'generated', ...seen, answer: res.result, ms: performance.now() - started };
         }
-        // The call an app makes: a name and the values. No query on the wire.
         const res = await engine.execute({ fingerprint: entry.fingerprint, context });
         return { ok: true, source: 'replayed', ...seen, dsl: seen.dsl ?? entry.dsl, answer: res.result, ms: performance.now() - started };
       } catch (err) {

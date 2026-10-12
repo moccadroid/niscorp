@@ -3,20 +3,6 @@ import { routeResponse } from '@niscorp/signal';
 import type { Capabilities, StepRequest, StepResult, StepStreamEvent, SignalDescription } from '@niscorp/signal';
 import { defineAgent, defineTool, type SignalClient } from '@niscorp/cortex';
 
-// ═══════════════════════════════════════════════════════════
-// The studio assistant — an agent with three tools, one of which moves money.
-//
-// Everything cortex does here is real: the tool loop, the policy gate, the
-// suspension, approve / approve-with-edits / deny, the observations, the
-// envelope. What is scripted is the MODEL: its replies are written in advance
-// (below) and branch on what cortex tells it, so the page runs with no API key.
-// The scripted provider is the same shape as cortex's own test double, and it
-// routes every reply through signal's real wire router.
-//
-// The script makes one mistake on purpose — a real one: it passes the refund in
-// cents to a tool that takes euros, and proposes €890 for an €89 class.
-// ═══════════════════════════════════════════════════════════
-
 export type Refund = { at: number; to: string; amount: number };
 export type Email = { at: number; to: string; subject: string; body: string };
 export type World = { refunds: Refund[]; emails: Email[] };
@@ -73,8 +59,6 @@ export const assistantFor = (world: World, gated: boolean) =>
 
 export const REQUEST = 'Ada couldn’t make Monday’s Power hour — we cancelled it. Refund her and let her know.';
 
-// ── the scripted model ──────────────────────────────────────────
-
 type Call = { id: string; name: string; args: unknown };
 type Turn = { text?: string; calls: Call[] };
 
@@ -85,7 +69,6 @@ const lastToolReply = (request: StepRequest): string | undefined => {
 };
 const toolCallsSoFar = (request: StepRequest): number => request.messages.filter((m) => m.role === 'tool').length;
 
-// What the model says next, given everything cortex has told it so far.
 const nextTurn = (request: StepRequest): Turn => {
   const step = toolCallsSoFar(request);
   const reply = lastToolReply(request) ?? '';
@@ -93,7 +76,7 @@ const nextTurn = (request: StepRequest): Turn => {
     return { text: 'Let me find Ada’s booking first.', calls: [{ id: 'c1', name: 'find_booking', args: { member: 'Ada', class: 'Power hour' } }] };
   }
   if (step === 1) {
-    // THE SLIP: the booking says paid_cents 8900 / paid_eur 89 — the model reads the wrong one.
+    // The script's deliberate mistake: the booking says paid_eur 89.
     return { text: 'Found it — she paid for Power hour. Refunding her now.', calls: [{ id: 'c2', name: 'issue_refund', args: { booking_id: 'b-2291', amount: 890 } }] };
   }
   if (step === 2) {
@@ -113,9 +96,7 @@ const nextTurn = (request: StepRequest): Turn => {
     try {
       const parsed: unknown = JSON.parse(reply);
       if (typeof parsed === 'object' && parsed !== null && 'refunded_eur' in parsed && typeof parsed.refunded_eur === 'number') amount = parsed.refunded_eur;
-    } catch {
-      // keep the amount it asked for
-    }
+    } catch {}
     return {
       text: 'Refund done. Letting Ada know.',
       calls: [
@@ -132,9 +113,7 @@ const nextTurn = (request: StepRequest): Turn => {
   try {
     const parsed: unknown = JSON.parse(typeof refundReply === 'string' ? refundReply : '');
     if (typeof parsed === 'object' && parsed !== null && 'refunded_eur' in parsed && typeof parsed.refunded_eur === 'number') refunded = parsed.refunded_eur;
-  } catch {
-    // no refund recorded
-  }
+  } catch {}
   return {
     calls: [{ id: 'c5', name: 'respond', args: { response: `Done — refunded €${refunded.toFixed(2)} to Ada and emailed her.`, data: { refunded_eur: refunded, emailed: true } } }],
   };
@@ -182,7 +161,6 @@ export const scriptedModel = (): SignalClient => {
       const turn = nextTurn(request);
       return {
         [Symbol.asyncIterator]: async function* (): AsyncGenerator<StepStreamEvent> {
-          // Stream the words at a readable pace, the way a model would.
           for (const word of (turn.text ?? '').split(/(?<= )/)) {
             await pause(35);
             yield { type: 'text', text: word };

@@ -1,10 +1,5 @@
 import type { CSSProperties, FC, ReactNode } from 'react';
 
-// ═══════════════════════════════════════════════════════════
-// The strata pages' own parts: page frame, panels, buttons, chips and a
-// JSON diff. Showroom chrome is light; these follow it.
-// ═══════════════════════════════════════════════════════════
-
 export const INK = {
   text: '#111827',
   soft: '#4b5563',
@@ -170,11 +165,6 @@ export const Mono: FC<{ children: ReactNode }> = ({ children }) => (
   <code style={{ fontFamily: MONO, fontSize: '0.92em', background: INK.wash, border: `1px solid ${INK.line}`, borderRadius: 5, padding: '0 4px' }}>{children}</code>
 );
 
-// ── JSON diff ───────────────────────────────────────────────────
-// Two documents, pretty-printed, each line knowing the path it prints. A path
-// only one side has, or whose value differs, is marked on that side — so a
-// renamed key shows as red on the left and green on the right.
-
 type JsonLine = { depth: number; text: string; path: string };
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
@@ -276,8 +266,6 @@ export const JsonDiff: FC<{ before: unknown; after: unknown; beforeTitle: ReactN
   );
 };
 
-// A stamp, readable: { "nisc.nova": 1, "acme.kit": 2 } → nova 1 · prism 1 · kit 2.
-// nisc's own grammars first, then the app's — whatever order the keys arrived in.
 export const stampText = (stamp: Readonly<Record<string, number>>): string =>
   Object.entries(stamp)
     .sort(([a], [b]) => Number(!a.startsWith('nisc.')) - Number(!b.startsWith('nisc.')) || a.localeCompare(b))

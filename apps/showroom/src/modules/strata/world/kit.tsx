@@ -4,15 +4,6 @@ import { Nova, type NovaComponent } from '@niscorp/nova/adapters/react';
 import { PhoneFrame, PhoneStyles, type PhoneTone } from '@showroom/chrome/stage/phone';
 import { RELEASES } from './acme';
 
-// ═══════════════════════════════════════════════════════════
-// Acme's component kit, release by release — the renderer each release ships.
-//
-// Components are configured, never styled, and an unknown prop is ignored:
-// exactly the nisc rule, and exactly why an old document drawn by a new kit
-// breaks QUIETLY. A `label` the kit no longer reads is not an error — it is a
-// blank button. That quiet is what strata exists to prevent.
-// ═══════════════════════════════════════════════════════════
-
 type Kids = { children?: ReactNode };
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
 
@@ -54,8 +45,6 @@ const pill = (filled: boolean) => ({
   alignSelf: 'flex-start',
 });
 
-// The one component every release changes. Release 0 reads `label` and `tone`;
-// 1 reads `text` and `tone`; 2 and on read `text` and `variant`.
 const buttonFor = (release: number): NovaComponent => {
   const ButtonAt: NovaComponent = (props: Record<string, unknown>) => {
     const words = str(release >= 1 ? props['text'] : props['label']);
@@ -87,8 +76,6 @@ const Box: NovaComponent = ({ children }: Kids) => (
   </div>
 );
 
-// Release 3 renamed Card to Tile: the kit before it knows only Card, the kit
-// after it only Tile. Same look — the name is the whole change.
 const kitAt = (release: number): Record<string, NovaComponent> => ({
   Stack,
   Text,
@@ -108,7 +95,6 @@ const kitFor = (release: number): Record<string, NovaComponent> => {
 
 const isLayout = (v: unknown): v is LayoutNode => typeof v === 'object' && v !== null && !Array.isArray(v);
 
-// A phone showing one action document, drawn by one release's kit.
 export const Phone: FC<{
   document: Record<string, unknown>;
   release: number;

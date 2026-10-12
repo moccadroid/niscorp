@@ -2,17 +2,6 @@ import { evaluate } from '@niscorp/prism';
 import { createMemoryStore, createTide, zonedParts, type ReflexInput, type Tide } from '@niscorp/tide';
 import { readLedger, type Snapshot } from './ledger';
 
-// ═══════════════════════════════════════════════════════════
-// Acme Studio's nightly job — run by cron, and run by tide.
-//
-// The same job, the same members, the same nights, the same accidents. The cron
-// side is a SIMULATION of what cron does, written here and labelled as such: it
-// wakes every minute, compares the local wall clock to 02:30, and runs the job;
-// a crashed job is restarted from the top by its supervisor; while the server is
-// down, nothing ticks. The tide side is the real engine and its memory store,
-// driven the way a host drives it — including a real crash and takeover.
-// ═══════════════════════════════════════════════════════════
-
 export const TZ = 'Europe/Vienna';
 export const AT = '02:30';
 const MINUTE = 60_000;
@@ -38,11 +27,9 @@ export type Scenario = {
   label: string;
   story: string;
   job: Job;
-  // Local calendar dates of the five nights shown, YYYY-MM-DD.
+  // Local calendar dates, YYYY-MM-DD.
   nights: readonly string[];
-  // Nights the job crashes on — once, after this many emails have gone out.
   crash?: { night: string; after: number };
-  // Nights the server is down for (it comes back the morning after the last).
   down?: readonly string[];
   cron: string;
   tide: string;
@@ -103,7 +90,6 @@ export const SCENARIOS: readonly Scenario[] = [
 
 export type Delivery = { member: string; night: string; at: number; late?: boolean; dropped?: boolean };
 export type LogLine = { night: string; text: string; tone: 'ok' | 'bad' | 'warn' | 'idle' };
-// `ledger` is tide's own rows after the week — the cron side has none to show.
 export type Side = { deliveries: readonly Delivery[]; log: readonly LogLine[]; ledger?: Snapshot };
 
 const localDate = (at: number): string => {
@@ -115,7 +101,6 @@ const localTime = (at: number): string => {
   return `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}`;
 };
 
-// The span a scenario covers, in UTC: noon before the first night to noon after the last.
 const spanOf = (s: Scenario): { from: number; to: number } => {
   const first = s.nights[0] ?? '2026-03-02';
   const last = s.nights[s.nights.length - 1] ?? first;
@@ -127,12 +112,9 @@ const isDown = (s: Scenario, at: number): boolean => {
   if (downs.length === 0) return false;
   const first = downs[0] ?? '';
   const last = downs[downs.length - 1] ?? '';
-  // Down from the evening before the first night; back just after midnight UTC
-  // the day after the last — before that night's run is due.
+  // Back at midnight UTC the day after the last night down, before that night's run is due.
   return at >= Date.parse(`${first}T00:00:00Z`) - 6 * HOUR && at < Date.parse(`${last}T00:00:00Z`) + DAY;
 };
-
-// ── cron, simulated ─────────────────────────────────────────────
 
 export const runCron = (s: Scenario): Side => {
   const deliveries: Delivery[] = [];
@@ -169,8 +151,6 @@ export const runCron = (s: Scenario): Side => {
   return { deliveries, log };
 };
 
-// ── tide, for real ──────────────────────────────────────────────
-
 const reflexFor = (s: Scenario): ReflexInput => ({
   id: s.job.id,
   intent: `Send ${s.job.what} every night at ${AT}.`,
@@ -190,8 +170,6 @@ export const runTide = async (s: Scenario): Promise<Side> => {
   const deliveries: Delivery[] = [];
   const log: LogLine[] = [];
   const store = createMemoryStore();
-  // The mail provider honours an idempotency key: a second send with a key it
-  // has seen is accepted and dropped.
   const seenKeys = new Set<string>();
   let crashing = s.crash !== undefined;
 
@@ -211,8 +189,7 @@ export const runTide = async (s: Scenario): Promise<Side> => {
             seenKeys.add(ctx.taskKey);
             const due = Date.parse(`${night}T00:00:00Z`);
             deliveries.push({ member, night, at: ctx.now, dropped, late: ctx.now - due > DAY / 2 });
-            // The crash: the provider has accepted Grace's email, and the
-            // process dies before it can record that.
+            // The crash: the provider has accepted the email, and the process dies before recording it.
             if (crashing && s.crash !== undefined && night === s.crash.night && member === MEMBERS[s.crash.after - 1]?.id) {
               crashing = false;
               return new Promise(() => undefined);

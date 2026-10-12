@@ -2,19 +2,11 @@ import { createContext, useContext, useEffect, useState, type FC, type ReactNode
 import { getVexRuntime, type VexRuntime } from './runtime/boot';
 import type { LlmExchange } from './runtime/live-debug';
 
-// ═══════════════════════════════════════════════════════════
-// Vex runtime context — boots the PGlite-backed engine once and
-// shares it with every story, plus a "current run" view the
-// inspector tabs read (DSL / SQL / cache meta) without prop drilling.
-// Mirrors the signal/cortex runtime-context pattern.
-// ═══════════════════════════════════════════════════════════
-
 export type BootState =
   | { status: 'booting' }
   | { status: 'ready'; runtime: VexRuntime }
   | { status: 'error'; error: string };
 
-// What the last run produced — surfaced to the inspector tabs.
 export type RunView = {
   scenarioId: string;
   intent: string;
@@ -25,7 +17,6 @@ export type RunView = {
   rows?: unknown[];
   warnings?: string[];
   cacheHit?: boolean;
-  // A model wrote the DSL on this run (live mode).
   live?: boolean;
   fingerprint?: string;
   scopeClause?: string;

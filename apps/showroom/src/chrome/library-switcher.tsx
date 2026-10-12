@@ -9,11 +9,7 @@ type Props = {
   libraries: Library[];
   activeId: string;
   onSelect: (id: string) => void;
-  // Mobile-only: render a hamburger on the left that toggles the
-  // sidebar drawer. Hidden on desktop where the sidebar is always
-  // visible.
   onMenuClick?: () => void;
-  // Mobile-only: render an inspector toggle on the right.
   onInspectorClick?: () => void;
 };
 

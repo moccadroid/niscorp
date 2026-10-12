@@ -4,10 +4,7 @@ import type { Story } from '@showroom/modules/types';
 
 type Props = { story: Story };
 
-// Stream demos spread provider/model/systemPrompt/userInput/schema/
-// initial directly onto the story via `...demo`. This view type pulls
-// them out for local use; the inspector trusts that the story came
-// from the signal module so the cast is safe.
+// A stream's .story.ts spreads these fields onto the story with `...demo`.
 type StreamView = {
   provider?: string;
   model?: string;

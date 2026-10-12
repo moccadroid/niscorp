@@ -2,22 +2,6 @@ import { evaluate } from '@niscorp/prism';
 import { createMemoryStore, createTide, type EffectRegistry, type PreviewReport, type ReflexInput, type Tide } from '@niscorp/tide';
 import { readLedger, type Snapshot } from './ledger';
 
-// ═══════════════════════════════════════════════════════════
-// The first-of-the-month billing run — as a script, and as three reflexes.
-//
-// The payment gateway is a stand-in written here, with two real-world
-// behaviours: one card declines, and the gateway has a bad few minutes for one
-// charge. It honours an idempotency key, as real gateways do.
-//
-// The script is a SIMULATION, labelled as such: charge everyone in a loop,
-// catch errors per member, and if anything errored exit non-zero so the
-// scheduler retries the job — the ordinary shape of a billing cron. A decline
-// is an error there, because payment SDKs throw on one.
-//
-// The tide side is the real engine: one reflex charges, two more react to the
-// charge rows it writes — a receipt, or a card-declined email.
-// ═══════════════════════════════════════════════════════════
-
 const MINUTE = 60_000;
 
 export const PLANS = [
@@ -37,8 +21,6 @@ export const RUN_AT = Date.UTC(2026, 3, 1, 1, 0);
 
 export type Charge = { at: number; member: string; amount: number; outcome: 'succeeded' | 'declined' | 'error'; replay?: boolean; by: 'script' | 'tide' };
 export type Mail = { at: number; member: string; kind: 'receipt' | 'declined' };
-
-// ── the gateway ─────────────────────────────────────────────────
 
 const makeGateway = (by: Charge['by']) => {
   const log: Charge[] = [];
@@ -65,9 +47,6 @@ const makeGateway = (by: Charge['by']) => {
   return { log, charge };
 };
 
-// ── the script, simulated ───────────────────────────────────────
-
-// Attempts at 03:00, 03:10 and 03:30 — the scheduler's retry of a failed job.
 export const SCRIPT_ATTEMPTS = [RUN_AT, RUN_AT + 10 * MINUTE, RUN_AT + 30 * MINUTE] as const;
 
 export type ScriptState = { charges: readonly Charge[]; lines: readonly { at: number; text: string; bad: boolean }[] };
@@ -89,8 +68,6 @@ export const runScript = (until: number): ScriptState => {
   }
   return { charges: gateway.log, lines };
 };
-
-// ── tide, for real ──────────────────────────────────────────────
 
 export const CHARGE: ReflexInput = {
   id: 'billing.charge',
@@ -122,7 +99,6 @@ export type TideState = {
   mails: readonly Mail[];
   tasks: readonly { reflex: string; unit: string; state: string; attempt: number; error?: string }[];
   nextDue?: number;
-  // tide's own rows — facts, runs, tasks — for the Ledger panel.
   ledger: Snapshot;
 };
 
@@ -141,11 +117,9 @@ export const createBillingTide = async (): Promise<BillingTide> => {
         const rec = recordOf(input);
         const member = str(rec['member']);
         const amount = Number(rec['amount'] ?? 0);
-        // The task key goes to the gateway as its idempotency key.
         const outcome = gateway.charge(member, amount, ctx.now, ctx.taskKey);
-        // A gateway fault is the only thing worth trying again: throw.
+        // Only a gateway fault throws, so only it is tried again; a decline is an answer.
         if (outcome === 'error') throw new Error('503 from the gateway');
-        // A decline is an answer, not a failure: record it and return.
         ctx.emit({ kind: 'write', entity: 'charges', op: 'insert', row: { member, status: outcome }, at: ctx.now });
         return { status: outcome };
       },

@@ -1,18 +1,6 @@
 import { createMemoryStore, createTide, zonedToUtc, type EffectRegistry, type ReflexInput, type Tide } from '@niscorp/tide';
 import { drain, hhmm, HOUR, MINUTE, readLedger, recordOf, str, transform, TZ, type Snapshot } from './ledger';
 
-// ═══════════════════════════════════════════════════════════
-// One booking, a chain of events — Power hour, Monday 2 March, 12:15.
-//
-// REAL: seven reflexes and the engine that chains them. There is no run body
-// anywhere: every hop — a confirmation, a timer, a reminder, a promotion off
-// the waitlist — is a fact that wakes the next reflex, and each is a row.
-// SIMULATED, and labelled on the page: the studio's booking table (a few rows
-// in memory — the host writes them and pushes a fact for each write, which is
-// what moss's vex bridge does), and the push service, which records what it
-// was handed instead of sending it.
-// ═══════════════════════════════════════════════════════════
-
 export const CLASS = { id: 'power', name: 'Power hour', date: '2026-03-02', capacity: 4 } as const;
 export const STARTS = zonedToUtc({ year: 2026, month: 3, day: 2 }, 12, 15, TZ);
 export const ENDS = STARTS + HOUR;
@@ -22,8 +10,6 @@ export const AFTER = ENDS + 5 * MINUTE;
 
 export const PEOPLE: Record<string, string> = { ada: 'Ada', alan: 'Alan', grace: 'Grace', mia: 'Mia', ruth: 'Ruth' };
 export const SEEDED = ['ada', 'alan', 'grace'] as const;
-
-// ── the reflexes ────────────────────────────────────────────────
 
 const bookingInsert = { fact: { entity: 'bookings', op: 'insert' as const } };
 const stillBooked = { query: { table: 'bookings', member: { $ref: '$.fact.payload.member' } }, mode: 'each' as const, unitKey: 'member' };
@@ -45,8 +31,6 @@ export const REFLEXES: readonly ReflexInput[] = [
     id: 'class.reminder',
     intent: 'Two hours before, remind the member — if they are still booked.',
     on: { fact: { signal: 'class.soon' } },
-    // Reality is the cancellation token: a member who cancelled selects no
-    // row, and zero rows is an ordinary, recorded outcome.
     select: stillBooked,
     effect: { name: 'push.send', input: { to: { $ref: '$.row.member' }, kind: 'reminder' } },
   },
@@ -77,8 +61,6 @@ export const REFLEXES: readonly ReflexInput[] = [
     effect: { name: 'push.send', input: { to: { $ref: '$.row.member' }, kind: 'waitlisted', position: { $ref: '$.row.position' } } },
   },
 ];
-
-// ── the world ───────────────────────────────────────────────────
 
 export type PushKind = 'confirmed' | 'promoted' | 'reminder' | 'feedback' | 'cancelled' | 'waitlisted';
 export type Push = { at: number; member: string; kind: PushKind; text: string; reflex: string };
@@ -121,8 +103,6 @@ export const createChain = async (): Promise<Chain> => {
         return { pushed: kind };
       },
     },
-    // Timers are data: two DELAYED facts, each with a dedupe key, so booking
-    // twice cannot set two reminders. `emit` commits with this attempt only.
     'timers.set': {
       run: (input, ctx) => {
         const member = str(recordOf(input)['member']);
@@ -131,8 +111,6 @@ export const createChain = async (): Promise<Chain> => {
         return { reminder: hhmm(TWO_HOURS_BEFORE), feedback: hhmm(ENDS) };
       },
     },
-    // The promotion is a WRITE: move the member from the waitlist to the
-    // bookings, and say so as a fact — which is what wakes the confirmation.
     'booking.promote': {
       writes: ['bookings'],
       run: (input, ctx) => {
@@ -159,8 +137,6 @@ export const createChain = async (): Promise<Chain> => {
   });
   await tide.load(REFLEXES, { at: OPENS });
 
-  // Every write the studio makes goes through here: change the table, then
-  // push the fact. (Under moss the vex bridge does this at the write itself.)
   const write = async (entity: 'bookings' | 'waitlist', op: 'insert' | 'delete', r: Record<string, unknown>, at: number): Promise<void> => {
     await tide.ingest({ kind: 'write', entity, op, row: r, at });
   };
@@ -194,8 +170,6 @@ export const createChain = async (): Promise<Chain> => {
       return state();
     },
     clockTo: async (at) => {
-      // Time only moves forward — and every instant in between is visited,
-      // the way a driver wakes at `nextDue`.
       if (at > now) {
         for (let guard = 0; guard < 50; guard += 1) {
           const due = await tide.nextDue(now);

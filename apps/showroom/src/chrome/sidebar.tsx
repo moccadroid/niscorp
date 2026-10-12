@@ -20,9 +20,6 @@ type Props = {
   kindOrder: string[];
   kindLabels: Record<string, string>;
   docs?: SidebarDoc[];
-  // When true, render as a fixed overlay drawer from the left with
-  // a close button. Parent controls visibility via its own state +
-  // backdrop; this component just renders as a drawer.
   isMobile?: boolean;
   onClose?: () => void;
 };
@@ -79,9 +76,6 @@ const DESKTOP_STYLE: CSSProperties = {
   fontSize: 13,
 };
 
-// On mobile, the sidebar is an overlay: fixed position, full height,
-// slightly narrower than the viewport, z-index above the canvas.
-// The backdrop is rendered by the parent.
 const MOBILE_STYLE: CSSProperties = {
   position: 'fixed',
   top: 0,

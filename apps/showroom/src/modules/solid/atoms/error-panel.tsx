@@ -2,9 +2,6 @@ import type { FC } from 'react';
 import type { StreamError } from '@niscorp/solid';
 import { INK, MONO } from '@showroom/chrome/stage/ui';
 
-// Renders a `stream.onError(...)` log. Shape comes from solid's
-// `StreamError` type: `{ phase, path, expected, received, message }`.
-
 export const ErrorPanel: FC<{ errors: StreamError[] }> = ({ errors }) =>
   errors.length === 0 ? null : (
     <div style={{ borderRadius: 12, padding: '10px 14px', background: INK.warnWash, border: '1px solid #fde68a', maxHeight: 220, overflow: 'auto' }}>

@@ -8,8 +8,6 @@ type Props = {
   onStop: () => void;
 };
 
-// Start / Streaming… / Restart button (label tracks state) plus
-// a Stop button that appears only while streaming.
 export const StreamControls: FC<Props> = ({ state, onStart, onStop }) => (
   <div style={{ display: 'flex', gap: 12, alignItems: 'center', margin: '0 0 16px 0' }}>
     <button

@@ -1,9 +1,5 @@
 import { KIND_CACHING, type VexScenario } from './scenarios';
 
-// Builds the teaching snippet shown in the chrome Source tab: how a
-// caller would issue this exact request against a wired engine. The read
-// snippets show the FINGERPRINT round-trip the runtime actually performs —
-// generate once, mint, replay — because that is how Vex is used.
 export const buildSource = (s: VexScenario): string => {
   const json = (v: unknown): string => JSON.stringify(v, null, 2).replace(/\n/g, '\n  ');
   const fp = `vex-demo/${s.id}`;
@@ -22,7 +18,6 @@ export const buildSource = (s: VexScenario): string => {
 
   if (s.mode === 'mutate') {
     if (s.mutation === undefined) {
-      // The raw-body refusal demo: the request IS the lesson.
       return [
         '// Writes are REPLAY-ONLY. A mutation definition is not a request',
         '// shape — the wire knows { fingerprint, context } and nothing else,',
@@ -71,8 +66,6 @@ export const buildSource = (s: VexScenario): string => {
     '});',
   ];
 
-  // "Then lock it" — the production posture. Seed, lock the endpoint,
-  // replay works, ad-hoc generation is refused.
   if (s.locked === true) {
     return [
       "import { handleQuery } from '@niscorp/vex';",
@@ -93,8 +86,6 @@ export const buildSource = (s: VexScenario): string => {
     ].join('\n');
   }
 
-  // "The published endpoint" — seed once, then the wire carries only the
-  // fingerprint. The whole caching category rides this pattern.
   if (s.kind === KIND_CACHING) {
     return [
       "import { createQueryEngine } from '@niscorp/vex';",
@@ -112,8 +103,6 @@ export const buildSource = (s: VexScenario): string => {
     ].join('\n');
   }
 
-  // A feature demo — show the fingerprint round-trip every read performs:
-  // generate + mint once, then replay by fingerprint.
   const ctx = s.context !== undefined ? `\n  context: ${json(s.context)},` : '';
   const replayCtx = s.context !== undefined ? ', context: { /* … */ }' : '';
   return [

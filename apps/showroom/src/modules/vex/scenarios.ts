@@ -1,33 +1,14 @@
 import type { Query, ScopeValues, MutationDefinition } from '@niscorp/vex';
 import { ACCOUNTS, DEMO_CUSTOMER_ID, DEMO_PRODUCT_ID, DEMO_ORDER_ID, DEMO_AIRPODS_ID, DEMO_KINDLE_ID } from './runtime/seed-data';
 
-// ═══════════════════════════════════════════════════════════
-// Canned scenarios — each is a real request (intent + shape) plus
-// the DSL an agent would generate for it. The DSL is seeded into the
-// cache under a named fingerprint (`vex-demo/<id>`), so every story
-// replays the genuine deterministic pipeline (resolve → scope →
-// analyze → compile → execute) against PGlite with ZERO LLM calls —
-// the fingerprint-replay hot path Vex is built around. With a key
-// set, the same stories can also be re-run live.
-// ═══════════════════════════════════════════════════════════
-
 export type ScenarioMode =
-  // Seed the DSL into the cache and call engine.execute — shows the
-  // full pipeline, rows, and the cache HIT badge.
   | 'execute'
-  // Call engine.compile directly — used for analyzer demos where the
-  // query is meant to be rejected before any SQL runs.
   | 'compile'
-  // Seed a `kind: 'mutation'` entry and drive the request through the
-  // REAL wire dispatch (handleQuery): one wire shape, { fingerprint,
-  // context } — the entry's kind picks the write pipeline. Writes are
-  // replay-only, so there is no live/LLM variant to toggle.
   | 'mutate';
 
 export type EditableContext = {
   key: string;
   label: string;
-  // Preset values the visualizer offers; the first is the default.
   options: string[];
 };
 
@@ -35,35 +16,18 @@ export type VexScenario = {
   id: string;
   name: string;
   description: string;
-  kind: string; // sidebar grouping
+  kind: string;
   mode: ScenarioMode;
   intent: string;
   shape: unknown;
-  // The read DSL (execute/compile modes). Absent on 'mutate' — a mutation
-  // definition is a different artifact and it NEVER travels.
   dsl?: Query;
-  // The mutation definition seeded under this scenario's fingerprint
-  // ('mutate' mode). What an app seeds at boot; the wire never carries it.
   mutation?: MutationDefinition;
-  // Raw wire-body override ('mutate' mode): POST exactly this instead of
-  // { fingerprint, context } — used to demo the shapes the wire REFUSES.
   body?: unknown;
   context?: Record<string, unknown>;
-  // When set, the run uses scope and the visualizer shows an account
-  // switcher bound to this scope key.
   scopeKey?: string;
   scope?: ScopeValues;
-  // Context keys the visualizer exposes as editable controls (drives
-  // the "same fingerprint, different values → cache HIT" demo).
   editable?: EditableContext[];
-  // Replay-only endpoint ('execute'): canned replays the seeded fingerprint
-  // (works, zero LLM); toggling Live attempts ad-hoc generation and is
-  // REFUSED with `locked` — the "seed it, then lock it" story.
   locked?: boolean;
-  // Optional Prism mapping config (applied per row as the engine wraps
-  // each row in { result: row }). Present only when the requested shape
-  // genuinely differs from the SQL rows — e.g. nesting. Compiled to IR
-  // and cached, so canned mapping runs with zero LLM.
   mapping?: unknown;
   note?: string;
 };
@@ -77,8 +41,6 @@ export const KIND_MUTATIONS = 'mutations';
 export const KIND_SAFETY = 'safety';
 export const KIND_CACHING = 'caching';
 
-// The one mutation definition two scenarios share: the create demo replays
-// it whole; the missing-context demo replays it with a hole.
 const ORDER_CREATE: MutationDefinition = {
   op: 'insert',
   table: 'orders',
@@ -89,7 +51,6 @@ const ORDER_CREATE: MutationDefinition = {
 };
 
 export const scenarios: readonly VexScenario[] = [
-  // ─── Basics ────────────────────────────────────────────────
   {
     id: 'top-customers',
     name: 'Top spenders',
@@ -122,7 +83,6 @@ export const scenarios: readonly VexScenario[] = [
     },
   },
 
-  // ─── The DSL ───────────────────────────────────────────────
   {
     id: 'filter-and',
     name: 'Compound filter',
@@ -306,7 +266,6 @@ export const scenarios: readonly VexScenario[] = [
     },
   },
 
-  // ─── Shaping (map to shape) ────────────────────────────────
   {
     id: 'shape-rename',
     name: 'Rename fields',
@@ -401,7 +360,6 @@ export const scenarios: readonly VexScenario[] = [
     },
   },
 
-  // ─── Search ────────────────────────────────────────────────
   {
     id: 'semantic-search',
     name: 'Semantic search',
@@ -453,7 +411,6 @@ export const scenarios: readonly VexScenario[] = [
     ],
   },
 
-  // ─── Scope ─────────────────────────────────────────────────
   {
     id: 'scope-orders',
     name: 'Row-level scope',
@@ -473,7 +430,6 @@ export const scenarios: readonly VexScenario[] = [
     scope: { accountId: ACCOUNTS[0] },
   },
 
-  // ─── Safety ────────────────────────────────────────────────
   {
     id: 'analyzer-warning',
     name: 'Unindexed warning',
@@ -506,7 +462,6 @@ export const scenarios: readonly VexScenario[] = [
     },
   },
 
-  // ─── Caching ───────────────────────────────────────────────
   {
     id: 'fingerprint-replay',
     name: 'The published endpoint',
@@ -550,13 +505,6 @@ export const scenarios: readonly VexScenario[] = [
     ],
   },
 
-  // ─── Mutations ─────────────────────────────────────────────
-  // Writes are REPLAY-ONLY: definitions are seeded server-side (an app
-  // seeds them at boot; here the scenario seeds on first run) and are
-  // NEVER generated and NEVER travel. The wire carries the same shape a
-  // read replay does — { fingerprint, context } — and the entry's kind
-  // picks the write pipeline. These run through the real handler, so the
-  // refusal demos show genuine wire statuses.
   {
     id: 'mutation-create',
     name: 'Create (replay-only)',

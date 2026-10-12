@@ -6,11 +6,6 @@ import { Intro } from './pages/intro';
 import readmeContent from '../../../../../packages/strata/README.md?raw';
 import designContent from '../../../../../packages/strata/DESIGN.md?raw';
 
-// Strata keeps every document an app ever wrote readable by the code that runs
-// today — and refuses one written by code newer than the reader. The pages follow
-// one made-up app, Acme Studio, through a year of releases; everything else on
-// them is real: nova's and Prism's grammars, strata's upgrader, gate and runner,
-// Postgres in the page (PGlite), and the corpus of real screens the lab apps captured.
 const docs: readonly DocPage[] = [
   { id: 'start', title: 'What strata is for', render: () => createElement(Intro) },
   { id: 'readme', title: 'README', content: readmeContent },

@@ -2,12 +2,6 @@ import { useMemo, useState, type FC } from 'react';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-typescript';
 
-// ═══════════════════════════════════════════════════════════
-// CodeView — reusable syntax-highlighted TypeScript pane with
-// a Copy button. Used by every library's Snippet tab.
-// Library-agnostic; lives in chrome/.
-// ═══════════════════════════════════════════════════════════
-
 type Props = {
   legend: string;
   source: string;

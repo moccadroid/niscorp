@@ -1,12 +1,6 @@
 import type { FC } from 'react';
 import { ChatView } from '@showroom/modules/signal/chat/chat-view';
 
-// ═══════════════════════════════════════════════════════════
-// PlaygroundPane — freeform interactive chat. Same ChatView
-// as recipes use, but with provider/model unlocked and no
-// pre-seeded conversation.
-// ═══════════════════════════════════════════════════════════
-
 export const PlaygroundPane: FC = () => (
   <div>
     <div

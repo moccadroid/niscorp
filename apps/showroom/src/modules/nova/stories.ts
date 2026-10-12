@@ -1,14 +1,12 @@
 import type { NovaStory } from './story-types';
 import { onStage, type StageFrame } from './stage/on-stage';
 
-// Bindings
 import { story as bindingsConditional } from './stories/bindings/conditional.story';
 import { story as bindingsMissingPaths } from './stories/bindings/missing-paths.story';
 import { story as bindingsNestedConditionals } from './stories/bindings/nested-conditionals.story';
 import { story as bindingsPath } from './stories/bindings/path.story';
 import { story as bindingsTemplates } from './stories/bindings/templates.story';
 
-// Components
 import { story as box } from './stories/components/box.story';
 import { story as buttonVariants } from './stories/components/button-variants.story';
 import { story as inputDisplay } from './stories/components/input-display.story';
@@ -19,7 +17,6 @@ import { story as text } from './stories/components/text.story';
 import { story as textColors } from './stories/components/text-colors.story';
 import { story as textTypography } from './stories/components/text-typography.story';
 
-// Structure
 import { story as structureConditionalInLoop } from './stories/structure/conditional-in-loop.story';
 import { story as structureEmptyList } from './stories/structure/empty-list.story';
 import { story as structureLayoutRefs } from './stories/structure/layout-refs.story';
@@ -27,7 +24,6 @@ import { story as structureLoop } from './stories/structure/loop.story';
 import { story as structureNestedLoops } from './stories/structure/nested-loops.story';
 import { story as structureNumberedList } from './stories/structure/numbered-list.story';
 
-// Actions
 import { story as counter } from './stories/actions/counter.story';
 import { story as endpoint } from './stories/actions/endpoint.story';
 import { story as endpointFull } from './stories/actions/endpoint-full.story';
@@ -40,14 +36,12 @@ import { story as setFromUndo } from './stories/actions/set-from-undo.story';
 import { story as strictError } from './stories/actions/strict-error.story';
 import { story as toggle } from './stories/actions/toggle.story';
 
-// Composition (ActionFragments)
 import { story as composeSlot } from './stories/composition/slot-fill.story';
 import { story as composeReuse } from './stories/composition/reuse.story';
 import { story as composeMerge } from './stories/composition/merge-rules.story';
 import { story as composeStack } from './stories/composition/stacking.story';
 import { story as composeModal } from './stories/composition/modal.story';
 
-// Shells
 import { story as conditionalDetail } from './stories/shell/conditional-detail.story';
 import { story as crossCanvasMessaging } from './stories/shell/cross-canvas-messaging.story';
 import { story as dashboardShell } from './stories/shell/dashboard-shell.story';
@@ -60,8 +54,6 @@ import { story as slotWrapperAnimation } from './stories/shell/slot-wrapper-anim
 import { story as slotWrapperAuthGate } from './stories/shell/slot-wrapper-auth-gate.story';
 import { story as suspendResumeOnNav } from './stories/shell/suspend-resume-on-nav.story';
 
-// i18n — the swap lives in nova's RENDERER, so every one of these runs on
-// pure nova: no moss, no server, no wire, and no i18n code in any adapter.
 import { story as i18nSwitch } from './stories/i18n/switch.story';
 import { story as i18nKeys } from './stories/i18n/keys.story';
 import { story as i18nDepth } from './stories/i18n/depth.story';
@@ -70,13 +62,11 @@ import { story as i18nHarvest } from './stories/i18n/harvest.story';
 import { story as i18nFormatting } from './stories/i18n/formatting.story';
 
 const authored: readonly NovaStory[] = [
-  // Bindings
   bindingsConditional,
   bindingsMissingPaths,
   bindingsPath,
   bindingsTemplates,
   bindingsNestedConditionals,
-  // Components
   box,
   buttonVariants,
   inputDisplay,
@@ -86,14 +76,12 @@ const authored: readonly NovaStory[] = [
   text,
   textColors,
   textTypography,
-  // Structure
   structureConditionalInLoop,
   structureLayoutRefs,
   structureLoop,
   structureNestedLoops,
   structureNumberedList,
   structureEmptyList,
-  // Actions
   counter,
   setFromUndo,
   inputModel,
@@ -105,13 +93,11 @@ const authored: readonly NovaStory[] = [
   functionEndpoint,
   functionEndpointMixed,
   strictError,
-  // Composition (ActionFragments)
   composeSlot,
   composeReuse,
   composeMerge,
   composeStack,
   composeModal,
-  // Shells
   pushPopNavigation,
   replaceWizard,
   multiCanvas,
@@ -123,7 +109,6 @@ const authored: readonly NovaStory[] = [
   conditionalDetail,
   slotWrapperAnimation,
   slotWrapperAuthGate,
-  // i18n
   i18nSwitch,
   i18nKeys,
   i18nDepth,
@@ -132,10 +117,6 @@ const authored: readonly NovaStory[] = [
   i18nFormatting,
 ];
 
-// Every story renders on a device (see stage/on-stage.tsx). A phone unless it
-// is listed here: a tablet for the stories whose point is several canvases
-// side by side, and `self` for the demos that draw their own device so their
-// controls can sit beside it.
 const FRAMES: Readonly<Record<string, StageFrame>> = {
   'multi-canvas': 'tablet',
   'dashboard-shell': 'tablet',

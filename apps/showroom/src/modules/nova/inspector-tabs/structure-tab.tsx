@@ -3,23 +3,6 @@ import type { CanvasState, Shell } from '@niscorp/nova';
 import type { NovaStory } from '@showroom/modules/nova/story-types';
 import { JsonViewer } from '@showroom/chrome/json-viewer';
 
-// ═══════════════════════════════════════════════════════════
-// Structure tab — shows the authored definitions behind the
-// story as pretty JSON, scoped by a selector at the top.
-//
-//   Shell      → shell state overview (canvases, their active
-//                action definitionIds — not the internal UUIDs).
-//   Canvas: X  → that canvas's live state + the active
-//                ActionDefinition (authored) as JSON.
-//   Action: Y  → the full ActionDefinition: id, data, triggers,
-//                layout. This is the useful view.
-//   Layout     → story.layout (LayoutNode) as JSON.
-//
-// All data comes from the public Shell API: getState() for
-// canvas snapshots, getRuntime(id).definition for authored
-// ActionDefinitions. No internal poking.
-// ═══════════════════════════════════════════════════════════
-
 type Scope =
   | { kind: 'layout' }
   | { kind: 'shell' }
@@ -28,8 +11,7 @@ type Scope =
 
 type ScopeEntry = { id: string; label: string; scope: Scope };
 
-// ─── Live canvas state (cached snapshot to avoid infinite loops) ──────────────
-
+// The snapshot is cached: an uncached one re-renders in an infinite loop.
 type Cache = {
   shell: Shell;
   canvases: Record<string, CanvasState>;
@@ -59,8 +41,6 @@ const useCanvases = (shell: Shell): Record<string, CanvasState> => {
 
   return useSyncExternalStore(subscribe, getSnapshot);
 };
-
-// ─── Build scope list from current shell state ────────────────────────────────
 
 const buildScopes = (
   story: NovaStory,
@@ -104,8 +84,6 @@ const defaultScopeId = (story: NovaStory, scopes: ScopeEntry[]): string => {
   return scopes[0]?.id ?? '';
 };
 
-// ─── Scope → value to display ─────────────────────────────────────────────────
-
 const buildShellOverview = (canvases: Record<string, CanvasState>): unknown => {
   const out: Record<string, unknown> = {};
   for (const [id, c] of Object.entries(canvases)) {
@@ -146,8 +124,6 @@ const buildActionView = (shell: Shell, instanceId: string): unknown => {
   return runtime.definition;
 };
 
-// ─── Selector ─────────────────────────────────────────────────────────────────
-
 const ScopeSelector: FC<{
   scopes: ScopeEntry[];
   activeId: string;
@@ -187,8 +163,6 @@ const ScopeSelector: FC<{
     })}
   </div>
 );
-
-// ─── Panels ───────────────────────────────────────────────────────────────────
 
 const ShellStructure: FC<{ story: NovaStory; shell: Shell }> = ({ story, shell }) => {
   const canvases = useCanvases(shell);

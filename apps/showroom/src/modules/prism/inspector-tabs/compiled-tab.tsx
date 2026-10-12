@@ -11,13 +11,8 @@ const LEGEND =
 
 type Props = { story: PrismStory };
 
-// Walk the optimized core and produce a "decorated" version for display: each
-// op node gets a synthetic `__op` field showing which handler is attached, so
-// users can SEE the work the optimizer did. Without this, the non-enumerable
-// `__op` and `__segments` properties are invisible to JSON.stringify and the
-// optimized core looks identical to the source for most stories.
-//
-// We also surface attached `__segments` arrays where present.
+// The optimizer's `__op` and `__segments` properties are non-enumerable, so
+// JSON.stringify does not print them.
 const HANDLER_KEY = '__op';
 const SEGMENTS_KEY = '__segments';
 
@@ -36,7 +31,6 @@ const decorate = (node: unknown): unknown => {
   if (!isPlainObject(node)) return node;
 
   const out: Record<string, unknown> = {};
-  // Surface the non-enumerable attachments first so they're visually prominent.
   const attachedHandler = Reflect.get(node, HANDLER_KEY);
   const attachedSegments = Reflect.get(node, SEGMENTS_KEY);
   if (typeof attachedHandler === 'function') {

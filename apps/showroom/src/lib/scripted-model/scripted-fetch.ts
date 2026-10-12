@@ -1,39 +1,15 @@
-// ═══════════════════════════════════════════════════════════
-// A scripted model provider — what the showroom talks to when the visitor has
-// no API key.
-//
-// It is a `fetch`, not a fake client: the real OpenAI SDK, signal's real
-// adapter, its stream parser, its wire router and repair, and cortex's real
-// loop all run against it. Only the network is replaced. It speaks the OpenAI
-// chat-completions dialect (JSON and SSE streams, tool calls) and embeddings.
-//
-// What it SAYS comes from scripts that pages register: a recorded reply from
-// a real run where one exists (labelled "recorded"), a reply written for the
-// page otherwise (labelled "scripted"). A prompt no script knows still gets a
-// valid answer in the requested shape — generated from the request's own JSON
-// Schema — and says plainly that it is scripted.
-// ═══════════════════════════════════════════════════════════
-
 export type ScriptedMessage = { role: string; content: string; toolCalls: readonly { name: string; args: unknown }[]; toolName?: string };
 
 export type ScriptedRequest = {
   messages: readonly ScriptedMessage[];
   lastUser: string;
   system: string;
-  // Tools the caller declared, minus signal/cortex's synthesized `respond` tool.
   tools: readonly { name: string; parameters: unknown }[];
-  // The structured-output schema, if the caller asked for one (respond tool or response_format).
   schema: unknown;
-  // How many tool results the conversation already holds, and how many since the last user message.
   toolResults: number;
   toolResultsSinceUser: number;
-  // The latest tool result's content, parsed if it is JSON.
   lastToolResult: unknown;
-  // Whether structured output is expected through the synthesized respond tool
-  // (else it goes in the message content as JSON).
   viaRespondTool: boolean;
-  // When the caller rejected the previous answer and asked again (cortex's
-  // output retry), the correction it sent — the issues, in its words.
   correction: string | undefined;
 };
 
@@ -44,7 +20,6 @@ export type ScriptedReply =
 
 export type Script = {
   id: string;
-  // 'recorded' = the words of a real model run, replayed; 'scripted' = written for the page.
   source: 'recorded' | 'scripted';
   reply: (request: ScriptedRequest) => ScriptedReply | undefined;
 };
@@ -54,20 +29,16 @@ export type ScriptedEvent = { script: string; source: Script['source'] | 'genera
 const scripts: Script[] = [];
 const listeners = new Set<(event: ScriptedEvent) => void>();
 
-/** Register a script. The latest registration with a matching reply wins. */
 export const registerScript = (script: Script): void => {
   const at = scripts.findIndex((s) => s.id === script.id);
   if (at >= 0) scripts.splice(at, 1);
   scripts.unshift(script);
 };
 
-/** Hear which script answered each request — for "replayed from a recording" labels. */
 export const onScriptedReply = (listener: (event: ScriptedEvent) => void): (() => void) => {
   listeners.add(listener);
   return () => listeners.delete(listener);
 };
-
-// ── reading the request ─────────────────────────────────────────
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const text = (v: unknown): string => {
@@ -105,9 +76,8 @@ const readRequest = (body: Record<string, unknown>): ScriptedRequest => {
   });
   const respond = declared.find((t) => t.name === RESPOND);
   const format = isRecord(body['response_format']) ? body['response_format'] : undefined;
-  // Signal states a schema one of three ways: the respond tool's parameters,
-  // response_format.json_schema, or — for json_object mode — a system message
-  // headed "OUTPUT SCHEMA:" carrying the JSON Schema on its next line.
+  // In json_object mode signal states the schema in a system message headed
+  // "OUTPUT SCHEMA:", with the JSON Schema on its next line.
   const stated = messages.find((m) => m.role === 'system' && m.content.startsWith('OUTPUT SCHEMA'));
   const statedSchema = stated === undefined ? undefined : parseJson(stated.content.slice(stated.content.indexOf('\n') + 1));
   const formatSchema = isRecord(format?.['json_schema']) ? format?.['json_schema']['schema'] : isRecord(statedSchema) ? statedSchema : format !== undefined ? {} : undefined;
@@ -130,9 +100,6 @@ const readRequest = (body: Record<string, unknown>): ScriptedRequest => {
   };
 };
 
-// ── the fallback: an answer in the requested shape ──────────────
-
-/** A value that satisfies a JSON Schema — the shape, with obviously example contents. */
 export const exampleOf = (schema: unknown, name = 'value', depth = 0): unknown => {
   if (!isRecord(schema) || depth > 6) return null;
   const pick = (key: string): unknown => (Array.isArray(schema[key]) ? schema[key][0] : undefined);
@@ -171,16 +138,12 @@ const answer = (request: ScriptedRequest): { reply: ScriptedReply; event: Script
   return { reply: fallback(request), event: { script: 'fallback', source: 'generated', at: Date.now() } };
 };
 
-// ── speaking OpenAI ─────────────────────────────────────────────
-
 type WireCall = { id: string; name: string; arguments: string };
 
 const wireOf = (reply: ScriptedReply, request: ScriptedRequest): { content: string; calls: WireCall[] } => {
   const id = `call_${Math.random().toString(36).slice(2, 10)}`;
   if ('call' in reply) return { content: reply.text ?? '', calls: [{ id, name: reply.call.name, arguments: JSON.stringify(reply.call.args) }] };
   if ('data' in reply) {
-    // Structured output travels on the channel the caller asked for: the
-    // synthesized respond tool, or JSON in the message content.
     return request.viaRespondTool
       ? { content: reply.text ?? '', calls: [{ id, name: RESPOND, arguments: JSON.stringify(reply.data) }] }
       : { content: JSON.stringify(reply.data), calls: [] };
@@ -213,7 +176,7 @@ const completionBody = (model: string, wire: { content: string; calls: WireCall[
   usage: usage(request, wire.content + wire.calls.map((c) => c.arguments).join('')),
 });
 
-// Chunks by code point, never through the middle of an emoji's surrogate pair.
+// Chunks by code point, so never through the middle of a surrogate pair.
 const pieces = (s: string, size: number): string[] => {
   const chars = Array.from(s);
   const out: string[] = [];
@@ -250,13 +213,6 @@ const sse = (model: string, wire: { content: string; calls: WireCall[] }, reques
   });
 };
 
-// ── embeddings: a concept map, not a model ──────────────────────
-// A small hand-made map from words to topics (audio, industrial, fitness, …)
-// fills the first dimensions; every word is also hashed into the rest, weakly.
-// So "bluetooth earbuds" lands near "noise-cancelling headphones" and far from
-// "pressure gauge calibration" — enough to show what `embed()` returns and how
-// similarity ranks. Pages that show it say it is a concept map.
-
 const DIMS = 256;
 const CONCEPTS: readonly (readonly string[])[] = [
   ['headphone', 'earbud', 'bluetooth', 'wireles', 'microphone', 'mic', 'noise', 'cancelling', 'canceling', 'speaker', 'audio', 'sound', 'music', 'podcast'],
@@ -286,8 +242,6 @@ export const scriptedEmbedding = (input: string): number[] => {
   return v.map((x) => x / norm);
 };
 
-// ── the fetch ───────────────────────────────────────────────────
-
 const json = (value: unknown): Response => new Response(JSON.stringify(value), { status: 200, headers: { 'content-type': 'application/json' } });
 
 export const scriptedFetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
@@ -307,7 +261,7 @@ export const scriptedFetch = async (input: string | URL | Request, init?: Reques
   const { reply, event } = answer(request);
   for (const l of listeners) l(event);
   const wire = wireOf(reply, request);
-  // A short think before answering, so a spinner is visible and nothing looks instant-fake.
+  // A pause before answering, so the page's spinner is visible.
   await new Promise((r) => setTimeout(r, 250));
   if (body['stream'] === true) return new Response(sse(model, wire, request, 18), { status: 200, headers: { 'content-type': 'text/event-stream' } });
   return json(completionBody(model, wire, request));

@@ -2,13 +2,6 @@ import type { FC, ReactNode } from 'react';
 import { PhoneFrame, type PhoneTone } from '@showroom/chrome/stage/phone';
 import { INK, MONO } from '@showroom/chrome/stage/ui';
 
-// ═══════════════════════════════════════════════════════════
-// Vex's small shared parts on the stage language: a light code block for
-// DSL / SQL / JSON, a numbered step label, and a phone that draws whatever a
-// query answered — a list for rows, tiles for one record. Presentation only;
-// nothing here talks to the engine.
-// ═══════════════════════════════════════════════════════════
-
 export const Block: FC<{ children: string; tone?: 'plain' | 'bad' | 'warn'; maxHeight?: number }> = ({ children, tone = 'plain', maxHeight = 320 }) => (
   <pre
     style={{
@@ -31,7 +24,6 @@ export const Block: FC<{ children: string; tone?: 'plain' | 'bad' | 'warn'; maxH
   </pre>
 );
 
-// A small caption over a block — sentence case, never shouted.
 export const Label: FC<{ children: ReactNode; aside?: ReactNode }> = ({ children, aside }) => (
   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
     <div style={{ fontSize: 12, fontWeight: 650, color: INK.soft }}>{children}</div>
@@ -41,16 +33,12 @@ export const Label: FC<{ children: ReactNode; aside?: ReactNode }> = ({ children
 
 export const json = (v: unknown): string => JSON.stringify(v, null, 2) ?? String(v);
 
-// SQL, one clause per line, so a reader can find the WHERE.
 export const prettySql = (sql: string): string =>
   sql.replace(/\s+(FROM|JOIN|LEFT JOIN|WHERE|GROUP BY|HAVING|ORDER BY|LIMIT|OFFSET|RETURNING)\b/g, '\n$1');
-
-// ── the phone ───────────────────────────────────────────────────
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const cell = (v: unknown): string => (v === null || v === undefined ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v));
 
-// Rows → a list (first value bold, the rest beneath); one record → tiles.
 export const Answer: FC<{ value: unknown; limit?: number }> = ({ value, limit = 8 }) => {
   if (Array.isArray(value)) {
     if (value.length === 0) return <div style={{ fontSize: 12.5, color: INK.soft }}>Nothing matches.</div>;
