@@ -3,13 +3,12 @@ import { snapshotShell } from '@niscorp/nova/reflect';
 import { emitterOf } from '../runtime';
 import { buildShell } from './build';
 import type { BuildRequest } from './build';
-import type { ShellComposition, ShellHostConfig } from './config';
+import type { OwnedShellHost, ShellComposition, ShellHost, ShellHostConfig, ShellReport } from './types';
 import { endShell, layoutsOf } from './host-state';
 import type { Cell, HostState, Live } from './host-state';
-import { sessionOn } from './shell-session';
+import { sessionOn } from './sessions';
 import { DEFAULT_SNAPSHOT_WAIT_MS, needOf, read, settle } from './snapshot';
 import { attach } from './stream';
-import type { OwnedShellHost, ShellHost, ShellReport } from './types';
 
 export const DEFAULT_IDLE_MS = 30 * 60 * 1000;
 

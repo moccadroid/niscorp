@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { PgPool } from '@niscorp/vex';
 import * as moss from '../src/index';
-import { sessionRevokerOf, sessionVerifierOf } from '../src/identity/verifier';
+import { sessionRevokerOf, sessionVerifierOf } from '../src/identity/sessions';
 
 const noDatabase: PgPool = { query: async () => ({ rows: [] }) };
 

@@ -1,5 +1,5 @@
-export type { DocumentConfig, DrawnDocument } from './config';
+export type { DocumentConfig, DrawnDocument } from './document';
 export { renderDocument } from './document';
-export { exportDocuments } from './export';
-export type { ExportedDocument } from './export';
+export { exportDocuments } from './pages';
+export type { ExportedDocument } from './pages';
 export { createPageRouter } from './pages';

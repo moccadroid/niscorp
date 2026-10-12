@@ -23,7 +23,7 @@ vi.mock('../src/server/server', () => ({
   },
 }));
 
-const { serve } = await import('../src/server/node');
+const { serve } = await import('../src/node');
 
 const freePort = (): Promise<number> =>
   new Promise((resolve, reject) => {

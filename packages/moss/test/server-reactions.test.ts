@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { WriteEvent } from '@niscorp/vex';
 import type { NiscApp } from '../src/manifest';
-import { subscribeReactions } from '../src/server/reactions';
+import { subscribeReactions } from '../src/server/server';
 
 type Reaction = NonNullable<NiscApp['reactions']>[number];
 type Told = Parameters<Reaction['run']>[0];

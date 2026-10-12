@@ -1,6 +1,6 @@
 import { CLOSE_INVALID_TOKEN } from '../protocol';
 import type { ServerMessage } from '../protocol';
-import type { Connection, SocketConfig } from './types';
+import type { Connection, SocketConfig } from './socket';
 
 export const DEFAULT_REVALIDATE_MS = 60 * 1000;
 

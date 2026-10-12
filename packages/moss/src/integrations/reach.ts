@@ -1,4 +1,4 @@
-import type { Bundle } from './bundle';
+import type { Bundle } from './intake';
 
 const normalizeReach = (path: string): string => (path.split('?')[0] ?? '').replace(/\/+$/, '');
 

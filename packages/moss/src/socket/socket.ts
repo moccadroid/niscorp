@@ -1,17 +1,55 @@
 import { z } from 'zod';
 import { DefinitionValidationError } from '@niscorp/nova';
+import { emitterOf, spanClock } from '../runtime';
+import type { Emit, Telemetry, TelemetrySpan } from '../runtime';
+import type { ShellHost, ShellSession } from '../shells';
 import { sealSession } from '../identity';
 import { CLOSE_AT_CAPACITY, CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SHELL_FAILED, PROTOCOL } from '../protocol';
 import type { ServerMessage } from '../protocol';
-import { emitterOf, spanClock } from '../runtime';
-import type { Emit, TelemetrySpan } from '../runtime';
-import type { ShellSession } from '../shells';
-import type { Connection, SocketAccept, SocketConfig } from './types';
 import { authenticateUpgrade, parametersOf, protocolRefusal } from './handshake';
 import type { UpgradeParameters, WarnedOnce } from './handshake';
 import { createRevalidation } from './revalidation';
 import type { Revalidation } from './revalidation';
 import { messageHandler } from './routing';
+
+export type SessionSource = Pick<ShellHost, 'session'>;
+
+export type HeldCatalog = { ids: readonly string[]; hash: string };
+
+export type SocketConfig = {
+  session: (token: string) => string | null | Promise<string | null>;
+  catalog: (principal: string | null) => HeldCatalog | Promise<HeldCatalog>;
+  shells?: SessionSource;
+  page?: (path: string) => { host: SessionSource; inputs: Record<string, Record<string, unknown>> } | undefined;
+  anonymousShellMax?: number;
+  // `0` or `Infinity` disables it.
+  revalidateMs?: number;
+  telemetry?: Telemetry;
+  origins?: readonly string[];
+  sessionLastsMs?: (token: string) => number | null | Promise<number | null>;
+};
+
+export type Connection = {
+  send: (text: string) => void;
+  close: (code?: number, reason?: string) => void;
+  onMessage: (fn: (text: string) => void) => void;
+  onClose: (fn: () => void) => void;
+  // `answer`: given by a transport that has not answered the request yet. It is
+  // called once with the `Set-Cookie` values that answer is to carry.
+  upgrade?: {
+    offered: readonly string[];
+    origin?: string | null;
+    host?: string | null;
+    cookie?: string | null;
+    answer?: (cookies: readonly string[]) => void;
+  };
+  // Set by the socket, never by a transport.
+  seal?: (token: string) => Promise<string>;
+};
+
+export type TransportSettings = { compression?: boolean | Record<string, unknown>; maxMessageBytes?: number };
+
+export type SocketAccept = ((url: string, connection: Connection) => Promise<void>) & { stop: () => void; transport?: TransportSettings };
 
 // A transport tells a close only to whoever already listens, and opening a
 // session awaits. So the close is heard once, before those awaits, and kept:

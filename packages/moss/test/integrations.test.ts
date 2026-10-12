@@ -11,8 +11,8 @@ import { createForwarder } from '../src/integrations/forward';
 import { findIntegration, writeBundle, listIntegrations, registeredIntegrations } from '../src/integrations/registry';
 import type { BundleImport } from '../src/integrations/registry';
 import type { IntakeContext } from '../src/integrations/intake';
-import { BundleSchema } from '../src/integrations/bundle';
-import type { Bundle } from '../src/integrations/bundle';
+import { BundleSchema } from '../src/integrations/intake';
+import type { Bundle } from '../src/integrations/intake';
 import { createAssertionSigner, verifyAssertion } from '../src/integrations/credentials';
 import { pristineDatabases } from './pristine-database';
 

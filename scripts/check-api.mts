@@ -10,12 +10,12 @@ const packages = resolve(import.meta.dirname, '..', 'packages');
 const ENTRIES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   moss: {
     '.': 'src/index.ts',
-    './node': 'src/server/node.ts',
-    './vite': 'src/server/vite.ts',
+    './node': 'src/node/index.ts',
+    './vite': 'src/node/vite.ts',
     './integrations': 'src/integrations/index.ts',
     './tide': 'src/tide/index.ts',
     './protocol': 'src/server/protocol.ts',
-    './unverified': 'src/server/unverified.ts',
+    './unverified': 'src/shells/unverified.ts',
     './client': 'src/client/index.ts',
     './client/node': 'src/client/node.ts',
     './terminal': 'src/terminal/index.ts',

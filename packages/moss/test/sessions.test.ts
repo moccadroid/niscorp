@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { migrate } from '@niscorp/strata/postgres';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import { SESSIONS_SEQUENCE, mintSession, sessionOf, sessionRemainingMs, revokeAllFor } from '../src/identity/sessions';
-import { sessionRevokerOf, sessionVerifierOf } from '../src/identity/verifier';
+import { sessionRevokerOf, sessionVerifierOf } from '../src/identity/sessions';
 import { mintDevToken } from '../src/identity';
 import type { ShellHost } from '../src/shells';
 import { hostConfig, standHost } from './shell-host-double';

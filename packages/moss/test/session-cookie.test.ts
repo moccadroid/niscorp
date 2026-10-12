@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { WebSocket as Ws } from 'ws';
 import type { FunctionSession, NiscApp } from '../src/manifest';
 import type { MossServer } from '../src/server';
-import { attachSocket } from '../src/server/node';
+import { attachSocket } from '../src/node';
 import { hostConfig, standHost } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import { renderDocument } from '../src/documents';

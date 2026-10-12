@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { createGrammarUpgrader } from '../src/data/engine';
 import type { FeatureEnv, Replay } from '../src/feature';
-import { BundleSchema } from '../src/integrations/bundle';
+import { BundleSchema } from '../src/integrations/intake';
 import { createForwarder } from '../src/integrations/forward';
 import { operatorRoutes } from '../src/integrations/operator';
 import type { OperatorDeps } from '../src/integrations/operator';

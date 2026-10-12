@@ -6,8 +6,8 @@ import { getRequestListener } from '@hono/node-server';
 import { renderDocument } from '../documents';
 import type { DocumentConfig } from '../documents';
 import { sessionCookies } from '../identity';
-import type { MossServer } from './moss-server';
-import { MOSS_PATHS } from './node';
+import type { MossServer } from '../server';
+import { MOSS_PATHS } from './index';
 import { createTransport, listenForUpgrades } from './transport';
 import type { Transport } from './transport';
 

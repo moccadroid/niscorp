@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mintDevToken, devSession } from '../src/identity/verifier';
+import { mintDevToken, devSession } from '../src/identity/sessions';
 
 describe('runtime — dev token pair', () => {
   it('mints a base64url token whose sub round-trips', () => {

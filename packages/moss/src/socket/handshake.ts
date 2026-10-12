@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { newSeal, openSealed, sealCookie, sealOf, ownOriginOf, sessionCookies, sessionTokenOf } from '../identity';
 import { DEFAULT_TOKEN_KEY, PROTOCOL, PROTOCOL_MIN, offeredSealed, offeredToken } from '../protocol';
 import type { ServerMessage } from '../protocol';
-import type { Connection, SocketConfig } from './types';
+import type { Connection, SocketConfig } from './socket';
 
 const flag = z.literal('1').optional().catch(undefined);
 const UpgradeParametersSchema = z.object({

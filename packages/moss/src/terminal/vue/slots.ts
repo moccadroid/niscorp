@@ -1,9 +1,9 @@
-import { defineComponent, Fragment, h, inject, type Component, type InjectionKey } from 'vue';
+import { Fragment, defineComponent, h, inject, provide, type Component, type InjectionKey } from 'vue';
 import { NovaRenderProvider, RenderTree } from '@niscorp/nova/adapters/vue';
 import type { NovaComponent } from '@niscorp/nova/adapters/vue';
 import type { ComponentRegistry } from '@niscorp/nova';
 import type { TerminalApi } from '../index';
-import { actionSlotOf, canvasSlotOf, registerSlots } from '../slots';
+import { actionSlotOf, canvasSlotOf, registerSlots } from '../targets';
 
 export const TerminalApiKey: InjectionKey<TerminalApi> = Symbol.for('@niscorp/moss/terminal/vue:api');
 
@@ -47,3 +47,20 @@ export const registerWireSlots = (registry: ComponentRegistry<NovaComponent>, sl
 
   registerSlots(registry, { canvas: CanvasSlot, action: ActionSlot });
 };
+
+const noDispatch = (): void => undefined;
+
+export const terminalFrame = (api: TerminalApi, registry: ComponentRegistry<NovaComponent>): Component =>
+  defineComponent(
+    () => {
+      provide(TerminalApiKey, api);
+      return () =>
+        h(
+          NovaRenderProvider,
+          // The frame is chrome: events come only from inside a canvas.
+          { registry, dispatch: noDispatch, publish: api.publish },
+          { default: () => h(RenderTree, { nodes: api.frame() }) },
+        );
+    },
+    { name: 'MossTerminalFrame' },
+  );

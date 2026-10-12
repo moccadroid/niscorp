@@ -1,8 +1,7 @@
 import type { ActionFragment, LayoutNode, Shell } from '@niscorp/nova';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Emit } from '../runtime';
-import type { ShellComposition, ShellHostConfig } from './config';
-import type { ShellConnection, ShellOpening } from './types';
+import type { ShellComposition, ShellConnection, ShellHostConfig, ShellOpening } from './types';
 
 export type ShellLayouts = {
   frame?: LayoutNode;

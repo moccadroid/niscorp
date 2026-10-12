@@ -1,10 +1,9 @@
 import { renderToString } from 'react-dom/server';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { ComponentRegistry } from '@niscorp/nova';
-import { drawnApi } from '../drawn';
-import type { DrawnSnapshot } from '../drawn';
-import { terminalFrame } from './frame';
-import { registerWireSlots } from './slots';
+import { drawnApi } from '../targets';
+import type { DrawnSnapshot } from '../targets';
+import { registerWireSlots, terminalFrame } from './slots';
 import type { TerminalSlotWrapper } from './slots';
 
 export type RenderSnapshotConfig = {

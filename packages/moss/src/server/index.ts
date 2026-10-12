@@ -1,2 +1,2 @@
-export type { MossServer } from './moss-server';
+export type { Env, MossServer } from './moss-server';
 export { createServer } from './server';

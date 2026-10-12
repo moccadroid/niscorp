@@ -3,8 +3,8 @@ import { createServer as createHttp } from 'node:http';
 import type { Server } from 'node:http';
 import type { ViteDevServer } from 'vite';
 import { WebSocket } from 'ws';
-import { mossDev } from '../src/server/vite';
-import type { DevApp, MossDevOptions } from '../src/server/vite';
+import { mossDev } from '../src/node/vite';
+import type { DevApp, MossDevOptions } from '../src/node/vite';
 import type { MossServer } from '../src/server';
 import type { SocketAccept } from '../src/socket';
 

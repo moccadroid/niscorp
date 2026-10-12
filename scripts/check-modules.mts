@@ -30,6 +30,7 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       // Not manifest or the server: a page's path, and what a document asks a server, are types written out in the module.
       documents: ['protocol', 'identity', 'shells'],
       server: ['runtime', 'protocol', 'feature', 'identity', 'manifest', 'data', 'shells', 'socket', 'documents'],
+      node: ['runtime', 'protocol', 'identity', 'manifest', 'socket', 'documents', 'server'],
       tide: ['feature'],
       client: ['protocol'],
       terminal: ['client'],

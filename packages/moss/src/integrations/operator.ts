@@ -6,11 +6,9 @@ import type { ActionDefinition, ComponentMeta, LayoutPaletteEntry } from '@nisco
 import { isRecord } from '@niscorp/nova/reflect';
 import type { Upgrader } from '@niscorp/strata';
 import type { FeatureEnv, Replay } from '../feature';
-import { INTEGRATION_ID, INTEGRATION_ID_RULE } from './bundle';
-import type { Bundle } from './bundle';
+import { INTEGRATION_ID, INTEGRATION_ID_RULE, extensionContextOf, runIntake } from './intake';
+import type { Bundle, ExtensionConfig, IntakeContext } from './intake';
 import { hashIntegrationKey, mintIntegrationKey } from './credentials';
-import { extensionContextOf, runIntake } from './intake';
-import type { ExtensionConfig, IntakeContext } from './intake';
 import { reachDeclares } from './reach';
 import { approveIntegration, findIntegration, writeBundle, listIntegrations, recordFailedImport, removeIntegration, setBackToPending, registrationOf, storedActionsOf } from './registry';
 

@@ -26,13 +26,13 @@ export default defineConfig([
   {
     entry: {
       index: 'src/index.ts',
-      node: 'src/server/node.ts',
+      node: 'src/node/index.ts',
       // The features, each from an entry of its own: nothing the main entry
       // reaches imports one (scripts/check-modules.mts).
       integrations: 'src/integrations/index.ts',
       tide: 'src/tide/index.ts',
       protocol: 'src/server/protocol.ts',
-      unverified: 'src/server/unverified.ts',
+      unverified: 'src/shells/unverified.ts',
       client: 'src/client/index.ts',
       'client/node': 'src/client/node.ts',
       'terminal/index': 'src/terminal/index.ts',
@@ -43,7 +43,7 @@ export default defineConfig([
       'terminal/dom/index': 'src/terminal/dom/index.ts',
       'terminal/dom/server': 'src/terminal/dom/server.ts',
       'terminal/tty/index': 'src/terminal/tty/index.ts',
-      vite: 'src/server/vite.ts',
+      vite: 'src/node/vite.ts',
     },
     format: ['esm', 'cjs'],
     splitting: true, // cjs too: entries share chunks, so module state exists once, not once per entry

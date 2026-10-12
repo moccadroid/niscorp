@@ -1,9 +1,9 @@
-import { createContext, createElement, Fragment, useContext, type ComponentType, type FC, type ReactNode } from 'react';
+import { Fragment, createContext, createElement, useContext, type ComponentType, type FC, type ReactElement, type ReactNode } from 'react';
 import { NovaRenderProvider, RenderTree } from '@niscorp/nova/adapters/react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { ComponentRegistry } from '@niscorp/nova';
 import type { TerminalApi } from '../index';
-import { actionSlotOf, canvasSlotOf, registerSlots } from '../slots';
+import { actionSlotOf, canvasSlotOf, registerSlots } from '../targets';
 
 export const TerminalApiContext = createContext<TerminalApi | undefined>(undefined);
 
@@ -15,7 +15,7 @@ export type TerminalSlotWrapperProps = {
 };
 export type TerminalSlotWrapper = FC<TerminalSlotWrapperProps>;
 
-export type LeafRenderers = {
+type LeafRenderers = {
   fallback?: NovaComponent;
   textWrapper?: ComponentType<{ children?: ReactNode }>;
   errorMarker?: ComponentType<{ code: string; message: string }>;
@@ -60,3 +60,20 @@ export const registerWireSlots = (registry: ComponentRegistry<NovaComponent>, op
 
   registerSlots(registry, { canvas: CanvasSlot, action: ActionSlot });
 };
+
+export const terminalFrame = (api: TerminalApi, registry: ComponentRegistry<NovaComponent>, leaves: LeafRenderers = {}): ReactElement =>
+  createElement(
+    TerminalApiContext.Provider,
+    { value: api },
+    createElement(
+      NovaRenderProvider,
+      {
+        registry,
+        // The frame is chrome: events come only from inside a canvas.
+        dispatch: () => undefined,
+        publish: (channel: string, payload?: unknown) => api.publish(channel, payload),
+        ...leaves,
+      },
+      createElement(RenderTree, { nodes: api.frame() }),
+    ),
+  );

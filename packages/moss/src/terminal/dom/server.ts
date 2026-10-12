@@ -2,8 +2,8 @@ import { renderToString } from '@niscorp/nova/adapters/dom/server';
 import type { DomComponent } from '@niscorp/nova/adapters/dom';
 import { defaultRegistry, fallback } from '@niscorp/nova/adapters/dom/components';
 import type { ComponentRegistry } from '@niscorp/nova';
-import { drawnApi } from '../drawn';
-import type { DrawnSnapshot } from '../drawn';
+import { drawnApi } from '../targets';
+import type { DrawnSnapshot } from '../targets';
 
 export type RenderSnapshotConfig = {
   snapshot: DrawnSnapshot;

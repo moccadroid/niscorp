@@ -1,11 +1,9 @@
 import { createApp, createSSRApp, shallowRef } from 'vue';
 import type { NovaComponent } from '@niscorp/nova/adapters/vue';
 import type { ComponentRegistry } from '@niscorp/nova';
-import { holdsDrawnScreen } from '../drawn';
+import { hideStatus, holdsDrawnScreen, showStatus } from '../targets';
 import type { Target, TerminalApi } from '../index';
-import { hideStatus, showStatus } from '../status';
-import { terminalFrame } from './frame';
-import { registerWireSlots } from './slots';
+import { registerWireSlots, terminalFrame } from './slots';
 import type { TerminalSlotWrapper } from './slots';
 
 export { TerminalApiKey } from './slots';

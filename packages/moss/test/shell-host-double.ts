@@ -4,7 +4,7 @@ import { definitionsFor } from '../src/manifest/roles';
 import type { NiscApp, ShellManifest } from '../src/manifest';
 import { createShellHost } from '../src/shells';
 import type { ShellHost, ShellHostConfig } from '../src/shells';
-import type { ShellComposition } from '../src/shells/config';
+import type { ShellComposition } from '../src/shells/types';
 import type { OwnedShellHost } from '../src/shells/types';
 
 export type HostSetup = {

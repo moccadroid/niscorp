@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { wireFabric } from '../src/server/signals';
 import type { FabricApply } from '../src/server/signals';
 import type { Fabric } from '../src/runtime';
-import type { FabricMessage } from '../src/runtime/fabric';
+import type { FabricMessage } from '../src/runtime/runtime';
 import type { ShellHost } from '../src/shells';
 import { hostConfig, standHost } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';

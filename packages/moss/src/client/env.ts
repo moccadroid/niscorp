@@ -1,4 +1,5 @@
-import { DEFAULT_TOKEN_KEY, heldCookieName } from '../protocol';
+import { DEFAULT_TOKEN_KEY, DocumentSnapshotSchema, SNAPSHOT_ELEMENT_ID, heldCookieName } from '../protocol';
+import type { DocumentSnapshot } from '../protocol';
 
 export type WireTokenStore = {
   load: () => string | null;
@@ -62,3 +63,14 @@ export const browserEnv = (config: { tokenKey?: string; cookie?: boolean } = {})
     return `${scheme}://${window.location.host}/socket`;
   },
 });
+
+export const readDocumentSnapshot = (doc: Pick<Document, 'getElementById'> = document): DocumentSnapshot | undefined => {
+  try {
+    const text = doc.getElementById(SNAPSHOT_ELEMENT_ID)?.textContent;
+    if (text === undefined || text === null || text === '') return undefined;
+    const read = DocumentSnapshotSchema.safeParse(JSON.parse(text));
+    return read.success ? read.data : undefined;
+  } catch {
+    return undefined;
+  }
+};

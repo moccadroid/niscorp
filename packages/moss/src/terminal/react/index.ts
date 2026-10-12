@@ -2,11 +2,9 @@ import { createElement, type FC } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { ComponentRegistry } from '@niscorp/nova';
-import { holdsDrawnScreen } from '../drawn';
+import { hideStatus, holdsDrawnScreen, showStatus } from '../targets';
 import type { Target } from '../index';
-import { terminalFrame } from './frame';
-import { hideStatus, showStatus } from '../status';
-import { registerWireSlots } from './slots';
+import { registerWireSlots, terminalFrame } from './slots';
 import type { TerminalSlotWrapper } from './slots';
 
 export { TerminalApiContext } from './slots';

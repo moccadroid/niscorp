@@ -3,7 +3,7 @@ import type { DomComponent } from '@niscorp/nova/adapters/dom';
 import { defaultRegistry, fallback, DEFAULT_CSS, ROOT_CLASS } from '@niscorp/nova/adapters/dom/components';
 import type { ComponentRegistry } from '@niscorp/nova';
 import type { Target } from '../index';
-import { hideStatus, showStatus } from '../status';
+import { hideStatus, showStatus } from '../targets';
 
 const styled = new WeakSet<Document>();
 const injectCss = (doc: Document): void => {

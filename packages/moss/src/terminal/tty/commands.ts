@@ -1,7 +1,7 @@
 import type { NovaEvent } from '@niscorp/nova';
 import type { TtyInteractive } from '@niscorp/nova/adapters/tty';
 import type { TerminalApi } from '../index';
-import { sendFrom, tapEventOf } from '../numbered';
+import { sendFrom, tapEventOf } from '../targets';
 import type { Focus } from './focus';
 
 export type Repl = {

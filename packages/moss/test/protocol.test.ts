@@ -3,7 +3,7 @@ import type { z } from 'zod';
 import type { RenderNode } from '@niscorp/nova';
 import { ClientMessageSchema, PROTOCOL, ServerMessageSchema } from '../src/protocol';
 import type { ClientMessage, ServerMessage } from '../src/protocol';
-import { RenderNodeSchema, renderNodeShapes } from '../src/protocol/tree';
+import { RenderNodeSchema, renderNodeShapes } from '../src/protocol/messages';
 
 describe('protocol — a rendered node', () => {
   it('is, as a schema, exactly the type nova gives it', () => {

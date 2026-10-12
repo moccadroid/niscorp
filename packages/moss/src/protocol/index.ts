@@ -14,6 +14,6 @@ export {
 export { encodeDelta, applyDelta, frameHash } from './delta';
 export { ClientMessageSchema, ServerMessageSchema } from './messages';
 export type { ClientMessage, DeltaOp, ServerMessage } from './messages';
-export { DocumentSnapshotSchema, SNAPSHOT_ELEMENT_ID } from './snapshot';
-export type { DocumentSnapshot } from './snapshot';
-export { DEFAULT_TOKEN_KEY, heldCookieName, sessionNameOf } from './session-name';
+export { DocumentSnapshotSchema, SNAPSHOT_ELEMENT_ID } from './messages';
+export type { DocumentSnapshot } from './messages';
+export { DEFAULT_TOKEN_KEY, heldCookieName, sessionNameOf } from './connection';

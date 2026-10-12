@@ -3,7 +3,7 @@ import { createServer as createHttp } from 'node:http';
 import type { Server } from 'node:http';
 import { hostConfig, standHost } from './shell-host-double';
 import { createSocket } from '../src/socket';
-import { attachSocket } from '../src/server/node';
+import { attachSocket } from '../src/node';
 import { createWire } from '../src/client';
 import type { WireEnv } from '../src/client';
 import type { NiscApp } from '../src/manifest';

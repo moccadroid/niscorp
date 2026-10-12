@@ -7,7 +7,7 @@ import { hostConfig, standHost } from './shell-host-double';
 import type { HostSetup } from './shell-host-double';
 import type { ActionFragment, LayoutNode } from '@niscorp/nova';
 import type { FunctionSession, NiscApp } from '../src/manifest';
-import { unverifiedShell } from '../src/server/unverified';
+import { unverifiedShell } from '../src/shells/unverified';
 import type { Connection } from '../src/socket';
 import { turn } from './turn';
 

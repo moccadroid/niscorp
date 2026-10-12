@@ -5,7 +5,7 @@ import { ActionDefinitionSchema } from '@niscorp/nova';
 import type { ActionDefinition } from '@niscorp/nova';
 import { isRecord } from '@niscorp/nova/reflect';
 import type { Replay } from '../feature';
-import type { Bundle } from './bundle';
+import type { Bundle } from './intake';
 import { hashIntegrationKey } from './credentials';
 import { PAGE } from './entries';
 import { reachOf } from './reach';

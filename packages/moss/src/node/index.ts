@@ -8,8 +8,8 @@ import type { DocumentConfig } from '../documents';
 import type { NiscApp } from '../manifest';
 import type { NiscRuntime } from '../runtime';
 import type { SocketAccept, TransportSettings } from '../socket';
-import type { Env, MossServer } from './moss-server';
-import { createServer } from './server';
+import type { Env, MossServer } from '../server';
+import { createServer } from '../server';
 import { createTransport, listenForUpgrades } from './transport';
 import type { Upgradeable } from './transport';
 

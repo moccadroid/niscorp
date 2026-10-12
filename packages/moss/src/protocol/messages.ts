@@ -1,5 +1,41 @@
 import { z } from 'zod';
-import { RenderNodeSchema } from './tree';
+import type { RenderNode } from '@niscorp/nova';
+
+const key = z.string().optional();
+const children = z.lazy(() => z.array(RenderNodeSchema));
+
+export const renderNodeShapes = z.discriminatedUnion('type', [
+  z.strictObject({
+    type: z.literal('component'),
+    name: z.string(),
+    props: z.record(z.string(), z.unknown()),
+    children,
+    ref: z.string().optional(),
+    key,
+    model: z.strictObject({ path: z.string(), ref: z.string() }).optional(),
+  }),
+  z.strictObject({ type: z.literal('text'), value: z.string(), key }),
+  z.strictObject({ type: z.literal('fragment'), children, key }),
+  z.strictObject({ type: z.literal('error'), code: z.string(), message: z.string(), nodeRef: z.string().optional(), key }),
+]);
+
+// Nova publishes the node as a type and no schema. The annotation refuses a schema wider than
+// that type, and a test refuses the two differing at all.
+export const RenderNodeSchema: z.ZodType<RenderNode> = renderNodeShapes;
+
+export const SNAPSHOT_ELEMENT_ID = 'nisc-snapshot';
+
+export const DocumentSnapshotSchema = z.strictObject({
+  frame: z.array(RenderNodeSchema),
+  trees: z.record(z.string(), z.array(RenderNodeSchema)),
+  seed: z.string().optional(),
+  // Whether it was drawn for somebody signed in, not who.
+  principal: z.boolean(),
+  path: z.string().optional(),
+  // False when nothing on the screen can still happen. Absent reads as live.
+  live: z.boolean().optional(),
+});
+export type DocumentSnapshot = z.infer<typeof DocumentSnapshotSchema>;
 
 // [0, offset, length] copies a run of the base frame; [1, text] is text the base does not hold.
 export const DeltaOpSchema = z.union([z.tuple([z.literal(0), z.number(), z.number()]), z.tuple([z.literal(1), z.string()])]);
