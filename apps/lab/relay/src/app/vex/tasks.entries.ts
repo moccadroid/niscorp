@@ -2,12 +2,8 @@ import type { CacheEntry } from './index';
 import type { MutationEntry } from './index';
 import { dateText } from '@relay/app/prisms/format.prism';
 
-// My tasks, scoped by the toolbar tab. ONE shape / ONE cached plan serves Open,
-// Done and All via a `done` RANGE in context: PG orders booleans (false < true),
-// so `done >= doneMin AND done <= doneMax` collapses to false-only (Open),
-// true-only (Done) or both (All) depending on the bounds the prism supplies. No
-// due constraint, so tasks without a due date still show. `due_date` is kept RAW
-// (so a row's ⋯ → Edit seeds the date input) alongside `due_date_display`.
+// Postgres orders booleans (false < true), so the `done` range selects open
+// tasks, done tasks or both from one query.
 export const tasksMine: CacheEntry = {
   fingerprint: 'tasks/mine',
   intent: 'List my tasks (open / done / all via a done range) ordered by due date',
@@ -43,9 +39,6 @@ export const tasksMine: CacheEntry = {
   },
 };
 
-// My OVERDUE tasks — open and past their due date (vs the injected `today`). Its
-// own read (the due cutoff can't be a no-op in `tasksMine`); the const `overdue`
-// key both flags the rows and keeps the shape distinct in the cache.
 export const tasksOverdue: CacheEntry = {
   fingerprint: 'tasks/overdue',
   intent: 'List my overdue open tasks (due before today)',
@@ -82,8 +75,6 @@ export const tasksOverdue: CacheEntry = {
   },
 };
 
-// A contact's open tasks, earliest due first. Shape carries `deal_id` so it
-// stays distinct from `tasksByDeal` in the shape-keyed cache.
 export const tasksByContact: CacheEntry = {
   fingerprint: 'tasks/byContact',
   intent: "A contact's open tasks ordered by due date",
@@ -110,7 +101,6 @@ export const tasksByContact: CacheEntry = {
   },
 };
 
-// A deal's tasks (open + done), earliest due first.
 export const tasksByDeal: CacheEntry = {
   fingerprint: 'tasks/byDeal',
   intent: "A deal's tasks ordered by due date",
@@ -136,8 +126,6 @@ export const tasksByDeal: CacheEntry = {
   },
 };
 
-// Count of open tasks (a dashboard KPI) — one aggregated row → an object. The
-// row already matches the shape, so the mapping is identity over that row.
 export const tasksOpenCount: CacheEntry = {
   fingerprint: 'tasks/openCount',
   intent: 'Count of open tasks',
@@ -152,10 +140,6 @@ export const tasksOpenCount: CacheEntry = {
   mapping: { $ref: '$.result' },
 };
 
-// Create-or-edit a task. `upsert` keys on `id`. `done` defaults false and
-// `id`/`created_at` default in the DB on create; `assignee_id` is scope-stamped,
-// never the DSL. `deal_id` is `insert`-only — a task's deal is set at creation
-// (a deal's "Add task") and NOT re-linked on edit, so it can't be wiped.
 export const taskUpsert: MutationEntry = {
   fingerprint: 'tasks/upsert',
   intent: 'Create a task, or edit one by id (a task keeps its deal on edit)',
@@ -173,8 +157,6 @@ export const taskUpsert: MutationEntry = {
   },
 };
 
-// Flip a task's done flag — the inline checkbox on every task list. `done` is the
-// new value (true on the Open/overdue lists, false to reopen on the Done list).
 export const taskSetDone: MutationEntry = {
   fingerprint: 'tasks/setDone',
   intent: "Flip a task's done flag",
@@ -186,7 +168,6 @@ export const taskSetDone: MutationEntry = {
   },
 };
 
-// Delete a task by id (the row ⋯ → Delete, behind the shared confirm).
 export const taskDelete: MutationEntry = {
   fingerprint: 'tasks/delete',
   intent: 'Delete a task by id',

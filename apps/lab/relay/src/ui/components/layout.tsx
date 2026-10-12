@@ -4,12 +4,6 @@ import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/reac
 import { cx } from '../lib/cx';
 import { ALIGN, BG, JUSTIFY, LINE, border, dim } from '../lib/tokens';
 
-// Layout primitives — Box, Stack, Row, Grid. Thin styled divs that turn JSON
-// props into inline styles. No feature logic. Layouts NEVER pass classes or
-// CSS strings: props are simple semantic values; any kit class is applied
-// internally by a component that owns it.
-
-// ─── Box ───────────────────────────────────────────────────
 const BoxProps = z
   .object({
     pad: z.number().optional(),
@@ -46,17 +40,17 @@ export const Box: NovaComponent<z.infer<typeof BoxProps>> = ({
   shrink,
   children,
 }) => {
-  // Pin to the bottom as content grows — re-runs every render (no deps), so each
-  // appended message scrolls the log to the latest.
+  // The effect has no deps: it runs after every render, so each appended
+  // message scrolls the log to the latest.
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (stickBottom === true && scrollRef.current !== null) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   });
-  // Only emit the keys that are actually set. Mixing a shorthand (`padding`,
-  // `border`) with undefined longhands makes React write the longhands as
-  // empty strings, which wipes the shorthand — so build the style additively.
+  // Only the keys that are set are emitted: beside a shorthand (`padding`,
+  // `border`), React writes an undefined longhand as an empty string, which
+  // wipes the shorthand.
   const style: CSSProperties = {
     ...(pad !== undefined ? { padding: pad } : {}),
     ...(px !== undefined ? { paddingLeft: px, paddingRight: px } : {}),
@@ -87,7 +81,6 @@ Box.meta = {
   propsSchema: BoxProps,
 };
 
-// ─── Stack (column) ────────────────────────────────────────
 const StackProps = z
   .object({
     gap: z.number().optional(),
@@ -129,7 +122,6 @@ export const Stack: NovaComponent<z.infer<typeof StackProps>> = ({
 );
 Stack.meta = { description: 'Vertical flex stack with a gap.', propsSchema: StackProps };
 
-// ─── Row ───────────────────────────────────────────────────
 const RowProps = z
   .object({
     gap: z.number().optional(),
@@ -174,10 +166,6 @@ export const Row: NovaComponent<z.infer<typeof RowProps>> = ({
 );
 Row.meta = { description: 'Horizontal flex row with a gap.', propsSchema: RowProps };
 
-// ─── Grid ──────────────────────────────────────────────────
-// A Grid with a `ref` becomes clickable and dispatches `ui:click` carrying its
-// bound `value` as the payload — that's how a table row hands its record to a
-// trigger (which can then push/replace it onto another canvas).
 const GridProps = z
   .object({
     weights: z
@@ -213,8 +201,6 @@ export const Grid: NovaComponent<z.infer<typeof GridProps>> = ({
 }: GridP) => {
   const dispatch = useNovaDispatch();
   const clickable = novaRef !== undefined;
-  // Columns come from `weights` (fractions/auto), else an equal `columns`
-  // count, else a 2-up default.
   const cols =
     weights !== undefined
       ? weights.map((w) => (w === 'auto' ? 'auto' : `${w}fr`)).join(' ')
@@ -246,13 +232,6 @@ Grid.meta = {
   propsSchema: GridProps,
 };
 
-// ─── Popover ───────────────────────────────────────────────
-// A positioning anchor for a floating panel. Children are a trigger + a panel;
-// give the panel the `.rl-popover__panel` class and it floats beneath the
-// trigger. Whether the panel renders is a layout conditional over data, so the
-// open state stays visible to the AI. The one bit of behaviour: `closeRef` — a
-// mousedown outside the popover fires `ui:click` with that ref, so a trigger can
-// dismiss it (the only thing genuinely needing the DOM).
 const PopoverProps = z
   .object({ closeRef: z.string().optional().describe('Ref fired as ui:click on an outside click, to dismiss the panel.') })
   .strict();
@@ -273,9 +252,7 @@ export const Popover: NovaComponent<z.infer<typeof PopoverProps>> = ({
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [closeRef, dispatch]);
-  // Clicks inside the popover (the trigger, the menu items) are self-contained —
-  // stop them bubbling so an enclosing clickable row (a table row `⋯` menu) does
-  // not also fire.
+  // A click inside the popover must not also fire an enclosing clickable row.
   return (
     <div className="rl-popover" ref={ref} onClick={(e) => e.stopPropagation()}>
       {children}
@@ -287,7 +264,6 @@ Popover.meta = {
   propsSchema: PopoverProps,
 };
 
-// ─── PopoverPanel ──────────────────────────────────────────
 const PopoverPanelProps = z.object({}).strict();
 
 export const PopoverPanel: NovaComponent<z.infer<typeof PopoverPanelProps>> = ({

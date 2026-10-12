@@ -1,8 +1,3 @@
-// Headless check for the action search → quickview flow:
-//  - a create opens as the form modal,
-//  - a screen opens as a QUICKVIEW on the modal canvas (not a main navigation),
-//  - the quickview's Open-fullscreen navigates main to that action carrying its
-//    already-loaded data.
 import { shell, runtime } from './check-shell';
 
 const settle = (ms = 120): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -27,7 +22,6 @@ const rows = (canvas: string): unknown[] => (dataOf(canvas)?.['rows'] ?? []) as 
 const main = async (): Promise<void> => {
   const checks: [string, boolean][] = [];
 
-  // Create → form modal.
   await search('new');
   await enter();
   const create = actionOf('modal');
@@ -35,14 +29,12 @@ const main = async (): Promise<void> => {
   shell.clear('modal');
   await settle();
 
-  // Screen → quickview on the modal canvas (NOT a main navigation).
   await search('deals');
   await enter();
   const qv = actionOf('modal');
   checks.push([`screen opens as a quickview on the modal (got ${String(qv)})`, qv === 'crm.deals']);
   checks.push([`quickview loaded its rows (got ${rows('modal').length})`, rows('modal').length > 0]);
 
-  // Open fullscreen → main shows the action, carrying the rows.
   shell.dispatch({ type: 'ui:click', ref: 'fullscreen' });
   await settle();
   checks.push([`fullscreen navigates main (got ${String(actionOf('main'))})`, actionOf('main') === 'crm.deals']);

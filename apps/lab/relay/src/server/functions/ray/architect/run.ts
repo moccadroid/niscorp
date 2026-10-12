@@ -10,18 +10,6 @@ import { editingGuide } from './producers';
 import { validatorAgent, type ValidatorVerdict } from './validator.agent';
 import { runAction } from './harness';
 
-// ═══════════════════════════════════════════════════════════
-// Drives the architect end-to-end, and exposes it to Ray as a single tool.
-// This is the ONLY code that leaves the architect folder (imported by
-// ray/tools.ts and the bench). Everything else is contained.
-// ═══════════════════════════════════════════════════════════
-
-// ═══ the build's three agents ═══
-// The architect REASONS (design the screen, read the harness back, repair it);
-// the reviewer reads the result against the intent; the transform writer does
-// the legwork inside the architect's `map` tool. Three jobs, so three roles —
-// which model each one runs on is the LLM seam's business (server/llm), set in
-// Settings → Models and read fresh on every build.
 export type BuildLlms = { agent: SignalClient; support: SignalClient; validator: SignalClient };
 
 export const architectLlms = (): BuildLlms | { error: string } => {
@@ -35,44 +23,25 @@ export const architectLlms = (): BuildLlms | { error: string } => {
 };
 
 export type BuildResult =
-  // proofs: what the build's queries PROVED (fingerprint → count +
-  // context keys) — the pipeline's post-build checks diff loads
-  // against them.
   | { ok: true; action: ActionDefinition; reasoning?: string; proofs: ReadonlyMap<string, QueryProof> }
-  // candidate: the failed run's last schema-valid attempt (when one
-  // exists) — the pipeline continues from it in EDIT mode instead of
-  // rebuilding from nothing.
   | { ok: false; error: string; issues?: string[]; candidate?: ActionDefinition };
 
 export type BuildOptions = {
-  // Observe the agent's run (tool calls, retries) — build_action forwards
-  // these into Ray's event stream; the bench collects them.
   onEvent?: (event: CortexEvent) => void;
-  // The caller's agent path (build_action passes Ray's), so the architect's
-  // events carry a nested path the trace can label.
   agentPath?: ReadonlyArray<string>;
-  // EDIT mode: the existing definition to modify. It rides the intent as
-  // context — the architect applies the smallest change instead of
-  // rebuilding, per its own instructions.
   base?: ActionDefinition;
 };
 
-// Run the architect once. Verification happens IN the run (the agent's
-// output validator mounts the candidate in a throwaway shell; failures feed
-// back as corrections) and voluntarily (the run_action tool).
 export const runActionArchitect = async (
   ray: RayContext,
-  agentLlm: SignalClient, // the architect's own reasoning
-  supportLlm: SignalClient, // its support agents (Vex synthesis, map)
+  agentLlm: SignalClient,
+  supportLlm: SignalClient,
   intent: string,
   opts: BuildOptions = {},
 ): Promise<BuildResult> => {
   const tools = makeArchitectTools(supportLlm, ray);
-  // EDIT runs start from a definition whose fingerprints were proven when it
-  // was BUILT — demanding they be re-proven would make every small edit
-  // re-query untouched endpoints. Seed them as known (count 0: the load-diff
-  // stays silent about them; the fp-scan accepts them). New fingerprints the
-  // edit introduces still need real proofs from this run.
+  // An edit's base fingerprints were proven when it was built: they are seeded
+  // as known, with count 0 so the load diff stays silent about them.
   if (opts.base !== undefined) {
     for (const [, fp] of JSON.stringify(opts.base).matchAll(/"(fp_[0-9a-f]{16})"/g)) {
       if (fp !== undefined && !tools.proofs.has(fp)) tools.proofs.set(fp, { count: 0, contextKeys: [] });
@@ -80,40 +49,25 @@ export const runActionArchitect = async (
   }
   const architectAgent = makeArchitectAgent(ray, tools.proofs);
 
-  // Edit mode: the current definition rides the INPUT; the editing rules
-  // ride the editingGuide PRODUCER (attached below only on edit runs), so
-  // they never dilute build runs and stay one precise, named block.
   const architectInput =
     opts.base !== undefined
       ? `You are EDITING the existing action "${opts.base.id}" (see EDITING).\n\nCURRENT DEFINITION:\n${JSON.stringify(opts.base)}\n\nCHANGE REQUEST: ${intent}`
       : intent;
 
-  // Context debugging lives in src/dev/architect-preview.ts — the exact
-  // assembled prefix, printed headlessly.
-
-  // Keep the last retry's issues so a run that exhausts its budget
-  // reports WHAT kept failing, not just that it stopped.
   let lastIssues: string | undefined;
   const result = await architectAgent.run({ intent: architectInput }, {
     llm: agentLlm,
-    // discover + query + run_action; `map` is a trap for the architect
-    // (see tools.ts). Each tool brings its own guide.
+    // `map` is left out deliberately: it is a trap for the architect.
     tools: [tools.discover, tools.query, tools.runAction],
-    // Edit runs get the editing rules: right-sized change, no hotfix spirals.
     ...(opts.base !== undefined && { producers: [editingGuide] }),
     ...(opts.agentPath && { agentPath: opts.agentPath }),
     onEvent: (event) => {
-      // Recovered provider rejections are corrected in-loop and are not
-      // why a build failed — only output/termination issues are worth
-      // reporting on failure.
       if (event.type === 'retry' && event.kind !== 'provider') lastIssues = event.issues;
       opts.onEvent?.(event);
     },
   }).result;
 
   if (!result.ok) {
-    // The last attempt rides the error (cortex lastOutput) as either the
-    // envelope or the bare payload — keep it when it parses as an action.
     const raw = result.error.lastOutput;
     const attempt =
       raw !== null && typeof raw === 'object' && 'data' in (raw as Record<string, unknown>)
@@ -135,21 +89,13 @@ export const runActionArchitect = async (
   };
 };
 
-// Force a generated action's id into the `view.*` namespace so it can never
-// overwrite a hand-authored screen (registerAction replaces silently).
+// A generated id is forced into `view.*` so it cannot overwrite a
+// hand-authored screen: registerAction replaces silently.
 const namespaceActionId = (definition: ActionDefinition): ActionDefinition =>
   definition.id.startsWith('view.') ? definition : { ...definition, id: `view.${definition.id}` };
 
-// One validator pass — a pure-reader agent judging intent vs wiring. Its
-// findings' `fix` lines are written for the architect (the repair run's
-// change request). A validator failure is reported, never fatal: the screen
-// still ships, honestly annotated.
-// The proven queries behind a definition's fingerprints, as ENGLISH — the
-// cache stores each query's intent. The validator needs them because
-// ordering, limits and filters live INSIDE the query, invisible in the
-// definition: a reviewer without this list reads "top 10 by value", finds no
-// ORDER BY anywhere, and blocks a correct screen. Measured before the fix:
-// it blocked every good screen it saw, always over query-resident semantics.
+// The validator needs each fingerprint's proven intent: ordering, limits and
+// filters live inside the query, invisible in the definition.
 export const queryIntentsOf = async (
   ray: RayContext,
   action: ActionDefinition,
@@ -184,25 +130,15 @@ const review = async (
   return result.ok ? result.output.data : undefined;
 };
 
-// The Ray tool. Ray delegates a "build me a screen" request here. The
-// PIPELINE lives in this plain code — build → harness → review → at most ONE
-// repair — composing whole agent runs deterministically; each agent is free
-// inside its own run and knows nothing of the pipeline. Every nested run
-// forwards into Ray's event stream (ctx.forward), so the chat trace shows
-// the build, the review, and the repair live. Each agent's model comes from
-// the seam (architectLlms, above), so Settings can move any of them.
 export const makeBuildActionTool = (ray: RayContext): ToolDefinition => {
-  // Same-session memory of what this tool built, keyed by action id — the
-  // edit path reads the CURRENT definition from here, so a fix request
-  // modifies the screen instead of rebuilding it from scratch.
   const builtActions = new Map<string, ActionDefinition>();
 
   return defineTool({
     id: 'ray.build',
     name: 'build_action',
     riskLevel: 'medium',
-    // Above the architect's 6-minute stop + the review/repair round, so the
-    // agents' own bounds are what end a slow build — not Ray's tool timeout.
+    // Above the architect's 6-minute stop plus the review and repair round, so
+    // the agents' own bounds end a slow build, not this timeout.
     timeoutMs: 12 * 60_000,
     description:
       'Design a NEW interactive screen (a real Nova action, built and verified by a design agent, placed on `main`) — ' +
@@ -218,8 +154,8 @@ export const makeBuildActionTool = (ray: RayContext): ToolDefinition => {
       intent: z
         .string()
         .describe('A complete description of the screen: the data (records, filters, sorting) and every interaction. In edit mode: only the change.'),
-      // nullish, NO transform: tool inputs travel as JSON Schema and
-      // z.toJSONSchema throws on transforms. Null is normalized in execute.
+      // No transform to normalize null: tool inputs travel as JSON Schema and
+      // z.toJSONSchema throws on transforms.
       edit: z
         .string()
         .nullish()
@@ -229,7 +165,7 @@ export const makeBuildActionTool = (ray: RayContext): ToolDefinition => {
       const llms = architectLlms();
       if ('error' in llms) return llms.error;
 
-      // Models regularly send `edit: null` for "not editing" — same as absent.
+      // Models send `edit: null` for "not editing".
       const editId = edit ?? undefined;
       const base = editId !== undefined ? builtActions.get(editId) : undefined;
       if (editId !== undefined && base === undefined) {
@@ -243,9 +179,6 @@ export const makeBuildActionTool = (ray: RayContext): ToolDefinition => {
         ...pipelineOpts,
         ...(base !== undefined && { base }),
       });
-      // A failed build with a schema-valid candidate CONTINUES in edit
-      // mode — the failed screen plus its concrete issues — instead of
-      // rebuilding from nothing. One continuation, then the verdict.
       if (!buildResult.ok && buildResult.candidate !== undefined) {
         const problems = buildResult.issues?.length ? buildResult.issues.join('\n') : buildResult.error;
         buildResult = await runActionArchitect(
@@ -259,13 +192,11 @@ export const makeBuildActionTool = (ray: RayContext): ToolDefinition => {
       if (!buildResult.ok) {
         return `build failed: ${buildResult.error}${buildResult.issues && buildResult.issues.length > 0 ? ` — ${buildResult.issues.join('; ')}` : ''}`;
       }
-      // Edits keep the id stable — the screen updates in place.
       let builtAction =
         base !== undefined
           ? { ...namespaceActionId(buildResult.action), id: base.id }
           : namespaceActionId(buildResult.action);
 
-      // ── review → at most ONE repair ──
       let report = await runAction(ray, builtAction, undefined, buildResult.proofs);
       let verdict = await review(ray, llms.validator, intent, builtAction, { issues: report.issues, loaded: report.loaded }, pipelineOpts);
       const blockers = (v: ValidatorVerdict | undefined): string[] =>
@@ -285,15 +216,11 @@ export const makeBuildActionTool = (ray: RayContext): ToolDefinition => {
 
       builtActions.set(builtAction.id, builtAction);
       ray.shell.registerAction(builtAction);
-      // The LIVE catalog: the new screen is immediately openable/pushable by
-      // Ray and legal as a push target for the next build.
       registerCatalogEntry({
         id: builtAction.id,
         description: builtAction.description ?? builtAction.name ?? 'Generated screen.',
         input: builtAction.input ?? {},
       });
-      // Honest reporting: pass, pass-with-warts, unresolved blockers, or
-      // review unavailable.
       const remaining = blockers(verdict);
       const reviewNote =
         verdict === undefined
@@ -306,21 +233,11 @@ export const makeBuildActionTool = (ray: RayContext): ToolDefinition => {
             : verdict.findings.length > 0
               ? ` Verified with minor warts: ${verdict.findings.map((f) => f.claim).join('; ')}.`
               : ' Verified: does what was asked.';
-      // A SCREEN THE REVIEW FAILED IS NOT PLACED. It used to ship anyway,
-      // "honestly annotated" — and the annotation did not survive: the tool
-      // said UNRESOLVED, Ray summarised it as "Added the screen", and a
-      // person got a broken screen with a cheerful sentence over it. A
-      // screen that does not do what was asked is not a deliverable; it is
-      // registered (so `edit` can repair it) but the canvas stays as it was.
+      // A screen that failed review is registered, so `edit` can repair it, but
+      // not placed.
       const shipped = remaining.length === 0;
       if (shipped) ray.shell.push('main', builtAction.id);
 
-      // Traced envelope: the model gets the summary; the trace panel gets
-      // the full definition + findings, so "what did it actually build?"
-      // is one click away instead of invisible.
-      //
-      // The failure sentence is written for a person and marked DO NOT
-      // SOFTEN, because the one time it mattered it was paraphrased away.
       return {
         forModel: shipped
           ? `${base !== undefined ? 'Updated' : 'Built and placed'} "${builtAction.id}" on main.${reviewNote}${buildResult.reasoning ? ` ${buildResult.reasoning}` : ''}`

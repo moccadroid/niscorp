@@ -1,9 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The contact form body — the modal chrome is the `modal` fragment. Shared by
-// create and edit (seeded from the record). Bound to the action data — a single
-// "Name" the input prism re-splits into first/last. Company is an id-bearing
-// picker (options.companies).
 export const contactFormLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 13 },
@@ -25,7 +21,6 @@ export const contactFormLayout: LayoutNode = {
         { component: 'Select', model: '$.company', props: { label: 'Company', placeholder: 'Select a company…', options: '$.companyOptions', valueKey: 'company_id', labelKey: 'name' } },
       ],
     },
-    // The form's own footer — buttons here, handled by the action's triggers.
     {
       component: 'FormFoot',
       children: [

@@ -5,26 +5,6 @@ import { vexGuide } from '@niscorp/vex';
 import type { RayContext } from '../engine';
 import { runAction } from './harness';
 
-// ═══════════════════════════════════════════════════════════
-// The architect's tools — truth-checks, not steering. Each carries its own
-// `guide` (assembled into TOOL GUIDES on the run): the knowledge travels
-// with the tool, never restated in agent instructions or app prose.
-//   discover   — the data landscape: real entities/fields + existing
-//                named queries. Eyes before intents.
-//   query      — read data through Vex to PROVE it (the exact call Ray's
-//                query makes), so the agent designs against real rows.
-//   run_action — mount a candidate in a throwaway shell and SEE what happens
-//                (errors, what each endpoint loaded). Voluntary self-test;
-//                the same check judges the final answer.
-//   map        — get a Prism transform from the mapping agent. NOT handed to
-//                the architect (Vex returns the exact shape asked for, so
-//                there is nothing to reshape). Kept for consumers that do
-//                need a reshape step.
-// ═══════════════════════════════════════════════════════════
-
-// What a query PROVED, per fingerprint — the build's ground truth. The
-// harness diffs mounted loads against these instead of guessing what
-// "healthy" looks like.
 export type QueryProof = { count: number; contextKeys: string[] };
 
 export type ArchitectTools = {
@@ -32,7 +12,6 @@ export type ArchitectTools = {
   query: ToolDefinition;
   runAction: ToolDefinition;
   map: ToolDefinition;
-  // Per-build: filled by `query`, read by `run_action` and the pipeline.
   proofs: Map<string, QueryProof>;
 };
 
@@ -44,7 +23,6 @@ const parseMaybeJson = (value: string): unknown => {
   }
 };
 
-// Canonical JSON for request identity — key order must not defeat the memo.
 const canonical = (v: unknown): unknown => {
   if (Array.isArray(v)) return v.map(canonical);
   if (v !== null && typeof v === 'object') {
@@ -55,15 +33,10 @@ const canonical = (v: unknown): unknown => {
   return v;
 };
 
-// The one genuine dependency: the LLM for support agents (Vex synthesis
-// inside `query` rides the app runtime; `map` runs the Prism mapping agent).
 export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): ArchitectTools => {
   const proofs = new Map<string, QueryProof>();
-  // intent+shape → the fingerprint it minted. Models re-send a proven intent
-  // with new context values instead of replaying the fingerprint, and vex
-  // regenerates at full price — measured: 109 of 112 build queries were
-  // multi-second generations, 3 were replays; one run generated the SAME
-  // query seven times. The memo answers a repeat from the existing entry.
+  // intent+shape → the fingerprint it minted: models re-send a proven intent
+  // with new context instead of replaying the fingerprint, and vex regenerates it.
   const provenRequests = new Map<string, string>();
 
   const discover = defineTool({
@@ -101,9 +74,6 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
       'Read data to PROVE it before building. Describe the rows you want as `shape` + `intent` ' +
       '(+ `context` for values that vary). Returns { count, sample, fingerprint } — the real result plus the ' +
       'fingerprint that replays this exact query.',
-    // The Vex contract is vex's own exported guide; the fingerprint rules are
-    // this tool's own contract. Both travel WITH the tool into every agent
-    // that carries it. Plain instructions, no prose.
     guide: () =>
       vexGuide() +
       '\n\nUSING THE RESULT: the result has a `fingerprint`. It replays the exact query you just proved. ' +
@@ -168,31 +138,21 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
         ),
     }),
     execute: async ({ fingerprint: replayFingerprint, intent, shape: rawShape, context }) => {
-      // Untyped fields invite stringified JSON from reasoning models
-      // (z.unknown() gives them no type signal); a string shape would
-      // silently corrupt the cache key and the mapper target.
+      // Reasoning models send an untyped field as stringified JSON; a string
+      // shape would silently corrupt the cache key and the mapper target.
       const shape = typeof rawShape === 'string' ? parseMaybeJson(rawShape) : rawShape;
-      // Failures THROW — the loop records an honest ✗ observation and the
-      // model sees `error: …`. Returning `{ error }` here made failed
-      // proving look like success in every trace (the v1 flail loop).
+      // Failures throw: a returned `{ error }` makes a failed proof look like
+      // a successful call in the trace.
       const rt = await ray.engine();
       const ctx = (context ?? {}) as Record<string, unknown>;
-      // AUTO-REPLAY: an intent+shape this build already proved IS the same
-      // query — serve it from its fingerprint (instant) instead of letting
-      // vex regenerate it (seconds), and say so in the reply, so the model
-      // learns the replay form. Exact match on canonical intent+shape: safe,
-      // and it is the measured repeat class (same wording, new context).
       const identity =
         replayFingerprint == null && intent != null
           ? `${intent.trim()}|${JSON.stringify(canonical(shape))}`
           : undefined;
       const memoFp = identity !== undefined ? provenRequests.get(identity) : undefined;
-      // REPLAY POSTURE, CLAMPED. Vex's named-slot posture (fingerprint +
-      // intent + shape) 409s on protected entries and silently REPLACES
-      // unprotected ones — and every model, told "pass ONLY fingerprint",
-      // still attaches shape and bounces off the 409 three times per build
-      // (measured). A fingerprint means replay; extras are dropped here so
-      // the wasteful posture cannot be expressed at all.
+      // A fingerprint means replay, so intent and shape are dropped with it: models
+      // attach them anyway, and vex's named-slot posture (fingerprint + intent +
+      // shape) 409s on a protected entry and silently replaces an unprotected one.
       const res = await rt.engine.execute(
         {
           ...(memoFp !== undefined || replayFingerprint != null
@@ -208,34 +168,17 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
       if (identity !== undefined && memoFp === undefined && res.meta.cache.fingerprint !== undefined) {
         provenRequests.set(identity, res.meta.cache.fingerprint);
       }
-      // The proven query's cache identity. The result stays QUERY-shaped
-      // (rows + fingerprint) — assembling the endpoint is the agent's job,
-      // taught by this tool's guide. The fingerprint replays THIS entry:
-      // no drift, no regeneration, no LLM at mount.
       const fingerprint = res.meta.cache.fingerprint;
       const rows = res.result;
-      // The query's bindings, from vex itself: name → { type, kind }.
-      // kind 'context' = the endpoint must pass it; 'scope' = the server
-      // injects it; 'semantic' = resolved from the intent. missingContext
-      // names bindings this call did NOT supply — those results are wrong.
       const bindings = res.meta.context;
       const missing = res.meta.missingContext ?? [];
       const warnings = res.meta.warnings ?? [];
-      // A result vex flags with missingContext ran WITHOUT required
-      // parameters — vex's own meta says it is wrong. It is not a proof:
-      // recording it would let the build cite an invalid run as ground
-      // truth, and the harness would then bless whatever matched it.
       if (fingerprint !== undefined && missing.length === 0) {
         const requiredKeys = Object.entries(bindings)
           .filter(([, meta]) => meta.kind === 'context')
           .map(([key]) => key);
         proofs.set(fingerprint, { count: Array.isArray(rows) ? rows.length : 1, contextKeys: requiredKeys });
       }
-      // A run with missing context is WRONG, and handing back its fingerprint
-      // anyway was a trap: the model embedded it, the gate refused it as
-      // never-proven, and a build died five retries deep on a token the tool
-      // itself had supplied. Withhold it — the only usable fingerprint comes
-      // from a run with every required key present.
       const shared = {
         ...(missing.length === 0 && { fingerprint }),
         ...(memoFp !== undefined && {
@@ -251,9 +194,6 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
       if (Array.isArray(rows)) {
         return { count: rows.length, sample: rows.slice(0, 2), ...shared };
       }
-      // Reflect the shape semantics back — an object shape means ONE
-      // record. If the intent wanted a list, this is the moment to fix
-      // the shape, not to build a single-record endpoint under a table.
       return {
         single: rows,
         ...shared,
@@ -278,7 +218,6 @@ export const makeArchitectTools = (supportLlm: SignalClient, ray: RayContext): A
     }),
     execute: async ({ action }) => {
       const check = await runAction(ray, action, undefined, proofs);
-      // Compact what loaded: full row arrays would flood the transcript.
       const data = Object.fromEntries(
         Object.entries(check.data).map(([key, value]) => [
           key,

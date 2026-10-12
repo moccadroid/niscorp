@@ -3,9 +3,7 @@ import react from '@vitejs/plugin-react';
 import { getRequestListener } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 
-// The app server runs INSIDE vite's dev process — one `pnpm dev`, no proxy,
-// no second terminal. ssrLoadModule gives the composition vite's own
-// resolution (aliases, TS), so this is the same boot serve.ts runs standalone.
+// ssrLoadModule gives boot.ts vite's own resolution (aliases, TS).
 const appServer = (): Plugin => ({
   name: 'relay-app-server',
   configureServer: (viteServer: ViteDevServer) => {
@@ -14,7 +12,6 @@ const appServer = (): Plugin => ({
         boot: () => Promise<{ server: { fetch: (req: Request) => Response | Promise<Response>; socket: Parameters<typeof attachSocket>[1] } }>;
       };
       const { server } = await mod.boot();
-      // The socket rides vite's own http server — one port, app + api + ws.
       if (viteServer.httpServer !== null) attachSocket(viteServer.httpServer, server.socket);
       return getRequestListener(server.fetch);
     })();
@@ -44,14 +41,12 @@ export default defineConfig({
     port: 5174,
     open: true,
     fs: {
-      // Allow Vite to read the workspace-linked package source.
       allow: [workspaceRoot],
     },
   },
   optimizeDeps: {
-    // PGlite ships its Postgres WASM + extension assets and resolves them
-    // via import.meta.url at runtime; pre-bundling breaks that, so exclude
-    // it (per ElectricSQL's Vite guidance).
+    // PGlite resolves its Postgres WASM and extension assets via
+    // import.meta.url at runtime; pre-bundling breaks that.
     exclude: ['@electric-sql/pglite', '@electric-sql/pglite-pgvector'],
   },
 });

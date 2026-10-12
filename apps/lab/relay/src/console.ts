@@ -3,32 +3,10 @@ import { createTtyView } from '@niscorp/nova/adapters/tty';
 import type { TtyFrame, TtyInteractive, TtyRenderApi } from '@niscorp/nova/adapters/tty';
 import { defaultRegistry, fallback } from '@niscorp/nova/adapters/tty/components';
 
-// ═══════════════════════════════════════════════════════════
-// Relay in the F12 console — the smallest terminal: any webpage's devtools
-// console becomes a render target. Paste the built bundle (dist/console.js,
-// `pnpm console`) into a console, or on lax-CSP pages:
-//
-//   await fetch('http://localhost:8787/console.js').then(r => r.text()).then(eval)
-//
-// Frames log as styled monospace with the same [n] markers as every other
-// terminal; the globals it installs are the whole input scheme:
-//
-//   act(6)          click [6] (button, row) · flip a toggle
-//   act(3, 'alex')  type into input [3]
-//   key(3, 'Enter') send a key to input [3]
-//   refs()          console.table of everything actionable
-//   show()          reprint the current screen
-//   relayQuit()     disconnect and remove the globals
-//
-// The session token lives in the VISITED page's localStorage — a separate
-// session per origin you haunt. RELAY_URL (set before pasting) overrides
-// the default ws://127.0.0.1:8787/socket.
-// ═══════════════════════════════════════════════════════════
-
 type ConsoleGlobals = Record<string, unknown> & { __relayConsole?: { dispose: () => void } };
 const w = window as unknown as ConsoleGlobals;
 
-// re-paste = reconnect: tear the previous instance down first
+// Pasting the bundle into the same page again reconnects: the previous instance goes first.
 w.__relayConsole?.dispose();
 
 const url = typeof w['RELAY_URL'] === 'string' ? (w['RELAY_URL'] as string) : 'ws://127.0.0.1:8787/socket';
@@ -45,7 +23,6 @@ const view = createTtyView(defaultRegistry(), api, { fallback });
 const MONO = 'font-family:ui-monospace,monospace;white-space:pre';
 const MARKER = `${MONO};color:#00bcd4;font-weight:bold`;
 
-// One console.log per frame: %c-styled so markers read cyan, everything mono.
 const styled = (text: string): [string, string[]] => {
   const styles: string[] = [MONO];
   const fmt = text.replace(/%/g, '%%').replace(/\[\d+\]/g, (marker) => {

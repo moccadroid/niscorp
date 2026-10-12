@@ -1,19 +1,9 @@
-// Headless data-layer harness: boots the real PGlite + Vex runtime in Node and
-// runs every read the way the APP runs it — each check evaluates the screen's
-// own prism (the same seam the shell's transform socket evaluates) against
-// screen state, sends the resulting `{ fingerprint, context }` through the
-// engine, and asserts the replay: cache HIT on the intended fingerprint, no
-// missing context, the right envelope, and rows where the seed guarantees
-// them. Run with `pnpm --filter relay smoke`. Excluded from the app typecheck
-// (src/dev).
 import { evaluate } from '@niscorp/prism';
 import type { QueryRequest } from '@niscorp/vex';
 import type { CacheEntry } from '@relay/app/vex';
 import { getVexRuntime } from '@relay/dev/engine';
 import { todayStr } from '@relay/lib/date';
 
-// The user the replays run as — smoke drives the ENGINE directly with an
-// explicit scope (the app derives its scope from the session token).
 const CURRENT_USER = 'usr_001';
 import { CHARTER, ASSIGNMENTS } from '@relay/app/charter';
 import { resolvePrincipal } from '@niscorp/charter';
@@ -36,23 +26,19 @@ import { sidebarCountsPrism } from '@relay/app/actions/chrome/sidebar.prism';
 import { topbarSearchPrism } from '@relay/app/actions/chrome/topbar.prism';
 
 type Check = {
-  def: CacheEntry; // the entry the prism must resolve to
-  prism: unknown; // the screen's request seam
-  state?: Record<string, unknown>; // screen state beyond the ambient defaults
-  mayBeEmpty?: boolean; // the seed doesn't guarantee rows for this read
+  def: CacheEntry;
+  prism: unknown;
+  state?: Record<string, unknown>;
+  mayBeEmpty?: boolean;
 };
 
-// Screen state mirrors what the shell provides: action-data defaults
-// (`search: ''`, sort defaults, tab scopes, opened ids) plus the ambient
-// context the transform socket folds into every source (`userId`, `today`).
-// Prism `$ref` is strict, so every key a list prism references must be here —
-// exactly as the action's `data` guarantees in the app.
+// Prism `$ref` is strict, so every key a prism references must be in its state.
 const checks: Check[] = [
   { def: contactsList, prism: listContactsPrism, state: { sortBy: 'contacts.last_name', sortDir: 'asc' } },
   { def: companiesList, prism: listCompaniesPrism, state: { sortBy: 'companies.name', sortDir: 'asc' } },
   { def: dealsList, prism: listDealsPrism, state: { ownerId: '', sortBy: 'deals.created_at', sortDir: 'desc' } },
   { def: dealsByOwner, prism: listDealsPrism, state: { ownerId: 'me', sortBy: 'deals.created_at', sortDir: 'desc' } },
-  // Static replays — plain JSON bodies in the actions (no seam), mirrored here.
+  // Static replays: plain JSON bodies in the actions, mirrored here.
   { def: dealsBoard, prism: { fingerprint: dealsBoard.fingerprint, context: {} } },
   { def: dealsOpenByStage, prism: { fingerprint: dealsOpenByStage.fingerprint, context: {} } },
   { def: dealsForecast, prism: { fingerprint: dealsForecast.fingerprint, context: {} } },
@@ -71,8 +57,8 @@ const checks: Check[] = [
   { def: dealsByStatus, prism: { fingerprint: dealsByStatus.fingerprint, context: { status: 'won' } } },
   { def: tasksOpenCount, prism: { fingerprint: tasksOpenCount.fingerprint, context: {} } },
   { def: sidebarCounts, prism: sidebarCountsPrism },
-  // `allowedIds` is what the shell seeds into the topbar at boot — the
-  // principal's resolved charter grant, derived here the same way.
+  // `allowedIds` is what the shell seeds into the topbar at boot: the
+  // principal's resolved charter grant.
   { def: actionsSearch, prism: topbarSearchPrism, state: { search: 'new', allowedIds: [...resolvePrincipal(CHARTER, Object.keys(CATALOG_DEFINITIONS), [...(ASSIGNMENTS[CURRENT_USER] ?? ['public'])])] } },
 ];
 
@@ -89,9 +75,6 @@ const main = async (): Promise<void> => {
     const sql = rt.engine.compile(c.def.dsl).sql;
     const res = await rt.engine.execute(request, { scope: { userId: CURRENT_USER } });
 
-    // The assertions that keep this harness honest: the prism resolved to the
-    // intended entry, the replay was warm, every SQL parameter was bound, the
-    // envelope matches the entry's shape, and seeded reads actually return data.
     const problems: string[] = [];
     if (res.meta.cache.hit !== true) problems.push('cache MISS');
     if (res.meta.cache.fingerprint !== c.def.fingerprint) {

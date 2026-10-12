@@ -4,18 +4,11 @@ import { Check } from 'lucide-react';
 import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/react';
 import { Icon } from './display';
 
-// Form inputs — Input, Select, Textarea, Checkbox. Each is two-way bound via a
-// layout `model: "$.path"`: the renderer feeds the current value in as `value`,
-// and a change dispatches `ui:model`, which the runtime turns into a `set` on
-// the bound path (no per-field trigger). Styling: .rl-input / .rl-field in
-// ui.css.
-
 type Bound = { novaModel?: { ref: string; path: string } };
 
 const asText = (v: unknown): string =>
   typeof v === 'string' || typeof v === 'number' ? String(v) : '';
 
-// Wrap a control in a labelled field (label + control) when `label` is given.
 const field = (label: string | undefined, required: boolean | undefined, control: ReactNode): ReactNode =>
   label === undefined ? (
     control
@@ -29,7 +22,6 @@ const field = (label: string | undefined, required: boolean | undefined, control
     </label>
   );
 
-// ─── Input ─────────────────────────────────────────────────
 const InputProps = z
   .object({
     type: z.string().optional(),
@@ -58,11 +50,8 @@ export const Input: NovaComponent<z.infer<typeof InputProps>> = ({
 }: z.infer<typeof InputProps> & Bound & { novaRef?: string }) => {
   const dispatch = useNovaDispatch();
   const debounced = typeof debounce === 'number' && debounce > 0;
-  // Debounced mode keeps a local echo of the text so typing is instant while the
-  // `ui:model` dispatch (which re-runs the query) fires only on a trailing timer.
-  // `lastSent` lets the effect adopt *external* changes to the bound value (e.g.
-  // an Escape that clears it) without clobbering keystrokes mid-type. Unset/0 =
-  // fully controlled + immediate, exactly as before (so form fields are untouched).
+  // `lastSent` lets the effect adopt an external change to the bound value (an
+  // Escape that clears it) without overwriting keystrokes not yet dispatched.
   const [local, setLocal] = useState(asText(value));
   const lastSent = useRef(asText(value));
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -95,9 +84,8 @@ export const Input: NovaComponent<z.infer<typeof InputProps>> = ({
         }
       }}
       onKeyDown={(e) => {
-        // With a ref, the input also emits `ui:key` so triggers can handle
-        // navigation (e.g. the action search's ↑/↓/Enter/Esc). Arrows are prevented
-        // so the caret doesn't jump while moving the selection.
+        // The arrows are prevented so the caret does not jump while a trigger
+        // moves the selection.
         if (novaRef === undefined) return;
         if (e.key === 'ArrowDown' || e.key === 'ArrowUp') e.preventDefault();
         dispatch({ type: 'ui:key', ref: novaRef, key: e.key });
@@ -119,12 +107,6 @@ export const Input: NovaComponent<z.infer<typeof InputProps>> = ({
 };
 Input.meta = { description: 'Text input. Two-way bound via `model:`.', propsSchema: InputProps };
 
-// ─── Select ────────────────────────────────────────────────
-// Options are objects; which keys hold the value + label is configurable
-// (`valueKey`/`labelKey`, default value/label). That lets id-bearing reads use
-// entity-distinct shapes — `[{ company_id, name }]` vs `[{ stage_id, name }]` —
-// which the shape-keyed Vex cache then keeps apart (same `{value,label}` shape
-// for two different lists would collide on one cache entry).
 const SelectProps = z
   .object({
     options: z.array(z.record(z.string(), z.unknown())).optional(),
@@ -175,7 +157,6 @@ Select.meta = {
   propsSchema: SelectProps,
 };
 
-// ─── Textarea ──────────────────────────────────────────────
 const TextareaProps = z
   .object({
     placeholder: z.string().optional(),
@@ -208,8 +189,6 @@ export const Textarea: NovaComponent<z.infer<typeof TextareaProps>> = ({
         if (novaModel) dispatch({ type: 'ui:model', ref: novaModel.ref, payload: e.target.value });
       }}
       onKeyDown={(e) => {
-        // With a ref, Enter submits (emits `ui:key`); Shift+Enter inserts a newline
-        // (default). Lets a chat box send on Enter while keeping multi-line input.
         if (novaRef === undefined) return;
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
@@ -224,7 +203,6 @@ Textarea.meta = {
   propsSchema: TextareaProps,
 };
 
-// ─── Checkbox ──────────────────────────────────────────────
 const CheckboxProps = z.object({ label: z.string().optional(), value: z.unknown().optional() }).strict();
 
 export const Checkbox: NovaComponent<z.infer<typeof CheckboxProps>> = ({
@@ -250,7 +228,6 @@ export const Checkbox: NovaComponent<z.infer<typeof CheckboxProps>> = ({
 };
 Checkbox.meta = { description: 'Boolean checkbox. Two-way bound via `model:`.', propsSchema: CheckboxProps };
 
-// ─── Switch ────────────────────────────────────────────────
 const SwitchProps = z.object({ value: z.unknown().optional() }).strict();
 
 export const Switch: NovaComponent<z.infer<typeof SwitchProps>> = ({

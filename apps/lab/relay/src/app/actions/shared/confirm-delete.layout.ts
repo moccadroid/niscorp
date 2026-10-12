@@ -1,10 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// A small, reusable destructive-confirm dialog — content only. The `panel`
-// fragment supplies the backdrop + card (width from `$.panelSize`); this is just
-// the header, message, and the Cancel / Delete buttons. The caller pushes it
-// `with: ['panel']` and `input: { label, message }`. Confirm announces
-// `confirm-delete`; the list that opened it holds the id and runs the delete.
 export const confirmDeleteLayout: LayoutNode = [
   {
     component: 'DialogHead',

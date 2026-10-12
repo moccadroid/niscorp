@@ -1,6 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Companies list — search toolbar (Nova) over the reusable `Table` primitive.
 export const companiesLayout: LayoutNode = {
   component: 'Box',
   props: {},

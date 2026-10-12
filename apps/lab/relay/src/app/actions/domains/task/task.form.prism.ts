@@ -1,15 +1,9 @@
 import { taskUpsert } from '@relay/app/vex/tasks.entries';
 
-// Write seam for the task form — a full Vex write body, attached to the form's
-// `save` request. The form's "Due date" (`due`) becomes the `due_date` column,
-// coerced to null when empty (an empty string is not a valid DATE); "Priority"
-// has no column and is dropped. `deal_id` is set when the task is added from a
-// deal (else '', coerced to null — '' isn't a valid FK). Action shape ≠ DB shape.
+// '' is not a valid DATE or foreign key, so an empty `due` or `deal_id` is sent
+// as null. The form's `priority` has no column and is not sent.
 const emptyToNull = (path: string) => ({ $case: { branches: [{ when: { $ref: path }, then: { $ref: path } }], else: null } });
 
-// One `upsert` seam. All of title/due/deal_id/id flow into context; the mutation
-// desugars by `id` — update sets title+due (its `columns`), insert adds the
-// `insert`-only `deal_id`, so editing can't re-link or wipe the task's deal.
 export const upsertTaskPrism = {
   fingerprint: taskUpsert.fingerprint,
   context: {

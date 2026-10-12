@@ -9,39 +9,14 @@ import { todayStr } from '@relay/lib/date';
 import { catalogEntries } from '../catalog';
 import { knownChannels } from '../knowledge';
 
-// ═══════════════════════════════════════════════════════════
-// The one verification primitive: schema parse → static wiring audit → mount
-// and look. This HARNESS is where action validation is robust — the agent's
-// validator, the run_action self-test tool, and any dev check all call it;
-// none carry bespoke checks of their own.
-//
-// The audit (nova's auditAction) cross-references the definition against
-// itself and the catalog: bindings ↔ data defaults, refs ↔ triggers, calls ↔
-// endpoints, targets ↔ data, pushes ↔ catalog input contracts — every way a
-// definition can mount politely and still be broken at click time. Audit
-// failures return WITHOUT mounting: they are deterministic and precise.
-//
-// `runAction` then mounts the candidate in a THROWAWAY shell — same
-// registry / fetch / transform as the live app, but its own buses, never
-// attached to React. It loads the action's data (proving its endpoints),
-// renders it once (so a broken binding/component surfaces via onError), and
-// reports what happened. The full data is returned; the probe TOOL samples
-// it before the model ever sees it.
-// ═══════════════════════════════════════════════════════════
-
 export type RunResult = {
   ok: boolean;
   data: Record<string, unknown>;
   issues: string[];
-  // What each endpoint's target held AFTER mount — the diff between "what
-  // should be there" (a target per endpoint) and what actually arrived
-  // ("12 rows" / "object" / "EMPTY"). Feedback for models and humans both.
   loaded: Record<string, string>;
 };
 
-// The same endpoint transform the live shell injects (see nova/shell/shell.ts):
-// fold the signed-in user + the app's "today" into the source so read prisms
-// resolve `$.userId` / `$.today`. Endpoint-only — never touches action data.
+// The same endpoint transform the live shell injects.
 const transformAmbient = (userId: string) => (config: unknown, source: unknown): unknown =>
   evaluate(
     config as Parameters<typeof evaluate>[0],
@@ -50,10 +25,7 @@ const transformAmbient = (userId: string) => (config: unknown, source: unknown):
       : source) as Parameters<typeof evaluate>[1],
   );
 
-// `shell.push` fires mount asynchronously and forgets it, so the data isn't loaded
-// the instant push returns — we must wait for the instance to finish mounting
-// (status → active) or die (unmounted) before reading. Bounded so a hung endpoint
-// can't hang the probe (and leak the shell); on timeout the caller records an issue.
+// `shell.push` does not wait for the mount. Bounded so a hung endpoint cannot hang the probe.
 const awaitMount = (rt: PublicActionRuntime, timeoutMs = 60_000): Promise<boolean> =>
   new Promise((resolve) => {
     const s = rt.instance.status;
@@ -72,12 +44,6 @@ const awaitMount = (rt: PublicActionRuntime, timeoutMs = 60_000): Promise<boolea
     });
   });
 
-// Post-mount load report: for every endpoint with a `target`, what
-// arrived — DIFFED against what the build's queries PROVED. No
-// heuristics about what "healthy" looks like: empty is legal exactly
-// when the proof was empty; a proof that returned rows while the
-// mounted replay loaded nothing is a named discrepancy (the context
-// bindings differ from the proof).
 type QueryProof = { count: number; contextKeys: string[] };
 
 type Endpointish = { target?: string; request?: unknown };
@@ -141,23 +107,14 @@ export const runAction = async (
       ok: false,
       data: {},
       loaded: {},
-      // Flattened union issues: zod says "Invalid input" at a union node
-      // (steps, layout nodes); the flattener names the branch the value
-      // meant, so the model reads "steps.0.call: expected string" instead.
       issues: flattenSchemaIssues(parsed.error.issues).map(
         (i) => `${i.path.join('.') || '(root)'}: ${i.message}`,
       ),
     };
   }
 
-  // EVERY GENERATED FINGERPRINT IN THE DEFINITION MUST HAVE BEEN PROVEN IN
-  // THIS BUILD. Mounting exercises only the DEFAULT state — a fingerprint
-  // behind the other branch of a $case (a dropdown's July while June is the
-  // default) is never replayed by the probe, so a mistyped or invented one
-  // ships silently and the screen dies at click time. The check is static and
-  // total: any `fp_…` literal anywhere in the definition that this build's
-  // query tool never returned is a named failure, not a latent 404. Seeded
-  // names (`deals/list`) are the durable API surface and pass freely.
+  // Mounting replays only the default state, never another branch of a $case, so
+  // every `fp_…` literal is checked statically. Seeded names (`deals/list`) pass.
   if (proofs !== undefined) {
     const serialized = JSON.stringify(parsed.data);
     const embedded = new Set(
@@ -175,12 +132,6 @@ export const runAction = async (
         ),
       };
     }
-    // THE HOLLOW SHIP. A run that proved data and then wired NONE of it can
-    // pass every other check: the schema allows a definition with no
-    // endpoints, the audit has nothing to cross-reference, and a mount with
-    // nothing to load fails nothing. Seen in the wild: five clean queries,
-    // then a Stack with one empty Text, shipped with zero retries. If this
-    // build proved data, the definition must load some of it.
     if (proofs.size > 0) {
       const used = [...proofs.keys()].some((fp) => serialized.includes(`"${fp}"`));
       if (!used) {
@@ -197,20 +148,11 @@ export const runAction = async (
   }
 
   const audit = auditAction(parsed.data, {
-    // LIVE catalog: hand-authored screens + everything built this session.
     catalog: catalogEntries().map((entry) => ({ id: entry.id, input: entry.input })),
-    // LIVE channel vocabulary, derived from the registered definitions.
     channels: knownChannels(),
   });
-  // PRISM GRAMMAR DOES NOT RENDER. Layout props are resolved by the shell's
-  // binding resolver, whose whole vocabulary is string paths ("$.deals"),
-  // moustache templates, and the render directives below. A prism node in a
-  // prop — rows: {"$ref": "$.deals"} — is walked as a PLAIN OBJECT: the Table
-  // receives { $ref: [rows] } instead of the rows, Array.isArray fails, and
-  // the screen renders its empty state OVER loaded data with no error
-  // anywhere. Seen live: a header reading "6 deals" beside an empty table.
-  // Prism belongs to endpoint request/response ONLY; in layout it is refused
-  // here, statically, with the rewrite spelled out.
+  // The binding resolver knows string paths, moustache and the directives below.
+  // A prism node in a layout prop is walked as a plain object: it renders empty, with no error.
   const RENDER_DIRECTIVES = new Set(['$if', '$then', '$else', '$eq', '$exists', '$at', '$prism']);
   const prismInLayout: string[] = [];
   const scanLayout = (node: unknown, path: string): void => {
@@ -234,11 +176,6 @@ export const runAction = async (
   scanLayout(parsed.data.layout, 'layout');
   if (prismInLayout.length > 0) return { ok: false, data: {}, loaded: {}, issues: prismInLayout };
 
-  // OPTION VALUES TRAVEL THROUGH THE DOM. A <select> option's value is a
-  // string, full stop — relay's Select coerces anything else to '' — so an
-  // object value reaches the trigger as an EMPTY string, the bound key goes
-  // blank, and the screen dies with no error (observed live: a month dropdown
-  // whose {start,end} values all became "", loading stuck on a skeleton).
   const badOptions: string[] = [];
   const scanOptions = (node: unknown, path: string): void => {
     if (Array.isArray(node)) { node.forEach((c, i) => scanOptions(c, `${path}.${i}`)); return; }
@@ -256,18 +193,9 @@ export const runAction = async (
     for (const [k, v] of Object.entries(record)) scanOptions(v, `${path}.${k}`);
   };
   scanOptions(parsed.data.layout, 'layout');
-  // Options can also ride DATA (`options: "$.months"`) — same DOM constraint,
-  // so the same scan walks the data defaults too.
   scanOptions((parsed.data as { data?: unknown }).data ?? {}, 'data');
   if (badOptions.length > 0) return { ok: false, data: {}, loaded: {}, issues: badOptions };
 
-  // THE ONE-CHOICE-BEHIND RACE, refused statically. A ui:model trigger fires
-  // in a race with the model-binding write, so a `call` that reads the bound
-  // key without first setting it from @event.payload loads the PREVIOUS
-  // value — pick August, see June. Every hand-authored screen sets first
-  // (settings.action.ts documents why); this was taught to the builder and
-  // promptly ignored, so like every class we have actually killed, it is now
-  // teaching AND refusal.
   const raceIssues: string[] = [];
   const triggers = (parsed.data as { triggers?: { event?: string; ref?: string; do?: unknown[] }[] }).triggers ?? [];
   triggers.forEach((trigger, i) => {
@@ -287,11 +215,6 @@ export const runAction = async (
   });
   if (raceIssues.length > 0) return { ok: false, data: {}, loaded: {}, issues: raceIssues };
 
-  // Correction QUALITY is part of the gate's job: an issue the model cannot
-  // decode is a retry burned. The audit reports `set: "$.loading"` as "writes
-  // a key with no default in data" — literally true (the data key is
-  // `loading`, not `$.loading`) and reliably misread: runs burn their whole
-  // budget re-shuffling everything BUT the `$.` prefix. Say the actual fix.
   const clarified = (issue: string): string => {
     const m = /step "set: \$\.([\w.]+)" writes a key with no default in data/.exec(issue);
     if (m !== null && m[1] !== undefined && Object.hasOwn(parsed.data.data ?? {}, m[1].split('.')[0] ?? '')) {
@@ -302,8 +225,6 @@ export const runAction = async (
   if (!audit.ok) return { ok: false, data: {}, loaded: {}, issues: audit.issues.map(clarified) };
 
   const issues: string[] = [];
-  // Ray's wire — the trusted generative island keeps an engine-direct shim
-  // (the app's data plane is moss; agents run server-side).
   type Init = { method?: string; headers?: Record<string, string>; body?: string };
   type Resp = { ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> };
   const wrap = (status: number, body: unknown): Resp => ({
@@ -312,14 +233,8 @@ export const runAction = async (
     json: () => Promise.resolve(body),
     text: () => Promise.resolve(JSON.stringify(body)),
   });
-  // THE REPLY SHAPE IS THE LIVE WIRE'S, EXACTLY. Moss's session wire unwraps a
-  // vex reply before the endpoint sees it — `{ result, meta }` becomes the bare
-  // result (server.ts, "endpoints want the data"). This probe used to serve the
-  // envelope verbatim, so it verified a contract that does not exist: a screen
-  // reading `$.result` passed here and died on the live shell (prism's $ref
-  // throws on a missing path — over an ARRAY, `$.result` is a missing path),
-  // while a correctly-authored screen would have flunked the probe. A verifier
-  // that disagrees with production is worse than none; this one now mirrors it.
+  // Mirrors moss's session wire, which unwraps a vex reply before the endpoint
+  // sees it: `{ result, meta }` becomes the bare result.
   const unwrapVex = (status: number, body: unknown): Resp => {
     if (status >= 400) return wrap(status, body);
     const result =
@@ -343,16 +258,11 @@ export const runAction = async (
     );
     return unwrapVex(res.status, res.body);
   };
-  // A failed endpoint call must be TALKED ABOUT, not just leave its target
-  // empty — vex's error body says exactly what went wrong (a cache_miss
-  // names the unknown fingerprint). Wrap the fetch and keep the bodies.
   const probeFetch: typeof rayFetch = async (url, init) => {
     const res = await rayFetch(url, init);
     if (!res.ok) {
       try {
         const text = (await res.text()).slice(0, 300);
-        // Vex's advice ("pass intent + shape") is for API callers; the
-        // action available HERE is the query tool. Say so.
         const advice = text.includes('cache_miss')
           ? ' Get a valid fingerprint by calling `query`; put THAT fingerprint in the endpoint request.'
           : '';
@@ -366,9 +276,6 @@ export const runAction = async (
   const shell = createShell({
     canvases: [{ id: 'main' }],
     registry: buildRegistry(),
-    // Only the candidate is registered. Navigation targets (a row click opening
-    // another action) resolve at INTERACTION time, which a mount-only probe never
-    // triggers, so the existing catalog isn't needed here.
     actions: { [parsed.data.id]: parsed.data },
     functions: {},
     transform: transformAmbient(ray.userId),
@@ -376,10 +283,8 @@ export const runAction = async (
     onError: (e) => issues.push(`${e.code}: ${e.message}`),
   });
 
-  // A FAILED ENDPOINT IS AN ISSUE EVEN WHEN THE ACTION HANDLES IT. An
-  // onError step that flips a loading flag makes the failure invisible to
-  // onError-the-shell-hook — the screen mounts politely over a dead load. The
-  // shell announces every endpoint outcome; a probe exists to look.
+  // An action's own onError step hides a failed endpoint from the shell's
+  // onError hook, so endpoint outcomes are watched directly.
   const offEndpoint = shell.onEndpoint((event) => {
     if (!event.ok) issues.push(`endpoint '${event.name}' FAILED (status ${event.status}) — its target was not written`);
   });

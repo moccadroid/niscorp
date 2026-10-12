@@ -3,38 +3,13 @@ import { createSignal } from '@niscorp/signal';
 import type { SignalClient } from '@niscorp/cortex';
 import type { ReasoningEffort } from './effort';
 
-// ═══════════════════════════════════════════════════════════
-// The OpenRouter LLM adapter.
-//
-// A sibling of the Groq adapter (llm/groq.ts): same shape, its own key slot, a
-// different provider. Used to run the whole pipeline (Ray, Vex's query/mapping
-// agents, the action builder) on a stronger model. OpenAI-compatible, so we
-// inject a statically-built OpenAI SDK client (Vite can't resolve Signal's
-// dynamic `import('openai')` from the workspace dist).
-//
-// One endpoint, many models — so the MODELS live here, each with a factory that
-// names it. What each model CAN DO is not stated here: it is signal's model
-// registry row for (openrouter, model), measured by signal's probe. A model
-// with no row resolves to signal's unmeasured floor.
-// ═══════════════════════════════════════════════════════════
-
 export const OPENROUTER_ENV_KEY = 'OPENROUTER_API_KEY';
 
 export const GLM_MODEL = 'z-ai/glm-5.2';
 
-// Ox Alpha — a reasoning model built for long-horizon agentic work: 1M context,
-// 131k completion, free while it sits behind the `stealth/` namespace (checked
-// against /api/v1/models on 2026-08-21 — pricing 0/0). Reasoning is mandatory
-// and defaults to MAX effort, so it thinks before every step by construction.
-//
-// GONE: not in OpenRouter's /models on 2026-09-24, so it has no signal registry
-// row and could not be measured. Kept in the roster pending a decision; a run
-// on it will fail at the provider.
+// Not in OpenRouter's /models: a run on it fails at the provider.
 export const OX_ALPHA_MODEL = 'stealth/ox-alpha';
 
-// GPT-5.6 Luna — a mid-price frontier model: 1M context, six reasoning rungs,
-// $0.20/$1.20 per Mtok. Probed 2026-08-22 like the others: `tools` +
-// `response_format` in one request, nested arrays in tool args arrive clean.
 export const LUNA_MODEL = 'openai/gpt-5.6-luna';
 
 
@@ -44,7 +19,6 @@ const openRouter = (apiKey: string): OpenAI =>
     apiKey,
     baseURL: 'https://openrouter.ai/api/v1',
     dangerouslyAllowBrowser: true,
-    // OpenRouter attribution headers (optional, for its dashboard/rankings).
     defaultHeaders: { 'HTTP-Referer': 'https://relay.local', 'X-Title': 'Relay' },
   });
 
@@ -56,13 +30,6 @@ export const createOpenRouterClient = (apiKey: string, reasoningEffort?: Reasoni
     ...(reasoningEffort !== undefined && { options: { reasoningEffort } }),
   });
 
-// Effort is a BUDGET, not a quality dial you always max. Reasoning is mandatory
-// on this model and it defaults to `max` — measured on one representative
-// prompt: low 7.9s, high 16.5s, max 18.7s, and the extra is nearly all thinking
-// tokens. Against the architect's knowledge base `max` cost ~33s per agent step
-// and overran the 6m stop before the agent was done; `high` finished the same
-// build in 3m55s, `low` in 2m42s. Which rung an agent runs at is now the seam's
-// business (server/llm/index.ts), set per agent in Settings.
 export const createOxAlphaClient = (apiKey: string, reasoningEffort?: ReasoningEffort): SignalClient =>
   createSignal('openrouter', {
     client: openRouter(apiKey),
@@ -71,8 +38,6 @@ export const createOxAlphaClient = (apiKey: string, reasoningEffort?: ReasoningE
     ...(reasoningEffort !== undefined && { options: { reasoningEffort } }),
   });
 
-// The OpenRouter API key — server configuration (.env), its own variable
-// (distinct from the Groq key).
 export const getKey = (): string | undefined => {
   const k = process.env[OPENROUTER_ENV_KEY];
   return k === undefined || k === '' ? undefined : k;

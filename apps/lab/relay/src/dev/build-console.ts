@@ -1,7 +1,5 @@
-// Builds the F12-console bundle (dist/console.js) and prints how to use it.
-// `pnpm console`. The ignored-bare-import warnings are tsup's pure chunk
-// re-exports under `sideEffects:false` — esbuild drops them correctly, so
-// they're silenced (see the --log-override rationale in the commit).
+// The ignored-bare-import warnings are tsup's pure chunk re-exports under
+// `sideEffects:false`; esbuild drops them correctly, so they are silenced.
 import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
 

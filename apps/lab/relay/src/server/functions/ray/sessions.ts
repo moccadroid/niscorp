@@ -1,9 +1,5 @@
 import type { TraceStep } from './trace';
 
-// Chat sessions — server-side, per principal, in memory: history survives
-// closing the panel and reconnecting (the store lives with the process),
-// and one principal's chats are invisible to another. Durable storage is
-// a later story; eviction dies with the process.
 export type ChatMessage = { role: string; text: string; trace?: TraceStep[]; ms?: number; view?: unknown };
 export type Session = { id: string; title: string; messages: ChatMessage[]; createdAt: number };
 
@@ -14,9 +10,6 @@ const stores = new Map<string, Store>();
 const storeOf = (principal: string): Store => {
   const hit = stores.get(principal);
   if (hit !== undefined) return hit;
-  // Debug ON by default: a run's tool calls are the only signal a person gets
-  // while a build takes minutes, and defaulting it off meant the honest answer
-  // to "is it doing anything?" was hidden behind a setting.
   const fresh: Store = { sessions: [], currentId: null, debug: true };
   stores.set(principal, fresh);
   return fresh;
@@ -30,7 +23,6 @@ const titleOf = (messages: ChatMessage[]): string => {
   return firstUser.text.length > 40 ? `${firstUser.text.slice(0, 40)}…` : firstUser.text;
 };
 
-// One principal's session surface — everything Ray's fns need, bound once.
 export type SessionStore = {
   ensureCurrent: () => Session;
   newSession: () => Session;
@@ -38,7 +30,6 @@ export type SessionStore = {
   setMessages: (id: string, messages: ChatMessage[]) => void;
   sessionList: () => { id: string; title: string }[];
   clear: () => void;
-  // rough byte estimate of this principal's chat history (JSON length)
   estimate: () => string;
   getDebug: () => boolean;
   setDebug: (on: boolean) => void;

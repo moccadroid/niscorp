@@ -6,33 +6,15 @@ import type { Shell } from '@niscorp/nova';
 import type { NiscRuntime } from '@niscorp/moss';
 import { llmFor, type AgentRole } from '@relay/server/llm';
 
-// ═══════════════════════════════════════════════════════════
-// Ray's engine — dynamic vex over WHATEVER environment is handed in (the
-// server's runtime in the app, devDatabase in checks), under an explicit
-// scope policy. This is the generative path: a novel shape invokes the
-// reference agents (query DSL + shape mapper); a warm shape replays from
-// the same cache the app surface seeds. The locked /api mounts refuse
-// novel shapes by design — agents come HERE instead.
-//
-// One engine per (environment, policy): an agent runs under its CALLER's
-// compiled policy, so it reads what the caller reads and is refused what
-// the caller is refused. Nothing here grants authority of its own.
-// ═══════════════════════════════════════════════════════════
-
 export type RayEngine = { engine: QueryEngine; db: NiscRuntime['db'] };
 
-// What Ray is built from that a session does not carry: the environment the
-// app's own boot created, and what a set of roles may read and write. The
-// same roles must be handed the SAME policy object each time: an engine is
-// kept for each policy (see `rayEngine`), so a fresh object per session would
-// be a fresh engine, and a fresh introspection, per session.
+// `policyFor` must answer the same object for the same roles each time: an
+// engine, with its introspection, is kept for each policy object.
 export type RaySeams = {
   runtime: NiscRuntime;
   policyFor: (roles: readonly string[]) => ScopePolicy;
 };
 
-// What Ray's tools close over — the session, from moss's function seam:
-// the living shell, who is asking, their policy, and the lazy engine.
 export type RayContext = {
   shell: Shell;
   userId: string;
@@ -40,10 +22,8 @@ export type RayContext = {
   engine: () => Promise<RayEngine>;
 };
 
-// The LLM for one of vex's two reference agents, rebuilt per call from the
-// role's CURRENT assignment — so changing it in Settings takes effect on the
-// next novel shape instead of waiting for the memoized engine to be rebuilt.
-// A missing key throws a readable error; warm cache replays never reach here.
+// Rebuilt per call from the role's current assignment, so a change in Settings
+// takes effect without rebuilding the memoized engine.
 const buildLlm = (role: AgentRole): SignalClient => {
   const resolved = llmFor(role);
   if ('error' in resolved) throw new Error(resolved.error);
@@ -54,16 +34,13 @@ const boot = async (runtime: NiscRuntime, policy: ScopePolicy): Promise<RayEngin
   const adapter = createPostgresAdapter({ pool: runtime.pool });
   const cache = runtime.cache ?? createPostgresCache({ pool: runtime.pool });
   await cache.init?.();
-  // The DSL JSON Schema is static; a throwaway probe yields it without
-  // touching the DB. The generateDsl hook needs it up front.
+  // The DSL JSON Schema is static; a throwaway engine yields it without
+  // touching the DB. generateDsl needs it before the real engine exists.
   const dslJsonSchema = createQueryEngine({ adapter }).getDslSchema();
   const engine = createQueryEngine({
     adapter,
     scope: policy,
     cache,
-    // The engine hands every generation its caller — a `read` under this
-    // policy and the asking user's scope — so the agent samples what they
-    // could read and nothing else.
     generateDsl: (request, schema, caller) =>
       createQueryDsl({ llm: buildLlm('query'), queryJsonSchema: dslJsonSchema })(request, schema, caller),
     mapToShape: (rows, shape) => createShapeMapper(buildLlm('shape'))(rows, shape),

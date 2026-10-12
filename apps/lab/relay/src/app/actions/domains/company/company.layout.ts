@@ -1,18 +1,11 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The company profile — responsive content that fills whatever canvas holds it
-// (the aside rail is sized by the shell; a modal by the `panel` fragment). A
-// two-column body: People | Open deals. Loads by id: `loadCompany` fills `$.view`
-// with { record, contacts, deals }. People and deals are LinkRows — click one to
-// open that contact/deal.
 export const companyLayout: LayoutNode = {
-  // Pure content — the placement (stack content box / panel) owns scroll + padding.
   component: 'Box',
   children: {
     component: 'Stack',
     props: { gap: 22 },
     children: [
-      // ── Header ──
       {
         component: 'Row',
         props: { justify: 'between', align: 'start' },
@@ -47,7 +40,6 @@ export const companyLayout: LayoutNode = {
         ],
       },
 
-      // ── Info row ──
       {
         component: 'Row',
         props: { gap: 32 },
@@ -71,12 +63,10 @@ export const companyLayout: LayoutNode = {
         ],
       },
 
-      // ── Two columns: People | Open deals ──
       {
         component: 'Grid',
         props: { weights: [1, 1], gap: 24, align: 'start' },
         children: [
-          // People
           {
             component: 'Stack',
             props: { gap: 8 },
@@ -117,7 +107,6 @@ export const companyLayout: LayoutNode = {
               },
             ],
           },
-          // Open deals
           {
             component: 'Stack',
             props: { gap: 8 },

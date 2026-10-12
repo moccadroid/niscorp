@@ -1,9 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Settings — sectioned cards of labelled rows. Every control is two-way bound to
-// `$.settings.*` via `model:`, so toggles/fields are live (persistence is a
-// later, mutations-phase concern). Shows the form primitives + the Switch.
-// Spelled out literally (like every screen): the layout IS the artifact.
 export const settingsLayout: LayoutNode = {
   component: 'Box',
   props: { width: 'min(720px, 100%)' },
@@ -11,7 +7,6 @@ export const settingsLayout: LayoutNode = {
     component: 'Stack',
     props: { gap: 18 },
     children: [
-      // ─── Profile ───────────────────────────────────────────
       {
         component: 'Box',
         props: { bg: 'surface', border: true, radius: 13 },
@@ -55,7 +50,6 @@ export const settingsLayout: LayoutNode = {
           },
         ],
       },
-      // ─── Notifications ─────────────────────────────────────
       {
         component: 'Box',
         props: { bg: 'surface', border: true, radius: 13 },
@@ -111,7 +105,6 @@ export const settingsLayout: LayoutNode = {
           },
         ],
       },
-      // ─── Workspace ─────────────────────────────────────────
       {
         component: 'Box',
         props: { bg: 'surface', border: true, radius: 13 },
@@ -155,7 +148,6 @@ export const settingsLayout: LayoutNode = {
           },
         ],
       },
-      // ─── Ray (assistant) ───────────────────────────────────
       {
         component: 'Box',
         props: { bg: 'surface', border: true, radius: 13 },
@@ -199,11 +191,6 @@ export const settingsLayout: LayoutNode = {
           },
         ],
       },
-      // ─── Models ────────────────────────────────────────────
-      // One row per agent: the model it runs on, and the reasoning rung it runs
-      // at. Both rosters come from the server (`$.models.*`) — the effort list
-      // is per ROLE, because which rungs are legal depends on the model that
-      // row is on. Server state, not a personal preference; the header says so.
       {
         component: 'Box',
         props: { bg: 'surface', border: true, radius: 13 },
@@ -355,7 +342,6 @@ export const settingsLayout: LayoutNode = {
           },
         ],
       },
-      // ─── Developer ─────────────────────────────────────────
       {
         component: 'Box',
         props: { bg: 'surface', border: true, radius: 13 },

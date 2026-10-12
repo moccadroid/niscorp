@@ -1,16 +1,8 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { assistantLayout } from './assistant.layout';
 
-// The Ray chat surface. Sessions persist server-side per principal (via the
-// ray.* fns — moss's in-process function seam), so closing and reopening keeps
-// the history; a session picker + New button switch or start a conversation.
-// Sending appends to `$.messages`, then calls `ray.run` (the Cortex agent,
-// running INSIDE moss), which drives this session's shell, persists the
-// exchange, and returns the reply. Keys are server .env — no key UI exists.
 const SEND = [
   { set: 'status', value: 'thinking' },
-  // A fresh run starts from an empty live trace — the last run's steps belong
-  // to its own message now.
   { set: 'live', value: [] },
   { push: 'messages', value: { role: 'user', text: '$.draft' } },
   { set: 'draft', value: '' },
@@ -27,7 +19,6 @@ const SEND = [
   },
 ];
 
-// Seed the chat from whatever the loaded/new/switched session returns.
 const fromSession = [
   { set: 'messages', value: '$.session.messages' },
   { set: 'sessions', value: '$.session.sessions' },
@@ -37,8 +28,6 @@ const fromSession = [
 
 export const assistantAction: ActionDefinition = {
   id: 'assistant',
-  // `live` holds the in-flight run's tool calls, replaced wholesale each time
-  // the server announces on `ray:step` (see server/functions/ray/run.ts).
   data: { messages: [], draft: '', status: 'idle', reply: '', sessions: [], currentId: '', session: {}, debug: false, live: [] },
   layout: assistantLayout,
   endpoints: {
@@ -48,22 +37,17 @@ export const assistantAction: ActionDefinition = {
     switchSession: { fn: 'ray.switch', target: 'session' },
     stop: { fn: 'ray.stop' },
   },
-  // On open, restore the current session (history survives a close).
   lifecycle: { mount: [{ call: 'load', onSuccess: fromSession }] },
   triggers: [
     { event: 'ui:model', ref: 'ray-draft', do: [{ set: 'draft', value: '@event.payload' }] },
     { event: 'ui:click', ref: 'ray-close', do: [{ pop: true }] },
-    // Stop the running turn. `ask` returns on its own (aborted runs answer
-    // "Stopped."), so this only pulls the abort — the reply path clears
-    // status like any other completion.
+    // `stop` only aborts: the running `ask` still returns, and its reply path
+    // sets `status` back to idle.
     { event: 'ui:click', ref: 'ray-stop', do: [{ call: 'stop' }] },
     { event: 'ui:click', ref: 'ray-new-session', do: [{ call: 'newSession', onSuccess: fromSession }] },
     { event: 'ui:model', ref: 'ray-session-select', do: [{ set: 'currentId', value: '@event.payload' }, { call: 'switchSession', onSuccess: fromSession }] },
     { event: 'ui:click', ref: 'ray-send', do: SEND },
     { event: 'ui:key', ref: 'ray-draft', key: 'Enter', do: SEND },
-    // The run, as it happens. Ray's tools drive this session's shell directly,
-    // so the announcement is an ordinary message on its bus — no socket of its
-    // own, no polling, and nothing to keep in sync when a run dies.
     { message: 'ray:step', do: [{ set: 'live', value: '@event.payload' }] },
   ],
 };

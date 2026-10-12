@@ -1,8 +1,3 @@
-// The sidebar nav badges must be LIVE Vex data, not literals in the layout:
-//  - on mount, ONE read (four COUNT(*)s cross-joined into a single row) fills
-//    `$.counts.*` with scalar numbers,
-//  - the NavItem `count` prop, bound to `$.counts.*`, resolves to that number
-//    and renders with no validation error.
 import { shell, runtime } from './check-shell';
 
 const settle = (ms = 80): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -28,11 +23,7 @@ const collect = (tree: unknown): { errors: string[]; navCounts: unknown[] } => {
 };
 
 const main = async (): Promise<void> => {
-  // The tasks badge is "my open tasks" (assignee = the demo user, not done) — read
-  // the live DB figure so this stays correct as the seed evolves.
   const myTasks = ((await runtime.db.query("SELECT count(*)::int AS n FROM tasks WHERE assignee_id='usr_001' AND done=false")).rows[0] as { n: number }).n;
-  // Wait for the mount lifecycle (the four COUNT(*) reads) to populate counts —
-  // each slot is a scalar number; the layout binds it directly.
   let counts: Record<string, unknown> = {};
   for (let i = 0; i < 40; i++) {
     counts = (sidebarData()?.['counts'] ?? {}) as Record<string, unknown>;

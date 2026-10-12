@@ -20,34 +20,14 @@ import { rayFunctions } from '@relay/server/functions/ray';
 import type { RaySeams } from '@relay/server/functions/ray';
 import { modelFunctions } from '@relay/server/functions/models';
 
-// ═══════════════════════════════════════════════════════════
-// Relay, the application, as data. Every field is an authored ARTIFACT —
-// the policy document, who wears what, the action definitions, the row
-// behaviors, the resource subgraphs, the shell's canvases and fragments.
-// The server derives everything else from these plus a database (whose
-// seeded vex_cache IS the API surface). The one derivation relay owns is
-// `shell.inputs`: per-principal boot input for the chrome.
-//
-// A function of `ray`, the one thing the manifest's code needs that is not an
-// artifact: the environment Ray's engine stands on and the policy it reads
-// under (server/boot.ts fills both in).
-// ═══════════════════════════════════════════════════════════
-
 export const buildRelay = (ray: RaySeams): NiscApp => defineApp({
   charter: CHARTER,
   assignments: ASSIGNMENTS,
   actions: CATALOG_DEFINITIONS,
-  // Ring 2: layout variants by minted id — the charter's `layouts` section
-  // selects who holds which; everyone else gets the base on the definition.
   layouts: LAYOUT_VARIANTS,
   entries: [...ENTRIES, ...MUTATION_ENTRIES],
   behaviors: scopeBehaviors,
   resources: RESOURCES,
-  // The `fn:` escape hatch, server-side: Ray, the magic-link pair, the model
-  // assignment, and nova's devtools fns (reflect over THIS session's shell —
-  // per-session-correct). Built per session; handlers close over the session's
-  // shell and policy. The model fns take no session: which model an agent runs
-  // on is the server's state, the same for every session (server/llm/index.ts).
   functions: (session) => ({
     ...rayFunctions(session, ray),
     ...authFunctions(session),
@@ -55,29 +35,18 @@ export const buildRelay = (ray: RaySeams): NiscApp => defineApp({
     ...createDevtoolsFunctions({ shell: () => session.shell, definitions: CATALOG_DEFINITIONS }),
   }),
   shell: {
-    // Canvases are data; mounting is the server's derivation — an initial
-    // the principal doesn't hold simply doesn't mount (anonymous gets no
-    // `home`; their application is the client-side lock screen).
     canvases: [
       { id: 'sidebar', initial: { action: 'chrome.sidebar' } },
       { id: 'topbar', initial: { action: 'chrome.topbar' } },
-      // Candidates: members boot home; anonymous holds only the lock
-      // screen, so that is their application.
+      // The first of these the principal holds mounts: `home` for a member,
+      // the login screen for anonymous.
       { id: 'main', actionLayout: mainStackLayout, initial: ['home', 'auth.login'] },
       { id: 'aside', actionLayout: asideStackLayout },
       { id: 'modal' },
-      // nova devtools: an empty canvas until the Settings → Developer toggle
-      // mounts the dock (via `devtools.setEnabled`). The dock is granted only
-      // to `dev`, so the toggle (a ring-2 dev variant of Settings) and the
-      // push both no-op for anyone else.
       { id: DEVTOOLS_CANVAS },
     ],
-    // The frame — the canvas arrangement, served to terminals as data.
     layout: frameLayout,
     fragments: { modal: modalFragment, quickview: quickviewFragment, panel: panelFragment, dock: dockFragment },
-    // Per-principal boot input — the sidebar renders only granted screens
-    // (boot input, not a variant), the topbar's palette searches only the
-    // granted catalog.
     inputs: ({ principal, actions, roles }) => {
       const has = (id: string): boolean => actions.includes(id);
       return {

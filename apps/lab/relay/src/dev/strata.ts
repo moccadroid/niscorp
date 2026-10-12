@@ -1,10 +1,3 @@
-// strata for this app's SOURCE artifacts — which version of each grammar
-// (nova's, Prism's) the actions and fragments in src/app are written in, and
-// how they are brought forward when a grammar moves (docs/plans/versioning.md).
-//
-//   pnpm strata status [--check]   where the source stands (CI runs --check)
-//   pnpm strata upgrade            the expected JSON + .strata/upgrade/REPORT.md
-//   pnpm strata verify             the edited source against it; moves strata.lock.json
 import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runSourceUpgrade } from '@niscorp/strata/node';

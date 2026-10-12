@@ -1,13 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The deal workspace — the single deal representation, far richer than a list
-// row. A hero (value + win-probability bar), the action surface (advance / log /
-// add task / edit / won / lost), then two columns: line items + tasks on the
-// left, the primary contact + the activity feed (calls/emails/meetings/notes) on
-// the right. Everything binds `$.*` (loaded by the action's mount). Carries
-// its own Overlay chrome today (it's pushed onto the `modal` canvas); decoupling
-// that so it can also load into a detail rail is a follow-up.
-
 const label = (text: string): LayoutNode => ({
   component: 'Text',
   props: { size: 'xs', weight: 600, color: 'mute', upper: true },
@@ -15,7 +7,6 @@ const label = (text: string): LayoutNode => ({
 });
 
 export const dealLayout: LayoutNode = {
-  // Pure content — the placement (stack content box / panel) owns scroll + padding.
   component: 'Box',
   children: [
       {
@@ -40,7 +31,6 @@ export const dealLayout: LayoutNode = {
             component: 'Stack',
             props: { gap: 18 },
             children: [
-              // ── Hero: value + stage + status + close date ──
               {
                 component: 'Row',
                 props: { justify: 'between', align: 'center', gap: 12, wrap: true },
@@ -57,7 +47,6 @@ export const dealLayout: LayoutNode = {
                   { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Closes {{$.record.close_date_display}}' },
                 ],
               },
-              // ── Win-probability bar ──
               {
                 component: 'Stack',
                 props: { gap: 6 },
@@ -70,11 +59,6 @@ export const dealLayout: LayoutNode = {
                   { component: 'Progress', props: { value: '{{$.record.prob}}%' } },
                 ],
               },
-              // ── Action surface. Edit re-opens the form (stage included, so a
-              // move is an edit); Add task opens the task form; Won/Lost close
-              // the deal. Each persists and re-reads. One layout for every
-              // principal — a verb the principal doesn't hold dies in vex;
-              // per-role shapes are ring-2 served variants, not conditionals. ──
               {
                 component: 'Row',
                 props: { gap: 8, wrap: true },
@@ -85,7 +69,6 @@ export const dealLayout: LayoutNode = {
                   { component: 'Button', ref: 'lost', props: { variant: 'danger', size: 'sm' }, children: 'Mark lost' },
                 ],
               },
-              // ── Two columns (wrap on a narrow canvas) ──
               {
                 component: 'Row',
                 props: { gap: 24, align: 'start', wrap: true },
@@ -94,7 +77,6 @@ export const dealLayout: LayoutNode = {
                     component: 'Stack',
                     props: { grow: true, gap: 20 },
                     children: [
-                      // Line items
                       {
                         component: 'Stack',
                         props: { gap: 8 },
@@ -134,7 +116,6 @@ export const dealLayout: LayoutNode = {
                           },
                         ],
                       },
-                      // Tasks
                       {
                         component: 'Stack',
                         props: { gap: 8 },
@@ -160,7 +141,6 @@ export const dealLayout: LayoutNode = {
                                         component: 'Row',
                                         props: { gap: 9, align: 'center' },
                                         children: [
-                                          // Click the marker to complete an open task; a done one shows checked.
                                           {
                                             if: '$.t.done',
                                             then: { component: 'Icon', props: { name: 'check-square', size: 15 } },
@@ -181,7 +161,6 @@ export const dealLayout: LayoutNode = {
                       },
                     ],
                   },
-                  // RIGHT column: contact + activity
                   {
                     component: 'Box',
                     props: { width: 'min(340px, 100%)' },
@@ -189,7 +168,6 @@ export const dealLayout: LayoutNode = {
                       component: 'Stack',
                       props: { gap: 20 },
                       children: [
-                        // Primary contact
                         {
                           component: 'Stack',
                           props: { gap: 8 },
@@ -224,7 +202,6 @@ export const dealLayout: LayoutNode = {
                             },
                           ],
                         },
-                        // Activity feed
                         {
                           component: 'Stack',
                           props: { gap: 8 },

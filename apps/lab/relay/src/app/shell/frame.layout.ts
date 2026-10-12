@@ -1,10 +1,6 @@
 import type { LayoutNode } from '@niscorp/nova';
 import { mainSplitLayout } from './main-split.layout';
 
-// The shell FRAME — fixed, author-owned chrome, served to terminals as
-// data: the whole canvas arrangement, CanvasSlots in real containers.
-// (Hot-swappable `{ ref }` regions exist in nova for LLM-chosen layouts;
-// nothing here swaps, so nothing here is a ref.)
 export const frameLayout: LayoutNode = {
   component: 'Box',
   props: { h: '100vh' },
@@ -16,9 +12,8 @@ export const frameLayout: LayoutNode = {
         { component: 'CanvasSlot', props: { canvasId: 'sidebar' } },
         {
           component: 'Stack',
-          // `shrink` lets the `main` region below shrink to the space LEFT by
-          // the fixed topbar — so content scrolls inside `main` instead of the
-          // whole column overflowing 100vh and scrolling the topbar off-screen.
+          // `shrink` lets `main` take only the height the topbar leaves, so
+          // content scrolls inside it and the column does not overflow 100vh.
           props: { grow: true, h: '100%', shrink: true },
           children: [
             { component: 'CanvasSlot', props: { canvasId: 'topbar' } },
@@ -28,9 +23,6 @@ export const frameLayout: LayoutNode = {
       ],
     },
     { component: 'CanvasSlot', props: { canvasId: 'modal' } },
-    // nova devtools — the served devtools canvas, floated in a fixed corner by
-    // the anchor. Empty (renders nothing) unless the principal holds the pill
-    // (ring 1 — the `dev` role); the pill opens the dock. Pure nova inside.
     { component: 'DevtoolsAnchor', children: { component: 'CanvasSlot', props: { canvasId: 'devtools' } } },
   ],
 };

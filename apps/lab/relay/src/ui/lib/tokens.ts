@@ -1,9 +1,5 @@
 import { z } from 'zod';
 
-// Shared style tokens — the primitives read these (the values are CSS custom
-// properties defined in theme.css) — plus a couple of zod helpers reused across
-// the primitive prop schemas. No React here; pure maps.
-
 export const TEXT_COLOR: Record<string, string> = {
   default: 'var(--text)',
   secondary: 'var(--text-2)',
@@ -49,10 +45,9 @@ export const FS: Record<string, string> = {
   '2xl': 'var(--fs-2xl)',
 };
 
-// `dim` — a number (px) or a string (any CSS length).
+// A number is px; a string is any CSS length.
 export const dim = z.union([z.number(), z.string()]).optional();
 
-// `border` — true (all sides) or a single side. One prop instead of four.
 export const border = z
   .union([z.boolean(), z.enum(['top', 'bottom', 'left', 'right'])])
   .optional();

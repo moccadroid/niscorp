@@ -16,17 +16,11 @@ import { styleGuide } from './knowledge';
 import { llmFor } from '@relay/server/llm';
 import { makeBuildActionTool } from './architect';
 
-// Per-turn scratch, passed in by run.ts: `query` stashes its result so `visualize`
-// can render it without the rows round-tripping through the model, and `visualize`
-// stashes the layout for run.ts to attach to the message. No globals, no store.
 export type Turn = {
   lastResult?: { result: unknown; shape: unknown; intent: string };
   pendingView?: { layout: unknown; data: unknown };
 };
 
-// ── find_records: resolve a name → id, by reusing the EXISTING list shapes.
-// Same read path the screens use (scoped, validated, cached) — just with a search
-// term and a small projection to { id, label }.
 type Lookup = { prism: unknown; sortBy: string; idKey: string; labelKey: string };
 const LOOKUPS: Record<string, Lookup> = {
   deal: { prism: listDealsPrism, sortBy: 'deals.created_at', idKey: 'deal_id', labelKey: 'title' },
@@ -44,18 +38,12 @@ const LOOKUPS: Record<string, Lookup> = {
   },
 };
 
-// `dataTools: false` disables the query→visualize pair (they are ON by
-// default — Ray should know how to read data; each tool teaches itself
-// through its guide).
 export const makeTools = (
   ray: RayContext,
   turn: Turn,
   opts: { dataTools?: boolean; buildTool?: ToolDefinition } = {},
 ): ToolDefinition[] => {
   const { shell, userId } = ray;
-  // A canvas is a stack; `stack` is the four stack operations. push/replace place
-  // an `action` from the ACTIONS catalog; pop/clear take none. On the `modal`
-  // canvas a placed form brings its own form chrome, everything else a plain card.
   const stackTool = defineTool({
     id: 'ray.stack',
     name: 'stack',
@@ -82,8 +70,6 @@ export const makeTools = (
     }),
     execute: ({ canvas, op, action, input, to }) => {
       try {
-        // Any real canvas is fair game — but not a made-up one (which would spawn
-        // an invisible phantom). SCREEN lists exactly the canvases that exist.
         if (shell.getState().canvases[canvas] === undefined)
           return `Unknown canvas "${canvas}". Use one shown in SCREEN.`;
         if (op === 'pop') {
@@ -95,7 +81,6 @@ export const makeTools = (
           shell.clear(canvas);
           return `clear ${canvas}.`;
         }
-        // push / replace place an action.
         if (action === undefined || action === '') return `${op} needs an \`action\`.`;
         if (!catalogIds().has(action)) return `Unknown action "${action}". Use one from ACTIONS.`;
         const data = (input ?? {}) as Record<string, unknown>;
@@ -134,18 +119,12 @@ export const makeTools = (
         today: todayStr(),
       }) as QueryRequest;
       const rt = await ray.engine();
-      // As the person asking, like every other read Ray makes. This one used to
-      // pass nothing, which the engine read as nobody-in-particular and ran
-      // without its policy at all.
       const res = await rt.engine.execute(request, { scope: { userId } });
       const rows = (res.result ?? []) as Record<string, unknown>[];
       return rows.slice(0, 5).map((r) => ({ id: r[cfg.idKey], label: r[cfg.labelKey] }));
     },
   });
 
-  // ── query: read ANY data through Vex. A near-pure wrapper over
-  // engine.execute — the body IS the Vex request contract, and the contract
-  // travels WITH the tool: its guide is vex's own exported vexGuide().
   const dataTool = defineTool({
     id: 'ray.data',
     name: 'query',
@@ -180,8 +159,6 @@ export const makeTools = (
     execute: async ({ intent, shape, context, fingerprint }) => {
       try {
         const rt = await ray.engine();
-        // Return exactly what Vex returns: { result, meta }. `result` IS the
-        // shape (array | object | scalar) — no remapping, no imposed `rows`.
         const res = await rt.engine.execute(
           {
             ...(intent !== undefined ? { intent } : {}),
@@ -191,7 +168,6 @@ export const makeTools = (
           },
           { scope: { userId } },
         );
-        // Stash for `visualize` (so the rows don't round-trip through the model).
         turn.lastResult = {
           result: res.result,
           shape,
@@ -204,15 +180,10 @@ export const makeTools = (
     },
   });
 
-  // ── visualize: render the last query result in the chat as a Nova layout.
-  // Delegates to Nova's layout agent with the kit palette + a small data sample;
-  // stashes the generated { layout, data } for run.ts to attach to the message.
   const visualizeTool = defineTool({
     id: 'ray.view',
     name: 'visualize',
     riskLevel: 'low',
-    // The layout agent inside can take real time on a slow model; the
-    // v1 default 30s tool timeout was a latent trap here.
     timeoutMs: 3 * 60_000,
     description:
       'Render the LAST query result in the chat as a layout. Describe how to show it (a table, a single KPI, a card per row).',
@@ -237,9 +208,8 @@ export const makeTools = (
       if ('error' in visualiser) return `${visualiser.error} Cannot visualize.`;
       const last = turn.lastResult;
       if (last === undefined) return 'Nothing to visualize yet — run a query first.';
-      // The app's own registry — the server shell's carries name-only stubs
-      // (React stays in the terminal); the palette needs the component META,
-      // which lives with the components themselves.
+      // The app's own registry: the server shell's carries name-only stubs, and
+      // the palette needs the components' meta.
       const palette = paletteFromRegistry(buildRegistry(), {
         include: VIZ_COMPONENTS,
         omitProps: VIZ_OMIT_PROPS,
@@ -259,10 +229,6 @@ export const makeTools = (
       const layout = res.output.data;
       turn.pendingView = { layout, data: last.result };
       const n = Array.isArray(last.result) ? last.result.length : 1;
-      // The layout goes back to the model (into its history) so Ray sees what it
-      // rendered and can pass it as `base` to revise/match next time. In the trace,
-      // the INPUT is what visualize operated on — the intent + the data it rendered
-      // (+ base when revising) — and the OUTPUT is the layout it produced.
       return {
         forInput: { intent, ...(base != null ? { base } : {}), data: last.result },
         forModel: { rendered: n, layout },
@@ -271,12 +237,8 @@ export const makeTools = (
     },
   });
 
-  // The build tool carries SESSION memory (which screens it built, for the
-  // edit path) — a per-turn instance forgets everything each message, so an
-  // edit request in any later message was refused with "not built in this
-  // session" while the screen sat right there. The caller passes a
-  // session-lived instance; the per-turn fallback survives only for the dev
-  // checks that build one turn and exit.
+  // The per-turn fallback forgets what it built, so it cannot edit in a later
+  // message: it is for the dev checks that build in one turn and exit.
   const buildTool = opts.buildTool ?? makeBuildActionTool(ray);
   return opts.dataTools === false
     ? [stackTool, queryTool, buildTool]

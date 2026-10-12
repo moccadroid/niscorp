@@ -7,38 +7,20 @@ import { Button, SortHeader, MenuItem } from './controls';
 import { Popover } from './layout';
 import { Skeleton } from './feedback';
 
-// ─── Table ─────────────────────────────────────────────────
-// A data-driven list table. Everything that varies between tables is declared in
-// the layout as DATA: the `columns` (each a label, an optional sort field, a
-// width fraction, a narrow-drop flag, and a cell spec), the sort/selection
-// bindings, and the optional row `⋯` menu. The responsive grid is derived
-// INTERNALLY from the columns (the table is its own container query context) —
-// no CSS class ever crosses the layout boundary. The component is a pure
-// interpreter — it renders the scaffold (header + rows + skeleton + empty) from
-// existing primitives and dispatches `ui:click` for the same refs an action's
-// triggers already handle.
-// All data shaping/formatting stays in Vex/Prism: cells display `row[key]`
-// verbatim (the value is already "$1.8M", the date already "Apr 6, 2026").
-//
-// Cell value access is by field key (dotted paths ok, e.g. "company.name"); a
-// `primary` cell's `sub` interpolates `{field}` tokens from the row (single
-// braces, so Nova's own `{{…}}` resolver leaves them for us).
-
+// The `{field}` tokens in `sub` have single braces so nova's `{{…}}` resolver
+// leaves them for the table to fill.
 const CellSchema = z
   .object({
     kind: z.enum(['text', 'badge', 'avatarName', 'primary', 'check']),
     key: z.string().describe('Row field to display (dotted path ok). For `check`, the boolean field it reflects.'),
     ref: z.string().optional().describe('`check` only: the ui:click ref fired on toggle, carrying { id: row[rowKey], done: <new state> }.'),
-    // text
     color: z.string().optional(),
     mono: z.boolean().optional(),
     weight: z.number().optional(),
     size: z.string().optional(),
-    // badge
     tone: z.string().optional(),
     toneMap: z.record(z.string(), z.string()).optional().describe('Map field value → tone; `_` is the fallback.'),
     dot: z.boolean().optional(),
-    // primary
     icon: z.string().optional(),
     sub: z.string().optional().describe('Secondary line; `{field}` tokens are filled from the row.'),
   })
@@ -121,8 +103,7 @@ const renderCell = (cell: Cell, row: unknown): ReactNode => {
   const v = at(row, cell.key);
   switch (cell.kind) {
     case 'badge': {
-      // Tone comes from data (a literal or a value→tone map); an unknown tone
-      // just falls back to the base badge styling, so the cast is safe.
+      // An unknown tone falls back to the base badge styling, so the cast is safe.
       const tone = (cell.tone ?? cell.toneMap?.[String(v)] ?? cell.toneMap?.['_'] ?? 'slate') as BadgeTone;
       return (
         <Badge tone={tone} dot={cell.dot}>
@@ -176,17 +157,13 @@ export const Table: NovaComponent<TableP> = ({
   menu,
 }: TableP) => {
   const dispatch = useNovaDispatch();
-  // Guard: a generated (or mis-bound) layout can hand `rows`/`columns` a non-array.
-  // Never let that throw and take down the whole screen — coerce to safe lists and
-  // render empty instead.
+  // A generated or mis-bound layout can pass a non-array despite the type; it
+  // renders empty and does not throw.
   const rowList = Array.isArray(rows) ? rows : [];
   const colList = Array.isArray(columns) ? columns : [];
 
-  // The grid is derived from the columns — no CSS class crosses the layout
-  // boundary. Wide: the declared widths. Narrow (via the @container rule in
-  // ui.css): hideNarrow columns drop; the first flexible survivor takes the
-  // space, the rest hug content. Both templates ride CSS custom properties so
-  // the container query can switch them without inline-style specificity wars.
+  // Both templates are CSS custom properties so the @container rule in ui.css
+  // can switch between them; an inline grid-template-columns would win over it.
   const track = (w: number | 'auto' | undefined): string => (w === 'auto' ? 'auto' : `${w ?? 1}fr`);
   const wide = [...colList.map((col) => track(col.w)), ...(menu !== undefined ? ['auto'] : [])].join(' ');
   const visible = colList.filter((col) => col.hideNarrow !== true);
@@ -195,21 +172,12 @@ export const Table: NovaComponent<TableP> = ({
     ...visible.map((col) => (col === firstFlex ? 'minmax(0, 1fr)' : 'auto')),
     ...(menu !== undefined ? ['auto'] : []),
   ].join(' ');
-  // CSS custom properties aren't in CSSProperties — the one widening here,
-  // same precedent as the BadgeTone cast above.
   const gridVars = { '--rl-tbl-wide': wide, '--rl-tbl-narrow': narrow } as CSSProperties;
-  // Scroll the selected row into view when the selection changes — so opening a
-  // record (a cross-link, or a freshly created/edited one) brings its row on
-  // screen. `nearest` is a no-op when it's already visible.
   const selectedRowEl = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     selectedRowEl.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [selectedId]);
 
-  // Row identity degrades gracefully: a missing or DUPLICATED rowKey value
-  // falls back to the row index for the affected rows (never colliding React
-  // keys), with one console warning instead of a render failure — a generated
-  // screen with an imperfect rowKey still works.
   const warnedRowKey = useRef(false);
   const seenIds = new Set<string>();
   const reactKeyFor = (id: unknown, index: number): string => {
@@ -267,9 +235,6 @@ export const Table: NovaComponent<TableP> = ({
       ) : (
         rowList.map((row, ri) => {
           const id = at(row, rowKey);
-          // The click payload may differ from the row identity (clickKey):
-          // a task row stays uniquely keyed by its own id while its click
-          // opens the related deal.
           const payload = clickKey !== undefined ? at(row, clickKey) : id;
           const selected = selectedId !== undefined && selectedId !== '' && id === selectedId;
           const open = menu !== undefined && menu.openId !== undefined && menu.openId !== '' && id === menu.openId;
@@ -286,8 +251,6 @@ export const Table: NovaComponent<TableP> = ({
                   className={cx('rl-tbl__cell', col.align === 'end' && 'rl-tbl__cell--end', col.hideNarrow === true && 'rl-tbl__hide')}
                 >
                   {col.cell.kind === 'check' ? (
-                    // Inline toggle: fires the cell's ref with the row id + the NEW
-                    // state; stops the row click. The action persists via task.setDone.
                     <input
                       type="checkbox"
                       className="rl-tbl__check"
@@ -310,10 +273,6 @@ export const Table: NovaComponent<TableP> = ({
                       {kebab(id)}
                       <div className="rl-menu rl-rowmenu">
                         {menu.items.map((it) => (
-                          // Item clicks carry the WHOLE row (the kebab open/close
-                          // above keeps the id) — so the action's row-edit/row-delete
-                          // can seed an edit form or a confirm label straight from
-                          // the row, no second read.
                           <MenuItem key={it.ref} icon={it.icon} danger={it.danger} value={row} novaRef={it.ref}>
                             {it.label}
                           </MenuItem>

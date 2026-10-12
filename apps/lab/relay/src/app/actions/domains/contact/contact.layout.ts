@@ -1,21 +1,11 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The contact profile panel — as rich as the company profile and the deal
-// workspace, and styled to match: a header with Edit, the company cross-link +
-// contact details, then the contact's open deals, open tasks and a recent
-// activity feed (the same type-coloured dots as the deal modal). Loads by id:
-// the action runs four reads into `$.view` ({ record, deals, tasks, activity }).
-// The root Box IS the panel chrome (fixed width + left border) — it exists only
-// while this action is on the `detail` canvas, so the pane collapses on close.
-
 const label = (text: string): LayoutNode => ({
   component: 'Text',
   props: { size: 'xs', weight: 600, color: 'mute', upper: true },
   children: text,
 });
 
-// One activity row — a type-coloured dot (call/email/meeting/note) + subject and
-// who/when. Identical treatment to the deal workspace's feed.
 const activityRow: LayoutNode = {
   component: 'Row',
   props: { gap: 10, align: 'center' },
@@ -49,11 +39,9 @@ const activityRow: LayoutNode = {
 };
 
 export const contactLayout: LayoutNode = {
-  // Pure content — the placement (stack content box / panel) owns scroll + padding.
   component: 'Stack',
   props: { gap: 20 },
   children: [
-      // ── Header (close always available; identity skeletons while loading) ──
       {
         component: 'Row',
         props: { justify: 'between', align: 'start' },
@@ -87,7 +75,6 @@ export const contactLayout: LayoutNode = {
           { component: 'Button', ref: 'edit', props: { variant: 'default', size: 'sm', icon: 'edit' }, children: 'Edit' },
         ],
       },
-      // ── Body ──
       {
         if: '$.loading',
         then: { component: 'Stack', props: { gap: 18 }, children: [{ component: 'Skeleton', props: { width: 150 } }, { component: 'Skeleton', props: { width: 210 } }, { component: 'Skeleton', props: { width: '70%' } }] },
@@ -95,7 +82,6 @@ export const contactLayout: LayoutNode = {
           component: 'Stack',
           props: { gap: 22 },
           children: [
-            // Company cross-link
             {
               component: 'Stack',
               props: { gap: 5 },
@@ -108,7 +94,6 @@ export const contactLayout: LayoutNode = {
                 },
               ],
             },
-            // Email + Phone, two-up
             {
               component: 'Row',
               props: { gap: 32, wrap: true },
@@ -125,8 +110,6 @@ export const contactLayout: LayoutNode = {
                 },
               ],
             },
-            // Deals (any status — the badge is coloured by status so won/lost read
-            // clearly, and a closed deal's activity has a visible source).
             {
               component: 'Stack',
               props: { gap: 8 },
@@ -167,7 +150,6 @@ export const contactLayout: LayoutNode = {
                 },
               ],
             },
-            // Tasks
             {
               component: 'Stack',
               props: { gap: 8 },
@@ -200,7 +182,6 @@ export const contactLayout: LayoutNode = {
                 },
               ],
             },
-            // Activity
             {
               component: 'Stack',
               props: { gap: 8 },

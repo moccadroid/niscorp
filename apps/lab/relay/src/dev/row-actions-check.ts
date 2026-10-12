@@ -1,12 +1,6 @@
-// Row ⋯ menu actions (Edit + Delete-with-confirm) across contacts, deals and the
-// company cascade. Drives the lists headlessly with REAL row payloads (the Table
-// passes the whole row to menu items), opens the edit form / confirm dialog, and
-// proves the writes land in PGlite and the lists re-read. Run:
-//   pnpm --filter relay exec tsx src/dev/row-actions-check.ts
 import { login, must, runtime } from './check-shell';
 
-// Deleting shared CRM records is the admin's verb now — walk as sam (admin),
-// the same flows sales can no longer complete.
+// sam is the admin: only the admin may delete shared CRM records.
 const shell = await login('sam');
 
 const settle = (ms = 220): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -25,7 +19,6 @@ const modalData = (): Record<string, unknown> => (modalRt()?.getData() ?? {}) as
 const main = async (): Promise<void> => {
   const checks: [string, boolean][] = [];
 
-  // ── Contacts: row → Edit seeds the form (incl. phone, which the table doesn't show) ──
   shell.dispatch({ type: 'ui:click', ref: 'nav-contacts' });
   await settle(320);
   const c0 = must(rows().find((r) => String(r['phone'] ?? '') !== '') ?? rows()[0], 'a contact row');
@@ -37,7 +30,6 @@ const main = async (): Promise<void> => {
   shell.dispatch({ type: 'ui:click', ref: 'cancel' });
   await settle(120);
 
-  // ── Contacts: row → Delete asks first, then deletes on confirm ──
   const cDel = must(rows()[1], 'a second contact row to delete');
   const beforeC = rows().length;
   shell.dispatch({ type: 'ui:click', ref: 'row-delete', payload: cDel });
@@ -45,14 +37,13 @@ const main = async (): Promise<void> => {
   checks.push([`contact Delete opens the confirm dialog (got ${String(modalId())})`, modalId() === 'confirm-delete']);
   checks.push([`confirm shows the contact's name (got ${String(modalData()['label'])})`, modalData()['label'] === cDel['name']]);
   checks.push([`nothing deleted yet (still ${rows().length})`, rows().length === beforeC]);
-  shell.dispatch({ type: 'ui:click', ref: 'confirm' }); // the dialog's Delete
+  shell.dispatch({ type: 'ui:click', ref: 'confirm' });
   await settle(360);
   const goneC = (await runtime.db.query('SELECT count(*)::int AS n FROM contacts WHERE id = $1', [cDel['contact_id']])).rows[0] as { n: number };
   checks.push([`contact row deleted from PGlite (rows with id: ${goneC.n})`, goneC.n === 0]);
   checks.push([`list re-read shrank (${beforeC} → ${rows().length})`, rows().length === beforeC - 1]);
   checks.push([`confirm dialog closed`, shell.getCanvasState('modal').active === undefined]);
 
-  // ── Deals: row → Edit seeds raw value (number) + stage_id + raw close_date ──
   shell.dispatch({ type: 'ui:click', ref: 'nav-deals' });
   await settle(320);
   const d0 = must(rows().find((r) => typeof r['value'] === 'number') ?? rows()[0], 'a deal row with a value');
@@ -64,7 +55,6 @@ const main = async (): Promise<void> => {
   shell.dispatch({ type: 'ui:click', ref: 'cancel' });
   await settle(120);
 
-  // ── Deals: row → Delete cascades the line items ──
   const dDel = must(rows()[0], 'a deal row to delete');
   const dId = dDel['deal_id'] as string;
   const liBefore = (await runtime.db.query('SELECT count(*)::int AS n FROM deal_products WHERE deal_id = $1', [dId])).rows[0] as { n: number };
@@ -78,10 +68,8 @@ const main = async (): Promise<void> => {
   checks.push([`deal deleted (rows with id: ${goneD.n})`, goneD.n === 0]);
   checks.push([`its ${liBefore.n} line item(s) cascaded away (now ${goneLI.n})`, goneLI.n === 0]);
 
-  // ── Company delete cascades its contacts + deals ──
   shell.dispatch({ type: 'ui:click', ref: 'nav-companies' });
   await settle(320);
-  // pick a company that has both contacts and deals
   const withChildren = (await runtime.db.query(`
     SELECT c.id FROM companies c
     WHERE EXISTS (SELECT 1 FROM contacts ct WHERE ct.company_id = c.id)

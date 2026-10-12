@@ -1,13 +1,9 @@
 import { z } from 'zod';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 
-// Loading primitives — Spinner, Skeleton. Styling lives in ui.css.
-
-// ─── Spinner ───────────────────────────────────────────────
 export const Spinner: NovaComponent = () => <span className="rl-spinner" />;
 Spinner.meta = { description: 'Loading spinner.' };
 
-// ─── Skeleton ──────────────────────────────────────────────
 const SkeletonProps = z
   .object({ width: z.union([z.number(), z.string()]).optional(), height: z.number().optional() })
   .strict();

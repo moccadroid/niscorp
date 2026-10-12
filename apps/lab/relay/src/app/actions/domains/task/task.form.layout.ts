@@ -1,9 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The task form body — the modal chrome is the `modal` fragment. Each field is
-// two-way bound to the action data (`$.title`, `$.due`, …): the FORM's shape, NOT
-// the tasks table. The `task.upsert` input prism maps it to columns (due →
-// due_date, empty → null; priority dropped).
 export const taskFormLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 13 },
@@ -23,7 +19,6 @@ export const taskFormLayout: LayoutNode = {
         ],
       },
     },
-    // The form's own footer — buttons here, handled by the action's triggers.
     {
       component: 'FormFoot',
       children: [

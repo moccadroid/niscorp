@@ -1,14 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The deals board view — the pipeline Kanban, a pure Nova layout (no grouping
-// code). A forecast bar (total + weighted, assembled in `loadSummary`), then a
-// column per open stage (`$.stages`) with its count + win-% + total and a
-// stage-coloured top accent. Cards are ALL open deals (`$.deals`) filtered
-// into each column in-layout by `{$eq:[d.stage, col.stage]}`. A card click opens
-// the deal workspace; a card drag fires `ui:drop`. Gated on `$.boardLoading` (the
-// table view has its own `$.loading`). One of the two layouts the `deals` action
-// renders (see deals.layout.ts).
-
 const skeletonColumn: LayoutNode = {
   component: 'KanbanColumn',
   children: [
@@ -24,7 +15,6 @@ export const dealsBoardLayout: LayoutNode = {
     component: 'Stack',
     props: { gap: 16, h: '100%' },
     children: [
-      // ── Forecast bar ──
       {
         component: 'Row',
         props: { gap: 8, align: 'baseline', wrap: true },
@@ -36,7 +26,6 @@ export const dealsBoardLayout: LayoutNode = {
           { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'weighted' },
         ],
       },
-      // ── Columns ──
       {
         component: 'KanbanBoard',
         props: { grow: true, shrink: true },

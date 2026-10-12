@@ -1,10 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// My tasks, over `tasks.mine` (scoped by the toolbar tab). The toolbar (title +
-// Open/Overdue/Done/All tabs + search + count) stays as Nova layout; the body is
-// the reusable `Table` primitive. A leading `check` column completes/reopens a
-// task inline; the ⋯ menu edits or deletes it. Cells show Vex/Prism-shaped
-// fields verbatim. Literal + serializable.
 export const tasksLayout: LayoutNode = {
   component: 'Box',
   props: {},

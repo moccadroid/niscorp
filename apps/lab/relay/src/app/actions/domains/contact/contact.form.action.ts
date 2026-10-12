@@ -4,11 +4,6 @@ import { contactFormLayout } from './contact.form.layout';
 import { companyOptions } from '@relay/app/vex/deals.entries';
 import { upsertContactPrism } from './contact.form.prism';
 
-// The contact form — create AND edit in one action. The `save` endpoint is the
-// `contact.upsert` mutation, which desugars to insert (no `id`) or update (`id`
-// set): a bare push creates, an edit push (with `id` + fields) edits. On mount it
-// loads the company picker (shared `options.companies` read). On success it
-// announces `contacts-changed`, opens the saved contact, and pops.
 export const contactFormAction: ActionDefinition = {
   id: 'crm.contact.form',
   data: {
@@ -19,7 +14,6 @@ export const contactFormAction: ActionDefinition = {
   layout: contactFormLayout,
   endpoints: {
     loadCompanies: { url: '/api/companies/vex', method: 'POST', request: { fingerprint: companyOptions.fingerprint, context: {} }, target: 'companyOptions' },
-    // One write — `contact.upsert` desugars to insert (id empty) or update (id set).
     save:          { url: '/api/contacts/vex',            method: 'POST', request: upsertContactPrism, target: 'saved' },
   },
   lifecycle: { mount: [{ call: 'loadCompanies' }] },
@@ -38,7 +32,6 @@ export const contactFormAction: ActionDefinition = {
   ],
 };
 
-// Settable inputs an opener may pass — authored in zod, exported as JSON Schema.
 export const contactFormInputSchema = z.toJSONSchema(
   z.object({
     name: z.string().optional(),

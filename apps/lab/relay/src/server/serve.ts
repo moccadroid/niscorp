@@ -1,13 +1,9 @@
-// The relay app server: the artifacts plus a database — the server derives
-// the rest. Dev only: `pnpm --filter relay serve`. (The Node listener is
-// runtime-specific by design; the Bun flip swaps the import, not the app.)
 import { readFileSync } from 'node:fs';
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { boot } from './boot';
 
-// The F12-console terminal bundle (`pnpm console` builds it) — served with
-// CORS so `fetch(...).then(eval)` works from any origin's devtools.
+// CORS is open so `fetch(...).then(eval)` works from any origin's devtools.
 const consoleRoute = (): Response => {
   try {
     const body = readFileSync(new URL('../../dist/console.js', import.meta.url), 'utf8');

@@ -1,10 +1,3 @@
-// TTY-terminal check — the REPL thesis, proven headlessly: a terminal with
-// zero React AND zero DOM renders the real relay app from the same moss
-// server, and a typed command round-trips. moss's tty target (nova/tty + the
-// default kit) paints PassThrough streams over the real wire on nodeEnv; we
-// assert relay content arrives as text, then type `click <n>` at the Deals
-// nav marker and watch the served deals table arrive. Same server as
-// dom-terminal-check; one less platform.
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -37,7 +30,6 @@ const main = async (): Promise<void> => {
   const address = httpServer.address();
   if (address === null || typeof address === 'string') throw new Error('no port');
 
-  // Authenticate as alex (sales + dev) — the token rides the env's token file.
   const token = mintToken('alex');
   if (token === null) throw new Error('no alex user');
   const tokenFile = join(mkdtempSync(join(tmpdir(), 'relay-tty-terminal-')), 'token');
@@ -52,7 +44,6 @@ const main = async (): Promise<void> => {
 
   const terminal = createTerminal({ target: ttyTarget({ input, output, debounceMs: 0 }), wire });
 
-  // ── the app renders as plain text ──
   await until(() => screen.includes('── sidebar') && screen.includes('Deals'), 'sidebar renders as text');
   checks.push(['the sidebar renders as text over the wire (zero React, zero DOM)', screen.includes('── sidebar')]);
 
@@ -60,7 +51,6 @@ const main = async (): Promise<void> => {
   checks.push(['the Deals nav prints an actionable [n] marker', marker !== undefined]);
   if (marker === undefined) throw new Error('no Deals marker on screen');
 
-  // ── a typed command round-trips: click <n> → ui:click → server re-renders ──
   const deal = (await runtime.db.query('SELECT title FROM deals LIMIT 1')).rows[0] as { title: string };
   input.write(`click ${marker[1]}\n`);
 

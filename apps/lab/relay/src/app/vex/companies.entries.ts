@@ -1,8 +1,6 @@
 import type { CacheEntry } from './index';
 import type { MutationEntry } from './index';
 
-// Companies list — `company_id` aliased so the array shape is distinct; the rows
-// already match the shape, so no mapping.
 export const companiesList: CacheEntry = {
   fingerprint: 'companies/list',
   intent: 'List all companies with industry and size',
@@ -22,8 +20,6 @@ export const companiesList: CacheEntry = {
   },
 };
 
-// One company by id — an object shape, so Vex maps the single row. The aliased
-// row already matches the shape, so the mapping is identity over that one row.
 export const companyById: CacheEntry = {
   fingerprint: 'companies/byId',
   intent: 'Load one company by id',
@@ -37,11 +33,6 @@ export const companyById: CacheEntry = {
   mapping: { $ref: '$.result' },
 };
 
-// Create-or-edit a company. The form's values arrive via `$context` (shaped by
-// the input prism). `upsert` keys on `id`: present → update that row, absent →
-// insert (the engine desugars it to update/insert). `owner_id` is NOT here —
-// identity is stamped by the engine from the scope policy on the insert branch;
-// `id`/`created_at` default in the DB on create.
 export const companyUpsert: MutationEntry = {
   fingerprint: 'companies/upsert',
   intent: 'Create a company, or edit one by id',
@@ -58,10 +49,6 @@ export const companyUpsert: MutationEntry = {
   },
 };
 
-// Delete a company by id (the row ⋯ → Delete, behind a confirm). The schema
-// CASCADEs the company's contacts and deals (and, through them, line items) so
-// nothing is orphaned behind an INNER join; activities/tasks SET NULL their
-// company reference. Destructive — the confirm spells that out.
 export const companyDelete: MutationEntry = {
   fingerprint: 'companies/delete',
   intent: 'Delete a company by id (cascades its contacts and deals)',

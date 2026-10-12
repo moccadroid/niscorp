@@ -7,13 +7,8 @@ import { createSlotWrapper } from './ui/slot-wrapper';
 import './ui/css/theme.css';
 import './ui/css/ui.css';
 
-// Relay as a Chrome extension surface — the side panel and the DevTools
-// "Relay" tab both load this page. It is main.tsx with one assumption
-// removed: a chrome-extension:// origin has no serving host to derive the
-// socket url from, so the url is explicit (localStorage['relay.url']
-// overrides the localhost default — set it from this page's own console).
-// The token lives in the extension origin's localStorage, so every surface
-// (panel, devtools, popup) is ONE session — sign in once.
+// A chrome-extension:// origin has no serving host to derive the socket url
+// from, so the url is explicit.
 const url = window.localStorage.getItem('relay.url') ?? 'ws://localhost:8787/socket';
 
 const root = document.getElementById('root');

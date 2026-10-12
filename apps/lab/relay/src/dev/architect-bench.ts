@@ -1,18 +1,3 @@
-// Bench: the architect over a graded prompt suite — same env, same validation,
-// the same models the app is set to. Run:
-//
-//   pnpm --filter relay exec tsx src/dev/architect-bench.ts
-//   ... [--only=<prompt-id>] [--edit] [--model=<id>]
-//
-// --edit runs the edit-drift probe; --model puts the ARCHITECT on one roster
-// model for this run (its reviewer and support agents stay where they are), so
-// two runs compare models over the same suite.
-//
-// Prints per run: ok, duration, tool calls, retries by kind (the events carry
-// the evidence), what each endpoint loaded at mount; writes every produced
-// ActionDefinition to a temp folder for eyeballing.
-// .env (the LLM keys) loads first — Node's own loader, same idiom as
-// server/boot.ts; the bench never reaches the server's composition.
 try {
   process.loadEnvFile();
 } catch {
@@ -29,8 +14,6 @@ import { devRayContext } from './engine';
 
 type PromptCase = { id: string; intent: string };
 
-// Graded by ambition: a scalar, a searchable list, a two-dataset overview,
-// and a genuinely complex interactive workspace.
 const PROMPTS: PromptCase[] = [
   {
     id: 'kpi',
@@ -82,8 +65,6 @@ const collectStats = (events: CortexEvent[], result: BuildResult, ms: number, lo
   };
 };
 
-// Mount the produced action once more and report what each endpoint target
-// actually holds — the "is this a real screen" number.
 const loadedTargets = async (result: BuildResult): Promise<string[]> => {
   if (!result.ok) return [];
   const check = await runAction(devRayContext(), result.action);
@@ -105,12 +86,6 @@ const statsLine = (label: string, stats: RunStats): string =>
   `${stats.nestedRetries > 0 ? ` nested:${stats.nestedRetries}` : ''}` +
   `  ${stats.ok ? stats.loaded.join(' · ') : `— ${stats.error ?? ''}`}`;
 
-// ── edit-drift probe (--edit): build once, request ONE trigger change, then
-// diff the sections the edit had no reason to touch. Transcription drift —
-// the model retyping 100 lines to change 3 and mangling an unrelated part —
-// becomes a measured verdict per section instead of a vibe. This is the
-// evidence that decides whether full-re-emit editing survives or
-// section-scoped merging replaces it.
 const editProbe = async (llms: BuildLlms, outDir: string): Promise<void> => {
   const buildIntent = PROMPTS.find((prompt) => prompt.id === 'list')?.intent ?? '';
   console.log(`\n═══ edit-drift ═══\n${buildIntent}`);
@@ -137,9 +112,6 @@ const editProbe = async (llms: BuildLlms, outDir: string): Promise<void> => {
   }
   writeFileSync(join(outDir, 'edit-drift.edited.json'), JSON.stringify(edited.action, null, 2));
 
-  // `triggers` is EXPECTED to change; every other section should survive
-  // byte-identical (modulo key order — JSON.stringify of untouched objects
-  // re-emitted by the model is exactly what we're measuring).
   const untouched = ['data', 'endpoints', 'lifecycle', 'layout', 'title', 'name'] as const;
   console.log(`  edit ${Math.round(ms / 100) / 10}s`);
   for (const section of untouched) {

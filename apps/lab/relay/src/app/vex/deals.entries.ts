@@ -2,9 +2,6 @@ import type { CacheEntry } from './index';
 import type { MutationEntry } from './index';
 import { money, dateText } from '@relay/app/prisms/format.prism';
 
-// The deals table. Joined names + the id are aliased in the DSL (distinct shape,
-// no `name` collisions); the mapping builds each shape field and formats
-// value/close-date.
 export const dealsList: CacheEntry = {
   fingerprint: 'deals/list',
   intent: 'List all deals with company, stage, owner, value and dates for the deals table',
@@ -53,11 +50,6 @@ export const dealsList: CacheEntry = {
   },
 };
 
-// One owner's deals. Carries the same raw edit-seed fields as `dealsList`
-// (stage_id / company_id / primary_contact_id / raw close_date) so a row's ⋯ →
-// Edit works on the My-deals tab too, plus `owner_id` — which both keeps the
-// shape DISTINCT from `dealsList` (so the shape-keyed cache doesn't conflate
-// them) and records whose deals these are.
 export const dealsByOwner: CacheEntry = {
   fingerprint: 'deals/byOwner',
   intent: "List a user's deals with company, stage, value and dates",
@@ -113,11 +105,6 @@ export const dealsByOwner: CacheEntry = {
   },
 };
 
-// One deal by id — the deal workspace's record. The mapping keeps value/close
-// as the RAW underlying values (a number, a 'YYYY-MM-DD' string) AND adds
-// `*_display` formatted strings: the view binds the display fields, the edit form
-// seeds the raw ones (so a numeric/date input round-trips). `stage_id` (raw) is
-// here too, so the edit Stage select pre-selects.
 export const dealById: CacheEntry = {
   fingerprint: 'deals/byId',
   intent: 'Load one deal by id — company, stage, owner, win-% and primary contact id',
@@ -161,7 +148,6 @@ export const dealById: CacheEntry = {
   },
 };
 
-// A company's open deals with stage — raw value + money-formatted display.
 export const dealsByCompany: CacheEntry = {
   fingerprint: 'deals/byCompany',
   intent: "List a company's open deals with stage",
@@ -188,11 +174,6 @@ export const dealsByCompany: CacheEntry = {
   },
 };
 
-// A contact's deals (ANY status) where they're the primary contact — open AND
-// closed, so the deal behind a closed-deal activity is visible on the panel (a
-// lost deal with five logged activities would otherwise look sourceless). `tone`
-// colours the badge by status (won=green, lost=red, open=blue); the `status`/
-// `tone` keys also keep the shape distinct from `dealsByCompany` in the cache.
 export const dealsByContact: CacheEntry = {
   fingerprint: 'deals/byContact',
   intent: "List a contact's deals (any status) where they are the primary contact",
@@ -229,7 +210,6 @@ export const dealsByContact: CacheEntry = {
   },
 };
 
-// Open deals for the board cards.
 export const dealsBoard: CacheEntry = {
   fingerprint: 'deals/board',
   intent: 'List open deals with company, owner, stage, value and close date for the pipeline board',
@@ -265,7 +245,6 @@ export const dealsBoard: CacheEntry = {
   },
 };
 
-// Open deals per stage — count, total value, win-%, colour tone, in stage order.
 export const dealsOpenByStage: CacheEntry = {
   fingerprint: 'deals/openByStage',
   intent: 'Open deals per pipeline stage — count, total value, win %, in stage order',
@@ -304,10 +283,6 @@ export const dealsOpenByStage: CacheEntry = {
   },
 };
 
-// Forecast — open pipeline total + weighted. The aggregation is in VEX: SUM of a
-// field, and SUM of an expression (value × win-%). win-% is 0–100, so the
-// weighted sum is /100 in the formatter (a unit scale, not aggregation). One
-// aggregated row → an object shape.
 export const dealsForecast: CacheEntry = {
   fingerprint: 'deals/forecast',
   intent: 'Open pipeline total and weighted forecast',
@@ -326,8 +301,6 @@ export const dealsForecast: CacheEntry = {
   },
 };
 
-// Total value + count of deals for ONE status (via $context.status) — one
-// aggregated row → an object. The dashboard runs it for open and won.
 export const dealsByStatus: CacheEntry = {
   fingerprint: 'deals/byStatus',
   intent: 'Total value and count of deals for a given status',
@@ -346,7 +319,6 @@ export const dealsByStatus: CacheEntry = {
   },
 };
 
-// Count + total value per stage (the home dashboard table).
 export const dealsByStage: CacheEntry = {
   fingerprint: 'deals/byStage',
   intent: 'Count and total deal value grouped by stage',
@@ -370,10 +342,6 @@ export const dealsByStage: CacheEntry = {
   },
 };
 
-// Pickers for the deal form. Each is `{ <entity>_id, name }` — ENTITY-DISTINCT
-// shapes on the `<entity>_id` convention, so the shape-keyed cache keeps them
-// apart (a shared `{ value, label }` would collide on one entry — the Stage
-// dropdown would show companies). The Select reads them via valueKey/labelKey.
 export const companyOptions: CacheEntry = {
   fingerprint: 'deals/companyOptions',
   intent: 'Companies as id/name options for a picker',
@@ -411,10 +379,6 @@ export const contactOptions: CacheEntry = {
   },
 };
 
-// Create-or-edit a deal. `company_id`/`stage_id`/`primary_contact_id` are real FK
-// ids (the form's id-bearing selects). `upsert` keys on `id`. `owner_id` is scope-stamped on
-// insert; `status`/`currency`/`id` default in the DB on create. The input prism
-// coerces empty value→0 and empty FK/date→null.
 export const dealUpsert: MutationEntry = {
   fingerprint: 'deals/upsert',
   intent: 'Create a deal, or edit one by id',
@@ -433,9 +397,6 @@ export const dealUpsert: MutationEntry = {
   },
 };
 
-// ── Writes ──────────────────────────────────────────────────
-// Move a deal to a stage (the board's drag-drop). `stage_id` + `deal_id` arrive
-// via the board's mutation input prism.
 export const dealMoveStage: MutationEntry = {
   fingerprint: 'deals/moveStage',
   intent: "Move a deal to a pipeline stage (the board's drag-drop)",
@@ -447,8 +408,6 @@ export const dealMoveStage: MutationEntry = {
   },
 };
 
-// Close a deal won / lost — the status is a literal per endpoint; only `deal_id`
-// comes from context (the open deal).
 export const dealMarkWon: MutationEntry = {
   fingerprint: 'deals/markWon',
   intent: 'Close a deal as won',
@@ -471,9 +430,6 @@ export const dealMarkLost: MutationEntry = {
   },
 };
 
-// Delete a deal by id (the row ⋯ → Delete, behind a confirm). The schema CASCADEs
-// the deal's line items (deal_products) and SET NULLs activities/tasks that point
-// at it, so the delete never FK-fails.
 export const dealDelete: MutationEntry = {
   fingerprint: 'deals/delete',
   intent: 'Delete a deal by id (cascades its line items)',

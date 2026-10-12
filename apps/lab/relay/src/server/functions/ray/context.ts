@@ -1,12 +1,6 @@
 import type { Shell } from '@niscorp/nova';
 import { catalogEntries } from './catalog';
 
-// The per-turn context: what's on each canvas right now (SCREEN) + what Ray can
-// open (ACTIONS, with serialized input schemas). SCREEN is the REAL data — for
-// each canvas, its stack trail (so Ray can navigate it) followed by the active
-// instance's live data, serialized as-is (minified JSON). Nothing is summarized,
-// truncated, or dropped: the model decides what matters, the same way the user
-// reads the screen. Built fresh each turn from the actual shell state.
 export const buildContext = (shell: Shell): string => {
   const state = shell.getState();
   const screen: string[] = [];
@@ -15,9 +9,6 @@ export const buildContext = (shell: Shell): string => {
       screen.push(`  ${canvasId}: (empty)`);
       continue;
     }
-    // The stack trail — every instance on this canvas as definitionId(instanceId),
-    // newest last; `*` marks the active (visible, top) one. The ids are what the
-    // `navigate` tool targets (back / jump to an instance / root).
     const trail = cs.stack
       .map((i, idx) => `${i.definitionId}(${i.id})${idx === cs.stack.length - 1 ? '*' : ''}`)
       .join(' › ');

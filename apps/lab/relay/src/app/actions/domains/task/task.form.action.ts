@@ -3,12 +3,6 @@ import type { ActionDefinition } from '@niscorp/nova';
 import { taskFormLayout } from './task.form.layout';
 import { upsertTaskPrism } from './task.form.prism';
 
-// The task form — create AND edit in one action. The `save` endpoint is the
-// `task.upsert` mutation, which desugars to insert (no `id`) or update (`id` set):
-// a bare push creates, a deal's "Add task" seeds the insert-only `deal_id`, an
-// edit push (with `id`) edits title+due without touching `deal_id`. Tasks have no
-// single-record view, so on success it just announces `tasks-changed` (every task
-// list re-reads) and pops. (`priority` is form-only — no column; the seam drops it.)
 export const taskFormAction: ActionDefinition = {
   id: 'tasks.form',
   data: {
@@ -17,8 +11,6 @@ export const taskFormAction: ActionDefinition = {
     id: '', title: '', due: '', priority: '', deal_id: '',
   },
   layout: taskFormLayout,
-  // One write — `task.upsert` desugars to insert (id empty) or update (id set);
-  // `deal_id` is insert-only, so an edit never disturbs it.
   endpoints: { save: { url: '/api/tasks/vex', method: 'POST', request: upsertTaskPrism, target: 'saved' } },
   triggers: [
     { event: 'ui:click', ref: 'cancel', do: [{ pop: true }] },
@@ -26,7 +18,6 @@ export const taskFormAction: ActionDefinition = {
   ],
 };
 
-// Settable inputs an opener may pass — authored in zod, exported as JSON Schema.
 export const taskFormInputSchema = z.toJSONSchema(
   z.object({
     title: z.string().optional(),

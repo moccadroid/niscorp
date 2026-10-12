@@ -1,20 +1,8 @@
-// Headless checks:
-//  1. Serializability — every action (layout included) round-trips through
-//     JSON unchanged. This is the DB-readiness guarantee: a layout/action is
-//     pure data, not a function call.
-//  2. Structure — the shell's full render tree materializes (every component
-//     found, every layout valid, actions instantiated).
-//  3. Fragment compose — pushing new-company `with: ['modal']` materializes the
-//     fragment chrome (Overlay + .rl-dialog) wrapped around the action's form
-//     (Inputs + Selects), and a fragment id can't be pushed as an action.
-// Run with `pnpm --filter relay shell-smoke`.
 import { shell } from './check-shell';
 import { ACTIONS } from '@relay/app/action-catalog';
 
 type Node = { type?: string; name?: string; message?: string; children?: unknown };
 
-// Walk a materialized render tree, counting components by name and collecting
-// any error nodes.
 const inspect = (tree: unknown): { counts: Record<string, number>; errors: string[] } => {
   const counts: Record<string, number> = {};
   const errors: string[] = [];
@@ -30,7 +18,6 @@ const inspect = (tree: unknown): { counts: Record<string, number>; errors: strin
   return { counts, errors };
 };
 
-// ─── 1. Serialization ──────────────────────────────────────
 for (const [id, action] of Object.entries(ACTIONS)) {
   const json = JSON.stringify(action);
   if (JSON.stringify(JSON.parse(json)) !== json) {
@@ -40,7 +27,6 @@ for (const [id, action] of Object.entries(ACTIONS)) {
   console.log(`serialize ${id.padEnd(14)} ${json.length} bytes  ✓`);
 }
 
-// ─── 2. Structure ──────────────────────────────────────────
 const shellTree = inspect(shell.flattenRenderTree(shell.getShellRenderTree()));
 console.log('\ncomponents rendered:', JSON.stringify(shellTree.counts));
 if (shellTree.errors.length > 0) {
@@ -48,9 +34,7 @@ if (shellTree.errors.length > 0) {
   process.exit(1);
 }
 
-// ─── 3. Fragment compose ───────────────────────────────────
 const main = async () => {
-  // A fragment is abstract — it isn't in `actions`, so it can't be pushed.
   let threw = false;
   try {
     shell.push('modal', 'modal');
@@ -63,8 +47,6 @@ const main = async () => {
   }
   console.log('\nfragment id not pushable as action  ✓');
 
-  // Push the form `with: ['modal']` — the fragment wraps it in dialog chrome.
-  // company.form exercises the modal fragment wrapping a form's inputs.
   shell.push('modal', 'crm.company.form', undefined, ['modal']);
   await new Promise((r) => setTimeout(r, 0));
 

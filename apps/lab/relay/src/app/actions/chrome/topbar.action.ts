@@ -2,16 +2,6 @@ import type { ActionDefinition } from '@niscorp/nova';
 import { topbarLayout } from './topbar.layout';
 import { topbarSearchPrism } from './topbar.prism';
 
-// The topbar shows the active screen title and hosts the action search.
-//
-// The search Input (`model: $.search`, `ref: search`) emits `ui:model` (each keystroke
-// re-runs `searchActions` into `$.results`) and `ui:key` (↑/↓ move `$.highlight`,
-// Enter runs the highlighted action, Esc clears). A result row click carries its
-// whole record. Running an action stashes its id/kind/name then `emit
-// run-{{kind}}`: a `run-create` opens the form modal; a `run-screen` opens it as
-// a quickview on the modal canvas (the QuickviewFragment, with an Open-fullscreen
-// escape). Nothing navigates the main canvas from here — that's the quickview's
-// fullscreen button. Push/replace resolve their `action` from `$.chosen_id`.
 export const topbarAction: ActionDefinition = {
   id: 'chrome.topbar',
   data: { title: 'Home', search: '', results: [], highlight: 0, chosen_id: '', chosen_kind: '', chosen_name: '', allowedIds: [] },
@@ -44,8 +34,6 @@ export const topbarAction: ActionDefinition = {
       ],
     },
     { event: 'ui:click', ref: 'search-close', do: [{ set: 'search', value: '' }, { set: 'results', value: [] }] },
-    // A create opens the form modal; a screen opens as a quickview on the modal
-    // canvas (carrying its id/name so the quickview can navigate + title itself).
     { message: 'run-create', do: [{ push: { action: '{{$.chosen_id}}', canvas: 'modal', with: ['modal'] } }, { set: 'search', value: '' }, { set: 'results', value: [] }] },
     {
       message: 'run-screen',
@@ -56,7 +44,6 @@ export const topbarAction: ActionDefinition = {
       ],
     },
     { event: 'ui:click', ref: 'new', do: [{ emit: { channel: 'new' } }] },
-    // Open Ray, the assistant, as a modal panel.
     { event: 'ui:click', ref: 'assistant', do: [{ push: { action: 'assistant', canvas: 'modal', with: ['dock'] } }] },
     { message: 'screen-home', do: [{ set: 'title', value: 'Home' }] },
     { message: 'screen-tasks', do: [{ set: 'title', value: 'My tasks' }] },

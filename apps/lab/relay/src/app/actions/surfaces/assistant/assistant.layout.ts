@@ -1,10 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Ray's chat panel — content only; the `dock` fragment supplies the right-docked
-// placement (so the action stays canvas-agnostic). Header has the session
-// switcher + New, the message log sticks to the bottom, and the input is a
-// textarea (Enter sends, Shift+Enter newlines). Messages bind to `$.messages`;
-// sessions to `$.sessions` / `$.currentId`.
 export const assistantLayout: LayoutNode = [
     {
       component: 'DialogHead',
@@ -38,28 +33,21 @@ export const assistantLayout: LayoutNode = [
             then: {
               for: '$.messages',
               as: 'm',
-              // No `key` → the loop keys by iteration index. Messages have no id
-              // field, and the transcript is append-only, so the index is stable.
+              // No `key`: messages have no id, and the transcript is append-only,
+              // so the iteration index is stable.
               do: {
                 component: 'Stack',
                 props: { gap: 2 },
                 children: [
                   { component: 'Text', props: { size: 'xs', weight: 600, color: 'mute', upper: true }, children: '{{$.m.role}}' },
-                  // The tool calls Ray made for this reply — between the name and
-                  // the response. Always shows the tools; the debug toggle adds the
-                  // expandable JSON. Absent on user messages (no trace).
                   { if: '$.m.trace', then: { component: 'RayTrace', props: { steps: '$.m.trace', ms: '$.m.ms', debug: '$.debug' } } },
                   { component: 'Text', props: { size: 'sm' }, children: '{{$.m.text}}' },
-                  // A layout Ray rendered for this message (step 1: static, in-chat).
                   { if: '$.m.view', then: { component: 'RayView', props: { layout: '$.m.view.layout', data: '$.m.view.data' } } },
                 ],
               },
             },
             else: { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Ask Ray to open something, find a record, or describe what’s on screen.' },
           },
-          // While thinking: the run's tool calls as they happen, fed by the
-          // `ray:step` trigger above. Before the first call lands it is just the
-          // "Ray is thinking…" header.
           { if: { $eq: ['$.status', 'thinking'] }, then: { component: 'RayTrace', props: { live: true, steps: '$.live', debug: '$.debug' } } },
         ],
       },
@@ -71,9 +59,6 @@ export const assistantLayout: LayoutNode = [
         props: { gap: 8, align: 'end', grow: true },
         children: [
           { component: 'Box', props: { grow: true }, children: { component: 'Textarea', ref: 'ray-draft', model: '$.draft', props: { placeholder: 'Ask Ray…  (Enter to send, Shift+Enter for newline)', rows: 2 } } },
-          // One button, two jobs: Send while idle, Stop while a turn runs —
-          // the control is where the hand already is, and a runaway build is
-          // never more than one click from over.
           {
             if: { $eq: ['$.status', 'thinking'] },
             then: { component: 'Button', ref: 'ray-stop', props: { variant: 'danger' }, children: 'Stop' },

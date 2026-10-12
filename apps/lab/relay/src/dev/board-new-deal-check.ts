@@ -1,9 +1,3 @@
-// Repro: does a freshly created OPEN deal appear on the Kanban board?
-// Navigate to the board, snapshot its cards, create a deal over the WIRE
-// (the same fingerprint replay the deal form sends, as alex), announce
-// `deals-changed` (the board listens), then re-read its cards + columns and
-// assert the new deal is there and lands in a column.
-// Run: pnpm --filter relay exec tsx src/dev/board-new-deal-check.ts
 import { shell, wire, runtime } from './check-shell';
 import { dealUpsert } from '@relay/app/vex/deals.entries';
 
@@ -28,7 +22,7 @@ const main = async (): Promise<void> => {
   const colsBefore = board().stages ?? [];
   console.log(`board: ${before.length} cards, ${colsBefore.length} columns: ${colsBefore.map((c) => `${String(c['stage'])}×${String(c['count'])}`).join(', ')}`);
 
-  // A real company + the 'Lead' stage (which already has open deals → a column).
+  // 'Lead' already has open deals, so its column exists.
   const co = (await runtime.db.query('SELECT id, name FROM companies LIMIT 1')).rows[0] as { id: string; name: string };
   const stg = (await runtime.db.query("SELECT id, name FROM stages WHERE name='Lead' LIMIT 1")).rows[0] as { id: string; name: string };
   const res = await wire('/api/deals/vex', {
@@ -42,7 +36,7 @@ const main = async (): Promise<void> => {
   const created = ((await res.json()) as { result?: Record<string, unknown> }).result ?? {};
   console.log(`created deal ${String(created['id']).slice(0, 8)}… status=${String(created['status'])} stage=${stg.name} company=${co.name}`);
 
-  // Announce the change the way the deal form does on create; the board re-reads.
+  // The deal form announces this on create.
   shell.publish('deals-changed');
   await settle(350);
   const after = board().deals ?? [];
@@ -57,8 +51,6 @@ const main = async (): Promise<void> => {
   checks.push([`value is a number (got ${typeof mine?.['value']} ${String(mine?.['value'])})`, typeof mine?.['value'] === 'number' && mine?.['value'] === 4242]);
   checks.push([`value_display is formatted (got ${String(mine?.['value_display'])})`, typeof mine?.['value_display'] === 'string' && String(mine?.['value_display']).startsWith('$')]);
 
-  // The deal form's Stage picker must only offer in-progress pipeline stages — never
-  // the terminal Closed Won/Lost (an open deal there would have no board column).
   shell.publish('new');
   await settle(280);
   const opts = (modalData()?.['stageOptions'] ?? []) as Record<string, unknown>[];
