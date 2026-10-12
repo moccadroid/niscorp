@@ -7,43 +7,19 @@ import { billableFor, namesForSubscriptions, purchaseFor, subscriptionsOfPerson 
 import { handleStripeEvent } from './hooks';
 import { invoicesFor, invoicesForSubscriptions, ledgerRows, payoutRows } from './ledger';
 
-// The same glyphs the ledger uses, for the two balance figures that belong to no
-// row and so cannot borrow a row's currency.
 const SYMBOLS: Record<string, string> = { eur: '€', usd: '$', gbp: '£' };
 import { sweepLeaving } from './leaving';
 
-// ═══════════════════════════════════════════════════════════════
-// STRIPE — payments, as an integration.
-//
-// Every route is relative and every one asks `ctx.identity(c)` with no audience
-// argument: the mounting bound this integration's id to both, so a token minted for
-// another integration on this deployment cannot be read here even by a handler that
-// never thought about it.
-//
-// THE STUDIO IN THE ASSERTION IS THE ONLY STUDIO THIS TOUCHES. Nothing reads a
-// studio id from a body; there is nowhere for one to come from but the token,
-// which is what makes "connect THIS studio" unable to mean somebody else's.
-// ═══════════════════════════════════════════════════════════════
-
 export const stripeIntegration: Integration = {
   id: 'stripe',
-  // Named, and therefore fenced: this integration cannot read another's secret even
-  // knowing its name, and Belts cannot read STRIPE_SECRET (integration.ts).
   env: ['STRIPE_SECRET', 'STRIPE_WEBHOOK_SECRET', 'LYRA_BASE', 'STRIPE_KEY', 'STRIPE_SWEEP_MS'],
   bundle: () => STRIPE_BUNDLE,
 
   mount: (r, ctx) => {
-    // SAID OUT LOUD, ONCE, AT BOOT. With no database this integration keeps connected
-    // account ids in memory, and a restart loses the only mapping between a
-    // studio and a live merchant account at Stripe. That is fine for a check
-    // and unacceptable for a deployment, and the difference between those two
-    // is not visible from a screen — so it is visible in the log instead.
     if (!storeIsDurable(ctx.db)) {
       console.warn('[stripe] no DATABASE_URL — connected accounts are held in memory and will not survive a restart. Run: pnpm --filter lyra-integrations db:up && pnpm --filter lyra-integrations migrate');
     }
 
-    // What the setup and money screens both open on: does this studio have an
-    // account, and what is Stripe still waiting for.
     r.post('/account', async (c) => {
       const who = ctx.identity(c);
       if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
@@ -56,9 +32,6 @@ export const stripeIntegration: Integration = {
       }
       try {
         const standing = await accountStanding(stripe, held.accountId);
-        // THREE STATES, not a boolean. The screen branches on `state` to decide
-        // whether to offer a button at all — offering one when Stripe is
-        // reviewing (`in_review`) is what sent the owner in circles.
         const label =
           standing.state === 'ready' ? 'Ready' : standing.state === 'in_review' ? 'In review' : 'Needs details';
         const tone = standing.state === 'ready' ? 'good' : standing.state === 'in_review' ? 'calm' : 'warn';
@@ -66,29 +39,16 @@ export const stripeIntegration: Integration = {
           account_id: held.accountId,
           state: standing.state,
           ready: standing.ready,
-          // Whether the STUDIO can do something now — the only thing that should
-          // put an action button on the screen.
           actionable: standing.state === 'needs_info',
           state_label: label,
           state_tone: tone,
           detail: standing.detail,
         });
       } catch (err) {
-        // A provider being down is an ordinary condition, not an outage here:
-        // the screen says so and nothing is claimed about the studio.
         return c.json({ account_id: held.accountId, state: 'in_review', ready: false, actionable: false, state_label: 'Unknown', state_tone: 'neutral', detail: `Stripe did not answer: ${String(err).slice(0, 120)}` });
       }
     });
 
-    // ── HOSTED ONBOARDING: the owner's way to enter their details ──
-    //
-    // A short-lived redirect to Stripe's own hosted onboarding form, returning
-    // to lyra when done. It needs no platform-side Connect config.
-    //
-    // The return address is the HOST's, and neither this integration nor its caller
-    // chooses it — a caller-supplied return on a payment onboarding flow is an
-    // open redirect that lands somebody on a page that looks like Stripe and is
-    // not.
     r.post('/onboarding-link', async (c) => {
       const who = ctx.identity(c);
       if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
@@ -108,10 +68,6 @@ export const stripeIntegration: Integration = {
       }
     });
 
-    // CONNECTING IS ONE CALL AND IT IS NOT REVERSIBLE ON STRIPE'S SIDE. The
-    // dashboard type is fixed at creation — changing it means a NEW account
-    // object — so this refuses to make a second one for a studio that has one
-    // rather than quietly stranding the first.
     r.post('/connect', async (c) => {
       const who = ctx.identity(c);
       if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
@@ -120,20 +76,10 @@ export const stripeIntegration: Integration = {
 
       const stripe = stripeFor(ctx.env);
       if (stripe === undefined) return c.json({ message: 'This deployment holds no Stripe key.' }, 503);
-      // WHERE THE STUDIO TRADES DECIDES WHAT STRIPE ASKS IT FOR, and it arrives
-      // in the assertion rather than being a constant here. No country, no
-      // account — a guess would create a merchant in the wrong jurisdiction, and
-      // the account object cannot be moved afterwards.
       if (who.country === '') return c.json({ message: 'This studio has no country set, so no merchant account can be created for it.' }, 409);
 
       try {
-        // THE STUDIO'S NAME, not its id. This said `who.studioId`, so North Rock
-        // became a merchant called `st_northrock` — the name Stripe then uses in
-        // its own correspondence with the business.
         const accountId = await createConnectedAccount(stripe, {
-          // THE REGISTERED NAME WHERE THERE IS ONE. A provider puts this on
-          // documents and asks a register about it; the name above the door is
-          // the fallback, and the studio id is the fallback's fallback.
           studioName: who.legalName !== '' ? who.legalName : who.studioName === '' ? who.studioId : who.studioName,
           country: who.country,
           entityType: who.legalForm === 'individual' ? 'individual' : 'company',
@@ -152,13 +98,6 @@ export const stripeIntegration: Integration = {
       }
     });
 
-    // ── THE MEMBER PAYS ────────────────────────────────────────
-    //
-    // The membership comes from the ASSERTION, never the body: a member cannot
-    // ask to pay for somebody else's membership because there is nowhere to say
-    // whose. What to charge comes from lyra over this integration's own key — the
-    // price list is the studio's, and a payment provider does not get to have
-    // an opinion about it.
     r.post('/checkout', async (c) => {
       const who = ctx.identity(c);
       if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
@@ -169,42 +108,24 @@ export const stripeIntegration: Integration = {
       const stripe = stripeFor(ctx.env);
       if (stripe === undefined) return c.json({ message: 'This deployment holds no Stripe key.' }, 503);
 
-      // READY TO CHARGE? Asked here, in a sentence, rather than discovered at a
-      // card form. Automatic tax refuses a session when the merchant is not set
-      // up for it, and that refusal arrives as a provider's error code in front
-      // of a member who was trying to pay their gym.
       const notReady = await notReadyToCharge(stripe, held.accountId);
       if (notReady !== undefined) return c.json({ message: notReady }, 409);
 
       const billable = await billableFor(ctx.env, who.studioId, who.personId);
       if (billable === undefined) return c.json({ message: 'There is nothing to pay for on this membership.' }, 409);
 
-      // ALREADY PAYING. A second checkout for a membership a provider is already
-      // billing is a second subscription and a second charge every month — and
-      // it is not a hypothetical mistake: this screen offers one button, the
-      // redirect races the webhook, and somebody who came back unsure whether it
-      // worked pressed it again.
-      //
-      // The reverse index is what makes this answerable: it names the provider
-      // subscription behind a membership, which nothing could do before.
       const already = await stripeSubscriptionFor(ctx.db, who.studioId, billable.subscriptionId);
       if (already !== undefined) {
         return c.json({ message: 'Your payment is already set up. Use Manage payment method to change the card it comes off.' }, 409);
       }
 
       const body = (await c.req.json().catch(() => ({}))) as { email?: unknown };
-      // The return address is the HOST's, and neither this integration nor its caller
-      // gets to choose it — a caller-supplied return on a payment flow is an
-      // open redirect, and it lands somebody on a page that looks like a receipt
-      // and is not.
+      // The return address is the host's, never the caller's: a caller-supplied
+      // return on a payment flow is an open redirect.
       const base = ctx.env('LYRA_BASE').replace(/\/$/, '');
       const returnUrl = base === '' ? '' : `${base}/`;
       if (returnUrl === '') return c.json({ message: 'This deployment has no address to return to.' }, 503);
 
-      // WHAT JOINING COSTS, resolved once. The plan points at another offering;
-      // `offerings/price` is the read that already answers what a thing costs,
-      // and a checkout is not a hot path — a second question here is cheaper
-      // than a second way to ask one.
       const fee = billable.joiningFeeId === '' ? undefined : await purchaseFor(ctx.env, who.studioId, 'pass', billable.joiningFeeId);
 
       try {
@@ -219,10 +140,8 @@ export const stripeIntegration: Integration = {
           currency: billable.currency,
           interval: billable.interval,
           intervalCount: billable.intervalCount,
-          // A fee that no longer resolves — retired since the plan named it — is
-          // simply not charged, rather than failing the whole checkout. The
-          // member gets their membership; the studio's price list is what needs
-          // looking at.
+          // A fee that no longer resolves (retired since the plan named it) is
+          // not charged, rather than failing the whole checkout.
           ...(fee === undefined || fee.amount <= 0 ? {} : { joiningFee: { name: fee.name, amount: fee.amount } }),
           joiningFeeId: fee === undefined ? '' : billable.joiningFeeId,
           returnUrl,
@@ -233,17 +152,6 @@ export const stripeIntegration: Integration = {
       }
     });
 
-    // ── THE MEMBER'S OWN CARD ──────────────────────────────────
-    //
-    // A door into the studio's billing portal for the person in the assertion,
-    // and nobody else: the customer is looked up by (studio, person) from this
-    // integration's own map, so there is nowhere for a caller to name whose
-    // payment details they would like to manage.
-    //
-    // What the portal is ALLOWED to do is configured rather than accepted
-    // (client.ts) — updating a card and reading invoices, never cancelling and
-    // never switching plan, because those two are lyra's and have terms behind
-    // them.
     r.post('/portal', async (c) => {
       const who = ctx.identity(c);
       if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
@@ -254,9 +162,6 @@ export const stripeIntegration: Integration = {
       const stripe = stripeFor(ctx.env);
       if (stripe === undefined) return c.json({ message: 'This deployment holds no Stripe key.' }, 503);
 
-      // NO CUSTOMER, NOTHING TO MANAGE — and that is an ordinary state, not a
-      // failure: somebody who has never paid through the app has no card on
-      // file anywhere. The sentence says so rather than opening an empty portal.
       const customerId = await customerFor(ctx.db, who.studioId, who.personId);
       if (customerId === undefined) return c.json({ message: 'There is no payment set up for you yet.' }, 409);
 
@@ -270,16 +175,6 @@ export const stripeIntegration: Integration = {
       }
     });
 
-    // ── BUYING ONE THING ───────────────────────────────────────
-    //
-    // A pass, a drop-in, a course place. The other half of what a studio sells,
-    // and until now the half with no way to pay for it: a studio could author a
-    // €18 drop-in and a €240 block and take money for neither except at a desk.
-    //
-    // WHICH thing comes from the body and that is fine — WHOSE studio and WHICH
-    // person do not, so the worst a caller can name is something their own
-    // studio sells to themselves. The PRICE is never in the body; it is read
-    // from lyra, and a caller who could send an amount would be setting it.
     r.post('/purchase', async (c) => {
       const who = ctx.identity(c);
       if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
@@ -291,17 +186,12 @@ export const stripeIntegration: Integration = {
       if (stripe === undefined) return c.json({ message: 'This deployment holds no Stripe key.' }, 503);
 
       const body = (await c.req.json().catch(() => ({}))) as { kind?: unknown; targetId?: unknown; email?: unknown };
-      // What the caller says is only a HINT about which read to make; for
-      // anything on the price list the kind comes back from lyra, so a caller
-      // cannot decide whether their purchase grants classes.
       const kind = body.kind === 'course' ? 'course' : 'pass';
       const targetId = typeof body.targetId === 'string' ? body.targetId : '';
 
       const purchase = await purchaseFor(ctx.env, who.studioId, kind, targetId);
-      // ONE SENTENCE FOR SEVERAL REFUSALS, deliberately: retired, sold out, not
-      // this studio's, not a thing at all. A member does not need to be told
-      // which of those it was, and telling them turns this into a way to ask
-      // questions about another studio's price list.
+      // One sentence for retired, sold out and not this studio's: saying which
+      // would answer questions about another studio's price list.
       if (purchase === undefined) return c.json({ message: 'That is not on sale just now.' }, 409);
       if (purchase.amount <= 0) return c.json({ message: 'There is nothing to pay for this.' }, 409);
 
@@ -327,15 +217,6 @@ export const stripeIntegration: Integration = {
       }
     });
 
-    // ── THE LEDGER, FROM THIS INTEGRATION'S OWN MIRROR ─────────
-    //
-    // Read from what the webhooks recorded, not from Stripe. A screen that
-    // called a vendor on every open would be slow, rate-limited and broken
-    // whenever they were — and S4 puts the ledger on this side precisely so it
-    // is answerable without them.
-    //
-    // Scoped by the ASSERTION. Two studios install this integration and each reads its
-    // own; there is nowhere for a caller to say whose.
     r.post('/ledger', async (c) => {
       const who = ctx.identity(c);
       if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
@@ -344,16 +225,6 @@ export const stripeIntegration: Integration = {
       return c.json(ledgerRows(invoices, named));
     });
 
-    // ── WHAT IS ON ITS WAY TO THE BANK ─────────────────────────
-    //
-    // Asked live rather than mirrored: a balance changes by the minute and would
-    // be stale the moment it was stored, and a payout is a handful of rows a few
-    // times a month. Neither is worth a table, and a mirror of either would be a
-    // second opinion about somebody else's money.
-    //
-    // A provider being unreachable answers empty with a sentence, exactly like
-    // the account read — a slow vendor is an ordinary condition, not an outage
-    // here.
     r.post('/payouts', async (c) => {
       const who = ctx.identity(c);
       if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
@@ -366,9 +237,6 @@ export const stripeIntegration: Integration = {
           rows.length === 0 ? '—' : rows.map((row) => `${SYMBOLS[row.currency.toLowerCase()] ?? `${row.currency.toUpperCase()} `}${(row.amount / 100).toFixed(2)}`).join(' · ');
         return c.json({
           payouts: payoutRows(payouts),
-          // TWO NUMBERS, because they mean different things and a studio owner
-          // has to know which is which: `pending` is money taken and not yet
-          // clear, `available` is money a payout can be made from today.
           pending_display: money(balance.pending),
           available_display: money(balance.available),
           detail: '',
@@ -378,12 +246,6 @@ export const stripeIntegration: Integration = {
       }
     });
 
-    // ── ONE PERSON'S OWN PAYMENTS ──────────────────────────────
-    //
-    // What the panel on a member's record reads. The person is named by the
-    // host — a panel is opened ON somebody — and the studio is still the
-    // assertion's, so naming somebody else's person id resolves to subscriptions
-    // this studio does not have and therefore to no invoices.
     r.post('/member-ledger', async (c) => {
       const who = ctx.identity(c);
       if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
@@ -393,9 +255,6 @@ export const stripeIntegration: Integration = {
       return c.json(ledgerRows(await invoicesForSubscriptions(ctx.db, who.studioId, held)));
     });
 
-    // THE STRIP, before the panel is opened. The host paints a line per offered
-    // person while deriving the list, so this answers about several at once and
-    // says only what a strip can show.
     r.post('/preview/member', async (c) => {
       const who = ctx.identity(c);
       if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
@@ -410,16 +269,8 @@ export const stripeIntegration: Integration = {
       return c.json(out);
     });
 
-    // ── GIVING MONEY BACK ──────────────────────────────────────
-    //
-    // Reached only from the money screen, which is a desk action — so the
-    // perimeter is what keeps a member off it, and this handler needs no opinion
-    // about who is asking beyond the studio in the assertion.
-    //
-    // THE INVOICE MUST BE THIS STUDIO'S, checked against this integration's own
-    // mirror rather than taken from the body. Without that, an id from another
-    // studio's ledger would refund another studio's customer with this studio's
-    // money.
+    // No role check here: the host's perimeter keeps a member off the money
+    // screen. The invoice id is checked against this studio's own ledger.
     r.post('/refund', async (c) => {
       const who = ctx.identity(c);
       if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
@@ -436,10 +287,6 @@ export const stripeIntegration: Integration = {
 
       try {
         const { refunded } = await refundInvoice(stripe, held.accountId, invoiceId);
-        // NOT WRITTEN HERE. The `charge.refunded` webhook records it, the same
-        // way it does when somebody refunds from Stripe's own dashboard — so
-        // there is one writer whoever pressed the button, and the screen shows
-        // the same thing either way.
         return c.json({ refunded, message: 'Refunded. It will show here once Stripe confirms.' });
       } catch (err) {
         return c.json({ message: `Stripe refused: ${String(err).slice(0, 200)}` }, 502);
@@ -447,45 +294,23 @@ export const stripeIntegration: Integration = {
     });
   },
 
-  // ── WHAT LYRA HAS ENDED, TOLD TO THE PROVIDER ──────────────
-  //
-  // A sweep rather than a reaction, because lyra cannot call this service: the
-  // proxy is person-driven and inbound-only. So this asks, on a timer, who is
-  // leaving — and states a date rather than firing an event, which is what makes
-  // running it twice free.
-  //
-  // THE TIMER IS OPT-IN. A check boots this service in-process dozens of times;
-  // a background interval firing during one would reach across a suite and make
-  // it order-dependent. Set the period to run it; leave it unset and the sweep
-  // is only ever what somebody calls.
+  // A timer, because lyra cannot call this service. Opt-in: an interval firing
+  // while a check has the service booted would make the suite order-dependent.
   sweep: (ctx) => {
     const every = Number(ctx.env('STRIPE_SWEEP_MS'));
     if (!Number.isFinite(every) || every <= 0) return undefined;
     return { everyMs: every, run: async () => { await sweepLeaving(ctx.env, ctx.db); } };
   },
 
-  // ── WHAT STRIPE TELLS US ─────────────────────────────────────
-  //
-  // Mounted at `/stripe/hook/*`, which moss reaches with NO principal and NO
-  // assertion — the one door on that server that asks for nothing, because a
-  // vendor calling in has no session and could not have one.
-  //
-  // So the context here has no `identity` to call. What replaces it is the
-  // signature, and `handleStripeEvent` verifies before it does anything at all.
-  //
-  // ONE ROUTE, not one per event type. Stripe posts every event to one endpoint
-  // and names the type inside the signed payload; a route per type would put the
-  // type in the URL, where it is unsigned and therefore a claim rather than a
-  // fact.
+  // One route, not one per event type: Stripe names the type inside the signed
+  // payload, and a type in the URL would be unsigned.
   hooks: (r, ctx) => {
     r.post('/events', async (c) => {
       const stripe = stripeFor(ctx.env);
       if (stripe === undefined) return c.json({ message: 'This deployment holds no Stripe key.' }, 503);
 
-      // THE EXACT BYTES. Not `c.req.json()`, not `c.req.text()` re-encoded —
-      // the signature is over what Stripe sent, and anything that parses and
-      // re-emits it breaks verification in a way that only shows up in
-      // production, on the day it goes live.
+      // The exact bytes: the signature is over what Stripe sent, and anything
+      // that parses and re-emits the body breaks verification.
       const raw = Buffer.from(await c.req.arrayBuffer());
       const signature = c.req.header('stripe-signature') ?? '';
       const outcome = await handleStripeEvent(stripe, ctx.db, ctx.env, raw, signature);

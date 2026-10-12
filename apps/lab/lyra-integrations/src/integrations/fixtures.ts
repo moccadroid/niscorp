@@ -1,15 +1,5 @@
 import type { Integration } from '../integration';
 
-// ── BUNDLES SERVED IN ORDER TO BE REFUSED ────────────────────
-//
-// Intake is the only thing standing between a mistake here and a corrupted
-// application over there, and a gate nobody has watched refuse anything is a
-// gate nobody knows the shape of. These two exist so the host's refusals are
-// exercised by something real rather than described in a comment.
-//
-// They are integrations like any other — a fixture that took a different path through
-// the mounting machinery would stop testing the machinery.
-
 // Three refusals in one payload: a namespace it does not own, a component the
 // host cannot render, and a fingerprint the host does not serve.
 export const brokenIntegration: Integration = {
@@ -30,9 +20,8 @@ export const brokenIntegration: Integration = {
   mount: () => {},
 };
 
-// `/hook/` requires no principal. An integration declaring an ACTION endpoint there
-// would be a screen's call riding the unauthenticated path — the whole point of
-// reserving it.
+// `/hook/` requires no principal: an action endpoint declared there would be a
+// screen's call on the unauthenticated path.
 export const hookClaimIntegration: Integration = {
   id: 'hookclaim',
   bundle: () => ({

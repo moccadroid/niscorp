@@ -1,33 +1,10 @@
 import type { ActionDefinition } from '@niscorp/nova';
 
-// BELTS — a discipline integration for a grappling gym, shipped from outside.
-//
-// This file may not import anything from Lyra. Not a fingerprint constant, not
-// a component name, not a type. Everything it knows about the app it extends
-// came from `GET /api/integrations/contract`, which is why that endpoint exists.
-//
-// It stores its own records. A belt is not a column beside `memberships` — it
-// lives in this service, keyed by the `person_id` the assertion (or the
-// host screen) hands over. That is the whole reason a discipline integration does not
-// need a migration in Lyra: the two systems share identifiers, not tables.
-//
-// WHERE ITS SCREENS GO is declared at the bottom, beside the actions and never
-// on them: the panel rides the member detail, the roster lists under People,
-// the member's own view lists under their Booking area, and the settings
-// screen surfaces on the store tile and nowhere else. Add-ons is a store; this
-// bundle puts nothing in it but words and one settings door.
-
 const heading = (title: string, lead: string) => ({
   component: 'Hero',
   props: { title, lead },
 });
 
-// ── the panel that rides the member record ───────────────────
-//
-// Attached to `people.detail`, so it opens WITH a member on screen and is
-// handed exactly what that screen offers: the membership id and the person's
-// name. No name or id renders here — the host screen owns identity; this
-// panel owns the belt.
 const panelAction: ActionDefinition = {
   id: 'ext.desk.belts.panel',
   title: 'Belt',
@@ -45,9 +22,6 @@ const panelAction: ActionDefinition = {
           component: 'Row',
           props: { gap: 22, wrap: true, align: 'end' },
           children: [
-            // THE BELT ITSELF, not the word for it. The bands arrive on the
-            // record — this integration owns what a grappling belt looks like; the
-            // kit only knows how to paint segments.
             {
               component: 'Stack',
               props: { gap: 6 },
@@ -59,14 +33,6 @@ const panelAction: ActionDefinition = {
             },
             { component: 'Stat', props: { label: 'Since', value: '$.belt.since' } },
             { component: 'Stat', props: { label: 'Classes', value: '$.belt.classes' } },
-            // THREE VERBS, THREE WEIGHTS. A stripe is the everyday act — tape
-            // on the bar after class — so it wears the quiet button. A
-            // promotion is the ceremony. Undo winds the ledger back one step
-            // and only exists while there is a step to unwind. Every one of
-            // them ASKS first: the clicks push Lyra's own `confirm` sheet
-            // (granted to everybody at the base rung) and the work fires only
-            // when its channel answers yes — this integration could not perform the
-            // change from inside the question if it wanted to.
             {
               if: '$.belt.can_stripe',
               then: { component: 'Button', props: { variant: 'ghost', label: 'Add stripe' }, ref: 'stripe' },
@@ -108,9 +74,6 @@ const panelAction: ActionDefinition = {
   },
   endpoints: {
     belt: { url: '/integrations/belts/member', method: 'POST', request: { personId: { $ref: '$.person_id' } }, target: 'belt', errorTarget: 'error' },
-    // Promote answers with the updated record, so one call both writes and
-    // repaints. Behind it the service also acts AS ITSELF: its key carries a
-    // notification into Lyra's inbox — the panel neither knows nor needs to.
     promote: {
       url: '/integrations/belts/promote',
       method: 'POST',
@@ -135,9 +98,6 @@ const panelAction: ActionDefinition = {
   },
   lifecycle: { mount: [{ call: 'belt', onSuccess: [{ set: 'loading', value: false }], onError: [{ set: 'loading', value: false }] }] },
   triggers: [
-    // Each click ASKS; each answer WORKS. The channels are namespaced to this
-    // integration so two integrations confirming on one screen cannot hear each
-    // other's yes.
     {
       event: 'ui:click',
       ref: 'stripe',
@@ -204,13 +164,6 @@ const panelAction: ActionDefinition = {
   ],
 };
 
-// ── the roster, under People where it belongs ────────────────
-//
-// Two reads, one screen: the roll from Lyra (a fingerprint the contract
-// advertises), the belts from here. The JOIN happens below, in the action —
-// belts keyed by membership id meet the roll's names, so the desk reads
-// "Omar Haddad · Purple", never an identifier. Neither system learned the
-// other's storage for that to work; they share ids, and the screen composes.
 const rosterAction: ActionDefinition = {
   id: 'ext.desk.belts.roster',
   title: 'Belts',
@@ -243,13 +196,7 @@ const rosterAction: ActionDefinition = {
     ],
   },
   endpoints: {
-    // OURS. A URL under our own prefix — intake refuses anything else.
     belts: { url: '/integrations/belts/roster', method: 'POST', request: {}, target: 'belts' },
-    // THEIRS. A fingerprint the contract listed. We do not know what table it
-    // reads and cannot ask. The roll takes TWO closed vocabularies now — who,
-    // and what they hold — and both are context values rather than part of the
-    // name. An integration wanting everybody with a membership asks for exactly
-    // that: no lens, no search, no wildcard to know about.
     members: {
       url: '/api/member/vex',
       method: 'POST',
@@ -258,9 +205,6 @@ const rosterAction: ActionDefinition = {
     },
   },
   lifecycle: {
-    // Sequenced, because the join needs both answers — and the join is the
-    // whole point: a roster of ids was this action's first recorded fault,
-    // fetching the roll and never reading it.
     mount: [
       {
         call: 'members',
@@ -270,12 +214,6 @@ const rosterAction: ActionDefinition = {
             onSuccess: [
               {
                 set: 'rows',
-                // `$prism` is the explicit door to the transform grammar — and
-                // the ROLL drives the map, not the belt records: there is no
-                // unranked, so every member is on the wall, and one with no
-                // record yet is a white belt with an empty bar. The white-belt
-                // fallback is a literal because what a white belt looks like is
-                // THIS integration's knowledge, written where it composes.
                 value: {
                   $prism: {
                   $with: {
@@ -326,7 +264,6 @@ const rosterAction: ActionDefinition = {
   },
 };
 
-// ── what a member sees, in their own area ────────────────────
 const mineAction: ActionDefinition = {
   id: 'ext.member.belts.mine',
   title: 'My belt',
@@ -363,11 +300,6 @@ const mineAction: ActionDefinition = {
   lifecycle: { mount: [{ call: 'belt', onSuccess: [{ set: 'loading', value: false }] }] },
 };
 
-// ── the settings door, on the store tile and nowhere else ────
-//
-// "What belts exist" is this integration's own configuration — rows in ITS storage,
-// reachable only from the Add-ons tile once a studio has it on. Nothing here
-// is a screen anybody works in; it is how the integration is set up.
 const settingsAction: ActionDefinition = {
   id: 'ext.desk.belts.settings',
   title: 'Belt settings',
@@ -423,10 +355,8 @@ const settingsAction: ActionDefinition = {
 
 export const BELTS_BUNDLE = {
   integration: 'belts',
-  // THE INTEGRATION'S OWN WORDS, in the languages it speaks — the host merges this
-  // under its OWN book (host words win) and the language pass covers these
-  // screens with everything else. Keyed by LANGUAGE, per the contract; a
-  // full locale here refuses the whole bundle at intake.
+  // Keyed by language: a full locale here makes intake refuse the whole bundle.
+  // The host merges this under its own book, and host words win.
   phrasebook: {
     de: {
       Belts: 'Gürtel',
@@ -443,7 +373,6 @@ export const BELTS_BUNDLE = {
       'Belts are recorded here and stay here.': 'Gürtel werden hier erfasst und bleiben hier.',
       'Where they are, and what is next.': 'Wo sie stehen — und was als Nächstes kommt.',
       'Where you are, and what is next.': 'Wo du stehst — und was als Nächstes kommt.',
-      // The example rank in a placeholder, a colour like the host's own Lime.
       Coral: 'Koralle',
       Member: 'Mitglied',
       'Nobody graded yet.': 'Noch niemand graduiert.',
@@ -456,14 +385,8 @@ export const BELTS_BUNDLE = {
         'Gürtel, Graduierungsdaten und Kurszahlen, im eigenen Speicher des Add-ons. Graduierungen landen in den Mitteilungen des Studios.',
     },
   },
-  // WHAT WE NEED, which somebody approves once. Asking is not getting: until an
-  // operator says yes, nothing here is served and the data grants are not held.
   grants: {
     actions: ['ext.desk.belts.*', 'ext.member.belts.*'],
-    // The roll it joins against: the anchor and the person. Standing derives
-    // from the anchor's own mirrors, so nothing else is asked for. Read as
-    // the person DRIVING — this is what the screens need, not what the
-    // integration's key holds.
     data: ['studio_people.read', 'people.read'],
   },
   actions: {
@@ -472,19 +395,12 @@ export const BELTS_BUNDLE = {
     [mineAction.id]: mineAction,
     [settingsAction.id]: settingsAction,
   },
-  // WHAT LYRA'S OWN VOCABULARY ADDS TO A BUNDLE. Everything above is nisc's;
-  // what is under `extension` is the host app's to read, and its contract
-  // (`GET /api/integrations/contract`) says what it takes.
   extension: {
-    // WORDS, for the store tile and the approval card. Never parsed, never
-    // trusted for anything but reading.
     meta: {
       title: 'Belts',
       tagline: 'Rank tracking for grappling gyms',
       description: 'Belts, promotion dates and class counts, kept in the add-on’s own storage. Promotions land in the studio’s notifications.',
     },
-    // THE BINDINGS — beside the artifacts, never on them. Each names a target
-    // the contract advertised; the host refuses anything else with a sentence.
     attachments: { [panelAction.id]: { to: 'people.detail', preview: '/integrations/belts/preview' } },
     placements: { [rosterAction.id]: 'hub.people', [mineAction.id]: 'hub.me' },
     settings: settingsAction.id,

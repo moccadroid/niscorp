@@ -4,34 +4,8 @@ import { billableFor, callLyra, grantPurchase, mailMember, notifyDesk } from './
 import { recordDispute, recordInvoice, recordRefund } from './ledger';
 import { rememberSubscription } from './store';
 
-// ═══════════════════════════════════════════════════════════════
-// WHAT STRIPE TELLS US, AND WHAT WE DO ABOUT IT.
-//
-// This is the one path in the service with no principal. Moss forwards a
-// vendor's call with no session and mints no assertion — there is nobody to be —
-// so the hook context carries no identity function at all, and authenticating
-// the caller is this file's own job against a signature only Stripe can make.
-//
-// THE BYTES MATTER. A signature is over exact bytes, so nothing between Stripe
-// and `constructEvent` may parse and re-emit the body: moss forwards it as an
-// ArrayBuffer and this reads it as one. A JSON round-trip would re-order one key
-// and break every verification, in production only, on the day it went live.
-//
-// ASSERTIONS, NEVER DELTAS. Everything replayed into lyra states a standing —
-// "active, paid until the 14th" — so a redelivery, a late delivery, or two
-// events arriving out of order all mean the same thing. There is no counter to
-// double and no cursor to lose.
-// ═══════════════════════════════════════════════════════════════
-
 const MEMORY_EVENTS = new Set<string>();
 
-/**
- * Claim an event, once.
- *
- * An INSERT that either wins or loses — not a read followed by a write, which
- * is the same question with a race in the middle: two deliveries arriving
- * together would both read "not seen" and both act.
- */
 const claimEvent = async (db: IntegrationStore | undefined, event: { id: string; type: string; account?: string }): Promise<boolean> => {
   if (db === undefined) {
     if (MEMORY_EVENTS.has(event.id)) return false;
@@ -51,29 +25,9 @@ const settleEvent = async (db: IntegrationStore | undefined, id: string, outcome
   await db.query(`UPDATE ${db.table('events')} SET outcome = $2, detail = $3 WHERE event_id = $1`, [id, outcome, detail.slice(0, 400)]);
 };
 
-// ── STRIPE'S WORDS → LYRA'S ──────────────────────────────────
-//
-// Lyra holds three: active, paused, cancelled. Stripe holds seven, and the
-// mapping is where a subtle wrong answer would live, so it is written out rather
-// than inferred.
-//
-// `past_due` maps to ACTIVE on purpose. Somebody whose card failed on Tuesday
-// has not stopped being a member — Stripe is still retrying, they are still
-// training, and what has actually changed is that `paid_until` is in the past,
-// which every screen that cares can compare for itself. Putting it in the status
-// column would be storing a date comparison, which is the bug lyra spent its
-// `trialling`/`lapsed` refactor removing.
-//
-// `unpaid` is different, and it is the line between "the bank said no once" and
-// "this is not being paid". Stripe reaches it only after its whole retry
-// schedule is exhausted — so it is the FINAL failure, and it pauses. Not
-// cancels: cancelling is a decision about the relationship, and nobody decided
-// anything here except a card issuer. A paused membership can be un-paused by
-// somebody at a desk in one click; a cancelled one has a leaving date and a
-// notice period behind it.
-//
-// Either way a human is told — dunning writes a follow-up onto the desk's list,
-// because a studio finding out from an empty class is worse than any status.
+// `past_due` is active on purpose: Stripe is still retrying, and `paid_until`
+// is what is in the past. `unpaid` comes only after its whole retry schedule,
+// and pauses: a cancelled membership has a leaving date and a notice period.
 const STANDING: Record<string, 'active' | 'paused' | 'cancelled'> = {
   active: 'active',
   trialing: 'active',
@@ -85,24 +39,8 @@ const STANDING: Record<string, 'active' | 'paused' | 'cancelled'> = {
   incomplete_expired: 'cancelled',
 };
 
-// The statuses that mean somebody should be told, and what to tell them. Stripe
-// retries on its own schedule and we do not replace that (docs/archive/
-// automation-requirements.md:
-// "where Stripe already does something well, we defer to it") — we listen for
-// the outcome and put it where a person looks.
-// THE SOURCE DIFFERS BECAUSE THE THINGS DIFFER, and lyra's follow-up table is
-// unique on (studio, source, person, day). That constraint is right — it stops
-// five delivery attempts in an afternoon becoming five identical tasks — but it
-// collapses on `source`, so filing both of these under one name would let the
-// retry notice swallow the escalation, silently, on the day it matters.
-//
-// A repeat of the SAME thing still collapses, which is what the rule is for.
-//
-// EACH CARRIES TWO MESSAGES, because the desk and the member need different
-// sentences about one event. The desk's is a task — who to talk to. The
-// member's is the thing only they can act on: a card to replace. Sending the
-// desk's wording to a member ("someone should talk to them") would be absurd,
-// and sending nothing at all is what happened before.
+// Two sources: lyra's follow-up table is unique on (studio, source, person,
+// day), so under one the retry notice would swallow the escalation.
 const DUNNING: Record<string, { source: string; body: string; subject: string; member: string }> = {
   past_due: {
     source: 'payment-retry',
@@ -125,32 +63,10 @@ const asDay = (seconds: unknown): string | null => {
   return Number.isFinite(value) && value > 0 ? new Date(value * 1000).toISOString().slice(0, 10) : null;
 };
 
-// Stamped at checkout: WHICH subscription (the assert key — a person may hold
-// more than one), WHO it is about (for the follow-up a failure writes), and
-// WHOSE studio. Ids only; this service never learns a name it did not ask for.
-// A one-off carries three more: WHICH kind of thing, and WHICH one — stamped
-// on the session rather than on a subscription, because a single payment has no
-// subscription object to hang anything on.
 type Meta = { subscription_id?: string; person_id?: string; studio_id?: string; purchase_kind?: string; target_id?: string; joining_fee_id?: string };
 
-/**
- * State a subscription's standing in lyra.
- *
- * The identifiers come from the METADATA Stripe carries on the subscription,
- * stamped at checkout — so an event arriving months later resolves without a
- * lookup that could be stale, and without this service keeping a second index
- * that could disagree.
- */
-// HOW FAR THE MONEY REACHES, and it is NOT where it used to be.
-//
-// `current_period_end` moved off the subscription and onto its ITEMS. On API
-// version 2026-07-29.dahlia the subscription object does not carry it at all —
-// reading the old place returns undefined, `paid_until` is written as null, and
-// nothing errors. A live event is what surfaced this; the hand-written fixtures
-// in billing-check had the old shape and passed happily.
-//
-// Both are read, newest first: a deployment pinned to an older version still
-// answers, and the pin here is not a promise that Stripe never moves anything.
+// `current_period_end` is on the subscription's items on newer API versions
+// and on the subscription itself on older ones.
 const periodEnd = (subscription: {
   current_period_end?: number;
   items?: { data?: { current_period_end?: number }[] };
@@ -169,10 +85,6 @@ const assertStanding = async (
   const subscriptionId = meta.subscription_id ?? '';
   const studioId = meta.studio_id ?? '';
   if (subscriptionId === '' || studioId === '') {
-    // A subscription created outside this integration — by hand in the dashboard, or by
-    // an older version — has nothing to point at. Recorded and skipped rather
-    // than guessed: writing a standing onto the wrong subscription is worse than
-    // writing none.
     return { ok: false, detail: 'no subscription in the event metadata' };
   }
   const status = STANDING[String(subscription.status ?? '')] ?? 'active';
@@ -190,8 +102,6 @@ const assertStanding = async (
   return { ok: answer.ok, detail: answer.ok ? `${status} until ${asDay(periodEnd(subscription)) ?? 'unknown'}` : answer.message };
 };
 
-// Stripe's invoice shape → the mirror's. The metadata rides on the subscription
-// the invoice belongs to, which is where checkout stamped it.
 const mirrorInvoice = async (db: IntegrationStore | undefined, accountId: string, invoice: Record<string, unknown>): Promise<void> => {
   const meta = (invoice['subscription_details'] as { metadata?: Meta } | undefined)?.metadata ?? (invoice['metadata'] as Meta | undefined) ?? {};
   await recordInvoice(db, {
@@ -205,10 +115,6 @@ const mirrorInvoice = async (db: IntegrationStore | undefined, accountId: string
     currency: String(invoice['currency'] ?? 'eur'),
     disputed: false,
     invoicedOn: asDay(invoice['created']) ?? '',
-    // WHERE THE DOCUMENT IS, mirrored as a pointer. Stripe numbers and issues
-    // the invoice under the studio's own identity; this side keeps no number and
-    // no copy, because §11 UStG sequencing is not a thing for two systems to
-    // both believe they own.
     hostedUrl: String(invoice['hosted_invoice_url'] ?? ''),
     pdfUrl: String(invoice['invoice_pdf'] ?? ''),
   });
@@ -216,13 +122,8 @@ const mirrorInvoice = async (db: IntegrationStore | undefined, accountId: string
 
 export type HookOutcome = { status: number; body: Record<string, unknown> };
 
-/**
- * Verify, claim, dispatch.
- *
- * Order is the whole safety story: a body that does not verify is not an event
- * and nothing about it is recorded; an event already claimed is answered 200
- * without acting, because Stripe asking twice must not charge anybody twice.
- */
+// Verify, then claim, then dispatch: Stripe delivers an event more than once,
+// and one already claimed is answered 200 without acting.
 export const handleStripeEvent = async (
   stripe: Stripe,
   db: IntegrationStore | undefined,
@@ -237,9 +138,7 @@ export const handleStripeEvent = async (
   try {
     event = stripe.webhooks.constructEvent(raw, signature, secret);
   } catch (err) {
-    // 400, so Stripe marks the delivery failed and retries — a signature that
-    // does not verify is either a caller we should ignore or a secret that has
-    // rotated, and both want a human rather than a silent 200.
+    // 400, so Stripe marks the delivery failed: a rotated secret must not pass.
     return { status: 400, body: { message: `Signature did not verify: ${String(err).slice(0, 120)}` } };
   }
 
@@ -251,20 +150,11 @@ export const handleStripeEvent = async (
 
   try {
     switch (event.type) {
-      // ── standing ────────────────────────────────────────────
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
         const applied = await assertStanding(env, object as never);
 
-        // WHICH PROVIDER SUBSCRIPTION THIS MEMBERSHIP IS, recorded as it goes
-        // past. Every other direction was already answered — the metadata
-        // carries lyra's ids here — but "this member is leaving on the 14th,
-        // stop charging them" needs the reverse, and had no way to ask it.
-        //
-        // A cache, filled from events rather than fetched: every subscription at
-        // the provider carries the metadata this is derived from, so it rebuilds
-        // itself from ordinary traffic.
         const held = ((object as { metadata?: Meta }).metadata ?? {}) as Meta;
         await rememberSubscription(db, {
           studioId: held.studio_id ?? '',
@@ -273,22 +163,12 @@ export const handleStripeEvent = async (
           stripeSubscriptionId: String(object['id'] ?? ''),
         });
 
-        // ── DUNNING: THE OUTCOME, NOT THE RETRIES ──────────────
-        //
-        // Stripe's own retry schedule is not replaced — where it already does
-        // something well we defer to it (docs/archive/automation-requirements.md).
-        // What this
-        // does is listen for where that schedule ENDED and put it in front of a
-        // person, because a studio learning about a failed payment from an empty
-        // class is the failure mode worth spending a row on.
         const dunning = DUNNING[String((object as { status?: unknown }).status ?? '')];
         const meta = ((object as { metadata?: Meta }).metadata ?? {}) as Meta;
         let told = false;
         if (dunning !== undefined && (meta.studio_id ?? '') !== '') {
           const billable = await billableFor(env, meta.studio_id ?? '', meta.person_id ?? '');
           const name = billable?.personName ?? 'A member';
-          // THE MEMBER FIRST — they are the only one who can fix it, and the
-          // desk's list is the studio's copy rather than the notice.
           await mailMember(env, {
             studioId: meta.studio_id ?? '',
             personId: billable?.personId ?? meta.person_id ?? '',
@@ -298,8 +178,6 @@ export const handleStripeEvent = async (
           });
           told = await notifyDesk(env, {
             studioId: meta.studio_id ?? '',
-            // Attached to the person where we could resolve one, so the desk can
-            // open the record from the follow-up rather than going to look.
             personId: billable?.personId === undefined || billable.personId === '' ? null : billable.personId,
             subject: `${name}: payment problem`,
             body: dunning.body,
@@ -311,38 +189,16 @@ export const handleStripeEvent = async (
         return { status: 200, body: { ok: true, applied: applied.ok, detail: applied.detail, told } };
       }
 
-      // Checkout completing is the moment a member first has a subscription. The
-      // subscription events above carry everything needed, and Stripe sends them
-      // too — so this only notes that it happened rather than asserting twice.
-      // ── THE MOMENT A ONE-OFF IS ACTUALLY BOUGHT ─────────────
-      //
-      // For a SUBSCRIPTION this is still only a note: the subscription events
-      // carry everything and Stripe sends them too, so asserting here would
-      // assert twice.
-      //
-      // For a PASS or a COURSE SEAT it is the whole thing. There is no row in
-      // lyra yet and deliberately so — an entitlement created when somebody
-      // opened a card form would be a pass they could spend without paying, and
-      // no later event would take it back. So this is the first and only place
-      // the thing is granted, and it runs after money.
-      // BOTH, because one purchase can arrive as two events. A delayed payment
-      // method completes the session unpaid and settles later under
-      // `async_payment_succeeded` — handled nowhere, until now, so a member
-      // paying by anything slower than a card bought nothing and was charged.
+      // A pass or a course seat is granted here and nowhere earlier: a row made
+      // when the card form opened could be spent without paying. A delayed
+      // payment method settles later under `async_payment_succeeded`.
       case 'checkout.session.completed':
       case 'checkout.session.async_payment_succeeded': {
         const purchase = (object['metadata'] as Meta | undefined) ?? {};
         const kind = purchase.purchase_kind ?? '';
         if (kind === '') {
-          // A SUBSCRIPTION CHECKOUT. The subscription events carry the standing
-          // and Stripe sends them too, so nothing is asserted here — but this is
-          // the one moment that says WHO COLLECTS, and nothing else ever could.
-          //
-          // `paid_via` is chosen when the subscription starts, and a member
-          // starting one themselves has no processor in the path yet, so it says
-          // `manual`. `assert` never touches it, by design. Without this line a
-          // member paying by card read "Billed by the studio" on their own
-          // screen, and the desk chased them for money already taken.
+          // A subscription checkout, and the one event that says who collects:
+          // `paid_via` starts as `manual` and `assert` never touches it.
           const started = (object['subscription_details'] as { metadata?: Meta } | undefined)?.metadata ?? purchase;
           const startedId = started.subscription_id ?? '';
           const startedStudio = started.studio_id ?? '';
@@ -354,10 +210,6 @@ export const handleStripeEvent = async (
               context: { subscriptionId: startedId },
             });
           }
-          // THE JOINING FEE, recorded as the purchase it is. It was charged on
-          // the same card form as the first period, so it lands here — and it is
-          // a purchase rather than a line on the subscription, because
-          // cancelling the membership next year must not look like un-buying it.
           let joined = false;
           if ((started.joining_fee_id ?? '') !== '' && startedStudio !== '') {
             const granted = await grantPurchase(env, {
@@ -373,11 +225,8 @@ export const handleStripeEvent = async (
           return { status: 200, body: { ok: true, noted: 'checkout', collects: startedId !== '', joiningFee: joined } };
         }
 
-        // PAID, not merely completed. A session can complete with payment still
-        // in flight — a delayed method, a bank that answers tomorrow — and
-        // granting on 'unpaid' hands over a pass for money that has not arrived.
-        // Stripe sends the event again when it settles, and the claim above is
-        // per EVENT, so the later delivery is a different event and lands here.
+        // A session can complete with the payment still in flight. The delivery
+        // that settles it is a different event, so the claim does not block it.
         if (String(object['payment_status'] ?? '') !== 'paid') {
           await settleEvent(db, event.id, 'skipped', `payment_status ${String(object['payment_status'] ?? 'unknown')}`);
           return { status: 200, body: { ok: true, waiting: true } };
@@ -388,22 +237,14 @@ export const handleStripeEvent = async (
           personId: purchase.person_id ?? '',
           kind,
           targetId: purchase.target_id ?? '',
-          // THE SESSION IS THE PURCHASE'S NAME, and the event is only the
-          // envelope it came in. lyra is unique on (studio, purchase_ref) and
-          // does nothing on conflict, so every later delivery about this same
-          // session — a retry, or the settle-later event above — lands on the
-          // pass the first one made.
-          //
-          // Naming the EVENT here instead is a second ten-pack, and it is not a
-          // theoretical one: the two cases above are two event ids for one
-          // purchase by construction.
+          // The session id, not the event id: lyra is unique on (studio,
+          // purchase_ref) and does nothing on conflict, and the two cases above
+          // are two event ids for one purchase.
           purchaseRef: String(object['id'] ?? ''),
         });
         await settleEvent(db, event.id, granted.ok ? 'applied' : 'failed', granted.ok ? `${kind} granted` : granted.message);
-        // A REFUSAL FROM LYRA IS NOT A RETRY. The money is taken and the
-        // entitlement did not land, which is a person's problem now rather than
-        // a delivery's — so it goes where a person looks instead of bouncing
-        // between two machines until Stripe gives up in three days.
+        // A refusal from lyra is answered 200, not retried: the money is taken,
+        // so it goes to the desk instead of bouncing until Stripe gives up.
         if (!granted.ok && (purchase.studio_id ?? '') !== '') {
           await notifyDesk(env, {
             studioId: purchase.studio_id ?? '',
@@ -416,7 +257,6 @@ export const handleStripeEvent = async (
         return { status: 200, body: { ok: true, granted: granted.ok, kind } };
       }
 
-      // ── the ledger ──────────────────────────────────────────
       case 'invoice.paid':
       case 'invoice.payment_failed': {
         await mirrorInvoice(db, accountId, object);
@@ -424,8 +264,6 @@ export const handleStripeEvent = async (
         return { status: 200, body: { ok: true, mirrored: String(object['id'] ?? '') } };
       }
 
-      // MONEY GIVEN BACK is not the invoice changing status — a refunded
-      // invoice is still `paid`. It is its own fact, kept beside the amount.
       case 'charge.refunded': {
         const refundedInvoice = String(object['invoice'] ?? '');
         const amount = Number(object['amount_refunded'] ?? 0);
@@ -434,10 +272,6 @@ export const handleStripeEvent = async (
         return { status: 200, body: { ok: true } };
       }
 
-      // A dispute names a CHARGE, and the charge carries the invoice it
-      // settled. Marked rather than deleted: a disputed invoice is the one
-      // somebody has to do something about, and it must not vanish from the
-      // list that would tell them.
       case 'charge.dispute.created': {
         const disputedInvoice = String(object['invoice'] ?? '');
         if (disputedInvoice !== '') await recordDispute(db, disputedInvoice);
@@ -445,27 +279,19 @@ export const handleStripeEvent = async (
         return { status: 200, body: { ok: true } };
       }
 
-      // ── the studio's own account ────────────────────────────
-      //
-      // Onboarding progress. Nothing is written to lyra: whether Stripe has
-      // finished verifying a business is not a fact about a membership, and the
-      // setup screen asks Stripe directly when somebody opens it.
       case 'account.updated': {
         await settleEvent(db, event.id, 'noted', String(object['id'] ?? ''));
         return { status: 200, body: { ok: true, noted: 'account' } };
       }
 
       default: {
-        // 200, deliberately. An event we do not handle is not a failure, and
-        // answering anything else makes Stripe retry it forever.
         await settleEvent(db, event.id, 'ignored', event.type);
         return { status: 200, body: { ok: true, ignored: event.type } };
       }
     }
   } catch (err) {
-    // The event is claimed but did not land. Recorded as failed and answered
-    // 500 so Stripe redelivers — and the claim row already exists, so the retry
-    // is what re-runs it rather than a second row.
+    // The event is claimed but did not land: answered 500 so Stripe redelivers,
+    // and the redelivery runs it again.
     await settleEvent(db, event.id, 'failed', String(err));
     if (db !== undefined) await db.query(`DELETE FROM ${db.table('events')} WHERE event_id = $1 AND outcome = 'failed'`, [event.id]);
     return { status: 500, body: { message: String(err).slice(0, 200) } };

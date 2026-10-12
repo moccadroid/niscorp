@@ -1,22 +1,5 @@
 import type { IntegrationEnv } from '../../integration';
 
-// ── THE SECOND DIRECTION: this integration acting as ITSELF ──
-//
-// Reads through the proxy travel as the PERSON driving, and that is right for a
-// screen. This is the other half: work nobody asked for — a webhook arriving at
-// three in the morning, a checkout resolving what to charge — where there is no
-// person, so the integration presents its OWN key and names the studio it is acting
-// for.
-//
-// The key is long-lived and the deployment issued it (moss mints at
-// registration, shows it once, stores only the hash). `x-nisc-acts-for` names
-// the studio; lyra resolves that to a per-(integration, studio) principal on
-// the integration's own charter rung, and from there nothing is special — same
-// compiled policy, same engine-stamped scope, no privileged path.
-//
-// WHICH IS WHY A FINGERPRINT OUTSIDE THE RUNG SIMPLY FAILS. This function can
-// name anything; the charter decides what answers.
-
 export type LyraCall = { ok: boolean; status: number; result: Record<string, unknown> | undefined; message: string };
 
 export const callLyra = async (
@@ -42,28 +25,10 @@ export const callLyra = async (
       message: String(body.message ?? ''),
     };
   } catch (err) {
-    // Lyra being unreachable is an ordinary condition for an integration: the caller
-    // says so and claims nothing about the studio.
     return { ok: false, status: 0, result: undefined, message: String(err).slice(0, 200) };
   }
 };
 
-// ── TELLING THE STUDIO SOMETHING ─────────────────────────────
-//
-// Onto the desk's follow-up list, which is a place somebody actually looks —
-// not an email nobody reads and not a status only this service can see.
-//
-// `automation/notify` is a PUBLISHED interface: the fingerprint name is
-// somebody else's contract, the same one the belts integration posts through, and the
-// only write the shared integration rung has ever held. This integration reaches it on
-// its own rung, which also grants it.
-//
-// The person is named because a follow-up reading "a payment failed" with nobody
-// attached is a note somebody has to research before they can act on it.
-// `source` is load-bearing rather than a label: lyra's follow-up table is unique
-// on (studio, source, person, day), so it is what decides whether a second
-// notice about the same person today is a duplicate to collapse or a different
-// thing to file. Callers name it deliberately.
 export const notifyDesk = async (
   env: IntegrationEnv,
   args: { studioId: string; personId: string | null; subject: string; body: string; source?: string },
@@ -77,17 +42,6 @@ export const notifyDesk = async (
   return answer.ok;
 };
 
-// ── TELLING THE MEMBER, NOT ONLY THE DESK ────────────────────
-//
-// A follow-up on the desk's list is the studio's copy. The member — whose card
-// expired, whose bank declined, whose membership is about to pause — could not
-// see it, and the first they heard was a phone call or an empty account. That is
-// a problem they could have fixed in a minute, discovered too late.
-//
-// `automation/queue-message` is the same published interface the automations
-// use, and this only ADDS to a queue: a separate transport claims each row and
-// sends it. Nothing here sends anything, and this rung holds no `outbox` update,
-// because claiming a message is the sender's verb.
 export const mailMember = async (
   env: IntegrationEnv,
   args: { studioId: string; personId: string; subject: string; body: string; source: string },
@@ -99,17 +53,13 @@ export const mailMember = async (
     fingerprint: 'automation/queue-message',
     context: {
       personId: args.personId,
-      // The address is the HOST's to resolve — this service never learns one it
-      // was not handed, and a queue row with an address typed in by an
-      // integration is an integration deciding who gets written to.
+      // Empty on purpose: the host resolves the address.
       toAddress: '',
       subject: args.subject,
       body: args.body,
       source: args.source,
-      // NOT MARKETING, and the flag is load-bearing rather than descriptive:
-      // consent gates marketing, and a member who opted out of news has NOT
-      // opted out of being told their payment failed. Mislabelling this would
-      // suppress exactly the message that matters.
+      // Consent gates marketing, and a member who opted out of news must still
+      // be told their payment failed.
       marketing: false,
     },
   });
@@ -117,35 +67,17 @@ export const mailMember = async (
 };
 
 export type Billable = {
-  // THE CONTRACT'S KEY. Checkout stamps it into the provider's metadata and
-  // `assert` is keyed on it — a person may hold more than one subscription,
-  // and a webhook must never guess which one it is about.
   subscriptionId: string;
   planName: string;
   amount: number;
   currency: string;
-  // A UNIT AND A COUNT. Quarterly is ('month', 3) — lyra's price list says so
-  // and Stripe's Price takes exactly this pair, so nothing in between gets to
-  // have an opinion about which periods exist.
   interval: 'day' | 'week' | 'month' | 'year';
   intervalCount: number;
   personId: string;
   personName: string;
-  // WHAT JOINING COSTS ON TOP, as a pointer. Resolved by asking
-  // `offerings/price` — the read that already answers "what does this cost" —
-  // rather than by growing the billable read a self-join.
   joiningFeeId: string;
 };
 
-// ── PUTTING A NAME TO A ROW ──────────────────────────────────
-//
-// The money screen was a list of amounts and dates with nobody attached: "€89.00
-// · Disputed" and no way to tell whose. This service holds no names by design
-// (S4) — the mirror keys on lyra's subscription id — so the names are borrowed
-// for the length of one render and stored nowhere.
-//
-// One call for the whole page rather than one per row, and the host answers with
-// only the people this studio knows, because the assertion says which studio.
 export const namesForSubscriptions = async (
   env: IntegrationEnv,
   studioId: string,
@@ -165,9 +97,6 @@ export const namesForSubscriptions = async (
   return named;
 };
 
-/** Which subscriptions a person holds, so their own invoices can be found. The
- *  mirror keys on the subscription, and a panel is opened on a PERSON — this is
- *  the one hop between the two, made by the host that knows both. */
 export const subscriptionsOfPerson = async (env: IntegrationEnv, studioId: string, personId: string): Promise<string[]> => {
   if (personId === '') return [];
   const answer = await callLyra(env, {
@@ -180,26 +109,8 @@ export const subscriptionsOfPerson = async (env: IntegrationEnv, studioId: strin
   return rows.map((row) => String(row.subscription_id ?? '')).filter((id) => id !== '');
 };
 
-// ── BUYING ONE THING, ONCE ───────────────────────────────────
-//
-// A subscription is a standing this integration restates. A pass and a course
-// seat are the other shape: a price, paid once, and an entitlement that must not
-// exist until the money does. Until these read a price, exactly one of the three
-// things a studio sells could be bought through the app — a drop-in at €18 and a
-// course block at €240 had no path to any money but cash at the desk.
-//
-// THE AMOUNT IS LYRA'S, ALWAYS. A caller names WHICH thing; a caller who could
-// also name its price would be naming their own price.
 export type Purchase = { kind: 'pass' | 'course' | 'one_off'; targetId: string; name: string; amount: number; currency: string };
 
-/**
- * What one purchasable thing costs at this studio.
- *
- * The studio is the assertion's, never the caller's, so an id from somebody
- * else's price list resolves to nothing rather than to their price. Retired
- * offerings and full courses answer nothing too, and both refusals are lyra's
- * own — made by the same reads its screens use.
- */
 export const purchaseFor = async (env: IntegrationEnv, studioId: string, kind: string, targetId: string): Promise<Purchase | undefined> => {
   if (targetId === '') return undefined;
 
@@ -207,9 +118,8 @@ export const purchaseFor = async (env: IntegrationEnv, studioId: string, kind: s
     const answer = await callLyra(env, { studioId, resource: 'member', fingerprint: 'courses/price', context: { courseId: targetId } });
     const row = answer.result;
     if (!answer.ok || row === undefined || String(row['course_id'] ?? '') === '') return undefined;
-    // A SEAT HAS TO EXIST BEFORE IT IS SOLD. Checked here and not only at
-    // enrolment, because the alternative is taking somebody's money for a block
-    // that filled while they were deciding.
+    // Checked here and not only at enrolment: otherwise money is taken for a
+    // course that filled while they were deciding.
     if (Number(row['seats_left'] ?? 0) <= 0) return undefined;
     return { kind: 'course', targetId, name: String(row['name'] ?? 'Course'), amount: Number(row['amount'] ?? 0), currency: String(row['currency'] ?? 'EUR') };
   }
@@ -217,15 +127,9 @@ export const purchaseFor = async (env: IntegrationEnv, studioId: string, kind: s
   const answer = await callLyra(env, { studioId, resource: 'member', fingerprint: 'offerings/price', context: { offeringId: targetId } });
   const row = answer.result;
   if (!answer.ok || row === undefined || String(row['offering_id'] ?? '') === '') return undefined;
-  // A PASS OR A ONE-OFF, and NOT a recurring plan. A plan has its own path —
-  // `subscriptions/billable` and a subscription-mode checkout — and selling one
-  // as a single payment would charge a member once for something the studio
-  // meant to bill forever.
-  //
-  // The KIND is read from lyra rather than taken from the caller, which matters
-  // because it decides which table the thing lands on: a caller who could say
-  // "this pass is a one-off" would be choosing whether their purchase grants
-  // classes.
+  // A recurring plan is refused: sold as a single payment it would be charged
+  // once for something the studio bills every period. The kind is lyra's, not
+  // the caller's, because it decides whether the purchase grants classes.
   const kindHere = String(row['kind'] ?? '');
   if (kindHere !== 'pass' && kindHere !== 'one_off') return undefined;
   return {
@@ -237,17 +141,9 @@ export const purchaseFor = async (env: IntegrationEnv, studioId: string, kind: s
   };
 };
 
-/**
- * Hand the entitlement over, now that it has been paid for.
- *
- * The ONLY inserts this integration makes, and they are inserts rather than
- * assertions because there was nothing to assert onto: a pass that existed
- * before the money would be a pass somebody could spend without paying.
- *
- * IDEMPOTENT BY CONSTRAINT, not by care here — `passes` is unique on
- * (studio, purchase_ref) and `enrolments` on (course, person). A redelivered
- * checkout lands on the row the first delivery made.
- */
+// Idempotent by lyra's constraints: `passes` is unique on (studio,
+// purchase_ref) and `enrolments` on (course, person), so a redelivered
+// checkout lands on the row the first delivery made.
 export const grantPurchase = async (
   env: IntegrationEnv,
   args: { studioId: string; personId: string; kind: string; targetId: string; purchaseRef: string },
@@ -263,8 +159,8 @@ export const grantPurchase = async (
     ? callLyra(env, {
         studioId: args.studioId,
         resource: 'member',
-        // ITS OWN TABLE, because it grants nothing. A joining fee recorded as a
-        // pass would hand somebody a free class for paying to join.
+        // Its own table, because it grants nothing: a joining fee recorded as a
+        // pass would hand over a free class.
         fingerprint: 'purchases/record',
         context: { personId: args.personId, offeringId: args.targetId, paidVia: 'stripe', purchaseRef: args.purchaseRef },
       })
@@ -275,7 +171,6 @@ export const grantPurchase = async (
         context: { personId: args.personId, offeringId: args.targetId, paidVia: 'stripe', purchaseRef: args.purchaseRef },
       });
 
-/** What a person should be charged — the numbers, not the words a screen shows. */
 export const billableFor = async (env: IntegrationEnv, studioId: string, personId: string): Promise<Billable | undefined> => {
   const answer = await callLyra(env, {
     studioId,
@@ -293,15 +188,7 @@ export const billableFor = async (env: IntegrationEnv, studioId: string, personI
     currency: String(row['currency'] ?? 'EUR'),
     personId: String(row['person_id'] ?? ''),
     personName: String(row['person_name'] ?? ''),
-    // FOUR WORDS, and they are Stripe's own — lyra's CHECK constraint allows
-    // exactly this set, so anything else is a bug upstream. Still narrowed
-    // rather than trusted: an unrecognised unit falling through to 'month' is
-    // the one defaulting that is safe here, because month is also the column's
-    // default and so is what the row would have meant.
     interval: interval === 'day' || interval === 'week' || interval === 'year' ? interval : 'month',
-    // A count that did not arrive is one, which is what every period meant
-    // before lyra could say otherwise. Floored at 1: Stripe refuses zero, and a
-    // zero here would mean a price nobody could be charged on.
     intervalCount: Math.max(1, Math.trunc(Number(row['interval_count'] ?? 1)) || 1),
     joiningFeeId: String(row['joining_fee_id'] ?? ''),
   };
