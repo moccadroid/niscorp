@@ -36,8 +36,6 @@ describe('$ref', () => {
   });
 });
 
-// A path is keys and indexes. The rest of JSONPath used to be read as `$`:
-// `$.items[*].sku` answered the whole source, and said nothing.
 describe('$ref — a path Prism does not read', () => {
   const unread = ['$.items[*].sku', '$.items[?(@.price>10)]', '$.items[-1]', '$.items[0:2]', "$.user['name']", '$.items[]', '$.items[0', '$..sku', '$.user..name'];
 

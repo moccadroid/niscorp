@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { compile, evaluate, execute } from '../src';
 
-// A small config that makes something enormous is stopped, each by the limit
-// that sees its shape — and an ordinary mapping is not.
 const items = (n: number): { items: number[] } => ({ items: Array.from({ length: n }, (_, i) => i) });
 const doubleString = { $reduce: { over: { $ref: '$.items' }, as: 'x', init: 'ab', body: { $join: { parts: [{ $var: 'acc' }, { $var: 'acc' }] } } } };
 const doubleArray = { $reduce: { over: { $ref: '$.items' }, as: 'x', init: [1], body: [{ $var: 'acc' }, { $var: 'acc' }] } };

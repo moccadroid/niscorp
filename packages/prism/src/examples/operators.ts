@@ -1,8 +1,5 @@
 import type { PrismExample } from './example.types';
 
-// One example for each operator, named by the operator, in the groups the
-// reference puts them in (./groups.ts, DOCS.md). test/examples.test.ts holds
-// that no operator in OP_KEYS is left out and none is shown twice.
 export const OPERATORS: readonly PrismExample[] = [
   {
     id: 'ref',

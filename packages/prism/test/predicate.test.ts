@@ -9,8 +9,6 @@ describe('$eq / $neq', () => {
   it('deep equal objects', () => expect(evaluate({ $eq: [{ $const: { a: 1 } }, { $const: { a: 1 } }] }, source)).toBe(true));
   it('neq', () => expect(evaluate({ $neq: [{ $const: 1 }, { $const: 2 }] }, source)).toBe(true));
 
-  // Equal is "the same JSON". Every pair here is answered as two JSON texts
-  // compared would answer it.
   const pairs: [string, unknown, unknown][] = [
     ['two equal strings', 'paid', 'paid'], ['two strings', 'paid', 'pending'], ['a number and its text', 1, '1'],
     ['zero and minus zero', 0, -0], ['true and 1', true, 1], ['null and null', null, null], ['null and false', null, false],

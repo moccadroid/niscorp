@@ -1,13 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { getConfigJsonSchema, getNodeJsonSchema } from '../src';
 
-// ═══════════════════════════════════════════════════════════
-// Helpers
-// ═══════════════════════════════════════════════════════════
-
 type SchemaObj = Record<string, unknown>;
 
-/** Recursively collect all property names from the schema (including inside anyOf, $defs, etc.) */
 const collectPropertyNames = (schema: SchemaObj): Set<string> => {
   const names = new Set<string>();
   const walk = (obj: unknown): void => {
@@ -23,7 +18,6 @@ const collectPropertyNames = (schema: SchemaObj): Set<string> => {
   return names;
 };
 
-/** Recursively collect all description strings */
 const collectDescriptions = (schema: SchemaObj): string[] => {
   const descs: string[] = [];
   const walk = (obj: unknown): void => {
@@ -37,15 +31,10 @@ const collectDescriptions = (schema: SchemaObj): string[] => {
   return descs;
 };
 
-/** Check if schema contains a $ref: "#" or similar self-reference (proves recursion works) */
 const containsSelfRef = (schema: SchemaObj): boolean => {
   const str = JSON.stringify(schema);
   return str.includes('"$ref":"#"') || str.includes('"$ref":"#/');
 };
-
-// ═══════════════════════════════════════════════════════════
-// Tests
-// ═══════════════════════════════════════════════════════════
 
 describe('JSON Schema generation', () => {
   const nodeSchema = getNodeJsonSchema() as SchemaObj;
@@ -72,30 +61,16 @@ describe('JSON Schema generation', () => {
     expect(containsSelfRef(nodeSchema)).toBe(true);
   });
 
-  // ─────────────────────────────────────────────────────────
-  // Every op should appear as a property name in the schema
-  // ─────────────────────────────────────────────────────────
-
   const allOpKeys = [
-    // Core
     '$ref', '$const', '$var', '$get', '$with',
-    // Array
     '$map', '$filter', '$reduce', '$slice', '$flatten', '$unique', '$sortBy',
-    // Math
     '$add', '$sub', '$mul', '$div', '$mod', '$round', '$toNumber',
-    // String
     '$join', '$toString', '$interpolate', '$trim', '$lower', '$upper', '$split', '$replace',
-    // Predicate
     '$eq', '$neq', '$gt', '$gte', '$lt', '$lte', '$empty', '$startsWith', '$endsWith', '$contains',
-    // Logic
     '$not', '$and', '$or',
-    // Structure
     '$merge', '$coalesce', '$case', '$entriesOf', '$keyBy', '$groupBy',
-    // Object
     '$keys', '$values', '$fromEntries', '$pick', '$omit', '$type', '$length',
-    // Time
     '$date', '$dateAdd', '$dateDiff',
-    // Sugar
     '$sum', '$avg', '$count', '$min', '$max', '$pluck', '$take', '$drop', '$match', '$flatMap',
   ];
 
@@ -105,14 +80,9 @@ describe('JSON Schema generation', () => {
     expect(propertyNames.has(op)).toBe(true);
   });
 
-  // ─────────────────────────────────────────────────────────
-  // Descriptions should be present and meaningful
-  // ─────────────────────────────────────────────────────────
-
   const descriptions = collectDescriptions(nodeSchema);
 
   it('has many descriptions (one per op + fields)', () => {
-    // At minimum, each op schema has a description + most fields have descriptions
     expect(descriptions.length).toBeGreaterThan(50);
   });
 
@@ -125,10 +95,6 @@ describe('JSON Schema generation', () => {
     expect(allDescs).toContain('variable');
     expect(allDescs).toContain('separator');
   });
-
-  // ─────────────────────────────────────────────────────────
-  // Structural checks on specific ops
-  // ─────────────────────────────────────────────────────────
 
   const anyOfEntries = nodeSchema['anyOf'] as SchemaObj[];
 
@@ -161,7 +127,6 @@ describe('JSON Schema generation', () => {
     const entry = findOpEntry('$add');
     expect(entry).toBeDefined();
     const addProp = (entry!['properties'] as SchemaObj)['$add'] as SchemaObj;
-    // Should be a tuple (prefixItems) or array
     const isTuple = 'prefixItems' in addProp;
     const isArray = addProp['type'] === 'array';
     expect(isTuple || isArray).toBe(true);

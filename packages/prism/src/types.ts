@@ -1,47 +1,24 @@
-// ═══════════════════════════════════════════════════════════
-// JSON Types
-// ═══════════════════════════════════════════════════════════
-
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | JsonObject;
 export type JsonObject = { [key: string]: JsonValue };
 
-// ═══════════════════════════════════════════════════════════
-// Evaluation Context
-// ═══════════════════════════════════════════════════════════
-
 import type { Budget } from './engine/budget';
 
 export type EvalContext = {
-  // The binding root for `$ref` paths — any JSON value. `$` resolves to it as-is
-  // (object, array, or scalar); `getByPath` walks from there. Not forced to an
-  // object: a transform over an array/scalar reply binds `$` directly.
   readonly source: JsonValue;
   readonly vars: Record<string, JsonValue>;
-  // What this evaluation may still cost (engine/budget.ts). Ops extend a
-  // context by spreading it, so every nested evaluation spends the same one.
+  // Ops extend a context by spreading it, so every nested evaluation spends
+  // the same budget.
   readonly budget?: Budget;
-  // The tree being evaluated is kept and run again (engine/transform.ts), so
-  // a `$const` is handed out as a copy: a caller that changes a result must
-  // not change the next one.
+  // The tree being evaluated is kept and run again, so a `$const` is handed
+  // out as a copy: a caller that changes a result must not change the next one.
   readonly kept?: boolean;
 };
 
-// ═══════════════════════════════════════════════════════════
-// Evaluate Function (passed to ops to avoid circular imports)
-// ═══════════════════════════════════════════════════════════
-
+// Passed to every op: an op importing the evaluator would be a circular import.
 export type EvaluateFn = (node: unknown, context: EvalContext) => JsonValue;
 
-// ═══════════════════════════════════════════════════════════
-// Result Type
-// ═══════════════════════════════════════════════════════════
-
 export type Result<T> = { ok: true; data: T } | { ok: false; error: Error };
-
-// ═══════════════════════════════════════════════════════════
-// Compilation Types
-// ═══════════════════════════════════════════════════════════
 
 export type CompileOptions = {
   name?: string;
@@ -74,10 +51,6 @@ export type CompiledIr = {
   };
   core: unknown;
 };
-
-// ═══════════════════════════════════════════════════════════
-// Validation Types
-// ═══════════════════════════════════════════════════════════
 
 export type ValidationIssue = {
   path: (string | number)[];

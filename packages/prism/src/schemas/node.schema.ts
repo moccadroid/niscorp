@@ -2,10 +2,6 @@ import { z } from 'zod';
 
 import { JsonPrimitiveSchema } from './json.schema';
 
-// ─────────────────────────────────────────────────────────
-// Op schemas — imported for the union
-// ───────────────────────────��─────────────────────────────
-
 import {
   RefNodeSchema, ConstNodeSchema, VarNodeSchema, GetNodeSchema, WithNodeSchema,
   setNodeSchema as setCoreNode,
@@ -62,10 +58,6 @@ import {
   setNodeSchema as setTransformNode,
 } from './ops/transform.schema';
 
-// ═══���═══════════════════════════════════════════════════════
-// Op keys — used by plain object detection
-// ═══════════════���═══════════════════════════════════════════
-
 export const OP_KEYS = [
   '$ref', '$const', '$var', '$get', '$with',
   '$map', '$filter', '$reduce', '$slice', '$flatten', '$unique', '$sortBy',
@@ -84,16 +76,9 @@ export const OP_KEYS = [
 
 export const OPTIONAL_FIELDS_KEY = '__optional';
 
-// ═════��═════════════════════════════════════════════════════
-// Plain object helpers
-// ════════════════════��══════════════════════════════════════
-
-// A `$` name is an op's. The template branch's key schema refuses every key
-// that starts with one — the evaluator's own rule (guards.ts, `isPlainObject`),
-// so the two agree on what a template is. It used to refuse only the names of ops
-// that exist: `{ $fetch: … }` validated as a template, was stored, and was
-// refused every time it ran (E_NODE_SHAPE). It also means a new op never takes
-// a key a stored template was using.
+// Every `$` key is refused, not only the names of ops that exist: the
+// evaluator's `isPlainObject` reads a template the same way, and a new op never
+// takes a key a stored template was using.
 const TEMPLATE_KEY = /^(?!\$)/;
 
 const isOpKey = (key: unknown): boolean => OP_KEYS.some((op) => op === key);
@@ -110,44 +95,21 @@ const hasValidOptionalMeta = (obj: Record<string, unknown>): boolean => {
   return meta.every((f) => typeof f === 'string' && f.length > 0);
 };
 
-// ═══════════════════════════════════════════════════════════
-// The members that are not ops
-// ═══════════════════════════════════════════════════════════
-
 const NodeArraySchema = z.array(z.lazy(() => NodeSchema));
 
-// A plain object: no `$` keys, recursive values. A `$` key is not a template
-// key. Said in the KEY schema, not a refinement: a refinement leaves this
+// The `$` rule is in the key schema, not a refinement: a refinement leaves this
 // branch structurally matched, and zod then reports its complaint instead of
-// the union's — so a typo inside a real op (`{ $get: { pathh } }`) read as
-// "plain object must not contain $ op keys" at the root. As a key pattern it
-// is also plain JSON Schema (`propertyNames`), which the grammar snapshot and
-// agent prompts read.
+// the union's. A key pattern is also plain JSON Schema (`propertyNames`), which
+// the grammar snapshot and agent prompts read.
 const TemplateSchema = z
   .record(z.string().regex(TEMPLATE_KEY, { error: (issue) => templateKeyRefusal(issue.input) }), z.lazy(() => NodeSchema))
   .refine((o) => hasValidOptionalMeta(o), { message: '__optional must be an array of non-empty field name strings.' });
 
-// ═══════════════════════════════════════════════════════════
-// The union, tried by key before it is walked
-//
 // zod tries a union's members in order and builds every failure's issues on
-// the way. A plain object is the last of 76, so each one in a config cost a
-// quarter of a millisecond to accept — half a millisecond for a config of
-// three ops. But what a value can be is decided by its keys: one `$` key and
-// nothing else is that op, no `$` key is a template. So the one member a value
-// can be is tried first, and a config that is valid never walks the union.
-//
-// One that is not valid is then walked exactly as before, from the top: the
-// refusal is the union's own, issue for issue (test/node-union.test.ts holds
-// the two against each other). Two passes, never a fallback at each node —
-// that would walk a failing subtree twice at every level above it.
-//
-// This is zod's own way of building a union that dispatches (its discriminated
-// union is the same shape: the union's init, then its own parse). zod's cannot
-// be used here: it dispatches on the value of one named key, and ops differ by
-// which key is there.
-// ═══════════════════════════════════════════════════════════
-
+// the way, so the one member a value can be, by its keys, is tried first. Two
+// passes, never a fallback at each node: that would walk a failing subtree
+// twice at every level above it. zod's discriminated union does not fit: it
+// dispatches on one key's value, and ops differ by which key is there.
 type Member = z.core.$ZodType;
 
 const opMembersOf = (options: readonly Member[]): Map<string, Member> => {
@@ -161,7 +123,6 @@ const opMembersOf = (options: readonly Member[]): Map<string, Member> => {
   return members;
 };
 
-// The member a value can only be — or none, and then the union decides.
 const memberOf = (value: unknown, ops: Map<string, Member>): Member | undefined => {
   if (value === null || typeof value !== 'object') return JsonPrimitiveSchema;
   if (Array.isArray(value)) return NodeArraySchema;
@@ -177,7 +138,6 @@ const memberOf = (value: unknown, ops: Map<string, Member>): Member | undefined 
   return count === 1 ? ops.get(op) : undefined;
 };
 
-// Which pass a parse is in, by the context zod hands every schema of one parse.
 const quick = new WeakSet<object>();
 const walking = new WeakSet<object>();
 
@@ -211,56 +171,33 @@ const NodeUnion = z.core.$constructor<z.ZodUnion>('PrismNodeUnion', (inst, def) 
   };
 });
 
-// ═══════════════════════════════════════════════════════════
-// NodeSchema — the big recursive union
-// ══════════════════════════════════════════════════���════════
-
 export const NodeSchema: z.ZodType<unknown> = z.lazy(
   (): z.ZodTypeAny =>
     new NodeUnion({ type: 'union', options: [
-      // Core
       RefNodeSchema, ConstNodeSchema, VarNodeSchema, GetNodeSchema, WithNodeSchema,
-      // Array
       MapNodeSchema, FilterNodeSchema, ReduceNodeSchema, SliceNodeSchema,
       FlattenNodeSchema, UniqueNodeSchema, SortByNodeSchema,
-      // Math
       AddNodeSchema, SubNodeSchema, MulNodeSchema, DivNodeSchema, ModNodeSchema, RoundNodeSchema, ToNumberNodeSchema,
-      // String
       FillNodeSchema, JoinNodeSchema, ToStringNodeSchema, InterpolateNodeSchema, TrimNodeSchema,
       LowerNodeSchema, UpperNodeSchema, SplitNodeSchema, ReplaceNodeSchema,
-      // Predicates
       EqNodeSchema, NeqNodeSchema, GtNodeSchema, GteNodeSchema,
       LtNodeSchema, LteNodeSchema, EmptyNodeSchema,
       StartsWithNodeSchema, EndsWithNodeSchema, ContainsNodeSchema,
-      // Logic
       NotNodeSchema, AndNodeSchema, OrNodeSchema,
-      // Structure
       MergeNodeSchema, CoalesceNodeSchema, CaseNodeSchema, EntriesOfNodeSchema,
       KeyByNodeSchema, GroupByNodeSchema,
-      // Object
       KeysNodeSchema, ValuesNodeSchema, FromEntriesNodeSchema,
       PickNodeSchema, OmitNodeSchema, TypeNodeSchema, LengthNodeSchema,
-      // Time
       DateNodeSchema, DateAddNodeSchema, DateDiffNodeSchema,
-      // Locale-aware formatting
       LocaleDateNodeSchema, LocaleMoneyNodeSchema, LocaleNumberNodeSchema,
-      // Sugar
       SumNodeSchema, AvgNodeSchema, CountNodeSchema, MinNodeSchema, MaxNodeSchema,
       PluckNodeSchema, TakeNodeSchema, DropNodeSchema, MatchNodeSchema, FlatMapNodeSchema,
-      // Transform (rewriting a document)
       HasNodeSchema, RenameKeysNodeSchema, UpdateNodeSchema, AssertNodeSchema, WalkNodeSchema,
-      // Primitives
       JsonPrimitiveSchema,
-      // Arrays of nodes
       NodeArraySchema,
-      // Plain objects (no `$` keys, recursive values)
       TemplateSchema,
     ] }).describe('A Prism node: an op, a plain JSON value, an array of nodes, or a plain object template.'),
 );
-
-// ─────────────────��────────────────────��──────────────────
-// Wire up forward references
-// ─────────────────────────────────────────────────────────
 
 setCoreNode(NodeSchema);
 setArrayNode(NodeSchema);

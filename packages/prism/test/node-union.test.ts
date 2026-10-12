@@ -2,11 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { ConfigSchema, validate } from '../src/index';
 import { PRISM_EXAMPLES } from '../src/examples/index';
 
-// The node union tries the one member a value can be before it walks its
-// members (schemas/node.schema.ts). A parse that may wait never takes that
-// first try, so `safeParseAsync` is the union walked as zod walks it — and the
-// two must say the same of every config: accepted with the same data, or
-// refused with the same issues at the same paths.
+// `safeParseAsync` never takes the node union's first try by key: it is the union walked as zod walks it.
 
 const WRONG: unknown[] = [5, { $bogus: 1 }];
 
@@ -14,8 +10,6 @@ type Parent = Record<string, unknown> | unknown[];
 const withAt = (node: Parent, key: string, value: unknown): Parent =>
   Array.isArray(node) ? node.map((item, i) => (String(i) === key ? value : item)) : { ...node, [key]: value };
 
-// Every config one change away from `node`: a part put wrong, a key taken out
-// or added — at every depth.
 const damaged = function* (node: unknown): Generator<unknown> {
   if (node === null || typeof node !== 'object') return;
   const parent = node as Parent;
@@ -35,8 +29,6 @@ const damaged = function* (node: unknown): Generator<unknown> {
 const said = (result: { success: boolean; data?: unknown; error?: { issues: unknown } }): string =>
   JSON.stringify([result.success, result.data, result.error?.issues]);
 
-// Small on purpose: a refusal is the union walked, at over a millisecond each,
-// and both sides of each comparison pay it.
 const SMALL: unknown[] = [
   { name: { $ref: '$.member.name' }, seats: { $join: { parts: { $ref: '$.seats' }, sep: ', ' } } },
   { $map: { over: { $ref: '$.rows' }, as: 'row', body: { id: { $get: { from: { $var: 'row' }, path: ['id'] } } } } },
@@ -55,15 +47,13 @@ describe('the node union, tried by key and walked', () => {
   it('say the same of every config one change away from a small one', async () => {
     let valid = 0;
     let refused = 0;
-    // Every fourth: enough of each kind of damage, and a fraction of a second
-    // even when every other suite is running beside this one.
+    // Every fourth: enough of each kind of damage, in a fraction of the time.
     for (const config of SMALL.flatMap((small) => [...damaged(small)]).filter((_, i) => i % 4 === 0)) {
       const tried = ConfigSchema.safeParse(config);
       expect(said(tried), JSON.stringify(config)).toBe(said(await ConfigSchema.safeParseAsync(config)));
       if (tried.success) valid += 1;
       else refused += 1;
     }
-    // Worth something only while it holds both kinds.
     expect(valid).toBeGreaterThan(5);
     expect(refused).toBeGreaterThan(15);
   });

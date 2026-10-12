@@ -46,7 +46,7 @@ export const opReduce = (node: ReduceNode, context: EvalContext, evaluate: Evalu
     vars[as] = item;
     vars[accName] = accumulator;
     accumulator = evaluate(body, scope);
-    // Fed back each item: the one place a value can double itself.
+    // Fed back each item: a body of [acc, acc] doubles it.
     measure(accumulator, context.budget);
   }
   return accumulator;
@@ -84,8 +84,6 @@ export const opUnique = (node: UniqueNode, context: EvalContext, evaluate: Evalu
   return result;
 };
 
-// A list or an object has no order here: compare() answers nothing for one, so
-// a sort by `[a, b]` handed the list back as it came.
 const sortKey = (key: JsonValue): JsonValue => {
   if (key !== null && typeof key === 'object') {
     throw new PrismError(
@@ -97,12 +95,9 @@ const sortKey = (key: JsonValue): JsonValue => {
   return key;
 };
 
-// Every key has a place. compare() answers only for two numbers or two
-// strings, and "no answer" was read as "equal": an item whose key was null, a
-// boolean, or a string among numbers was equal to everything, which is not an
-// order — where it landed depended on what it happened to be compared with.
-// So: numbers, then strings, then false and true; `desc` turns that around;
-// and an item with no key (null) is last whichever way the sort runs.
+// Every key has a place, by kind first: a key equal to every key of another
+// kind would land wherever it happened to be compared. An item with no key
+// (null) is last whichever way the sort runs.
 const NULL_KIND = 3;
 const kindOf = (key: JsonValue): number => (key === null ? NULL_KIND : typeof key === 'number' ? 0 : typeof key === 'string' ? 1 : 2);
 

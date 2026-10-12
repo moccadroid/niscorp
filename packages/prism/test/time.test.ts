@@ -47,7 +47,7 @@ describe('$dateAdd', () => {
 
   it('adds months', () => {
     const result = evaluate({ $dateAdd: { date: { $ref: '$.start' }, amount: 3, unit: 'month' } }, source) as string;
-    // 2024-01-01 + 3 months = 2024-04-01 (but timezone may shift the day)
+    // 2024-04-01, but the local time zone may shift the day.
     expect(result).toMatch(/2024-0[34]/);
   });
 
@@ -80,14 +80,6 @@ describe('$dateDiff', () => {
   });
 });
 
-// ── the timezone regression ─────────────────────────────────
-//
-// A DATE IS NOT A TIMESTAMP. "2026-06-01" names a calendar day, and dayjs
-// parses a bare date at LOCAL midnight — so `+1 month, -1 day` used to come
-// back "2026-06-29T22:00:00.000Z" on a UTC+2 machine: the wrong day, wearing
-// an instant's clothes. Range filters built that way silently dropped their
-// boundary day. These run under a non-UTC TZ on purpose; under UTC the bug
-// is invisible.
 describe('$dateAdd keeps calendar days calendar days', () => {
   it('end-of-month: first + 1 month - 1 day is the last day, not the night before', () => {
     const monthEnd = {

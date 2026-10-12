@@ -7,13 +7,9 @@ import { PrismError, ErrorCode } from '../errors';
 
 dayjs.extend(utc);
 
-// A DATE IS NOT A TIMESTAMP. "2026-06-01" names a calendar day; dayjs parses
-// it at LOCAL midnight, and toISOString then converts to UTC — so on any
-// positive-offset machine `first-of-month + 1 month - 1 day` came back
-// "2026-06-29T22:00:00.000Z" instead of June 30. Range filters built that way
-// silently dropped their boundary day (measured: a month's deals losing the
-// 30th). Date-only input is parsed and computed in UTC so the calendar day
-// survives the round trip.
+// dayjs parses "2026-06-01" at local midnight and toISOString then converts to
+// UTC, which east of Greenwich is the day before. A bare date is parsed and
+// computed in UTC.
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const isDateOnly = (value: JsonValue): boolean => typeof value === 'string' && DATE_ONLY.test(value);
 
@@ -38,8 +34,6 @@ export const opDateAdd = (node: DateAddNode, context: EvalContext, evaluate: Eva
   const value = evaluate(node.$dateAdd.date, context);
   const d = parseDate(value, '$dateAdd');
   const moved = d.add(node.$dateAdd.amount, node.$dateAdd.unit);
-  // Date in, date out — a calendar day that entered as "2026-06-01" leaves as
-  // a calendar day, not an instant carrying somebody's timezone.
   return isDateOnly(value) ? moved.format('YYYY-MM-DD') : moved.toISOString();
 };
 

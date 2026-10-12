@@ -12,34 +12,18 @@ export const getNodeJsonSchema = (target: JsonSchemaTarget = 'draft-2020-12'): o
 export const getConfigJsonSchema = (target: JsonSchemaTarget = 'draft-2020-12'): object =>
   z.toJSONSchema(ConfigSchema, { target });
 
-// ─────────────────────────────────────────────────────────
-// Profiles — the config schema, documenting only some ops
-// ─────────────────────────────────────────────────────────
-//
-// DERIVED from getConfigJsonSchema, never written by hand: the node is one
-// recursive definition whose `anyOf` holds one alternative per op, and every
-// child position refers back to it — so dropping an op's alternative there
-// drops it everywhere. Everything that is not an op (primitives, arrays, the
-// plain-object template, whose key pattern refuses every `$` key — so an op
-// left out of the profile is still not a template key) is kept as it is. Definitions only
-// the dropped ops used are removed. Documentation only: validation is always
-// the full ConfigSchema (schemas/profiles.ts).
-//
-// A reference is read in either spelling. Drafts 4–7 ignore keywords beside a
-// `$ref`, so a described reference is written `allOf: [{ $ref }]` there — and
-// zod does so for the root and for a described op in every version but 4.3.
+// A reference is read in either spelling: drafts 4 to 7 ignore keywords beside
+// a `$ref`, so a described reference is written `allOf: [{ $ref }]` there.
 
 type JsonObject = Record<string, unknown>;
 const isObject = (value: unknown): value is JsonObject => typeof value === 'object' && value !== null && !Array.isArray(value);
 
-// `allOf: [{ $ref }]` → `{ $ref }`; anything else as it is.
 const unwrapRef = (value: unknown): unknown => {
   const allOf = isObject(value) ? value['allOf'] : undefined;
   const only: unknown = Array.isArray(allOf) && allOf.length === 1 ? allOf[0] : undefined;
   return isObject(only) && '$ref' in only ? only : value;
 };
 
-// `#/$defs/x` or `#/definitions/x` → ['$defs', 'x'].
 const refTarget = (ref: unknown): [string, string] | undefined => {
   if (typeof ref !== 'string') return undefined;
   const match = /^#\/([^/]+)\/([^/]+)$/.exec(ref);
@@ -54,8 +38,6 @@ const resolve = (root: JsonObject, ref: unknown): JsonObject | undefined => {
   return isObject(def) ? def : undefined;
 };
 
-// The op an alternative is — its one `$`-key — whether written inline or
-// behind a `$ref` to its own definition.
 const opOf = (root: JsonObject, written: unknown): string | undefined => {
   const alternative = unwrapRef(written);
   const node = isObject(alternative) && '$ref' in alternative ? resolve(root, alternative['$ref']) : alternative;
@@ -79,8 +61,6 @@ const refsIn = (value: unknown, found: Set<string>): void => {
 export const getProfileJsonSchema = (ops: readonly OpKey[], target: JsonSchemaTarget = 'draft-2020-12'): object =>
   narrowConfigJsonSchema(getConfigJsonSchema(target), ops);
 
-// The narrowing itself, over any spelling of the config schema — exported for
-// the tests, which feed it both.
 export const narrowConfigJsonSchema = (full: unknown, ops: readonly OpKey[]): object => {
   if (!isObject(full)) throw new Error('prism: the config JSON Schema is not an object');
   const root = structuredClone(full);
@@ -95,8 +75,6 @@ export const narrowConfigJsonSchema = (full: unknown, ops: readonly OpKey[]): ob
     return op === undefined || keep.has(op);
   });
 
-  // Keep the definitions still reachable from the root, and only those: a
-  // worklist, so a chain of definitions is followed to its end.
   const reached = new Set<string>();
   const pending: string[] = [];
   const visit = (value: unknown): void => {

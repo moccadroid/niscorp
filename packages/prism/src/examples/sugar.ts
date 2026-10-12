@@ -1,7 +1,5 @@
 import type { PrismExample } from './example.types';
 
-// The shorthands, one example each. A shorthand is rewritten into the operators
-// it stands for before a config is evaluated.
 export const SUGAR: readonly PrismExample[] = [
   {
     id: 'sum',

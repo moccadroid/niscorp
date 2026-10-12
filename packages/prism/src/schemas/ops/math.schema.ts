@@ -9,10 +9,6 @@ const node = (): z.ZodTypeAny => _NodeSchema;
 const pairOf = (desc: string) =>
   z.tuple([z.lazy(node), z.lazy(node)]).describe(desc);
 
-// ═══════════════════════════════════════════════════════════
-// Binary math ops
-// ═══════════════════════════════════════════════════════════
-
 export const AddNodeSchema = z
   .object({ $add: pairOf('Two numeric operands to add.') })
   .strict()
@@ -43,10 +39,6 @@ export const ModNodeSchema = z
   .describe('The remainder of the first number divided by the second, with the sign of the second: for a positive divisor n it is always from 0 up to n, also for a negative first number. Throws E_DIVISION_BY_ZERO if divisor is 0.');
 export type ModNode = z.infer<typeof ModNodeSchema>;
 
-// ═══════════════════════════════════════════════════════════
-// $round
-// ═══════════════════════════════════════════════════════════
-
 export const RoundNodeSchema = z
   .object({
     $round: z
@@ -60,10 +52,6 @@ export const RoundNodeSchema = z
   .strict()
   .describe('Round a number to N decimal places: to the nearest, or down ("floor") or up ("ceil") with `mode`.');
 export type RoundNode = z.infer<typeof RoundNodeSchema>;
-
-// ═══════════════════════════════════════════════════════════
-// $toNumber
-// ═══════════════════════════════════════════════════════════
 
 export const ToNumberNodeSchema = z
   .object({

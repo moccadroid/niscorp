@@ -2,9 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { evaluate, evaluateSafe, PrismError } from '../src/index';
 import { PRISM_EXAMPLES } from '../src/examples/index';
 
-// evaluate checks a config object the first time it sees it and keeps its
-// tree; the second time it optimizes the tree; from the third it only runs.
-// What a call answers, and refuses, is the same on each.
+// The first call checks a config object, the second optimizes its tree, and from the third it only runs.
 describe('evaluate — the same config object again', () => {
   it('answers every example the same on the first, second and third call', () => {
     for (const example of PRISM_EXAMPLES) {
@@ -66,7 +64,6 @@ describe('evaluate — the same config object again', () => {
     expect(evaluate(null, {})).toBe(null);
   });
 
-  // The other side of keeping by the object.
   it('does not read a config again that was changed in place; a new object is read', () => {
     const config: Record<string, unknown> = { out: { $ref: '$.a' } };
     expect(evaluate(config, { a: 1, b: 2 })).toEqual({ out: 1 });
@@ -85,8 +82,6 @@ describe('evaluate — the same config object again', () => {
   });
 });
 
-// For writing a config, for tests and for tools: everything is checked, on
-// every call, and nothing is kept.
 describe("evaluate — check: 'always'", () => {
   const always = { check: 'always' } as const;
 

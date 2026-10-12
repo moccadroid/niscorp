@@ -6,10 +6,6 @@ export const setNodeSchema = (schema: z.ZodTypeAny): void => {
 };
 const node = (): z.ZodTypeAny => _NodeSchema;
 
-// ═══════════════════════════════════════════════════════════
-// Aggregate sugar
-// ═══════════════════════════════════════════════════════════
-
 const overOnly = (desc: string) =>
   z.object({ over: z.lazy(node).describe(desc) }).strict();
 
@@ -42,10 +38,6 @@ export const MaxNodeSchema = z
   .strict()
   .describe('Sugar: find maximum value in an array. Desugars to $reduce + $gt.');
 export type MaxNode = z.infer<typeof MaxNodeSchema>;
-
-// ═══════════════════════════════════════════════════════════
-// Collection sugar
-// ═══════════════════════════════════════════════════════════
 
 export const PluckNodeSchema = z
   .object({

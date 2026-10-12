@@ -1,6 +1,5 @@
 import type { PrismExample } from './example.types';
 
-// Whole configs of the size an app writes.
 export const REAL_WORLD: readonly PrismExample[] = [
   {
     id: 'api-to-ui',

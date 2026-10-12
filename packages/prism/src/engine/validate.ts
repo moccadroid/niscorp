@@ -9,8 +9,6 @@ export const validate = (config: unknown): ValidationResult => {
   if (!parsed.success) {
     return {
       ok: false,
-      // The branch the config meant, with its full path — not the root union's
-      // "Invalid input" (see utils/issues).
       issues: explainIssues(parsed.error.issues),
     };
   }

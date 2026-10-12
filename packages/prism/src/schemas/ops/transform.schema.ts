@@ -6,16 +6,6 @@ export const setNodeSchema = (schema: z.ZodTypeAny): void => {
 };
 const node = (): z.ZodTypeAny => _NodeSchema;
 
-// ═══════════════════════════════════════════════════════════
-// Transform ops — rewriting a document rather than deriving a value.
-//
-// Built for migrations (strata document steps), useful anywhere a config must
-// return its input with a precise edit: rename keys and keep their order, set
-// one deep path and leave everything else alone, test whether a key is there at
-// all (not "present and non-null"), refuse loudly, and rewrite every node of a
-// tree whose depth nobody knows.
-// ═══════════════════════════════════════════════════════════
-
 const PathSchema = z
   .array(z.union([z.string(), z.number().int().nonnegative()]))
   .min(1)

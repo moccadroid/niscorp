@@ -125,8 +125,6 @@ describe('$sortBy', () => {
     const result = evaluate(config, source) as any[];
     expect(result[0].name).toBe('Date');
   });
-  // A list has no order for compare(), so a sort by `[a, b]` handed the items
-  // back as they came. It says so, and says what to write.
   it('refuses a key that is a list or an object, and says how to sort by two keys', () => {
     const of = (key: string): unknown => ({ $get: { from: { $var: 'item' }, path: [key] } });
     expect(() => evaluate({ $sortBy: { over: { $ref: '$.items' }, as: 'item', by: [of('category'), of('price')] } }, source)).toThrow(
@@ -136,8 +134,6 @@ describe('$sortBy', () => {
       expect.objectContaining({ code: 'E_TYPE', message: expect.stringContaining('$sortBy.by answered an object') }),
     );
   });
-  // A key that is null, a boolean, or a string among numbers used to compare
-  // as equal to everything, so such an item landed wherever the sort left it.
   describe('keys of more than one kind', () => {
     const sorted = (rows: unknown[], dir?: 'asc' | 'desc'): unknown =>
       evaluate({ $pluck: { over: { $sortBy: { over: { $ref: '$' }, as: 'row', by: { $get: { from: { $var: 'row' }, path: ['k'] } }, ...(dir ? { dir } : {}) } }, key: 'id' } }, rows as never);
@@ -171,8 +167,6 @@ describe('$sortBy', () => {
   });
 });
 
-// A loop sets its variable for each item in a scope of its own. What is
-// outside the loop, and what a loop inside it sets, do not meet.
 describe("a loop's variables", () => {
   const of = (name: string, ...path: (string | number)[]): unknown => (path.length === 0 ? { $var: name } : { $get: { from: { $var: name }, path } });
   const rows = { rows: [{ id: 1, tags: ['a', 'b'] }, { id: 2, tags: ['c'] }], limit: 1 };

@@ -5,8 +5,6 @@ import { isJsonObject } from '../schemas/guards';
 
 export const opJoin = (node: JoinNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const { parts, sep = '' } = node.$join;
-  // A literal list is itself a node that evaluates to an array, so literal and
-  // computed parts are one case.
   const list = evaluate(parts, context);
   if (!Array.isArray(list)) throw new PrismError('Expected $join.parts to evaluate to an array', ErrorCode.TYPE, { op: '$join' });
   return list.map((p) => String(p ?? '')).join(sep);
@@ -29,13 +27,6 @@ export const opInterpolate = (node: InterpolateNode, context: EvalContext, evalu
   );
 };
 
-// A counted phrase — `{ phrase: '{n} of {total}', slots: { n: 1, total: 12 } }`
-// — filled with its own slots, in the source language. The TRANSLATED fill
-// belongs to the render pass, which holds the book; this op exists for the
-// places that compose a sentence from pattern values before any pass runs
-// (a confirm sheet's message, a notification body). A nested pattern slot
-// fills recursively; anything that is not a pattern passes through as the
-// string it already was.
 const fillOne = (value: JsonValue): JsonValue => {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
   const { phrase, slots } = value as { phrase?: JsonValue; slots?: JsonValue };

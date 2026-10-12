@@ -31,9 +31,7 @@ export const opDiv = (node: DivNode, context: EvalContext, evaluate: EvaluateFn)
   return a / b;
 };
 
-// The remainder with the sign of the divisor, not of the dividend as `%` gives
-// it: what a bucket, a page or every-other-row wants is 0..n-1 for a negative
-// number too.
+// The remainder with the sign of the divisor, not of the dividend as `%` gives it.
 export const opMod = (node: ModNode, context: EvalContext, evaluate: EvaluateFn): JsonValue => {
   const [a, b] = requireNumbers(node.$mod, context, evaluate, '$mod');
   if (b === 0) throw new PrismError('Division by zero', ErrorCode.DIVISION_BY_ZERO, { op: '$mod' });
@@ -54,8 +52,8 @@ export const opRound = (node: RoundNode, context: EvalContext, evaluate: Evaluat
   return ROUNDING[node.$round.mode ?? 'nearest'](value * factor) / factor;
 };
 
-// A number as it is written in digits, and nothing more of what JavaScript's
-// Number() takes: not '', not '0x10', not 'Infinity'.
+// A number as it is written in digits, not all that Number() takes: not '',
+// not '0x10', not 'Infinity'.
 const NUMERIC_TEXT = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
 
 const whatIs = (value: JsonValue): string => {

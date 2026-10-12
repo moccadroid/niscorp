@@ -8,10 +8,6 @@ import { isJsonObject } from '../schemas/guards';
 import { evaluateNode } from './evaluate';
 import { optimize } from './optimize';
 
-// ═══════════════════════════════════════════════════════════
-// Tree Walker — collects stats in a single pass
-// ═══════════════════════════════════════════════════════════
-
 type WalkStats = {
   nodeCount: number;
   maxDepth: number;
@@ -38,28 +34,21 @@ const walk = (node: unknown, stats: WalkStats, depth: number): void => {
 
   if (!isJsonObject(node)) return;
 
-  // Detect op and count
   for (const key of Object.keys(node)) {
     if (key.startsWith('$')) {
       stats.opCount[key] = (stats.opCount[key] ?? 0) + 1;
     }
   }
 
-  // Capture $ref paths
   if ('$ref' in node && typeof node['$ref'] === 'string') {
     stats.paths.add(node['$ref']);
     stats.strings.add(node['$ref']);
   }
 
-  // Recurse into all values
   for (const value of Object.values(node)) {
     walk(value, stats, depth + 1);
   }
 };
-
-// ═══════════════════════════════════════════════════════════
-// SHA256 fingerprint
-// ═══════════════════════════════════════════════════════════
 
 const hashSha256 = async (data: string): Promise<string> => {
   const encoder = new TextEncoder();
@@ -69,28 +58,12 @@ const hashSha256 = async (data: string): Promise<string> => {
     .join('');
 };
 
-// ═══════════════════════════════════════════════════════════
-// Compile
-//
-// Pipeline:
-//   1. Validate via ConfigSchema (Zod)
-//   2. Desugar — rewrite sugar ops ($sum, $pluck, ...) to canonical
-//   3. Optimize — three passes that mutate the tree in place via
-//      non-enumerable properties so the JSON shape stays stable:
-//        - inline parsed JSONPath segments on $ref nodes
-//        - attach op handlers to every recognized op node
-//        - constant-fold subtrees that have no source/var dependencies
-//   4. Walk for stats (post-optimization, so node counts reflect what
-//      the runtime actually evaluates)
-//   5. Fingerprint via SHA256 of the JSON-serialized core
-// ═══════════════════════════════════════════════════════════
-
 export const compile = async (
   config: unknown,
   options?: CompileOptions,
 ): Promise<CompiledIr> => {
-  // Validate — depth first: a deep enough config overflows the schema
-  // instead of failing it (strata depth.ts).
+  // Depth first: a deep enough config overflows the stack in the schema
+  // instead of failing it.
   if (exceedsDepth(config)) throw new PrismError(`Invalid config: ${depthRefusal()}`, ErrorCode.SCHEMA);
   const parsed = ConfigSchema.safeParse(config);
   if (!parsed.success) {
@@ -98,13 +71,10 @@ export const compile = async (
     throw new PrismError(`Invalid config: ${issues}`, ErrorCode.SCHEMA);
   }
 
-  // Desugar
   const desugared = desugar(parsed.data);
 
-  // Optimize: inline ref segments, attach op handlers, constant-fold
   const { node: core, stats: optimizations } = optimize(desugared, evaluateNode);
 
-  // Walk for stats (post-optimization — counts reflect the executed tree)
   const stats: WalkStats = {
     nodeCount: 0,
     maxDepth: 0,
@@ -114,10 +84,6 @@ export const compile = async (
   };
   walk(core, stats, 0);
 
-  // Fingerprint of the (post-optimization) core. Non-enumerable
-  // optimization metadata does not affect JSON serialization, so the
-  // fingerprint is stable for any input that produces the same canonical
-  // JSON tree.
   const fingerprint = await hashSha256(JSON.stringify(core));
 
   return {
