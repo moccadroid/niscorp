@@ -1,7 +1,7 @@
 # Moss: how it is built, and what is open
 
 **Status: Built (2026-10-12) on branch `worktree-moss-refactor` (base `9e88009`,
-moss 0.4.0), and on main since 2026-10-12, where CI passes. What is
+moss 0.4.0), on main since 2026-10-12 and released as moss 0.5.0. What is
 open is in part 7. Midas and the two websites are other repositories and follow
 at their next bump (part 9). Next is the artifactory (part 10), which is its
 own plan and is not started.**
@@ -83,8 +83,8 @@ rebuilt. Code that does it anyway takes the whole shell from
 `unverifiedShell(session)`, so the file says so in its imports. The type stays
 `Shell` because nova's helpers take one (`sessionShellOf`, `shells/build.ts`).
 
-What an app changes for this release is the last part of
-`.changeset/moss-in-modules.md`.
+What an app changes for it is the last part of the 0.5.0 entry in
+`packages/moss/CHANGELOG.md`.
 
 ## 4. The gates
 
@@ -137,8 +137,8 @@ store; `scripts/check-raw-sql.mts` lists each file with its reason.
 The owner's, taken between 2026-10-09 and 2026-10-12. They are what gets asked
 again.
 
-- **The public API breaks in this release**, and every app follows. The
-  changeset carries the approval.
+- **The public API broke in 0.5.0**, and every app follows. The release's
+  entry in `packages/moss/CHANGELOG.md` carries the approval.
 - **An app does not change its actions by editing the object it handed
   `createServer`.** The manifest is frozen at hand-over;
   `server.replaceActions` is the way.
@@ -217,7 +217,7 @@ else of moss.
 It has three parts, and only the first was cut out here:
 
 1. **One product's vocabulary** left moss for `extension`. What a host with a
-   store takes over is listed in the changeset; the last commit that has it all
+   store takes over is listed in that entry; the last commit that has it all
    is `41fc8942`.
 2. **The artifact half** is what the artifactory takes: a bundle's actions and
    layouts are artifacts that arrive from somewhere else. Eleven of the 23
@@ -232,7 +232,7 @@ It has three parts, and only the first was cut out here:
 
 None of them is edited from here.
 
-- **Midas** follows the changeset's last part, "What an app changes". The
+- **Midas** follows the last part of that entry, "What an app changes". The
   largest piece is the vocabulary: its 13 bundles say `meta`, `capabilities`,
   `offers`, `needs`, `placements`, `settings`, `documents` and `assistants`
   under `extension`, and its substrate supplies `extension: { schema, check,
@@ -240,7 +240,9 @@ None of them is edited from here.
   `assistantTools` and `storePress`. None of its bundles declares `frames`,
   `attachments` or `configuration` (read on 2026-10-11).
 - **nisc-website and moccadroid-website** follow the import table at the top of
-  the changeset.
+  that entry.
+- **All three** call `server.invalidateTag(tag)` where they called
+  `server.invalidateTenant(tag)`, from the release after 0.5.0.
 
 ## 10. The artifactory
 
