@@ -59,8 +59,6 @@ const attachNonEnumerable = (target: Record<string, unknown>, key: string, value
   });
 };
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> => isJsonObject(value);
-
 // A constant of a compiled tree is handed out by every execute of it. Frozen,
 // so that a caller cannot change what the next caller is given.
 const freezeConstant = (value: unknown): void => {
@@ -143,7 +141,7 @@ const isFoldableLiteral = (node: unknown): boolean => {
   const t = typeof node;
   if (t === 'string' || t === 'number' || t === 'boolean') return true;
   if (Array.isArray(node)) return node.every(isFoldableLiteral);
-  if (!isPlainObject(node)) return false;
+  if (!isJsonObject(node)) return false;
   if (isConstNode(node)) return isFoldableLiteral(node.$const);
   // An op is no literal: children are optimized before their parent, so one
   // that could fold is a `$const` by now.
@@ -167,7 +165,7 @@ const optimizeNode = (
     return out;
   }
 
-  if (!isPlainObject(node)) return node;
+  if (!isJsonObject(node)) return node;
 
   // A `$const` payload is data, never a subtree to optimize: an op-shaped value
   // inside it (`{ $const: [{ $upper: 'x' }] }`) stays as written.
@@ -248,7 +246,7 @@ const annotateNode = (node: unknown): void => {
     for (const child of node) annotateNode(child);
     return;
   }
-  if (!isPlainObject(node)) return;
+  if (!isJsonObject(node)) return;
 
   if (isWithNode(node)) {
     for (const value of Object.values(node.$with.let)) annotateNode(value);
