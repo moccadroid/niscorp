@@ -6,14 +6,14 @@ import type { DocumentStore } from '@niscorp/strata/postgres';
 import type { CacheBackend, DatabaseAdapter, ExecuteRecord, MutationClient, PgPool, QueryEngine, QueryEngineConfig, QueryResponse, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { memoKey } from '../identity';
 import type { ResolvedIdentity } from '../identity';
-import type { NiscApp, Pointer, RunningManifest } from '../manifest';
+import type { NiscApp } from '../manifest';
 import { emitterOf } from '../runtime';
 import type { Telemetry } from '../runtime';
 import { createDataLayer, createGrammarUpgrader, vexRecordToSpan } from './engine';
 import { tableSequencesOf } from './migrate';
 import type { FeatureTables } from './migrate';
 import { POINTER, createOwnEntries, createPointer } from './own-entries';
-import type { OwnEntries, Replay } from './own-entries';
+import type { OwnEntries, Pointer, Replay } from './own-entries';
 import { createExecuteAs, createPolicies, resolvePolicyForRoles } from './policy';
 import type { ExecuteAs } from './policy';
 import { createIntentAnswers, createVexRoutes } from './routes';
@@ -59,7 +59,7 @@ export type Data = {
   upgradeStore: (feature: string, store: DocumentStore) => Promise<void>;
   onWrite: (listener: WriteListener) => () => void;
   pointer: Pointer;
-  dropOnChange: (changed: RunningManifest['onChange']) => void;
+  dropOnChange: (changed: (listener: () => void) => () => void) => void;
 };
 
 const callerOfRoles = (roles: readonly string[]): Caller => ({ memoKey: memoKey(roles, undefined), roles });

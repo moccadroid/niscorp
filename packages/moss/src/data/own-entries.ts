@@ -1,7 +1,6 @@
 import { createMemoryCache, createQueryEngine, handleDiscovery, handleQuery, seedCache, tablesChangedBy } from '@niscorp/vex';
 import type { DatabaseAdapter, ExecuteRecord, Filter, MutationClient, QueryEngine, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { z } from 'zod';
-import type { Pointer } from '../manifest';
 
 export type OwnEntries = {
   owner: string;
@@ -95,6 +94,11 @@ export const POINTER: OwnEntries = { owner: 'the generation pointer', entries: [
 
 const RowSchema = z.object({ n: z.coerce.number() });
 const RowsSchema = z.array(z.unknown());
+
+export type Pointer = {
+  read: () => Promise<number>;
+  move: (from: number) => Promise<boolean>;
+};
 
 export const createPointer = (replay: () => Promise<Replay>): Pointer => ({
   read: async () => {
