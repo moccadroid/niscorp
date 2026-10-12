@@ -187,6 +187,14 @@ describe('createIntegrations — started with the seams', () => {
     ]);
   });
 
+  it('an outbound timeout a timer cannot hold is refused where the feature is created', () => {
+    for (const outboundTimeoutMs of [Infinity, Number.NaN, 1.5, 0, -1, 2 ** 31]) {
+      expect(() => createIntegrations({ outboundTimeoutMs })).toThrow(/`outboundTimeoutMs` of `createIntegrations`/);
+    }
+    expect(() => createIntegrations({ outboundTimeoutMs: 45_000 })).not.toThrow();
+    expect(() => createIntegrations()).not.toThrow();
+  });
+
   it('a signing seed that cannot be a key refuses the start, and so the boot', async () => {
     const { seams, said } = await world();
     await expect(createIntegrations({ signingSeed: 'consent-check-seed' }).start(seams)).rejects.toThrow(/signing seed.*decodes to 13 bytes.*`signingSeed` of `createIntegrations`/);
