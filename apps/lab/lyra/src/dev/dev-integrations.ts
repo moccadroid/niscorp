@@ -1,26 +1,6 @@
 import type { MossServer } from '@niscorp/moss';
 import type { PgPool } from '@niscorp/vex';
 
-// ── DEV ONLY: STAND THE INTEGRATIONS BACK UP ON EVERY BOOT ────
-//
-// Lyra's database is in-memory and replayed from seed each start, so the
-// integrations table — who is registered, approved, installed — is empty every
-// boot. In production an operator registers an integration once and it stays; in dev it
-// vanishes on every save, and the store reads "Nothing on offer" until somebody
-// re-runs the whole register → approve → install dance by hand.
-//
-// This does that dance automatically when `LYRA_DEV_INTEGRATIONS` names an
-// integration. It is the same three operator calls a person would make, in the
-// same order, through the same surfaces — nothing here is a privileged shortcut.
-// Off by default and unreachable without the env var, so it cannot touch a real
-// deployment.
-//
-// Format: `LYRA_DEV_INTEGRATIONS="stripe@http://127.0.0.1:8799/stripe,belts@http://127.0.0.1:8799/belts"`
-// — 8799 being where the integrations service actually listens in dev; this
-// example said 8781 for a while and cost two sessions an empty store.
-// An integration that is not running yet fails its fetch and is logged and skipped — it
-// registers on the next boot once it is up, rather than taking lyra down.
-
 type DevIntegration = { id: string; url: string };
 
 const parse = (raw: string): DevIntegration[] =>
@@ -50,7 +30,6 @@ export const registerDevIntegrations = async (
       body: JSON.stringify(body),
     });
 
-  // Every studio, so a dev signs in as any owner and finds the integration already on.
   const studios = (await pool.query('SELECT id FROM studios ORDER BY id')).rows as { id: string }[];
 
   for (const integration of parse(raw)) {
@@ -61,8 +40,6 @@ export const registerDevIntegrations = async (
         continue;
       }
       await op(`/operator/integrations/${integration.id}/approve`, {});
-      // Install straight into the tenancy table the operator seam does not touch
-      // — the same rows the owner's own install writes, so every studio has it.
       for (const studio of studios) {
         await pool.query(
           `INSERT INTO studio_integrations (studio_id, integration_id, enabled)
@@ -76,9 +53,6 @@ export const registerDevIntegrations = async (
     }
   }
 
-  // The install rows landed after the directory snapshot was taken at boot, so
-  // re-read it — otherwise `installedFor` returns the empty pre-install list and
-  // the integration's screens stay hidden — then re-resolve the manifest.
   await reloadDirectory();
   server.refresh();
 };

@@ -24,8 +24,6 @@ const coerce = (raw: string, numeric: boolean): string | number => {
 };
 type InputP = z.infer<typeof InputProps> & { novaRef?: string; novaModel?: NovaModelBinding; value?: unknown };
 
-// A labelled wrapper, so every field in the app has its label in the same place
-// and no layout has to remember to put one there.
 const Labelled = ({ label, hint, invalid, children }: { label?: string; hint?: string; invalid?: boolean; children: React.ReactNode }): React.ReactElement => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 5, width: '100%' }}>
     {label === undefined ? null : (
@@ -44,8 +42,7 @@ const Labelled = ({ label, hint, invalid, children }: { label?: string; hint?: s
 );
 
 // Outside the component on purpose: a tree whose shape changes reconciles by
-// position, React drops the node, and focus goes with it — so the next
-// keystrokes land on the body and vanish.
+// position, React drops the node, and focus goes with it.
 let lastFocused: { ref: string; caret: number } | null = null;
 
 export const Input: NovaComponent<z.infer<typeof InputProps>> = ({ placeholder, label, hint, type = 'text', debounce, big, disabled, invalid, submitRef, novaRef, novaModel, value }: InputP) => {
@@ -62,8 +59,6 @@ export const Input: NovaComponent<z.infer<typeof InputProps>> = ({ placeholder, 
     if (!focused.current) setDraft(incoming);
   }, [incoming]);
 
-  // Mount only. If this field is the one that was being typed into when its
-  // node was replaced, take focus back and put the caret where it was.
   useEffect(() => {
     if (ref === undefined || lastFocused?.ref !== ref) return;
     const element = node.current;
@@ -109,8 +104,8 @@ export const Input: NovaComponent<z.infer<typeof InputProps>> = ({ placeholder, 
         }}
         onBlur={() => {
           focused.current = false;
-          // A REAL blur clears the claim; an unmount never runs this, which is
-          // exactly the difference the restore above depends on.
+          // A real blur clears the claim; an unmount never runs this, which is
+          // the difference the focus restore depends on.
           if (ref !== undefined && lastFocused?.ref === ref) lastFocused = null;
           if (timer.current !== null) {
             clearTimeout(timer.current);
@@ -247,7 +242,6 @@ export const Switch: NovaComponent<z.infer<typeof SwitchProps>> = ({ label, disa
 };
 Switch.meta = { description: 'An on/off control. Emits `{ next }` so the trigger never has to compute a negation.', propsSchema: SwitchProps };
 
-// ── MONEY ────────────────────────────────────────────────────
 const MoneyProps = z.object({ ...fieldProps, symbol: z.string().optional(), big: z.boolean().optional() }).strict();
 type MoneyP = Partial<z.infer<typeof MoneyProps>> & { novaRef?: string; novaModel?: NovaModelBinding; value?: unknown };
 
@@ -311,7 +305,6 @@ export const Money: NovaComponent<Partial<z.infer<typeof MoneyProps>>> = ({ labe
 };
 Money.meta = { description: 'An amount in the studio currency. Shows decimal, emits cents — the conversion lives here, not in a hint.', propsSchema: MoneyProps };
 
-// ── CHECKBOX ─────────────────────────────────────────────────
 const CheckboxProps = z.object({ label: z.string().optional(), disabled: z.boolean().optional(), value: z.unknown().optional(), payload: z.unknown().optional() }).strict();
 type CheckboxP = Partial<z.infer<typeof CheckboxProps>> & { novaRef?: string; novaModel?: NovaModelBinding; checked?: unknown };
 
@@ -352,11 +345,9 @@ export const Checkbox: NovaComponent<Partial<z.infer<typeof CheckboxProps>>> = (
 };
 Checkbox.meta = { description: 'One selection. The primitive a bulk action is built from.', propsSchema: CheckboxProps };
 
-// ── PERSON PICKER ────────────────────────────────────────────
-// `name`, deliberately not `label`: an option carries a PERSON, and `label`
-// is a prose key the language pass translates — the exact hole where somebody
-// called "Active" gets renamed. `sub` carries the standing word, which SHOULD
-// translate.
+// `name`, not `label`: `label` is a prose key the language pass translates,
+// and somebody called "Active" would be renamed. `sub` carries the standing
+// word, which should translate.
 const PickerOption = z.object({ value: z.string(), name: z.string(), sub: z.string().optional() }).loose();
 const PersonPickerProps = z
   .object({

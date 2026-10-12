@@ -1,16 +1,3 @@
-// Run: pnpm --filter lyra exec tsx src/dev/bounce-check.ts
-//
-// WHAT HAPPENED AFTER WE HANDED IT OVER — and why "Sent" was not enough.
-//
-// A 200 from the provider means ACCEPTED. It was proven the hard way against
-// the real API: a message went out from a sender the sandbox had every reason
-// to refuse, came back with an id, and arrived. Nothing after that point can
-// be known without the provider telling us — so this door, and the list it
-// writes, are the only things that make the word on a studio's screen true.
-//
-// The signature is the whole authentication: a vendor calling in has no
-// session and could not have one. So the claims here are a forger's: tamper
-// with the body, replay an old one, guess.
 process.env['MAIL_HOOK_SECRET'] = 'whsec_dGhpcyBpcyBhIHRlc3Qgc2lnbmluZyBrZXkh';
 
 import { createHmac } from 'node:crypto';
@@ -20,8 +7,6 @@ const SECRET = 'whsec_dGhpcyBpcyBhIHRlc3Qgc2lnbmluZyBrZXkh';
 const MESSAGE = 'pm_bounce_probe';
 const ADDRESS = 'gone.away@example.com';
 
-// Signed exactly as Svix does it: `id.timestamp.body`, HMAC-SHA256, keyed on
-// the secret with `whsec_` stripped and the rest base64 DECODED.
 const deliver = async (body: unknown, options: { at?: number; tamper?: boolean } = {}): Promise<number> => {
   const raw = JSON.stringify(body);
   const id = 'msg_2abc';
@@ -31,8 +16,6 @@ const deliver = async (body: unknown, options: { at?: number; tamper?: boolean }
   const response = await server.request('/api/mail/events', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'svix-id': id, 'svix-timestamp': timestamp, 'svix-signature': `v1,${signature}` },
-    // A tampered body keeps the signature it was NOT computed over — the exact
-    // shape of an attacker editing a payload in flight.
     body: options.tamper === true ? `${raw} ` : raw,
   });
   return response.status;
@@ -58,7 +41,6 @@ await runtime.db.query(
 
 const bounce = { type: 'email.bounced', data: { email_id: MESSAGE, to: [ADDRESS], bounce: { message: 'Recipient address does not exist' } } };
 
-// ── the ones that are not the provider ───────────────────────
 ok('a tampered body is not an event', (await deliver(bounce, { tamper: true })) === 200 && (await suppressions()) === 0, 'signed over the RAW body, so a trailing space is a different message');
 ok('...and neither is a replay from an hour ago', (await deliver(bounce, { at: Date.now() - 3_600_000 })) === 200 && (await suppressions()) === 0, 'a signature is valid forever; a recording of one request IS that request');
 ok(
@@ -67,7 +49,6 @@ ok(
   'a 4xx tells a webhook sender to retry all night — nothing happened, and nothing needs saying about it',
 );
 
-// ── the real thing ───────────────────────────────────────────
 ok('a signed bounce is heard', (await deliver(bounce)) === 200 && (await suppressions()) === 1, 'the signature is the whole authentication');
 const bounced = await stateOf();
 ok('...and the row stops claiming it was sent', bounced.state === 'failed', `${bounced.state} — "${bounced.failed_reason}"`);
@@ -79,9 +60,6 @@ ok(
   'the address does not exist — that is not a fact about one studio',
 );
 
-// A COMPLAINT IS ABOUT THE RELATIONSHIP. Suppressing them everywhere would
-// punish studios they never complained about, and withdrawing consent is the
-// honest reading of somebody pressing "spam".
 await runtime.db.query("UPDATE mail_suppressions SET studio_id = 'x' WHERE address = $1", [ADDRESS]);
 await runtime.db.query("UPDATE studio_people SET marketing_ok = true WHERE person_id = 'p_ava' AND studio_id = 'st_lumen'");
 await deliver({ type: 'email.complained', data: { email_id: MESSAGE, to: [ADDRESS] } });
@@ -90,16 +68,9 @@ ok('a complaint is suppressed at the studio complained about', scoped.rows[0]?.s
 const consent = await runtime.db.query<{ marketing_ok: boolean }>("SELECT marketing_ok FROM studio_people WHERE person_id = 'p_ava' AND studio_id = 'st_lumen'");
 ok('...and takes their consent with it', consent.rows[0]?.marketing_ok === false, 'pressing "spam" withdraws permission whatever a checkbox says');
 
-// ── delivered is a different fact from sent ──────────────────
 await deliver({ type: 'email.delivered', data: { email_id: MESSAGE, to: [ADDRESS] } });
 ok('a delivery is recorded where it can be answered from', (await stateOf()).delivered_at !== null, 'a column, not a fifth state — the screen keeps its words until somebody chooses new ones');
 
-// ── THE NET UNDER THE DISPATCHER ─────────────────────────────
-//
-// A message whose process died mid-send leaves a row saying `sending` that no
-// state can tell apart from one genuinely in flight. The claim takes it back
-// once it is old enough — which is the only thing that can, and the reason
-// `claimed_at` is written by the claiming statement itself.
 process.env['MAIL_SINK'] = 'log';
 const { STUCK_AFTER_MS } = await import('@lyra/app/reflexes/compose');
 await runtime.db.query(

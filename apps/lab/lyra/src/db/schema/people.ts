@@ -1,5 +1,3 @@
-// People, the sign-in link, and the anchor that says a human is known to a
-// studio — plus the recompute every relationship table lands on.
 export const PEOPLE_DDL = /* sql */ `
   -- A human. Deliberately thin: a person is not a member and not staff and not
   -- a lead — they HOLD relationships to a studio, plural and concurrent. Email

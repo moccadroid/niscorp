@@ -8,8 +8,6 @@ export const timetableLayout: LayoutNode = {
 
     { component: 'Tabs', props: { value: '$.view', options: '$.views' }, ref: 'view' },
 
-    // The legend. Programs carry a TOKEN name for their colour, so the dots
-    // here and the dots in the list resolve through the same theme.
     {
       component: 'Row',
       props: { gap: 16, wrap: true, align: 'center' },

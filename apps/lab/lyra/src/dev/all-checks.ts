@@ -1,4 +1,3 @@
-// Run: pnpm --filter lyra check
 import { spawnSync } from 'node:child_process';
 
 const CHECKS = [

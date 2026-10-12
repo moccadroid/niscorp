@@ -3,8 +3,6 @@ import { dateText, pattern } from '@lyra/app/prisms/format.prism';
 
 const row = (name: string) => ({ $get: { from: { $var: 'r' }, path: [name] } });
 
-// ─── what is due ─────────────────────────────────────────────
-
 export const trialsDue: CacheEntry = {
   fingerprint: 'automation/trials-due',
   intent: 'People at this studio whose free trial ends on or before a given date',
@@ -20,26 +18,12 @@ export const trialsDue: CacheEntry = {
     ],
     filter: {
       and: [
-      // ── A REACHABLE ADDRESS IS PART OF THE QUESTION ─────────
-      //
-      // `studio_people.mail_to` is where mail for this person at this studio
-      // goes: their own address, or their guardian's when they have none. A
-      // child is a record with no way in, so everything a studio would write
-      // to them has to reach an adult — and that resolution is a trigger's,
-      // not a selection's, because it needs `people` twice in one query and
-      // the read grammar cannot alias one entity into two sources.
-      //
-      // Stated as a FILTER rather than fixed at the effect, for the reason the
-      // consent test is: "who should hear this" is the question, and somebody
-      // nobody can write to is not part of the answer. Zero rows is a message
-      // that correctly never exists — and `outbox.to_address` is NOT NULL, so
-      // without this a child selected by any moment did not mail the wrong
-      // person, it threw and took the whole run with it.
+      // `mail_to` is the person's own address, or their guardian's when they
+      // have none (a trigger resolves it). `outbox.to_address` is NOT NULL: a
+      // person with no address would throw and take the whole run with it.
       { isNotNull: 'studio_people.mail_to' },
         { isNotNull: 'studio_people.trial_ends_on' },
         { lte: ['studio_people.trial_ends_on', { $context: 'cutoff' }] },
-        // A window, so "ending soon" and "just ended" are two settings of one
-        // selection rather than two reads.
         { gte: ['studio_people.trial_ends_on', { $context: 'from' }] },
       ],
     },
@@ -47,23 +31,13 @@ export const trialsDue: CacheEntry = {
   },
 };
 
-// ── who just joined ──────────────────────────────────────────
-// Joining IS a subscription row landing, and the write fact off the vex
-// bridge carries that row. What the effect needs is the PERSON behind it, so
-// the reflex's selection anchors on the fact's own id and enriches — and in
-// doing so RE-CHECKS reality under the automation's own principal: a
-// subscription cancelled between the write and the run selects zero rows,
-// which is a welcome email that correctly never sends.
 export const joinedSubscription: CacheEntry = {
   fingerprint: 'automation/joined-subscription',
   intent: 'One new subscription, with the person behind it',
   shape: [{ subscription_id: '', person_name: '', person_id: '', mail_to: '' }],
   dsl: {
-    // `studio_people` joins for the ADDRESS, and the pair is stated rather
-    // than assumed: a join derived from `people` alone would pair a member
-    // with their anchor at another studio. The tenant rule the engine ANDs on
-    // makes that unreachable in practice; saying it here means the entry does
-    // not depend on that for its correctness.
+    // The pair (person, studio) is stated in the filter: a join derived from
+    // `people` alone would pair a member with their anchor at another studio.
     from: ['subscriptions', 'people', 'studio_people'],
     fields: [
       { field: 'subscriptions.id', as: 'subscription_id' },
@@ -73,21 +47,6 @@ export const joinedSubscription: CacheEntry = {
     ],
     filter: {
       and: [
-      // ── A REACHABLE ADDRESS IS PART OF THE QUESTION ─────────
-      //
-      // `studio_people.mail_to` is where mail for this person at this studio
-      // goes: their own address, or their guardian's when they have none. A
-      // child is a record with no way in, so everything a studio would write
-      // to them has to reach an adult — and that resolution is a trigger's,
-      // not a selection's, because it needs `people` twice in one query and
-      // the read grammar cannot alias one entity into two sources.
-      //
-      // Stated as a FILTER rather than fixed at the effect, for the reason the
-      // consent test is: "who should hear this" is the question, and somebody
-      // nobody can write to is not part of the answer. Zero rows is a message
-      // that correctly never exists — and `outbox.to_address` is NOT NULL, so
-      // without this a child selected by any moment did not mail the wrong
-      // person, it threw and took the whole run with it.
       { isNotNull: 'studio_people.mail_to' },
         { eq: ['subscriptions.id', { $context: 'subscriptionId' }] },
         { eq: ['subscriptions.status', 'active'] },
@@ -98,12 +57,6 @@ export const joinedSubscription: CacheEntry = {
   },
 };
 
-// ── somebody asked ───────────────────────────────────────────
-// An enquiry is a person the studio now KNOWS who holds nothing yet — the
-// anchor row appearing is the moment. The holding-nothing filter is the
-// guard, unchanged in meaning from the day it was written: an anchor written
-// in the same breath as a subscription holds something by the time this
-// selection runs, selects zero rows, and is not greeted as an enquiry.
 export const enquiredPerson: CacheEntry = {
   fingerprint: 'automation/enquired-person',
   intent: 'One newly written-down person, if they still hold nothing',
@@ -116,25 +69,8 @@ export const enquiredPerson: CacheEntry = {
       { field: 'people.name', as: 'person_name' },
       { field: 'studio_people.mail_to', as: 'mail_to' },
     ],
-    // Holding nothing, read off the anchor's own mirrors (schema.ts) — no
-    // reach into tables this rung has no business reading.
     filter: {
       and: [
-      // ── A REACHABLE ADDRESS IS PART OF THE QUESTION ─────────
-      //
-      // `studio_people.mail_to` is where mail for this person at this studio
-      // goes: their own address, or their guardian's when they have none. A
-      // child is a record with no way in, so everything a studio would write
-      // to them has to reach an adult — and that resolution is a trigger's,
-      // not a selection's, because it needs `people` twice in one query and
-      // the read grammar cannot alias one entity into two sources.
-      //
-      // Stated as a FILTER rather than fixed at the effect, for the reason the
-      // consent test is: "who should hear this" is the question, and somebody
-      // nobody can write to is not part of the answer. Zero rows is a message
-      // that correctly never exists — and `outbox.to_address` is NOT NULL, so
-      // without this a child selected by any moment did not mail the wrong
-      // person, it threw and took the whole run with it.
       { isNotNull: 'studio_people.mail_to' },
         { eq: ['studio_people.id', { $context: 'studioPersonId' }] },
         { eq: ['studio_people.held_subscriptions', 0] },
@@ -150,15 +86,9 @@ export const membersLapsedAway: CacheEntry = {
   intent: 'Active members with no attended class since a cutoff',
   shape: [{ subscription_id: '', person_id: '', person_name: '', started_on: '' }],
   dsl: {
-    // `studio_people` IS JOINED RATHER THAN CORRELATED, and that is not a
-    // stylistic preference — it is the difference between consent that works
-    // and consent that goes stale. vex derives a cached read's dependencies
-    // from the tables in `from` (handler.ts, collectTables), recursing into
-    // subquery SOURCES and not into a filter's EXISTS. A consent test written
-    // as a correlated EXISTS is a test on a table this entry does not appear
-    // to read: somebody opts out, nothing invalidates, and the next run
-    // selects them from cache. Joined here, the opt-out invalidates the
-    // answer the same way any other write does.
+    // `studio_people` is joined, not correlated: vex derives a cached read's
+    // dependencies from `from`, not from a filter's EXISTS, and an opt-out
+    // would invalidate nothing.
     from: ['subscriptions', 'people', 'studio_people'],
     fields: [
       { field: 'subscriptions.id', as: 'subscription_id' },
@@ -169,41 +99,11 @@ export const membersLapsedAway: CacheEntry = {
     ],
     filter: {
       and: [
-      // ── A REACHABLE ADDRESS IS PART OF THE QUESTION ─────────
-      //
-      // `studio_people.mail_to` is where mail for this person at this studio
-      // goes: their own address, or their guardian's when they have none. A
-      // child is a record with no way in, so everything a studio would write
-      // to them has to reach an adult — and that resolution is a trigger's,
-      // not a selection's, because it needs `people` twice in one query and
-      // the read grammar cannot alias one entity into two sources.
-      //
-      // Stated as a FILTER rather than fixed at the effect, for the reason the
-      // consent test is: "who should hear this" is the question, and somebody
-      // nobody can write to is not part of the answer. Zero rows is a message
-      // that correctly never exists — and `outbox.to_address` is NOT NULL, so
-      // without this a child selected by any moment did not mail the wrong
-      // person, it threw and took the whole run with it.
       { isNotNull: 'studio_people.mail_to' },
         { eq: ['subscriptions.status', 'active'] },
-        // ── THE OPT-IN, AND IT IS PART OF THE QUESTION ──────────
-        //
-        // Not a filter the effect applies afterwards, and not a rule each
-        // studio's automation has to remember: winning somebody back is
-        // marketing under AT/DE law, so "who should we miss" MEANS "who has
-        // said we may write to them". Somebody who never opted in selects
-        // zero rows, which is a message that correctly never exists — no
-        // outbox row, nothing to unsubscribe from, nothing to explain.
-        //
-        // Correlated the same way the attendance test below is, because there
-        // is no foreign key from a subscription to the anchor: the pair
-        // (person, studio) is what ties them.
+        // Winning somebody back is marketing under AT/DE law: without the
+        // opt-in no row is selected and no message ever exists.
         { eq: ['studio_people.marketing_ok', true] },
-        // The anchor belongs to the same relationship the subscription does.
-        // Stated rather than assumed: a join derived from `people` alone would
-        // pair a member with their anchor at ANOTHER studio, and the person
-        // known to two studios (the physio both gyms use) is seeded precisely
-        // so that mistake has somewhere to show up.
         { eq: ['studio_people.person_id', 'subscriptions.person_id'] },
         { eq: ['studio_people.studio_id', 'subscriptions.studio_id'] },
         {
@@ -212,7 +112,6 @@ export const membersLapsedAway: CacheEntry = {
               from: ['bookings', 'class_sessions'],
               filter: {
                 and: [
-                  // The correlation: this member's bookings, not everybody's.
                   { eq: ['bookings.person_id', 'subscriptions.person_id'] },
                   { eq: ['bookings.studio_id', 'subscriptions.studio_id'] },
                   { eq: ['bookings.attended', true] },
@@ -244,21 +143,6 @@ export const bookingsOnDay: CacheEntry = {
     ],
     filter: {
       and: [
-      // ── A REACHABLE ADDRESS IS PART OF THE QUESTION ─────────
-      //
-      // `studio_people.mail_to` is where mail for this person at this studio
-      // goes: their own address, or their guardian's when they have none. A
-      // child is a record with no way in, so everything a studio would write
-      // to them has to reach an adult — and that resolution is a trigger's,
-      // not a selection's, because it needs `people` twice in one query and
-      // the read grammar cannot alias one entity into two sources.
-      //
-      // Stated as a FILTER rather than fixed at the effect, for the reason the
-      // consent test is: "who should hear this" is the question, and somebody
-      // nobody can write to is not part of the answer. Zero rows is a message
-      // that correctly never exists — and `outbox.to_address` is NOT NULL, so
-      // without this a child selected by any moment did not mail the wrong
-      // person, it threw and took the whole run with it.
       { isNotNull: 'studio_people.mail_to' },
         { eq: ['bookings.status', 'booked'] },
         { eq: ['class_sessions.status', 'scheduled'] },
@@ -284,8 +168,6 @@ export const followUpsOpen: CacheEntry = {
       'notifications.due_on',
       { field: 'people.name', as: 'person_name' },
     ],
-    // Decided by the engine against the studio's own day: a browser must not be
-    // the thing that says what "today" is.
     compute: {
       overdue: {
         case: { when: [{ condition: { lt: ['notifications.due_on', { $scope: 'today' }] }, then: true }], else: false },
@@ -301,8 +183,6 @@ export const followUpsOpen: CacheEntry = {
       as: 'r',
       body: {
         follow_up_id: row('follow_up_id'),
-        // A follow-up about the studio has no person, and an empty cell reads
-        // as a bug.
         person_name: { $case: { branches: [{ when: row('person_name'), then: row('person_name') }], else: 'The studio' } },
         title: row('title'),
         detail: row('detail'),
@@ -315,9 +195,6 @@ export const followUpsOpen: CacheEntry = {
   },
 };
 
-// What went, and what did not, and why not — the third of those being the
-// whole reason the columns exist. A studio that cannot see why nothing
-// arrived asks us instead, every time.
 export const outboxRecent: CacheEntry = {
   fingerprint: 'automation/outbox',
   intent: 'Messages this studio’s automations have sent, and the ones that did not go',
@@ -331,8 +208,6 @@ export const outboxRecent: CacheEntry = {
       'outbox.body',
       'outbox.state',
       'outbox.failed_reason',
-      // Carried but not printed: it is what support is quoted, not something a
-      // studio owner reads down a column.
       'outbox.provider_message_id',
       'outbox.created_on',
     ],
@@ -347,13 +222,7 @@ export const outboxRecent: CacheEntry = {
         message_id: row('message_id'),
         to_address: row('to_address'),
         provider_message_id: row('provider_message_id'),
-        // A FAILED row is the only one worth offering again. Anything else is
-        // on its way, or has already arrived.
         can_send_again: { $case: { branches: [{ when: { $eq: [row('state'), 'failed'] }, then: true }], else: false } },
-        // THE LINE UNDER THE SUBJECT. Normally who it went to, which is what
-        // somebody scanning the list wants. On a row that did not go, the
-        // address is the least interesting thing about it — so the reason
-        // rides beside it, in the provider's own words.
         detail: {
           $case: {
             branches: [{ when: row('failed_reason'), then: { $join: { parts: [row('to_address'), ' — ', row('failed_reason')], sep: '' } } }],
@@ -368,12 +237,8 @@ export const outboxRecent: CacheEntry = {
             branches: [
               { when: { $eq: [row('state'), 'sent'] }, then: 'Sent' },
               { when: { $eq: [row('state'), 'failed'] }, then: 'Failed' },
-              // It has been claimed and is on its way out. Brief, and real:
-              // a row can genuinely be seen in this state.
               { when: { $eq: [row('state'), 'sending'] }, then: 'Sending' },
             ],
-            // Not "Pending": nothing is working on it yet, and the word has to
-            // be true.
             else: 'Not sent',
           },
         },
@@ -392,8 +257,6 @@ export const outboxRecent: CacheEntry = {
   },
 };
 
-// ─── what they do ────────────────────────────────────────────
-
 export const closeFollowUp: MutationEntry = {
   fingerprint: 'automation/follow-up-done',
   intent: 'Mark a follow-up done',
@@ -405,20 +268,9 @@ export const closeFollowUp: MutationEntry = {
   },
 };
 
-// ── the message, and the studio it goes out as ───────────────
-//
-// THE ENVELOPE IS COMPOSED HERE, and that is the whole reason this entry
-// exists. The transport reads nothing — no pool, no vex, no identity — so
-// everything a message needs to leave the building has to arrive with it, and
-// the only honest place to assemble that is a selection running as the
-// studio's own automation principal, under the tenant boundary the engine
-// already draws.
-//
-// It is anchored on the fact's own row and it RE-READS THE STATE: a message
-// already claimed, already sent, or belonging to another studio selects zero
-// rows, which is a send that correctly never happens. The channel filter is
-// not decoration either — an SMS row reaching a mail transport is a message
-// delivered to nobody, silently.
+// The state is re-read: a message already claimed or sent, or another
+// studio's, selects no row. The channel filter matters: an SMS row reaching
+// the mail transport is delivered to nobody, silently.
 export const outboxQueued: CacheEntry = {
   fingerprint: 'automation/outbox-queued',
   intent: 'One queued message, with the studio whose name it goes out in',
@@ -430,25 +282,18 @@ export const outboxQueued: CacheEntry = {
       'outbox.to_address',
       'outbox.subject',
       'outbox.body',
-      // The three the wire needs beyond the words: whether this earns an
-      // unsubscribe footer, and who to address that link to.
       'outbox.marketing',
       'outbox.person_id',
       'outbox.studio_id',
-      // The studio's name is what a member sees it is from; the slug is the box
-      // before our sending domain; the reply address is what makes an answer
-      // reach the studio rather than us.
       { field: 'studios.name', as: 'from_name' },
       { field: 'studios.slug', as: 'from_box' },
       { field: 'studios.reply_to', as: 'reply_to' },
-      // Empty unless the provider has verified it — see studios.sending_domain_ok.
       { field: 'studios.sending_domain', as: 'sending_domain' },
       { field: 'studios.sending_domain_ok', as: 'sending_domain_ok' },
       { field: 'studios.daily_mail_cap', as: 'daily_cap' },
     ],
-    // SUPPRESSED IS ANSWERED, NOT FILTERED. Dropping the row from the answer
-    // would leave it `queued` for a reader that never comes; carrying the fact
-    // lets the effect record why it stopped, where a studio can read it.
+    // Answered, not filtered on: a dropped row would stay `queued` for ever,
+    // and the effect could not record why it stopped.
     compute: {
       suppressed: {
         case: {
@@ -460,8 +305,8 @@ export const outboxQueued: CacheEntry = {
                   filter: {
                     and: [
                       { eq: ['mail_suppressions.address', 'outbox.to_address'] },
-                      // Empty scope is everybody (a dead address); otherwise it
-                      // is this studio's own complaint.
+                      // An empty `studio_id` is every studio (a dead address);
+                      // otherwise it is this studio's own complaint.
                       { or: [{ eq: ['mail_suppressions.studio_id', ''] }, { eq: ['mail_suppressions.studio_id', 'outbox.studio_id'] }] },
                     ],
                   },
@@ -484,32 +329,19 @@ export const outboxQueued: CacheEntry = {
   },
 };
 
-// ── the claim ────────────────────────────────────────────────
-//
-// THE ONE WRITE THAT MAKES SENDING SAFE. Tide retries a failed task, and the
-// case that bites is not a failure: the provider accepted the message and the
-// acknowledgement did not come back inside the timeout. The retry would send
-// it again — to a person, who would receive two.
-//
-// So the effect takes the row before it sends, and the WHERE is the whole
-// mechanism: `state = 'queued'` is what makes this lose when somebody else has
-// already won. An empty answer means "not mine", and the effect stops.
+// Taken before the send: tide retries a task whose send the provider accepted
+// but whose acknowledgement timed out, and the retry would mail the person
+// twice. The WHERE makes it lose, and an empty answer means "not mine".
 export const outboxClaim: MutationEntry = {
   fingerprint: 'outbox/claim',
   intent: 'Take a queued message, so that only one attempt can send it',
   mutation: {
     op: 'update',
     table: 'outbox',
-    // The timestamp is written by the same statement that takes the row, and
-    // that is the whole point of it: a claim recorded a moment later is a claim
-    // that is missing exactly when the process died.
     set: { state: 'sending', claimed_at: { $context: 'claimedAt' } },
-    // QUEUED, OR ABANDONED. The second half is what makes a stranded row
-    // recoverable: a process that dies between claiming and recording leaves a
-    // row saying `sending` that no state can distinguish from one that is
-    // genuinely in flight — only its AGE can. Past the threshold the claim
-    // takes it back, which is why `claimed_at` is written by this statement
-    // and not a moment later.
+    // Queued, or abandoned: a process that dies between claiming and recording
+    // leaves a `sending` row that only its age tells apart from one in flight.
+    // That is why `claimed_at` is written by this same statement.
     where: {
       and: [
         { eq: ['outbox.id', { $context: 'messageId' }] },
@@ -532,8 +364,6 @@ export const outboxSent: MutationEntry = {
     table: 'outbox',
     set: {
       state: 'sent',
-      // WHAT SUPPORT IS QUOTED. Recording `sent` with nothing to look up is
-      // the state nobody can act on the morning somebody asks where it went.
       provider_message_id: { $context: 'providerMessageId' },
       sent_at: { $context: 'sentAt' },
       failed_reason: '',
@@ -542,13 +372,8 @@ export const outboxSent: MutationEntry = {
   },
 };
 
-// TWO OUTCOMES, TWO ENTRIES, AND THE STATES ARE LITERAL.
-//
-// ⟲ These were one entry taking its state from context, which read as tidy and
-// was not: a fingerprint called `record-unsent` that could write 'sent' holds
-// more authority than its name admits, and a charter grant is table.verb — it
-// cannot tell two updates on `outbox` apart. Anything holding the pen for one
-// held it for the other. The name is now the whole of what each can do.
+// The state is a literal, not a context value: a charter grant is table.verb,
+// so an entry that took its state from context could also write 'sent'.
 export const outboxFailed: MutationEntry = {
   fingerprint: 'outbox/record-failed',
   intent: 'Record that a message did not go, and why',
@@ -560,11 +385,6 @@ export const outboxFailed: MutationEntry = {
   },
 };
 
-// Back in the queue for the retry the reflex's own policy provides, with the
-// reason kept so the row says what went wrong while it waits. Whether a
-// failure earns this or `record-failed` is decided by WHY it did not go — a
-// refused address will be refused again, an unreachable host might not be —
-// and the transport draws that line (`retry`), not this entry.
 export const outboxRequeue: MutationEntry = {
   fingerprint: 'outbox/requeue',
   intent: 'Put a message back in the queue after an attempt that may yet work',
@@ -576,8 +396,6 @@ export const outboxRequeue: MutationEntry = {
   },
 };
 
-// The row records exactly what will go out; the reflex below it does the
-// sending. See `outboxQueued` for how it acquires a sender.
 export const queueMessage: MutationEntry = {
   fingerprint: 'automation/queue-message',
   intent: 'Queue an email for a person, to be sent when the outbox reflex wakes',
@@ -598,10 +416,8 @@ export const queueMessage: MutationEntry = {
 export const notify: MutationEntry = {
   fingerprint: 'automation/notify',
   intent: 'Record something an automation or an installed integration wants the studio to know',
-  // A PUBLISHED interface: the belts and stripe integrations replay this by name, so
-  // the fingerprint stays put while the table under it got its honest name.
-  // Landing a row here also fans out over the socket to the studio's
-  // connected staff — see the app's onMutation hook (app.ts).
+  // A published interface: the belts and stripe integrations replay this
+  // fingerprint by name, so it must not change.
   mutation: {
     op: 'insert',
     table: 'notifications',
@@ -614,8 +430,6 @@ export const notify: MutationEntry = {
   },
 };
 
-// ── the bell ─────────────────────────────────────────────────
-
 export const notificationsUnseen: CacheEntry = {
   fingerprint: 'notifications/unseen-count',
   intent: 'How many open notifications this studio has not read yet',
@@ -623,8 +437,6 @@ export const notificationsUnseen: CacheEntry = {
   dsl: {
     from: ['notifications'],
     aggregate: { total: { count: 'notifications.id' } },
-    // Open AND unread — the same rows the Notices list shows, so the badge
-    // can always reach zero by reading the list it points at.
     filter: { and: [{ eq: ['notifications.seen', false] }, { eq: ['notifications.done', false] }] },
   },
   mapping: {
@@ -635,11 +447,6 @@ export const notificationsUnseen: CacheEntry = {
   },
 };
 
-// Reading marks exactly the ROWS THE SCREEN SHOWED — the caller names the ids
-// off its own list, which is both what the authoring lint demands of an
-// update (a caller-bounded WHERE) and the honest claim: you have seen what
-// was in front of you, not whatever landed while you were reading it. The
-// flag is all a screen may say; WHEN is the trigger's.
 export const notificationsMarkSeen: MutationEntry = {
   fingerprint: 'notifications/seen',
   intent: 'Mark the notifications somebody has on screen as read',
@@ -656,18 +463,6 @@ export const notificationsMarkSeen: MutationEntry = {
   },
 };
 
-// ─── the automations as rows ─────────────────────────────────
-//
-// THE WHOLE CARD, IN ONE ENTRY. The screen used to be built by a function:
-// two hand-written SELECTs, a lookup into the shipped constants, and every
-// label composed in JavaScript. All of it is here now — the vocabulary is
-// joined by foreign key, the sentence and the state words are composed in
-// the mapping, and the tenant boundary is the engine's rather than a WHERE
-// somebody remembered to type.
-//
-// `last_run_*` are mirror columns the engine's ledger pushes (boot.ts): the
-// ledger is keyed by a composed reflex id, so it is the one thing here that
-// could not be a join.
 export const automationsList: CacheEntry = {
   fingerprint: 'automations/list',
   intent: 'The automations this studio has set up, as the cards that show them',
@@ -705,9 +500,7 @@ export const automationsList: CacheEntry = {
       as: 'r',
       body: {
         automation_id: row('automation_id'),
-        // The reflex id the engine knows this by, composed the same way
-        // `reflexIdFor` composes it — the ledger and the screen agree because
-        // both build it from the same two columns.
+        // Must match `reflexIdFor`: the engine's ledger knows the reflex by it.
         reflex_id: { $join: { parts: [row('studio_id'), ':', row('automation_id')], sep: '' } },
         moment: row('moment'),
         effect: row('effect'),
@@ -716,23 +509,12 @@ export const automationsList: CacheEntry = {
         enabled: row('enabled'),
         run_at: row('run_at'),
         days: row('days'),
-        // THE SENTENCE, composed rather than stored: it is what the row does,
-        // in the operator's language, so it stays true when either half moves.
-        // A PATTERN, not a join — the frame translates whole and the fragment
-        // slots go through the book themselves. And spelled `sentence`, not
-        // `name`: `name` is deliberately no prose key (people are named), so
-        // this sentence filed under it was invisible to the language pass.
+        // A pattern, so the frame translates whole. Under `sentence`, not
+        // `name`: `name` is no prose key and the language pass would skip it.
         sentence: pattern('When {moment}, {effect}', { moment: row('moment_phrase'), effect: row('effect_phrase') }),
-        // The MOMENT's blurb alone. The card is a list of things that happen,
-        // read at a glance; what the effect is like belongs in the form, where
-        // somebody is choosing one. Joining both here turns every card into
-        // two paragraphs saying the same thing about email.
         intent: row('moment_blurb'),
-        // A watched moment has no hour, and a row claiming one it ignores lies.
         run_display: { $case: { branches: [{ when: row('watched'), then: 'As it happens' }], else: pattern('Every day at {time}', { time: row('run_at') }) } },
         watched: row('watched'),
-        // The pairing's shape, carried on the row — "Edit" hands it straight
-        // to the form, which then has nothing to ask anybody.
         moment_phrase: row('moment_phrase'),
         moment_blurb: row('moment_blurb'),
         effect_phrase: row('effect_phrase'),
@@ -745,8 +527,6 @@ export const automationsList: CacheEntry = {
         message_hint: row('message_hint'),
         state_label: { $case: { branches: [{ when: row('enabled'), then: 'Armed' }], else: 'Paused' } },
         state_tone: { $case: { branches: [{ when: row('enabled'), then: 'good' }], else: 'neutral' } },
-        // The card shows Pause OR Arm, never both — `hideKey`/`showKey` read
-        // this rather than the layout branching on a role or a state.
         paused: { $case: { branches: [{ when: row('enabled'), then: false }], else: true } },
         facts: [
           {
@@ -768,13 +548,8 @@ export const automationsList: CacheEntry = {
   },
 };
 
-// ─── the recipes, against what this studio already runs ──────
-//
-// A recipe is an app constant; whether THIS studio runs it is a row. The
-// join is the point: `installed` is an EXISTS correlated on the studio the
-// engine stamped, so the answer is per-tenant without the entry naming a
-// tenant. The studio's own words win where they have any — "Change it" has
-// to open their automation, their hour, not the recipe's suggestion.
+// `installed` is an EXISTS on `automations`, which the engine scopes to the
+// caller's studio: the answer is per tenant without the entry naming one.
 export const automationRecipes: CacheEntry = {
   fingerprint: 'automations/recipes',
   intent: 'The recipes this app ships, marked with the ones this studio already runs',
@@ -855,10 +630,6 @@ export const automationRecipes: CacheEntry = {
         body_label: row('body_label'),
         message_hint: row('message_hint'),
         installed: row('installed'),
-        // A recipe a studio already runs is not an offer — saying so beats
-        // letting them add it and hit a unique-constraint error.
-        // The title slot is itself vocabulary (the seeded recipe titles), so
-        // it translates inside its frame.
         heading: { $case: { branches: [{ when: row('installed'), then: row('title') }], else: pattern('Set up: {title}', { title: row('title') }) } },
         state_label: { $case: { branches: [{ when: row('installed'), then: 'Running' }], else: 'Not set up' } },
         state_tone: { $case: { branches: [{ when: row('installed'), then: 'good' }], else: 'neutral' } },
@@ -885,8 +656,6 @@ export const automationCreate: MutationEntry = {
   mutation: {
     op: 'insert',
     table: 'automations',
-    // Both are foreign keys into the shipped vocabulary, so a row can combine
-    // what the app ships and cannot name anything it does not.
     values: {
       moment: { $context: 'moment' },
       effect: { $context: 'effect' },
@@ -895,11 +664,6 @@ export const automationCreate: MutationEntry = {
       subject: { $context: 'subject' },
       body: { $context: 'body' },
     },
-    // A PAIRING IS UNIQUE PER STUDIO, so setting one up twice is setting it
-    // up once and changing it. Saving a recipe a studio already runs used to
-    // need the id of their existing row carried all the way through the
-    // screen; the natural key was there the whole time, and the constraint
-    // that was going to refuse the second insert now resolves it instead.
     onConflict: {
       target: ['studio_id', 'moment', 'effect'],
       set: {
@@ -912,10 +676,6 @@ export const automationCreate: MutationEntry = {
   },
 };
 
-// Pause and arm, as one flag on the row. The write lands through vex, so the
-// reflex reload rides the app's `automations` reaction — no screen remembers
-// to poke anything, and the raw UPDATE this replaced is gone with the fn
-// that held it.
 export const automationArm: MutationEntry = {
   fingerprint: 'automations/arm',
   intent: 'Pause an automation, or arm it again',
@@ -944,22 +704,6 @@ export const automationUpdate: MutationEntry = {
   },
 };
 
-// ── THE ONES NOBODY IS COMING BACK FOR ───────────────────────
-//
-// Two shapes, one question: which of this studio's messages are still not out?
-//
-//   `sending`, claimed long ago — a process died mid-send. Nothing else can
-//   free these: the insert fact that woke the dispatcher was consumed, and no
-//   state distinguishes abandoned from in-flight without an age.
-//   `queued`, older than the window — the dispatcher never got to it, or a
-//   human pressed Retry on a failed row and put it back.
-//
-// Deliberately NOT `failed`: that is a decision somebody or something already
-// made, and a sweep that re-sent failures would re-send a bounce forever.
-// ONE ENVELOPE, TWO QUESTIONS. The dispatcher asks "this row, is it still
-// sendable"; the sweep asks "what did this studio never send". They must hand
-// the effect the SAME shape or the second one mails an empty message — so the
-// shape is written once and the filter is what differs.
 export const outboxStuck: CacheEntry = {
   fingerprint: 'automation/outbox-stuck',
   intent: 'Messages this studio queued that never went out',
@@ -969,10 +713,8 @@ export const outboxStuck: CacheEntry = {
     filter: {
       and: [
         { eq: ['outbox.channel', 'email'] },
-        // Deliberately NOT `failed`: that is a decision something already made,
-        // and a sweep that re-sent failures would re-send a bounce forever.
-        // `sending` is the abandoned case — a process that died mid-send —
-        // which only an age can tell apart from one genuinely in flight.
+        // Not `failed`: a sweep that re-sent failures would re-send a bounce for
+        // ever. `sending` is a process that died mid-send.
         { in: ['outbox.state', ['queued', 'sending']] },
         { lt: ['outbox.created_at', { $context: 'stuckBefore' }] },
       ],

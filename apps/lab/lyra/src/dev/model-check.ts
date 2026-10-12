@@ -1,16 +1,3 @@
-// THE MODEL INVERSION, PROVEN: a person is just a person; what varies is the
-// relationships they hold — plural, concurrent, typed — and access is a
-// different fact from payment. These are the assertions the model overhaul
-// (docs/plans/lyra-model-overhaul.md)
-// Part 13 says the remodel owes the suite, in one place:
-//
-//   · a person holds two entitlements AT ONCE — the old UNIQUE forbade it
-//   · a drop-in attends without becoming a member, and attending is what
-//     spends the credit
-//   · a manual subscription reaches "active, paid until X" with no payment
-//     processor anywhere
-//
-// Run: pnpm --filter lyra exec tsx src/dev/model-check.ts
 import { CAST } from '@lyra/db/seed';
 import { asPrincipal, login, ok, report, runtime, settle, treeOf } from './world';
 
@@ -23,12 +10,6 @@ const refused = (value: unknown): boolean =>
 
 const OWNER = CAST.lumen.owner;
 
-// ── TWO ENTITLEMENTS, ONE HUMAN, AT ONCE ─────────────────────
-//
-// Ava holds an active subscription. The desk sells her a ten-class pass on
-// top — a member buying credits for a visiting partner, or banking classes
-// for a travel month. The old schema's UNIQUE (studio_id, person_id) made
-// this row combination unrepresentable.
 const sold = await asPrincipal(OWNER, '/api/member/vex', {
   fingerprint: 'passes/sell',
   context: { personId: 'p_ava', offeringId: 'of_lumen_ten', paidVia: 'manual', purchaseRef: null },
@@ -46,11 +27,6 @@ ok(
   'the terms they were SOLD, not the terms on sale later',
 );
 
-// ── THE DROP-IN ATTENDS, AND ATTENDING SPENDS ────────────────
-//
-// Ida is a pass holder and nothing else: one credit, no subscription. She is
-// bookable, she attends, and the CHECK-IN is what draws the credit down — a
-// booking is a promise, and promises get cancelled.
 ok('the drop-in holds no subscription', (await count("SELECT count(*) n FROM subscriptions WHERE person_id = 'p_ida'")) === 0, 'and never has to');
 
 const session = await runtime.db.query<{ id: string }>(
@@ -74,8 +50,6 @@ ok('...and ATTENDING is what spent the credit', (await count("SELECT credits_use
 ok('...flipping the drop-in used up', (await count("SELECT count(*) n FROM passes WHERE id = 'pass_ida' AND status = 'used_up'")) === 1, 'the last credit and the status move together');
 ok('...while she still never became a member', (await count("SELECT count(*) n FROM subscriptions WHERE person_id = 'p_ida'")) === 0, 'the backbone of a yoga studio, representable at last');
 
-// A COVERED member's check-in spends nothing: their subscription is what
-// admits them, and a pass they also hold stays whole.
 const avaSession = await runtime.db.query<{ id: string; bid: string }>(
   `SELECT cs.id, b.id AS bid FROM bookings b JOIN class_sessions cs ON cs.id = b.session_id
     WHERE b.person_id = 'p_ava' AND b.status = 'booked' AND cs.held_on = studio_today('st_lumen') LIMIT 1`,
@@ -92,13 +66,6 @@ ok(
   'the subscription covers attendance; the pass waits whole',
 );
 
-// ── MANUAL MONEY: THE PRIMARY PATH ───────────────────────────
-//
-// Hana's trial closed yesterday and she signs at the counter. No Stripe is
-// connected anywhere in this check: the desk starts the plan, takes the cash,
-// and states how far the money reaches. "Active, paid until X" must be the
-// same fact here as when a webhook writes it — the desk and the provider are
-// the same mutation with a different caller.
 const started = await asPrincipal(OWNER, '/api/member/vex', {
   fingerprint: 'subscriptions/start',
   context: { personId: 'p_hana', offeringId: 'pl_nr_twice', paidVia: 'manual' },
@@ -134,16 +101,9 @@ ok(
 );
 ok('...on the offering’s own terms', Number(standing.rows[0]?.monthly_cents) === 9500, 'stamped by the trigger, exactly as a checkout start would be');
 
-// And the standing derives: she reads as a member now, not trial-over.
 const roll = await asPrincipal(rock, '/api/member/vex', { fingerprint: 'people/list', context: { q: '%hana%', holding: 'membership', after: '', afterId: '' } });
 ok('...and the roll derives her as a member', JSON.stringify(roll).includes('Hana Oksana') && JSON.stringify(roll).includes('"standing":"active"'), 'nothing was stored; the rows speak');
 
-// ── THE STUDIO IS TOLD, LIVE ─────────────────────────────────
-//
-// A notification insert fans out over the per-principal socket the shells
-// already run: the connected owner's chrome hears it and the unread strip
-// appears with no navigation and no reload. The row is the durable fact —
-// this is only the news of it arriving while somebody is looking.
 const watching = await login(CAST.lumen.owner);
 await settle(10);
 ok('the owner starts with nothing unread', !treeOf(watching).includes('unread notice'), 'a quiet studio has a quiet chrome');
@@ -156,7 +116,6 @@ ok('an automation tells the studio something', !refused(told), JSON.stringify(to
 await settle(12);
 ok('...and the connected owner hears it over the socket', treeOf(watching).includes('unread notice'), 'pushed into the live shell — no poll, no reload, no navigation');
 
-// Reading the list is what clears it, for the whole studio.
 watching.dispatch({ type: 'ui:click', ref: 'bell' });
 await settle(16);
 ok('the bell opens the Notices list', treeOf(watching).includes('Lena converted her trial'), 'the push pointed at rows, and here they are');
@@ -164,13 +123,6 @@ await settle(8);
 ok('...and reading marks the studio caught up', !treeOf(watching).includes('unread notice'), 'seen is a flag a screen may set; when is the trigger’s');
 ok('...stamped by the database', (await count("SELECT count(*) n FROM notifications WHERE source = 'model-check' AND seen = true AND seen_at IS NOT NULL")) === 1);
 
-// ── a commitment that does not exist is not displayed ────────
-//
-// With no minimum term the trigger stamps committed_until = started_on —
-// right for the arithmetic (a past date loses every GREATEST), wrong to
-// show: "committed until" a date already behind them, beside a field that
-// says there is no commitment. The column keeps its value; the display
-// declines to invent one.
 const loose = await runtime.db.query<{ person_id: string; committed: string | null }>(
   `SELECT s.person_id, s.committed_until::text AS committed FROM subscriptions s
      JOIN offerings o ON o.id = s.offering_id
@@ -182,8 +134,6 @@ ok('the seed holds a no-minimum subscription, stamped anyway', loosePerson !== '
 const loosePanel = await asPrincipal(OWNER, '/api/member/vex', { fingerprint: 'subscriptions/for-member', context: { personId: loosePerson } });
 ok('a no-minimum subscription renders no committed-until', (loosePanel as { committed_display?: string }).committed_display === '', JSON.stringify((loosePanel as { committed_display?: string }).committed_display));
 
-// And one WITH a minimum still says its date — this is a refusal to invent,
-// not a lost field.
 const bound = await runtime.db.query<{ person_id: string; studio_id: string }>(
   `SELECT s.person_id, s.studio_id FROM subscriptions s
      JOIN offerings o ON o.id = s.offering_id

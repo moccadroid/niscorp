@@ -1,37 +1,6 @@
-// ═══════════════════════════════════════════════════════════════
-// DEUTSCH — the litmus test.
-//
-// Keyed on the English source phrase, which is what `@niscorp/nova/i18n`
-// harvests from the layouts and swaps on the way out. Regenerate the list of
-// what is still missing with:
-//
-//   pnpm --filter lyra exec tsx src/dev/phrase-harvest.ts de
-//
-// Keyed `de`, and there is no `de-AT` to be keyed on: this application offers
-// one German, not one per country. What is not in here is money and dates —
-// `Intl` derives those from the same tag (`prisms/format.prism.ts`).
-//
-// REGISTER: du, not Sie. The English voice is plain and warm ("Nobody here
-// yet.", "Quiet day.") and Sie would make it stiff in a way the original is
-// not. It is also what studios in the German-speaking world actually use.
-//
-// GLOSSARY — decided once, so three screens cannot describe one thing three
-// ways (the same rule `standing.ts` states for the English vocabulary):
-//   Class          Kurs            (one slot that repeats weekly)
-//   Class type     Kursart         (Vinyasa, Fundamentals — no times)
-//   Course         Kursblock       (bounded, between two dates, one price)
-//   Timetable      Stundenplan     (every dated class)
-//   Plan           Tarif           (a recurring membership)
-//   Pass           Blockkarte      (classes bought up front)
-//   The roll       Kartei          (everyone the studio knows)
-//   Staff          Team
-//   Front desk     Empfang
-//   Instructor     Trainer   / "Taught by" → Kursleitung
-//   Standing       Status
-// ═══════════════════════════════════════════════════════════════
-
+// Register: du, not Sie. One word per thing: a class is Kurs, a class type
+// Kursart, a course Kursblock, a plan Tarif, a pass Blockkarte, the roll Kartei.
 export const GERMAN: Record<string, string> = {
-  // ── copy, long form ──
   'A block with an end date and a price. Joined once, and the seat is held for the whole run.':
     'Ein Block mit Enddatum und Preis. Einmal beigetreten, ist der Platz für den ganzen Zeitraum reserviert.',
   'A member joins from their own Booking screen, or the desk enrols them.':
@@ -49,7 +18,6 @@ export const GERMAN: Record<string, string> = {
     'Ein Workshop, eine Masterclass, ein Samstagsintensiv — ein Termin, ohne wöchentliche Regel dahinter.',
   'A year': 'Ein Jahr',
 
-  // ── actions ──
   Active: 'Aktiv',
   Add: 'Hinzufügen',
   'Add a class': 'Kurs anlegen',
@@ -105,7 +73,6 @@ export const GERMAN: Record<string, string> = {
   Automation: 'Automatisierung',
   Automations: 'Automatisierungen',
 
-  // ── money and terms ──
   Billed: 'Abgerechnet',
   'Billed by the studio': 'Vom Studio abgerechnet',
   'Blocks this person is on. Joining holds their place for every week of it.':
@@ -166,9 +133,6 @@ export const GERMAN: Record<string, string> = {
   Course: 'Kursblock',
   Courses: 'Kursblöcke',
   'Courses you are on': 'Deine Kursblöcke',
-  // The People lens: everybody the studio deals with right now, whatever the
-  // relationship. Not "aktuelle Mitglieder" — the whole point of the lens is
-  // that it is wider than membership.
   Current: 'Aktuell',
   'In use': 'In Verwendung',
 
@@ -275,8 +239,6 @@ export const GERMAN: Record<string, string> = {
   'A company': 'Ein Unternehmen',
   'A sole trader': 'Ein Einzelunternehmen',
   Business: 'Unternehmen',
-  // The third verb on the price list. Retiring is for a product a studio
-  // stopped selling; this is for the row that was never one.
   Delete: 'Löschen',
   'Nobody has ever taken this — deleting it removes it for good.':
     'Das hat noch nie jemand gekauft — Löschen entfernt es endgültig.',
@@ -338,10 +300,8 @@ export const GERMAN: Record<string, string> = {
   Instructor: 'Trainer',
   'Internal only — the member never sees this.': 'Nur intern — das Mitglied sieht das nie.',
   Integration: 'Integration',
-  // Reads under the new person's name, which is the Hero's title above it.
   'is on the roll and can be booked from today.':
     'steht in der Kartei und kann ab heute gebucht werden.',
-  // The other half of the same sentence: what they became once a plan started.
   'is a member from today.': 'ist ab heute Mitglied.',
 
   Join: 'Beitreten',
@@ -459,8 +419,6 @@ export const GERMAN: Record<string, string> = {
   Pass: 'Blockkarte',
   'Pass holder': 'Blockkarten-Inhaber',
   Passes: 'Blockkarten',
-  // The lens for people the studio no longer deals with — former members and
-  // lapsed contacts alike, so the word is about the person and not the tense.
   Past: 'Ehemalige',
   Pause: 'Pausieren',
   Paused: 'Pausiert',
@@ -509,11 +467,7 @@ export const GERMAN: Record<string, string> = {
   'Ran it. Anything it produced is on the follow-up list or in the outbox.':
     'Ausgeführt. Alles Entstandene steht in den Mitteilungen oder im Postausgang.',
   'Read them': 'Lesen',
-  // "Rezepte" kept the English metaphor and lost the argument to its own
-  // neighbours: every sentence ABOUT a recipe already said Vorlage ("Eine
-  // Vorlage füllt das Formular für dich aus", "Der Reiter Vorlagen"), so the
-  // tab was the only place the metaphor survived and it read as a different
-  // feature from the one described underneath it. One word wins; this is it.
+  // Not "Rezepte": every sentence about a recipe says Vorlage.
   Recipes: 'Vorlagen',
   'Record payment': 'Zahlung erfassen',
   Remove: 'Entfernen',
@@ -521,11 +475,8 @@ export const GERMAN: Record<string, string> = {
   Reports: 'Berichte',
   Resume: 'Fortsetzen',
   Retention: 'Bindung',
-  // NOT 'Einstellen'. That word means to HIRE somebody before it means to
-  // discontinue a product, it sits next to a person's name on half these
-  // screens, and this app already spells Settings 'Einstellungen'. Said as the
-  // exact counterpart of 'Wieder anbieten', which is the control it toggles
-  // with.
+  // Not 'Einstellen': it means to hire somebody before it means to discontinue
+  // a product, and Settings is already 'Einstellungen'.
   Retire: 'Nicht mehr anbieten',
   Role: 'Rolle',
   'Role changed. Their application has already adopted it.':
@@ -711,25 +662,16 @@ export const GERMAN: Record<string, string> = {
     'Du bist dabei. Das Studio klärt die Zahlung mit dir.',
   'Your classes and your membership.': 'Deine Kurse und deine Mitgliedschaft.',
 
-  // ── the automation vocabulary ────────────────────────────
-  //
-  // Seeded into `automation_moments` / `_effects` / `_recipes` and rendered as
-  // row data. The moment and effect labels are SENTENCE FRAGMENTS that the
-  // form joins into "Wenn <moment>, <effect>" — so each one is translated to
-  // fit that frame, not as a standalone phrase.
+  // The moment and effect labels are sentence fragments the form joins into
+  // "Wenn <moment>, <effect>", so each is translated to fit that frame.
   'somebody enquires': 'jemand anfragt',
   'somebody stops coming': 'jemand nicht mehr kommt',
   'a trial is about to run out': 'ein Probetraining bald ausläuft',
   "it is the day before somebody's class": 'es der Tag vor jemandes Kurs ist',
 
-  // THE SAME FIVE MOMENTS, WELDED. The form's picker builds its labels as
-  // `When ${moment.label}` in TypeScript, so each pairing reaches the screen as
-  // one finished English sentence rather than as the fragment above. A pattern
-  // would be wrong here rather than merely verbose: German moves the verb to
-  // the end after "wenn", so "Wenn " + "jemand tritt bei" is not a sentence
-  // anybody would write. Five rows, one per moment — and the harvest now sees
-  // this array, so a sixth moment turns the gate red instead of shipping
-  // English.
+  // The form's picker builds `When ${moment.label}` in TypeScript, so each
+  // pairing arrives as one finished sentence and has its own row: German moves
+  // the verb to the end after "wenn", so a pattern would not do.
   'When somebody joins': 'Wenn jemand beitritt',
   'When somebody enquires': 'Wenn jemand anfragt',
   'When somebody stops coming': 'Wenn jemand nicht mehr kommt',
@@ -747,7 +689,6 @@ export const GERMAN: Record<string, string> = {
   'One message per person per class, so forty reminders retry independently.':
     'Eine Nachricht pro Person und Kurs, damit vierzig Erinnerungen unabhängig voneinander wiederholt werden.',
 
-  // Recipe cards: a title and the one line under it saying why it is worth it.
   'Welcome somebody the day they join': 'Neue am Tag des Beitritts begrüßen',
   'The first week decides whether there is a second year, and right now a new member hears nothing from the studio at all.':
     'Die erste Woche entscheidet, ob es ein zweites Jahr gibt — und derzeit hört ein neues Mitglied überhaupt nichts vom Studio.',
@@ -764,19 +705,12 @@ export const GERMAN: Record<string, string> = {
   'Empty spots that somebody booked and forgot are the cheapest attendance a studio can buy back.':
     'Gebuchte und vergessene Plätze sind die günstigste Teilnahme, die ein Studio zurückgewinnen kann.',
 
-  // ── placeholders: German examples, so a German form reads like one ──
   'Breath-led, continuous movement. All levels.': 'Atemgeführte, fließende Bewegung. Alle Level.',
   'Foundations — autumn block': 'Grundlagen — Herbstblock',
   'Inversions masterclass': 'Umkehrhaltungen-Masterclass',
   'Morning Flow': 'Morgen-Flow',
   'Vinyasa Flow': 'Vinyasa Flow',
 
-  // ── what the reads manufacture ───────────────────────────
-  //
-  // Closed-set words and counted PATTERNS from the vex mappings, surfaced by
-  // the derived harvest source. A pattern translates whole — '{n} von
-  // {total}' is one row however big n gets — and its slots are filled in
-  // this language by the pass.
   '{n} a month': '{n} pro Monat',
   '{n} classes': '{n} Kurse',
   '{n} classes a month': '{n} Kurse pro Monat',
@@ -815,8 +749,6 @@ export const GERMAN: Record<string, string> = {
   On: 'Aktiv',
   'One-off': 'Einmalig',
   Refunded: 'Erstattet',
-  // One word for two screens: a price withdrawn from the list, and a weekly
-  // class withdrawn from the timetable. 'Eingestellt' read as 'hired' on both.
   Retired: 'Zurückgezogen',
   'Rolling — cancel any time': 'Laufend — jederzeit kündbar',
   Running: 'Läuft',
@@ -832,7 +764,6 @@ export const GERMAN: Record<string, string> = {
   Waiting: 'Warteliste',
   Wednesday: 'Mittwoch',
 
-  // ── the walk-in desk ─────────────────────────────────────
   'Walk-in': 'Walk-in',
   'At the desk, not on the list.': 'Am Empfang, aber nicht auf der Liste.',
   'Who is here?': 'Wer ist da?',
@@ -844,11 +775,6 @@ export const GERMAN: Record<string, string> = {
   'Nobody outside a class yet.': 'Bisher niemand außerhalb eines Kurses.',
   'A walk-in goes through the picker below.': 'Ein Walk-in läuft über die Auswahl unten.',
 
-  // ── mail, and the consent switch ─────────────────────────
-  //
-  // The settings screen for outbound mail, and the one switch on the person
-  // form it made mandatory. "Domain" stays "Domain" — considered, not skipped:
-  // German UIs say Domain, and an entry here stops somebody "fixing" it later.
   'A ceiling, not a target. It is here so one mistake — a bad import, an automation pointed at everybody — cannot run away overnight.':
     'Eine Obergrenze, kein Ziel. Sie ist dafür da, dass ein einzelner Fehler — ein schlechter Import, eine Automatisierung, die auf alle zeigt — nicht über Nacht durchgehen kann.',
   'A subdomain you own. We will show you the records to publish.':
@@ -885,7 +811,6 @@ export const GERMAN: Record<string, string> = {
     'Auf allem, was die Automatisierungen verschicken, steht der Name deines Studios. Hierhin kommt eine Antwort zurück.',
   'Your studio’s name on what goes out, and where an answer comes back to.':
     'Der Name deines Studios auf allem, was rausgeht — und wohin eine Antwort zurückkommt.',
-  // ── families ──
   Family: 'Familie',
   'My family': 'Meine Familie',
   'Add a child': 'Kind hinzufügen',
@@ -902,11 +827,6 @@ export const GERMAN: Record<string, string> = {
     'Alles, wofür deine Kinder eingetragen sind.',
   'Anything you book for them will show up here.':
     'Alles, was du für sie buchst, erscheint hier.',
-  // ── campaigns ──
-  //
-  // The audience PHRASES are the same words the People screen wears for its
-  // own lenses, deliberately: an owner picking "Membership holders" here is
-  // picking the list they already know by that name.
   Campaigns: 'Kampagnen',
   Marketing: 'Marketing',
   'What you say to your people, and who hears it.':
@@ -923,7 +843,6 @@ export const GERMAN: Record<string, string> = {
   'Some of these did not go out.': 'Einiges davon ist nicht rausgegangen.',
   Draft: 'Entwurf',
   'Going out': 'Geht raus',
-  // the questions a studio may ask of its own roll
   'A question about your own people. Nothing to import.':
     'Eine Frage über deine eigenen Leute. Nichts zu importieren.',
   'Everyone current': 'Alle Aktiven',
@@ -931,16 +850,13 @@ export const GERMAN: Record<string, string> = {
   'Pass holders': 'Blockkarten-Inhaber',
   'Past members': 'Ehemalige',
   'Quiet for how many days': 'Seit wie vielen Tagen inaktiv',
-  // the honest partition
   '{n} will be written to': '{n} werden angeschrieben',
   '{n} in this list': '{n} in dieser Liste',
   '{n} sent today': '{n} heute verschickt',
   'Who gets it': 'Wer es bekommt',
   'Everybody ticked. Untick anyone you would rather leave out.':
     'Alle sind angehakt. Nimm den Haken bei allen weg, die du lieber auslässt.',
-  // what a studio writes
   'Send it': 'Abschicken',
-  // the compose page and the sheet that says who gets it
   'Who it goes to': 'Wer es bekommt',
   'Pick who it goes to, say your piece, send.':
     'Wähle, wer es bekommt, sag was du zu sagen hast, schick es ab.',

@@ -31,8 +31,6 @@ export const staffChromeLayout: LayoutNode = {
             key: 'action',
             do: {
               component: 'DrawerLink',
-              // Lights by the AREA, opens its FIRST SCREEN — see `Tab` for why
-              // those are two props rather than one.
               props: { label: '$.area.label', value: '$.area.areaId', payload: '$.area.action', current: '$.currentArea', icon: '$.area.icon' },
               ref: 'nav',
             },
@@ -42,7 +40,6 @@ export const staffChromeLayout: LayoutNode = {
       },
     },
 
-    // ── the thumb bar ────────────────────────────────────────
     {
       component: 'Bar',
       props: { position: 'bottom' },
@@ -57,12 +54,6 @@ export const staffChromeLayout: LayoutNode = {
       ],
     },
 
-    // ── the bell ─────────────────────────────────────────────
-    //
-    // Only exists while something is unread, which is also what keeps it off
-    // rungs that cannot read the table (their count call is refused and the
-    // number stays 0). Pushed live: the shell hears 'notified' over its own
-    // socket and this strip appears with no navigation and no reload.
     {
       if: '$.unseen',
       then: {
@@ -91,12 +82,9 @@ export const staffChromeLayout: LayoutNode = {
       else: '',
     },
 
-    // ── the second level, in the content ─────────────────────
     {
       if: '$.tabCount',
       then: {
-        // The hairline runs full width and the tabs sit on the measure, so the
-        // rule reads as the edge of the chrome rather than a box around them.
         component: 'Box',
         props: { border: 'bottom' },
         children: {

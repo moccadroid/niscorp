@@ -1,5 +1,3 @@
-// The timetable: a recurring slot, the sessions it generates, and the
-// denormalised facts vex cannot join its way to.
 export const CLASSES_DDL = /* sql */ `
   CREATE TABLE class_templates (
     id             TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,

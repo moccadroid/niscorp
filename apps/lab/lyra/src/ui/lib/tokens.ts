@@ -30,12 +30,9 @@ export const BG: Record<string, string> = {
   goodSoft: 'var(--good-soft)',
 };
 
-// No display serif anywhere — the whole scale is one sans stack, and the
-// hierarchy comes from size and weight rather than from a second face.
 export const SIZE: Record<string, string> = { xs: '11px', sm: '12.5px', md: '14px', lg: '17px', xl: '22px', xxl: '30px', display: '44px' };
 export const WEIGHT: Record<string, number> = { normal: 400, medium: 500, semi: 600, bold: 700 };
 
-// ── STATUS. Five words, each one a claim about a state.
 export const TONE: Record<string, { bg: string; fg: string }> = {
   neutral: { bg: 'var(--surface-sunk)', fg: 'var(--ink-soft)' },
   accent: { bg: 'var(--accent)', fg: 'var(--accent-ink)' },
@@ -45,7 +42,6 @@ export const TONE: Record<string, { bg: string; fg: string }> = {
   good: { bg: 'var(--good-soft)', fg: 'var(--good)' },
 };
 
-// ── IDENTITY. Ten colours, each one a claim about nothing.
 export const HUES = ['rose', 'amber', 'lime', 'emerald', 'teal', 'sky', 'indigo', 'violet', 'fuchsia', 'stone'] as const;
 export type HueName = (typeof HUES)[number];
 
@@ -75,8 +71,6 @@ export const RADIUS: Record<string, string> = { none: '0', sm: 'var(--radius-sm)
 
 export const LINE = '1px solid var(--line)';
 
-// Shared prop fragments, so twelve components do not each re-declare `border`
-// slightly differently.
 export const border = z.union([z.boolean(), z.enum(['top', 'bottom', 'left', 'right'])]).optional();
 export const colorToken = z.enum(['ink', 'soft', 'mute', 'faint', 'accent', 'calm', 'warm', 'alert', 'good', 'invert']).optional();
 export const bgToken = z.enum(['none', 'ground', 'surface', 'sunk', 'ink', 'accent', 'accentSoft', 'calmSoft', 'warmSoft', 'alertSoft', 'goodSoft']).optional();

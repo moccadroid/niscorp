@@ -9,9 +9,6 @@ import { cx } from '../lib/cx';
 import { displayText } from '../lib/display';
 import { Avatar } from './display';
 
-// The arrangement primitives. Domain-blind by construction: none of them can be
-// given a colour that is not a token, and none of them knows what it contains.
-
 const spacing = z.number().optional();
 
 const BoxProps = z
@@ -125,24 +122,13 @@ const SpacerProps = z.object({ size: z.number().optional() }).strict();
 export const Spacer: NovaComponent<z.infer<typeof SpacerProps>> = ({ size }: z.infer<typeof SpacerProps>) => <div style={size === undefined ? { flex: 1 } : { height: size }} />;
 Spacer.meta = { description: 'Empty space. Bare, it pushes siblings apart in a flex parent.', propsSchema: SpacerProps };
 
-// ── the shell's own furniture ────────────────────────────────
-
 const BarProps = z.object({ position: z.enum(['top', 'bottom']).optional() }).strict();
 type BarP = Partial<z.infer<typeof BarProps>> & { children?: React.ReactNode };
 
 /**
- * A bar that stays put while the surface scrolls under it.
- *
- * THE BOTTOM ONE IS PORTALLED, for the reason the scrim below already learned
- * the hard way: `position: fixed` resolves against the nearest ancestor with a
- * transform, and `.ly-slot` keeps an identity `matrix(1,0,0,1,0,0)` after its
- * entry animation (fill-mode `both`, a `from` keyframe that translates). So a
- * bar pinned to `bottom: 0` inside the chrome slot pinned itself to the bottom
- * of the CHROME — fifty-nine points tall, at the very top of the screen — and
- * the screenshot showed a thumb bar under the status bar.
- *
- * The rail does this, the sheet does this, the row menu does this. Anything
- * that means "relative to the window" has to leave the tree that is not.
+ * The bottom bar is portalled: `position: fixed` resolves against the nearest
+ * ancestor with a transform, and `.ly-slot` keeps an identity matrix after its
+ * entry animation (fill-mode `both`).
  */
 export const Bar: NovaComponent<Partial<z.infer<typeof BarProps>>> = ({ position = 'top', children }: BarP) => {
   const bar = <div className={cx('ly-bar', `ly-bar--${position}`)}>{children}</div>;
@@ -159,16 +145,8 @@ const SheetProps = z
   .strict();
 type SheetP = Partial<z.infer<typeof SheetProps>> & { children?: React.ReactNode; novaRef?: string };
 
-/**
- * A panel over the surface: a bottom sheet on a phone, a side panel on a desk.
- *
- * A form is not a place you go, it is something you do to what is already on
- * screen — so it belongs over the screen rather than instead of it. Closed, it
- * renders nothing at all, which is what makes an empty canvas free.
- */
 export const Sheet: NovaComponent<Partial<z.infer<typeof SheetProps>>> = ({ open, title, depth, children, novaRef }: SheetP) => {
   const dispatch = useNovaDispatch();
-  // Two or more on the stack: this returns you to the one underneath.
   const back = (depth ?? 1) > 1;
   if (open === false) return null;
   const close = (): void => {
@@ -202,17 +180,10 @@ Sheet.meta = { description: 'A panel over the surface — a bottom sheet on a ph
 
 const WIDE = '(min-width: 860px)';
 
-// THE WINDOW'S WIDTH, AS A STORE — with an answer for a tree that is being
-// drawn where there is no window, and for the first pass over elements a server
-// already drew.
-//
-// This used to be `useState(() => window.matchMedia(…).matches)`, guarded by
-// `typeof window`. The guard made the server answer `false` and a wide browser
-// answer `true` FOR THE SAME FIRST RENDER, which is the one thing adopting
-// server-drawn elements cannot survive: React finds a rail where the page has
-// none and throws the page's elements away. `useSyncExternalStore` is told what
-// the server said, uses it for that first pass, and moves to the window's own
-// answer straight after — so a page drawn narrow becomes wide in place.
+// A store rather than `useState(() => window.matchMedia(…).matches)`: that
+// answers `false` on a server and `true` in a wide browser for the same first
+// render, and React throws the server-drawn elements away. `useSyncExternalStore`
+// uses the server's answer for that first pass, then the window's own.
 const watchWide = (changed: () => void): (() => void) => {
   const mq = window.matchMedia(WIDE);
   mq.addEventListener('change', changed);
@@ -225,8 +196,8 @@ const useWide = (): boolean =>
     () => false,
   );
 
-// Whether this tree is past its first pass over server-drawn elements. Nothing
-// to subscribe to: it is false on a server and during adoption, true after.
+// False on a server and during the first pass over server-drawn elements, true
+// after.
 const nothingToWatch = (): (() => void) => () => undefined;
 const useAdopted = (): boolean =>
   React.useSyncExternalStore(
@@ -235,10 +206,6 @@ const useAdopted = (): boolean =>
     () => false,
   );
 
-// Anything that means "relative to the window" leaves the tree that is not (see
-// Bar, below) — but only once there is a window to leave it FOR. A server has no
-// `document.body`, and the first pass over its elements must find them where it
-// put them: in place. The portal happens on the render after.
 const Overlay: React.FC<{ children: React.ReactNode }> = ({ children }) => (useAdopted() ? createPortal(children, document.body) : children);
 
 const overlay = (node: React.ReactNode): React.ReactNode => <Overlay>{node}</Overlay>;
@@ -258,14 +225,6 @@ const PANEL_LEFT: React.CSSProperties = { position: 'relative', height: '100%', 
 const DrawerProps = z.object({ open: z.boolean().optional(), title: z.string().optional() }).strict();
 type DrawerP = Partial<z.infer<typeof DrawerProps>> & { children?: React.ReactNode; novaRef?: string };
 
-/**
- * The navigation, in one place.
- *
- * Lyra had a tab bar at the bottom AND a strip of nine links at the top, which
- * is the same "collection of things" a flat nav was — split across two edges of
- * the screen instead of one. A phone gets ONE navigation surface. This is it:
- * closed it is a button, open it is every destination, grouped.
- */
 export const Drawer: NovaComponent<Partial<z.infer<typeof DrawerProps>>> = ({ open, children, novaRef }: DrawerP) => {
   const dispatch = useNovaDispatch();
   const wide = useWide();
@@ -316,15 +275,11 @@ const DrawerLinkProps = z
     current: z.string().optional(),
     icon: z.string().optional(),
     payload: z.string().optional(),
-    // A screen INSIDE the open area — indented, quieter, and marked with its
-    // own current-state so an area and a screen can both be lit at once.
     sub: z.boolean().optional(),
   })
   .strict();
 export const DrawerLink: NovaComponent<Partial<z.infer<typeof DrawerLinkProps>>> = ({ label, value, current, icon, payload, sub, novaRef }: Partial<z.infer<typeof DrawerLinkProps>> & { novaRef?: string }) => {
   const dispatch = useNovaDispatch();
-  // Compared HERE, because a layout cannot compare — and a menu that does not
-  // say where you already are makes you read all twelve entries to find out.
   const here = value !== undefined && value !== '' && value === current;
   return (
     <button
@@ -340,17 +295,8 @@ export const DrawerLink: NovaComponent<Partial<z.infer<typeof DrawerLinkProps>>>
 };
 DrawerLink.meta = { description: 'One destination in the drawer. Full width, thumb-sized.', propsSchema: DrawerLinkProps };
 
-// ── the menu's own furniture ─────────────────────────────────
-
 const DrawerHeaderProps = z.object({ name: z.string(), role: z.string().optional(), studio: z.string().optional() }).strict();
 
-/**
- * Who you are and where you are, at the top of the menu.
- *
- * A drawer without one makes identity homeless: the previous version had the
- * person's name only in the top bar and "Sign out" floating at the end of a
- * list of destinations, as though signing out were a place to go.
- */
 export const DrawerHeader: NovaComponent<Partial<z.infer<typeof DrawerHeaderProps>>> = ({ name, role, studio }: Partial<z.infer<typeof DrawerHeaderProps>>) => (
   <div className="ly-drawer__header">
     <Avatar name={name ?? ''} size={40} />

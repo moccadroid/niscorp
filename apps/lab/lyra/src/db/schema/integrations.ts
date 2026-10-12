@@ -1,4 +1,3 @@
-// Which integrations a studio has bought.
 export const INTEGRATIONS_DDL = /* sql */ `
   CREATE TABLE studio_integrations (
     studio_id       TEXT NOT NULL REFERENCES studios(id),

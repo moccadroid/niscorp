@@ -1,28 +1,11 @@
-// Code census — how much of this application is DATA and how much is CODE.
-//
-// The nisc thesis (AGENTS.md) is that everything the app does is data with a
-// schema, and imperative TypeScript exists only at five edges: a renderer
-// primitive, an endpoint, setup, authored data, or a check. This walks the real
-// TypeScript AST — not a regex — classifies every top-level declaration, and
-// reports what fell outside those five.
-//
-// Run: pnpm --filter lyra exec tsx src/dev/code-census.ts
-
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
 
-// ─── what a declaration is ───────────────────────────────────
-
-/** DATA is an authored artifact: an object or array literal, a Zod schema, a
- *  string table. CODE is a function body. The rest is scaffolding. */
 type Kind = 'data' | 'code' | 'type' | 'import' | 'reexport';
 
-/** A comment line, in any of the three syntaxes this codebase uses. */
 const COMMENT = /^\s*(\/\/|\/\*|\*|--)/;
 
-/** The five edges AGENTS.md licenses imperative TypeScript to live at, plus
- *  `unplaced` for code that is none of them — the discipline break. */
 type Edge = 'primitive' | 'endpoint' | 'setup' | 'check' | 'authored-data' | 'unplaced';
 
 type Decl = {
@@ -31,11 +14,7 @@ type Decl = {
   kind: Kind;
   edge: Edge;
   lines: number;
-  /** Arrow functions nested inside a data literal: authored data that computes. */
   embedded: number;
-  /** The declared type annotation, when there is one — `ActionDefinition`,
-   *  `LayoutNode`, `CacheEntry`. What the author asserted this IS, which beats
-   *  every heuristic over filenames or literal shape. */
   declared: string;
 };
 
@@ -45,34 +24,20 @@ type FileReport = {
   blank: number;
   comment: number;
   decls: Decl[];
-  /** One entry per line, so every line lands in exactly one bucket. A comment
-   *  inside a data literal is a comment, not a data line — counting a
-   *  declaration's whole span would bill it twice. */
   tally: Record<string, number>;
   edge: Edge;
 };
 
-// ─── which edge a file sits at ───────────────────────────────
-//
-// Directory decides, because the layout IS the architecture here. A file that
-// cannot be placed is the finding, so the fallback is `unplaced` rather than a
-// guess.
 const edgeOf = (file: string): Edge => {
   if (file.startsWith('dev/')) return 'check';
   if (file.startsWith('ui/')) return 'primitive';
   if (file.startsWith('server/')) return 'endpoint';
   if (file.startsWith('db/')) return 'setup';
   if (file === 'app/app.ts' || file === 'app/action-catalog.ts' || file === 'main.tsx') return 'setup';
-  // Everything else under app/ is an artifact file. A FUNCTION declared in one
-  // is at none of the five edges by definition — which is the whole point of
-  // asking, so it must not fall through to something comfortable.
   return 'unplaced';
 };
 
-// Setup files inside an edge that is otherwise something else.
 const SETUP_FILES = new Set(['ui/registry.ts', 'server/boot.ts', 'server/runtime.ts', 'server/serve.ts', 'db/sql.ts']);
-
-// ─── reading a declaration ───────────────────────────────────
 
 const unwrap = (node: ts.Expression): ts.Expression => {
   if (ts.isAsExpression(node) || ts.isSatisfiesExpression(node)) return unwrap(node.expression);
@@ -81,11 +46,6 @@ const unwrap = (node: ts.Expression): ts.Expression => {
   return node;
 };
 
-/** A DATA FACTORY is a local arrow function whose whole body is an object or
- *  array literal — `const page = (children) => ({ component: 'Stack', … })`.
- *  Calling one produces an artifact, so the result is authored data and the
- *  factory is not imperative code. Without this every layout built through a
- *  wrapper reads as a function call and the census lies. */
 const containsFunction = (node: ts.Node): boolean => {
   let found = false;
   const visit = (n: ts.Node): void => {
@@ -105,9 +65,7 @@ const isDataFactory = (init: ts.Expression): boolean => {
   if (!ts.isArrowFunction(node)) return false;
   const body = ts.isParenthesizedExpression(node.body) ? unwrap(node.body.expression) : node.body;
   if (!ts.isObjectLiteralExpression(body) && !ts.isArrayLiteralExpression(body)) return false;
-  // `functions(session) => ({ 'members.create': async () => … })` also returns a
-  // literal, but it is an endpoint REGISTRY, not an artifact. A literal holding
-  // functions is code wearing a literal's shape.
+  // A factory whose literal holds functions is an endpoint registry, not an artifact.
   return !containsFunction(body);
 };
 
@@ -122,8 +80,6 @@ const factoriesIn = (source: ts.SourceFile): Set<string> => {
   return names;
 };
 
-/** A call that produces authored data rather than doing work: `z.object(...)`,
- *  `defineApp({...})`, or a local data factory. Everything else computes. */
 const isDataCall = (node: ts.CallExpression, factories: Set<string>): boolean => {
   const text = node.expression.getText();
   return text.startsWith('z.') || text === 'defineApp' || text.endsWith('.describe') || factories.has(text);
@@ -140,8 +96,6 @@ const kindOfInitializer = (init: ts.Expression, factories: Set<string>): Kind =>
   return 'data';
 };
 
-/** Arrow functions living inside an authored literal — `context: (row) => …` on
- *  a reflex moment, a `cell` renderer. Authored data that computes. */
 const embeddedFnLines = (node: ts.Node, source: ts.SourceFile): number => {
   let lines = 0;
   const visit = (n: ts.Node): void => {
@@ -173,8 +127,6 @@ const nameOf = (node: ts.Node): string => {
   }
   return ts.SyntaxKind[node.kind];
 };
-
-// ─── the walk ────────────────────────────────────────────────
 
 const census = (path: string, rel: string): FileReport => {
   const text = readFileSync(path, 'utf8');
@@ -217,13 +169,9 @@ const census = (path: string, rel: string): FileReport => {
       decls.push({ file: rel, name, kind, edge: kind === 'data' ? 'authored-data' : fileEdge, lines: span, embedded, declared });
       continue;
     }
-    // A bare statement at module scope: a check's script body, a boot call.
     decls.push({ file: rel, name, kind: 'code', edge: fileEdge, lines: span, embedded: 0, declared: '' });
   }
 
-  // Line-exact attribution: walk the file once, and give each line to the
-  // innermost thing that owns it. Blank and comment win over everything, so a
-  // 40-line literal with 8 comment lines counts as 32 data lines.
   const owner: string[] = new Array<string>(lines.length).fill('other');
   for (const decl of decls) {
     const statement = source.statements[decls.indexOf(decl)];
@@ -241,8 +189,6 @@ const census = (path: string, rel: string): FileReport => {
   return { file: rel, total: lines.length, blank, comment, decls, tally, edge: fileEdge };
 };
 
-// ─── discipline checks (rule 16 + the thesis) ────────────────
-
 type Break = { file: string; line: number; what: string; detail: string; inChecks: boolean };
 
 const RULES: { what: string; test: RegExp; skip?: RegExp }[] = [
@@ -256,8 +202,7 @@ const RULES: { what: string; test: RegExp; skip?: RegExp }[] = [
 ];
 
 const disciplineBreaks = (path: string, rel: string): Break[] => {
-  // The census names every banned construct in its own rule table, so scanning
-  // itself reports its own regexes as violations.
+  // Its own rule table names every banned construct, so scanning itself reports its regexes.
   if (rel === 'dev/code-census.ts') return [];
   const lines = readFileSync(path, 'utf8').split('\n');
   const found: Break[] = [];
@@ -271,8 +216,6 @@ const disciplineBreaks = (path: string, rel: string): Break[] => {
   return found;
 };
 
-// A component that reaches for the app is a feature component in disguise
-// (rule 2). A layout or action that formats is rule 9.
 const architectureBreaks = (path: string, rel: string): Break[] => {
   const text = readFileSync(path, 'utf8');
   const found: Break[] = [];
@@ -292,7 +235,6 @@ const architectureBreaks = (path: string, rel: string): Break[] => {
       }
     }
   }
-  // A domain noun in a component name is a feature component in disguise (rule 2).
   if (rel.startsWith('ui/components/')) {
     const DOMAIN = /\b(Member|Class|Booking|Plan|Staff|Course|Studio|Invoice|Lead|Enrol)[A-Z]\w*/;
     for (const [i, line] of text.split('\n').entries()) {
@@ -305,8 +247,6 @@ const architectureBreaks = (path: string, rel: string): Break[] => {
   }
   return found;
 };
-
-// ─── collect ─────────────────────────────────────────────────
 
 const walk = (dir: string): string[] =>
   readdirSync(dir).flatMap((entry) => {
@@ -322,8 +262,6 @@ const breaks = files.flatMap((f) => {
   const rel = relative(ROOT, f).replace(/\\/g, '/');
   return [...disciplineBreaks(f, rel), ...architectureBreaks(f, rel)];
 });
-
-// ─── report ──────────────────────────────────────────────────
 
 const bold = (s: string): string => `\x1b[1m${s}\x1b[0m`;
 const dim = (s: string): string => `\x1b[2m${s}\x1b[0m`;
@@ -346,7 +284,6 @@ const commentLines = tallied('comment');
 const blankLines = tallied('blank');
 const otherLines = tallied('other');
 
-// Every line lands in exactly one bucket, or the report is lying.
 const counted = dataLines + codeLines + typeLines + importLines + commentLines + blankLines + otherLines;
 if (counted !== totalLines) {
   console.error(`census: attributed ${counted} lines of ${totalLines} — the tally is wrong, do not trust this run.`);
@@ -374,11 +311,6 @@ console.log(row('authored data', dataLines, substantive));
 console.log(row('imperative code', codeLines, substantive));
 console.log(dim(`\n  ${embedded} of the data lines are arrow functions inside literals`));
 
-// ── what the data actually IS ──
-//
-// Not all authored data is a nisc artifact. SQL DDL and demo fixtures are data
-// in the plain sense and would flatter the ratio if left folded in, so they are
-// counted apart from the nova/vex/charter surface the thesis is about.
 console.log(`\n${bold('  What the data is')}`);
 const dataIn = (test: (f: string) => boolean): number =>
   sum(reports.filter((r) => test(r.file)).map((r) => r.tally['data'] ?? 0));
@@ -401,13 +333,6 @@ const niscArtifacts = sum(
 const nonFixture = niscArtifacts + codeLines;
 console.log(`\n${dim('  Excluding SQL and fixtures, the app itself is')} ${bold(pct(niscArtifacts, nonFixture))} ${dim('data.')}`);
 
-// THE MEASURE THAT ACTUALLY TESTS THE THESIS.
-//
-// A ratio over the whole tree mostly measures how big the component kit is — a
-// rich kit of domain-blind primitives is the thesis working, and it drags the
-// number down. What the thesis claims is narrower: the APPLICATION layer, the
-// part that says what this product does, is data and not code. Everything under
-// app/ except the manifest is exactly that layer.
 const appLayer = (bucket: string): number =>
   sum(reports.filter((r) => r.file.startsWith('app/') && !SETUP_FILES.has(r.file) && r.file !== 'app/app.ts' && r.file !== 'app/action-catalog.ts').map((r) => r.tally[bucket] ?? 0));
 const layerData = appLayer('data');
@@ -416,7 +341,6 @@ console.log(`\n${bold('  The application layer')} ${dim('(app/ — what this pro
 console.log(row('authored data', layerData, layerData + layerCode));
 console.log(row('imperative code', layerCode, layerData + layerCode));
 
-// ── where the code lives ──
 console.log(`\n${bold('  Where the imperative code lives')}`);
 const EDGES: Edge[] = ['primitive', 'endpoint', 'setup', 'check', 'unplaced'];
 const LABEL: Record<Edge, string> = {
@@ -434,10 +358,6 @@ for (const edge of EDGES) {
   console.log(edge === 'unplaced' ? amber(row(label, n, codeLines)) : row(label, n, codeLines));
 }
 
-// Code in an artifact file is outside the five edges by definition. That is not
-// automatically a break — the thesis names three specific ones (a React feature
-// component, a fetch-and-massage helper, an inline formatter) and a selector
-// over an authored table is none of them. Listed so a human judges it.
 const unplacedFiles = new Set(reports.filter((r) => r.edge === 'unplaced').map((r) => r.file));
 const unplaced = allDecls.filter((d) => d.kind === 'code' && unplacedFiles.has(d.file));
 if (unplaced.length > 0) {
@@ -447,7 +367,6 @@ if (unplaced.length > 0) {
   }
 }
 
-// ── the artifact surface ──
 console.log(`\n${bold('  The authored surface')}`);
 const countDecl = (test: (d: Decl) => boolean): number => allDecls.filter(test).length;
 const artifacts: [string, number][] = [
@@ -459,7 +378,6 @@ const artifacts: [string, number][] = [
 ];
 for (const [label, n] of artifacts) console.log(`  ${label.padEnd(26)} ${String(n).padStart(6)}`);
 
-// ── discipline ──
 console.log(`\n${bold('  Discipline (rule 16 + the thesis)')}`);
 if (breaks.length === 0) {
   console.log(green('  ✓ no breaks'));
@@ -476,14 +394,6 @@ if (breaks.length === 0) {
   }
 }
 
-// ── grade ──
-//
-// The scale is this file's, not the specification's — AGENTS.md states the
-// thesis and names the five edges but sets no ratio. What it can measure without
-// judgement is the two hard rules: code outside the five edges, and rule 16.
-// Graded on the APPLICATION layer, not the whole tree: a rich kit of
-// domain-blind primitives is the thesis succeeding, and grading the tree-wide
-// ratio would mark it down for that.
 const dataShare = layerData / (layerData + layerCode);
 const unplacedLines = sum(reports.filter((r) => r.edge === 'unplaced').map((r) => r.tally['code'] ?? 0));
 const appBreaks = breaks.filter((b) => !b.inChecks).length;
@@ -500,9 +410,6 @@ console.log(`  ${unplacedLines} lines of code sit in artifact files, unnamed by 
 console.log(`  ${breaks.length} rule-16 break(s) — ${appBreaks} of them in the app, the rest in checks.`);
 console.log(`\n  ${bold(`Grade: ${grade}`)} ${dim('(this file\'s scale; AGENTS.md sets no ratio)')}\n`);
 
-// ── what the app weighs once it is data on a wire ────────────
-//
-// Booted behind a flag: it needs the manifest, and the AST pass above does not.
 if (process.argv.includes('--wire')) {
   const { CATALOG_DEFINITIONS } = await import('@lyra/app/action-catalog');
   const { ENTRIES, MUTATION_ENTRIES } = await import('@lyra/app/vex');
@@ -516,10 +423,8 @@ if (process.argv.includes('--wire')) {
   const asJson = (v: unknown): string =>
     JSON.stringify(v, (_k, val) => (typeof val === 'function' ? '<fn>' : val)) ?? '';
 
-  // No tokenizer is installed, so this is bounded rather than measured.
-  // Minified JSON runs ~36% punctuation, which is why the prose heuristic of
-  // 4 chars/token reads low; BPE merges common runs (`","`, `":{"`) but not
-  // arbitrary ones. 2.4–2.9 chars/token brackets it for this shape of payload.
+  // A bound, not a measurement: no tokenizer is installed. Minified JSON is heavy
+  // in punctuation, so 2.4–2.9 chars/token brackets it where prose runs 4.
   const tokens = (s: string): [number, number] => [Math.round(s.length / 2.9), Math.round(s.length / 2.4)];
 
   const parts: [string, unknown][] = [
@@ -548,7 +453,6 @@ if (process.argv.includes('--wire')) {
   console.log(dim(`\n    ${(chars / 1024).toFixed(0)} KB minified\n`));
 }
 
-// ── every file holding imperative code, so the total is auditable ──
 if (process.argv.includes('--code')) {
   console.log(bold('  Every file with imperative code'));
   const withCode = reports.filter((r) => (r.tally['code'] ?? 0) > 0);
@@ -567,7 +471,6 @@ if (process.argv.includes('--code')) {
   console.log(dim(`\n  ${running} lines across ${withCode.length} files\n`));
 }
 
-// ── per directory, so every number above is auditable ──
 if (process.argv.includes('--by-dir')) {
   console.log(bold('  By directory'));
   const dirOf = (f: string): string => (f.includes('/') ? f.slice(0, f.lastIndexOf('/')) : '.');

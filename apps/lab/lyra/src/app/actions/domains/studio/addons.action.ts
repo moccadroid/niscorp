@@ -7,13 +7,6 @@ const installedPrism = { fingerprint: addonsInstalled.fingerprint, context: {} }
 const installPrism = { fingerprint: addonInstall.fingerprint, context: { integrationId: { $ref: '$.pendingId' } } };
 const uninstallPrism = { fingerprint: addonUninstall.fingerprint, context: { integrationId: { $ref: '$.pendingId' } } };
 
-// The store's tiles: `offered` (every approved integration) joined with
-// `installed` (this studio's rows) — the stitch that used to be a server
-// function, now a derivation over data the screen already holds. Both halves
-// of `has_settings` on purpose: the integration shipped a settings screen AND this
-// studio has it on — a store must never open functionality a studio has not
-// bought. The "Adds …" sentence rides as a fact rather than a clipped table
-// cell, and a bundle that shipped no meta still gets a tile named by its id.
 const stitchRows = {
   $prism: {
     $map: {
@@ -66,8 +59,6 @@ const layout: LayoutNode = {
   children: [
     { component: 'Hero', props: { title: 'Add-ons', lead: 'What this studio can turn on. Screens land where they belong — a store, not a menu.' } },
     { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
-    // Tiles, because prose in a spreadsheet cell clips at the ellipsis whatever
-    // width you give it.
     {
       component: 'Cards',
       props: {
@@ -101,14 +92,8 @@ export const addonsAction: ActionDefinition = {
   data: { rows: [], offered: [], installed: [], loading: true, error: '', pendingId: '' },
   layout,
   endpoints: {
-    // A failed read says so and stops pretending to load — otherwise it is a
-    // refusal underneath and grey bars on top, forever.
     offered: { url: '/api/studio/vex', method: 'POST', request: listPrism, target: 'offered', errorTarget: 'error' },
     installed: { url: '/api/studio/vex', method: 'POST', request: installedPrism, target: 'installed', errorTarget: 'error' },
-    // Install is idempotent from every starting state — fresh, removed,
-    // already on — the DB arbitrates via ON CONFLICT (see addon.entries.ts).
-    // The server-side world refresh rides `onMutation` in app.ts: it fires on
-    // the WRITE landing, whoever caused it, not on this screen remembering to.
     enable: { url: '/api/studio/vex', method: 'POST', request: installPrism, errorTarget: 'error' },
     disable: { url: '/api/studio/vex', method: 'POST', request: uninstallPrism, errorTarget: 'error' },
   },
@@ -129,17 +114,6 @@ export const addonsAction: ActionDefinition = {
       ],
     },
     {
-      // REMOVING ONE IS NOT THE OPPOSITE OF ADDING ONE, and it used to be one
-      // click either way. Installing shows some screens; removing takes them
-      // away — and for a payments add-on the money does NOT stop with them.
-      // Members keep being charged by a provider the studio can no longer see,
-      // which is the worst possible shape for a mistake.
-      //
-      // Leaving the subscriptions running is the right behaviour: cancelling
-      // everybody's payments because somebody tapped Remove would be far worse,
-      // and a studio that re-installs finds its ledger where it left it. So the
-      // fix is not a bigger machine, it is telling the truth before the tap
-      // lands.
       event: 'ui:click',
       ref: 'uninstall',
       do: [
@@ -167,8 +141,6 @@ export const addonsAction: ActionDefinition = {
       ref: 'openSettings',
       do: [{ push: { action: '@event.payload.settings_action', canvas: 'sheet', with: ['sheet'] } }],
     },
-    // The world refresh happened server-side when the write landed; these
-    // re-reads are only the store repainting its own list.
     {
       message: 'addons-changed',
       do: [{ call: 'offered' }, { call: 'installed', onSuccess: [{ set: 'rows', value: stitchRows }] }],

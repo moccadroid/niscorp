@@ -5,23 +5,6 @@ import { STANDING, standingLabel, standingTone, hasSubscription, hasLivePass, on
 
 const row = (name: string) => ({ $get: { from: { $var: 'm' }, path: [name] } });
 
-// ═══════════════════════════════════════════════════════════════
-// THE ROLL, LENSED.
-//
-// People is everyone the studio deals with — members, prospects, pass
-// holders, course attendees, staff, contacts, the lapsed — one list over
-// `studio_people`, worn through lenses. A lens is a FILTER over the
-// relationships a person holds, never a stored category; the standing word
-// beside each name is the same derivation every other screen uses.
-//
-// THE LENS IS A VALUE, not a fingerprint. A computed standing still cannot be
-// filtered on (no dialect allows an alias in WHERE), so each lens still states
-// its own relationship conditions — but they live as guarded arms of one OR
-// rather than as eighteen separate entries, and the caller names which arm it
-// means. See `LENS` below for why that stays a flat scan.
-// ═══════════════════════════════════════════════════════════════
-
-/** Everyone with LIVE access or a live trial — the working roll. */
 const CURRENT: Filter = {
   or: [
     { and: [{ isNotNull: 'studio_people.trial_ends_on' }, { gte: ['studio_people.trial_ends_on', { $scope: 'today' }] }] },
@@ -31,10 +14,8 @@ const CURRENT: Filter = {
   ],
 };
 
-/** A recurring relationship, live or on hold. */
 const MEMBERS: Filter = hasSubscription('studio_people', ['active', 'paused']);
 
-/** Known, holding nothing — the people to talk to. */
 const PROSPECTS: Filter = {
   and: [
     { not: isStaff('studio_people') },
@@ -45,35 +26,20 @@ const PROSPECTS: Filter = {
   ],
 };
 
-/** Credits on the books. */
 const PASSES: Filter = hasLivePass('studio_people');
 
-/** A seat in a running or upcoming block. */
 const ON_A_COURSE: Filter = onACourse('studio_people');
 
-/** Works or teaches here. */
 const STAFF_LENS: Filter = isStaff('studio_people');
 
-/** Dealt with, not trained: the supplier, the physio, the guest coach. */
 const CONTACTS: Filter = isContact('studio_people');
 
-/** Held a subscription once, holds nothing live now. */
 const PAST: Filter = {
   and: [holdsAnySubscription('studio_people'), { not: hasSubscription('studio_people', ['active', 'paused']) }],
 };
 
 const SEARCH: Filter = { or: [{ ilike: ['people.name', { $context: 'q' }] }, { ilike: ['people.email', { $context: 'q' }] }] };
 
-// ── WHOSE CHILDREN THESE ARE ─────────────────────────────────
-//
-// The desk's half of the family, read for whichever person's record is open.
-// Tenant-scoped like everything else on this rung — a guardianship is a
-// relationship AT a studio, so the desk sees its own and no other's.
-//
-// Named by the GUARDIAN, because that is the direction the record is read
-// from: "who does this person look after". The reverse question ("who looks
-// after this child") is the same table read the other way and has no screen
-// yet — the desk reaches a child through their guardian's record.
 export const familyForPerson: CacheEntry = {
   fingerprint: 'people/family',
   intent: 'The children a person may act for, at this studio',
@@ -108,59 +74,11 @@ export const familyForPerson: CacheEntry = {
   },
 };
 
-/** How many people a page of the roll holds. */
 export const ROLL_PAGE = 50;
 
-// ── PAGING BY THE LAST ROW, NOT BY A ROW NUMBER ──────────────
-//
-// The roll answered fifty people and there was no way to reach the fifty-
-// first. A studio is meant to hold two thousand.
-//
-// This SEEKS rather than offsets: "the next page" is everyone sorted after
-// the last row on screen, which the caller already has. That is not a
-// workaround for vex having no OFFSET — it is the better technique for a
-// list somebody is adding to while reading it. An offset counts rows from
-// the start, so a sign-up landing above your position shifts everything
-// down and page two silently repeats a person page one already showed;
-// a seek is anchored to a value, so it cannot skip or repeat.
-//
-// The tiebreaker is what makes it correct. Sorting by name alone, two people
-// called Anna Berger straddle a page boundary and the second is unreachable
-// forever. So the sort key is the PAIR (name, person_id), and the seek is
-// that pair's ordinary lexicographic comparison, spelled out in the filter
-// grammar rather than needing a row-value operator:
-//
-//   name > after  OR  (name = after AND person_id > afterId)
-//
-// The first page sends NO cursor at all — the condition is simply not in the
-// query. It used to send an empty string and lean on every name sorting above
-// it, which was true for this dataset and not a property of anything.
-//
-// ── AND THE SEEK KNOWS WHICH ORDER IT IS IN ──────────────────
-//
-// A cursor is a position in ONE ordering. Sort the roll by first-seen and a
-// name-based seek is measuring the wrong axis: page two skips and repeats.
-// That is why sorting used to cost the roll its paging — the entry offered one
-// order and one cursor, and the caller could change the first without the
-// second.
-//
-// So the orders are DECLARED, once, and both halves are built from the same
-// list: the entry's default `sort` is the first entry's, and the seek is one
-// guarded arm per order. They cannot disagree, because there is nothing left
-// to keep in step by hand.
-//
-// EACH ORDER CARRIES ITS OWN CURSOR KEY, and which key the caller sends is
-// what says which order they are in. There is no separate discriminator —
-// presence is the statement, which is exactly what an optional condition is for.
-//
-// It has to be per-order rather than one shared `after`, and the reason is
-// types. All four arms compile into ONE statement, so a single shared param is
-// bound once for all of them: a cursor holding a NAME reached the date arms
-// too, Postgres cast `'Zy Order 036'` to a date, and the whole read died with a
-// 500 — even though those arms were guarded false, because a cast happens
-// before a guard can matter. Separate keys mean each comparison binds a value
-// of its own column's type, and the arms a caller is not using bind nothing at
-// all.
+// Each order has its own cursor key; the key sent says which order the caller
+// is in. One shared key would be bound into every arm of the statement, and
+// Postgres casts a name to a date before a false guard can matter.
 export type RollOrder = { id: string; field: string; dir: 'asc' | 'desc'; rowKey: string; cursor: string };
 
 export const ROLL_ORDERS: readonly RollOrder[] = [
@@ -172,13 +90,8 @@ export const ROLL_ORDERS: readonly RollOrder[] = [
 
 const DEFAULT_ORDER = ROLL_ORDERS[0] as RollOrder;
 
-// One order's seek: strictly past the last row on the sorted column, or level
-// with it and past its id. `person_id` breaks every tie in the SAME direction
-// whatever the column does, because it is there to make the order total rather
-// than to express a preference.
-//
-// Gated on its own cursor AND `afterId`: both halves of a position, so half a
-// cursor drops the condition instead of leaving a hole that answers empty.
+// `person_id` breaks ties in the same direction whatever the column's: it is
+// there to make the order total.
 const seekArm = (order: RollOrder): Filter => ({
   optional: {
     key: [order.cursor, 'afterId'],
@@ -198,36 +111,15 @@ const seekArm = (order: RollOrder): Filter => ({
   },
 });
 
-// An `or` of optionals: send no cursor and every arm drops, so the whole
-// condition disappears and this is page one. Send one and the `or` collapses
-// to that arm alone.
+// With no cursor every arm drops and the whole `or` disappears: page one.
 const AFTER: Filter = { or: ROLL_ORDERS.map(seekArm) };
 
-// ── TWO QUESTIONS, NOT NINE CHIPS ────────────────────────────
-//
-// This was one strip of nine, and the nine sat on THREE DIFFERENT AXES flattened
-// into a single row: time (Current, Past, Everyone), relationship (Members,
-// Prospects, Staff, Contacts) and what somebody holds (Passes, On a course).
-//
-// So "Current" and "Passes" were offered as alternatives to each other while
-// being answers to different questions, and the ordinary thing a desk wants to
-// ask — *members who hold a pass* — could not be said at all, because the strip
-// could only ever answer one axis at a time.
-//
-// Now it is two closed vocabularies rather than one flattened list. Both are
-// still a CHOICE FROM A LIST and not a filter anybody writes: the guard is still
-// `{ $context } = literal`, a name that is not on the list matches no arm, and
-// the chips are still built from the same constants as the query so they cannot
-// drift apart.
 export const LENSES: ReadonlyArray<{ lens: string; label: string; condition: Filter | undefined }> = [
   { lens: 'current', label: 'Current', condition: CURRENT },
   { lens: 'past', label: 'Past', condition: PAST },
   { lens: 'everyone', label: 'Everyone', condition: undefined },
 ];
 
-// WHAT THEY HOLD — the second question, asked alongside the first rather than
-// instead of it. `any` is the arm that guards nothing, so not asking is the
-// default and costs no condition.
 export const HOLDINGS: ReadonlyArray<{ holding: string; label: string; condition: Filter | undefined }> = [
   { holding: 'any', label: 'Anything', condition: undefined },
   { holding: 'membership', label: 'A membership', condition: MEMBERS },
@@ -238,22 +130,6 @@ export const HOLDINGS: ReadonlyArray<{ holding: string; label: string; condition
   { holding: 'contact', label: 'A contact tag', condition: CONTACTS },
 ];
 
-// ── NINE LENSES, ONE ENTRY ───────────────────────────────────
-//
-// Each arm guards its own conditions behind the lens NAME, so exactly one arm
-// can be live per call and the OR reduces to that lens's filter. `everyone` is
-// the arm that guards nothing.
-//
-// This is one flat scan, not nine nested ones: the roll's base IS the anchor,
-// and `anchored()` (standing.ts) returns bare local predicates when the base
-// is `studio_people`. Every arm is therefore a comparison against a mirror
-// column on the row already being read — the same columns the standing
-// derivation above uses. Nothing here reaches into another table.
-//
-// The guard is `{ $context } = literal`, which binds the lens once per arm and
-// compares it to a constant. A lens the caller invents matches no arm and
-// returns nothing, so the grammar is still closed: naming a lens is choosing
-// from this list, not writing a filter.
 const lensArm = (lens: string, condition: Filter | undefined): Filter => {
   const guard: Filter = { eq: [{ $context: 'lens' }, lens] };
   return condition === undefined ? guard : { and: [guard, condition] };
@@ -261,9 +137,6 @@ const lensArm = (lens: string, condition: Filter | undefined): Filter => {
 
 const LENS: Filter = { or: LENSES.map((l) => lensArm(l.lens, l.condition)) };
 
-// The same construction on its own key, so the two are ANDed by the entry rather
-// than multiplied into one list of combinations — three lenses and seven
-// holdings is twenty-one questions from ten arms.
 const holdingArm = (holding: string, condition: Filter | undefined): Filter => {
   const guard: Filter = { eq: [{ $context: 'holding' }, holding] };
   return condition === undefined ? guard : { and: [guard, condition] };
@@ -274,9 +147,6 @@ const HOLDING: Filter = { or: HOLDINGS.map((h) => holdingArm(h.holding, h.condit
 export const peopleList: CacheEntry = {
   fingerprint: 'people/list',
   intent: 'The studio roll seen through one lens, searched, a page at a time',
-  // `first_seen_on` travels RAW as well as pretty: it is a sortable column, so
-  // the cursor has to carry its value, and a formatted date cannot be compared
-  // against one. Same reason the timetable carries raw values beside displays.
   shape: [{ person_id: '', person_name: '', email: '', standing: '', status_display: '', status_tone: '', joined_display: '', first_seen_on: '' }],
   dsl: {
     from: ['studio_people', 'people'],
@@ -286,26 +156,17 @@ export const peopleList: CacheEntry = {
       { field: 'people.name', as: 'person_name' },
       'people.email',
     ],
-    // Computed by the engine against the studio's own day — see `standing.ts`.
     compute: STANDING,
-    // THREE QUESTIONS THE CALLER TURNS ON, or leaves off. Send none of them and
-    // this is the whole roll; each key adds a condition rather than filling a
-    // hole in one. No sentinels: "everyone" is not `lens: 'everyone'` plus
-    // `q: '%'` plus `after: ''` — it is an empty context.
     filter: {
       and: [
         { optional: { key: 'lens', then: LENS } },
         { optional: { key: 'holding', then: HOLDING } },
         { optional: { key: 'q', then: SEARCH } },
-        // The seek: one arm per order, each gating on its own cursor. Nothing
-        // wraps it, because the arms gate themselves — see `seekArm`.
         AFTER,
       ],
     },
-    // The default order, from the same declaration the seek arms are built
-    // from — and `person_id` behind it, which is what makes the order total.
-    // A caller's `sortBy` leads and keeps this tiebreaker (vex's
-    // applySortContext), so every order the roll can be in ends the same way.
+    // A caller's `sortBy` leads and keeps the `person_id` tiebreaker (vex's
+    // `applySortContext`), so every order the roll can be in is total.
     sort: [
       { field: DEFAULT_ORDER.field, dir: DEFAULT_ORDER.dir },
       { field: 'studio_people.person_id', dir: 'asc' },
@@ -324,27 +185,20 @@ export const peopleList: CacheEntry = {
         status_display: standingLabel(row('standing')),
         status_tone: standingTone(row('standing')),
         joined_display: dateText(row('first_seen_on')),
-        // The cursor's value when the roll is in first-seen order.
         first_seen_on: row('first_seen_on'),
       },
     },
   },
 };
 
-// The same lens and the same search, counted. Two entries rather than one
-// because a count is an aggregate over the whole match and a page is fifty
-// rows of it — one query cannot be both. The seek is deliberately absent: a
-// total that moved with the cursor would not be a total.
+// No seek here: a total that moved with the cursor would not be a total.
 export const peopleCount: CacheEntry = {
   fingerprint: 'people/count',
   intent: 'How many people match the current lens and search',
-  // The sentence, not just the number: a layout binds values and cannot
-  // concatenate, so formatting on the way out is the only place it happens once.
   shape: { total: 0, total_display: '' },
   dsl: {
     from: ['studio_people', 'people'],
     aggregate: { total: { count: 'studio_people.id' } },
-    // The same two questions the list takes, minus the cursor — see above.
     filter: { and: [{ optional: { key: 'lens', then: LENS } }, { optional: { key: 'holding', then: HOLDING } }, { optional: { key: 'q', then: SEARCH } }] },
   },
   mapping: {
@@ -396,21 +250,12 @@ export const personById: CacheEntry = {
         trial_ends_on: one('trial_ends_on', null),
         trial_display: { $case: { branches: [{ when: one('trial_ends_on', null), then: dateText(one('trial_ends_on', null)) }], else: '' } },
         notes: one('notes'),
-        // Whether this studio may write to them beyond what they booked. On the
-        // person's own record because that is where the desk asks the question.
         marketing_ok: { $get: { from: { $var: 'r' }, path: ['marketing_ok'], fallback: { $const: false } } },
       },
     },
   },
 };
 
-// What a Select needs and nothing else — the choosing shape of the price list.
-//
-// The KIND is the caller's, because it is a value the price list already holds
-// and not a different question. What used to be two entries guaranteed by
-// separate fingerprints that a plan screen could not offer passes; that
-// guarantee now lives where the screen does — each Select names its kind, and
-// the column's own CHECK bounds the word to 'recurring' or 'pass'.
 export const offeringOptions: CacheEntry = {
   fingerprint: 'offerings/options',
   intent: 'The offerings of one kind currently on sale, shaped for choosing one',
@@ -433,10 +278,6 @@ export const offeringOptions: CacheEntry = {
   },
 };
 
-// The member-facing price list — what the CTA dashboard offers a prospect at
-// the plan-choice cliff. Recurring and on sale only, with the terms IN WORDS,
-// because a person about to commit to twelve months is owed the sentence
-// before the confirm sheet asks for their word (D2: immediate + hard confirm).
 export const offeringsOnSale: CacheEntry = {
   fingerprint: 'offerings/on-sale',
   intent: 'The plans a member can start themselves, with the terms spelled out',
@@ -456,10 +297,6 @@ export const offeringsOnSale: CacheEntry = {
         name: row('name'),
         price_display: priceText(row('price_cents'), row('currency')),
         interval_display: perIntervalText(row('interval'), row('interval_count')),
-        // A PERIOD IS NOT A MONTH ANY MORE, so an allowance cannot say it is.
-        // "8 classes a month" on a quarterly plan is a different offer from the
-        // one the studio priced, and the member reading it is the person who
-        // would find out last.
         allowance_display: {
           $case: {
             branches: [
@@ -468,8 +305,8 @@ export const offeringsOnSale: CacheEntry = {
             else: 'Unlimited classes',
           },
         },
-        // Whole patterns per shape, never an optional tail glued on — half a
-        // sentence translates like half a sentence.
+        // A whole pattern per shape, never a tail glued on: half a sentence
+        // cannot be translated.
         term_display: {
           $case: {
             branches: [
@@ -485,8 +322,6 @@ export const offeringsOnSale: CacheEntry = {
   },
 };
 
-// ─── the price list ──────────────────────────────────────────
-
 export const offeringsList: CacheEntry = {
   fingerprint: 'offerings/list',
   intent: 'Everything this studio sells — plans and passes, retired ones last',
@@ -494,8 +329,6 @@ export const offeringsList: CacheEntry = {
   dsl: {
     from: ['offerings'],
     fields: [{ field: 'offerings.id', as: 'offering_id' }, 'offerings.name', 'offerings.kind', 'offerings.price_cents', 'offerings.currency', 'offerings.interval', 'offerings.interval_count', 'offerings.class_allowance', 'offerings.active', 'offerings.minimum_term_months', 'offerings.notice_days', 'offerings.credits', 'offerings.valid_days', 'offerings.joining_fee_id', 'offerings.held_count'],
-    // Retired offerings sort last but stay on the list. A price a studio
-    // stopped offering is still a price somebody is paying.
     sort: [{ field: 'offerings.active', dir: 'desc' }, { field: 'offerings.price_cents', dir: 'asc' }],
   },
   mapping: {
@@ -518,15 +351,9 @@ export const offeringsList: CacheEntry = {
         price_cents: row('price_cents'),
         price_display: priceText(row('price_cents'), row('currency')),
         interval: row('interval'),
-        // Carried so the edit form opens on what the row actually is — the
-        // payload IS the row, and a field the list drops is a field Save writes
-        // a blank over.
         interval_count: row('interval_count'),
         interval_display: {
           $case: {
-            // Neither recurs, so neither has a period to print. 'Once' rather
-            // than a blank cell: a price list where some rows say nothing reads
-            // as a price list with something missing from it.
             branches: [
               { when: { $eq: [row('kind'), 'pass'] }, then: 'Once' },
               { when: { $eq: [row('kind'), 'one_off'] }, then: 'Once' },
@@ -535,14 +362,10 @@ export const offeringsList: CacheEntry = {
           },
         },
         class_allowance: row('class_allowance'),
-        // NULL allowance means unlimited — said in words rather than left as a
-        // blank cell somebody has to interpret. A pass's allowance IS its credits.
         allowance_display: {
           $case: {
             branches: [
               { when: { $eq: [row('kind'), 'pass'] }, then: { $case: { branches: [{ when: { $eq: [row('credits'), 1] }, then: 'Single class' }], else: pattern('{n} classes', { n: row('credits') }) } } },
-              // A one-off entitles nobody to anything, and that IS its
-              // description — an empty cell here would read as missing data.
               { when: { $eq: [row('kind'), 'one_off'] }, then: 'Grants nothing' },
               { when: row('class_allowance'), then: pattern('{n} {per}', { n: row('class_allowance'), per: perIntervalText(row('interval'), row('interval_count')) }) },
             ],
@@ -552,37 +375,14 @@ export const offeringsList: CacheEntry = {
         active: row('active'),
         state_label: { $case: { branches: [{ when: row('active'), then: 'Offered' }], else: 'Retired' } },
         state_tone: { $case: { branches: [{ when: row('active'), then: 'good' }], else: 'neutral' } },
-        // The raw values travel so the edit form can round-trip them — without
-        // that, opening an offering to fix its name and pressing Save would
-        // write empty terms over a twelve-month commitment.
+        // The raw values travel so the edit form can round-trip them: without
+        // them, fixing a name and pressing Save would write empty terms.
         minimum_term_months: row('minimum_term_months'),
         notice_days: row('notice_days'),
         credits: row('credits'),
         valid_days: row('valid_days'),
-        // AND THE FEE IT NAMES, for the same round-trip reason as the terms
-        // above — the form writes this column, so a row that arrives without it
-        // is a row whose Save clears it. Correcting a typo in a plan's name
-        // silently stopped its joining fee being charged.
         joining_fee_id: row('joining_fee_id'),
-        // WHETHER ANYBODY HAS EVER HELD THIS, so the form can offer the right
-        // way out. Nothing held it means it was never a product, and a studio
-        // should be able to delete a typo rather than retiring it and reading it
-        // forever. Travels with the row because the form opens FROM the row.
         held_count: row('held_count'),
-        // A NUMBER, NOT A SENTENCE. This carried the whole line at first, built
-        // with a pattern — and a pattern is an object the phrase book resolves
-        // at a _display position. Copied into an action's plain data field and
-        // drawn as text it stringified, so every offering with two holders or
-        // more said "[object Object]" to its owner.
-        //
-        // The words moved to the layout, where prose belongs and where a
-        // translator can find them — and they dropped the count, because a
-        // sentence carrying a number needs one phrasing for one holder and
-        // another for several, and neither the count nor the plural was worth
-        // what saying them cost. What the owner needs to know is that somebody
-        // is on it. The number, if it is ever wanted, is right here.
-        // And the terms as a phrase, because "6 months · 60 days notice" is what
-        // a studio is selling and a price list that omits it is not a price list.
         term_display: {
           $case: {
             branches: [

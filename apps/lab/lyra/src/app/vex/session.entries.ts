@@ -61,7 +61,6 @@ export const sessionAttending: CacheEntry = {
         { neq: ['bookings.status', 'cancelled'] },
       ],
     },
-    // Booked before waiting, then by name — the queue reads as a queue.
     sort: [{ field: 'bookings.status', dir: 'asc' }, { field: 'people.name', dir: 'asc' }],
   },
   mapping: {

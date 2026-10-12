@@ -22,8 +22,7 @@ export const themeCurrent: CacheEntry = {
   },
 };
 
-// The catalog an owner picks from. Themes are PLATFORM artifacts — offered to
-// studios, not owned by one — so this is deliberately unscoped.
+// Unscoped on purpose: themes are offered to every studio and owned by none.
 export const themesList: CacheEntry = {
   fingerprint: 'themes/list',
   intent: 'Every theme a studio may wear',
@@ -35,12 +34,6 @@ export const themesList: CacheEntry = {
   },
 };
 
-// ── the words ────────────────────────────────────────────────
-//
-// Same shape as the theme above, because it is the same kind of decision. The
-// options are read from the `phrases` table rather than listed: a language this
-// deployment holds no words for is not a language it can offer, and a hardcoded
-// list would offer it anyway.
 export const localeCurrent: CacheEntry = {
   fingerprint: 'locale/current',
   intent: 'The language this studio reads in',
@@ -49,22 +42,8 @@ export const localeCurrent: CacheEntry = {
   mapping: { $with: { let: { r: { $ref: '$.result' } }, value: { locale: one('locale', 'en') } } },
 };
 
-// WHICH LANGUAGES ARE ON OFFER is deliberately NOT an entry here.
-//
-// The obvious query — DISTINCT locale FROM phrases — is wrong in a way worth
-// recording: the SOURCE language has no rows in that table, by construction,
-// because nothing about it needs translating. A studio reading English would
-// be offered every language except the one it is already in, and switching
-// back would be impossible.
-//
-// So the offer is "the source language, plus every language we hold words for",
-// which is a fact about the loaded server rather than about a table. It is the
-// `world.languages` endpoint (server/functions/world.ts), where the language
-// names also come from `Intl.DisplayNames` instead of a hand-kept list.
-
-// The caller NAMES the row and the engine ANDs its own match on top. Relying on
-// the injected clause alone is refused at seed by vex's `lintMutation`: a write
-// whose only bound is injected is one behaviors edit away from a blanket update.
+// The caller names the row and the engine ANDs its own match on top: vex's
+// `lintMutation` refuses at seed a write whose only bound is the injected one.
 export const studioSetLocale: MutationEntry = {
   fingerprint: 'studio/set-language',
   intent: 'Set which language this studio reads in',

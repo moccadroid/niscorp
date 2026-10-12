@@ -1,4 +1,3 @@
-// What each studio teaches, and the two dated blocks running now.
 import { day, insert } from '../sql';
 import { LUMEN, NORTHROCK } from './studios';
 
@@ -16,11 +15,6 @@ export const PROGRAMS_SQL = insert(
   ],
 );
 
-// ─── the blocks ──────────────────────────────────────────────
-//
-// A block's PRICE is a catalogue row like every other price — see
-// courses.offering_id. Seeded as its own statement first, because the block
-// names it and a foreign key does not wait.
 export const COURSE_OFFERINGS_SQL = insert(
   'offerings',
   ['id', 'studio_id', 'name', 'kind', 'price_cents', 'currency'],

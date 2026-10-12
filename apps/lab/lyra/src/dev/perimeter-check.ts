@@ -1,4 +1,3 @@
-// Run: pnpm --filter lyra exec tsx src/dev/perimeter-check.ts
 import { createAssertionSigner } from '@niscorp/moss/integrations';
 import { startIntegrations } from '../../../lyra-integrations/src/serve';
 import { ok, report } from './world';
@@ -28,7 +27,6 @@ try {
   const selftest = (await fetch(`${BASE}/belts/_selftest`).then((r) => r.json())) as Record<string, number>;
   ok('the service is reachable and holds records', (selftest['north'] ?? 0) > 0, `${selftest['north']} belts`);
 
-  // ── claims without an envelope ───────────────────────────────
   const forged = await direct('/belts/roster', {
     'x-nisc-principal': 'p_omar',
     'x-nisc-scope-studioid': 'st_northrock',
@@ -39,7 +37,6 @@ try {
   const bare = await direct('/belts/roster', {});
   ok('...and a bare request gets nothing', bare.status === 401, `${bare.status} ${bare.body}`);
 
-  // ── the envelope has to be OURS ──────────────────────────────
   const wrongKey = await direct('/belts/roster', { authorization: `Bearer ${impostor.mint(northrock)}` });
   ok('a well-formed token from the wrong signer is refused', wrongKey.status === 401, String(wrongKey.status));
 
@@ -49,15 +46,12 @@ try {
   const tampered = `${Buffer.from(editedPayload).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}.${signaturePart}`;
   ok('a tampered payload is refused', (await direct('/belts/roster', { authorization: `Bearer ${tampered}` })).status === 401, 'one edited byte unverifies the claim');
 
-  // ── ...and CURRENT ───────────────────────────────────────────
   const expired = deployment.mint(northrock, -1);
   ok('an expired token is refused', (await direct('/belts/roster', { authorization: `Bearer ${expired}` })).status === 401, 'a token lives seconds; a logged one is not a credential');
 
-  // ── ...and FOR THIS INTEGRATION ──────────────────────────────
   const sideways = deployment.mint({ ...northrock, integration: 'stripe' });
   ok('a token minted for another integration is refused', (await direct('/belts/roster', { authorization: `Bearer ${sideways}` })).status === 401, 'credentials do not replay sideways between bundles');
 
-  // ── THE RIGHT CALLER GETS THROUGH, as who the TOKEN says ─────
   const admitted = await direct('/belts/roster', { authorization: `Bearer ${deployment.mint(northrock)}` });
   ok('a deployment-signed assertion is served', admitted.status === 200, String(admitted.status));
   ok('...scoped to the studio INSIDE the token', admitted.body.includes('Purple'), admitted.body.slice(0, 60));
@@ -68,7 +62,6 @@ try {
   });
   ok('...and a header beside the token moves nothing', lumen.body === '[]', `${lumen.body} — identity is only what was signed`);
 
-  // ── what stays open, deliberately ────────────────────────────
   const bundle = await fetch(`${BASE}/belts/bundle`);
   ok('the bundle stays open — it is what the service publishes about itself', bundle.status === 200, String(bundle.status));
 

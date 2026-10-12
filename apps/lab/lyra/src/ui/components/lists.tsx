@@ -9,14 +9,9 @@ import { cx } from '../lib/cx';
 type Row = Record<string, unknown>;
 const str = (row: Row, key: string | undefined): string => {
   if (key === undefined) return '';
-  // A counted phrase arrives already filled: the renderer fills patterns at
-  // any prose key, in every language including the source one, so nothing that
-  // reaches a cell is still a `{ phrase, slots }` shape.
   const v = row[key];
   return v === undefined || v === null ? '' : String(v);
 };
-
-// ── LINKS ────────────────────────────────────────────────────
 
 const LinkItemSchema = z
   .object({
@@ -121,8 +116,6 @@ export const Links: NovaComponent<Partial<z.infer<typeof LinksProps>>> = ({ item
   );
 };
 Links.meta = { description: 'A navigation list: icon, title, a sentence that wraps, and a chevron. For menus and choosers — not a table.', propsSchema: LinksProps };
-
-// ── CARDS ────────────────────────────────────────────────────
 
 const CardActionSchema = z.object({ label: z.string(), ref: z.string(), variant: z.string().optional(), showKey: z.string().optional(), hideKey: z.string().optional(), icon: z.string().optional() }).loose();
 

@@ -3,10 +3,6 @@ import type { ActionDefinition, LayoutNode, Step } from '@niscorp/nova';
 import { coursePricePrism, courseCreatePrism, courseRetirePrism, courseSlotsPrism, courseUpdatePrism, programsPrism } from './courses.prism';
 import { teachersPrism } from '@lyra/app/actions/domains/timetable/timetable.prism';
 
-// THE CHECK THAT WAS ONCE MISSING ENTIRELY, now held by the button instead of
-// a thrown error: a course with no days is a course with no classes, and the
-// form refuses to submit one — along with a blank name, missing dates, or an
-// end before the start. Recomputed whenever a day is toggled or a field typed.
 const createBlocked = {
   $prism: {
     $or: [
@@ -67,7 +63,6 @@ const courseFormLayout: LayoutNode = {
               { component: 'Input', props: { label: 'Minutes', type: 'number' }, ref: 'durationMins', model: '$.durationMins' },
             ],
           },
-          // Stored on the row, so it has to be askable somewhere.
           { component: 'Select', props: { label: 'Taught by', options: '$.teacherOptions', emptyLabel: 'Unassigned' }, ref: 'instructorId', model: '$.instructorId' },
         ],
       },
@@ -127,8 +122,6 @@ export const courseFormAction: ActionDefinition = {
     endsOn: '',
     capacity: 12,
     priceCents: 0,
-    // Two evenings a week is the shape almost every block has, so it is what
-    // the form opens on — a default that is usually right beats a blank.
     mon: true,
     tue: false,
     wed: true,
@@ -141,12 +134,8 @@ export const courseFormAction: ActionDefinition = {
     instructorId: '',
     teacherOptions: [],
     saving: false,
-    // The create button starts held down: the default days are ticked but the
-    // name and dates are blank. Edit mode never reads it (Save has its own).
     blocked: true,
     created: {},
-    // The price row this block names — minted by the call before the block on
-    // create, and carried in from the row on edit.
     createdPrice: {},
     offeringId: '',
     error: '',
@@ -155,9 +144,6 @@ export const courseFormAction: ActionDefinition = {
   endpoints: {
     programs: { url: '/api/schedule/vex', method: 'POST', request: programsPrism, target: 'programOptions' },
     teachers: { url: '/api/schedule/vex', method: 'POST', request: teachersPrism, target: 'teacherOptions' },
-    // Two replays where a server function used to loop: the course row first
-    // (RETURNING hands back the DB-minted id as `$.created`), then every
-    // chosen day's slot in ONE `insertEach` statement.
     priceIt: { url: '/api/schedule/vex', method: 'POST', request: coursePricePrism, target: 'createdPrice', errorTarget: 'error' },
     create: { url: '/api/schedule/vex', method: 'POST', request: courseCreatePrism, target: 'created', errorTarget: 'error' },
     slots: { url: '/api/schedule/vex', method: 'POST', request: courseSlotsPrism, errorTarget: 'error' },
@@ -171,8 +157,6 @@ export const courseFormAction: ActionDefinition = {
     ],
   },
   triggers: [
-    // A day toggle is a CLICK, not a model write: Switch dispatches a ui:click
-    // carrying the next state, so the value is set here rather than assumed.
     { event: 'ui:click', ref: 'mon', do: [{ set: 'mon', value: '@event.payload.next' }] },
     { event: 'ui:click', ref: 'tue', do: [{ set: 'tue', value: '@event.payload.next' }] },
     { event: 'ui:click', ref: 'wed', do: [{ set: 'wed', value: '@event.payload.next' }] },
@@ -180,9 +164,9 @@ export const courseFormAction: ActionDefinition = {
     { event: 'ui:click', ref: 'fri', do: [{ set: 'fri', value: '@event.payload.next' }] },
     { event: 'ui:click', ref: 'sat', do: [{ set: 'sat', value: '@event.payload.next' }] },
     { event: 'ui:click', ref: 'sun', do: [{ set: 'sun', value: '@event.payload.next' }] },
-    // The gate, re-answered after every change that could move it. Separate
-    // triggers, not extra steps: buffered sets in one trigger resolve against
-    // the same pre-write snapshot, so a shared buffer would read stale toggles.
+    // Separate triggers, not extra steps: the sets of one trigger resolve
+    // against the same pre-write snapshot, so `blocked` would read a stale
+    // toggle.
     { event: 'ui:click', ref: 'mon', do: [{ set: 'blocked', value: createBlocked }] },
     { event: 'ui:click', ref: 'tue', do: [{ set: 'blocked', value: createBlocked }] },
     { event: 'ui:click', ref: 'wed', do: [{ set: 'blocked', value: createBlocked }] },
@@ -204,9 +188,6 @@ export const courseFormAction: ActionDefinition = {
         { set: 'saving', value: true },
         { set: 'blocked', value: true },
         {
-          // THE PRICE FIRST, because the block names it and a foreign key does
-          // not wait. Same write every other price on the Offers list goes
-          // through — a block is a thing in the catalogue, not a second one.
           call: 'priceIt',
           onSuccess: [
             {

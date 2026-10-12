@@ -52,7 +52,6 @@ export const ENTRIES: CacheEntry[] = [
   programsList,
   addonsList,
   addonsInstalled,
-  // The roll, lensed: the lens is a context value, not a fingerprint.
   peopleList,
   peopleCount,
   personById,
@@ -111,10 +110,8 @@ export const ENTRIES: CacheEntry[] = [
   purchasesForPerson,
   offeringPrice,
   coursePrice,
-  // The session's own facts, self-pinned at the identity reach. The licensed
-  // pre-auth entries (identity/roles, identity/actor, and friends) are
-  // DELIBERATELY not here: a pre-auth read on the wire is the hole D4 refused,
-  // and reads-are-vex-check asserts their absence.
+  // The pre-auth `identity/roles` entry is deliberately absent: listed here,
+  // a pre-auth read would be on the wire.
   identityPerson,
   identityStudio,
   identityInstalled,
@@ -139,10 +136,7 @@ export const ENTRIES: CacheEntry[] = [
   campaignPending,
 ];
 
-// Every write the app can make. Replay-only forever: never generated, linted at
-// seed, and the statement lives server-side where a request cannot see it.
 export const MUTATION_ENTRIES: MutationEntry[] = [
-  // the no-principal machinery, executed only via `server.executeAs`
   credentialSweepLinks,
   credentialMintLink,
   credentialRedeemLink,

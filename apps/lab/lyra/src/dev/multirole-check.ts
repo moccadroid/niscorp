@@ -13,9 +13,6 @@ const planOf = async (email: string): Promise<Record<string, unknown>> => {
   return (answer ?? {}) as Record<string, unknown>;
 };
 
-// ─── the assignment ────────────────────────────────────────────
-// ASKED, not read off a map. There is no assignment map any more — roles come
-// from the identity seam, one principal at a time, which is the whole point.
 const rolesOfPrincipal = async (id: string): Promise<readonly string[]> => (await server.identity(id)).roles;
 const tobias = await rolesOfPrincipal('p_tobias');
 const ava = await rolesOfPrincipal('p_ava');
@@ -25,7 +22,6 @@ ok('somebody who teaches and trains holds BOTH roles', tobias.includes('instruct
 ok('...a member who is only a member holds one', ava.length === 1 && ava.includes('member'), ava.join(' + '));
 ok('...and staff who do not train are not handed a membership', !ines.includes('member'), ines.join(' + '));
 
-// ─── the two halves, at the same time ──────────────────────────
 const his = await cardOf(TOBIAS);
 const hers = await cardOf(AVA);
 const hisPlan = await planOf(TOBIAS);
@@ -35,7 +31,6 @@ ok('his card comes back at all', typeof his['studio_name'] === 'string' && his['
 ok('...and it is HIS, not the first person the planner reached', his['joined_display'] !== hers['joined_display'] || hisPlan['value_display'] !== hersPlan['value_display'], `${String(hisPlan['plan_name'])} at ${String(hisPlan['value_display'])} vs ${String(hersPlan['value_display'])}`);
 ok('...on a plan with a real price, so the money joined through', String(hisPlan['value_display'] ?? '').match(/\d/) !== null, String(hisPlan['value_display']));
 
-// ─── the ladder does not carry member grants upward ────────────
 const revenue = (await asPrincipal('ines@lumen.studio', '/api/me/vex', { fingerprint: 'studio/revenue/expected', context: {} })) as { status?: number };
 ok('the desk still cannot reach the takings', revenue.status === 400, JSON.stringify(revenue));
 

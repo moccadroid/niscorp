@@ -1,4 +1,3 @@
-// The look: a theme's tokens, and the layout it wears per action.
 export const THEMES_DDL = /* sql */ `
   CREATE TABLE themes (
     id          TEXT PRIMARY KEY,

@@ -16,7 +16,6 @@ export const studioSettingsAction: ActionDefinition = {
     currentRow: {},
     studioRow: {},
     pendingThemeId: '',
-    // ── the language ──
     languages: [],
     currentLocale: '',
     localeRow: {},
@@ -31,8 +30,6 @@ export const studioSettingsAction: ActionDefinition = {
     load: { url: '/api/studio/vex', method: 'POST', request: themesListPrism, target: 'themeRows' },
     current: { url: '/api/studio/vex', method: 'POST', request: themeCurrentPrism, target: 'currentRow' },
     apply: { url: '/api/studio/vex', method: 'POST', request: setThemePrism, errorTarget: 'error' },
-    // The language: one read for what is on offer (server knowledge — see
-    // world.ts), one for what is worn, one write, one resync.
     languages: { fn: 'world.languages', target: 'languages' },
     locale: { url: '/api/studio/vex', method: 'POST', request: localeCurrentPrism, target: 'localeRow' },
     setLocale: { url: '/api/studio/vex', method: 'POST', request: setLocalePrism, errorTarget: 'error' },
@@ -63,14 +60,8 @@ export const studioSettingsAction: ActionDefinition = {
         },
       ],
     },
-    // CHANGING THE LANGUAGE ENDS THIS SCREEN'S LIFE, and that is the correct
-    // behaviour rather than a limitation. The words a shell wears are read when
-    // the shell is built, so `world.relanguage` rebuilds it — this instance is
-    // disposed mid-step and what the terminal receives is the whole application
-    // again, in the new language, on its home screen.
-    //
-    // Hence `switching`: the only thing this screen can usefully say afterwards
-    // is that it is going, so it says that and stops.
+    // `world.relanguage` rebuilds the shell, so this instance is disposed
+    // mid-step: `switching` is the last thing it says and is never set back.
     {
       event: 'ui:model',
       ref: 'language',

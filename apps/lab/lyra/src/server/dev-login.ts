@@ -1,19 +1,5 @@
 import type { ExecuteAs } from '@niscorp/moss';
 
-// ═══════════════════════════════════════════════════════════════
-// THE LAB'S SIGN-IN TRANSPORT — anonymity choosing who to be.
-//
-// The picker offers the cast so a developer can BE somebody with one click:
-// the same path a mailed link takes, with the delivery step replaced by a
-// choice. It answers only when `LYRA_DEV_LOGIN` is on — a deployment never
-// sets it — and `identity-check` asserts both states on the anonymous shell.
-//
-// It reads through the ENGINE, as the charter's `transport` role: two seeded
-// entries (staff, then anchors — the resolver's reverse joins are INNER, so
-// one entry cannot walk both), merged here with the staff word winning.
-// Automation rows never appear: a robot is not somebody you can be.
-// ═══════════════════════════════════════════════════════════════
-
 export type DevLoginRow = { id: string; name: string; email: string; studio: string; role: string };
 
 export const readDevLoginRoster = async (runAs: ExecuteAs): Promise<DevLoginRow[]> => {
@@ -24,11 +10,6 @@ export const readDevLoginRoster = async (runAs: ExecuteAs): Promise<DevLoginRow[
   const byId = new Map<string, DevLoginRow>();
   if (Array.isArray(members)) {
     for (const row of members as { person_id?: unknown; name?: unknown; email?: unknown; studio?: unknown }[]) {
-      // A PERSON YOU CANNOT BE DOES NOT BELONG IN A PICKER OF PEOPLE TO BE.
-      // A child has no address (db/schema/people.ts), so `mintToken` refuses
-      // them by construction — listing them would offer a click that dies at
-      // `principalByEmail` with nothing to say. The roster is a transport for
-      // signing in, so its membership test is "could sign in".
       if (row.email === null || row.email === undefined || row.email === '') continue;
       byId.set(String(row.person_id ?? ''), { id: String(row.person_id ?? ''), name: String(row.name ?? ''), email: String(row.email), studio: String(row.studio ?? ''), role: 'member' });
     }

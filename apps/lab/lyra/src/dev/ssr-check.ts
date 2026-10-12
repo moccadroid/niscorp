@@ -1,21 +1,3 @@
-// SSR check — the page a request is answered with is the screen the socket
-// would have streamed, and the browser's own terminal adopts it as it stands.
-//
-// The real server, the real document route (src/server/document.ts), the real
-// wire and the real React target over a jsdom page whose socket never opens —
-// the moment in which the page is up and the wire is not.
-//
-//   1. nobody asking: the sign-in screen, drawn; a cache may keep it
-//   2. a member asking: their own screen, drawn; nothing may keep it; the
-//      studio's palette is in the markup before any script runs
-//   3. their terminal adopts the page on a NARROW window and on a WIDE one — the
-//      window's width is the one thing a server cannot know, and a kit that
-//      answered it differently on the two sides threw the page away
-//      (ui/components/layout.tsx, `useWide`)
-//   4. on a wide window the rail is there after adoption: drawn narrow, made
-//      wide in place
-//
-// Run: pnpm --filter lyra exec tsx src/dev/ssr-check.ts
 import { JSDOM } from 'jsdom';
 import { mintToken, ok, report, server } from './world';
 import { renderPage } from '@lyra/server/document';
@@ -73,14 +55,12 @@ const open = async (html: string, token: string | null, wide: boolean): Promise<
   return { complaints, rail: dom.window.document.querySelector('.ly-drawer--rail') !== null, sockets };
 };
 
-// ── 1. nobody asking ──
 const anonymous = await renderPage({ server, template: TEMPLATE, path: '/', cookie: null });
 ok('nobody asking: the sign-in screen is drawn', anonymous.drawn && anonymous.principal === null && /<div id="root"><[a-z]/.test(anonymous.html));
 ok('…a cache may keep it, told apart on the cookie', anonymous.headers['cache-control'] === 'no-cache' && anonymous.headers['vary'] === 'Cookie');
 const stranger = await open(anonymous.html, null, true);
 ok('…and its terminal adopts it', stranger.complaints.length === 0, stranger.complaints[0] ?? '');
 
-// ── 2. a member asking ──
 const token = await mintToken(MEMBER);
 if (token === null) throw new Error('ssr-check: no token for the member');
 const theirs = await renderPage({ server, template: TEMPLATE, path: '/', cookie: `nisc.token=${encodeURIComponent(token)}` });
@@ -88,7 +68,6 @@ ok('a member asking: their own screen is drawn, not the sign-in', theirs.drawn &
 ok('…nothing may keep it', theirs.headers['cache-control'] === 'private, no-store');
 ok('…and it is the app’s shell: live, kept for them', theirs.live === true && theirs.page === undefined);
 
-// ── 3 & 4. adoption, whatever the window's width ──
 const narrow = await open(theirs.html, token, false);
 ok('their terminal adopts it on a narrow window', narrow.complaints.length === 0, narrow.complaints[0] ?? '');
 ok('…with no rail, as drawn', !narrow.rail);

@@ -1,4 +1,3 @@
-// The vocabulary an automation is built from, and the automations themselves.
 export const AUTOMATIONS_DDL = /* sql */ `
   -- THE PRESENTATION HALF OF A CODE CONSTANT, PROJECTED AS ROWS.
   --

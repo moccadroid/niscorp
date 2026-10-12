@@ -1,8 +1,6 @@
 import type { Shell } from '@niscorp/nova';
 import { unverifiedShell } from '@niscorp/moss/unverified';
-// THE LAB'S SIGN-IN TRANSPORT. Clicking a name is how a nonce reaches the
-// browser here, exactly as a mail link is in a deployment. Set before the app
-// is built, because `shell.inputs` reads it when it composes the login screen.
+// Set before `boot()`: `shell.inputs` reads it when it composes the login screen.
 process.env['LYRA_DEV_LOGIN'] = 'on';
 
 import { boot, tideDriver } from '@lyra/server/boot';
@@ -16,32 +14,14 @@ export const tide = booted.tide;
 export { tideDriver };
 
 
-// HOW THE HARNESS ADDRESSES A PERSON.
-//
-// Every check says "as Omar" and needs an id. That used to come from
-// `personByEmail`, a second index over a resident copy of the population — the
-// exact shape invariant 2 bans, kept alive by the checks long after the
-// application stopped needing it.
-//
-// One query, at boot, for the check harness only. It is a directory, and it is
-// allowed to be: this file IS the dev transport, the same surface the login
-// picker is served from, and `held-state-check` excludes `dev/` for this reason.
-// The application below it holds nothing.
 const ROSTER: Record<string, string> = {};
 {
-  // ADDRESSED PEOPLE ONLY. `people.email` is nullable because a child is a
-  // record rather than a user (db/schema/people.ts), and this roster's whole
-  // job is turning an address into a principal — somebody with no address has
-  // nothing to turn. A check that wants a child names them by id.
   const rows = await booted.runtime.pool.query('SELECT id, email FROM people WHERE email IS NOT NULL');
   for (const row of rows.rows as { id: string; email: string }[]) ROSTER[row.email.trim().toLowerCase()] = row.id;
 }
 
-/** The principal behind an address — the harness's whole addressing scheme. */
 import { mintToken as mintFor } from '@lyra/server/tokens';
 
-/** The lab's credential for an address. Bound to the harness pool so a check
- *  says `mintToken(email)` and nothing else. */
 export const mintToken = async (email: string): Promise<string | null> => mintFor(server.executeAs, email);
 
 export const idFor = (email: string): string => {
@@ -60,7 +40,6 @@ export const sessionFor = async (email: string): Promise<Awaited<ReturnType<NonN
 
 export const login = async (email: string): Promise<Shell> => unverifiedShell(await sessionFor(email));
 
-/** The anonymous principal's shell — what somebody with no credential is served. */
 export const anonymous = async (): Promise<Shell> => {
   const session = await server.shells?.session(null, null);
   if (session === undefined) throw new Error('world: the app serves no shell');
@@ -68,20 +47,9 @@ export const anonymous = async (): Promise<Shell> => {
 };
 
 
-// THE CATALOG A PERSON HOLDS — resolved the way production resolves it.
-//
-// Checks used to resolve a catalog from the manifest by hand, reading roles out
-// of the assignment map. There is no map: roles come from the identity seam,
-// one principal at a time. So the harness asks the server, which resolves who
-// somebody is the way the request path does and answers from the actions in
-// force. That is also the point: a check resolving by a route production does
-// not take is a check asserting about a deployment nobody runs.
 export const idsFor = async (email: string | null): Promise<readonly string[]> => (await server.catalogOf(email === null ? null : idFor(email))).ids;
 
 
-/** A session-authorized wire for checks — the same shape moss lends shells,
- *  with the same /vex envelope unwrapping, so a check reads an entry exactly
- *  as a shell would. */
 export const wireFor = (email: string): import('@niscorp/nova').FetchFn => async (url, init) => {
   const token = await mintToken(email);
   const res = await server.request(url, {
@@ -112,10 +80,6 @@ export const asPrincipal = async (email: string, path: string, body: unknown): P
   return json.result;
 };
 
-/** The WHOLE envelope, not just `result` — `meta.context` is the parameter
- *  contract a caller reads to learn what a fingerprint accepts, and
- *  `meta.missingContext` is how it learns what it forgot. Neither is visible
- *  through `asPrincipal`, which unwraps to the rows on purpose. */
 export const envelopeOf = async (email: string, path: string, body: unknown): Promise<Record<string, unknown>> => {
   const token = await mintToken(email);
   if (token === null) throw new Error(`world: unknown email "${email}"`);
@@ -128,19 +92,8 @@ export const envelopeOf = async (email: string, path: string, body: unknown): Pr
   return await response.json() as Record<string, unknown>;
 };
 
-/** THE SHELL'S STRUCTURE, in the language the application was authored in.
- *
- *  Read with the book deliberately off, and restored before returning. It used
- *  to come out in the source language for free — the language pass lived in
- *  moss, between flatten and serialize, so a tree read straight from nova had
- *  never been through it. The pass moved into the renderer, so a shell now
- *  renders in its reader's language and every structural check in this harness
- *  would be spelling its probes in a language half the seed does not read.
- *
- *  Which is the right trade: a check asking "does the roll open" should not
- *  have to know what "People" is in German, and a check asking "what does this
- *  person SEE" should never have been reading this function. That one is
- *  `servedTo`. */
+// Read with the phrase book off: a shell renders in its reader's language, and
+// a check spells its probes in the source language.
 export const treeOf = (shell: Shell): string => {
   // Setting the phrases goes around moss, so it takes the whole shell.
   const whole = unverifiedShell({ shell });
@@ -153,11 +106,6 @@ export const treeOf = (shell: Shell): string => {
   }
 };
 
-/** EVERYTHING A TERMINAL IS ACTUALLY SENT, as one string.
- *
- *  Attaches a real connection and keeps what comes down it — the only honest
- *  answer to "what does this person see", and the one to reach for whenever a
- *  check is about words rather than about structure. */
 export const servedTo = async (email: string): Promise<string> => {
   const session = await sessionFor(email);
   const sent: string[] = [];
@@ -172,7 +120,4 @@ export const servedTo = async (email: string): Promise<string> => {
   return sent.join('\n');
 };
 
-// The tick and the cross live in `assert.ts` — a surface check needs them
-// without needing a database. Re-exported so every check that already reaches
-// for them here keeps working.
 export { ok, report } from './assert';

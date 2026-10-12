@@ -1,4 +1,3 @@
-// Run: pnpm --filter lyra exec tsx src/dev/members-check.ts
 import { CAST } from '@lyra/db/seed';
 import { asPrincipal, login, ok, report, runtime, settle, treeOf } from './world';
 import { ROLL_PAGE } from '@lyra/app/vex/member.entries';
@@ -19,7 +18,6 @@ const subStatusOf = async (subscriptionId: string): Promise<string> => {
   return String(result.rows[0]?.status ?? '');
 };
 
-// ── the list ──
 shell.dispatch({ type: 'ui:click', ref: 'nav', payload: 'people.list' });
 await settle();
 let tree = treeOf(shell);
@@ -36,14 +34,6 @@ ok('...and keeps the current ones', tree.includes('Ava Klein'));
 ok('...and a trial that ran out reads as such', tree.includes('Trial over'), 'computed against the studio’s own day');
 ok('...and the milkman is on it', tree.includes('Bo Lindqvist'), 'somebody the studio deals with, resolved at last');
 
-// ── TWO QUESTIONS, ASKED SEPARATELY ──────────────────────────
-//
-// These were chips in one strip of nine, which put "Current" and "Passes"
-// side by side as if they were alternatives — they are answers to different
-// questions, and one strip could only ever carry one of them.
-//
-// WHO is the strip; WHAT THEY HOLD is its own control. Everyone, so the second
-// question is doing the work rather than the first.
 shell.dispatch({ type: 'ui:click', ref: 'scope', payload: { value: 'everyone', label: 'Everyone' } });
 await settle();
 shell.dispatch({ type: 'ui:model', ref: 'holding', payload: 'contact' });
@@ -56,8 +46,6 @@ await settle();
 tree = treeOf(shell);
 ok('holding a pass finds the drop-in', tree.includes('Ida Brandt') && !tree.includes('Ava Klein'), 'a person with credits, not a member');
 
-// THE QUESTION THE OLD STRIP COULD NOT ASK. Both axes at once — current people
-// who hold a membership — which nine flattened chips had no way to express.
 shell.dispatch({ type: 'ui:click', ref: 'scope', payload: { value: 'current', label: 'Current' } });
 await settle();
 shell.dispatch({ type: 'ui:model', ref: 'holding', payload: 'membership' });
@@ -72,7 +60,6 @@ shell.dispatch({ type: 'ui:click', ref: 'scope', payload: { value: 'current', la
 await settle();
 ok('Current narrows it again', !treeOf(shell).includes('Mira'));
 
-// ── the record ──
 shell.dispatch({ type: 'ui:click', ref: 'open', payload: { person_id: 'p_lena' } });
 await settle();
 tree = treeOf(shell);
@@ -81,7 +68,6 @@ ok('...with the contact details a desk needs', tree.includes('lena.gruber@exampl
 ok('...and the note the desk wrote', tree.includes('Saturday open class'));
 ok('...labelled with its standing', tree.includes('"label":"On trial"'), 'a live trial outranks the subscription beside it');
 
-// ── the form ──
 shell.dispatch({ type: 'ui:click', ref: 'edit' });
 await settle();
 tree = treeOf(shell);
@@ -98,7 +84,6 @@ ok('before saving, the database is untouched', (await notesOf('p_lena')).include
 shell.dispatch({ type: 'ui:click', ref: 'save' });
 await settle(10);
 
-// ── what the save actually did ──
 ok('the save wrote the notes', (await notesOf('p_lena')).includes('signed up on the spot'));
 ok('...and cleared the trial window in the same statement', (await trialOf('p_lena')) === '', 'NULL means no window, and nothing marks it');
 
@@ -108,19 +93,16 @@ ok('the form closed itself', !tree.includes('Edit person'));
 ok('the record is what the form popped back to', tree.includes('Lena Gruber'));
 ok('...and it re-read on resume, so standing moved with the data', tree.includes('"label":"Active"'), 'no trial window left, so her subscription speaks');
 
-// ── back to the list ──
 shell.dispatch({ type: 'ui:click', ref: 'back' });
 await settle();
 tree = treeOf(shell);
 ok('Back returns to the list', tree.includes('Ava Klein'));
 
-// ── ending a subscription keeps the record ──
 shell.dispatch({ type: 'ui:click', ref: 'open', payload: { person_id: 'p_jonas' } });
 await settle();
 ok('a second record opens', treeOf(shell).includes('Jonas Weber'));
 shell.dispatch({ type: 'ui:click', ref: 'end' });
 await settle(8);
-// Ending is a decision, so a confirm sheet asks first.
 ok('ending asks first', treeOf(shell).includes('End their subscription?'));
 shell.dispatch({ type: 'ui:click', ref: 'confirm' });
 await settle(12);
@@ -132,7 +114,6 @@ ok('...and the database stamped the end date, on the studio’s clock', (await r
 ok('...matching studio_today, not the server’s day', (await runtime.db.query<{ same: boolean }>("SELECT ends_on = studio_today(studio_id) AS same FROM subscriptions WHERE id='sub_jonas'")).rows[0]?.same === true);
 ok('...and the person now derives as left', (await runtime.db.query<{ n: number }>("SELECT count(*) n FROM subscriptions WHERE person_id = 'p_jonas' AND status = 'active'")).rows[0]?.n === 0, 'the standing follows the rows');
 
-// ── coming back is a new start on today's terms ──
 tree = treeOf(shell);
 ok('the record now offers a plan to start', tree.includes('Start plan'), 'reactivation IS another start — the old terms left with the old subscription');
 
@@ -145,12 +126,10 @@ const started = await runtime.db.query<{ n: number }>("SELECT count(*) n FROM su
 ok('starting a plan grants access again', Number(started.rows[0]?.n) === 1, 'a NEW subscription, billed by the studio, no processor anywhere');
 ok('...with the terms stamped by the trigger', (await runtime.db.query<{ n: number }>("SELECT count(*) n FROM subscriptions WHERE person_id = 'p_jonas' AND status = 'active' AND monthly_cents = 8900 AND currency = 'EUR'")).rows[0]?.n === 1, 'price and currency came from the offering, not the caller');
 
-// ── back out of the second record ──
 shell.dispatch({ type: 'ui:click', ref: 'back' });
 await settle();
 ok('Back leaves the record', !treeOf(shell).includes('Start plan'));
 
-// ── the timetable ──
 shell.dispatch({ type: 'ui:click', ref: 'nav', payload: 'schedule.timetable' });
 await settle();
 tree = treeOf(shell);
@@ -158,24 +137,14 @@ ok('the nav reaches the timetable', tree.includes('Timetable'));
 ok('...with classes on it', tree.includes('Morning Flow') || tree.includes('Saturday Open'));
 ok('...and the programs legend', tree.includes('Vinyasa Flow'));
 
-// ── THE WAY TO PERSON FIFTY-ONE ──────────────────────────────
-//
-// The roll answered fifty and there was no way to reach the fifty-first,
-// against a stated target of two thousand. It SEEKS now: the next page is
-// everyone sorted after the last row on screen.
-//
-// Seeded wide enough to page, because a check against seven people proves
-// nothing about a limit of fifty.
 for (let i = 0; i < 60; i += 1) {
   const id = `p_page_${String(i).padStart(3, '0')}`;
   await runtime.db.query('INSERT INTO people (id, email, name) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [id, `${id}@example.com`, `Zz Pager ${String(i).padStart(3, '0')}`]);
   await runtime.db.query("INSERT INTO studio_people (id, studio_id, person_id, source) VALUES ($1, 'st_lumen', $2, 'walk-in') ON CONFLICT DO NOTHING", [`sp_page_${i}`, id]);
 }
 
-// The cursor key names the ORDER it is a position in — `afterNameAsc` here,
-// the roll's default. A seek belongs to one ordering, so each declared order
-// carries its own key (member.entries.ts, ROLL_ORDERS); sending the wrong one,
-// or a bare `after`, is simply not a cursor and the page starts over.
+// The cursor key names the order it is a position in: `afterNameAsc` is the
+// roll's default. The wrong key, or a bare `after`, is not a cursor and the page starts over.
 const rollPage = async (after: string, afterId: string): Promise<{ person_id: string; person_name: string }[]> =>
   (await asPrincipal(CAST.lumen.owner, '/api/member/vex', {
     fingerprint: 'people/list',

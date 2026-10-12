@@ -1,7 +1,6 @@
 import type { CacheEntry, MutationEntry } from './index';
 import { money } from '@lyra/app/prisms/format.prism';
 
-// ─── one row, or none ────────────────────────────────────────
 const rowText = (name: string) => ({ $get: { from: { $var: 'r' }, path: [name], fallback: { $const: '' } } });
 const rowNum = (name: string) => ({ $get: { from: { $var: 'r' }, path: [name], fallback: { $const: 0 } } });
 
@@ -44,8 +43,6 @@ export const membersActiveCount: CacheEntry = {
   mapping: { $with: { let: { r: { $ref: '$.result' } }, value: { total: rowNum('total') } } },
 };
 
-// Turnout today. Counts check-ins rather than bookings on purpose: the question
-// a desk asks at 6pm is who actually walked in.
 export const checkInsTodayCount: CacheEntry = {
   fingerprint: 'studio/check-ins/today-count',
   intent: 'How many people have checked in at this studio today',
@@ -58,13 +55,6 @@ export const checkInsTodayCount: CacheEntry = {
   mapping: { $with: { let: { r: { $ref: '$.result' } }, value: { total: rowNum('total') } } },
 };
 
-// ── WHERE A REPLY GOES ───────────────────────────────────────
-//
-// The one setting that decides whether a member can answer their studio.
-// Mail leaves from a shared deployment domain wearing the studio's name, so
-// this header is the only thing pointing home: with it blank a reply lands at
-// an address nobody reads. Its own fingerprint because it is its own decision
-// — not a corner of the appearance form.
 export const studioSetReplyTo: MutationEntry = {
   fingerprint: 'studio/set-reply-to',
   intent: 'Set where replies go, and how much this studio may send in a day',
@@ -72,22 +62,11 @@ export const studioSetReplyTo: MutationEntry = {
     op: 'update',
     table: 'studios',
     set: { reply_to: { $context: 'replyTo' }, daily_mail_cap: { $context: 'dailyCap' } },
-    // The engine ANDs the caller's own studio onto this, so a forged id
-    // selects nothing — the same shape the theme and locale writes take.
+    // The engine ANDs the caller's own studio on: a forged id selects nothing.
     where: { eq: ['studios.id', { $context: 'studioId' }] },
   },
 };
 
-// ── WHAT KIND OF BUSINESS THIS IS ────────────────────────────
-//
-// Company or sole trader. It reads like a detail and it is the field that
-// decides what a payment provider demands of the studio before any money can
-// move — and on a merchant account it is close to irreversible, so getting it
-// wrong is not a form to re-submit.
-//
-// It was a constant in the payments integration ('company'), which is right for
-// a GmbH and wrong for every Einzelunternehmen, which is most small studios in
-// the countries these trade in. The owner answers it.
 export const studioSetBusiness: MutationEntry = {
   fingerprint: 'studio/set-business',
   intent: 'Record the registered name, address and VAT number this studio trades under',
@@ -110,9 +89,6 @@ export const studioSetLegalForm: MutationEntry = {
   },
 };
 
-// The provider's answer, written down: which domain this studio asked for, the
-// id it was given, and whether the DNS has landed. Set by the settings screen
-// after the provider has spoken — never guessed here.
 export const studioSetDomain: MutationEntry = {
   fingerprint: 'studio/set-domain',
   intent: 'Record this studio’s own sending domain and whether it is verified',
@@ -128,10 +104,7 @@ export const studioSetDomain: MutationEntry = {
   },
 };
 
-// HOW MUCH THIS STUDIO HAS ALREADY SENT TODAY. Counted from the outbox rather
-// than kept in a counter, so it cannot drift: `created_on` is the studio's own
-// day (the column's default), and `sending` counts because a message in flight
-// has been spent whether or not it has landed yet.
+// `sending` counts: a message in flight is spent whether or not it has landed.
 export const outboxSentToday: CacheEntry = {
   fingerprint: 'automation/sent-today',
   intent: 'How many messages this studio has sent today',
@@ -144,12 +117,8 @@ export const outboxSentToday: CacheEntry = {
   mapping: { $with: { let: { r: { $ref: '$.result' } }, value: { total: rowNum('total') } } },
 };
 
-// ─── the studio's look, as an entry ──────────────────────────
-//
-// What replaced `BY_STUDIO`: one studio's theme, read at shell build over the
-// session's own wire, pinned to the caller's studio by the default reach. The
-// join is LEFT (theme_id is nullable), so a studio that names no theme answers
-// nulls and the shell falls back to stock.
+// The join is LEFT (`theme_id` is nullable): a studio that names no theme
+// answers nulls and the shell falls back to stock.
 export const studioTheme: CacheEntry = {
   fingerprint: 'studio/theme',
   intent: "The session studio's look — name and tokens, stock when it names none",

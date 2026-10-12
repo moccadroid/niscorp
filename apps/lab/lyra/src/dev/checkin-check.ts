@@ -1,4 +1,3 @@
-// Run: pnpm --filter lyra exec tsx src/dev/checkin-check.ts
 import { CAST } from '@lyra/db/seed';
 import { asPrincipal, login, ok, report, runtime, settle, treeOf } from './world';
 
@@ -22,7 +21,6 @@ if (target === undefined) report('nothing to check into today');
 
 const sessionId = target.id;
 
-// ── the surface ──
 shell.dispatch({ type: 'ui:click', ref: 'nav', payload: 'desk.checkin' });
 await settle();
 let tree = treeOf(shell);
@@ -30,7 +28,6 @@ ok('the desk reaches check-in', tree.includes('Check in'));
 ok("...listing today's classes", tree.includes(target.name));
 ok('...and no roster until a class is picked', !tree.includes('Arrived'), 'an empty roster pane would read as an empty class');
 
-// ── pick a class ──
 shell.dispatch({ type: 'ui:click', ref: 'pick', payload: { session_id: sessionId, name: target.name } });
 await settle();
 tree = treeOf(shell);
@@ -49,7 +46,6 @@ const due = roster.rows.find((r) => r.attended === false);
 ok('somebody is still due', due !== undefined, due?.person ?? 'everyone already arrived');
 if (due === undefined) report('nobody left to check in');
 
-// ── the tap ──
 const before = await one<{ n: number }>('SELECT count(*)::int n FROM check_ins WHERE session_id = $1', [sessionId]);
 shell.dispatch({ type: 'ui:click', ref: 'checkin', payload: { person_id: due.person_id, booking_id: due.id } });
 await settle(14);
@@ -70,17 +66,11 @@ ok('...with an hour bucket for the peak-hours report', stamp?.hour_key !== null 
 const stamped = await one<{ studio_id: string }>('SELECT studio_id FROM check_ins WHERE session_id = $1 ORDER BY happened_at DESC LIMIT 1', [sessionId]);
 ok('...and the studio was stamped engine-side', stamped?.studio_id === 'st_lumen');
 
-// ── the screen caught up ──
 tree = treeOf(shell);
 ok('the roster re-read itself', tree.includes(due.person));
 ok('...and the row now reads Here', tree.includes('"arrived_label":"Here"'), 'asserted on the row data — Rows renders its cells in React, so expanded badges never reach the tree');
 ok('...while anyone still due reads Due', roster.rows.length > 1 ? tree.includes('"arrived_label":"Due"') : true);
 
-// ── the walk-in: most of a front desk's day ──────────────────
-//
-// Somebody with live access, no booking, standing at the desk. One tap books
-// the place and checks them in — the reads and writes existed for two
-// reviews; this is the first time anything calls them.
 const walkIn = await one<{ person_id: string; name: string }>(
   `SELECT sp.person_id, p.name FROM studio_people sp JOIN people p ON p.id = sp.person_id
    WHERE sp.studio_id = 'st_lumen'
@@ -113,7 +103,6 @@ tree = treeOf(shell);
 ok('the roster now holds the walk-in', tree.includes(walkIn.name), 're-read after the write');
 ok('...and stopped offering them in the picker', !tree.includes(`"value":"${walkIn.person_id}"`), 'booked is no longer bookable');
 
-// ── the boundary holds on the new surfaces too ──
 const foreign = await asPrincipal(CAST.northrock.owner, '/api/schedule/vex', { fingerprint: 'roster/forSession', context: { sessionId } });
 ok("another studio cannot read Lumen's roster", Array.isArray(foreign) && foreign.length === 0, JSON.stringify(foreign).slice(0, 80));
 

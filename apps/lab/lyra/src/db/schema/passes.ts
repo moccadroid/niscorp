@@ -1,4 +1,3 @@
-// Passes: N class credits, and the attendance that spends one.
 export const PASSES_DDL = /* sql */ `
   -- The other entitlement: N class credits, decremented as they are used.
   -- A drop-in is a pass with credits_total = 1 — the degenerate case, not a

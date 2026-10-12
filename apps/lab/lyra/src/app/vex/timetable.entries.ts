@@ -1,9 +1,6 @@
 import type { CacheEntry, MutationEntry } from './index';
 import { dateText, pattern, priceText } from '@lyra/app/prisms/format.prism';
 
-// The TIMETABLE — the rules a studio runs on, as opposed to the dated classes
-// they produce. Managing this is a manager's job; reading it is everybody's.
-
 const row = (name: string) => ({ $get: { from: { $var: 't' }, path: [name] } });
 
 const weekdayText = (value: unknown) => ({
@@ -20,7 +17,6 @@ const weekdayText = (value: unknown) => ({
   },
 });
 
-// The weekly grid. The teacher's name rides on the row — see the DSL for why.
 export const templatesList: CacheEntry = {
   fingerprint: 'templates/list',
   intent: "This studio's weekly class grid, with program and instructor",
@@ -43,14 +39,9 @@ export const templatesList: CacheEntry = {
       'class_templates.course_id',
       'class_templates.starts_on',
       'class_templates.ends_on',
-      // NO PRICE HERE ANY MORE, and not because it could not be reached: a
-      // block's price is a catalogue row (courses.offering_id), which is NOT
-      // NULL, so joining it turns this read's LEFT JOIN to courses into an inner
-      // one and every weekly class without a block falls out of the timetable.
-      //
-      // Which is the right outcome anyway. This screen answers WHEN things run.
-      // What a block costs is authored on Offers, beside every other price, and
-      // a second place showing it is a second place for it to go stale.
+      // No price: joining it through `courses.offering_id` (NOT NULL) turns
+      // this read's LEFT JOIN to courses into an inner one, and every weekly
+      // class without a block falls out of the timetable.
       { field: 'courses.enrolled_count', as: 'course_enrolled' },
     ],
     sort: [
@@ -77,12 +68,8 @@ export const templatesList: CacheEntry = {
         instructor_id: { $coalesce: [row('instructor_id'), ''] },
         instructor_name: row('instructor_name'),
         active: row('active'),
-        // WHAT KIND OF THING THIS IS, in the row rather than in which screen
-        // you happened to open. "Every week" or the dates it runs between.
         course_id: { $coalesce: [row('course_id'), ''] },
         is_course: { $case: { branches: [{ when: row('course_id'), then: true }], else: false } },
-        // Blank on a weekly slot: "0 of 24" against a class that runs forever
-        // is a number about nothing. A block is the only row with a cohort.
         places_display: {
           $case: {
             branches: [
@@ -157,7 +144,6 @@ export const teachersList: CacheEntry = {
     filter: { and: [{ eq: ['staff.active', true] }, { in: ['staff.role', ['owner', 'manager', 'instructor']] }] },
     sort: [{ field: 'people.name', dir: 'asc' }],
   },
-  // Option shape on the way out, for the same reason as programs.
   mapping: {
     $map: {
       over: { $ref: '$.result' },
@@ -172,8 +158,6 @@ export const teachersList: CacheEntry = {
     },
   },
 };
-
-// ─── writes ──────────────────────────────────────────────────
 
 export const templateCreate: MutationEntry = {
   fingerprint: 'templates/create',
@@ -196,10 +180,6 @@ export const templateCreate: MutationEntry = {
   },
 };
 
-// One statement for however many days a course meets on — `slots` is an array
-// of `{ weekday }` objects and every other column is constant across rows.
-// This is the loop that used to live in a server function, now authored:
-// `INSERT … SELECT … FROM jsonb_array_elements($slots)`.
 export const templatesCreateEach: MutationEntry = {
   fingerprint: 'templates/createEach',
   intent: 'Add a weekly class slot for each chosen day — a course’s whole meeting pattern in one write',
@@ -241,14 +221,6 @@ export const templateUpdate: MutationEntry = {
   },
 };
 
-// RETIRE AND RESTORE ARE ONE VERB. They were two entries writing `false` and
-// `true` into the same column of the same row — the flag is the only thing
-// that differed, so the flag is the argument.
-//
-// This gives up nothing. A boolean column bounds the value completely (there
-// is no third thing to write), and charter grants are table.operation
-// (`class_templates.write.update`), so both fingerprints already sat behind
-// one identical permission — splitting them never bought a narrower grant.
 export const templateSetActive: MutationEntry = {
   fingerprint: 'templates/set-active',
   intent: 'Take a weekly slot out of the grid, or put it back — its history is kept either way',
@@ -260,8 +232,6 @@ export const templateSetActive: MutationEntry = {
   },
 };
 
-// Calling off ONE dated class. The slot survives; only this occurrence is off,
-// and its bookings stay so the desk can see who to tell.
 export const sessionCancel: MutationEntry = {
   fingerprint: 'sessions/cancel',
   intent: 'Cancel one dated class',
@@ -283,8 +253,6 @@ export const sessionRestore: MutationEntry = {
     where: { eq: ['class_sessions.id', { $context: 'sessionId' }] },
   },
 };
-
-// ─── programs ────────────────────────────────────────────────
 
 export const programCreate: MutationEntry = {
   fingerprint: 'programs/create',

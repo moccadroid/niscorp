@@ -1,4 +1,3 @@
-// The words: what this application says, in a language.
 export const PHRASES_DDL = /* sql */ `
   -- WHAT THIS APPLICATION SAYS, IN A LANGUAGE. The exact twin of "themes"
   -- above, and for the same reason: a studio's look and a studio's language

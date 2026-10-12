@@ -86,8 +86,6 @@ export const reportsLayout: LayoutNode = {
             rowKey: 'week_key',
             empty: 'Not enough history yet.',
             columns: [
-              // The week's first attended day, in the studio's locale —
-              // `2026-W25` is the grouping key, not a label.
               { label: 'Week', px: 140, cell: { kind: 'text', key: 'week_display', color: 'ink' } },
               { label: 'Check-ins', w: 1, align: 'right', cell: { kind: 'number', key: 'total' } },
             ],

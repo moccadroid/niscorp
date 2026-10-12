@@ -14,16 +14,10 @@ export const peopleListLayout: LayoutNode = page([
       { component: 'Hero', props: { title: 'People' } },
       { component: 'Button', props: { variant: 'solid', label: 'Add a person' }, ref: 'add' },
       { component: 'Tabs', props: { value: '$.scope', options: '$.scopes' }, ref: 'scope' },
-      // THE SECOND QUESTION. It used to be four more chips in the strip above,
-      // which offered "Current" and "Passes" as alternatives to each other while
-      // they answer different things — and made "members who hold a pass"
-      // unaskable, because one strip can only carry one axis.
       { component: 'Select', props: { label: 'What they hold', options: '$.holdings', value: '$.holding' }, ref: 'holding' },
     ],
   },
 
-  // The count beside the search box is what stops a capped list lying: fifty
-  // rows look complete at a studio with two thousand members.
   {
     component: 'Row',
     props: { justify: 'between', align: 'center', wrap: true, gap: 12 },
@@ -45,11 +39,6 @@ export const peopleListLayout: LayoutNode = page([
         onRowRef: 'open',
         empty: 'Nobody here yet.',
         emptyHint: 'People appear once somebody asks, signs up, or the desk writes them down.',
-        // The database owns the order, so a header click re-reads rather than
-        // shuffling the fifty rows already on screen — sorting two thousand
-        // people by the fifty you happen to be looking at is not sorting.
-        // Standing is deliberately NOT sortable: it is computed per row and no
-        // dialect will order by an alias that is not a column.
         sortKey: '$.sortBy',
         sortDir: '$.sortDir',
         onSortRef: 'sort',
@@ -62,9 +51,6 @@ export const peopleListLayout: LayoutNode = page([
     },
   },
 
-  // THE WAY TO PERSON FIFTY-ONE. Shown only while a full page came back:
-  // a short page is the end of the roll, and a button that fetches nothing
-  // is a button that lies about there being more.
   {
     if: '$.hasMore',
     then: {
@@ -116,12 +102,6 @@ export const peopleDetailLayout: LayoutNode = page([
       ],
     },
   },
-  // ── the family ───────────────────────────────────────────────
-  //
-  // Children this person may act for. Drawn on every record rather than only
-  // on parents': an empty family with an "Add a child" button beside it is how
-  // a desk discovers the feature exists, and a section that appears only once
-  // somebody already used it teaches nobody.
   {
     component: 'Section',
     props: { title: 'Family', subtitle: 'Children this person may book and pay for.' },
@@ -156,9 +136,6 @@ export const peopleDetailLayout: LayoutNode = page([
             component: 'Rows',
             props: { gap: 12 },
             children: [
-              // NO EMAIL FIELD, and that is the screen saying what the schema
-              // says: a child is a record, not a login. Somebody looking for
-              // the field is meant to notice it is not there.
               { component: 'Input', props: { label: 'Name', big: true, placeholder: 'Emma Klein' }, ref: 'childName', model: '$.childName' },
               { component: 'Input', props: { label: 'Date of birth', type: 'date', hint: 'Kids’ classes are grouped by age.' }, ref: 'childBornOn', model: '$.childBornOn' },
               {
@@ -182,8 +159,6 @@ export const peopleDetailLayout: LayoutNode = page([
     children: {
       component: 'Card',
       props: {},
-      // A note is PROSE, at whatever length somebody needed. `Text` is a span
-      // with no leading and no measure.
       children: { if: '$.member.notes', then: { component: 'Prose', props: { color: 'soft' }, children: '$.member.notes' }, else: { component: 'Text', props: { color: 'faint' }, children: 'Nothing noted.' } },
     },
   },
@@ -210,11 +185,6 @@ export const peopleDetailLayout: LayoutNode = page([
     else: '',
   },
 
-  // ── WHAT THEY HOLD ─────────────────────────────────────────
-  //
-  // Drawn from data, not from capability: a rung that cannot read a
-  // subscription gets an empty object here and the section is simply absent.
-  // No branch asks what anybody is allowed to do.
   {
     if: '$.subscription.subscription_id',
     then: {
@@ -230,9 +200,6 @@ export const peopleDetailLayout: LayoutNode = page([
             children: [
               { component: 'Field', props: { label: 'Plan', value: '$.subscription.plan_name' } },
               { component: 'Field', props: { label: 'Worth', value: '$.subscription.value_display' } },
-              // `phrase` for the three that carry vocabulary or a counted
-              // pattern; names, money and dates stay `value` — data, already
-              // in the reader's locale, and the pass must never rename them.
               { component: 'Field', props: { label: 'Minimum term', phrase: '$.subscription.term_display' } },
               { component: 'Field', props: { label: 'Notice', phrase: '$.subscription.notice_display' } },
               { component: 'Field', props: { label: 'Committed until', value: '$.subscription.committed_display', empty: 'No commitment' } },
@@ -240,9 +207,6 @@ export const peopleDetailLayout: LayoutNode = page([
               { component: 'Field', props: { label: 'Paid until', value: '$.subscription.paid_until_display', empty: 'Nothing recorded' } },
             ],
           },
-          // The desk's own pen for money it took itself: cash, a transfer, the
-          // SEPA run. Standing only — the ledger is a later feature, and the
-          // screen says what was decided rather than pretending otherwise.
           {
             component: 'Row',
             props: { gap: 10, align: 'end', wrap: true },
@@ -253,8 +217,6 @@ export const peopleDetailLayout: LayoutNode = page([
           },
           {
             if: '$.subscription.notice_given',
-            // Once notice is given the date is the fact worth showing, and the
-            // control becomes the way back rather than a second way forward.
             then: {
               component: 'Row',
               props: { gap: 12, align: 'center', wrap: true },
@@ -277,9 +239,6 @@ export const peopleDetailLayout: LayoutNode = page([
         ],
       },
     },
-    // No subscription: the desk puts them on a plan, saying how it will be
-    // paid. This is the write the old model did not have — a studio with no
-    // payment processor sells a plan right here.
     else: {
       component: 'Section',
       props: { title: 'Plan', subtitle: 'Nothing running. Starting a plan grants access from today; how the money moves is its own question.' },
@@ -306,7 +265,6 @@ export const peopleDetailLayout: LayoutNode = page([
     },
   },
 
-  // ── PASSES ─────────────────────────────────────────────────
   {
     component: 'Section',
     props: { title: 'Passes', subtitle: 'Class credits. A drop-in is a one-credit pass; attending is what spends one.' },
@@ -331,10 +289,6 @@ export const peopleDetailLayout: LayoutNode = page([
             },
           },
         },
-        // BOUGHT OUTRIGHT, and granting nothing — the joining fee, the deposit,
-        // the gi. Drawn from data like everything else on this record: a studio
-        // that sells none has an empty list and the section says so, rather than
-        // the screen asking what anybody is allowed to see.
         {
           component: 'Card',
           props: { flush: true },
@@ -412,8 +366,6 @@ export const peopleDetailLayout: LayoutNode = page([
               columns: [
                 { label: 'Put them on', w: 2, cell: { kind: 'primary', key: 'name', subKey: 'dates_display', dotKey: 'tone' } },
                 { label: 'Places', px: 88, align: 'right', cell: { kind: 'text', key: 'places_display' } },
-                // Hidden when the block is full — the database would refuse it,
-                // and offering it anyway is a promise the screen cannot keep.
                 { label: '', px: 84, align: 'right', cell: { kind: 'action', label: 'Enrol', ref: 'enrol', variant: 'outline', hideKey: 'full' } },
               ],
             },
@@ -434,9 +386,6 @@ export const peopleFormLayout: LayoutNode = page([
       component: 'Stack',
       props: { gap: 18, maxWidth: 460 },
       children: [
-        // No status field, deliberately: what a person IS derives from what
-        // they hold, and the writes that change that live on the record —
-        // start a plan, sell a pass, give notice. This form edits the anchor.
         {
           component: 'Input',
           props: { label: 'Free trial until', type: 'date', hint: 'The window closes on its own — nothing marks it.' },
@@ -449,10 +398,6 @@ export const peopleFormLayout: LayoutNode = page([
           ref: 'notes',
           model: '$.notes',
         },
-        // THE ONLY PLACE A YES CAN BE RECORDED. Class reminders and booking
-        // confirmations need no permission — they asked for the class. This is
-        // for everything else, and without it the studio's win-back automation
-        // reaches nobody at all, which is correct and looks broken.
         {
           component: 'Switch',
           props: {
@@ -477,8 +422,6 @@ export const peopleFormLayout: LayoutNode = page([
 
 export const peopleSignupLayout: LayoutNode = page([
   {
-    // Done and not-done are the same screen with the middle swapped, so the
-    // heading never jumps and a kiosk never looks like it navigated.
     if: '$.done',
     then: {
       component: 'Stack',
@@ -488,11 +431,6 @@ export const peopleSignupLayout: LayoutNode = page([
           component: 'Hero',
           props: {
             title: '$.signedUpName',
-            // WHAT THEY ARE, said out loud. Standing is derived — the moment an
-            // active subscription exists they read as a member on every screen —
-            // and that was completely invisible: the app knew and never told
-            // anybody. Two sentences, because "on the roll" and "a member" are
-            // different states and the desk has to be able to tell them apart.
             lead: '$.standingLine',
           },
         },
@@ -503,17 +441,6 @@ export const peopleSignupLayout: LayoutNode = page([
             component: 'Stack',
             props: { gap: 16, maxWidth: 480 },
             children: [
-              // ── AND WHAT ARE THEY ON? ────────────────────────
-              //
-              // The step that did not exist. Somebody standing at a desk with a
-              // new customer had to add them, find them again on the roll, open
-              // their record, and start a plan from there — three screens for
-              // one errand, and the fourth thing they needed (a joining fee) had
-              // nowhere to happen at all.
-              //
-              // Offered here, once, while the person is still in front of them.
-              // Skipping it is a real answer: a prospect who has not decided is
-              // exactly who the roll's "holding nothing yet" is for.
               {
                 if: '$.onAPlan',
                 then: '',
@@ -522,9 +449,6 @@ export const peopleSignupLayout: LayoutNode = page([
                   props: { gap: 12 },
                   children: [
                     { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Put them on something now, or leave it — they are on the roll either way.' },
-                    // The error Notice used to live only in the form, which is
-                    // the OTHER branch of this screen — so a failure here had
-                    // nowhere to appear and the button simply did nothing.
                     { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
                     {
                       component: 'Row',
@@ -578,9 +502,6 @@ export const peopleSignupLayout: LayoutNode = page([
               { component: 'Input', props: { label: 'Name', big: true, placeholder: 'Ava Klein' }, ref: 'newName', model: '$.newName' },
               { component: 'Input', props: { label: 'Email', type: 'email', big: true, placeholder: 'ava@example.com', hint: 'How they sign in. If we already know this address we reuse the person.' }, ref: 'newEmail', model: '$.newEmail' },
               { component: 'Input', props: { label: 'Phone', type: 'tel' }, ref: 'newPhone', model: '$.newPhone' },
-              // No "starting as" select: being written down IS the relationship,
-              // and everything else (a plan, a pass, a course) is granted from
-              // their record. What they ARE is never chosen from a dropdown.
               {
                 component: 'Input',
                 props: { label: 'Free trial until', type: 'date', hint: 'Leave empty for no trial window.' },

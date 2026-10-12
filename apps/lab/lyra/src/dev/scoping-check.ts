@@ -1,4 +1,3 @@
-// Run: pnpm --filter lyra exec tsx src/dev/scoping-check.ts
 import { CAST } from '@lyra/db/seed';
 import { asPrincipal, ok, report, runtime, server } from './world';
 
@@ -9,7 +8,6 @@ const mine = await count(`SELECT count(*) n FROM bookings WHERE person_id = 'p_a
 const studio = await count(`SELECT count(*) n FROM bookings WHERE studio_id = 'st_lumen' AND status = 'booked' ${UPCOMING}`);
 ok('the seed has both quantities to tell apart', mine > 0 && studio > mine, `${mine} of Ava's against ${studio} at the studio`);
 
-// ── the same fingerprint, from two rungs ─────────────────────
 const asMember = await asPrincipal(CAST.lumen.member, '/api/me/vex', { fingerprint: 'me/bookings', context: {} });
 const asDesk = await asPrincipal(CAST.lumen.desk, '/api/me/vex', { fingerprint: 'me/bookings', context: {} });
 
@@ -26,7 +24,6 @@ const foreignRows = await count(
 );
 ok('...and not one of those rows belongs to anybody else', foreignRows === 0, `${foreignRows} foreign row(s) in a ${memberRows}-row answer`);
 
-// ── the tenant rule still stacks ─────────────────────────────
 const foreign = await asPrincipal(CAST.northrock.member, '/api/me/vex', { fingerprint: 'me/bookings', context: {} });
 const northRock = Array.isArray(foreign) ? foreign.length : -1;
 ok('another studio’s member reads their own, at their own studio', northRock > 0, `${northRock} rows`);
@@ -35,12 +32,6 @@ const leaked = await count(
 );
 ok('...with no Lumen row among them', leaked === 0, 'the personal rule ANDs onto the tenant rule, it does not replace it');
 
-// ── reach itself, read off the compiled policy ───────────────
-
-// The policy the server compiles for the ROLES the identity seam resolves —
-// the same path the request takes, over the tables the database has. There is
-// no assignment map to read them out of any more, and no grant list written
-// down here that could disagree with the schema.
 const rulesFor = async (personId: string, phase: 'read'): Promise<number> => {
   const { roles } = await server.identity(personId);
   const entity = server.policyForRoles(roles).entities['bookings'];
@@ -52,7 +43,6 @@ const deskRules = await rulesFor('p_ines', 'read');
 ok("a member's policy filters bookings by more than the tenant", memberRules > deskRules, `${memberRules} rule(s) against the desk's ${deskRules}`);
 ok('...and the desk keeps the roster it exists to read', deskRules >= 1, `${deskRules} rule(s) — the tenant boundary, and nothing narrower`);
 
-// ── a profile is a floor, not a ceiling ──────────────────────
 const busiest = await runtime.db.query<{ session_id: string; n: string }>(
   "SELECT session_id, count(*) AS n FROM bookings WHERE studio_id = 'st_lumen' AND status = 'booked' GROUP BY session_id ORDER BY n DESC LIMIT 1",
 );

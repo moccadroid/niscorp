@@ -1,20 +1,5 @@
-// Render check — the kit draws what the server said.
-//
-// Every other suite stops at the render TREE: it asserts JSON, which is the
-// engine's output and the component kit's input. Nothing has ever run the
-// components. This mounts the real trees, for real principals, through the real
-// registry, into a real DOM — and asks the only question the tree cannot
-// answer: is what the server sent actually on the screen?
-//
-// The rule it exists for is the one the roster bug broke — a list that fetched
-// ids and never joined them, showing raw keys while the check asserted names
-// that only ever existed in props. A tree comparison cannot see that. A person
-// can, and so can this.
-//
-// Run: pnpm --filter lyra exec tsx src/dev/render-check.ts
-//
-// `world` first: it boots pglite, which reads its environment at load, and
-// `surface` installs a DOM over the same globals.
+// `world` before `surface`: it boots pglite, which reads its environment at
+// load, and `surface` installs a DOM over the same globals.
 import { anonymous, app, login, ok, report, settle } from './world';
 import { CAST } from '@lyra/db/seed';
 import { COMPONENT_NAMES } from '@lyra/ui/registry';
@@ -25,7 +10,6 @@ import { all, click, draw, errorMarkers, events, find, namesIn, resize, show, te
 const treeOf = (shell: { flattenRenderTree: (nodes: RenderNode[]) => RenderNode[]; getShellRenderTree: () => RenderNode[] }): RenderNode[] =>
   shell.flattenRenderTree(shell.getShellRenderTree());
 
-/** Every string the server put in the tree as CONTENT — the words a person is owed. */
 const wordsIn = (nodes: RenderNode[], into: string[] = []): string[] => {
   for (const item of nodes) {
     if (item.type === 'text') {
@@ -38,7 +22,6 @@ const wordsIn = (nodes: RenderNode[], into: string[] = []): string[] => {
   return into;
 };
 
-/** Every `Rows` node in a tree, with the props it was given. */
 const rowsIn = (nodes: RenderNode[], into: Record<string, unknown>[] = []): Record<string, unknown>[] => {
   for (const item of nodes) {
     if (item.type === 'component') {
@@ -51,16 +34,10 @@ const rowsIn = (nodes: RenderNode[], into: Record<string, unknown>[] = []): Reco
   return into;
 };
 
-// What a cell of each kind puts on the screen. The vocabulary is closed
-// (rows.tsx), so this can be exhaustive rather than a guess — and it is
-// deliberately written from the SPEC, not from the component, so the two have
-// to agree for the assertion to pass.
 type Cell = { kind?: string; key?: string; subKey?: string; suffix?: string };
 const shownBy = (cell: Cell, row: Record<string, unknown>): string[] => {
   const at = (key: string | undefined): string => {
     if (key === undefined) return '';
-    // Filled exactly the way the kit fills — a counted phrase is owed to the
-    // screen as its text, not as the `{ phrase, slots }` it travels as.
     const value = fillPhrase(row[key]);
     return value === undefined || value === null ? '' : String(value);
   };
@@ -70,17 +47,14 @@ const shownBy = (cell: Cell, row: Record<string, unknown>): string[] => {
       return [at(cell.key)];
     case 'badge':
       return [at(cell.key)];
-    // A subtitle equal to its title is dropped on purpose, so it is not owed.
     case 'primary':
     case 'avatar':
       return [at(cell.key), at(cell.subKey) === at(cell.key) ? '' : at(cell.subKey)];
     default:
-      // bands, icon, meter, menu, action — drawn rather than spelled.
       return [];
   }
 };
 
-/** Every field in a tree with the value the server gave it — `[name, value]`. */
 const FIELDS = new Set(['Input', 'Textarea', 'Select', 'PersonPicker']);
 const fieldsIn = (nodes: RenderNode[], into: [string, string][] = []): [string, string][] => {
   for (const item of nodes) {
@@ -98,7 +72,6 @@ const fieldsIn = (nodes: RenderNode[], into: [string, string][] = []): [string, 
 const seen = new Set<string>();
 const remember = (nodes: RenderNode[]): void => namesIn(nodes).forEach((name) => seen.add(name));
 
-// ── 1. every principal's shell draws ─────────────────────────
 const PRINCIPALS: [string, string | null, string][] = [
   ['an owner', CAST.lumen.owner, 'Maren'],
   ['the front desk', CAST.lumen.desk, 'Lumen Yoga'],
@@ -118,11 +91,6 @@ for (const [who, email, expected] of PRINCIPALS) {
   ok(`...saying what the tree says`, text().includes(expected), `"${expected}"`);
 }
 
-// ── 2. and every word the server sent is on it ───────────────
-//
-// The tree is the promise; the DOM is the delivery. A component that quietly
-// drops its children — or renders them into an attribute — passes every JSON
-// assertion in this directory and fails here.
 const DESTINATIONS = ['people.list', 'staff.list', 'plans.list', 'timetable.list', 'schedule.timetable', 'reports.overview', 'studio.settings', 'automations.list', 'campaigns.list', 'desk.checkin', 'programs.list'].filter(
   (id) => app.actions[id] !== undefined,
 );
@@ -151,7 +119,6 @@ for (const destination of DESTINATIONS) {
   if (missing.length > 0) swallowed.push(`${destination}: ${missing.slice(0, 3).map((w) => `"${w.slice(0, 24)}"`).join(', ')}`);
   else drawn += 1;
 
-  // ── 3. …including the cells of every list on it ────────────
   for (const props of rowsIn(tree)) {
     const rows = Array.isArray(props['rows']) ? (props['rows'] as Record<string, unknown>[]) : [];
     const columns = Array.isArray(props['columns']) ? (props['columns'] as { cell?: Cell }[]) : [];
@@ -168,22 +135,12 @@ for (const destination of DESTINATIONS) {
 ok('every screen an owner opens draws its own words', drawn === DESTINATIONS.length && swallowed.length === 0, swallowed.length === 0 ? `${DESTINATIONS.length} screens, nothing swallowed between tree and DOM` : swallowed.slice(0, 4).join(' · '));
 ok('...and every list shows the cells its spec names', rowFaults.length === 0, rowFaults.length === 0 ? 'no column resolves to something the reader never sees' : [...new Set(rowFaults)].slice(0, 4).join(' · '));
 
-// ── 4. the loop, closed ──────────────────────────────────────
-//
-// Everything above renders what the server said. This is the other direction,
-// and no other check in this directory has it: a click on a real element, the
-// event the KIT decided to emit, forwarded to the shell exactly as the wire
-// does, and the screen that comes back. Both bugs that ever reached a browser
-// died in this gap — one in the event, one in what the event carried.
 owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'people.list' });
 await settle(14);
 const roll = treeOf(owner);
 await show(roll);
 
-// Who to click is read from the SPEC — the column that carries the name — and
-// then found on the screen by that name, so the click lands on the row a person
-// would have aimed at. Somebody with something written down, because a blank
-// record makes a blank form correct and the assertion below vacuous.
+// Somebody with something written down: a blank record makes a blank form correct.
 const spec = rowsIn(roll)[0] ?? {};
 const rows = Array.isArray(spec['rows']) ? (spec['rows'] as Record<string, unknown>[]) : [];
 const nameKey =
@@ -205,8 +162,6 @@ await show(opened);
 ok('clicking a row opens that person', fired.length === 1 && somebody !== '' && text().includes(somebody), `clicked "${somebody}", the kit sent ${JSON.stringify(fired[0]?.payload).slice(0, 60)}`);
 ok('...onto the sheet, over the roll', find('[role="dialog"]') !== null && text().includes(somebody), 'a record is something you do to the list, not a place you go');
 
-// The form is where the components that hold their own state live — a draft, a
-// caret, a decimal that leaves as cents. Nothing has ever rendered one.
 owner.dispatch({ type: 'ui:click', ref: 'edit' });
 await settle(16);
 const form = treeOf(owner);
@@ -215,20 +170,11 @@ await show(form);
 const fields = all('input, textarea, select');
 ok('the edit form draws real fields', fields.length >= 3, `${fields.length} of them on the sheet`);
 
-// A FIELD THE SERVER GAVE A VALUE MUST SHOW IT. `Input` keeps a local draft so
-// a remote echo cannot clobber what somebody is typing, and the seam between
-// that draft and the served value is the one place a form can silently arrive
-// blank. It is a hook, so no tree records whether it worked.
 const owed = fieldsIn(form).filter(([, value]) => value !== '');
 const held = new Set(fields.map((field) => String((field as HTMLInputElement).value ?? '')));
 const blank = owed.filter(([, value]) => !held.has(value));
 ok('...seeded with what the record holds', owed.length > 0 && blank.length === 0, blank.length > 0 ? `the tree says ${blank.map(([name, value]) => `${name}="${value.slice(0, 20)}"`).join(', ')}, the field is empty` : `${owed.length} field${owed.length === 1 ? '' : 's'} arrived filled in`);
 
-// ── 5. one arrangement, two shapes ───────────────────────────
-//
-// The navigation is the one place the kit decides something the server did not:
-// a rail at a desk, a drawer behind a thumb bar on a phone. It is a media query
-// inside a component, so no tree anywhere records which one happened.
 owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'people.list' });
 await settle(12);
 
@@ -244,7 +190,6 @@ const overlay = find('.ly-drawer--rail') === null;
 ok('on a phone it is a thumb bar, and the rail is gone', thumbBar && overlay, `${all('.ly-bar--bottom .ly-tab').length} destinations under a thumb`);
 await resize(1280);
 
-// ── 6. the states a screen full of data never shows ──────────
 const LIST = {
   rowKey: 'id',
   columns: [
@@ -268,11 +213,7 @@ await draw('Rows', { ...LIST, rows: [{ id: '1', name: 'Ada Byron' }], onRowRef: 
 const row = find('.ly-row-item--clickable');
 ok('a clickable row is reachable from a keyboard', row?.getAttribute('role') === 'button' && row?.getAttribute('tabindex') === '0');
 
-// ── 7. what the screens actually exercised ───────────────────
-//
-// Reported rather than asserted: an unexercised component is not a fault, it is
-// a component whose only proof is somebody clicking. The number is the point —
-// it says how much of the kit these checks now stand behind.
+// The untouched components are reported, not asserted: none of them is a fault.
 const registered = COMPONENT_NAMES.filter((name) => name !== 'CanvasSlot' && name !== 'ActionSlot');
 const exercised = registered.filter((name) => seen.has(name));
 const untouched = registered.filter((name) => !seen.has(name));

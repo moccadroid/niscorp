@@ -10,8 +10,6 @@ export const scheduleTimetableAction: ActionDefinition = {
     sessions: [],
     programs: [],
     loading: true,
-    // The calendar is the default. Somebody opening a timetable is looking at
-    // a week, not reading a feed.
     calendar: true,
     view: 'calendar',
     views: [
@@ -19,7 +17,6 @@ export const scheduleTimetableAction: ActionDefinition = {
       { value: 'list', label: 'List', calendar: false },
     ],
     weekSkip: 0,
-    // The tag the calendar formats its day names with — see schedule.prism.ts.
     currentLocale: '',
   },
   layout: timetableLayout,
@@ -36,7 +33,6 @@ export const scheduleTimetableAction: ActionDefinition = {
     ],
   },
   triggers: [
-    // ONE trigger for the whole stepper: the arrow carries where it is going.
     { event: 'ui:click', ref: 'stepWeek', do: [{ set: 'weekSkip', value: '@event.payload.skip' }] },
     { event: 'ui:click', ref: 'view', do: [{ set: 'view', value: '@event.payload.value' }, { set: 'calendar', value: '@event.payload.calendar' }] },
     { event: 'ui:click', ref: 'openSession', do: [{ push: { action: 'schedule.session', canvas: 'sheet', with: ['sheet'], input: { sessionId: '@event.payload.session_id' } } }] },

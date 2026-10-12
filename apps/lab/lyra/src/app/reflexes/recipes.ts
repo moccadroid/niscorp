@@ -1,8 +1,6 @@
 export type Recipe = {
   id: string;
-  /** The problem, in the words somebody would use to complain about it. */
   title: string;
-  /** Why it is worth doing — one sentence, not a feature description. */
   why: string;
   icon: string;
   moment: string;
@@ -13,17 +11,8 @@ export type Recipe = {
   body: string;
 };
 
-// ONE RECIPE PER MOMENT, and none that cannot run.
-//
-// There were seven, and three of them named moments the automation principal
-// is not granted to read — so "Set it up" produced a row that was refused by
-// the engine every single time it fired. `renewal` was the worst of them: it
-// reads `plans`, the rung has no `plans.read`, and nothing anywhere said so
-// until the reflex ran and parked. A recipe is an offer, and an offer that
-// cannot be honoured is worse than an empty list.
-//
-// Every one below was driven through the engine against real data and watched
-// to select real people before it was written down here.
+// A recipe must name a moment the automation principal is granted to read:
+// otherwise "Set it up" produces a row the engine refuses every time it fires.
 export const RECIPES: readonly Recipe[] = [
   {
     id: 'welcome',

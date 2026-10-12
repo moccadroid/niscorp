@@ -33,8 +33,6 @@ export const deskCheckInLayout: LayoutNode = {
       },
     },
 
-    // The roster only exists once a class is chosen. An empty pane with
-    // headings would look like a class with nobody in it.
     {
       if: '$.selectedSessionId',
       then: [
@@ -62,11 +60,6 @@ export const deskCheckInLayout: LayoutNode = {
           },
         },
 
-        // ── the walk-in, most of a front desk's day ──────────
-        // Somebody at the desk who is not on the list: pick them, and one
-        // tap books the place and checks them in. The picker only offers
-        // people with live access who are not already booked — the read
-        // that sat built and uncalled for two reviews.
         {
           component: 'Section',
           props: { title: 'Walk-in', subtitle: 'At the desk, not on the list.' },
@@ -100,8 +93,6 @@ export const deskCheckInLayout: LayoutNode = {
       else: '',
     },
 
-    // Check-ins with no class at all — open gym, a visitor, the door. The
-    // list this screen always promised.
     {
       component: 'Section',
       props: { title: 'Walk-ins today', subtitle: 'Check-ins that belong to no class.' },

@@ -59,8 +59,6 @@ const sessionLayout: LayoutNode = {
 export const scheduleSessionAction: ActionDefinition = {
   id: 'schedule.session',
   title: 'Class',
-  // `sessionId` is data, seeded by the opener through the input schema — the
-  // request prisms read it from here, the way every other opened surface does.
   data: { sessionId: '', session: {}, attending: [], loading: true },
   layout: sessionLayout,
   endpoints: {
@@ -77,7 +75,6 @@ export const scheduleSessionAction: ActionDefinition = {
   ],
 };
 
-// The opener passes the class. Rule 14: the contract is authored, not implied.
 export const scheduleSessionInputSchema = z.toJSONSchema(
   z.object({ sessionId: z.string().describe('The class being looked at.') }),
 );

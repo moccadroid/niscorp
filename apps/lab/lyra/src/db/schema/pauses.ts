@@ -1,4 +1,3 @@
-// Pausing: a ledger of freezes, and the term arithmetic that follows one.
 export const PAUSES_DDL = /* sql */ `
   -- A LEDGER, its own table, for the same reason notice is: a charter grant is
   -- table.verb, and "may freeze their own training" must not be the grant that

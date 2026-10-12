@@ -1,4 +1,3 @@
-// Run: pnpm --filter lyra exec tsx src/dev/waitlist-check.ts
 import { CAST } from '@lyra/db/seed';
 import { asPrincipal, login, ok, report, runtime, settle, treeOf } from './world';
 
@@ -9,7 +8,6 @@ const count = async (sql: string, params: unknown[] = []): Promise<number> => {
 const refused = (value: unknown): boolean =>
   value !== null && typeof value === 'object' && !Array.isArray(value) && typeof (value as { status?: unknown }).status === 'number';
 
-// ── a one-off ────────────────────────────────────────────────
 const owner = await login(CAST.lumen.owner);
 await settle(10);
 owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'timetable.list' });
@@ -48,7 +46,6 @@ member.dispatch({ type: 'ui:click', ref: 'nav', payload: 'me.classes' });
 await settle(14);
 ok('a member is offered the one-off', treeOf(member).includes('Inversions masterclass'), 'no branch anywhere knows it has no template');
 
-// ── the queue ────────────────────────────────────────────────
 const seat1 = await asPrincipal(CAST.lumen.member, '/api/me/vex', { fingerprint: 'me/book', context: { sessionId: eventId } });
 ok('the first member books', !refused(seat1));
 const seat2 = await asPrincipal(CAST.lumen.instructor, '/api/me/vex', { fingerprint: 'me/book', context: { sessionId: eventId } });
@@ -60,7 +57,6 @@ ok('a full class does NOT refuse the third', !refused(third), 'turning them away
 ok('...it queues them', (await count("SELECT count(*) n FROM bookings WHERE person_id = 'p_lena' AND session_id = $1 AND status = 'waitlisted'", [eventId])) === 1);
 ok('...without taking a seat', (await count('SELECT booked_count n FROM class_sessions WHERE id = $1', [eventId])) === 2, 'the counter counts `booked` only');
 
-// ── the queue moves itself ───────────────────────────────────
 const avaBooking = (await runtime.db.query<{ id: string }>("SELECT id FROM bookings WHERE person_id = 'p_ava' AND session_id = $1", [eventId])).rows[0]?.id ?? '';
 await asPrincipal(CAST.lumen.member, '/api/me/vex', { fingerprint: 'me/cancel', context: { bookingId: avaBooking } });
 
@@ -73,7 +69,6 @@ const lenaBooking = (await runtime.db.query<{ id: string }>("SELECT id FROM book
 await asPrincipal('lena.gruber@example.com', '/api/me/vex', { fingerprint: 'me/cancel', context: { bookingId: lenaBooking } });
 ok('a cancellation with an empty queue just frees the seat', (await count('SELECT booked_count n FROM class_sessions WHERE id = $1', [eventId])) === 1);
 
-// ── what the member is told ──────────────────────────────────
 const jonas = await login(CAST.lumen.instructor);
 await settle(12);
 jonas.dispatch({ type: 'ui:click', ref: 'nav', payload: 'me.bookings' });

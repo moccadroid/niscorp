@@ -1,29 +1,6 @@
 import type { CacheEntry, MutationEntry } from './index';
 
-// ═══════════════════════════════════════════════════════════════
-// THE NO-PRINCIPAL SURFACES, AS ENTRIES.
-//
-// Four surfaces in this application act before or without a session: the
-// sign-in credential (a session does not exist yet), a mail provider's
-// callback (a vendor has no principal), the lab's login picker (its caller is
-// anonymity itself), and the automations engine loading its reflex rows. They
-// used to be raw SQL behind justifications. Now each is a seeded entry
-// executed by `server.executeAs` under a DECLARED charter role — `credential`,
-// `mailer`, `transport`, `scheduler` — each holding exactly the verbs its
-// surface needs, each impossible to wear, each scoped by a named reach in
-// behaviors.ts. Widening any of them is a charter diff somebody reviews.
-//
-// The one thing that stays raw is the roles read in `server/identity.ts`,
-// because a policy cannot authorise the read it compiles from. Everything in
-// this file runs UNDER a policy. That is the whole line, and
-// `reads-are-vex-check` holds it at exactly one statement.
-// ═══════════════════════════════════════════════════════════════
-
-// ─── credential: how a session comes to exist ────────────────
-
-// Exact-match on the address, the same posture as the served `people/byEmail`
-// the desk already holds: input is lowercased by the caller, addresses are
-// stored lowercase.
+// Exact match: callers lowercase the input, and addresses are stored lowercase.
 export const credentialPrincipalByEmail: CacheEntry = {
   fingerprint: 'credential/principal-by-email',
   intent: 'The principal behind the address somebody signs in with — resolved to mint a link, never to answer a screen',
@@ -37,8 +14,6 @@ export const credentialPrincipalByEmail: CacheEntry = {
   mapping: { person_id: { $get: { from: { $ref: '$.result' }, path: ['person_id'], fallback: { $const: '' } } } },
 };
 
-// Yesterday's dead links go while we are already writing to the table —
-// cheaper than a janitor, and there is no window in which it matters.
 export const credentialSweepLinks: MutationEntry = {
   fingerprint: 'credential/sweep-links',
   intent: 'Drop expired sign-in links',
@@ -63,10 +38,9 @@ export const credentialMintLink: MutationEntry = {
   },
 };
 
-// DELETE ... RETURNING, engine-compiled: reading the link and using it up are
-// one statement, which is what makes single-use hold when somebody
-// double-clicks. The rows answered carry the person; none answered is a
-// refusal — spent, expired and never-existed alike.
+// Compiled to DELETE … RETURNING: reading the link and spending it are one
+// statement, which is what holds single use under a double click. No row
+// answered is a refusal.
 export const credentialRedeemLink: MutationEntry = {
   fingerprint: 'credential/redeem-link',
   intent: 'Spend a sign-in link, or refuse — one statement, one use',
@@ -76,8 +50,6 @@ export const credentialRedeemLink: MutationEntry = {
     where: { and: [{ eq: ['login_links.nonce', { $context: 'nonce' }] }, { gt: ['login_links.expires_at', { $context: 'now' }] }] },
   },
 };
-
-// ─── mailer: what the provider tells us afterwards ───────────
 
 export const mailerRecordDelivered: MutationEntry = {
   fingerprint: 'mailer/record-delivered',
@@ -101,9 +73,6 @@ export const mailerRecordFailed: MutationEntry = {
   },
 };
 
-// Which studio a provider message belonged to — a bounce suppresses the
-// address everywhere, a complaint suppresses it at the studio complained
-// about, and the provider's id is the only key it gives back.
 export const mailerOutboxOrigin: CacheEntry = {
   fingerprint: 'mailer/outbox-origin',
   intent: 'The studio and person behind a provider message id — a bounce suppresses everywhere, a complaint at the studio complained about',
@@ -132,15 +101,12 @@ export const mailerSuppress: MutationEntry = {
       kind: { $context: 'kind' },
       reason: { $context: 'reason' },
     },
-    // The newest word from the provider wins: a bounce that becomes a
-    // complaint updates in place.
     onConflict: { target: ['address', 'studio_id'], set: { kind: { $context: 'kind' }, reason: { $context: 'reason' } } },
   },
 };
 
-// Pinned twice: the WHERE names the verified pair, and the `mailer` reach in
-// behaviors.ts pins the write to the same pair from scope — values that came
-// from the token's own HMAC, never from a request body.
+// The `mailer` reach also pins the write to this pair from scope: values the
+// token's HMAC verified, never a request body.
 export const mailerOptOut: MutationEntry = {
   fingerprint: 'mailer/opt-out',
   intent: 'One person, one studio, no more marketing — the unsubscribe link, spent',
@@ -152,13 +118,9 @@ export const mailerOptOut: MutationEntry = {
   },
 };
 
-// ─── transport: the lab's login picker ───────────────────────
-//
-// Two entries because the resolver's reverse joins are INNER: one walks the
-// staff, one walks the anchors, and the caller merges (staff word wins).
-// Served replays are tenant-pinned by each caller's own reach; the full
-// cross-studio roster exists only for the `transport` role the lab executes as
-// — and the LYRA_DEV_LOGIN gate in front of it stays.
+// Two entries because vex's reverse joins are INNER: one walks the staff, one
+// the anchors. A session that replays them is pinned to its own studio: only
+// the `transport` role reads across studios.
 export const transportStaffRoster: CacheEntry = {
   fingerprint: 'transport/staff-roster',
   intent: 'Everybody a studio employs, for the lab picker',
@@ -217,8 +179,6 @@ export const transportMemberRoster: CacheEntry = {
     },
   },
 };
-
-// ─── scheduler: the automations engine's own rows ────────────
 
 export const schedulerReflexRows: CacheEntry = {
   fingerprint: 'scheduler/reflex-rows',

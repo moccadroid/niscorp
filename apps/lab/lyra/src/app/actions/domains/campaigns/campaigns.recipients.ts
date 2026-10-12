@@ -1,28 +1,12 @@
 import { z } from 'zod';
 import type { ActionDefinition, LayoutNode, Step } from '@niscorp/nova';
 
-// ═══════════════════════════════════════════════════════════════
-// WHO GETS IT — asked for, not shown by default.
-//
-// ONLY THE PEOPLE WHO WILL RECEIVE IT. The ones who will not are not the
-// owner's business here: they did not opt in, or they have no address, or the
-// provider told us not to write to them, and none of those is a decision
-// anybody is being asked to make on this screen. The compose page's number
-// says how many there are; this says who they are, when somebody wants to
-// know, and lets them strike one off.
-//
-// A SHEET IS RIGHT FOR THIS and wrong for composing. This is a detail you open,
-// glance at and close — the shape a sheet has always been for.
-// ═══════════════════════════════════════════════════════════════
-
 const person = (name: string) => ({ $get: { from: { $var: 'p' }, path: [name] } });
 
 const struckOff = (id: unknown): Record<string, unknown> => ({
   $gt: [{ $length: { $filter: { over: { $ref: '$.excluded' }, as: 'x', when: { $eq: [{ $var: 'x' }, id] } } } }, 0],
 });
 
-/** The people this send would reach, and the ticks over them. Both derived
- *  from the same read in one step, so a name and its checkbox cannot disagree. */
 const REBUILD: Step[] = [
   {
     set: 'recipients',
@@ -133,8 +117,7 @@ export const campaignRecipientsAction: ActionDefinition = {
             $prism: {
               $case: {
                 branches: [
-                  // The header box sends `{ all: true }` and no person: everybody
-                  // back on.
+                  // The header box sends no person: everybody back on.
                   { when: { $not: { $ref: '$.toggleId' } }, then: [] },
                   {
                     when: struckOff({ $ref: '$.toggleId' }),
@@ -151,19 +134,10 @@ export const campaignRecipientsAction: ActionDefinition = {
     },
     { message: 'settled', do: [...REBUILD, { call: 'counted' }] },
 
-    // ── HANDING THE CHOICE BACK ──────────────────────────────
-    //
-    // ON CLOSE, NOT ON EVERY TICK, and that is nova's rule rather than a
-    // preference: the page underneath is SUSPENDED while this sits over it,
-    // and a suspended action reacts to nothing. A message published while the
-    // sheet is open is a message nobody hears. Emitting as the sheet goes
-    // works because publishing is queued to a microtask — the pop resumes the
-    // page first, and the announcement lands on something live. (The confirm
-    // pattern in nova's own runtime does exactly this.)
-    //
-    // BOTH EXITS COMMIT. The × belongs to the shell's sheet fragment, which
-    // pops; this rides the same click so that closing is never a way to
-    // silently lose the ticking somebody just did.
+    // Emitted on close, not on every tick: the page underneath is suspended
+    // while the sheet is open and hears nothing. An emit is published after the
+    // pop has resumed the page. `sheetClose` is the × of the shell's sheet
+    // fragment, which pops by itself.
     { event: 'ui:click', ref: 'sheetClose', do: [{ emit: { channel: 'recipients-chosen', payload: '$.excluded' } }] },
     { event: 'ui:click', ref: 'done', do: [{ emit: { channel: 'recipients-chosen', payload: '$.excluded' } }, { pop: true }] },
   ],

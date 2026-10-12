@@ -1,4 +1,3 @@
-// What happens at the studio: a program, and a course as a dated block of it.
 export const PROGRAMS_DDL = /* sql */ `
   CREATE TABLE programs (
     id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,

@@ -127,8 +127,6 @@ export const retentionAction: ActionDefinition = {
     quiet: { url: '/api/studio/vex', method: 'POST', request: windowed(membersLapsedAway.fingerprint), target: 'quiet' },
   },
   lifecycle: {
-    // The window first: `quiet` takes the cutoff as context, and firing it
-    // beside the call that resolves the date sends an empty string.
     mount: [
       { call: 'runRate' },
       { call: 'committed' },
@@ -155,7 +153,6 @@ export const retentionAction: ActionDefinition = {
       ref: 'range-90',
       do: [{ set: 'days', value: 90 }, { call: 'window', onSuccess: [{ set: 'from', value: '$.windowRow.from' }, { set: 'rangeLabel', value: '$.windowRow.label' }, { call: 'quiet' }] }],
     },
-    // A cancellation or a check-in moves both halves of this screen.
     { message: 'members-changed', do: [{ call: 'runRate' }, { call: 'committed' }, { call: 'leaving' }, { call: 'atRisk' }] },
     { message: 'check-ins-changed', do: [{ call: 'quiet' }] },
   ],

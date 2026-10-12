@@ -3,8 +3,6 @@ import { dayText, fillText, fillTone, sessionStateText } from '@lyra/app/prisms/
 
 const row = (name: string) => ({ $get: { from: { $var: 's' }, path: [name] } });
 
-// Every session today, in the order they happen. `today` arrives as injected
-// context, never a wall-clock read inside the query.
 export const sessionsToday: CacheEntry = {
   fingerprint: 'schedule/today',
   intent: "Today's classes at this studio, in start order",
@@ -43,8 +41,6 @@ export const sessionsToday: CacheEntry = {
   },
 };
 
-// The week ahead, for the timetable screen. Same shape as today plus the day,
-// so one column spec serves both lists.
 export const sessionsUpcoming: CacheEntry = {
   fingerprint: 'schedule/upcoming',
   intent: 'Classes at this studio from today forward, in date and start order',
@@ -77,8 +73,6 @@ export const sessionsUpcoming: CacheEntry = {
         name: row('name'),
         program_name: row('program_name'),
         program_tone: row('program_tone'),
-        // The RAW date as well as the pretty one: a list reads the label, a
-        // calendar has to group by the day itself.
         held_on: row('held_on'),
         starts_at: row('starts_at'),
         day_display: dayText(row('held_on')),
@@ -91,7 +85,6 @@ export const sessionsUpcoming: CacheEntry = {
   },
 };
 
-// The studio's streams, for filters and for the timetable's legend.
 export const programsList: CacheEntry = {
   fingerprint: 'schedule/programs',
   intent: 'The active programs at this studio',

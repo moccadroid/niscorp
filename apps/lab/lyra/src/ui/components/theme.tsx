@@ -25,8 +25,6 @@ const KNOWN = new Set([
   'alert-soft',
   'good',
   'good-soft',
-  // The identity scale. A studio may retune a hue — its Competition stream in
-  // its own red — and every badge, dot and edge wearing it follows.
   ...HUES.flatMap((hue) => [`hue-${hue}`, `hue-${hue}-soft`]),
   'radius-sm',
   'radius-md',
@@ -44,12 +42,8 @@ const ThemeProps = z
   })
   .strict();
 
-// THE SAME PALETTE, AS ATTRIBUTES FOR <html> — for a page drawn where no effect
-// runs (src/server/document.ts). The effect below writes these onto the document
-// once the page's script is up; a server writes them into the markup, so the
-// studio's colours are on the first paint and not the second. One list of known
-// names for both, and a value that could end its own declaration is dropped:
-// here it would be read as CSS, where `setProperty` below takes it as a value.
+// A value that could end its own declaration is dropped: here it is written into
+// markup and read as CSS, where `setProperty` below takes it as a value.
 export const themeDocumentAttributes = (tokens: Record<string, string> | undefined): Record<string, string> => {
   if (tokens === undefined) return {};
   const scheme = tokens['scheme'];
