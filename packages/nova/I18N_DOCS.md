@@ -116,6 +116,14 @@ string.
 rule, where a query manufactures a word and a read puts it on screen. There the
 key is what protects data.
 
+A string is a binding (`isBinding`) when it is `$` alone or starts with `$`
+followed by `.`, a letter or `_`, when it starts with `@` followed by a letter or
+`_` (an extra scope such as `@event.payload.id`), or when it holds `{{`.
+
+A phrase (`isPhrase`) is a non-blank string that is not a binding and holds at
+least one letter. Only a phrase is harvested, looked up in the book or reported
+as a miss: `12`, `100%` and `—` never are.
+
 ## Counted phrases
 
 A dictionary can hold "Standing". It can never hold "12 of 20" — two numbers
@@ -139,7 +147,9 @@ source language, not switching i18n off — a shell is language-bearing from the
 moment it is given a book or a key set.
 
 For a pattern held as data rather than shown — a check reading engine output, a
-fixture, an exporter — use `fillPhrase(value)` from `@niscorp/nova/i18n`.
+fixture, an exporter — use `fillPhrase(value)` from `@niscorp/nova/i18n`. A value
+that is not a `{ phrase, slots }` pattern comes back unchanged, so it can be
+called on a column of mixed values.
 
 ## What this cannot do
 
@@ -201,16 +211,21 @@ At runtime, `onPhraseMiss(phrase, where)` reports every lookup that failed. A
 miss renders as the **source language** — never an empty box, never a raw key —
 which is the only sane failure and also the one that hides, so wire the report.
 
+`where` is the path of component names from the layout's root, then the prop:
+`/Stack/Button.label`, `/Stack/Table.columns[0].label`, or `/Stack/Text#text`
+for a text child. The hook is called inside the render, once for each failed
+lookup and again on every later render, so a slow handler slows every render.
+
 ## API
 
 From `@niscorp/nova/i18n`:
 
 | Export | Purpose |
 |---|---|
-| `harvestLayout` / `harvestDefinition` / `harvestDefinitions` | Enumerate the phrases an artifact can show |
+| `harvestLayout` / `harvestDefinition` / `harvestDefinitions` | Enumerate the phrases an artifact can show. The list is sorted by phrase; each phrase's `where` holds its author sites, sorted, each once |
 | `missingFrom(harvested, book)` | What a language is still missing |
 | `fillPhrase(value)` | Close a counted phrase held as data, outside a render |
-| `translateRenderTree(tree, { phrases, keys?, onMiss? })` | For a tree you did **not** render — a replayed frame, a fixture. An empty book returns the same tree, patterns unfilled |
+| `translateRenderTree(tree, { phrases, keys?, onMiss? })` | For a tree you did **not** render — a replayed frame, a fixture. An empty book returns the same tree, patterns unfilled. `onMiss(phrase, where)` is called for each lookup the book has no entry for |
 | `DEFAULT_PHRASE_KEYS` | The default prose prop set |
 | `isBinding` / `isPhrase` / `matcherFor` | The primitives the rules are built from |
 | `Phrasebook` / `PhraseKeys` / `PhraseKeyMatcher` / `TranslateOptions` / `HarvestedPhrase` | Types |

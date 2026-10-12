@@ -46,7 +46,8 @@ type ShellConfig = {
 
   // Layout of the shell itself
   canvasLayout?: LayoutNode | string;    // how the shell arranges its canvases; when omitted,
-                                         // canvases render in a single flex row in declaration order
+                                         // canvases render in a single flex row in declaration order.
+                                         // A string is the id of a layout in the layout store
 
   // Registry / layouts (both built fresh when omitted)
   registry?: ComponentRegistry;          // shared component registry for all actions
@@ -99,13 +100,15 @@ type CanvasConfig = {
                                          // that loops `$.instances`
   actionLayout?: LayoutNode | string;    // how this canvas arranges its instances; when omitted,
                                          // only the top-of-stack (card-deck) action renders.
-                                         // Scope available to resolvables: { instances, active, count }
+                                         // Scope available to resolvables: { instances, active, count }.
+                                         // A string is the id of a layout in the layout store
   initial?: CanvasInitialSeed | CanvasInitialSeed[];  // pre-populate the stack on shell creation;
                                          // a list is pushed left to right
 };
 
-// A seed is an action id, or an object with input and fragment composition —
-// equivalent to calling shell.push(canvasId, ...) after createShell returns.
+// A seed is an action id, or an object with input and fragment composition.
+// It is pushed as shell.push(canvasId, ..., { history: false }) pushes it:
+// `back` does not undo it.
 type CanvasInitialSeed = string | { action: string; input?: Record<string, unknown>; with?: string[] };
 ```
 
@@ -316,7 +319,9 @@ shell.back();
 The shell keeps a **navigation journal**: before every `push`, `replace`,
 `clear` and `resetTo` — and every `reconcile` that moved something — it writes
 down the canvas that is about to change. One entry is one position somebody can
-be returned to; `back` restores the newest.
+be returned to; `back` restores the newest. An entry whose position is already on
+screen is passed over, so one call can spend several entries and `true` means the
+screen moved.
 
 - **Global and ordered.** One journal across every canvas, each entry naming the
   one canvas it describes — so back walks a person's own moves in the order they
@@ -355,6 +360,8 @@ shell.setCanvasLayout(layout);           // swap how the shell arranges its canv
 shell.setLayout('region-a', layout);     // swap what a LayoutRef placeholder resolves to
 ```
 
+`removeAction` with an id the shell does not have is a no-op. Where it unmounts the top of a canvas, the instance beneath resumes; fragments and the instances of other actions are untouched.
+
 `setLayout` is the hot-swap hook for dynamic region layouts: a canvasLayout embeds `{ ref: id }` placeholders, and this replaces what one resolves to — the frame/chrome stays intact.
 
 ### Language
@@ -382,7 +389,7 @@ const { changed, notes } = reconcileCanvas(
 );
 ```
 
-`origin` (required) is stamped on everything the call pushes. `own: 'pushed'` (default) moves only instances carrying that origin; `own: 'canvas'` moves everything on the canvas. One instance per action id. An optional `definitionOf(actionId)` enables the re-aim rule: when a live instance's input changed and that input carries a key the action declares in its `input` and its mount-time load reads through an endpoint `request`, the instance is re-opened instead of written into.
+`origin` (required) is stamped on everything the call pushes. `own: 'pushed'` (default) moves only instances carrying that origin; `own: 'canvas'` moves everything on the canvas. One instance per action id. An optional `definitionOf(actionId)` enables the re-aim rule: when a live instance's input changed and that input carries a key the action declares in its `input` and its mount-time load reads through an endpoint `request`, the instance is re-opened instead of written into. A desired entry's `with` names the fragments the action is composed with when the call pushes it, as `push` takes them. `notes` lists what the call did, in order (`placed notes`, `closed timer`, `set minutes on timer`), for a log or a trace.
 
 ### Render-tree access
 
@@ -548,7 +555,9 @@ api.dispatch('main', { type: 'ui:click', ref: 'save' });
 const done = await shellIdle(shell, { waitMs: 5000 });     // true: what the press set going has finished
 ```
 
-`api.dispatch` stamps an event that names no `origin` with the canvas's active instance; `api.publish(channel, payload?)` is `shell.publish`. `shellSettled` and `shellIdle` also take `stopped?: () => boolean` — once it answers `true` the wait ends with `false`.
+`api.dispatch` stamps an event that names no `origin` with the canvas's active instance; `api.publish(channel, payload?)` is `shell.publish`. On a canvas with nothing mounted there is no instance to stamp it with, and the event reaches every instance listening. `shellSettled` and `shellIdle` also take `stopped?: () => boolean` — once it answers `true` the wait ends with `false`.
+
+`api.canvasTree(canvasId)` is `canvasTreeOf(shell, canvasId)`: the canvas's flattened tree, or `[]` when `hasVisibleContent` finds nothing to show in it. Empty text, a `nova:head` node, and a fragment or an `ActionSlot` marker with nothing to show inside count as nothing; any other component counts, also one with no children, and so does an error node.
 
 `shellView` is what lets an adapter written against `RenderApi` (the DOM and TTY adapters, a moss terminal) draw a shell that lives beside it. `shellSettled` resolves `true` once no instance is `initializing` — every mount hook, and what it chained to, has been awaited — and `false` if `waitMs` (default 300) runs out first. It is the moment to draw a shell to markup, and the moment for the page's own shell to adopt it.
 

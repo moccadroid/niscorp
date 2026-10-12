@@ -282,7 +282,10 @@ head or for what it holds, no registry has to have the names, and a component
 is never handed a head as a child. It rides in the render tree, so it reaches
 every place a screen does — a shell in the page, a snapshot a server drew, the
 trees on a wire — and `headOf(api)` reads it off any of them:
-`{ elements, actions, refused }`.
+`{ elements, actions, refused }`. Each of `elements` is
+`{ tag, attributes, text? }`, where `text` is a title's words or a script's
+data as JSON. `actions` lists the ids of the actions that said any of them; it
+is empty when only the shell's own layouts did.
 
 A screen can hold more than one head: the shell's chrome says what holds on
 every screen, an action says its own, a dialog opens over a page. They are
@@ -302,7 +305,12 @@ anything, or in the kit component that needs them.
 `@niscorp/nova/document` is the surface that has a `<head>`. `placeHead`
 writes the elements into an HTML document being drawn to a string (what
 `@niscorp/cli` and moss's `renderDocument` call): an element takes the place
-of the tag that said the same thing, and anything else is added. In the page,
+of the tag that said the same thing, and anything else is added. Its third
+argument is `{ site, path }`: given both, with `site` an origin
+(`https://example.com`), it also writes that path's canonical `<link>` and
+`og:url`, built from `site` and `path` without its query or fragment, as the
+document's own tags, so a screen that says either takes its place. Given only
+one of the two it writes neither. In the page,
 the DOM, React and Vue adapters keep `document.head` on the screen
 (`createHeadKeeper`): its elements go in, the document's own tags give way to
 them and come back when the screen stops saying them. To offer the names to a
@@ -429,6 +437,56 @@ can perform their own final async work (e.g. telemetry flush).
   `classifyAudit` / `auditCatalog` (closure-audit triage), `livenessOf` (what
   an action can still do once drawn: gestures, the channels it waits on, every
   endpoint and whether it is called on open or later).
+  - `walkNodes(value, visit)` calls `visit` on every plain object in a tree,
+    an object before the ones inside it. `refsOf` returns only the refs inside
+    a component's props (a Table's `rowRef`, a cell's `ref`), not a node's own
+    `ref`.
+  - `snapshotShell(shell, exclude?)` returns `{ canvases, layouts,
+    components }`: every canvas with its instances, top of the stack first,
+    the ids in the layout store, and every component name in the registry.
+    `exclude` lists canvas ids to leave out.
+  - `describeInstance(shell, instanceId)` returns one live instance's
+    definition wiring, its current data and its classified audit, or
+    `undefined` when no instance with that id is mounted.
+  - `describeShell(shell, options?)` returns the shell as text: a line per
+    canvas with its stack, bottom to top and the last marked `*`, then a line
+    per instance with its data as JSON. `only` names the canvases to write
+    (all of them without it). `mark(instanceId)` returns a note written beside
+    that instance. An array longer than `collapseOver` (5 by default; `0`
+    collapses nothing) is cut to its first `head` items (3 by default) and a
+    count of the rest. `clean(data)` maps each instance's data before it is
+    written.
+  - `actionGraph(definitions)` returns `{ nodes, dangling }`: `dangling` lists
+    the `push` / `replace` / `resetTo` targets that no definition in the set
+    has; a target written as a `{{…}}` template is left out.
+  - `auditCatalog(definitions)` audits each definition against a catalog and
+    a channel list built from the whole set, so the wiring between actions is
+    checked. It returns a row `{ id, address, issues }` for each definition
+    that has findings: every issue is classified by `classifyAudit` as
+    `address` or `info`, the `address` ones first, and the rows are ordered by
+    how many `address` findings they hold, most first.
+  - `livenessOf(definition)`: `gestures` is true when the action has an
+    `event` trigger or a component with a `model`. An HTTP endpoint also
+    carries its `url` and `request` as authored (a template stays a template).
+    When the layout is a store id it is not read: `opaqueLayout` is true, and
+    `gestures: false` then does not mean nothing can be pressed.
+  - `chainCycles(definitions)` returns the loops in the set's trigger chains,
+    one `{ steps, path }` per group of chains that lead back into each other.
+    A chain starts at a `message:` trigger or a `mount` hook and runs on
+    through `emit`, `reload`, `push`, `replace` and `resetTo` steps; only
+    literal channels and the ids of actions in the set are followed. A step is
+    `{ from, to, action, via }`: `from` and `to` are `channel:<name>` or
+    `mount:<action id>`, `action` is the definition whose trigger or `mount`
+    hook holds the step, and `via` is the step's kind. `path` is the loop on
+    one line: `x —emit (loop)→ x`.
+  - `gesturedKeys`, `declaredKeys`, `loadedKeys` and `lifecycleKeys` return a
+    definition's top-level data keys by who writes them: the mutation steps of
+    its `ui:` triggers, the keys its `input` declares, every endpoint's
+    `target` and `errorTarget`, and the mutation steps of its lifecycle hooks.
+    `mountInputKeys` returns the declared input keys that the `request` of an
+    endpoint called from `mount` reads: writing one into a live instance
+    leaves the previous record's data on screen, so a caller that re-aims the
+    instance re-mounts it.
 - **`@niscorp/nova/devtools`** — a shell inspector built as pure nova:
   `devtoolsActions` (`devtools.dock`, `devtools.inspect` — plain
   ActionDefinitions over generic primitives), `DEVTOOLS_CANVAS`, and
@@ -436,6 +494,19 @@ can perform their own final async work (e.g. telemetry flush).
   timeline is a ring buffer fed by `shell.onEndpoint`). An app opts in by
   granting `devtools.*` to a dev role, adding the canvas plus a frame
   slot, and spreading the fns into its `functions(session)`.
+  - `createDevtoolsFunctions({ shell, definitions })`: `definitions` is the
+    app's catalog (a record or an array) and is what the audit tab checks;
+    without it the audit is empty.
+  - The `devtools.setEnabled` fn mounts and unmounts the dock: it reads the
+    calling action's `devtools` data key, pushes `devtools.dock` onto the
+    `devtools` canvas when that is `true`, and clears the canvas otherwise.
+    `devtools.enabled` answers whether the dock is mounted.
+  - While the dock is mounted, a `ui:click` with ref `inspect` and an instance
+    id as its payload, dispatched on the devtools canvas, pushes
+    `devtools.inspect` for that instance. An app's own control (a chip in a
+    `slotWrapper`) opens the inspector that way.
+  - A timeline row's `action` is the calling instance's definition id, read
+    when the call is recorded, so it is there after the instance unmounts.
 
 ---
 
@@ -448,6 +519,21 @@ can perform their own final async work (e.g. telemetry flush).
   `meta`), and `collectInteractive` (a layout's refs, models and bound data
   keys, derived by walking the tree). Needs the optional peer
   `@niscorp/cortex`.
+  - `paletteFromRegistry(registry, { include, omitProps })`: `include` limits
+    the palette to the named components (every registered one without it);
+    `omitProps` removes the named props from every component's schema, so the
+    agent cannot set them.
+  - `paletteEntryOf(name, meta, omitProps?)`, exported from the package root,
+    is the entry `paletteFromRegistry` builds for one component: `{ name,
+    description, propsSchema? }`, with `propsSchema` the component's props
+    schema as draft-07 JSON Schema, left out when the component has none.
+  - `collectInteractive(layout)` returns `{ refs, models, boundKeys,
+    suspectBindings, componentCount }`. A ref's `via` is `'ref'` for a node's
+    own `ref`, or the prop name (`rowRef`) for a ref held in a `*Ref` prop. A
+    model's `path` is the binding as written (`'$.search'`).
+    `suspectBindings` lists each `$name.` whose `name` is not a loop variable
+    of an enclosing `for`/`as`; `auditAction` reports each one as a malformed
+    binding.
 - **`@niscorp/nova/i18n`** — nova is language-blind: a host hands the shell a
   phrasebook (`phrases` on `ShellConfig`, `shell.setPhrases` at runtime) and
   nova swaps prose at render. The subpath holds the pieces around that:
@@ -492,7 +578,11 @@ const counter = NOVA_EXAMPLES.find((example) => example.id === 'counter');
 // counter.expected: { data: { count: 1 }, says: ['Count: 1', 'One more', 'One fewer'] }
 ```
 
-An example is one action alone on a canvas (`action`) or a small shell (`shell`: canvases, actions, and how the canvases are arranged). Beside either stand what it needs from its host: `fragments`, stored `layouts`, a phrase book (`phrases`, `phraseKeys`), and what its endpoints are answered (`replies` for `fn:`, `fetches` for a URL). Every id an example brings begins with the example's own, so a host can hold all of them in one shell.
+An example is one action alone on a canvas (`action`) or a small shell (`shell`: canvases, actions, and how the canvases are arranged). Beside either stand what it needs from its host: `fragments`, stored `layouts`, a phrase book (`phrases`, `phraseKeys`), and what its endpoints are answered (`replies` for `fn:`, `fetches` for a URL). Every id an example brings begins with the example's own, so a host can hold all of them in one shell. `replies` is keyed by the function's name and holds what each returns; `fetches` is keyed by method and address (`'GET /examples/<id>/…'`) and holds the `status` and `body` each is answered with.
+
+`presses` are what is done to it, in order. A press is `{ ref, type?, payload?, canvas? }`: a `ui:click` on the component with that `ref`, or with `type: 'ui:model'` the `payload` typed into it. In a shell example `canvas` names the canvas and the press goes to the action on top of it; without `canvas` it goes to the first canvas. A press of `{ phrases }` is the host changing the language: it hands the shell that book, or with `null` takes the book away.
+
+`expected` is what must come out once the presses are done. `says` is every text the screen holds, in reading order, with what stands in a prop at a prose key (a placeholder, a label). `data` is what the one action holds (an `action` example). `stacks` is the action ids on each canvas, bottom to top (a `shell` example). `asked` is what was sent to each URL the example called: `method`, `url`, and `headers` and `body` where there were any.
 
 The examples name only the plain components every kit has (`Stack`, `Text`, `Button`, `Input`) and nova's two slots, with no prop about looks. One that says `stage: false` (the ones on i18n) cannot simply be mounted beside a host's own screens, and is shown as what it comes to. The package's tests run each one, so what they say is what this version does.
 
