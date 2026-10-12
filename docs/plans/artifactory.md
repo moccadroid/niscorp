@@ -1,10 +1,9 @@
 # The artifactory
 
 **Status: Proposed (2026-10-12). What it has to do is decided: part 2 is the
-owner's. The design is part 5. Of its ten decisions (part 6) eight are
-settled. D3 has the owner's direction and three rules that wait for a yes, and
-D7 was redone after the owner refused a publish command and waits for one too.
-Nothing is built. Moss was rebuilt first so that this has one place to go
+owner's. The design is part 5. Its ten decisions (part 6) are settled, but
+for how a publish is built (D7), which waits for a yes. Nothing is built, and
+nothing of this plan is merged until the plan holds. Moss was rebuilt first so that this has one place to go
 ([moss-refactor.md](moss-refactor.md)).**
 
 ## 1. What it is
@@ -277,7 +276,9 @@ open screen follows with its data kept. A layout's body is `{ ref, layout,
 style?, use? }`: `style` says which of the app's styles it belongs to, and
 `use` marks the one of several that is in use. At a ref the order is: mine
 marked in use; the default of the style I chose; the layout variant of my
-roles; the plain default; the build's copy.
+roles; the plain default; the build's copy. Which style somebody chose is the
+app's to keep: it reaches the artifactory on their identity record, beside
+their roles.
 
 **What goes with an action.** A layout's id is the ref it fills, so it names
 the action it is for. Taking a generated action out of force takes its owner's
@@ -318,14 +319,33 @@ with a description each. The charter gains one part: which of them the
 generated actions of a role may call. A generated action that names any other
 fails the check.
 
-**Publishing.** It happens in the running app. Somebody generates an artifact
-and saves it, and then publishes it: what was theirs becomes the default for
-everybody. It is one call on the server, made by a function the app ships, so
-who may publish is who the charter grants that function. The call runs the
-verification a boot runs and writes the default as one save. The pointer
-moves, every process follows, and living shells adopt. No command, no build
-and no deploy is part of it. Taking a default back is a save too: the one
-before it is in force again, or the build's copy when there was none.
+**Saving and publishing are one call.** The draft has one way out, a save, and
+a save is told who it is for: the session's principal, or everybody. Nothing
+else differs: the same check, the same two tables, the same history. A save
+for everybody is a default, a row with no principal.
+
+**The trusted channel.** A session handed to the app's functions can already
+do things moss trusts shipped code with (`session.grant`, `session.revoke`).
+The draft is one more of them. Anybody's function may save for the session's
+own principal. A save for everybody is reached the same way, from a function
+the app ships for its owners, and the charter says who holds that function.
+That is the whole channel: no route, no key, no command. A generated action
+cannot reach it, because the function is on no list a generated action may
+call.
+
+**What a publish gives an id.** A generated action has an id nobody chose and
+no charter grants (D3). As a default it has to be granted, so whoever
+publishes it gives it its id, as a shipped action has one, and its layouts'
+refs follow that id. Publishing a new version of something that is already a
+default keeps the id. A read keeps its fingerprint.
+
+**After a save.** A default moves the generation pointer: every process
+follows and living shells adopt, as for every change of the app today. A
+person's own save is adopted at once by their shells in the process that
+saved; a deployment with several processes carries it to the others on its
+fabric, as it carries an identity that was forgotten. Taking a default back
+is a save too: the one before it is in force again, or the build's copy when
+there was none.
 
 ## 6. The decisions
 
@@ -352,14 +372,15 @@ before it is in force again, or the build's copy when there was none.
   does every direct read of that table for a shipped entry.
 - **D6. What a generated action may call.** Any read its owner may replay, the
   functions on the charter's list, and no vex write.
-- **D7. Publishing happens in the running app. Waiting for a yes.** The owner
-  refused a command that publishes from the app's source: that is a deploy by
-  another name. What is published is what somebody generated and saved, from
-  where they did it, through a function the app ships and the charter grants
-  (part 5). Two things follow. What can be published is what can be
-  generated, so a new action that makes a vex write still ships in a build.
-  And a published default wins over a build that is deployed later, until it
-  is taken back.
+- **D7. Publishing is the same save a person makes of their own, through a
+  trusted channel for the owners.** The owner's, in those words. No command
+  and no route: a publish from the app's source is a deploy by another name.
+  How it is built is in part 5 and waits for a yes: one save, told who it is
+  for; the channel is a function the app ships and the charter grants; a
+  published action is given its id by whoever publishes it. Two things
+  follow. What can be published is what can be generated, so a new action
+  that makes a vex write still ships in a build. And a published default wins
+  over a build that is deployed later, until it is taken back.
 - **D8. Somebody else's publish while my screen is open** is adopted in place:
   layouts at once, an action's definition on its next open.
 - **D9. Integrations' actions and an app's named sets are in the live list,
@@ -373,24 +394,21 @@ before it is in force again, or the build's copy when there was none.
   is a new save that holds a copy of it. A reset is a new save that says none
   of mine is in force for that artifact.
 
-**D3. Who a generated action exists for.** The owner's direction is in part 2:
-the id is never chosen, the action runs in its owner's scope, and layouts go
-with their action. Three rules follow, and wait for a yes:
-
-1. The artifactory gives the id, `generated.<random>`, and that first segment
-   is refused everywhere else.
-2. A generated action exists for the principal who saved it and for nobody
-   else, and is never held against a charter glob. What it can do stays the
-   charter's: its reads replay as its owner, it makes no vex write, and the
-   only code it calls is on the charter's list for their roles.
-3. Removing a generated action takes its owner's layouts for it along, in the
-   same save. A layout for an action that does not exist for its owner is not
-   loaded, and is the first thing a pruning removes.
+- **D3. Who a generated action exists for.** Three rules:
+  1. The artifactory gives the id, `generated.<random>`, and that first
+     segment is refused everywhere else.
+  2. A generated action exists for the principal who saved it and for nobody
+     else, and is never held against a charter glob. What it can do stays the
+     charter's: its reads replay as its owner, it makes no vex write, and the
+     only code it calls is on the charter's list for their roles.
+  3. Removing a generated action takes its owner's layouts for it along, in
+     the same save. A layout for an action that does not exist for its owner
+     is not loaded, and is the first thing a pruning removes.
 
 ## 7. What is still open
 
-- The three rules of D3.
-- D7: publishing from the running app.
+- How a publish is built (D7, part 5): one save, the function session as the
+  channel, and the id a published action is given.
 - How many versions of one artifact are kept, how large a body may be, and
   when pruning runs. Measured before a number is proposed.
 - What lyceum shows. To be said when the first step is built.
