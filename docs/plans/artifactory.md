@@ -1,8 +1,9 @@
 # The artifactory
 
 **Status: Proposed (2026-10-12). What it has to do is decided: part 2 is the
-owner's. The design is part 5. Of its ten decisions (part 6) nine are
-settled; D3 has the owner's direction and three rules that wait for a yes.
+owner's. The design is part 5. Of its ten decisions (part 6) eight are
+settled. D3 has the owner's direction and three rules that wait for a yes, and
+D7 was redone after the owner refused a publish command and waits for one too.
 Nothing is built. Moss was rebuilt first so that this has one place to go
 ([moss-refactor.md](moss-refactor.md)).**
 
@@ -317,10 +318,14 @@ with a description each. The charter gains one part: which of them the
 generated actions of a role may call. A generated action that names any other
 fails the check.
 
-**Publishing.** `nisc publish` sends the build's artifacts, or the ones it is
-told, to an operator route, which checks them and writes them as defaults in
-one save. The pointer moves, every process follows, and living shells adopt.
-Taking a default back is publishing the version before it.
+**Publishing.** It happens in the running app. Somebody generates an artifact
+and saves it, and then publishes it: what was theirs becomes the default for
+everybody. It is one call on the server, made by a function the app ships, so
+who may publish is who the charter grants that function. The call runs the
+verification a boot runs and writes the default as one save. The pointer
+moves, every process follows, and living shells adopt. No command, no build
+and no deploy is part of it. Taking a default back is a save too: the one
+before it is in force again, or the build's copy when there was none.
 
 ## 6. The decisions
 
@@ -347,11 +352,14 @@ Taking a default back is publishing the version before it.
   does every direct read of that table for a shipped entry.
 - **D6. What a generated action may call.** Any read its owner may replay, the
   functions on the charter's list, and no vex write.
-- **D7. Publishing is an operator call.** `nisc publish` loads the manifest
-  from source and sends it to a route under `/operator`, which verifies it as
-  a boot does and writes it as defaults in one save. A deploy publishes again
-  as one of its steps, because a default published before it would otherwise
-  win over the build's newer copy.
+- **D7. Publishing happens in the running app. Waiting for a yes.** The owner
+  refused a command that publishes from the app's source: that is a deploy by
+  another name. What is published is what somebody generated and saved, from
+  where they did it, through a function the app ships and the charter grants
+  (part 5). Two things follow. What can be published is what can be
+  generated, so a new action that makes a vex write still ships in a build.
+  And a published default wins over a build that is deployed later, until it
+  is taken back.
 - **D8. Somebody else's publish while my screen is open** is adopted in place:
   layouts at once, an action's definition on its next open.
 - **D9. Integrations' actions and an app's named sets are in the live list,
@@ -382,6 +390,7 @@ with their action. Three rules follow, and wait for a yes:
 ## 7. What is still open
 
 - The three rules of D3.
+- D7: publishing from the running app.
 - How many versions of one artifact are kept, how large a body may be, and
   when pruning runs. Measured before a number is proposed.
 - What lyceum shows. To be said when the first step is built.
@@ -393,7 +402,6 @@ Each is a change to another library and needs its own approval.
 - **charter:** one part, which functions the generated actions of a role may
   call.
 - **strata:** one stored kind, for a vex entry.
-- **cli:** `nisc publish`.
 - **moss's manifest:** functions declared by name with a description. Today
   `functions(session)` is one map whose names are not known before a session.
 - **nova:** nothing.
@@ -406,9 +414,11 @@ each.
 
 1. Entries through the cache seam, shipped only. No table yet. It removes the
    seeding and proves D5.
-2. The two tables, published defaults, `nisc publish`, and adopt on publish.
-3. Layouts by ref, styles, and which is in use.
-4. Generated artifacts: save, history, restore, reset, and the check.
-5. The draft in the shell, shown in lyceum.
+2. The two tables, and published defaults that win over the build's copy.
+3. Layouts by ref, styles, and which is in use. Lyceum's two uses of
+   `/unverified` move onto it.
+4. Generated artifacts: save, history, restore, reset, publish, and the check.
+5. The draft in the shell, shown in lyceum. Relay's and atrium's uses of
+   `/unverified` move onto it.
 6. The declared functions and the charter's part.
 7. Integrations' actions and named sets through the live list and its check.
