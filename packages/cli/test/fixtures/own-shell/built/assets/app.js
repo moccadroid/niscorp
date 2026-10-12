@@ -1,6 +1,4 @@
-// A stand-in for what a bundler writes: the fixture app is never run in a browser.
-// It is here so `nisc start` has a file under assets/ to serve — long enough that
-// compressing it is worth it.
+// A stand-in for what a bundler writes, long enough that `nisc start` compresses it.
 export const room0 = { room_id: "r0", name: "Room 0", beds: 1 };
 export const room1 = { room_id: "r1", name: "Room 1", beds: 2 };
 export const room2 = { room_id: "r2", name: "Room 2", beds: 3 };

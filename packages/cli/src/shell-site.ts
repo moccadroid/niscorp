@@ -10,68 +10,22 @@ import type { ScreenHead } from '@niscorp/nova/document';
 import { livenessOf } from '@niscorp/nova/reflect';
 import type { NiscShellProject } from './project';
 
-// ═══════════════════════════════════════════════════════════════
-// AN APP WITH ITS OWN SHELL, DRAWN AHEAD OF TIME.
-//
-// The shell lives in the page. A build runs the app's own boot where there is
-// no browser, waits for the screen to be whole, and has the app's adapter draw
-// it to markup; the page's boot then picks that markup up and from there the
-// app is what it always was. No server holds a shell at any point.
-//
-// A file is a claim — "this is the page" — so a build does not write one it has
-// not checked. Per path, and each one FAILS the build:
-//
-//   drawn         the app booted and its screen drew to markup that is not empty
-//   whole         nothing was still loading when it was drawn
-//   same twice    a second boot draws the same markup, byte for byte, and says
-//                 the same head — or the page's own boot would not match what
-//                 the file says
-//   adopted       inside a DOM, a third boot picks the markup up and the
-//                 adapter complains about nothing
-//
-// And one that holds by construction: the boot is handed a path and nothing
-// else, so a file is only ever the screen as nobody in particular sees it.
-//
-// What a build cannot fail on, it reports: what the screen opened with (those
-// answers are in the markup as they were at build), what it can still call, and
-// what it waits on.
-//
-// THE HEAD OF EACH FILE IS ITS SCREEN'S OWN. A page's <head> is a node in a
-// layout (nova's `nova:head`, holding the elements a head holds). It is read
-// off the same shell the markup was drawn from and written into the template's
-// <head>; a path whose screen has none goes out with the template's. A head
-// that holds what it may not — something that runs, or styles — FAILS the
-// build like any other check. With a `site` in the config, each path is given
-// its own canonical address.
-// ═══════════════════════════════════════════════════════════════
-
 const DEFAULT_BUILD_WAIT_MS = 5000;
 export const DEFAULT_ROOT = '<div id="root"></div>';
 
 export type ShellRouteReport = {
   path: string;
-  // the whole document; the template as it is when the screen could not be drawn
   html: string;
-  // every check that did not hold — empty is a file that may be written
   problems: readonly string[];
-  // the actions on the first screen
   actions: readonly string[];
-  // endpoints answered while the screen opened: their answers are in the markup
-  // as they were when it was drawn
   opensWith: readonly string[];
-  // endpoints the first screen can still call once it is in the page
   callsLater: readonly string[];
-  // channels the first screen waits on
   listens: readonly string[];
-  // what the first screen's head held, and the actions that said it — absent
-  // when the screen has no head and the file's is the template's own
   head?: ScreenHead;
 };
 
 const escapeAttribute = (value: string): string => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
-// The screen, in the app's own index.html: inside the empty root, with whatever
-// the kit would have put on <html>.
 export const placeScreen = (template: string, screen: string, attributes: Record<string, string> = {}, root = DEFAULT_ROOT): string => {
   const written = Object.entries(attributes)
     .map(([name, value]) => ` ${name}="${escapeAttribute(value)}"`)
@@ -84,7 +38,6 @@ export const placeScreen = (template: string, screen: string, attributes: Record
   );
 };
 
-// What the first screen is made of, read off the definitions of what is mounted.
 const factsOf = (shell: Shell): Pick<ShellRouteReport, 'actions' | 'opensWith' | 'callsLater' | 'listens'> => {
   const [actions, opensWith, callsLater, listens] = [new Set<string>(), new Set<string>(), new Set<string>(), new Set<string>()];
   for (const canvas of Object.values(shell.getState().canvases)) {
@@ -107,12 +60,9 @@ const factsOf = (shell: Shell): Pick<ShellRouteReport, 'actions' | 'opensWith' |
 
 type Drawn = { screen: string; whole: boolean; attributes: Record<string, string>; head: ScreenHead | undefined; facts: ReturnType<typeof factsOf> };
 
-// A drawn screen as the document it goes out in: the screen in the root, and
-// what it says about itself in the head.
 const documentOf = (project: NiscShellProject, template: string, path: string, drawn: Drawn): string =>
   placeHead(placeScreen(template, drawn.screen, drawn.attributes), drawn.head?.elements, { ...(project.site !== undefined ? { site: project.site } : {}), path });
 
-// One boot, one draw, and the app let go again.
 const drawOnce = async (project: NiscShellProject, path: string): Promise<Drawn> => {
   const booted = await project.shell({ path });
   try {
@@ -126,14 +76,9 @@ const drawOnce = async (project: NiscShellProject, path: string): Promise<Drawn>
 
 const said = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
-// ── adopted ──
-//
-// The one check that needs a browser's world. A DOM has to exist BEFORE the
-// app's modules load (an adapter decides what it is running in when it is
-// imported), so it runs in a process of its own: ./adopt stands a DOM up, loads
-// the same config, and for each path puts the markup in a root and makes the
-// app's own `adopt` call over a fresh boot.
-
+// The adoption check runs in a process of its own (./adopt): a DOM has to exist
+// before the app's modules load, because an adapter decides what it is running
+// in when it is imported.
 type Adoption = { path: string; complaints: string[] };
 
 const isAdoption = (value: unknown): value is Adoption =>
@@ -164,7 +109,6 @@ const adoptAll = (root: string, pages: readonly { path: string; screen: string }
   }
 };
 
-// Every path, checked.
 export const surveyShell = async (root: string, project: NiscShellProject, template: string): Promise<ShellRouteReport[]> => {
   if (!template.includes(DEFAULT_ROOT)) {
     throw new Error(`nisc: the built index.html has no empty root (${DEFAULT_ROOT}) — that is where a screen goes.`);
@@ -191,7 +135,6 @@ export const surveyShell = async (root: string, project: NiscShellProject, templ
     first.push({ path, ...(drawn !== undefined ? { drawn } : {}), problems });
   }
 
-  // only what is worth adopting: a screen that drew, whole
   const adoptable = first.flatMap((route) => (route.drawn !== undefined && route.drawn.whole && route.drawn.screen.trim() !== '' ? [{ path: route.path, screen: route.drawn.screen }] : []));
   const adoptions = new Map(adoptAll(root, adoptable).map((adoption) => [adoption.path, adoption.complaints]));
 
@@ -209,7 +152,6 @@ export const surveyShell = async (root: string, project: NiscShellProject, templ
   });
 };
 
-// Where two draws part, in a few words — enough to find it.
 const differenceOf = (a: string, b: string): string => {
   let at = 0;
   while (at < a.length && at < b.length && a[at] === b[at]) at += 1;
@@ -223,8 +165,6 @@ export const shellRouteTable = (routes: readonly ShellRouteReport[]): string => 
   const width = Math.max(5, ...routes.map((route) => route.path.length)) + 2;
   const lines = [`  ${pad('Route', width)}First screen`];
   const indent = ' '.repeat(width + 2);
-  // Said only by an app that has a head somewhere: then a path without one is
-  // going out under the template's, and that may not be what was meant.
   const says = (route: ShellRouteReport): boolean => (route.head?.elements.length ?? 0) > 0;
   const headed = routes.some(says);
   const headNote = (route: ShellRouteReport): string =>
@@ -249,16 +189,6 @@ export const shellRouteTable = (routes: readonly ShellRouteReport[]): string => 
   lines.push('✗  not written: a check did not hold');
   return lines.join('\n');
 };
-
-// ── served ──
-//
-// The same draw, per request: the first answer to a path is its screen, and
-// everything else in the built folder is a file. No checks here — a build made
-// them; a screen that will not draw goes out as the template, and the page's
-// own boot paints it as it did before any of this existed.
-//
-// What a browser may keep of all this, and how it travels, is not said here:
-// `start` puts that around this handler (./site), as it does around moss's.
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -288,13 +218,10 @@ export const shellSite = (project: NiscShellProject, dist: string): ((request: R
       const file = resolve(base, `.${path}`);
       const stats = file === base || file.startsWith(base + sep) ? statSync(file, { throwIfNoEntry: false }) : undefined;
       if (stats?.isFile() === true) {
-        // How big it is and when it last changed — what `start` needs to say
-        // what a browser may keep, and to answer "has it changed?" (./site).
         return new Response(readFileSync(file), {
           headers: { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream', 'content-length': String(stats.size), 'last-modified': stats.mtime.toUTCString() },
         });
       }
-      // a name with an extension that is not there is a missing file, not a page
       if (extname(path) !== '') return new Response('not found', { status: 404 });
     }
     const template = readFileSync(join(base, 'index.html'), 'utf8');

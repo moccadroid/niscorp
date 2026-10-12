@@ -6,12 +6,6 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-// ═══════════════════════════════════════════════════════════════
-// `nisc dev` on an app behind moss — the moss template, the way a new app
-// starts. One process: the app's own vite, with moss's dev plugin fed from the
-// app's nisc.config.ts. Nothing about the server is in the app's vite.config.
-// ═══════════════════════════════════════════════════════════════
-
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..', '..', 'create-nisc', 'templates', 'moss-react');
 const bin = join(here, '..', 'bin', 'nisc.js');
@@ -68,7 +62,6 @@ describe('nisc dev — an app behind moss', () => {
     const html = await (await fetch(`${base}/`)).text();
     expect(html).toContain('class="k-heading"');
     expect(html).toContain('id="nisc-snapshot"');
-    // vite's client is in it: the drawn page hot-reloads like any other
     expect(html).toContain('/@vite/client');
   }, SLOW);
 
@@ -89,7 +82,6 @@ describe('nisc dev — an app behind moss', () => {
     } finally {
       writeFileSync(file, before);
     }
-    // and the new server answers
     expect((await fetch(`${base}/catalog`)).ok).toBe(true);
   }, SLOW);
 });

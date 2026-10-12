@@ -8,13 +8,6 @@ import { placeScreen } from '../src';
 import { shellSite } from '../src/shell-site';
 import { project } from './fixtures/own-shell/nisc.config';
 
-// ═══════════════════════════════════════════════════════════════
-// An app with its own shell, through the command as it is installed: the built
-// `nisc`, run against a fixture app that has no moss in it (fixtures/own-shell —
-// nova's DOM adapter, one file). Each check a build makes is seen to hold, and
-// then seen to fail when the fixture is broken that one way.
-// ═══════════════════════════════════════════════════════════════
-
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, 'fixtures', 'own-shell');
 const bin = join(here, '..', 'bin', 'nisc.js');
@@ -22,7 +15,6 @@ const scratch = mkdtempSync(join(tmpdir(), 'nisc-own-shell-'));
 
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
-// each run is a process (and a second one inside it, for the adoption check)
 const SLOW = 60_000;
 
 const nisc = (args: readonly string[], fault = ''): { code: number | null; out: string } => {
@@ -93,7 +85,6 @@ describe('nisc export — an app with its own shell', () => {
 });
 
 describe('nisc start — an app with its own shell', () => {
-  // the handler `nisc start` listens with; no port is opened here
   const site = shellSite(project, join(root, 'built'));
 
   it('answers a path with its first screen, drawn from a boot of the app’s own', async () => {
@@ -108,7 +99,6 @@ describe('nisc start — an app with its own shell', () => {
     const file = await site(new Request('http://localhost/index.html'));
     expect(await file.text()).toContain('<div id="root">');
     expect((await site(new Request('http://localhost/assets/nope.js'))).status).toBe(404);
-    // nothing above the built folder is reachable
     expect((await site(new Request('http://localhost/..%2Fnisc.config.ts'))).status).toBe(404);
   });
 
@@ -117,7 +107,6 @@ describe('nisc start — an app with its own shell', () => {
     expect(file.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
     expect(file.headers.get('content-length')).toBe(String((await file.arrayBuffer()).byteLength));
     expect(Number.isNaN(Date.parse(file.headers.get('last-modified') ?? ''))).toBe(false);
-    // what may be kept is not this handler's to say (../src/site)
     expect(file.headers.has('cache-control')).toBe(false);
   });
 });

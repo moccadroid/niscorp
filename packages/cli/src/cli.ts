@@ -2,10 +2,6 @@ import { resolve } from 'node:path';
 import { build, check, dev, exportSite, migrate, start } from './commands';
 import type { CommandOptions } from './commands';
 
-// ═══════════════════════════════════════════════════════════════
-// nisc — the command line. It parses, and hands over to ./commands.
-// ═══════════════════════════════════════════════════════════════
-
 const USAGE = `nisc — the command for a nisc application
 
   nisc dev                 the app's dev server — its vite, with the app server inside
@@ -51,7 +47,6 @@ const main = async (): Promise<number> => {
     };
     process.on('SIGINT', stop);
     process.on('SIGTERM', stop);
-    // stays up until it is told to stop
     return new Promise<number>(() => undefined);
   }
   if (command === 'check') return check(options);
@@ -68,8 +63,8 @@ const main = async (): Promise<number> => {
 };
 
 main().then(
-  // An app's own handles (a database, a timer) must not keep a finished command
-  // open: a command that is done says so and leaves.
+  // An explicit exit: an app's own handles (a database, a timer) would keep a
+  // finished command open.
   (code) => process.exit(code),
   (error: unknown) => {
     console.error(error instanceof Error ? error.message : error);

@@ -14,47 +14,21 @@ import type { ShellRouteReport } from './shell-site';
 import { siteHandler } from './site';
 import { writeStylesheetIntoPage } from './stylesheet';
 
-// ═══════════════════════════════════════════════════════════════
-// What `nisc` does. Each command is the app's own machinery, run in order:
-//
-//   dev     the app's own vite, with the app server inside it when it has one
-//   build   bundle the terminal and write its stylesheet into its page, then
-//           draw every path once and say how each is served — a file, or a server
-//   export  build, then write every path as a file: the whole site as a folder
-//   start   serve the built terminal from the app's own process, pages drawn —
-//           compressed, and with what a browser may keep said (./site)
-//   check   the app's check suite
-//   migrate apply the tables' pending migrations, if the app's entries fit what
-//           they leave
-//
-// Nothing here knows an app. How it boots and how a screen is drawn come from
-// its nisc.config.ts. An app behind moss hands over its server, and which paths
-// exist and what each needs come from that (`server.pages`, `exportDocuments`).
-// An app with its own shell hands over its boot, and every path is drawn from
-// that and checked (./shell-site). Moss is loaded only for the first kind — an
-// app without it does not have it installed.
-// ═══════════════════════════════════════════════════════════════
+// Moss is loaded by a dynamic import, and only for an app behind it: an app
+// with its own shell does not have it installed.
 
 export type CommandOptions = {
-  // the app's root (where nisc.config.ts is)
   root: string;
-  // export: where the files go (default `out`), relative to the root
   out?: string;
-  // export: write the site even though some path wants a server behind it
   allowLive?: boolean;
-  // start: the port (default $PORT, then 8787)
   port?: number;
-  // build/export: skip the bundler (the terminal is already built)
   skipBundle?: boolean;
-  // migrate: do all of it, then roll it back
   dryRun?: boolean;
   print?: (line: string) => void;
 };
 
 const say = (options: CommandOptions): ((line: string) => void) => options.print ?? ((line) => console.log(line));
 
-// A tool the APP has installed, found from the app's own root — the command
-// carries no bundler and no test runner of its own.
 const toolOf = (root: string, name: string, bin: string): string => {
   const require = createRequire(join(root, 'package.json'));
   let manifestPath: string;
@@ -72,9 +46,6 @@ const toolOf = (root: string, name: string, bin: string): string => {
 
 const distOf = (root: string, project: NiscProject): string => resolve(root, project.dist ?? 'dist');
 
-// The app's own vite, and then the one thing done to what it wrote: the page's
-// stylesheet goes into the page (./stylesheet). A terminal that is already built
-// (`skipBundle`) is taken as it is.
 const bundle = (options: CommandOptions, project: NiscProject): void => {
   const result = spawnSync(process.execPath, [toolOf(options.root, 'vite', 'vite'), 'build'], { cwd: options.root, stdio: 'inherit' });
   if (result.status !== 0) throw new Error('nisc: the bundler failed — nothing was drawn.');
@@ -87,18 +58,11 @@ const bundle = (options: CommandOptions, project: NiscProject): void => {
   if (inPage.length > 0) print("      A Content-Security-Policy that forbids inline styles would refuse it: `stylesheet: 'file'` in nisc.config.ts keeps it a file.");
 };
 
-// `start` tells browsers to keep what is under /assets/ for a year — right for
-// what the bundler writes there, named by its content. The bundler also copies
-// the app's public/ as it is, so a file of the app's own under public/assets/
-// would be kept just as long, under a name that says nothing about its content.
 const warnOfOwnAssets = (options: CommandOptions): void => {
   if (!existsSync(join(options.root, 'public', 'assets'))) return;
   say(options)('nisc: public/assets/ holds files of your own. `nisc start` has browsers keep everything under /assets/ for a year, so a change to one of them will not be seen under the same name — keep them elsewhere in public/.');
 };
 
-// index.html says where the page lives, once — and every path is written from
-// it. With more than one path and no `site`, each file would name that one
-// address as its own, which tells a search engine they are all copies of it.
 const warnOfOneAddress = (options: CommandOptions, project: NiscProject, template: string, paths: number): void => {
   if (project.site !== undefined || paths < 2 || !/<link\b[^>]*\brel\s*=\s*["']?canonical\b/i.test(template)) return;
   say(options)('');
@@ -106,7 +70,6 @@ const warnOfOneAddress = (options: CommandOptions, project: NiscProject, templat
   say(options)('      `site: "https://…"` in nisc.config.ts gives each path its own.');
 };
 
-// Stand the app up, draw every path once for nobody, let the app go.
 const templateOf =(options: CommandOptions, project: NiscProject): string => {
   const template = join(distOf(options.root, project), 'index.html');
   if (!existsSync(template)) throw new Error(`nisc: no built terminal at ${template} — run \`nisc build\`.`);
@@ -133,7 +96,6 @@ const survey = async (options: CommandOptions, project: NiscMossProject): Promis
   }
 };
 
-// What a build found, either way round: every path, and whether the build holds.
 export type BuildResult =
   | { kind: 'moss'; ok: boolean; routes: ExportedDocument[] }
   | { kind: 'shell'; ok: boolean; routes: ShellRouteReport[] };
@@ -171,12 +133,6 @@ const write = (options: CommandOptions, project: NiscProject, out: string, route
   say(options)(`nisc: ${routes.length} paths written to ${out}`);
 };
 
-// The whole site as a folder. A path that wants a server behind it is not
-// something a folder can be — so unless the caller says a server will stand
-// beside the files (`allowLive`), nothing is written and the table says why.
-//
-// An app with its own shell has no such path: the shell is in the page, so a
-// folder is all of it. What stops ITS files is a check that did not hold.
 export const exportSite = async (options: CommandOptions): Promise<{ written: boolean; result: BuildResult; out: string }> => {
   const project = await loadProject(options.root);
   const result = await build(options);
@@ -216,8 +172,6 @@ export const start = async (options: CommandOptions): Promise<{ url: string; clo
   if (!existsSync(join(dist, 'index.html'))) throw new Error(`nisc: no built terminal in ${dist} — run \`nisc build\`.`);
   const port = options.port ?? Number(process.env['PORT'] ?? 8787);
   if (isShellProject(project)) {
-    // no server shell, no socket: each path's first answer is its screen, drawn
-    // from a boot of the app's own, and the page's shell takes it from there
     const httpServer = serve({ fetch: siteHandler(shellSite(project, dist)), port });
     const url = await listening(httpServer, options);
     say(options)(`nisc: serving ${url} — the built app, each path’s first screen drawn; the shell is the page’s own`);
@@ -233,7 +187,6 @@ export const start = async (options: CommandOptions): Promise<{ url: string; clo
     ...(project.site !== undefined ? { site: project.site } : {}),
     ...(project.tokenKey !== undefined ? { tokenKey: project.tokenKey } : {}),
   });
-  // what the app server answers itself is its own to say; the rest is the site
   const httpServer = serve({ fetch: siteHandler(booted.server.fetch, { except: MOSS_PATHS }), port });
   attachSocket(httpServer, booted.server.socket);
   const url = await listening(httpServer, options);
@@ -247,9 +200,6 @@ export const start = async (options: CommandOptions): Promise<{ url: string; clo
   };
 };
 
-// The tables, moved — by moss (`migrateTables`), which refuses a run that would
-// leave an entry of the manifest not fitting. A refusal is thrown with its
-// reasons, and nothing was applied. What a run that lands took away is said.
 export const migrate = async (options: CommandOptions): Promise<void> => {
   const project = await loadProject(options.root);
   if (isShellProject(project) || project.app === undefined || project.runtime === undefined) {
@@ -273,7 +223,6 @@ export const migrate = async (options: CommandOptions): Promise<void> => {
   }
 };
 
-// The two that hand over to a tool of the app's own and stay out of the way.
 const handOver = (options: CommandOptions, tool: string, args: readonly string[]): Promise<number> =>
   new Promise((done) => {
     const child = spawn(process.execPath, [tool, ...args], { cwd: options.root, stdio: 'inherit' });

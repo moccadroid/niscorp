@@ -4,17 +4,6 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-// ═══════════════════════════════════════════════════════════════
-// `nisc build` WITH its bundle step — the built command, run against an app made
-// here for the purpose: the own-shell fixture's app, and a stand-in for its
-// bundler. The command finds "the app's own vite" from the app's root, so the
-// app is given one: a script that writes what vite writes — an index.html that
-// links a hashed stylesheet. What the command then does to that page is its own.
-//
-// The app lives under fixtures/ (its config imports the fixture's, and resolves
-// the same packages) and is removed when the tests are done.
-// ═══════════════════════════════════════════════════════════════
-
 const here = dirname(fileURLToPath(import.meta.url));
 const bin = join(here, '..', 'bin', 'nisc.js');
 const SLOW = 60_000;
@@ -23,7 +12,6 @@ const SHEET = '.rooms{color:rebeccapurple}';
 const LINK = '<link rel="stylesheet" crossorigin href="/assets/index-FaKe1234.css">';
 const PAGE = `<!doctype html><html lang="en"><head><meta charset="UTF-8" /><title>bundled</title>${LINK}</head><body><div id="root"></div></body></html>`;
 
-// What stands in for vite: `vite build`, run from the app's root.
 const BUNDLER = `
 const { mkdirSync, writeFileSync } = require('node:fs');
 if (process.argv[2] !== 'build') process.exit(2);
@@ -67,7 +55,6 @@ describe('nisc build — the bundle, and then the stylesheet into the page', () 
     expect(out).toContain('nisc: /assets/index-FaKe1234.css is in the page (0.0 kB) — one response paints it');
     expect(out).toContain("`stylesheet: 'file'` in nisc.config.ts keeps it a file");
     expect(built()).toBe(PAGE.replace(LINK, `<style>${SHEET}</style>`));
-    // the stylesheet's own file is still there
     expect(readFileSync(join(app, 'built', 'assets', 'index-FaKe1234.css'), 'utf8')).toBe(SHEET);
     expect(out).toContain('drawn · whole · same twice · adopted');
     expect(code).toBe(0);
@@ -105,7 +92,6 @@ describe('nisc build — the bundle, and then the stylesheet into the page', () 
     const { code, out } = nisc(['build', '--skip-bundle']);
     expect(out).toContain('nisc: public/assets/ holds files of your own.');
     expect(out).toContain('keep everything under /assets/ for a year');
-    // said, not refused
     expect(code).toBe(0);
   }, SLOW);
 

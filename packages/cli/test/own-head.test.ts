@@ -7,14 +7,6 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { shellSite } from '../src/shell-site';
 import { project } from './fixtures/own-head/nisc.config';
 
-// ═══════════════════════════════════════════════════════════════
-// A head per path. An app with its own shell and more than one page
-// (fixtures/own-head): the list at `/` has no head of its own, and each article
-// has one in its layout. Through the command as it is installed, each path's
-// file goes out with its screen's own head — and a path whose screen has none,
-// with the template's.
-// ═══════════════════════════════════════════════════════════════
-
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, 'fixtures', 'own-head');
 const bin = join(here, '..', 'bin', 'nisc.js');
@@ -45,7 +37,6 @@ describe('nisc build — a head per path', () => {
   it('fails a boot that does not say the same head twice, and says where they part', () => {
     const { code, out } = nisc(['build'], 'head');
     expect(out).toContain('same twice: a second boot said a different head — at character');
-    // the markup itself was the same both times
     expect(out).not.toContain('drew different markup');
     expect(code).toBe(1);
   }, SLOW);
@@ -68,16 +59,13 @@ describe('nisc export — a head per path', () => {
     expect(head).toContain('<meta property="og:type" content="article" data-nova-head>');
     expect(head).toContain('<meta property="og:title" content="Types &amp; &lt;tags>" data-nova-head>');
     expect(head).toContain('<meta property="og:image" content="https://example.com/articles/types/og.png" data-nova-head>');
-    // a tag nova was never taught: it is written because the layout said it
     expect(head).toContain('<meta property="og:image:alt" content="Types &amp; &lt;tags>" data-nova-head>');
     expect(head).toContain('<link rel="alternate" type="application/rss+xml" href="/feed.xml" data-nova-head>');
     expect(head).toContain(
       '<script type="application/ld+json" data-nova-head>{"@context":"https://schema.org","@type":"Article","headline":"Types & \\u003ctags>","image":"https://example.com/articles/types/og.png"}</script>',
     );
-    // what the template said in those places is kept for the page, inert, and says nothing here
     expect(head).toContain('<template data-nova-own><title>The site</title><meta name="description" content="Everything on the site." /></template>');
     expect(head.split('<template')[0]).not.toContain('Everything on the site.');
-    // and what the head did not speak of is as index.html has it
     expect(head).toContain('<link rel="icon" href="/favicon.svg" />');
     expect(head).toContain('<meta property="og:site_name" content="The site" />');
   }, SLOW);

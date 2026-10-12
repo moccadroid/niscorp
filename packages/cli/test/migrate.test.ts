@@ -3,14 +3,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-// `nisc migrate`, run as the command against two fixtures: one that hands over
-// neither the manifest nor the environment, and one that hands over both on a
-// stand-in database that says what was done to it (fixtures/migrates). What the
-// step decides is moss's (`migrateTables`), and held there on a real one.
-
 const here = dirname(fileURLToPath(import.meta.url));
 const bin = join(here, '..', 'bin', 'nisc.js');
-// each run is a process
 const SLOW = 60_000;
 
 const migrate = (fixture: string, args: readonly string[] = [], env: Record<string, string> = {}) =>

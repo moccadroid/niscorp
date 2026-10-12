@@ -5,17 +5,11 @@ import { JSDOM } from 'jsdom';
 import { afterAll, describe, expect, it } from 'vitest';
 import { stylesheetInPage, writeStylesheetIntoPage } from '../src/stylesheet';
 
-// ═══════════════════════════════════════════════════════════════
-// The stylesheet goes in the page: what moves, what is left alone and why, and
-// that nothing a stylesheet says can break out of where it was put.
-// ═══════════════════════════════════════════════════════════════
-
 const page = (head: string): string => `<!doctype html><html lang="en"><head>${head}</head><body><div id="root"></div></body></html>`;
 const files =
   (map: Record<string, string>) =>
   (href: string): string | undefined =>
     map[href];
-// the link exactly as vite writes it
 const VITE = '<link rel="stylesheet" crossorigin href="/assets/index-AbC12345.css">';
 const SHEET = '/assets/index-AbC12345.css';
 
@@ -25,7 +19,6 @@ describe('stylesheetInPage', () => {
     expect(html).toBe(page('<style>.a{color:red}</style>'));
     expect(inPage).toEqual([{ href: SHEET, bytes: 13 }]);
     expect(left).toEqual([]);
-    // the empty root a screen is drawn into is still there, once
     expect(html.split('<div id="root"></div>')).toHaveLength(2);
   });
 
@@ -41,7 +34,6 @@ describe('stylesheetInPage', () => {
     expect(dom.window.document.querySelectorAll('script')).toHaveLength(0);
     expect(Reflect.get(dom.window, 'broke')).toBeUndefined();
     expect(dom.window.document.querySelectorAll('style')).toHaveLength(1);
-    // all of it is inside, to the last rule
     expect(dom.window.document.querySelector('style')?.textContent).toContain('.c{color:blue}');
   });
 
@@ -68,11 +60,9 @@ describe('stylesheetInPage', () => {
 
   it('leaves a stylesheet a file when moving it would change what it points at', () => {
     const moved = (css: string): boolean => stylesheetInPage(page(VITE), files({ [SHEET]: css })).inPage.length === 1;
-    // these mean the same from a page at any path
     expect(moved(`a{background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E")}`)).toBe(true);
     expect(moved(`a{background:url('data:image/svg+xml,<svg fill="rgb(0,0,0)"/>')}`)).toBe(true);
     expect(moved('a{src:url(/assets/f.woff2) format("woff2"),url(https://x/y.woff);fill:url(#g)}')).toBe(true);
-    // these are relative to the stylesheet's own place
     expect(moved('a{src:url(f.woff2)}')).toBe(false);
     expect(moved('a{src:url("./f.woff2")}')).toBe(false);
     expect(moved("a{src:url( '../img/x.png' )}")).toBe(false);
@@ -116,7 +106,6 @@ describe('writeStylesheetIntoPage', () => {
     expect(writeStylesheetIntoPage(dist)).toEqual({ inPage: [{ href: SHEET, bytes: 13 }], left: [] });
     expect(readFileSync(join(dist, 'index.html'), 'utf8')).toBe(page('<style>.a{color:red}</style>'));
     expect(readFileSync(join(dist, 'assets/index-AbC12345.css'), 'utf8')).toBe('.a{color:red}');
-    // again: nothing left to do
     expect(writeStylesheetIntoPage(dist)).toEqual({ inPage: [], left: [] });
   });
 

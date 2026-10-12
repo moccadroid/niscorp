@@ -6,12 +6,6 @@ import { defaultRegistry, fallback } from '@niscorp/nova/adapters/dom/components
 import { renderToString } from '@niscorp/nova/adapters/dom/server';
 import type { NiscShellProject } from '../../../src';
 
-// A whole app with its own shell, in one file: no moss, no framework — nova's
-// DOM adapter and reference kit. It opens with a read, can make a call, and
-// waits on a channel, so a build has all three to report.
-//
-// NISC_FIXTURE_FAULT breaks it one way at a time, so each of the build's checks
-// can be seen to fail.
 const fault = process.env['NISC_FIXTURE_FAULT'] ?? '';
 
 const rooms: ActionDefinition = {
@@ -46,12 +40,10 @@ const kit = (): ReturnType<typeof defaultRegistry> => {
 
 const titleOf = (): string => {
   if (fault === 'differs') return `Rooms ${Math.random()}`;
-  // a boot that is not the same boot in a page as it was at build
   if (fault === 'adopt' && typeof document !== 'undefined') return 'Rooms, in a page';
   return 'Rooms & <suites>';
 };
 
-// The boot — the one a browser entry would run.
 const boot = (): Shell => {
   let minted = 0;
   return createShell({

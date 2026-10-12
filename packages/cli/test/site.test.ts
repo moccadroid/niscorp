@@ -3,11 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { siteHandler, withCaching, withCompression } from '../src/site';
 import type { SiteHandler } from '../src/site';
 
-// ═══════════════════════════════════════════════════════════════
-// What `nisc start` puts around an app, against handlers made up for each rule:
-// what a browser may keep, and how an answer travels.
-// ═══════════════════════════════════════════════════════════════
-
 const WHEN = 'Sat, 03 Oct 2026 12:00:00 GMT';
 const LONG = 'nisc '.repeat(2000);
 const BROWSER = { 'accept-encoding': 'gzip, deflate, br, zstd' };
@@ -92,7 +87,6 @@ describe('withCompression — how an answer travels', () => {
     const plain = await withCompression(html)(get('/'));
     expect(plain.headers.has('content-encoding')).toBe(false);
     expect(await plain.text()).toBe(LONG);
-    // …but it would have been different had it been asked for differently
     expect(plain.headers.get('vary')).toBe('Accept-Encoding');
   });
 
@@ -161,7 +155,6 @@ describe('withCompression — how an answer travels', () => {
     const response = await withCompression(() => new Response(source, { headers: { 'content-type': 'text/plain' } }))(get('/words', BROWSER));
     expect(response.headers.get('content-encoding')).toBe('br');
 
-    // read it the way a browser does: decompressing as it arrives
     const decompress = createBrotliDecompress();
     const arrived: { text: string; sentByThen: number }[] = [];
     decompress.on('data', (piece: Buffer) => arrived.push({ text: piece.toString(), sentByThen: sent }));
@@ -174,14 +167,11 @@ describe('withCompression — how an answer travels', () => {
     await new Promise<void>((done) => decompress.end(() => done()));
 
     expect(arrived.map((piece) => piece.text).join('')).toBe('piece 1\npiece 2\npiece 3\npiece 4\npiece 5\n');
-    // the first piece was readable before the last was even produced
     expect(arrived[0]?.text).toContain('piece 1');
     expect(arrived[0]?.sentByThen).toBeLessThan(5);
   });
 
   it('an answer that will never change is compressed once', async () => {
-    // the inner answer's body, let go unread: what happens to it when the
-    // compressed bytes are already known
     let letGo = 0;
     const asset: SiteHandler = () =>
       new Response(
@@ -199,22 +189,18 @@ describe('withCompression — how an answer travels', () => {
     const handler = withCompression(asset);
 
     const first = await handler(get('/assets/index-AbC12345.js', BROWSER));
-    // compressed as it is read: how long it will be is not known yet
     expect(first.headers.has('content-length')).toBe(false);
     const firstBytes = await bytesOf(first);
     expect(brotliDecompressSync(firstBytes).toString()).toBe(LONG);
 
     const second = await handler(get('/assets/index-AbC12345.js', BROWSER));
     expect(second.headers.get('content-encoding')).toBe('br');
-    // what was remembered goes out whole, with its length
     expect(second.headers.get('content-length')).toBe(String(firstBytes.length));
     expect((await bytesOf(second)).equals(firstBytes)).toBe(true);
 
-    // asked for differently, it is a different answer
     const gz = await handler(get('/assets/index-AbC12345.js', { 'accept-encoding': 'gzip' }));
     expect(gz.headers.has('content-length')).toBe(false);
     expect(gunzipSync(await bytesOf(gz)).toString()).toBe(LONG);
-    // of the three, only the second had nothing to read the inner answer for
     expect(letGo).toBe(1);
   });
 
@@ -224,14 +210,12 @@ describe('withCompression — how an answer travels', () => {
     const cut = await handler(get('/assets/index-AbC12345.js', BROWSER));
     await cut.body?.cancel();
     const next = await handler(get('/assets/index-AbC12345.js', BROWSER));
-    // nothing was remembered, so this one is compressed as it is read too
     expect(next.headers.has('content-length')).toBe(false);
     expect(brotliDecompressSync(await bytesOf(next)).toString()).toBe(LONG);
   });
 });
 
 describe('withCompression — an answer that does not finish', () => {
-  // a source that produces a piece every 20ms until it is stopped, or told to fail
   const slow = (failAt?: number): { handler: SiteHandler; sent: () => number; stopped: () => boolean } => {
     let sent = 0;
     let isStopped = false;
