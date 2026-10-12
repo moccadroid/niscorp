@@ -8,19 +8,8 @@ import { scopeProfiles } from '@niscorp/vex';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { z } from 'zod';
 import { isBinding } from '@niscorp/nova/i18n';
-import { entriesOf } from './app';
+import { entriesOf, wearableOf } from './app';
 import type { LayoutVariant, NiscApp } from './app';
-
-export const wearableOf = (app: Pick<NiscApp, 'wearable' | 'assignments'>): readonly (readonly string[])[] => {
-  const declared = app.wearable;
-  const source = declared ?? Object.values(app.assignments ?? {});
-  const seen = new Map<string, readonly string[]>();
-  for (const roles of source) {
-    const key = [...roles].sort().join('\0');
-    if (!seen.has(key)) seen.set(key, roles);
-  }
-  return [...seen.values()];
-};
 
 export type ManifestCandidate = {
   charter: Charter;

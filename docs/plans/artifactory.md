@@ -19,9 +19,11 @@ part, "Changing a package", binds this work. `packages/nisc/STYLE_GUIDE.md`.
 [moss-refactor.md](moss-refactor.md): how moss is built, and in its part 6 the
 owner's standing decisions. Then this file. Then the code part 4 names.
 
-**Where the repository stands.** Start from `main`. Moss is
+**Where the repository stands.** Start from the branch `worktree-artifactory`,
+or from `main` once that branch is in it. Moss is
 `packages/moss/src`: 90 files in 16 modules, about 7,400 lines of code and
-370 comment lines. `pnpm verify` passes and CI passes.
+370 comment lines. `pnpm verify` passes on the branch. CI has passed on
+`main`, and has not run on the branch until it is pushed.
 
 **The owner's rules.** Each was learned the hard way.
 
@@ -265,9 +267,9 @@ Read against the code on 2026-10-12. Paths are under `packages/moss/src/`.
 
 | File | It holds |
 |---|---|
-| `manifest/app.ts` | the types an app is written in (`NiscApp`, `ShellManifest`), `defineApp`, `entriesOf` |
+| `manifest/app.ts` | the types an app is written in (`NiscApp`, `ShellManifest`), `defineApp`, and two readings of an app: `entriesOf`, `wearableOf` |
 | `manifest/schema.ts` | the schema that parses a manifest and freezes it |
-| `manifest/verify.ts` | `verifyManifest` (what a boot checks), `layoutMisfits`, `endlessChains`, and what it is built from: `wearableOf`, and a layout variant put in place (`variantLayouts`, `withVariants`) |
+| `manifest/verify.ts` | `verifyManifest` (what a boot checks), `layoutMisfits`, `endlessChains`, and a layout variant put in place (`variantLayouts`, `withVariants`) |
 | `artifactory/running.ts` | `createRunningManifest`: the actions in force (the build's, then each named set), `catalogFor`, `artifactsFor`, `onChange`, `claim` and `replace` for named sets |
 | `artifactory/roles.ts` | what a set of roles holds, kept per set of roles |
 | `artifactory/artifacts.ts` | `ShellArtifacts`, `shellComponents` |
@@ -446,13 +448,14 @@ by what names, and wait.
 `running.ts` and `generation.ts` from `manifest/`, and `roles.ts` and
 `artifacts.ts` but for four functions: `entriesOf`, `wearableOf`,
 `variantLayouts` and `withVariants` stay in `manifest`, because its
-verification is built from them and the artifactory imports `manifest`. It
-has its own `index.ts` and a line in the table of `scripts/check-modules.mts`.
-`data` writes out the two shapes it took from `manifest` (the pointer, and the
-listener it subscribes with), so that it imports nothing of the artifactory.
-Nothing behaves differently. *Done when:* the source holds the same top-level
-statements as before, but for that one type in `data`, and part 0's "works"
-holds.
+verification is built from them and the artifactory imports `manifest`
+(`entriesOf` is read by `data`'s migration too). It has its own `index.ts` and
+a line in the table of `scripts/check-modules.mts`. `data` writes out the two
+shapes it took from `manifest` (the pointer, and the listener it subscribes
+with), so that it imports nothing of the artifactory. Nothing behaves
+differently. *Done when:* the source holds the same top-level statements as
+before, but for two types in `data` (`Pointer` is written out there, and one
+member of `Data` names the listener's shape), and part 0's "works" holds.
 
 **Step 2. Entries through the cache.** The engine's cache asks the artifactory
 first (part 5, "Entries"), for the build's entries only. `Data.seed` and its

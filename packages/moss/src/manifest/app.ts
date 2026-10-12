@@ -125,3 +125,14 @@ export type PageManifest = ShellManifest & {
 export const defineApp = (app: NiscApp): NiscApp => app;
 
 export const entriesOf = (app: Pick<NiscApp, 'entries'>): readonly (SeedEntry | SeedMutation)[] => app.entries ?? [];
+
+export const wearableOf = (app: Pick<NiscApp, 'wearable' | 'assignments'>): readonly (readonly string[])[] => {
+  const declared = app.wearable;
+  const source = declared ?? Object.values(app.assignments ?? {});
+  const seen = new Map<string, readonly string[]>();
+  for (const roles of source) {
+    const key = [...roles].sort().join('\0');
+    if (!seen.has(key)) seen.set(key, roles);
+  }
+  return [...seen.values()];
+};

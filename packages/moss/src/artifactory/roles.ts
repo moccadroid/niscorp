@@ -1,6 +1,6 @@
 import { resolvePrincipal } from '@niscorp/charter';
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
-import { assignedRoles, memoKey } from '../identity';
+import { memoKey } from '../identity';
 import { variantLayouts, withVariants } from '../manifest';
 import type { NiscApp } from '../manifest';
 

@@ -1334,7 +1334,7 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
   `onSession`, `runs`), the wire for a token, and its limits. Everything in
   that answer but who somebody is comes from the running manifest, which is
   asked once for each build and once for each adopt
-  (`src/artifactory/artifacts.ts`): an action, a layout, a fragment and an entry
+  (`artifactsFor`, `src/artifactory/running.ts`): an action, a layout, a fragment and an entry
   reach a shell through that one answer, and the server's wiring reads none
   of them off the app. For an entry that is what a shell is told of the reads
   on its screens. What a read replays is not in the answer: the entries have

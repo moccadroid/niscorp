@@ -68,7 +68,7 @@ process's alone. A library every process reads is the part that is unbuilt.
 And there is one place it will be asked. Everything a shell loads that
 somebody authored (its actions, its frame and layout store, its fragments, the
 entries its reads replay) is answered by the running manifest in one function,
-for a shell and a set of roles (`src/artifactory/artifacts.ts`). A shell is built
+for a shell and a set of roles (`artifactsFor`, `src/artifactory/running.ts`). A shell is built
 from that answer and adopts it: an adopt puts in place the actions that are
 held now, and the frame, each `{ ref }` of the layout store and each fragment
 that the answer says differently from the last time. (The canvases are what a
@@ -263,8 +263,8 @@ this is a copy of it:
 
 The table has no cycle, and what it leaves out is as deliberate as what it
 names. `shells` does not import `identity`: who somebody is, it is told.
-`socket` does not import `manifest`: what somebody holds is a function it is
-handed. `artifactory` and `data` do not import each other: the generation
+`socket` does not import `artifactory`: what somebody holds is a function it
+is handed. `artifactory` and `data` do not import each other: the generation
 pointer's row is `data`'s, when it moves is the artifactory's, and each
 reaches the other as functions the server hands over. `integrations` does not
 import `data`: what it reads and writes it
@@ -832,7 +832,7 @@ nothing.
 | Temptation | Refusal |
 |---|---|
 | An auth provider | BYO identity. Who somebody is, the app decides at its own door (magic link is the default strategy); the server only asks who a token is. Moss does keep a credential an app may use for that: `mintSession` stores a token by its hash once the app has decided, and `'dev-open'` trusts an unsigned one for a harness. Neither decides anything. |
-| A framework | An assembly point. The intelligence lives in the artifacts; the server resolves, serves, pushes, enforces. Its core is ten modules, each one question or the wiring, and an eleventh that runs it on Node (*How the code is laid out*). |
+| A framework | An assembly point. The intelligence lives in the artifacts; the server resolves, serves, pushes, enforces. Its core is eleven modules, each one question or the wiring, and a twelfth that runs it on Node (*How the code is laid out*). |
 | A place where policy hides | Every opinion it enforces is a readable artifact: charter, scope policy, assertion. No annotations, no interceptor magic. |
 | A second way to do anything | Reads are vex, writes are vex, compute is functions, UI is actions, permissions are the charter. Moss's core adds no vocabulary of its own, and holds itself to the same: the rows it keeps it reads and writes through vex entries, and the statements left outside vex are counted, each with its reason (`pnpm check:raw-sql`). |
 | A web framework | A page is a shell manifest at a path; a drawn document is a first frame delivered early. No file-system routes, no layouts-of-layouts, no loaders, and no chain of middleware for an app to configure (one gate may be laid over the operator prefix, `runtime.operatorGate`). A page's `<head>` is not managed either: it is a node in a layout, written into the document like the rest of the screen. The template, the route and the kit are the app's. |

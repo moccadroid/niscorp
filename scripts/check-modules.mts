@@ -25,9 +25,9 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       data: ['runtime', 'identity', 'manifest'],
       // Not identity or feature: they reach it as functions the server hands over.
       shells: ['runtime', 'protocol', 'manifest', 'data'],
-      // A feature. Not data or manifest: it goes through the seams it is started with.
+      // A feature. Not data, manifest or artifactory: it goes through the seams it is started with.
       integrations: ['runtime', 'feature'],
-      // Not manifest: what somebody holds, and where a session comes from, are functions it is handed.
+      // Not artifactory: what somebody holds, and where a session comes from, are functions it is handed.
       socket: ['runtime', 'protocol', 'identity', 'shells'],
       // Not manifest or the server: a page's path, and what a document asks a server, are types written out in the module.
       documents: ['protocol', 'identity', 'shells'],
