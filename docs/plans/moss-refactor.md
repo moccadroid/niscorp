@@ -242,75 +242,16 @@ None of them is edited from here.
 
 ## 10. The artifactory
 
-Its own plan, not started. What follows is what is decided, what moss already
-does for it, and what it will still have to change.
+Its own plan: [artifactory.md](artifactory.md). It holds what is decided, what
+was run, the last design proposed, and what moss still has to change for it.
+Not started.
 
-**Decided (the owner's).**
-
-- It is a sub-module of moss that every load goes through: an action, a
-  layout, a fragment, a vex entry. It is asked; it is not handed around. It is
-  what `manifest` grows into.
-- An id resolves to what is shipped, what is published, what a person made, or
-  a draft held in their shell. Developers publish new defaults without
-  deploying; what is published wins, and the build's own copy is what is left
-  when nothing is published or the published one fails its check.
-- Several layouts may exist for one action, and which is in use is separate
-  from them. A person's own change shows on their open screen at once.
-- A made action calls only functions the charter allows, each described in the
-  manifest, and no vex write.
-- One check for an artifact, made of the checks prism, nova and vex already
-  have.
-- The kinds stay open, and replacing an artifact leaves room for merging later.
-- The design stays simple. A requirement that contorts it is dropped.
-
-**What moss does for it now.** While a server runs, the running manifest is
-the one place an action, a layout and a fragment are asked of (part 5). The
-entries the app shipped are held there too (`entries()`), and that list is
-their source; where no server stands, `entriesOf` (`manifest/artifacts.ts`)
-says what an app's entries are.
-
-**What it will still change**, read against the code on 2026-10-12:
-
-- **Entries have two holders.** The manifest's list is copied once, at boot,
-  into vex's cache (`Data.seed`, called in `buildRunningManifest`,
-  `server/server.ts`). From then on the cache runs them: a replay and
-  `fingerprints` resolve there and ask the manifest nothing. The cache also
-  holds what the list does not: a query written for an intent while the app
-  runs (`createIntentAnswers`, `data/routes.ts`), and any row from before this
-  boot. There is no way to hand an entry over while a server runs.
-- **`artifactsFor(shell, roles, installed)` is synchronous and asked by
-  roles.** What it answers is kept for each set of roles and install list, never
-  for a person (`manifest/roles.ts`). An id that resolves to what one person
-  made needs the principal, and a read of rows needs to be awaited: the
-  signature, the key it is kept under and its one caller (`server/hosts.ts`)
-  move. `ShellHostConfig.composition(principal)` is already asked by principal
-  and awaited.
-- **`catalogFor(roles, installed)` is the same**, with four callers outside
-  `manifest`: `server.catalogOf` and the socket's catalog (`server/server.ts`),
-  the catalog route (`server/routes.ts`), and the seam `grantedActionIds`
-  (`server/features.ts`), which the integrations proxy asks on every call it
-  forwards.
-- **An adopt does not take the canvases again** (`takeLayouts`,
-  `shells/host.ts`). It applies the frame, each `{ ref }` of the layout store
-  and each fragment that is answered differently. A published default that
-  changes which canvases a shell has reaches a living shell by a reset.
-- **A shell's liveness reads the entries of its composition**
-  (`shellNeedOf`, `shells/snapshot.ts`), so an entry that is only in the cache
-  is reported as not readable.
-- **`@niscorp/moss/unverified` is the second way in.** Relay registers an
-  action a model built, atrium registers one an operator previews, and lyceum
-  sets two layouts, all on the whole shell and all unverified. The artifactory's
-  draft takes these over, and the entry goes when no app needs it.
-- **Named sets of actions** (`server.replaceActions`, a feature's own set and
-  its loader) are how an action arrives while a server runs today. Published
-  and made artifacts replace them.
-- **The artifact half of integrations** (part 8).
-
-Shown by probes on 2026-10-07 and 2026-10-08, all removed afterwards: vex,
-unchanged, answers shipped and saved entries from a cache that asks somebody
-else first; a nova shell reads its layouts through a store that asks somebody
-else, and an open screen follows; every action of the five lab apps (185) draws
-the same with its layout held by reference.
+What this refactor did for it: while a server runs, one place answers what a
+shell is made of (part 5); a living shell is brought level in place when that
+changes; and a change in one process reaches the others. What it left, by
+decision: the entries have two holders, the feature seam carries the half of
+integrations that handles a bundle's actions, and `@niscorp/moss/unverified`
+is a second way into a shell.
 
 ## 11. In numbers
 
