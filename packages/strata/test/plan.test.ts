@@ -15,7 +15,6 @@ const app: Sequence = {
   id: 'acme.app',
   migrations: [
     { description: 'People', steps: [sql('CREATE TABLE people (id text PRIMARY KEY)')] },
-    // reads the cache table, so the cache must be there first
     { description: 'A view over both', steps: [sql('CREATE VIEW v AS SELECT 1')], dependsOn: ['nisc.vex.cache/2'] },
   ],
 };

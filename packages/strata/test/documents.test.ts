@@ -2,8 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { createUpgrader, prepare, type Sequence, type Stamp, type Transform } from '../src';
 import { migrate } from '../src/postgres';
 
-// A grammar shaped like nova's: an action holds a layout and endpoint configs;
-// a layout holds layouts wherever a node nests them.
 const nova = (migrations: Sequence['migrations'] = []): Sequence => ({
   id: 'nisc.nova',
   documents: {
@@ -27,15 +25,12 @@ const action = {
   endpoints: { load: { url: '/x', request: { q: { $ref: '$.q' } } } },
 };
 
-// The injected evaluator. Under moss this is Prism's `evaluate` over a Prism
-// config; here the config IS a function, which is all strata needs to know.
 const transform: Transform = (config, source) => {
   if (typeof config !== 'function') throw new Error('not a test transform');
   return config(source);
 };
 const step = (at: string, fn: (source: { document: Record<string, unknown>; path: string }) => unknown) => ({ kind: 'document' as const, at, transform: fn });
 
-// Button's `label` prop is now `text` — one flat node at a time.
 const renameLabel = step('nisc.nova/layout', ({ document }) => {
   const props = document['props'];
   if (document['component'] !== 'Button' || typeof props !== 'object' || props === null || !('label' in props)) return document;
@@ -93,9 +88,6 @@ describe('upgrade — a document catches up to the code', () => {
     expect(result.document).toBe(action);
   });
 
-  // A stamp can name a grammar this code was not given — a kit the reader does not
-  // have. That entry is the document's own record of it: an upgrade that drops it
-  // lets code that does have the grammar run its migrations a second time.
   it('keeps the stamp entries of grammars it was not given', async () => {
     const upgrader = await createUpgrader([nova([{ description: 'rename', steps: [renameLabel] }]), prism()], { transform });
 
@@ -195,7 +187,7 @@ describe('upgrade — refusals', () => {
 
   it('a kind nobody declares is UNKNOWN_KIND — as a step target or an embedding', async () => {
     await expect(createUpgrader([nova([{ description: 'x', steps: [step('nisc.nova/widget', ({ document }) => document)] }]), prism()], { transform })).rejects.toMatchObject({ code: 'UNKNOWN_KIND' });
-    await expect(createUpgrader([nova()], { transform })).rejects.toMatchObject({ code: 'UNKNOWN_KIND' }); // embeds nisc.prism/config
+    await expect(createUpgrader([nova()], { transform })).rejects.toMatchObject({ code: 'UNKNOWN_KIND' });
   });
 
   it('tables and documents are different owners, and each path refuses the other', async () => {
@@ -205,10 +197,6 @@ describe('upgrade — refusals', () => {
     await expect(migrate(pool, [nova(), prism()])).rejects.toMatchObject({ code: 'WRONG_OWNER' });
   });
 
-  // strata reads a sequence as a grammar when it declares `documents` or has a
-  // document step. A kit with nothing but markers declares neither, so it reads
-  // as owning tables — and a refusal whose only advice is `migrate` would put
-  // the kit's markers in a database's ledger. It has to say what makes a grammar.
   it('a markers-only sequence without `documents` is refused, and the refusal says to declare them', async () => {
     const kit: Sequence = { id: 'acme.kit', migrations: [{ description: 'Button may carry an icon', steps: [] }] };
     const error = await createUpgrader([nova(), prism(), kit], { transform }).catch((e: unknown) => e);

@@ -1,6 +1,3 @@
-// @niscorp/strata — the core: the grammar of a migration, the plan, the errors.
-// Pure and storage-blind; `@niscorp/strata/postgres` applies a plan to a database.
-
 import type { Sequence } from './schema';
 
 export { SequenceSchema, MigrationSchema, StepSchema, SqlStepSchema, DocumentStepSchema, DocumentKindSchema, SEQUENCE_ID, MIGRATION_REF, KIND_NAME, KIND_REF, EMBED_PATH } from './schema';
@@ -15,6 +12,4 @@ export { DOCUMENT_DEPTH_LIMIT, exceedsDepth, depthRefusal } from './depth';
 export { StrataError } from './errors';
 export type { StrataErrorCode } from './errors';
 
-// Authoring helper: a sequence, type-checked where it is written. Parsing
-// happens where it is applied (`prepare`), like every other artifact.
 export const defineSequence = <const T extends Sequence>(sequence: T): T => sequence;

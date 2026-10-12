@@ -3,28 +3,9 @@ import type { Sequence } from '../schema';
 import type { UpgradeResult, Upgrader } from '../documents';
 import { StrataError } from '../errors';
 
-// ═══════════════════════════════════════════════════════════════
-// @niscorp/strata/postgres — the ledger, and the one path DDL takes.
-//
-// A run is ONE TRANSACTION under an advisory lock: take the lock, make sure the
-// ledger exists, read it, plan against it, apply every pending step and record
-// each migration as it lands. Anything throws, nothing happened — Postgres DDL
-// is transactional, so a half-migrated database is not a state this can leave.
-// Two processes booting at once serialize on the lock; the second finds the
-// work done.
-//
-// The ledger's own table is the only statement strata runs outside a ledger —
-// the base case, the way every migration system has one.
-// ═══════════════════════════════════════════════════════════════
-
-// The pool shape nisc passes everywhere (vex's PgPool, a PGlite shim, a `pg`
-// pool wrapped to check a client out per transaction). Structural — strata
-// depends on no driver.
-//
-// `query` and `transaction` are called ON the object that has them, never
-// taken off it first. A driver's own object (a PGlite, a `pg` client handed
-// through as the transaction) has them as methods that reach for `this`; taken
-// off, they fail inside the driver on a property nobody here has heard of.
+// `query` and `transaction` are called on the object that has them, never taken
+// off it first: a driver's own object (a PGlite, a `pg` client) has them as
+// methods that reach for `this`.
 export type StrataQuery = (text: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
 export type StrataPool = {
   query: StrataQuery;
@@ -32,33 +13,20 @@ export type StrataPool = {
 };
 
 export type LedgerOptions = {
-  // Default `strata_ledger`, in the connection's current schema — beside the
-  // app's own tables.
   table?: string;
   schema?: string;
 };
 
-// What a host asks of a run before it may land: called inside the run's
-// transaction, after the last pending step — when nothing was pending too.
-// Every sentence it returns refuses the run (DOES_NOT_FIT) — and since
-// nothing has been committed, nothing happened. strata does not know what is
-// being asked; the host does.
 export type MigrateGuard = (tx: { query: StrataQuery }) => Promise<readonly string[]>;
 
 export type MigrateOptions = LedgerOptions & {
-  // `apply` (default): run what is pending. `verify`: refuse if anything is —
-  // a production boot that expects a deploy step to have migrated already.
   mode?: 'apply' | 'verify';
   guard?: MigrateGuard;
-  // The whole run, guard included, then rolled back: the report says what
-  // WOULD be applied. It takes the locks a real run takes, for as long.
   dryRun?: boolean;
 };
 
 export type MigrateReport = {
-  // What this run applied, in order.
   applied: readonly PreparedMigration[];
-  // The plan it acted on (per-sequence positions before the run).
   plan: Plan;
 };
 
@@ -99,8 +67,6 @@ const readRows = async (on: { query: StrataQuery }, qualified: string): Promise<
   }));
 };
 
-// The ledger as it stands — read-only, no lock, no table created. A database
-// that has never been migrated has an empty ledger.
 export const readLedger = async (pool: StrataPool, options: LedgerOptions = {}): Promise<LedgerRow[]> => {
   const { qualified } = ledgerNameOf(options);
   const { rows } = await pool.query('SELECT to_regclass($1) IS NOT NULL AS present', [qualified]);
@@ -108,8 +74,6 @@ export const readLedger = async (pool: StrataPool, options: LedgerOptions = {}):
   return readRows(pool, qualified);
 };
 
-// What `migrate` would do, without doing it — for a boot report, a CI check, a
-// page that shows the ledger.
 export const status = async (pool: StrataPool, sequences: readonly Sequence[], options: LedgerOptions = {}): Promise<Plan> =>
   planMigrations(await prepare(sequences), await readLedger(pool, options));
 
@@ -135,8 +99,8 @@ export const migrate = async (pool: StrataPool, sequences: readonly Sequence[], 
     );
   }
   const { qualified, schema } = ledgerNameOf(options);
-  // A dry run leaves by throwing: that is what rolls a transaction back in
-  // every pool there is. This is the throw, told apart by being this object.
+  // A dry run leaves by throwing, which is what rolls a transaction back in
+  // every pool. This is the throw, told apart by being this object.
   const dryRunEnd = new Error('strata: dry run');
   let dryRunReport: MigrateReport | undefined;
 
@@ -199,40 +163,18 @@ export const migrate = async (pool: StrataPool, sequences: readonly Sequence[], 
   });
 };
 
-// ═══════════════════════════════════════════════════════════════
-// Stores — tables whose rows hold documents.
-//
-// A store names where the documents live: the table, the jsonb column holding
-// each document, the jsonb column holding its stamp, the kind every document
-// in it is, and the key that identifies a row. The table itself (and its stamp
-// column) is its owner's, created by the owner's TABLE sequence; strata only
-// reads and rewrites rows.
-//
-// `upgradeStore` brings every row that is behind up to the code, in one
-// transaction, and writes each back with a current stamp. A row written by
-// newer code refuses the whole run (TOO_NEW) — the same answer the ledger
-// gives, one row at a time. Read paths that cannot wait for a boot upgrade the
-// row they read with the same upgrader; this is the pass that makes that rare.
-// ═══════════════════════════════════════════════════════════════
-
 export type DocumentStore = {
   table: string;
   schema?: string;
-  // The jsonb column holding the document.
   column: string;
-  // The jsonb column holding the document's stamp (`{}` means "before stamps").
   stamp: string;
-  // Every document in this store is of this kind, e.g. "nisc.nova/action".
   kind: string;
-  // The columns that identify a row.
   key: readonly string[];
 };
 
 export type StoreReport = {
-  // Rows read, and rows that were behind and rewritten.
   total: number;
   upgraded: number;
-  // Per migration ref, how many rows it rewrote.
   applied: Readonly<Record<string, number>>;
 };
 

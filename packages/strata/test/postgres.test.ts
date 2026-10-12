@@ -3,7 +3,6 @@ import { PGlite } from '@electric-sql/pglite';
 import { createUpgrader, type Sequence } from '../src';
 import { migrate, readLedger, status, upgradeStore, type StrataPool, type StrataQuery } from '../src/postgres';
 
-// A PGlite database in the pool shape — query plus a pinned transaction.
 const freshPool = (): StrataPool & { db: PGlite } => {
   const db = new PGlite();
   return {
@@ -106,20 +105,16 @@ describe('migrate — the ledger', () => {
     await expect(migrate({ query: pool.query }, [cache])).rejects.toMatchObject({ code: 'NO_TRANSACTION' });
   });
 
-  // A driver's own object has `query` and `transaction` as methods that need
-  // their receiver. They are called on the object, so one works as it is.
   it('a PGlite works as it is — its methods are called on it, never taken off it', async () => {
     const db = new PGlite();
     expect((await migrate(db, [cache])).applied.map((m) => m.ref)).toEqual(['nisc.vex.cache/1', 'nisc.vex.cache/2']);
     expect((await migrate(db, [cache])).applied).toEqual([]);
-    // Once a ledger exists, reading it goes through `query` too.
     expect((await status(db, [cache])).pending).toEqual([]);
     expect((await readLedger(db)).map((row) => `${row.sequence}/${row.n}`)).toEqual(['nisc.vex.cache/1', 'nisc.vex.cache/2']);
   });
 
   it('a transaction whose `query` needs its receiver works — a client handed through as it is', async () => {
     const db = new PGlite();
-    // The shape of a checked-out `pg` client: `query` is a method on it.
     const clientOver = (inner: { query: StrataQuery }) => ({
       inner,
       query(this: { inner: { query: StrataQuery } }, text: string, values?: unknown[]) {
@@ -150,7 +145,6 @@ describe('migrate — the ledger', () => {
 });
 
 describe('migrate — a guard, and a dry run', () => {
-  // What a host would ask: is this table there, as the transaction sees it?
   const sees = async (tx: { query: StrataQuery }, table: string): Promise<boolean> =>
     (await tx.query('SELECT to_regclass($1) IS NOT NULL AS present', [table])).rows[0]?.['present'] === true;
 
@@ -188,7 +182,6 @@ describe('migrate — a guard, and a dry run', () => {
     expect(report.applied.map((m) => m.ref)).toEqual(['nisc.vex.cache/1', 'nisc.vex.cache/2']);
     expect(await columnsOf(pool, 'vex_cache')).toEqual([]);
     expect(await readLedger(pool)).toEqual([]);
-    // and the real run afterwards finds everything still to do
     expect((await migrate(pool, [cache])).applied).toHaveLength(2);
   });
 
@@ -199,10 +192,6 @@ describe('migrate — a guard, and a dry run', () => {
 });
 
 describe('adoption — a database created the old way', () => {
-  // Before strata, packages converged their tables on every boot with
-  // CREATE … IF NOT EXISTS + ADD COLUMN IF NOT EXISTS. A baseline written the
-  // same way is its own adoption: run once over ANY earlier shape, it lands the
-  // current one — and is recorded, so it never runs again.
   const baseline: Sequence = {
     id: 'nisc.vex.cache',
     migrations: [
@@ -281,11 +270,9 @@ describe('upgradeStore — rows that hold documents', () => {
     expect(await upgradeStore(db, store, upgrader)).toEqual({ total: 3, upgraded: 2, applied: { 'acme.forms/1': 2 } });
   });
 
-  // Two deployments over one table, one of them without a grammar the other has.
   it('a row keeps its stamp entry for a grammar the upgrader was not given — its migration is not run twice', async () => {
     const pool = freshPool();
     await pool.query(`CREATE TABLE forms (id text PRIMARY KEY, definition jsonb NOT NULL, grammar jsonb NOT NULL DEFAULT '{}'::jsonb)`);
-    // Written by code that had both grammars: prices already in cents (acme.prices 1), the title not yet renamed.
     await pool.query(`INSERT INTO forms (id, definition, grammar) VALUES ('a', '{"title":"Seats","price":1200}', '{"acme.forms":0,"acme.prices":1}')`);
     const prices: Sequence = {
       id: 'acme.prices',

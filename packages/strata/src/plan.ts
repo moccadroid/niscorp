@@ -2,15 +2,6 @@ import { SequenceSchema, type DocumentKind, type Sequence, type Step } from './s
 import { checksumOf } from './checksum';
 import { StrataError, type StrataErrorCode } from './errors';
 
-// ═══════════════════════════════════════════════════════════════
-// The plan — what the code says, against what the database has run.
-//
-// Pure: sequences and ledger rows in, a plan out. No database, no clock. The
-// postgres runner reads the ledger, calls this, and applies what it says; a
-// showroom page or a CI check can call it with a ledger it made up.
-// ═══════════════════════════════════════════════════════════════
-
-// A migration the code declares, numbered and hashed.
 export type PreparedMigration = {
   sequence: string;
   n: number;
@@ -23,30 +14,23 @@ export type PreparedMigration = {
 
 export type PreparedSequence = {
   id: string;
-  // A grammar sequence owns documents (tracked by stamps); otherwise it owns
-  // tables (tracked by a database's ledger). See SequenceSchema.
   grammar: boolean;
   documents: Readonly<Record<string, DocumentKind>>;
   migrations: readonly PreparedMigration[];
 };
 
-// One row of the ledger, as a runner read it back.
 export type LedgerRow = { sequence: string; n: number; checksum: string; description: string; appliedAt: string };
 
 export type Problem = { code: Exclude<StrataErrorCode, 'PENDING' | 'STEP_FAILED' | 'DOES_NOT_FIT' | 'NO_TRANSACTION' | 'UNKNOWN_KIND' | 'WRONG_OWNER'>; detail: string };
 
 export type Plan = {
-  // Already run, per sequence this code knows: how far each one is.
   applied: Readonly<Record<string, number>>;
-  // To run, in the order they must run.
   pending: readonly PreparedMigration[];
-  // Anything that makes applying unsafe. A plan with problems is never applied.
   problems: readonly Problem[];
 };
 
 const refOf = (sequence: string, n: number): string => `${sequence}/${n}`;
 
-// Parse, number and hash. Async only for the hash (WebCrypto).
 export const prepare = async (sequences: readonly Sequence[]): Promise<readonly PreparedSequence[]> => {
   const seen = new Set<string>();
   const prepared: PreparedSequence[] = [];
@@ -80,11 +64,6 @@ export const prepare = async (sequences: readonly Sequence[]): Promise<readonly 
   return prepared;
 };
 
-// Order: walk the sequences in the order given, and let each run as far as its
-// dependencies allow before moving on; repeat until nothing moves. The same
-// input always yields the same order, and a sequence's own migrations stay
-// together unless a dependency splits them. Shared by the ledger's plan and a
-// document's upgrade, so both order the same migrations the same way.
 export const orderPending = (
   queues: readonly { waiting: readonly PreparedMigration[] }[],
   alreadyDone: ReadonlySet<string>,
@@ -119,8 +98,6 @@ export const planMigrations = (sequences: readonly PreparedSequence[], ledger: r
     const rows = ledger.filter((row) => row.sequence === sequence.id);
     applied[sequence.id] = rows.length;
 
-    // The database ran migrations this code has never seen: newer code migrated
-    // it. Applying ours on top would be guessing — refuse.
     const beyond = rows.filter((row) => row.n > sequence.migrations.length);
     if (beyond.length > 0) {
       problems.push({
@@ -141,8 +118,6 @@ export const planMigrations = (sequences: readonly PreparedSequence[], ledger: r
         });
       }
     }
-    // A hole: something later ran, something earlier did not. The ledger was
-    // written by hand, or by a different ordering of the same sequence.
     const firstWaiting = waiting[0];
     if (firstWaiting !== undefined && rows.some((row) => row.n > firstWaiting.n)) {
       problems.push({ code: 'EDITED', detail: `${sequence.id}: ${firstWaiting.ref} never ran, but a later migration of the sequence did.` });
@@ -150,7 +125,6 @@ export const planMigrations = (sequences: readonly PreparedSequence[], ledger: r
     queues.push({ id: sequence.id, waiting });
   }
 
-  // Every dependency must be satisfiable by the ledger or by this plan.
   const provided = new Set(sequences.flatMap((s) => s.migrations.map((m) => m.ref)));
   for (const { waiting } of queues) {
     for (const migration of waiting) {
@@ -170,7 +144,6 @@ export const planMigrations = (sequences: readonly PreparedSequence[], ledger: r
   return { applied, pending, problems };
 };
 
-// Throw the plan's problems as one error, named by the first.
 export const refuseProblems = (plan: Plan): void => {
   const first = plan.problems[0];
   if (first === undefined) return;
