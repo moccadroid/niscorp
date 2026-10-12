@@ -481,7 +481,8 @@ Report violations by rule number. A change that makes the app less declarative, 
 4. **Narrow inputs.** A factory takes a typed object of the functions and values it needs. Never the whole manifest, never the whole runtime, never an object that stands in for either.
 5. **Parse where it enters.** A body, a socket message, a row, a fetched payload, a message from another process, a token: parsed by a schema in the module where it enters. No type assertion.
 6. **Nothing flat.** Only `index.ts` sits at the top of `src/`.
-7. **Limits.** A function of up to 200 lines is fine; 300 is the ceiling, for the rare one that reads better whole than cut up. A file is at most 400 lines of code, a line at most 200 wide. Do not split a function or a file to satisfy a number: split it when it has stopped being one thing.
+7. **Limits.** A function of up to 200 lines is fine; 300 is the ceiling, for the rare one that reads better whole than cut up. A file is at most 400 lines of code, a line at most 200 wide. Do not split a function or a file to satisfy a number: split it when it has stopped being one thing. The other way round too: a file of a few lines joins the file that uses it, unless it is a published entry point.
+8. **The code speaks.** A comment is there only where the reasoning, a decision or the workings would be misread without it (`/STYLE_GUIDE.md`, "Comments"). No file headers, and no prose on the fields of a type: what an app author needs to know of an exported type is in the package's `DOCS.md`.
 
 **How something new gets in.** In this order, and before any of it is written:
 
@@ -505,6 +506,6 @@ A defect found on the way gets a test that fails first. A commit moves code or c
 
 The lint reads types, and a type from another package of the repository is read from its `dist`: `pnpm build` first, as `pnpm verify` and CI do.
 
-Rules 3 and 4 have no gate. They are what a review reads for. What two processes do to each other is in no package's tests either: those run on PGlite, which has one connection.
+Rules 3, 4 and 8 have no gate. They are what a review reads for. What two processes do to each other is in no package's tests either: those run on PGlite, which has one connection.
 
 `check:raw-sql` sweeps every package but vex and strata, where SQL lives. `check:modules` and `check:api` hold moss. A package joins `check:modules` by being made of modules and getting an entry in `PACKAGES`; it joins `check:api` by an entry in `ENTRIES` and `pnpm check:api --write`.

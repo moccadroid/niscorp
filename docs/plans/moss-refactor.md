@@ -23,13 +23,14 @@ Moss answers five questions about a request. Each has one owner under
 | How does it reach them? | `socket`, `documents` | the live connection; the drawn page, and pages as files |
 
 Under them are `runtime` (what a deployment supplies) and `protocol` (what both
-ends of the wire agree on). `server` wires them and owns none of the five. The
-terminal side (`client`, `terminal`) imports `protocol` and nothing else of
-moss.
+ends of the wire agree on). `server` wires them and owns none of the five.
+`node` is how moss runs on Node (the listener, the `ws` transport, the Vite dev
+plugin): it imports the server and nothing imports it. The terminal side
+(`client`, `terminal`) imports `protocol` and nothing else of moss.
 
 A **feature** owns none of the five. It has a directory and an entry point of
 its own, the core never imports it, and it reaches the core only through the
-seams it is started with (`feature/seams.ts`). There are two, `integrations`
+seams it is started with (`feature/index.ts`). There are two, `integrations`
 and `tide`, and both are moss's own: the types `Feature` and `FeatureSeams` are
 not exported.
 
@@ -43,10 +44,15 @@ of state, narrow inputs (never the whole manifest or runtime), parse where it
 enters, nothing at the top of `src/` but `index.ts`, and the sizes. A function
 of 200 lines is fine and 300 is the ceiling; a file is at most 400 lines of
 code; a line is at most 200 wide. A function or a file is split when it has
-stopped being one thing, not to satisfy a number.
+stopped being one thing, not to satisfy a number, and a file of a few lines
+joins what uses it unless it is a published entry point.
 
-A comment says what the code does and the constraint behind it. How the code
-came to be is in the commit message.
+The code speaks. A comment is there only where the reasoning, a decision or
+the workings would be misread without it: a race a line closes, an order that
+must not change, a property of a library that makes a line right. No file
+headers, and no prose on the fields of a type: what an app author needs of an
+exported type is in `DOCS.md`. How the code came to be is in the commit
+message.
 
 Something new names the question it answers and goes to that owner. If it
 answers none, it is a feature on the seams, and a seam that is missing is
@@ -75,7 +81,7 @@ throw: `registerAction`, `removeAction`, `registerFragment`, `addCanvas`,
 they add is not verified, is in nobody's catalog and is gone when the shell is
 rebuilt. Code that does it anyway takes the whole shell from
 `unverifiedShell(session)`, so the file says so in its imports. The type stays
-`Shell` because nova's helpers take one (`shells/whole-shell.ts`).
+`Shell` because nova's helpers take one (`sessionShellOf`, `shells/build.ts`).
 
 What an app changes for this release is the last part of
 `.changeset/moss-in-modules.md`.
@@ -100,16 +106,16 @@ which has one.
 
 ## 5. How three things work that are easy to get wrong
 
-**Every piece of work on a shell carries a number** (`shells/host.ts`). A first
-build, a reset and a change of what is in force each take the next number of
-one counter, and a cell records the number its shell reflects. Work waits on
-the app's code, so two answers may arrive in either order: a shell takes the
-one with the higher number, and a shell that lands behind the latest change
-adopts it. Two arrivals for one principal share one build, and the resets of
-one shell run in turn. A build runs under `runtime.endpointTimeoutMs` (30
-seconds unless set) and fails when it has not landed by then, so whoever waits
-on one waits that long at most, and app code that hangs inside a build holds up
-nobody else.
+**A shell host counts changes** (`shells/host.ts`). The host counts how many
+times what is in force has changed, and each shell records how many of those
+it reflects. A build reads the count before it asks the app anything, so a
+shell that lands having seen fewer changes than there have been adopts. Work
+waits on the app's code, so two answers to a change may arrive in either
+order: the one for a change the shell already reflects is dropped. Two
+arrivals for one principal share one build, and the resets of one shell run in
+turn. A build runs under `runtime.endpointTimeoutMs` (30 seconds unless set)
+and fails when it has not landed by then, so whoever waits on one waits that
+long at most, and app code that hangs inside a build holds up nobody else.
 
 **What a shell is made of is one answer** (`manifest/running.ts`,
 `artifactsFor`): the definitions a set of roles holds with their layout variant
@@ -150,6 +156,10 @@ again.
 - **Four gates, each short.** No script that tests a gate, and no Postgres
   service in CI.
 - **Sizes**: 200 lines for a function is fine, 300 is the ceiling.
+- **The code speaks.** A comment only where the code would be misread without
+  it. Every other comment is text a reader has to take in and nothing checks.
+  The prose on the fields of the exported types is in `DOCS.md` and not in the
+  source.
 - **A new moss test starts no database and does not call `createServer`.** The
   one suite kept on PGlite by decision is the registry's 18 cases
   (`test/integrations.test.ts`), because nothing else runs the registry's vex
@@ -194,7 +204,7 @@ spawn on Windows; relay's `console-terminal-check` needs a built file and its
 
 ## 8. Integrations as it stands
 
-`packages/moss/src/integrations/` is ten files behind
+`packages/moss/src/integrations/` is nine files behind
 `@niscorp/moss/integrations`. It imports `runtime` and `feature` and nothing
 else of moss.
 
@@ -297,7 +307,7 @@ says what an app's entries are.
   and each fragment that is answered differently. A published default that
   changes which canvases a shell has reaches a living shell by a reset.
 - **A shell's liveness reads the entries of its composition**
-  (`shellNeedOf`, `shells/liveness.ts`), so an entry that is only in the cache
+  (`shellNeedOf`, `shells/snapshot.ts`), so an entry that is only in the cache
   is reported as not readable.
 - **`@niscorp/moss/unverified` is the second way in.** Relay registers an
   action a model built, atrium registers one an operator previews, and lyceum

@@ -108,7 +108,7 @@ One screen mixing client-side canvases with authoritative server ones —
 **authority islands** — is what the design allows, because a canvas slot
 renders a tree and is indifferent to whether it came from a local shell or a
 socket; no render target of moss's does it today, each registers its slots
-against the wire alone (`src/terminal/slots.ts`).
+against the wire alone (`src/terminal/targets.ts`).
 
 ---
 
@@ -208,7 +208,10 @@ sink), and `protocol`, what both ends of the wire agree on (the messages, the
 close codes, the delta codec, the snapshot a drawn page carries). Over them
 sits `server`, which answers none of the five: `createServer` constructs the
 modules, hands each the narrow things it needs, starts the features and mounts
-the routes, one step to a line.
+the routes, one step to a line. Over `server` sits `node`, how moss runs on
+Node: the listener, the `ws` transport, the built site, and the Vite dev plugin
+(`@niscorp/moss/node` and `/vite`). It imports the server, and nothing imports
+it.
 
 A **feature** owns none of the five. It lives in a directory of its own, ships
 from an entry point of its own, and the core never imports it: the app creates
@@ -249,6 +252,7 @@ this is a copy of it:
 | `socket` | `runtime`, `protocol`, `identity`, `shells` |
 | `documents` | `protocol`, `identity`, `shells` |
 | `server` | every module above, and no feature |
+| `node` | `runtime`, `protocol`, `identity`, `manifest`, `socket`, `documents`, `server` |
 | `integrations` (a feature) | `runtime`, `feature` |
 | `tide` (a feature) | `feature` |
 | `client` | `protocol` |
@@ -711,7 +715,7 @@ an action — a `ui:` trigger, a two-way binding, a channel it waits on, a read
 that keeps answering — so the question is decidable from the definitions
 actually mounted, without running anything. Nova reports those facts
 (`livenessOf`); moss, which holds the entries behind each fingerprint, composes
-the verdict (`src/shells/liveness.ts`) and puts it on the snapshot as `live`. A page that
+the verdict (`src/shells/snapshot.ts`) and puts it on the snapshot as `live`. A page that
 is not live is served as markup and its terminal opens no socket at all. A page
 that is live gets a shell for as long as its connection lasts — per connection,
 never per person. The one thing counted live without being read is code: a `fn:`
@@ -822,7 +826,7 @@ nothing.
 | Temptation | Refusal |
 |---|---|
 | An auth provider | BYO identity. Who somebody is, the app decides at its own door (magic link is the default strategy); the server only asks who a token is. Moss does keep a credential an app may use for that: `mintSession` stores a token by its hash once the app has decided, and `'dev-open'` trusts an unsigned one for a harness. Neither decides anything. |
-| A framework | An assembly point. The intelligence lives in the artifacts; the server resolves, serves, pushes, enforces. Its core is ten modules, each one question or the wiring (*How the code is laid out*). |
+| A framework | An assembly point. The intelligence lives in the artifacts; the server resolves, serves, pushes, enforces. Its core is ten modules, each one question or the wiring, and an eleventh that runs it on Node (*How the code is laid out*). |
 | A place where policy hides | Every opinion it enforces is a readable artifact: charter, scope policy, assertion. No annotations, no interceptor magic. |
 | A second way to do anything | Reads are vex, writes are vex, compute is functions, UI is actions, permissions are the charter. Moss's core adds no vocabulary of its own, and holds itself to the same: the rows it keeps it reads and writes through vex entries, and the statements left outside vex are counted, each with its reason (`pnpm check:raw-sql`). |
 | A web framework | A page is a shell manifest at a path; a drawn document is a first frame delivered early. No file-system routes, no layouts-of-layouts, no loaders, and no chain of middleware for an app to configure (one gate may be laid over the operator prefix, `runtime.operatorGate`). A page's `<head>` is not managed either: it is a node in a layout, written into the document like the rest of the screen. The template, the route and the kit are the app's. |

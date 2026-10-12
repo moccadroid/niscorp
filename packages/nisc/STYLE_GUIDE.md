@@ -168,9 +168,9 @@ Plain `name.ts` is fine when the file's role is obvious from context or when it'
 
 A package that holds more than one concern is made of modules. The rules, and how something new gets in, are in AGENTS.md, "Changing a package". What is longer than a rule is here.
 
-**A module's door says what is behind it.** A module is a directory under `src/` with an `index.ts`. In moss each of those files carries a comment that says the question the module answers and which modules it imports. Code in another module imports the door (`../identity`), never a file behind it (`../identity/cache`). An entry point of the package is a door, or one file that a door names as an entry (`server/node.ts` is `@niscorp/moss/node`).
+**A module has one door.** A module is a directory under `src/` with an `index.ts`. Code in another module imports the door (`../identity`), never a file behind it (`../identity/cache`). An entry point of the package is a door (`node/index.ts` is `@niscorp/moss/node`), or one file beside it that exports only what is published (`shells/unverified.ts` is `@niscorp/moss/unverified`). A helper is not merged into an entry file where that would export it. Which question a module answers is in the package's `DESIGN.md`, not in a comment on its door.
 
-**What a factory is handed is a type in its own module.** Each member is one function or one value, named for what it answers, with a comment that says who supplies it (`shells/config.ts`, `socket/types.ts`). Not the manifest, not the runtime, not an object carrying either. When the type needs a shape another module owns and may not import that module, the shape is written out where it is needed, and the wiring holds the two to each other where it hands one over. Its name ends in one of two words, by what it means and not by which module it is in. `…Config` is the argument of something another module or an app calls: what the caller chooses (`ShellHostConfig`, `DataConfig`, `IntegrationsConfig`). `…Deps` is what a module's own code hands one of its own parts: what already stands (`ServerDeps` and `RouteDeps` in the server's wiring, `OperatorDeps` in the integrations feature, `ExecuteAsDeps` inside `data`). What a thing holds while it runs is neither: it is its state (`HostState`).
+**What a factory is handed is a type in its own module.** Each member is one function or one value, named for what it answers (`ShellHostConfig`, `SocketConfig`). Not the manifest, not the runtime, not an object carrying either. When the type needs a shape another module owns and may not import that module, the shape is written out where it is needed, and the wiring holds the two to each other where it hands one over. Its name ends in one of two words, by what it means and not by which module it is in. `…Config` is the argument of something another module or an app calls: what the caller chooses (`ShellHostConfig`, `DataConfig`, `IntegrationsConfig`). `…Deps` is what a module's own code hands one of its own parts: what already stands (`ServerDeps` and `RouteDeps` in the server's wiring, `OperatorDeps` in the integrations feature, `ExecuteAsDeps` inside `data`). What a thing holds while it runs is neither: it is its state (`HostState`).
 
 **A seam belongs to the module that answers the question.** A feature reaches the core through one object it is handed when it starts. Each member is one function or one narrow value, and each is there because a feature uses it; one that stops being used is taken out, and one is not added for a feature that might want it. The object is made for the feature it is handed to. A member that reaches something owned (a table, a set of actions, the documents in a row) is bound to that feature and takes no name of one, so a feature cannot ask for what is another's; what a feature owns it says on itself, where it can be read before it runs (`Feature.tables`). No member carries a secret: a setting only one feature needs is that feature's own configuration.
 
@@ -263,11 +263,13 @@ export const createShell = (config: ShellConfig, bus: MessageBus, reg: Registry,
 
 ## Comments
 
-- Explain **why**, not **what**. If the code needs a "what" comment, make the code clearer.
+- The code speaks. A comment is there only where the reasoning, a decision or the workings would be misread without it, and that is rare. Every other comment is text a reader has to take in and nothing checks: it goes.
+- Not a comment: what the next line does, what a name already says, what a file or a module contains, what a setting is for, what `DOCS.md` or `DESIGN.md` already says.
+- If a name is only understood with its comment, change the name.
+- No history: what the code used to do, what a review found, a date, a count. That is the commit message.
+- No file headers and no section banners. A file that needs sections has stopped being one thing.
 - Schema `.describe()` replaces JSDoc for anything that generates documentation.
-- No JSDoc on functions unless the signature is genuinely ambiguous.
 - No commented-out code. Git has history.
-- Section headers (`// ═══` major, `// ───` minor) to organize large files.
 
 ---
 
