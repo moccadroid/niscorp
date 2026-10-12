@@ -248,8 +248,8 @@ Three kinds (and two more fact flavours). Structured on purpose — a reflex is 
 
 Any reflex — whatever its trigger — may additionally be fired by hand through
 `fire(reflexId, { now, input?, by? })`, **including a disarmed one**: arming gates *triggers*, not
-people, and testing before arming is half of what `fire` is for; the ledger records
-`manual:<who>` either way. A `manual` trigger just means *only* by hand. And `fire`
+people, and testing before arming is half of what `fire` is for; the manual fact
+records who fired in its `by` either way. A `manual` trigger just means *only* by hand. And `fire`
 is sugar over `ingest`: it mints a `manual` fact aimed at one reflex — `at` supplied
 by the caller, like every fact — so even the human verb enters through the one intake
 and reads no clock.
@@ -393,8 +393,8 @@ a guarantee nothing else can:
 
 - **`fact`** — everything that arrived: kind, payload, `dedupeKey`, depth, delivery,
   any park. The intake log *is* the audit trail of change.
-- **`run`** — one activation of one reflex: the cause (occurrence key, fact id, run id,
-  or `manual:<who>`), the version hash, the identity it ran `as`, what the selection
+- **`run`** — one activation of one reflex: the cause (`occurrence:<key>` or
+  `fact:<id>`), the version hash, the identity it ran `as`, what the selection
   returned, the counts, the outcome.
 - **`task`** — one unit of effect work: unit key, pinned `env`, state, attempt count,
   last error, and the handler's returned **output** — stored, which is what makes

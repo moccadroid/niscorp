@@ -45,7 +45,7 @@ type TideConfig = {
   maxChainDepth?: number;                // default 24 — a fact deeper than this is parked
   maxChainFacts?: number;                // default 10 000 — facts one chain may mint beneath its root; the rest are parked
   storeUnwatchedWrites?: boolean;        // default true — false drops a write fact no loaded reflex could watch
-  maxFanOut?: number;                    // default 10 000
+  maxFanOut?: number;                    // default 10 000 — rows one selection may return; a run whose selection returns more is skipped
   leaseMs?: number;                      // default 300 000 — how long a claim is good for
   onEvent?: (event: TideEvent) => void;
 };
@@ -457,10 +457,21 @@ tide.ledger.releaseParked(factId)  // let a parked fact through, once; false if 
 - **fact** — everything that arrived: the `FactInput` plus `id`, the `as` it
   was minted under, `depth`, `deliveredAt`, any `parked` reason and `released`
   override, the `root` of its chain and (on a root) its `descendants` count.
+  `depth` counts the hops from the start of a chain: a fact a handler emits or
+  a settled run mints is one deeper than the task or run it came from, and
+  `ingest` stores the `depth` it is handed. `deliveredAt` is the `now` of the
+  `advance` that offered the fact to every loaded reflex, set whether or not
+  one matched. `root` is the id of the fact that started the chain, and that
+  fact itself has none.
 - **run** — one activation: cause, version hash, the identity it ran `as`, what
-  the selection returned, the counts, the outcome.
+  the selection returned, the counts, the outcome. A run's `cause` is
+  `occurrence:<key>` or `fact:<id>`; a fact's is `task:<id>` when a handler
+  emitted it and `run:<id>` when a run's settlement minted it.
 - **task** — one unit of effect work: unit key, pinned `env`, attempt count,
-  lease, last error, `output`.
+  lease, last error, `output`. `unit` is the row's `unitKey` value as a string
+  in `each` mode, and `''` for a `batch` run and for a run with no selection.
+  `claimedUntil` is when the lease lapses, and `0` while the task is not
+  `claimed`.
 
 States: a task moves `pending → claimed → done | retrying | failed`; a run moves
 `pending → fanned → settled`, or lands on `skipped` (overlap, catch-up, a
@@ -566,11 +577,18 @@ of one operation and diverged three ways.
 - **`appendIfAbsent`** is idempotent on the table's unique key, declared once in
   the exported `UNIQUE_BY` constant. Those four constraints *are* the engine's
   exactly-once promises; a store that does not enforce all four is not a tide store.
+  It returns the stored row, or `undefined` on a collision: a refusal, not an
+  error. The store mints the `id` of a `fact`, `run` or `task` row that carries
+  none. A key with a `when` column applies only to rows that have that column
+  set, so a fact with no `dedupeKey` is always appended.
 - **`claim`** selects and mutates in one step. `set` accepts `{ inc: n }` for a
   counter, because `attempt` has to rise at claim time or a handler that
   reliably kills the process retries forever. `onePer` is `order: 'serial'`,
   and it lives inside the claim because a caller that looks first and claims
-  second loses the race.
+  second loses the race. `onePer: { column, held, only }` lets at most one row
+  per value of `column` be held at a time, counting rows that match `held`
+  from an earlier claim; it applies to the values listed in `only`, and every
+  other value claims freely.
 - **`cas`** is the fence: a timed-out attempt finishing late finds its token
   superseded and is discarded. Setting a field to `undefined` clears it.
 - **`transact`** is required. Fan-out committing with its run's transition, and
