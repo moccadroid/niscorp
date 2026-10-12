@@ -12,11 +12,6 @@ import type { ScopePolicy } from '../../src/scope/scope.types.js';
 import type { QueryResponse } from '../../src/schemas/request.schema.js';
 import type { SeedEntry, SeedMutation } from '../../src/cache/seed.js';
 
-// `refresh: 'reactive'` end to end, against a real database: one query for
-// everybody who would get the same rows, a write through the handler reaching
-// every follower whose answer changed and nobody else, and a snapshot read
-// behaving exactly as it always has.
-
 const DDL = `
   CREATE TABLE houses (id TEXT PRIMARY KEY, name TEXT NOT NULL);
   CREATE TABLE members (
@@ -34,7 +29,6 @@ const ENTRIES: (SeedEntry | SeedMutation)[] = [
     refresh: 'reactive',
     shape: [{ name: '', house: '' }],
     dsl: { from: ['members'], fields: ['members.name', { field: 'members.house_id', as: 'house' }], sort: [{ field: 'members.id', dir: 'asc' }] },
-    // Words per reader: the same rows, said in the reader's own language.
     mapping: {
       $map: {
         over: { $ref: '$.result' },
@@ -87,7 +81,6 @@ const makeWorld = async (): Promise<World> => {
 
 const config = (world: World) => ({ engine: world.engine, locked: true, scopePolicy: policy, mutations: { client: world.db, policy } });
 
-// Replays a fingerprint as `userId`, following the answer.
 const follow = async (world: World, fingerprint: string, scope: Record<string, unknown>, signal: AbortSignal) => {
   const changes: unknown[] = [];
   const res = await handleQuery(config(world), { fingerprint, context: {} }, scope, {
@@ -143,7 +136,6 @@ describe('reactive reads', () => {
   it('a follower whose own answer did not change hears nothing', async () => {
     const ada = await follow(world, 'members/mine', { userId: 'm1' }, controller.signal);
     const ben = await follow(world, 'members/mine', { userId: 'm2' }, controller.signal);
-    // Different people, different scope values bound: two keys, two queries.
     expect(world.queries()).toBe(2);
     await write(world, 'members/sort', { member: 'm1', house: 'h1' });
     await settle();

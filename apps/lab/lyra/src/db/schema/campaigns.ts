@@ -1,4 +1,3 @@
-// What the studio decided to say, to which of its people, and what came of it.
 export const CAMPAIGNS_DDL = /* sql */ `
   -- ── THE QUESTIONS A STUDIO MAY ASK OF ITS OWN ROLL ──────────
   --

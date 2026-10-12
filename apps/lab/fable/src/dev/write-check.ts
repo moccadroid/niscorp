@@ -1,9 +1,3 @@
-// Writes. Proves the full round-trip for every write: create → announce →
-// re-read, complete/reopen via the inline checkbox, edit seeded from the row,
-// and delete behind the confirm dialog. Run: pnpm --filter fable check:write
-// A check runs under node, not in a browser — imported rather than assumed.
-// The tsconfig types list is [vite/client], so node globals are ambient only
-// when something drags them in.
 import process from 'node:process';
 import { getVexRuntime } from '../vex/runtime';
 import { SEED_COUNTS } from '../vex/seed';
@@ -29,8 +23,6 @@ const stats = (): Record<string, unknown> => {
 };
 const byTitle = (title: string): Record<string, unknown> | undefined => rows().find((r) => r['title'] === title);
 
-// Find the `ui:model` ref bound to a data key in the modal's render tree —
-// the same wire the real inputs dispatch on.
 const modelRef = (key: string): string | undefined => {
   let found: string | undefined;
   const walk = (x: unknown): void => {
@@ -58,7 +50,6 @@ const main = async (): Promise<void> => {
   await settle(500);
   const checks: [string, boolean][] = [];
 
-  // ── Create ──
   shell.dispatch({ type: 'ui:click', ref: 'new' });
   await settle(150);
   checks.push([`+ New opens the form on the modal canvas`, actionOn('modal') === 'todo.form']);
@@ -73,7 +64,6 @@ const main = async (): Promise<void> => {
   checks.push([`new row round-trips priority (got ${String(created?.['priority'])})`, created?.['priority'] === 'high']);
   checks.push([`stats re-read after create (open=${String(stats()['open'])})`, Number(stats()['open']) === SEED_COUNTS.open + 1]);
 
-  // ── Complete via the inline checkbox ──
   const id = created?.['todo_id'];
   shell.dispatch({ type: 'ui:click', ref: 'toggle', payload: { id, done: true } });
   await settle(500);
@@ -83,7 +73,6 @@ const main = async (): Promise<void> => {
   await settle();
   checks.push([`it shows under Done, most recent first`, rows()[0]?.['title'] === 'Feed the cat']);
 
-  // ── Reopen from the Done tab ──
   shell.dispatch({ type: 'ui:click', ref: 'toggle', payload: { id, done: false } });
   await settle(500);
   checks.push([`reopening removes it from Done`, byTitle('Feed the cat') === undefined]);
@@ -91,7 +80,6 @@ const main = async (): Promise<void> => {
   await settle();
   checks.push([`it is back under Open`, byTitle('Feed the cat') !== undefined]);
 
-  // ── Edit, seeded from the row ──
   shell.dispatch({ type: 'ui:click', ref: 'row-edit', payload: byTitle('Feed the cat') });
   await settle(150);
   checks.push([`row ⋯ Edit opens the form seeded`, actionOn('modal') === 'todo.form' && dataOf('modal')?.['title'] === 'Feed the cat' && dataOf('modal')?.['confirmLabel'] === 'Save']);
@@ -100,7 +88,6 @@ const main = async (): Promise<void> => {
   await settle(500);
   checks.push([`edit round-trips (row renamed, count unchanged)`, byTitle('Feed the cat twice') !== undefined && byTitle('Feed the cat') === undefined && Number(stats()['open']) === SEED_COUNTS.open + 1]);
 
-  // ── Delete behind the confirm ──
   shell.dispatch({ type: 'ui:click', ref: 'row-delete', payload: byTitle('Feed the cat twice') });
   await settle(150);
   checks.push([`row ⋯ Delete asks first`, actionOn('modal') === 'confirm-delete' && dataOf('modal')?.['label'] === 'Feed the cat twice']);

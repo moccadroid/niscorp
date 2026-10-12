@@ -1,21 +1,6 @@
 import type { Charter, RoleDef, Section, Selection } from './types';
 import { matchAll } from './glob';
 
-// Resolution is a pure function from (charter, universe, section) to a
-// concrete id set per role — the algebra from DESIGN.md § The algebra,
-// verbatim, per section:
-//
-//   resolved(role) = (∪ resolved(extends) ∪ match(allow))
-//                    − match(deny)
-//                    − ∪ resolved(without)
-//
-// The engine is UNIVERSE-BLIND: it resolves globs over opaque strings and
-// never learns what a string means. `actions` and `data` run the SAME code
-// against different universes. Order-independent (all subtraction is
-// set-minus); deny wins within a role; denies do NOT inherit (a child may
-// re-add what a parent denied — the verifier flags it); cycles and unknown
-// references are errors.
-
 export class CharterError extends Error {
   constructor(message: string) {
     super(message);
@@ -23,18 +8,9 @@ export class CharterError extends Error {
   }
 }
 
-// NOTE deliberately absent: the engine never MANUFACTURES a universe — it is
-// always handed one. The data universe's atoms are the governed target's own
-// dialect (vex exports `SCOPE_VERBS` and `scopeGrants(tables)`); the app
-// wiring derives it and passes it in. That keeps this module free of any
-// foreign import, in either direction.
-
 const asSelection = (s: Selection | undefined): { allow: string[]; deny: string[] } =>
   s === undefined ? { allow: [], deny: [] } : Array.isArray(s) ? { allow: s, deny: [] } : { allow: s.allow ?? [], deny: s.deny ?? [] };
 
-// A role's atoms for ONE section, plus its role-level composition (shared
-// across sections). A bare array is an actions-only role; top-level
-// `allow`/`deny` are sugar for the `actions` section.
 export const normalizeRole = (
   def: RoleDef,
   section: Section,
@@ -45,7 +21,6 @@ export const normalizeRole = (
       : { allow: [], deny: [], extends: [], without: [] };
   }
   const composition = { extends: def.extends ?? [], without: def.without ?? [] };
-  // Actions: explicit `actions:` wins, else the top-level allow/deny sugar.
   const sel =
     section === 'actions' && def.actions === undefined
       ? { allow: def.allow ?? [], deny: def.deny ?? [] }
@@ -80,22 +55,8 @@ export const resolveRole = (
   return resolved;
 };
 
-// A principal wears roles; a section's grant is the union of their resolved
-// sets in that section's universe.
-// The reach a ROLE was given: the profile it names, or none.
-//
-// SINGULAR ON PURPOSE. This took a list of roles and refused when two of them
-// named different profiles — "incoherence rather than a precedence puzzle,
-// refused in the same spirit as two granted layout variants for one action."
-// That analogy was wrong. Two layout variants for one action genuinely conflict,
-// because a screen renders one of them; two roles naming different reaches is
-// somebody who teaches at a studio AND trains there, which is a person, not a
-// contradiction.
-//
-// A caller who holds several roles resolves each one separately and merges the
-// results (vex: `mergeScopePolicies`). That is where "holding two roles" is
-// decided, and it belongs there — reach is a property of a role, so a function
-// handed several of them has no answer to give, only a choice to refuse.
+// One role, not a list: two roles naming different profiles are not a conflict
+// to refuse. A caller holding several resolves each and merges the results.
 export const resolveScoping = (charter: Charter, role: string): string | undefined => {
   const def = charter[role];
   return def === undefined || Array.isArray(def) ? undefined : def.scoping;

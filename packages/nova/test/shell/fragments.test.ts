@@ -7,7 +7,6 @@ import { createShell } from '@shell';
 const modal: ActionFragment = {
   kind: 'fragment',
   id: 'modal',
-  // Chrome wrapping a body slot, plus a pre-wired close.
   layout: { component: 'Dialog', children: [{ component: 'Close', ref: 'close' }, { slot: 'body' }] },
   triggers: [{ event: 'ui:click', ref: 'close', do: [{ pop: true }] }],
 };
@@ -35,8 +34,8 @@ describe('ActionFragment composition — push `with`', () => {
     await settle();
 
     const tree = JSON.stringify(shell.flattenRenderTree(shell.getCanvasRenderTree('modal')));
-    expect(tree).toContain('Dialog'); // chrome from the fragment
-    expect(tree).toContain('FORM'); // body from the action
+    expect(tree).toContain('Dialog');
+    expect(tree).toContain('FORM');
     shell.dispose();
   });
 
@@ -69,8 +68,8 @@ describe('ActionFragment composition — push `with`', () => {
     await settle();
 
     const tree = JSON.stringify(shell.flattenRenderTree(shell.getCanvasRenderTree('modal')));
-    expect(tree).toContain('Dialog'); // chrome from the fragment
-    expect(tree).toContain('FORM'); // body from the action
+    expect(tree).toContain('Dialog');
+    expect(tree).toContain('FORM');
     shell.dispose();
   });
 });

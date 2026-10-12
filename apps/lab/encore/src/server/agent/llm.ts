@@ -3,39 +3,18 @@ import type { SignalClient } from '@niscorp/cortex';
 import { FAKE_AGENT_MODEL, createScriptedClient } from './fake-llm';
 import type { FakeAgentControls } from './fake-llm';
 
-// WHICH MODEL THE AGENT THINKS WITH, chosen once at boot — the slow speed's
-// twin of decider.ts.
-//
-//   ENCORE_AGENT=groq   Groq's default model (signal's registry) through signal;
-//                       needs GROQ_API_KEY
-//   ENCORE_AGENT=fake   the scripted client, deterministic and offline
-//   ENCORE_AGENT=off    no agent
-//
-// Unset, it is `groq` when there is a key and `off` when there is not — so a
-// fresh checkout runs the fast speed alone and says so, rather than failing on
-// a key nobody was told about.
-//
-// OFF IS NOT ABSENT. The context questions are still asked in every pass and
-// still traced, and every finished sentence is still a turn in the thread. Only
-// the run, and the card that announces it, do not exist.
-
 export type AgentKind = 'groq' | 'fake' | 'off';
 
 export type AgentLlm = {
   kind: AgentKind;
   id: string;
   model: string;
-  // What a card it opened is tagged with — short enough for a card header:
-  // `27b`, not `qwen/qwen3.8-27b`.
   label: string;
-  // Absent exactly when `kind` is 'off'.
   llm: SignalClient | undefined;
 };
 
 export type AgentLlmConfig = {
   kind: AgentKind;
-  // The fake's knobs — held by reference, so a check can change its script and
-  // pacing between sentences. Ignored by the other kinds.
   fake: FakeAgentControls;
 };
 
@@ -59,25 +38,8 @@ export const createAgentLlm = (config: AgentLlmConfig, env: Record<string, strin
   if (config.kind === 'off') return { kind: 'off', id: 'off', model: '', label: '', llm: undefined };
 
   if (config.kind === 'groq') {
-    // Asking for Groq without a key is refused rather than quietly served by
-    // nothing: somebody waiting for an answer should learn why none is coming
-    // at boot, not by watching a card stay pending.
     if ((env['GROQ_API_KEY'] ?? '') === '') throw new Error('encore: ENCORE_AGENT=groq needs GROQ_API_KEY in apps/lab/encore/.env.');
-    // Three settings:
-    //
-    //   temperature 0       a scar from gpt-oss-120b in another app: the
-    //                       provider default made one prompt a 3-tool run on
-    //                       Monday and a 20-step wander on Tuesday;
-    //   reasoningEffort     Qwen's own default on Groq, which does not reason
-    //   default             before answering — chosen 2026-09-24. signal
-    //                       refuses it at construction on a model whose
-    //                       registry row does not list it;
-    //   no strategy pinned  signal resolves `emit` on Groq (its endpoint
-    //                       validates tool args, so `respond` params would
-    //                       enforce nothing), and must be left to.
-    //
-    // signal's registry default for Groq is qwen/qwen3.8-27b; read back rather
-    // than restated, so the trace names whatever the registry actually resolves.
+    // `'default'` is Qwen's own default on Groq, which does not reason before answering.
     const llm = createSignal('groq', { options: { temperature: 0, reasoningEffort: 'default' } });
     const model = llm.describe().model ?? '';
     return { kind: 'groq', id: 'groq', model, label: model.split('-').at(-1) ?? 'groq', llm };
@@ -88,15 +50,7 @@ export const createAgentLlm = (config: AgentLlmConfig, env: Record<string, strin
     id: 'fake',
     model: FAKE_AGENT_MODEL,
     label: 'scripted',
-    // A custom openai-compatible provider whose SDK client is the script. The
-    // base URL is never dialled — the injected client answers instead.
-    //
-    // It declares what production resolves to — Groq's endpoint joined with
-    // Qwen's measured row (signal registry) — so everything above the client
-    // resolves as it will in production: `validatesToolArgs` puts the envelope
-    // on the content channel (`emit`), the schema rides the prompt as a
-    // document, and a check that reads `agent.preview()` is reading the prompt
-    // Groq gets.
+    // `validatesToolArgs` is Groq's, so the envelope resolves to `emit` as it does in production.
     llm: createSignal(
       {
         baseUrl: 'http://127.0.0.1:0/v1',

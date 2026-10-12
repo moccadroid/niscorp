@@ -21,8 +21,6 @@ export const weatherRadarLayout: LayoutNode = {
         },
       ],
     },
-    // The day in rain: the bar AT the aimed hour is marked, so "is it building
-    // or clearing" is read off the neighbours without a second card.
     { component: 'BarChart', props: { series: '$.hours', labelKey: 'hour', valueKey: 'rain_mm', highlight: '$.hour', tone: 'warn', unit: 'mm' } },
   ],
 };

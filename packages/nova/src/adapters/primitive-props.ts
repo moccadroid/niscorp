@@ -1,14 +1,5 @@
 import { z } from 'zod';
 
-// ═══════════════════════════════════════════════════════════
-// The headless primitive vocabulary's AUTHORING contracts — one Zod props
-// schema per primitive, framework-free, shared by every adapter kit that ships
-// the vocabulary (react, vue). A schema is what a layout node may set; the
-// kits differ in how they paint, never in what they accept, so the schema
-// lives once, here, and each kit's component carries it as its static `meta`.
-// ═══════════════════════════════════════════════════════════
-
-// ─── Stack ───
 export const StackPropsSchema = z
   .object({
     direction: z
@@ -45,7 +36,6 @@ export const StackPropsSchema = z
 
 export type StackProps = z.infer<typeof StackPropsSchema>;
 
-// ─── Text ───
 export const TextPropsSchema = z
   .object({
     as: z
@@ -70,7 +60,6 @@ export const TextPropsSchema = z
 
 export type TextProps = z.infer<typeof TextPropsSchema>;
 
-// ─── Input ───
 export const InputPropsSchema = z
   .object({
     type: z
@@ -99,7 +88,6 @@ export const InputPropsSchema = z
 
 export type InputProps = z.infer<typeof InputPropsSchema>;
 
-// ─── Button ───
 export const ButtonPropsSchema = z
   .object({
     label: z
@@ -120,7 +108,6 @@ export const ButtonPropsSchema = z
 
 export type ButtonProps = z.infer<typeof ButtonPropsSchema>;
 
-// ─── Box ───
 export const BoxPropsSchema = z
   .object({
     padding: z
@@ -149,7 +136,6 @@ export const BoxPropsSchema = z
 
 export type BoxProps = z.infer<typeof BoxPropsSchema>;
 
-// ─── Panel ───
 export const PanelPropsSchema = z
   .object({
     title: z.string().optional().describe('Optional header title.'),
@@ -161,7 +147,6 @@ export const PanelPropsSchema = z
 
 export type PanelProps = z.infer<typeof PanelPropsSchema>;
 
-// ─── JsonTree ───
 export const JsonTreePropsSchema = z
   .object({
     value: z.unknown().optional().describe('The value to render.'),
@@ -172,7 +157,6 @@ export const JsonTreePropsSchema = z
 
 export type JsonTreeProps = z.infer<typeof JsonTreePropsSchema>;
 
-// ─── CanvasSlot ───
 export const CanvasSlotPropsSchema = z
   .object({
     canvasId: z
@@ -185,11 +169,9 @@ export const CanvasSlotPropsSchema = z
 
 export type CanvasSlotProps = z.infer<typeof CanvasSlotPropsSchema>;
 
-// ─── ActionSlot ───
-// The AUTHORING contract: what a layout node may set on an ActionSlot —
-// instanceId only, strict. The identity props flattenRenderTree stamps on a
-// served marker (canvasId / definitionId) are runtime OUTPUT, never authored;
-// widening this schema would advertise them to the layout agent's palette.
+// Authored props only. The `canvasId` and `definitionId` that flattenRenderTree
+// stamps on a served marker are output: in this schema they would be offered to
+// the layout agent's palette.
 export const ActionSlotPropsSchema = z
   .object({
     instanceId: z

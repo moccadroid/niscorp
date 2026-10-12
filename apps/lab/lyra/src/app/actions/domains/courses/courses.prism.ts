@@ -16,11 +16,6 @@ const fields = {
   capacity: { $ref: '$.capacity' },
 };
 
-// THE BLOCK'S PRICE, WRITTEN THE WAY EVERY PRICE IS. Not a column on the course
-// any more: one catalogue answers "what can somebody pay for here", and a block
-// is one of the things on it. Every column that describes how a thing recurs or
-// what it entitles somebody to is written as its own absence — a block is a
-// name, a price, and a set of dates that live on the course.
 export const coursePricePrism = {
   fingerprint: offeringCreate.fingerprint,
   context: {
@@ -38,26 +33,15 @@ export const coursePricePrism = {
   },
 };
 
-// No `courseId` on create — the database mints it, as everywhere else.
-//
-// THE FINGERPRINT ITSELF IS THE GUARD: with no day ticked it resolves to a
-// sentinel no entry answers, and replay-only refuses it before any SQL — the
-// same trick the roll's lenses use, pointed at refusal instead of choice. The
-// disabled button covers humans; this covers everything that dispatches
-// events without looking at buttons. A course with no days has no classes,
-// and it must not be creatable from ANY direction.
+// With no day ticked the fingerprint resolves to one no entry answers, so the
+// server refuses the call before any SQL. The disabled button only covers
+// people; this covers whatever else dispatches the event.
 const anyDay = { $or: [{ $ref: '$.mon' }, { $ref: '$.tue' }, { $ref: '$.wed' }, { $ref: '$.thu' }, { $ref: '$.fri' }, { $ref: '$.sat' }, { $ref: '$.sun' }] };
 export const courseCreatePrism = {
   fingerprint: { $case: { branches: [{ when: { $not: anyDay }, then: 'courses/refused-no-days' }], else: courseCreate.fingerprint } },
-  // The price row the call before this one just wrote. Chained rather than
-  // carried inside one artifact, for the reason `courses/create` states.
   context: { ...fields, offeringId: { $ref: '$.createdPrice.id' } },
 };
 
-// The ticked days as the rows `class_templates.weekday` holds — the loop that
-// used to live in `courses.create` (a server function), now a $filter/$map
-// over the form's toggles feeding ONE `insertEach` statement. `$.created` is
-// the course row the create call just returned; the id chains the two calls.
 const chosenDays = {
   $map: {
     over: {
@@ -99,7 +83,5 @@ export const courseUpdatePrism = {
   fingerprint: courseUpdate.fingerprint,
   context: { courseId: { $ref: '$.courseId' }, offeringId: { $ref: '$.offeringId' }, priceCents: { $ref: '$.priceCents' }, ...fields },
 };
-// One write either way — see `plans.prism`. Only the retiring half has a
-// control today; the other direction is a prism away rather than an entry away.
 export const courseRetirePrism = { fingerprint: courseSetActive.fingerprint, context: { courseId: { $ref: '$.courseId' }, active: false } };
 export const courseRestorePrism = { fingerprint: courseSetActive.fingerprint, context: { courseId: { $ref: '$.courseId' }, active: true } };

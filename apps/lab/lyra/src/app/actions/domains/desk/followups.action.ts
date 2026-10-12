@@ -7,8 +7,6 @@ const donePrism = {
   fingerprint: closeFollowUp.fingerprint,
   context: { followUpId: { $ref: '$.pendingId' }, done: { $ref: '$.pendingDone' } },
 };
-// The ids come off the list on screen — see the entry for why that is the
-// honest bound, not a shortcut.
 const seenPrism = {
   fingerprint: notificationsMarkSeen.fingerprint,
   context: { ids: { $map: { over: { $ref: '$.rows' }, as: 'r', body: { $get: { from: { $var: 'r' }, path: ['follow_up_id'] } } } } },
@@ -41,8 +39,6 @@ const layout: LayoutNode = {
           emptyHint: 'An add-on that has something to tell you — a belt awarded, a payment failed — puts it here.',
           emptyIcon: 'check',
           columns: [
-            // The JOB is the identity of the row and the detail is a sentence,
-            // so it goes through a wrapping cell rather than a truncating one.
             { label: 'What happened', w: 2, cell: { kind: 'primary', key: 'title', subKey: 'person_name' } },
             { label: 'Due', px: 104, cell: { kind: 'badge', key: 'due_display', toneKey: 'due_tone' } },
             {
@@ -81,18 +77,12 @@ export const followUpsAction: ActionDefinition = {
   endpoints: {
     load: { url: '/api/automation/vex', method: 'POST', request: listPrism, target: 'rows' },
     setDone: { url: '/api/automation/vex', method: 'POST', request: donePrism, errorTarget: 'error' },
-    // Opening this list IS the studio reading its inbox: the flag flips for
-    // every unread row, the trigger stamps when, and the chrome's bell hears
-    // the announcement and re-counts to zero.
     markSeen: { url: '/api/automation/vex', method: 'POST', request: seenPrism, errorTarget: 'error' },
   },
   lifecycle: {
-    // Marking seen rides load's success because its ids ARE the loaded rows.
     mount: [
       { call: 'load', onSuccess: [{ set: 'loading', value: false }, { call: 'markSeen', onSuccess: [{ emit: { channel: 'notices-seen' } }] }] },
     ],
-    // Coming back to it: an automation may have run, or somebody else may have
-    // worked through half of them.
     resume: [{ call: 'load', onSuccess: [{ call: 'markSeen', onSuccess: [{ emit: { channel: 'notices-seen' } }] }] }],
   },
   triggers: [

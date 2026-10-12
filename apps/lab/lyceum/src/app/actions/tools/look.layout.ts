@@ -1,6 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// A row per surface, a button per renderer; the one drawing it now is marked.
 export const lookLayout: LayoutNode = {
   component: 'Sheet',
   props: {

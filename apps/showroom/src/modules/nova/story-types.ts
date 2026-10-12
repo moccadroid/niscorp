@@ -2,21 +2,9 @@ import type { LayoutNode, LayoutStore, RegistrationInput, Shell } from '@niscorp
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { Story as BaseStory } from '@showroom/modules/types';
 
-// Nova extends the chrome Story with runtime refs the module's
-// inspector tabs can introspect. Stories export whichever ones
-// their demo declares:
-//
-//   - layout demos  → { layout, data?, components?, layoutStore? }
-//   - action + shell demos → { shell }
-//
-// The inspector-tabs module reads them via the NovaStory cast to
-// decide which extra tabs to show (RenderTree / Canvas / Registry)
-// and derives any other surfaces from these (e.g. shell.registry).
-
-// `i18n` is a kind rather than a category so the whole area lands in ONE
-// sidebar segment: the chrome groups by kind first, and these stories are a
-// mix of shell- and layout-driven demos that would otherwise be split across
-// two headings by an implementation detail nobody reading them cares about.
+// `i18n` is a kind rather than a category: the chrome groups by kind first,
+// and these stories mix shell- and layout-driven demos, which would otherwise
+// split across two sidebar headings.
 export type NovaStoryKind = 'layout' | 'action' | 'shell' | 'i18n';
 
 export type NovaStory = BaseStory & {

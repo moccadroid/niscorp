@@ -7,39 +7,6 @@ import { inputContractOf } from './input-contract';
 import type { InputField } from './input-contract';
 import type { CandidateSets } from './intent.types';
 
-// ═══════════════════════════════════════════════════════════
-// THE ADMISSION RULE — may this card go up, opened with this? ONE rule, ONE
-// file. A chip the operator clicks, a plan step they press and a card the
-// agent's answer names all pass through `admit`, and nothing mounts that did
-// not. A second copy of this rule anywhere is a defect: three doors with three
-// slightly different locks is how an action a principal does not hold ends up
-// on their screen through the door nobody re-read.
-//
-// A card is admitted when
-//
-//   · its action is in `allowed` — for the operator's own click, everything
-//     they hold; for the agent, only the few actions Jev narrowed the catalog
-//     to for this sentence;
-//   · the placement map gives it a canvas — and, if the caller named one, the
-//     SAME one: a card's position is a fact about the action, never a choice;
-//   · its input is that action's own contract, field for field, with every row
-//     reference one of the candidate rows Jev was offered in this pass — rows
-//     read under the caller's policy, so a row they cannot see cannot be named.
-//
-// The input contract is rebuilt as zod here, so "an action outside the list",
-// "a row that was not offered" and "an input that does not fit" are one kind of
-// failure with one kind of message.
-//
-// `admitAnswer` is the same rule over a whole agent answer, and it is called
-// TWICE with the same arguments: inside the run, where a refusal goes back to
-// the model as a correction while its tools are still warm, and when the answer
-// lands, where a refusal rejects it WHOLE. One function, so the two can never
-// disagree about what is allowed.
-//
-// Optional fields are `.nullish()`: models say null for "absent" (STYLE_GUIDE,
-// model-boundary schemas). Nulls are dropped before anything is opened.
-// ═══════════════════════════════════════════════════════════
-
 export type AdmissionContext = {
   allowed: ReadonlySet<string>;
   definitions: Record<string, ActionDefinition>;
@@ -51,12 +18,8 @@ export type AdmittedCard = { actionId: string; canvas: QuestionCanvas; input: Re
 export type Admitted = ({ ok: true } & AdmittedCard) | { ok: false; reason: string };
 
 export type AdmitOptions = {
-  // The canvas the caller put the card on. A card has ONE place; naming
-  // another is a refusal, not a suggestion.
   canvas?: string;
-  // A chip is opened with nothing — the operator asked for the card, and Jev
-  // fills it on the next pass — so its required inputs are not required YET.
-  // Everything a model opens is held to them: an empty record card is a box.
+  // For a chip: it opens empty and is filled on the next pass. A model's card needs its required inputs.
   partial?: boolean;
 };
 
@@ -65,8 +28,6 @@ const enumOf = (values: readonly string[]): z.ZodType | undefined => {
   return first === undefined ? undefined : z.enum([first, ...rest]);
 };
 
-// One input field as it may be filled — or undefined for a field that cannot
-// be: a row reference with no candidate rows this pass.
 const fieldSchema = (field: InputField, candidates: CandidateSets): z.ZodType | undefined => {
   if (field.ref !== undefined) return enumOf((candidates[field.ref] ?? []).map((row) => row.id));
   if (field.enum !== undefined) return enumOf(field.enum);
@@ -91,7 +52,6 @@ export const inputSchemaFor = (definition: ActionDefinition, candidates: Candida
   return z.strictObject(shape);
 };
 
-// Nulls are how a model says "absent"; nothing downstream wants them.
 const withoutNulls = (input: Record<string, unknown>): Record<string, unknown> => Object.fromEntries(Object.entries(input).filter(([, value]) => value !== null && value !== undefined));
 
 export const admit = (context: AdmissionContext, actionId: string, input: Record<string, unknown>, options: AdmitOptions = {}): Admitted => {
@@ -109,11 +69,6 @@ export const admit = (context: AdmissionContext, actionId: string, input: Record
   return { ok: true, actionId, canvas, input: withoutNulls(parsed.data) };
 };
 
-// ─── a whole answer ─────────────────────────────────────────
-
-// The `data` half of the agent's envelope, as far as admission cares. Typed by
-// shape so this file does not depend on the agent's contract — the dependency
-// runs the other way.
 export type AnswerShape = {
   claims?: readonly { text: string; card: string; row?: string | null | undefined }[] | null | undefined;
   followUps?: readonly string[] | null | undefined;
@@ -125,26 +80,14 @@ export type AnswerShape = {
 export type WritableField = { card: string; field: string };
 
 export type AnswerContext = AdmissionContext & {
-  // The free-text fields this run was offered. Nothing else may be written.
   writable: readonly WritableField[];
-  // CITATIONS. The cards on screen right now — a claim may stand on one of
-  // these, or on a card this same answer places — and, per card, the row ids it
-  // is showing. Absent = nothing is on screen and no row is known.
   onScreen?: ReadonlySet<string>;
   rowsOn?: (card: string) => ReadonlySet<string>;
-  // WHAT THIS THREAD HAS ALREADY ASKED OR BEEN OFFERED, this sentence included.
-  // A follow-up that repeats one is dropped: "what are our options?" under every
-  // answer is furniture, not a suggestion.
   asked?: readonly string[];
 };
 
 export type AdmittedClaim = { text: string; card: string; row: string };
 
-// (The bounds — two sentences, two follow-ups — are the contract's:
-// agent/contract.ts. They are enforced here.)
-
-// A sentence ends at . ! or ? followed by a space and a capital or a quote — or
-// by the end. "21.00", "4.5 k" and "e.g. this" do not end one.
 export const sentencesOf = (text: string): string[] =>
   text
     .trim()
@@ -158,23 +101,17 @@ export const FOLLOW_UP_MAX_CHARS = 60;
 export type AdmittedAnswer =
   | {
       ok: true;
-      // ONLY the canvases the answer named, each as its complete state.
       canvases: Record<string, AdmittedCard[]>;
       fields: { card: string; field: string; text: string }[];
       steps: { say: string; card: AdmittedCard }[];
-      // What survived of the citations and the follow-ups, and — in words — what
-      // did not. A BAD CITATION IS DROPPED, NOT FATAL: a wrong card, row or input
-      // would put the wrong thing on screen and rejects the answer whole; a
-      // citation that points nowhere only fails to light something, and costs
-      // the operator the answer if it is treated the same way.
+      // A bad citation is dropped, not fatal: it only fails to light something, where a wrong
+      // card, row or input would put the wrong thing on screen.
       claims: AdmittedClaim[];
       followUps: string[];
       notes: string[];
     }
   | { ok: false; reasons: string[] };
 
-// Every candidate row id of the pass, whatever its table: a claim's row may be
-// any row the conversation has put on the table.
 const candidateIds = (candidates: CandidateSets): Set<string> => new Set(Object.values(candidates).flatMap((rows) => rows.map((row) => row.id)));
 
 const admitClaims = (context: AnswerContext, answer: AnswerShape, response: string, placed: ReadonlySet<string>): { claims: AdmittedClaim[]; notes: string[] } => {
@@ -188,7 +125,6 @@ const admitClaims = (context: AnswerContext, answer: AnswerShape, response: stri
     else {
       const row = claim.row ?? '';
       const isKnown = row === '' || known.has(row) || context.rowsOn?.(claim.card).has(row) === true;
-      // The WORDS still stand on the card; only the row was wrong.
       if (!isKnown) notes.push(`a citation kept its card and lost its row: "${row}" is not a row of ${claim.card}`);
       claims.push({ text: claim.text, card: claim.card, row: isKnown ? row : '' });
     }
@@ -196,15 +132,6 @@ const admitClaims = (context: AnswerContext, answer: AnswerShape, response: stri
   return { claims, notes };
 };
 
-// Too long. Reasons are written FOR THE MODEL: cortex hands them to it as the
-// correction, and it gets to try again.
-//
-// There used to be a second gate here — "a recital": an answer naming more than
-// two things a mounted card shows was refused. On the real model it refused
-// "how will the storm at 9 affect the lineup?" three times, because the honest
-// answer names the exposed sets and the running order shows them too, and the
-// run failed. A gate that refuses a correct answer is deleted, not tuned; the
-// instruction to prefer what the cards do not show stays as guidance.
 const wordReasons = (response: string): string[] => {
   const reasons: string[] = [];
   const sentences = sentencesOf(response);
@@ -234,7 +161,6 @@ export const admitAnswer = (context: AnswerContext, answer: AnswerShape, respons
   const steps: { say: string; card: AdmittedCard }[] = [];
 
   for (const [canvas, cards] of Object.entries(answer.canvases ?? {})) {
-    // null and absent both mean "I did not name this canvas".
     if (cards === null || cards === undefined) continue;
     const state: AdmittedCard[] = [];
     for (const card of cards) {
@@ -258,8 +184,6 @@ export const admitAnswer = (context: AnswerContext, answer: AnswerShape, respons
     else steps.push({ say: step.say, card: { actionId: admitted.actionId, canvas: admitted.canvas, input: admitted.input } });
   }
 
-  // THE WORDS. Only an answer that HAS words is judged on them: the in-run check
-  // sees every attempt, and the landing sees the last.
   if (response.trim() !== '') reasons.push(...wordReasons(response));
 
   if (reasons.length > 0) return { ok: false, reasons };

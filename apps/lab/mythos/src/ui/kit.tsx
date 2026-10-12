@@ -4,12 +4,6 @@ import { z } from 'zod';
 import { useNovaDispatch } from '@niscorp/nova/adapters/react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 
-// ═══════════════════════════════════════════════════════════
-// The kit: domain-blind primitives. Props in, events out —
-// nothing here knows what a todo is. Palette flows through the
-// --m-* custom properties that Surface sets per mood.
-// ═══════════════════════════════════════════════════════════
-
 type MoodVars = { bg: string; panel: string; accent: string; soft: string; ink: string; sub: string; line: string };
 
 const MINT: MoodVars = { bg: '#edf8f0', panel: '#ffffff', accent: '#5fc493', soft: '#d9f2e3', ink: '#2f4451', sub: '#7d948c', line: '#dcefe3' };
@@ -21,8 +15,6 @@ const MOODS: Record<string, MoodVars> = {
 };
 
 const ROSE = { bg: '#fbe3e9', ink: '#b0455e' };
-
-// ─── Surface ───────────────────────────────────────────────
 
 const SurfacePropsSchema = z
   .object({
@@ -56,8 +48,6 @@ export const Surface: NovaComponent<SurfaceProps> = ({ mood, pad, fill, children
 };
 
 Surface.meta = { description: 'Mood palette provider and page background.', propsSchema: SurfacePropsSchema };
-
-// ─── Stack ─────────────────────────────────────────────────
 
 const StackPropsSchema = z
   .object({
@@ -99,8 +89,6 @@ export const Stack: NovaComponent<StackProps> = ({ direction, gap, align, justif
 );
 
 Stack.meta = { description: 'Flex container.', propsSchema: StackPropsSchema };
-
-// ─── Text ──────────────────────────────────────────────────
 
 const TextPropsSchema = z
   .object({
@@ -144,8 +132,6 @@ export const Text: NovaComponent<TextProps> = ({ size, weight, tone, strike, ali
 
 Text.meta = { description: 'Typography element.', propsSchema: TextPropsSchema };
 
-// ─── Card ──────────────────────────────────────────────────
-
 const CardPropsSchema = z
   .object({
     pad: z.number().optional().describe('Padding in px. Default 14.'),
@@ -180,8 +166,6 @@ export const Card: NovaComponent<CardProps> = ({ pad, tone, hover, radius, child
 };
 
 Card.meta = { description: 'Rounded container.', propsSchema: CardPropsSchema };
-
-// ─── Button ────────────────────────────────────────────────
 
 const ButtonPropsSchema = z
   .object({
@@ -239,8 +223,6 @@ export const Button: NovaComponent<ButtonProps> = ({ label, variant, size, disab
 
 Button.meta = { description: 'Clickable button; dispatches ui:click.', propsSchema: ButtonPropsSchema };
 
-// ─── Checkbox ──────────────────────────────────────────────
-
 const CheckboxPropsSchema = z
   .object({
     checked: z.boolean().optional(),
@@ -287,8 +269,6 @@ export const Checkbox: NovaComponent<CheckboxProps> = ({ checked, payload, novaR
 
 Checkbox.meta = { description: 'Round check control.', propsSchema: CheckboxPropsSchema };
 
-// ─── Chip ──────────────────────────────────────────────────
-
 const ChipPropsSchema = z
   .object({
     label: z.string().optional().describe('Chip text.'),
@@ -328,8 +308,6 @@ export const Chip: NovaComponent<ChipProps> = ({ label, tone, children }) => {
 
 Chip.meta = { description: 'Small pill of secondary information.', propsSchema: ChipPropsSchema };
 
-// ─── Meter ─────────────────────────────────────────────────
-
 const MeterPropsSchema = z
   .object({
     value: z.number().optional().describe('Current value.'),
@@ -367,8 +345,6 @@ export const Meter: NovaComponent<MeterProps> = ({ value, max, label }) => {
 };
 
 Meter.meta = { description: 'Small progress meter.', propsSchema: MeterPropsSchema };
-
-// ─── Input ─────────────────────────────────────────────────
 
 const inputStyle = (focused: boolean): CSSProperties => ({
   padding: '9px 13px',
@@ -417,8 +393,6 @@ export const Input: NovaComponent<InputProps> = ({ placeholder, type, value, nov
 };
 
 Input.meta = { description: 'Single-line input bound via `model`.', propsSchema: InputPropsSchema };
-
-// ─── TextArea ──────────────────────────────────────────────
 
 const TextAreaPropsSchema = z
   .object({

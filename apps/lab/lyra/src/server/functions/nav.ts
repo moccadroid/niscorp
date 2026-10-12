@@ -10,26 +10,15 @@ import { dayIn } from '../clock';
 
 export const navFunctions = (
   session: FunctionSession,
-  // `integrations` is the feature the app created (app/app.ts): it answers the
-  // registered integrations, each with what its bundle said in this app's own
-  // vocabulary (app/integration-extension.ts). What rides a host action and
-  // what is placed under a hub are read off that. `attachable` is what each
-  // host action offers a rider, as the app said it there.
   deps: { server: () => MossServer; integrations: Integrations<IntegrationExtension>; attachable: Readonly<Record<string, Readonly<Record<string, string>>>> },
 ): Record<string, FunctionHandler> => {
-  // What the approved integrations said, each with the integration it is of.
-  // One that is pending places nothing.
   const approved = async (): Promise<{ integration: string; extension: IntegrationExtension }[]> =>
     (await deps.integrations.listIntegrations()).flatMap(({ id, status, extension }) => (status === 'approved' && extension !== undefined ? [{ integration: id, extension }] : []));
 
-  // An integration's screen is not part of what the app shipped: it is among
-  // the actions in force, which the server answers.
   const titleOf = (actionId: string): string => deps.server().actions()[actionId]?.title ?? actionId;
 
-  // LIVE, not the build-time snapshot. `session.actions` is what the shell was
-  // BUILT with; an integration landing mid-session re-registers definitions without a
-  // rebuild, and these two functions are exactly where the newly-granted ids
-  // must appear. `/catalog` answers current, per principal, memo-backed.
+  // `session.actions` is what the shell was built with; an integration landing
+  // mid-session grants ids without a rebuild, and `/catalog` answers current.
   const grantedNow = async (): Promise<readonly string[]> => {
     const response = await session.wire('/catalog', {});
     if (!response.ok) return session.actions;
@@ -38,35 +27,16 @@ export const navFunctions = (
   };
 
   return {
-  // ── WHO THIS SESSION MAY ACT FOR ──────────────────────────
-  //
-  // Off the identity record, never a lookup — the same rule every other seam
-  // in this file follows. The children were read ONCE, by the `identity` role
-  // (which holds `people.read` pinned to the household), when the session
-  // resolved.
-  //
-  // It is a function rather than an entry because a member holds no
-  // `people.read` and never will: "a member cannot read the roll" is an
-  // invariant three checks assert, and a name lives on `people`. This is the
-  // seam that lets a parent see their child's NAME without the rung gaining a
-  // verb that would make the roster replayable.
-  //
-  // A picker is all this feeds. Nothing here decides what anybody may DO —
-  // the household reach and the guardianships `$lookup` do that, engine-side,
-  // and they would refuse a subject this list was wrong about.
+  // A function rather than an entry because a member holds no `people.read`:
+  // a parent sees their child's name without the rung gaining that verb.
   'nav.family': async () => (session.principal === null ? [] : Array.isArray(session.identity['household']) ? session.identity['household'] : []),
 
   'nav.identity': async () => {
-    // EVERYTHING A SESSION IS is on the session: the record the engine
-    // resolved carries the name, the studio and the language. Nothing here
-    // looks anybody up — the lookups were the disease.
     if (session.principal === null) return {};
     const name = String(session.identity['name'] ?? '');
     return {
       studioName: String(session.identity['studioName'] ?? ''),
       personName: name,
-      // The same composer `inputs` uses, so the opening paint and this
-      // confirming read cannot disagree about which language they greet in.
       greeting: greetingFrom(await bookOverWire(session.wire, String(session.identity['locale'] ?? '')), name, new Date()),
     };
   },
@@ -99,8 +69,6 @@ export const navFunctions = (
     return {
       areaId: context.areaId,
       areaLabel: context.areaLabel,
-      // Same rule as the taxonomy: one tab is a label pretending to be a
-      // control. An integration's screen can be what makes an area worth tabs.
       tabs: tabs.length > 1 ? tabs.map((t) => ({ value: t.action, label: t.label })) : [],
       moreValue: (((data['primaryAreas'] ?? []) as { areaId?: string }[]).some((a) => a.areaId === context.areaId) ? '' : context.areaId),
     };
@@ -109,9 +77,7 @@ export const navFunctions = (
   'nav.attachments': async (data) => {
     const host = String(data['hostId'] ?? '');
     if (host === '') return [];
-    // The session's own catalog — installs already filtered by the record.
     const granted = await grantedNow();
-    // In the order of the action ids, whichever integration each belongs to.
     const attached = (await approved())
       .flatMap(({ integration, extension }) => Object.entries(extension.attachments).map(([actionId, binding]) => ({ integration, actionId, ...binding })))
       .filter((binding) => binding.to === host)
@@ -130,9 +96,6 @@ export const navFunctions = (
           const row: Record<string, unknown> = { action: actionId, label: titleOf(actionId), bands: [], hint: '' };
           if (preview === '' || session.principal === null) return row;
           try {
-            // The app's own signed call, as the person looking: a preview is
-            // no endpoint of an action, so it is not among what the proxy
-            // forwards for a screen.
             const res = await deps.integrations.callIntegration(integration, pathOnService(integration, preview), { principal: session.principal, body: offered });
             if (res.ok) {
               const atoms = (await res.json()) as { bands?: unknown; hint?: unknown };

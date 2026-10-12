@@ -14,12 +14,8 @@ export const deskCheckInAction: ActionDefinition = {
     arrivedSummary: '',
     loadingSessions: true,
     loadingRoster: false,
-    // What the pending tap is about. Held as data because a trigger's steps
-    // run against the action, not against the event.
     pendingPersonId: '',
     pendingBookingId: '',
-    // The walk-in half: who could still join the chosen class, the one the
-    // desk picked, and the row the create handed back.
     bookable: [],
     walkInPersonId: '',
     walkInBooked: {},
@@ -31,12 +27,7 @@ export const deskCheckInAction: ActionDefinition = {
     sessions: { url: '/api/schedule/vex', method: 'POST', request: sessionsTodayPrism, target: 'sessions' },
     roster: { url: '/api/schedule/vex', method: 'POST', request: rosterPrism, target: 'roster' },
     checkin: { url: '/api/schedule/vex', method: 'POST', request: checkInPrism, errorTarget: 'error' },
-    // The picker's options, shaped at the SOURCE: the entry emits `value`,
-    // `name`, `sub` — its one consumer is this picker, and `name` (never
-    // `label`) keeps a person's name off the language pass.
     bookable: { url: '/api/schedule/vex', method: 'POST', request: bookablePrism, target: 'bookable' },
-    // The insert answers with the row it wrote — the id is what the check-in
-    // needs to flip `attended` on the booking it just created.
     book: { url: '/api/schedule/vex', method: 'POST', request: walkInBookPrism, target: 'walkInBooked', errorTarget: 'error' },
     walkIns: { url: '/api/schedule/vex', method: 'POST', request: walkInsPrism, target: 'walkIns' },
   },
@@ -55,9 +46,6 @@ export const deskCheckInAction: ActionDefinition = {
         { call: 'bookable' },
       ],
     },
-    // The walk-in: book, then check in — two writes the desk fires as one
-    // tap. Steps await in order, so the booking id is in hand before the
-    // check-in that flips its `attended`.
     {
       event: 'ui:click',
       ref: 'walkinBook',
@@ -83,8 +71,6 @@ export const deskCheckInAction: ActionDefinition = {
         { set: 'pendingBookingId', value: '@event.payload.booking_id' },
         {
           call: 'checkin',
-          // Re-read the roster, and announce — the day's figures live on
-          // another surface entirely and hear the same channel.
           onSuccess: [{ call: 'roster' }, { emit: { channel: 'check-ins-changed' } }],
         },
       ],

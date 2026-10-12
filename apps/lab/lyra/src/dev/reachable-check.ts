@@ -1,4 +1,3 @@
-// Run: pnpm --filter lyra exec tsx src/dev/reachable-check.ts
 import { mutationEffect } from '@niscorp/vex';
 import { ENTRIES, MUTATION_ENTRIES } from '@lyra/app/vex';
 import { areasFor } from '@lyra/app/nav/sections';
@@ -30,7 +29,6 @@ for (const [who, email] of CAST_PEOPLE) {
   ok(`everything the ${who} holds can be opened`, orphans.length === 0, orphans.length > 0 ? `unreachable: ${orphans.join(', ')}` : 'menu, sheet, or landing');
 }
 
-// Falsifiable: the check above passes trivially if `orphansFor` sees nothing.
 const ids = (await idsFor(CAST.lumen.owner));
 const invented = [...ids, 'ghost.screen'];
 const navIds = new Set(navFor(invented).flatMap((a) => [a.id, ...a.items.map((i) => i.action)]));
@@ -51,18 +49,6 @@ const named = navFor(Object.keys(CATALOG_DEFINITIONS)).flatMap((a) => a.items.ma
 const missing = named.filter((id) => CATALOG_DEFINITIONS[id] === undefined);
 ok('every destination the menu names is a real action', missing.length === 0, missing.join(', ') || `${named.length} checked`);
 
-// ── A REACTION THAT WATCHES NOTHING IS A REACTION THAT NEVER RUNS ──
-//
-// The app declares what writes it reacts to by TABLE, and moss routes vex's
-// write observer by matching that name. A table nothing writes is not an
-// error anywhere — the reaction simply never fires, silently, forever.
-//
-// ⟲ It happened while this was being built: the add-on reaction named
-// `addons`, and the mutation behind "install" writes `studio_integrations`.
-// Nothing complained. The directory stopped resyncing, and the failure
-// surfaced three checks away as a studio that could not see its own screens.
-// The names are derived from the mutations themselves now, so a reaction
-// naming a table no entry writes is loud, here, at boot.
 const WRITTEN = new Set(MUTATION_ENTRIES.flatMap((entry) => mutationEffect(entry.mutation).map((effect) => effect.table)));
 const declared = (app.reactions ?? []).map((reaction) => reaction.table);
 const unwatchable = declared.filter((table) => !WRITTEN.has(table));
@@ -77,25 +63,10 @@ ok(
   'the exact pair that shipped broken: the plural nobody writes, and the table that install really touches',
 );
 
-// ── AN ENTRY WITH NO CONSUMER IS INVISIBLE ───────────────────
-//
-// This check proved every ACTION a principal holds can be opened — and said
-// nothing about the vex registry underneath. That is how `me/booked-sessions`
-// sat granted, commented and uncalled for two reviews while the Book button
-// beside it invited an error, and how the walk-in desk's reads were built,
-// registered and unreachable. A grant is not a caller.
-//
-// A caller is one of: a prism in some action's endpoints (the resolved
-// catalog names the fingerprint — this covers every `entry.fingerprint`
-// reference a prism makes), or source OUTSIDE the registry naming the
-// fingerprint literally — the tide driver, the server functions, the
-// charter's machine rungs, the automation vocabulary, the integrations
-// service and the admin tool all call by literal string. A check file does
-// NOT count: the suites assert what was built, and "asserted by a check"
-// was exactly the state the two orphans above rotted in.
+// The catalog is searched resolved, which covers a prism's `entry.fingerprint`
+// reference. `src/dev` is not searched below: an entry only a check calls has
+// no caller.
 const CATALOG_JSON = JSON.stringify(CATALOG_DEFINITIONS);
-// The automation vocabulary names its selections by `entry.fingerprint`
-// reference — resolved here, so the literal is present however it was spelt.
 const VOCABULARY_JSON = JSON.stringify({ MOMENTS, EFFECTS });
 const { readdirSync, readFileSync } = await import('node:fs');
 const { join } = await import('node:path');
@@ -120,9 +91,6 @@ const OUTSIDE_THE_REGISTRY = [
   .map((file) => readFileSync(file, 'utf8'))
   .join('\n');
 
-// Deliberately unwired, the reason on the row. Every entry here is a
-// DECISION somebody can disagree with — which is the point; the drift this
-// replaces could not be disagreed with because nobody could see it.
 const DELIBERATE: Record<string, string> = {
   'staff/byId': 'harness-only today (roles flow) — no product screen opens one staff row yet',
   'automations/runs': 'the run history read — the Automations screen shows last_run from the list instead; candidate for a detail screen or deletion',

@@ -3,16 +3,6 @@ import { paletteFromRegistry } from '@niscorp/nova/agent';
 import { buildRegistry } from '@relay/ui';
 import { catalogEntries, VIZ_OMIT_PROPS } from '../catalog';
 
-// ═══════════════════════════════════════════════════════════
-// The architect-side producers — LIVE app data (component registry, action
-// catalog) formatted into context. Producers run at run start, so both read
-// the CURRENT state every build. Named for what they produce; shared by the
-// architect (which writes layouts) and the validator (which reads them).
-// ═══════════════════════════════════════════════════════════
-
-// Kept out of the palette: structural shell components (meaningless inside a
-// screen body), app chrome (dialogs, rails, kanban scaffolding —
-// hand-authored screens' business), Table internals, and Ray's own surfaces.
 const OMIT_COMPONENTS = new Set([
   'CanvasSlot',
   'ActionSlot',
@@ -41,9 +31,6 @@ const OMIT_COMPONENTS = new Set([
   'RayView',
 ]);
 
-// Styling props stay masked: the house style is "defaults only". Sort
-// affordances are available — with the transform DSL and vex's reserved
-// sortBy/sortDir, a generated screen can wire sort headers legally.
 const OMIT_PROPS = [...VIZ_OMIT_PROPS];
 
 export const componentPalette = ((): string => {
@@ -58,11 +45,8 @@ export const componentPalette = ((): string => {
   ].join('\n');
 }) satisfies Producer;
 
-// Composition RULES, not solutions. Nothing here names a domain, a
-// screen, or a task — baking today's answer into the prompt biases
-// every future screen toward it and rots when the app changes. These
-// are the structural idioms of the component set; the intent supplies
-// the content.
+// Structural idioms only: a rule that names a domain, a screen or a task
+// biases every future screen toward it.
 export const layoutComposition = ((): string =>
   [
     'LAYOUT COMPOSITION — how layouts are put together here:',
@@ -84,10 +68,6 @@ export const actionCatalog = ((): string =>
       .join('\n'),
   ].join('\n')) satisfies Producer;
 
-// Attached only on EDIT runs (see run.ts) — editing rules never dilute build
-// runs. RIGHT-SIZED, not minimal: the hotfix death spiral (patch the symptom,
-// keep the broken structure, patch the next symptom it causes) is the failure
-// mode this steers away from.
 export const editingGuide = ((): string =>
   [
     'EDITING — the request includes the action\'s CURRENT definition. Rules:',

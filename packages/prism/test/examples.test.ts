@@ -3,14 +3,8 @@ import { OP_KEYS, evaluate, validate } from '../src';
 import type { OpKey } from '../src';
 import { PRISM_EXAMPLES, PRISM_EXAMPLE_GROUPS } from '../src/examples';
 
-// The examples ship as data and are shown as the reference, so they are held
-// to the engine here: each one answers what it says it answers, and every
-// operator has exactly one example of its own, named by the operator.
-
 const isOpKey = (key: string): key is OpKey => OP_KEYS.some((op) => op === key);
 
-// Every operator a config uses, at any depth. What sits under a $const is a
-// value, not a config, so it is not looked into.
 const opsUsedIn = (node: unknown, found: Set<OpKey> = new Set()): Set<OpKey> => {
   if (Array.isArray(node)) {
     node.forEach((item) => opsUsedIn(item, found));
@@ -24,7 +18,6 @@ const opsUsedIn = (node: unknown, found: Set<OpKey> = new Set()): Set<OpKey> => 
   return found;
 };
 
-// `$sortBy` → `sort-by`: an operator's example is found at its own name.
 const idOf = (op: OpKey): string =>
   op.slice(1).replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
 
@@ -63,8 +56,6 @@ describe('the examples', () => {
     },
   );
 
-  // An operator's example is named by the operator and found at its name, so a
-  // reader looking for `$lte` finds `$lte` — never a topic that contains it.
   it("an operator's example carries the operator's name, and uses it", () => {
     const off = PRISM_EXAMPLES.filter(
       (example) =>
@@ -76,8 +67,6 @@ describe('the examples', () => {
     expect(off.map((example) => example.id)).toEqual([]);
   });
 
-  // An operator added to the grammar without an example fails here, by name;
-  // so does a second example for one that has its own.
   it('every operator has exactly one', () => {
     const shown = PRISM_EXAMPLES.flatMap((example) =>
       example.op === undefined ? [] : [example.op],

@@ -1,4 +1,3 @@
-// Run: pnpm --filter lyra exec tsx src/dev/roles-check.ts
 import { CAST } from '@lyra/db/seed';
 import { app, asPrincipal, idFor, idsFor, login, ok, report, settle, treeOf } from './world';
 
@@ -11,7 +10,6 @@ const DESK = CAST.lumen.desk;
 const OWNER = CAST.lumen.owner;
 const MEMBER = CAST.lumen.member;
 
-// ── ring 1: exactly one landing surface each ──
 const HOMES = ['home.overview', 'home.desk', 'home.classes', 'home.member'];
 for (const [who, email] of [['owner', OWNER], ['desk', DESK], ['instructor', INSTRUCTOR], ['member', MEMBER]] as const) {
   const ids = await idsFor(email);
@@ -31,7 +29,6 @@ ok('an instructor does NOT', !(await idsFor(INSTRUCTOR)).includes('home.overview
 ok('...nor the desk surface', !(await idsFor(INSTRUCTOR)).includes('home.desk'));
 ok('a member does NOT', !(await idsFor(MEMBER)).includes('home.overview'));
 
-// ── what actually mounts ──
 const instructorShell = await login(INSTRUCTOR);
 await settle();
 const instructorTree = treeOf(instructorShell);
@@ -43,9 +40,7 @@ const ownerShell = await login(OWNER);
 await settle();
 const ownerTree = treeOf(ownerShell);
 ok('the owner does get the figures', ownerTree.includes('Expected monthly'));
-// `89,00 €` in German, `€89.00` in English — which side the symbol sits on is
-// the language's, so the assertion allows for either. What is being claimed is
-// that an AMOUNT rendered, not that it rendered the way one language writes it.
+// Either order: `89,00 €` in German, `€89.00` in English.
 ok('...with a real amount, not a blank', /€\s?\d|\d\s?€/.test(ownerTree), 'revenue rendered');
 
 const deskShell = await login(DESK);
@@ -54,7 +49,6 @@ const deskTree = treeOf(deskShell);
 ok('the desk sees the headcount they work with', deskTree.includes('Members'));
 ok('...but not the takings', !deskTree.toLowerCase().includes('expected monthly'));
 
-// ── ring 3: the engine refuses, screen or no screen ──
 const deskRevenue = await read(DESK, 'studio', 'studio/revenue/expected');
 ok('the desk asking for revenue by hand is refused', refused(deskRevenue), JSON.stringify(deskRevenue));
 

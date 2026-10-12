@@ -11,14 +11,7 @@ import type { Query } from '../../src/schemas/query.schema.js';
 import type { ScopePolicy } from '../../src/scope/scope.types.js';
 import type { GenerateDsl, GenerationCaller } from '../../src/types.js';
 
-// WHO "ME" IS. A generation is told which columns the host's behaviors bind to
-// a scope key the caller carries — read from what the host declared, never
-// from a column's name — so "my name" can be written as a filter on the
-// caller's own `$scope` value. Every reach and phase counts: a reader holds no
-// insert, yet the insert's stamp is what says the column is theirs.
-
 const BEHAVIORS: ScopeBehaviors = {
-  // `id`, not `member_id` — the name tells nothing; the rule does.
   people: { default: { insert: [{ set: 'id', to: 'userId' }] }, personal: { update: [{ match: 'id', to: 'userId' }] } },
   notes: { write: [{ set: 'author', to: 'userId' }, { match: 'org', to: 'orgId' }] },
   teams: { read: [{ match: 'team_id', in: 'teamIds' }] },
@@ -66,7 +59,6 @@ describe('a generation is told who its caller is', () => {
   const db = new PGlite();
   const pool = createPglitePool(db);
   const adapter = createPostgresAdapter({ pool });
-  // A reader: may read people, and do nothing else to them.
   const reader: ScopePolicy = { default: 'deny', entities: { people: { read: [] } } };
   const myName: Query = { from: ['people'], fields: ['people.name'], filter: { eq: ['people.id', { $scope: 'userId' }] } };
 
@@ -99,7 +91,6 @@ describe('a generation is told who its caller is', () => {
     await engine.introspect();
     const answer = await engine.execute({ intent: 'what is my name', shape: [{ name: '' }], context: {} }, { scope: { userId: 'u2' } });
     expect(seen.caller?.bindings).toEqual([{ entity: 'people', field: 'id', key: 'userId' }]);
-    // …and the query written with it answers for THIS caller.
     expect(answer.result).toEqual([{ name: 'Ben' }]);
   });
 

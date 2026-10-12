@@ -13,13 +13,11 @@ import { Skeleton, Empty, Spinner } from './components/feedback';
 import { Theme } from './components/theme';
 
 const LYRA_PRIMITIVES = {
-  // arrangement
   Box,
   Stack,
   Row,
   Grid,
   Spacer,
-  // display
   Text,
   Prose,
   Badge,
@@ -31,7 +29,6 @@ const LYRA_PRIMITIVES = {
   Avatar,
   Bands,
   Icon,
-  // controls
   Button,
   Tabs,
   NavItem,
@@ -47,7 +44,6 @@ const LYRA_PRIMITIVES = {
   DrawerLink,
   DrawerHeader,
   DrawerFooter,
-  // fields
   Input,
   Textarea,
   Select,
@@ -55,29 +51,23 @@ const LYRA_PRIMITIVES = {
   Money,
   Checkbox,
   PersonPicker,
-  // surfaces
   Card,
   Section,
   Hero,
   Notice,
-  // lists and states — THREE SHAPES, because a menu is not a table and an
-  // object worth a paragraph is not a row (see components/lists.tsx)
   Rows,
   Links,
   Cards,
   Skeleton,
   Empty,
   Spinner,
-  // the surface half of theming: writes a studio's tokens, renders nothing
   Theme,
 };
 
-// nova's own slot markers are not ours and are not optional — the frame
-// resolves CanvasSlot, a list canvas resolves ActionSlot.
 export const buildRegistry = (): ReturnType<typeof createComponentRegistry<NovaComponent>> => {
   const registry = createComponentRegistry<NovaComponent>();
-  // nova's slots first: registering them up front stops the shell's builtin
-  // auto-registration from overwriting the styled kit.
+  // Registering nova's slots up front stops the shell's builtin
+  // auto-registration from overwriting the kit.
   registry.registerAll({ CanvasSlot, ActionSlot });
   registry.registerAll(LYRA_PRIMITIVES);
   return registry;

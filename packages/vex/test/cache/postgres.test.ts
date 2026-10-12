@@ -7,15 +7,6 @@ import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '../../src/adapters/pglite/index.js';
 import { checksumOf } from '@niscorp/strata';
 
-// ───────────────────────────────────────────────────────────────
-// Fake pg Pool
-//
-// Emulates just the queries createPostgresCache issues, backed by a Map
-// of snake_case "rows". This exercises serialization, the kind
-// discriminant, TTL filtering, and read/write validation — not real SQL
-// (that's covered by the live integration path).
-// ───────────────────────────────────────────────────────────────
-
 type DbRow = {
   key: string;
   kind: string;
@@ -39,10 +30,6 @@ const makeFakePool = () => {
       const sql = text.trim();
       const v = values ?? [];
 
-      // The migration ledger (strata): `init` runs the table's sequence
-      // through it. This fake is about row serialization, not SQL, so the
-      // ledger reads empty and its writes land nowhere — the real ledger is
-      // covered against PGlite below and in strata's own suite.
       if (sql.includes('strata_ledger') || sql.includes('pg_advisory_xact_lock') || sql.startsWith('ALTER TABLE')) {
         return { rows: [] };
       }
@@ -50,9 +37,8 @@ const makeFakePool = () => {
         return { rows: [] };
       }
       if (sql.startsWith('INSERT INTO')) {
-        // POSITIONAL, so the order here is part of the contract with
-        // `postgres.ts` — a column inserted in the middle silently shifts every
-        // field after it, and the round-trips below are what catch that.
+        // Positional, in the parameter order of the INSERT in `postgres.ts`: a
+        // column inserted in the middle shifts every field after it.
         const [key, kind, intent, shape, dsl, prismIr, reach, reason, createdAt, expiresAt, fingerprint, , , , refresh] = v;
         rows.set(key as string, {
           key: key as string,
@@ -78,7 +64,6 @@ const makeFakePool = () => {
       if (sql.startsWith('SELECT key FROM')) {
         return { rows: [...rows.values()].filter(notExpired).map((r) => ({ key: r.key })) };
       }
-      // SELECT <cols> ... — either get (WHERE key = $1) or entries (no key param)
       if (sql.startsWith('SELECT')) {
         if (sql.includes('WHERE key = $1')) {
           const row = rows.get(v[0] as string);
@@ -136,8 +121,6 @@ describe('createPostgresCache', () => {
     const { pool } = makeFakePool();
     const cache = createPostgresCache({ pool });
     await cache.init();
-    // Dropping this on the way through would not throw — the read would just be
-    // served at the caller's own, wider reach. Silence is the whole risk.
     await cache.set('mine', okEntry({ reach: 'personal' }));
     const got = await cache.get('mine');
     expect(got?.kind).toBe('ok');
@@ -148,8 +131,6 @@ describe('createPostgresCache', () => {
     const { pool } = makeFakePool();
     const cache = createPostgresCache({ pool });
     await cache.init();
-    // Dropped here, a reactive read would answer once and never again — and
-    // nothing would say so.
     await cache.set('roster', okEntry({ refresh: 'reactive' }));
     const got = await cache.get('roster');
     expect(got?.kind === 'ok' ? got.refresh : undefined).toBe('reactive');
@@ -274,13 +255,8 @@ describe('createPostgresCache', () => {
     const cache = createPostgresCache({ pool, onError });
     await cache.init();
 
-    // Inject a corrupt row directly, bypassing write validation.
-    //
-    // Corrupt in its DSL, not in its SHAPE: this stands for a row the database
-    // really holds, so it carries every column one has — `reach` included, which
-    // the table grew after this fixture was written. What validate-on-read is
-    // being asked to catch is the nonsense inside `dsl`, and a row missing a
-    // column would be caught for the wrong reason.
+    // Corrupt in its `dsl` only: a row missing a column would be evicted for
+    // the wrong reason.
     rows.set('corrupt', {
       key: 'corrupt',
       kind: 'ok',
@@ -297,7 +273,7 @@ describe('createPostgresCache', () => {
 
     expect(await cache.get('corrupt')).toBeUndefined();
     expect(onError).toHaveBeenCalledOnce();
-    expect(rows.has('corrupt')).toBe(false); // evicted
+    expect(rows.has('corrupt')).toBe(false);
   });
 
   it('rejects invalid schema/table identifiers', () => {
@@ -306,10 +282,6 @@ describe('createPostgresCache', () => {
     expect(() => createPostgresCache({ pool, schema: '1bad' })).toThrow();
   });
 });
-
-// ───────────────────────────────────────────────────────────────
-// The table goes through strata's ledger (real SQL, PGlite)
-// ───────────────────────────────────────────────────────────────
 
 describe('createPostgresCache — the table, through the ledger', () => {
   const columns = async (pool: PgPool): Promise<string[]> =>
@@ -336,9 +308,8 @@ describe('createPostgresCache — the table, through the ledger', () => {
     expect((await pool.query('SELECT key FROM vex_cache')).rows).toEqual([{ key: 'kept' }]);
   });
 
-  // HISTORY, PINNED: every database with a vex cache has run and recorded this.
-  // Red means the applied migration changed — put it back and append a new one
-  // (rewording a full-line `--` comment is fine; strata hashes without them).
+  // Every database with a vex cache has run and recorded this migration. Red
+  // means it changed: put it back and append a new one.
   it('nisc.vex.cache/1 is unchanged', async () => {
     const migration = createPostgresCache({ pool: createPglitePool(new PGlite()) }).sequence.migrations[0];
     expect(migration).toBeDefined();

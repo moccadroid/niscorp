@@ -1,11 +1,5 @@
 import type { RenderNode } from '@layout/types';
 
-// ═══════════════════════════════════════════════════════════
-// Walk a RenderNode[] tree and collect every model binding.
-// Used by the action runtime to install listeners on the event bus
-// that write `ui:model` payloads back into the data store.
-// ═══════════════════════════════════════════════════════════
-
 export type ModelBinding = {
   ref: string;
   path: string;

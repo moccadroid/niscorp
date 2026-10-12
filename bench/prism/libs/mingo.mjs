@@ -1,12 +1,7 @@
-// Each task as a MongoDB aggregation pipeline, run by mingo. The default entry point registers every operator.
-// Options are the defaults: processingMode CLONE_OFF (nothing is cloned; no stage used here writes to its input).
-
 import { Aggregator, aggregate } from 'mingo';
 
-// An order's lines as qty × unitCents, summed, plus its shipping.
 const totalCents = { $add: [{ $sum: { $map: { input: '$items', as: 'item', in: { $multiply: ['$$item.qty', '$$item.unitCents'] } } } }, '$shippingCents'] };
 
-// The skus of an order joined with ", ". The pipeline language has no join: $reduce with $concat is how it is written.
 const skus = {
   $reduce: {
     input: '$items.sku',
@@ -15,20 +10,16 @@ const skus = {
   },
 };
 
-// A pipeline takes a collection and answers a collection. What the shape forces, and nothing else:
-// one order goes in as a list of one, and the one document that comes out is the answer.
 const record = {
   run: (aggregator, order) => aggregator.run([order])[0],
   oneShot: (pipeline, order) => aggregate([order], pipeline)[0],
   glue: 'The order is wrapped in a one-element list and the one resulting document is unwrapped.',
 };
-// The orders are the collection; the answer is the list of documents.
 const list = {
   run: (aggregator, input) => aggregator.run(input.orders),
   oneShot: (pipeline, input) => aggregate(input.orders, pipeline),
   glue: 'input.orders is handed over as the collection.',
 };
-// The orders are the collection; the pipeline ends in one document, which is the answer.
 const single = {
   run: (aggregator, input) => aggregator.run(input.orders)[0],
   oneShot: (pipeline, input) => aggregate(input.orders, pipeline)[0],

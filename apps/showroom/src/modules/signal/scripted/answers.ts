@@ -1,15 +1,6 @@
 import type { Answer } from '@showroom/lib/scripted-model/scripts';
 import type { ScriptedRequest } from '@showroom/lib/scripted-model/scripted-fetch';
 
-// ═══════════════════════════════════════════════════════════
-// What the scripted model says on each signal page when there is no API key.
-//
-// Each page's opening exchange is a recording of a real run (replayed from its
-// snapshot). These are the answers to the prompts each page offers as "Try:"
-// chips — written for the page, labelled SCRIPTED in the chat. The signal code
-// that sends the request, streams, validates and parses the reply is real.
-// ═══════════════════════════════════════════════════════════
-
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const str = (v: unknown, fallback: string): string => (typeof v === 'string' ? v : typeof v === 'number' ? String(v) : fallback);
 
@@ -47,8 +38,6 @@ export const TUTOR: readonly Answer[] = [
   },
 ];
 
-// The weather tool always reports what its `execute` returns; the model asks
-// for the city, then describes whatever came back.
 const weather = (city: string, finish: (r: Record<string, unknown>) => string) => (request: ScriptedRequest) => {
   if (request.toolResultsSinceUser === 0) return { call: { name: 'get_weather', args: { city } } };
   const r = isRecord(request.lastToolResult) ? request.lastToolResult : {};
@@ -155,7 +144,6 @@ export const CARDS: readonly Answer[] = [
   },
 ];
 
-// The four follow-ups the recorded run suggested — answered in the same shape.
 export const FOLLOW_UPS: readonly Answer[] = [
   {
     ask: 'Show me the most popular posts from the last 7 days across all topics and communities.',
@@ -207,8 +195,6 @@ export const FOLLOW_UPS: readonly Answer[] = [
 ];
 
 export const suggestionPrompts = (answers: readonly Answer[]): string[] => answers.map((a) => a.ask);
-
-// ── the streaming pages: one prompt each, streamed token by token ─
 
 const RUST_GUIDE = `# Ownership, borrowing and lifetimes in Rust
 

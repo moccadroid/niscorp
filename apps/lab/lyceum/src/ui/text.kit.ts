@@ -6,14 +6,6 @@ import { ActionSlot } from '@niscorp/nova/adapters/tty/components';
 import type { KitOf } from './kit.props';
 import { SIGILS, oneOf, records, text } from './kit';
 
-// ═══════════════════════════════════════════════════════════════
-// THE TEXT KIT — lyceum's grammar (./kit.props.ts) drawn as plain lines: what
-// a screen SAYS, with no look at all. It is how the assistant sees the person
-// it is talking to (`screenText` below): the same served trees their phone
-// renders, rendered again as words — so it sees only what is on their screen,
-// and only what the charter put there.
-// ═══════════════════════════════════════════════════════════════
-
 const lines = (children: TtyBlock[]): string[] => children.flatMap((child) => child.lines);
 const block = (...said: string[]): TtyBlock => ({ lines: said.filter((line) => line !== '') });
 const GLYPHS: Record<(typeof SIGILS)[number], string> = { triangle: '▲', circle: '●', square: '■', cross: '✚', check: '✔', x: '✖' };
@@ -34,9 +26,7 @@ const instantOf = (value: string | undefined): number =>
 export const TEXT_KIT: KitOf<TtyComponent> = {
   Page: ({ children }) => block(...lines(children)),
   Sheet: ({ children }) => block(...lines(children)),
-  // An ink or a mark is how a cell looks; in words it has neither.
   Cell: ({ children }) => block(...lines(children)),
-  // Capitals are the poster's look, not the words: a label reads as written.
   Label: ({ children }) => block(lines(children).join(' ')),
   Headline: ({ children }) => block(...lines(children)),
   Text: ({ children }) => block(...lines(children)),
@@ -80,12 +70,10 @@ export const TEXT_KIT: KitOf<TtyComponent> = {
 const registry = createComponentRegistry<TtyComponent>();
 registry.registerAll({ ...TEXT_KIT, ActionSlot });
 
-// Which action instances to leave out of the screen — the assistant leaves its
-// own conversation out, which it is handed separately.
 export type Leaving = (instanceId: string, definitionId: string) => boolean;
 
-// The screen without what `leaving` names, and without the `[n]` markers a
-// terminal would print for what is pressable.
+// `ref` and `model` go, and with them the `[n]` markers a terminal would print
+// for what is pressable.
 const without = (nodes: readonly RenderNode[], leaving: Leaving): RenderNode[] =>
   nodes.flatMap((node): RenderNode[] => {
     if (node.type === 'fragment') return [{ ...node, children: without(node.children, leaving) }];
@@ -97,10 +85,6 @@ const without = (nodes: readonly RenderNode[], leaving: Leaving): RenderNode[] =
     return [{ ...plain, children: without(node.children, leaving) }];
   });
 
-// A person's screen as words: their shell's served trees — the frame and each
-// canvas, exactly what moss sends their phone — drawn by the text kit. A canvas
-// an action's layout places (the phone's regions, the controller's) is its own
-// tree, resolved where its slot is, and headed with its name.
 export const screenText = (shell: Shell, leaving: Leaving): string => {
   const served = (tree: RenderNode[]): RenderNode[] => without(shell.flattenRenderTree(tree), leaving);
   const view = createTtyView(registry, {

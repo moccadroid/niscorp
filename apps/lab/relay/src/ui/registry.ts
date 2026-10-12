@@ -31,9 +31,6 @@ import { RayTrace } from './components/ray-trace';
 import { RayView } from './components/ray-view';
 import { DevtoolsAnchor } from './components/devtools-anchor';
 
-// The Relay primitive vocabulary — every component a Nova layout can name.
-// Layouts control components ONLY through semantic props; every kit CSS class
-// is applied inside a component that owns it.
 const RELAY_PRIMITIVES = {
   Box,
   Stack,
@@ -81,15 +78,12 @@ const RELAY_PRIMITIVES = {
   RayTrace,
   RayView,
   DevtoolsAnchor,
-  // relay-styled introspection primitives (the devtools dock renders these)
   Panel,
   JsonTree,
 } as unknown as Record<string, NovaComponent>;
 
-// The component registry the shell renders against. CanvasSlot / ActionSlot are
-// Nova's shell-aware slots (we reuse them); everything else is a Relay
-// primitive. Registering CanvasSlot up front also stops <NovaShell>'s builtin
-// auto-registration from overwriting our styled Box/Stack/Text/Button.
+// Registering CanvasSlot here stops <NovaShell>'s builtin auto-registration,
+// which would overwrite the styled Box, Stack, Text and Button.
 export const buildRegistry = () => {
   const reg = createComponentRegistry<NovaComponent>();
   reg.registerAll({ CanvasSlot, ActionSlot });

@@ -1,9 +1,5 @@
 import type { Unsubscribe } from '../common';
 
-// ═══════════════════════════════════════════════════════════
-// Generic data store types.
-// ═══════════════════════════════════════════════════════════
-
 export type DataStore<T extends Record<string, unknown> = Record<string, unknown>> = {
   get: () => T;
   update: (updater: (current: T) => T) => void;

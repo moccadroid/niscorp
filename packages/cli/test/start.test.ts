@@ -9,17 +9,10 @@ import { fileURLToPath } from 'node:url';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-// ═══════════════════════════════════════════════════════════════
-// `nisc start` on an app with its own shell — the built command, listening for
-// real, asked over a real socket with nothing decoding on the way. What a
-// browser may keep of the built folder, and how each answer travels.
-// ═══════════════════════════════════════════════════════════════
-
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, 'fixtures', 'own-shell');
 const bin = join(here, '..', 'bin', 'nisc.js');
 const SLOW = 60_000;
-// what a browser says it takes
 const BROWSER = { 'accept-encoding': 'gzip, deflate, br, zstd' };
 
 const freePort = (): Promise<number> =>
@@ -67,9 +60,7 @@ beforeAll(async () => {
   for (;;) {
     try {
       if ((await ask('/robots.txt')).status === 200) break;
-    } catch {
-      // not up yet
-    }
+    } catch {}
     if (Date.now() > deadline) throw new Error(`nisc start did not come up:\n${log}`);
     await pause(150);
   }

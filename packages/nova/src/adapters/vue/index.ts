@@ -1,12 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// @niscorp/nova/adapters/vue — Vue 3 adapter
-//
-// Render functions in plain TS (no SFCs, no compiler step). The same contract
-// as the React adapter (ADAPTER.md): a walker, provide/inject for registry /
-// dispatch / publish, subscription composables, shell-backed slots. The
-// primitive vocabulary ships at `@niscorp/nova/adapters/vue/components`.
-// ═══════════════════════════════════════════════════════════
-
 export type { NovaComponent, NovaComponentProps, NovaModelBinding, NovaDispatch, NovaPublish } from './types';
 export { isNovaComponent } from './types';
 

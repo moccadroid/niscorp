@@ -4,11 +4,6 @@ import { folioLayout } from './folio.layout';
 import { folioPrism, folioTotalPrism } from './stay.prism';
 import { previewable, previewTriggers } from '@atrium/app/actions/preview';
 
-// The bill. Two independent reads — the lines and the total — because they are
-// two questions and the total is an aggregate, not a sum computed on screen.
-//
-// Preview-capable: collapsed on the home it is one box whose live line IS the
-// running total — the number no launcher tile could ever show.
 export const stayFolioAction: ActionDefinition = {
   id: 'stay.folio',
   title: 'Your bill',

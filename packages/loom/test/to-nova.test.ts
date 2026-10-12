@@ -4,12 +4,8 @@ import { ActionDefinitionSchema, type ComponentNode } from '@niscorp/nova';
 import { parse, toNova, Roles } from '../src/index.js';
 import { collectModels, mountForm } from './helpers.js';
 
-// Static metadata props (branches / containers / child) are JSON-encoded so
-// Nova's resolver leaves their `$`-bearing data intact; decode to inspect.
 const decode = (value: unknown): unknown => (typeof value === 'string' ? JSON.parse(value) : value);
 
-// toNova — Loom's field model → a Nova editor. Deliberately boring: Nova's own
-// schemas stay examples, not the rig.
 const personSchema = z.object({
   name: z.string(),
   age: z.int().optional(),
@@ -56,7 +52,7 @@ describe('toNova — object schema', () => {
     const nameControl = nameField!.children as ComponentNode;
     expect(nameControl.component).toBe(Roles.text);
     expect(nameControl.model).toBe('$.name');
-    expect(nameControl.ref).toBeUndefined(); // no explicit ref — the renderer derives one
+    expect(nameControl.ref).toBeUndefined();
 
     expect(ageField!.props).toMatchObject({ required: false });
     const ageControl = ageField!.children as ComponentNode;
@@ -70,7 +66,7 @@ describe('toNova — object schema', () => {
 
   it('round-trips a ui:model edit through Nova into the document', () => {
     const { shell, runtime } = mountForm(render(personSchema));
-    const models = collectModels(runtime.render()); // render installs listeners
+    const models = collectModels(runtime.render());
 
     const nameRef = models.find((m) => m.path === 'name')?.ref;
     expect(nameRef).toBeTruthy();
@@ -84,13 +80,10 @@ describe('toNova — object schema', () => {
     shell.dispose();
   });
 
-  // The variant carries each branch's pattern + defaults as props and its branch
-  // editors as children; the widget matches the value to a branch and shows it.
   const variantOf = (action: { layout?: unknown }): ComponentNode =>
     ((action.layout as ComponentNode).children as ComponentNode[])[0]!.children as ComponentNode;
   const branchesOf = (variant: ComponentNode) =>
     decode((variant.props as { branches: unknown }).branches) as { label: string; pattern: unknown; defaults: unknown; childrenKey?: string }[];
-  // Each child is a `branch` wrapper around the branch's editor.
   const editorsOf = (variant: ComponentNode): ComponentNode[] =>
     (variant.children as ComponentNode[]).map((wrap) => wrap.children as ComponentNode);
 
@@ -114,7 +107,6 @@ describe('toNova — object schema', () => {
     expect(branches[0]).toMatchObject({ pattern: { kind: 'tag', key: 'kind', value: 'circle' }, defaults: { kind: 'circle', radius: 0 } });
     expect(branches[1]).toMatchObject({ pattern: { kind: 'tag', key: 'kind', value: 'rect' }, defaults: { kind: 'rect', w: 0, h: 0 } });
 
-    // Each child is a `branch` wrapper (no `{ if: … }` conditionals), holding its editor.
     const wrappers = variant.children as ComponentNode[];
     expect(wrappers).toHaveLength(2);
     expect(wrappers.every((w) => w.component === Roles.branch)).toBe(true);
@@ -142,17 +134,14 @@ describe('toNova — object schema', () => {
       }),
     );
     expect(() => ActionDefinitionSchema.parse(action)).not.toThrow();
-    // Defaults to the first branch (the object).
     expect(action.data).toEqual({ node: { component: '' } });
 
     const variant = variantOf(action);
     const branches = branchesOf(variant);
     expect(branches[0]).toMatchObject({ pattern: { kind: 'key', key: 'component' }, defaults: { component: '' } });
-    // The non-object branches discriminate by type, and default to a scalar / array — not {}.
     expect(branches[1]).toMatchObject({ pattern: { kind: 'type', type: 'string' }, defaults: '' });
     expect(branches[2]).toMatchObject({ pattern: { kind: 'type', type: 'array' }, defaults: [] });
 
-    // Each branch's editor matches its kind: a group, a text control, an array.
     const editors = editorsOf(variant);
     expect(editors[0]!.component).toBe(Roles.group);
     expect(editors[1]!.component).toBe(Roles.text);
@@ -167,10 +156,8 @@ describe('toNova — object schema', () => {
     const { action } = render(z.object({ tags: z.array(z.string()) }));
     expect(() => ActionDefinitionSchema.parse(action)).not.toThrow();
     expect(action.data).toEqual({ tags: [] });
-    // Every list op is a model write, so the action carries no triggers.
     expect(action.triggers).toBeUndefined();
 
-    // group → field(tags) → array → [ loop over $.tags, append bound to $.tags ].
     const group = action.layout as ComponentNode;
     const array = (group.children as ComponentNode[])[0]!.children as ComponentNode;
     expect(array.component).toBe(Roles.array);
@@ -180,9 +167,6 @@ describe('toNova — object schema', () => {
     expect(add).toMatchObject({ component: Roles.append, model: '$.tags' });
     expect(decode((add.props as { child: unknown }).child)).toBe('');
 
-    // Each row is [ editor cell (a box), actions menu ] — the menu binds `$items`
-    // and acts on its own `$index`. A plain list has no container variants, so no
-    // `containers` prop is emitted.
     const row = loop.do as ComponentNode;
     expect(row.component).toBe(Roles.arrayItem);
     const [cell, menu] = row.children as ComponentNode[];
@@ -194,7 +178,6 @@ describe('toNova — object schema', () => {
 });
 
 describe('toNova — recursion', () => {
-  // A comment tree: a node with a body and a list of replies of the same shape.
   const Comment = z.object({
     body: z.string(),
     get replies() {
@@ -212,8 +195,6 @@ describe('toNova — recursion', () => {
     const template = layouts[names[0]!] as ComponentNode;
     expect(template.component).toBe(Roles.group);
 
-    // The template's replies array loops over `$item.replies`; each child is a
-    // row of [ editor cell (a box wrapping the ref-back-to-template), ✕, ↑, ↓ ].
     const repliesField = (template.children as ComponentNode[]).find(
       (c) => (c.props as { label?: string }).label === 'replies',
     )!;
@@ -225,11 +206,8 @@ describe('toNova — recursion', () => {
     expect(row.component).toBe(Roles.arrayItem);
     const [cell, menu] = row.children as ComponentNode[];
     expect(cell).toEqual({ component: Roles.box, children: { ref: names[0] } });
-    // The menu writes the *whole list* back: bound to `$items`, acting on its own
-    // `$index` — depth-agnostic, no static target.
     expect(menu).toMatchObject({ component: Roles.rowMenu, model: '$items', props: { index: '$index' } });
 
-    // The add control appends a default child to this node's own list.
     expect(add.component).toBe(Roles.append);
     expect(add.model).toBe('$item.replies');
     expect(decode((add.props as { child: unknown }).child)).toEqual({ body: '', replies: [] });
@@ -244,7 +222,6 @@ describe('toNova — recursion', () => {
     const { shell, runtime } = mountForm(render(commentSchema, { value: initial }));
     const models = collectModels(runtime.render());
 
-    // The append bound to the *nested* child's replies (resolved at depth).
     const nestedReplies = models.find((m) => m.path === 'thread.replies.0.replies');
     expect(nestedReplies).toBeTruthy();
     shell.dispatch({
@@ -266,8 +243,6 @@ describe('toNova — recursion', () => {
     const { shell, runtime } = mountForm(render(commentSchema, { value: initial }));
     const models = collectModels(runtime.render());
 
-    // The row controls bind `$items` (the list itself), distinct from the append
-    // (which binds `$item.replies`). Removing index 0 writes the list without it.
     const listCtrl = models.find((m) => m.path === 'thread.replies' && m.ref.includes('row-menu'));
     expect(listCtrl).toBeTruthy();
     shell.dispatch({ type: 'ui:model', ref: listCtrl!.ref, payload: [{ body: 'b', replies: [] }] });
@@ -278,7 +253,6 @@ describe('toNova — recursion', () => {
   });
 
   it('compiles a recursive *union* (a tree of typed nodes) to a self-referencing template', () => {
-    // A node is a Box (children recurse) or a Text (leaf) — a Nova-layout shape.
     const node: z.ZodType = z.discriminatedUnion('component', [
       z.object({ component: z.literal('Box'), children: z.array(z.lazy(() => node)) }),
       z.object({ component: z.literal('Text'), text: z.string() }),
@@ -288,13 +262,11 @@ describe('toNova — recursion', () => {
     const root = ir.fields[0]!.field;
     if (root.kind !== 'union') throw new Error('expected union');
     expect(root.recursive).toBe(true);
-    // The Box branch's children are an array of `self` (back to the union).
     const box = root.variants.find((v) => v.pattern.kind === 'tag' && v.pattern.value === 'Box')!;
     if (box.field.kind !== 'object') throw new Error('expected object branch');
     const children = box.field.fields.find((f) => f.key === 'children')!.field;
     expect(children).toMatchObject({ kind: 'array', item: { kind: 'self' } });
 
-    // toNova emits the union once as a named template; the `self` refs it.
     const { action, layouts } = toNova(parse(z.object({ root: node })));
     expect(() => ActionDefinitionSchema.parse(action)).not.toThrow();
     expect(Object.keys(layouts)).toHaveLength(1);
@@ -333,14 +305,12 @@ describe('toNova — recursion', () => {
     const { layouts } = toNova(parse(z.object({ layout: node })));
     const template = Object.values(layouts)[0] as ComponentNode;
 
-    // The chooser carries `childrenKey` on the container branches, not on Text.
     const branches = decode((template.props as { branches: unknown }).branches) as { label: string; childrenKey?: string }[];
     const childrenKeyOf = (label: string) => branches.find((b) => b.label === label)!.childrenKey;
     expect(childrenKeyOf('Box')).toBe('children');
     expect(childrenKeyOf('Stack')).toBe('children');
     expect(childrenKeyOf('Text')).toBeUndefined();
 
-    // The children-list row menu carries the container variants (Box, Stack).
     const menus: ComponentNode[] = [];
     const walk = (n: unknown): void => {
       if (Array.isArray(n)) return n.forEach(walk);

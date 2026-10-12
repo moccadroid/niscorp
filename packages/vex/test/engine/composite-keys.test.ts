@@ -10,14 +10,6 @@ import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
 import type { Query } from '../../src/schemas/query.schema.js';
 import type { Row } from '../../src/adapters/adapter.types.js';
 
-// A composite foreign key is ONE relation with ordered pairs, and the join
-// carries every pair. Read against a real database, because this is exactly
-// what a hand-built schema fixture cannot catch: introspection paired every
-// referencing column with every referenced one, the resolver joined on
-// whichever pair came first, and a key referencing (id, account_id) — the
-// referenced column that sorts before `id` is the trap — joined on the wrong
-// column and matched nothing. Nothing failed; the read was simply empty.
-
 const DDL = `
   CREATE TABLE accounts (id TEXT PRIMARY KEY);
 
@@ -102,10 +94,6 @@ describe('a composite foreign key', () => {
     expect(roles?.relations).toContainEqual(
       { type: 'hasOne', entity: 'leads', localFields: ['id', 'account_id'], foreignFields: ['role_id', 'account_id'] },
     );
-    // grants' primary key is (role_id, account_id, capability): the referencing
-    // columns are a subset of it, not a superset, so a role has many grants.
-    // (The old flat-set test would have seen role_id in "some unique
-    // constraint" and called it hasOne.)
     expect(roles?.relations.find((r) => r.entity === 'grants')?.type).toBe('hasMany');
   });
 
@@ -115,8 +103,6 @@ describe('a composite foreign key', () => {
       fields: ['grants.capability', 'roles.account_id'],
     });
     expect(sql).toContain('JOIN roles AS r1 ON g1.role_id = r1.id AND g1.account_id = r1.account_id');
-    // A join on the first pair alone would pair each grant with BOTH admin
-    // roles and return four rows.
     expect(rows.map((r) => [r['capability'], r['account_id']]).sort()).toEqual([
       ['read', 'acme'],
       ['write', 'bolt'],
@@ -148,8 +134,6 @@ describe('a composite foreign key', () => {
 
 describe('two tables that reference each other both ways', () => {
   it('join on the first-declared key, whichever side the from starts on', async () => {
-    // members → teams was declared first (teams → members is the ALTER after
-    // it), so both reads express "a member's team" — never the team's lead.
     const forward = await read({ from: ['teams', 'members'], fields: ['members.id'] });
     expect(forward.sql).toContain('JOIN members AS m1 ON t1.id = m1.team_id');
     expect(forward.rows.map((r) => r['id'])).toEqual(['m1']);

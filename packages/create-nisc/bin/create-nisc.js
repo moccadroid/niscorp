@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// The launcher — a committed file, so the bin links on a fresh install before
-// anything is built (the same reason as @niscorp/cli's). The command itself is
-// what it imports.
+// A committed file, not one in dist/: a package manager links a bin when it
+// installs, which in this workspace is before anything is built.
 import '../dist/cli.js';

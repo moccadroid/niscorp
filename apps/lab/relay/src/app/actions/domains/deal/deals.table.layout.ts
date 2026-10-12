@@ -1,11 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The deals table view. The toolbar (title + All/Mine tabs + search + count)
-// stays as Nova layout; the table body is the reusable `Table` primitive, driven
-// by a `columns` data-spec. Cells show Vex/Prism-shaped fields verbatim. The row
-// `⋯` menu, sort headers, skeleton and empty-state are all the Table's job — the
-// action's triggers (row / sort / q / menu-*) are unchanged. One of the two
-// layouts the `deals` action renders (see deals.layout.ts).
 export const dealsTableLayout: LayoutNode = {
   component: 'Box',
   props: {},

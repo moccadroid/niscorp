@@ -1,11 +1,3 @@
-// Server check — the data/policy plane through the wire. The app is its
-// MANIFEST (src/relay.ts) plus a database; createServer derives the
-// rest — data layer from the seeded db, universe from the introspected
-// schema, boot refusal, per-principal policies and catalogs — and answers
-// real HTTP requests in-process (app.request — no port): identity from
-// the Bearer token, the catalog resolved per principal, vex reads/writes
-// under the principal's compiled policy, and discovery advertising only
-// what the policy can touch.
 import { serverOn } from '../server/boot';
 import { devRuntime } from '../server/runtime';
 import { mintToken } from '../server/users';
@@ -34,7 +26,6 @@ const main = async (): Promise<void> => {
     return { status: res.status, body: (await res.json()) as Json };
   };
 
-  // ── identity: bad token → 401; no token → the anonymous principal ──
   const bad = await request('/catalog', { token: 'garbage' });
   checks.push([`an invalid token is refused (got ${bad.status} ${String(bad.body['error'])})`, bad.status === 401 && bad.body['error'] === 'invalid_token']);
 
@@ -42,7 +33,6 @@ const main = async (): Promise<void> => {
   const anonActions = anon.body['actions'] as string[];
   checks.push([`anonymous catalog = the lock screen alone (got ${anonActions?.join(', ')})`, anon.status === 200 && anonActions?.length === 1 && anonActions[0] === 'auth.login']);
 
-  // ── the catalog is per principal; the hash is the version token ──
   const jordan = await request('/catalog', { as: 'jordan' });
   const alex = await request('/catalog', { as: 'alex' });
   const jordanActions = jordan.body['actions'] as string[];
@@ -53,7 +43,6 @@ const main = async (): Promise<void> => {
   const jordanAgain = await request('/catalog', { as: 'jordan' });
   checks.push(['the same principal gets the same token (equal hash, equal application)', jordanAgain.body['hash'] === jordan.body['hash']]);
 
-  // ── vex under the principal's policy, through the server surface ──
   const openDeal = (await rt.db.query("SELECT id FROM deals WHERE status='open' LIMIT 1")).rows[0] as { id: string };
 
   const vWon = await request('/api/deals/vex', { as: 'jordan', body: { fingerprint: 'deals/markWon', context: { deal_id: openDeal.id } } });
@@ -72,7 +61,6 @@ const main = async (): Promise<void> => {
   const mDel = await request('/api/deals/vex', { as: 'sam', body: { fingerprint: 'deals/delete', context: { id: openDeal.id } } });
   checks.push([`admin's delete lands (got ${mDel.status})`, mDel.status === 200]);
 
-  // ── discovery is per principal: what you can't touch isn't advertised ──
   const anonDisc = await request('/api/deals/vex');
   const alexDisc = await request('/api/deals/vex', { as: 'alex' });
   const jordanDisc = await request('/api/deals/vex', { as: 'jordan' });
@@ -87,17 +75,13 @@ const main = async (): Promise<void> => {
   const samMutations = fps(samDisc.body).filter((f) => f.kind === 'mutation') as { fingerprint?: string }[];
   checks.push(["admin's discovery does advertise deals/delete", samMutations.some((f) => f.fingerprint === 'deals/delete')]);
 
-  // ── the assistant's engine is relay's own, and carries relay's entries itself ──
-  // The server keeps the entries it serves to itself, so an engine beside it
-  // finds only what it was given.
+  // The server keeps the entries it serves to itself, so an engine beside it finds only what it was given.
   const ray = await rayEngine(dev, systemPolicy);
   const replayed = await ray.engine.execute({ fingerprint: 'deals/list', context: { q: ' ' } }, { scope: { userId: 'usr_001' } }).then(
     (answer) => Array.isArray(answer.result),
     () => false,
   );
   checks.push(["the assistant's own engine replays an entry the app ships", replayed]);
-
-  // ── report ──
   let failed = 0;
   for (const [label, ok] of checks) {
     if (!ok) failed += 1;

@@ -5,12 +5,8 @@ import { useShell } from './use-shell';
 
 type Cache = {
   data: Record<string, unknown> | undefined;
-  // WHAT ELSE A TREE DEPENDS ON. Data is not the only input to a render: the
-  // renderer also reads the shell's book, and `setPhrases` changes it without
-  // touching a single instance's data. Cached on data alone, an instance that
-  // was already mounted when the language changed would go on showing the old
-  // words until something unrelated happened to it — which is precisely the
-  // failure `setPhrases` exists to prevent.
+  // The renderer also reads the shell's phrases, and `setPhrases` changes them
+  // without touching any instance's data.
   phrases: Phrasebook | undefined;
   tree: RenderNode[];
 };
@@ -23,9 +19,7 @@ export const useRenderTree = (instanceId: string): RenderNode[] => {
 
   const subscribe = useCallback(
     (cb: () => void) => {
-      // Two sources, because a tree has two inputs. Data changes come from the
-      // runtime; a language change is shell-wide and arrives as a state change,
-      // the same signal the canvas and shell trees already listen to.
+      // A language change is shell-wide and arrives as a state change.
       const offState = shell.onStateChange(() => cb());
       const runtime = shell.getRuntime(instanceId);
       if (runtime === undefined) return offState;
@@ -53,8 +47,7 @@ export const useRenderTree = (instanceId: string): RenderNode[] => {
     return tree;
   }, [shell, instanceId]);
 
-  // The third argument is what a SERVER reads. The shell exists there too, with
-  // a real state, so it is the same read — and without it React refuses to draw
-  // this to markup at all ("Missing getServerSnapshot").
+  // The third argument is what a server reads: without it React refuses to draw
+  // this to markup ("Missing getServerSnapshot").
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 };

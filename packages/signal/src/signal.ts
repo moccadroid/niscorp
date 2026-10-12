@@ -21,12 +21,7 @@ import { runComplete, runStream } from './run';
 import { resolveWireStrategies, responseStrategies, recoverRejection, type WireStrategy } from './wire/strategies';
 import { routeResponse, routeRejection } from './wire/router';
 
-// ═══════════════════════════════════════════════════════════
-// Signal Type (public interface)
-// ═══════════════════════════════════════════════════════════
-
 export type Signal<T = string> = {
-  // Builder methods — each returns a new Signal
   apiKey: (key: string) => Signal<T>;
   model: (model: string) => Signal<T>;
   systemPrompt: (prompt: string) => Signal<T>;
@@ -38,75 +33,36 @@ export type Signal<T = string> = {
   onRetry: (handler: (error: Error, attempt: number) => void) => Signal<T>;
   onToolCall: (handler: (name: string, args: unknown) => void) => Signal<T>;
 
-  // Execution
   complete: (input: string | ContentPart[]) => Promise<SignalResult<T>>;
   stream: (input: string | ContentPart[], options?: StreamOptions) => AsyncIterable<StreamEvent<T>>;
 
-  // describe(): what this client resolves to — provider, model,
-  // effective capabilities. Never hits the network and never throws
-  // for missing API keys. Orchestrators (cortex) use it to pick
-  // output strategies; previews use it to explain themselves.
   describe: () => SignalDescription;
 
-  // ─── Low-level primitives ─────────────────────────────────
-  // step(): one model call, no auto tool execution. The caller
-  // owns the loop. Used by @niscorp/cortex which runs its own
-  // tool loop with policy gating, ledger attribution, and
-  // observation per call.
   step: (request: StepRequest) => Promise<StepResult>;
-  // stepStream(): the streaming variant of step(). Same single-call
-  // semantics — no schema validation, no auto tool execution, no
-  // retries — but yields text deltas incrementally and a final `done`
-  // event carrying the aggregated StepResult. The caller still owns
-  // the tool loop. Used by @niscorp/cortex when streaming is opted in.
   stepStream: (request: StepRequest, options?: StreamOptions) => AsyncIterable<StepStreamEvent>;
-  // count(): rough token count for an input. Currently a heuristic;
-  // will become provider-aware once tokenizer integration lands.
   count: (input: CountInput) => Promise<number>;
 
-  // ─── Embedding ────────────────────────────────────────────
   embed: {
     (input: string, options?: EmbedOptions): Promise<number[]>;
     (input: string[], options?: EmbedOptions): Promise<number[][]>;
   };
 
-  // ─── Decisions ────────────────────────────────────────────
-  // decide(): typed questions about a state, each answered with a pick. One
-  // request, one response — no history, no tools, no loop. The questions are
-  // the schema: the result type and the acceptance gate both derive from them.
-  // On a decision provider the picks come with probabilities
-  // (`calibrated: true`); on a chat provider the same questions run through
-  // structured output and come back as picks alone, one to two orders of
-  // magnitude slower — a caller on a latency budget reads `describe().kind`.
   decide: <const Qs extends Questions>(request: DecideRequest<Qs>) => Promise<DecideResult<Qs>>;
 };
 
-// What a Signal client resolves to, without touching the network.
 export type SignalDescription = {
-  provider: string;              // registry name, or the custom baseUrl
-  model: string | undefined;     // undefined only for custom providers with no model set
-  // Which verbs exist here. A decision provider has decide() and nothing else;
-  // a chat provider has every verb, decide() included, by emulation.
+  provider: string; // registry name, or the custom baseUrl
+  model: string | undefined;
   kind: ProviderAdapter['kind'];
   capabilities: Capabilities;
-  // Is (provider, model) a row in the model registry? False means the model
-  // half of `capabilities` is UNMEASURED_MODEL — assumed, not measured. Always
-  // false for a custom provider, which declares its own.
   modelKnown: boolean;
 };
-
-// ═══════════════════════════════════════════════════════════
-// Internal: resolve provider config
-// ═══════════════════════════════════════════════════════════
 
 type ResolvedProvider = {
   model: string;
   apiKey: string;
   baseUrl: string;
   adapterType: ProviderEntry['adapter'];
-  // Per-provider params that ask for streamed reasoning (registry.ts). Carried
-  // to the adapter, which applies them only on a streaming call the caller
-  // asked reasoning of.
   reasoningRequest?: Record<string, unknown>;
 };
 
@@ -144,8 +100,7 @@ const FALLBACK_CAPABILITIES: Capabilities = {
   supportsEmbedding: false,
 };
 
-// The adapter a config names, without resolving a key — describe() and the
-// capability lookup both need it and neither may throw for a missing one.
+// Read without resolving a key: describe() must not throw for a missing one.
 const adapterTypeOf = (config: SignalConfig): ProviderEntry['adapter'] | undefined =>
   typeof config.provider === 'string'
     ? providerRegistry[config.provider]?.adapter
@@ -154,7 +109,6 @@ const adapterTypeOf = (config: SignalConfig): ProviderEntry['adapter'] | undefin
 const kindOf = (adapterType: ProviderEntry['adapter'] | undefined): ProviderAdapter['kind'] =>
   adapterType === 'systemone' ? 'decisions' : 'chat';
 
-// The model a registered provider's client runs, and its row if it has one.
 const modelRowOf = (config: SignalConfig): { provider: string; model: string; row: ModelEntry | undefined } | undefined => {
   if (typeof config.provider !== 'string') return undefined;
   const entry = providerRegistry[config.provider];
@@ -163,10 +117,6 @@ const modelRowOf = (config: SignalConfig): { provider: string; model: string; ro
   return { provider: config.provider, model, row: modelEntry(config.provider, model) };
 };
 
-// Chat capabilities: the provider's endpoint row JOINED with the model's row —
-// no field is on both, so nothing overrides anything. A model with no row gets
-// UNMEASURED_MODEL. A decision provider declares none because it has none, so
-// it resolves to the all-false floor.
 const resolveCapabilities = (config: SignalConfig): Capabilities => {
   if (typeof config.provider === 'string') {
     const entry = providerRegistry[config.provider];
@@ -177,9 +127,6 @@ const resolveCapabilities = (config: SignalConfig): Capabilities => {
   return { ...FALLBACK_CAPABILITIES, ...declared };
 };
 
-// A reasoning effort the model's row does not list is refused HERE, when the
-// client is built — not by a provider 400 in the middle of a run. An unmeasured
-// model is not checked: nobody knows what it takes, and the provider will say.
 const assertEffort = (config: SignalConfig, effort: ReasoningEffort | undefined): void => {
   if (effort === undefined) return;
   const resolved = modelRowOf(config);
@@ -210,10 +157,6 @@ const createAdapter = async (resolved: ResolvedProvider, client: unknown): Promi
   }
 };
 
-// ═══════════════════════════════════════════════════════════
-// Internal: build message array from config + input
-// ═══════════════════════════════════════════════════════════
-
 const buildMessages = (config: SignalConfig, input: string | ContentPart[]): Message[] => {
   const messages: Message[] = [];
   if (config.systemPrompt) messages.push({ role: 'system', content: config.systemPrompt });
@@ -222,14 +165,6 @@ const buildMessages = (config: SignalConfig, input: string | ContentPart[]): Mes
   return messages;
 };
 
-// ═══════════════════════════════════════════════════════════
-// createSignal — factory function
-// ═══════════════════════════════════════════════════════════
-
-// Build a recovered StepResult from a provider rejection: the routed
-// view of the attempt the 400 carried. toolCalls is populated when the
-// rejection routes back to a declared tool, so transcripts pair the
-// call with its eventual tool message exactly like an accepted turn.
 const recoveredStepResult = (
   recovered: { strategy: string; rejection: Rejection },
   routed: ReturnType<typeof routeRejection>,
@@ -238,10 +173,7 @@ const recoveredStepResult = (
 ): StepResult => ({
   content: '',
   toolCalls: routed.outcome.kind === 'tool_calls' ? routed.outcome.calls : [],
-  // A rejected generation costs tokens — the provider processed the request and
-  // billed for it — and the 400 body carries none. The prompt is known exactly
-  // and the model's attempt is in the rejection, so this is countable rather
-  // than lost. Marked unreported, because it is a reckoning.
+  // The provider bills a rejected generation and its 400 carries no usage.
   usage: estimateUsage(sent, recovered.rejection.argsText, routed.outcome.kind === 'tool_calls' ? routed.outcome.calls : []),
   finishReason: 'error_recovered',
   raw,
@@ -257,17 +189,11 @@ const recoveredStepResult = (
 });
 
 const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => {
-  // Adapter is lazily created and cached per provider config
   let cachedAdapter: ProviderAdapter | undefined;
   let cachedAdapterKey: string | undefined;
 
-  // Provider wire strategies — data from the registry entry (or the
-  // custom provider config), resolved once. Unknown ids throw here,
-  // at construction, not mid-run.
   const wireStrategies: WireStrategy[] = resolveWireStrategies(wireIdsOf(config));
 
-  // So is an effort the model does not take — every builder call re-runs this,
-  // so `.model()` after `.options()` is checked against the model it lands on.
   assertEffort(config, config.options?.reasoningEffort);
 
   const getAdapter = async (): Promise<ProviderAdapter> => {
@@ -279,8 +205,6 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
     return cachedAdapter;
   };
 
-  // The chat verbs on a decision provider fail HERE, by name, before any
-  // request is built — the provider has no endpoint that could answer them.
   const getChatAdapter = async (verb: string): Promise<ChatAdapter> => {
     const adapter = await getAdapter();
     if (adapter.kind === 'chat') return adapter;
@@ -293,10 +217,6 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
 
   const fork = <U = T>(override: Partial<SignalConfig>): Signal<U> =>
     createSignalFromConfig<U>({ ...config, ...override });
-
-  // ─── step / stepStream — the ONE execution core ────────────
-  // Everything above (complete/stream) is a wrapper over these, so the
-  // wire layer serves every entry point identically.
 
   const step = async (request: StepRequest): Promise<StepResult> => {
     const adapter = await getChatAdapter('step');
@@ -318,10 +238,6 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
       ...(providerTools && { tools: providerTools }),
       ...(request.toolChoice !== undefined && { toolChoice: request.toolChoice }),
       ...(request.responseFormat !== undefined && { responseFormat: request.responseFormat }),
-      // The client's own options are the floor; a request may override them
-      // field by field. `complete`/`stream` already run on config.options —
-      // step used to drop them, so a configured client behaved differently
-      // depending on which door the caller came through.
       ...((config.options !== undefined || request.options !== undefined) && {
         options: { ...config.options, ...request.options },
       }),
@@ -332,9 +248,6 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
     try {
       response = await adapter.chat(providerRequest);
     } catch (error) {
-      // The wire layer: provider rejections that carry the model's
-      // attempt are recovered by a registry-selected strategy and
-      // ROUTED like any response. No strategy claims it → rethrow.
       const recovered = recoverRejection(wireStrategies, error);
       if (!recovered) throw error;
       const routed = routeRejection(recovered.rejection, {
@@ -351,7 +264,6 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
         try {
           parsed = JSON.parse(call.args);
         } catch {
-          // Leave args as the raw string if it isn't valid JSON.
           parsed = call.args;
         }
       }
@@ -360,8 +272,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
     const result: StepResult = {
       content: response.content,
       toolCalls,
-      // The non-streaming body always carries usage, so a zero here is a real
-      // zero rather than a missing frame.
+      // A non-streaming body always carries usage, so a zero here is a reported zero.
       usage: { ...response.usage, reported: true },
       finishReason: response.finishReason,
       raw: response.raw,
@@ -378,19 +289,11 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
     return { ...result, outcome: routed.outcome, wire: routed.wire };
   };
 
-  // `verb` is the door the caller came through. complete() and stream() run on
-  // this core too, and a refusal has to name the verb that was called — not the
-  // one underneath it.
   const stepStreamAs = (verb: string) => (request: StepRequest, streamOptions?: StreamOptions): AsyncIterable<StepStreamEvent> => {
     const run = async function* (): AsyncGenerator<StepStreamEvent> {
       const adapter = await getChatAdapter(verb);
       const resolved = resolveProvider(config);
       const declared = new Set((request.tools ?? []).map((tool) => tool.name));
-      // The client's own options are the floor here too — step() merges them and
-      // stepStream must not diverge, or a configured client (reasoningEffort,
-      // temperature, …) behaves differently depending on which door it came
-      // through. This is the merge that carries reasoning_effort to the wire on
-      // the streaming path cortex actually runs every turn through.
       const merged: StepRequest =
         config.options !== undefined || request.options !== undefined
           ? { ...request, options: { ...config.options, ...request.options } }
@@ -418,8 +321,8 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
           yield event;
         }
       } catch (error) {
-        // Rejections surface at stream creation OR mid-iteration (the
-        // 400 lands on the first chunk read) — recover both here.
+        // A provider's 400 can land on the first chunk read, not only when the stream is
+        // created, so the catch covers the iteration too.
         const recovered = recoverRejection(wireStrategies, error);
         if (!recovered) throw error;
         const routed = routeRejection(recovered.rejection, {
@@ -435,10 +338,6 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
   };
   const stepStream = stepStreamAs('stepStream');
 
-  // ─── decide — beside the execution core, not through it ────
-  // A decision provider answers the questions itself and the gate checks the
-  // answers against them. No wire strategy, repair or retry applies: there are
-  // no bytes to repair and the model cannot be told what it got wrong.
   const decideCalibrated = async <Qs extends Questions>(
     adapter: DecisionAdapter,
     model: string,
@@ -464,10 +363,6 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
     };
   };
 
-  // A chat provider is asked the same questions through structured output: the
-  // derived schema is the contract, so the whole complete() pipeline — native
-  // grammar where it exists, the repair ladder, correction retries — serves it.
-  // It returns picks and no probabilities; see DecideResult.
   const decideEmulated = async <Qs extends Questions>(
     model: string,
     request: DecideRequest<Qs>,
@@ -490,8 +385,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
       decisions: acceptUncalibrated(request.questions, result.response, result.meta.provider.raw),
       meta: {
         model: result.meta.model,
-        // complete() sums what providers reported with what it had to estimate
-        // and does not say which, so this total cannot be vouched for as measured.
+        // complete() adds reported usage to estimated usage and does not say which.
         usage: { ...result.meta.usage, reported: false },
         durationMs: Date.now() - started,
         provider: { raw: result.meta.provider.raw },
@@ -500,7 +394,6 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
   };
 
   return {
-    // Builder methods
     apiKey: (key) => fork({ apiKey: key }),
     model: (m) => fork({ model: m }),
     systemPrompt: (prompt) => fork({ systemPrompt: prompt }),
@@ -532,7 +425,6 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
       };
     },
 
-    // Execution — thin wrappers over the step core (src/complete.ts).
     complete: async (input): Promise<SignalResult<T>> =>
       runComplete<T>(
         {
@@ -562,11 +454,9 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
         { stepStream: stepStreamAs('stream'), model: resolveProvider(config).model, capabilities: resolveCapabilities(config) },
       ),
 
-    // ─── Low-level primitives — the execution core itself ────
     step,
     stepStream,
 
-    // ─── Embedding ────────────────────────────────────────────
     embed: (async (input: string | string[], options?: EmbedOptions): Promise<number[] | number[][]> => {
       const adapter = await getChatAdapter('embed');
       if (!adapter.embed) {
@@ -578,9 +468,6 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
         input,
         dimensions: options?.dimensions,
       });
-      // The usage the adapter already parsed, handed back before the vector
-      // return narrows it away. After success only — a throw above never reaches
-      // here — and once for both the string and array shapes.
       options?.onUsage?.(response.usage, resolved.model);
       if (typeof input === 'string') {
         const vector = response.embeddings[0];
@@ -590,7 +477,6 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
       return response.embeddings;
     }) as Signal<T>['embed'],
 
-    // ─── Decisions ────────────────────────────────────────────
     decide: async <const Qs extends Questions>(request: DecideRequest<Qs>): Promise<DecideResult<Qs>> => {
       assertQuestions(request.questions);
       const started = Date.now();
@@ -601,11 +487,7 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
         : decideEmulated(model, request, started);
     },
 
-    // ─── Low-level: token counting (heuristic) ───────────────
     count: async (input: CountInput): Promise<number> => {
-      // Heuristic: ~4 characters per token, plus a small per-message
-      // overhead for structured inputs. This will be replaced with a
-      // provider-aware tokenizer in a follow-up.
       const CHARS_PER_TOKEN = 4;
       if (typeof input === 'string') {
         return Math.ceil(input.length / CHARS_PER_TOKEN);
@@ -621,7 +503,6 @@ const createSignalFromConfig = <T = string>(config: SignalConfig): Signal<T> => 
           if (part.type === 'text') {
             total += Math.ceil(part.text.length / CHARS_PER_TOKEN);
           } else {
-            // Image: rough placeholder.
             total += 256;
           }
         }

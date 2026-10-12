@@ -7,16 +7,6 @@ import { Input, Button, Field, Select, Hotkey, OnLoad } from './components/contr
 import { Timeline, ZoneMap, BarChart, Gauge } from './components/viz';
 import { Rail, Spans, Spotlight } from './components/linked';
 
-// THE KIT — the only renderer code in the app, assembled once.
-//
-// Two dozen primitives and not one of them is named after anything at a
-// festival. That is the rule that keeps the room honest: everything the
-// operator sees was composed out of these by JSON the server sent, so a card
-// the model opens is made of the same parts as a card a person authored, and
-// there is no component that could quietly contain app logic.
-//
-// The two slot markers are nova's; the terminal re-registers wire-backed
-// versions over them (a terminal holds no shell).
 const PRIMITIVES = {
   Box,
   Stack,

@@ -4,22 +4,6 @@ import { briefLayout } from './brief.layout';
 import { previewable, previewTriggers, crewCard } from '@atrium/app/actions/preview';
 import { deskStayPrism, guestByStayPrism, visitCountPrism, folioTotalPrism, guestIssuesPrism, notesByStayPrism, transfersByStayPrism, goodwillByStayPrism } from './desk.prism';
 
-// The one card the composition cannot produce.
-//
-// Opening a guest already places every stay-scoped surface the hotel offers, and
-// that is right — a clerk's screen must not depend on model judgement. But every
-// one of those cards answers "what can I DO for this person", and none of them
-// answers "who is this", which is the question a clerk actually has in the two
-// seconds before they speak.
-//
-// Seven reads, none of them new: the stay, the guest, how many times they have
-// been here, what they have spent, what is broken, what the desk has written
-// down, and what is already arranged. Assembling them is the whole feature.
-//
-// `reading` is the assistant's single line, and it is DECLARED INPUT rather than
-// anything the card fetches — so the surface is complete and true with the model
-// switched off, and better with it on. That is the shape every AI-adjacent
-// surface in this app takes.
 export const deskBriefAction: ActionDefinition = {
   id: 'desk.brief',
   title: 'Guest profile',
@@ -34,8 +18,6 @@ export const deskBriefAction: ActionDefinition = {
   ),
   endpoints: {
     load: { url: '/api/stay/vex', method: 'POST', request: deskStayPrism, target: 'stay' },
-    // The guest first, because the visit count hangs off the PERSON and this
-    // surface was handed a reservation.
     loadGuest: { url: '/api/stay/vex', method: 'POST', request: guestByStayPrism, target: 'guest' },
     loadVisits: { url: '/api/stay/vex', method: 'POST', request: visitCountPrism, target: 'visits' },
     loadTotal: { url: '/api/stay/vex', method: 'POST', request: folioTotalPrism, target: 'total' },

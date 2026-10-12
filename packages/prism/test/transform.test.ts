@@ -2,10 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { compile, execute, evaluate, validate, type Config, type JsonObject } from '../src';
 import { OP_KEYS } from '../src/schemas';
 
-// Transform ops — rewriting a document rather than deriving a value (strata S3).
-// Every case runs twice: interpreted (evaluate) and compiled (execute), which
-// must agree — the optimizer attaches handlers to the new ops like any other.
-
 const both = async (config: Config, source: Parameters<typeof evaluate>[1]) => {
   const interpreted = evaluate(config, source);
   const compiled = execute(await compile(config), source as Parameters<typeof execute>[1]);
@@ -67,10 +63,6 @@ describe('$assert — a migration refuses what it cannot handle', () => {
 });
 
 describe('$walk — every node of a tree, any depth', () => {
-  // The relay rename from git history (af0d9b8): the state key `q` became
-  // `search` everywhere — `ref: 'q'`, `{ set: 'q' }`, and every path string
-  // beginning `$.q`. As a whole-tree transform without $walk this took 22.5 KB
-  // of unrolled Prism; with it, three rules.
   const qToSearch: Config = {
     $walk: {
       over: { $ref: '$.document' },
@@ -85,10 +77,6 @@ describe('$walk — every node of a tree, any depth', () => {
       ],
     },
   };
-  // The third rule's shape change is expressed with $update below; the walk
-  // above proves the string rules alone.
-  // A walk visits every node — objects too — so a string op needs its type
-  // checked first ($and short-circuits).
   const before: JsonObject = {
     data: { q: '', rows: [] },
     layout: { component: 'Stack', children: [{ component: 'Input', model: '$.q', ref: 'q' }, { for: '$.rows', as: 'r', do: { component: 'Text', props: { value: '$.q.length' } } }] },
@@ -122,7 +110,7 @@ describe('$walk — every node of a tree, any depth', () => {
     expect(text).not.toMatch(/"ref":"q"|"set":"q"|"\$\.q/);
     expect(text).toContain('"ref":"search"');
     expect(text).toContain('"set":"search"');
-    // `data.q` is a KEY, not a value — the rename of the key itself is a $renameKeys at the root.
+    // `data.q` is a key, not a value: renaming it is a $renameKeys at the root.
     expect((out as { data: object }).data).toEqual({ q: '', rows: [] });
   });
 
@@ -189,13 +177,6 @@ describe('validation errors say WHERE', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// A Prism op is never removed or reshaped. Configs are stored — as endpoint
-// requests, vex mappings, and strata migrations — and a migration cannot be
-// migrated by the language it is written in. An old form stays and desugars
-// to the new one. This list is the record: removing an op fails here; adding
-// one means adding it here, on purpose.
-// ═══════════════════════════════════════════════════════════
 const EVERY_OP_EVER = [
   '$ref', '$const', '$var', '$get', '$with',
   '$map', '$filter', '$reduce', '$slice', '$flatten', '$unique', '$sortBy',

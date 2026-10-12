@@ -4,10 +4,6 @@ import { setDelayLayout } from './set-delay.layout';
 import { formActPrism, delayAddPrism } from './do.prism';
 import { actRef } from '@encore/app/actions/shared/input-fields';
 
-// CALL A HOLD. "push the lantern club back 20 min" — the act is a row the model
-// picks, the twenty is a number the parser reads, and neither is ever the
-// other's job: `minutes` carries `parse`, so it is never a question, and a
-// 0–120 integer never becomes a 121-level `score`.
 export const setDelayAction: ActionDefinition = {
   id: 'set.delay',
   title: 'Delay a set',

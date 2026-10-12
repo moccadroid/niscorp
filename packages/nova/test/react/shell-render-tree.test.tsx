@@ -23,7 +23,6 @@ describe('Shell render tree — slot-driven rendering', () => {
   it('default layouts render top-of-stack for each canvas (card-deck mode)', async () => {
     const registry = createComponentRegistry<NovaComponent>();
     registerNovaReactComponents(registry);
-    // Text isn't registered by default; use a tiny inline one.
     registry.register('Text', ((props: { children?: React.ReactNode }) => (
       <span data-testid="text">{props.children}</span>
     )) as NovaComponent);
@@ -124,9 +123,6 @@ describe('Shell render tree — slot-driven rendering', () => {
     const flat = shell.flattenRenderTree(shell.getShellRenderTree());
     const json = JSON.stringify(flat);
     expect(json).toContain('"HELLO"');
-    // CanvasSlot resolves away; the ActionSlot marker SURVIVES, carrying the
-    // instance identity so a remote renderer can key reconciliation by
-    // instance and an app slotWrapper can wrap each one.
     expect(json).not.toContain('CanvasSlot');
     expect(json).toContain('ActionSlot');
     const instanceId = shell.getCanvasState('main').active?.id;

@@ -3,33 +3,16 @@ import { decodeJsonish, deepDecodeJsonish, extractJson, repairEscapeDamage, clos
 import type { Rejection, StepOutcome, StepToolCall, WireReport } from '../types';
 import type { ResponseWireStrategy } from './strategies';
 
-// ═══════════════════════════════════════════════════════════
-// The router — normalize one response, decide what it IS
-// ═══════════════════════════════════════════════════════════
-//
-// One rule, no name games:
-//   - a call matching a DECLARED tool is a tool call;
-//   - anything else whose repaired value validates against the
-//     acceptance schema is OUTPUT;
-//   - what survives neither is a typed failure with evidence.
-//
-// Repairs are rescue-only: a candidate counts ONLY when it passes the
-// acceptance gate; a clean response wins at the first rung untouched.
-
 export type RouteRequest = {
   content: string;
   toolCalls: ReadonlyArray<StepToolCall>;
   declared: ReadonlySet<string>;
-  // The synthetic EXIT tool (respond transport): declared to the
-  // provider so its calls are wire-legal, but semantically OUTPUT.
   outputTool?: string | undefined;
   accept?: ZodType | undefined;
   responseStrategies: ReadonlyArray<ResponseWireStrategy>;
 };
 
 export type Routed = { outcome: StepOutcome; wire: WireReport };
-
-// ─── Result constructors — every return site goes through these ───
 
 const toolTurn = (calls: StepToolCall[], notes: string[]): Routed => ({
   outcome: { kind: 'tool_calls', calls },
@@ -50,13 +33,8 @@ const failed = (evidence: string, flags: { truncated?: boolean } = {}): Routed =
   wire: {},
 });
 
-// ─── Candidates — the default repair ladder, least-invasive first ───
-
 type Candidate = { value: unknown; rung: string };
 
-// The parser's own complaint, kept rather than swallowed. When nothing on the
-// ladder parses, this is the only description of what the model actually got
-// wrong, and a correction that cannot name the defect gets the same output back.
 const tryParse = (text: string): { ok: true; value: unknown } | { ok: false; why: string } => {
   try {
     return { ok: true, value: JSON.parse(text) };
@@ -65,14 +43,8 @@ const tryParse = (text: string): { ok: true; value: unknown } | { ok: false; why
   }
 };
 
-// Why the UNTOUCHED text failed, asked only when the whole ladder came up
-// empty. It re-parses rather than remembering: a module-level note would be
-// shared by every route in flight, and two runs answering at once would report
-// each other's defect.
-//
-// The FIRST rung is the only one worth reporting. Every later rung parses text
-// this file has already altered, so its complaint describes a repair rather
-// than what the model wrote.
+// The untouched text only: every later rung parses text this file has altered, so its
+// complaint describes a repair and not what the model wrote.
 const whyNotJson = (text: string): string | undefined => {
   const direct = tryParse(text.trim());
   return direct.ok ? undefined : direct.why;
@@ -107,10 +79,6 @@ function* ladder(text: string, strategies: ReadonlyArray<ResponseWireStrategy>):
   }
 }
 
-// Gate candidates (and their deep-decoded variants). Returns the RAW
-// winning candidate — the schema is a gate, not a transform. The gate
-// is a TRANSPORT concern; near-miss evidence here is deliberately
-// plain (semantic evidence belongs to the caller's own validation).
 const firstAccepted = (
   candidates: Iterable<Candidate>,
   accept: ZodType,
@@ -132,11 +100,6 @@ const firstAccepted = (
 
 const decodedCall = (call: StepToolCall): StepToolCall => ({ ...call, args: decodeJsonish(call.args) });
 
-// ─── The three turn shapes ──────────────────────────────────
-
-// A call that is NOT a domain tool call delivers output through its
-// args (the exit tool, or pseudo-tool fixation). undefined = nothing
-// salvageable and nothing near — the caller picks the fallback.
 const finishAttempt = (call: StepToolCall, request: RouteRequest): Routed | undefined => {
   if (!request.accept) return undefined;
   const source: Iterable<Candidate> =
@@ -158,9 +121,6 @@ const contentEvidence = (content: string, nearMiss: string | undefined): string 
   if (nearMiss !== undefined) return nearMiss;
   const snippet = content.trim().slice(0, 160);
   if (snippet.length === 0) return 'the turn produced no output';
-  // The parser's reason first: "Expected ',' or ']' after array element at
-  // position 2057" is something a model can act on. The opening characters are
-  // not, and on their own they buy a near-identical retry.
   const why = whyNotJson(content);
   return why === undefined
     ? `output is not valid JSON — it began: ${snippet}`
@@ -175,8 +135,6 @@ const contentTurn = (request: RouteRequest): Routed => {
     truncated: isTruncatedJson(request.content),
   });
 };
-
-// ─── routeResponse — a response the provider ACCEPTED ───────
 
 export const routeResponse = (request: RouteRequest): Routed => {
   const isExit = (call: StepToolCall): boolean => call.name === request.outputTool;
@@ -196,12 +154,6 @@ export const routeResponse = (request: RouteRequest): Routed => {
   }
   return contentTurn(request);
 };
-
-// ─── routeRejection — the 400 carried the payload ───────────
-//
-// The routing rule is identical. A recovered call to a DECLARED tool
-// becomes a normal tool call (its args are judged by the tool's own
-// schema downstream); anything else is a finish attempt.
 
 let recoveredCallCounter = 0;
 

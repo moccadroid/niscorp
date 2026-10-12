@@ -1,7 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// Path utilities — splitting, traversal, projection
-// ═══════════════════════════════════════════════════════════
-
 export const splitPath = (path: string): string[] => {
   if (path === '') return [];
   return path.split('.');

@@ -7,10 +7,6 @@ import { LoomText, LoomNumber, LoomCheckbox, LoomSelect, LoomRaw } from './contr
 import { LoomBranch, LoomVariant } from './variant.js';
 import { LoomArray, LoomArrayItem, LoomBox, LoomColumn, LoomAppend, LoomRowMenu } from './array.js';
 
-// The default Loom widget kit: one React component per role the compiler emits,
-// plus the editor's `loom:column`. Swapping the kit = registering different
-// components under the same role names.
-
 export { LoomGroup, LoomField } from './fields.js';
 export { LoomText, LoomNumber, LoomCheckbox, LoomSelect, LoomRaw } from './controls.js';
 export { LoomBranch, LoomVariant } from './variant.js';
@@ -18,8 +14,6 @@ export { LoomArray, LoomArrayItem, LoomBox, LoomColumn, LoomAppend, LoomRowMenu 
 export { JsonEditor } from './json-editor.js';
 export { ActionMenu, MenuItem, SubMenu } from './menu.js';
 
-// Role → component. Keyed by the `Roles` constants, so the kit and the compiler
-// can never disagree on a name.
 export const loomComponents: Record<string, NovaComponent> = {
   [Roles.group]: LoomGroup,
   [Roles.field]: LoomField,

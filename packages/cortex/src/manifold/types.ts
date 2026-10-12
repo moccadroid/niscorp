@@ -1,12 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// Erased agent shapes — how the manifold stores heterogeneity
-// ═══════════════════════════════════════════════════════════
-//
-// The manifold holds agents of many <TData, TDeps> in one Map, so
-// it stores them through an erased structural view. Conversion in
-// and out goes through utils/trust.ts (the documented boundary);
-// callers of manifold.run() re-name the type they expect.
-
 import type { SignalClient, Unsubscribe } from '../types';
 import type { CortexEvent } from '../events/types';
 import type { RunInput } from '../context/assemble';

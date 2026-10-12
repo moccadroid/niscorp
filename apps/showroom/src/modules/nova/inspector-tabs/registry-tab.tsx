@@ -3,13 +3,6 @@ import { z } from 'zod';
 import type { NovaStory } from '@showroom/modules/nova/story-types';
 import { getStoryRegistry } from './story-registry';
 
-// ═══════════════════════════════════════════════════════════
-// Registry tab — collapsible list of components. Each row shows
-// the component name + a builtin/custom tag. Expanding a row
-// reveals the prop list (name, type, required, description)
-// extracted from the component's Zod propsSchema via toJSONSchema.
-// ═══════════════════════════════════════════════════════════
-
 const BUILTINS = new Set<string>([
   'Stack',
   'Text',

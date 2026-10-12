@@ -22,7 +22,6 @@ export const automationsLayout: LayoutNode = {
     { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
     { if: '$.notice', then: { component: 'Notice', props: { tone: 'good', message: '$.notice' } }, else: '' },
 
-    // ── RECIPES ────────────────────────────────────────────────
     {
       if: '$.showRecipes',
       then: {
@@ -59,7 +58,6 @@ export const automationsLayout: LayoutNode = {
       else: '',
     },
 
-    // ── WHAT IS RUNNING ────────────────────────────────────────
     {
       if: '$.showRunning',
       then: {
@@ -104,7 +102,6 @@ export const automationsLayout: LayoutNode = {
       else: '',
     },
 
-    // ── the outbox, and what it admits ─────────────────────────
     {
       if: '$.showOutbox',
       then: {
@@ -127,9 +124,6 @@ export const automationsLayout: LayoutNode = {
               columns: [
                 { label: 'Message', w: 2, cell: { kind: 'primary', key: 'subject', subKey: 'detail' } },
                 { label: '', px: 96, align: 'right', cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
-                // Only on a row that did not go: an action offered beside a
-                // message that already arrived is an invitation to send it
-                // twice.
                 { label: '', px: 104, align: 'right', cell: { kind: 'action', ref: 'sendAgain', label: 'Send again', showKey: 'can_send_again' } },
               ],
             },
@@ -164,9 +158,6 @@ export const automationsLayout: LayoutNode = {
                 empty: 'Nobody is due.',
               },
             },
-            // Said by the fn, not the layout: "come back later" is true of a
-            // clocked window with nobody in it and false of a watched moment,
-            // and only the fn knows which this is.
             else: { component: 'Text', props: { color: 'faint' }, children: '$.previewHint' },
           },
         ],

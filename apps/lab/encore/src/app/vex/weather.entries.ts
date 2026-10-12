@@ -1,9 +1,5 @@
 import type { SeedEntry } from '@niscorp/vex';
 
-// The forecast, hour by hour. Two reads because the radar is two questions: the
-// shape of the whole day (is it building or clearing?) and the one hour the
-// operator asked about.
-
 export const weatherForDay: SeedEntry = {
   fingerprint: 'weather/forDay',
   intent: 'Hourly weather for one festival day',
@@ -34,9 +30,6 @@ export const weatherAtHour: SeedEntry = {
   },
 };
 
-// A WINDOW of hours, for the text model: a storm at 21:00 is a different
-// problem if 20:00 is already wet and 23:00 is dry. Bounds, not a list, so the
-// caller says "two either side" with two numbers.
 export const weatherWindow: SeedEntry = {
   fingerprint: 'weather/window',
   intent: 'Hourly weather for one festival day between two hours, inclusive',

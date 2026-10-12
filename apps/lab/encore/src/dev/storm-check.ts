@@ -1,16 +1,3 @@
-// THE STORM CHECK — the sentence the app exists for, typed into a real shell.
-//
-//   "storm at 9 move headliner to the tent"
-//
-// Typed PROGRESSIVELY, prefix by prefix, the way a person does, with the pacer
-// allowed to go idle between them — so what is asserted is the room a person
-// would actually be looking at, arrived at through every intermediate room,
-// hysteresis and re-aims included. Nothing here reaches into the loop: events
-// go in through `shell.dispatch`, and what is read back is canvases and card
-// data, the same things a terminal is served.
-//
-// The ids asserted against come from SQL, not from the seed file: the check
-// asks the database who the headliner is, and then asks the room.
 import { OPERATOR_PRINCIPAL } from '@encore/app/charter/assignments';
 import { QUESTION_CANVASES } from '@encore/app/canvas-placement';
 import { PASS_CEILING_MS, PASS_QUIET_MS } from '@encore/server/intent/pacer';
@@ -28,7 +15,6 @@ const main = async (): Promise<void> => {
   const shell = await login(OPERATOR_PRINCIPAL);
   await settle();
 
-  // ═══ 1. the room assembles WHILE the sentence is typed ═══
   const rooms: Record<string, string[]> = {};
   for (const prefix of PREFIXES) {
     await typeLine(OPERATOR_PRINCIPAL, prefix);
@@ -40,13 +26,10 @@ const main = async (): Promise<void> => {
   check('"storm" alone already aims the radar', (rooms['storm'] ?? []).includes('weather.radar'));
   check('...and the swap form is NOT there yet — nobody has said move', !(rooms['storm at 9'] ?? []).includes('slot.swap'));
   check('"…move" opens the swap form before there is an act to put in it', (rooms['storm at 9 move'] ?? []).includes('slot.swap'));
-  // (Restated 2026-09-21: the mount line moved from 0.80 to 0.50 — a calibrated "probably" — and the unmount line from 0.55 to 0.35.
-  // "headl" reads as the headliner at 0.60: probably — so it is shown. Three letters are still a guess.)
   check('three letters of a word — "hea" — do not yet mount the record card', !(rooms['storm at 9 move hea'] ?? []).includes('act.card'));
   check('..."headl" already does: probably the headliner is enough to show her', (rooms['storm at 9 move headl'] ?? []).includes('act.card'));
   check('...the finished word does', (rooms['storm at 9 move headliner'] ?? []).includes('act.card'));
 
-  // ═══ 2. what each canvas holds, at the end of the sentence ═
   check(`doing holds the slot swap (${mounted(shell, 'doing').join(', ')})`, mounted(shell, 'doing').includes('slot.swap'));
   const swap = cardData(shell, 'doing', 'slot.swap');
   check('...prefilled with the headliner, picked from candidate rows', swap['actId'] === headliner);
@@ -61,12 +44,11 @@ const main = async (): Promise<void> => {
   check('...and has loaded the cell it was aimed at', JSON.stringify(radar['at'] ?? {}).includes('storm'));
   const timeline = cardData(shell, 'when', 'lineup.timeline');
   check('...the running order lights the headliner', timeline['highlightActId'] === headliner);
-  check('...across every stage — "to the tent" did not narrow it to one', timeline['stageId'] === '' && Array.isArray(timeline['slots']) && timeline['slots'].length === 9); // 7 until slice 2a seeded two more Saturday-evening open-air sets (SCENARIOS.md scene 1).
+  check('...across every stage — "to the tent" did not narrow it to one', timeline['stageId'] === '' && Array.isArray(timeline['slots']) && timeline['slots'].length === 9);
 
   check(`about holds the headliner's card (${mounted(shell, 'about').join(', ')})`, mounted(shell, 'about').includes('act.card') && cardData(shell, 'about', 'act.card')['actId'] === headliner);
   check('...loaded: it knows her name', JSON.stringify(cardData(shell, 'about', 'act.card')['act'] ?? {}).includes('Nova Kestrel'));
 
-  // ═══ 3. the instrument ═══════════════════════════════════
   const trace = cardData(shell, 'trace', 'intent.trace');
   const passes = passesOf(OPERATOR_PRINCIPAL);
   check(`the trace reports the passes it ran (${String(trace['pass'])})`, typeof trace['pass'] === 'number' && trace['pass'] >= 1);
@@ -76,11 +58,9 @@ const main = async (): Promise<void> => {
   check('the act question was asked ONCE and shared by three cards', (passes.at(-1)?.questionNames ?? []).filter((name) => name.endsWith('/actId')).length === 1);
   check('no date, time or minute ever became a question', !(passes.at(-1)?.questionNames ?? []).some((name) => /\/(day|hour|time|minutes|body)$/.test(name)));
 
-  // ═══ 4. nothing was committed ════════════════════════════
   const slot = (await sql(`SELECT stage_id, starts_at FROM slots WHERE act_id = $1`, [headliner]))[0];
   check('the model filled a form and pressed nothing: the headliner has not moved', slot?.['stage_id'] === main && slot?.['starts_at'] === '21:30');
 
-  // ...and a PERSON pressing it moves her, and the room hears about it.
   const swapInstance = shell.getState().canvases['doing']?.stack.find((item) => item.definitionId === 'slot.swap');
   if (swapInstance !== undefined) shell.dispatch({ type: 'ui:click', ref: 'submit', origin: swapInstance.id });
   await settle(14);
@@ -88,18 +68,11 @@ const main = async (): Promise<void> => {
   check('a click on submit moves the set, through the vex mutation', moved?.['stage_id'] === tent && moved?.['starts_at'] === '21:00');
   check('...and the act card, a viewer, re-read it', JSON.stringify(cardData(shell, 'about', 'act.card')['act'] ?? {}).includes('The Tent'));
 
-  // ═══ 5. clearing the line empties the room ═══════════════
   await typeLine(OPERATOR_PRINCIPAL, '');
   check('an empty line is an empty room', QUESTION_CANVASES.every((canvas) => mounted(shell, canvas).length === 0));
   check('...chips included', Array.isArray(cardData(shell, 'maybe', 'intent.options')['chips']) && JSON.stringify(cardData(shell, 'maybe', 'intent.options')['chips']) === '[]');
   check('...and the furniture stays', mounted(shell, 'line').join() === 'intent.line' && mounted(shell, 'trace').join() === 'intent.trace');
 
-  // ═══ 6. the pacer: a burst is ONE pass ═══════════════════
-  // This used to read "far fewer passes (2)": the first keystroke started a
-  // pass at once and the rest queued behind it. With the quiet timer in front
-  // (pacer.ts) nothing is in flight to queue behind: "st" has nothing to
-  // decide and is never sent, each later keystroke re-arms the timer, and
-  // exactly one pass goes — on the last text, a quiet beat after it.
   const before = passes.length;
   for (const prefix of PREFIXES) keystroke(OPERATOR_PRINCIPAL, prefix);
   await typeLine(OPERATOR_PRINCIPAL, SENTENCE);
@@ -110,9 +83,7 @@ const main = async (): Promise<void> => {
   const paced = cardData(shell, 'trace', 'intent.trace');
   check(`the trace says how long the pass waited and what it rode (${String(paced['waitedMs'])} ms, connection ${String(paced['connection'])})`, typeof paced['waitedMs'] === 'number' && paced['waitedMs'] >= PASS_QUIET_MS - 5 && paced['connection'] === 'reused');
 
-  // ═══ 7. the instant lane ═════════════════════════════════
-  // The fake is slowed so the window between "heard" and "decided" is wide
-  // enough to stand in.
+  // The fake is slowed so the window between "heard" and "decided" is wide enough to stand in.
   await typeLine(OPERATOR_PRINCIPAL, '');
   check('a cleared line has heard nothing', JSON.stringify(cardData(shell, 'line', 'intent.line')['heard']) === '[]');
   if (decider.fakeLatency !== undefined) decider.fakeLatency.ms = 500;

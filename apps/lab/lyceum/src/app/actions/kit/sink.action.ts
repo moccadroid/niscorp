@@ -1,10 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { sinkLayout } from './sink.layout';
 
-// THE KITCHEN SINK — every piece of the look on one screen: the four inks,
-// the five marks, the four sigils, the type registers, figures, code, rows, a
-// bar and actions. Held only by the `kit` principal (dev: /dev/as/kit). The
-// look is locked here before a feature leans on it.
 export const sinkAction: ActionDefinition = {
   id: 'kit.sink',
   title: 'Kitchen sink',

@@ -12,9 +12,6 @@ export type DevRuntime = NiscRuntime & { db: PGlite };
 export const devRuntime = async (): Promise<DevRuntime> => {
   const db = new PGlite();
   await db.exec(DDL);
-  // The tide tables and the run-mirror trigger are schema like everything
-  // else — applied here by the database builder, in dependency order, never
-  // created imperatively at boot.
   await db.exec(TIDE_DDL);
   await db.exec(TIDE_MIRROR_DDL);
   await db.exec(buildSeedSql());
@@ -28,8 +25,6 @@ export const devRuntime = async (): Promise<DevRuntime> => {
     db,
     pool: createPglitePool(db, RAW_DATE_PARSERS),
     cache,
-    // A dev floor over an in-memory database: every token is trusted, and
-    // moss says so at boot. The honest label for what this always was.
     session: 'dev-open',
     ...(operatorKey === '' ? {} : { operatorKey }),
   };

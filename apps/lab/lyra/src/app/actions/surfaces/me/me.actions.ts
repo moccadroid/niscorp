@@ -24,8 +24,6 @@ import {
   upcomingPrism,
 } from './me.prism';
 
-// The member's landing surface, granted BY NAME at the member rung like every
-// other home — a wildcard at the bottom of a ladder grants to the whole ladder.
 export const homeMemberAction: ActionDefinition = {
   id: 'home.member',
   title: 'Today',
@@ -41,8 +39,6 @@ export const homeMemberAction: ActionDefinition = {
   },
   layout: homeMemberLayout,
   endpoints: {
-    // Read on mount, not seeded at boot — same reason as the staff landing
-    // surfaces. A member who taps into their classes and back had no name.
     identity: { fn: 'nav.identity', target: 'identity' },
     card: { url: '/api/me/vex', method: 'POST', request: myCardPrism, target: 'card' },
     membership: { url: '/api/me/vex', method: 'POST', request: myMembershipPrism, target: 'membership' },
@@ -60,8 +56,6 @@ export const homeMemberAction: ActionDefinition = {
   },
   triggers: [
     { message: 'my-bookings-changed', do: [{ call: 'bookings' }] },
-    // The cliff's door: the chooser opens over the dashboard, and coming back
-    // re-reads because a plan may have started while the sheet was up.
     { event: 'ui:click', ref: 'choosePlan', do: [{ push: { action: 'me.membership', canvas: 'sheet', with: ['sheet'] } }] },
     { message: 'members-changed', do: [{ call: 'card' }, { call: 'membership' }, { call: 'passes' }] },
   ],
@@ -69,7 +63,6 @@ export const homeMemberAction: ActionDefinition = {
 
 export const homeMemberInputSchema = z.toJSONSchema(z.object({}));
 
-// ── the membership, reachable from the menu ──────────────────
 export const meMembershipAction: ActionDefinition = {
   id: 'me.membership',
   title: 'My membership',
@@ -77,8 +70,6 @@ export const meMembershipAction: ActionDefinition = {
     card: {},
     membership: {},
     passes: [],
-    // The plan-choice cliff (D2): the offerings on sale, the one under
-    // consideration, and the words the confirm sheet says about it.
     plans: [],
     chosenOfferingId: '',
     chosenName: '',
@@ -104,12 +95,6 @@ export const meMembershipAction: ActionDefinition = {
   },
   lifecycle: { mount: [{ call: 'card' }, { call: 'membership' }, { call: 'passes' }, { call: 'plans' }] },
   triggers: [
-    // Picking a plan is a CONTRACT, so the confirm is hard and its words are
-    // the terms (Decision D2: immediate + hard confirm — no desk approval
-    // step, and the sentence they say yes to is the commitment itself).
-    // Staged through data because the sheet's words are COMPOSED: an @event
-    // ref resolves only as a whole value, so the row lands first and the
-    // sentence is built from it.
     {
       event: 'ui:click',
       ref: 'pick',
@@ -122,9 +107,8 @@ export const meMembershipAction: ActionDefinition = {
         { set: 'chosenInterval', value: '@event.payload.interval_display' },
         { set: 'chosenAllowance', value: '@event.payload.allowance_display' },
         { set: 'chosenTerms', value: '@event.payload.term_display' },
-        // A $prism in the SAME batch reads the data these sets have not
-        // reached yet, so composing waits for the emit's microtask — the same
-        // boundary the confirm pattern itself rides (see PLAN.md).
+        // A `$prism` in the same run of sets reads the data these sets have not
+        // reached yet, so composing waits for the message.
         { emit: { channel: 'compose-plan-confirm' } },
       ],
     },
@@ -142,10 +126,6 @@ export const meMembershipAction: ActionDefinition = {
                   ' ',
                   { $ref: '$.chosenInterval' },
                   ' · ',
-                  // `$fill`: allowance and terms arrive as counted PATTERNS
-                  // now ('{n} classes a month') — filled here in the source
-                  // language, because this sentence is composed before any
-                  // render pass could do it with a book.
                   { $fill: { $ref: '$.chosenAllowance' } },
                   ' · ',
                   { $fill: { $ref: '$.chosenTerms' } },
@@ -191,11 +171,10 @@ export const meMembershipAction: ActionDefinition = {
         },
       ],
     },
-    // The shared card block carries the trial CTA; here the chooser is already
-    // on the page, so the door just points at it.
+    // The shared card block carries this button; here the chooser is already
+    // on the page, so it only points at it.
     { event: 'ui:click', ref: 'choosePlan', do: [{ set: 'notice', value: 'Pick a plan below — you will confirm the terms before anything starts.' }] },
 
-    // ── leaving, and freezing — decisions, so they ask first ──
     {
       event: 'ui:click',
       ref: 'giveNotice',
@@ -224,16 +203,11 @@ export const meMembershipAction: ActionDefinition = {
 
 export const meMembershipInputSchema = z.toJSONSchema(z.object({}));
 
-// ── booking ──────────────────────────────────────────────────
 export const meClassesAction: ActionDefinition = {
   id: 'me.classes',
   title: 'Book a class',
   data: {
     sessions: [],
-    // The two halves `sessions` is composed from: the studio's list, and the
-    // personal read saying which of them the caller already holds. The list
-    // only ever reaches the screen marked — an unmarked flash would offer
-    // Book on a class they are already in.
     rawSessions: [],
     bookedSessions: [],
     sessionId: '',
@@ -244,10 +218,6 @@ export const meClassesAction: ActionDefinition = {
     loading: true,
     error: '',
     notice: '',
-    // Who this booking is FOR. Empty means the caller themselves, which is
-    // what everybody who guards nobody always sends — and `me/book` (the
-    // personal-reached write that stamps the caller) is what runs then. The
-    // subject only exists for a member who has children.
     family: [],
     subjectId: '',
   },
@@ -257,25 +227,21 @@ export const meClassesAction: ActionDefinition = {
     booked: { url: '/api/me/vex', method: 'POST', request: myBookedSessionsPrism, target: 'bookedSessions' },
     book: { url: '/api/me/vex', method: 'POST', request: bookPrism, errorTarget: 'error' },
     family: { fn: 'nav.family', target: 'family' },
-    // A SECOND VERB RATHER THAN A PARAMETER ON THE FIRST, deliberately.
-    // `me/book` stamps person_id from the caller and cannot say anybody else;
-    // this one carries a subject the engine validates through guardianships.
-    // Keeping them apart means the ordinary path keeps the stronger guarantee
-    // — the one that holds whether or not anybody thought about it.
+    // A second verb, not a parameter on `book`: `me/book` stamps person_id from
+    // the caller and cannot name anybody else, so the ordinary path keeps the
+    // stronger guarantee.
     bookFor: { url: '/api/me/vex', method: 'POST', request: bookForPrism, errorTarget: 'error' },
     courses: { url: '/api/me/vex', method: 'POST', request: coursesPrism, target: 'courses' },
     mine: { url: '/api/me/vex', method: 'POST', request: myEnrolmentsPrism, target: 'enrolments' },
     join: { url: '/api/me/vex', method: 'POST', request: joinPrism, errorTarget: 'error' },
     leave: { url: '/api/me/vex', method: 'POST', request: leavePrism, errorTarget: 'error' },
   },
-  // Steps run in order, each awaited — `booked` has landed by the time `load`
+  // Steps are awaited in order: `booked` has landed by the time `load`
   // succeeds, so the mark never reads a stale half.
   lifecycle: { mount: [{ call: 'courses' }, { call: 'mine' }, { call: 'booked' }, { call: 'family' }, { call: 'load', onSuccess: [{ emit: { channel: 'mark-booked' } }] }] },
   triggers: [
-    // The join: each session wears whether the caller already holds it, and
-    // the verbs read the result — Book hides, a Booked badge shows. A policy
-    // could not permit the entry itself to join these (a studio-wide list
-    // against a personal read), so the screen holds both and marks.
+    // Joined on the screen: a policy cannot permit the entry itself to join a
+    // studio-wide list against a personal read.
     {
       message: 'mark-booked',
       do: [
@@ -308,8 +274,6 @@ export const meClassesAction: ActionDefinition = {
                           already_booked: { $var: 'held' },
                           mine_display: { $case: { branches: [{ when: { $var: 'held' }, then: 'Booked' }], else: '' } },
                           mine_tone: 'good',
-                          // One key for the Book cell to read: off for a class
-                          // they hold, off for a class the studio called off.
                           unbookable: { $or: [{ $get: { from: { $var: 's' }, path: ['cancelled'] } }, { $var: 'held' }] },
                         },
                       ],
@@ -362,7 +326,6 @@ export const meClassesAction: ActionDefinition = {
         },
       ],
     },
-    // Choosing whose class this is, then booking it for them.
     { event: 'ui:click', ref: 'subject', do: [{ set: 'subjectId', value: '@event.payload.value' }] },
     {
       event: 'ui:click',
@@ -383,7 +346,6 @@ export const meClassesAction: ActionDefinition = {
 
 export const meClassesInputSchema = z.toJSONSchema(z.object({}));
 
-// ── what they hold ───────────────────────────────────────────
 export const meBookingsAction: ActionDefinition = {
   id: 'me.bookings',
   title: 'My classes',
@@ -393,10 +355,6 @@ export const meBookingsAction: ActionDefinition = {
     loading: true,
     error: '',
     notice: '',
-    // WHO THIS MEMBER MAY ACT FOR, and the whole household's week. Both are
-    // empty for everybody who guards nobody, and the screen then draws exactly
-    // what it drew before — the family surface is additive on the screen for
-    // the same reason it is additive in the engine.
     family: [],
     familyBookings: [],
   },
@@ -405,10 +363,6 @@ export const meBookingsAction: ActionDefinition = {
     load: { url: '/api/me/vex', method: 'POST', request: myBookingsPrism, target: 'bookings' },
     cancel: { url: '/api/me/vex', method: 'POST', request: cancelPrism, errorTarget: 'error' },
     family: { fn: 'nav.family', target: 'family' },
-    // THE ONE READ THAT MAKES THE SATURDAY-MORNING SCREEN POSSIBLE: the
-    // member's own classes and their children's, together, ordered by when to
-    // turn up. Under an identity switcher this would have been one session per
-    // child.
     familyBookings: { url: '/api/me/vex', method: 'POST', request: familyBookingsPrism, target: 'familyBookings' },
     cancelFor: { url: '/api/me/vex', method: 'POST', request: cancelForPrism, errorTarget: 'error' },
   },
@@ -427,10 +381,8 @@ export const meBookingsAction: ActionDefinition = {
         },
       ],
     },
-    // Cancelling a CHILD's class. Its own verb because its reach is wider:
-    // `me/cancel` is pinned to the caller and would match nothing for a
-    // child's booking id — which is the personal clamp doing its job, not a
-    // bug to route around.
+    // Its own verb: `me/cancel` is pinned to the caller and matches nothing for
+    // a child's booking id.
     {
       event: 'ui:click',
       ref: 'cancelFor',

@@ -8,15 +8,11 @@ const one = (name: string, fallback: unknown = '') => ({ $get: { from: { $var: '
 export const myCard: CacheEntry = {
   fingerprint: 'me/card',
   intent: 'The standing of whoever is asking, at their own studio',
-  // `reach` is a property of the READ. Without it a caller holding two roles
-  // gets the widest either grants, and a teacher who trains here is handed
-  // whichever person the planner reached first.
+  // Without `reach` a caller holding two roles gets the widest either grants:
+  // a teacher who trains here is handed whichever person the planner reached.
   reach: 'personal',
-  // The anchor and the standing ONLY. What they hold — the subscription, the
-  // passes — are their own reads (`me/membership`, `me/passes`): a reverse
-  // join is INNER, so a card that joined subscriptions would simply vanish
-  // for the prospect at the plan-choice cliff, who is exactly the person the
-  // member surface has to catch.
+  // No join to subscriptions or passes: a reverse join is INNER, and the card
+  // would vanish for a prospect who holds neither.
   shape: { studio_name: '', standing: '', status_label: '', status_tone: '', joined_display: '', trial_display: '', on_trial: false },
   dsl: {
     from: ['studio_people', 'studios'],
@@ -28,7 +24,6 @@ export const myCard: CacheEntry = {
     compute: STANDING,
     limit: 1,
   },
-  // An object `shape` makes vex unwrap the single row, so `$.result` IS the row.
   mapping: {
     $with: {
       let: { c: { $ref: '$.result' } },
@@ -45,7 +40,6 @@ export const myCard: CacheEntry = {
   },
 };
 
-// What they hold in credits, personal-pinned like everything on this surface.
 export const myPasses: CacheEntry = {
   fingerprint: 'me/passes',
   intent: 'The class passes of whoever is asking',
@@ -80,8 +74,6 @@ export const myPasses: CacheEntry = {
 
 export const myBookings: CacheEntry = {
   fingerprint: 'me/bookings',
-  // "What YOU have booked" — personal whoever asks. Unpinned, this lists every
-  // booking at the studio to a teacher who also trains there.
   reach: 'personal',
   intent: 'The classes the person asking has booked',
   shape: [{ booking_id: '', session_id: '', class_name: '', program_name: '', tone: '', status: '', when_display: '', held_on: '', state_label: '', state_tone: '', session_cancelled: false }],
@@ -94,9 +86,8 @@ export const myBookings: CacheEntry = {
       { field: 'class_sessions.name', as: 'class_name' },
       { field: 'class_sessions.held_on', as: 'held_on' },
       { field: 'class_sessions.starts_at', as: 'starts_at' },
-      // The SESSION's own status, not just the booking's. A studio cancelling
-      // a class does not touch anybody's booking row — the one screen that
-      // tells a member where to turn up has to look at both.
+      // A studio cancelling a class does not touch anybody's booking row, so
+      // the session's own status is read as well.
       { field: 'class_sessions.status', as: 'session_status' },
       { field: 'programs.name', as: 'program_name' },
       { field: 'programs.colour', as: 'tone' },
@@ -116,17 +107,8 @@ export const myBookings: CacheEntry = {
         tone: row('tone'),
         status: row('status'),
         held_on: row('held_on'),
-        // Day AND time — this list's whole job is saying when to turn up.
-        // Joined with punctuation, not words: each half is already made by a
-        // locale-aware op, and a separator with no language needs no book.
         when_display: { $join: { parts: [dateText(row('held_on')), timeText(row('starts_at'))], sep: ' · ' } },
-        // What the layout branches on: the Cancel verb disappears when the
-        // studio already cancelled the class — there is nothing left to cancel.
         session_cancelled: { $eq: [row('session_status'), 'cancelled'] },
-        // In words: the two states a member has to understand without being
-        // told what the app means by them. The SESSION being off outranks
-        // whatever the booking says — "Booked" on a cancelled class is a
-        // member turning up to a locked door.
         state_label: {
           $case: {
             branches: [
@@ -150,11 +132,8 @@ export const myBookings: CacheEntry = {
   },
 };
 
-// So the class list can mark what they already hold, without a join their policy
-// would not permit anyway.
 export const myBookedSessions: CacheEntry = {
   fingerprint: 'me/booked-sessions',
-  // Unpinned, every class at the studio comes back marked as already booked.
   reach: 'personal',
   intent: 'Which class sessions the person asking is already booked into',
   shape: [{ session_id: '' }],
@@ -164,8 +143,6 @@ export const myBookedSessions: CacheEntry = {
     filter: { eq: ['bookings.status', 'booked'] },
   },
 };
-
-// ─── the two writes ──────────────────────────────────────────
 
 export const bookClass: MutationEntry = {
   fingerprint: 'me/book',
@@ -179,32 +156,6 @@ export const bookClass: MutationEntry = {
   },
 };
 
-// ═══════════════════════════════════════════════════════════════
-// THE FAMILY — the same surface, one reach wider.
-//
-// Every entry above keeps `reach: 'personal'` and is untouched by any of
-// this. That is not caution, it is the design: reach is a property of the
-// ENTRY as well as the rung, so a family surface is entries ADDED beside the
-// member surface rather than a widening of it. A member who guards nobody
-// reads exactly what they read before, through exactly the same artifacts —
-// and `householdIds` resolves to `[them]` anyway, so even these answer
-// personally for them.
-// ═══════════════════════════════════════════════════════════════
-
-// WHO I MAY ACT FOR is NOT an entry — see `nav.family` (server/functions/nav.ts).
-// A member holds no `people.read`, so a child's NAME cannot be read through the
-// engine on this rung at all; it rides on the identity record, read once by the
-// `identity` role when the session resolved. What IS an entry is everything
-// below, because rows are what the engine is for.
-
-// THE FAMILY'S WEEK, IN ONE READ — which is the whole reason the reach won
-// over a switcher that swaps identity. A parent with two enrolled kids on a
-// Saturday morning wants one screen, and this is it: their own classes and
-// their children's, in one answer, ordered by when to turn up.
-//
-// The `person_id` comes back on every row because the screen has to say WHOSE
-// class each one is. Under a personal reach that column is a constant and
-// worth nothing; here it is the point.
 export const familyBookings: CacheEntry = {
   fingerprint: 'me/family-bookings',
   intent: "The classes the person asking and their children have booked, in one answer",
@@ -264,28 +215,9 @@ export const familyBookings: CacheEntry = {
   },
 };
 
-// ── BOOKING FOR SOMEBODY ELSE, SAFELY ────────────────────────
-//
-// The one write in this application whose subject is not the caller, and the
-// place the whole families design either holds or does not.
-//
-// `person_id` is NOT sent by the browser and NOT stamped from scope. It is a
-// `$lookup` on `guardianships` — and a `$lookup` READS its table, so vex ANDs
-// that table's read rules into this very subquery: `guardian_person_id =
-// userId` and the studio pin, both engine-supplied. The subquery therefore
-// answers the child's id only if the caller actually guards them, at this
-// studio, and answers NULL otherwise — landing on `bookings.person_id NOT
-// NULL`. There is no path in which it returns somebody else's id.
-//
-// WHY NOT A SCOPE RULE. The household reach carries NO person rule on writes
-// (behaviors.ts): a `set` cannot name a set, and swapping the stamp for a
-// check against `householdIds` would trade a guarantee that holds by
-// construction for one that holds by diligence. vex refuses a set-valued rule
-// on an INSERT outright, so that trade cannot be made later by accident.
-//
-// `can_book` IS tested here and not in `me/family`: seeing a child's classes
-// and booking one for them are different verbs, and this is the one the
-// capability column was added for.
+// `person_id` is a `$lookup` on `guardianships`, whose read rules vex ANDs into
+// the subquery (`guardian_person_id = userId`, the studio pin): a child the
+// caller does not guard resolves NULL. `can_book` gates booking, not the reads.
 export const bookForFamily: MutationEntry = {
   fingerprint: 'me/book-for',
   intent: 'Book one of my children into a class',
@@ -311,11 +243,6 @@ export const bookForFamily: MutationEntry = {
   },
 };
 
-// The mirror of the above. An UPDATE may safely carry the set — the rows
-// already exist and the rule only narrows which of them may be touched — so
-// this needs no lookup: the household reach's own `person_id = ANY(...)` is
-// what stops a parent cancelling a stranger's class, applied by the engine
-// underneath the id the caller named.
 export const cancelFamilyBooking: MutationEntry = {
   fingerprint: 'me/cancel-for',
   intent: "Cancel a class booked for me or one of my children",
@@ -328,15 +255,11 @@ export const cancelFamilyBooking: MutationEntry = {
   },
 };
 
-// An update, never a delete: the seat has to be freed on the operational row,
-// and "who cancels every week" needs the row to still be there to answer.
 export const cancelMyBooking: MutationEntry = {
   fingerprint: 'me/cancel',
   intent: 'Cancel a class I booked',
   reach: 'personal',
 
-  // The row filter rides on the UPDATE too, so naming somebody else's booking id
-  // matches nothing rather than cancelling their class.
   mutation: {
     op: 'update',
     table: 'bookings',

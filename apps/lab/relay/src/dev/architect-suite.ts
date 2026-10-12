@@ -1,22 +1,3 @@
-// The architect under a MICROSCOPE, against the metric that matters.
-//
-// Each run: build an intent → gate → register on the REAL server shell →
-// mount → count the rows a person would see. "The harness said ok" is not a
-// result; LIVE ROWS is the result. Everything the run said and heard —
-// every tool call with its input and output, every correction with its full
-// issues text, the final artifact or the failed candidate — lands in one
-// JSONL per run, so a failure is a transcript to read, not a vibe.
-//
-//   pnpm --filter relay exec tsx src/dev/architect-suite.ts
-//     [--only=<id>] [--reps=N] [--pipeline]   (default: every intent, 2 reps)
-//
-// --pipeline runs the REAL `build_action` tool — build, harness, the
-// validator's review, and one repair — the exact path a chat request takes.
-// The reviewer's findings land in the log and the summary, so intent-fit
-// misses (a query that quietly ignored a filter) finally get scored.
-//
-// Reps share one server and one cache, deliberately: rep 2 sees rep 1's
-// fingerprints in discover, exactly as a warm production server would.
 import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CortexEvent } from '@niscorp/cortex';
@@ -48,8 +29,7 @@ export const INTENTS: Record<string, string> = {
     'A my-day workspace: my open tasks ordered by due date, a KPI of how many of my tasks are overdue, and a ' +
     'table of my 5 biggest open deals (company, value, close date) where clicking a deal opens it. ' +
     'A "New task" button opens the task form.',
-  // ── HOLDOUTS: shapes the teaching was never tuned on. If these pass, the
-  // fixes generalized; if they fail, we taught to the test.
+  // Holdouts: shapes the teaching is never tuned on.
   feed:
     'A recent-activity feed: the 30 most recent activities (calls, emails, meetings, notes) showing type, ' +
     'subject and when it happened, newest first.',
@@ -59,10 +39,8 @@ export const INTENTS: Record<string, string> = {
   tasksWeek:
     'A table of all open tasks due in the next 7 days (today included), ordered by due date, showing title, ' +
     'assignee name and due date.',
-  // RAY'S OWN WORDS, verbatim from a live chat trace — the intent Ray authored
-  // from the user's one-line request, embellishments included (auto-refresh,
-  // default month, sorting the user never asked for). The suite's curated
-  // intents never reproduced chat behavior; this is the like-for-like test.
+  // Verbatim from a live chat trace: the intent Ray authored from a one-line
+  // request, embellishments included.
   rayIntent:
     "Create a new screen on the main canvas that shows a dropdown to select a month (June, July, August). " +
     "The selected month filters the deals displayed in a table to only those with a close_date in that month. " +
@@ -71,9 +49,6 @@ export const INTENTS: Record<string, string> = {
     "Default view shows June deals. Include sorting by close date ascending.",
 };
 
-// ── ORACLES: the database's own truth, per intent. "Rows rendered" is
-// necessary; "the RIGHT rows rendered" is the actual bar. Each returns a
-// verdict string starting PASS/WARN/FAIL.
 type Oracle = (db: typeof runtime.db, dataRows: number | 'n/a', renderedRows: number | 'n/a', artifact: unknown) => Promise<string>;
 const count = async (db: typeof runtime.db, sql: string): Promise<number> =>
   ((await db.query<{ n: number }>(sql)).rows[0]?.n ?? -1);
@@ -130,10 +105,6 @@ const main = async (): Promise<void> => {
   const only = process.argv.find((a) => a.startsWith('--only='))?.slice(7);
   const reps = Number(process.argv.find((a) => a.startsWith('--reps='))?.slice(7) ?? '2');
   const pipeline = process.argv.includes('--pipeline');
-  // --model=<roster id>: put the ARCHITECT (and reviewer) on one model for this
-  // run. Without it the suite silently tests the code default — which is how
-  // every chat pain on GLM went unreproduced while the suite glowed green on
-  // 120b. The suite must run what the chat runs.
   const model = process.argv.find((a) => a.startsWith('--model='))?.slice(8);
   if (model !== undefined) {
     if (!isModelId(model)) { console.error(`unknown model "${model}"`); process.exit(2); }
@@ -175,7 +146,6 @@ const main = async (): Promise<void> => {
       };
 
       const t0 = Date.now();
-      // One tool per run: its same-session edit memory is not under test here.
       const buildTool = pipeline ? makeBuildActionTool(ray) : undefined;
       let built: Awaited<ReturnType<typeof runActionArchitect>>;
       let review = '';
@@ -205,7 +175,6 @@ const main = async (): Promise<void> => {
       if (built.ok) {
         put({ ev: 'built', action: built.action });
         writeFileSync(join(outDir, `${id}.${rep}.action.json`), JSON.stringify(built.action, null, 2));
-        // ── the metric: mount on the REAL shell, count what a person sees ──
         if (buildTool === undefined) shell.registerAction(built.action);
         const iid = buildTool !== undefined
           ? (shell.getCanvasState('main').active?.id ?? shell.push('main', built.action.id))
@@ -221,10 +190,6 @@ const main = async (): Promise<void> => {
           const data = rt.getData() as Record<string, unknown>;
           const arr = Object.values(data).find(Array.isArray);
           const dataRows = Array.isArray(arr) ? arr.length : 0;
-          // The metric that matters is what the Table RENDERS, not what the
-          // data holds — they diverge exactly when a binding is broken (a
-          // prism node in a prop hands the component garbage over loaded
-          // data), the failure every data-side check waves through.
           type AnyNode = { type?: string; name?: string; props?: Record<string, unknown>; children?: AnyNode[] };
           const findTableRows = (nodes: AnyNode[]): number | 'n/a' => {
             for (const node of nodes) {
@@ -244,12 +209,6 @@ const main = async (): Promise<void> => {
           put({ ev: 'live-mount', dataRows, renderedRows: rendered, dataKeys: Object.keys(data) });
           if (rendered !== 'n/a' && rendered !== dataRows) note = `RENDER≠DATA: table renders ${rendered}, data holds ${dataRows}`;
 
-          // ── INTERACTION PROBES: drive the screen the way a person would.
-          // Mount only ever exercises the DEFAULT state; every other branch —
-          // the July option, the search keystroke — shipped on faith until
-          // here. Probes find the real control in the RENDERED tree (its ref
-          // and its option values are the artifact's own), dispatch the real
-          // event, and hold the re-rendered table to SQL truth.
           const findNode = (nodes: AnyNode[], match: (n: AnyNode) => boolean): AnyNode | undefined => {
             for (const n of nodes) {
               if (n.type === 'component' && match(n)) return n;
@@ -260,10 +219,8 @@ const main = async (): Promise<void> => {
           };
           type RNode = AnyNode & { ref?: string };
           const dispatchModel = async (ref: string, payload: unknown): Promise<number | 'n/a'> => {
-            // The DOM's contract, not a kind one: a <select>/<input> dispatches
-            // e.target.value — a STRING. An object option value becomes ''.
-            // The probe dispatches exactly that, so a screen that only works
-            // when handed raw objects fails HERE, not in the user's browser.
+            // As the DOM does: a <select> or <input> dispatches e.target.value,
+            // a string, so an object option value becomes ''.
             const domPayload = typeof payload === 'string' || typeof payload === 'number' ? String(payload) : '';
             shell.dispatch({ type: 'ui:model', ref, payload: domPayload, origin: iid } as never);
             await new Promise((r) => setTimeout(r, 1800));
@@ -323,6 +280,5 @@ const main = async (): Promise<void> => {
   process.exit(0);
 };
 
-// Run only as an entrypoint — validator-suite imports INTENTS from here, and
-// an import that silently launches eight LLM builds is a landmine.
+// Runs only as an entrypoint: validator-suite imports INTENTS from here.
 if (process.argv[1]?.endsWith('architect-suite.ts') === true) void main();

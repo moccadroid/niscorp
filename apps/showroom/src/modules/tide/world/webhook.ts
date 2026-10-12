@@ -1,23 +1,10 @@
 import { createMemoryStore, createTide, zonedToUtc, type EffectRegistry, type ReflexInput, type Tide } from '@niscorp/tide';
 import { drain, MINUTE, readLedger, recordOf, str, transform, TZ, type Snapshot } from './ledger';
 
-// ═══════════════════════════════════════════════════════════
-// The same webhook, twice — Grace's membership, fed by a payment provider.
-//
-// SIMULATED, and labelled on the page: the payment provider (a "Stripe" that
-// sends events the way Stripe does: at least once, in no promised order), the
-// mailer, and the NAIVE handler — the usual `app.post('/webhooks/stripe')`
-// that does what each event says the moment it arrives.
-// REAL: the tide side. The host parses each webhook into a signal fact with
-// the provider's event id as its `dedupeKey`; four reflexes do the rest.
-// ═══════════════════════════════════════════════════════════
-
 export const OPENS = zonedToUtc({ year: 2026, month: 3, day: 2 }, 10, 0, TZ);
 export const PRICE = 8900;
 
 export type EventType = 'invoice.payment_succeeded' | 'invoice.payment_failed';
-// What the provider sends. `created` is when the thing HAPPENED at the
-// provider; the webhook can arrive much later, and more than once.
 export type StripeEvent = { id: string; type: EventType; customer: string; invoice: string; created: number };
 export type Delivery = { at: number; event: StripeEvent; retry: boolean; late: boolean };
 
@@ -26,10 +13,6 @@ export type Mail = { at: number; kind: 'receipt' | 'card-failed'; invoice: strin
 export type SideState = { membership: Membership; mails: readonly Mail[] };
 
 const EMPTY_MEMBERSHIP: Membership = { status: 'none', payments: [], lastEventAt: 0 };
-
-// ── the naive handler, simulated ────────────────────────────────
-// Do what the event says, now. No memory of what it has seen, no idea when
-// the event happened.
 
 export const naive = (deliveries: readonly Delivery[]): SideState => {
   let m: Membership = EMPTY_MEMBERSHIP;
@@ -47,8 +30,6 @@ export const naive = (deliveries: readonly Delivery[]): SideState => {
   return { membership: m, mails };
 };
 
-// ── tide, for real ──────────────────────────────────────────────
-
 const isType = (t: string) => ({ $eq: [{ $ref: '$.fact.payload.type' }, t] });
 
 export const REFLEXES: readonly ReflexInput[] = [
@@ -63,9 +44,7 @@ export const REFLEXES: readonly ReflexInput[] = [
     id: 'stripe.membership-status',
     intent: 'Set the membership’s status from the newest event the provider has sent.',
     on: { fact: { signal: 'stripe' } },
-    // The guard is a question about reality: "is this event newer than what
-    // the membership already reflects?" An old event arriving late selects no
-    // row, and nothing happens — recorded as a run that selected 0.
+    // The selection is the guard: an event older than what the membership reflects selects no row.
     select: { query: { table: 'memberships', member: { $ref: '$.fact.payload.customer' }, olderThan: { $ref: '$.fact.payload.created' } }, mode: 'each', unitKey: 'member' },
     effect: {
       name: 'membership.set',
@@ -151,8 +130,6 @@ export const createWebhooks = async (): Promise<Webhooks> => {
 
   return {
     state,
-    // The webhook endpoint, tide's way: parse, ingest with the event id as
-    // the dedupe key, answer 200. A repeat is refused at the door.
     deliver: async (d) => {
       const fact = await tide.ingest({ kind: 'signal', name: 'stripe', payload: d.event, dedupeKey: d.event.id, at: d.at });
       intake.push({ at: d.at, event: d.event, accepted: fact !== undefined });
@@ -161,15 +138,12 @@ export const createWebhooks = async (): Promise<Webhooks> => {
   };
 };
 
-// ── what the provider sends, per button ─────────────────────────
-
 let serial = 0;
 const nextId = (): string => {
   serial += 1;
   return `evt_1Q${(4000 + serial).toString(36).toUpperCase()}x${serial}`;
 };
 
-// A new invoice paid: one fresh event.
 export const paid = (invoice: string, at: number): Delivery => ({
   at,
   retry: false,
@@ -177,11 +151,8 @@ export const paid = (invoice: string, at: number): Delivery => ({
   event: { id: nextId(), type: 'invoice.payment_succeeded', customer: 'grace', invoice, created: at },
 });
 
-// The provider didn't hear a 200 in time, so it sends the SAME event again.
 export const resend = (d: Delivery, at: number): Delivery => ({ ...d, at, retry: true, late: false });
 
-// Grace's card failed at first, she fixed it, the retry charge succeeded —
-// and the provider delivers the success before the older failure.
 export const outOfOrder = (invoice: string, at: number): readonly Delivery[] => {
   const failed: StripeEvent = { id: nextId(), type: 'invoice.payment_failed', customer: 'grace', invoice, created: at - 4 * MINUTE };
   const succeeded: StripeEvent = { id: nextId(), type: 'invoice.payment_succeeded', customer: 'grace', invoice, created: at };

@@ -1,8 +1,5 @@
 import type { ActionFragment } from '@niscorp/nova';
 
-// Modal chrome as composition, not a wrapper component (AGENTS rule 3):
-// pushed alongside an action via `with: ['modal-frame']`, it wraps the
-// action's layout in a panel and wires the close button.
 export const modalFrame: ActionFragment = {
   kind: 'fragment',
   id: 'modal-frame',

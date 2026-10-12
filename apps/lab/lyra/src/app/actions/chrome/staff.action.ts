@@ -3,9 +3,6 @@ import { navigatedChannel } from '@niscorp/nova';
 import { staffChromeLayout } from './staff.layout';
 import { themeCurrentPrism, unseenPrism } from './chrome.prism';
 
-// What the answer from `nav.context` becomes on this screen. Written once
-// because it is now asked from exactly two places — boot, and the canvas
-// saying it moved — where it used to be copied into every click.
 const applyContext = [
   { set: 'currentArea', value: '$.context.areaId' },
   { set: 'tabs', value: '$.context.tabs' },
@@ -24,14 +21,11 @@ export const staffChromeAction: ActionDefinition = {
     navItems: [],
     home: {},
     areas: [],
-    // The four the thumb bar shows; the rest live behind More. Derived per
-    // principal by the manifest, because which four matter depends on the rung.
     primaryAreas: [],
     currentArea: '',
     currentLeaf: '',
     tabs: [],
-    // An empty array is truthy, so the guard is a count. Zero means the area
-    // has one screen and the row renders nothing.
+    // An empty array is truthy, so the layout's guard is a count.
     tabCount: 0,
     moreValue: '',
     context: {},
@@ -39,9 +33,6 @@ export const staffChromeAction: ActionDefinition = {
     themeTokens: {},
     themeName: '',
     themeRow: {},
-    // The bell: how many notifications the studio has not read. Counted on
-    // mount, re-counted when the socket says 'notified' — push over the shell
-    // the chrome already lives in, no polling anywhere.
     unseenRow: {},
     unseen: 0,
   },
@@ -50,12 +41,8 @@ export const staffChromeAction: ActionDefinition = {
     leave: { fn: 'auth.leave' },
     theme: { url: '/api/studio/vex', method: 'POST', request: themeCurrentPrism, target: 'themeRow' },
     unseen: { url: '/api/automation/vex', method: 'POST', request: unseenPrism, target: 'unseenRow' },
-    // Asked on every move. See `nav.context` in server/functions/nav.ts for why
-    // this is a call rather than something the screen announces.
     context: { fn: 'nav.context', target: 'context' },
   },
-  // Boot input alone would leave a studio that re-skinned itself wearing the old
-  // palette until somebody reloaded, and "no reload" is the entire claim.
   lifecycle: {
     mount: [
       { call: 'theme', onSuccess: [{ set: 'themeTokens', value: '$.themeRow.tokens' }, { set: 'themeName', value: '$.themeRow.name' }] },
@@ -65,16 +52,6 @@ export const staffChromeAction: ActionDefinition = {
     ],
   },
   triggers: [
-    // ── WHERE THE SIDEBAR LEARNS WHERE IT IS ──────────────────
-    //
-    // ⟲ THE CLICKS USED TO SAY. Each one set `currentLeaf` and re-read the
-    // context on its way to the `resetTo` — a copy of where you were going,
-    // written by the gesture that sent you. It agreed with the canvas until
-    // something moved the canvas without a click, and then the strip lit one
-    // screen while the canvas showed another. `back` was the first thing that
-    // did it; an agent opening a screen and a deep link are the next two.
-    //
-    // Now the canvas says, and this listens. The clicks below just go.
     {
       message: navigatedChannel('main'),
       do: [{ set: 'currentLeaf', value: '@event.payload.action' }, { call: 'context', onSuccess: applyContext }],
@@ -96,15 +73,9 @@ export const staffChromeAction: ActionDefinition = {
       ],
     },
     { event: 'ui:click', ref: 'openMenu', do: [{ set: 'menuOpen', value: true }] },
-    // The scrim fires this too, so tapping beside the drawer closes it.
     { event: 'ui:click', ref: 'closeMenu', do: [{ set: 'menuOpen', value: false }] },
     { event: 'ui:click', ref: 'leave', do: [{ call: 'leave' }] },
-    // The look changed. Nothing here knows what changed or why — it re-reads.
     { message: 'theme-changed', do: [{ call: 'theme', onSuccess: [{ set: 'themeTokens', value: '$.themeRow.tokens' }, { set: 'themeName', value: '$.themeRow.name' }] }] },
-    // The studio was TOLD something — the socket fan-out from a landed
-    // `automation/notify` (app.ts onMutation). Re-count rather than increment:
-    // the row is the fact, and a push that raced another reader still ends at
-    // the right number. The bell click is the pull half.
     { message: 'notified', do: [{ call: 'unseen', onSuccess: [{ set: 'unseen', value: '$.unseenRow.total' }] }] },
     { message: 'notices-seen', do: [{ call: 'unseen', onSuccess: [{ set: 'unseen', value: '$.unseenRow.total' }] }] },
     { event: 'ui:click', ref: 'bell', do: [{ set: 'menuOpen', value: false }, { resetTo: { action: 'desk.followups', canvas: 'main' } }] },

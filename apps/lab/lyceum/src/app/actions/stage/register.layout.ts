@@ -1,7 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Everybody who joined, as a ruled table — the names they chose — the
-// way in beside it while people are still arriving, and the count.
 export const registerLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['kick join', 'head join', 'table join', 'table count'], cols: [3, 1.1], rows: ['auto', 'auto', 1, 'auto'] },

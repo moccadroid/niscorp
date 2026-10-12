@@ -1,10 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { collectInteractive } from '../../src/agent/affordances';
 
-// The affordance walker derives a layout's interactive surface from the tree
-// itself — refs, *Ref props, models, bound keys — so a director can wire
-// triggers against a layout it never sees, and nothing is self-reported.
-
 describe('collectInteractive', () => {
   it('collects node refs with their component', () => {
     const layout = {
@@ -63,7 +59,6 @@ describe('collectInteractive', () => {
 
     const surface = collectInteractive(layout);
     expect(surface.refs.map((r) => r.ref).sort()).toEqual(['menu-close', 'pick']);
-    // `$row.name` is loop-local, not a data key; `$.menuOpenId` / `$.rows` are.
     expect(surface.boundKeys).toEqual(['menuOpenId', 'rows']);
   });
 

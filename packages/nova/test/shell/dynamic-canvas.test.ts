@@ -14,8 +14,6 @@ const makeShell = () =>
     actions: { A: defA },
   });
 
-// The default shell layout loops $.canvases into a CanvasSlot per canvas, so the
-// rendered shell tree carries `"canvasId":"<id>"` for every rendered canvas.
 const renderedCanvasIds = (shell: ReturnType<typeof makeShell>): string[] =>
   [...JSON.stringify(shell.getShellRenderTree()).matchAll(/"canvasId":"([^"]+)"/g)].map((m) => m[1]!);
 
@@ -56,7 +54,6 @@ describe('createShell — dynamic canvases', () => {
   it('setLayout swaps a LayoutRef target without touching the frame chrome', () => {
     const shell = createShell({
       canvases: [{ id: 'sidebar' }, { id: 'main' }],
-      // Frame: sidebar is real chrome; `main` is a dynamic region behind a ref.
       canvasLayout: {
         component: 'Row',
         children: [
@@ -74,12 +71,11 @@ describe('createShell — dynamic canvases', () => {
     expect(tree).toContain('"canvasId":"sidebar"');
     expect(tree).toContain('"canvasId":"main"');
 
-    // Swap only the ref target. The sidebar (frame) is untouched; the region changes.
     shell.setLayout('main', { component: 'Splitpane' });
     tree = JSON.stringify(shell.getShellRenderTree());
-    expect(tree).toContain('"canvasId":"sidebar"');   // chrome intact — can't be removed
-    expect(tree).toContain('Splitpane');               // new region layout
-    expect(tree).not.toContain('"canvasId":"main"');   // old region replaced
+    expect(tree).toContain('"canvasId":"sidebar"');
+    expect(tree).toContain('Splitpane');
+    expect(tree).not.toContain('"canvasId":"main"');
   });
 
   it('registerAction adds a definition a canvas can then seed', async () => {

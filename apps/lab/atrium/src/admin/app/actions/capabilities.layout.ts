@@ -5,7 +5,6 @@ export const capabilitiesLayout: LayoutNode = panel(
   'Capabilities',
   'What each connector offers, what each property took, and the discovery pull',
   split(
-    // ── left: the connectors, and the pull ──
     {
       component: 'Stack',
       props: { gap: 14 },
@@ -56,7 +55,6 @@ export const capabilitiesLayout: LayoutNode = panel(
       ],
     },
 
-    // ── right: the offer, then what each property took ──
     {
       component: 'Stack',
       props: { gap: 18 },

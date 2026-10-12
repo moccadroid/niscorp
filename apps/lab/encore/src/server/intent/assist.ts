@@ -30,45 +30,9 @@ import type { TouchTracker } from './touched';
 import type { BriefRequest } from '@encore/server/watch/watch';
 import type { CandidateSets, Handoff, HeldCard, Parsed, RunRecord, RunStatus } from './intent.types';
 
-// ═══════════════════════════════════════════════════════════
-// THE SLOW SPEED, for one session: the agent's manager.
-//
-// The fast speed decides and never waits. This runs the assistant on EVERY
-// FINISHED SENTENCE, and keeps the thread. It owns five things:
-//
-//   WHEN    a sentence is FINISHED when the line has been quiet for a beat after
-//           its pass landed, or when the operator presses Enter. Nothing else
-//           decides whether the assistant runs — not Jev, not the sentence's
-//           shape. Never more than one run at a time.
-//   WHAT    the same state every time: the thread, Jev's pre-decisions for this
-//           sentence, and the line (agent/run.ts) — and two read tools.
-//   ABORT   a run belongs to the text it started with. Any change of the line
-//           tears it down mid-request; what it spent is still recorded.
-//   APPLY   whole, or not at all, through the one admission rule. It ADDS AND
-//           AIMS cards; only Jev closes. Words go into fields nobody has
-//           touched. Steps wait behind their chips. Nothing is ever submitted.
-//           An answer with nothing in it shows nothing.
-//   THREAD  every finished sentence becomes a turn — what was said, or, when
-//           nothing was, what the cards amounted to (thread.ts).
-//
-// THE AGENT NEVER TOUCHES THE SHELL. Everything under src/server/agent/ is
-// handed callbacks; every write to a screen is in THIS file, made by the loop,
-// from an answer that was admitted first. `law-check` holds that line.
-//
-// Everything the operator can see of this is one card (`assist.answer`) and one
-// row of the trace, both written from here.
-// ═══════════════════════════════════════════════════════════
-
-// How long the line must stay quiet, after a pass lands, before the sentence
-// counts as finished. Long enough that a person pausing between words does not
-// spend a run; short enough to read as "it noticed I stopped". THE constant.
 export const HANDOFF_IDLE_MS = 700;
 
-// THE ONE PLACE THIS NUMBER LIVES. A run writes to the card at most this often,
-// whatever the model streams: relay measured what publishing per model event
-// costs — three times the wall clock, and a stream starved into provider
-// rejections (DESIGN.md § What was studied first). Midas's mechanism, at half
-// its rate.
+// Publishing per model event triples the wall clock and starves the stream into provider rejections.
 export const ANSWER_WRITE_MS = 120;
 
 export const ASSIST_ORIGIN = 'assist';
@@ -79,61 +43,41 @@ const AGENT_ID = encoreAgent.agentId;
 
 const STATUS_TONE: Record<RunStatus, string> = { running: 'accent', landed: 'good', aborted: 'warn', failed: 'alert' };
 
-// What the latest landed pass knew — the run's whole input, thread aside.
 export type PassContext = {
   text: string;
   parsed: Parsed;
   candidates: CandidateSets;
   handoff: Handoff;
-  // Cards Jev wanted and could not put up, with why (resolve.ts `held`).
   held: readonly HeldCard[];
 };
 
 export type AssistDeps = {
   session: FunctionSession;
-  // What this session's roles may read: the agent's read tools are the
-  // stored queries over tables it reads, and no others.
   policy: ScopePolicy;
   agent: AgentLlm;
   clock: FestivalClock;
   definitions: Record<string, ActionDefinition>;
-  // The packs this principal's policy can read (context-packs.ts).
   packs: readonly ContextPack[];
   touched: TouchTracker;
-  // Where ENCORE_TRACE_DIR points, if anywhere (agent/trace-file.ts).
   traceDir?: string;
-  // Hand a card to the fast speed: pin it, remember what it was opened with,
-  // and let Jev fill the keys the agent left alone.
   adopt: (actionId: string, input: Record<string, unknown>, placedBy: string, why: string) => void;
   repass: () => void;
   onRun?: (principal: string | null, record: RunRecord) => void;
-  // An operator's run is starting: whatever else is using the agent gives way.
   onRunStart?: () => void;
 };
 
 export type Assist = {
   enabled: boolean;
-  // The line changed. A run belongs to the text it started with.
   onKeystroke: (text: string) => void;
   onPass: (context: PassContext) => void;
-  // The line is still this sentence, but what is left of it asks for nothing —
-  // backspaced to a letter or two, so no pass will be sent to say so. A run in
-  // flight is for words that are gone; a promise of one is withdrawn.
   onNothingAsked: () => void;
-  // The sentence is gone — emptied, or typed over (continuation.ts). `why` is
-  // what an in-flight run is told it was dropped for.
   onClear: (why: string) => void;
   runNow: () => string;
   openStep: (index: number) => string;
-  // The operator ends the thread. Nothing else ever does.
   newThread: () => Promise<string>;
-  // The conversation BEFORE the exchange on the card, oldest first — rows, read
-  // back through the wire every time.
   earlierTurns: () => Promise<RailEntry[]>;
   idle: () => Promise<void>;
   runs: () => readonly RunRecord[];
-  // The messages the last run was started with — what a check hands to
-  // `agent.preview()` to read the prompt that run sent.
   lastInput: () => { input: Message[] } | undefined;
   recordEvent: (line: string, detail: Record<string, unknown>) => void;
   isRunOut: () => boolean;
@@ -141,8 +85,6 @@ export type Assist = {
   traceRows: () => { label: string; value: string | number }[];
 };
 
-// A step is OPENED when its chip is pressed and DONE when a person presses that
-// form's own button. Only the second ticks the plan.
 type Landed = { text: string; steps: { say: string; card: AdmittedCard }[]; opened: Set<number>; done: Set<number> };
 type Active = { id: number; controller: AbortController; record: RunRecord };
 type SayDetail = { steps?: number; fields?: number; reason?: string; read?: string[]; lookedUp?: number; ms?: number };
@@ -151,8 +93,6 @@ const StepIndexSchema = z.number().int().min(0);
 
 const AIMED_MAX_CHARS = 80;
 
-// How many of the rows a run was handed are kept on its turn for later turns to
-// name. Enough for a day's running order; not a copy of the database.
 const REMEMBERED_MAX = 40;
 
 const turnsOf = (messages: readonly Message[]): RunTurn[] =>
@@ -167,46 +107,26 @@ const charsOf = (messages: readonly Message[]): number => messages.reduce((sum, 
 
 export const createAssist = (deps: AssistDeps): Assist => {
   const { session, agent, touched } = deps;
-  // Both halves are required: a model to run, and the card to say so on. A
-  // principal whose charter withholds `assist.answer` simply has no agent.
   const enabled = agent.llm !== undefined && session.actions.includes(ASSIST_ACTION);
   const thread = createThread(session.wire);
 
   const records: RunRecord[] = [];
-  // Runs before this index belong to sentences that are gone: the trace shows
-  // the sentence on the line, not the last thing that ever ran.
   let sentenceFrom = 0;
-  // The text whose run has finished — landed or failed. It is not run again by
-  // the pass its own landing sets off; Enter runs it again, because a person asked.
   let answeredText = '';
   let latest: PassContext | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let active: Active | undefined;
   let landed: Landed | undefined;
   let runCount = 0;
-  // Has a run been started for the sentence on the line? Then the card is a
-  // REPORT, and stays; before that it is only a promise, and can be withdrawn.
   let hasReported = false;
-  // A sentence that settled with NO run — Jev alone, or no agent to hand it to.
-  // It is a turn all the same, stored when the sentence is left: by then the
-  // screen says what was opened, aimed and submitted, which at the moment of
-  // settling it did not yet.
   let settledAlone: PassContext | undefined;
-  // The sentence last stored as an operator turn — Enter twice is one question.
   let storedLine = '';
   let lastInput: { input: Message[] } | undefined;
-  // What the last landed WRITE was authored from, and the timer that notices it
-  // has gone stale.
   let authoredFrom: { text: string; siblings: string } | undefined;
   let reauthorTimer: ReturnType<typeof setTimeout> | undefined;
-  // Form instances whose button has been pressed — so a press is recorded once.
   const submitted = new Set<string>();
   let watching: Shell | undefined;
-  // The rows the last run could name (candidates, facts, thread) — kept for
-  // wording a form that run opened.
   let lastTable: CandidateSets = {};
-  // Runs still draining: an aborted run is reported at once and RECORDED when
-  // its stream finally ends, because only then is what it spent known.
   const draining = new Set<Promise<void>>();
   let waiters: (() => void)[] = [];
 
@@ -222,8 +142,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
     timer = undefined;
   };
 
-  // ─── the card and the trace ────────────────────────────────
-
   const instanceOf = (shell: Shell, canvas: string, actionId: string): string | undefined => shell.getState().canvases[canvas]?.stack.find((item) => item.definitionId === actionId)?.id;
 
   const mergeInto = (canvas: string, actionId: string, patch: Record<string, unknown>): void => {
@@ -233,9 +151,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
     if (runtime !== undefined) runtime.setData({ ...runtime.getData(), ...patch });
   };
 
-  // THE ROOM HAS ONE ROW OF NEXT STEPS (frame/intent-options.layout.ts), and the
-  // answer's part of it — the questions worth asking next, and whether a plan's
-  // steps are standing in for card suggestions — is written there with the card.
   const writeNextSteps = (card: Record<string, unknown>): void => {
     const links = Array.isArray(card['followUps']) ? card['followUps'] : [];
     const steps = Array.isArray(card['steps']) ? card['steps'] : [];
@@ -254,8 +169,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
     writeNextSteps({});
   };
 
-  // WHAT THE CARD SAYS WHILE A RUN IS OUT, and — for x-ray's story — what it read
-  // and how long it took once it is back.
   const sayFor = (status: RunStatus, detail: SayDetail): string => {
     if (status === 'running') return 'Answering…';
     if (status === 'landed') {
@@ -267,8 +180,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
     return '';
   };
 
-  // The one line an operator still needs once an answer is back: that it failed,
-  // that the steps are theirs to press, that the words are theirs to edit.
   const plainFor = (status: RunStatus, detail: SayDetail): string => {
     if (status === 'failed') return 'That did not work, and nothing was changed. Say it another way, or press Enter to try again.';
     if (status !== 'landed') return '';
@@ -319,13 +230,8 @@ export const createAssist = (deps: AssistDeps): Assist => {
     deps.onRun?.(session.principal, { ...record, answerWrites: [...record.answerWrites] });
   };
 
-  // The thread's rows changed: the card reloads them through its own endpoint.
   const threadChanged = (): void => session.shell.publish(THREAD_CHANNEL);
 
-  // ─── what the agent is handed ──────────────────────────────
-
-  // What is up right now, and what each card is aimed at — read off the live
-  // data, so a field a person corrected by hand is reported as they left it.
   const screenNow = (): Predecisions['screen'] => {
     const shell = session.shell;
     const state = shell.getState();
@@ -341,14 +247,11 @@ export const createAssist = (deps: AssistDeps): Assist => {
             return [[field.name, typeof value === 'string' && value.length > AIMED_MAX_CHARS ? `${value.slice(0, AIMED_MAX_CHARS)}…` : value]];
           }),
         );
-        // A form somebody SUBMITTED is the most important fact on a screen.
         return [{ canvas, card: item.definitionId, aimedAt: data['saved'] === true ? { ...aimedAt, submitted: true } : aimedAt }];
       }),
     );
   };
 
-  // Free-text fields the agent may author: `.meta({ write: true })`, on a card
-  // that is on screen now, that no person has touched.
   const writableNow = (): Predecisions['writable'] => {
     const shell = session.shell;
     const state = shell.getState();
@@ -375,11 +278,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
     ...(parsed.amount !== undefined ? { amount: parsed.amount } : {}),
   });
 
-  // ─── rows, and what cards amount to ────────────────────────
-
-  // The row ids a card is showing, read off its live data: every string under a
-  // key that names an id, anywhere in what it loaded. What a claim's `row` may
-  // be when it is not one of the pass's own candidates.
   const idsIn = (value: unknown, found: Set<string>): void => {
     if (Array.isArray(value)) for (const item of value) idsIn(item, found);
     const record = z.record(z.string(), z.unknown()).safeParse(value);
@@ -407,15 +305,11 @@ export const createAssist = (deps: AssistDeps): Assist => {
     return merged;
   };
 
-  // A row's NAME, for a sentence a person reads: the label up to its dash. Looked
-  // for among this pass's candidates, then among the rows the last run was
-  // handed — a plan's form is about an act the FOLLOW-UP never retrieved.
   const nameOf = (id: string): string => {
     const rows = [...Object.values(latest?.candidates ?? {}).flat(), ...Object.values(lastTable).flat()];
     return (rows.find((row) => row.id === id)?.label ?? id).split(' — ')[0] ?? id;
   };
 
-  // WHAT A CARD AMOUNTED TO, in the operator's terms (app/rail-phrases.ts).
   const phraseFor = (actionId: string, data: Record<string, unknown>): string | undefined => {
     const phrase = RAIL_PHRASES[actionId];
     const definition = deps.definitions[actionId];
@@ -432,8 +326,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
       .join('');
   };
 
-  // The room, as a line of the rail: what the forms amount to, or else which
-  // cards were opened.
   const railOfScreen = (): string => {
     const shell = session.shell;
     const cards = QUESTION_CANVASES.flatMap((canvas) => shell.getState().canvases[canvas]?.stack ?? []);
@@ -450,25 +342,18 @@ export const createAssist = (deps: AssistDeps): Assist => {
   const stepsShown = (): { index: number; label: string; opened: boolean; done: boolean }[] =>
     (landed?.steps ?? []).map((step, index) => ({ index, label: step.say, opened: landed?.opened.has(index) === true, done: landed?.done.has(index) === true }));
 
-  // The forms beside a written field, as the run saw them.
   const siblingsNow = (): string => JSON.stringify(screenNow().map((card) => [card.card, Object.fromEntries(Object.entries(card.aimedAt).filter(([key]) => !writableKeys(card.card).has(key)))]));
   const writableKeys = (card: string): ReadonlySet<string> => {
     const definition = deps.definitions[card];
     return new Set(definition === undefined ? [] : inputContractOf(definition).fields.flatMap((field) => (field.write === true ? [field.name] : [])));
   };
 
-  // ─── the thread ────────────────────────────────────────────
-
   const aimedWords = (aimedAt: Record<string, unknown>): string => {
     const words = Object.entries(aimedAt).map(([key, value]) => (key === 'submitted' ? 'SUBMITTED' : `${key}=${String(value)}`));
     return words.length === 0 ? '' : ` (${words.join(', ')})`;
   };
 
-  // A sentence the CARDS answered — no assistant, or an assistant with nothing to
-  // add — as ONE compact line: what was opened, what those cards were aimed at,
-  // which rows the sentence was taken to name. Stored when the sentence is LEFT:
-  // by then the screen says what was submitted, which at the moment it finished it
-  // did not yet.
+  // Stored when the sentence is left: only by then does the screen say what was submitted.
   const storeSettledAlone = (): void => {
     const context = settledAlone;
     settledAlone = undefined;
@@ -476,34 +361,21 @@ export const createAssist = (deps: AssistDeps): Assist => {
     const rows = resolvedRows(context.handoff.entities);
     if (context.text !== storedLine) void thread.append('operator', context.text, { run: false, rows });
     storedLine = context.text;
-    // `rail` is the same turn for a PERSON: "moved Nova Kestrel → The Tent,
-    // 21:00 · not submitted". The body above it is the same turn for the agent.
     void thread.append('jev', `${CARDS_ONLY} ${screenWords(rows)}`, { resolved: rows, rows, screen: screenNow(), rail: railOfScreen() }).then(threadChanged);
   };
 
-  // What the cards amount to, as one compact line for the thread: what is open and
-  // aimed at what, and which rows the sentence was taken to name.
   const screenWords = (rows: Predecisions['resolved'] = []): string => {
     const screen = screenNow();
     const openedWords = screen.length === 0 ? 'Nothing was opened.' : `Opened ${screen.map((card) => `${card.card}${aimedWords(card.aimedAt)}`).join('; ')}.`;
     return `${openedWords}${rows.length === 0 ? '' : ` Rows named: ${rows.map((row) => `${row.label} [${row.table}:${row.id}]`).join('; ')}.`}`;
   };
 
-  // ─── applying a landed answer ──────────────────────────────
-
-  // Bring ONE canvas to a described state: `cards` go up, or are re-aimed where
-  // they already stand, tagged with who put them there; `standing` cards are
-  // named with no input, so reconcile leaves them exactly as they are. The SAME
-  // verb Jev's cards land through, and the same placement map.
+  // `standing` cards are named with no input, so reconcile leaves them exactly as they are.
   const reconcileTo = (canvas: string, cards: readonly AdmittedCard[], standing: readonly string[], placedBy: string, why: string): void => {
     const shell = session.shell;
     const described = cards.map((card) => {
       const existing = instanceOf(shell, canvas, card.actionId);
-      // Tagged like every card in the room — but with the agent's name, not
-      // Jev's probability: this card is here because an answer said so.
       const input = { ...card.input, ...tileOf(card.actionId, canvas), [PLACED_BY]: placedBy, [CITE_KEY]: card.actionId, [WHY]: why };
-      // A card already up is written only where nobody has been (touched.ts):
-      // the write is recorded BEFORE it is made.
       const writing = existing === undefined ? input : { ...touched.untouched(existing, input), ...keptAcrossReopen(shell.getRuntime(existing)?.getData() ?? {}) };
       if (existing !== undefined) touched.willWrite(existing, writing);
       return { actionId: card.actionId, input: writing, with: [PLACED_FRAGMENT] };
@@ -518,12 +390,10 @@ export const createAssist = (deps: AssistDeps): Assist => {
         touched.adopt(instanceId, definition, writing);
         touched.markAuthored(instanceId, Object.keys(writing));
       }
-      // Handed to the fast speed: pinned, and Jev fills what the agent left.
       deps.adopt(card.actionId, card.input, placedBy, why);
     });
   };
 
-  // A plan step's card JOINS its canvas: what is there stays.
   const openBeside = (card: AdmittedCard, placedBy: string, why: string): void => {
     const standing = (session.shell.getState().canvases[card.canvas]?.stack ?? []).map((item) => item.definitionId).filter((id) => id !== card.actionId);
     reconcileTo(card.canvas, [card], standing, placedBy, why);
@@ -534,7 +404,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
     for (const entry of answer.fields) {
       const canvas = CANVAS_PLACEMENT[entry.card];
       const instanceId = canvas === undefined ? undefined : instanceOf(shell, canvas, entry.card);
-      // Touched since the run began: the person's words stand.
       if (instanceId === undefined || touched.isTouched(instanceId, entry.field)) continue;
       touched.willWrite(instanceId, { [entry.field]: entry.text });
       touched.markAuthored(instanceId, [entry.field]);
@@ -544,20 +413,9 @@ export const createAssist = (deps: AssistDeps): Assist => {
       record.fieldsWritten.push(`${entry.card}.${entry.field}`);
     }
 
-    // THE AGENT ADDS AND AIMS; ONLY JEV CLOSES. The first version copied
-    // atrium: what a named canvas's list left out came down, and was held down.
-    // That is right where the agent is the only thing placing cards. Here there
-    // are two placers, and on the real model it went wrong at once: asked how
-    // the storm affects the lineup, 120b named `when: [weather.radar]` as
-    // evidence — and so closed the running order Jev had at 0.88, in the same
-    // answer that cited it ("a citation was dropped: lineup.timeline is not on
-    // screen"). An omission from a slow model's list is far too weak a signal
-    // to take down a card the fast model wants; what leaves the room is Jev's
-    // call, on its hysteresis, 300 ms after the sentence changes.
+    // Only Jev closes: an omission from the slow model's list is too weak a signal to take a card down.
     for (const [canvas, cards] of Object.entries(answer.canvases)) {
       record.canvasesNamed.push(canvas);
-      // A CARD JEV WANTED AND THE ASSISTANT AIMED says so, one card at a time: which
-      // row, and where the assistant got it.
       for (const card of cards) {
         const aimedWith = aimedBy?.(card);
         if (aimedWith !== undefined) record.cardsAimed.push(aimedWith.told);
@@ -568,12 +426,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
     if (record.canvasesNamed.length > 0) deps.repass();
   };
 
-  // ─── a run ─────────────────────────────────────────────────
-
-  // THE MANIFEST'S `runs` SINK, ON EVERY BRANCH — landed, failed, aborted. A
-  // stopped run still spent tokens, and recording only the successes
-  // undercounts precisely when something is going wrong. moss has two outcomes
-  // and a run has three, so the third rides the label (a gap — PLAN.md).
+  // moss has two outcomes and a run has three: the third rides the label.
   const recordSpend = (record: RunRecord, outcome: AgentRunOutcome | undefined): void => {
     session.recordRun({
       agentId: AGENT_ID,
@@ -605,8 +458,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
     record.lookups = [...outcome.lookups];
   };
 
-  // A torn-down run has nothing to show: the card goes with it. The provider
-  // stream is still draining behind this line; nobody has to watch it do so.
   const abort = (reason: string): void => {
     if (active === undefined) return;
     const { controller, record } = active;
@@ -620,11 +471,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
     settleIfIdle();
   };
 
-  // Every write a RUN makes to the card goes through here, and so at most once
-  // per ANSWER_WRITE_MS. Patches merge while they wait: the newest words win,
-  // and a "looking something up" is never lost behind them. A patch that says
-  // nothing new is not a write — solid reports a partial for every chunk, and
-  // most of an envelope's chunks are not the answer.
   const createCardWriter = (record: RunRecord, isCurrent: () => boolean): { push: (patch: Record<string, unknown>) => void; cancel: () => void } => {
     let pending: Record<string, unknown> | undefined;
     let writeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -655,7 +501,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
         pending = Object.keys(fresh).length === 0 ? undefined : fresh;
         if (pending !== undefined && writeTimer === undefined) tick();
       },
-      // The attempt was rejected, or the run is over: what is waiting is void.
       cancel: () => {
         if (writeTimer !== undefined) clearTimeout(writeTimer);
         writeTimer = undefined;
@@ -668,8 +513,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
     const context = latest;
     const llm = agent.llm;
     if (!enabled || llm === undefined || context === undefined || context.text.trim() === '') return;
-    // ONE RUN PER SESSION, and a run belongs to its text: the same text already
-    // being answered is left to finish.
     if (active !== undefined) {
       if (active.record.text === context.text) return;
       abort('The line changed.');
@@ -718,26 +561,18 @@ export const createAssist = (deps: AssistDeps): Assist => {
     records.push(record);
     landed = undefined;
     hasReported = true;
-    // This sentence is the agent's now; its turn is stored here, not on leave.
     settledAlone = undefined;
     showCard(cardFor('running'));
     publish(record);
 
     const isCurrent = (): boolean => active === run;
-    // Every write this run makes to the card — the first included — is throttled.
     const writer = createCardWriter(record, isCurrent);
-    // Torn down before a model was ever called: nothing was spent, and the
-    // sink is told so rather than told nothing.
     const droppedEarly = (): void => recordSpend(record, undefined);
 
-    // THE WINDOW IS READ BEFORE THE LINE IS STORED — the line is the run's last
-    // message, and must not also be its last turn of history — and the line is
-    // stored BEFORE the run, so a failed or aborted reply still leaves the
-    // question behind (Midas turn.ts:96-102).
+    // The window is read before the line is stored, or the line would be both the run's last
+    // message and its last turn of history. Stored before the run, it survives a failed reply.
     const window = await thread.window();
-    // ...and so is what the conversation has already put on the table.
     const remembered = await thread.remembered();
-    // ...and what has already been asked or offered, this sentence included.
     const asked = [...(await thread.asked()), context.text];
     if (context.text !== storedLine) {
       storedLine = context.text;
@@ -746,30 +581,17 @@ export const createAssist = (deps: AssistDeps): Assist => {
     }
     if (!isCurrent()) return droppedEarly();
 
-    // The context Jev asked for, read now, under the caller's policy.
     const wanted = deps.packs.filter((pack) => handoff.packs.some((entry) => entry.id === pack.id));
     const facts = await readPacks(session.wire, wanted, context.parsed, deps.clock);
     if (!isCurrent()) return droppedEarly();
     record.packsSent = Object.keys(facts);
-    // WHILE IT HAPPENS, in the operator's terms: what is being read.
     const reading = wanted.filter((pack) => facts[pack.id] !== undefined).map((pack) => pack.noun);
     if (reading.length > 0) writer.push({ say: `Reading ${reading.length === 1 ? reading[0] : `${reading.slice(0, -1).join(', ')} and ${reading.at(-1)}`}…` });
 
-    // THE ROWS THIS ANSWER MAY NAME: the candidates Jev was offered for this
-    // sentence, the rows the facts it is being handed are ABOUT, and the rows
-    // earlier turns of this thread resolved or were handed. A follow-up — "what
-    // are our options" — retrieves nothing, and the plan that answers it has to
-    // be able to move the act the last answer was about. All of them were read
-    // under this principal's policy; none is a row they could not see.
     const handed = harvestRefs(wanted, facts);
     const table = mergeRows(context.candidates, [...remembered, ...handed]);
     lastTable = table;
 
-    // THE TWO MODELS FINISH EACH OTHER'S WORK. Jev only knows the rows the operator
-    // NAMED; the assistant is about to be handed facts. A card Jev wanted and could
-    // not aim ("who's playing right now?" — the act's card, 0.70, no act named) is
-    // told to the assistant with what it needs, and is one of the actions it may
-    // open — so if the facts settle which row is meant, it can aim the card.
     const unaimed = context.held.filter((card) => card.needs.length > 0 && deps.definitions[card.id] !== undefined);
     const mayOpen = [...new Set([...handoff.narrowed, ...unaimed.map((card) => card.id)])];
     const narrowed = mayOpen.flatMap((id) => (deps.definitions[id] === undefined ? [] : [deps.definitions[id]]));
@@ -787,15 +609,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
       wanted: unaimed.map((card) => `${card.id} — wanted ${card.p.toFixed(2)} — needs: ${card.needs.map((need) => need.noun).join(', ')}`),
       asked,
     };
-    // WHAT THIS RUN MAY NAME: the few actions Jev narrowed the catalog to, the
-    // candidate rows of this pass, the fields listed as writable. The same
-    // context admits the answer inside the run (as a correction) and when it
-    // lands (whole, or not at all).
-    // Citations are admitted against the screen AS IT IS WHEN THEY ARE CHECKED —
-    // inside the run and again at landing — so both are functions, not values.
-    // ...AND THE ROWS IT MAY NAME GROW WITH WHAT IT READS: a row a `query` of this
-    // run returned — under this session's policy, shown to the model — is as nameable
-    // as a row of a pack. Nothing else is: an id from nowhere still rejects the answer.
+    // A function: citations are admitted against the screen as it is when they are checked.
     const lookedUpRows: HarvestedRow[] = [];
     const answerContext = (): AnswerContext => ({ allowed: new Set(mayOpen), definitions: deps.definitions, candidates: mergeRows(table, lookedUpRows), writable, onScreen: new Set(screenNow().map((card) => card.card)), rowsOn, asked });
     const request = { thread: window, predecisions, line: context.text };
@@ -815,8 +629,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
         return verdict.ok ? [] : verdict.reasons;
       },
       onAnswer: (soFar) => writer.push({ answer: soFar, segments: streamingSegments(soFar) }),
-      // A REJECTED ATTEMPT NEVER REACHES THE CARD as an answer: what streamed
-      // of it is wiped, and the next attempt starts from nothing.
       onRetry: () => {
         writer.cancel();
         writer.push({ answer: '', segments: [], say: 'Still working — the first attempt was not good enough, trying again…' });
@@ -830,16 +642,12 @@ export const createAssist = (deps: AssistDeps): Assist => {
     writer.cancel();
     measure(record, outcome);
 
-    // Torn down while it was out: `abort` already said so on the card, and
-    // whatever came back is for a question nobody is asking any more. What it
-    // SPENT is known only now.
     if (!isCurrent()) {
       publish(record);
       return recordSpend(record, outcome);
     }
     active = undefined;
 
-    // NOTHING AT ALL IS AN ANSWER: no data is an empty answer, admitted like any other.
     const data = outcome.data ?? {};
     const verdict = outcome.status === 'landed' ? admitAnswer(answerContext(), data, outcome.response) : undefined;
     if (outcome.status === 'landed' && verdict !== undefined && verdict.ok) {
@@ -847,8 +655,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
       record.answer = outcome.response;
       record.planSteps = verdict.steps.length;
       landed = { text: context.text, steps: verdict.steps, opened: new Set(), done: new Set() };
-      // What aimed a wanted card, in words: the row the assistant chose for the input
-      // Jev could not fill, and the facts it came from.
       const sources = new Map([...handed, ...lookedUpRows].map((row) => [`${row.table}:${row.id}`, row]));
       apply(verdict, record, (card) => {
         const need = unaimed.find((held) => held.id === card.actionId)?.needs.find((entry) => entry.table !== undefined && typeof card.input[entry.key] === 'string');
@@ -857,8 +663,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
         const name = row.label.split(' — ')[0] ?? row.label;
         return { why: `Opened because you said “${context.text.trim()}” — the assistant picked ${name} from ${row.from}.`, told: `“${deps.definitions[card.actionId]?.title ?? card.actionId}” at ${name}, from ${row.from} — Jev wanted it and could not aim it` };
       });
-      // Citations are re-admitted against the screen the answer just MADE: a
-      // card it placed is on screen now, and may be stood on.
+      // Citations are admitted again, against the screen the answer just made.
       const cited = admitAnswer(answerContext(), data, outcome.response);
       const claims = cited.ok ? cited.claims : verdict.claims;
       const notes = cited.ok ? cited.notes : verdict.notes;
@@ -866,8 +671,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
       record.claimsDropped = notes;
       record.followUps = verdict.followUps;
       const hasWords = outcome.response.trim() !== '';
-      // THE SURFACE SHOWS ONLY WHAT THERE IS TO SHOW: words, steps, a question worth
-      // asking next. An answer with none of them leaves no card behind.
       if (hasWords || verdict.steps.length > 0 || verdict.followUps.length > 0) {
         showCard(
           cardFor(
@@ -880,25 +683,15 @@ export const createAssist = (deps: AssistDeps): Assist => {
         hasReported = false;
         hideCard();
       }
-      // What written words were authored from: the forms beside the field. If a
-      // person changes one of them, the words are stale (see `reauthor`).
       authoredFrom = record.fieldsWritten.length > 0 ? { text: context.text, siblings: siblingsNow() } : undefined;
-      // The answer becomes a turn — with what it did to the screen, so a later "do
-      // that for the support act too" knows what "that" was, and with the rows it
-      // was handed, so a later turn may name them. An answer with no words is a turn
-      // too: what the cards amounted to, in the same compact line a sentence with no
-      // assistant gets (storeSettledAlone).
       await thread.append('agent', hasWords ? outcome.response : `${CARDS_ONLY} ${screenWords()}`, { canvases: record.canvasesNamed, cards: record.cardsMounted, closed: record.cardsClosed, fields: record.fieldsWritten, steps: verdict.steps.map((step) => step.say), lookups: outcome.lookups, followUps: verdict.followUps, rows: handed.slice(0, REMEMBERED_MAX), ...(hasWords ? {} : { rail: railOfScreen() }) });
       threadChanged();
     } else if (outcome.status === 'aborted') {
-      // AN OUTCOME, NOT AN ERROR. Nothing of it is kept — not on the card, not in
-      // the thread.
       record.status = 'aborted';
       record.reason = outcome.reason;
       hasReported = false;
       hideCard();
     } else {
-      // REJECTED WHOLE: nothing above ran, so nothing was written or mounted.
       record.status = 'failed';
       record.reason = verdict !== undefined && !verdict.ok ? `The answer named something the room cannot open: ${verdict.reasons.join('; ')}` : outcome.reason;
       showCard(cardFor('failed', { reason: record.reason, lookups: outcome.lookups.join(' · ') }, { reason: record.reason }));
@@ -930,12 +723,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
     draining.add(running);
   };
 
-  // ─── what a PERSON does to the room ────────────────────────
-
-  // A BUTTON WAS PRESSED. The form says `saved`; the loop did not press it and
-  // neither did the agent, so this is the one kind of turn nobody typed. It is
-  // recorded for the rail and for the agent's next answer, and if the form was a
-  // step of the plan on the card, the plan ticks.
   const onSubmitted = (actionId: string, data: Record<string, unknown>): void => {
     const phrase = `${phraseFor(actionId, data) ?? deps.definitions[actionId]?.title ?? actionId} · ${SUBMITTED}`;
     void thread.append('did', phrase, { rail: phrase, action: actionId }).then(threadChanged);
@@ -946,11 +733,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
     mergeInto(ASSIST_CANVAS, ASSIST_ACTION, { steps: stepsShown(), progress: `${landed.done.size} of ${landed.steps.length}` });
   };
 
-  // THE WORDS FOLLOW THE FORM THEY WERE WRITTEN FROM. A push drafted from "Nova
-  // Kestrel → The Tent, 21:00" is wrong the moment somebody makes it 22:00 —
-  // so when the forms beside a written field change, and the line is quiet, the
-  // same question is asked again. A field the operator has typed in is not
-  // offered to that run, and so is never written (touched.ts).
   const reauthor = (): void => {
     reauthorTimer = undefined;
     const written = authoredFrom;
@@ -975,8 +757,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
     });
   };
 
-  // The line has been quiet for a beat: the sentence is FINISHED. With an assistant,
-  // it runs. Without one, the cards are the turn.
   const onFinished = (context: PassContext): void => {
     if (enabled) launch('idle');
     else settledAlone = context;
@@ -984,8 +764,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
 
   return {
     enabled,
-    // A keystroke is the line NOT being idle — and a run belongs to the text it
-    // started with, so a line that now says something else tears it down.
     onKeystroke: (text) => {
       disarm();
       if (active !== undefined && active.record.text !== text) abort('The line changed.');
@@ -996,7 +774,7 @@ export const createAssist = (deps: AssistDeps): Assist => {
       watch();
       disarm();
       if (active !== undefined && active.record.text !== context.text) abort('The line changed.');
-      // The pass a landing sets off is the same text: it is not run twice.
+      // A landing sets off a pass on the same text: it must not start a second run.
       if (active === undefined && context.text !== answeredText) {
         timer = setTimeout(() => {
           timer = undefined;
@@ -1017,8 +795,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
     onClear: (why) => {
       disarm();
       abort(why);
-      // The sentence is being LEFT: if it settled without a run, this is when
-      // it becomes a turn — while the screen still shows what came of it.
       storeSettledAlone();
       latest = undefined;
       landed = undefined;
@@ -1029,11 +805,8 @@ export const createAssist = (deps: AssistDeps): Assist => {
       if (reauthorTimer !== undefined) clearTimeout(reauthorTimer);
       reauthorTimer = undefined;
       submitted.clear();
-      // The trace is about the sentence on the line. The last sentence's run is
-      // history, and the thread is where history lives.
       sentenceFrom = records.length;
       if (enabled) hideCard();
-      // The exchange that was on show is history now: the rail reads it back.
       threadChanged();
       writeTraceRun();
       settleIfIdle();
@@ -1058,7 +831,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
     },
 
     newThread: async () => {
-      // A sentence waiting to become a turn belongs to the thread being ended.
       storeSettledAlone();
       await thread.append('break', '');
       storedLine = '';
@@ -1068,8 +840,6 @@ export const createAssist = (deps: AssistDeps): Assist => {
 
     earlierTurns: async () => {
       const entries = await thread.entries();
-      // The exchange on the answer card is shown BY that card; the rail is what
-      // came before it. Same rows, newest first, minus the line being answered.
       const current = storedLine === '' ? -1 : entries.findIndex((entry) => entry.line === storedLine && entry.by !== 'pressed');
       return current < 0 ? entries : entries.filter((_, index) => index !== current);
     },
@@ -1078,14 +848,10 @@ export const createAssist = (deps: AssistDeps): Assist => {
       if (timer !== undefined || reauthorTimer !== undefined || active !== undefined || draining.size > 0) await new Promise<void>((resolve) => waiters.push(resolve));
       await thread.flushed();
     },
-    // ─── for the room that watches (server/watch) ──────────────
-    // A flagged event is a turn like any other: a row, through the wire.
     recordEvent: (line, detail) => {
       void thread.append('event', line, detail).then(threadChanged);
     },
     isRunOut: () => active !== undefined,
-    // ONE LINE about an event — the same agent, the same prompt and contract, the
-    // event as its state; no tools, nothing it may name. Recorded in the `runs` sink like every other run.
     brief: async (request, abort) => {
       const llm = agent.llm;
       if (!enabled || llm === undefined) return undefined;
@@ -1095,9 +861,8 @@ export const createAssist = (deps: AssistDeps): Assist => {
         llm,
         thread: [],
         predecisions,
-        // The line is the WHOLE situation, not only what tipped it: a model
-        // answers its last message, and a brief about one cause is what it wrote
-        // when that message named one cause.
+        // The line is the whole situation, not only what tipped it: a model answers its
+        // last message, and one that names a single cause gets a brief about that cause.
         line: `JUST NOW: ${request.event.line}\nSTANDING, all at once: ${request.standing.map((cause) => `${cause.place} — ${cause.reading} (since ${cause.since})`).join(' | ')}`,
         tools: [],
         abort,

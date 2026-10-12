@@ -1,10 +1,5 @@
 import { defineComponent, h, onErrorCaptured, shallowRef, type VNodeChild } from 'vue';
 
-// ═══════════════════════════════════════════════════════════
-// Vue's error boundary is a hook, not a class: onErrorCaptured stops the
-// error propagating (return false) and swaps the subtree for a fallback.
-// ═══════════════════════════════════════════════════════════
-
 export type NovaErrorBoundaryProps = {
   fallback?: (error: Error) => VNodeChild;
   onError?: (error: Error, info: string) => void;

@@ -2,8 +2,6 @@ import type { ActionDefinition } from '@niscorp/nova';
 import { memberCounts, memberRegister } from '@lyceum/app/vex/member.entries';
 import { registerLayout } from './register.layout';
 
-// The register, as a slide: everybody who joined. Its reads are reactive: when
-// somebody joins, the new rows arrive on their own.
 export const stageRegisterAction: ActionDefinition = {
   id: 'stage.register',
   title: 'The register',

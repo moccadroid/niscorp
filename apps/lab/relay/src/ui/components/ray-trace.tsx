@@ -3,13 +3,6 @@ import { z } from 'zod';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { type TraceStep } from '@relay/server/functions/ray/trace';
 
-// RayTrace — shows the tools Ray is calling. Two modes:
-//   • live=true   → the in-flight run's calls, headed "Ray is thinking…". Same
-//                   `steps` prop; the chat keeps it current from the server's
-//                   `ray:step` announcements, so this stays a dumb renderer.
-//   • steps=[...] → a finished message's tool calls, headed by "Ray thought for X".
-// Tool names + timing are ALWAYS shown. The debug toggle (Settings → Ray) only
-// adds the expandable JSON input/output per step. Self-contained dark styling.
 const RayTraceProps = z
   .object({
     steps: z.array(z.unknown()).optional().describe("A finished message's recorded tool calls."),
@@ -19,7 +12,6 @@ const RayTraceProps = z
   })
   .strict();
 
-// Human duration — minutes/seconds, never raw ms.
 const fmtDuration = (ms: number): string => {
   const s = ms / 1000;
   if (s >= 60) {
@@ -92,8 +84,6 @@ const C = {
 
 const Json = ({ value }: { value: unknown }) => <pre style={C.json}>{JSON.stringify(value, null, 2)}</pre>;
 
-// One tool call. Always shows name + status (running… / duration); in debug mode
-// the row toggles the JSON input (and output once it lands).
 const Step = ({ s, debug }: { s: TraceStep; debug: boolean }) => {
   const [open, setOpen] = useState(false);
   const running = s.status === 'running';
@@ -132,8 +122,6 @@ export const RayTrace: NovaComponent<z.infer<typeof RayTraceProps>> = ({
   if (live !== true && data.length === 0) return null;
 
   const showDetail = debug === true;
-  // Live: say how far in we are. "Thinking…" for seven minutes with a step
-  // count that never moves is the thing this whole panel exists to avoid.
   const head =
     live === true
       ? data.length === 0

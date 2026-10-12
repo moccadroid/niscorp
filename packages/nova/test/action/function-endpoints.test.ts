@@ -62,8 +62,7 @@ describe('callEndpoint — function variant', () => {
       functions: { withSignal: handler },
       signal: controller.signal,
     });
-    // Not the same object — the call's signal also carries its timeout — but
-    // the action going away still reaches the handler.
+    // Not the same object: the call's signal also carries its timeout.
     expect(captured?.aborted).toBe(false);
     controller.abort();
     expect(captured?.aborted).toBe(true);
@@ -175,7 +174,6 @@ describe('runtime — function endpoints via triggers', () => {
     await tick();
     expect(runtime.getData()['result']).toEqual({ via: 'update' });
 
-    // Flip the data accessor → the same endpoint now dispatches to `create`.
     runtime.setData({ saveFn: 'create', result: null });
     deps.eventBus.emit({ type: 'ui:click', ref: 'go' });
     await tick();

@@ -1,6 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The deck as a numbered list, the slide on screen marked; a row is a press.
 export const slidesLayout: LayoutNode = {
   component: 'Rows',
   props: {

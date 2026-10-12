@@ -1,13 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// The manifold — a catalog, defaults, and the run tap
-// ═══════════════════════════════════════════════════════════
-//
-// Per DESIGN.md §8. Not a lifecycle, not an event substrate, not a
-// second execution path: agent.run() standalone and manifold.run()
-// are the same function — the manifold merges its defaults and taps
-// the handle. Libraries (vex, prism, nova) export agents; apps
-// register them here and compose them (asTool) into orchestrators.
-
 import type { Envelope, SignalClient } from '../types';
 import type { RunInput } from '../context/assemble';
 import type { ToolGate } from '../gates/types';
@@ -20,16 +10,11 @@ import { buildAgentTool } from './as-tool';
 import type { ErasedAgent, ErasedRunOptions, RunTap } from './types';
 
 export type ManifoldConfig = {
-  // Fallback model for agents without their own binding.
   llm?: SignalClient;
-  // Gates appended to every run (e.g. the app's UI approval gate).
   gates?: ReadonlyArray<ToolGate<unknown>>;
-  // Tap: called with every handle created through manifold.run().
   onRun?: RunTap;
 };
 
-// Anything registrable: agent definitions and tool definitions match
-// structurally; the manifold discriminates at runtime.
 export type Registrable = { agentId: string } | { toolId: string };
 
 export type ManifoldAsToolOptions = {

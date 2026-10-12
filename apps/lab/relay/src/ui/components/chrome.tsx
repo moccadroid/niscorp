@@ -3,13 +3,6 @@ import { z } from 'zod';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { cx } from '../lib/cx';
 
-// Chrome components — dialogs, panels, rails, kanban scaffolding, small
-// decorated atoms. Every kit CSS class is applied HERE, internally: a layout
-// declares WHAT a thing is via simple props; it never names a class or a
-// style. The global stylesheet (ui.css) is these components' private business.
-
-// ─── Dialog family ─────────────────────────────────────────
-
 const DialogProps = z
   .object({
     size: z.enum(['narrow', 'wide']).optional().describe('Card width: narrow (confirm), wide (record/quickview). Default form width.'),
@@ -68,14 +61,10 @@ export const PanelClose: NovaComponent<z.infer<typeof EMPTY_PROPS>> = ({ childre
 );
 PanelClose.meta = { description: 'Floating close-button slot in a panel Dialog\'s corner.', propsSchema: EMPTY_PROPS };
 
-// ─── Form footer ───────────────────────────────────────────
-
 export const FormFoot: NovaComponent<z.infer<typeof EMPTY_PROPS>> = ({ children }) => (
   <div className="rl-form__foot">{children}</div>
 );
 FormFoot.meta = { description: 'A form\'s own footer (Cancel + Confirm), bordered, right-aligned.', propsSchema: EMPTY_PROPS };
-
-// ─── Shell rails ───────────────────────────────────────────
 
 export const Aside: NovaComponent<z.infer<typeof EMPTY_PROPS>> = ({ children }) => (
   <div className="rl-aside">{children}</div>
@@ -86,8 +75,6 @@ export const AssistantDock: NovaComponent<z.infer<typeof EMPTY_PROPS>> = ({ chil
   <div className="rl-assistant">{children}</div>
 );
 AssistantDock.meta = { description: 'The right-docked assistant panel (screen stays visible beside it).', propsSchema: EMPTY_PROPS };
-
-// ─── Small decorated atoms ─────────────────────────────────
 
 const ProgressProps = z
   .object({
@@ -112,8 +99,6 @@ export const ActivityDot: NovaComponent<z.infer<typeof ActivityDotProps>> = ({ t
   <div className={cx('rl-actdot', `rl-actdot--${tone}`)}>{children}</div>
 );
 ActivityDot.meta = { description: 'A coloured circle holding a type icon (activity feeds read by colour).', propsSchema: ActivityDotProps };
-
-// ─── Kanban scaffolding ────────────────────────────────────
 
 const KanbanBoardProps = z
   .object({

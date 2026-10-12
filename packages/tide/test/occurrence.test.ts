@@ -3,10 +3,6 @@ import { occurrencesBetween, zonedParts, zonedToUtc, daysInMonth } from '../src/
 import type { Clock } from '../src/index';
 import { utc } from './support';
 
-// The claim under test: occurrence identity is LOCAL CALENDAR FIELDS, so a
-// DST boundary can move the instant a key fires at but can neither mint a
-// second key nor lose one.
-
 const vienna = 'Europe/Vienna';
 const denver = 'America/Denver';
 
@@ -15,9 +11,7 @@ const daily = (at: string, tz: string): Clock => ({ every: 'day', at, tz });
 
 describe('zoned time', () => {
   it('resolves a wall-clock time to the instant it names', () => {
-    // 03:00 Vienna in January is CET (UTC+1).
     expect(zonedToUtc({ year: 2026, month: 1, day: 15 }, 3, 0, vienna)).toBe(utc('2026-01-15T02:00:00Z'));
-    // …and in July is CEST (UTC+2). Same wall clock, different instant.
     expect(zonedToUtc({ year: 2026, month: 7, day: 15 }, 3, 0, vienna)).toBe(utc('2026-07-15T01:00:00Z'));
   });
 
@@ -36,8 +30,7 @@ describe('zoned time', () => {
   });
 
   it('shifts an erased spring-forward time past the gap', () => {
-    // 2026-03-29: Vienna springs 02:00 CET → 03:00 CEST, so 02:30 never
-    // exists. Temporal's `compatible` disambiguation shifts forward.
+    // 2026-03-29: Vienna springs 02:00 CET → 03:00 CEST, so 02:30 never exists.
     const resolved = zonedToUtc({ year: 2026, month: 3, day: 29 }, 2, 30, vienna);
     expect(resolved).toBe(utc('2026-03-29T01:30:00Z'));
     expect(zonedParts(resolved, vienna).hour).toBe(3);
@@ -52,8 +45,7 @@ describe('occurrences', () => {
   });
 
   it('crosses a DST boundary without minting or losing a key', () => {
-    // March 2026 contains Vienna's spring-forward. A daily 03:00 run must
-    // produce exactly one key per local date across it.
+    // Vienna springs forward on 2026-03-29.
     const found = occurrencesBetween(daily('03:00', vienna), utc('2026-03-27T00:00:00Z'), utc('2026-03-31T23:00:00Z'), 50);
     expect(found.map((occurrence) => occurrence.key)).toEqual([
       '2026-03-27',

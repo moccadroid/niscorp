@@ -9,8 +9,6 @@ import { Skeleton } from './components/feedback';
 import { Overlay } from './components/overlay';
 import { Table } from './components/table';
 
-// The Fable primitive vocabulary — every component a Nova layout can name.
-// Domain-blind on purpose: no component knows what a todo is.
 const FABLE_PRIMITIVES = {
   Box,
   Stack,
@@ -30,10 +28,8 @@ const FABLE_PRIMITIVES = {
   Table,
 } as unknown as Record<string, NovaComponent>;
 
-// The component registry the shell renders against. CanvasSlot / ActionSlot
-// are Nova's shell-aware slots (we reuse them); everything else is a Fable
-// primitive. Registering CanvasSlot up front also stops <NovaShell>'s builtin
-// auto-registration from overwriting our styled Box/Stack/Text/Button.
+// Registering CanvasSlot here also stops <NovaShell>'s builtin
+// auto-registration from overwriting the kit's Box/Stack/Text/Button.
 export const buildRegistry = () => {
   const reg = createComponentRegistry<NovaComponent>();
   reg.registerAll({ CanvasSlot, ActionSlot });

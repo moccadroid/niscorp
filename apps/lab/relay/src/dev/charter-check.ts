@@ -1,9 +1,3 @@
-// Charter check — "if it boots, it's coherent" for RELAY'S DOCUMENTS. The
-// engine's grammar corpus lives with the engine (packages/charter/test);
-// this check asserts the exact resolved set per role per SECTION against
-// relay's live universes, the compiled vex policies, and a clean verifier
-// report — printing the per-role closure. A viewer's dangling Edit targets
-// are EXPECTED findings (shown, not hidden), not failures.
 import { resolveRole, resolvePrincipal } from '@niscorp/charter';
 import { verifyApp, MOSS_SEQUENCE } from '@niscorp/moss';
 import { scopeGrants, createScopePolicy, createPostgresCache } from '@niscorp/vex';
@@ -17,13 +11,9 @@ import { scopeBehaviors } from '@relay/app/vex/behaviors';
 import { TABLES } from '@relay/db/schema';
 
 const ids = Object.keys(CATALOG_DEFINITIONS);
-// THE UNIVERSE MOSS ACTUALLY RESOLVES AGAINST. At boot moss introspects the
-// database, and the database holds more than relay's tables: moss's own
-// (integrations — which carries integration key HASHES — their actions, the
-// generation pointer), the strata ledger, and the vex cache. This check used
-// scopeGrants(TABLES) — relay's tables alone — so `*.read` looked like "every
-// CRM read" here while granting all of those at runtime, and nothing said so.
-// Built the way boot builds it: the same sequences, through the same runner.
+// The universe moss resolves against at boot holds more than relay's tables:
+// moss's own (integrations carries key hashes), the strata ledger and the vex
+// cache, so `*.read` reaches those too. Built from the same sequences boot runs.
 const enginePool = createPglitePool(new PGlite());
 await migrate(enginePool, [MOSS_SEQUENCE, createPostgresCache({ pool: enginePool }).sequence]);
 const ENGINE_TABLES = (await enginePool.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`)).rows
@@ -36,12 +26,9 @@ const eq = (a: readonly string[], b: readonly string[]): boolean => a.length ===
 const resolvedActions = (name: string): string[] => [...resolveRole(CHARTER, ids, name, 'actions')].sort();
 const resolvedData = (name: string): string[] => [...resolveRole(CHARTER, dataU, name, 'data')].sort();
 
-// ── the exact resolved ACTION sets ──
 const MEMBER = ['chrome.sidebar', 'chrome.topbar', 'confirm-delete', 'home', 'placeholder', 'settings'].sort();
 const VIEWER = [...MEMBER, 'crm.companies', 'crm.company.view', 'crm.contact.view', 'crm.contacts', 'crm.deal.view', 'crm.deals'].sort();
 const SALES = [...VIEWER, 'assistant', 'crm.company.form', 'crm.contact.form', 'crm.deal.form', 'tasks.form', 'tasks.manage'].sort();
-// Admin adds no actions of its own — settings is now a member-floor action, so
-// admin's action set equals sales'. Its distinction is purely the data delete tier.
 const ADMIN = [...SALES].sort();
 
 checks.push(['public = the lock screen alone', eq(resolvedActions('public'), ['auth.login'])]);
@@ -54,9 +41,6 @@ const USR1_EXPECTED = new Set([...SALES, ...resolvedActions('dev')]).size;
 checks.push([`usr_001 (sales + dev) = the union of both closures (${USR1_EXPECTED})`, resolvePrincipal(CHARTER, ids, [...ASSIGNMENTS['usr_001']!], 'actions').size === USR1_EXPECTED]);
 checks.push(['admin does NOT imply devtools', !resolveRole(CHARTER, ids, 'admin', 'actions').has('devtools.dock')]);
 
-// ── the exact resolved DATA sets — the SAME grammar, a second universe.
-//    Verb leaves mirror vex's phases: read + write.{insert,update,delete};
-//    `write` is a NAMESPACE, the umbrella is a glob (`tasks.write.*`). ──
 const READS = TABLES.map((t) => `${t}.read`).sort();
 const CRM = ['deals', 'contacts', 'companies'];
 const SALES_WRITES = [...CRM.flatMap((t) => [`${t}.write.insert`, `${t}.write.update`]), 'tasks.write.insert', 'tasks.write.update', 'tasks.write.delete'].sort();
@@ -64,7 +48,6 @@ const ADMIN_WRITES = [...SALES_WRITES, ...CRM.map((t) => `${t}.write.delete`)].s
 const SYSTEM_WRITES = [...CRM, 'tasks'].flatMap((t) => [`${t}.write.insert`, `${t}.write.update`, `${t}.write.delete`]).sort();
 checks.push([`the universe includes the engine's tables (${ENGINE_TABLES.join(', ')})`, ENGINE_TABLES.includes('integrations') && ENGINE_TABLES.includes('strata_ledger')]);
 checks.push(['public data = nothing (no data section)', resolvedData('public').length === 0]);
-// No role reads the engine's bookkeeping — least of all integration key hashes.
 for (const role of ['viewer', 'sales', 'admin', 'system']) {
   const leaked = resolvedData(role).filter((g) => ENGINE_TABLES.some((t) => g.startsWith(`${t}.`)));
   checks.push([`${role} reads none of the engine's tables${leaked.length > 0 ? ` (holds ${leaked.join(', ')})` : ''}`, leaked.length === 0]);
@@ -75,14 +58,12 @@ checks.push(['sales holds deals.write.update but NOT deals.write.delete', resolv
 checks.push([`admin data = sales + the CRM delete tier (${READS.length + ADMIN_WRITES.length})`, eq(resolvedData('admin'), [...READS, ...ADMIN_WRITES].sort())]);
 checks.push(['activities are read-only for everyone (no role grants any write leaf)', !resolvedData('admin').some((g) => g.startsWith('activities.write')) && !resolvedData('system').some((g) => g.startsWith('activities.write'))]);
 
-// ── the trusted floor is a charter artifact too ──
 checks.push([`system data = reads + the full write namespaces (${READS.length + SYSTEM_WRITES.length})`, eq(resolvedData('system'), [...READS, ...SYSTEM_WRITES].sort())]);
 checks.push(['system grants no actions (an engine principal, not a user)', resolvedActions('system').length === 0]);
 const systemPolicy = createScopePolicy(new Set(resolvedData('system')), scopeBehaviors);
 const sysPipelines = systemPolicy.entities['pipelines'] as { read?: unknown; insert?: unknown; update?: unknown; delete?: unknown } | undefined;
 checks.push(["system's compiled pipelines entity is read-only (no write phase of any kind)", sysPipelines?.read !== undefined && sysPipelines.insert === undefined && sysPipelines.update === undefined && sysPipelines.delete === undefined]);
 
-// ── the compiled policies: grants → which vex phases exist ──
 const viewerPolicy = createScopePolicy(new Set(resolvedData('viewer')), scopeBehaviors);
 const salesPolicy = createScopePolicy(new Set(resolvedData('sales')), scopeBehaviors);
 const adminPolicy = createScopePolicy(new Set(resolvedData('admin')), scopeBehaviors);
@@ -93,17 +74,12 @@ checks.push(["admin's deals entity gains the delete phase", Array.isArray(phases
 checks.push(["tasks read carries the assignee filter (a granted behavior)", phases(viewerPolicy, 'tasks')?.read?.length === 1]);
 checks.push(["sales's tasks phases carry the umbrella behaviors (insert: set+match; delete: match only)", phases(salesPolicy, 'tasks')?.insert?.length === 2 && phases(salesPolicy, 'tasks')?.delete?.length === 1]);
 
-// ── the exact resolved LAYOUT sets — ring 2, a third universe. The base
-//    is the FLOOR; variants enrich upward as grants, so `extends` composes
-//    them like every other capability — no deny-it-back anywhere ──
 const resolvedLayouts = (name: string): string[] => [...resolveRole(CHARTER, layoutU, name, 'layouts')].sort();
 checks.push(['viewer holds no variant — the floor is not an id (ring 2)', resolvedLayouts('viewer').length === 0]);
 checks.push(['sales holds the full topbar (the write-path chrome rides with the write grants)', eq(resolvedLayouts('sales'), ['chrome.topbar.full'])]);
 checks.push(['admin inherits it through extends (variants compose like capabilities)', eq(resolvedLayouts('admin'), ['chrome.topbar.full'])]);
 checks.push(['member and public hold no variants', resolvedLayouts('member').length === 0 && resolvedLayouts('public').length === 0]);
 
-// ── relay's documents are coherent — the check a server boots on, run over
-//    the same four documents and the universe built above ──
 const verified = verifyApp({ charter: CHARTER, assignments: ASSIGNMENTS, actions: CATALOG_DEFINITIONS, layouts: LAYOUT_VARIANTS }, dataU);
 checks.push([
   'ring-2 documents are coherent (every variant reshapes a shipped action; one variant per action per wearer)',
@@ -113,15 +89,12 @@ const report = verified.charter;
 checks.push([`relay charter: zero errors (got ${report.errors.length})`, report.errors.length === 0]);
 checks.push([`relay charter: zero warnings (got ${report.warnings.length})`, report.warnings.length === 0]);
 
-// ── closure: admin reaches everything it wires; narrower roles show their
-//    dangling targets (ring 1 working, documented not hidden) ──
 const closure = (r: string): { actions: string[]; issues: string[] } =>
   report.perRole.find((p) => p.role === r) ?? { actions: [], issues: [] };
 checks.push([`admin closure is clean (got ${closure('admin').issues.length})`, closure('admin').issues.length === 0]);
 checks.push(['viewer closure flags the contact form push', closure('viewer').issues.some((i) => i.includes('crm.contact.form'))]);
 checks.push(['member closure flags the sidebar targets', closure('member').issues.some((i) => i.includes('crm.contacts'))]);
 
-// ── report ──
 let failed = 0;
 for (const [label, ok] of checks) {
   if (!ok) failed += 1;

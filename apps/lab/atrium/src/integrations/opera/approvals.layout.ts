@@ -1,13 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The human-yes queue: late checkouts and upgrades guests asked for.
-//
-// The card that frames this surface already names it, so there is no heading
-// here and no second card around each row — a card inside a card was the
-// double border. What each row needs is a hierarchy that matches the
-// decision: the ASK is the headline, the guest is the context under it, and
-// the PRICE is stated, because approving posts exactly that number to their
-// folio and a yes should never be given blind.
 export const approvalsLayout: LayoutNode = {
   if: '$.loading',
   then: { component: 'Skeleton', props: { h: 72, count: 2 } },

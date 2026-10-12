@@ -7,20 +7,6 @@ import { useModelWrite } from '@react/hooks/model.js';
 import { JsonEditor } from '@react/kit/json-editor.js';
 import { ActionMenu, MenuItem, SubMenu } from '@react/kit/menu.js';
 
-// The Prism Node editor: a recursive React editor for one Prism node, supplied
-// by the plugin under the `prism:node` role. It owns the recursion (a node's
-// arguments are themselves nodes, directly, not through arrays — which Loom's
-// array-driven recursion does not cover) and the domain UX (a grouped op
-// chooser). It reads its value from the model and writes the *whole* node back
-// through that one binding, so to Nova it is an ordinary control: the data
-// store, validation, and the preview all keep working, and Prism's `$`-data
-// never round-trips through Nova's binding resolver.
-
-// ─── Node kinds, derived from the schema ─────────────────────
-// One descriptor per thing a node can be: each op, the JSON primitives, an array
-// of nodes, and the plain-object template. Built from the parsed IR so it tracks
-// the schema; categories are the plugin's domain knowledge.
-
 type NodeKind = { id: string; label: string; category: string; variant: Variant };
 
 const CATEGORY_ORDER = ['Value', 'Core', 'Array', 'Math', 'String', 'Predicate', 'Logic', 'Structure', 'Object', 'Time', 'Sugar'];
@@ -58,12 +44,9 @@ const OP_KEYS = new Set(KINDS.filter((kind) => kind.category !== 'Value').map((k
 const isObj = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-// The op's single argument field (the value behind its `$op` key); a primitive
-// or array kind has its own field directly.
 const argFieldOf = (variant: Variant): Field | undefined =>
   variant.field.kind === 'object' ? variant.field.fields[0]?.field : variant.field;
 
-// Which kind a value currently is — the chooser's selection.
 const kindOf = (value: unknown): string => {
   if (Array.isArray(value)) return 'array';
   if (value === null || value === undefined) return 'null';
@@ -73,7 +56,6 @@ const kindOf = (value: unknown): string => {
   return 'template';
 };
 
-// A fresh value when the chooser switches to a kind.
 const defaultFor = (id: string): unknown => {
   switch (id) {
     case 'template': return {};
@@ -92,15 +74,6 @@ const defaultFor = (id: string): unknown => {
 const defaultItem = (field: Field): unknown =>
   field.kind === 'self' ? null : field.kind === 'string' ? '' : field.kind === 'number' ? 0 : field.kind === 'boolean' ? false : buildDocument(field, {});
 
-// ─── Wrap / unwrap ───────────────────────────────────────────
-// Restructure without retyping: wrap the current node into an op's input slot,
-// or unwrap an op down to one of its node arguments. Driven by the IR — a node
-// slot is a `self` field.
-
-// A field's primary node slot: a function that places a node into it (a `self`
-// directly, the first element of an array/tuple of nodes, or — recursing one
-// level — the first slotted field of an object). Undefined when the field has
-// no place for a node, which is exactly what makes an op a valid wrap target.
 const nodeSlot = (field: Field): ((node: unknown) => unknown) | undefined => {
   if (field.kind === 'self') return (node) => node;
   if (field.kind === 'array' && field.item.kind === 'self') return (node) => [node];
@@ -122,7 +95,6 @@ const nodeSlot = (field: Field): ((node: unknown) => unknown) | undefined => {
   return undefined;
 };
 
-// The kinds a node can be wrapped into: every op with a node slot, plus a list.
 const WRAP_TARGETS = KINDS.filter((kind) => {
   if (kind.id === 'array') return true;
   if (kind.category === 'Value') return false;
@@ -133,8 +105,6 @@ const WRAP_TARGETS = KINDS.filter((kind) => {
 const wrapInto = (id: string, node: unknown): unknown =>
   id === 'array' ? [node] : { [id]: nodeSlot(argFieldOf(BY_ID.get(id)!.variant)!)!(node) };
 
-// The node-valued children of a field+value (one level down), each a place to
-// unwrap to: a `self` field, the elements of an array/tuple of nodes.
 const nodeChildren = (field: Field | undefined, value: unknown): { label: string; node: unknown }[] => {
   if (field === undefined) return [];
   if (field.kind === 'self') return [{ label: 'value', node: value }];
@@ -153,7 +123,6 @@ const nodeChildren = (field: Field | undefined, value: unknown): { label: string
   return [];
 };
 
-// The places the current node can be unwrapped to: its node-valued children.
 const unwrapChildren = (value: unknown): { label: string; node: unknown }[] => {
   const id = kindOf(value);
   if (id === 'array') return (Array.isArray(value) ? value : []).map((node, i) => ({ label: `#${i + 1}`, node }));
@@ -162,8 +131,6 @@ const unwrapChildren = (value: unknown): { label: string; node: unknown }[] => {
   if (kind === undefined || kind.category === 'Value') return [];
   return nodeChildren(argFieldOf(kind.variant), isObj(value) ? value[id] : undefined);
 };
-
-// ─── Styles ──────────────────────────────────────────────────
 
 const input: CSSProperties = { padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, width: '100%', boxSizing: 'border-box' };
 const block: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 8 };
@@ -180,8 +147,6 @@ const opPane: CSSProperties = { flex: 1, overflowY: 'auto', padding: 4 };
 const tag: CSSProperties = { fontSize: 11, color: '#9ca3af' };
 const empty: CSSProperties = { padding: 12, fontSize: 13, color: '#9ca3af' };
 const CHOOSER_CSS = '.prism-pick{width:100%;box-sizing:border-box;text-align:left;padding:6px 10px;border:none;border-radius:4px;background:transparent;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;gap:10px;align-items:center;}.prism-pick:hover{background:#f3f4f6;}.prism-pick[data-active="true"]{background:#eff6ff;color:#1d4ed8;font-weight:600;}';
-
-// ─── The grouped chooser ─────────────────────────────────────
 
 const NodeKindChooser: FC<{ current: string; onPick: (id: string) => void }> = ({ current, onPick }) => {
   const here = BY_ID.get(current);
@@ -251,8 +216,6 @@ const NodeKindChooser: FC<{ current: string; onPick: (id: string) => void }> = (
   );
 };
 
-// ─── Argument / list / template editors ──────────────────────
-
 const Labeled: FC<{ label: string; required?: boolean; children: ReactNode }> = ({ label: text, required, children }) => (
   <label style={block}>
     <span style={label}>{text}{required ? ' *' : ''}</span>
@@ -260,9 +223,6 @@ const Labeled: FC<{ label: string; required?: boolean; children: ReactNode }> = 
   </label>
 );
 
-// Edit a value against an IR field — a node's argument. A `self` recurses into a
-// NodeEditor; an object composes labeled sub-editors; an array becomes a list;
-// scalars are inputs; anything else falls back to raw JSON.
 const ArgEditor: FC<{ field: Field; value: unknown; onChange: (next: unknown) => void }> = ({ field, value, onChange }) => {
   switch (field.kind) {
     case 'string':
@@ -327,8 +287,6 @@ const ListEditor: FC<{ itemField: Field; value: unknown; onChange: (next: unknow
   return (
     <div style={block}>
       {list.map((item, index) =>
-        // A node item carries its own menu, so removal lives there; a scalar item
-        // has no menu, so it keeps the inline ✕.
         itemField.kind === 'self' ? (
           <NodeEditor key={index} value={item} onChange={(next) => setAt(index, next)} onRemove={() => removeAt(index)} />
         ) : (
@@ -345,9 +303,6 @@ const ListEditor: FC<{ itemField: Field; value: unknown; onChange: (next: unknow
   );
 };
 
-// The plain-object template: a static target object whose values are nodes. A
-// valid config on its own (no op, no conversion), so it is fully editable here:
-// add / rename / remove keys, each value its own NodeEditor.
 const TemplateEditor: FC<{ value: unknown; onChange: (next: unknown) => void }> = ({ value, onChange }) => {
   const entries = Object.entries(isObj(value) ? value : {});
   const rename = (from: string, to: string): void => {
@@ -378,8 +333,6 @@ const TemplateEditor: FC<{ value: unknown; onChange: (next: unknown) => void }> 
     </div>
   );
 };
-
-// ─── The recursive node editor ───────────────────────────────
 
 const NodeEditor: FC<{ value: unknown; onChange: (next: unknown) => void; onRemove?: () => void }> = ({ value, onChange, onRemove }) => {
   const id = kindOf(value);
@@ -438,8 +391,6 @@ const NodeEditor: FC<{ value: unknown; onChange: (next: unknown) => void; onRemo
   );
 };
 
-// The role component: bind the whole node to its model, render the recursive
-// editor, write the whole node back on any edit.
 export const PrismNode: NovaComponent<{ value?: unknown }> = ({ value, novaModel }) => {
   const set = useModelWrite(novaModel);
   return <NodeEditor value={value} onChange={set} />;

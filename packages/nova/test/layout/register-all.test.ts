@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createComponentRegistry, type ComponentMeta } from '@layout';
 
-// A tiny component surrogate. We don't care that it's actually a
-// React element — the registry is framework-agnostic.
 type FakeComponent = ((props: Record<string, unknown>) => null) & {
   meta?: ComponentMeta;
 };

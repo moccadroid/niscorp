@@ -6,19 +6,6 @@ import { Nova } from '../../src/adapters/react';
 import type { ActionDefinition } from '../../src';
 import type { Phrasebook } from '../../src/i18n';
 
-// ═══════════════════════════════════════════════════════════
-// `setPhrases` THROUGH THE ADAPTER, not just through the runtime.
-//
-// The runtime-level test (test/i18n/render-pass.test.ts) proves `render()`
-// returns the new words. It cannot prove a mounted React tree SHOWS them —
-// and for one commit it did not: `useRenderTree` cached an instance's tree on
-// its data identity alone, so a language change left every open screen holding
-// the words it was mounted with. Data had not changed, so nothing invalidated.
-//
-// The two assertions below are the ones that failed. The chrome case passed
-// the whole time, which is what made it easy to miss by looking.
-// ═══════════════════════════════════════════════════════════
-
 const GERMAN: Phrasebook = { 'Front desk': 'Empfang', 'Add a member': 'Mitglied hinzufügen' };
 
 const desk: ActionDefinition = {

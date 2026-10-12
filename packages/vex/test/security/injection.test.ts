@@ -14,20 +14,6 @@ import type { ScopePolicy } from '../../src/scope/scope.types.js';
 import type { MutationDefinition } from '../../src/mutations/schema.js';
 import type { Row } from '../../src/adapters/adapter.types.js';
 
-// SQL INJECTION, attempted the way an attacker would: against a real Postgres,
-// under a deny-by-default policy, with a table the caller may not read.
-//
-// Every string a query can carry reaches SQL one of three ways — a column that
-// resolved against the schema, a quoted literal, or a quoted output name. These
-// cases are the ways that used to be a fourth: a field position holding
-// something that was not a column, and an output name holding a quote. The
-// `secrets` table is denied; any case that returns its row has crossed the
-// policy through the compiler rather than around it.
-//
-// Each read attack is asserted twice: the schema refuses it (what a model's
-// output and a stored entry go through), and the engine refuses it anyway when
-// handed the DSL directly (`engine.compile` never parses).
-
 const DDL = `
   CREATE TABLE notes (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, body TEXT, score INT);
   CREATE TABLE secrets (id TEXT PRIMARY KEY, secret TEXT NOT NULL);

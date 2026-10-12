@@ -10,42 +10,23 @@ import './ui/css/ui.css';
 const root = document.getElementById('root');
 if (root === null) throw new Error('No root element');
 
-// ── ARRIVING ON A SIGN-IN LINK ───────────────────────────────
-//
-// ⟲ THIS USED TO READ `?token=` AND STORE IT. The link in somebody's inbox was
-// the session itself — no expiry, no limit on uses, and worth an account to
-// anybody who saw the URL in a mail, a log, a referrer or over a shoulder.
-//
-// `?login=` is a nonce and nothing else. It buys a session from the server, or
-// it does not, and either way it leaves the address bar before anything mounts:
-// a link that survives in history is one that gets shared by accident.
 try {
   const url = new URL(window.location.href);
   const offered = url.searchParams.get('login');
   if (offered !== null && offered !== '') {
-    // Nothing comes back to keep: the answer puts the session in the browser's
-    // own cookie, which this page cannot read, and the socket below is opened
-    // with it.
     await fetch('/api/auth/redeem', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ nonce: offered }),
     });
-    // Stripped whether or not it worked: a spent nonce is worth nothing, and a
-    // refused one is worth less. Leaving it would re-POST on every reload.
+    // Stripped whether or not it worked: leaving it would re-POST on every reload.
     url.searchParams.delete('login');
     window.history.replaceState({}, '', url.toString());
   }
 } catch {
-  /* storage-less or offline — the picker still works */
+  /* offline — the picker still works */
 }
 
-// The page may already show a screen: the server draws it into index.html and
-// leaves the snapshot it drew from beside it (src/server/document.ts). The wire
-// starts from that snapshot, so the first render adopts the elements already
-// there. `cookie` keeps a copy of the session token where a page request can
-// carry it — which is how the server knows whose screen to draw next time. A
-// token the redeem above just stored is copied the moment the wire loads it.
 const drawn = readDocumentSnapshot();
 
 const terminal = mountTerminal({

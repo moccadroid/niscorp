@@ -4,16 +4,6 @@ import { guestLayout } from './guest.layout';
 import { previewable, previewTriggers, crewCard } from '@atrium/app/actions/preview';
 import { deskStayPrism, deskCheckinPrism, deskCheckoutPrism } from './desk.prism';
 
-// One RESERVATION, managed: the stay as the desk sees it and the two controls
-// that move it — check in, check out. Opened WITH a stay: from a movements row,
-// from the inbox (the agent picks the stay out of the thread), or placed by the
-// shell's agent with the stay preselected.
-//
-// It shed the guest's open issues when `desk.brief` arrived. Both cards land in
-// the same workspace, and both were answering "who is this" — one of them
-// properly, with history, spend, notes and language, and one of them with a
-// three-row list. Two live surfaces for one record is the same bug as two live
-// figures for one number.
 export const deskGuestAction: ActionDefinition = {
   id: 'desk.guest',
   title: 'The stay',

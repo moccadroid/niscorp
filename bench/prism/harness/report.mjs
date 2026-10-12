@@ -1,9 +1,3 @@
-// results/*.raw.json as tables: results/REPORT-<label>.md for each run, and results/SOURCES.md, every task as
-// every library writes it.
-//
-//   node harness/report.mjs            every run in results/
-//   node harness/report.mjs node-24    that run
-
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,7 +15,6 @@ const median = (list) => {
 };
 const geomean = (list) => (list.length === 0 ? undefined : Math.exp(list.reduce((sum, x) => sum + Math.log(x), 0) / list.length));
 
-// A time in the unit a reader takes in at a glance.
 const time = (ns) => {
   if (ns === undefined) return '';
   if (ns < 1000) return `${ns < 10 ? ns.toFixed(1) : Math.round(ns)} ns`;
@@ -30,7 +23,6 @@ const time = (ns) => {
   return `${(ns / 1e9).toFixed(2)} s`;
 };
 const times = (x) => (x === undefined ? '' : x >= 100 ? `${Math.round(x)}×` : x >= 10 ? `${x.toFixed(1)}×` : `${x.toFixed(2)}×`);
-// Words to the left, figures to the right.
 const WORDS = new Set(['library', 'package', 'version', 'the transform is', 'prepared form', 'notes', 'note']);
 const table = (head, rows) => [`| ${head.join(' | ')} |`, `|${head.map((h) => (WORDS.has(h) ? '---' : '---:')).join('|')}|`, ...rows.map((r) => `| ${r.join(' | ')} |`)].join('\n');
 
@@ -40,7 +32,6 @@ const reportOf = (label) => {
   const ids = Object.keys(libraries);
   const name = (id) => libraries[id].name + (libraries[id].usesEval ? ' ⚠ eval' : '');
 
-  // One number for a case: the median over passes of each process's median.
   const cell = new Map();
   const errors = [];
   for (const r of raw.results) {
@@ -51,7 +42,6 @@ const reportOf = (label) => {
     cell.get(key).push(r);
   }
   const at = (id, task, size, phase) => median((cell.get(`${id}|${task}|${size}|${phase}`) ?? []).map((r) => r.median));
-  // What a host that keeps what it can keep pays for each call: the prepared form where the library has one.
   const repeated = (id, task, size) => (libraries[id].prepared ? at(id, task, size, 'run') : at(id, task, size, 'oneshot'));
   const expresses = (id, task) => check[id]?.[task]?.state === 'ok';
 
@@ -131,7 +121,6 @@ const reportOf = (label) => {
 let ids = [];
 for (const label of labels) ids = reportOf(label);
 
-// Every task as every library writes it.
 const text = ['# Every task, as every library writes it', '', 'What `libs/<id>.mjs` holds as `source`: the form an author writes and a host stores.', ''];
 for (const task of TASKS) {
   text.push(`## \`${task.id}\` — ${task.title}`, '', task.words, '');

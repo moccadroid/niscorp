@@ -2,17 +2,6 @@ import type { Rejection } from '../../types';
 import { failedGeneration } from './failed-generation';
 import { jsonlLines } from './jsonl-lines';
 
-// ═══════════════════════════════════════════════════════════
-// Wire strategies — provider pathologies, one FILE per pathology
-// ═══════════════════════════════════════════════════════════
-//
-// The one strategy pattern in signal. Selection is registry DATA
-// (ProviderEntry.wire lists ids); adding a provider quirk = one file
-// here + one id on the provider entry + fixtures from the real
-// error/response body. Nothing else changes. Two hooks:
-//   'error'    — turn a provider ERROR into a Rejection.
-//   'response' — contribute candidate TEXTS from response content.
-
 export type ErrorWireStrategy = {
   id: string;
   hook: 'error';
@@ -46,7 +35,6 @@ export const errorStrategies = (strategies: ReadonlyArray<WireStrategy>): ErrorW
 export const responseStrategies = (strategies: ReadonlyArray<WireStrategy>): ResponseWireStrategy[] =>
   strategies.filter((strategy): strategy is ResponseWireStrategy => strategy.hook === 'response');
 
-// Run the error-hook strategies; the first that claims the error wins.
 export const recoverRejection = (
   strategies: ReadonlyArray<WireStrategy>,
   error: unknown,

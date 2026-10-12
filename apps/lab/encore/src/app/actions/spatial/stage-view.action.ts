@@ -4,11 +4,6 @@ import { stageViewLayout } from './stage-view.layout';
 import { stageByIdPrism, stageSetsPrism } from './spatial.prism';
 import { dayField } from '@encore/app/actions/shared/input-fields';
 
-// One stage: what it is, how many it holds, and who is on it that day.
-//
-// `stageId` is REQUIRED, and the loop reads that off the schema: a stage view
-// of no stage is an empty box, so until a stage is picked with confidence this
-// card is offered as a chip rather than mounted.
 export const stageViewAction: ActionDefinition = {
   id: 'stage.view',
   title: 'Stage',

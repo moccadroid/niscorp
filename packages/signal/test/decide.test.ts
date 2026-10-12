@@ -2,14 +2,6 @@ import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { describe, it, expect, expectTypeOf, afterEach } from 'vitest';
 import { createSignal, SignalError, ErrorCode, providerRegistry } from '../src';
 
-// ═══════════════════════════════════════════════════════════
-// A fake decision provider, by base URL
-// ═══════════════════════════════════════════════════════════
-//
-// A real HTTP server speaking the System One wire with a canned body, so the
-// genuine adapter does the fetch, the auth header and the parsing. `reply`
-// decides what comes back; `never` leaves the request hanging for the abort test.
-
 type Seen = { url: string | undefined; authorization: string | undefined; body: unknown };
 type Reply = { status?: number; body: unknown } | 'never';
 
@@ -196,8 +188,6 @@ describe('a decision provider has decide() and nothing else', () => {
     expect(provider.seen).toEqual([]);
   });
 
-  // complete() and stream() run through stepStream; the refusal names the verb
-  // the caller used, not the one underneath it.
   it('names the verb that was called, in the message and in context.verb', async () => {
     const provider = await fakeProvider({ body: { answers: ANSWERS } });
     const signal = decider(provider.baseUrl);

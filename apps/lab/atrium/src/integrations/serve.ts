@@ -1,11 +1,3 @@
-// The integrations service as a process: `pnpm --filter atrium integrations`.
-// The service itself is a factory (service.ts) so the checks can start and stop
-// it; this file is only the listener around it.
-//
-// Runs under `tsx watch`: the app server reboots on save inside vite, and this
-// process does the same on its own clock. Editing a bundle restarts THIS, and
-// the app picks the change up at its next sync — which is the deployment model
-// in miniature.
 import { startIntegrationsService } from './service';
 
 const main = async (): Promise<void> => {

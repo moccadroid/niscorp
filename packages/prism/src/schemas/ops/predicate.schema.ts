@@ -9,10 +9,6 @@ const node = (): z.ZodTypeAny => _NodeSchema;
 const pairOf = (desc: string) =>
   z.tuple([z.lazy(node), z.lazy(node)]).describe(desc);
 
-// ═══════════════════════════════════════════════════════════
-// Comparison predicates
-// ═══════════════════════════════════════════════════════════
-
 export const EqNodeSchema = z
   .object({ $eq: pairOf('Two values to compare for deep equality.') })
   .strict()
@@ -49,19 +45,11 @@ export const LteNodeSchema = z
   .describe('Less than or equal comparison.');
 export type LteNode = z.infer<typeof LteNodeSchema>;
 
-// ═══════════════════════════════════════════════════════════
-// Emptiness check
-// ═══════════════════════════════════════════════════════════
-
 export const EmptyNodeSchema = z
   .object({ $empty: z.lazy(node).describe('Value to check for emptiness (null, "", [], {}).') })
   .strict()
   .describe('Returns true if value is null, empty string, empty array, or empty object.');
 export type EmptyNode = z.infer<typeof EmptyNodeSchema>;
-
-// ═══════════════════════════════════════════════════════════
-// String predicates
-// ═══════════════════════════════════════════════════════════
 
 export const StartsWithNodeSchema = z
   .object({

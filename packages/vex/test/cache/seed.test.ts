@@ -16,17 +16,6 @@ const write: SeedMutation = {
   mutation: { op: 'update', table: 'things', set: { name: { $context: 'name' } }, where: { eq: ['things.id', { $context: 'id' }] } },
 };
 
-// ───────────────────────────────────────────────────────────────
-// A jsonb-shaped memory cache.
-//
-// The postgres backend stores dsl/shape/prism_ir as jsonb, and jsonb does
-// not preserve object key order — a durable row comes back with the
-// store's key order, not the author's. This wrapper models exactly that
-// (and counts writes), so these tests hold seedCache to a canonical
-// compare: an unfaithful one would see every row as "changed" and the
-// write counter would catch it.
-// ───────────────────────────────────────────────────────────────
-
 const reorderKeys = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(reorderKeys);
   if (value !== null && typeof value === 'object') {
@@ -72,9 +61,6 @@ describe('seedCache', () => {
     const { cache, writes } = jsonbLikeCache();
     await seedCache(cache, [read, write]);
     const landed = writes();
-    // Reseeding the same authored set writes nothing: the compare survives
-    // reordered keys, and the IR is matched by core fingerprint even though
-    // a fresh compile stamps a fresh createdAt.
     await seedCache(cache, [read, write]);
     expect(writes()).toBe(landed);
   });
@@ -114,7 +100,6 @@ describe('seedCache', () => {
 
   it('reclaims a drifted row: unprotected or regenerated content converges to authored', async () => {
     const cache = createMemoryCache();
-    // A runtime-regenerated row squatting on the authored name, unprotected.
     await cache.set('demo/list', { kind: 'ok', dsl: { from: ['other'] }, createdAt: 1 });
     await seedCache(cache, [read]);
     const row = (await cache.get('demo/list')) as OkCacheEntry;
@@ -145,7 +130,6 @@ describe('seedCache', () => {
     await seedCache(cache, [read]);
     expect(writes()).toBe(2);
     expect(((await cache.get('demo/list')) as OkCacheEntry).refresh).toBeUndefined();
-    // An explicit 'snapshot' is the default said out loud — no rewrite.
     await seedCache(cache, [{ ...read, refresh: 'snapshot' }]);
     expect(writes()).toBe(2);
   });

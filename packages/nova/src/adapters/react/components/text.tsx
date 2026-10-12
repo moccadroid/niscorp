@@ -2,10 +2,6 @@ import { createElement, type CSSProperties } from 'react';
 import { TextPropsSchema, type TextProps } from '../../primitive-props';
 import type { NovaComponent, NovaComponentProps } from '@react';
 
-// ═══════════════════════════════════════════════════════════
-// Text — typography element
-// ═══════════════════════════════════════════════════════════
-
 export { TextPropsSchema, type TextProps };
 
 const SIZE_MAP = {

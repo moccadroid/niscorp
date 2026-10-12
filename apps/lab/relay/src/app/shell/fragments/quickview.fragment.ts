@@ -1,13 +1,5 @@
 import type { ActionFragment } from '@niscorp/nova';
 
-// The quickview chrome — the same dialog as the modal, but its header carries an
-// "Open fullscreen" button beside the close. Any action opened from the search
-// is composed `with: ['quickview']` and pushed onto the `modal` canvas, so it
-// shows as a peek. "Open fullscreen" navigates the main canvas to that action,
-// carrying the data the quickview already loaded (the push `input` below pulls
-// `$.rows` / `$.view` / … from the quickviewed action's own data), so the
-// fullscreen view shows immediately. `fullscreenAction` / `quickviewTitle` are
-// passed at the push.
 export const quickviewFragment: ActionFragment = {
   kind: 'fragment',
   id: 'quickview',
@@ -53,9 +45,7 @@ export const quickviewFragment: ActionFragment = {
   },
   triggers: [
     { event: 'ui:click', ref: 'close', do: [{ pop: true }] },
-    // Navigate the main canvas to the action, carrying whatever data the
-    // quickview loaded. `loading: false` so it shows at once; the mount re-query
-    // is a cached refresh. pop is last — it self-closes this (modal) action.
+    // `pop` is last: it closes this action.
     {
       event: 'ui:click',
       ref: 'fullscreen',

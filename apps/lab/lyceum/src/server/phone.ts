@@ -3,16 +3,6 @@ import type { Integrations } from '@niscorp/moss/integrations';
 import type { Seats } from '@lyceum/app/attachable';
 import { attachedTo } from './attached';
 
-// THE PHONE'S LIST for one person, as boot data (`inputs`): the actions they
-// hold that belong on a phone, in the phone's order — derived when their shell
-// is built; a grant that changes (the X-ray given) or an integration approved
-// rebuilds the shell, and the list with it. Ring 1 decides; this only reads it.
-//
-//   the assistant            once the speaker gave it
-//   attached to the phone    every integration screen installed, approved and
-//                            attached to `member.phone` (The QA Company's Q&A)
-//   the button               for the three the speaker gave it to
-//   the X-ray                once the speaker gave it
 export const phoneInputs = (integrations: Integrations<Seats>): NonNullable<ShellManifest['inputs']> => async ({ actions }): Promise<Record<string, Record<string, unknown>>> => {
   if (!actions.includes('member.phone')) return {};
   const onThePhone = [

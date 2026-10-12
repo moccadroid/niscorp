@@ -4,15 +4,6 @@ import { salesChartLayout } from './sales-chart.layout';
 import { salesHourlyPrism, salesDailyPrism, salesPreviousPrism } from './money.prism';
 import { dayField } from '@encore/app/actions/shared/input-fields';
 
-// Takings, five ways. This is the card that shows what "the questions are
-// derived from the catalog" buys: four enums and a boolean are four `choice`
-// questions and a `noul`, and nobody wrote any of them — "bar revenue by hour,
-// compared" fills the form because the schema said what the form was.
-//
-// `kind`, `range` and `day` decide what is LOADED and re-mount the card;
-// `metric`, `grain` and `compare` only decide what is DRAWN, so the loop writes
-// them in place. All three reads run at mount for the same reason: a toggle
-// should never wait on a fetch.
 export const salesChartAction: ActionDefinition = {
   id: 'sales.chart',
   title: 'Sales',

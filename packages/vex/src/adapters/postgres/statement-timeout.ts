@@ -1,27 +1,5 @@
 import type { PgPool } from './introspect.js';
 
-// ═══════════════════════════════════════════════════════════════
-// HOW LONG ONE READ MAY RUN, enforced where it is cheapest.
-//
-// The engine asks for a ceiling (`config.statementTimeoutMs`); the database
-// is what has to enforce it — a client that stops waiting leaves the query
-// running on the server (measured: `query_timeout` gave up at 200ms and the
-// sleep was still active in pg_stat_activity). Postgres enforces
-// `statement_timeout` two ways, and they cost very differently (Postgres 17,
-// 500 reads each):
-//
-//   · on the connection (the pool's own `statement_timeout`, a role or a
-//     database default) — 0.36ms a read, the same as none;
-//   · per statement (`SET LOCAL` in a transaction) — 1.37ms a read, 3.4×,
-//     and more across a network.
-//
-// So the adapter asks the database once what its connections already
-// enforce. At or under the ceiling: reads run plain. Otherwise each read is
-// wrapped. A pool that cannot enforce it at all (PGlite: single-threaded, the
-// timer never fires — a 2s sleep ran 2.9s under a 200ms limit) says so, and
-// reads run unbounded with one warning.
-// ═══════════════════════════════════════════════════════════════
-
 export type TimeoutEnforcement = 'connection' | 'statement' | 'unenforced';
 
 // `SHOW statement_timeout` answers in Postgres units: '0', '250ms', '5s',

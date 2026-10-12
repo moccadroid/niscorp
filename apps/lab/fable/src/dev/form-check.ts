@@ -1,10 +1,3 @@
-// The form's public contract. Proves the one-form-two-modes convention
-// (bare = create, seeded = edit), that cancel never writes, and that every
-// action's declared `input` is a subset of its `data` keys (rule 11 / review
-// item 3), mechanically. Run: pnpm --filter fable check:form
-// A check runs under node, not in a browser — imported rather than assumed.
-// The tsconfig types list is [vite/client], so node globals are ambient only
-// when something drags them in.
 import process from 'node:process';
 import { getVexRuntime } from '../vex/runtime';
 import { SEED_COUNTS } from '../vex/seed';
@@ -26,7 +19,6 @@ const main = async (): Promise<void> => {
   await settle(500);
   const checks: [string, boolean][] = [];
 
-  // Every declared `input` is a JSON Schema whose properties ⊆ data keys.
   for (const action of Object.values(ACTIONS)) {
     if (action.input === undefined) continue;
     const props: unknown = action.input['properties'];
@@ -36,7 +28,6 @@ const main = async (): Promise<void> => {
     checks.push([`${action.id}: input ⊆ data (${declared.length} declared${extras.length > 0 ? `, extras: ${extras.join(',')}` : ''})`, declared.length > 0 && extras.length === 0]);
   }
 
-  // Bare = create mode, with the definition's defaults.
   shell.dispatch({ type: 'ui:click', ref: 'new' });
   await settle(150);
   const bare = dataOf('modal');
@@ -48,7 +39,6 @@ const main = async (): Promise<void> => {
   await settle(150);
   checks.push([`cancel closes without writing (open=${rows().length})`, active('modal') === undefined && rows().length === SEED_COUNTS.open]);
 
-  // Seeded = edit mode: raw values round-trip into the fields.
   const seedRow = rows().find((r) => r['title'] === 'Renew the domain');
   shell.dispatch({ type: 'ui:click', ref: 'row-edit', payload: seedRow });
   await settle(150);

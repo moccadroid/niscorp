@@ -5,47 +5,16 @@ import { RELOAD_CHANNEL, tablesReadBy } from '@encore/app/reload-on-write';
 import type { FestivalClock } from '@encore/lib/festival-clock';
 import { inputContractOf } from '@encore/server/intent/input-contract';
 
-// ═══════════════════════════════════════════════════════════
-// A WRITE LANDED → the cards that show those rows re-read. One of these per
-// live session (app/reload-on-write.ts says which tables a card reads, and
-// composes the trigger that does the re-reading).
-//
-// IT ASKS CARDS TO RE-READ; IT READS NOTHING ITSELF. The reaction carried no
-// rows and this passes none on: a card's reload is the card's own endpoint,
-// over the session's own wire, under the session's own policy.
-//
-// THROTTLED PER CARD. The leading write reloads at once — a number under an
-// alert must not be half a second old for no reason — and whatever else lands
-// inside RELOAD_EVERY_MS becomes ONE more reload at the end of it. A scanner
-// writing three hundred rows a minute cannot thrash the room: at most two
-// reloads a second per card, however hard the feeds fire. (And `gate_scans`
-// itself reloads nothing at all: no card reads it.)
-//
-// THE CLOCK IS A ROW TOO, and a card that follows it follows THE ROW. A field
-// declared `fallback: 'now'` that nobody set — not the sentence, not a person's
-// hand — holds "whatever time it is", and keeps meaning that when the director
-// advances the clock: it is re-aimed IN PLACE (same instance) and re-read. A
-// card the sentence aimed at "at 9" holds 21 because somebody said so, and does
-// not drift.
-// ═══════════════════════════════════════════════════════════
-
 export const RELOAD_EVERY_MS = 500;
 
 export type ReloadDeps = {
   session: FunctionSession;
   definitions: Record<string, ActionDefinition>;
   entries: readonly (SeedEntry | SeedMutation)[];
-  // Canvases a SENTENCE arranges, and canvases EVENTS arrange. On the first, a
-  // clock field the sentence spoke to ("at 9", "tomorrow") is somebody's; on the
-  // second nobody typed anything, so every clock field is the clock's.
   sentenceCanvases: readonly string[];
   eventCanvases: readonly string[];
-  // The kinds of time the sentence on the line said out loud: 'day', 'hour',
-  // 'time'. Empty when it said none.
   saidInSentence: () => ReadonlySet<string>;
-  // A person's hand has been on this key of this instance.
   isTouched: (instanceId: string, key: string) => boolean;
-  // Record a write before making it, so it is not mistaken for a person's.
   willWrite: (instanceId: string, input: Record<string, unknown>) => void;
 };
 
@@ -53,7 +22,6 @@ export type Reloader = {
   tableChanged: (table: string) => void;
   clockMoved: (from: FestivalClock, to: FestivalClock) => void;
   idle: () => Promise<void>;
-  // How many reloads were published, per action — what a check measures.
   published: () => Record<string, number>;
 };
 
@@ -97,8 +65,8 @@ export const createReloader = (deps: ReloadDeps): Reloader => {
     clockMoved: (from, to) => {
       const shell = session.shell;
       const said = deps.saidInSentence();
-      // Every card is re-aimed BEFORE any is asked to re-read: a reload is one
-      // message per action, and two gauges must both hold the new hour by then.
+      // Every card is re-aimed before any is asked to re-read: a reload is one message per
+      // action, and two gauges must both hold the new hour by then.
       const toReload = new Set<string>();
       for (const canvasId of [...deps.sentenceCanvases, ...deps.eventCanvases]) {
         const isSentences = deps.sentenceCanvases.includes(canvasId);
@@ -112,7 +80,6 @@ export const createReloader = (deps: ReloadDeps): Reloader => {
             if (field.fallback !== 'now' || deps.isTouched(item.id, field.name) || (isSentences && said.has(field.parse ?? ''))) continue;
             const was = clockValue(field.parse, from);
             const now = clockValue(field.parse, to);
-            // It held what the clock said, and the clock says something else.
             if (was !== undefined && now !== undefined && data[field.name] === was && was !== now) moved[field.name] = now;
           }
           if (Object.keys(moved).length === 0) continue;

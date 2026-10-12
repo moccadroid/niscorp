@@ -7,9 +7,6 @@ import { SHELL_EXAMPLES } from './shells';
 import { STRUCTURE_EXAMPLES } from './structure';
 import type { NovaExample } from './example.types';
 
-// Every example of nova. Whoever shows them orders them by group
-// (NOVA_EXAMPLE_GROUPS), and within a group as they stand here. See
-// example.types.ts for what one is and who reads them.
 export const NOVA_EXAMPLES: readonly NovaExample[] = [...LAYOUT_EXAMPLES, ...ACTION_EXAMPLES, ...STRUCTURE_EXAMPLES, ...ENDPOINT_EXAMPLES, ...COMPOSITION_EXAMPLES, ...SHELL_EXAMPLES, ...I18N_EXAMPLES];
 
 export { NOVA_EXAMPLE_GROUPS } from './groups';

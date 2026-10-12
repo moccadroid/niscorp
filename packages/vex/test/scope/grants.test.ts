@@ -3,8 +3,6 @@ import { SCOPE_VERBS, scopeGrants, createScopePolicy, scopeProfiles, mergeScopeP
 import type { ScopeBehaviors } from '../../src/scope/grants.js';
 import type { ScopeMatch, ScopeRule } from '../../src/scope/scope.types.js';
 
-// The behaviors an app would own: tasks personal (umbrella set+match),
-// everything else rule-free or unlisted.
 const behaviors: ScopeBehaviors = {
   tasks: {
     read: [{ match: 'assignee_id', to: 'userId' }],
@@ -24,7 +22,7 @@ describe('scopeGrants', () => {
     expect(u).toHaveLength(2 * SCOPE_VERBS.length);
     expect(u).toContain('deals.read');
     expect(u).toContain('tasks.write.delete');
-    expect(u).not.toContain('deals.write'); // the namespace is never a grant
+    expect(u).not.toContain('deals.write');
   });
 });
 
@@ -36,16 +34,16 @@ describe('createScopePolicy', () => {
     expect(deals?.read).toEqual([]);
     expect(deals?.insert).toEqual([]);
     expect(deals?.update).toEqual([]);
-    expect(deals?.delete).toBeUndefined(); // ungranted phase is ABSENT
-    expect((p.entities['deals'] as { write?: unknown }).write).toBeUndefined(); // never the umbrella
+    expect(deals?.delete).toBeUndefined();
+    expect((p.entities['deals'] as { write?: unknown }).write).toBeUndefined();
   });
 
   it('a granted phase carries umbrella behaviors plus its own; delete keeps matches only', () => {
     const p = createScopePolicy(new Set(['tasks.read', 'tasks.write.insert', 'tasks.write.delete']), behaviors);
     const tasks = phases(p, 'tasks');
     expect(tasks?.read).toEqual([{ match: 'assignee_id', to: 'userId' }]);
-    expect(tasks?.insert).toHaveLength(2); // umbrella set + match
-    expect(tasks?.delete).toEqual([{ match: 'assignee_id', to: 'userId' }]); // set filtered out
+    expect(tasks?.insert).toHaveLength(2);
+    expect(tasks?.delete).toEqual([{ match: 'assignee_id', to: 'userId' }]);
   });
 
   it('an unlisted table with a grant gets a rule-free phase; a table with no grant is absent', () => {
@@ -62,16 +60,6 @@ describe('createScopePolicy', () => {
     expect(deals?.insert).toBeUndefined();
   });
 
-  // ── SCOPING PROFILES: reach is a property of the rung ──
-  //
-  // What these exist for: one table, two rungs, different reach. A desk reads
-  // every booking at its studio; a member reads their own. With one rule per
-  // table that is unsayable, and the only way to say it was a SECOND TABLE
-  // carrying the tighter rule — one fact in two places, kept level by a trigger.
-  //
-  // The profile is chosen ONCE per principal rather than repeated on every
-  // grant, because "acts for themselves" is true of the person, not of each
-  // thing they read.
   describe('scoping profiles', () => {
     const named: ScopeBehaviors = {
       bookings: {
@@ -83,8 +71,6 @@ describe('createScopePolicy', () => {
           ],
         },
       },
-      // A shared table declares no variant: everybody reads it the same way, and
-      // a profiled principal falls back to this without an entry per profile.
       class_sessions: { default: { read: [{ match: 'studio_id', to: 'studioId' }] } },
     };
 
@@ -106,8 +92,8 @@ describe('createScopePolicy', () => {
       expect(phases(p, 'class_sessions')?.read).toEqual([{ match: 'studio_id', to: 'studioId' }]);
     });
 
-    // THE ONE THAT MATTERS. A mistyped profile must not mean "the default" — it
-    // would widen a member to every row of every table they hold a grant on.
+    // A mistyped profile read as the default would widen a member to every row
+    // of every table they hold a grant on.
     it('an unknown profile grants nothing at all, on any table', () => {
       const p = createScopePolicy(new Set(['bookings.read', 'class_sessions.read']), named, 'persona1');
       expect(p.entities).toEqual({});
@@ -143,11 +129,6 @@ describe('createScopePolicy', () => {
   });
 });
 
-// ── SEVERAL ROLES, one principal ──
-//
-// The case this exists for: an instructor who also trains. Staff on the roster
-// (studio-wide reads), a member in the class (their own writes). One profile per
-// PRINCIPAL cannot describe that; one per ROLE can, and the policies merge.
 describe('merging per-role policies', () => {
   const behaviors: ScopeBehaviors = {
     bookings: {

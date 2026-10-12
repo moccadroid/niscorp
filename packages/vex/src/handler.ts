@@ -17,69 +17,34 @@ import { isVexError } from './errors.js';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { canReadTable } from './scope/apply.js';
 
-// ═══════════════════════════════════════════════════════════════
-// Types
-// ═══════════════════════════════════════════════════════════════
-
 export type VexHandlerConfig = {
   engine: QueryEngine;
   entities?: string[];
-  // Replay-only posture (production): requests needing generation fail
-  // with 'locked'; fingerprint management (PATCH/DELETE) is refused too.
-  // Mutation replay is unaffected — writes are ALWAYS replay-only.
   locked?: boolean;
-  // Per-request read policy — overrides the engine default for reads on
-  // this request (the read-side twin of `mutations.policy`). A host that
-  // resolves a policy per principal passes the SAME policy here and in
-  // `mutations.policy`, so reads and writes enforce one principal's phases.
+  // Reads and discovery, over the engine's default. Writes are enforced under `mutations.policy`.
   scopePolicy?: ScopePolicy;
-  // Compiles the SAME principal's policy at a named reach, for entries that
-  // declare one (`OkCacheEntry.reach`). Vex holds neither grants nor behaviors,
-  // so it cannot build this itself — the host does, and returning `undefined`
-  // refuses the read rather than serving it at the caller's own, wider reach.
+  // The same principal's policy compiled at a named reach, for entries that
+  // declare one. `undefined` refuses the request rather than serve it at the
+  // caller's own, wider reach.
   policyForReach?: (reach: string) => Promise<ScopePolicy | undefined> | ScopePolicy | undefined;
-  // Enables replay of `kind: 'mutation'` cache entries. The client is
-  // structural (PGlite, a pg wrapper, a test double); the policy is the
-  // same ScopePolicy reads use, its `write` rules applied by the engine.
   mutations?: {
     client: MutationClient;
     policy: ScopePolicy;
-    // The write observer. Fired once per successful mutation replay, AFTER
-    // the commit — per-statement writes with the rows the database returned,
-    // plus the scope the request could not forge. Vex is the choke point
-    // every write passes through, so this is where a host learns about all
-    // of them; what the host does with the news (mint facts, wake shells)
-    // is not the engine's business. A listener that throws cannot unwrite
-    // a committed write, so its error is contained, never the request's.
     onWrite?: (event: WriteEvent) => void;
   };
-  // The execution observer — the read/write twin of `mutations.onWrite`, and
-  // vex's whole telemetry surface. Fired once per `handleQuery`, AFTER the
-  // outcome is known, with vex-vocabulary facts (fingerprint, reach, cache,
-  // rows, status, timing) and the unforgeable scope. Vex knows nothing of spans
-  // or OTLP; a host maps this record to whatever it emits. Absent → not even the
-  // record is built (see `handleQuery`), so an unobserved endpoint pays nothing.
-  // A listener that throws is contained, never the request's.
   onExecute?: (record: ExecuteRecord) => void;
 };
 
 export type WriteEvent = { fingerprint: string; writes: WriteResult[]; scope: ScopeValues };
 
-// A CALLER THAT FOLLOWS THE ANSWER. In-process only: an HTTP request cannot
-// carry a callback, so a host that runs its own clients next to the handler
-// (moss's server shells) passes one here, and a reactive entry keeps
-// answering through it until `signal` aborts. See `refresh` on an entry.
 export type VexLive = {
   signal: AbortSignal;
   onChange: (response: QueryResponse) => void;
 };
 
-// WHICH TABLES A WRITE CHANGED. The statements' own tables, plus — for a
-// delete — every table that references one of them, transitively: an
-// `ON DELETE CASCADE` or `SET NULL` changes rows vex never wrote. The
-// introspected schema carries the reference but not its rule, so a delete is
-// assumed to reach every referencing table. Over-telling costs a refetch;
-// under-telling leaves a screen stale.
+// A delete is taken to change every table that references its own,
+// transitively: ON DELETE CASCADE or SET NULL changes rows vex never wrote,
+// and the introspected schema carries the reference but not its rule.
 export const tablesChangedBy = (writes: readonly WriteResult[], schema: DatabaseSchema | undefined): string[] => {
   const changed = new Set<string>();
   const referencing = (table: string): string[] =>
@@ -102,29 +67,18 @@ export const tablesChangedBy = (writes: readonly WriteResult[], schema: Database
   return [...changed];
 };
 
-// What one execution DID, in vex's own vocabulary — the record `onExecute`
-// hands a host. Not a span: vex holds no telemetry model, so a host maps these
-// facts to whatever it emits. `startUnixNano`/`endUnixNano` are epoch nanos at
-// millisecond anchoring with a sub-millisecond monotonic span between them —
-// exact enough for durations, coarse in the low bits — copied through verbatim.
 export type ExecuteRecord = {
   kind: 'query' | 'mutation';
   status: 'ok' | 'error' | 'refused';
   fingerprint?: string;
   reach?: string;
-  // Reads: whether the entry was already compiled. Mutations always replay.
   cacheHit?: boolean;
-  // Rows returned (reads) or written (mutations).
   rows?: number;
   startUnixNano: number;
   endUnixNano: number;
-  // The scope the request could not forge, passed exactly as `onWrite` passes
-  // it — for a host to read principal PRESENCE from, never a value into a span.
   scope: ScopeValues;
 };
 
-// The mutable half of the record, filled by `runQuery` as it goes and read once
-// by `handleQuery`. Built only when an observer is attached.
 type ExecuteProbe = {
   kind: 'query' | 'mutation';
   fingerprint?: string;
@@ -141,10 +95,7 @@ export type DiscoveryFingerprint = {
   intent?: string;
   createdAt: number;
   lastUsedAt?: number;
-  // The derived input contract: every `$context` key the stored def binds,
-  // typed from the schema by its position. Computed, never authored.
   context?: ContextSignature;
-  // Reads: the stored result shape. Mutations: what the write changes.
   shape?: unknown;
   effect?: MutationEffect[];
 };
@@ -153,8 +104,6 @@ export type DiscoveryResponse = {
   vex: string;
   description: string;
   entities: DiscoveryEntity[];
-  // Governance summary + the endpoint's known queries — self-description
-  // an agent (or a management UI) can read before generating anything.
   protection: 'all' | 'some' | 'none';
   locked: boolean;
   fingerprints: DiscoveryFingerprint[];
@@ -187,11 +136,6 @@ type DiscoveryField = {
   required: boolean;
   description: string;
 };
-// (queryParams are gone — the request body carries all cache semantics.)
-
-// ═══════════════════════════════════════════════════════════════
-// Discovery
-// ═══════════════════════════════════════════════════════════════
 
 const filterSchema = (schema: DatabaseSchema | undefined, entities?: string[]): EntitySchema[] => {
   if (schema === undefined) return [];
@@ -199,28 +143,21 @@ const filterSchema = (schema: DatabaseSchema | undefined, entities?: string[]): 
   return schema.entities.filter(e => entities.includes(e.name));
 };
 
-// ─── Visibility under a policy — discovery advertises only what the
-// policy can touch. These mirror the ENFORCEMENT semantics (applyScope /
-// scopeMutation) as pure predicates: a phase exists, is public, or falls
-// to the default. Enforcement still runs on every request; this only
-// keeps the catalog honest per principal. ───────────────────────
+// For discovery only: it mirrors what scopeMutation enforces on every request.
 const canWriteTable = (policy: ScopePolicy, table: string, op: string): boolean => {
   const rule = policy.entities[table];
   if (rule === undefined) return policy.default === 'allow';
   if ('public' in rule) return true;
   if ('deny' in rule) return false;
   if (rule.write !== undefined || policy.default === 'allow') return true;
-  // insertEach is an insert that happens N times — same phase.
   if (op === 'insert' || op === 'insertEach') return rule.insert !== undefined;
   if (op === 'update') return rule.update !== undefined;
   if (op === 'delete') return rule.delete !== undefined;
-  // upsert desugars to insert or update per call — advertise if either exists
+  // An upsert runs as an insert or as an update, per call.
   if (op === 'upsert') return rule.insert !== undefined || rule.update !== undefined;
   return false;
 };
 
-// Every table a read touches — string sources, recursing into subquery
-// sources (`{ as, query }`).
 const collectTables = (dsl: Query): string[] => {
   const out: string[] = [];
   const walk = (q: Query): void => {
@@ -255,7 +192,6 @@ const listFingerprints = async (engine: QueryEngine, policy?: ScopePolicy): Prom
       ...(entry.intent !== undefined ? { intent: entry.intent } : {}),
       createdAt: entry.createdAt,
       ...(entry.lastUsedAt !== undefined ? { lastUsedAt: entry.lastUsedAt } : {}),
-      // The derived contract — what to pass, straight from the stored def.
       ...(entry.kind === 'ok'
         ? {
             context: collectQueryContext(entry.dsl, schema),
@@ -272,9 +208,6 @@ const listFingerprints = async (engine: QueryEngine, policy?: ScopePolicy): Prom
 
 export const handleDiscovery = async (config: VexHandlerConfig): Promise<DiscoveryResponse> => {
   const { engine, entities: entityFilter, scopePolicy } = config;
-  // Under a scopePolicy, discovery is per-principal: entities and entries
-  // the policy cannot touch are not advertised (what you can't reach
-  // doesn't exist for you — deny by absence, in the catalog too).
   const filtered = filterSchema(engine.getSchema(), entityFilter).filter(
     (e) => scopePolicy === undefined || canReadTable(scopePolicy, e.name),
   );
@@ -335,17 +268,11 @@ export const handleDiscovery = async (config: VexHandlerConfig): Promise<Discove
   };
 };
 
-// ═══════════════════════════════════════════════════════════════
-// Query execution
-// ═══════════════════════════════════════════════════════════════
-
 export type QueryResult = {
   status: number;
   body: unknown;
 };
 
-// Rows an execution touched, for the observer's `rows` — an array's length, a
-// single object as one, nothing as zero. Never inspects the values.
 const rowsOf = (result: unknown): number =>
   Array.isArray(result) ? result.length : result === null || result === undefined ? 0 : 1;
 
@@ -355,8 +282,6 @@ export const handleQuery = async (
   scope: ScopeValues,
   live?: VexLive,
 ): Promise<QueryResult> => {
-  // Unobserved: the fast path builds no probe, takes no timestamps, allocates
-  // no record. An endpoint with no telemetry pays exactly nothing.
   if (config.onExecute === undefined) return runQuery(config, body, scope, undefined, live);
 
   const startUnixNano = Date.now() * 1e6;
@@ -365,8 +290,6 @@ export const handleQuery = async (
   const result = await runQuery(config, body, scope, probe, live);
   const record: ExecuteRecord = {
     kind: probe.kind,
-    // 200 succeeded; 403 is a policy/reach refusal (a normal outcome, not a
-    // fault); everything else is an error.
     status: result.status === 200 ? 'ok' : result.status === 403 ? 'refused' : 'error',
     startUnixNano,
     endUnixNano: startUnixNano + (elapsedClock() - t0) * 1e6,
@@ -384,9 +307,6 @@ export const handleQuery = async (
   return result;
 };
 
-// Sub-millisecond monotonic reading in milliseconds. `performance` is present
-// on every runtime vex targets; the wall clock is the fallback that keeps the
-// duration honest (0) rather than throwing where it is not.
 const elapsedClock = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 const runQuery = async (
@@ -398,7 +318,7 @@ const runQuery = async (
 ): Promise<QueryResult> => {
   const { engine } = config;
 
-  // Before the schema: a deep enough body overflows it (strata depth.ts).
+  // Before the schema: a deep enough body overflows the stack when parsed.
   if (exceedsDepth(body)) return { status: 400, body: { error: 'invalid_request', message: depthRefusal() } };
   const parsed = QueryRequestSchema.safeParse(body);
   if (!parsed.success) {
@@ -422,14 +342,9 @@ const runQuery = async (
     };
   }
 
-  // Recorded before anything can refuse, so a refusal span still carries the
-  // fingerprint it refused. A read that mints one overwrites this from meta.
   if (probe !== undefined && parsed.data.fingerprint !== undefined) probe.fingerprint = parsed.data.fingerprint;
 
   try {
-    // ONE wire shape: `{ fingerprint, context }`. The entry's kind decides
-    // the pipeline — a mutation fingerprint replays the write path; anything
-    // else is the read path (which owns misses, generation, and locked).
     let entryReach: string | undefined;
     if (parsed.data.fingerprint !== undefined) {
       const entry = await engine.cache.get(parsed.data.fingerprint);
@@ -450,9 +365,6 @@ const runQuery = async (
         if (schema === undefined) {
           return { status: 500, body: { error: 'execution_error', message: 'Vex schema not introspected.' } };
         }
-        // A WRITE MAY DEMAND A NARROWER REACH TOO, and the stakes are higher
-        // than for a read: too wide here changes somebody else's row rather
-        // than merely showing it.
         let writePolicy = config.mutations.policy;
         if (entry.reach !== undefined) {
           if (config.policyForReach === undefined) {
@@ -481,15 +393,8 @@ const runQuery = async (
           schema,
         });
         const rows = writes.flatMap((w) => w.rows);
-        // Every reactive read over these tables is now stale. Here, not in
-        // any host's observer: this is the one door every vex write passes —
-        // a request, a server function's `executeAs`, a reflex's effect — and
-        // a read that heard about only some of them would be live only
-        // sometimes, which is worse than a snapshot that says what it is.
         engine.invalidate(tablesChangedBy(writes, schema));
-        // The commit happened; the observer hears about it now, and its
-        // failure is its own — the response must tell the truth about a
-        // write that already landed.
+        // The write is committed: a throwing observer must not fail the response.
         if (config.mutations.onWrite !== undefined) {
           try {
             config.mutations.onWrite({ fingerprint: parsed.data.fingerprint, writes, scope });
@@ -497,28 +402,13 @@ const runQuery = async (
             console.error('[vex:onWrite]', err);
           }
         }
-        // Lifetime = usage, for writes exactly as for reads: stamp
-        // lastUsedAt (off the hot path, at most once per TOUCH_EVERY_MS) so
-        // the GC sweep sees replays.
         const now = Date.now();
         if (isTouchDue(entry, now)) fireAndForget(engine.cache.set(parsed.data.fingerprint, { ...entry, lastUsedAt: now }));
         if (probe !== undefined) probe.rows = rows.length;
-        // A single statement returns its one affected row; a batch returns
-        // the array — the same `{ result }` envelope a query reply uses.
         return { status: 200, body: { result: rows.length === 1 ? rows[0] : rows } };
       }
     }
 
-    // AN ENTRY MAY REQUIRE A NARROWER REACH THAN ITS CALLER HAS.
-    //
-    // "The classes you have booked" means the caller's own, and a principal
-    // holding two roles reaches as wide as either grants. So the entry names
-    // the profile it must be served at and the host recompiles the same grants
-    // under it — narrowing rows, never widening verbs.
-    //
-    // Fail closed: a declared reach the host cannot compile refuses the read.
-    // Serving it at the caller's own reach is the exact failure the field
-    // exists to prevent, and it would be invisible.
     let readPolicy = config.scopePolicy;
     if (entryReach !== undefined) {
       if (config.policyForReach === undefined) {
@@ -548,16 +438,13 @@ const runQuery = async (
     });
     if (probe !== undefined) {
       probe.cacheHit = response.meta.cache.hit;
-      // The identity actually served — the caller's replay key, or the one just
-      // minted for a miss.
       if (response.meta.cache.fingerprint !== undefined) probe.fingerprint = response.meta.cache.fingerprint;
       probe.rows = rowsOf(response.result);
     }
     return { status: 200, body: response };
   } catch (err) {
-    // The host did not say who is asking. That is the server's fault, not the
-    // request's, and the names of the missing keys are the host's business —
-    // they go to the log, not over the wire.
+    // The names of the missing scope keys are the host's business: they go to
+    // the log, not over the wire.
     if (isVexError(err) && err.code === 'missing_scope') {
       console.error('[vex] refused a statement the host did not scope:', err.message);
       return { status: 500, body: { error: 'missing_scope', message: 'The server did not supply the scope this request needs.' } };
@@ -585,11 +472,6 @@ const runQuery = async (
     };
   }
 };
-
-// ═══════════════════════════════════════════════════════════════
-// Fingerprint management — protect (PATCH) and evict (DELETE).
-// The ONLY writers of the `protected` bit besides the seed path.
-// ═══════════════════════════════════════════════════════════════
 
 export const handleFingerprintPatch = async (
   config: VexHandlerConfig,

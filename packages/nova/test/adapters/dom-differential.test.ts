@@ -6,24 +6,6 @@ import type { DomComponent } from '../../src/adapters/dom';
 import type { NovaEvent } from '../../src/shared/event-bus/schemas';
 import type { RenderComponentNode, RenderNode } from '../../src/layout/types';
 
-// ═══════════════════════════════════════════════════════════
-// A page that was patched reads the same as one drawn from nothing.
-//
-// The adapter keeps what did not change and builds only what differs — which is
-// only right if, after ANY run of trees, the page holds exactly what a view
-// would draw if it were handed the last tree and nothing before it. So: a long
-// run of random trees (some fresh, most a small change to the one before), and
-// after every one the patched page is held to a page drawn from scratch — its
-// markup, and what every press on it dispatches. Seeded, so a failure names the
-// run that produced it.
-//
-// The kit covers each way a component can treat its children: puts them in
-// itself (Box, Press), wraps each in a cell (Cells), reads them and puts none
-// on the page (Reads), holds them and marks each with its place (Marks, which
-// says so), has none and is all props (Leaf), and starts something that has to
-// stop (Timer).
-// ═══════════════════════════════════════════════════════════
-
 type Rng = () => number;
 const seeded = (seed: number): Rng => {
   let a = seed >>> 0;
@@ -61,8 +43,8 @@ const props = (r: Rng, name: string): Record<string, unknown> => {
 };
 const children = (r: Rng, depth: number, slots: boolean): RenderNode[] => Array.from({ length: Math.floor(r() * 4) }, () => node(r, depth, slots));
 
-// `slots`: whether this tree may place a canvas. Only the outer canvas may —
-// one that could place itself would never stop.
+// `slots`: only the outer canvas may place a canvas. One that could place
+// itself would never stop.
 const node = (r: Rng, depth: number, slots: boolean): RenderNode => {
   const roll = r();
   if (depth >= MAX_DEPTH || roll < 0.22) return text(r);
@@ -79,14 +61,12 @@ const node = (r: Rng, depth: number, slots: boolean): RenderNode => {
   }
   const picked = pick(r, 'Box', 'Box', 'Box', 'Press', 'Cells', 'Reads', 'Timer', 'Leaf');
   const ref = r() < 0.4 ? pick(r, 'r1', 'r2', 'r3') : undefined;
-  // (a Box that carries `r3` is a Marks instead — decided from what was already
-  // drawn, so the runs named below are the runs they were)
+  // A Box that carries `r3` is a Marks: decided from rolls already made, so
+  // the seeds named below stay the runs they name.
   const name = picked === 'Box' && ref === 'r3' ? 'Marks' : picked;
   return component(name, props(r, picked), picked === 'Leaf' ? [] : children(r, depth + 1, slots), ref);
 };
 
-// The tree before, with a little of it different: a word, a prop, an order, a
-// child more or fewer.
 const changed = (r: Rng, tree: RenderNode, depth: number, slots: boolean): RenderNode => {
   if (r() > 0.25) {
     if (tree.type === 'component' || tree.type === 'fragment') return { ...tree, children: tree.children.map((child) => changed(r, child, depth + 1, slots)) };
@@ -120,7 +100,6 @@ const next = (r: Rng, trees: Trees): Trees =>
         other: trees.other.map((tree) => changed(r, tree, 2, false)),
       };
 
-// ── the kit ──
 const el = (tag: string, tone: unknown, kids: Node[]): HTMLElement => {
   const node = document.createElement(tag);
   if (typeof tone === 'string') node.setAttribute('data-tone', tone);
@@ -176,7 +155,6 @@ const draw = (trees: () => Trees): Drawn => {
   return { root, render: view.render, destroy: view.destroy, dispatched, running, started: () => started, stopped: () => stopped };
 };
 
-// Press everything that can be pressed, in page order, and say what went up.
 const pressAll = (drawn: Drawn): Drawn['dispatched'] => {
   drawn.dispatched.length = 0;
   for (const target of drawn.root.querySelectorAll<HTMLElement>('[data-ref]')) target.click();
@@ -189,10 +167,9 @@ afterEach(() => {
 
 describe('dom adapter — a patched page reads the same as one drawn from nothing', () => {
   const STEPS = 120;
-  // 1009 and 271828 are runs in which a component that wraps each child had one
-  // child and was given a second; 5077, 5150 and 5285 are runs in which one was
-  // handed a child that draws nothing (an empty loop). Both were once patched
-  // where the component should have been asked again.
+  // 1009 and 271828 are runs in which a component that wraps each child has one
+  // child and is given a second; in 5077, 5150 and 5285 one is handed a child
+  // that draws nothing (an empty loop).
   for (const seed of [1, 7, 42, 1009, 5077, 5150, 5285, 31337, 271828]) {
     it(`seed ${seed}: ${STEPS} trees, each held to a page drawn from scratch`, () => {
       const r = seeded(seed);
@@ -208,17 +185,14 @@ describe('dom adapter — a patched page reads the same as one drawn from nothin
         scratch.destroy();
         scratch.root.remove();
 
-        // drawing the same tree again touches nothing
         const observer = new MutationObserver(() => undefined);
         observer.observe(live.root, { childList: true, subtree: true, attributes: true, characterData: true });
         live.render();
         expect(observer.takeRecords().length, `a second render of step ${step}`).toBe(0);
         observer.disconnect();
 
-        // what is on the page is still running; nothing was stopped under it
         for (const timer of live.root.querySelectorAll<HTMLElement>('[data-component="Timer"]')) expect(live.running.has(timer), `a timer on the page, step ${step}`).toBe(true);
       }
-      // …and everything that was ever started is stopped, once, when the view goes
       live.destroy();
       expect(live.running.size).toBe(0);
       expect(live.stopped()).toBe(live.started());

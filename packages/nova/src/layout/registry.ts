@@ -5,21 +5,11 @@ import type {
   RegistrationInput,
 } from './types';
 
-// ═══════════════════════════════════════════════════════════
-// Component registry
-//
-// Stores `{component, meta}` entries keyed by name. Components
-// can carry a static `.meta` property; `registerAll` picks it up
-// automatically. Explicit meta passed to `register`/`registerAll`
-// wins over a component's static meta.
-// ═══════════════════════════════════════════════════════════
-
 const hasOwn = (value: object, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(value, key);
 
 const isComponentMeta = (value: unknown): value is ComponentMeta => {
   if (typeof value !== 'object' || value === null) return false;
-  // Meta is an open bag with optional fields; any plain object qualifies.
   return true;
 };
 

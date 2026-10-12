@@ -1,12 +1,7 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Mews' half of `transfer.book`, and its half of `goodwill.grant`.
-//
-// These are deliberately NOT imported from the Opera bundle. Two vendors
-// implementing one capability each ship their own surfaces, against their own
-// service, on their own deployment clock — that is the thing the app is claiming,
-// and a shared file between two integrations would quietly make it false. The
-// duplication is the boundary.
+// Not imported from the Opera bundle: two vendors implementing one capability
+// each ship their own surfaces, on their own deployment clock.
 
 const routes: LayoutNode = {
   if: '$.loading',
@@ -177,7 +172,6 @@ export const transferSheetLayout: LayoutNode = {
   ],
 };
 
-// ─── goodwill ────────────────────────────────────────────────
 export const goodwillLayout: LayoutNode = {
   if: '$.done',
   then: {

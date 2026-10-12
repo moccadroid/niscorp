@@ -1,11 +1,6 @@
 import type { FC } from 'react';
 import type { Response } from './structured-stream.demo';
 
-// ═══════════════════════════════════════════════════════════
-// Renderer for the Response shape. Pure presentational — reads
-// off the live `current` value the solid stream drives.
-// ═══════════════════════════════════════════════════════════
-
 type Props = { value: Response; streaming: boolean };
 
 export const ResponseCard: FC<Props> = ({ value, streaming }) => (

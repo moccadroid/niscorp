@@ -3,10 +3,6 @@ import { z } from 'zod';
 import { defineAgent, defineTool } from '../src';
 import { stubSignal } from './helpers/stub-signal';
 
-// The finish protocol is ONE cortex-owned system chunk stating how the
-// run ends under the RESOLVED transport. Agents never author finish
-// lines — they cannot know which transport resolution picked.
-
 const Small = z.object({ value: z.string() });
 
 const noopTool = defineTool({
@@ -41,7 +37,6 @@ describe('finish protocol chunk', () => {
     expect(chunk).toContain('ENTIRE final message');
     expect(chunk).toContain('no code fences');
     expect(chunk).not.toContain('respond');
-    // No respond descriptor on the wire either.
     expect(preview.tools.some((tool) => tool.name === 'respond')).toBe(false);
   });
 
@@ -76,7 +71,6 @@ describe('finish protocol chunk', () => {
       expect(result.meta.strategy).toBe('emit');
       expect(result.output.data).toEqual({ value: 'done' });
     }
-    // No respond tool was ever advertised.
     for (const request of llm.requests) {
       expect((request.tools ?? []).some((tool) => tool.name === 'respond')).toBe(false);
     }
@@ -93,8 +87,6 @@ describe('finish protocol chunk', () => {
     expect(() => agent.run('go', { llm })).toThrow(/forceTool/);
   });
 
-  // forceTool says "respond is the only exit" — under auto that IS the choice,
-  // on a provider where auto would otherwise land on emit.
   it('forceTool under auto resolves to respond, even on a mangling provider', async () => {
     const llm = stubSignal([], { capabilities: { manglesNestedToolArgs: true } });
     const agent = defineAgent({ id: 'a', instructions: 'x', tools: [noopTool], output: { schema: Small, forceTool: true } });

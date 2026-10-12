@@ -1,13 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// Envelope — wire schema + validation
-// ═══════════════════════════════════════════════════════════
-//
-// The wire schema (a Zod object) exists ONLY for JSON-schema
-// generation — it feeds signal's transport resolution (exit-tool
-// params, response_format) and the schema docs. Validation is
-// hand-rolled below so `data` flows through the agent's own schema
-// and stays typed end-to-end — no envelope-level cast, no widening.
-
 import { z, type ZodType } from 'zod';
 import { decodeJsonish, deepDecodeJsonish } from '@niscorp/signal';
 import { flattenSchemaIssues } from '../utils/schema-issues';
@@ -22,33 +12,13 @@ export type EnvelopeSpec<TData> = {
 };
 
 const RESPONSE_DESCRIPTION = 'Human-facing text answer. Plain prose, no JSON.';
-// Forward, not backward — because the field now LEADS the envelope. It used to
-// trail `data`, where the only honest description was "why you did what you
-// did", and a note that can only justify a finished decision is worth little to
-// the model and nothing to the answer. Written first, it is the decision being
-// made rather than defended.
 const REASONING_DESCRIPTION = 'Short model-authored note, written FIRST: what you are about to do and why. It comes before your answer, so use it to decide rather than to justify.';
 const LOOSE_DATA_DESCRIPTION =
   'The final answer payload. MUST validate against the OUTPUT SCHEMA documented in the system prompt.';
 
-// ───────────────────────────────────────────────────────────
-// Wire schema builders (for z.toJSONSchema only)
-// ───────────────────────────────────────────────────────────
-
-// Models say null: every optional model-facing field accepts null and
-// treats it as absent (.nullish(), never bare .optional()). A required
-// response stays strict — null there IS a missing reply.
-// KEY ORDER IS LOAD-BEARING, and it is the reason `reasoning` comes first.
-//
-// A model emits an object in the order it is declared, so a field placed after
-// `data` is written after the answer it exists to explain. That is post-hoc
-// justification — it cannot change what it follows, and consumers rightly
-// treated it as latency and told models to omit it. Declared FIRST, writing it
-// conditions everything after: the model names what it is doing before it does
-// it, which is the cheapest quality lever a structured-output agent has.
-//
-// Validation reads by key and `KNOWN_KEYS` is a Set, so nothing downstream
-// notices. Only generation order changes.
+// `.nullish()`, not `.optional()`: models write null for an absent field.
+// Key order matters: a model writes the keys in the order they are declared, so
+// `reasoning` comes first to be written before the answer it explains.
 export const envelopeWireSchema = (spec: { schema?: ZodType; responseMode: ResponseMode }): ZodType => {
   const response = spec.responseMode === 'required'
     ? z.string().describe(RESPONSE_DESCRIPTION)
@@ -60,16 +30,12 @@ export const envelopeWireSchema = (spec: { schema?: ZodType; responseMode: Respo
       data: spec.schema,
     });
   }
-  // Pure chat agents: no data key on the wire at all.
   return z.object({
     reasoning: z.string().nullish().describe(REASONING_DESCRIPTION),
     response,
   });
 };
 
-// Loose variant: `data` is opaque on the wire; the real schema is
-// documented in the prompt and enforced by Zod on validation. This is
-// what makes recursive DSL schemas (Prism nodes, Nova actions) work.
 export const envelopeLooseWireSchema = (spec: { hasData: boolean; responseMode: ResponseMode }): ZodType => {
   const response = spec.responseMode === 'required'
     ? z.string().describe(RESPONSE_DESCRIPTION)
@@ -78,8 +44,8 @@ export const envelopeLooseWireSchema = (spec: { hasData: boolean; responseMode: 
     return z.object({
       reasoning: z.string().nullish().describe(REASONING_DESCRIPTION),
       response,
-      // A typed union, not z.unknown(): an empty {} schema gives the
-      // model zero type signal and invites stringified payloads.
+      // Not z.unknown(): an empty {} schema tells the model no type, and it
+      // sends the payload as a string.
       data: z
         .union([z.record(z.string(), z.unknown()), z.array(z.unknown())])
         .describe(LOOSE_DATA_DESCRIPTION),
@@ -91,19 +57,10 @@ export const envelopeLooseWireSchema = (spec: { hasData: boolean; responseMode: 
   });
 };
 
-// The ACCEPTANCE gate — what signal's router gates candidates on. The
-// gate is a TRANSPORT concern: its only job is telling a real attempt
-// (a JSON container) from garbage so the repair ladder can pick a
-// candidate. It carries NO envelope semantics — pushing semantics into
-// the gate is how evidence archaeology crept into signal once already.
-// validateEnvelope below is the ONE semantic judge; corrections quote
-// its evidence.
+// Any JSON container passes: for signal's router the gate only tells an attempt
+// from garbage. validateEnvelope is the one judge of what the envelope holds.
 export const envelopeAcceptSchema = (_spec: { schema?: ZodType; responseMode: ResponseMode }): ZodType =>
   z.union([z.record(z.string(), z.unknown()), z.array(z.unknown())]);
-
-// ───────────────────────────────────────────────────────────
-// Validation
-// ───────────────────────────────────────────────────────────
 
 export type EnvelopeVerdict<TData> =
   | { ok: true; envelope: Envelope<TData> }
@@ -111,27 +68,17 @@ export type EnvelopeVerdict<TData> =
 
 const KNOWN_KEYS = new Set(['response', 'data', 'reasoning']);
 
-// Reasoning models sometimes serialize the payload INTO a string
-// ("data": "{\"id\": ...}"). When a data schema exists and data
-// arrives as a JSON-looking string, decode (with escape repair)
-// before validating — same defense as the loop's tool-args decode.
-const decodeData = decodeJsonish;
+// A schema that takes an object of one unknown key cannot tell a bare payload
+// from an envelope with a misspelt key.
+const takesAnyObject = (schema: ZodType): boolean => schema.safeParse({ 'cortex:no-such-field': true }).success;
 
-// The "arrived UNWRAPPED" rung: models regularly emit the payload itself
-// instead of the envelope around it — especially when the payload has its
-// own `data`-named field (a Nova action) that collides with the envelope's.
-// If the raw object is NOT a plausible envelope but validates cleanly
-// against the data schema, it IS the answer, missing only its coat: accept
-// it as { data: raw }. Envelope-first precedence; a strict, discriminating
-// data schema is what makes this safe (loose record-ish schemas would
-// wrongly swallow malformed envelopes — those agents keep the strict path
-// because their unknown-keys check fails first only when keys overlap).
-const tryUnwrap = <TData>(record: Record<string, unknown>, spec: EnvelopeSpec<TData>): Envelope<TData> | undefined => {
+// Models often send the bare payload, without the envelope around it.
+const asBarePayload = <TData>(record: Record<string, unknown>, spec: EnvelopeSpec<TData>): Envelope<TData> | undefined => {
   if (!spec.schema || spec.responseMode === 'required') return undefined;
-  // A plausible envelope (some known key, nothing unknown) is never unwrapped.
   const keys = Object.keys(record);
   const looksWrapped = keys.length > 0 && keys.every((key) => KNOWN_KEYS.has(key));
   if (looksWrapped) return undefined;
+  if (takesAnyObject(spec.schema)) return undefined;
   const parsed = spec.schema.safeParse(record);
   if (!parsed.success) return undefined;
   return { data: parsed.data };
@@ -148,12 +95,10 @@ export const validateEnvelope = <TData>(raw: unknown, spec: EnvelopeSpec<TData>)
     if (!KNOWN_KEYS.has(key)) issues.push(`unknown key "${key}" — only response, data, reasoning are allowed`);
   }
   if (issues.length > 0) {
-    const unwrapped = tryUnwrap(record, spec);
-    if (unwrapped !== undefined) return { ok: true, envelope: unwrapped };
+    const bare = asBarePayload(record, spec);
+    if (bare !== undefined) return { ok: true, envelope: bare };
   }
 
-  // Models say null for "absent" — normalize before judging. A REQUIRED
-  // response still fails on null: that is a missing reply.
   const response = record['response'] ?? undefined;
   if (spec.responseMode === 'required' && typeof response !== 'string') {
     issues.push('response: required — a plain-text string answer');
@@ -167,20 +112,14 @@ export const validateEnvelope = <TData>(raw: unknown, spec: EnvelopeSpec<TData>)
   }
 
   if (spec.schema) {
-    const data = decodeData(record['data']);
+    const data = decodeJsonish(record['data']);
     let parsed = spec.schema.safeParse(data);
     if (!parsed.success) {
-      // Deep repair, one retry: the payload may carry stringified
-      // NESTED values (Groq gpt-oss corrupts nested arrays in tool
-      // args). Decode every JSON-looking string in the tree and
-      // validate once more; when that also fails, report the ORIGINAL
-      // issues — the repair is a rescue, never a source of error text.
+      // Some providers stringify nested values inside the payload.
       const repaired = spec.schema.safeParse(deepDecodeJsonish(data));
       if (repaired.success) parsed = repaired;
     }
     if (!parsed.success) {
-      // Flattened union issues (see signal's formatter): corrections must
-      // name the branch the value meant, not zod's "Invalid input".
       for (const issue of flattenSchemaIssues(parsed.error.issues)) {
         const path = issue.path.length > 0 ? `data.${issue.path.join('.')}` : 'data';
         issues.push(`${path}: ${issue.message}`);

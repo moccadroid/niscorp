@@ -1,42 +1,15 @@
 import { STOPWORDS } from './parse';
 import type { CandidateSets, Superseded } from './intent.types';
 
-// LANE 2½ — A CORRECTION IS READ, NOT JUDGED. Pure.
-//
-// "move the headliner to the tent no the grove" left To = The Tent on the real
-// model. It passed every check because the fake scorer had a negation cue — the
-// sixth rule the fake hid. A model that reads "the tent" and "the grove" in one
-// sentence has two good answers and picks the first; asking it nicely to mind
-// the word "no" is a prompt, and a prompt is a hope.
-//
-// So it is made structural, the way "at 9" is: a row the speaker took back is NOT
-// AN OPTION. It is removed from the pass's candidate sets before a question is
-// derived from them, so no model — calibrated, middling or lexical — can pick it.
-//
-// TWO KINDS OF MARKER, because English has two:
-//
-//   replaces   "the tent NO the grove" · "the tent, ACTUALLY the grove" · "I MEAN" ·
-//              "SCRATCH THAT" · "INSTEAD" · "RATHER". What FOLLOWS the marker
-//              replaces the same-table row mentioned LAST before it.
-//   rejects    "the grove, NOT the tent" · "the grove INSTEAD OF the tent" · "the
-//              grove RATHER THAN the tent". What follows the marker is the thing
-//              NOT meant: it goes, provided another row of its table was mentioned
-//              at all. (Treating "not" like "no" would take The Grove back in "to
-//              the grove, not the tent" — deterministically wrong, for every model.)
-//
-// A ROW IS MENTIONED when a word of the sentence begins a word of its label AND
-// OF NO OTHER ROW'S in that table: "stage" names four stages and therefore none.
-// Rows of different tables never touch each other: "move Nova Kestrel, no, to the
-// grove" takes nobody back. A marker with nothing after it changes nothing, and
-// neither does "do not delay" — no row follows it.
+// What follows a replaces marker ("the tent no the grove") replaces the row said last before it.
+// What follows a rejects marker ("the grove, not the tent") is itself the row not meant.
 
 export type SupersedeResult = { candidates: CandidateSets; superseded: Superseded[] };
 
-// Longest first: "instead of" must be read before "instead".
+// Rejects are matched first: "instead of" must be read before "instead".
 const REJECTS: readonly (readonly string[])[] = [['instead', 'of'], ['rather', 'than'], ['not']];
 const REPLACES: readonly (readonly string[])[] = [['scratch', 'that'], ['i', 'mean'], ['no'], ['actually'], ['instead'], ['rather']];
 
-// The same floor the parser uses: a shorter prefix matches too much.
 const MIN_MENTION_LENGTH = 3;
 
 const wordsOf = (text: string): string[] => text.toLowerCase().split(/[^a-z0-9&]+/).filter((word) => word !== '');
@@ -64,7 +37,6 @@ const markersOf = (words: readonly string[]): Marker[] => {
 
 type Mention = { at: number; id: string; label: string };
 
-// Every unambiguous mention of a row of one table, in the order it was said.
 const mentionsOf = (words: readonly string[], rows: CandidateSets[string], skipped: ReadonlySet<number>): Mention[] =>
   words.flatMap((word, at) => {
     if (word.length < MIN_MENTION_LENGTH || STOPWORDS.has(word) || skipped.has(at)) return [];
@@ -77,7 +49,6 @@ export const supersede = (line: string, candidates: CandidateSets): SupersedeRes
   const words = wordsOf(line);
   const markers = markersOf(words);
   if (markers.length === 0) return { candidates, superseded: [] };
-  // A marker's own words are not mentions: "no" begins "Nova".
   const markerWords = new Set(markers.flatMap((marker) => Array.from({ length: marker.length }, (_, offset) => marker.at + offset)));
 
   const superseded: Superseded[] = [];
@@ -90,8 +61,8 @@ export const supersede = (line: string, candidates: CandidateSets): SupersedeRes
       if (next === undefined) continue;
       if (marker.kind === 'replaces') {
         const last = standing.filter((mention) => mention.at < marker.at && mention.id !== next.id).at(-1);
-        // ...and only if the survivor is not itself something said earlier and
-        // kept: "the grove, no, the grove" takes nothing back.
+        // Not when the survivor was itself said after that row and before the marker:
+        // "the tent, the grove, no, the grove" takes nothing back.
         if (last === undefined || standing.some((mention) => mention.at < marker.at && mention.id === next.id && mention.at > last.at)) continue;
         gone.add(last.id);
         superseded.push({ table, id: last.id, label: last.label, by: { id: next.id, label: next.label }, marker: marker.text });
@@ -111,7 +82,5 @@ export const supersede = (line: string, candidates: CandidateSets): SupersedeRes
   };
 };
 
-// What Jev is told, beside the line exactly as it was typed: the row is already
-// not an option, and the note is why the sentence still names it.
 const nameOf = (label: string): string => label.split(' — ')[0] ?? label;
 export const supersededNotes = (superseded: readonly Superseded[]): string[] => superseded.map((entry) => `"${nameOf(entry.label)}" was taken back ("${entry.marker}"): "${nameOf(entry.by.label)}" is meant in its place`);

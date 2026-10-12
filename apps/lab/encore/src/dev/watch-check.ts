@@ -1,25 +1,3 @@
-// THE ROOM WATCHES — scene 4, with nobody typing.
-//
-// A director writes through the server's own door as its own principal; moss
-// says THAT a table was written; each live session re-reads what changed under
-// its own policy and puts it to Jev as an EVENT. Driven on the fake providers
-// with the fake's `noulFloor` at 0.4 THROUGHOUT: every rule here is a threshold,
-// and a threshold that only holds against a model that answers zero is the
-// mistake this app has made three times. Under the floor a routine event is a
-// 0.4 "maybe worth a look", every card is a 0.4 guess — and nothing may rise.
-//
-//   a. a routine event raises nothing, and is counted as triaged
-//   b. Food Court 91% → 96% raises crowd.gauge, aimed at the Food Court
-//   c. scanner down + 96% → ONE brief, naming both
-//   d. a burst of 300 scans is ONE pass
-//   e. a sentence typed mid-stream is untouched and undelayed
-//   f. a click is a label, with the raising pass's probabilities
-//   g. a closed incident takes its card down
-//   h. more than four raises fold into a counted line — raised all the same
-//   i. flagged events are turns: on the rail, and in the agent's thread
-//   j. the liaison gets crowd events and is never shown, or asked about, an incident
-//   k. the brief's rate limit, and the operator's run coming first
-//   l. the law: an event pass writes nothing
 import { z } from 'zod';
 import { LIAISON_PRINCIPAL, OPERATOR_PRINCIPAL } from '@encore/app/charter/assignments';
 import { feedOpenIncident, feedScan, feedSetCount, feedSetIncidentStatus, feedSetScanner } from '@encore/app/vex/watch.entries';
@@ -59,37 +37,25 @@ const main = async (): Promise<void> => {
   };
   const setCount = (zoneId: string, headcount: number): Promise<void> => director.send({ what: `${zoneId} → ${headcount}`, fingerprint: feedSetCount.fingerprint, context: { zoneId, day: 'sat', hour: 18, headcount } });
   const countsBefore = await world.tableCounts();
-  // (2026-09-22: the app has no demo handle, so the idle sentence offers none.)
   const IDLE_WITH_DECK = 'Nothing needs attention right now. Say what is happening.';
   const idleSays = (room: typeof shell): unknown => cardData(room, 'maybe', 'intent.options')['idle'];
   const served = (room: string, actionId: string): string => world.servedTo(room).filter((message) => message.includes(`"definitionId":"${actionId}"`)).at(-1) ?? '';
 
-  // (2026-09-21, the surface; 2026-09-22, x-ray rebuilt: the story of a pass and the
-  // director's deck live in x-ray's PANEL. This check reads them off the rendering, so
-  // the operator's panel is OPEN from here; the app is identical either way, and what
-  // it shows is surface-check's.)
+  // The story of a pass and the director's deck live in x-ray's panel. This check
+  // reads them off the rendering, so the operator's panel is open from here.
   await world.xray(OP);
 
-  // ═══ what am I looking at? — the room before anything has happened ═══
   check(`AN IDLE ROOM SAYS SO, in one quiet sentence: "${String(idleSays(shell))}"`, String(idleSays(shell)).startsWith('Nothing needs attention right now. Say what is happening') && served(OP, 'intent.options').includes('Nothing needs attention right now'));
   check('...and the director’s deck is held only by somebody granted it', !String(idleSays(liaisonShell)).includes('press play') && mounted(liaisonShell, 'deck').length === 0 && mounted(shell, 'deck').join() === 'director.deck');
-  // (Restated 2026-09-22, x-ray rebuilt: the trace is x-ray's PANEL now, and its zero
-  // state is one plain sentence — still no zeros, still no "calibrated false".)
   check('X-RAY HAS A ZERO STATE: before any pass its panel says so in one sentence — no zeros, no "calibrated false"', served(OP, 'intent.trace').includes('Nothing has been typed yet') && !served(OP, 'intent.trace').toLowerCase().includes('calibrated') && !served(OP, 'intent.trace').includes('Jev ·'));
-  // (2026-09-22: the deck is drawn inside the panel, under "Demo", and only while it is open.)
   check('the director’s deck says it is ready, and offers play — inside x-ray’s panel', JSON.stringify(cardData(shell, 'deck', 'director.deck')['deck']).includes('"status":"ready"') && world.servedTo(OP).filter((message) => message.includes('"canvas":"deck"')).at(-1)?.includes('"label":"Play"') === true);
 
-  // ═══ a. routine ══════════════════════════════════════════
   await setCount('zone_arena', 6980);
   await bothSettled();
   check(`a routine event — Main Arena 26% → 28% — is asked about and answered NOTHING (${JSON.stringify(watcher.stats())})`, watcher.stats().events === 1 && watcher.stats().passes === 1 && watcher.stats().nothing === 1 && watcher.stats().raised === 0 && mounted(shell, 'attention').length === 0);
-  // (Restated 2026-09-21: the strip's line did not add up — a cause re-asked while
-  // its card stood, or one that left, was an event and neither "raised" nor
-  // "nothing". It now names all four things an event can be.)
   check(`...and COUNTED, because that is the product: "${String(strip()['say'])}"`, strip()['say'] === '1 event · 0 raised · 1 nothing · 0 already up · 0 left');
   check(`...under a model with a ${FLOOR} opinion of everything: "worth a look?" came back ${FLOOR}, under the ${YES_AT} line`, (world.booted.decider.fakeMiddling?.floor ?? 0) === FLOOR && tone() === 'calm');
 
-  // ═══ d. a burst is one pass ══════════════════════════════
   const beforeBurst = watcher.stats();
   const framesBeforeBurst = world.servedTo(OP).length;
   for (let batch = 0; batch < 12; batch += 1) void director.send({ what: '25 scans', fingerprint: feedScan.fingerprint, context: { gateId: 'gate_west', day: 'sat', minute: 1082, scans: 25 } });
@@ -102,7 +68,6 @@ const main = async (): Promise<void> => {
   check(`...and a burst of scans re-reads NO card and costs the terminal ${framesInBurst} frame(s): nothing on screen shows a scan`, Object.keys(world.booted.intent.of(OP)?.reloading().published() ?? {}).length === 0 && framesInBurst <= 2);
   check('...Jev was asked about "West Gate: 325 tickets scanned in the last minute", once', burstBody.includes('West Gate: 325 tickets scanned in the last minute'));
 
-  // ═══ b + c. scanner down, then the Food Court goes over ══
   await director.send({ what: 'West Gate scanners fail', fingerprint: feedSetScanner.fingerprint, context: { gateId: 'gate_west', ok: false } });
   await bothSettled();
   check('...and the idle sentence is gone the moment a card goes up', idleSays(shell) === '');
@@ -114,8 +79,6 @@ const main = async (): Promise<void> => {
   check(`FOOD COURT 91% → 96% RAISES crowd.gauge on \`attention\`, aimed at the Food Court (${mounted(shell, 'attention').join(', ')})`, mounted(shell, 'attention').includes('crowd.gauge') && gauge['zoneId'] === 'zone_food' && gauge['hour'] === 18);
   check(`...wearing what happened and how sure Jev was: "${String(gauge['causeLine']).slice(0, 70)}…" [${String(gauge['raisedBand'])}, ${String(gauge['raisedBy'])}]`, String(gauge['causeLine']).includes('Food Court crowding: 96% of capacity') && gauge['raisedBand'] === 'critical' && String(gauge['raisedBy']).startsWith('jev 0.9'));
   check('...and the frame goes critical: the louder of the sentence’s tone and the festival’s', tone() === 'critical');
-  // THE CARD UNDER THE ALERT IS NOT STALE (seen live: "96%" over a gauge reading
-  // 93%). It was on screen BEFORE the count moved; it re-read when it did.
   const GaugeCount = z.object({ headcount: z.number() }).loose();
   check(`the gauge under that header READS WHAT THE HEADER SAYS: ${JSON.stringify(gauge['count'])}`, GaugeCount.safeParse(gauge['count']).data?.headcount === 5760);
   check(`ONE BRIEF, and it names BOTH: "${String(strip()['brief'])}"`, watcher.stats().briefs === 1 && String(strip()['brief']).includes('Food Court') && String(strip()['brief']).includes('West Gate') && world.booted.spent().filter((run) => run.label === 'brief:landed' && run.principal === OP).length === 1);
@@ -125,15 +88,11 @@ const main = async (): Promise<void> => {
   check(`...from the agent with NO tools and nothing it may name, handed the causes that are up — one request per watcher that may be briefed (${briefRequests.length})`, controls.seen.length === briefRequests.length && briefRequests.length === 2 && briefRequests.every((request) => request.tools.length === 0) && briefRequests.filter((request) => request.messages.some((message) => message.content.includes('West Gate'))).length === 1);
   check('AN EVENT PASS TOUCHES `attention` AND NOTHING ELSE: the five question canvases are exactly as they were', room() === roomBefore);
 
-  // ═══ a write re-reads the cards that show it ═════════════
-  // A gauge up BEFORE the write, the same instance after it, a new number in it.
   const gaugeInstance = (): string => shell.getState().canvases['attention']?.stack.find((item) => item.definitionId === 'crowd.gauge')?.id ?? '';
   const gaugeBefore = gaugeInstance();
   await setCount('zone_food', 5790);
   await bothSettled();
   check(`THE COUNT MOVES AND THE MOUNTED GAUGE MOVES WITH IT — re-read in place, the same instance (${JSON.stringify(cardData(shell, 'attention', 'crowd.gauge')['count'])})`, GaugeCount.safeParse(cardData(shell, 'attention', 'crowd.gauge')['count']).data?.headcount === 5790 && gaugeInstance() === gaugeBefore && gaugeBefore !== '');
-  // Ten writes to one zone inside a breath: the first re-reads at once, the rest
-  // become ONE more.
   const beforeThrash = world.booted.intent.of(OP)?.reloading().published()['crowd.gauge'] ?? 0;
   for (let step = 1; step <= 10; step += 1) void setCount('zone_food', 5790 + step);
   await bothSettled();
@@ -142,9 +101,8 @@ const main = async (): Promise<void> => {
   await setCount('zone_food', 5762);
   await bothSettled();
 
-  // ═══ k. the brief's rate limit, and the operator first ═══
-  // (Counted from HERE: the writes above were critical events too, and each of
-  // them found the ten-second limit in its way.)
+  // Counted from here: the writes above were critical events too, and each of
+  // them found the ten-second limit in its way.
   const skippedSoFar = watcher.stats().briefsSkipped;
   await setCount('zone_grove', 3900);
   await bothSettled();
@@ -169,7 +127,6 @@ const main = async (): Promise<void> => {
   await world.typeLine(OP, '');
   await bothSettled();
 
-  // ═══ e. a sentence, mid-stream ═══════════════════════════
   const latency = world.booted.decider.fakeLatency;
   if (latency === undefined) throw new Error('watch-check: the decider has no latency knob');
   latency.ms = 150;
@@ -189,12 +146,10 @@ const main = async (): Promise<void> => {
   await world.typeLine(OP, '');
   await bothSettled();
 
-  // ═══ l. the law, measured before anybody clicks ══════════
   const countsAfterEvents = await world.tableCounts();
   const grew = Object.keys(countsAfterEvents).filter((table) => countsAfterEvents[table] !== countsBefore[table]).sort();
   check(`THE EVENT PATH WRITES NOTHING: after ${watcher.stats().passes} passes and ${watcher.stats().raised} raises the only tables that grew are the feed’s own and the thread (${grew.join(', ')}) — not one label`, grew.join() === 'agent_turns,gate_scans' && (countsAfterEvents['attention_labels'] ?? -1) === 0 && (countsAfterEvents['pushes'] ?? -1) === (countsBefore['pushes'] ?? -2));
 
-  // ═══ f. a click is a label ═══════════════════════════════
   world.dispatchOn(OP, 'attention', { type: 'ui:click', ref: 'dismiss' }, 'crowd.gauge');
   await bothSettled();
   const labels = await world.sql('SELECT principal, verdict, action_id, cause, probabilities FROM attention_labels ORDER BY seq');
@@ -214,7 +169,6 @@ const main = async (): Promise<void> => {
   const kept = await world.sql(`SELECT verdict, cause FROM attention_labels WHERE verdict = 'kept'`);
   check('KEEP is a label too, and the card stays', kept.length === 1 && String(kept[0]?.['cause']).startsWith('gate:') && mounted(shell, 'attention').includes('site.map') && cardData(shell, 'attention', 'site.map')['labelled'] === 'kept');
 
-  // ═══ g. a closed incident ════════════════════════════════
   await director.send({ what: 'a fall', fingerprint: feedOpenIncident.fingerprint, context: { id: 'inc_check_1', day: 'sat', at: '18:30', zoneId: 'zone_grove', kind: 'medical', severity: 2, summary: 'Guest fell from the riser; conscious, medics on the way.' } });
   await bothSettled();
   check(`an incident raises the incident feed (${watcher.raised().map((entry) => `${entry.cause}→${entry.actionId}`).join(', ')})`, watcher.raised().some((entry) => entry.cause === 'incident:inc_check_1' && entry.actionId === 'incident.feed'));
@@ -222,7 +176,6 @@ const main = async (): Promise<void> => {
   await bothSettled();
   check('CLOSED: its cause has left, and the card with it — nobody was asked', !watcher.raised().some((entry) => entry.cause === 'incident:inc_check_1'));
 
-  // A card a SENTENCE opened re-reads too: the incident list, up before the row.
   await world.typeLine(OP, 'open incidents');
   const feedInstance = (): string => shell.getState().canvases['nearby']?.stack.find((item) => item.definitionId === 'incident.feed')?.id ?? '';
   const feedBefore = feedInstance();
@@ -237,7 +190,6 @@ const main = async (): Promise<void> => {
   await world.typeLine(OP, '');
   await bothSettled();
 
-  // ═══ j. the liaison ══════════════════════════════════════
   const bodies = world.booted.decider.fakeSeen?.() ?? [];
   const askedAboutTheFall = bodies.filter((body) => body.includes('Guest fell from the riser')).length;
   const askedAboutTheCourt = bodies.filter((body) => body.includes('Food Court crowding: 96% of capacity (5,760 of 6,000)')).length;
@@ -245,14 +197,12 @@ const main = async (): Promise<void> => {
   check(`...and is NEVER SHOWN, OR ASKED ABOUT, AN INCIDENT: Jev was asked about the fall exactly once, by the operator’s session (${askedAboutTheFall})`, askedAboutTheFall === 1 && !liaisonWatcher.raised().some((entry) => entry.cause.startsWith('incident:') || entry.cause.startsWith('gate:')) && !mounted(liaisonShell, 'attention').includes('incident.feed'));
   check('...with no code that says so: their policy cannot read the incident log or the gates, so those feeds were never re-read for them', liaisonWatcher.stats().events < watcher.stats().events && (await world.asPrincipal(LIAISON_PRINCIPAL, '/api/vex', { fingerprint: 'feed/incidents', context: { after: 0 } })).status !== 200);
 
-  // ═══ h. more than four ═══════════════════════════════════
   for (const [zone, headcount] of [['zone_arena', 24500], ['zone_tent', 8800], ['zone_camp', 17600], ['zone_dock', 2460], ['zone_grove', 3950]] as const) await setCount(zone, headcount);
   await bothSettled();
   const raisedNow = watcher.raised().length;
   check(`${raisedNow} causes are raised and ${mounted(shell, 'attention').length} cards show: the cap is on the DISPLAY`, raisedNow > ATTENTION_SHOWN && mounted(shell, 'attention').length === ATTENTION_SHOWN);
   check(`...the rest fold into one counted line: "${String(strip()['foldedSay'])}"`, strip()['folded'] === raisedNow - ATTENTION_SHOWN && String(strip()['foldedSay']).startsWith(`+${raisedNow - ATTENTION_SHOWN} more raised`));
 
-  // ═══ i. flagged events are turns ═════════════════════════
   const rail = Entries.parse(cardData(shell, 'rail', 'assist.rail')['entries'] ?? []);
   const flagged = rail.filter((entry) => entry.by === 'event');
   check(`every raise is on the rail, as what it was (${flagged.length}: "${flagged.at(-1)?.line}")`, flagged.length === watcher.stats().raised && flagged.some((entry) => /^18:00 · Food Court 96% — raised$/.test(entry.line)));
@@ -265,7 +215,6 @@ const main = async (): Promise<void> => {
   await world.typeLine(OP, '');
   await bothSettled();
 
-  // ═══ tone decays; the clock is a row ═════════════════════
   for (const [zone, headcount] of [['zone_arena', 6500], ['zone_tent', 4800], ['zone_camp', 9000], ['zone_dock', 1100], ['zone_grove', 1900], ['zone_food', 4900]] as const) await setCount(zone, headcount);
   await director.send({ what: 'scanners back', fingerprint: feedSetScanner.fingerprint, context: { gateId: 'gate_west', ok: true } });
   await bothSettled();
@@ -277,18 +226,10 @@ const main = async (): Promise<void> => {
   check('...and stops saying it at the first key', idleSays(shell) === '');
   await world.typeLine(OP, 'storm at 9');
   check('...while a sentence that describes a storm still raises it by itself', tone() === 'elevated');
-  // (Restated 2026-09-21, the surface: the trace is a drawer of five sections, each
-  // ONE LINE until it is opened — so what a landed pass draws is its summaries, not
-  // a KeyValue. Same claim: the zero state is gone and the pass is on the screen.)
-  // (Restated again 2026-09-22: what a landed pass draws is its STORY.)
   check('x-ray tells the story of a pass once one has landed', /Jev · \d+ ms · \d+ questions/.test(served(OP, 'intent.trace')) && served(OP, 'intent.trace').includes('You typed: ') && !served(OP, 'intent.trace').includes('Nothing has been typed yet'));
-  check(`THE RAIL HAS A HEADING, so a cold reader knows what the list is`, /"label":"Earlier · \d+"/.test(served(OP, 'assist.rail'))); // (2026-09-21: the heading is one plain word — and, since the redesign, the whole rail until it is pressed: "Earlier · n")
+  check(`THE RAIL HAS A HEADING, so a cold reader knows what the list is`, /"label":"Earlier · \d+"/.test(served(OP, 'assist.rail')));
   await world.typeLine(OP, '');
 
-  // A CARD THAT FOLLOWS THE CLOCK FOLLOWS THE ROW; one that was TOLD an hour
-  // keeps it. Three cards up before the clock moves: a gauge the room raised, a
-  // head count a sentence opened with no hour said, and the same card in the
-  // liaison's room — aimed, by their sentence, at nine o'clock.
   await setCount('zone_food', 5760);
   await bothSettled();
   await world.typeLine(OP, 'how many guests are there right now?');
@@ -316,7 +257,6 @@ const main = async (): Promise<void> => {
   console.log(`       reloads published to the operator's cards, this suite: ${JSON.stringify(world.booted.intent.of(OP)?.reloading().published())}`);
   console.log(`\n       measured, this suite (operator's watcher): ${stats.rows} rows re-read → ${stats.events} events → ${stats.passes} passes · ${stats.raised} raised · ${stats.nothing} nothing · ${stats.left} left · ${stats.briefs} briefs (${stats.briefsSkipped} stood aside)`);
 
-  // ═══ the ceiling, in a world where it bites ══════════════
   const tight = await createWorld({ agent: { kind: 'off' }, decider: { noulFloor: FLOOR }, eventPassesPerSecond: 2 });
   const tightShell = await tight.login(OP);
   await settle();
@@ -330,14 +270,13 @@ const main = async (): Promise<void> => {
   check(`A CEILING ON EVENT PASSES PER SECOND, shared by every session: 5 events at 2 a second took ${(took / 1000).toFixed(1)} s (${((tightStats?.passes ?? 0) / (took / 1000)).toFixed(1)} passes/s)`, tightStats?.passes === 5 && took >= 1900 && (tightStats.deferred ?? 0) >= 2);
   check(`...and it SAYS SO when it bites: "${String(cardData(tightShell, 'watch', 'attention.strip')['ceilingSay'])}"`, String(cardData(tightShell, 'watch', 'attention.strip')['ceilingSay']).startsWith('ceiling held 2 passes back'));
 
-  // ═══ measured: the whole evening ═════════════════════════
   const evening = await createWorld({ agent: { kind: 'fake', fake: { latencyMs: 0, chunkMs: 0, seen: [] } } });
   const eveningShell = await evening.login(OP);
   await settle();
   const eveningWatcher = evening.booted.intent.of(OP)?.watching();
   const cues = evening.booted.director.cues();
-  // Play sets the scene first — the evening's start, written by the feed — so a
-  // first play and a replay are the same evening. A check that steps does it by hand.
+  // Play sets the scene first, so a first play and a replay are the same
+  // evening. A check that steps does it by hand.
   await evening.booted.director.reset();
   await settle(8);
   await evening.settled(OP);
@@ -363,8 +302,6 @@ const main = async (): Promise<void> => {
   await settle(4);
   check('...on the deck too, where `play` has become `replay`', JSON.stringify(cardData(eveningShell, 'deck', 'director.deck')['deck']).includes('"status":"finished"') && evening.servedTo(OP).filter((message) => message.includes('"definitionId":"director.deck"')).at(-1)?.includes('"label":"Replay"') === true);
 
-  // REPLAY: the feed puts the evening back — through its own mutations, as its
-  // own principal — and plays it again.
   await evening.booted.director.reset();
   await settle(8);
   await evening.settled(OP);

@@ -1,7 +1,3 @@
-// @niscorp/tide — a reflex turns the clock and the fact into one named
-// effect, through a durable ledger. Host-blind: storage, selection,
-// transformation, effects and identity are seams the host fills.
-
 export { createTide } from './tide';
 export type { Tide } from './tide';
 
@@ -11,16 +7,11 @@ export type { TideErrorCode } from './errors';
 export { createMemoryStore } from './store/memory';
 export type { MemoryStore } from './store/memory';
 
-// ── the driver ──────────────────────────────────────────────────
-//
-// The engine reads no clock and sets no timer. This is what does, for a host
-// that wants one written: wake on ingest, sleep until the next due instant.
-// The Postgres store is NOT here: it is `@niscorp/tide/postgres`, so that
-// nothing this entry reaches imports strata.
+// The Postgres store is not exported here: it is `@niscorp/tide/postgres`, so
+// that nothing this entry reaches imports strata.
 export { createTideDriver } from './driver';
 export type { TideDriver, TideDriverConfig } from './driver';
 
-// ── the grammar ─────────────────────────────────────────────────
 export {
   ReflexSchema,
   ReflexDraftSchema,
@@ -68,7 +59,6 @@ export type {
   Weekday,
 } from './schemas';
 
-// ── the ledger, the seams, the reports ──────────────────────────
 export type {
   AttemptOutcome,
   EffectHandler,
@@ -95,11 +85,6 @@ export type {
   TransformFn,
 } from './types';
 
-// ── the store contract ──────────────────────────────────────────
-//
-// Exported in full because a host writing its own store needs the whole
-// grammar, not just the interface: `UNIQUE_BY` IS the set of exactly-once
-// promises, and a store that does not enforce all four is not a tide store.
 export { PRIMARY_KEY, UNIQUE_BY, COMPARISON_OPS } from './types';
 export type {
   ClaimSpec,
@@ -119,8 +104,6 @@ export type { AdvanceOptions } from './engine/advance';
 export type { PreviewOptions } from './engine/preview';
 export type { GraphReport, Edge } from './engine/graph';
 
-// ── occurrence math, exported because a host that renders a
-// schedule needs the same answers the engine uses ───────────────
 export { occurrencesBetween, occurrenceKey, zonedParts, zonedToUtc, daysInMonth } from './engine/occurrence';
 export { anchorDraft, timerMs } from './engine/anchor';
 export type { Occurrence, LocalParts, LocalDay } from './engine/occurrence';

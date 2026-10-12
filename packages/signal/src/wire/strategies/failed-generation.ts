@@ -3,21 +3,13 @@ import { SignalError } from '../../errors';
 import type { Rejection } from '../../types';
 import type { ErrorWireStrategy } from './index';
 
-// Groq validates tool args / response_format SERVER-SIDE and 400s the
-// whole request (tool_use_failed / json_validate_failed) with the
-// model's attempt in `error.failed_generation`. Both observed shapes
-// normalize here and ONLY here:
-//   - parseable `{ name, arguments }` — the attempt was a call;
-//   - truncated bytes (Groq caps the body) — close the structure to
-//     recover the call shape, or hand the raw bytes to the ladder.
-
+// Groq answers a tool call or a response_format that fails its own validation with a 400
+// that carries the model's attempt in `error.failed_generation`, cut off at Groq's body cap.
 const RECOVERABLE_CODES = new Set(['tool_use_failed', 'json_validate_failed']);
 
 const prop = (obj: unknown, key: string): unknown =>
   obj !== null && typeof obj === 'object' ? (obj as Record<string, unknown>)[key] : undefined;
 
-// Adapters wrap provider errors in SignalError with the ORIGINAL error
-// under context.raw — the strategy reads the original.
 const unwrap = (error: unknown): unknown =>
   error instanceof SignalError ? (error.context?.['raw'] ?? error) : error;
 
@@ -33,8 +25,6 @@ const failedGenerationOf = (error: unknown): string | undefined => {
   return typeof gen === 'string' && gen.trim().length > 0 ? gen : undefined;
 };
 
-// When `arguments` is itself a string (double-encoded), args stays
-// unset so the router's ladder runs over the text instead.
 type CallShape = { name: string; args?: unknown; argsText: string };
 
 const asCallShape = (value: unknown): CallShape | undefined => {
@@ -48,30 +38,23 @@ const asCallShape = (value: unknown): CallShape | undefined => {
 
 const recover = (error: unknown): Rejection | undefined => {
   const raw = failedGenerationOf(unwrap(error));
-  // Not every rejection carries an attempt (gpt-oss commentary-channel
-  // emissions rejected as unknown-tool calls, message only). The FACT
-  // of the rejection is still worth a typed result.
+  // Groq sends some rejections with no attempt. Empty, not undefined: undefined would
+  // rethrow the error, and this way the turn comes back as a typed failure.
   if (raw === undefined) return { argsText: '', truncated: false };
 
   try {
     const parsed: unknown = JSON.parse(raw);
     const call = asCallShape(parsed);
     if (call) return { name: call.name, ...(call.args !== undefined && { args: call.args }), argsText: call.argsText, truncated: false };
-    // Parseable but not call-shaped: the attempt itself is the payload.
     return { args: parsed, argsText: raw, truncated: false };
   } catch {
-    // Truncated or malformed. Closing the structure can recover the
-    // call SHAPE — the torn tail is dropped, downstream schemas judge
-    // what remains.
     const truncated = isTruncatedJson(raw);
     const closed = closeTruncated(raw);
     if (closed !== undefined) {
       try {
         const call = asCallShape(JSON.parse(closed));
         if (call) return { name: call.name, ...(call.args !== undefined && { args: call.args }), argsText: call.argsText, truncated };
-      } catch {
-        // fall through to raw bytes
-      }
+      } catch {}
     }
     return { argsText: raw, truncated };
   }

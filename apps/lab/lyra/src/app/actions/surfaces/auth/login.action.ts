@@ -33,8 +33,6 @@ export const authLoginAction: ActionDefinition = {
         },
       ],
     },
-    // The picker: choosing a name IS the auth in the lab, exactly as clicking
-    // the link would be. One trigger, because the payload carries who.
     {
       event: 'ui:click',
       ref: 'as',

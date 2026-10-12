@@ -1,8 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The map is rectangles with a number on them. Which key carries the heat is a
-// binding — `plain` hands the primitive no heat key at all, so "no overlay" is
-// the absence of data rather than a mode the component knows about.
 export const siteMapLayout: LayoutNode = {
   component: 'Card',
   props: { title: 'Site', subtitle: '{{$.day}} · {{$.hour}}:00' },

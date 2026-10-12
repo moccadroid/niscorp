@@ -1,8 +1,5 @@
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 
-// ── identity: read as the `identity` role, pinned to the principal by the
-//    engine-side `userId` scope value — never by a request ──
-
 export const identityMember: SeedEntry = {
   fingerprint: 'identity/member',
   intent: 'The member row of the principal being resolved, if they have joined',
@@ -25,9 +22,6 @@ export const identityGrants: SeedEntry = {
   },
 };
 
-// What everybody was given (vex/grant.entries.ts): the roles on the one
-// `everybody` row. Read for a member whenever their identity is resolved — so
-// somebody who joins after the X-ray was given has it too.
 export const identityEverybody: SeedEntry = {
   fingerprint: 'identity/everybody',
   intent: 'The roles given to everybody in the audience',
@@ -38,13 +32,6 @@ export const identityEverybody: SeedEntry = {
     filter: { eq: ['grants.principal', 'everybody'] },
   },
 };
-
-// ── the room ──
-//
-// REACTIVE: the room's reads answer again whenever a write lands on a table
-// they read — somebody joins, or their card is written — on every
-// screen that has them open. Nothing announces the change and nothing listens
-// for it: vex knows what each query reads, and every write passes through vex.
 
 export const memberMe: SeedEntry = {
   fingerprint: 'members/me',
@@ -92,7 +79,6 @@ export const memberJoin: SeedMutation = {
   },
 };
 
-// ── a typed name the moderator refused, kept for reference (server/moderation.ts) ──
 export const nameRefuse: SeedMutation = {
   fingerprint: 'names/refuse',
   intent: 'Keep a name somebody typed that was not fit to show, with how sure the moderator was',

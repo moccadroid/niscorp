@@ -1,17 +1,9 @@
 import type { CacheEntry, MutationEntry } from './index';
 import { stampText } from '@atrium/app/prisms/format.prism';
 
-// The assistant's surface — persona rows and the durable conversation.
-//
-// Note what is ABSENT from every context here: a user id. `assistant_turns` is
-// the app's one personal table, and its rows are pinned to the caller by the
-// user-shaped scope behavior — reads filtered to yours, writes stamped as
-// yours, engine-side. A client (or a confused model) cannot read another
-// principal's conversation or write into it, because the pin is not in the
-// request.
+// No context here carries a user id: the scope behavior pins `assistant_turns`
+// rows to the caller, on read and on write.
 
-// The persona for an audience. Character is voice; abilities are derived per
-// session, never stored.
 export const assistantPersona: CacheEntry = {
   fingerprint: 'assistant/persona',
   intent: "An audience's assistant persona: name, character, model, provider",
@@ -25,13 +17,6 @@ export const assistantPersona: CacheEntry = {
   mapping: { $ref: '$.result' },
 };
 
-// The caller's CONVERSATION, oldest first: what the dock renders and the memory
-// the chat agent runs with.
-//
-// CHAT ROWS ALONE. What the assistant does unasked is the watcher's record
-// (`assistant/log` below), not part of anyone's conversation — a line nobody
-// said to anybody is not a turn, and feeding it back as one taught the chat
-// agent to narrate instead of answer.
 export const assistantTurns: CacheEntry = {
   fingerprint: 'assistant/turns',
   intent: "The caller's chat conversation, oldest first",
@@ -62,9 +47,6 @@ export const assistantTurns: CacheEntry = {
   },
 };
 
-// What the assistant did UNASKED, newest first. One reader: the administration
-// tool, which shows the record beside the conversation. The chat agent never
-// sees these rows — the two agents share no history.
 export const assistantLog: CacheEntry = {
   fingerprint: 'assistant/log',
   intent: 'What the assistant did on its own for the caller, newest first',
@@ -89,9 +71,6 @@ export const assistantLog: CacheEntry = {
   },
 };
 
-// One model run, recorded. Same governed wire as everything else, so the row is
-// pinned to whoever the run was for — a record that could be written on another
-// principal's behalf would be worth nothing.
 export const assistantMeter: MutationEntry = {
   fingerprint: 'assistant/meter',
   intent: 'Record what one assistant run said, called and cost',
@@ -117,8 +96,6 @@ export const assistantMeter: MutationEntry = {
   },
 };
 
-// Append one turn. `user_id` and `property_id` are scope-stamped; the caller
-// supplies what was said, by which side, and which way in produced it.
 export const assistantAppend: MutationEntry = {
   fingerprint: 'assistant/append',
   intent: "Append a turn to the caller's assistant record",

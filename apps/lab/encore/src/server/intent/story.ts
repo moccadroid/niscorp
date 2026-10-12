@@ -1,40 +1,18 @@
 import type { HeardTag } from './heard';
 import type { HeldCard, PassRecord, RunRecord } from './intent.types';
 
-// THE STORY OF ONE PASS — x-ray's main view, as DATA. Pure.
-//
-// The most interesting thing in this room is two models talking to each other,
-// and the first x-ray buried it: five collapsed key/value grids, lowercase mono
-// labels, and probability tags sprayed over every card. This is the same
-// information as a short sequence a person can read top to bottom:
-//
-//   1. what was typed, and what was heard in it
-//   2. Jev — what it wanted on screen and how much, which rows it picked, how
-//      urgent it read
-//   3. what the assistant was handed
-//   4. the assistant — what it said, placed, looked up, and what the admission
-//      rule dropped or refused, WITH THE REASON
-//   5. what changed on screen
-//
-// An event pass tells the same story from the event. The layout draws these
-// fields and knows nothing about either model (frame/intent-trace.layout.ts);
-// the numbers — lanes, bytes, tokens — are a second tab, each label once.
-
 export type StoryLine = { text: string; tone: 'plain' | 'mute' | 'warn' };
-// `note`: why a card at or above the mount line is NOT on screen — beside its bar.
 export type StoryCard = { id: string; label: string; p: number; shown: string; note: string };
 export type StoryFact = { label: string; value: string };
 
 export type Story = {
   key: string;
-  // "Sentence 12" · "Event 4": what the stepper calls it.
   label: string;
   kind: 'sentence' | 'event';
   typed: string;
   heard: { label: string }[];
   corrections: StoryLine[];
   jevHeading: string;
-  // Every card Jev was asked about, best first; `cardsTop` is the first few.
   cards: StoryCard[];
   cardsTop: StoryCard[];
   moreCards: number;
@@ -65,9 +43,6 @@ const cardsOf = (scored: readonly { id: string; p: number }[], titles: Record<st
 
 const TONE_WORDS: Record<string, string> = { calm: 'calm — nothing urgent in it', elevated: 'elevated — something to watch', critical: 'critical — act now' };
 
-// ─── 5. what changed on screen ───────────────────────────────
-
-// The chrome's own keys are not news: every pass rewrites who placed a card and why.
 const CHROME_KEYS = new Set(['placedBy', 'why', 'citeKey', 'tileSpan', 'tileHue', 'tileTag']);
 
 const screenLineOf = (note: string, titles: Record<string, string>): StoryLine | undefined => {
@@ -87,14 +62,12 @@ const screenLineOf = (note: string, titles: Record<string, string>): StoryLine |
   return undefined;
 };
 
-// A re-aim is reported as "re-opened" AND "placed"; one line says it.
+// A re-aim is reported as both "re-opened" and "placed": one line says it.
 const screenOf = (notes: readonly string[], titles: Record<string, string>): StoryLine[] => {
   const reopened = new Set(notes.flatMap((note) => /^\w+: re-opened (\S+)$/.exec(note)?.[1] ?? []));
   const lines = notes.filter((note) => !(/^\w+: placed (\S+)$/.test(note) && reopened.has(/^\w+: placed (\S+)$/.exec(note)?.[1] ?? ''))).flatMap((note) => screenLineOf(note, titles) ?? []);
   return lines.length === 0 ? [mute('Nothing moved: the room already showed this.')] : lines;
 };
-
-// ─── the numbers ─────────────────────────────────────────────
 
 const timingsOf = (record: PassRecord, warm: string): StoryFact[] => [
   { label: 'Reading the sentence', value: ms(record.lanes.parse) },
@@ -124,8 +97,6 @@ const costOf = (record: PassRecord, run: RunRecord | undefined): StoryFact[] => 
       ]),
 ];
 
-// ─── 3 and 4. the assistant ──────────────────────────────────
-
 export type StoryNames = { titles: Record<string, string>; packs: Record<string, string> };
 
 const handedOf = (record: PassRecord, run: RunRecord, names: StoryNames): StoryFact[] => [
@@ -134,7 +105,6 @@ const handedOf = (record: PassRecord, run: RunRecord, names: StoryNames): StoryF
   { label: 'The conversation so far', value: `${run.threadMessages} message(s)` },
 ];
 
-// An admission note, as a sentence somebody outside the codebase can read.
 const droppedOf = (note: string): string =>
   note
     .replace(/^a citation was dropped: (.+) is not in the answer$/, 'Dropped one citation: the words it quoted ($1) are not in the answer.')
@@ -163,12 +133,9 @@ const assistantOf = (run: RunRecord, names: StoryNames): StoryLine[] => {
   return lines;
 };
 
-// Why it ran — the only two reasons there are — and what it was handed.
 const ranHeadingOf = (run: RunRecord): string => `Assistant ran (${run.startedBy === 'enter' ? 'Enter' : 'finished sentence'}) — what it was handed`;
 
 export const assistantHeadingOf = (run: RunRecord): string => `Assistant · ${run.model} · ${seconds(run.ms)} · ${run.modelSteps} step${run.modelSteps === 1 ? '' : 's'}`;
-
-// ─── a sentence ──────────────────────────────────────────────
 
 export type SentenceStoryInput = {
   record: PassRecord;
@@ -208,7 +175,6 @@ export const sentenceStory = (input: SentenceStoryInput): Story => {
   };
 };
 
-// The same story, with the run that answered it attached (or updated).
 export const withRun = (story: Story, record: PassRecord, run: RunRecord, names: StoryNames): Story => ({
   ...story,
   handedHeading: ranHeadingOf(run),
@@ -217,8 +183,6 @@ export const withRun = (story: Story, record: PassRecord, run: RunRecord, names:
   assistant: assistantOf(run, names),
   cost: costOf(record, run),
 });
-
-// ─── an event ────────────────────────────────────────────────
 
 export type EventStoryInput = {
   count: number;

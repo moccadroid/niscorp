@@ -22,8 +22,6 @@ const slot = {
   templateId: { $ref: '$.templateId' },
   programId: { $ref: '$.programId' },
   name: { $ref: '$.name' },
-  // Numbers arrive as numbers: the fields that feed integer columns are marked
-  // numeric in the layout, so no coercion is needed on the way out.
   weekday: { $ref: '$.weekday' },
   startsAt: { $ref: '$.startsAt' },
   durationMins: { $ref: '$.durationMins' },
@@ -34,9 +32,6 @@ const slot = {
 export const templateCreatePrism = { fingerprint: templateCreate.fingerprint, context: { ...slot, courseId: null, startsOn: null, endsOn: null } };
 export const templateUpdatePrism = { fingerprint: templateUpdate.fingerprint, context: slot };
 
-// One write, and the screen says which way. `pendingActive` is set by the
-// trigger that opened it, so the request carries the flag rather than the
-// choice being which fingerprint got named.
 export const templateSetActivePrism = {
   fingerprint: templateSetActive.fingerprint,
   context: { templateId: { $ref: '$.pendingTemplateId' }, active: { $ref: '$.pendingActive' } },

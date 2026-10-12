@@ -2,16 +2,7 @@ import { defineComponent, h, type VNode } from 'vue';
 import { JsonTreePropsSchema, PanelPropsSchema, type JsonTreeProps, type PanelProps } from '../../primitive-props';
 import { useNovaDispatch } from '../composables/context';
 
-// ═══════════════════════════════════════════════════════════
-// The introspection primitives nova/devtools composes against — Panel and
-// JsonTree. Generic, useful anywhere.
-// ═══════════════════════════════════════════════════════════
-
 export { PanelPropsSchema, type PanelProps, JsonTreePropsSchema, type JsonTreeProps };
-
-// ─── Panel ─────────────────────────────────────────────────
-// A framed, elevated surface with an optional title header. `backRef` /
-// `closeRef` grow a header ← / ✕ firing ui:click with that ref.
 
 const HEADER_BUTTON_STYLE = {
   border: 'none',
@@ -62,9 +53,6 @@ export const Panel = Object.assign(
     },
   },
 );
-
-// ─── JsonTree ──────────────────────────────────────────────
-// A collapsible view of any JSON value via native <details> (no state).
 
 const entriesOf = (value: object): Array<[string, unknown]> =>
   Array.isArray(value) ? value.map((item, index): [string, unknown] => [String(index), item]) : Object.entries(value);

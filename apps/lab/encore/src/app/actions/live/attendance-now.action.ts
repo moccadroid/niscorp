@@ -4,18 +4,6 @@ import { attendanceNowLayout } from './attendance-now.layout';
 import { attendanceTotalPrism, attendanceByZonePrism } from './live.prism';
 import { dayField, hourField } from '@encore/app/actions/shared/input-fields';
 
-// HOW MANY PEOPLE ARE HERE? — the plainest question an ops tent gets asked, and
-// the one the room could not answer. `crowd.gauge` needs a ZONE, so a sentence
-// that names none left it as a chip and the screen empty: the operator asked a
-// whole-site question and was offered a per-zone instrument.
-//
-// So this card takes no row at all. It is aimed only in time — the festival
-// clock's hour unless the sentence says another — which means nothing about it
-// is ever unsure enough to demote it: if Jev wants it, it mounts.
-//
-// Two reads: the site total against the site's capacity (the dial), and every
-// zone's share of it (the list), so the follow-up question — "where are they
-// all?" — is answered before it is asked.
 export const attendanceNowAction: ActionDefinition = {
   id: 'attendance.now',
   title: 'On site',

@@ -1,11 +1,3 @@
-// strata for this app's SOURCE artifacts — which version of each grammar
-// (nova's, Prism's, the kit's own) the actions, fragments and shell layouts in
-// src/app are written in, and
-// how they are brought forward when a grammar moves (docs/plans/versioning.md).
-//
-//   pnpm strata status [--check]   where the source stands (CI runs --check)
-//   pnpm strata upgrade            the expected JSON + .strata/upgrade/REPORT.md
-//   pnpm strata verify             the edited source against it; moves strata.lock.json
 import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runSourceUpgrade } from '@niscorp/strata/node';
@@ -39,8 +31,6 @@ const documents = async () => {
     const module: Record<string, unknown> = await import(new URL(`../app/shell/fragments/${name}`, import.meta.url).href);
     for (const value of Object.values(module)) if (isFragment(value)) fragments.push({ kind: 'nisc.nova/fragment', id: value.id, document: value });
   }
-  // The shell's own layouts are nova layouts too: the frame, and each canvas's
-  // action layout (the controller's tool list says what an empty one shows).
   const shell = [
     { kind: 'nisc.nova/layout', id: 'shell.frame', document: frameLayout },
     ...CANVASES.flatMap((canvas) => (canvas.actionLayout === undefined ? [] : [{ kind: 'nisc.nova/layout', id: `canvas.${canvas.id}`, document: canvas.actionLayout }])),

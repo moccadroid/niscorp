@@ -1,12 +1,3 @@
-// The claim, end to end: shipping a capability is a data change, and it lands
-// on shells that are ALREADY OPEN.
-//
-// The check holds two guests' shells open, drives the vendor console through
-// the real UI path — open the connector, flip two switches on its offer, press
-// Go live — and then asserts on what appeared in the guests' hands without
-// either of them touching anything. No reload, no reconnect, no restart.
-//
-// Run: pnpm --filter atrium exec tsx src/dev/ship-check.ts
 import { login, settle, topData, mounted, tap, tapCard, cardData, openCard, sql, catalogFor, check, report, runtime } from './world';
 import { refreshServer } from '@atrium/server/bundles';
 import { resolveStatements } from '@atrium/db/resolve';
@@ -17,9 +8,8 @@ type OfferRow = { row_id?: string; capability_id?: string; enabled?: boolean };
 const offerRows = (data: Record<string, unknown>): OfferRow[] => (Array.isArray(data['offer']) ? (data['offer'] as OfferRow[]) : []);
 
 const main = async (): Promise<void> => {
-  // Two guests, two hotels, both already looking at their phones.
-  const amara = await login('amara'); // The Lumen, Opera
-  const ines = await login('ines'); // Casa Marisol, Mews
+  const amara = await login('amara');
+  const ines = await login('ines');
   const vendor = await login('atrium');
   await settle();
 
@@ -27,9 +17,6 @@ const main = async (): Promise<void> => {
   const inesBefore = slotIds(topData(ines, 'main'));
   check(`Amara's phone shows ${before.length} things, and a key is not one of them`, !before.includes('stay.key'));
 
-  // ── the pull, from the console, before anything is staged ──
-  // Discovery has its own button because it is its own operation — and it is
-  // the way back if the app ever booted with a service down.
   tapCard(vendor, 'deploy.connectors', 'sync');
   await settle(12);
   const pulled = cardData(vendor, 'deploy.connectors')['sync'];
@@ -37,7 +24,6 @@ const main = async (): Promise<void> => {
   check(`the console pulls every connector's bundle on demand (${pulledRows.length})`, pulledRows.length === 3);
   check('...and reports each one landing', pulledRows.every((r) => r['ok'] === true));
 
-  // ── the vendor console, driven the way a person drives it ──
   const connectors = cardData(vendor, 'deploy.connectors')['rows'];
   const opera = (Array.isArray(connectors) ? connectors : []).find((c) => (c as Record<string, unknown>)['connector_id'] === 'con_opera');
   check('the console lists the Opera connector', opera !== undefined);
@@ -51,7 +37,6 @@ const main = async (): Promise<void> => {
   const reach = picked['reach'];
   check('and names its blast radius', Array.isArray(reach) && (reach as Record<string, unknown>[]).some((p) => p['name'] === 'The Lumen'));
 
-  // ── stage the two dark switches ──
   const keyRow = offer.find((o) => o.capability_id === 'key.issue');
   const expressRow = offer.find((o) => o.capability_id === 'checkout.express');
   tapCard(vendor, 'deploy.connectors', 'stage-on', keyRow);
@@ -61,7 +46,6 @@ const main = async (): Promise<void> => {
 
   const staged = await sql(`SELECT capability_id FROM connector_capabilities WHERE connector_id = 'con_opera' AND enabled = true ORDER BY capability_id`);
   check('staging flips the offer rows', staged.length === 16);
-  // Staged is not live: the resolved layer must not have moved yet.
   const midflight = await sql(
     `SELECT ps.live FROM property_slots ps JOIN surface_slots s ON s.id = ps.slot_id
      WHERE ps.property_id = 'prop_lumen' AND s.id = 'gs_key'`,
@@ -69,7 +53,6 @@ const main = async (): Promise<void> => {
   check('staging does not ship — the guest surface is untouched', midflight[0]?.['live'] === false);
   check('the console owns up to being ahead of the world', cardData(vendor, 'deploy.connectors')['dirty'] === true);
 
-  // ── go live ──
   tapCard(vendor, 'deploy.connectors', 'golive');
   await settle(12);
 
@@ -80,14 +63,9 @@ const main = async (): Promise<void> => {
   );
   check('the resolved surface recomputed', resolved[0]?.['live'] === true);
 
-  // ── the shot, honest edition ──
-  // There is no push. Amara's OPEN shell still shows the old slots until it
-  // reads again — the database is correct, the shell is merely stale.
   const stale = slotIds(topData(amara, 'main'));
   check('her open shell is momentarily stale — no push, by design', !stale.includes('stay.key'));
 
-  // Model her shell re-reading: a resume, a nav, or (later) a NOTIFY nudge all
-  // do this. Here we fire the same channel her concierge already listens on.
   amara.publish('capabilities-changed');
   await settle();
 
@@ -97,11 +75,9 @@ const main = async (): Promise<void> => {
   check('...and express checkout arrived with it', now.includes('stay.checkout'));
   check('no reload happened — same shell, same instance', topData(amara, 'main')['stayId'] === 'stay_amara');
 
-  // The blast radius is the connector, not the estate.
   const inesNow = slotIds(topData(ines, 'main'));
   check('the hotel on the other PMS was not touched', inesNow.join(',') === inesBefore.join(','));
 
-  // And the desk gained its half of the same capability, in the same instant.
   await login('rosa');
   await settle();
   check('the front desk holds the key tool in its charter', (await catalogFor('rosa')).includes('desk.keys'));
@@ -111,11 +87,6 @@ const main = async (): Promise<void> => {
   );
   check("...and the desk's key tool resolved live too", deskSurface[0]?.['live'] === true);
 
-  // ── the deeper claim: an ACTION that never existed, shipped as a row ──
-  // No TypeScript below authors this action. It is inserted as data, the
-  // resolver places its slot, refresh() re-verifies the charter over the new
-  // id (the ext.guest.* glob already covers it), the memos drop, and Amara's
-  // LIVING shell adopts the definition in place — then opens it.
   const NOTE = {
     id: 'ext.guest.opera.goodnight',
     title: 'Goodnight',

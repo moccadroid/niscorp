@@ -19,13 +19,6 @@ describe('validate', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// A `$` name is an op's. A `$` key no op answers to used to validate as a
-// template key and fail only when it was evaluated (E_NODE_SHAPE) — so a config
-// could pass validation, be stored, and fail every time it ran. The schema
-// refuses it now: what validates is what the evaluator can dispatch.
-// ═══════════════════════════════════════════════════════════
-
 describe('a `$` key that is not an op', () => {
   const NOT_AN_OP = 'Not a Prism op. A key that starts with "$" names an op; data with such a key goes in $const.';
   const issuesOf = (config: unknown): string[] => {
@@ -48,7 +41,6 @@ describe('a `$` key that is not an op', () => {
     ]);
   });
 
-  // The cases that evaluated before: nothing reached the key, so nothing refused it.
   it('is refused where evaluation would never have reached it', () => {
     expect(issuesOf({ $case: { branches: [{ when: true, then: 'kept' }], else: { $todo: 'later' } } })).toEqual([`$case.else.$todo: ${NOT_AN_OP}`]);
     expect(issuesOf({ $or: [{ $ref: '$.member.name' }, { $lookup: 'name' }] })).toEqual([`$or.1.$lookup: ${NOT_AN_OP}`]);
@@ -77,7 +69,6 @@ describe('a `$` key that is not an op', () => {
     expect(evaluate({ a$b: { $ref: '$.member.name' } }, member)).toEqual({ a$b: 'Grace' });
   });
 
-  // E_NODE_SHAPE is still the evaluator's answer to a tree the schema never saw.
   it('is E_NODE_SHAPE only for a tree that skipped the schema', async () => {
     const ir = await compile({ name: { $ref: '$.member.name' } });
     expect(() => execute({ ...ir, core: stored }, member)).toThrow(expect.objectContaining({ code: 'E_NODE_SHAPE' }));

@@ -6,10 +6,6 @@ import type { TriggerConfig } from '@action/schemas';
 
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
-// Typed FROM StepContext, not from the factories. This helper builds a step
-// context, so its parts are that context's parts — inferring them from
-// `ReturnType<typeof createEventBus>` instead described a bus the runtime does
-// not take, and the mismatch was invisible while tests went untypechecked.
 const makeBuild = (
   dataStore: StepContext['dataStore'],
   eventBus: StepContext['eventBus'],
@@ -51,9 +47,6 @@ describe('attachTriggers', () => {
       makeBuild(dataStore, eventBus, messageBus),
       'inst',
     );
-    // `emit` takes a payload and the bus delivers one; a listener reads it the
-    // same way it reads a click's. Without this, an overlay handing its result
-    // back to the screen underneath could only ever say "something happened".
     messageBus.publish('chosen', ['a', 'b']);
     await tick();
     expect(dataStore.get()).toEqual({ chosen: ['a', 'b'] });
@@ -120,10 +113,10 @@ describe('attachTriggers', () => {
     );
     eventBus.emit({ type: 'ui:key', key: 'ArrowUp' });
     await tick();
-    expect(dataStore.get()).toEqual({ n: 0 }); // non-matching key ignored
+    expect(dataStore.get()).toEqual({ n: 0 });
     eventBus.emit({ type: 'ui:key', key: 'ArrowDown' });
     await tick();
-    expect(dataStore.get()).toEqual({ n: 1 }); // matching key fires
+    expect(dataStore.get()).toEqual({ n: 1 });
   });
 
   it('fires multiple matching triggers in order', async () => {

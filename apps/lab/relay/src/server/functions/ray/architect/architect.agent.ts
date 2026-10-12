@@ -7,26 +7,8 @@ import type { QueryProof } from './tools';
 import { componentPalette, actionCatalog, layoutComposition } from './producers';
 import { workedExample } from './worked-example';
 
-// ═══════════════════════════════════════════════════════════
-// The action architect — one free agent on a complete knowledge base.
-//
-// No phases, no nudges, no tool masking. The knowledge is TOTAL, and every
-// piece is a named PRODUCER derived from its source of truth: the
-// ActionDefinition schema (cortex injects it from the Zod source), the
-// transform DSL (prism's schema, via knowledge), the Vex contract (vex's own
-// guide, riding the query tool), the component palette and the LIVE action
-// catalog (producers.ts), and the app's ambient facts (knowledge.ts). The
-// agent works however it wants inside hard BOUNDS (stopWhen) and against
-// TRUTH-CHECKS (the query tool proves data, the run_action tool and the
-// output validator mount the candidate for real). Paths break the moment
-// reality deviates; bounds and truth-checks don't.
-// ═══════════════════════════════════════════════════════════
-
 export type ActionAgentOutput = ActionDefinition;
 
-// Identity + what must be TRUE at the end. How to get there is the agent's
-// business. Built from plain lines so `$.path` / `{{ }}` / `@event` tokens
-// can't collide with a template literal.
 const INSTRUCTIONS = [
   'You are the action architect. From one intent you design ONE complete, interactive Nova action (a screen): its data, endpoints, layout, and triggers.',
   '',
@@ -48,44 +30,24 @@ const INSTRUCTIONS = [
 
 export const makeArchitectAgent = (
   ray: RayContext,
-  // The build's proofs (the query tool fills this map as the run proves data).
-  // The gate hands them to the harness so the FINAL answer is held to them:
-  // load counts diffed against what was proven, and every `fp_…` the
-  // definition embeds must have come from a query this run actually made.
   proofs?: ReadonlyMap<string, QueryProof>,
 ): AgentDefinition<ActionDefinition> => defineAgent<ActionDefinition>({
   id: 'action.architect',
   description: 'Designs a complete Nova ActionDefinition from an intent.',
   instructions: INSTRUCTIONS,
-  // Producers: live app data (components, catalog) and app knowledge (house
-  // style, today, ambient context, channels). Each is a named function
-  // producing a string — nothing rides deps, nothing is unpacked from an env.
-  //
-  // The transform DSL is DELIBERATELY absent. Vex returns the exact shape a
-  // query proves, so a screen never reshapes — and the two request-binding
-  // idioms a screen does need ({"$ref": "$.search"} for state-following
-  // context, $join for %patterns%) ride the query tool's guide with examples.
-  // The full schema was ~7,800 tokens per step of attractive nuisance:
-  // measured runs reached for $dateAdd (timezone-shifted, drops boundary
-  // rows), $case over fingerprints, $map/$localeMoney response reshapes of
-  // work the query already does, and $ref inside layout props — every one a
-  // failure class, none a capability a screen required. Same decision the
-  // `map` tool already made ("NOT handed to the architect"), now applied to
-  // the knowledge too.
+  // The transform DSL is deliberately absent: Vex returns the exact shape a query
+  // proves, the two request-binding idioms a screen needs ride the query tool's
+  // guide, and with the full schema in context runs reach for transforms that fail.
   context: [workedExample, componentPalette, layoutComposition, actionCatalog, styleGuide, today, ambientContext, channels],
   output: {
     schema: ActionDefinitionSchema,
-    // The one gate: the HARNESS. It audits the wiring statically, mounts the
-    // candidate in a throwaway shell, and reports what each endpoint loaded —
-    // every failure comes back as a correction while context is warm. No
-    // bespoke checks here; the harness is the single validation authority.
     validate: async (output) => {
       const check = await runAction(ray, output.data, undefined, proofs);
       if (!check.ok) return { retry: `verification failed: ${check.issues.join('; ')}` };
       return { ok: true };
     },
   },
-  // outputRetries 5: measured — runs converge with a NEW mistake fixed
-  // per round; 3 cut them off mid-convergence (2026-07-13 trace).
+  // outputRetries 5: runs converge with a new mistake fixed per round, and 3
+  // cuts them off mid-convergence.
   stopWhen: [stepCount(20), outputRetries(5), duration('6m')],
 });

@@ -8,20 +8,8 @@ import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { KitOf } from './kit.props';
 import { INKS, LEVELS, MARKS, SIGILS, oneOf, records, text } from './kit';
 
-// ═══════════════════════════════════════════════════════════════
-// THE TERMINAL KIT — the same grammar (./kit.props.ts) painted in a terminal,
-// for the SSH door (src/server/ssh.ts): moss's ink target with these in its
-// registry. The trees are the ones a phone gets; only the names resolve here.
-//
-// What a terminal cannot do it does not fake: a sheet's areas become a column
-// of cells, one under the next, each ruled off; an ink becomes a colour on the
-// cell's first line; a mark becomes dim. Everything pressable carries nova's
-// `[n]` marker — type the number, or Tab to it and press Enter.
-// ═══════════════════════════════════════════════════════════════
-
 const h = createElement;
 
-// Each ink as a terminal colour (hex where the terminal takes it).
 const COLOUR: Record<(typeof INKS)[number], string | undefined> = {
   paper: undefined,
   ink: 'white',
@@ -33,7 +21,6 @@ const COLOUR: Record<(typeof INKS)[number], string | undefined> = {
 
 const Page: NovaComponent = ({ children }) => h(Box, { flexDirection: 'column' }, children);
 
-// A column of cells, a rule between each and the next.
 const Sheet: NovaComponent = ({ children }) =>
   h(
     Box,
@@ -43,8 +30,6 @@ const Sheet: NovaComponent = ({ children }) =>
     ),
   );
 
-// The cell's ink is a rule down its left edge in that colour; its mark ("not
-// yet") a dim one.
 const Cell: NovaComponent = ({ children, ...props }) => {
   const ink = oneOf(props['ink'], INKS);
   const colour = ink === undefined ? undefined : COLOUR[ink];
@@ -74,7 +59,6 @@ const Text: NovaComponent = ({ children, ...props }) => h(InkText, { dimColor: p
 const Figure: NovaComponent = ({ ...props }) =>
   h(Box, { gap: 1 }, h(InkText, { dimColor: true }, text(props['label']) ?? ''), h(InkText, { bold: true }, text(props['value']) ?? '—'));
 
-// Ticks on the viewer's clock, as in the browser; zero stays zero.
 const instantOf = (value: string | undefined): number =>
   value === undefined ? Number.NaN : Date.parse(value.replace(' ', 'T').replace(/([+-]\d\d)$/, '$1:00'));
 const Countdown: NovaComponent = ({ ...props }) => {
@@ -105,16 +89,13 @@ const Sigil: NovaComponent = ({ ...props }) => {
   return shape === undefined ? null : h(InkText, {}, GLYPHS[shape]);
 };
 
-// Scannable from the screen: half-block characters, two rows of modules a line.
 const Qr: NovaComponent = ({ ...props }) => {
   const value = text(props['value']) ?? '';
   return value === '' ? null : h(InkText, {}, renderUnicodeCompact(value));
 };
 
-// A ruled table in lyceum's own grammar (./kit.props.ts: each column's `key`,
-// `label`, `kind`, `missing`) — nova's terminal Table speaks a different one
-// (`cell.key`), so it is not borrowed. Widths are the values', capped; a row
-// you can press (`rowRef`) carries its own [n], its payload `clickKey`.
+// nova's terminal Table speaks a different grammar (`cell.key`), so it is not
+// borrowed.
 const CELL_CAP = 32;
 const cellOf = (record: Record<string, unknown>, column: Record<string, unknown>): string => {
   const value = record[text(column['key']) ?? ''];
@@ -158,7 +139,6 @@ const Rows: NovaComponent = ({ ...props }) => {
   );
 };
 
-// Proportions as a bar of blocks, forty cells wide, each segment in its ink.
 const BAR_CELLS = 40;
 const Bar: NovaComponent = ({ ...props }) => {
   const segments = records(props['segments']).filter((segment) => typeof segment['value'] === 'number' && segment['value'] > 0);
@@ -175,7 +155,6 @@ const Bar: NovaComponent = ({ ...props }) => {
   );
 };
 
-// What passes between two ends: one line per lane, its arrow in its ink.
 const Flow: NovaComponent = ({ ...props }) =>
   h(
     Box,
@@ -188,7 +167,6 @@ const Flow: NovaComponent = ({ ...props }) =>
     }),
   );
 
-// Bars as rows of blocks, forty cells for the largest, each in its ink.
 const Columns: NovaComponent = ({ ...props }) => {
   const bars = records(props['bars']);
   const most = Math.max(1, ...bars.map((bar) => (typeof bar['value'] === 'number' ? bar['value'] : 0)));
@@ -204,7 +182,6 @@ const Columns: NovaComponent = ({ ...props }) => {
   );
 };
 
-// A button: its [n], its label, the alert ink in colour.
 const Action: NovaComponent = ({ novaRef, ...props }) => {
   const { marker, isFocused } = useActionable(novaRef, props['value']);
   const ink = oneOf(props['ink'], INKS);
@@ -216,19 +193,15 @@ const Action: NovaComponent = ({ novaRef, ...props }) => {
   );
 };
 
-// nova's own terminal input: draft-preserving, Enter sends.
 const Field: NovaComponent = (props) => h(Input, props);
 
-// The look belongs to a browser; a terminal has one.
 const Look: NovaComponent = () => null;
 const Xray: NovaComponent = () => null;
-// No dropdown in a terminal: the entries are simply there.
 const Menu: NovaComponent = ({ children }) => h(Box, { flexDirection: 'column' }, children);
 
 export const INK_KIT: KitOf<NovaComponent> = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look, Xray, Menu };
 
-// The terminal's registry: this kit, assembled once. moss's ink target adds
-// the wire-backed slots (ActionSlot, CanvasSlot) itself.
+// moss's ink target adds the wire-backed slots (ActionSlot, CanvasSlot) itself.
 export const lyceumInkRegistry = (): ComponentRegistry<NovaComponent> => {
   const registry = createComponentRegistry<NovaComponent>();
   registry.registerAll(INK_KIT);

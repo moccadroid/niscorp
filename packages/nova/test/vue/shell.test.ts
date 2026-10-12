@@ -8,12 +8,6 @@ import { createShell } from '@shell';
 import { NovaCanvas, NovaErrorBoundary, NovaShell, NovaShellProvider, RenderTree, useRenderTree, type NovaComponent } from '../../src/adapters/vue';
 import { registerNovaVueComponents } from '../../src/adapters/vue/components';
 
-// ═══════════════════════════════════════════════════════════
-// The shell-backed pieces against a real shell (ADAPTER.md §3–§5): the
-// subscription composables, CanvasSlot / ActionSlot, scoped dispatch reaching
-// the instance's own triggers, and the persistent slot wrapper.
-// ═══════════════════════════════════════════════════════════
-
 const counter: ActionDefinition = {
   id: 'counter',
   data: { count: 0, name: '' },
@@ -41,12 +35,10 @@ describe('vue shell — NovaShell renders canvases through CanvasSlot / ActionSl
     const wrapper = mount(NovaShell, { props: { shell }, attachTo: document.body });
     expect(wrapper.text()).toContain('count=0');
 
-    // a click inside the ActionSlot reaches the instance's own trigger
     await wrapper.find('button').trigger('click');
     await flushPromises();
     expect(wrapper.text()).toContain('count=1');
 
-    // model binding round-trip through the kit's Input
     await wrapper.find('input').setValue('ada');
     await flushPromises();
     expect(wrapper.text()).toContain('name=ada');
@@ -117,7 +109,6 @@ describe('vue shell — NovaShell renders canvases through CanvasSlot / ActionSl
     wrapper.unmount();
     shell.dispose();
 
-    // an empty canvas still mounts the wrapper (content null) so exits can animate
     const empty = createShell({ canvases: [{ id: 'main' }], actions: {} });
     await flushPromises();
     seen.length = 0;

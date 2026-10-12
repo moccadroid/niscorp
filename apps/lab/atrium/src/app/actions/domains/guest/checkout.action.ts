@@ -4,11 +4,6 @@ import { arrivalLayout } from './arrival.layout';
 import { stayDetailPrism, checkOutPrism, folioTotalPrism } from './stay.prism';
 import { previewable, previewTriggers } from '@atrium/app/actions/preview';
 
-// Express checkout — the second thing Opera v2 unlocks. Same layout as check-in,
-// different words and a different write, because they are the same shape.
-//
-// The done screen shows the real settled folio total (loaded from the DB), not a
-// promise of an email that never sends.
 export const stayCheckoutAction: ActionDefinition = {
   id: 'stay.checkout',
   title: 'Express checkout',

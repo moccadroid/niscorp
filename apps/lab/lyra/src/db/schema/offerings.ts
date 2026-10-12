@@ -1,4 +1,3 @@
-// What a studio sells: one price list, one row per thing on it.
 export const OFFERINGS_DDL = /* sql */ `
   -- Studios sell more than recurring plans: a drop-in class, a ten-class pass,
   -- a course. One table, a kind — because "what is on sale here" is one

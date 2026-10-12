@@ -1,30 +1,13 @@
 import pg from 'pg';
 import type { PgPool } from '@niscorp/vex';
 
-// ═══════════════════════════════════════════════════════════════
-// A `pg` Pool, in the shape vex and moss take — the deployment's sibling of
-// `@niscorp/vex/pglite`. Lyceum's own for now; the next app on Postgres is
-// the moment it earns a place in vex.
-//
-// Two decisions carried over from the PGlite shim:
-//
-//   · DATES. `pg` parses DATE and TIMESTAMPTZ into JS `Date`s, which stringify
-//     to locale noise and which Prism's `$date` cannot read — so app reads get
-//     the raw wire strings. The vex cache keeps `Date`s: it calls getTime() on
-//     its own timestamps. Two wrappers over ONE pool, differing only in the
-//     parsers each query is run with.
-//
-//   · TRANSACTIONS. A batch mutation must land on one connection or not at
-//     all, so `transaction` checks a client out, runs BEGIN … COMMIT on it, and
-//     rolls back on a throw. Wrapping BEGIN/COMMIT over `pool.query` would send
-//     the statements to whichever connections were free.
-// ═══════════════════════════════════════════════════════════════
-
+// `pg` parses DATE and TIMESTAMPTZ into `Date`s, which Prism's `$date` cannot
+// read, so app reads get the raw wire strings. The vex cache keeps `Date`s: it
+// calls getTime() on its own timestamps.
 type Parsers = Record<number, (value: string) => unknown>;
 
 const RAW = (value: string): string => value;
 
-// DATE (OID 1082) and TIMESTAMPTZ (1184) come back as the wire's own strings.
 export const RAW_DATE_PARSERS: Parsers = { 1082: RAW, 1184: RAW };
 
 type Queryable = Pick<pg.Pool | pg.PoolClient, 'query'>;

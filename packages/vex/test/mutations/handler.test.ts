@@ -29,8 +29,6 @@ const schema: DatabaseSchema = {
 
 const policy: ScopePolicy = { default: 'deny', entities: { tasks: { write: [{ match: 'assignee_id', to: 'userId' }] } } };
 
-// Annotated so the literal is checked against the write grammar — see the same
-// note in conflict.test.ts.
 const setDone: MutationDefinition = { op: 'update' as const, table: 'tasks', set: { done: { $context: 'done' } }, where: { eq: ['tasks.id', { $context: 'id' }] } };
 
 const makeWorld = async () => {

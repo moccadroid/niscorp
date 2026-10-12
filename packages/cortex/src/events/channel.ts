@@ -1,20 +1,8 @@
-// ═══════════════════════════════════════════════════════════
-// Event channel — per-run emitter + AsyncIterable view
-// ═══════════════════════════════════════════════════════════
-//
-// Listener callbacks fan out synchronously (multi-consumer);
-// the AsyncIterable view buffers so a slow consumer never loses
-// events (single-consumer, which is the typical UI case).
-// Listener errors are swallowed per handler — an observer must
-// never break the run.
-
 import type { Unsubscribe } from '../types';
 import type { CortexEvent, CortexEventBody } from './types';
 
 export type EventChannel = {
   emit: (body: CortexEventBody) => void;
-  // Re-push a child run's event verbatim (its own runId/agentPath/seq),
-  // so one subscription on the parent sees the whole tree. Used by asTool.
   forward: (event: CortexEvent) => void;
   onEvent: (listener: (event: CortexEvent) => void) => Unsubscribe;
   events: AsyncIterable<CortexEvent>;
@@ -36,7 +24,7 @@ export const createEventChannel = (
       try {
         listener(event);
       } catch {
-        // Observer errors never break the run.
+        // A listener that throws does not end the run.
       }
     }
     buffer.push(event);

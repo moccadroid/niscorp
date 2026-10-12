@@ -30,9 +30,6 @@ const defaultInstanceIdFactory = createIdFactory('act');
 export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime => {
   const definition = config.definition;
   const initialData = buildInitialData(definition, config.input);
-  // Deep-clone so `reset` can restore nested structures without sharing
-  // references with the live data store. Fixes correctness bug where
-  // mutating nested objects would corrupt the snapshot used by reset.
   const initialSnapshot: Record<string, unknown> = structuredClone(initialData);
   const dataStore: DataStore = createDataStore(initialData);
 
@@ -51,23 +48,13 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
 
   const statusSubscribers: StatusChangeHandler[] = [];
   let triggerHandle: TriggerHandle | undefined;
-  // The single `ui:model` write subscription, made in `attach()` BEFORE any
-  // trigger so the model write is always first in the bus's insertion order —
-  // a trigger listening to `ui:model` reads the value the event just wrote, not
-  // the one the field held before the keystroke. See `attach()`.
   let modelWriteOff: Unsubscribe | undefined;
-  // ref → path, the model bindings the current render carries. Reconciled every
-  // render; consulted by the ONE subscription above at event time. Keeping this
-  // a map (not a subscription per binding) is what lets a binding appear or
-  // vanish across renders without ever touching the bus's ordering.
-  const modelListeners = new Map<string, string>();
+  const modelPaths = new Map<string, string>();
 
   dataStore.subscribe((next) => {
     instance.data = next;
   });
 
-  // Per endpoint: the last ticket handed out, the newest that landed, and the
-  // later-bodies subscription it holds. See `EndpointCalls` in steps.ts.
   const ledger = new Map<string, { issued: number; landed: number; stop?: Unsubscribe }>();
   const entryOf = (endpoint: string): { issued: number; landed: number; stop?: Unsubscribe } => {
     const existing = ledger.get(endpoint);
@@ -86,7 +73,6 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
       const entry = entryOf(endpoint);
       if (ticket < entry.landed) return false;
       entry.landed = ticket;
-      // Whatever the endpoint followed belongs to an older call now.
       entry.stop?.();
       delete entry.stop;
       return true;
@@ -108,12 +94,8 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     }
   };
 
-  // The runtime is the only place that knows THIS instance, so it desugars
-  // `{ removeSelf: true }` — a card's "close me" — into a `removeInstance`
-  // carrying the real id, and stamps a `reconcile` with who is placing things:
-  // the firing action's definition id, which outlives any one instance of it
-  // (a remounted deck still owns what it placed). Every other effect passes
-  // through untouched.
+  // A reconcile's origin is the definition id, not the instance id: a
+  // remounted action still owns what it placed.
   const stamp = (effect: NavigationEffect): NavigationEffect => {
     if ('removeSelf' in effect) return { removeInstance: { instance: instance.id } };
     if ('reconcile' in effect) return { reconcile: { origin: instance.definitionId, ...effect.reconcile } };
@@ -122,11 +104,9 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
   const onNavigate =
     config.onNavigate === undefined ? undefined : (effect: NavigationEffect): void => config.onNavigate!(stamp(effect));
 
-  // RELOADS MERGE. A `reload` asked for while one is running does not start a
-  // second mount beside it (a trigger that reloads and re-emits would double
-  // them every turn): it marks the running one to go round once more, with
-  // the newest cause, and returns. Each round is one hop, so a mount that
-  // reloads itself ends where its budget does (./cause.ts).
+  // A reload asked for while one runs joins it as one more round, with the
+  // newest cause: a second mount beside it would double every turn under a
+  // trigger that reloads and re-emits.
   let reloading = false;
   let reloadAgain: { cause: Cause | undefined } | undefined;
   const reload = async (cause: Cause | undefined): Promise<void> => {
@@ -163,9 +143,6 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     ...(config.fetch === undefined ? {} : { fetch: config.fetch }),
     ...(config.transform === undefined ? {} : { transform: config.transform }),
     ...(onNavigate === undefined ? {} : { onNavigate }),
-    // Stamp the call event with this instance's identity before it flows up to
-    // the shell's telemetry — `runCall` only knows the endpoint, the runtime
-    // knows who made it.
     ...(config.onEndpoint === undefined
       ? {}
       : { onEndpoint: (event) => config.onEndpoint!({ ...event, instanceId: instance.id, canvasId: instance.canvasId }) }),
@@ -177,10 +154,6 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     onError,
     signal,
     suspended: instance.status === 'suspended',
-    // `reload` — re-run this instance's own mount hook. The same refresh
-    // `resume` performs, made available as a step for canvases that never
-    // suspend (a list keeps every card active, so nothing else would ever
-    // re-read one).
     onReload: reload,
     ...(cause === undefined ? {} : { cause }),
   });
@@ -191,27 +164,20 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     for (const handler of statusSubscribers.slice()) {
       try {
         handler(next);
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
   };
 
   const attach = (): void => {
-    // FIRST, and unconditionally — before the trigger subscriptions below and
-    // before either early return, so it wins the bus's insertion order even for
-    // an action that has model bindings but no triggers (an inspector field
-    // that only previews). The handler resolves the ref against the render-time
-    // map at event time and applies the same origin/suspension checks and the
-    // same write the per-binding listener used to.
+    // Before the trigger subscriptions and before either early return: the bus
+    // calls handlers in the order they subscribed, so a trigger on `ui:model`
+    // reads the value the event just wrote.
     if (modelWriteOff === undefined) {
       modelWriteOff = config.eventBus.on('ui:model', (event) => {
         if (event.type !== 'ui:model' || instance.status === 'suspended') return;
-        // A stamped model event reaches its own instance only; an unstamped
-        // (global) one reaches every instance holding the ref.
         if (event.origin !== undefined && event.origin !== instance.id) return;
         if (event.ref === undefined) return;
-        const path = modelListeners.get(event.ref);
+        const path = modelPaths.get(event.ref);
         if (path === undefined) return;
         dataStore.update((curr) =>
           applyMutations(curr, [{ set: path, value: event.payload }], { initial: initialSnapshot, strict }),
@@ -273,9 +239,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
       dataStore.update(() => next);
     }
     attach();
-    // A mount a chain caused (a trigger's push) is one hop further down it;
-    // one nothing caused starts its own. Read before the first await — the
-    // navigation that set it is still on the stack (./cause.ts).
+    // Read before the first await: the navigation that set it is still on the stack.
     const parent = ambientCause();
     const cause = nextCause(parent);
     if (isRunaway(cause)) {
@@ -283,20 +247,15 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     } else {
       await runLifecycleHook('mount', definition, () => buildContext(abortController.signal, cause));
     }
-    // Only if nothing moved it meanwhile: an instance covered (or removed)
-    // while its mount hook was still running stays suspended (or unmounted).
+    // An instance covered or removed while its mount hook ran stays suspended or unmounted.
     if (instance.status === 'initializing') setStatus('active');
   };
 
   const unmount = async (): Promise<void> => {
-    // Cancel any in-flight step execution before running unmount hooks, and
-    // stop following every endpoint whose answer could still change.
     abortController.abort();
     stopFollowing();
     detach();
-    teardownModelListeners();
-    // Unmount hooks run on a fresh (non-aborted) signal so they can
-    // perform their own async work (e.g. final telemetry calls).
+    modelPaths.clear();
     const unmountController = new AbortController();
     await runLifecycleHook('unmount', definition, () =>
       buildContext(unmountController.signal),
@@ -310,32 +269,19 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
   };
 
   const resume = async (): Promise<void> => {
-    // Becoming active again re-runs `mount` to refresh the action's data — so a
-    // backgrounded action (which ignored everything while suspended) is current
-    // when it's revealed, with no need to keep it live underneath — then the
-    // `resume` hook, if the action defines one.
+    // `mount` runs again: a suspended action ignored everything, and this
+    // re-read is what makes it current when it is revealed.
     setStatus('active');
     await runLifecycleHook('mount', definition, buildContext);
     await runLifecycleHook('resume', definition, buildContext);
   };
 
-  // The map the ONE `ui:model` subscription (see `attach()`) consults at event
-  // time. Rebuilt from the render tree every render — a binding inside a loop
-  // depends on the data, so the set is not knowable before a render. This only
-  // ever touches the map, never the bus, so the write's position ahead of the
-  // triggers is unaffected by a binding appearing or vanishing across renders.
   const reconcileModelBindings = (nodes: RenderNode[]): void => {
-    modelListeners.clear();
-    for (const b of collectModelBindings(nodes)) modelListeners.set(b.ref, b.path);
-  };
-
-  const teardownModelListeners = (): void => {
-    modelListeners.clear();
+    modelPaths.clear();
+    for (const b of collectModelBindings(nodes)) modelPaths.set(b.ref, b.path);
   };
 
   const render = (): RenderNode[] => {
-    // Asked per render, not held: `shell.setPhrases` has to reach the screens
-    // that are already open, and a book captured at spawn could not.
     const language = config.i18n?.();
     const out = renderRuntime(definition, dataStore, {
       store: config.layoutStore,
@@ -363,7 +309,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
   const dispose = (): void => {
     stopFollowing();
     detach();
-    teardownModelListeners();
+    modelPaths.clear();
     statusSubscribers.length = 0;
   };
 

@@ -22,7 +22,6 @@ describe('Input', () => {
   it('dispatches ui:model when bound and the user types', () => {
     const { Wrapper, dispatch, registry } = createHarness();
     registry.register('Input', Input);
-    // Render via the component directly with novaModel injected as render-node would.
     render(
       <Wrapper>
         <Input value="" novaModel={{ ref: 'form', path: 'name' }} />
@@ -49,7 +48,7 @@ describe('Input', () => {
     fireEvent.change(el, { target: { value: 'a' } });
     fireEvent.change(el, { target: { value: 'ab' } });
     fireEvent.change(el, { target: { value: 'abc' } });
-    expect(dispatch).not.toHaveBeenCalled(); // still inside the window
+    expect(dispatch).not.toHaveBeenCalled();
     vi.advanceTimersByTime(200);
     expect(dispatch).toHaveBeenCalledTimes(1);
     expect(dispatch).toHaveBeenCalledWith({ type: 'ui:model', ref: 'form', payload: 'abc' });
@@ -66,14 +65,12 @@ describe('Input', () => {
     if (el === null) throw new Error('no input');
     fireEvent.focus(el);
     fireEvent.change(el, { target: { value: 'help' } });
-    // a stale tree arrives mid-type (echo of an earlier keystroke) — must not clobber
     rerender(
       <Wrapper>
         <Input value="h" novaModel={{ ref: 'form', path: 'name' }} />
       </Wrapper>,
     );
     expect(el.value).toBe('help');
-    // once blurred, the authoritative server value takes over again
     fireEvent.blur(el);
     rerender(
       <Wrapper>

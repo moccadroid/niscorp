@@ -2,36 +2,12 @@ import type { Stamp, Upgrader } from '../documents';
 import { diffJson, type GrammarSchema } from '../check';
 import { StrataError } from '../errors';
 
-// ═══════════════════════════════════════════════════════════════
-// @niscorp/strata/upgrade — artifacts in an app's SOURCE, brought forward.
-//
-// Rows and submissions are upgraded where they are read. Source files are
-// different: they are TypeScript, written by people, and rewriting them by
-// machine means a codemod that would have to understand every way a person
-// can write an object. So strata does not edit them. It works out, from the
-// migrations, EXACTLY what each artifact must become — and then checks that
-// whoever did the editing (a person, an agent) landed on it, byte for byte.
-//
-//   plan    the lock says the source is written at stamp S; the installed
-//           grammars are ahead. Every artifact is upgraded from S: the ones
-//           that change get their expected JSON and a diff; the rest are noted.
-//   (edit)  anyone — the report says which artifact, which migration, what
-//           changes, and where the expected JSON is.
-//   verify  the edited source, read again: every planned artifact equals its
-//           expected JSON; every other one is still one no migration touches.
-//           Then — and only then — the lock moves.
-//
-// Pure: documents in, plans out. `@niscorp/strata/node` does the files.
-// ═══════════════════════════════════════════════════════════════
-
 export type SourceDocument = { kind: string; id: string; document: unknown; file?: string };
 
 export type PlannedDocument = {
   kind: string;
   id: string;
   file?: string;
-  // Files that contain what changes — the artifact's own file names only where
-  // its id is written; the layout it imports is often where the edit goes.
   lookIn?: readonly string[];
   applied: readonly string[];
   changes: readonly string[];
@@ -42,12 +18,8 @@ export type SourcePlan = {
   from: Stamp;
   to: Stamp;
   migrations: readonly { ref: string; description: string }[];
-  // Artifacts the migrations change — the whole to-do list.
   documents: readonly PlannedDocument[];
-  // Artifacts no pending migration touches (by kind:id) — verify checks they stay that way.
   untouched: readonly string[];
-  // An expected document that does not pass its kind's current schema: the
-  // MIGRATION is wrong, and no edit could make verify pass. Fix it first.
   problems: readonly string[];
 };
 
@@ -58,11 +30,8 @@ const sortKeys = (value: unknown): unknown => {
   if (typeof value !== 'object' || value === null) return value;
   return Object.fromEntries(Object.entries(value).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([k, v]) => [k, sortKeys(v)]));
 };
-// Equal as JSON: key order is how a person happened to write the object, not content.
 const sameJson = (a: unknown, b: unknown): boolean => JSON.stringify(sortKeys(a)) === JSON.stringify(sortKeys(b));
 
-// The string values a migration removes or rewrites — what to search the
-// source for to find where an edit goes.
 export const changedStrings = (before: unknown, after: unknown): string[] => {
   const found = new Set<string>();
   const visit = (a: unknown, b: unknown): void => {
@@ -88,8 +57,6 @@ export const planSourceUpgrade = async (options: {
   stamp: Stamp;
   documents: readonly SourceDocument[];
   schemas?: Readonly<Record<string, GrammarSchema>>;
-  // Every migration the upgrader would run from `stamp`, for the report — the
-  // host passes the grammar sequences' descriptions.
   describe: (ref: string) => string;
 }): Promise<SourcePlan> => {
   const { upgrader, stamp, documents, schemas, describe } = options;
@@ -124,8 +91,6 @@ export const planSourceUpgrade = async (options: {
     }
   }
 
-  // Every migration between the lock and the installed grammars — markers
-  // included, which change no artifact but still move the version.
   const from = stamp;
   const to = upgrader.stamp;
   const migrations = Object.entries(to).flatMap(([id, n]) =>
@@ -146,9 +111,6 @@ export type VerifyResult = {
   lines: readonly { ok: boolean; text: string; detail?: readonly string[] }[];
 };
 
-// The edited source against the plan. `upgrader` still reads from the plan's
-// `from` stamp: an artifact the plan left untouched must still be one no
-// pending migration would change.
 export const verifySourceUpgrade = (options: { plan: SourcePlan; upgrader: Upgrader; documents: readonly SourceDocument[] }): VerifyResult => {
   const { plan, upgrader, documents } = options;
   const now = new Map(documents.map((d) => [keyOf(d), d]));
@@ -185,7 +147,6 @@ export const verifySourceUpgrade = (options: { plan: SourcePlan; upgrader: Upgra
   return { ok, lines };
 };
 
-// The report a person — or an agent — works from.
 export const renderReport = (plan: SourcePlan, expectedPathOf: (doc: PlannedDocument) => string): string => {
   const stamp = (s: Stamp): string => Object.entries(s).map(([k, v]) => `${k} ${v}`).join(', ');
   const out: string[] = [

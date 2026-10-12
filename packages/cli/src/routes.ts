@@ -1,28 +1,14 @@
-// ═══════════════════════════════════════════════════════════════
-// The paths an app has, where each one's file goes, and the table a build
-// prints. Pure: no server, no disk — the command hands these what it found.
-// ═══════════════════════════════════════════════════════════════
-
-// What a build learned about one path (moss's `ExportedDocument`, without the
-// markup).
 export type RouteReport = {
   path: string;
-  // the page the path led to; absent: the app's own shell
   page?: string;
   drawn: boolean;
-  // something on it can still happen — it wants a server behind it
   live: boolean;
   why: readonly string[];
-  // reads whose answers are in the markup as they were when it was drawn
   drawnWith: readonly string[];
   settled: boolean;
-  // what the screen's head held, and the actions that said it — absent when
-  // the screen has no head and the document's is the template's own
   head?: { elements: readonly unknown[]; actions: readonly string[] };
 };
 
-// `/`, and every page whose path names no parameter. A parameterised page has
-// as many paths as there are rows; those are the app's to list.
 export const defaultPaths = (pages: readonly { name: string; path: string }[]): string[] => [
   '/',
   ...pages
@@ -31,9 +17,6 @@ export const defaultPaths = (pages: readonly { name: string; path: string }[]): 
     .sort(),
 ];
 
-// Where a path's file goes under the output directory: `/` is index.html, and
-// every other path is a folder with an index.html in it — what every static
-// host serves for that path without being told to.
 export const fileOf = (path: string): string => {
   const segments = path.split('?')[0]?.split('/').filter((segment) => segment !== '') ?? [];
   if (segments.some((segment) => segment === '..' || segment === '.')) throw new Error(`nisc: "${path}" is not a path a file can be written for.`);
@@ -42,11 +25,7 @@ export const fileOf = (path: string): string => {
 
 const pad = (text: string, width: number): string => text + ' '.repeat(Math.max(0, width - text.length));
 
-// The table. One row per path: whether a file is the whole of it, or a server
-// has to stand behind it — and, in the build's own words, why.
 export const routeTable = (routes: readonly RouteReport[]): string => {
-  // Said only by an app that has a head somewhere: then a path without one is
-  // going out under the template's, and that may not be what was meant.
   const says = (route: RouteReport): boolean => (route.head?.elements.length ?? 0) > 0;
   const headed = routes.some(says);
   const rows = routes.map((route) => {

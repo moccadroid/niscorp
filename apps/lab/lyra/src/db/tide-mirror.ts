@@ -1,15 +1,5 @@
-// HOW EACH AUTOMATION LAST RAN, MIRRORED ONTO ITS OWN ROW.
-//
-// The card wants one line per automation; the ledger is keyed by a COMPOSED
-// reflex id (`<studioId>:<automationId>`), which is a join no foreign key can
-// carry and no vex entry can express. So the engine's ledger pushes to the
-// automation instead — the counter-cache this schema already runs for booked
-// seats, and for the same reason: recompute on write, read as a column.
-//
-// DECLARED here as schema, like every other trigger this database carries —
-// not created imperatively at boot. It lives in its own file rather than
-// schema.ts because `tide_run` is moss's table (TIDE_DDL), so the database
-// builder applies this AFTER the tide tables exist.
+// Outside schema/ because `tide_run` comes from TIDE_DDL: the database builder
+// applies this after the tide tables exist.
 export const TIDE_MIRROR_DDL = /* sql */ `
   CREATE OR REPLACE FUNCTION mirror_last_run() RETURNS TRIGGER AS $mirror$
   BEGIN

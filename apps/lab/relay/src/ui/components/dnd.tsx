@@ -3,14 +3,6 @@ import { z } from 'zod';
 import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/react';
 import { cx } from '../lib/cx';
 
-// Kanban drag-and-drop. The browser drag mechanics stay here; only the
-// SEMANTIC outcomes reach Nova — a `KanbanCard` emits `ui:click` on a plain
-// click (so a card is still openable) and the dragged id rides in the native
-// `dataTransfer`; `KanbanCards` (a column's drop zone) emits `ui:drop`
-// carrying `{ id, toStage }` so a trigger can act. The kit card/zone chrome
-// is applied internally — layouts declare no classes.
-
-// ─── KanbanCard ────────────────────────────────────────────
 const KanbanCardProps = z
   .object({
     value: z.unknown().optional().describe('The record id — drag payload (dataTransfer) and click payload.'),
@@ -39,7 +31,6 @@ export const KanbanCard: NovaComponent<z.infer<typeof KanbanCardProps>> = ({ val
 };
 KanbanCard.meta = { description: 'A draggable + clickable kanban card. Click fires ui:click; drag carries `value` (the id) for a KanbanCards zone.', propsSchema: KanbanCardProps };
 
-// ─── KanbanCards ───────────────────────────────────────────
 const KanbanCardsProps = z
   .object({
     value: z.unknown().optional().describe('Where a drop lands (e.g. the stage); sent as `toStage`.'),
@@ -50,9 +41,8 @@ type KanbanCardsP = z.infer<typeof KanbanCardsProps> & { novaRef?: string; child
 
 export const KanbanCards: NovaComponent<z.infer<typeof KanbanCardsProps>> = ({ value, novaRef, children }: KanbanCardsP) => {
   const dispatch = useNovaDispatch();
-  // Light up while a card is dragged over. A depth counter (enter++/leave--)
-  // survives the dragenter/dragleave the nested cards fire, so the highlight
-  // doesn't flicker as you move across them.
+  // A counter, not a boolean: the nested cards fire their own dragenter and
+  // dragleave, and the highlight would flicker as the pointer crosses them.
   const [depth, setDepth] = useState(0);
   return (
     <div

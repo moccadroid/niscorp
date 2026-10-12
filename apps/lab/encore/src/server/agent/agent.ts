@@ -4,43 +4,8 @@ import { ANSWER_MAX_CHARS, ANSWER_MAX_SENTENCES, AnswerDataSchema, FOLLOW_UPS_MA
 import type { AnswerData } from './contract';
 import { runFacts } from './run-facts';
 
-// ═══════════════════════════════════════════════════════════
-// THE AGENT — the slow speed. Defined ONCE, at module scope.
-//
-// An agent is configuration, not an object with a lifetime: tools arrive on the
-// run (they close over a session's wire and policy), the model arrives on the
-// run, and what differs between two turns is `deps` and the input. Rebuilding
-// the definition per call is the pattern cortex's typed deps exist to delete.
-//
-// ONE PROMPT, ONE CONTRACT, EVERY FINISHED SENTENCE. It is handed the same state
-// each time and everything it may return is optional — words, cards to add or
-// aim, words for a form, steps — including nothing at all, which is the right
-// answer when the cards already say it. What it NEVER does is act:
-// it has two tools and both read; it returns a state and the loop applies it;
-// the forms it opens have their own buttons and a person presses them.
-//
-// THE PROMPT, IN ORDER (cortex assembles it; `agent.preview()` shows it):
-//
-//   instructions        identity and the law            ┐
-//   tool guides         each tool teaches itself        │ fixed for the life of
-//   the contract        JSON Schema, from contract.ts   │ the agent — a provider's
-//   theRoom             what the five regions are for   │ prefix cache holds it
-//   howToAnswer         how to decide                   ┘
-//   ── the run's input ──
-//   the thread          the conversation so far, as messages
-//   pre-decisions       Jev's work for THIS sentence, as a system message
-//   the operator's line
-//
-// Every producer is static, so a provider's prefix cache holds all of it. The
-// thread and the pre-decisions are the run's INPUT, not producers:
-// cortex places producers before the input, and the pre-decisions have to sit
-// between the conversation and its last line.
-// ═══════════════════════════════════════════════════════════
-
 export type AgentDeps = Record<string, never>;
 
-// Identity and the law. A few sentences — what the answer may contain is the
-// contract's business, and the contract explains itself.
 const INSTRUCTIONS = [
   'You are the second, slower mind of Encore: the operations room of a three-day music festival. The operator types what is happening; a fast model has already read the sentence and arranged cards on screen. You are called on every finished sentence, for what cards alone cannot do: say what matters, add or aim a card, write words into a form, propose steps. EVERYTHING you may return is optional. When the cards on screen already say it, return nothing at all — an empty `response` and no data is a correct answer, and the common one.',
   'THE LAW: you never act. You cannot press a button, submit a form, send a message or change a record, and you must never say that you did. You say things, and you return a description of the screen; a person reads it and decides.',
@@ -71,14 +36,7 @@ const howToAnswer = (() =>
     'The conversation above is what this operator said and what was done about it — including things the cards handled without you, marked [cards only]. "Then", "that one", "tomorrow" refer to it.',
   ].join('\n')) satisfies Producer<AgentDeps>;
 
-// THE PER-RUN HALF OF THE CONTRACT. The schema above it is static — it has to
-// be, the agent is a module — so "an action Jev did not rank", "a row that was
-// not offered" and "a field nobody listed" are refused here, by the one
-// admission rule, and go back to the model as a correction while its tools are
-// still warm. The facts come from the run's own scope (run-facts.ts).
 const admitted: OutputValidator<AnswerData> = (output) => {
-  // The words are judged with the data: the length bound is an admission rule
-  // like any other, so the model is told and retries.
   const refusals = runFacts.getStore()?.refusals(output.data, output.response ?? '') ?? [];
   return refusals.length === 0 ? { ok: true } : { retry: refusals.join('; ') };
 };
@@ -88,16 +46,7 @@ export const encoreAgent: AgentDefinition<AnswerData, AgentDeps> = defineAgent<A
   description: 'The slower mind of the Encore ops room: says what matters, adds and aims cards, writes words, proposes steps — or nothing; never acts.',
   instructions: INSTRUCTIONS,
   context: [theRoom, howToAnswer],
-  // `response` is OPTIONAL (cortex's default beside a schema): saying nothing is a
-  // correct answer when the cards already say it.
-  //
-  // NO `strategy`. On Groq signal resolves `emit` — the envelope on the content
-  // channel — because Groq validates tool args server-side, so `respond`
-  // params would enforce nothing (signal transport/resolve.ts). Pinning a
-  // strategy here would take that resolution away.
+  // No `strategy`: Groq validates tool args server-side, so signal is left to resolve `emit`.
   output: { schema: AnswerDataSchema, validate: admitted },
-  // A typical run is ONE step — the facts are already in the prompt. Six is
-  // room for a lookup or two and a correction, not for a wander; somebody is
-  // watching a card say "answering".
   stopWhen: [stepCount(6), duration('45s'), outputRetries(2)],
 });

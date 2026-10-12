@@ -1,14 +1,10 @@
 import type { LayoutNode } from '@niscorp/nova';
 import { panel, split, errorNotice } from './panel';
 
-// Two depths: the runs, and one run opened. The prompt is then ONE text, whole,
-// because reading it straight through is what it is for — a per-turn table looked
-// tidy and made the artifact unreadable. Tool calls sit beside it, not inside it.
 export const runsLayout: LayoutNode = panel(
   'Agent runs',
   'Every model run — what went out, what it called, what came back, and what it cost',
   split(
-    // ── left: the totals, and the three groupings ──
     {
       component: 'Stack',
       props: { gap: 14 },
@@ -79,7 +75,6 @@ export const runsLayout: LayoutNode = panel(
       ],
     },
 
-    // ── right: the runs, one run, one turn ──
     {
       component: 'Stack',
       props: { gap: 12 },
@@ -105,10 +100,6 @@ export const runsLayout: LayoutNode = panel(
           },
         },
 
-        // ONE RUN, OPENED. The turns in the order the model saw them — the only
-        // honest account of "why did it do that", and one that cannot be
-        // reconstructed later because the prompt is assembled from screen state
-        // that has already moved.
         {
           if: '$.open.id',
           then: {
@@ -132,15 +123,9 @@ export const runsLayout: LayoutNode = panel(
               { component: 'Text', props: { size: 'xs', color: 'faint' }, children: 'ANSWERED' },
               { component: 'Code', props: { text: '$.open.response', max: 200 } },
 
-              // THE PROMPT, whole, in one scroll. It is the artifact this pane
-              // exists for — reading it straight through is the only way to see
-              // an ordering problem or a block that says the same thing twice.
               { component: 'Text', props: { size: 'xs', color: 'faint' }, children: 'PROMPT' },
               { component: 'Code', props: { text: '$.open.prompt', max: 620 } },
 
-              // THE TOOL CALLS, separately: what it asked for, and what came
-              // back. Arguments exactly as the provider sent them, so a
-              // malformed call still reads as malformed.
               {
                 if: '$.open.calls',
                 then: {

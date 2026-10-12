@@ -1,20 +1,9 @@
 import { z } from 'zod';
 
-// ═══════════════════════════════════════════════════════════════
-// Triggers — four kinds, closed.
-//
-// Structured on purpose: a reflex is shown to the operator it
-// affects, and `{ every: 'month', on: 1, at: '03:00' }` is
-// reviewable by the person it bills where `0 3 1 * *` is a
-// shibboleth. Cron-string sugar belongs in tooling, never in the
-// stored artifact.
-// ═══════════════════════════════════════════════════════════════
-
 export const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MMDD = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
-// Seconds are optional: a one-shot can name the second it fires on.
 const LOCAL_DATETIME = /^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 
 export const ClockUnitSchema = z.enum(['day', 'week', 'month', 'year']);
@@ -82,14 +71,6 @@ export const RunTriggerSchema = z
   .strict()
   .describe('Fires when another reflex has run: one automation after another.');
 
-// There is NO poll trigger, and the absence is a decision. Polls existed
-// for hosts with no write choke point — run a selection, diff a cursor,
-// mint write facts for the delta. In this stack the host's DAL IS the
-// choke point: every application write becomes a fact at the vex bridge,
-// so a poll could only ever re-discover what was already pushed, one
-// interval late. An external source with no choke point enters through an
-// importer that ingests write facts at the door — the same shape, without
-// a reflex secretly re-querying.
 export const ManualTriggerSchema = z
   .object({ manual: z.object({}).strict() })
   .strict()
@@ -109,9 +90,6 @@ export type Clock = ClockRecurring | ClockOnce;
 export type Trigger = z.infer<typeof TriggerSchema>;
 export type Op = z.infer<typeof OpSchema>;
 export type Weekday = (typeof WEEKDAYS)[number];
-
-// ── narrowing helpers: the union is structural, so every consumer
-// would otherwise re-derive these three checks ───────────────────
 
 export const clockOf = (trigger: Trigger): Clock | undefined => ('clock' in trigger ? trigger.clock : undefined);
 

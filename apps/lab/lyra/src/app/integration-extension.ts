@@ -1,25 +1,6 @@
 import { z } from 'zod';
 import type { ExtensionConfig, ExtensionContext } from '@niscorp/moss/integrations';
 
-// ═══════════════════════════════════════════════════════════════
-// WHAT AN INTEGRATION MAY SAY TO LYRA, beyond the fields every nisc bundle has.
-//
-// A bundle's actions, grants and phrasebook are nisc's, and moss reads them.
-// Where a screen of an integration appears in THIS app, and the words its
-// store tile shows, are this app's own vocabulary: a bundle carries them under
-// `extension`, moss hands them here, and what this file answers is what the
-// integration's row keeps.
-//
-//   meta          the store tile's words: a title, a line, a paragraph
-//   attachments   action id → the host screen it rides as a panel, with an
-//                 endpoint of the integration's own that paints its strip
-//   placements    action id → the menu hub it is listed under
-//   settings      the one action the store tile opens
-//
-// `adds` is the sentence the store tile says of all three. It is written here,
-// at import, and a bundle that brings one of its own is refused.
-// ═══════════════════════════════════════════════════════════════
-
 const ExtensionSchema = z
   .object({
     meta: z.object({ title: z.string().default(''), tagline: z.string().default(''), description: z.string().default('') }).strict().prefault({}),
@@ -29,23 +10,18 @@ const ExtensionSchema = z
     adds: z.string().default(''),
   })
   .strict()
-  // A bundle that says none of it is one with nothing to place.
   .prefault({});
 
 export type IntegrationExtension = z.infer<typeof ExtensionSchema>;
 
-// What this app offers an integration to name: the host screens a panel may
-// ride, each with what it hands a rider ({offered key: where it is read from on
-// this app's own data}); the menu hubs that list an integration's screen; and
-// this app's words for both, for the sentence a person reads.
+// `attachable`: host action → { offered key: the path it is read from on this
+// app's own data }.
 export type IntegrationOffer = {
   attachable: Readonly<Record<string, Readonly<Record<string, string>>>>;
   menuSlots: readonly string[];
   names: Readonly<Record<string, string>>;
 };
 
-// Each binding names an action the bundle ships and a place this app offers,
-// and a preview stays under the integration's own prefix.
 const refusals = (offer: IntegrationOffer, extension: IntegrationExtension, bundle: ExtensionContext): string[] => {
   const reasons: string[] = [];
   for (const [actionId, binding] of Object.entries(extension.attachments)) {
@@ -64,9 +40,6 @@ const refusals = (offer: IntegrationOffer, extension: IntegrationExtension, bund
   return reasons;
 };
 
-// WHAT APPEARS WHERE, as the one sentence the store tile prints, in this app's
-// own words for its screens and hubs. A place it has no word for is said by
-// its id.
 const placementSentence = (offer: IntegrationOffer, extension: IntegrationExtension, bundle: ExtensionContext): string => {
   const say = (id: string): string => offer.names[id] ?? id;
   const titled = (actionId: string): string => bundle.actions[actionId]?.title ?? actionId;
@@ -82,8 +55,6 @@ export const integrationExtension = (offer: IntegrationOffer): ExtensionConfig<I
   schema: ExtensionSchema,
   check: (extension, bundle) => refusals(offer, extension, bundle),
   prepare: (extension, bundle) => ({ ...extension, adds: placementSentence(offer, extension, bundle) }),
-  // What a vendor reads of this vocabulary. The offered keys are the contract:
-  // where this app reads them from is its own wiring, and is not said.
   contract: {
     meta: 'title, tagline, description: the words of the store tile',
     attachments: 'action id → { to: a host screen below, preview?: an endpoint under your own prefix that answers { bands, hint } }',
@@ -94,6 +65,4 @@ export const integrationExtension = (offer: IntegrationOffer): ExtensionConfig<I
   },
 });
 
-// The path a preview is called at on the integration's own service: what its
-// bundle declared, without the prefix it is served under here.
 export const pathOnService = (integration: string, declared: string): string => declared.slice(`/integrations/${integration}/`.length);

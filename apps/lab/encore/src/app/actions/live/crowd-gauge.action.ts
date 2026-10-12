@@ -4,8 +4,6 @@ import { crowdGaugeLayout } from './crowd-gauge.layout';
 import { zoneCountPrism } from './live.prism';
 import { zoneRef, dayField, hourField } from '@encore/app/actions/shared/input-fields';
 
-// How full one zone is at one hour — the number that decides whether moving
-// twenty thousand people under canvas is a plan or a crush.
 export const crowdGaugeAction: ActionDefinition = {
   id: 'crowd.gauge',
   title: 'Crowd',

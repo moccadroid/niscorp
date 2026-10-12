@@ -4,10 +4,6 @@ import { z } from 'zod';
 import { createStream } from '../src/create-stream';
 import { simulateStream, simulateAsyncStream, generatePayload } from './helpers/simulate-stream';
 
-// ═══════════════════════════════════════════════════════════
-// Schema — realistic LLM structured output
-// ═══════════════════════════════════════════════════════════
-
 const LLMResponseSchema = z.object({
   widget: z.object({
     type: z.string(),
@@ -37,10 +33,6 @@ const INITIAL: LLMResponse = {
   items: [],
   meta: { model: '', temperature: 0, tokens: 0 },
 };
-
-// ═══════════════════════════════════════════════════════════
-// Full lifecycle — token-by-token streaming
-// ═══════════════════════════════════════════════════════════
 
 describe('e2e — full lifecycle', () => {
   const json = generatePayload({ responseLength: 200, itemCount: 3 });
@@ -76,10 +68,6 @@ describe('e2e — full lifecycle', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// Progressive observation — values evolve during streaming
-// ═══════════════════════════════════════════════════════════
-
 describe('e2e — progressive observation', () => {
   const json = generatePayload({ responseLength: 100, itemCount: 2 });
 
@@ -96,16 +84,11 @@ describe('e2e — progressive observation', () => {
       responseAtWidgetComplete = stream.current().response;
     });
 
-    // Use char-by-char to ensure fine-grained chunk boundaries
     simulateStream(stream, json, { mode: 'char' });
 
-    // Widget should have been populated early in the stream
     expect(widgetSnapshots.length).toBeGreaterThanOrEqual(2);
     expect(lastOf(widgetSnapshots).type).toBe('card');
 
-    // When widget.title finalized, response was still incomplete
-    // (widget comes before response in the JSON, char-by-char ensures
-    // the parser has not yet seen the full response when widget closes)
     expect(responseAtWidgetComplete.length).toBeLessThanOrEqual(
       stream.current().response.length,
     );
@@ -121,10 +104,8 @@ describe('e2e — progressive observation', () => {
 
     simulateStream(stream, json, { mode: 'token' });
 
-    // Should have seen the array grow from 0 to 2
-    expect(itemCountHistory[0]).toBe(0); // initial
+    expect(itemCountHistory[0]).toBe(0);
     expect(itemCountHistory[itemCountHistory.length - 1]).toBe(2);
-    // Should have seen intermediate states
     expect(itemCountHistory.length).toBeGreaterThanOrEqual(3);
   });
 
@@ -136,27 +117,18 @@ describe('e2e — progressive observation', () => {
 
     simulateStream(stream, json, { mode: 'char' });
 
-    // First state is the initial
     expect(states[0]).toEqual(INITIAL);
 
-    // Last state is the final value
     const expected = JSON.parse(json);
     expect(states[states.length - 1]).toEqual(expected);
 
-    // Should have many intermediate states (char-by-char produces lots)
     expect(states.length).toBeGreaterThan(10);
 
-    // Each notification should carry a genuinely different state
-    // (structural sharing + dirty-skip ensures no spurious emissions)
     for (let i = 1; i < states.length; i++) {
-      expect(states[i]).not.toBe(states[i - 1]); // different reference
+      expect(states[i]).not.toBe(states[i - 1]);
     }
   });
 });
-
-// ═══════════════════════════════════════════════════════════
-// Subtree finalization timing
-// ═══════════════════════════════════════════════════════════
 
 describe('e2e — finalization ordering', () => {
   const json = generatePayload({ responseLength: 100, itemCount: 2 });
@@ -173,10 +145,6 @@ describe('e2e — finalization ordering', () => {
 
     simulateStream(stream, json, { mode: 'token' });
 
-    // First four finalize in JSON key order (each triggered by the next sibling).
-    // 'meta' is the last key — it finalizes via root close, which fires
-    // through a different notification path (onRootFinalize). Depending on
-    // timing it may appear in order or not. Verify the first four are ordered.
     expect(finalizationOrder.slice(0, 4)).toEqual(['widget', 'response', 'reasoning', 'items']);
     expect(finalizationOrder).toContain('meta');
   });
@@ -192,10 +160,6 @@ describe('e2e — finalization ordering', () => {
     expect(result).toEqual(JSON.parse(json));
   });
 });
-
-// ═══════════════════════════════════════════════════════════
-// Async streaming — with timing
-// ═══════════════════════════════════════════════════════════
 
 describe('e2e — async streaming', () => {
   it('works with async delays between chunks', async () => {
@@ -213,34 +177,25 @@ describe('e2e — async streaming', () => {
     const stream = createStream({ schema: LLMResponseSchema, initial: INITIAL });
     const chunks = json.match(/.{1,30}/g) ?? [];
 
-    // Write first half
     const half = Math.floor(chunks.length / 2);
     for (let i = 0; i < half; i++) {
       stream.write(at(chunks, i));
     }
 
-    // Subscribe mid-stream
     const states: LLMResponse[] = [];
     stream.on(v => states.push(structuredClone(v)));
 
-    // First emission should have partial data from first half
     expect(states.length).toBe(1);
-    expect(at(states, 0).widget.type).toBe('card'); // widget comes early
+    expect(at(states, 0).widget.type).toBe('card');
 
-    // Write second half
     for (let i = half; i < chunks.length; i++) {
       stream.write(at(chunks, i));
     }
 
-    // Should have received updates
     expect(states.length).toBeGreaterThan(1);
     expect(states[states.length - 1]).toEqual(JSON.parse(json));
   });
 });
-
-// ═══════════════════════════════════════════════════════════
-// Destroy mid-stream
-// ═══════════════════════════════════════════════════════════
 
 describe('e2e — destroy mid-stream', () => {
   it('destroy halts all processing', () => {
@@ -252,7 +207,6 @@ describe('e2e — destroy mid-stream', () => {
     stream.on(listener);
     stream.final().catch(() => {});
 
-    // Write first quarter
     const quarter = Math.floor(chunks.length / 4);
     for (let i = 0; i < quarter; i++) {
       stream.write(at(chunks, i));
@@ -263,7 +217,6 @@ describe('e2e — destroy mid-stream', () => {
 
     stream.destroy();
 
-    // Write rest — should be ignored
     for (let i = quarter; i < chunks.length; i++) {
       stream.write(at(chunks, i));
     }

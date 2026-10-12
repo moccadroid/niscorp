@@ -10,8 +10,6 @@ import { refuseOptional } from '../../engine/optional.js';
 import { VexError } from '../../errors.js';
 import { isFieldPathShape } from '../../schemas/identifier.schema.js';
 
-// A `$context` ref naming a reserved sort key would otherwise become a bound
-// param; reject it at compile so reserved keys only ever drive ORDER BY.
 const assertNotReserved = (key: string): void => {
   if (RESERVED_CONTEXT_KEYS.has(key))
     throw new VexError(
@@ -20,10 +18,6 @@ const assertNotReserved = (key: string): void => {
     );
 };
 
-// ═══════════════════════════════════════════════════════════════
-// Types
-// ═══════════════════════════════════════════════════════════════
-
 type PathResolution = { alias: string; column: string; schema: FieldSchema };
 
 type CompilationContext = {
@@ -31,42 +25,23 @@ type CompilationContext = {
   aliasMap: Map<string, string>;
   paramSlots: ParamSlot[];
   paramCounter: { value: number };
-  // Every `exists` in this query's filter, resolved. Keyed by the node, because
-  // the compiler walks the raw filter tree and needs to find the resolution for
-  // the node in front of it.
   existsMap?: Map<object, ResolvedExists>;
 };
 
-// ═══════════════════════════════════════════════════════════════
-// FieldOrValue compilation
-// ═══════════════════════════════════════════════════════════════
-
-// ═══════════════════════════════════════════════════════════════
-// SQL TEXT — the only three ways authored input reaches a statement.
-//
-//   · a COLUMN, which must have resolved against the introspected schema —
-//     `columnOf` emits the resolver's alias.column or refuses. There is no
-//     "pass it through" branch, anywhere: the fallback that used to exist here
-//     pasted whatever string sat in a field position into the statement.
-//   · a LITERAL, quoted by `quoteLiteral` exactly as Postgres's own
-//     quote_literal() does, so it is safe whatever standard_conforming_strings
-//     says.
-//   · an OUTPUT NAME, quoted by `quoteIdent`.
-//
-// Values from a request never reach text at all: they bind as parameters.
-// ═══════════════════════════════════════════════════════════════
-
+// An authored string reaches SQL text only as a column that resolved against
+// the schema (`columnOf`), a quoted literal (`quoteLiteral`) or a quoted output
+// name (`quoteIdent`). A request's values never do: they bind as parameters.
 export const quoteLiteral = (s: string): string => {
   const doubled = s.replace(/'/g, "''");
-  // With standard_conforming_strings off, a backslash in '…' is an escape and
-  // `\'` closes the string. The E'' form escapes backslashes explicitly, so the
-  // literal means the same thing under either setting.
+  // With standard_conforming_strings off, a backslash in '…' is an escape, and
+  // one before a doubled quote ends the string early. The E'' form escapes
+  // backslashes explicitly, so the literal means the same under either setting.
   return s.includes('\\') ? `E'${doubled.replace(/\\/g, '\\\\')}'` : `'${doubled}'`;
 };
 
 export const quoteIdent = (name: string): string => `"${name.replace(/"/g, '""')}"`;
 
-// A number that is not finite has no SQL spelling — `NaN` would read as a name.
+// A number that is not finite has no SQL spelling: `NaN` would read as a name.
 export const numberLiteral = (n: number): string => {
   if (!Number.isFinite(n)) throw new VexError('invalid_dsl', `${String(n)} is not a number SQL can hold.`);
   return String(n);
@@ -100,12 +75,9 @@ export const compileFieldOrValue = (
   if (typeof fov === 'number') return numberLiteral(fov);
 
   if (typeof fov === 'string') {
-    // Shaped like a column → it is one, and it resolved (or this refuses).
-    // Anything else is a literal.
     return isFieldPath(fov) ? columnOf(fov, ctx) : quoteLiteral(fov);
   }
 
-  // Object: $context or $scope — after eliminating primitives, only these remain
   if (typeof fov === 'object' && fov !== null && '$context' in fov) {
     const key = fov.$context;
     assertNotReserved(key);
@@ -133,14 +105,6 @@ export const compileFieldOrValue = (
 };
 
 
-// ═══════════════════════════════════════════════════════════════
-// Join pairs
-//
-// The whole key, one equality per column pair, for the query's joins and
-// the joins inside an `exists` alike — two emitters, one rule, so a
-// composite key can never be half-joined in one of them.
-// ═══════════════════════════════════════════════════════════════
-
 export const compileJoinPairs = (join: ResolvedJoin): string[] =>
   join.fromColumns.map((column, i) => {
     const to = join.toColumns[i];
@@ -152,10 +116,6 @@ export const compileJoinPairs = (join: ResolvedJoin): string[] =>
     }
     return `${join.fromAlias}.${column} = ${join.toAlias}.${to}`;
   });
-
-// ═══════════════════════════════════════════════════════════════
-// Filter compilation
-// ═══════════════════════════════════════════════════════════════
 
 const compileComparisonFilter = (
   op: string,
@@ -171,13 +131,8 @@ export const compileFilter = (
   filter: Filter,
   ctx: CompilationContext,
 ): string => {
-  // EXISTS compiles INLINE, into the parent's own parameter counter and slot
-  // list. That is deliberate: the other subquery path compiles independently
-  // and then tries to renumber, which is how two parameterised subqueries came
-  // to collide on $1. There is nothing to renumber if nothing was numbered
-  // separately.
-  //
-  // `SELECT 1` because EXISTS asks whether a row is there, not what is in it.
+  // EXISTS compiles inline, into the parent's own parameter counter and slot
+  // list, so its `$N` never need renumbering.
   if ('exists' in filter) {
     const resolved = ctx.existsMap?.get(filter.exists);
     if (resolved === undefined) throw new VexError('invalid_dsl', 'An "exists" filter was not resolved. It must appear in a query\'s own filter.');
@@ -185,8 +140,7 @@ export const compileFilter = (
     const inner: CompilationContext = {
       ...ctx,
       resolvedPaths: resolved.filter?.resolvedPaths ?? ctx.resolvedPaths,
-      // The inner map LAYERS OVER the outer one, so an inner path resolves to
-      // the inner alias and an outer path — the correlation — still resolves.
+      // Inner over outer: an outer path, the correlation, still resolves.
       aliasMap: new Map([...ctx.aliasMap, ...resolved.aliasMap]),
     };
 
@@ -224,7 +178,6 @@ export const compileFilter = (
       return `${col} IN (${values.join(', ')})`;
     }
 
-    // ContextRef or ScopeRef → array parameter
     if ('$context' in target) {
       assertNotReserved(target.$context);
       ctx.paramCounter.value += 1;
@@ -300,7 +253,7 @@ export const compileFilter = (
   }
 
   if ('semantic' in filter) {
-    // Semantic filter: cosine distance using pgvector <=> operator
+    // pgvector's `<=>` is cosine distance.
     const fieldPath = filter.semantic.field;
     const col = columnOf(fieldPath, ctx);
 
@@ -308,7 +261,6 @@ export const compileFilter = (
     const key = '$context' in queryRef ? queryRef.$context : queryRef.$scope;
     if ('$context' in queryRef) assertNotReserved(queryRef.$context);
 
-    // Look up vector dimensions from resolved paths
     const res = ctx.resolvedPaths.get(fieldPath);
     const dimensions = res?.schema.vectorDimensions;
 
@@ -342,24 +294,16 @@ export const compileFilter = (
     if (maxDistance !== undefined) {
       return `levenshtein(${col}, ${paramRef}) <= ${numberLiteral(maxDistance)}`;
     }
-    // pg_trgm similarity
+    // `%` is pg_trgm's similarity operator.
     return `${col} % ${paramRef}`;
   }
 
-  // Resolved away before the pipeline — see engine/optional.ts. Named
-  // explicitly because the fallthrough below is `TRUE`: an unrecognised node
-  // would quietly compile to "match everything", which for an optional
-  // condition is the right answer reached by the wrong route, and for anything
-  // else is a filter that silently stopped filtering.
+  // Refused by name because the fallthrough below is `TRUE`.
   if ('optional' in filter) refuseOptional('SQL compilation');
 
-  // Should not reach here if the filter was validated
+  // Unreachable for a validated filter.
   return 'TRUE';
 };
-
-// ═══════════════════════════════════════════════════════════════
-// Compute expression compilation
-// ═══════════════════════════════════════════════════════════════
 
 export const compileCompute = (
   expr: ComputeExpression,
@@ -412,12 +356,6 @@ export const compileCompute = (
   return 'NULL';
 };
 
-// ═══════════════════════════════════════════════════════════════
-// Aggregate expression compilation
-// ═══════════════════════════════════════════════════════════════
-
-// SUM/AVG/MIN/MAX take a field path (mapped to its qualified column) OR a
-// compute expression (compiled to SQL). count stays a plain field/`*`.
 const aggArg = (arg: string | ComputeExpression, ctx: CompilationContext): string =>
   typeof arg === 'string' ? columnOf(arg, ctx) : compileCompute(arg, ctx);
 

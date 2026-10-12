@@ -1,9 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Mews' bill-item void, as a surface. The same two steps as Opera's — pick
-// the line, say why — because the CAPABILITY is the same and the guest-facing
-// job is the same. What differs is the call underneath, which is the whole
-// reason each vendor ships its own surface rather than the app writing one.
 export const folioLayout: LayoutNode = {
   component: 'Box',
   props: { py: 18, px: 18 },

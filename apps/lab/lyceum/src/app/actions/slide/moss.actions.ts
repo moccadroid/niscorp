@@ -3,13 +3,6 @@ import { pressesRecent } from '@lyceum/app/vex/press.entries';
 import { documentLayout, mossLayout, twiceLayout } from './later.layouts';
 import { buttonLayout, claimLayout, pairLayout, placesLayout } from './moss.layouts';
 
-// MOSS AND CHARTER — how a screen got onto a phone, and who decides which.
-// Moss: each person's screen runs on the server, the phone draws it; the
-// server is a list of documents, and it sends each person only what exists for
-// them. Then the room sees it: three people are given an action nobody else is
-// sent. Charter is how that was decided: one file instead of checks in three
-// places, enforced in the screen and in every query, and the same for a model.
-
 const code = (...lines: string[]): string => lines.join('\n');
 
 const still = (id: string, title: string, layout: ActionDefinition['layout'], data: Record<string, unknown>): ActionDefinition => ({
@@ -35,7 +28,6 @@ export const wireSlide = still('slide.wire', 'Your phone only draws.', mossLayou
   ],
 });
 
-// app/app.ts, as written: what this app hands Moss.
 export const manifestSlide = still('slide.manifest', 'This is what Moss is given.', documentLayout, {
   kicker: 'Moss',
   file: 'app.ts',
@@ -62,7 +54,6 @@ export const existsSlide = still('slide.exists', 'It sends you only what you hav
   two: { label: 'Moss', line: 'Your app. Nothing else is sent.' },
 });
 
-// Who pressed, live: a reactive read, so a press is on the stage on its own.
 export const buttonSlide: ActionDefinition = {
   id: 'slide.button',
   title: 'Some of you have an action now.',
@@ -81,10 +72,6 @@ export const whereSlide = still('slide.where', 'Where do you check permissions?'
   ],
 });
 
-// Three roles from app/charter/charter.ts, as written. Marked: the `actions`
-// lines — what Moss reads to decide which actions exist on a person's screen.
-// The `data` lines are the other half, enforced in every query (slide.twice,
-// once queries have been introduced).
 export const charterSlide = still('slide.charter', 'Who gets what: one file.', documentLayout, {
   kicker: 'Charter',
   file: 'charter.ts',
@@ -106,9 +93,6 @@ export const charterSlide = still('slide.charter', 'Who gets what: one file.', d
   marked: [2, 3, 9],
 });
 
-// The charter's other half, shown once queries have been introduced: the
-// `data` lines are enforced inside every query. The questions rule from
-// app/vex/behaviors.ts.
 export const twiceSlide = still('slide.twice', 'Enforced twice.', twiceLayout, {
   shell: 'Only what you’re given.',
   code: code(

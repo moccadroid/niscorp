@@ -2,13 +2,6 @@ import { useState, type CSSProperties, type MouseEvent } from 'react';
 import { ButtonPropsSchema, type ButtonProps } from '../../primitive-props';
 import { useNovaDispatch, type NovaComponent, type NovaComponentProps } from '@react';
 
-// ═══════════════════════════════════════════════════════════
-// Button — clickable element
-//
-// Click events fire as `ui:click` carrying the layout node's
-// `ref` (injected as `novaRef`). Without a ref, clicks are no-ops.
-// ═══════════════════════════════════════════════════════════
-
 export { ButtonPropsSchema, type ButtonProps };
 
 type Variant = 'primary' | 'secondary' | 'ghost';

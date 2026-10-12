@@ -6,14 +6,6 @@ import { defaultRegistry, fallback } from '@niscorp/nova/adapters/dom/components
 import { renderToString } from '@niscorp/nova/adapters/dom/server';
 import type { NiscShellProject } from '../../../src';
 
-// An app with its own shell and more than one page: `/` is a list with no head
-// of its own, and each article has one in its layout (`nova:head`, holding the
-// elements a head holds, bound to its data). So a build has a path whose head
-// is the template's and paths whose head is their own.
-//
-// NISC_FIXTURE_FAULT breaks it one way at a time: `head` makes two boots of one
-// path say different heads while drawing the same markup; `runs` puts a script
-// that would execute into an article's head.
 const fault = process.env['NISC_FIXTURE_FAULT'] ?? '';
 
 const ARTICLES: Record<string, { title: string; lead: string; card: string }> = {
@@ -62,8 +54,6 @@ const kit = (): ReturnType<typeof defaultRegistry> => {
   return registry;
 };
 
-// The boot — the one a browser entry would run. The path says which action,
-// and with what: `/articles/<slug>/` is that article, everything else the list.
 const boot = (path: string): Shell => {
   let minted = 0;
   const slug = /^\/articles\/([^/]+)\/?$/.exec(path)?.[1];

@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { compile, validate } from '../src';
 
-// A config a few thousand levels deep used to throw RangeError from inside
-// the schema; it is refused like any other invalid config.
 const deep = (): unknown => {
   let config: unknown = 1;
   for (let i = 0; i < 2000; i++) config = { $if: [true, config, 0] };

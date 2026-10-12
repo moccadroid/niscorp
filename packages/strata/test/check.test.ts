@@ -51,7 +51,6 @@ describe('snapshot — did the grammar change?', () => {
     expect(result.status).toBe('changed');
   });
 
-  // Most schema arrays are sets. A tuple's is not: its positions are the grammar.
   it('a tuple whose positions swap is a change — a document valid before is not now', () => {
     const before = z.object({ range: z.tuple([z.string(), z.number()]) }).strict();
     const after = z.object({ range: z.tuple([z.number(), z.string()]) }).strict();
@@ -113,9 +112,6 @@ describe('snapshot — did the grammar change?', () => {
   });
 });
 
-// A recursive grammar as one validator writes it: the node union behind a
-// numbered definition, a described reference inlined beside its description,
-// a union of bare types as `anyOf`, one non-recursive definition of its own.
 const recursiveAsWritten = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   description: 'A node.',
@@ -134,9 +130,6 @@ const recursiveAsWritten = {
   },
 };
 
-// The same grammar as another version writes it: definitions renamed and
-// inlined differently, a described root as `allOf: [{ $ref }]`, the primitive
-// union as a type list in another order. `change` departs from it for real.
 const respelled = (change: { primitives?: string[]; closeAdd?: boolean; addNeg?: boolean } = {}) => {
   const node = { $ref: '#/$defs/__schema0' };
   const op = (name: string, value: unknown) => ({ type: 'object', properties: { [name]: value }, required: [name], additionalProperties: false });

@@ -24,29 +24,14 @@ import {
   weight,
 } from './kit.shape';
 
-// ═══════════════════════════════════════════════════════════════
-// THE POSTER KIT IN REACT — the same grammar (./kit.props.ts) as ./kit.ts, the
-// same class names and data attributes, so the same stylesheet (./tokens.ts)
-// makes it look the same. What differs is who builds the elements: React, from
-// the trees moss's React target hands it. Nothing here knows a slide or a
-// member either.
-//
 // nova's DOM adapter wires a node's `ref` and `model` by convention; React's
-// does not, so these components do it themselves: a `ref`'d element is a
-// `ui:click` whose payload is its `value`, a `model`'d field a `ui:model` per
-// keystroke and a `ui:key` per key.
-// ═══════════════════════════════════════════════════════════════
+// does not, so these components do it themselves.
 
 const h = createElement;
 type Props = NovaComponentProps & Record<string, unknown>;
 
-// The names a Sheet's narrow arrangement shows; a place it leaves out hides on
-// a phone-width screen. Each Sheet sets it for its own cells.
 const NarrowContext = createContext<Set<string> | undefined>(undefined);
 
-// What every element here carries: its area (and whether the narrow
-// arrangement leaves it out), and, if it is `ref`'d, the press.
-// `style` is the component's own geometry, merged with its area.
 const usePlaced = (props: Props, style: Record<string, string> = {}): Record<string, unknown> => {
   const dispatch = useNovaDispatch();
   const narrow = useContext(NarrowContext);
@@ -74,7 +59,6 @@ const usePlaced = (props: Props, style: Record<string, string> = {}): Record<str
   };
 };
 
-// A data attribute only when there is a value for it.
 const data = (key: string, value: string | undefined): Record<string, string> =>
   value === undefined ? {} : { [`data-${key}`]: value };
 
@@ -150,7 +134,6 @@ const Figure: NovaComponent = (props: Props) =>
     h('span', { className: 'value' }, text(props['value']) ?? '—'),
   );
 
-// Ticks on the viewer's clock, as in the DOM kit; zero stays zero.
 const Countdown: NovaComponent = (props: Props) => {
   const placed = usePlaced(props);
   const to = instantOf(text(props['to']));
@@ -305,7 +288,7 @@ const Bar: NovaComponent = (props: Props) => {
   );
 };
 
-// The dots start where the wall clock says, once, when the Flow first draws —
+// The dots start where the wall clock says, once, when the Flow first draws:
 // React keeps the elements across updates, so they never jump back.
 const Flow: NovaComponent = (props: Props) => {
   const placed = usePlaced(props);
@@ -389,9 +372,8 @@ const Action: NovaComponent = (props: Props) =>
     h('span', null, text(props['label']) ?? ''),
   );
 
-// A field bound with the layout's `model`. While it has focus, what the person
-// is typing is the value (nova's ADAPTER.md §6): a tree arriving a round trip
-// later must not overwrite it. `enter: 'clears'` empties it on Enter.
+// While the field has focus, what the person is typing is the value: a tree
+// arriving a round trip later must not overwrite it.
 const Field: NovaComponent = (props: Props) => {
   const placed = usePlaced(props);
   const dispatch = useNovaDispatch();
@@ -427,7 +409,6 @@ const Xray: NovaComponent = () => h('span', { className: 'look' });
 const Menu: NovaComponent = (props: Props) =>
   h('details', { ...usePlaced(props), className: 'menu' }, h('summary', { className: 'menu-icon', 'aria-label': text(props['label']) ?? 'Menu' }), h('div', { className: 'menu-items' }, props.children));
 
-// THIS KIT, whole — typed against the grammar, like the DOM one.
 export const REACT_KIT: KitOf<NovaComponent> = {
   Page,
   Sheet,

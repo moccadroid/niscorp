@@ -1,4 +1,3 @@
-// Barrel for src/schemas
 export {
   ToolRiskLevelSchema,
   ToolConfigSchema,

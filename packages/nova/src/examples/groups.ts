@@ -1,12 +1,8 @@
 import type { NovaExampleGroup } from './example.types';
 
-// The groups the examples come in, in reading order, each with what it holds.
-// Whoever shows the examples takes the grouping from here, so a group is named
-// in one place.
 export type NovaExampleGroupInfo = {
   id: NovaExampleGroup;
   title: string;
-  // One or two sentences: what the examples in the group have in common.
   description: string;
 };
 

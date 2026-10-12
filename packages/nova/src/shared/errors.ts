@@ -1,9 +1,5 @@
 import type { z } from 'zod';
 
-// ═══════════════════════════════════════════════════════════
-// Error codes
-// ═══════════════════════════════════════════════════════════
-
 export const ErrorCodes = {
   render: 'RENDER_ERROR',
   componentNotFound: 'COMPONENT_NOT_FOUND',
@@ -21,14 +17,6 @@ export const ErrorCodes = {
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 
 export type NovaErrorContext = Record<string, unknown>;
-
-// ═══════════════════════════════════════════════════════════
-// Base error — classes are permitted here because these are
-// the only thrown error types; identity + instanceof are needed.
-//
-// Subclasses are added when there is a real throw site. Do not
-// add dead exports.
-// ═══════════════════════════════════════════════════════════
 
 export class NovaError extends Error {
   readonly code: ErrorCode;

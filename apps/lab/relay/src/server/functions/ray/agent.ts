@@ -3,14 +3,6 @@ import type { Shell } from '@niscorp/nova';
 import { today, ambientContext, channels } from './knowledge';
 import { buildContext } from './context';
 
-// Ray — the Relay assistant. A chat agent (envelope with a required
-// `response`, no data payload) whose tools arrive per-run from tools.ts.
-// The instructions carry IDENTITY and protocol only: every tool teaches
-// itself through its own `guide` (assembled into the TOOL GUIDES section),
-// the app's ambient facts are the shared knowledge producers every relay
-// agent composes, and the live SCREEN + ACTIONS arrive per turn through
-// deps. Nothing here describes a tool or another library.
-
 export type RayDeps = { shell: Shell };
 
 const INSTRUCTIONS = [
@@ -26,8 +18,7 @@ export const rayAgent: AgentDefinition<undefined, RayDeps> = defineAgent<undefin
   description: 'Assistant inside Relay, a CRM.',
   instructions: INSTRUCTIONS,
   context: [today, ambientContext, channels, ({ deps }) => buildContext(deps.shell)],
-  // A Ray turn can host a full build pipeline (architect + review + one
-  // repair — the build_action tool allows itself 12 minutes), so Ray's own
-  // wall clock must sit ABOVE the longest tool it may call.
+  // build_action allows itself 12 minutes; Ray's own wall clock must sit above
+  // the longest tool it may call.
   stopWhen: [stepCount(20), duration('15m')],
 });

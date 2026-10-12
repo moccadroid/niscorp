@@ -6,8 +6,6 @@ const page = (children: LayoutNode | LayoutNode[]): LayoutNode => ({
   children,
 });
 
-// The grid — the RULES, not the dated classes. A manager edits one row and the
-// calendar follows, because the derivation is a database trigger (schema.ts).
 export const timetableListLayout: LayoutNode = page([
   {
     component: 'Row',
@@ -40,18 +38,13 @@ export const timetableListLayout: LayoutNode = page([
         onRowRef: 'edit',
         empty: 'No classes yet.',
         emptyHint: 'Add the first weekly slot and the calendar fills itself.',
-        // Grouped by what it runs as, which is what deletes the widest column:
-        // a value repeating in nine rows out of ten is a heading, not a column.
         groupKey: 'runs_display',
         columns: [
-          // Deliberately NOT sortable, unlike Staff and Pricing: this list is
-          // grouped by `runs_display`, and a caller-supplied ORDER BY replaces
-          // the entry's whole sort — so the grouping would stop being
-          // contiguous and the same heading would repeat down the page.
-          // Grouping owns this list's order; the two cannot both have it.
+          // Not sortable: this list is grouped by `runs_display`, and a
+          // caller-supplied ORDER BY replaces the entry's whole sort, so the
+          // groups would stop being contiguous.
           { label: 'Class', w: 2, cell: { kind: 'primary', key: 'name', subKey: 'program_name', dotKey: 'program_tone' } },
           { label: 'When', px: 116, cell: { kind: 'primary', key: 'weekday_display', subKey: 'starts_at' } },
-          // A face, not a string: eight rows of grey names read as texture.
           { label: 'Teacher', px: 148, cell: { kind: 'avatar', key: 'instructor_name' } },
           { label: 'Seats', px: 68, align: 'right', cell: { kind: 'number', key: 'capacity' } },
           { label: 'State', px: 88, cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
@@ -62,8 +55,6 @@ export const timetableListLayout: LayoutNode = page([
             cell: {
               kind: 'menu',
               items: [
-                // Only a course has people enrolled on it, so only a course
-                // offers the roster — `showKey`, rather than a second screen.
                 { label: 'Who is on it', ref: 'roster', icon: 'people', showKey: 'is_course' },
                 { label: 'Retire', ref: 'retire', icon: 'pause', danger: true, showKey: 'active' },
                 { label: 'Put back on', ref: 'restore', icon: 'undo', hideKey: 'active' },
@@ -81,8 +72,6 @@ export const timetableFormLayout: LayoutNode = {
   props: { gap: 16 },
   children: [
     { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
-    // Every sheet form opens the same way: one line saying what this makes, then
-    // the fields, then one button. No Hero — the sheet supplies the title.
     { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'A weekly slot that repeats forever. The calendar fills itself in from it.' },
     { component: 'Input', props: { label: 'Class name', placeholder: 'Morning Flow' }, ref: 'name', model: '$.name' },
     {
@@ -121,8 +110,6 @@ export const timetableFormLayout: LayoutNode = {
   ],
 };
 
-// ── programs ─────────────────────────────────────────────────
-
 export const programsLayout: LayoutNode = page([
   {
     component: 'Row',
@@ -155,8 +142,6 @@ export const programsLayout: LayoutNode = page([
 
 ]);
 
-// A ONE-OFF. The same fields as a weekly slot minus the weekday, plus a date —
-// which is exactly what the difference between the two is.
 export const eventFormLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 16 },

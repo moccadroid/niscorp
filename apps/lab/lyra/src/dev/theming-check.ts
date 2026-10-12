@@ -1,11 +1,9 @@
-// Run: pnpm --filter lyra exec tsx src/dev/theming-check.ts
 import { CAST } from '@lyra/db/seed';
 
 import { asPrincipal, login, ok, report, runtime, settle, treeOf } from './world';
 
 const tokensOn = (tree: string, token: string): boolean => tree.includes(token);
 
-// ── two studios, two palettes, one set of actions ──
 const maren = await login(CAST.lumen.owner);
 const dario = await login(CAST.northrock.owner);
 await settle();
@@ -20,19 +18,14 @@ ok('...and neither sees the other’s', !tokensOn(lumenTree, '#0c0c0d') && !toke
 const idsIn = (tree: string): string[] => [...tree.matchAll(/"definitionId":"([^"]+)"/g)].map((m) => m[1] ?? '').sort();
 ok('both studios run the same actions', JSON.stringify(idsIn(lumenTree)) === JSON.stringify(idsIn(northTree)), idsIn(lumenTree).join(', ') || 'same set');
 
-// ── absent is stock, through the ordinary path ──
-// Stock is what the ENTRY answers when a studio names no theme — asserted for
-// a principal whose studio has none, through the same read a shell makes.
 const stock = { name: 'stock', tokens: {} as Record<string, string> };
 ok('a studio with no theme gets the stock look', Object.keys(stock.tokens).length === 0 && stock.name === 'stock');
 
-// ── the read is scoped like everything else ──
 const lumenTheme = await asPrincipal(CAST.lumen.owner, '/api/studio/vex', { fingerprint: 'theme/current', context: {} });
 const northTheme = await asPrincipal(CAST.northrock.owner, '/api/studio/vex', { fingerprint: 'theme/current', context: {} });
 ok('the theme read answers for the caller’s own studio', JSON.stringify(lumenTheme).includes('Sand'));
 ok('...and the other gets theirs from the same fingerprint', JSON.stringify(northTheme).includes('Charcoal'));
 
-// ── only the owner may change it ──
 const asDesk = await asPrincipal(CAST.lumen.desk, '/api/studio/vex', {
   fingerprint: 'studio/set-theme',
   context: { themeId: 'th_charcoal' },
@@ -49,7 +42,6 @@ void forged;
 const northUntouched = await runtime.db.query<{ t: string }>("SELECT theme_id t FROM studios WHERE id='st_northrock'");
 ok('an owner cannot re-skin a competitor', northUntouched.rows[0]?.t === 'th_charcoal');
 
-// ── the swap lands on a shell that is already open ──
 ok('before: Maren is wearing sand', tokensOn(treeOf(maren), '#fdfcfa'));
 
 maren.dispatch({ type: 'ui:click', ref: 'nav', payload: 'studio.settings' });

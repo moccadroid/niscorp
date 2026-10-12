@@ -1,8 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Contacts list — a search toolbar (Nova) over the reusable `Table` primitive.
-// The company is nested on each row (`company.name`), reached by the cell's
-// dotted key. Sort headers, the row `⋯` menu, skeleton + empty are the Table's.
 export const contactsLayout: LayoutNode = {
   component: 'Box',
   props: {},

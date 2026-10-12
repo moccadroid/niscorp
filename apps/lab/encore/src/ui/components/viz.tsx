@@ -2,18 +2,7 @@ import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { TONES, clamp01, classes, num, oneOf, rowsOf, text } from './props';
 import type { Props, Row } from './props';
 
-// THE FOUR DATA-DRIVEN PRIMITIVES. Each is handed plain rows plus the NAMES of
-// the keys that matter, and draws. None of them knows what it is drawing: the
-// timeline has rows of bars, not stages of sets; the map has rectangles with a
-// number from 0 to 1, not zones with a crowd. Which is what lets the next app
-// use them for a hospital's theatres or a port's berths without touching this
-// file.
-
-// ─── Timeline ────────────────────────────────────────────────
-// Flat bars, grouped here by `rowKey`, laid on one axis. `from`/`to`/`step` are
-// in the data's own unit; the axis prints tick / 60 when the step divides an
-// hour, because a number of minutes past midnight is not something anyone
-// reads — that is axis rendering, the chart's own business.
+// When the step divides an hour, ticks are taken as minutes past midnight and printed as the hour.
 const tickLabel = (tick: number, step: number): string => (step % 60 === 0 ? String(Math.floor(tick / 60) % 24).padStart(2, '0') : String(tick));
 
 export const Timeline: NovaComponent<Props> = ({ bars, idKey, rowKey, labelKey, startKey, endKey, toneKey, noteKey, from, to, step, highlight, empty }) => {
@@ -53,8 +42,6 @@ export const Timeline: NovaComponent<Props> = ({ bars, idKey, rowKey, labelKey, 
               const left = percent(num(bar[text(startKey)], start));
               const right = percent(num(bar[text(endKey)], start));
               const id = text(bar[text(idKey)]);
-              // A bar may arrive with a TONE and a note saying why — decided
-              // upstream, in the read. The timeline only knows tones exist.
               const tone = oneOf(bar[text(toneKey)], TONES, 'plain');
               const note = text(bar[text(noteKey)]);
               return (
@@ -75,10 +62,6 @@ export const Timeline: NovaComponent<Props> = ({ bars, idKey, rowKey, labelKey, 
   );
 };
 
-// ─── ZoneMap ─────────────────────────────────────────────────
-// Named rectangles on a `width` × `height` grid. `heatKey` names a 0–1 column
-// that fills them; with no heat key the plan is drawn bare. `focus` outlines
-// one by id.
 export const ZoneMap: NovaComponent<Props> = ({ zones, idKey, labelKey, heatKey, focus, width, height }) => {
   const list = rowsOf(zones);
   const gridWidth = num(width, 100);
@@ -113,10 +96,6 @@ export const ZoneMap: NovaComponent<Props> = ({ zones, idKey, labelKey, heatKey,
   );
 };
 
-// ─── BarChart ────────────────────────────────────────────────
-// `series` rows, one bar each; `highlight` marks the bar whose label equals it;
-// `behind` is a second series drawn as ghosts at the same labels, scaled
-// together so the comparison is honest.
 export const BarChart: NovaComponent<Props> = ({ series, labelKey, valueKey, highlight, behind, tone, unit }) => {
   const bars = rowsOf(series);
   const ghosts = rowsOf(behind);
@@ -158,16 +137,11 @@ export const BarChart: NovaComponent<Props> = ({ series, labelKey, valueKey, hig
   );
 };
 
-// ─── Gauge ───────────────────────────────────────────────────
-// value / max on a half-dial. `warnAt` (0–1) is where it turns to the warning
-// tone — a threshold is data, so the layout sets it.
 export const Gauge: NovaComponent<Props> = ({ value, max, label, warnAt }) => {
   const ceiling = Math.max(1e-9, num(max, 1));
   const amount = Math.max(0, num(value, 0));
   const fill = clamp01(amount / ceiling);
   const isHot = fill >= num(warnAt, 2);
-  // A semicircle of radius 40: its length is π·r, and the dash offset is the
-  // part of it left unfilled.
   const arc = Math.PI * 40;
   return (
     <div className="en-gauge">

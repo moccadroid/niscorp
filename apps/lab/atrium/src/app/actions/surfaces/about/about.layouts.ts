@@ -1,7 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The about page's two layouts. Both draw authored words and nothing else: no
-// ref, no binding a person could write through.
 export const aboutPageLayout: LayoutNode = {
   component: 'Box',
   props: { px: 20, py: 28 },

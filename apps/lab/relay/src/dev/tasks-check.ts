@@ -1,7 +1,3 @@
-// Tasks toolbar. Drives the Tasks screen headlessly to prove the toolbar now
-// matches the deals table: in-place search + sortable column headers (Vex's
-// reserved sortBy/sortDir → ORDER BY, same cached query). The body is the
-// reusable Table primitive. Run: pnpm --filter relay exec tsx src/dev/tasks-check.ts
 import { shell, runtime } from './check-shell';
 
 const settle = (ms = 200): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -40,7 +36,6 @@ const main = async (): Promise<void> => {
   checks.push([`body is one Table node (got ${countComponent('Table')})`, countComponent('Table') === 1]);
   checks.push([`default sort is due-date asc (got ${String(mainData()?.['sortBy'])} ${String(mainData()?.['sortDir'])})`, mainData()?.['sortBy'] === 'tasks.due_date' && mainData()?.['sortDir'] === 'asc']);
 
-  // Search filters in place.
   shell.dispatch({ type: 'ui:model', ref: 'search', payload: 'follow' });
   await settle(240);
   const searched = rows().length;
@@ -49,7 +44,6 @@ const main = async (): Promise<void> => {
   await settle(240);
   checks.push([`clearing the search restores all (got ${rows().length})`, rows().length === all]);
 
-  // Sort by title: asc vs desc must reverse the first row, same query.
   shell.dispatch({ type: 'ui:click', ref: 'sort', payload: { sortBy: 'tasks.title', sortDir: 'asc' } });
   await settle(240);
   const ascTitles = titles();

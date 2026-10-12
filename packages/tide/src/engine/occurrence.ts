@@ -1,27 +1,12 @@
 import { WEEKDAYS, isRecurring } from '../schemas';
 import type { Clock, ClockRecurring } from '../schemas';
 
-// ═══════════════════════════════════════════════════════════════
-// Occurrences — local calendar fields, never instants
-//
-// A DST boundary can move the INSTANT a key fires at; it cannot
-// mint a second key or lose one. `2026-03` exists exactly once
-// whatever the clock does, so the double-fire and the silent skip
-// are structurally impossible rather than carefully avoided — and
-// catch-up is decidable, because the missed keys are enumerable.
-//
-// Zero dependencies: timezone resolution rides the platform's own
-// IANA data through Intl.
-// ═══════════════════════════════════════════════════════════════
-
 export type LocalParts = { year: number; month: number; day: number; hour: number; minute: number; second: number };
 export type LocalDay = { year: number; month: number; day: number };
 export type Occurrence = { key: string; at: number };
 
 const HALF_DAY_MS = 43_200_000;
 const DAY_MS = 86_400_000;
-// Ten years of local days. A bound, not a policy: catch-up covers outages
-// and deliberate backfill is its own (deferred) verb.
 const MAX_DAYS_SCANNED = 3_700;
 
 const FORMATTERS = new Map<string, Intl.DateTimeFormat>();
@@ -76,14 +61,10 @@ const rendersAs = (instant: number, tz: string, day: LocalDay, hour: number, min
   );
 };
 
-// A local wall-clock time → the instant it names.
-//
-// The two edges are DECIDED, not discovered. Probing the offset half a day
-// either side is what surfaces both candidates across a transition; probing
-// at the guess alone finds only one, and silently returns the wrong side of
-// a fall-back. Ambiguous (fall back) → the FIRST occurrence. Erased (spring
-// forward) → shifted forward past the gap. Both match Temporal's
-// `disambiguation: 'compatible'`, so behaviour here is not tide's invention.
+// The offset is probed half a day either side: across a transition that
+// yields both candidates, where a probe at the guess alone finds one.
+// Ambiguous (fall back): the first occurrence. Erased (spring forward):
+// shifted forward past the gap. Both as Temporal's `disambiguation: 'compatible'`.
 export const zonedToUtc = (day: LocalDay, hour: number, minute: number, tz: string): number => {
   const guess = Date.UTC(day.year, day.month - 1, day.day, hour, minute);
   const before = offsetAt(guess - HALF_DAY_MS, tz);
@@ -115,9 +96,8 @@ const ordinalOf = (day: LocalDay): number => day.year * 10_000 + day.month * 100
 
 const pad2 = (value: number): string => String(value).padStart(2, '0');
 
-// Day-31 clamps to month end: February bills on the 28th, because
-// "skip February" is never what a billing rule means. A yearly Feb-29
-// clamps the same way, for the same reason.
+// Day 31 clamps to the month's end, and a yearly Feb 29 likewise: a billing
+// rule never means "skip February".
 const isDueOn = (clock: ClockRecurring, day: LocalDay): boolean => {
   if (clock.every === 'day') return true;
   if (clock.every === 'week') return weekdayOf(day) === clock.on;
@@ -136,8 +116,6 @@ export const occurrenceKey = (clock: ClockRecurring, day: LocalDay): string => {
   return `${day.year}-${pad2(day.month)}-${pad2(day.day)}`;
 };
 
-// Every occurrence in (after, through]. Half-open at the start so a
-// materialization watermark can advance without re-minting its own edge.
 export const occurrencesBetween = (clock: Clock, after: number, through: number, cap: number): Occurrence[] => {
   if (through <= after || cap <= 0) return [];
 

@@ -1,4 +1,3 @@
-// Run: pnpm --filter lyra exec tsx src/dev/course-check.ts
 import { CAST } from '@lyra/db/seed';
 import { areasFor } from '@lyra/app/nav/sections';
 import { app, asPrincipal, idFor, idsFor, login, ok, report, runtime, settle, treeOf } from './world';
@@ -11,17 +10,14 @@ const count = async (sql: string, params: unknown[] = []): Promise<number> => {
 const refused = (value: unknown): boolean =>
   value !== null && typeof value === 'object' && !Array.isArray(value) && typeof (value as { status?: unknown }).status === 'number';
 
-// ── a program is not a course ────────────────────────────────
 ok('a program has no dates to carry', (await count("SELECT count(*) n FROM information_schema.columns WHERE table_name = 'programs' AND column_name LIKE '%_on'")) === 0);
 ok('a course has both', (await count("SELECT count(*) n FROM information_schema.columns WHERE table_name = 'courses' AND column_name IN ('starts_on','ends_on')")) === 2);
 
-// ── bounded recurrence ───────────────────────────────────────
 const blockSessions = await count("SELECT count(*) n FROM class_sessions cs JOIN class_templates ct ON ct.id = cs.template_id WHERE ct.course_id = 'co_lumen_found'");
 ok('a block generates classes', blockSessions > 0, `${blockSessions} of them`);
 ok('...and none outside its dates', (await count("SELECT count(*) n FROM class_sessions cs JOIN class_templates ct ON ct.id = cs.template_id WHERE ct.course_id = 'co_lumen_found' AND (cs.held_on < ct.starts_on OR cs.held_on > ct.ends_on)")) === 0);
 ok('...while an ongoing class keeps running', (await count("SELECT count(*) n FROM class_sessions WHERE template_id = 'ct_l_mon_am' AND held_on > studio_today('st_lumen')")) > 0, 'both NULL is unbounded, which is the default');
 
-// ── the manager's screen ─────────────────────────────────────
 const owner = await login(CAST.lumen.owner);
 await settle(8);
 const offered = areasFor(await idsFor(CAST.lumen.owner)).flatMap((a) => a.items.map((i) => i.action));
@@ -35,7 +31,6 @@ ok('...and courses are ON it, beside the weekly classes', tree.includes('"is_cou
 ok('...with the dates that make it a block', tree.includes('runs_display'));
 ok('...and a way to see who is on it', tree.includes('"ref":"roster"'), 'offered on course rows only — showKey: is_course');
 
-// ── creating one ─────────────────────────────────────────────
 const before = await count("SELECT count(*) n FROM courses WHERE studio_id = 'st_lumen'");
 owner.dispatch({ type: 'ui:click', ref: 'addCourse' });
 await settle();
@@ -48,10 +43,6 @@ owner.dispatch({ type: 'ui:model', ref: 'capacity', payload: 10 });
 owner.dispatch({ type: 'ui:model', ref: 'priceCents', payload: 14000 });
 await settle();
 
-// Untick the default days and try anyway — headless dispatch does not look at
-// disabled buttons, which is the point: the create request's FINGERPRINT
-// resolves to a sentinel nothing answers, so the refusal is the wire's, not
-// the button's. A course with no days must be uncreatable from any direction.
 owner.dispatch({ type: 'ui:click', ref: 'mon', payload: { next: false } });
 owner.dispatch({ type: 'ui:click', ref: 'wed', payload: { next: false } });
 await settle();
@@ -67,9 +58,6 @@ await settle(14);
 
 ok('a course can be created', (await count("SELECT count(*) n FROM courses WHERE studio_id = 'st_lumen'")) === before + 1);
 ok('...with its dates and size', (await count("SELECT count(*) n FROM courses WHERE name = 'Winter beginners' AND capacity = 10 AND starts_on = '2026-11-02'")) === 1);
-// AND ITS PRICE IN THE ONE CATALOGUE. A block used to carry price_cents, which
-// made `courses` a second price list nothing else read. The join is the claim
-// that creating a block writes a catalogue row and points the block at it.
 ok(
   '...and its price is a catalogue row, not a column of its own',
   (await count("SELECT count(*) n FROM courses c JOIN offerings o ON o.id = c.offering_id WHERE c.name = 'Winter beginners' AND o.kind = 'course' AND o.price_cents = 14000")) === 1,
@@ -109,14 +97,12 @@ ok('no course exists without days to meet on', Number((daysless.rows[0] as { n: 
 ok('...stamped with this studio by the engine', (await count("SELECT count(*) n FROM courses WHERE name = 'Winter beginners' AND studio_id = 'st_lumen'")) === 1, 'no form carries a studio id');
 ok('...and the list shows it', treeOf(owner).includes('"name":"Winter beginners"'), 'asserted on the ROW, not the form field');
 
-// ── the cohort ───────────────────────────────────────────────
 owner.dispatch({ type: 'ui:click', ref: 'roster', payload: { course_id: 'co_lumen_found', name: 'Foundations — autumn block' } });
 await settle(12);
 tree = treeOf(owner);
 ok('a course has a roster', tree.includes('Everybody who holds a place on this block'));
 ok('...naming who is on it', tree.includes('Jonas Weber'), 'the cohort — what six separate bookings could not have told a studio');
 
-// ── a member joins ───────────────────────────────────────────
 const member = await login(CAST.lumen.member);
 await settle(10);
 const bookingsBefore = await count("SELECT count(*) n FROM bookings WHERE person_id = 'p_ava' AND status = 'booked'");
@@ -130,14 +116,12 @@ ok('...which fanned out into the block’s classes', bookingsAfter > bookingsBef
 ok('...as ORDINARY bookings', (await count("SELECT count(*) n FROM bookings b JOIN class_sessions cs ON cs.id = b.session_id JOIN class_templates ct ON ct.id = cs.template_id WHERE ct.course_id = 'co_lumen_found' AND b.person_id = 'p_ava'")) > 0, 'the desk’s roster needs to know nothing about courses');
 ok('...and the counter cache followed', (await count("SELECT enrolled_count n FROM courses WHERE id = 'co_lumen_found'")) === 2);
 
-// ── capacity is the COURSE's ─────────────────────────────────
 await runtime.db.query("UPDATE courses SET capacity = 2 WHERE id = 'co_lumen_found'");
 const third = await asPrincipal(CAST.lumen.instructor, '/api/me/vex', { fingerprint: 'me/join-course', context: { courseId: 'co_lumen_found' } });
 ok('a full course refuses the next person', refused(third), JSON.stringify(third).slice(0, 90));
 ok('...and nobody was half-enrolled', (await count("SELECT count(*) n FROM enrolments WHERE course_id = 'co_lumen_found' AND status = 'enrolled'")) === 2, 'the check is in the database, so there is no race to lose');
 await runtime.db.query("UPDATE courses SET capacity = 12 WHERE id = 'co_lumen_found'");
 
-// ── joining twice, and leaving ───────────────────────────────
 const twice = await asPrincipal(CAST.lumen.member, '/api/me/vex', { fingerprint: 'me/join-course', context: { courseId: 'co_lumen_found' } });
 ok('a member cannot join the same course twice', refused(twice), JSON.stringify(twice).slice(0, 90));
 
@@ -150,7 +134,6 @@ ok('withdrawing releases the enrolment', (await count("SELECT count(*) n FROM en
 ok('...and frees the seats', (await count("SELECT count(*) n FROM bookings b JOIN class_sessions cs ON cs.id = b.session_id JOIN class_templates ct ON ct.id = cs.template_id WHERE ct.course_id = 'co_lumen_found' AND b.person_id = 'p_ava' AND b.status = 'booked' AND cs.held_on >= studio_today('st_lumen')")) === 0, 'seats held by somebody who left is how a studio finds out by counting chairs');
 ok('...and the counter followed back down', (await count("SELECT enrolled_count n FROM courses WHERE id = 'co_lumen_found'")) === 1);
 
-// ── who may decide what a block IS ───────────────────────────
 const deskWrite = await asPrincipal(CAST.lumen.desk, '/api/schedule/vex', {
   fingerprint: 'courses/update',
   context: { courseId: 'co_lumen_found', programId: 'pr_beginners', name: 'Free', blurb: '', startsOn: '2026-01-01', endsOn: '2026-02-01', capacity: 999, priceCents: 0 },
@@ -167,7 +150,6 @@ ok('...and no row crossed', (await count("SELECT count(*) n FROM enrolments WHER
 
 void member;
 
-// ── the desk, at the counter ─────────────────────────────────
 const desk = await login(CAST.lumen.desk);
 await settle(10);
 desk.dispatch({ type: 'ui:click', ref: 'nav', payload: 'people.list' });

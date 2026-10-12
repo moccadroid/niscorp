@@ -1,5 +1,3 @@
-// What a person holds: a standing right to attend, and the terms they were
-// sold — stamped once, kept in one unit, and never written by a screen.
 export const SUBSCRIPTIONS_DDL = /* sql */ `
   -- A subscription is an ENTITLEMENT — a person's standing right to attend —
   -- and it hangs off the person directly. No UNIQUE on (studio, person):

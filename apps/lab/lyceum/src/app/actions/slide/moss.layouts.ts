@@ -1,8 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// THE MOSS AND CHARTER SECTION'S LAYOUTS: the server that runs each person's
-// screen, and the one file that decides what each person has.
-
 const cell = (area: string, children: LayoutNode[], props: Record<string, unknown> = {}): LayoutNode => ({
   component: 'Cell',
   props: { area, ...props },
@@ -12,7 +9,6 @@ const cell = (area: string, children: LayoutNode[], props: Record<string, unknow
 const label = (words: string): LayoutNode => ({ component: 'Label', children: words });
 const headline = (level: 'display' | 'title' | 'name', words: string): LayoutNode => ({ component: 'Headline', props: { level }, children: words });
 
-// A claim, and beside it one thing for the room to do or to see.
 export const claimLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['kick side', 'head side'], cols: [1.4, 1], rows: ['auto', 1] },
@@ -23,7 +19,6 @@ export const claimLayout: LayoutNode = {
   ],
 };
 
-// Two things side by side, each a name and a line: the usual way, and this one.
 export const pairLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head head', 'one two'], rows: ['auto', 1] },
@@ -34,7 +29,6 @@ export const pairLayout: LayoutNode = {
   ],
 };
 
-// Three places, side by side: one word each.
 export const placesLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head head head', 'one two three'], rows: ['auto', 1] },
@@ -44,7 +38,6 @@ export const placesLayout: LayoutNode = {
   ],
 };
 
-// The button, given to a few: the claim, and beside it who pressed — live.
 export const buttonLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head pressed'], cols: [1.25, 1] },

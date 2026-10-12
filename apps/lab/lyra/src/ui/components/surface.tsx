@@ -3,8 +3,6 @@ import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { COLOR, SIZE, TONE, WEIGHT, toneToken } from '../lib/tokens';
 import { displayText } from '../lib/display';
 
-// The things that hold other things and say something by doing so.
-
 const CardProps = z.object({ pad: z.number().optional(), tone: toneToken, raised: z.boolean().optional(), flush: z.boolean().optional() }).strict();
 type CardP = z.infer<typeof CardProps> & { children?: React.ReactNode };
 

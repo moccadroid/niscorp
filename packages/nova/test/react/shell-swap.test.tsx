@@ -7,17 +7,6 @@ import { createShell, type Shell } from '@shell';
 import type { NovaComponent } from '@react';
 import { NovaShellProvider, useShellState } from '@react';
 
-// ═══════════════════════════════════════════════════════════
-// Shell-swap and provider-lifecycle tests.
-//
-// Contracts verified:
-//   1. Changing the `shell` prop on <NovaShellProvider> causes
-//      hooks to resubscribe to the new shell.
-//   2. Unmounting the provider stops subscriptions cleanly.
-//   3. The provider NEVER calls shell.dispose() — the consumer
-//      owns the shell's lifecycle.
-// ═══════════════════════════════════════════════════════════
-
 type Rig = {
   shell: Shell;
   registry: ReturnType<typeof createComponentRegistry<NovaComponent>>;
@@ -70,7 +59,6 @@ describe('<NovaShellProvider> shell-swap and lifecycle', () => {
     });
     expect(screen.getByTestId('active').textContent).toBe('bar');
 
-    // Changes on the old shell must NOT affect the rendered DOM.
     await act(async () => {
       rigA.shell.push('main', 'foo');
       await Promise.resolve();
@@ -99,8 +87,6 @@ describe('<NovaShellProvider> shell-swap and lifecycle', () => {
 
     unmount();
 
-    // After unmount, the still-alive shell must remain functional
-    // and driving it must not throw or log errors.
     expect(() => rig.shell.push('main', 'foo')).not.toThrow();
     expect(rig.shell.getCanvasState('main').stack.length).toBeGreaterThan(0);
 
@@ -132,7 +118,6 @@ describe('<NovaShellProvider> shell-swap and lifecycle', () => {
     expect(disposeA).not.toHaveBeenCalled();
     expect(disposeB).not.toHaveBeenCalled();
 
-    // The original shells remain fully usable.
     await act(async () => {
       rigA.shell.push('main', 'foo');
       rigB.shell.push('main', 'bar');

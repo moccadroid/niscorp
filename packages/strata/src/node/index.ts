@@ -6,24 +6,6 @@ import type { GrammarSchema } from '../check';
 import { changedStrings, planSourceUpgrade, renderReport, verifySourceUpgrade, type SourceDocument, type SourcePlan } from '../upgrade';
 import { StrataError } from '../errors';
 
-// ═══════════════════════════════════════════════════════════════
-// @niscorp/strata/node — `strata upgrade` for an app's source.
-//
-// An app runs this from a script of its own (it knows how to list its
-// artifacts; strata does not), e.g. `src/dev/strata.ts`:
-//
-//   process.exit(await runSourceUpgrade({ root, grammars, transform, documents }, process.argv.slice(2)));
-//
-//   status [--check]  where the source stands against the installed grammars
-//   init              record that the source is written at the CURRENT grammars
-//   upgrade           plan: expected JSON + REPORT.md in .strata/upgrade/
-//   verify            the edited source against the plan; moves the lock
-//
-// The lock — strata.lock.json, committed — is the source's stamp: which
-// version of every grammar its artifacts are written in. It moves only when
-// verify passes.
-// ═══════════════════════════════════════════════════════════════
-
 export type SourceUpgradeOptions = {
   root: string;
   grammars: readonly Sequence[];
@@ -32,7 +14,6 @@ export type SourceUpgradeOptions = {
   schemas?: Readonly<Record<string, GrammarSchema>>;
   lock?: string;
   workDir?: string;
-  // Where to look for the file an artifact is written in (default "src").
   sources?: string;
   log?: (line: string) => void;
 };
@@ -55,8 +36,7 @@ export const runSourceUpgrade = async (options: SourceUpgradeOptions, argv: read
   const command = argv.find((a) => !a.startsWith('-')) ?? 'status';
   const lockPath = join(options.root, options.lock ?? 'strata.lock.json');
   const work = join(options.root, options.workDir ?? join('.strata', 'upgrade'));
-  // POSIX separators on every platform: these paths land in REPORT.md,
-  // plan.json and the log, which agents and committed tooling read.
+  // POSIX separators on every platform: these paths land in REPORT.md, plan.json and the log.
   const rel = (path: string): string => relative(options.root, path).split(sep).join('/');
 
   const upgrader = await createUpgrader(options.grammars, { transform: options.transform });
@@ -81,7 +61,7 @@ export const runSourceUpgrade = async (options: SourceUpgradeOptions, argv: read
       return undefined;
     };
     return (await options.documents()).map((d) => {
-      // Pure JSON, as it would be stored: no undefined, no functions.
+      // As it would be stored: no undefined, no functions.
       const document: unknown = JSON.parse(JSON.stringify(d.document));
       const file = d.file ?? fileOf(d.id);
       return { kind: d.kind, id: d.id, document, ...(file === undefined ? {} : { file }) };
@@ -138,7 +118,6 @@ export const runSourceUpgrade = async (options: SourceUpgradeOptions, argv: read
       ...(options.schemas === undefined ? {} : { schemas: options.schemas }),
       describe: (ref) => descriptions.get(ref) ?? '(no description)',
     });
-    // Where each change is written: the files holding the values it rewrites.
     const text = sourceText();
     const byKey = new Map(documents.map((d) => [`${d.kind}:${d.id}`, d]));
     const plan: SourcePlan = {
@@ -179,7 +158,6 @@ export const runSourceUpgrade = async (options: SourceUpgradeOptions, argv: read
       log(`[fail] ${rel(planPath)} is not a plan — run: strata upgrade`);
       return 1;
     }
-    // The plan was made by strata and read back as it wrote it.
     const plan: SourcePlan = {
       from: Object.fromEntries(Object.entries(raw['from']).map(([k, v]) => [k, Number(v)])),
       to: Object.fromEntries(Object.entries(raw['to']).map(([k, v]) => [k, Number(v)])),

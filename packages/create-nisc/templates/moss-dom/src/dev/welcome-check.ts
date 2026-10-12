@@ -2,11 +2,6 @@ import { renderDocument } from '@niscorp/moss';
 import { boot } from '../server/boot';
 import { drawing } from '../server/document';
 
-// The welcome screen, end to end with no browser: the real server boots, the
-// screen is served to nobody in particular, the page is drawn on the server,
-// and a press reaches the shell. One `[pass]`/`[fail]` line per assertion; any
-// failure exits non-zero (AGENTS.md, "Verification").
-
 let failures = 0;
 const check = (name: string, passed: boolean, detail = ''): void => {
   console.log(`${passed ? '[pass]' : '[fail]'} ${name}${!passed && detail !== '' ? ` — ${detail}` : ''}`);

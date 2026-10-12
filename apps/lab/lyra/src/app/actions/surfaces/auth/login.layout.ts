@@ -9,8 +9,6 @@ export const loginLayout: LayoutNode = {
       props: { eyebrow: 'Lyra', title: 'Sign in', lead: 'We will email you a link. No password to remember, and none to lose.' },
     },
 
-    // Sent, or asking. Two shapes of one surface, so nothing navigates and
-    // the address stays on screen behind the confirmation.
     {
       if: '$.sent',
       then: {
@@ -37,7 +35,6 @@ export const loginLayout: LayoutNode = {
       },
     },
 
-    // ── the lab's inbox ──
     { if: '$.people.length', then: { component: 'Rule', props: { my: 4 } }, else: '' },
     {
       if: '$.people.length',

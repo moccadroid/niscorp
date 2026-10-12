@@ -4,9 +4,7 @@ import { fieldStyle } from './styles.js';
 const comboListStyle: CSSProperties = { position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, marginTop: 2, maxHeight: 200, overflowY: 'auto', background: '#fff', border: '1px solid #d1d5db', borderRadius: 6, boxShadow: '0 6px 16px rgba(0,0,0,0.12)' };
 const comboItemStyle: CSSProperties = { padding: '6px 10px', fontSize: 13, cursor: 'pointer', fontFamily: 'ui-monospace, Menlo, monospace' };
 
-// A combobox: shows all options on focus, filters as you type, commits a pick on
-// mousedown (before the input blurs). Replaces <datalist>, which shows only the
-// exact match once a value is set.
+// Not a <datalist>: that shows only the exact match once a value is set.
 export const Combo: FC<{
   value: string;
   placeholder?: string;

@@ -1,14 +1,5 @@
 import type { CacheEntry } from './index';
 
-// ═══════════════════════════════════════════════════════════════
-// THE DEPLOYMENT'S WORDS, as entries. The `phrases` table is release
-// vocabulary — translations of the application's own sentences, identical for
-// every reader of a language and owned by no tenant — so these reads are
-// context-driven and unscoped, granted on `base` because every shell needs its
-// book to greet somebody. What they replace is `BY_LOCALE`: every phrase for
-// every language, resident, so a synchronous seam could answer.
-// ═══════════════════════════════════════════════════════════════
-
 export const phrasesBook: CacheEntry = {
   fingerprint: 'phrases/book',
   intent: "One language's words: source sentence in, translated sentence out — the book a shell wears, read when the shell is built",
@@ -17,10 +8,8 @@ export const phrasesBook: CacheEntry = {
     from: ['phrases'],
     fields: ['phrases.source', 'phrases.text'],
     filter: { eq: ['phrases.locale', { $context: 'locale' }] },
-    // The whole book, explicitly: a language is ~500 sentences today and the
-    // engine's default page would serve a translated shell a partial
-    // vocabulary — which reads as UNTRANSLATED, the one failure this entry
-    // exists to prevent.
+    // The whole book: the engine's default page would serve a translated shell
+    // a partial vocabulary.
     limit: 10000,
   },
   mapping: {
@@ -49,12 +38,8 @@ export const phrasesLocales: CacheEntry = {
   },
 };
 
-// An approved integration ships a phrasebook with its bundle, `(language, source,
-// text)` like the app's own. Approved is the bar, not installed: words are
-// harmless where the screens are absent, and a book that changed per studio
-// would put the tenant back into a language fact. The FOLD ORDER lives in the
-// one consumer (`bookOverWire`): integration words first, the app's own over them, so
-// an integration can never rename a word the host already owns.
+// Approved, not installed: a language's book must not differ per studio
+// (`bookOverWire` holds one per language for every tenant).
 export const phrasesIntegrations: CacheEntry = {
   fingerprint: 'phrases/integrations',
   intent: "Approved integrations' words for one language — folded under the app's own book",

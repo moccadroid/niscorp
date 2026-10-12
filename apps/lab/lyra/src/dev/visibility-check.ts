@@ -1,4 +1,3 @@
-// Run: pnpm --filter lyra exec tsx src/dev/visibility-check.ts
 import { CAST } from '@lyra/db/seed';
 import { areasFor } from '@lyra/app/nav/sections';
 import { app, asPrincipal, idFor, idsFor, ok, report, runtime } from './world';
@@ -14,12 +13,8 @@ const sessionId = String(busiest.rows[0]?.session_id ?? '');
 const booked = Number(busiest.rows[0]?.n ?? -1);
 ok('the seed has a class worth looking at', booked > 1, `${booked} people in it`);
 
-// ── the owner ────────────────────────────────────────────────
 const detail = (await read(CAST.lumen.owner, 'session/detail', { sessionId })) as Record<string, unknown>;
 ok('an owner can ask about one class', typeof detail['name'] === 'string' && detail['name'] !== '', String(detail['name']));
-// A number, a word, a number — in whatever language the studio reads. The
-// figure now travels as a counted PATTERN and fills at the glass, so the
-// assertion fills it the same way before asking.
 ok('...and is told how full it is', /\d+\s+\p{L}+\s+\d+/u.test(String(fillPhrase(detail['booked_display']) ?? '')), String(fillPhrase(detail['booked_display'])));
 
 const attending = (await read(CAST.lumen.owner, 'session/attending', { sessionId })) as unknown[];
@@ -53,11 +48,9 @@ const withQueue = (await read(CAST.lumen.owner, 'session/attending', { sessionId
 ok('...and the owner sees them waiting, not missing', withQueue.some((r) => r.place_label === 'Waiting'), `${withQueue.length} holding a place, ${withQueue.filter((r) => r.place_label === 'Waiting').length} of them waiting`);
 ok('...with the confirmed places still first', withQueue[0]?.place_label === 'Booked', withQueue.map((r) => r.place_label).join(', '));
 
-// ── a destination, not just a grant ──────────────────────────
 ok('the owner holds the screen it lives on', (await idsFor(CAST.lumen.owner)).includes('schedule.session'));
 ok('...and reaches it from the timetable, which is in their menu', areasFor(await idsFor(CAST.lumen.owner)).some((a) => a.items.some((i) => i.action === 'schedule.timetable')));
 
-// ── the same fault, one rung down ────────────────────────────
 const teacher = await idsFor(CAST.lumen.instructor);
 ok('a teacher who trains here holds the membership screen', teacher.includes('me.membership'));
 ok(

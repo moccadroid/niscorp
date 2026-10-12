@@ -2,24 +2,6 @@ import type { Sequence } from '@niscorp/strata';
 import { ActionDefinitionSchema, ActionFragmentSchema } from '../action/schemas';
 import { LayoutNodeSchema } from '../layout/schemas';
 
-// ═══════════════════════════════════════════════════════════════
-// nova's grammar, as a strata sequence — @niscorp/nova/migrations.
-//
-// The documents nova defines (actions, fragments, layouts) and where each holds
-// other documents. A stored or submitted nova document carries a stamp naming
-// how far along this sequence its writer was; strata runs what it has not seen.
-//
-// THE EMBEDDINGS are the grammar's shape, not a migration's business: every
-// place a layout nests a layout (a lone child, an array of them, a branch, a
-// loop body), and every place an action holds another grammar's document (its
-// endpoints' request and response are Prism configs). With them, a migration
-// rewrites ONE flat node and strata finds every node at every depth.
-//
-// Version 0 is the grammar as it stood when strata arrived. HISTORY: migrations
-// are appended, never edited — a change to ActionDefinitionSchema or the layout
-// schemas that older documents would fail is a migration here.
-// ═══════════════════════════════════════════════════════════════
-
 const actionEmbeds = {
   layout: 'nisc.nova/layout',
   'endpoints.*.request': 'nisc.prism/config',
@@ -43,23 +25,18 @@ export const NOVA_SEQUENCE: Sequence = {
   },
   migrations: [
     {
-      // A MARKER: an addition, so no stored action needs rewriting — but a
-      // reader at 0 must refuse an action that uses it.
+      // No steps: an addition rewrites no stored action, but a reader at 0 must
+      // refuse an action that uses it.
       description: 'The `reconcile` step: make a canvas hold exactly the actions a list in the action\'s data names',
       steps: [],
     },
     {
-      // A MARKER: an addition. An endpoint may say how long its reply may take.
       description: 'The endpoint `timeoutMs`: how long to wait for the reply before the call fails',
       steps: [],
     },
   ],
 };
 
-// ── the schemas behind the kinds ────────────────────────────────
-//
-// What each nova kind means today — read by the grammar check, which snapshots
-// them and fails when one changes without a migration in NOVA_SEQUENCE.
 export const NOVA_SCHEMAS = {
   'nisc.nova/action': ActionDefinitionSchema,
   'nisc.nova/fragment': ActionFragmentSchema,

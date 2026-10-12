@@ -1,11 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// The default kit's stylesheet — a self-contained, legible neutral look, so
-// the terminal reads the same regardless of the host app's CSS. Layout comes
-// from the inline styles the components set (props.ts); this only supplies the
-// base scheme, form-control chrome, and table lines. Scoped to
-// `.nova-dom-root`, which the target stamps on the mount element.
-// ═══════════════════════════════════════════════════════════
-
 export const ROOT_CLASS = 'nova-dom-root';
 
 export const DEFAULT_CSS = `

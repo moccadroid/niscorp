@@ -1,12 +1,6 @@
 import type { FC } from 'react';
 import { INK, MONO } from '@showroom/chrome/stage/ui';
 
-// ═══════════════════════════════════════════════════════════
-// Prism's small shared parts on the stage language: a light JSON block, a
-// one-line description of a value's shape, and the operators a config uses.
-// Presentation only — evaluation is prism-view.tsx's job.
-// ═══════════════════════════════════════════════════════════
-
 export const Block: FC<{ children: string; tone?: 'plain' | 'ok' | 'bad'; maxHeight?: number }> = ({ children, tone = 'plain', maxHeight = 380 }) => (
   <pre
     style={{
@@ -31,7 +25,6 @@ export const Block: FC<{ children: string; tone?: 'plain' | 'ok' | 'bad'; maxHei
 
 export const json = (v: unknown): string => JSON.stringify(v, null, 2) ?? String(v);
 
-// "3 items", "4 keys", "text", "number" — what a value is, in two words.
 export const shapeOf = (v: unknown): string => {
   if (Array.isArray(v)) return `list · ${v.length} item${v.length === 1 ? '' : 's'}`;
   if (v === null) return 'null';
@@ -43,7 +36,6 @@ export const shapeOf = (v: unknown): string => {
   return typeof v;
 };
 
-// Every `$op` key a config uses, in first-seen order.
 export const opsOf = (config: unknown): string[] => {
   const seen = new Set<string>();
   const walk = (node: unknown): void => {

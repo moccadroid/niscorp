@@ -1,23 +1,3 @@
-// The REVIEWER under the same microscope as the builder. It is a pure
-// judge — { intent, action, report } in, verdict out — so it can be scored
-// like an exam:
-//
-//   GOOD screens (today's verified artifacts) → zero blockers expected.
-//     Every blocker raised on a good screen is a FALSE ALARM, and a false
-//     alarm is not free: the pipeline burns its one repair round on it.
-//   SABOTAGED screens → a blocker expected, every time. Each sabotage is a
-//     defect the harness CANNOT catch — only a reader can:
-//       wrongPush   row click opens a different (valid) screen than asked
-//       dropColumn  a column the intent names is silently gone
-//       lyingLabel  a column's header names one field, the cell shows another
-//     Every miss is the reviewer asleep on the job.
-//
-//   pnpm --filter relay exec tsx src/dev/validator-suite.ts
-//
-// Fixtures come from the newest architect-suite artifacts on disk, paired
-// with their intents. Reports are REAL harness runs of each (mutated)
-// definition — mutations are chosen to stay harness-clean, so the reviewer
-// faces exactly what it faces in production: a screen that mounts fine.
 import { mkdirSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { shell, runtime } from './check-shell';
@@ -37,28 +17,22 @@ const SUITE_DIR =
 
 type Action = Record<string, unknown>;
 
-// Fixtures are built IN THIS PROCESS: an artifact from an earlier run points
-// at fingerprints that died with that run's in-memory database, so its mounts
-// fail here and the reviewer — correctly — blocks a screen that loads
-// nothing. (The first version of this suite fed it exactly those corpses and
-// scored the smell test as 8 false alarms.) Building fresh costs a few
-// architect runs and makes every mount real.
+// Fixtures are built in this process: an artifact from an earlier run points
+// at fingerprints that died with that run's in-memory database.
 const FIXTURE_IDS = ['top10', 'wonlost', 'feed'] as const;
 
-// ── sabotage, as JSON surgery. Each returns null when its anchor is absent.
 const clone = (a: Action): Action => JSON.parse(JSON.stringify(a)) as Action;
 
 const wrongPush = (a: Action): Action | null => {
   const s = JSON.stringify(a);
   if (!s.includes('"push"')) return null;
-  // Point the row click at a different, still-valid catalog screen.
   const swapped = s
     .replace(/"action":\s*"crm\.deal\.view"/, '"action": "crm.companies"')
     .replace(/"action":\s*"crm\.company\.view"/, '"action": "crm.deals"');
   if (swapped === s) return null;
   const out = JSON.parse(swapped) as Action;
-  // A different target may take different input keys — drop the seeded input
-  // so the sabotage stays harness-clean (audit checks input contracts).
+  // A different target may take different input keys: the seeded input is
+  // dropped so the sabotage passes the audit's input-contract check.
   const drop = (node: unknown): void => {
     if (Array.isArray(node)) { node.forEach(drop); return; }
     if (node === null || typeof node !== 'object') return;
@@ -94,7 +68,6 @@ const lyingLabel = (a: Action): Action | null => {
   findTables(out['layout'], (props) => {
     const cols = props['columns'] as { label?: string; cell?: { key?: string } }[] | undefined;
     if (!done && Array.isArray(cols) && cols.length >= 2 && cols[0]?.cell?.key !== undefined && cols[1]?.cell?.key !== undefined) {
-      // Column 0 keeps its label but shows column 1's field.
       cols[0].cell.key = cols[1].cell.key ?? '';
       done = true;
     }
@@ -131,7 +104,6 @@ const main = async (): Promise<void> => {
     const cases: [string, Action | null][] = [['good', fx.action], ...Object.entries(MUTATIONS).map(([k, m]): [string, Action | null] => [k, m(fx.action)])];
     for (const [label, action] of cases) {
       if (action === null) continue;
-      // The REAL report for THIS variant — the reviewer sees what prod shows it.
       const report = await runAction(ray, action);
       if (label !== 'good' && !report.ok) { put({ fx: fx.id, label, skipped: 'sabotage not harness-clean', issues: report.issues }); continue; }
       const res = await validatorAgent.run(

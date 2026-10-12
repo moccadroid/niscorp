@@ -7,10 +7,9 @@ import { handleDiscovery, handleQuery, handleFingerprintPatch, handleFingerprint
 import type { WriteEvent, ExecuteRecord, VexLive } from '../../handler.js';
 import type { QueryResponse } from '../../schemas/request.schema.js';
 
-// A request made IN-PROCESS may carry a follower in hono's env — the third
-// argument of `app.request(url, init, env)` — under this key. A request off
-// the network never can: its env is the runtime's (node's sockets, a
-// worker's bindings), so nothing a client sends reaches it. See `VexLive`.
+// A request made in-process may carry a follower under this key in hono's env
+// (`app.request(url, init, env)`). One off the network cannot: its env is the
+// runtime's, which nothing a client sends reaches.
 export const VEX_LIVE_ENV = 'vexLive';
 
 const liveOf = (env: unknown): VexLive | undefined => {
@@ -22,61 +21,35 @@ const liveOf = (env: unknown): VexLive | undefined => {
   return { signal, onChange: (response: QueryResponse) => void Reflect.apply(onChange, undefined, [response]) };
 };
 
-// Generic over the hono Env so a host that mounts this under its own app
-// (with typed context variables — e.g. the resolved principal) reads them
-// in `getScope`/`getPolicy` without casts.
 export type VexHonoConfig<E extends Env = Env> = {
   engine: QueryEngine;
   entities?: string[];
-  // Replay-only posture: no generation, no fingerprint management.
-  // (Writes are unaffected — mutation replay is always replay-only.)
   locked?: boolean;
   getScope?: (c: Context<E>) => Promise<ScopeValues> | ScopeValues;
-  // Per-request ScopePolicy — a host that resolves policy per principal
-  // (e.g. compiled from an ACL layer at login) returns it here; it governs
-  // reads, mutation replay AND discovery on this endpoint. Absent (or
-  // returning undefined), the engine default and `mutations.policy` apply.
   getPolicy?: (c: Context<E>) => Promise<ScopePolicy | undefined> | ScopePolicy | undefined;
-  // The same principal's policy at a reach an entry demands — see
-  // `OkCacheEntry.reach`. Bound per request, because the principal is.
   getPolicyForReach?: (c: Context<E>, reach: string) => Promise<ScopePolicy | undefined> | ScopePolicy | undefined;
-  // Enables replay of `kind: 'mutation'` cache entries on this endpoint.
-  // `policy` is the static fallback when `getPolicy` is absent; at least
-  // one of the two must supply a policy for writes to run.
-  // `onWrite` is the handler's write observer, passed through verbatim —
-  // fired after a successful commit with per-statement writes and scope.
   mutations?: {
     client: MutationClient;
     policy?: ScopePolicy;
     onWrite?: (event: WriteEvent) => void;
   };
-  // The execution observer, passed through verbatim — fired once per query or
-  // mutation with vex-vocabulary facts. See `VexHandlerConfig.onExecute`.
   onExecute?: (record: ExecuteRecord) => void;
 };
 
-// Fingerprints may contain '/' (named slots like "deals/table"), so
-// management rides the request BODY, not the path.
+// A fingerprint may contain '/' (a named slot such as "deals/table"), so it
+// travels in the request body, not the path.
 const fingerprintFromBody = (body: unknown): string | undefined => {
   if (body === null || typeof body !== 'object') return undefined;
   const fp = (body as Record<string, unknown>)['fingerprint'];
   return typeof fp === 'string' && fp.length > 0 ? fp : undefined;
 };
 
-// A body that is not JSON is the request's mistake, not the server's: it is
-// answered 400 in the surface's own error shape instead of thrown out of the
-// route. The content type is never read: JSON sent as text/plain (what `fetch`
-// sends for a string body) parses as it always has.
 const NOT_JSON = { error: 'invalid_request', message: 'Body must be JSON' };
 
 export const vex = <E extends Env = Env>(config: VexHonoConfig<E>): Hono<E> => {
   const app = new Hono<E>();
-  // The body is read through hono's own `c.req.json()`, as it always was — so
-  // a host middleware that read it first still shares hono's cache with this
-  // adapter (before hono 4.2 that cache was kept per reader; reading the body
-  // any other way here answered 500 to a valid request behind one). Only the
-  // parse failing is caught: a body that cannot be read at all — consumed
-  // outside hono, a stream that broke — is still a fault and still throws.
+  // Read through hono's own `c.req.json()`, which shares hono's body cache with
+  // a host middleware that read the body first.
   const jsonBodyOf = async (c: Context<E>): Promise<{ parsed: true; body: unknown } | { parsed: false }> => {
     try {
       const body: unknown = await c.req.json();
@@ -86,8 +59,6 @@ export const vex = <E extends Env = Env>(config: VexHonoConfig<E>): Hono<E> => {
       throw err;
     }
   };
-  // The per-request policy (when configured) overrides everything policy-
-  // shaped: reads (scopePolicy), writes (mutations.policy) and discovery.
   const requestConfig = async (c: Context<E>) => {
     const policy = config.getPolicy ? await config.getPolicy(c) : undefined;
     const mutationPolicy = policy ?? config.mutations?.policy;
@@ -111,8 +82,8 @@ export const vex = <E extends Env = Env>(config: VexHonoConfig<E>): Hono<E> => {
         : {}),
     };
   };
-  // Fingerprint management carries no per-request policy — it is refused
-  // under `locked` and is an operator surface, not a principal one.
+  // Fingerprint management is an operator's surface, not a principal's: it
+  // carries no per-request policy.
   const handlerConfig = {
     engine: config.engine,
     entities: config.entities,

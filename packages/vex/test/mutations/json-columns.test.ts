@@ -4,12 +4,9 @@ import type { MutationClient } from '../../src/mutations/engine.js';
 import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
 import type { ScopePolicy } from '../../src/scope/scope.types.js';
 
-// A value written into a json/jsonb column binds as its JSON TEXT. Handed a JS
-// array, the pg driver writes a postgres ARRAY literal: `[]` arrives as '{}',
-// which jsonb reads as an empty OBJECT, and a list of rows becomes a map. PGlite
-// binds it the way you would expect, so nothing on PGlite shows it — found in
-// production (lyceum's assistant turns, whose `opened` list came back an
-// object). The bound parameters are what this checks.
+// Handed a JS array, the pg driver writes a postgres ARRAY literal: `[]` arrives
+// as '{}', which jsonb reads as an empty object. PGlite does not, so nothing run
+// on PGlite shows it: the bound parameters are what this checks.
 
 const schema: DatabaseSchema = {
   entities: [

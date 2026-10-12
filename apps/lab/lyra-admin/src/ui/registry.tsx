@@ -4,18 +4,6 @@ import { useNovaDispatch } from '@niscorp/nova/adapters/react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { CanvasSlot, ActionSlot } from '@niscorp/nova/adapters/react/components';
 
-// THE TOOL'S OWN COMPONENTS, AND THEY ARE DELIBERATELY PLAIN.
-//
-// This does not import Lyra's kit and does not want to. Nobody buys this tool,
-// nobody looks at it who is not us, and it needs to be legible rather than
-// designed. A dozen unstyled elements is the correct amount of effort.
-//
-// The alternative — extracting Lyra's kit into a shared package so the admin
-// could reuse it — was the reason this thing spent a day living as a strip
-// injected into Lyra's page. That was a shortcut to borrow components, and it
-// put operator credentials in a tenant's browsing context to save writing the
-// file below.
-
 type Props = Record<string, unknown>;
 const str = (v: unknown): string => (typeof v === 'string' || typeof v === 'number' ? String(v) : '');
 
@@ -23,9 +11,6 @@ const Stack: NovaComponent<Props> = ({ children, gap }: Props & { children?: unk
   <div style={{ display: 'flex', flexDirection: 'column', gap: typeof gap === 'number' ? gap : 12 }}>{children as never}</div>
 );
 
-// `align: 'end'` bottom-aligns — the register row needs it, because an Input is
-// a label ABOVE a field and a Button is just a button: centred between the two,
-// the button floats. Bottom edges are the ones that line up.
 const Row: NovaComponent<Props> = ({ children, gap, align }: Props & { children?: unknown }) => (
   <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: align === 'end' ? 'flex-end' : 'center', gap: typeof gap === 'number' ? gap : 10 }}>
     {children as never}
@@ -57,14 +42,6 @@ const Text: NovaComponent<Props> = ({ children, color }: Props & { children?: un
   <span style={{ fontSize: 13, color: color === 'mute' ? '#666' : '#111' }}>{children as never}</span>
 );
 
-// A NOTICE WITH NOTHING IN IT IS WORSE THAN NO NOTICE.
-//
-// `errorTarget` writes whatever the runtime caught — an object, usually, not a
-// string. Binding `message` straight to it rendered an empty red box: a border
-// saying something went wrong and refusing to say what.
-//
-// So this digs a sentence out of whatever it is handed, and renders NOTHING
-// when there is no sentence to show.
 const messageOf = (value: unknown): string => {
   if (typeof value === 'string') return value;
   if (value === null || value === undefined) return '';
@@ -96,15 +73,8 @@ const Notice: NovaComponent<Props> = ({ message, tone }: Props) => {
   );
 };
 
-// THE ONE-TIME CREDENTIAL BLOCK. Renders nothing without a value, and when
-// there is one it looks like what it is: the most important thing on the page
-// for the next thirty seconds and gone forever after.
-//
-// Masked by default — reveal is a LOCAL decision (React state, not shell
-// state): whether a secret is on the glass is a property of this screen right
-// now, not of the durable shell, and it must not survive a reload or travel a
-// socket. Copy works while masked, which is the path that never puts the value
-// on a screen at all.
+// Reveal is React state, not shell state: whether the secret is on screen must
+// not survive a reload or travel the socket.
 const Secret: NovaComponent<Props> = ({ value, label }: Props) => {
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -170,9 +140,6 @@ const Input: NovaComponent<Props> = ({ label, placeholder, secret, novaRef, nova
     <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12, color: '#555' }}>
       {str(label)}
       <input
-        // A CREDENTIAL FIELD IS A PASSWORD FIELD. Not decoration: it keeps the
-        // value off the screen, out of a screenshot, and out of the browser's
-        // form history.
         type={secret === true ? 'password' : 'text'}
         placeholder={str(placeholder)}
         defaultValue={str(value)}
@@ -234,18 +201,6 @@ const Rows: NovaComponent<Props> = ({ rows, columns, empty, rowKey }: Props) => 
 };
 
 
-// ── ONE CARD PER RECORD ──────────────────────────────────────
-//
-// The screen this replaces was laid out by WIDGET: a notice box, a form, a
-// table of states, and a second table of permissions — four boxes, all about
-// the same integration, and eight boxes as soon as there were two of them.
-//
-// Everything about one record belongs in one place. This takes a list and
-// renders a block each: a heading, a row of facts, a list of scopes with a
-// state, and the buttons that act on it.
-//
-// Generic on purpose — it names keys, not integrations — but no more general
-// than this tool needs.
 type Fact = { label?: string; value?: string };
 type Scope = { label?: string; state?: string };
 type CardAction = { label?: string; ref?: string; showKey?: string; hideKey?: string };

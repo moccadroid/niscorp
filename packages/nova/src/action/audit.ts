@@ -2,49 +2,19 @@ import { collectInteractive } from '../agent/affordances';
 import { MUTATION_KEYS } from './grammar';
 import type { ActionDefinition } from './schemas';
 
-// ═══════════════════════════════════════════════════════════
-// auditAction — static analysis of an ActionDefinition's internal wiring.
-//
-// A definition can parse, mount, and render politely while being broken in
-// every way that matters: a table bound to a key no endpoint fills, a search
-// box whose trigger re-calls a load that never reads it, a ref with no
-// trigger (dead chrome), a push into an action that doesn't exist. None of
-// that is visible to a schema parse or a mount probe — it IS visible in the
-// artifact. This audits the definition deterministically: every claim is a
-// cross-reference inside the definition (plus an optional catalog), so there
-// are no heuristics and no false authority.
-//
-// Scope: SELF-CONTAINED definitions with an inline layout — generated
-// actions above all. Hand-authored actions that receive triggers from
-// fragments (`with: [...]`) or bind stored layouts will report issues that
-// composition would resolve; audit the COMPOSED definition instead, or skip.
-// ═══════════════════════════════════════════════════════════
-
 export type AuditCatalogEntry = {
   id: string;
-  // The action's openable-input contract (a JSON Schema). When it carries
-  // `properties`, seeded push input keys are checked against them.
+  // A JSON Schema.
   input?: Record<string, unknown>;
 };
 
 export type AuditOptions = {
-  // Known pushable action ids. When given, every push/replace/resetTo
-  // target must be one of them (or the definition's own id), with input
-  // keys from its contract.
   catalog?: ReadonlyArray<AuditCatalogEntry>;
-  // Known message channels (derive them from the registered definitions —
-  // see collectChannels). When given, a `message:` listen must name a known
-  // channel or one this definition emits itself; an `emit` must name a known
-  // channel or one this definition listens on. Catches the silent
-  // never-fires class ("tasks:changed" vs "tasks-changed").
   channels?: ReadonlyArray<string>;
 };
 
 export type AuditResult = { ok: boolean; issues: string[] };
 
-// The channels a definition talks on — every `message:` trigger (listens)
-// and every `emit` step (emits), nested steps included. Walk a whole
-// registry's definitions to derive the app's live channel vocabulary.
 export type ChannelUsage = { emits: string[]; listens: string[] };
 
 export const collectChannels = (definition: ActionDefinition): ChannelUsage => {
@@ -72,7 +42,6 @@ export const collectChannels = (definition: ActionDefinition): ChannelUsage => {
   return { emits: [...emits].sort(), listens: [...listens].sort() };
 };
 
-// Mutation ops whose value is a data PATH (see action/mutations/ops). The
 const firstSegment = (path: string): string => {
   const segment = path.split('.')[0];
   return segment === undefined || segment.length === 0 ? path : segment;
@@ -99,8 +68,6 @@ export const auditAction = (definition: ActionDefinition, options?: AuditOptions
   const dataKeys = new Set(Object.keys(definition.data ?? {}));
   const endpointNames = new Set(Object.keys(definition.endpoints ?? {}));
 
-  // ── collect every step (structurally — nested onSuccess/onError included),
-  //    wherever steps live: triggers and lifecycle hooks ──
   const steps: Record<string, unknown>[] = [];
   const pushSteps = (list: unknown): void => {
     if (!Array.isArray(list)) return;
@@ -116,8 +83,6 @@ export const auditAction = (definition: ActionDefinition, options?: AuditOptions
   for (const trigger of definition.triggers ?? []) pushSteps(trigger.do);
   for (const hook of Object.values(definition.lifecycle ?? {})) pushSteps(hook);
 
-  // ── steps: calls name real endpoints; mutations write declared keys;
-  //    navigation targets exist in the catalog with legal input keys ──
   for (const step of steps) {
     const call = step['call'];
     if (typeof call === 'string' && !endpointNames.has(call)) {
@@ -149,7 +114,6 @@ export const auditAction = (definition: ActionDefinition, options?: AuditOptions
     }
   }
 
-  // ── endpoints: targets land on declared keys ──
   for (const [name, endpoint] of Object.entries(definition.endpoints ?? {})) {
     for (const field of ['target', 'errorTarget'] as const) {
       const target = endpoint[field];
@@ -159,7 +123,6 @@ export const auditAction = (definition: ActionDefinition, options?: AuditOptions
     }
   }
 
-  // ── message channels (when the app's vocabulary is provided) ──
   if (options?.channels !== undefined) {
     const known = new Set(options.channels);
     const usage = collectChannels(definition);
@@ -175,7 +138,6 @@ export const auditAction = (definition: ActionDefinition, options?: AuditOptions
     }
   }
 
-  // ── layout ↔ data ↔ triggers (inline layouts only) ──
   if (definition.layout !== undefined && typeof definition.layout !== 'string') {
     const surface = collectInteractive(definition.layout);
 

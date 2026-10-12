@@ -1,42 +1,16 @@
 import type { ActionDefinition } from '@action';
 import { isRecord } from './walk';
 
-// ═══════════════════════════════════════════════════════════
-// CHAINS THAT NEVER END, found in the definitions. A step list has no
-// conditionals, so once a chain can come back to where it started it always
-// will: a trigger on `x` that emits `x`, two triggers answering each other, a
-// mount that reloads itself, a mount whose emit reaches a trigger that pushes
-// the same action again. The runtime stops every such chain at its budget
-// (action/runtime/cause.ts); this finds them before anything runs.
-//
-// The graph: a node is where steps start running — a channel (its message
-// triggers) or an action's mount. An edge is a step that starts more:
-//
-//   · `emit: c`             → the channel c
-//   · `reload`              → this action's own mount
-//   · `push`/`replace`/`resetTo` of A → A's mount
-//
-// followed through `call`'s onSuccess/onError, which run as part of the same
-// chain. A channel or target written as a template (`{{…}}`) is decided at
-// runtime and has no edge; a push to an action not in the set has none
-// either. Fragment triggers join when an action is composed — walk the
-// composed definitions to see them.
-// ═══════════════════════════════════════════════════════════
-
 export type ChainStep = {
-  // Where the steps run: `channel:x` or `mount:<action id>`.
+  // `from` and `to`: `channel:<name>` or `mount:<action id>`.
   from: string;
   to: string;
-  // The action whose trigger or mount carries the step.
   action: string;
-  // What the step is: `emit`, `reload`, `push`, `replace`, `resetTo`.
   via: string;
 };
 
 export type ChainCycle = {
-  // The steps round the cycle, back to where it started.
   steps: ChainStep[];
-  // One line: `x —emit (loop)→ x`.
   path: string;
 };
 
@@ -77,8 +51,8 @@ export const chainCycles = (definitions: Record<string, ActionDefinition> | read
   const outgoing = new Map<string, ChainStep[]>();
   for (const edge of edges) outgoing.set(edge.from, [...(outgoing.get(edge.from) ?? []), edge]);
 
-  // One cycle per strongly connected component that has one (Tarjan), so a
-  // tangle of triggers reports once, not once per rotation of every loop in it.
+  // Tarjan: one cycle per strongly connected component, so a tangle of triggers
+  // reports once and not once per rotation of every loop in it.
   const index = new Map<string, number>();
   const low = new Map<string, number>();
   const onStack = new Set<string>();
@@ -110,8 +84,6 @@ export const chainCycles = (definitions: Record<string, ActionDefinition> | read
   };
   for (const node of [...outgoing.keys()].sort()) if (!index.has(node)) connect(node);
 
-  // A path round the component from its first node back to it, by
-  // breadth-first search inside the component — the shortest such cycle.
   const cycleIn = (component: readonly string[]): ChainStep[] | undefined => {
     const members = new Set(component);
     const start = [...component].sort()[0];

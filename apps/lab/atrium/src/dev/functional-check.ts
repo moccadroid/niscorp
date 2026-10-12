@@ -1,18 +1,3 @@
-// Nothing is fluff: every loop the app offers closes through the database and
-// survives being seen by a different principal.
-//
-//   1. Guest → desk messaging is TWO-way, with unread both directions.
-//   2. The Mews bundle works end to end: treatments from catalogue rows, live
-//      slots from the connector, booking mirrors a row AND charges the folio,
-//      the desk diary works it, the minibar posts.
-//   3. The guest home reads the guest's own activity back.
-//   4. The Opera bundle works end to end: wake call set → call sheet rung;
-//      the seeded upgrade ask → approved → folio charged.
-//   5. Ops room inventory is a real write.
-//   6. Checkout is dark until the vendor enables express checkout on the
-//      offer and goes live; then it settles the real folio total.
-//
-// Run: pnpm --filter atrium exec tsx src/dev/functional-check.ts
 import type { Shell } from '@niscorp/nova';
 import { integrations, login, settle, topData, mounted, tap, tapCard, cardData, openCard, openFromMenu, menuIds, composed, sql, asPrincipal, check, report } from './world';
 
@@ -24,17 +9,13 @@ const chromeOf = (shell: Shell): Record<string, unknown> => {
 };
 
 const main = async (): Promise<void> => {
-  // The bundles call their connector live — availability is ITS truth. The
-  // world already runs the service (boot pulled the bundles from it), so this
-  // check just uses it.
-  const amara = await login('amara'); // guest, The Lumen
-  const ines = await login('ines'); // guest, Casa Marisol
-  const rosa = await login('rosa'); // desk, The Lumen
-  const pilar = await login('pilar'); // desk, Casa Marisol
-  const henrik = await login('henrik'); // ops, The Lumen
+  const amara = await login('amara');
+  const ines = await login('ines');
+  const rosa = await login('rosa');
+  const pilar = await login('pilar');
+  const henrik = await login('henrik');
   await settle();
 
-  // ── 1. messaging, both directions ─────────────────────────
   const msgSlot = rows(topData(amara, 'main'), 'slots').find((s) => s['slot_id'] === 'gs_message');
   tap(amara, 'main', 'open', msgSlot);
   await settle();
@@ -51,9 +32,6 @@ const main = async (): Promise<void> => {
   const unreadBefore = Number((chromeOf(rosa)['unread'] as Row)?.['count'] ?? -1);
   check(`the desk chrome wears an unread badge (${unreadBefore})`, unreadBefore >= 1);
 
-  // The inbox is opened from the MENU — the one door every staff surface goes
-  // through now that the working column is a stack rather than a pile of
-  // collapsed cards. The unread count on the chrome is asserted further down.
   await openFromMenu(rosa, 'desk.message.list');
   const feed = rows(cardData(rosa, 'desk.message.list'), 'feed');
   const incoming = feed.find((m) => String(m['body']).includes('quiet table'));
@@ -62,15 +40,7 @@ const main = async (): Promise<void> => {
 
   tapCard(rosa, 'desk.message.list', 'open-thread', incoming);
   await settle(10);
-  // Opening a thread composes NOTHING. It used to fill the aside with every
-  // stay-scoped surface, which is what left the assistant no column to use — and
-  // made that column look identical whether or not a model was behind it. The
-  // aside is the assistant's alone now, so it stays empty until one offers
-  // something. Keyless, that is never.
   check('opening a thread composes nothing into the assistant column', mounted(rosa, 'aside').length === 0);
-  // The conversation opens BESIDE the inbox, and it is where she answers: one
-  // surface for reading and replying, so the words she is answering stay on
-  // screen while she writes.
   check('...as its own surface beside the inbox', mounted(rosa, 'detail').includes('desk.thread.detail'));
   check('...and the thread itself loaded', rows(cardData(rosa, 'desk.thread.detail', 'detail'), 'thread').length > 0);
 
@@ -102,9 +72,6 @@ const main = async (): Promise<void> => {
   await openFromMenu(pilar, 'desk.message.list');
   check("the other hotel's desk sees none of it", !rows(cardData(pilar, 'desk.message.list'), 'feed').some((m) => String(m['body']).includes('quiet table')));
 
-  // ── 2. the Mews bundle, end to end ────────────────────────
-  // The spa tile opens the BUNDLE action: treatments are Mews catalogue rows,
-  // priced; the times are the connector's own availability.
   const spaSlot = rows(topData(ines, 'main'), 'slots').find((s) => s['slot_id'] === 'gs_spa');
   tap(ines, 'main', 'open', spaSlot);
   await settle();
@@ -130,10 +97,6 @@ const main = async (): Promise<void> => {
   tap(ines, 'sheet', 'sheet-close');
   await settle();
 
-  // The desk's diary — a bundle STAFF surface, and it is simply a CARD on her
-  // composed screen. Nothing authored placed it there: Mews reported spa.book,
-  // the bundle shipped the surface, the resolver made it live, and the
-  // composition picked it up.
   check('the Marisol desk was OFFERED a Spa diary from the bundle', menuIds(pilar).includes('ext.desk.mews.spa-diary'));
   await openFromMenu(pilar, 'ext.desk.mews.spa-diary');
   const diary = rows(cardData(pilar, 'ext.desk.mews.spa-diary'), 'diary');
@@ -144,19 +107,15 @@ const main = async (): Promise<void> => {
   const done = await sql(`SELECT status FROM spa_bookings WHERE id = $1`, [fresh?.['booking_id']]);
   check('the desk marks it done — one write, one row', done[0]?.['status'] === 'done');
 
-  // The minibar: tap what you took, the folio carries it.
   const barSlot = rows(topData(ines, 'main'), 'slots').find((s) => s['slot_id'] === 'gs_minibar');
   tap(ines, 'main', 'open', barSlot);
   await settle();
   const items = rows(topData(ines, 'sheet'), 'items');
   check(`the minibar list is Mews's, priced (${items.length} items)`, items.length === 6);
-  // Tapping STAGES it — nothing is charged yet. That is the fix for the
-  // honesty bar posting money on a mis-tap.
   tap(ines, 'sheet', 'take', items.find((i) => String(i['label']).includes('beer')));
   await settle();
   check('tapping an item stages it and charges nothing', (await sql(`SELECT id FROM folio_lines WHERE stay_id = 'stay_ines' AND description = 'Local beer'`)).length === 0);
   check('...and the tile shows as chosen', String((topData(ines, 'sheet')['chosen'] as Row)?.['label'] ?? '').includes('beer'));
-  // Tapping the same tile again takes it back.
   tap(ines, 'sheet', 'take', items.find((i) => String(i['label']).includes('beer')));
   await settle();
   check('...tapping it again unchooses it', Object.keys((topData(ines, 'sheet')['chosen'] as Row) ?? {}).length === 0);
@@ -169,10 +128,6 @@ const main = async (): Promise<void> => {
   tap(ines, 'sheet', 'sheet-close');
   await settle();
 
-  // ── 2b. she tapped it by mistake, and the desk can undo it ──
-  // The whole loop the app could not close until folio.adjust arrived — and
-  // NOTHING about it was written in the app: Mews reported the capability,
-  // shipped the surface, and the desk found it in her workspace.
   const totalBefore = Number(((await asPrincipal('ines', '/api/vex', { fingerprint: 'folio/total', context: { stayId: 'stay_ines' } })) as Row)?.['total'] ?? 0);
   tap(ines, 'main', 'open-messages');
   await settle();
@@ -189,11 +144,6 @@ const main = async (): Promise<void> => {
   tapCard(pilar, 'desk.message.list', 'open-thread', beerNote);
   await settle(12);
 
-  // The bill is no longer composed for her — it is one of the surfaces the
-  // assistant offers, or that a clerk opens. Placed here the way an opener
-  // places it, seeded with the stay, so the rest of this section tests the
-  // BUNDLE's void loop rather than who decided to put it up. Which hotel's bill
-  // surface exists at all is still the resolver's answer:
   check("Marisol resolved MEWS's bill surface, not Opera's", menuIds(pilar).concat(['ext.desk.mews.folio']).includes('ext.desk.mews.folio'));
   pilar.push('aside', 'ext.desk.mews.folio', { stayId: 'stay_ines', propertyId: 'prop_marisol', expanded: true }, []);
   await settle(12);
@@ -216,7 +166,6 @@ const main = async (): Promise<void> => {
   const herLines = (await asPrincipal('ines', '/api/vex', { fingerprint: 'folio/forStay', context: { stayId: 'stay_ines' } })) as Row[];
   check('...and the beer is off the bill she reads', !herLines.some((l) => l['description'] === 'Local beer'));
 
-  // The generic request action still serves the OTHER integrations' menus.
   const reportSlot = rows(topData(ines, 'main'), 'slots').find((s) => s['slot_id'] === 'gs_report');
   tap(ines, 'main', 'open', reportSlot);
   await settle();
@@ -230,14 +179,10 @@ const main = async (): Promise<void> => {
   tap(ines, 'sheet', 'sheet-close');
   await settle();
 
-  // ── 3. the home reads the guest's own activity back ───────
   ines.publish('issues-changed');
   await settle();
   check('her report shows under "Your requests" on the home', rows(topData(ines, 'main'), 'issues').some((i) => i['kind'] === 'wifi'));
 
-  // ── 4. the Opera bundle, end to end ───────────────────────
-  // The wake call: times are Opera's switchboard rows; the seeded 7:00 call is
-  // already on the books.
   const wakeSlot = rows(topData(amara, 'main'), 'slots').find((s) => s['slot_id'] === 'gs_wake');
   tap(amara, 'main', 'open', wakeSlot);
   await settle();
@@ -252,9 +197,6 @@ const main = async (): Promise<void> => {
   tap(amara, 'sheet', 'sheet-close');
   await settle();
 
-  // The desk works the sheet — a bundle staff surface, composed onto her
-  // screen because Opera reports wakecall.set at this hotel and for no other
-  // reason. Nothing authored names it.
   const rosaSurface = menuIds(rosa);
   check("the Lumen desk is offered Opera's surfaces, not Mews's", rosaSurface.includes('ext.desk.opera.call-sheet') && !rosaSurface.some((id) => id.includes('mews')));
   check('one Approvals row despite its two capability gates', rosaSurface.filter((id) => id === 'ext.desk.opera.approvals').length === 1);
@@ -266,27 +208,16 @@ const main = async (): Promise<void> => {
   const rung = await sql(`SELECT status FROM wake_calls WHERE call_at = '06:30'`);
   check('ringing it moves the row to done', rung[0]?.['status'] === 'done');
 
-  // The crew HALF of the same capability: the desk sets a call FOR a guest.
-  // Stay-scoped, so it is NOT on the house screen — it arrives in the guest
-  // WORKSPACE, already carrying the guest. Theo asks at check-in; the clerk
-  // opens him from arrivals and the switchboard is already there.
   check('a stay-scoped surface stays off the house screen', !rosaSurface.includes('ext.desk.opera.set-call'));
   await openFromMenu(rosa, 'desk.movements');
   const theoRow = rows(cardData(rosa, 'desk.movements'), 'rows').find((r) => r['guest_name'] === 'Theo Lindqvist');
   check('the movements list has Theo', theoRow !== undefined);
   tapCard(rosa, 'desk.movements', 'row', theoRow);
   await settle(12);
-  // A row opens the GUEST — one record, one surface, on the column she is
-  // working in. It used to fill the aside with eight stay-scoped surfaces from a
-  // hardcoded fn on this one trigger; that is gone, and the aside stays the
-  // assistant's.
   check('opening a row opens the guest beside her list', mounted(rosa, 'detail').at(-1) === 'desk.guest');
   check('...carrying HIS stay, from the row', cardData(rosa, 'desk.guest', 'detail')['stayId'] === 'stay_theo');
   check('...and nothing was composed into the assistant column', mounted(rosa, 'aside').length === 0);
 
-  // The switchboard is one of the surfaces the assistant offers beside her work.
-  // Placed here the way an opener places it, so what follows tests the BUNDLE's
-  // wake-call loop rather than who decided to put it up.
   rosa.push('aside', 'ext.desk.opera.set-call', { stayId: 'stay_theo', propertyId: 'prop_lumen', staffId: 'stf_rosa', expanded: true }, []);
   await settle(12);
   check('...and it carries the guest it was given', cardData(rosa, 'ext.desk.opera.set-call', 'aside')['stayId'] === 'stay_theo');
@@ -299,7 +230,6 @@ const main = async (): Promise<void> => {
   const theoCall = await sql(`SELECT status, property_id FROM wake_calls WHERE stay_id = 'stay_theo' AND call_at = '05:30'`);
   check('the desk books the ring for the guest — same row the guest half writes', theoCall[0]?.['status'] === 'scheduled' && theoCall[0]?.['property_id'] === 'prop_lumen');
 
-  // Approvals: Theo's seeded junior-suite ask, priced by the connector.
   await openFromMenu(rosa, 'ext.desk.opera.approvals');
   const pending = rows(cardData(rosa, 'ext.desk.opera.approvals'), 'pending');
   const suite = pending.find((p) => p['label'] === 'Junior suite');
@@ -311,7 +241,6 @@ const main = async (): Promise<void> => {
   const suiteCharge = await sql(`SELECT amount FROM folio_lines WHERE stay_id = 'stay_theo' AND description = 'Junior suite'`);
   check('...and posts the price it carried to the folio', Number(suiteCharge[0]?.['amount']) === 90);
 
-  // ── 5. room inventory is a real write ─────────────────────
   const outOfOrder = async (): Promise<number> =>
     Number((await sql(`SELECT count(*) AS count FROM rooms WHERE property_id = 'prop_lumen' AND status = 'out_of_order'`))[0]?.['count'] ?? -1);
   const oooBefore = await outOfOrder();
@@ -326,10 +255,6 @@ const main = async (): Promise<void> => {
   const oooAfter = await outOfOrder();
   check(`the out-of-service count moved with it (${oooBefore} → ${oooAfter})`, oooAfter === oooBefore + 1);
 
-  // ── 6. checkout settles the real folio ────────────────────
-  // Express checkout sits in Opera's offer SWITCHED OFF. Enable it through the
-  // real console first; only then can Amara check out. The gate itself is part
-  // of what is being tested.
   check('express checkout is dark before the vendor enables it', !rows(topData(amara, 'main'), 'slots').some((s) => s['slot_id'] === 'gs_checkout'));
 
   const vendor = await login('atrium');
@@ -357,7 +282,6 @@ const main = async (): Promise<void> => {
   const departed = await sql(`SELECT state FROM stays WHERE id = 'stay_amara'`);
   check('...and the stay really departed', departed[0]?.['state'] === 'departed');
 
-  // ── everything above survives a fresh login ───────────────
   const rosaAgain = await login('rosa');
   await settle();
   await openFromMenu(rosaAgain, 'desk.message.list');

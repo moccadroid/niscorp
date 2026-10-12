@@ -1,46 +1,10 @@
 import type Stripe from 'stripe';
 import type { IntegrationStore } from '../../integration';
 
-// ═══════════════════════════════════════════════════════════════
-// PRICES ARE LAZY AND CONTENT-ADDRESSED (S7).
-//
-// No sync loop. A loop between lyra's price list and Stripe's has to decide what
-// happens when the two disagree, and every answer to that is wrong for somebody
-// already paying: push lyra's list and you reprice existing subscribers, pull
-// Stripe's and the studio's own screen stops being the truth.
-//
-// So a Price is materialised at CHECKOUT, addressed by what it is rather than by
-// which plan asked for it. Ask for the same (account, amount, interval,
-// currency) twice and get the same Price back. Edit a plan in lyra and the next
-// checkout asks for a different four and gets a new Price — and everybody
-// already subscribed keeps the one they signed on, which is exactly the rule
-// lyra's own pricing screen states about retiring a plan.
-//
-// THE PLAN ID IS DELIBERATELY NOT IN THE KEY. Two plans at the same price on the
-// same interval ARE the same price, and giving them separate Stripe objects
-// would be inventing a distinction Stripe has no use for. What a member is on
-// lives in lyra; what they are charged lives here.
-// ═══════════════════════════════════════════════════════════════
-
-// THE PERIOD IS A PAIR, and both halves are Stripe's own vocabulary: a unit and
-// a count, so quarterly is ('month', 3) rather than a fifth word. Lyra widened
-// its price list to say this because a studio billing quarterly is ordinary in
-// the countries these studios trade in; here it is simply passed through.
 export type PriceShape = { accountId: string; amount: number; currency: string; interval: 'day' | 'week' | 'month' | 'year'; intervalCount: number };
 
-/**
- * The address. Pure, total, and the only place the shape becomes a string —
- * which is what makes it checkable without a network and without a database.
- *
- * Currency is lower-cased because Stripe's is: `EUR` and `eur` are one currency
- * and must not be two Prices.
- *
- * THE COUNT IS IN THE KEY, and leaving it out would have been the expensive kind
- * of bug: €240 monthly and €240 quarterly are the same three other fields, so
- * they would have addressed one Price and every quarterly subscriber would have
- * been billed monthly. Content-addressing only works when the address holds the
- * whole content.
- */
+// The key holds the whole shape. Without the count, monthly and quarterly at
+// one amount would address one Price and bill every quarterly subscriber monthly.
 export const priceKey = (shape: PriceShape): string =>
   [shape.accountId, String(shape.amount), shape.currency.toLowerCase(), shape.interval, String(shape.intervalCount)].join(':');
 
@@ -57,10 +21,8 @@ export const rememberPrice = async (db: IntegrationStore | undefined, key: strin
     if (!MEMORY.has(key)) MEMORY.set(key, priceId);
     return MEMORY.get(key) ?? priceId;
   }
-  // ON CONFLICT DO NOTHING and then read back: two checkouts on the same plan at
-  // the same moment both create a Price at Stripe, and only one may be recorded.
-  // The loser's Price is simply never used — an orphan object at a vendor is
-  // cheap, and two rows claiming one address is not.
+  // Two checkouts on one plan at the same moment both create a Price at Stripe.
+  // One is recorded and read back; the other is never used.
   await db.query(
     `INSERT INTO ${db.table('prices')} (price_key, account_id, price_id, amount, currency, interval, interval_count)
      VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (price_key) DO NOTHING`,
@@ -69,13 +31,6 @@ export const rememberPrice = async (db: IntegrationStore | undefined, key: strin
   return (await priceFor(db, key)) ?? priceId;
 };
 
-/**
- * The Price for this shape, made if it does not exist.
- *
- * Created ON THE CONNECTED ACCOUNT — the studio is the merchant, so the product
- * and the price are the studio's, not the platform's. A Price on the platform
- * would charge the wrong party and settle to the wrong bank account.
- */
 export const ensurePrice = async (stripe: Stripe, db: IntegrationStore | undefined, shape: PriceShape, productName: string): Promise<string> => {
   const key = priceKey(shape);
   const held = await priceFor(db, key);
@@ -88,13 +43,8 @@ export const ensurePrice = async (stripe: Stripe, db: IntegrationStore | undefin
       product: product.id,
       unit_amount: shape.amount,
       currency: shape.currency.toLowerCase(),
-      // Stripe caps a billing period at a year — 365 days, 52 weeks, 12 months,
-      // 1 year — and refuses anything longer with a message the setup screen
-      // prints. Not re-checked here: a second copy of somebody else's limit is
-      // a copy that goes stale, and the refusal already says what is wrong.
       recurring: { interval: shape.interval, interval_count: shape.intervalCount },
-      // GROSS, as decided: lyra's `price_cents` is what a member pays, so the
-      // tax is inside it rather than added at checkout.
+      // Gross: lyra's `price_cents` is what a member pays, tax included.
       tax_behavior: 'inclusive',
     },
     onAccount,

@@ -12,16 +12,6 @@ import { REACT_KIT } from './react.kit';
 import { vueRenderer } from './vue.kit';
 import { lyceumRegistry } from './registry';
 
-// The terminal's render target: the same trees, drawn by one of three
-// renderers — nova's DOM adapter with lyceum's kit, moss's React target with
-// the React port of it, moss's Vue target with the Vue port. All three wear
-// the one stylesheet (./tokens.ts), so they look the same; what differs is who
-// builds the elements. WHICH is in the frame: a `Look` the server sets for
-// this screen's surface (server/renderers.ts). Each update reads it; when it
-// names another renderer, the one drawing now is taken down and the other
-// mounted on the same root. Nothing is sent to switch: the speaker writes the
-// surface's row, the server sets the frame's `Look` anew, and the next frame
-// names the other renderer. No `Look`: DOM.
 const dressed = new WeakSet<Document>();
 const dress = (doc: Document): void => {
   if (dressed.has(doc)) return;
@@ -45,7 +35,6 @@ const lookIn = (nodes: readonly RenderNode[]): (typeof LOOKS)[number] | undefine
   return undefined;
 };
 
-// Whether the frame says this screen is X-rayed (server/functions/xray.functions.ts).
 const xrayIn = (nodes: readonly RenderNode[]): boolean => {
   for (const node of nodes) {
     if (node.type === 'component' && node.name === 'Xray') return node.props['on'] === true;
@@ -54,8 +43,6 @@ const xrayIn = (nodes: readonly RenderNode[]): boolean => {
   return false;
 };
 
-// Which action instance is on the stage's `main` canvas — the slide. A new one
-// is a slide arriving; the same one is the slide updating.
 const slideIn = (nodes: readonly RenderNode[]): string | undefined => {
   for (const node of nodes) {
     if (node.type !== 'component' && node.type !== 'fragment') continue;
@@ -67,27 +54,24 @@ const slideIn = (nodes: readonly RenderNode[]): string | undefined => {
   return undefined;
 };
 
-// How long a slide's cells take to wipe in (./tokens.ts, "a slide arriving").
+// How long a slide's cells take to wipe in, by the stylesheet.
 const ENTERING_MS = 2200;
 
-// nova's DOM adapter, with the kit.
 const domRenderer = (root: HTMLElement): Target => (api) => {
   const view = createDomView(root, lyceumRegistry(POSTER_KIT), api, { fallback });
   view.render();
   return { update: view.render, destroy: view.destroy };
 };
 
-// moss's React target, with the React kit. The DOM adapter draws a canvas as a
-// `<div data-canvas>` and an action instance as a `<div>`, and the stylesheet
-// lays the screen out by those; React's wire slots draw neither, so the kit
-// wraps them.
+// The DOM adapter draws a canvas as a `<div data-canvas>` and an action
+// instance as a `<div>`, and the stylesheet lays the screen out by those;
+// React's wire slots draw neither, so the kit wraps them.
 const reactRenderer = (root: HTMLElement): Target => {
   const registry = createComponentRegistry<NovaComponent>();
   registry.registerAll(REACT_KIT);
   const target = reactTarget({
     root,
     registry,
-    // The instance box, as the DOM kit draws it (./registry.ts).
     slotWrapper: ({ instanceId, definitionId, children }) =>
       createElement('div', { 'data-action': definitionId ?? '', 'data-instance': instanceId ?? '' }, createElement('span', { className: 'xray-tag' }, definitionId ?? ''), children),
   });
@@ -100,20 +84,16 @@ const reactRenderer = (root: HTMLElement): Target => {
 
 export const lyceumTarget = (config: { root: HTMLElement }): Target => {
   const { root } = config;
-  // Each renderer draws into a HOST of its own, made when it is chosen and
+  // Each renderer draws into a host of its own, made when it is chosen and
   // thrown away when another is: whatever a framework leaves on the element it
-  // mounted into (Vue's data-v-app, React's container key) goes with it, so the
-  // element a laptop inspects names the renderer drawing now and no other. The
-  // host is display: contents — it adds no box, and the layout is unchanged.
+  // mounted into (Vue's data-v-app, React's container key) goes with it. The
+  // host is display: contents, so it adds no box.
   const renderers: Record<(typeof LOOKS)[number], (host: HTMLElement) => Target> = { dom: domRenderer, react: reactRenderer, vue: vueRenderer };
   return (api) => {
     dress(root.ownerDocument);
     root.classList.add(ROOT_CLASS);
-    // X-RAYED, every action on the screen is outlined with its id as a tag
-    // (every renderer draws the same box, ./registry.ts). A tapped tag opens
-    // that action: the terminal says which instance, and the phone opens it
-    // (member/phone.action.ts). Caught before the action's own element sees
-    // the tap, so the tag never presses what is under it.
+    // Caught before the action's own element sees the tap, so the tag never
+    // presses what is under it.
     const openTag = (event: Event): void => {
       if (!root.hasAttribute('data-xray') || !(event.target instanceof Element)) return;
       const tag = event.target.closest('.xray-tag');
@@ -124,8 +104,6 @@ export const lyceumTarget = (config: { root: HTMLElement }): Target => {
       api.publish('xray-open', { instance: box.getAttribute('data-instance') ?? '', action: box.getAttribute('data-action') ?? '' });
     };
     root.addEventListener('click', openTag, true);
-    // AN ACTION WITH A SOUND plays it where it is pressed — one listener for
-    // all three renderers, which only mark the button (data-sound).
     const chime = (event: Event): void => {
       if (!(event.target instanceof Element) || event.target.closest('[data-sound="chime"]') === null) return;
       const audio = new AudioContext();

@@ -100,8 +100,7 @@ const countedEngine = (nextDue: Tide['nextDue']): { tide: Tide; advances: () => 
   return { tide, advances: () => at.length, advancedAt: () => at };
 };
 
-// The janitor's beat is set as long as the delay in both: by default it wakes the driver every
-// five minutes whatever is due, and these are about one timer at a time.
+// `janitorMs` is as long as the delay in both: by default the janitor wakes the driver every five minutes whatever is due.
 describe('a delay longer than a timer can hold', () => {
   const A_MINUTE = 60_000;
 

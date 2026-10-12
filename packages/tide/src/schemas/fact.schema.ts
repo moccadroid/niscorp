@@ -1,31 +1,19 @@
 import { z } from 'zod';
 import { OpSchema } from './trigger.schema';
 
-// ═══════════════════════════════════════════════════════════════
-// Fact — the public intake contract.
-//
-// Tide's whole ingestion surface. Anything that can produce this
-// shape can drive tide; nothing else about the producer is tide's
-// business. A host that sees its own writes pushes them — the vex
-// bridge is that host. Either way, what arrives is this.
-// ═══════════════════════════════════════════════════════════════
-
 export const FactKindSchema = z.enum(['write', 'signal', 'manual', 'run']);
 
 export const FactInputSchema = z
   .object({
     kind: FactKindSchema,
 
-    // write facts
     entity: z.string().optional().describe('Which table or entity was written.'),
     op: OpSchema.optional().describe('Ops are distinct stimuli — "only on create" is op: "insert".'),
     row: z.record(z.string(), z.unknown()).optional().describe('The row, as the write returned it.'),
 
-    // signal facts
     name: z.string().optional().describe('Which named intake this arrived on.'),
     payload: z.unknown().optional().describe('The event body — validated at the HOST boundary before it gets here.'),
 
-    // run facts (minted by tide when a run settles — the fan-in mechanism)
     reflex: z.string().optional(),
     runId: z.string().optional(),
     occurrence: z.string().optional().describe('The calendar key, when the clock was the cause.'),
@@ -34,7 +22,6 @@ export const FactInputSchema = z
       .strict()
       .optional(),
 
-    // manual facts (minted by `fire`)
     target: z.string().optional().describe('The one reflex a manual fact is aimed at.'),
     by: z.string().optional().describe('Who fired it — recorded on the firing as manual:<who>.'),
 
@@ -44,13 +31,6 @@ export const FactInputSchema = z
     cause: z.string().optional().describe('Set by tide when an effect emits — the causality chain.'),
   })
   .strict()
-  // THE UNION IS ENFORCED, because an unenforced one is worse than none.
-  //
-  // `{ kind: 'write' }` with no entity used to parse, store, match nothing,
-  // get marked delivered, and vanish — the producer had no way to learn its
-  // fact was never going to wake anything. Each kind names the fields that
-  // make it addressable, and a fact that cannot be addressed is refused at
-  // the intake rather than swallowed by the matcher.
   .superRefine((fact, ctx) => {
     const require = (field: keyof typeof fact, why: string) => {
       if (fact[field] === undefined)

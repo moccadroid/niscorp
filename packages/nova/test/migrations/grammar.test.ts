@@ -4,28 +4,17 @@ import { evaluate } from '@niscorp/prism';
 import { PRISM_SEQUENCE } from '@niscorp/prism/migrations';
 import { NOVA_SCHEMAS, NOVA_SEQUENCE } from '../../src/migrations';
 
-// ═══════════════════════════════════════════════════════════
-// nova's own grammar, through strata — the real sequence, not a stand-in.
-// strata tests TOO_NEW with sequences it makes up; this is the promise for the
-// documents nova actually defines: a reader refuses an action written by newer
-// nova, and upgrades one written by older nova. Each version's reader is built
-// by cutting the sequence back to that version, which is exactly the code an
-// older host runs.
-// ═══════════════════════════════════════════════════════════
-
 const readerAt = (version: number) =>
   createUpgrader([{ ...NOVA_SEQUENCE, migrations: NOVA_SEQUENCE.migrations.slice(0, version) }, PRISM_SEQUENCE], { transform: evaluate });
 
 const current = NOVA_SEQUENCE.migrations.length;
 
-// An action that uses the reconcile step (nisc.nova/1).
 const reconciling = {
   id: 'deck',
   data: { tools: [] },
   triggers: [{ message: 'deck-moved', do: [{ reconcile: { canvas: 'tools', to: '$.tools', action: 'tool_id', own: 'canvas' } }] }],
 };
 
-// An action any nova since 0 could have written.
 const plain = { id: 'counter', data: { n: 0 }, triggers: [{ event: 'ui:click', ref: 'bump', do: [{ increment: 'n' }] }] };
 
 describe('nisc.nova — the grammar a stamp names', () => {

@@ -1,12 +1,3 @@
-// Wire bench — what diffing would buy, measured against doing nothing.
-//
-// Moss sends a whole canvas tree whenever that tree changes. Two cheaper things
-// are possible: compress the frame, or send only what moved. This measures both
-// against the real trees Lyra produces, for the two change shapes that matter —
-// a NAVIGATION (the tree is genuinely different) and an IN-PLACE update (a
-// keystroke in a search box, where the tree is almost entirely the same).
-//
-// Run: pnpm --filter lyra exec tsx src/dev/wire-bench.ts
 import { deflateSync } from 'node:zlib';
 import type { Shell } from '@niscorp/nova';
 import { CAST } from '@lyra/db/seed';
@@ -19,10 +10,6 @@ const treeOfCanvas = (shell: Shell, canvas: string): unknown => shell.flattenRen
 const bytes = (v: unknown): number => JSON.stringify(v)?.length ?? 0;
 const squashed = (v: unknown): number => deflateSync(Buffer.from(JSON.stringify(v) ?? '')).length;
 
-// A representative structural diff: walk both trees together and emit
-// [path, value] for every leaf that moved. No keying, so a list REORDER costs
-// the whole list — which is honest, because that is the case a naive diff
-// handles worst and the one a real implementation has to key to survive.
 const diff = (a: unknown, b: unknown, path: string, out: [string, unknown][]): void => {
   if (a === b) return;
   const bothObjects = a !== null && b !== null && typeof a === 'object' && typeof b === 'object';
@@ -51,12 +38,8 @@ await settle(20);
 if (owner === undefined) throw new Error('bench: no shell');
 const shell = owner.shell;
 
-// A byte-delta against the previous frame, approximated with zlib's preset
-// DICTIONARY: compressing the new frame with the old one as the dictionary is
-// close to what fossil-delta or xdelta would emit, and needs no dependency.
-// This is the number that decides whether a delta layer beats the deflate moss
-// already has — because `permessage-deflate` with context takeover is itself a
-// crude version of the same idea.
+// Approximates a byte-delta: deflating the new frame with the old one as zlib's
+// preset dictionary is close to what fossil-delta or xdelta would emit.
 const deltaBytes = (before: unknown, after: unknown): number => {
   const dictionary = Buffer.from(JSON.stringify(before) ?? '');
   return deflateSync(Buffer.from(JSON.stringify(after) ?? ''), { dictionary }).length;
@@ -76,7 +59,6 @@ const report = (label: string, before: unknown, after: unknown): void => {
 console.log(`\n${bold('WIRE BENCH')} ${dim('— bytes moss sends today, vs compressed, vs diffed')}`);
 console.log(dim('  scenario                       full  deflate         patch        delta'));
 
-// ── navigation: the tree really is different ─────────────────
 shell.dispatch({ type: 'ui:click', ref: 'nav', payload: 'people.list' });
 await settle(20);
 let before = treeOfCanvas(shell, 'main');
@@ -91,10 +73,6 @@ shell.dispatch({ type: 'ui:click', ref: 'nav', payload: 'reports.overview' });
 await settle(20);
 report('navigate: people → reports', before, treeOfCanvas(shell, 'main'));
 
-// ── in-place: a keystroke in the search box ──────────────────
-//
-// The frequent case, and the one diffing exists for. Each keystroke re-runs the
-// read and re-sends the WHOLE roll today.
 shell.dispatch({ type: 'ui:click', ref: 'nav', payload: 'people.list' });
 await settle(24);
 for (const typed of ['a', 'av', 'ava']) {
@@ -104,9 +82,6 @@ for (const typed of ['a', 'av', 'ava']) {
   report(`search keystroke → "${typed}"`, was, treeOfCanvas(shell, 'main'));
 }
 
-// ── in-place: one row's state changes ────────────────────────
-// The scope tabs belong to people.list, so the shell has to BE there or the
-// dispatch lands on nothing and the measurement is of a no-op.
 shell.dispatch({ type: 'ui:click', ref: 'nav', payload: 'people.list' });
 await settle(24);
 shell.dispatch({ type: 'ui:model', ref: 'search', payload: '' });

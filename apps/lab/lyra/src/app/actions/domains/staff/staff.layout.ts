@@ -34,8 +34,6 @@ export const staffLayout: LayoutNode = {
           loading: '$.loading',
           rowKey: 'staff_id',
           empty: 'Nobody on staff yet.',
-          // A sortable header names the COLUMN, not the row key: the value goes
-          // to vex as `sortBy` and is resolved against the entry's schema.
           sortKey: '$.sortBy',
           sortDir: '$.sortDir',
           onSortRef: 'sort',

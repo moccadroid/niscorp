@@ -1,4 +1,3 @@
-// Run: pnpm --filter lyra exec tsx src/dev/plans-check.ts
 import { CAST } from '@lyra/db/seed';
 import { asPrincipal, login, ok, report, runtime, servedTo, settle, treeOf } from './world';
 
@@ -7,13 +6,6 @@ const count = async (sql: string, params: unknown[] = []): Promise<number> => {
   return Number(result.rows[0]?.n ?? -1);
 };
 
-// THE ROW THE LIST ACTUALLY HANDS OVER, not one written out here.
-//
-// A row typed into this file is a row that agrees with the screen only until
-// somebody adds a column, and that is not hypothetical: the opener was missing
-// `joining_fee_id` for as long as the column existed, so correcting a typo in a
-// plan's name quietly stopped its joining fee being charged, and a hand-written
-// payload in this check said everything was fine.
 const rowFor = async (name: string): Promise<Record<string, unknown>> => {
   const answer = await asPrincipal(CAST.lumen.owner, '/api/studio/vex', { fingerprint: 'offerings/list', context: { sortBy: '', sortDir: 'asc' } });
   const rows = Array.isArray(answer) ? (answer as Record<string, unknown>[]) : [];
@@ -23,14 +15,11 @@ const rowFor = async (name: string): Promise<Record<string, unknown>> => {
 const manager = await login(CAST.lumen.owner);
 await settle();
 
-// ── the list ──
 manager.dispatch({ type: 'ui:click', ref: 'nav', payload: 'plans.list' });
 await settle(8);
 let tree = treeOf(manager);
 ok('a manager reaches the offers list', tree.includes('Everything a member can pay for'));
-// Not `€89`: a German studio writes `89,00 €`, symbol last. The claim is cents
-// became money, so the assertion is the major units and the symbol, in either
-// order — which side it lands on is the language's business, not this check's.
+// Either order: a German studio writes `89,00 €`, symbol last.
 const money = (amount: number, tree: string): boolean => new RegExp(`€\\s?${String(amount)}\\b|\\b${String(amount)}[.,]\\d\\d\\s?€`).test(tree);
 ok('...with prices formatted, not in cents', money(89, tree), 'the mapping does the money');
 ok('...and billing said in words', tree.includes('Monthly'));
@@ -38,7 +27,6 @@ ok('...and an unlimited plan says so', tree.includes('Unlimited'));
 
 ok('...and only this studio’s plans', !tree.includes('Mat fee'), 'North Rock’s price list stays at North Rock');
 
-// ── adding one ──
 const before = await count("SELECT count(*) n FROM offerings WHERE studio_id = 'st_lumen'");
 manager.dispatch({ type: 'ui:click', ref: 'add' });
 await settle();
@@ -60,16 +48,6 @@ ok('...and the list shows it', tree.includes('"name":"Drop-in"'), 'asserted on t
 ok('...formatted', money(18, tree));
 ok('the form closed itself', !tree.includes('In cents'));
 
-// ── THE TERMS ARE THE STUDIO'S, NOT OURS ─────────────────────
-//
-// Every one of these was a fixed menu: three, six, twelve or twenty-four months;
-// fourteen, thirty, sixty or ninety days; four, eight, twelve or sixteen
-// classes. A studio on a four-month term with forty-five days' notice could not
-// say so — not because anything refused it (the columns are plain integers with
-// a `>= 0` check) but because nobody had typed those numbers into a list.
-//
-// So the assertion is deliberately a shape none of those menus could produce.
-// It is not about 4 and 45; it is that we stopped having an opinion.
 const oddBefore = await count("SELECT count(*) n FROM offerings WHERE studio_id = 'st_lumen'");
 manager.dispatch({ type: 'ui:click', ref: 'add' });
 await settle();
@@ -90,8 +68,6 @@ ok(
   'no rounding to the nearest thing we had thought of',
 );
 
-// EMPTY IS A REAL ANSWER, and a different one per column — the difference a
-// Select never had to express, because a Select cannot be blank.
 manager.dispatch({ type: 'ui:click', ref: 'add' });
 await settle();
 manager.dispatch({ type: 'ui:model', ref: 'name', payload: 'Rolling, unlimited' });
@@ -110,17 +86,6 @@ ok(
   'NULL where absence is the answer, 0 where none is a term — not one rule for both',
 );
 
-// ── HOW OFTEN IS THE STUDIO'S TOO ────────────────────────────
-//
-// 'month' and 'year' were the whole vocabulary, so a studio billing quarterly —
-// ordinary in AT and DE — could not write its own price list down. The period is
-// a pair now: a unit and a count, which is also exactly what Stripe's Price
-// takes, so nothing between the two gets an opinion about which periods exist.
-//
-// The arithmetic is the part worth asserting. `monthly_cents` is SUMMED to make
-// every revenue figure in the app, so a quarterly plan that reported its whole
-// price as monthly would treble a studio's forecast — and it would look
-// plausible, which is the failure mode that survives a demo.
 manager.dispatch({ type: 'ui:click', ref: 'add' });
 await settle();
 manager.dispatch({ type: 'ui:model', ref: 'name', payload: 'Quarterly' });
@@ -137,10 +102,6 @@ ok(
   'every three months — a unit and a count, not a fifth named period',
 );
 
-// Somebody on it, so the trigger has something to stamp. Written directly for
-// the same reason the notice probe below is: the arithmetic under test is the
-// DATABASE's, and routing through a screen would put a second thing in the way
-// of finding out whether it is right.
 const quarterlyId = (await runtime.db.query<{ id: string }>("SELECT id FROM offerings WHERE name = 'Quarterly'")).rows[0]?.id ?? '';
 const anyLumen = await runtime.db.query<{ id: string }>("SELECT person_id AS id FROM studio_people WHERE studio_id = 'st_lumen' LIMIT 1");
 await runtime.db.query(
@@ -155,10 +116,6 @@ ok(
   `${String(quarterlyMonthly)} cents — the figure every forecast in this app is a sum of`,
 );
 
-// REPRICING THE PERIOD MOVES IT TOO. The resync trigger fired on price and
-// interval and not on the count, so a plan moved from monthly to quarterly kept
-// reporting its old monthly value — a studio's forecast frozen at three times
-// the truth, with nothing on any screen to say so.
 await asPrincipal(CAST.lumen.owner, '/api/studio/vex', {
   fingerprint: 'offerings/update',
   context: { offeringId: quarterlyId, name: 'Quarterly', priceCents: 33000, interval: 'month', intervalCount: 1, classAllowance: null, minimumTermMonths: 0, noticeDays: 0, credits: null, validDays: null, joiningFeeId: null },
@@ -169,11 +126,7 @@ ok(
   'the resync trigger watches the count, not only the price and the unit',
 );
 
-// ── editing one ──
 const planId = (await runtime.db.query<{ id: string }>("SELECT id FROM offerings WHERE name = 'Drop-in'")).rows[0]?.id ?? '';
-// The payload IS the row the list hands over, so it carries the terms too —
-// without them the form opens with nothing in those fields and Save writes the
-// nothing back over a commitment somebody sold.
 manager.dispatch({ type: 'ui:click', ref: 'edit', payload: await rowFor('Drop-in') });
 await settle();
 ok('editing prefills from the row', treeOf(manager).includes('Edit offering'));
@@ -184,7 +137,6 @@ await settle(10);
 ok('a plan can be repriced', (await count("SELECT count(*) n FROM offerings WHERE name = 'Drop-in' AND price_cents = 2000")) === 1);
 ok('...without touching what was not edited', (await count("SELECT count(*) n FROM offerings WHERE name = 'Drop-in' AND class_allowance = 4 AND interval = 'month'")) === 1);
 
-// ── retiring one ──
 const unlimitedId = (await runtime.db.query<{ id: string }>("SELECT id FROM offerings WHERE name = 'Unlimited' AND studio_id = 'st_lumen'")).rows[0]?.id ?? '';
 const subsBefore = await count('SELECT count(*) n FROM subscriptions WHERE offering_id = $1', [unlimitedId]);
 ok('the plan under test has subscribers', subsBefore > 0, `${subsBefore} of them`);
@@ -201,19 +153,15 @@ ok('...and every subscriber keeps their subscription', (await count('SELECT coun
 tree = treeOf(manager);
 ok('...and the list still shows it, marked', tree.includes('Retired'), 'greyed rather than gone');
 
-// ── offering it again ──
 manager.dispatch({ type: 'ui:click', ref: 'edit', payload: { offering_id: unlimitedId, kind: 'recurring', active: false, name: 'Unlimited', price_cents: 11900, interval: 'month', interval_count: 1, class_allowance: null } });
 await settle();
 manager.dispatch({ type: 'ui:click', ref: 'restore' });
 await settle(10);
 ok('a retired plan can be offered again', (await count('SELECT count(*) n FROM offerings WHERE id = $1 AND active = true', [unlimitedId])) === 1);
 
-// ── who may set prices ──
 const deskWrite = await asPrincipal(CAST.lumen.desk, '/api/studio/vex', {
   fingerprint: 'offerings/update',
-  // The terms travel too, so this is refused for the RIGHT reason — the rung —
-  // rather than for a missing field, which would pass the assertion while
-  // proving nothing about who may set prices.
+  // Every field is sent, so the refusal is for the role, not for a missing field.
   context: { offeringId: unlimitedId, name: 'Free', priceCents: 0, interval: 'month', intervalCount: 1, classAllowance: '', minimumTermMonths: 0, noticeDays: 0, credits: null, validDays: null, joiningFeeId: null },
 });
 ok('the desk cannot reprice a plan', JSON.stringify(deskWrite).includes('status'), JSON.stringify(deskWrite).slice(0, 70));
@@ -229,16 +177,6 @@ const deskSees = await login(CAST.lumen.desk);
 await settle();
 ok('the desk has no Plans in its nav', !treeOf(deskSees).includes('"label":"Plans"'), 'ring 1 removes the door, not just the lock');
 
-// ── ONE CURRENCY PER STUDIO, and the database is what says so ──
-//
-// `monthly_cents` is SUMMED across a studio's subscriptions with no currency
-// predicate. Two currencies in one studio would not have failed — they would
-// have quietly added together and reported a revenue figure that was not any
-// amount of money. So the rule is a composite foreign key on (studio, currency)
-// rather than a convention, and this is the proof it bites.
-//
-// Not a CHECK: a CHECK cannot see another row, so "all this studio's plans
-// agree" is not expressible as one.
 const wrongCurrency = await runtime.db
   .query("INSERT INTO offerings (studio_id, name, price_cents, currency, interval) VALUES ('st_lumen', 'Dollars please', 5000, 'USD', 'month')")
   .then(() => '')
@@ -246,26 +184,12 @@ const wrongCurrency = await runtime.db
 ok('a plan cannot be priced in a currency its studio does not charge in', wrongCurrency !== '', wrongCurrency.split('\n')[0] ?? '');
 ok('...and none landed', (await count("SELECT count(*) n FROM offerings WHERE currency <> 'EUR'")) === 0, 'refused by the key, not cleaned up afterwards');
 
-// The same key reaches the money that hangs off a plan. A subscription's
-// currency is stamped from its plan by the trigger, so this is the belt to that
-// braces: even a hand-written row cannot disagree with its studio.
 const wrongSub = await runtime.db
   .query("UPDATE subscriptions SET currency = 'USD' WHERE studio_id = 'st_lumen'")
   .then(() => '')
   .catch((err: unknown) => String(err));
 ok('...nor can a subscription drift from it', wrongSub !== '', wrongSub.split('\n')[0] ?? '');
 
-// ── THE ASSERTION S6 EXISTS FOR, AND IT HAS NEVER BEEN MADE ──
-//
-// A six-month term with sixty days' notice. Give notice in month two and the
-// naive answer — notice plus the notice period — says they leave in month four.
-// They do not. A commitment outlives notice given inside it, so they leave at
-// the end of month six, and the difference is two months of revenue on every
-// member who ever walks in and says they are thinking of stopping.
-//
-// The trigger has computed this correctly since the beginning
-// (GREATEST(committed_until, notice_given_on + notice_days)) and nothing has
-// ever written a term, a notice period, or a notice — so it has never once run.
 const termPlan = await asPrincipal(CAST.lumen.owner, '/api/studio/vex', {
   fingerprint: 'offerings/create',
   context: { name: 'Six months, two months notice', kind: 'recurring', priceCents: 9900, interval: 'month', intervalCount: 1, classAllowance: null, minimumTermMonths: 6, noticeDays: 60, credits: null, validDays: null, joiningFeeId: null },
@@ -276,7 +200,6 @@ const planRow = await runtime.db.query<{ id: string; minimum_term_months: number
 const sold = planRow.rows[0];
 ok('a plan can be sold on terms', sold !== undefined && sold.minimum_term_months === 6 && sold.notice_days === 60, JSON.stringify(sold ?? termPlan));
 
-// Somebody two months into it. Started in the past so "month two" is now.
 const member = await runtime.db.query<{ id: string }>("SELECT person_id AS id FROM studio_people WHERE studio_id = 'st_lumen' LIMIT 1");
 await runtime.db.query(
   `INSERT INTO subscriptions (id, studio_id, person_id, offering_id, status, started_on)
@@ -289,7 +212,6 @@ const stamped = await runtime.db.query<{ committed_until: string; ends_on: strin
 ok('...and signing stamps the commitment', stamped.rows[0]?.committed_until !== null, `committed until ${String(stamped.rows[0]?.committed_until).slice(0, 10)} — four months out, from a term that started two months ago`);
 ok('...with no leaving date yet', stamped.rows[0]?.ends_on === null, 'nobody has said anything');
 
-// The act under test, through the app's own surface.
 await asPrincipal(CAST.lumen.owner, '/api/studio/vex', {
   fingerprint: 'subscriptions/give-notice',
   context: { subscriptionId: 'sub_term_probe' },
@@ -306,7 +228,6 @@ ok('giving notice dates itself on the studio’s own day', day(row?.notice_given
 ok('...and they leave at the END OF THE TERM', day(row?.ends_on) === day(row?.committed_until), `${day(row?.ends_on)} — month six`);
 ok('...NOT sixty days from today', day(row?.ends_on) !== day(row?.naive), `month four would have been ${day(row?.naive)} — two months of revenue, on every member who ever gives notice early`);
 
-// And it is reversible, because everything at a desk is.
 await asPrincipal(CAST.lumen.owner, '/api/studio/vex', {
   fingerprint: 'subscriptions/withdraw-notice',
   context: { subscriptionId: 'sub_term_probe' },
@@ -316,16 +237,8 @@ const undone = await runtime.db.query<{ notice_given_on: string | null; ends_on:
 );
 ok('taking notice back leaves nothing behind', undone.rows[0]?.notice_given_on === null && undone.rows[0]?.ends_on === null, 'the leaving date was derived from the notice, so it goes with it');
 
-// The seed's own notice still stands — a trigger that clears on the way in
-// would have deleted it silently, and this is the assertion that caught that.
 ok('a subscription seeded with notice keeps it', (await count("SELECT count(*) n FROM subscriptions WHERE notice_given_on IS NOT NULL AND id <> 'sub_term_probe'")) > 0, 'the ledger row is the fact; the column follows it');
 
-// ── and it is reachable, which is the part that was missing ──
-//
-// The columns, the trigger and the arithmetic were all correct before any of
-// this; what did not exist was a way for a person to use them. So the last
-// assertion is that the record actually draws it, and that the control changes
-// depending on what has been decided rather than sitting there twice.
 const record = await login(CAST.lumen.owner);
 await settle(10);
 const withNotice = await runtime.db.query<{ id: string }>(
@@ -352,11 +265,6 @@ ok('somebody who gave notice reads as leaving', leaving.includes('"label":"Leavi
 ok('...and is offered the way back, not a second way out', leaving.includes('changed their mind') && !leaving.includes('Give notice'), 'one decision, one control');
 
 
-// ── A MISTAKE IS NOT A PRODUCT ───────────────────────────────
-//
-// Retiring was the only way out of anything, so a mistyped price stayed on the
-// list forever wearing a "Retired" badge. Deleting exists for the row nobody
-// ever held; retiring still exists for the one somebody does.
 manager.dispatch({ type: 'ui:click', ref: 'nav', payload: 'plans.list' });
 await settle(10);
 manager.dispatch({ type: 'ui:click', ref: 'add' });
@@ -389,14 +297,6 @@ const heldOpen = treeOf(manager);
 ok('a row somebody holds offers Retire, not Delete', heldOpen.includes('"label":"Retire"') && !heldOpen.includes('"label":"Delete"'));
 ok('...and says why', heldOpen.includes('Somebody is already on this'), 'a danger button with no sentence beside it makes somebody guess');
 
-// AND IT SAYS IT IN GERMAN, which is the half the English tree cannot see.
-//
-// This sentence shipped reading "Beim Einstellen behält sie es" — einstellen is
-// to HIRE somebody before it is to discontinue anything, and this app already
-// spells Settings "Einstellungen". Its plural rendered "[object Object]",
-// because the line was assembled as a phrase-book pattern in the mapping and
-// then copied into a plain data field. Both are invisible to a check reading
-// the source language, so this one reads what the owner is actually served.
 const germanSheet = await servedTo(CAST.lumen.owner);
 ok(
   '...in German, on the wire, in words that mean what they say',
@@ -409,10 +309,8 @@ ok(
   'a pattern copied out of a _display field stringifies, and only a rendered German screen shows it',
 );
 
-// THE BUTTON IS A HINT; THE DATABASE IS THE ANSWER. Clicked anyway, past a
-// control this screen did not draw — because a count read a moment ago is a
-// count that can be wrong by the time somebody acts on it, and the refusal has
-// to be a sentence rather than a constraint name either way.
+// The open sheet draws no Delete. The click is dispatched anyway: the count
+// behind that button can be stale by the time somebody acts.
 const heldId = (await runtime.db.query<{ id: string }>("SELECT id FROM offerings WHERE name = 'Unlimited' AND studio_id = 'st_lumen'")).rows[0]?.id ?? '';
 manager.dispatch({ type: 'ui:click', ref: 'delete' });
 await settle(12);
@@ -425,9 +323,6 @@ ok('...leaving it exactly where it was', (await count('SELECT count(*) n FROM of
 manager.dispatch({ type: 'ui:click', ref: 'close' });
 await settle(6);
 
-// AND THE FEE SURVIVES AN EDIT. The row the form opens on has to carry every
-// column Save writes, and this one was missing: the plan naming a joining fee
-// stopped naming it the moment somebody corrected its name.
 manager.dispatch({ type: 'ui:click', ref: 'edit', payload: await rowFor('Unlimited') });
 await settle(8);
 manager.dispatch({ type: 'ui:model', ref: 'name', payload: 'Unlimited ' });
@@ -441,13 +336,6 @@ ok(
 );
 
 
-// ── AND THE BLOCKS ARE HERE TOO ──────────────────────────────
-//
-// A course block is a thing a member pays for, and it was authored on a
-// different screen under a different hub — an owner had to already know why a
-// block is different in order to guess where to price one. Editing one was
-// reachable from NOWHERE: it could be created, and its roster read, and nothing
-// could change it afterwards.
 manager.dispatch({ type: 'ui:click', ref: 'nav', payload: 'plans.list' });
 await settle(12);
 const offers = treeOf(manager);
@@ -470,12 +358,6 @@ ok(
   'one catalogue: the same table a plan, a pass and a joining fee are priced in',
 );
 
-// AND A BLOCK IS NOT A THING YOU BUY OFF A SHELF. The member's own buy screen
-// asks for everything that is not a recurring plan, which was a filter that
-// admitted every kind nobody had invented yet — so the moment course blocks
-// became catalogue rows they appeared there as outright purchases, taking money
-// and handing back no seat. A block is joined through the course, where the
-// roster and the capacity are.
 const onSale = await asPrincipal(CAST.lumen.member, '/api/me/vex', { fingerprint: 'offerings/purchasable', context: {} });
 const kinds = new Set((Array.isArray(onSale) ? (onSale as Record<string, unknown>[]) : []).map((r) => String(r['kind'])));
 ok(

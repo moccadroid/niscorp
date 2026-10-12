@@ -1,13 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// A VEX QUERY'S RESULT, shown by the shape it came in (vex/query.shapes.ts) —
-// in the query the assistant opens (actions/query/). The route hands back
-// only WHICH shape and HOW it was reached; what each looks like is written
-// here, one branch per kind, picked by `$eq`. A kind with no branch below falls
-// through to the list's columns; query-check holds every kind to a branch.
-//
-// `at` names where the three live in the action's data: the kind, how it was
-// answered, the rows (and, for one number, their `value`).
 export type AnswerAt = { kind: string; how: string; rows: string };
 
 const rows = (at: AnswerAt, columns: { label: string; key: string; w: number; kind?: 'mono' }[]): LayoutNode => ({
@@ -44,7 +36,6 @@ export const answerLayout = (at: AnswerAt): LayoutNode[] => [
       },
     },
   },
-  // How it was reached — the point of the query.
   {
     if: { $eq: [at.how, 'replayed'] },
     then: { component: 'Text', props: { tone: 'muted' }, children: 'Replayed: an earlier request stored this query. No model wrote anything.' },

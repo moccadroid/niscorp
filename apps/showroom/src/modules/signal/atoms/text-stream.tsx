@@ -5,9 +5,6 @@ type Props = {
   streaming: boolean;
 };
 
-// Dark monospace pane that renders accumulating stream text.
-// Shows a blinking cursor and a blue border while streaming;
-// a subtle "Waiting…" placeholder when empty and idle.
 export const TextStream: FC<Props> = ({ text, streaming }) => (
   <div
     style={{

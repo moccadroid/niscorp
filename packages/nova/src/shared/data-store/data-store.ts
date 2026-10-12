@@ -1,11 +1,6 @@
 import type { Unsubscribe } from '../common';
 import type { DataStore } from './types';
 
-// ═══════════════════════════════════════════════════════════
-// createDataStore — mutations live outside the store and are
-// applied via `store.update(curr => applyMutations(curr, list))`.
-// ═══════════════════════════════════════════════════════════
-
 export const createDataStore = <T extends Record<string, unknown> = Record<string, unknown>>(
   initial: T,
 ): DataStore<T> => {
@@ -19,9 +14,7 @@ export const createDataStore = <T extends Record<string, unknown> = Record<strin
     for (const handler of subscribers.slice()) {
       try {
         handler(current);
-      } catch {
-        // handler errors must not crash the store
-      }
+      } catch {}
     }
   };
 

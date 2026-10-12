@@ -5,13 +5,6 @@ import { PREVIEW } from '../preview.layout.js';
 import { makePreview } from './preview.js';
 import { PrismNode } from './node-editor.js';
 
-// @niscorp/loom/plugins/prism/react — the React surface for the Prism plugin.
-//
-// `prism(options)` assembles the core plugin with its two components: the
-// recursive node editor (the `prism:node` widget that edits the config) and the
-// preview, which applies the edited config to `options.input` and shows the
-// output.
-
 export type { PrismPluginOptions } from '../index.js';
 
 export const prism = (options: PrismPluginOptions): LoomEditorPlugin => {

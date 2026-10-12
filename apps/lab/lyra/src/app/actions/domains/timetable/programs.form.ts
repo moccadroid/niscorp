@@ -30,8 +30,6 @@ const programFormLayout: LayoutNode = {
       ref: 'colour',
       model: '$.colour',
     },
-    // The choice, shown as itself. A word for a colour is a word; the swatch
-    // is the only part of this field that answers "what will it look like".
     {
       component: 'Row',
       props: { gap: 8, align: 'center' },

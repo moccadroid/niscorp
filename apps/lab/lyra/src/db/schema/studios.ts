@@ -1,4 +1,3 @@
-// The tenant: a studio, and the clock every date in this schema is stamped from.
 export const STUDIOS_DDL = /* sql */ `
   -- A studio. "theme" names the row in "themes" this studio wears; NULL means
   -- the stock look. "slug" is what a future public URL would use.

@@ -4,9 +4,6 @@ import { automationsLayout } from './automations.layout';
 import { automationRecipes, automationsList, outboxRecent } from '@lyra/app/vex/tide.entries';
 
 const outboxPrism = { fingerprint: outboxRecent.fingerprint, context: {} };
-// Both screens are QUERIES now. The cards, their sentences, their state words
-// and how each one last ran all come out of one entry, scoped by the engine —
-// the two hand-written SELECTs and the JS that captioned them are gone.
 const listPrism = { fingerprint: automationsList.fingerprint, context: {} };
 const recipesPrism = { fingerprint: automationRecipes.fingerprint, context: {} };
 
@@ -19,8 +16,6 @@ export const automationsAction: ActionDefinition = {
     outbox: [],
     messageId: '',
     loading: true,
-    // Recipes first for a studio with nothing set up; the manifest flips it to
-    // Running for one that already has some.
     view: 'recipes',
     views: [
       { value: 'recipes', label: 'Recipes', showRecipes: true, showRunning: false, showOutbox: false },
@@ -48,12 +43,9 @@ export const automationsAction: ActionDefinition = {
     load: { url: '/api/studio/vex', method: 'POST', request: listPrism, target: 'reflexes', errorTarget: 'error' },
     recipes: { url: '/api/studio/vex', method: 'POST', request: recipesPrism, target: 'recipes', errorTarget: 'error' },
     outbox: { url: '/api/automation/vex', method: 'POST', request: outboxPrism, target: 'outbox' },
-    // The studio asking its own robot to try again — see automations.sendAgain.
     sendAgain: { fn: 'automations.sendAgain', errorTarget: 'error' },
     preview: { fn: 'automations.preview', target: 'previewResult', errorTarget: 'error' },
     run: { fn: 'automations.run', errorTarget: 'error' },
-    // A vex write like any other; the reflex reload rides the app's
-    // `automations` reaction, so nothing here remembers to poke one.
     setArm: {
       url: '/api/studio/vex',
       method: 'POST',
@@ -78,8 +70,6 @@ export const automationsAction: ActionDefinition = {
         { call: 'sendAgain', onSuccess: [{ call: 'outbox' }] },
       ],
     },
-    // The two faces. The option carries which panels it shows, so one trigger
-    // serves both and the layout's guards are plain values.
     {
       event: 'ui:click',
       ref: 'view',
@@ -197,8 +187,6 @@ export const automationsAction: ActionDefinition = {
         },
       ],
     },
-    // Pause and arm are the same call with the flag flipped, held as data so
-    // the layout branches on a value rather than on which button was pressed.
     {
       event: 'ui:click',
       ref: 'pause',

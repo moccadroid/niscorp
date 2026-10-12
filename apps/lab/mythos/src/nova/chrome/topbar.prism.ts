@@ -1,13 +1,4 @@
-// ───────────────────────────────────────────────────────────
-// Streak derivation for the topbar's loadStreak endpoint.
-//
-// The reply is the doneDays read: distinct completion days,
-// newest first. The transform socket wraps array replies as
-// `{ reply, today }` (today = the app's pinned reference date),
-// so this config sees both. It maps each day to its distance
-// from today in days, then counts the run of consecutive
-// distances — a streak that ended before yesterday is 0.
-// ───────────────────────────────────────────────────────────
+// The shell's `transform` wraps an array reply as `{ reply, today }`.
 
 const acc = (key: string): Record<string, unknown> => ({
   $get: { from: { $var: 'a' }, path: [key] },
@@ -34,7 +25,6 @@ export const streakFromDoneDays = {
       $case: {
         branches: [
           { when: { $empty: { $var: 'days' } }, then: { $const: 0 } },
-          // Newest completion is older than yesterday: the chain is broken.
           {
             when: { $gt: [{ $get: { from: { $var: 'days' }, path: [0], fallback: { $const: 99 } } }, { $const: 1 }] },
             then: { $const: 0 },

@@ -2,10 +2,6 @@ import { z } from 'zod';
 import { MutationSchema } from '../mutations';
 import type { Mutation } from '../mutations';
 
-// ═══════════════════════════════════════════════════════════
-// Effects + Steps (recursive union of Mutation | Effect)
-// ═══════════════════════════════════════════════════════════
-
 export type Step = Mutation | Effect;
 
 export type CallEffect = {
@@ -28,35 +24,16 @@ export type ReplaceEffect = {
   replace: { action: string; canvas?: string; input?: Record<string, unknown>; with?: string[] };
 };
 
-// Pop a canvas down to a given instance (everything above it is popped). The
-// stack-nav breadcrumb fires this with the target crumb's instance id.
 export type PopToEffect = { popTo: { canvas?: string; instance: string } };
 
-// Reset a canvas to a single root action (clear the whole stack, then push). The
-// screen-level nav (sidebar) fires this so drilling into a record doesn't leave
-// a stale stack beneath the new screen.
 export type ResetToEffect = {
   resetTo: { action: string; canvas?: string; input?: Record<string, unknown>; with?: string[] };
 };
 
-// Remove ONE instance anywhere in a canvas's stack (not just the top). On a
-// list-mode canvas — where every card is live and visible at once — this is how
-// a card's own close button dismisses itself. `pop` removes the top; this
-// removes a named one.
 export type RemoveInstanceEffect = { removeInstance: { canvas?: string; instance: string } };
 
-// Sugar for `removeInstance` aimed at the firing instance itself: a card's X
-// says "close me" without knowing its own id. The runtime desugars it to
-// `removeInstance` with the instance's real id before it escapes.
 export type RemoveSelfEffect = { removeSelf: true };
 
-// Make a canvas EQUAL a list read from the action's data — the declarative
-// verb (shell/reconcile.ts) as a step. Every other navigation step moves ONE
-// action; a surface whose actions come from rows (a set of tools, a set of
-// cards) has as many as the rows say, and a fixed list of steps cannot.
-// Missing actions are pushed, ones no longer listed are removed, ones already
-// there stay mounted. A row naming an action this shell does not have (not
-// granted) is skipped, as an ungranted `initial` candidate is.
 export type ReconcileEffect = {
   reconcile: { to: string; action: string; input?: string; canvas?: string; own?: 'pushed' | 'canvas'; with?: string[] };
 };
@@ -231,14 +208,6 @@ const ReconcileEffectSchema = z
   .strict()
   .describe('Make a canvas hold exactly the actions a list names: push the missing, remove the unlisted, keep the rest mounted (escapes via onNavigate callback).');
 
-// Re-run the firing instance's `mount` hook — the action re-reads whatever it
-// reads, in place, keeping its identity and its data.
-//
-// The gap this fills: a stacked canvas suspends what it covers and `resume`
-// already re-runs mount, so a revealed action is never stale. A LIST canvas
-// suspends nothing — every card stays active — so a card that loaded at seed
-// time and is opened an hour later would show the hour-old answer. `reload` is
-// what "opening it" means there.
 const ReloadEffectSchema = z
   .object({
     reload: z.literal(true).describe('Sentinel literal — must be true. Re-runs this instance\'s mount hook.'),

@@ -1,8 +1,5 @@
 import { spawnSync } from 'node:child_process';
 
-// Every check, each in its own process: a check ships the app a
-// history, and a shared one would make the order of the suite part of its
-// meaning. `nisc check` runs this. A new feature adds its check here.
 const CHECKS: readonly (readonly [name: string, what: string, args?: readonly string[]])[] = [
   ['artifacts-check', 'src/app is data: pure JSON, and every artifact parses its schema'],
   ['strata', 'the source is written at the installed grammars (strata.lock.json)', ['status', '--check']],

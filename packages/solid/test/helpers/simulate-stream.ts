@@ -1,21 +1,12 @@
 import type { Stream } from '../../src/types';
 
-// ═══════════════════════════════════════════════════════════
-// Stream simulation — feed JSON into a stream in realistic chunks
-// ═══════════════════════════════════════════════════════════
-
 export type SimulateOptions = {
-  // How to split the JSON into chunks
   mode: 'char' | 'token' | 'random' | 'fixed';
-  // Fixed chunk size (for 'fixed' mode)
   chunkSize?: number;
-  // Random chunk size range (for 'random' mode)
   minChunk?: number;
   maxChunk?: number;
 };
 
-// Feed JSON into a stream chunk by chunk, synchronously.
-// Returns the chunks that were fed (useful for debugging).
 export const simulateStream = <T>(
   stream: Stream<T>,
   json: string,
@@ -28,8 +19,6 @@ export const simulateStream = <T>(
   return chunks;
 };
 
-// Feed JSON into a stream with async delays between chunks.
-// Simulates real network latency.
 export const simulateAsyncStream = async <T>(
   stream: Stream<T>,
   json: string,
@@ -43,10 +32,6 @@ export const simulateAsyncStream = async <T>(
   }
   return chunks;
 };
-
-// ───────────────────────────────────────────────────────────
-// Chunk splitting strategies
-// ───────────────────────────────────────────────────────────
 
 const splitIntoChunks = (json: string, options: SimulateOptions): string[] => {
   switch (options.mode) {
@@ -69,8 +54,6 @@ const splitIntoChunks = (json: string, options: SimulateOptions): string[] => {
   }
 };
 
-// Split at JSON token boundaries — simulates how LLM token streaming
-// often aligns with JSON structural tokens
 const splitByTokenBoundaries = (json: string): string[] => {
   const chunks: string[] = [];
   let current = '';
@@ -79,7 +62,6 @@ const splitByTokenBoundaries = (json: string): string[] => {
     const ch = json[i];
     current += ch;
 
-    // Split after structural tokens and after string closes
     const isStructural = ch === '{' || ch === '}' || ch === '[' || ch === ']' || ch === ',' || ch === ':';
     const isStringEnd = ch === '"' && i > 0 && json[i - 1] !== '\\';
 
@@ -96,11 +78,9 @@ const splitByTokenBoundaries = (json: string): string[] => {
   return chunks;
 };
 
-// Split into chunks of random or fixed size
 const splitBySize = (json: string, min: number, max: number): string[] => {
   const chunks: string[] = [];
   let pos = 0;
-  // Deterministic pseudo-random for reproducible tests
   let seed = 42;
 
   while (pos < json.length) {
@@ -113,11 +93,6 @@ const splitBySize = (json: string, min: number, max: number): string[] => {
   return chunks;
 };
 
-// ───────────────────────────────────────────────────────────
-// Realistic payload generators
-// ───────────────────────────────────────────────────────────
-
-// Generates a realistic LLM structured output response
 export const generatePayload = (options: {
   responseLength?: number;
   itemCount?: number;
@@ -143,17 +118,16 @@ export const generatePayload = (options: {
   });
 };
 
-// Generate a large payload for performance testing
 export const generateLargePayload = (sizeKb: number): string => {
   const targetBytes = sizeKb * 1024;
   const items: { id: number; content: string; value: number }[] = [];
-  let currentSize = 50; // rough overhead for outer object
+  let currentSize = 50;
 
   let id = 0;
   while (currentSize < targetBytes) {
     const content = `Item content for entry ${id}. ` + 'x'.repeat(80);
     items.push({ id, content, value: id * 1.1 });
-    currentSize += content.length + 40; // rough per-item overhead
+    currentSize += content.length + 40;
     id++;
   }
 

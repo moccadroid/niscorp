@@ -1,11 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// API key storage — per-provider keys held in localStorage.
-// Plain text. Visible to anyone with browser access. The
-// settings UI shows a clear warning. Keys are sent ONLY to
-// each provider's official API endpoint via the openai SDK
-// signal loads dynamically.
-// ═══════════════════════════════════════════════════════════
-
 const STORAGE_KEY = 'showroom-signal-keys';
 
 type StoredKeys = Record<string, string>;

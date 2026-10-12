@@ -1,29 +1,7 @@
 import type { IntegrationStore } from '../../integration';
 
-// ── THE STORAGE THIS INTEGRATION BRINGS WITH IT ──────────────
-//
-// Per studio: which connected account is theirs.
-//
-// THIS IS THE ONE THING IN THIS REPO THAT CANNOT BE REGENERATED. Lyra's whole
-// database is replayed from a seed on every boot, on purpose, because its schema
-// is still moving. Belts' ranks are demo data. But Stripe mints `acct_…` once
-// and keeps it forever, and there is no way to ask from their side which of your
-// studios an account belongs to — so losing this mapping leaves a live, billable
-// merchant account that nobody can reach, and an `account.updated` webhook
-// arriving about a stranger.
-//
-// So it is Postgres, and it is migrated (`migrations/`), and the primary key is
-// what refuses a second account for a studio rather than a handler remembering
-// to check.
-//
-// NONE OF THIS IS EVER SENT TO LYRA (S4). Lyra's subscription row holds
-// STANDING — status, how far the money reaches — and never learns a Stripe id.
-// That split is what makes cash at the desk and a second provider the same
-// mutation with a different caller rather than a rewrite.
-//
-// NOTHING OUTSIDE integrations/stripe IMPORTS THIS FILE, and separation-check asserts
-// it: Belts holding rank data and this holding payment identifiers are in one
-// process, and an import is the only thing that would join them.
+// Cannot be regenerated: Stripe mints `acct_…` once and cannot be asked which
+// studio it belongs to. A lost row is a live merchant account nobody can reach.
 export type ConnectedAccount = {
   studioId: string;
   accountId: string;
@@ -32,15 +10,6 @@ export type ConnectedAccount = {
   createdAt: string;
 };
 
-// THE FALLBACK IS FOR CHECKS AND FOR THE MINUTE BEFORE `pnpm db:up`.
-//
-// Thirty-odd checks each boot an isolated world in-process; pointing them at a
-// shared Postgres would make them order-dependent and flaky, and that isolation
-// has caught most of the bugs in this build. A developer who has not started
-// the database should also get a working service rather than a crash.
-//
-// It is NOT for a deployment, and the integration says so at boot rather than letting
-// it be discovered when an account goes missing.
 const MEMORY = new Map<string, ConnectedAccount>();
 
 const ROW = (row: Record<string, unknown>): ConnectedAccount => ({
@@ -58,11 +27,8 @@ export const accountFor = async (db: IntegrationStore | undefined, studioId: str
   return row === undefined ? undefined : ROW(row);
 };
 
-// ONE ACCOUNT PER STUDIO, and the database is what says so. `ON CONFLICT DO
-// NOTHING` rather than an upsert: a second call is not a correction, it is a
-// second live merchant account at a vendor — and because Stripe fixes the
-// dashboard type at creation, the first cannot be repaired into the second. The
-// caller finds out it lost by reading back what is actually there.
+// `DO NOTHING`, not an upsert: a second call carries a second live merchant
+// account, not a correction. The caller reads back the one that is held.
 export const rememberAccount = async (db: IntegrationStore | undefined, account: ConnectedAccount): Promise<ConnectedAccount> => {
   if (db === undefined) {
     if (!MEMORY.has(account.studioId)) MEMORY.set(account.studioId, account);
@@ -76,7 +42,6 @@ export const rememberAccount = async (db: IntegrationStore | undefined, account:
   return (await accountFor(db, account.studioId)) ?? account;
 };
 
-/** For the checks, and for a dev restart that wants a clean slate. */
 export const forgetAccounts = async (db: IntegrationStore | undefined): Promise<void> => {
   if (db === undefined) {
     MEMORY.clear();
@@ -85,16 +50,8 @@ export const forgetAccounts = async (db: IntegrationStore | undefined): Promise<
   await db.query(`DELETE FROM ${db.table('accounts')}`);
 };
 
-/** Whether this integration is holding its data somewhere that survives a restart. */
 export const storeIsDurable = (db: IntegrationStore | undefined): boolean => db !== undefined;
 
-/**
- * Every studio this deployment has connected.
- *
- * The sweep needs it: "who is leaving" is a question per studio, and there is no
- * other list of which studios this integration acts for — lyra knows its own
- * tenants and this side knows only the ones that connected an account.
- */
 export const allAccounts = async (db: IntegrationStore | undefined): Promise<ConnectedAccount[]> => {
   if (db === undefined) return [...MEMORY.values()];
   const rows = await db.query<Record<string, unknown>>(
@@ -109,16 +66,6 @@ export const allAccounts = async (db: IntegrationStore | undefined): Promise<Con
   }));
 };
 
-// ── WHICH PROVIDER SUBSCRIPTION IS WHICH MEMBERSHIP ──────────
-//
-// The metadata carries lyra's ids TO Stripe, which is all a webhook needs: an
-// event arrives holding the subscription it is about. Going the other way had no
-// answer at all — given a membership in lyra that is leaving, there was nothing
-// that could name the Stripe subscription to stop.
-//
-// So the mapping is recorded as events arrive. It is a CACHE and not a source:
-// every row in it is rebuildable from Stripe, because every subscription there
-// carries the metadata this was derived from.
 const SUBSCRIPTION_MEMORY = new Map<string, string>();
 const subKey = (studioId: string, subscriptionId: string): string => `${studioId}:${subscriptionId}`;
 

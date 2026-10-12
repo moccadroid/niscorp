@@ -1,16 +1,7 @@
 import type { ScopePolicy } from '@niscorp/vex';
 
-// Server-side, LLM-invisible access control. `orders` is the only
-// seeded table with a tenant column (account_id), so it carries the
-// row-level filter the scope demo shows.
-//
-// The engine has NO default policy: the other read stories are an open
-// database and say so by carrying none. The scope story passes this policy
-// with its request (`scopePolicy`), together with the values that fill it —
-// who a read is for is stated, never inferred from a missing argument. Under
-// it the engine places
-//   { eq: ["orders.account_id", { $scope: "accountId" }] }
-// on every read of `orders`, and refuses one that names no accountId.
+// `orders` is the only seeded table with a tenant column (account_id). Under this
+// policy the engine refuses a read of `orders` that names no accountId.
 export const scopePolicy: ScopePolicy = {
   default: 'allow',
   entities: {
@@ -18,17 +9,7 @@ export const scopePolicy: ScopePolicy = {
   },
 };
 
-// The write side — the SAME ScopePolicy grammar, handed to the handler as
-// `mutations.policy`. Deliberately `default: 'deny'`: a write phase a table
-// doesn't have is a verb that doesn't exist.
-//
-//   - `write`  is the UMBRELLA phase: present = insert/update/delete all
-//     granted, its rules applying to each. `products` uses it, rule-free.
-//   - `insert`/`update`/`delete` are SPECIFIC phases: each grants just its
-//     op. `orders` grants insert + update — every write stamps the tenant
-//     column from scope (`set`, applied on insert AND update) and update is
-//     pinned to your own rows (`match`). `delete` is absent ON PURPOSE:
-//     no phase, no verb — the deny-by-absence demo.
+// `orders` has no `delete` phase on purpose: under `default: 'deny'` the verb is refused.
 export const mutationPolicy: ScopePolicy = {
   default: 'deny',
   entities: {
@@ -40,16 +21,13 @@ export const mutationPolicy: ScopePolicy = {
         { match: 'account_id', to: 'accountId' },
       ],
     },
-    // The onConflict demos. `customers` grants insert AND update because its
-    // create-or-fetch entry declares DO UPDATE — an update by another name,
-    // gated like one (insert alone would refuse it). `product_tags` is
-    // insert-only: its entry uses DO NOTHING, which needs no update grant.
+    // `customers` grants update because its entry declares DO UPDATE, which is gated
+    // like an update. `product_tags` uses DO NOTHING, which needs no update grant.
     customers: { insert: [], update: [] },
     product_tags: { insert: [] },
-    // A $lookup READS its table under THIS policy — `tags` needs a read
-    // phase here or the tag-by-name lookup is refused (default: deny).
+    // A $lookup reads its table under this policy: without a read phase here the
+    // tag-by-name lookup is refused.
     tags: { read: [] },
-    // The insertEach demo.
     order_items: { insert: [] },
   },
 };

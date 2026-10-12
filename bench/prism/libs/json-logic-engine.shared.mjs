@@ -1,10 +1,5 @@
-// The tasks as json-logic-engine rules. Shared by its two rows, which differ only in how a rule is run:
-// interpreted (engine.run) or compiled (engine.build). Built-in operators only; beyond the JsonLogic spec these
-// use `eachKey` (an object from fixed keys) and `??`.
-
 const v = (path) => ({ var: path });
 
-// qty × unitCents over the lines of the order in scope, plus its shipping.
 const totalCents = {
   '+': [{ reduce: [v('items'), { '+': [v('accumulator'), { '*': [v('current.qty'), v('current.unitCents')] }] }, 0] }, v('shippingCents')],
 };

@@ -6,20 +6,6 @@ import type { EngineDeps } from './runtime';
 import { occurrencesBetween } from './occurrence';
 import { unitsForRun } from './fanout';
 
-// ═══════════════════════════════════════════════════════════════
-// Preview — dry run as a verb, not a flag
-//
-// The real pipeline runs: the occurrence is computed, the
-// selection hits real data, every template is evaluated. Exactly
-// one function is stubbed — the effect executor — and because
-// that is the only door out of tide, there is no per-reflex
-// dry-run flag and no `if (dryRun)` for an author to forget. A
-// reflex CANNOT opt out of being previewable.
-//
-// Nothing here writes to the store. Preview is also where template
-// typos surface, which makes it the authoring loop's inner verb.
-// ═══════════════════════════════════════════════════════════════
-
 const LOOKBACK_MS = 400 * 86_400_000;
 const LOOKAHEAD_MS = 400 * 86_400_000;
 
@@ -60,16 +46,9 @@ export const previewReflex = async (
     units: [],
   };
 
-  // `when` is part of the truth a preview owes its reader: a reflex that
-  // would not have matched must say so rather than showing a hypothetical.
   if (reflex.when !== undefined && facts.length > 0) {
     try {
       const env = { params: reflex.params ?? {}, fact: { ...facts[0] }, now };
-      // THE ENGINE'S OWN PREDICATE, imported rather than restated. Preview
-      // used to reject only false/null/undefined while the matcher also
-      // rejects 0, '' and []: a `when` returning an empty list previewed as
-      // "this will fire" and then didn't — the exact class of surprise preview
-      // exists to eliminate.
       if (!isTruthy(evaluateTemplate(deps.transform, reflex.when, env)))
         return { ...report, fired: false, reason: '`when` did not match this fact' };
     } catch (error) {
@@ -107,9 +86,6 @@ export const previewReflex = async (
   return { ...report, selected: units.length, units: previewed };
 };
 
-// The occurrence a preview should show: the most recent one, or — for a
-// reflex that has not come round yet — the next. Showing nothing because
-// the clock happens to be between beats would be the least useful answer.
 const nearestOccurrence = (
   clock: NonNullable<ReturnType<typeof clockOf>>,
   now: number,
@@ -118,7 +94,5 @@ const nearestOccurrence = (
   if (past.length > 0) return past[past.length - 1];
   const future = occurrencesBetween(clock, now, now + LOOKAHEAD_MS, 1);
   if (future.length > 0) return future[0];
-  // A one-shot whose moment has passed outside the lookback still deserves
-  // a key rather than an empty preview.
   return isRecurring(clock) ? undefined : { key: clock.at, at: now };
 };

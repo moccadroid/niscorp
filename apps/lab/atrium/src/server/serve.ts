@@ -1,4 +1,3 @@
-// The atrium app server. Dev only: `pnpm --filter atrium serve`.
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { boot } from './boot';

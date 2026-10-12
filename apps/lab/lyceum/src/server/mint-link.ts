@@ -1,11 +1,3 @@
-// `pnpm mint <principal>` — A ONE-TIME SIGN-IN LINK for the speaker or the stage.
-//
-// Run where the database is (in the container: `docker compose exec app pnpm
-// mint speaker`). Prints a link that signs one device in as that principal,
-// once, within 15 minutes. Only principals the `grants` table names can have
-// one. Operator tooling, like the schema and the seed: it writes one row
-// directly and is not part of the app. For testing — a mailed link replaces
-// how the link travels, not how it is redeemed.
 import { randomBytes } from 'node:crypto';
 import pg from 'pg';
 import { hashLinkToken } from './login';

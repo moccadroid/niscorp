@@ -1,7 +1,5 @@
 import type { NovaExample } from './example.types';
 
-// Fragments: chrome and wired behaviour kept once and put around an action
-// when it is opened.
 export const COMPOSITION_EXAMPLES: readonly NovaExample[] = [
   {
     id: 'slot-fill',

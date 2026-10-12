@@ -1,14 +1,5 @@
 import type { SignalClient } from '@niscorp/cortex';
 
-// ═══════════════════════════════════════════════════════════
-// Live debug recorder — wraps the SignalClient so every LLM round
-// trip (including each retry) is captured: the messages we sent, the
-// raw content the model returned, its tool calls, finish reason, and
-// tokens. A run sets a fresh recorder; the wrapped client writes into
-// it; run.ts reads it back for the Debug inspector tab. Single-
-// threaded + sequential runs make a module-level "current" safe.
-// ═══════════════════════════════════════════════════════════
-
 export type LlmExchange = {
   iteration: number;
   label: string;
@@ -19,9 +10,6 @@ export type LlmExchange = {
   finishReason: string;
   tokens: number;
   ms: number;
-  // Raw provider payload — for error_recovered turns this is the
-  // underlying provider error (groq's code + failed_generation),
-  // which Signal otherwise swallows.
   raw?: unknown;
 };
 
@@ -43,9 +31,6 @@ type StepRes = Awaited<ReturnType<SignalClient['step']>>;
 const asText = (content: unknown): string =>
   typeof content === 'string' ? content : JSON.stringify(content);
 
-// Wrap a SignalClient so its round trips are recorded when a recording
-// is active. Cortex v2 always streams, so stepStream records too (from
-// the aggregated `done` result); count/describe pass through untouched.
 export const wrapForDebug = (llm: SignalClient, label: string): SignalClient => {
   let iteration = 0;
 

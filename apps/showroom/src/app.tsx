@@ -28,9 +28,6 @@ type LibraryDef = {
   load: () => Promise<LibraryModule>;
 };
 
-// Display order: Signal → Solid → Prism → Nova → Cortex follows the
-// LLM-stack mental model (talk to the model → parse the stream →
-// transform JSON → render UI → orchestrate).
 const LIBRARIES: LibraryDef[] = [
   { id: 'signal', name: 'Signal', load: async () => (await import('./modules/signal')).signalModule },
   { id: 'solid', name: 'Solid', load: async () => (await import('./modules/solid')).solidModule },
@@ -45,9 +42,6 @@ const LIBRARIES: LibraryDef[] = [
   { id: 'loom', name: 'Loom', load: async () => (await import('./modules/loom')).loomModule },
 ];
 
-// 'start' is a chrome-level landing page that renders the repo's root README
-// directly (no sidebar, no inspector). Not a LibraryDef. START_ID and the
-// `doc:` selection helpers live in ./routing, which owns the URL mapping.
 const LIBRARY_TABS: Library[] = [
   { id: START_ID, name: 'Start' },
   ...LIBRARIES.map((l) => ({ id: l.id, name: l.name })),
@@ -57,7 +51,6 @@ const PassThroughProvider: ComponentType<{ children: ReactNode }> = ({ children 
   <Fragment>{children}</Fragment>
 );
 
-// Semi-transparent click-away layer behind mobile drawers.
 const Backdrop: FC<{ onClick: () => void }> = ({ onClick }) => (
   <div
     onClick={onClick}
@@ -75,16 +68,11 @@ export const App: FC = () => {
   const [activeLibraryId, setActiveLibraryId] = useState<string>(initial.libraryId);
   const [active, setActive] = useState<LibraryModule | undefined>(undefined);
   const [activeStoryId, setActiveStoryId] = useState<string>('');
-  // URL segments after the library, awaiting the module to resolve into a
-  // selection. Null once resolved, and for user-driven navigation within a
-  // library (which sets the selection directly).
   const [pending, setPending] = useState<string[] | null>(initial.pending);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [inspectorOpen, setInspectorOpen] = useState<boolean>(false);
   const isMobile = useIsMobile();
 
-  // Load the active library's module (lazy, code-split). An unknown id falls
-  // back to Start. The selection is resolved separately, once the module is in.
   useEffect(() => {
     if (activeLibraryId === START_ID) {
       setActive(undefined);
@@ -105,8 +93,6 @@ export const App: FC = () => {
     };
   }, [activeLibraryId]);
 
-  // Resolve the pending URL path into a selection, once the matching module is
-  // loaded. An empty path resolves to the library landing.
   useEffect(() => {
     if (pending === null) return;
     if (activeLibraryId === START_ID) {
@@ -118,8 +104,8 @@ export const App: FC = () => {
     setPending(null);
   }, [active, pending, activeLibraryId]);
 
-  // Mirror the selection into the URL. Skipped while a URL-driven navigation is
-  // still resolving, so it never clobbers the address it came from.
+  // While a URL-driven navigation is still resolving, a write here would
+  // replace the address it came from.
   useEffect(() => {
     if (pending !== null) return;
     const path = buildPath(activeLibraryId, activeStoryId, active);
@@ -128,7 +114,6 @@ export const App: FC = () => {
     }
   }, [activeLibraryId, activeStoryId, active, pending]);
 
-  // Browser back/forward: re-read the URL into (library, pending path).
   useEffect(() => {
     const onPop = (): void => {
       const segments = routeSegments();
@@ -139,10 +124,6 @@ export const App: FC = () => {
     return (): void => window.removeEventListener('popstate', onPop);
   }, []);
 
-  // Crossing the breakpoint in either direction clears drawer state
-  // so the desktop layout isn't left with a stale "open" flag and a
-  // mobile user switching libraries doesn't reopen something they
-  // dismissed.
   useEffect(() => {
     setSidebarOpen(false);
     setInspectorOpen(false);
@@ -163,15 +144,11 @@ export const App: FC = () => {
     return active.docs.map((d) => ({ id: docId(d.id), title: d.title }));
   }, [active]);
 
-  // Selecting a story/doc on mobile should close the drawer so the
-  // user can see the canvas. Desktop is unchanged.
   const onStorySelect = useCallback((id: string): void => {
     setActiveStoryId(id);
     if (isMobile) setSidebarOpen(false);
   }, [isMobile]);
 
-  // Switching libraries goes to that library's landing; the resolver picks the
-  // first doc or story once the module loads (Start clears the pending path).
   const onLibrarySelect = useCallback((id: string): void => {
     setActiveLibraryId(id);
     setPending([]);
@@ -192,8 +169,6 @@ export const App: FC = () => {
     );
   }
 
-  // Still loading the module, or a URL-driven navigation has not resolved its
-  // selection yet. Either way there is no settled page to show.
   if (active === undefined || pending !== null) {
     return <div style={{ padding: 24 }}>Loading…</div>;
   }
@@ -206,8 +181,6 @@ export const App: FC = () => {
     ? active.stories.find((s) => s.id === activeStoryId)
     : undefined;
 
-  // Chrome contributes the Source tab for every story. Modules can
-  // add extras via buildInspectorTabs.
   const inspectorTabs: InspectorTabDef[] = activeStory === undefined || activeStory.doc === true
     ? []
     : [
@@ -218,9 +191,6 @@ export const App: FC = () => {
   const RuntimeProvider = active.RuntimeProvider ?? PassThroughProvider;
   const Demo = activeStory?.Demo;
 
-  // On mobile: sidebar is visible only when explicitly opened.
-  // Inspector is shown only when opened AND the current view has
-  // tabs (docs have none).
   const showSidebar = !isMobile || sidebarOpen;
   const hasInspector = inspectorTabs.length > 0;
   const showInspector = hasInspector && (!isMobile || inspectorOpen);

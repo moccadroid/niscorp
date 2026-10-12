@@ -2,17 +2,8 @@ import { useCallback, useRef, useSyncExternalStore, type FC } from 'react';
 import type { Shell, CanvasState } from '@niscorp/nova';
 import type { NovaStory } from '@showroom/modules/nova/story-types';
 
-// ═══════════════════════════════════════════════════════════
-// Data tab — shows live action-instance data, one section per
-// canvas. For each canvas with an active action, we render the
-// action id + instance id + the data bag as key/value rows.
-//
-// Subscribes to shell.onStateChange via useSyncExternalStore
-// with a cached snapshot (shell.getState allocates a fresh
-// object each call, so the cache is required to avoid an
-// infinite re-render loop).
-// ═══════════════════════════════════════════════════════════
-
+// shell.getState allocates a fresh object each call, so useSyncExternalStore
+// needs the cached snapshot to avoid an infinite re-render loop.
 type Cache = {
   shell: Shell;
   canvases: Record<string, CanvasState>;

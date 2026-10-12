@@ -4,8 +4,6 @@ import { scenarios, type VexScenario } from './scenarios';
 import { VexView } from './vex-view';
 import { buildSource } from './source';
 
-// Each scenario becomes a chrome Story. The scenario rides along as an
-// extra so the inspector tabs can read the DSL / SQL / cache meta.
 const toStory = (scenario: VexScenario): Story => {
   const Demo: FC = () => <VexView scenario={scenario} />;
   Demo.displayName = `VexDemo(${scenario.id})`;

@@ -1,11 +1,6 @@
 import { shellSettled } from '@niscorp/nova';
 import { boot } from '../boot';
 
-// The welcome screen, with no browser: the app's own boot, its first screen
-// whole, and a press reaching the shell. One `[pass]`/`[fail]` line per
-// assertion; any failure exits non-zero (AGENTS.md, "Verification"). Whether
-// the screen draws and is picked up in a page is `nisc build`'s to check.
-
 let failures = 0;
 const check = (name: string, passed: boolean, detail = ''): void => {
   console.log(`${passed ? '[pass]' : '[fail]'} ${name}${!passed && detail !== '' ? ` — ${detail}` : ''}`);

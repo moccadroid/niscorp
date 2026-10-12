@@ -3,16 +3,6 @@ import { z } from 'zod';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { cx } from '../lib/cx';
 
-// The dock — a fixed bottom-anchored surface, designed for a phone first: a
-// pill within thumb reach that expands into a panel over the content. On a wide
-// screen the same panel anchors bottom-right instead of full-width; that is the
-// desktop getting lucky, not a second design. Domain-blind: it positions and
-// frames, the layout decides everything inside.
-//
-// `side` and `wide` are corners and sizes, which is the only kind of decision
-// this component is allowed to carry. Two docks can therefore share one screen
-// without knowing about each other — and in this app two do, served by two
-// different processes to two different audiences.
 const DockProps = z
   .object({
     open: z.boolean().optional(),

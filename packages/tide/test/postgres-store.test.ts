@@ -95,7 +95,6 @@ describe('a serial group, claimed by two instances at once', () => {
 });
 
 describe('the engine tables are not application data', () => {
-  // The one case about a database with no table of tide's in it, so it starts one of its own.
   const empty: { db?: PGlite } = {};
   beforeAll(async () => {
     empty.db = new PGlite({ loadDataDir: initialisedDirectory(inject('initialisedDatabase')) });

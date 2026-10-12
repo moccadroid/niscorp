@@ -1,13 +1,3 @@
-// The timed runs. Every case is a process of its own (harness/case.mjs), one after another, in a shuffled order.
-//
-//   node harness/run.mjs                       every adapter that passes the check
-//   node harness/run.mjs --only prism,jsonata  these adapters
-//   node harness/run.mjs --passes 2            the whole list this many times, shuffled anew each time (default 1)
-//   node harness/run.mjs --node <path>         run the cases with another node binary
-//   node harness/run.mjs --label quick         results/<label>.raw.json instead of results/node-<major>.raw.json
-//
-// Nothing else should be running on the machine. A library is only timed on the tasks it passed in the check.
-
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -53,7 +43,6 @@ for (const id of ids) {
   for (const task of TASKS) {
     if (matrix[id][task.id].state !== 'ok') continue;
     any = true;
-    // A row whose prepare only hands its source back (the same object kept) has no prepare to time.
     if (adapter.prepared !== false && adapter.prepareTimed !== false) cases.push([id, task.id, task.sizes[0], 'prepare']);
     for (const size of task.sizes) {
       if (adapter.prepared !== false) cases.push([id, task.id, size, 'run']);
@@ -65,7 +54,6 @@ for (const id of ids) {
   for (let n = 0; n < COLD_RUNS; n += 1) cases.push([id, '-', 0, 'cold']);
 }
 
-// A seeded shuffle, so a run can be repeated in the same order.
 const shuffled = (list, seed) => {
   let state = seed >>> 0;
   const random = () => {

@@ -5,10 +5,6 @@ import { canonicalHash } from '../../src/utils/canonical.js';
 import { computePolicyKey, computeRequestHash, computeSchemaFingerprint, mintFingerprint } from '../../src/cache/hash.js';
 import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
 
-// Vex hashes without `node:crypto`, so that it runs in a page. Two things are
-// held here: its SHA-256 answers what node's answers, and the values vex
-// stores — which caches already hold — are the ones it stored before.
-
 const nodeSha256 = (text: string): string => createHash('sha256').update(text).digest('hex');
 
 describe('sha256Hex', () => {
@@ -20,7 +16,6 @@ describe('sha256Hex', () => {
   });
 
   it('answers what node answers at every length around a block', () => {
-    // 55, 56, 63, 64 and 65 bytes are where the padding changes shape
     for (let length = 0; length <= 200; length += 1) {
       const text = 'a'.repeat(length);
       expect(sha256Hex(text), `length ${length}`).toBe(nodeSha256(text));
@@ -38,9 +33,8 @@ describe('sha256Hex', () => {
 });
 
 describe('the hashes vex stores', () => {
-  // Captured from the build that hashed with node's `createHash`. A cache
-  // row's `request_hash` and `schema_fingerprint` are compared against what
-  // is computed now, so a value that moved would read every stored entry as
+  // A cache row's `request_hash` and `schema_fingerprint` are compared against
+  // what is computed now: a value that moved reads every stored entry as
   // changed, or as stale.
   it('a request hash is what it was', () => {
     const request = { intent: 'List open todos ordered by due date', shape: [{ todo_id: '', title: '', due_display: '' }], context: { ownerId: 'u1' } };

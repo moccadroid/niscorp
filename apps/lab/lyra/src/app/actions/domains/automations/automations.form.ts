@@ -3,18 +3,6 @@ import type { ActionDefinition, LayoutNode, Step } from '@niscorp/nova';
 import { automationCreate, automationUpdate } from '@lyra/app/vex/tide.entries';
 import { EFFECTS, MOMENTS } from '@lyra/app/reflexes/compose';
 
-// THE VOCABULARY, BAKED INTO THE MANIFEST — not fetched from a function.
-//
-// A moment and an effect are app CONSTANTS: they ship with the release, they
-// are the same for every studio, and a round trip to ask what they are is a
-// round trip to be told what this file already imports. Each option carries
-// its own shape — whether the number means anything, what the message fields
-// are called — so choosing one IS learning what the form should show, the
-// same way the list's view options carry which panels they open.
-//
-// Three functions died here: `automations.moments`, `automations.effects`
-// and `automations.shape`, the last of which existed only to look up a pair
-// in these two arrays.
 const MOMENT_OPTIONS = MOMENTS.map((moment) => ({
   value: moment.id,
   label: `When ${moment.label}`,
@@ -39,12 +27,9 @@ const EFFECT_OPTIONS = EFFECTS.map((effect) => ({
 const FIRST_MOMENT = MOMENT_OPTIONS[0];
 const FIRST_EFFECT = EFFECT_OPTIONS[0];
 
-// The sentence and the intent are the only two things that need BOTH halves,
-// so they are composed from the data rather than carried on either option.
-//
-// STAGED, through a message, because a `$prism` set reads the action's root
-// data as it was when the batch began: composing in the same `do` that sets
-// the halves would read the previous pairing and always be one change behind.
+// Run through a message: a `$prism` set reads the data as it stood before its
+// run of sets, so composing beside the sets of the halves would read the
+// previous pairing.
 const COMPOSE: Step[] = [
   { set: 'sentence', value: { $prism: { $join: { parts: ['When ', { $ref: '$.momentPhrase' }, ', ', { $ref: '$.effectPhrase' }], sep: '' } } } },
   { set: 'intent', value: { $prism: { $join: { parts: [{ $ref: '$.momentBlurb' }, ' ', { $ref: '$.effectBlurb' }], sep: '' } } } },
@@ -92,18 +77,9 @@ const automationFormLayout: LayoutNode = {
       model: '$.effect',
     },
 
-    // Composing two vocabularies is only an improvement if you can see what you
-    // made.
     { if: '$.sentence', then: { component: 'Notice', props: { tone: 'calm', message: '$.sentence' } }, else: '' },
     { if: '$.intent', then: { component: 'Prose', props: { size: 'sm', color: 'mute' }, children: '$.intent' }, else: '' },
 
-    // WHO IT WOULD REACH, before it is saved rather than after.
-    //
-    // Preview existed, on the list, once the automation was already running.
-    // This asks the same question one step earlier — while the sentence is
-    // still being composed — because both ways of building a useless
-    // automation were invisible until then: one that matches nobody, and one
-    // the studio's automations are not permitted to run at all.
     {
       if: '$.audience.known',
       then: {
@@ -113,8 +89,6 @@ const automationFormLayout: LayoutNode = {
       else: '',
     },
 
-    // Only the knobs this sentence takes: a WATCHED moment has no hour, so
-    // asking for one would be asking for a number the automation ignores.
     {
       if: '$.watched',
       then: { component: 'Notice', props: { tone: 'good', message: 'This one runs as it happens, within a minute. There is no time to set.' } },
@@ -137,8 +111,6 @@ const automationFormLayout: LayoutNode = {
         component: 'Stack',
         props: { gap: 12 },
         children: [
-          // The LABELS come from the effect. "Subject" is right for an email
-          // and wrong for a tag, where the same field holds one word.
           { component: 'Input', props: { label: '$.subjectLabel', hint: '$.messageHint' }, ref: 'subject', model: '$.subject' },
           {
             if: '$.bodyLabel',
@@ -170,8 +142,6 @@ export const automationFormAction: ActionDefinition = {
   data: {
     heading: 'Add an automation',
     automationId: '',
-    // The defaults ARE the first option of each list, so a form opened from
-    // scratch already describes the pairing it is showing.
     moment: FIRST_MOMENT?.value ?? '',
     effect: FIRST_EFFECT?.value ?? '',
     momentOptions: MOMENT_OPTIONS,
@@ -204,13 +174,9 @@ export const automationFormAction: ActionDefinition = {
     create: { url: '/api/studio/vex', method: 'POST', request: createPrism, errorTarget: 'error' },
     update: { url: '/api/studio/vex', method: 'POST', request: updatePrism, errorTarget: 'error' },
   },
-  // A form opened from a card or a recipe arrives with that pairing's shape
-  // already in its input, so the sentence only has to be composed.
   lifecycle: { mount: [{ emit: { channel: 'compose-sentence' } }, { call: 'audience' }] },
   triggers: [
     { message: 'compose-sentence', do: COMPOSE },
-    // The option IS the shape: picking one carries what the form should show
-    // with it, so there is nothing to go and ask.
     {
       event: 'ui:model',
       ref: 'moment',
@@ -259,8 +225,6 @@ export const automationFormInputSchema = z.toJSONSchema(
     runAt: z.string().optional(),
     days: z.number().optional(),
     enabled: z.boolean().optional(),
-    // The pairing's SHAPE, carried in by whatever opened the form — a card or
-    // a recipe already knows it, so the form has nothing to look up.
     momentPhrase: z.string().optional(),
     momentBlurb: z.string().optional(),
     effectPhrase: z.string().optional(),

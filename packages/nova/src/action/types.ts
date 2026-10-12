@@ -8,10 +8,6 @@ import type { ComponentRegistry, LayoutStore, RenderNode } from '../layout/types
 import type { PhraseKeys, Phrasebook } from '../i18n/phrases';
 import type { ActionDefinition, Mutation, PopEffect, PopToEffect, PushEffect, RemoveInstanceEffect, RemoveSelfEffect, ReplaceEffect, ResetToEffect, Step } from './schemas';
 
-// ═══════════════════════════════════════════════════════════
-// Status / Instance
-// ═══════════════════════════════════════════════════════════
-
 export type ActionStatus = 'initializing' | 'active' | 'suspended' | 'unmounted';
 
 export type ActionInstance = {
@@ -22,26 +18,10 @@ export type ActionInstance = {
   data: Record<string, unknown>;
 };
 
-// ═══════════════════════════════════════════════════════════
-// Callbacks / handlers
-// ═══════════════════════════════════════════════════════════
-
 export type DataChangeHandler = (data: Record<string, unknown>) => void;
 export type StatusChangeHandler = (status: ActionStatus) => void;
 export type { Unsubscribe };
 
-// ═══════════════════════════════════════════════════════════
-// Transform / Fetch injection
-// ═══════════════════════════════════════════════════════════
-
-// The injected transform evaluator. Runs an opaque `config` over a `source`
-// value and returns the result. Nova never interprets the config — the host
-// injects the interpreter (e.g. Prism's `evaluate`), so Prism stays an optional
-// dependency. Used only on endpoints: `request` runs over the action data → the
-// request body; `response` runs over the reply exactly as received (`$` is the
-// reply — object, array, or scalar; no wrapping) → the value stored at `target`.
-// Declaring a `request`/`response` without injecting a transform is an error
-// (never a silent skip). Initial data is never transformed.
 export type TransformFn = (config: unknown, source: unknown) => unknown;
 export type FetchFn = (url: string, init?: FetchInit) => Promise<FetchResponse>;
 export type FunctionHandler = (
@@ -61,21 +41,9 @@ export type FetchResponse = {
   status: number;
   json: () => Promise<unknown>;
   text: () => Promise<string>;
-  // A LATER BODY FOR THE SAME REQUEST. A transport that can tell the answer
-  // changed (a reactive vex read under moss) offers this; nova applies every
-  // later body exactly as it applied the first — `response`, then `target` —
-  // and nothing else runs: no `onSuccess`, no telemetry, no loading flag. The
-  // subscription ends when a newer call to the same endpoint lands or the
-  // instance unmounts. Nova knows nothing about why a body changed.
   onChange?: (handler: (body: unknown) => void) => Unsubscribe;
 };
 
-// ═══════════════════════════════════════════════════════════
-// Navigation effects (escape via onNavigate)
-// ═══════════════════════════════════════════════════════════
-
-// A `reconcile` step, resolved: its rows read into the actions they name, and
-// stamped with who placed them (the firing action's id, by the runtime).
 export type ReconcileNavigation = {
   reconcile: {
     canvas?: string;
@@ -89,15 +57,6 @@ export type ReconcileNavigation = {
 export type NavigationEffect = PushEffect | PopEffect | ReplaceEffect | PopToEffect | ResetToEffect | RemoveInstanceEffect | RemoveSelfEffect | ReconcileNavigation;
 export type NavigateHandler = (effect: NavigationEffect) => void;
 
-// ═══════════════════════════════════════════════════════════
-// Endpoint telemetry — a `call` step reports its outcome upward the same way
-// a navigation does (via a shell-provided handler), so the shell can route it
-// to telemetry. Covers BOTH endpoint kinds (`http` via fetch, `fn` in-process):
-// the observation point is `callEndpoint`, not the fetch, so a server-shell app
-// whose endpoints are all `fn:` is fully seen. `status` is the HTTP status, or 0
-// for a function endpoint; `ms` is the call's wall-clock duration.
-// ═══════════════════════════════════════════════════════════
-
 export type EndpointEvent = {
   name: string;
   kind: 'fn' | 'http';
@@ -107,13 +66,8 @@ export type EndpointEvent = {
   instanceId: string;
   canvasId: string;
 };
-// What `runCall` knows at the call site — the runtime stamps instance/canvas.
 export type EndpointEventInit = Omit<EndpointEvent, 'instanceId' | 'canvasId'>;
 export type EndpointHandler = (event: EndpointEvent) => void;
-
-// ═══════════════════════════════════════════════════════════
-// Runtime config + interface
-// ═══════════════════════════════════════════════════════════
 
 export type OnErrorHandler = (error: NovaError) => void;
 
@@ -130,37 +84,21 @@ export type ActionRuntimeConfig = {
   transform?: TransformFn;
   fetch?: FetchFn;
   functions?: Record<string, FunctionHandler>;
-  // The shell's default wait for an endpoint's reply (ShellConfig).
   endpointTimeoutMs?: number;
   onNavigate?: NavigateHandler;
   onEndpoint?: EndpointHandler;
-  // Handed every chain this instance starts and does not await — a trigger's
-  // steps, a message on its way to its listeners — so whoever holds the instance
-  // can tell when nothing it started is still running (shell/chains.ts).
   onChain?: (chain: Promise<unknown>) => void;
   strict?: boolean;
   onError?: OnErrorHandler;
-  // THE WORDS THIS INSTANCE RENDERS IN — asked for, rather than held.
-  //
-  // A function and not a value because the book outlives the instance: a shell
-  // whose language changes must reach the screens that are already open, and an
-  // instance handed a book at spawn would go on rendering the old one until
-  // somebody navigated. Called once per render; the shell answers from the one
-  // cell `setPhrases` writes.
   i18n?: () => LanguageOptions | undefined;
 };
 
-// What a render needs to know about language — the shell's cell, the runtime's
-// question, and the renderer's context all speak this one shape.
 export type LanguageOptions = {
   phrases?: Phrasebook;
   phraseKeys?: PhraseKeys;
   onPhraseMiss?: (phrase: string, where: string) => void;
 };
 
-// Narrow public surface — what an external consumer (adapter, telemetry,
-// inspector) needs from a runtime obtained via `shell.getRuntime`.
-// Lifecycle and mutation control belong to the shell.
 export type PublicActionRuntime = {
   readonly instance: ActionInstance;
   readonly definition: ActionDefinition;
@@ -173,8 +111,6 @@ export type PublicActionRuntime = {
   onStatusChange: (handler: StatusChangeHandler) => Unsubscribe;
 };
 
-// Internal full runtime — held by the shell, used by tests that exercise
-// internals directly. Not re-exported from the package root.
 export type ActionRuntime = PublicActionRuntime & {
   readonly dataStore: DataStore;
 

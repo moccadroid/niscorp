@@ -3,12 +3,6 @@ import { z } from 'zod';
 import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/react';
 import { FS, LINE } from '../lib/tokens';
 
-// Introspection primitives — Panel, JsonTree. The relay-styled (dark)
-// implementations of the generic names nova/devtools composes against; nova's
-// own light reference versions are for the zero-config DOM terminal. Same
-// names, same props — the registry swap is the theming.
-
-// ─── Panel ─────────────────────────────────────────────────
 const PanelProps = z
   .object({
     title: z.string().optional(),
@@ -25,9 +19,8 @@ export const Panel: NovaComponent<z.infer<typeof PanelProps>> = ({ title, backRe
       display: 'flex',
       flexDirection: 'column',
       minHeight: 0,
-      // the panel owns its viewport — intermediate wrappers (slotWrapper,
-      // canvas hosts) don't propagate flex constraints, so cap here and let
-      // the body scroll
+      // Capped here so the body scrolls: the wrappers above (slotWrapper,
+      // canvas hosts) do not pass flex constraints down.
       maxHeight: '80vh',
       minWidth: 320,
       maxWidth: 440,
@@ -67,7 +60,6 @@ export const Panel: NovaComponent<z.infer<typeof PanelProps>> = ({ title, backRe
 };
 Panel.meta = { description: 'A framed, elevated surface with an optional title header; `closeRef` adds a header ✕.', propsSchema: PanelProps };
 
-// ─── JsonTree ──────────────────────────────────────────────
 const entriesOf = (value: object): Array<[string, unknown]> =>
   Array.isArray(value) ? value.map((item, index): [string, unknown] => [String(index), item]) : Object.entries(value);
 

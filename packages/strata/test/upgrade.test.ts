@@ -7,9 +7,6 @@ import type { Sequence, Transform } from '../src';
 import { runSourceUpgrade } from '../src/node';
 import type { SourceDocument } from '../src/upgrade';
 
-// The whole loop, against a temporary app: a lock, a plan, an edit, a verify.
-// The "source" is a mutable list — editing it stands in for editing files.
-
 const transform: Transform = (config, source) => (typeof config === 'function' ? config(source) : source);
 const renameTitle = {
   description: 'Forms: title → heading',
@@ -37,7 +34,6 @@ const app = () => {
     { kind: 'acme.forms/form', id: 'contact', document: { id: 'contact', heading: 'Contact', fields: [] } },
   ];
   const lines: string[] = [];
-  // Editing the source: artifact `id` now reads `document`.
   const edit = (id: string, document: unknown): void => {
     const at = source.findIndex((d) => d.id === id);
     if (at === -1) throw new Error(`no artifact ${id}`);
@@ -64,10 +60,8 @@ describe('strata upgrade — the loop', () => {
     await a.run([forms([])], 'init');
     const next = [forms([renameTitle])];
 
-    // A newer grammar is installed: the source is behind.
     expect(await a.run(next, 'status', '--check')).toBe(1);
 
-    // Plan.
     expect(await a.run(next, 'upgrade')).toBe(0);
     const work = join(a.root, '.strata', 'upgrade');
     const report = readFileSync(join(work, 'REPORT.md'), 'utf8');
@@ -76,20 +70,17 @@ describe('strata upgrade — the loop', () => {
     expect(report).toContain('**File:** `src/forms.ts`');
     expect(report).toContain('- title');
     expect(report).toContain('+ heading');
-    expect(report).not.toContain('### `contact`'); // already has a heading: untouched
+    expect(report).not.toContain('### `contact`');
     const expected = JSON.parse(readFileSync(join(work, 'expected', 'acme.forms_form', 'signup.json'), 'utf8'));
     expect(expected).toEqual({ id: 'signup', heading: 'Sign up', fields: ['email'] });
 
-    // Verify before editing: refused, with what differs; the lock has not moved.
     expect(await a.run(next, 'verify')).toBe(1);
     expect(a.lines.join('\n')).toContain('signup does not match its migrated JSON yet');
     expect(a.lock()).toEqual({ grammar: { 'acme.forms': 0 } });
 
-    // A wrong edit is still refused.
     a.edit('signup', { id: 'signup', heading: 'Signup', fields: ['email'] });
     expect(await a.run(next, 'verify')).toBe(1);
 
-    // The right edit (key order is how a person wrote it, not content).
     a.edit('signup', { fields: ['email'], heading: 'Sign up', id: 'signup' });
     expect(await a.run(next, 'verify')).toBe(0);
     expect(a.lock()).toEqual({ grammar: { 'acme.forms': 1 } });
@@ -114,7 +105,7 @@ describe('strata upgrade — the loop', () => {
     const next = [forms([renameTitle])];
     await a.run(next, 'upgrade');
     a.edit('signup', { id: 'signup', heading: 'Sign up', fields: ['email'] });
-    a.edit('contact', { id: 'contact', title: 'Contact', fields: [] }); // regressed while editing
+    a.edit('contact', { id: 'contact', title: 'Contact', fields: [] });
     expect(await a.run(next, 'verify')).toBe(1);
     expect(a.lines.join('\n')).toContain('contact was not in the plan, but the migrations would change it now');
   });

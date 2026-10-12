@@ -1,9 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 
-// The layout + field shells: the group heading and the per-field wrapper
-// (label / description / required marker / error) around one control.
-
 const groupStyle: CSSProperties = { display: 'flex', flexDirection: 'column' };
 const titleStyle: CSSProperties = { fontSize: 15, fontWeight: 700, marginBottom: 8, color: '#111827' };
 const fieldStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12 };
@@ -21,12 +18,9 @@ export const LoomField: NovaComponent<{
   label?: string;
   description?: string;
   required?: boolean;
-  // Resolved from the error channel: a string at a leaf path, the error
-  // sub-tree at a container path (rendered only when it's a string).
   error?: unknown;
-  // A plain <div>, not a <label>: a field can wrap composite content (an
-  // object group, an array with its own buttons), and a <label> would
-  // capture every control inside it as its target.
+  // A <div>, not a <label>: a field can wrap a group or an array with its own
+  // buttons, and a click anywhere in a <label> goes to the first control in it.
 }> = ({ label, description, required, error, children }) => (
   <div style={fieldStyle}>
     <span style={labelStyle}>

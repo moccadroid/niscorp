@@ -1,12 +1,5 @@
 import { useState, type FC } from 'react';
 
-// ═══════════════════════════════════════════════════════════
-// JsonViewer — collapsible, syntax-highlighted JSON tree.
-// Used to render structured assistant responses inside chat
-// bubbles. Keeps depth ≤ 2 expanded by default so the user
-// sees structure immediately without scrolling forever.
-// ═══════════════════════════════════════════════════════════
-
 const COLOR_KEY = '#9cdcfe';
 const COLOR_STRING = '#ce9178';
 const COLOR_NUMBER = '#b5cea8';

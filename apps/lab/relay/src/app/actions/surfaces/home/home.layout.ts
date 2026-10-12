@@ -1,8 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The Home dashboard: three KPI tiles over a pipeline-by-stage table. All
-// values are pre-formatted strings written by the `loadHome` function, so the
-// layout only binds and displays. Literal + serializable.
 export const homeLayout: LayoutNode = {
   if: '$.loading',
   then: {

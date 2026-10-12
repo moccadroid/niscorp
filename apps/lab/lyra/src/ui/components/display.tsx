@@ -13,10 +13,9 @@ const TextProps = z
     mono: z.boolean().optional(),
     truncate: z.boolean().optional(),
     tabular: z.boolean().optional().describe('Lining figures — for anything in a column that should line up'),
-    // A prose value bound as a PROP rather than as a text-node child, for two
-    // reasons that both come from the renderer: a bound TEXT CHILD is data and
-    // is never translated, and a counted pattern only gets filled at a prose
-    // key. Both rules are about the key, so the value has to travel under one.
+    // A prose value travels as this prop, not as a text child: the renderer
+    // never translates a bound text child, and fills a counted pattern only at
+    // a prose key.
     phrase: z.string().optional(),
   })
   .strict();
@@ -70,7 +69,6 @@ export const Badge: NovaComponent<z.infer<typeof BadgeProps>> = ({ tone, hue, la
 };
 Badge.meta = { description: 'A small status pill. `tone` is a token, so a status never carries its own colour.', propsSchema: BadgeProps };
 
-// `phrase` beside `value` for the same reason Field has both — see Field.
 const StatProps = z
   .object({
     label: z.string(),
@@ -161,7 +159,6 @@ export const Bands: NovaComponent<Partial<z.infer<typeof BandsProps>>> = ({ band
 };
 Bands.meta = { description: 'A horizontal strip of colored segments; a segment may carry tick marks. Colors are content from rows, never theme tokens.', propsSchema: BandsProps };
 
-// ── prose ────────────────────────────────────────────────────
 const ProseProps = z
   .object({
     size: sizeToken,
@@ -188,16 +185,6 @@ export const Prose: NovaComponent<z.infer<typeof ProseProps>> = ({ size, color, 
 );
 Prose.meta = { description: 'A paragraph: real leading, a readable measure, and it wraps. For explanations — Text is for labels and values.', propsSchema: ProseProps };
 
-// ── field ────────────────────────────────────────────────────
-//
-// `value` and `phrase` are the same slot with different CITIZENSHIP. A
-// binding's key dies at resolution — `$.x.paid_via_display` reaches the
-// renderer as a prop named `value` — so proseness has to be declared by the
-// prop the author picks, not recovered from where the data came from. `value`
-// is data (a name, an amount) and the pass never touches it; `phrase` is
-// vocabulary (a closed-set word, a counted pattern) and translates. Deciding
-// which is which is the author's one job here, and it is the same decision the
-// vex mapping already made when it spelled the field `*_display`.
 const FieldProps = z
   .object({
     label: z.string(),
@@ -227,7 +214,6 @@ export const Field: NovaComponent<Partial<z.infer<typeof FieldProps>>> = ({ labe
 };
 Field.meta = { description: 'A label and its value, sized for text. Stat is for figures; this is for facts.', propsSchema: FieldProps };
 
-// ── meter ────────────────────────────────────────────────────
 const MeterProps = z
   .object({
     value: z.number(),
@@ -278,7 +264,6 @@ const RuleProps = z.object({ my: z.number().optional() }).strict();
 export const Rule: NovaComponent<z.infer<typeof RuleProps>> = ({ my }: z.infer<typeof RuleProps>) => <hr style={{ border: 0, borderTop: '1px solid var(--line)', margin: `${my ?? 0}px 0`, width: '100%' }} />;
 Rule.meta = { description: 'A horizontal rule.', propsSchema: RuleProps };
 
-// ── the icon ─────────────────────────────────────────────────
 const IconProps = z
   .object({
     name: z.string().describe('A name from the kit vocabulary — see ui/lib/icons.ts'),

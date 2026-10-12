@@ -1,10 +1,3 @@
-// Shell-host check — through a REAL websocket: the shell
-// runs INSIDE moss, per principal, durable; the client is nothing but a
-// socket. Render frames flow on connect and on every change; events flow
-// up and drive the same nova machinery every headless check drives; two
-// connections of one principal are the same shell fanned out (shared
-// canvases). The server shell's endpoint calls ride moss's own HTTP
-// surfaces under the session's token — same wire, same enforcement.
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { CLOSE_SIGNED_OUT, offerToken, PROTOCOL } from '@niscorp/moss/protocol';
@@ -21,13 +14,10 @@ type Client = {
   until: (predicate: () => boolean, why: string) => Promise<void>;
   close: () => void;
   closeCode: () => number | null;
-  // the shell frame (the canvas arrangement) and a session grant, if any
   shellFrame: () => string;
   granted: () => string | null;
 };
 
-// A frame-accumulating client: keeps the LAST render frame per canvas
-// (frames stream as data loads; the latest is the current truth).
 const connect = (base: string, token?: string): Promise<Client> =>
   new Promise((resolve, reject) => {
     const ws = new WebSocket(`${base}/socket?protocol=${PROTOCOL}`, offerToken(token ?? null));
@@ -79,7 +69,6 @@ const main = async (): Promise<void> => {
   const jordanToken = mintToken('jordan');
   if (alexToken === null || jordanToken === null) throw new Error('users missing');
 
-  // ── connect: the shell renders server-side, frames arrive ──
   const alex = await connect(base, alexToken);
   await alex.until(() => alex.frame('sidebar') !== '' && alex.frame('main') !== '', 'initial frames');
   checks.push(['the sidebar tree arrives over the socket', alex.frame('sidebar').includes('nav-deals')]);
@@ -87,37 +76,25 @@ const main = async (): Promise<void> => {
   await alex.until(() => alex.frame('main').length > 200, 'home content');
   checks.push([`the main canvas carries the home screen (${alex.frame('main').length} chars of tree)`, alex.frame('main').length > 200]);
 
-  // ── a second connection of the SAME principal is the same shell ──
-  // (frames may still be streaming; the two connections converge on the
-  // same current tree — that convergence IS the reattach semantics)
   const alex2 = await connect(base, alexToken);
   await alex2.until(() => alex2.frame('main') !== '' && alex2.frame('main') === alex.frame('main'), 'reattach converges');
   checks.push(['a second connection reattaches to the SAME shell (same main tree)', alex2.frame('main') === alex.frame('main')]);
 
-  // ── an event drives the server shell; data loads over moss's own wire ──
   const aDeal = (await runtime.db.query('SELECT title FROM deals LIMIT 1')).rows[0] as { title: string };
   alex.send({ type: 'event', canvas: 'sidebar', event: { type: 'ui:click', ref: 'nav-deals' } });
   await alex.until(() => alex.frame('main').includes(aDeal.title), 'deals list after nav click');
   checks.push([`nav click → the deals list renders with live data ("${aDeal.title}" present)`, alex.frame('main').includes(aDeal.title)]);
 
-  // ── the change fanned out to BOTH connections (convergence, not an
-  // instant snapshot — trees settle over a couple of frames) ──
   await alex2.until(
     () => alex2.frame('main').includes(aDeal.title) && alex2.frame('main') === alex.frame('main'),
     'fan-out converges on the second connection',
   );
   checks.push(['the same frame reached the second connection (shared canvas fan-out)', alex2.frame('main') === alex.frame('main')]);
 
-  // ── a different principal is a different shell (ring 1, server-side) ──
   const jordan = await connect(base, jordanToken);
   await jordan.until(() => jordan.frame('sidebar') !== '', "jordan's frames");
   checks.push(["jordan's sidebar omits tasks (ungranted — a different application)", !jordan.frame('sidebar').includes('nav-tasks')]);
 
-  // ── ring 2: SAME action id, a different SERVED layout. The base is the
-  // floor (no New, no assistant); alex (sales) holds chrome.topbar.full so
-  // the write-path chrome exists in his tree; jordan (viewer) is served the
-  // floor. Nothing on the wire says why: the terminal renders what it is
-  // served ──
   await alex.until(() => alex.frame('topbar') !== '', "alex's topbar");
   await jordan.until(() => jordan.frame('topbar') !== '', "jordan's topbar");
   checks.push(["alex's topbar carries the New button (the granted full variant)", alex.frame('topbar').includes('New')]);
@@ -125,27 +102,16 @@ const main = async (): Promise<void> => {
   checks.push(["jordan's topbar still searches (the shared piece is in both shapes)", jordan.frame('topbar').includes('Search actions')]);
   checks.push(["the assistant is variant chrome too (alex has it, jordan does not)", !jordan.frame('topbar').includes('assistant') && alex.frame('topbar').includes('assistant')]);
 
-  // ── no visible content = an empty tree: the collapsed aside rail is []
-  // over the wire, so the terminal collapses chrome on length alone ──
   checks.push(['the empty aside canvas arrives as [] (no phantom rail)', alex.frame('aside') === '[]']);
 
-  // ── transport → shell addressing: a keystroke tagged with its canvas
-  // is stamped with that canvas's ACTIVE instance server-side — no client
-  // stamping anywhere — so the topbar search cannot leak into the open
-  // screen's search ──
   const mainBefore = alex.frame('main');
   alex.send({ type: 'event', canvas: 'topbar', event: { type: 'ui:model', ref: 'search', payload: 'zzz-nothing' } });
   await alex.until(() => alex.frame('topbar').includes('zzz-nothing'), 'topbar search echoes');
   checks.push(['the canvas-tagged keystroke reached the topbar search', alex.frame('topbar').includes('zzz-nothing')]);
   checks.push(['…and did NOT leak into the open screen (main tree untouched)', alex.frame('main') === mainBefore]);
 
-  // ── the frame is SERVED: a layout of CanvasSlot markers the terminal
-  // resolves — the browser authors no arrangement of its own ──
   checks.push(['the shell frame arrives over the socket (CanvasSlot markers)', alex.shellFrame().includes('CanvasSlot') && alex.shellFrame().includes('sidebar')]);
 
-  // ── the login loop: an ANONYMOUS terminal is served the lock screen (the
-  // charter's `public` grant — ring 1 picks it as main's initial), signs in
-  // THROUGH it, and the session grant comes down the socket ──
   const anon = await connect(base);
   await anon.until(() => anon.frame('main').includes('username'), 'anonymous lock screen');
   checks.push(['anonymous is served the lock screen', anon.frame('main').includes('Send magic link')]);
@@ -163,9 +129,6 @@ const main = async (): Promise<void> => {
   jordanViaLogin.close();
   anon.close();
 
-  // ── sign-out is session lifecycle: the served sidebar button emits on the
-  // reserved channel, moss closes every terminal of the principal with
-  // SIGNED_OUT and evicts the durable shell — the next connect is fresh ──
   jordan.send({ type: 'event', canvas: 'sidebar', event: { type: 'ui:click', ref: 'sign-out' } });
   await jordan.until(() => jordan.closeCode() !== null, 'signed-out close');
   checks.push([`sign-out closes the connection with SIGNED_OUT (got ${jordan.closeCode()})`, jordan.closeCode() === CLOSE_SIGNED_OUT]);

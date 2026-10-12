@@ -6,10 +6,6 @@ import { AggregateExpressionSchema } from '../../src/schemas/aggregate.schema.js
 import { QuerySchema } from '../../src/schemas/query.schema.js';
 import { QueryRequestSchema } from '../../src/schemas/request.schema.js';
 
-// ───────────────────────────────────────────────────────────────
-// Value schemas
-// ───────────────────────────────────────────────────────────────
-
 describe('Value schemas', () => {
   describe('ContextRefSchema', () => {
     it('accepts { $context: "key" }', () => {
@@ -82,10 +78,6 @@ describe('Value schemas', () => {
     });
   });
 });
-
-// ───────────────────────────────────────────────────────────────
-// Filter schema
-// ───────────────────────────────────────────────────────────────
 
 describe('Filter schema', () => {
   describe('comparison operators', () => {
@@ -260,10 +252,6 @@ describe('Filter schema', () => {
   });
 });
 
-// ───────────────────────────────────────────────────────────────
-// Compute schema
-// ───────────────────────────────────────────────────────────────
-
 describe('Compute schema', () => {
   describe('arithmetic operators', () => {
     const ops = ['add', 'subtract', 'multiply', 'divide'] as const;
@@ -335,10 +323,6 @@ describe('Compute schema', () => {
   });
 });
 
-// ───────────────────────────────────────────────────────────────
-// Aggregate schema
-// ───────────────────────────────────────────────────────────────
-
 describe('Aggregate schema', () => {
   const aggOps = ['count', 'sum', 'avg', 'min', 'max'] as const;
 
@@ -359,10 +343,6 @@ describe('Aggregate schema', () => {
     expect(result.success).toBe(false);
   });
 });
-
-// ───────────────────────────────────────────────────────────────
-// Query schema
-// ───────────────────────────────────────────────────────────────
 
 describe('Query schema', () => {
   it('accepts a minimal valid query', () => {
@@ -483,10 +463,6 @@ describe('Query schema', () => {
     expect(result.success).toBe(true);
   });
 });
-
-// ───────────────────────────────────────────────────────────────
-// Request schema
-// ───────────────────────────────────────────────────────────────
 
 describe('Request schema', () => {
   it('accepts { shape, context }', () => {

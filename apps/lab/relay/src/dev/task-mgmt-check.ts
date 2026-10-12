@@ -1,8 +1,3 @@
-// Task management end-to-end. Drives the Tasks screen + deal modal headlessly:
-// the scope tabs match the DB, the inline checkbox completes/reopens (task.setDone),
-// the row ⋯ menu edits (task.update) and deletes (task.delete behind the confirm),
-// and a deal's task completes from the workspace. Run:
-//   pnpm --filter relay exec tsx src/dev/task-mgmt-check.ts
 import { shell, must, runtime } from './check-shell';
 import { todayStr } from '@relay/lib/date';
 
@@ -35,7 +30,6 @@ const main = async (): Promise<void> => {
   shell.dispatch({ type: 'ui:click', ref: 'nav-tasks' });
   await settle(340);
 
-  // ── Scope tabs match the DB ──
   await tab('open');
   checks.push([`Open tab = my not-done (${rows().length})`, rows().length === (await count(`SELECT count(*)::int n FROM tasks WHERE ${me} AND done=false`))]);
   await tab('done');
@@ -46,7 +40,6 @@ const main = async (): Promise<void> => {
   const overdueOk = rows().length === (await count(`SELECT count(*)::int n FROM tasks WHERE ${me} AND done=false AND due_date < $1`, [todayStr()])) && rows().length > 0;
   checks.push([`Overdue tab = not-done & past ${todayStr()} (${rows().length})`, overdueOk]);
 
-  // ── Inline complete: check off an open task → it leaves the Open list, lands done ──
   await tab('open');
   const openBefore = rows().length;
   const t = must(rows()[0], 'an open task');
@@ -56,14 +49,12 @@ const main = async (): Promise<void> => {
   checks.push([`completing persists done=true`, (await count('SELECT count(*)::int n FROM tasks WHERE id=$1 AND done=true', [tId])) === 1]);
   checks.push([`it left the Open list (${openBefore} → ${rows().length})`, rows().length === openBefore - 1 && !rows().some((r) => r['task_id'] === tId)]);
 
-  // ── Reopen from the Done tab ──
   await tab('done');
   checks.push([`it shows on the Done tab now`, rows().some((r) => r['task_id'] === tId)]);
   shell.dispatch({ type: 'ui:click', ref: 'toggle', payload: { id: tId, done: false } });
   await settle(360);
   checks.push([`reopening persists done=false`, (await count('SELECT count(*)::int n FROM tasks WHERE id=$1 AND done=false', [tId])) === 1]);
 
-  // ── Edit a task from the row ⋯ menu (seeded from the row, saves the new title) ──
   await tab('open');
   const er = must(rows()[0], 'a task to edit');
   shell.dispatch({ type: 'ui:click', ref: 'row-edit', payload: er });
@@ -75,7 +66,6 @@ const main = async (): Promise<void> => {
   await settle(360);
   checks.push([`save updated the title in PGlite`, (await count("SELECT count(*)::int n FROM tasks WHERE id=$1 AND title='Renamed by check'", [er['task_id']])) === 1]);
 
-  // ── Delete a task (confirm first, then it's gone) ──
   const dr = must(rows()[1], 'a second task to delete');
   const dId = dr['task_id'] as string;
   shell.dispatch({ type: 'ui:click', ref: 'row-delete', payload: dr });
@@ -85,7 +75,6 @@ const main = async (): Promise<void> => {
   await settle(360);
   checks.push([`task deleted from PGlite`, (await count('SELECT count(*)::int n FROM tasks WHERE id=$1', [dId])) === 0]);
 
-  // ── Complete a deal's task from the workspace ──
   const dealWithTask = (await runtime.db.query("SELECT deal_id, id AS task_id FROM tasks WHERE done=false AND deal_id IS NOT NULL LIMIT 1")).rows[0] as { deal_id: string; task_id: string };
   shell.dispatch({ type: 'ui:click', ref: 'nav-pipeline' });
   await settle(320);

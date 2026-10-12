@@ -1,12 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// asTool — consume an agent as an ordinary tool
-// ═══════════════════════════════════════════════════════════
-//
-// Delegation is a tool call (DESIGN.md §8): the wrapped agent runs
-// with the parent's agentPath extended, its events forward into the
-// parent's stream, and its envelope maps to the tool result —
-// `data` when present, else `response`. No plan-node interpreter.
-
 import { z } from 'zod';
 import type { Envelope, SignalClient } from '../types';
 import type { CortexEvent } from '../events/types';
@@ -16,14 +7,11 @@ import type { AgentDefinition } from '../agent/define-agent';
 import type { RunHandle } from '../agent/run';
 import type { ErasedAgent, ErasedRunOptions } from './types';
 
-// Agents are slow tools — give them real time by default.
 const DEFAULT_AGENT_TOOL_TIMEOUT_MS = 300_000;
 
 export type AgentToolStartContext = {
   signal: AbortSignal;
   agentPath: ReadonlyArray<string>;
-  // The parent's forward sink — pass as the child's RunOptions.onEvent
-  // so it subscribes before the child's run-start fires.
   onEvent: (event: CortexEvent) => void;
 };
 
@@ -65,15 +53,13 @@ export type AsToolOptions<TData, TDeps> = {
   select?: (output: Envelope<TData>) => unknown;
 } & (undefined extends TDeps ? { deps?: TDeps } : { deps: TDeps });
 
-// Typed variant for direct composition (vex agent → architect tool).
 export const asTool = <TData, TDeps>(
   agent: AgentDefinition<TData, TDeps>,
   ...args: undefined extends TDeps ? [options?: AsToolOptions<TData, TDeps>] : [options: AsToolOptions<TData, TDeps>]
 ): ToolDefinition => {
   const options = args[0];
-  // Erased call: the rest-tuple signature of AgentDefinition.run cannot
-  // be invoked with an unresolved TDeps; the erased view can. Deps were
-  // type-checked at THIS boundary via AsToolOptions.
+  // AgentDefinition.run cannot be called while TDeps is unresolved: its argument
+  // tuple is conditional on it. AsToolOptions has already type-checked the deps.
   const erased = trustErased<ErasedAgent<TData>>(agent);
   return buildAgentTool<TData>({
     id: options?.id ?? agent.agentId,

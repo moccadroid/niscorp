@@ -1,12 +1,4 @@
-// THE ONE FILE THAT KNOWS WHO SENDS THE MAIL — Resend, over HTTPS (Railway
-// blocks outbound SMTP below its Pro plan). It sends one thing: the speaker's
-// sign-in link (./login.ts). Without RESEND_API_KEY there is no mail at all,
-// and the message is printed to the server log instead — dev, and a deploy
-// that has not been given a key yet.
-//
-//   RESEND_API_KEY   the Resend API key
-//   MAIL_FROM        the sender, on a domain verified in Resend — defaults to
-//                    `Lyceum <no-reply@<PUBLIC_URL's host>>`
+// Resend, over HTTPS: Railway blocks outbound SMTP below its Pro plan.
 
 export type Mail = { to: string; subject: string; text: string };
 export type SendMail = (mail: Mail) => Promise<void>;

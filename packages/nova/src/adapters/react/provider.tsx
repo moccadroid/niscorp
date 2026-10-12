@@ -13,24 +13,12 @@ import type { NovaComponent, NovaDispatch, NovaPublish } from './types';
 const noopDispatch: NovaDispatch = () => {};
 const noopPublish: NovaPublish = () => {};
 
-// ═══════════════════════════════════════════════════════════
-// <NovaRenderProvider>
-//
-// The framework-agnostic renderer context. Pairs a component
-// registry with a dispatch and publish function. Works with no
-// shell — dispatch and publish default to no-ops so static
-// layouts can be rendered without any event infrastructure.
-// ═══════════════════════════════════════════════════════════
-
 export type NovaRenderProviderProps = {
   registry: ComponentRegistry<NovaComponent>;
   dispatch?: NovaDispatch;
   publish?: NovaPublish;
   slotWrapper?: SlotWrapper;
-  // renderer for unregistered component names; omit for strict error markers
   fallback?: NovaComponent;
-  // host-specific leaf renderers (see NovaRenderContextValue) — a non-DOM
-  // react host (ink) supplies both; browser consumers omit them
   textWrapper?: ComponentType<{ children?: ReactNode }>;
   errorMarker?: ComponentType<{ code: string; message: string }>;
   children?: ReactNode;
@@ -52,16 +40,6 @@ export const NovaRenderProvider: FC<NovaRenderProviderProps> = ({
   );
   return <NovaRenderContext.Provider value={value}>{children}</NovaRenderContext.Provider>;
 };
-
-// ═══════════════════════════════════════════════════════════
-// <NovaShellProvider>
-//
-// A thin wrapper over <NovaRenderProvider> that also exposes the
-// shell via context. The registry defaults to `shell.registry` so
-// callers don't have to thread it through twice; pass an explicit
-// `registry` override only when the shell should render against a
-// different one (rare).
-// ═══════════════════════════════════════════════════════════
 
 export type NovaShellProviderProps = {
   shell: Shell;

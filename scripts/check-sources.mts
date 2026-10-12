@@ -1,14 +1,3 @@
-// Every lab app's SOURCE is written at the grammars it runs on.
-//
-// Each app with a strata.lock.json records which version of every grammar its
-// artifacts are written in. When a grammar moves (a migration lands in nova,
-// Prism or the app's kit), this fails until the app has run `pnpm strata
-// upgrade`, made the edits its report lists, and `pnpm strata verify` has moved
-// the lock — so no app silently runs artifacts written for a grammar it no
-// longer speaks.
-//
-// Run after `pnpm build`: pnpm check:sources
-
 import { execFileSync, execSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -26,8 +15,6 @@ const strataStatus = (cwd: string): string => {
     : execFileSync('pnpm', ['-s', 'strata', 'status', '--check'], options);
 };
 
-// What a failed run said: its stdout, else its stderr, else the error itself
-// (a spawn that never started has neither).
 const failureOf = (error: unknown): string => {
   if (typeof error !== 'object' || error === null) return String(error);
   for (const key of ['stdout', 'stderr'] as const) {

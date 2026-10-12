@@ -1,19 +1,6 @@
 import { bench, describe, beforeAll } from 'vitest';
 import { compile, evaluate, execute, type CompiledIr } from '../src';
 
-// ═══════════════════════════════════════════════════════════
-// Benchmarks comparing raw evaluate(config, source) against
-// execute(ir, source) where the IR is precompiled once.
-//
-// The compile cost is paid ONCE at startup; the per-iteration
-// cost only measures evaluation.
-//
-// Run via:  pnpm --filter @niscorp/prism bench
-// ═══════════════════════════════════════════════════════════
-
-// ─────────────────────────────────────────────────────────
-// Scenario 1 — Tiny literal (constant folding paradise)
-// ─────────────────────────────────────────────────────────
 const tinyConfig = {
   $add: [
     { $mul: [{ $const: 6 }, { $const: 7 }] },
@@ -22,9 +9,6 @@ const tinyConfig = {
 };
 const tinySource = {};
 
-// ─────────────────────────────────────────────────────────
-// Scenario 2 — Simple ref-heavy (pluck fields from a record)
-// ─────────────────────────────────────────────────────────
 const refConfig = {
   id: { $ref: '$.user.id' },
   name: { $ref: '$.user.name' },
@@ -41,9 +25,6 @@ const refSource = {
   },
 };
 
-// ─────────────────────────────────────────────────────────
-// Scenario 3 — Map over a small array
-// ─────────────────────────────────────────────────────────
 const mapConfig = {
   $map: {
     over: { $ref: '$.items' },
@@ -63,9 +44,6 @@ const mapSource = {
   items: Array.from({ length: 20 }, (_, i) => ({ sku: `A${i}`, price: 10 + i, qty: 1 + (i % 5) })),
 };
 
-// ─────────────────────────────────────────────────────────
-// Scenario 4 — Nested $with + $filter + $sortBy + $map
-// ─────────────────────────────────────────────────────────
 const nestedConfig = {
   $with: {
     let: {
@@ -100,9 +78,6 @@ const nestedSource = {
   })),
 };
 
-// ─────────────────────────────────────────────────────────
-// Scenario 5 — Real-world denormalize join (100 users × 200 posts)
-// ─────────────────────────────────────────────────────────
 const joinConfig = {
   $map: {
     over: { $ref: '$.users' },
@@ -146,9 +121,6 @@ const joinSource = {
   })),
 };
 
-// ─────────────────────────────────────────────────────────
-// Pre-compiled IRs (compile cost is amortized — out of the loop)
-// ─────────────────────────────────────────────────────────
 let tinyIr: CompiledIr;
 let refIr: CompiledIr;
 let mapIr: CompiledIr;
@@ -162,10 +134,6 @@ beforeAll(async () => {
   nestedIr = await compile(nestedConfig);
   joinIr = await compile(joinConfig);
 });
-
-// ─────────────────────────────────────────────────────────
-// Benchmarks — each scenario times evaluate vs execute
-// ─────────────────────────────────────────────────────────
 
 describe('1. tiny literal arithmetic', () => {
   bench('evaluate (no IR)', () => {

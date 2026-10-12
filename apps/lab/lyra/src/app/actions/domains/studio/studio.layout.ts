@@ -38,12 +38,9 @@ export const studioSettingsLayout: LayoutNode = {
     {
       component: 'Text',
       props: { size: 'sm', color: 'mute' },
-      // NO INTERNAL REFERENCES IN PRODUCT COPY. This said 'see PLAN.md' — a
-      // file the person reading it cannot open and has never heard of.
       children: 'Colours and words for now. Studio-specific layouts are coming.',
     },
 
-    // ── the language ────────────────────────────────────────
     {
       component: 'Card',
       props: { pad: 18 },
@@ -62,8 +59,6 @@ export const studioSettingsLayout: LayoutNode = {
             },
             ref: 'language',
           },
-          // The screen is about to be rebuilt underneath this instance, so the
-          // only honest thing left to say is that it is happening.
           {
             if: '$.switching',
             then: { component: 'Notice', props: { tone: 'calm', message: 'Switching language — one moment.' } },

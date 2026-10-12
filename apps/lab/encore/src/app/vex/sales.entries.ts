@@ -1,11 +1,5 @@
 import type { SeedEntry } from '@niscorp/vex';
 
-// Ticket and bar takings. `days` is a LIST so one plan serves "today" and "the
-// whole weekend": the chart's range is which days it sends, not which entry it
-// replays. Both metrics ride every row — which one the bars draw is the
-// chart's `valueKey`, a layout binding, so flipping units ↔ revenue re-reads
-// nothing.
-
 export const salesHourly: SeedEntry = {
   fingerprint: 'sales/hourly',
   intent: 'Hourly units and revenue for one kind of sale across the given days',
@@ -47,7 +41,6 @@ export const salesDaily: SeedEntry = {
   },
 };
 
-// One day's takings, one row per kind of sale — the money picture in two rows.
 export const salesDayTotals: SeedEntry = {
   fingerprint: 'sales/dayTotals',
   intent: 'Units and revenue for one festival day, per kind of sale',

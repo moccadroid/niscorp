@@ -6,10 +6,7 @@ import { dirname, resolve } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = resolve(here, '../../..');
 
-// The Chrome extension build: `pnpm extension` → extension/dist, load
-// unpacked from there. Root is extension/ (panel.html), publicDir carries
-// the manifest and the plain-JS extension plumbing verbatim. base '' keeps
-// asset urls relative — extension pages live under chrome-extension://.
+// base '' keeps asset urls relative: extension pages live under chrome-extension://.
 export default defineConfig({
   root: resolve(here, 'extension'),
   base: '',

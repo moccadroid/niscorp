@@ -1,4 +1,3 @@
-// The studio being told things: notices, and the ones that need doing.
 export const NOTIFICATIONS_DDL = /* sql */ `
   -- A NOTIFICATION is "the studio was told something". A TASK is a
   -- notification that needs action — it has a due date and can be ticked

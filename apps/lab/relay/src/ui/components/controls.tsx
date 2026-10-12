@@ -4,10 +4,6 @@ import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/reac
 import { cx } from '../lib/cx';
 import { Icon } from './display';
 
-// Interactive primitives — Button, NavItem. Each fires `ui:click` carrying the
-// node's ref (injected as novaRef) for a trigger to match.
-
-// ─── Button ────────────────────────────────────────────────
 const ButtonProps = z
   .object({
     variant: z.enum(['primary', 'default', 'ghost']).optional(),
@@ -32,7 +28,6 @@ export const Button: NovaComponent<z.infer<typeof ButtonProps>> = ({
     <button
       className={cx('rl-btn', `rl-btn--${variant}`, size !== 'md' && `rl-btn--${size}`)}
       onClick={(e) => {
-        // Don't bubble to an enclosing clickable row (a table row's `⋯` kebab).
         e.stopPropagation();
         if (novaRef !== undefined) dispatch({ type: 'ui:click', ref: novaRef, payload: value });
       }}
@@ -47,9 +42,6 @@ Button.meta = {
   propsSchema: ButtonProps,
 };
 
-// ─── NavItem ───────────────────────────────────────────────
-// Active state is derived: `id` (this item) compared to `activeId` (bound to
-// the sidebar's current selection). Click fires ui:click for a trigger.
 const NavItemProps = z
   .object({
     id: z.string().optional(),
@@ -91,11 +83,6 @@ NavItem.meta = {
   propsSchema: NavItemProps,
 };
 
-// ─── Tabs ──────────────────────────────────────────────────
-// A compact segmented control (e.g. All / Mine). `value` is the active option
-// (bound to data); a click fires `ui:click` carrying the chosen option's value,
-// so a trigger can set state + re-run the list query. Pure selection — the open
-// list is plain data, visible to the AI.
 const TabsProps = z
   .object({
     options: z.array(z.object({ value: z.string(), label: z.string() })),
@@ -125,12 +112,6 @@ export const Tabs: NovaComponent<z.infer<typeof TabsProps>> = ({ options, value,
 };
 Tabs.meta = { description: 'Segmented control (e.g. All/Mine); active = `value`, fires ui:click with the chosen value.', propsSchema: TabsProps };
 
-// ─── SortHeader ────────────────────────────────────────────
-// A clickable table-column header that drives Vex's reserved `sortBy`/`sortDir`
-// context keys. `field` is the entity.field this column sorts by; `sortBy` /
-// `sortDir` are the live sort state (bound to data). A click fires `ui:click`
-// carrying the NEXT sort — same column flips asc↔desc, a new column starts asc —
-// so the trigger just `set`s the two values. The ▲/▼ shows on the active column.
 const SortHeaderProps = z
   .object({
     label: z.string(),
@@ -161,10 +142,6 @@ export const SortHeader: NovaComponent<z.infer<typeof SortHeaderProps>> = ({ lab
 };
 SortHeader.meta = { description: 'Clickable column header driving Vex sortBy/sortDir; click flips/sets the sort, ▲/▼ marks the active column.', propsSchema: SortHeaderProps };
 
-// ─── MenuItem ──────────────────────────────────────────────
-// One row of a dropdown menu (the row `⋯` menu). Fires `ui:click` with its ref
-// (and optional `value`, e.g. the record id) so a trigger can act. `danger`
-// tints it red. Styling: .rl-menu__item in ui.css.
 const MenuItemProps = z
   .object({
     icon: z.string().optional(),
@@ -192,11 +169,6 @@ export const MenuItem: NovaComponent<z.infer<typeof MenuItemProps>> = ({ icon, d
 };
 MenuItem.meta = { description: 'A dropdown menu row; fires ui:click with its ref + optional value. `danger` tints red.', propsSchema: MenuItemProps };
 
-// ─── LinkRow ───────────────────────────────────────────────
-// A clickable navigation row: hover-highlights and reveals a → chevron, and on
-// click fires `ui:click` carrying its bound `value` (e.g. a record id) so a
-// trigger can open that record. The standard cross-link affordance for lists
-// inside a panel (a company's people/deals, a deal's tasks, …).
 const LinkRowProps = z
   .object({
     value: z.unknown().optional().describe('Payload sent on click (e.g. the record id). Needs a ref.'),

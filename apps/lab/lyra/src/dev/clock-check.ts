@@ -1,20 +1,15 @@
-// Run: pnpm --filter lyra exec tsx src/dev/clock-check.ts
 import { ok, report, runtime } from './world';
 import { dayIn } from '@lyra/server/clock';
 
 const one = async <T>(sql: string, params: unknown[] = []): Promise<T | undefined> =>
   (await runtime.db.query(sql, params)).rows[0] as T | undefined;
 
-// ── two studios that can never share a date ──────────────────
 await runtime.db.query(`
   INSERT INTO studios (id, name, slug, kind, timezone)
   VALUES ('st_early', 'Dawn Studio', 'dawn', 'yoga', 'Pacific/Kiritimati'),
          ('st_late',  'Dusk Studio', 'dusk', 'yoga', 'Pacific/Niue')
   ON CONFLICT (id) DO UPDATE SET timezone = EXCLUDED.timezone
 `);
-
-// The server's half of the clock is a cache of a database fact, so a new studio
-// has to reach it. This is the reload a deployment does.
 
 const days = await one<{ early: string; late: string; server: string }>(`
   SELECT studio_today('st_early')::text AS early,
@@ -29,7 +24,6 @@ ok(
   `server says ${days?.server} — at least one studio is on another date, always`,
 );
 
-// ── the two halves agree ─────────────────────────────────────
 const studios = await runtime.db.query<{ id: string; sql_day: string; timezone: string }>(
   `SELECT id, timezone, studio_today(id)::text AS sql_day FROM studios ORDER BY id`,
 );
@@ -43,7 +37,6 @@ ok(
   disagreements.length === 0 ? `${studios.rows.length} studios` : disagreements.map((d) => `${d.id}: sql ${d.sql} vs js ${d.js}`).join(', '),
 );
 
-// ── and the triggers use it ──────────────────────────────────
 const off = days !== undefined && days.early !== days.server ? { id: 'st_early', day: days.early } : { id: 'st_late', day: days?.late ?? '' };
 ok('a studio whose day is not the server’s exists to test with', off.day !== days?.server, `${off.id} is on ${off.day}, server on ${days?.server}`);
 
@@ -84,7 +77,6 @@ function addDays(iso: string, amount: number): string {
   return new Date(Date.parse(`${iso}T00:00:00Z`) + amount * 86_400_000).toISOString().slice(0, 10);
 }
 
-// ── why `starts_at` is TEXT and not TIME ─────────────────────
 const times = await runtime.db.query<{ a: string }>(
   `SELECT starts_at a FROM class_sessions ORDER BY starts_at ASC`,
 );

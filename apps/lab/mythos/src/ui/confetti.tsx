@@ -2,14 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 
-// ═══════════════════════════════════════════════════════════
-// Confetti — replays a full-viewport pastel burst every time
-// the `spark` prop changes to a new non-zero value. Pure
-// presentation: the burst geometry is deterministic per piece,
-// no timers, no cleanup — pieces end at opacity 0 and are
-// replaced wholesale (new keys) on the next burst.
-// ═══════════════════════════════════════════════════════════
-
 const ConfettiPropsSchema = z
   .object({
     spark: z.number().optional().describe('Burst trigger: each new non-zero value replays the burst.'),
@@ -21,7 +13,6 @@ type ConfettiProps = z.infer<typeof ConfettiPropsSchema>;
 
 const COLORS = ['#f4a7b9', '#f2cf5b', '#8fd0a5', '#a9c1ec', '#d8b4e2', '#f5a973'];
 
-// Golden-angle spread: deterministic, but no two pieces alike.
 const PIECES = Array.from({ length: 22 }, (_, i) => {
   const angle = (i * 137.5 * Math.PI) / 180;
   const distance = 90 + ((i * 53) % 160);

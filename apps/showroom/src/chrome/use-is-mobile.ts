@@ -1,8 +1,5 @@
 import { useEffect, useState } from 'react';
 
-// Returns true when the viewport is narrower than `breakpoint` (px).
-// Drives whether the chrome collapses sidebar + inspector into
-// overlay drawers vs. the three-pane desktop layout.
 export const useIsMobile = (breakpoint: number = 900): boolean => {
   const query = `(max-width: ${breakpoint - 1}px)`;
   const [matches, setMatches] = useState<boolean>(() => {

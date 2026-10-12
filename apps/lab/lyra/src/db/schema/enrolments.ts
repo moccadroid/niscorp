@@ -1,4 +1,3 @@
-// Joining a course: a seat in a dated block, and the bookings it fans out to.
 export const ENROLMENTS_DDL = /* sql */ `
   -- The third entitlement: a seat in a dated, bounded block. Held by the
   -- person — a course full of beginners is mostly people who are not members.

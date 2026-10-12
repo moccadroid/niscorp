@@ -3,9 +3,6 @@ import { useModelWrite } from '../hooks/model.js';
 import { inputStyle } from './shared.js';
 import { JsonEditor } from './json-editor.js';
 
-// The leaf controls: each reads its value from the auto-bound `value` prop and
-// writes back through `useModelWrite`.
-
 const HTML_INPUT_TYPE: Record<string, string> = { email: 'email', uri: 'url', date: 'date' };
 
 export const LoomText: NovaComponent<{ value?: unknown; format?: string; placeholder?: string }> = ({
@@ -58,9 +55,8 @@ export const LoomSelect: NovaComponent<{
   options?: { value: unknown; label: string }[];
 }> = ({ value, options, novaModel }) => {
   const set = useModelWrite(novaModel);
-  // A <select> speaks strings: an option is offered as its text and the choice
-  // comes back as that text. What is written is the option's OWN value — an
-  // enum's values may be numbers, and its schema refuses "2" where it means 2.
+  // A <select> speaks strings, and an enum's values may be numbers. The option's
+  // own value is written: the schema refuses "2" where it means 2.
   const choose = (text: string): void => {
     const chosen = (options ?? []).find((option) => String(option.value) === text);
     set(chosen === undefined ? text : chosen.value);
@@ -76,7 +72,6 @@ export const LoomSelect: NovaComponent<{
   );
 };
 
-// The raw role: JsonEditor wired to the model.
 export const LoomRaw: NovaComponent<{ value?: unknown }> = ({ value, novaModel }) => {
   const set = useModelWrite(novaModel);
   return <JsonEditor value={value} onChange={set} />;

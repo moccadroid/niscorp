@@ -1,16 +1,8 @@
 import { z } from 'zod';
 
-// ═══════════════════════════════════════════════════════════
-// Schema default derivation
-// ═══════════════════════════════════════════════════════════
-
 export const deriveDefaults = (schema: z.ZodType): unknown => {
   return deriveFromType(schema);
 };
-
-// ───────────────────────────────────────────────────────────
-// Internal derivation by Zod type
-// ───────────────────────────────────────────────────────────
 
 const deriveFromType = (schema: z.ZodType): unknown => {
   if (schema instanceof z.ZodDefault) {
@@ -51,7 +43,6 @@ const deriveFromType = (schema: z.ZodType): unknown => {
   }
 
   if (schema instanceof z.ZodEnum) {
-    // Zod v4 enum entries are a Record<string, string>
     const values = Object.values(schema._zod.def.entries);
     if (values.length > 0) return values[0];
   }

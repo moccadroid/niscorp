@@ -2,10 +2,6 @@ import type { CSSProperties, FC } from 'react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { ConfigSchema, evaluateSafe, type JsonObject } from '@niscorp/prism';
 
-// The preview component: applies the edited config to the sample input and shows
-// the output (or the error). Registered under PREVIEW; the plugin's mount binds
-// the live config to it. Closes over the host's `input`.
-
 const mono = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
 const Note: FC<{ children: string }> = ({ children }) => (

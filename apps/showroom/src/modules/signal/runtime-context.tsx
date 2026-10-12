@@ -1,12 +1,6 @@
 import { createContext, useContext, useState, type FC, type ReactNode } from 'react';
 import type { SignalResult } from '@niscorp/signal';
 
-// ═══════════════════════════════════════════════════════════
-// Signal runtime context — published by the recipe runner so
-// the inspector tabs can read the live result without prop
-// drilling. Mirrors the nova/prism pattern.
-// ═══════════════════════════════════════════════════════════
-
 export type SignalView = {
   mode: 'snapshot' | 'live';
   loading: boolean;

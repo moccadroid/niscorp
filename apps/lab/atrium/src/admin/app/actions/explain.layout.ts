@@ -5,7 +5,6 @@ export const explainLayout: LayoutNode = panel(
   'Explain',
   'Pick a principal and a stay state — every slot, and which link in the chain broke',
   split(
-    // ── left: who, and in what state ──
     {
       component: 'Stack',
       props: { gap: 14 },
@@ -60,7 +59,6 @@ export const explainLayout: LayoutNode = panel(
       ],
     },
 
-    // ── right: every slot, and where it stopped ──
     {
       component: 'Stack',
       props: { gap: 14 },
@@ -112,8 +110,6 @@ export const explainLayout: LayoutNode = panel(
                         { component: 'Badge', props: { tone: '$s.tone' }, children: '$s.verdict' },
                       ],
                     },
-                    // The chain itself. Four chips, and the one that is alert is
-                    // the answer — everything after it was never asked.
                     {
                       component: 'Row',
                       props: { gap: 5, wrap: true },

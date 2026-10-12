@@ -6,10 +6,6 @@ export const setNodeSchema = (schema: z.ZodTypeAny): void => {
 };
 const node = (): z.ZodTypeAny => _NodeSchema;
 
-// ═══════════════════════════════════════════════════════════
-// $map — Transform each element
-// ═══════════════════════════════════════════════════════════
-
 export const MapNodeSchema = z
   .object({
     $map: z
@@ -25,10 +21,6 @@ export const MapNodeSchema = z
 
 export type MapNode = z.infer<typeof MapNodeSchema>;
 
-// ═══════════════════════════════════════════════════════════
-// $filter — Keep matching elements
-// ═══════════════════════════════════════════════════════════
-
 export const FilterNodeSchema = z
   .object({
     $filter: z
@@ -43,10 +35,6 @@ export const FilterNodeSchema = z
   .describe('Filter an array, keeping elements where condition is truthy.');
 
 export type FilterNode = z.infer<typeof FilterNodeSchema>;
-
-// ═══════════════════════════════════════════════════════════
-// $reduce — Fold/accumulate
-// ═══════════════════════════════════════════════════════════
 
 export const ReduceNodeSchema = z
   .object({
@@ -65,10 +53,6 @@ export const ReduceNodeSchema = z
 
 export type ReduceNode = z.infer<typeof ReduceNodeSchema>;
 
-// ═══════════════════════════════════════════════════════════
-// $slice — Array/string slice
-// ═══════════════════════════════════════════════════════════
-
 export const SliceNodeSchema = z
   .object({
     $slice: z
@@ -84,10 +68,6 @@ export const SliceNodeSchema = z
 
 export type SliceNode = z.infer<typeof SliceNodeSchema>;
 
-// ═══════════════════════════════════════════════════════════
-// $flatten — Flatten one level
-// ═══════════════════════════════════════════════════════════
-
 export const FlattenNodeSchema = z
   .object({
     $flatten: z.lazy(node).describe('Array of arrays to flatten one level.'),
@@ -97,10 +77,6 @@ export const FlattenNodeSchema = z
 
 export type FlattenNode = z.infer<typeof FlattenNodeSchema>;
 
-// ═══════════════════════════════════════════════════════════
-// $unique — Deduplicate
-// ═══════════════════════════════════════════════════════════
-
 export const UniqueNodeSchema = z
   .object({
     $unique: z.lazy(node).describe('Array to deduplicate.'),
@@ -109,10 +85,6 @@ export const UniqueNodeSchema = z
   .describe('Remove duplicate values from an array (compared by JSON.stringify).');
 
 export type UniqueNode = z.infer<typeof UniqueNodeSchema>;
-
-// ═══════════════════════════════════════════════════════════
-// $sortBy — Sort by computed key
-// ═══════════════════════════════════════════════════════════
 
 export const SortByNodeSchema = z
   .object({

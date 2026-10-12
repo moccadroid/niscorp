@@ -1,11 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Moving a guest into a different room.
-//
-// The candidates are rooms that are INSPECTED and not already spoken for, which
-// is a stricter test than "vacant" and the right one: a clerk cannot give
-// somebody a room housekeeping has not signed off, and a room held for an
-// arrival at half four is not free at four o'clock however empty it looks.
 export const moveLayout: LayoutNode = {
   if: '$.done',
   then: {

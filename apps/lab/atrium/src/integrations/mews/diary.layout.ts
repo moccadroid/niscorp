@@ -1,8 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The desk's spa diary — who is on the table, when, and the three ways a
-// booking ends. Buttons only exist while a booking is still 'booked'; history
-// keeps its badge and nothing else.
 export const diaryLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 12 },

@@ -9,8 +9,6 @@ export const rosterPrism = {
   context: { sessionId: { $ref: '$.selectedSessionId' } },
 };
 
-// Who and which class. Not when — the database defaults that — and not which
-// studio, which the engine stamps.
 export const checkInPrism = {
   fingerprint: checkInMark.fingerprint,
   context: {
@@ -20,16 +18,11 @@ export const checkInPrism = {
   },
 };
 
-// ── the walk-in half, wired at last ──────────────────────────
-// Who could still join the chosen class: live access, no booking yet. The
-// read sat here for two reviews with nothing calling it.
 export const bookablePrism = {
   fingerprint: bookableForSession.fingerprint,
   context: { sessionId: { $ref: '$.selectedSessionId' } },
 };
 
-// Books the picked person into the picked class; the check-in that follows
-// rides the same pending keys a roster tap uses.
 export const walkInBookPrism = {
   fingerprint: bookingCreate.fingerprint,
   context: { sessionId: { $ref: '$.selectedSessionId' }, personId: { $ref: '$.walkInPersonId' } },

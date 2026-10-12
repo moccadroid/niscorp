@@ -265,8 +265,7 @@ describe('recovery on postgres', () => {
     await tide.advance({ now: T0 });
     expect(calls).toHaveLength(1);
 
-    // The state a crash leaves, written directly because no verb produces it: claimed, a token held,
-    // the lease running, and the process that owned it gone.
+    // The state a crash leaves, written directly because no verb produces it.
     const [task] = await tide.ledger.tasks();
     await pool.query(
       `UPDATE tide_work SET state = 'claimed', token = 'ghost', claimed_until = $1, settled_at = NULL WHERE id = $2`,

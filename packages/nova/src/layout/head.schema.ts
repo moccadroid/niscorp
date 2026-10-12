@@ -2,14 +2,8 @@ import { z } from 'zod';
 import { HEAD_LINK_NAME, HEAD_META_NAME, HEAD_NAME, HEAD_SCRIPT_NAME, HEAD_TITLE_NAME } from './head';
 import type { ComponentMeta } from './types';
 
-// The authoring contracts of a head and the elements it holds (./head): what a
-// layout may set on each. Props are bound and resolved like any other node's.
-//
-// An element's props are its attributes, so these are open records: any
-// attribute HTML gives the element may be written. What each refuses is said
-// in its description, and held by the reader (`headOf`), not by a list here.
-
-// What every element refuses, whatever else it is.
+// An element's props are its attributes, so its schema is open. What each
+// refuses is enforced by the reader (`headOf`) and only described here.
 const REFUSED_ATTRIBUTES = 'an attribute whose name starts with `on`, or a prop whose name is not an attribute’s name';
 
 const AttributeSchema = z
@@ -64,7 +58,6 @@ export type HeadScriptProps = z.infer<typeof HeadScriptPropsSchema>;
 
 const described = (schema: z.ZodTypeAny): ComponentMeta => ({ description: schema.description ?? '', propsSchema: schema });
 
-// What to register each name with, for a palette that should offer them.
 export const HEAD_META: Record<string, ComponentMeta> = {
   [HEAD_NAME]: described(HeadPropsSchema),
   [HEAD_TITLE_NAME]: described(HeadTitlePropsSchema),

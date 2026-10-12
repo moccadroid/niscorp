@@ -2,10 +2,7 @@ import { useState, type FC, type ReactNode } from 'react';
 import type { ValidationMode } from '@niscorp/solid';
 import { INK, MONO, type Tone } from '@showroom/chrome/stage/ui';
 
-// Render-prop helper for demos that want to toggle between
-// trust / recover / strict. The child is re-mounted on mode
-// change (via key) so any internal state resets — matching
-// what a user expects from flipping the toggle.
+// The child is re-mounted on a mode change (its `key`), so its internal state resets.
 
 const MODE_TONE: Record<ValidationMode, Tone> = { trust: 'idle', recover: 'accent', strict: 'bad' };
 

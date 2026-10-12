@@ -7,22 +7,12 @@ import { createShell } from '@shell';
 
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
-// Collect every text value in a render tree (the actionLayout output).
 const texts = (nodes: RenderNode[]): string[] =>
   nodes.flatMap((n) =>
     n.type === 'text' ? [n.value] : n.type === 'component' || n.type === 'fragment' ? texts(n.children) : [],
   );
 
-// ═══════════════════════════════════════════════════════════
-// instance.title — a per-instance label resolved from the action's `title`
-// resolvable, exposed on the canvas actionLayout scope. Falls back name → id.
-// ═══════════════════════════════════════════════════════════
-
 describe('shell — instance.title on the actionLayout scope', () => {
-  // An actionLayout that just prints every instance's resolved title.
-  // A LayoutNode, which is what `actionLayout` takes — this was cast to
-  // RenderNode, the RENDERED form. The two are different ends of the pipeline
-  // and the cast said so was fine.
   const titleLayout: LayoutNode = {
     component: 'Box',
     children: { for: '$.instances', as: 'i', do: { component: 'Box', children: '{{$.i.title}}' } },
@@ -59,7 +49,7 @@ describe('shell — instance.title on the actionLayout scope', () => {
   it('falls back when the title resolves empty', async () => {
     const deal: ActionDefinition = { id: 'deal', name: 'Deal', title: '{{$.record.title}}' };
     const shell = setup({ deal });
-    shell.push('main', 'deal', { record: {} }); // title resolves to '' → fall back to name
+    shell.push('main', 'deal', { record: {} });
     await tick();
     expect(texts(shell.getCanvasRenderTree('main'))).toContain('Deal');
   });
@@ -75,11 +65,6 @@ describe('shell — instance.title on the actionLayout scope', () => {
     expect(texts(shell.getCanvasRenderTree('main'))).toContain('Renamed');
   });
 });
-
-// ═══════════════════════════════════════════════════════════
-// shell.popTo — public on the Shell, so stack-nav chrome can jump to an
-// ancestor via useShell().popTo(canvasId, instanceId) without an effect/trigger.
-// ═══════════════════════════════════════════════════════════
 
 describe('shell — public popTo', () => {
   const setup = () =>

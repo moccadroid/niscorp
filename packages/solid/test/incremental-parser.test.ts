@@ -11,17 +11,12 @@ const base = {
   meta: null as unknown,
 };
 
-// Helper: write JSON, take snapshot, return typed result
 const parse = (json: string, initial = base): typeof base => {
   const parser = createIncrementalParser(initial);
   parser.write(json);
   const snap = parser.snapshot(initial);
   return snap.changed ? snap.value as typeof base : initial;
 };
-
-// ═══════════════════════════════════════════════════════════
-// Value extraction
-// ═══════════════════════════════════════════════════════════
 
 describe('incremental parser — value extraction', () => {
   it('extracts string values', () => {
@@ -64,10 +59,6 @@ describe('incremental parser — value extraction', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// Strings
-// ═══════════════════════════════════════════════════════════
-
 describe('incremental parser — strings', () => {
   it('partial strings visible mid-stream', () => {
     const parser = createIncrementalParser(base);
@@ -109,10 +100,6 @@ describe('incremental parser — strings', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// Arrays
-// ═══════════════════════════════════════════════════════════
-
 describe('incremental parser — arrays', () => {
   it('builds array elements incrementally', () => {
     const result = parse('{"items":[{"name":"first","value":1}');
@@ -143,10 +130,6 @@ describe('incremental parser — arrays', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// Chunked streaming
-// ═══════════════════════════════════════════════════════════
-
 describe('incremental parser — chunked', () => {
   it('character-by-character streaming', () => {
     const parser = createIncrementalParser(base);
@@ -175,10 +158,6 @@ describe('incremental parser — chunked', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// Structural sharing
-// ═══════════════════════════════════════════════════════════
-
 describe('incremental parser — structural sharing', () => {
   it('unchanged subtrees keep the same reference', () => {
     const initial = { a: { x: 1 }, b: { y: 2 } };
@@ -187,11 +166,9 @@ describe('incremental parser — structural sharing', () => {
     const snap = parser.snapshot(initial);
     if (!snap.changed) throw new Error('expected change');
 
-    // a changed — new reference
     expect(snap.value.a).not.toBe(initial.a);
     expect(snap.value.a.x).toBe(99);
 
-    // b unchanged — SAME reference
     expect(snap.value.b).toBe(initial.b);
   });
 
@@ -207,23 +184,18 @@ describe('incremental parser — structural sharing', () => {
     const snap2 = parser.snapshot(snap1.value);
     if (!snap2.changed) throw new Error('expected change');
 
-    // snap2.a should be the same reference as snap1.a (unchanged between snapshots)
     expect(snap2.value.a).toBe(snap1.value.a);
-    // snap2.b is new
     expect(snap2.value.b).toBe('world');
-    // snap2.c should still be the ORIGINAL reference
     expect(snap2.value.c).toBe(initial.c);
   });
 
   it('snapshot with no changes returns changed: false', () => {
     const parser = createIncrementalParser(base);
-    parser.write('{"widget"');  // just a key, no value set
+    parser.write('{"widget"');
     const snap = parser.snapshot(base);
     expect(snap.changed).toBe(false);
   });
 
-  // A snapshot is what a consumer keeps. A container the parser has only just
-  // opened is still the one it writes into — a snapshot must hold a copy of it.
   it('a snapshot taken right after a row opens does not gain the row later', () => {
     const initial = { rows: [] as { seat: string; price: number }[] };
     const parser = createIncrementalParser(initial);
@@ -258,7 +230,6 @@ describe('incremental parser — structural sharing', () => {
     expect(first.value).toEqual({ seats: [], tags: [] });
     expect(second.value).toEqual({ seats: ['C4', 'C5'], tags: [[]] });
     expect(third.value).toEqual({ seats: ['C4', 'C5'], tags: [['a', 'b']] });
-    // The copy costs no sharing: what did not change is still the same reference.
     expect(third.value.seats).toBe(second.value.seats);
   });
 
@@ -277,10 +248,6 @@ describe('incremental parser — structural sharing', () => {
     expect(second.value.rows[0]).toBe(first.value.rows[0]);
   });
 });
-
-// ═══════════════════════════════════════════════════════════
-// Events
-// ═══════════════════════════════════════════════════════════
 
 describe('incremental parser — events', () => {
   it('emits enterObject/leaveObject', () => {
@@ -313,10 +280,6 @@ describe('incremental parser — events', () => {
     expect(lastOf(leaves).path).toBe('');
   });
 });
-
-// ═══════════════════════════════════════════════════════════
-// Complex structures
-// ═══════════════════════════════════════════════════════════
 
 describe('incremental parser — complex', () => {
   it('deeply nested objects', () => {

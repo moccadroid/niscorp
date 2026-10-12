@@ -1,10 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// Reading nova's presentational prop vocabulary into inline styles. These are
-// LAYOUT props (gap, justify, padding, size, weight) — universal, not domain
-// nouns — so a reference kit can honor them and real structure renders. The
-// readers narrow `unknown` with `typeof`; there are no casts.
-// ═══════════════════════════════════════════════════════════
-
 export type Props = Record<string, unknown>;
 
 export const num = (props: Props, key: string): number | undefined => {
@@ -19,7 +12,6 @@ export const str = (props: Props, key: string): string | undefined => {
 
 export const bool = (props: Props, key: string): boolean => props[key] === true;
 
-// A CSS dimension: a number is pixels, a string passes through ('100%', '100vh').
 export const dim = (value: unknown): string | undefined =>
   typeof value === 'number' ? `${value}px` : typeof value === 'string' ? value : undefined;
 
@@ -38,13 +30,10 @@ const COLOR: Record<string, string> = {
 };
 const BG: Record<string, string> = { surface: '#fbfcfd', canvas: '#ffffff', dim: '#f4f5f7', mute: '#f4f5f7' };
 
-// A style record for any element: setProperty skips undefined, so absent props
-// leave the browser default.
 export const css = (el: HTMLElement, style: Record<string, string | undefined>): void => {
   for (const [key, value] of Object.entries(style)) if (value !== undefined) el.style.setProperty(key, value);
 };
 
-// Box/spacing props shared by every container.
 export const boxStyle = (props: Props): Record<string, string | undefined> => {
   const p = num(props, 'p') ?? num(props, 'padding');
   const border = props['border'];
@@ -65,7 +54,6 @@ export const boxStyle = (props: Props): Record<string, string | undefined> => {
   };
 };
 
-// Flex layout props (Row/Stack).
 export const flexStyle = (props: Props, direction: 'row' | 'column'): Record<string, string | undefined> => ({
   display: 'flex',
   'flex-direction': direction,
@@ -75,9 +63,6 @@ export const flexStyle = (props: Props, direction: 'row' | 'column'): Record<str
   'flex-wrap': bool(props, 'wrap') ? 'wrap' : undefined,
 });
 
-// Grid props — `columns` (N equal tracks) or `weights` ([2,1,1] → fr tracks).
-// Relay's tables and tile rows are grids, not stacks; honoring this is what
-// makes rows lay out horizontally instead of collapsing to a column.
 export const gridStyle = (props: Props): Record<string, string | undefined> => {
   const columns = num(props, 'columns');
   const weights = props['weights'];
@@ -94,7 +79,6 @@ export const gridStyle = (props: Props): Record<string, string | undefined> => {
   };
 };
 
-// Typography props (Text).
 export const textStyle = (props: Props): Record<string, string | undefined> => {
   const size = str(props, 'size');
   const weightNum = num(props, 'weight');
@@ -108,7 +92,6 @@ export const textStyle = (props: Props): Record<string, string | undefined> => {
   };
 };
 
-// A handful of icon names → a glyph, so icon-only buttons show something.
 const ICON: Record<string, string> = {
   plus: '+', bell: '\u{1F514}', sparkles: '✨', more: '⋯', search: '\u{1F50D}', check: '✓', close: '✕', settings: '⚙',
 };

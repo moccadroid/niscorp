@@ -1,7 +1,5 @@
 import jsonLogic from 'json-logic-js';
 
-// JsonLogic has operators that answer a primitive or an array, and none that builds an object: a rule object with
-// more than one key is handed back as it is, unevaluated, and one with a single key is read as an operator.
 const noObjects = 'JsonLogic has no operator that builds an object, so a rule cannot answer one (a multi-key object in a rule is returned unevaluated).';
 
 export default {

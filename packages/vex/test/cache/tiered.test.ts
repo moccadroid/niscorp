@@ -41,13 +41,11 @@ describe('createTieredCache', () => {
     const l2 = createMemoryCache();
     const cache = createTieredCache({ l1, l2 });
 
-    // Seed only L2.
     await l2.set('k1', okEntry());
     expect(await l1.get('k1')).toBeUndefined();
 
     const result = await cache.get('k1');
     expect(result).toBeDefined();
-    // Now present in L1.
     expect(await l1.get('k1')).toBeDefined();
   });
 
@@ -75,9 +73,7 @@ describe('createTieredCache', () => {
     const cache = createTieredCache({ l1, l2, warmup: 'lazy' });
     await cache.init();
 
-    // Nothing preloaded.
     expect(await l1.get('a')).toBeUndefined();
-    // But a get pulls it from L2 and promotes.
     expect(await cache.get('a')).toBeDefined();
     expect(await l1.get('a')).toBeDefined();
   });
@@ -100,7 +96,6 @@ describe('createTieredCache', () => {
     const l2 = createMemoryCache();
     const onError = vi.fn();
 
-    // Inject a corrupt entry straight into L2 (bypassing validation).
     const corrupt = { kind: 'ok', dsl: { nope: 1 }, createdAt: Date.now() } as unknown as CacheEntry;
     await l2.set('bad', corrupt);
 
@@ -109,7 +104,7 @@ describe('createTieredCache', () => {
 
     expect(onError).toHaveBeenCalledOnce();
     expect(await l1.get('bad')).toBeUndefined();
-    expect(await l2.get('bad')).toBeUndefined(); // evicted from L2, not just skipped
+    expect(await l2.get('bad')).toBeUndefined();
   });
 
   it('delete and clear affect both tiers', async () => {

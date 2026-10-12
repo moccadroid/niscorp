@@ -4,17 +4,8 @@ import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { HUES, classes, length, num, oneOf } from './props';
 import type { Props } from './props';
 
-// Arrangement primitives. They know about boxes, gaps and columns, and have
-// never heard of a stage.
-
 const BOX_TONES = ['plain', 'ground', 'panel', 'sunken', 'calm', 'elevated', 'critical', 'dock', 'dock-head'] as const;
 
-// `tone` doubles as the frame's alarm state: calm / elevated / critical are
-// box tones like any other, so the intent line changing colour when a storm is
-// typed is a data binding, not a feature of this component.
-// `stick` pins a box to the top or the bottom of the PAGE as it scrolls — the
-// page, because the room has exactly one scrollbar and it is the document's.
-// `scroll` exists for an instrument drawer and nothing in the app uses it.
 export const Box: NovaComponent<Props> = ({ children, tone, pad, px, py, h, minH, maxH, grow, scroll, stick }) => {
   const style: CSSProperties = {
     padding: length(pad),
@@ -28,10 +19,9 @@ export const Box: NovaComponent<Props> = ({ children, tone, pad, px, py, h, minH
     overflow: scroll === true ? 'auto' : undefined,
   };
   const element = useRef<HTMLDivElement>(null);
-  // A BOX STUCK TO THE BOTTOM CHANGES HEIGHT UNDER THE READER — a panel opens in it
-  // — and the page must not move when it does. Where the page WAS is remembered from
-  // its own scroll events, and put back after the box has resized; a scroll the
-  // resize itself caused is not remembered.
+  // A box stuck to the bottom changes height under the reader, and the page must not
+  // move: where it was is remembered from its own scroll events and put back after
+  // the resize. A scroll the resize itself caused is not remembered.
   useLayoutEffect(() => {
     const box = element.current;
     if (stick !== 'bottom' || box === null) return undefined;
@@ -65,11 +55,6 @@ export const Box: NovaComponent<Props> = ({ children, tone, pad, px, py, h, minH
   );
 };
 
-// `grow` is a flex weight (true = 1) and `basis` the width it would like before
-// growing, `max` the width past which it stops — together they make a Stack a
-// COLUMN of a wrapping Row. A Stack with
-// nothing in it is removed from the flow by the stylesheet (`:empty`), so a
-// column whose every slot rendered nothing leaves no gap behind.
 export const Stack: NovaComponent<Props> = ({ children, gap, pad, h, minH, grow, basis, max }) => {
   const weight = grow === true ? 1 : num(grow, 0);
   return (
@@ -96,18 +81,8 @@ export const Row: NovaComponent<Props> = ({ children, gap, align, justify, wrap 
   </div>
 );
 
-// ONE PACKED FLOW. Every card in the room is a `Tile` inside one `Pack`, however
-// many canvases they came from (a slot renders no element of its own, so tiles
-// from six canvases are siblings here). The grid has as many columns as the
-// width affords — the stylesheet decides, by container query — a tile spans what
-// its size class says, and `dense` lets a later small card fill a hole an
-// earlier wide one left.
-//
-// ...AND PACKED DOWNWARD TOO. Grid rows are as tall as their tallest card, which
-// leaves a band of nothing under every short one. So rows here are 4 px, and a
-// tile spans as many of them as its content is tall — measured, and re-measured
-// when the content resizes. That is the whole of "masonry"; nothing is absolutely
-// positioned and the browser still does the packing.
+// Grid rows are as tall as their tallest card. So rows here are 4 px, and a tile spans as
+// many of them as its content is tall, measured and re-measured when the content resizes.
 const PACK_ROW = 4;
 const PACK_GAP = 12;
 
@@ -147,17 +122,12 @@ export const Pack: NovaComponent<Props> = ({ children }) => {
   );
 };
 
-// One card's place in the pack: how wide it is allowed to be, and which of the
-// kit's hues edges it. `pin` keeps it ahead of everything that is not pinned.
 export const Tile: NovaComponent<Props> = ({ children, span, accent, pin }) => (
   <div className={classes('en-tile', `en-tile--${oneOf(span, ['wide', 'regular', 'compact'], 'regular')}`, `en-hue--${oneOf(accent, HUES, 'teal')}`, pin === true && 'en-tile--pin')}>
     <div className="en-tile__body">{children}</div>
   </div>
 );
 
-// `columns` is a count or a full template ('1fr 2fr'). Below the
-// breakpoint the stylesheet collapses every grid to one column — an ops room on
-// a phone is a list.
 export const Grid: NovaComponent<Props> = ({ children, columns, gap, align }) => (
   <div
     className="en-grid"

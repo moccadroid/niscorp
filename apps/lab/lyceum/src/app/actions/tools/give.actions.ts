@@ -2,12 +2,6 @@ import type { ActionDefinition } from '@niscorp/nova';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { assistantGive, assistantGiven, assistantTake, EVERYBODY, xrayGive, xrayGiven, xrayTake } from '@lyceum/app/vex/grant.entries';
 
-// A CONTROLLER TOOL THAT GIVES EVERYBODY SOMETHING, or takes it back — the
-// X-ray and the assistant are both this. Giving writes ONE grant row, for
-// `everybody` (vex/grant.entries.ts): every member's shell is rebuilt and the
-// action is a block on their phone's list — and on the phone of whoever joins
-// later, because their roles are read from that same row. Taking it back
-// deletes it. Whether it is given is a reactive read, so the tool follows.
 const giveTool = (tool: { id: string; title: string; kicker: string; give: string; entries: { given: SeedEntry; give: SeedMutation; take: SeedMutation } }): ActionDefinition => ({
   id: tool.id,
   title: tool.title,

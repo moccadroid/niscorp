@@ -1,15 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Collapsed: one pill in the corner, deliberately unglamorous — it floats over
-// a customer's application and must never look like part of it.
-//
-// Open: the panes, in three groups, because eight flat entries is a list you
-// read rather than a menu you use. The groups are the three questions the tool
-// answers — what exists, where it lands, what is happening — and Explain sits
-// above them because it is the one you reach for when something is wrong.
-//
-// Tapping a pane pushes it over this instance; there is no active state to keep
-// in step, because the thing on top IS the current pane.
 const group = (label: string, tiles: LayoutNode[]): LayoutNode => ({
   component: 'Stack',
   props: { gap: 6 },
@@ -22,9 +12,8 @@ export const dockLayout: LayoutNode = {
   children: {
     if: '$.open',
     then: {
-      // `shrink` is what lets the list below scroll: the panel caps its own
-      // height, so this has to be allowed to be shorter than its content before
-      // anything inside it can take a scrollbar.
+      // `shrink` lets the list below scroll: the panel caps its own height, so
+      // this must be allowed shorter than its content.
       component: 'Stack',
       props: { gap: 0, shrink: true },
       children: [
@@ -48,9 +37,6 @@ export const dockLayout: LayoutNode = {
           },
         },
         {
-          // The panes scroll on a short window. Eight of them plus a header is
-          // taller than a laptop's 70vh, and a nav you cannot reach the bottom
-          // of is a nav with four entries.
           component: 'Box',
           props: { px: 14, py: 14, grow: true, scroll: true, shrink: true },
           children: {

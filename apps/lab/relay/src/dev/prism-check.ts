@@ -1,7 +1,3 @@
-// Verifies the Prism money formatter in the deal-query mappings actually
-// evaluates (Config is loosely typed, so tsc can't catch a malformed node).
-// The mapping is WHOLE-SET now (a `$map` over `$.result`), so feed an array.
-// Run: pnpm --filter relay exec tsx src/dev/prism-check.ts
 import { evaluate } from '@niscorp/prism';
 import { dealsByCompany } from '@relay/app/vex/deals.entries';
 
@@ -18,7 +14,6 @@ const cases: Array<[number, string]> = [
 let ok = true;
 for (const [value, expected] of cases) {
   const out = evaluate(mapping, { result: [{ deal_id: 'd', title: 'T', stage: 'S', value }] }) as Array<Record<string, unknown>>;
-  // `value` is the raw number now; the money string is `value_display`.
   const got = out[0]?.['value_display'];
   const pass = got === expected && out[0]?.['value'] === value;
   ok = ok && pass;

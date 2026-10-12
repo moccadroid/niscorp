@@ -1,14 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// ToolConfig schema — Zod-validated, serializable tool metadata
-// ═══════════════════════════════════════════════════════════
-//
-// The serializable parts of a tool definition. Validated by Zod
-// at defineTool() time. Non-serializable fields (input schema,
-// execute function) are separate parameters — they carry live
-// objects that can't round-trip through JSON.
-//
-// This schema is the source of truth for tool config shape.
-
 import { z } from 'zod';
 
 export const ToolRiskLevelSchema = z.enum(['low', 'medium', 'high']);

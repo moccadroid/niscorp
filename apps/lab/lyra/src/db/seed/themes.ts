@@ -1,4 +1,3 @@
-// The two looks: one warm, one dark, so a theme swap is visible in the demo.
 import { insert } from '../sql';
 
 export const THEMES_SQL = insert(
@@ -8,8 +7,6 @@ export const THEMES_SQL = insert(
     [
       'th_sand',
       'Sand',
-      // Warm and quiet: off-white grounds, ink softened towards brown, a clay
-      // accent that carries dark text. What a yoga studio would pick.
       JSON.stringify({
         ground: '#fdfcfa',
         surface: '#ffffff',

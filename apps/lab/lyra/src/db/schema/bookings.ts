@@ -1,5 +1,3 @@
-// Holding a seat and turning up: capacity, the waitlist behind it, and the
-// check-in that spends a pass credit.
 export const BOOKINGS_DDL = /* sql */ `
   -- A booking belongs to a PERSON at a studio. It used to belong to a
   -- membership, which meant a drop-in — somebody with no membership at all —

@@ -3,20 +3,6 @@ import { SignalError, ErrorCode } from '../errors';
 import { decisionQuestionDescription } from '../transport/protocol';
 import type { Questions, Question, CalibratedDecision, UncalibratedDecision } from '../types';
 
-// ═══════════════════════════════════════════════════════════
-// The acceptance gate for decisions
-// ═══════════════════════════════════════════════════════════
-//
-// Signal's rule is that what comes out conforms to the schema that went in. For
-// decide() the schema that went in is the questions object, so the gate is
-// DERIVED from it — one schema per question, built from that question's own
-// options — and an answer outside what was asked is a typed failure with the
-// provider's body as evidence.
-//
-// There is no repair and no correction retry here. A decision model writes no
-// bytes to repair and cannot be told what it got wrong; a failed gate fails the
-// call.
-
 export type CalibratedDecisions<Qs extends Questions> = { [N in keyof Qs]: CalibratedDecision<Qs[N]> };
 export type UncalibratedDecisions<Qs extends Questions> = { [N in keyof Qs]: UncalibratedDecision<Qs[N]> };
 
@@ -36,9 +22,6 @@ const levelKeysOf = (question: { criteria: readonly string[] }): string[] =>
 const mostProbable = (probabilities: readonly number[]): number =>
   probabilities.reduce((best, value, level) => (value > (probabilities[best] ?? 0) ? level : best), 0);
 
-// What a decision model's answer to ONE question must look like, and the public
-// decision it becomes. The wire keys a score's levels by index string; the
-// public shape is the array those indexes already describe.
 const calibratedGate = (name: string, question: Question): ZodType => {
   if (question.type === 'choice') {
     const option = enumOf(name, Object.keys(question.criteria));
@@ -61,7 +44,6 @@ const calibratedGate = (name: string, question: Question): ZodType => {
   return z.object({ noul: probability }).transform((answer) => ({ answer: answer.noul >= 0.5, noul: answer.noul }));
 };
 
-// The same questions as a text model answers them: the pick and nothing else.
 const uncalibratedField = (name: string, question: Question): ZodType => {
   const description = decisionQuestionDescription(question);
   if (question.type === 'choice') return enumOf(name, Object.keys(question.criteria)).describe(description);
@@ -81,8 +63,7 @@ const assertAsked = (questions: Questions): void => {
   }
 };
 
-// True when every question has its decision. Each entry was written by that
-// question's own gate, so covering the names is covering the type.
+// Each entry was written by its question's own gate, so covering the names covers the type.
 const answersEvery = <Out extends object>(questions: Questions, decisions: object): decisions is Out =>
   Object.keys(questions).every((name) => name in decisions);
 
@@ -92,7 +73,7 @@ const rejected = (issues: readonly string[], raw: unknown): SignalError =>
 const issuesOf = (name: string, error: z.ZodError): string[] =>
   error.issues.map((issue) => `${[name, ...issue.path].join('.')}: ${issue.message}`);
 
-// Fails before the network when a question cannot be gated at all.
+// Builds each gate for its throw: a question that cannot be gated fails before the network.
 export const assertQuestions = (questions: Questions): void => {
   assertAsked(questions);
   for (const [name, question] of Object.entries(questions)) calibratedGate(name, question);
@@ -121,7 +102,6 @@ export const acceptCalibrated = <Qs extends Questions>(
   return decisions;
 };
 
-// The contract a text model is held to when it stands in for a decision model.
 export const uncalibratedSchemaOf = (questions: Questions): ZodType<Record<string, unknown>> =>
   z.strictObject(
     Object.fromEntries(Object.entries(questions).map(([name, question]) => [name, uncalibratedField(name, question)])),

@@ -38,7 +38,7 @@ describe('tool gates', () => {
     const agent = agentWith({ toolGates: [() => ({ deny: 'not today' })] });
 
     const result = await agent.run('go', { llm, onEvent: (event) => events.push(event) }).result;
-    expect(result.ok).toBe(true); // the RUN succeeds; the CALL was denied
+    expect(result.ok).toBe(true);
 
     const toolEnd = events.find((event) => event.type === 'tool-end');
     expect(toolEnd?.type === 'tool-end' && toolEnd.observation.kind).toBe('denied');

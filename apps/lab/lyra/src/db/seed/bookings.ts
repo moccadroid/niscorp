@@ -1,9 +1,6 @@
-// Who booked, who turned up, and the two people who stopped coming.
 import { at, day, insert } from '../sql';
 import { LUMEN, NORTHROCK } from './studios';
 
-// Whoever holds a live subscription books — the entitlement, not a category,
-// is what puts somebody in class.
 export const BOOKINGS_SQL = /* sql */ `
   INSERT INTO bookings (id, studio_id, session_id, person_id, status, booked_at)
   SELECT
@@ -58,7 +55,6 @@ export const CHECK_INS_SQL = /* sql */ `
     AND ((('x' || substr(md5('att' || b.id), 1, 7))::bit(28)::int) % 100) < 82;
 `;
 
-// ─── one authored beat ───────────────────────────────────────
 export const WALK_IN_SQL = insert(
   'check_ins',
   ['id', 'studio_id', 'person_id', 'session_id', 'happened_at', 'held_on', 'hour_key', 'method'],

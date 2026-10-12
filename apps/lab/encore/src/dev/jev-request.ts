@@ -1,9 +1,3 @@
-// THE EXACT BYTES. Writes the request body a pass sends to the decision
-// provider for one sentence — `{ model, state, questions }`, as the System One
-// wire takes it — so it can be read, measured and replayed with curl. Runs on
-// the fake provider: deriving the questions needs the world, not the key.
-//
-//   pnpm --filter encore request "storm at 9 move headliner to the tent" > body.json
 import { OPERATOR_PRINCIPAL } from '@encore/app/charter/assignments';
 import { PINNED_CLOCK } from '@encore/lib/festival-clock';
 import { parseLine } from '@encore/server/intent/parse';

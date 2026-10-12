@@ -1,12 +1,3 @@
-// CHAT, MIRRORED HEADLESSLY — the real Ray agent (not the build tool bare),
-// real tools, mounted assistant, throttled trace publishing, the user's RAW
-// message as input. The one chat ingredient it can toggle is SERVER AGE:
-// --aged runs a full 120b build first, so the second build sees the first
-// one's cache entries and catalog registrations, exactly like a session
-// where screens were already built. Bare-harness GLM is clean; chat GLM
-// spirals; this isolates which remaining ingredient causes it.
-//
-//   pnpm --filter relay exec tsx src/dev/ray-mirror.ts [--model=<id>] [--aged]
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CortexEvent } from '@niscorp/cortex';
@@ -38,19 +29,10 @@ const main = async (): Promise<void> => {
   const model = process.argv.find((a) => a.startsWith('--model='))?.slice(8);
   if (model !== undefined) {
     if (!isModelId(model)) { console.error('unknown model'); process.exit(2); }
-    assign('architect', model); // builder only — the reviewer stays default, like the user's Settings
+    assign('architect', model);
   }
   const aged = process.argv.includes('--aged');
-  // --direct: the measured run calls build_action ITSELF instead of going
-  // through Ray. On an aged server Ray rightly just OPENS the screen that
-  // already exists (measured: 2s, one stack call) — correct chat behavior,
-  // but it dodges the architect, and the poison hypothesis is about the
-  // ARCHITECT seeing an aged cache. Direct is how that gets isolated.
   const direct = process.argv.includes('--direct');
-  // --attached: a REAL frame consumer on a real websocket, like the browser.
-  // Headless-with-no-connections makes every flush free; a connection makes
-  // the server render, encode and COMPRESS every changed canvas per flush.
-  // The last untested chat ingredient this side of vite itself.
   const attached = process.argv.includes('--attached');
 
   const policy = createScopePolicy(resolvePrincipal(CHARTER, scopeGrants(TABLES), ['sales', 'dev'], 'data'), scopeBehaviors);
@@ -62,7 +44,6 @@ const main = async (): Promise<void> => {
   mkdirSync(outDir, { recursive: true });
   const put = (o: Record<string, unknown>): void => appendFileSync(join(outDir, 'run.jsonl'), JSON.stringify({ t: Date.now(), ...o }) + '\n');
 
-  // Chat's exact furniture: assistant mounted, trace published (throttled, as run.ts now does).
   shell.push('modal', 'assistant');
   await new Promise((r) => setTimeout(r, 1500));
 
@@ -144,8 +125,6 @@ const main = async (): Promise<void> => {
   };
 
   if (aged) {
-    // Age like a real session: several DIFFERENT screens built first, their
-    // fingerprints and catalog entries left behind.
     const AGE_INTENTS = [
       'A table of the top 10 open deals by value, showing company, stage, value and close date. Click a row to open that deal.',
       'A searchable table of all companies showing name, industry and size. Typing filters the list; clicking a row opens the company.',

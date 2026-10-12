@@ -1,11 +1,3 @@
-// Every check, each in its own process over its own fresh database.
-//
-// Separate processes on purpose: the storm check MOVES the headliner, and a
-// shared database would make the order of the suite part of its meaning. Each
-// also binds its own fake decision provider on a free port, so the suite runs
-// beside a live dev server without either noticing.
-//
-// Run: pnpm --filter encore check
 import { spawnSync } from 'node:child_process';
 
 const CHECKS = [

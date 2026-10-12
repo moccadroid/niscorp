@@ -1,7 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Spa utilization for the ops manager — bookings counted by treatment and
-// status, straight from the mirror rows. Numbers before adjectives.
 export const reportLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 12 },

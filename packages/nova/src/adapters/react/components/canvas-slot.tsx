@@ -2,12 +2,6 @@ import { CanvasSlotPropsSchema, type CanvasSlotProps } from '../../primitive-pro
 import { RenderTree, useCanvasRenderTree } from '@react';
 import type { NovaComponent, NovaComponentProps } from '@react';
 
-// ═══════════════════════════════════════════════════════════
-// CanvasSlot — structural component that renders a canvas's
-// actionLayout inside a shell's canvasLayout. Used as a leaf in
-// the shell-tier layout tree.
-// ═══════════════════════════════════════════════════════════
-
 export { CanvasSlotPropsSchema, type CanvasSlotProps };
 
 export const CanvasSlot: NovaComponent<CanvasSlotProps> = ({

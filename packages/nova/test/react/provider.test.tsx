@@ -82,7 +82,6 @@ describe('<NovaRenderProvider>', () => {
       useNovaDispatch();
       return null;
     };
-    // Suppress React error logging noise.
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(() => render(<Probe />)).toThrow(/NovaRenderProvider/);
     spy.mockRestore();

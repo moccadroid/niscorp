@@ -1,11 +1,3 @@
-// TABLES CHECK — the Ministry's tables go through strata's ledger.
-//
-// The talk runs on a Postgres that outlives the process, and until the ledger it
-// ran the DDL on every boot. So the check is the adoption the live database
-// will go through: a database that ran the old DDL and holds rows is migrated
-// once, keeps every row, and is recorded — and a second boot does nothing. The
-// migration itself is history, so its checksum is pinned: an edit is caught here,
-// not by the talk refusing to start.
 import { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import { checksumOf } from '@niscorp/strata';
@@ -14,13 +6,8 @@ import { TIDE_TABLES } from '@niscorp/tide/postgres';
 import { DDL, LYCEUM_SEQUENCE, LYCEUM_SEQUENCES } from '@lyceum/db/schema';
 import { check, finish } from './harness';
 
-// What migration 1 creates, and what the whole sequence leaves.
 const BASELINE_TABLES = ['departments', 'members', 'slides', 'slide_notes', 'deck', 'grants', 'login_links'];
-// Migration 13 drops `departments`: the talk sorts nobody into one any more.
-// Migration 14 replaces `room` (one look for every screen) with `renderers`.
-// Migration 15 keeps refused names and the moderator's verdicts on questions.
 const TABLES = [...BASELINE_TABLES.filter((table) => table !== 'departments'), 'slide_tools', 'queries', 'timers', 'assistant_turns', 'questions', 'renderers', 'refused_names', 'question_verdicts', 'presses'];
-// What the boot migrates: lyceum's sequence and tide's (db/schema.ts).
 const BOOT_TABLES = [...TABLES, ...TIDE_TABLES];
 const ALL = LYCEUM_SEQUENCE.migrations.map((_, index) => `lyceum.app/${index + 1}`).join();
 
@@ -28,7 +15,7 @@ const tablesOf = async (pool: ReturnType<typeof createPglitePool>): Promise<stri
   (await pool.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name <> 'strata_ledger' ORDER BY table_name`)).rows.map((r) => String(r['table_name']));
 
 const main = async (): Promise<void> => {
-  // ── HISTORY, PINNED. Red here: put migration 1 back and append a new one. ──
+  // Pinned checksums. Red here: put the migration back and append a new one.
   const baseline = LYCEUM_SEQUENCE.migrations[0];
   check('lyceum.app/1 is one statement per table (a `;` inside a comment does not split one)', baseline?.steps.length === BASELINE_TABLES.length);
   check('lyceum.app/1 is unchanged', baseline !== undefined && (await checksumOf(baseline)) === '299dd26ee2db4e8288e2bda0361db75300d4ef34e6dee1fe6cce94701e0f4c61');
@@ -61,14 +48,12 @@ const main = async (): Promise<void> => {
   const namesAndVerdicts = LYCEUM_SEQUENCE.migrations[14];
   check('lyceum.app/15 is unchanged', namesAndVerdicts !== undefined && (await checksumOf(namesAndVerdicts)) === '7b6300c3f27de1af34506970b9d435c3b101ed85001f655119600e7d62593448');
 
-  // ── a fresh database ──
   const fresh = createPglitePool(new PGlite());
   await migrate(fresh, [...LYCEUM_SEQUENCES]);
   check('a fresh database gets every table, lyceum and tide both, before the server looks', JSON.stringify(await tablesOf(fresh)) === JSON.stringify([...BOOT_TABLES].sort()));
   check(`...and the ledger records every one of lyceum's migrations (${ALL})`, (await readLedger(fresh)).filter((r) => r.sequence === 'lyceum.app').map((r) => `${r.sequence}/${r.n}`).join() === ALL);
   check('a second boot runs nothing', (await migrate(fresh, [...LYCEUM_SEQUENCES])).applied.length === 0);
 
-  // ── the live talk's database: it ran the old DDL on every boot and holds rows ──
   const db = new PGlite();
   await db.exec(DDL);
   await db.exec(`INSERT INTO departments (department_id, name, remit, mark, sigil, position) VALUES ('archive', 'Archive', 'Reads', 'dots', 'circle', 1)`);

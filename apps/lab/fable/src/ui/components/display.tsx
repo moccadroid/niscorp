@@ -15,9 +15,6 @@ import {
 import { cx } from '../lib/cx';
 import { FS, TEXT_COLOR } from '../lib/tokens';
 
-// Display primitives — Text, Badge, Icon. Read-only visuals.
-
-// ─── Text ──────────────────────────────────────────────────
 const TextProps = z
   .object({
     size: z.string().optional(),
@@ -53,10 +50,6 @@ export const Text: NovaComponent<z.infer<typeof TextProps>> = ({
 );
 Text.meta = { description: 'Inline text with size/weight/color.', propsSchema: TextProps };
 
-// ─── Badge ─────────────────────────────────────────────────
-// `tone` is an open string: a known tone gets its tint class, an unknown one
-// falls back to the base badge — so a data-driven toneMap can never crash a
-// render.
 const TONES = ['accent', 'green', 'amber', 'red', 'blue'];
 
 const BadgeProps = z
@@ -70,7 +63,6 @@ export const Badge: NovaComponent<z.infer<typeof BadgeProps>> = ({ tone = 'slate
 );
 Badge.meta = { description: 'A small status pill.', propsSchema: BadgeProps };
 
-// ─── Icon ──────────────────────────────────────────────────
 const ICONS: Record<string, LucideIcon> = {
   calendar: Calendar,
   check: Check,

@@ -1,27 +1,3 @@
-// ═══════════════════════════════════════════════════════════════
-// LYCEUM'S LOOK — the poster. Every visual decision is here, as tokens and
-// the rules that read them; the components (./kit.ts) only say WHAT a thing is
-// (an area, an ink, a mark), never how it looks, and take no style from a
-// layout. A different look is a different stylesheet over the same kit.
-//
-// The grammar:
-//   · A screen is a SHEET: a ruled grid. The rules are the grid's gaps showing
-//     the ink underneath — cells never draw borders.
-//   · Everything is a CELL. Paper by default; a block of INK only where it
-//     carries a fact (the live count, the one primary action).
-//   · Four colours, each with a job, on paper and ink: SIGNAL (blue) is the
-//     fact that matters, ALERT (orange) is what to do next, LIVE (green) is a
-//     number that changes on its own, HIGHLIGHT (yellow) is what the pointer
-//     is on and what the eye should find. Houses are not colours — they are
-//     MARKS (a pattern) and SIGILS (a shape), so the colours stay free to mean
-//     something.
-//   · "Not yet" has a pattern, the hatch — never a grey.
-//   · Two voices: Unbounded for what is read from the back row, Space
-//     Grotesk for sentences, Space Mono for code and data. Sizes follow the
-//     cell's own width (container units), so one layout reads on a projector
-//     and on a phone.
-// ═══════════════════════════════════════════════════════════════
-
 export const ROOT_CLASS = 'lyceum';
 
 export const FONTS_HREF =

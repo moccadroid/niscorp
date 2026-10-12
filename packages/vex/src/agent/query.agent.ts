@@ -5,21 +5,12 @@ import { QuerySchema } from '../schemas/query.schema.js';
 import type { Query } from '../schemas/query.schema.js';
 import type { ScopeBinding } from '../types.js';
 
-// Per-invocation deps: the introspected database schema and the DSL
-// JSON Schema arrive per call (they vary with adapter and scope), so
-// they are context-function inputs — the agent itself is defined once.
 export type VexQueryDeps = {
   schemaJson: string;
   dslSpecJson: string;
-  // Who the caller is, in the schema's terms (describeCaller). Absent — a run
-  // built without it — reads as a caller nothing identifies.
   caller?: string;
 };
 
-// WHO THE CALLER IS, for the agent: the columns their scope keys are bound to
-// (GenerationCaller.bindings) — the keys and the columns, never a value. With
-// none, the agent is told plainly that nothing here identifies them, so a
-// question about "me" is refused for the right reason rather than guessed at.
 export const describeCaller = (bindings: readonly ScopeBinding[]): string =>
   bindings.length === 0
     ? 'The caller: no column in this schema is bound to anything that identifies the caller, so a request about "me", "my" or "mine" cannot be answered.'
@@ -71,13 +62,10 @@ export const vexQueryDslAgent: AgentDefinition<Query, VexQueryDeps> = defineAgen
   context: [
     ({ deps }) => `Database schema:\n${deps.schemaJson}`,
     ({ deps }) => deps.caller ?? describeCaller([]),
-    // Named OUTPUT SCHEMA because that is what the finish protocol refers to:
-    // the query this agent returns is the envelope's `data`.
+    // Named OUTPUT SCHEMA because cortex's finish protocol refers to it by that name.
     ({ deps }) => `OUTPUT SCHEMA — the DSL specification (JSON Schema), the single source of truth for your query:\n${deps.dslSpecJson}`,
   ],
-  // The DSL spec above IS the schema documentation; don't inject it twice.
+  // The DSL spec in the context is the schema documentation; with `doc` on it would be injected twice.
   output: { schema: QuerySchema, doc: 'off' },
-  // Three identical testQuery calls with the same error in a row is a model
-  // not reading the error; a fourth would cost a full prompt and change nothing.
   stopWhen: [stepCount(20), outputRetries(3), repeatedCalls(2)],
 });

@@ -11,14 +11,8 @@ import type { NovaComponent } from '@react';
 import { NovaShell } from '@react';
 import { registerNovaReactComponents } from '../../src/adapters/react/components';
 
-// ═══════════════════════════════════════════════════════════
-// A head under the React adapter: nothing is drawn for it or what it holds, and
-// the page's <head> follows it for as long as the shell lives in the page.
-// ═══════════════════════════════════════════════════════════
-
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true);
 
-// A kit component that gives every child a cell: what a head must never be handed to.
 const Cells: NovaComponent = ({ children }: { children?: ReactNode }) => (
   <div>
     {Children.map(children, (child) => (
@@ -118,7 +112,6 @@ describe('a head node, under the React adapter', () => {
     await press(root, 'rename');
     expect(document.title).toBe('Second title');
 
-    // a screen with no head has the document's own title again
     await press(root, 'leave');
     expect(root.textContent).toContain('no head here');
     expect(document.title).toBe('The site');

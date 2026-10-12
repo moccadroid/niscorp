@@ -1,10 +1,6 @@
 import type { LayoutNode } from '@niscorp/nova';
 import { answerLayout } from '@lyceum/app/actions/shared/answer.layouts';
 
-// A VEX QUERY, shown as what it is: the INTENT it was given, the SHAPE it
-// answers in, the FINGERPRINT it is stored and replayed under — then its
-// result, and how that result was reached (replayed, or generated just now).
-// Green: a query reads the live records.
 export const queryResultLayout: LayoutNode = {
   component: 'Sheet',
   props: { areas: ['intent', 'shape', 'print', 'result'], rows: ['auto', 'auto', 'auto', 'auto'] },

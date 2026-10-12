@@ -7,19 +7,8 @@ import type { SignalClient } from '@niscorp/cortex';
 import type { DatabaseAdapter, PgPool, Query, QueryEngine, QueryEngineConfig, ScopePolicy, ScopeValues, SeedEntry } from '../../src/index.js';
 import type { VexExpressResponse } from '../../src/adapters/express/index.js';
 
-// THE BUILT ENTRIES, loaded the way `require('@niscorp/vex')` and
-// `require('@niscorp/vex/hono')` load them.
-//
-// Every other suite imports source, where VexError is one class. The built
-// CommonJS files are not split: each entry carries its own copy of the class,
-// so an error thrown by an engine from one entry is not an `instanceof` the
-// VexError another entry holds. The HTTP handler used to ask exactly that, and
-// answered every engine error on a read with a 500. An app that loads the two
-// formats side by side splits the class the same way.
-//
-// Nothing here imports source at run time (the imports above are types). It
-// needs `dist/`, which the `test` task builds first; run on its own, build
-// first — it reads the files as they were last built.
+// Reads `dist/` as it was last built. The turbo `test` task builds first;
+// `vitest` run directly does not.
 
 type Core = typeof import('../../src/index.js');
 type PgliteEntry = typeof import('../../src/adapters/pglite/index.js');
@@ -89,7 +78,6 @@ const throughExpress =
     return reply;
   };
 
-// Every code the engine throws on a read, and the status DOCS.md gives it.
 const READS: ReadonlyArray<{ code: string; status: number; ask: (post: Post, engines: Engines) => Promise<Reply> }> = [
   { code: 'cache_miss', status: 404, ask: (post, { open }) => post({ engine: open }, { fingerprint: 'nope/nothing' }) },
   {
@@ -177,8 +165,6 @@ describe('the built entries, one class in several copies', () => {
   });
 
   describe('the agent entry', () => {
-    // A model that describes itself and then cannot be reached: the run fails,
-    // and the hook says so with the agent entry's own copy of VexError.
     const unreachable = (): never => {
       throw new Error('no model here');
     };

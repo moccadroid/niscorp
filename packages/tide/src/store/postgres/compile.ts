@@ -48,8 +48,6 @@ export const compileWhere = (where: Fields | undefined, start: number, alias = '
     const column = `${prefix}${snake(field)}`;
     const bare = snake(field);
     if (test === null || typeof test !== 'object' || Array.isArray(test)) {
-      // An equality on `undefined` means IS NULL, which is what the engine
-      // means when it filters on a column it just cleared.
       clauses.push(test === undefined ? `${column} IS NULL` : `${column} = ${slot(toColumn(bare, test))}`);
       continue;
     }
@@ -95,8 +93,6 @@ export const compileSet = (set: Fields, start: number): Bind => {
   for (const [field, value] of Object.entries(set)) {
     const column = snake(field);
     if (value !== null && typeof value === 'object' && 'inc' in value) {
-      // Column arithmetic, so two settling tasks cannot lose an increment
-      // between a read and a write.
       assignments.push(`${column} = coalesce(${column}, 0) + ${Number(value.inc)}`);
       continue;
     }

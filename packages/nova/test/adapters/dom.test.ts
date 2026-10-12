@@ -6,14 +6,6 @@ import type { DomComponent, DomRenderApi } from '../../src/adapters/dom';
 import type { NovaEvent } from '../../src/shared/event-bus/schemas';
 import type { RenderComponentNode, RenderNode } from '../../src/layout/types';
 
-// ═══════════════════════════════════════════════════════════
-// The DOM adapter resolves a CanvasSlot WHEREVER it appears — in the frame, or
-// inside a canvas's own tree (an action that arranges canvases). Inside a slot,
-// events are that canvas's: a click in a nested canvas is dispatched as the
-// NESTED canvas's, not the canvas around it. Driven the way moss's terminal
-// drives it, with a stub RenderApi.
-// ═══════════════════════════════════════════════════════════
-
 const component = (name: string, props: Record<string, unknown> = {}, children: RenderNode[] = [], ref?: string): RenderComponentNode => ({
   type: 'component',
   name,
@@ -91,7 +83,6 @@ describe('dom adapter — which instance a click belongs to', () => {
     const root = document.createElement('div');
     createDomView(root, registry, {
       frame: () => [slot('tray')],
-      // a LIST canvas: two live cards at once, the second one "active"
       canvasTree: (id) => (id === 'tray' ? [card('i-1', 'first'), card('i-2', 'second')] : []),
       dispatch: (canvasId, event) => dispatched.push({ canvasId, event }),
       publish: () => undefined,

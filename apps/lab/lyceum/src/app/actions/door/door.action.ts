@@ -1,12 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { doorLayout } from './door.layout';
 
-// The anonymous principal's whole application: choose a name, and step in.
-// Stepping in is a server function that lets the person in and GRANTS the
-// session — the terminal reconnects as the new member, and their shell is
-// built from their row. `offer` is twelve names nobody has (server/names.ts);
-// a typed name is checked before it is used, and a refused one comes back as
-// `refused`, with a name offered instead.
 const enter = [
   { set: 'entering', value: true },
   { set: 'error', value: '' },

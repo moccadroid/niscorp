@@ -1,9 +1,5 @@
 import type { CacheEntry } from './index';
 
-// The sidebar nav badges — four COUNT(*)s in ONE read, not four. Each table's
-// count is a single-row aggregate subquery; with no foreign key between them
-// they cross-join into a single row { contacts, companies, deals, tasks }. The
-// object shape makes Vex map that one row; the mapping returns it as-is.
 export const sidebarCounts: CacheEntry = {
   fingerprint: 'counts/sidebar',
   intent: 'Sidebar nav badge counts — contacts, companies, deals, my open tasks',

@@ -5,13 +5,6 @@ import type { ScopePolicy, ScopeEntityRule, ScopeMatch } from './scope.types.js'
 import { isSetMatch } from './scope.types.js';
 import { VexError } from '../errors.js';
 
-// ───────────────────────────────────────────────────────────────
-// Error
-// ───────────────────────────────────────────────────────────────
-
-// A scope denial IS a VexError (code 'scope_denied') so the HTTP layer maps
-// it to a 400 like every other request error — a denied read or write is the
-// caller's problem, not a 500. `entity` is kept for callers that inspect it.
 export class VexScopeError extends VexError {
   readonly entity: string;
 
@@ -22,29 +15,9 @@ export class VexScopeError extends VexError {
   }
 }
 
-// ───────────────────────────────────────────────────────────────
-// TWO QUESTIONS, DELIBERATELY SEPARATED
-// ───────────────────────────────────────────────────────────────
-//
-// Scope answers two things that used to be answered in one pass, and
-// conflating them produced a silent, universal row-loss bug:
-//
-//   1. MAY this caller touch this table at all?  — a pure allow/deny over
-//      entity names. Needs no schema, no aliases, no joins. Runs before
-//      resolution, over every entity discovered anywhere in the tree.
-//
-//   2. WHERE does the row rule go?  — needs to know HOW the table is reached,
-//      because a row rule on a LEFT-joined table belongs in that join's ON
-//      clause. It used to be merged into the DSL's `filter`, which compiles to
-//      WHERE, which turns every LEFT join into an INNER one: a driving row
-//      whose optional FK is null gets null-padded columns, `null = $tenant` is
-//      null rather than true, and the row vanishes. No error, no warning, a
-//      shorter list. It hid for as long as no data had a null FK.
-//
-// Only the resolver knows join kinds, so (2) moved after resolution. That also
-// means scope no longer writes anything into the authored `Query` — the
-// document integrations ship over the wire carries no engine-trusted field,
-// which is a property worth having on its own.
+// Row rules are placed after resolution, because only a resolved query knows
+// its join kinds: a rule on a LEFT-joined table goes in that join's ON clause.
+// In WHERE, `null = $tenant` is null and a driving row with a null key vanishes.
 
 const matchesFor = (entity: string, rule: ScopeEntityRule | undefined, def: 'allow' | 'deny'): ScopeMatch[] => {
   if (rule === undefined) {
@@ -60,10 +33,6 @@ const matchesFor = (entity: string, rule: ScopeEntityRule | undefined, def: 'all
   return rule.read;
 };
 
-// Whether a policy lets a caller read a table at all — the same answer
-// `checkScope` enforces, as a predicate for anything that must decide what to
-// SHOW (discovery, the schema a generating agent is handed) rather than what
-// to refuse.
 export const canReadTable = (policy: ScopePolicy, table: string): boolean => {
   const rule = policy.entities[table];
   if (rule === undefined) return policy.default === 'allow';
@@ -72,20 +41,9 @@ export const canReadTable = (policy: ScopePolicy, table: string): boolean => {
   return rule.read !== undefined || policy.default === 'allow';
 };
 
-// ───────────────────────────────────────────────────────────────
-// 1. May they touch it
-// ───────────────────────────────────────────────────────────────
-
-// Throws on the first denied entity. A denied entity ANYWHERE denies the query,
-// including inside a subquery or an `exists` — `discoverEntities` walks the
-// whole tree, so a table cannot be reached by hiding it one level down.
 export const checkScope = (entities: Set<string>, policy: ScopePolicy): void => {
   for (const entity of entities) matchesFor(entity, policy.entities[entity], policy.default);
 };
-
-// ───────────────────────────────────────────────────────────────
-// 2. Where the row rule goes
-// ───────────────────────────────────────────────────────────────
 
 const andMerge = (existing: ResolvedFilter | undefined, additions: ResolvedFilter[]): ResolvedFilter | undefined => {
   if (additions.length === 0) return existing;
@@ -97,7 +55,6 @@ const andMerge = (existing: ResolvedFilter | undefined, additions: ResolvedFilte
   return { original: { and: all.map((f) => f.original) }, resolvedPaths: paths as never };
 };
 
-// One row rule, resolved against the alias the table actually got.
 const predicateFor = (
   entityName: string,
   alias: string,
@@ -105,23 +62,17 @@ const predicateFor = (
   fields: { name: string; nullable: boolean }[],
 ): ResolvedFilter | undefined => {
   const field = fields.find((f) => f.name === match.match);
-  // A rule naming a column the table does not have is a policy bug, not a
-  // request bug — but failing the read closed is the only safe reading of it.
+  // Fails closed: a rule naming a missing column must not let the read run without it.
   if (field === undefined) throw new VexScopeError(entityName, `Scope rule for "${entityName}" names column "${match.match}", which the table does not have`);
   const path = `${entityName}.${match.match}`;
-  // The set-valued form compiles to `col = ANY($n)`, which the operator table
-  // already emits for `in` against a scope ref — so a reach covering several
-  // rows needs no compile branch of its own, and binds through the same slot
-  // machinery. An absent or empty set matches nothing (see scope.types.ts).
+  // `in` against a scope value compiles to `col = ANY($n)`, so a null or empty
+  // set matches no row.
   const original: Filter = isSetMatch(match)
     ? { in: [path, { $scope: match.in }] }
     : { eq: [path, { $scope: match.to }] };
   return { original, resolvedPaths: new Map([[path, { alias, column: match.match, schema: field as never }]]) as never };
 };
 
-// One LEVEL of a resolved tree — an outer query, a subquery, or an `exists`.
-// They differ in what else they carry; for placing row rules they are the same
-// four things, so they get the same code and cannot drift apart.
 type ScopeLevel = {
   sources: ResolvedSource[];
   joins: ResolvedJoin[];
@@ -142,8 +93,7 @@ const placeInto = (level: ScopeLevel, policy: ScopePolicy): void => {
       if (predicate === undefined) continue;
 
       // The compiler resolves `entity.column` through the alias map, and these
-      // predicates never went through the resolver's field pass, so they say
-      // where they point.
+      // predicates did not go through the resolver's field pass.
       level.aliasMap.set(`${entity.name}.${match.match}`, `${source.alias}.${match.match}`);
 
       if (join !== undefined && join.kind === 'left') join.on = [...(join.on ?? []), predicate];
@@ -155,22 +105,14 @@ const placeInto = (level: ScopeLevel, policy: ScopePolicy): void => {
   if (merged !== undefined) level.filter = merged;
 };
 
-// Walk the resolved tree and place every row rule. Subqueries and `exists`
-// nodes recurse: a rule on `tasks` lands inside the level whose FROM actually
-// reads tasks, never on an outer query that only sees an alias.
-//
-// The `exists` recursion is not tidiness — it is the boundary. An EXISTS
-// returns a boolean, but a boolean about somebody else's rows is still an
-// answer about somebody else's rows: an uncorrelated `exists` over a scoped
-// table would report whether ANY tenant has such a row. Access-checking the
-// table is not enough; the rule has to be inside the subquery too.
+// Rules go inside every `exists` as well: an uncorrelated `exists` over a
+// scoped table would otherwise report whether any tenant has such a row.
 export const scopeResolved = (resolved: ResolvedQuery, policy: ScopePolicy): ResolvedQuery => {
   for (const source of resolved.sources) {
     if (source.subquery !== undefined) scopeResolved(source.subquery, policy);
   }
 
-  // Every `exists` at every depth — the resolver collects nested ones into the
-  // same flat map, so one pass covers the tree.
+  // The resolver collects nested `exists` nodes into this one flat map.
   for (const node of resolved.existsMap?.values() ?? []) {
     placeInto(node, policy);
   }
@@ -179,11 +121,11 @@ export const scopeResolved = (resolved: ResolvedQuery, policy: ScopePolicy): Res
   return resolved;
 };
 
-// ───────────────────────────────────────────────────────────────
-// Deprecated shape, kept so a caller that only wanted the access check still
-// gets one. It no longer returns a filtered DSL, because scope is not a DSL
-// concern any more — `scopeResolved` does the placing.
-// ───────────────────────────────────────────────────────────────
+/**
+ * @deprecated Checks access only and returns the query as it came, with no row
+ * rule added. Use `checkScope`; row rules are placed by `scopeResolved`, on the
+ * resolved query.
+ */
 export const applyScope = (dsl: Query, entities: Set<string>, policy: ScopePolicy): Query => {
   checkScope(entities, policy);
   return dsl;

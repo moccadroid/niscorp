@@ -1,6 +1,5 @@
 import type { PrismStory } from './story-types';
 
-// Operators
 import { story as constStory } from './stories/ops/const.story';
 import { story as refStory } from './stories/ops/ref.story';
 import { story as withStory } from './stories/ops/with.story';
@@ -21,7 +20,6 @@ import { story as stringsStory } from './stories/ops/strings.story';
 import { story as keyByStory } from './stories/ops/key-by.story';
 import { story as datesStory } from './stories/ops/dates.story';
 
-// Sugar
 import { story as sumStory } from './stories/sugar/sum.story';
 import { story as countStory } from './stories/sugar/count.story';
 import { story as avgStory } from './stories/sugar/avg.story';
@@ -33,14 +31,12 @@ import { story as dropStory } from './stories/sugar/drop.story';
 import { story as matchStory } from './stories/sugar/match.story';
 import { story as flatMapStory } from './stories/sugar/flat-map.story';
 
-// Composition
 import { story as pickAndRenameStory } from './stories/compose/pick-and-rename.story';
 import { story as mapShapeStory } from './stories/compose/map-shape.story';
 import { story as filterThenMapStory } from './stories/compose/filter-then-map.story';
 import { story as calculatedFieldsStory } from './stories/compose/calculated-fields.story';
 import { story as denormalizeJoinStory } from './stories/compose/denormalize-join.story';
 
-// Real world
 import { story as apiToUiStory } from './stories/real-world/api-to-ui.story';
 import { story as groupByStory } from './stories/real-world/group-by.story';
 import { story as sortAndSliceStory } from './stories/real-world/sort-and-slice.story';
@@ -48,7 +44,6 @@ import { story as searchSortPaginateStory } from './stories/real-world/search-so
 import { story as analyticsSummaryStory } from './stories/real-world/analytics-summary.story';
 
 export const stories: readonly PrismStory[] = [
-  // Operators
   constStory,
   refStory,
   withStory,
@@ -68,7 +63,6 @@ export const stories: readonly PrismStory[] = [
   stringsStory,
   keyByStory,
   datesStory,
-  // Sugar
   sumStory,
   countStory,
   avgStory,
@@ -79,13 +73,11 @@ export const stories: readonly PrismStory[] = [
   dropStory,
   matchStory,
   flatMapStory,
-  // Composition
   pickAndRenameStory,
   mapShapeStory,
   filterThenMapStory,
   calculatedFieldsStory,
   denormalizeJoinStory,
-  // Real world
   apiToUiStory,
   groupByStory,
   sortAndSliceStory,

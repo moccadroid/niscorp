@@ -1,14 +1,10 @@
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { dateText, money, stampText, statusTone } from '@atrium/app/prisms/format.prism';
 
-// The Opera bundle's data surface. Wake calls and stay requests are OUR mirror
-// tables; `property_id` is stamped and matched by the tenant behaviors, so no
-// query here mentions it.
+// `property_id` is stamped and matched by the tenant behaviors, so no entry
+// here mentions it.
 
-// ─── wake calls ──────────────────────────────────────────────
-
-// The table default dates the call for tomorrow — a call set tonight is for
-// tomorrow morning, which is the only wake call a hotel sells.
+// The table default dates the call for tomorrow.
 export const wakeSet: SeedMutation = {
   fingerprint: 'wake/set',
   intent: 'Set a wake-up call for tomorrow morning',
@@ -62,7 +58,6 @@ export const wakeCancel: SeedMutation = {
   },
 };
 
-// The desk's call sheet — scheduled calls in ringing order, with room and name.
 export const wakeSheet: SeedEntry = {
   fingerprint: 'wake/sheet',
   intent: "The property's scheduled wake-up calls in ringing order",
@@ -109,8 +104,6 @@ export const wakeSetDone: SeedMutation = {
   },
 };
 
-// ─── stay requests: the human-yes queue ──────────────────────
-
 export const requestRaise: SeedMutation = {
   fingerprint: 'requests/raise',
   intent: 'Raise a stay request that needs a human yes',
@@ -126,15 +119,6 @@ export const requestRaise: SeedMutation = {
     },
   },
 };
-
-// (`requests/forStay` used to live here and is CORE now — app/vex/stay.entries.
-// The read moved when a core surface needed it: `desk.arrival` asks what an
-// arriving guest has already requested, at every hotel, including ones that run
-// no Opera. A core action reaching into a bundle's fingerprint space works right
-// up until the bundle is not there, which is the failure the whole discovery
-// model exists to avoid. Opera still WRITES the queue — `requests/raise`,
-// `requests/decide` and the pending sheet below are all its own; it simply reads
-// one stay's asks through core, the way it posts a charge through `folio/post`.)
 
 export const requestsPending: SeedEntry = {
   fingerprint: 'requests/pending',
@@ -153,10 +137,8 @@ export const requestsPending: SeedEntry = {
       { field: 'guests.name', as: 'guest_name' },
       { field: 'rooms.number', as: 'room_number' },
     ],
-    // `requestId` AIMS THE QUEUE, so this surface can be opened on one guest's
-    // ask rather than only on everybody's. Callers wanting the whole thing pass
-    // '%' — the same optional-filter idiom the movements read uses for a name
-    // search, and one entry rather than two that drift apart.
+    // `requestId` narrows the queue to one request; a caller wanting all of it
+    // passes '%'.
     filter: {
       and: [{ eq: ['stay_requests.status', 'pending'] }, { like: ['stay_requests.id', { $context: 'requestId' }] }],
     },
@@ -174,9 +156,6 @@ export const requestsPending: SeedEntry = {
         label: { $get: { from: { $var: 'r' }, path: ['label'] } },
         detail: { $get: { from: { $var: 'r' }, path: ['detail'] } },
         amount: { $get: { from: { $var: 'r' }, path: ['amount'] } },
-        // The price the ask carried, spelled here so the clerk sees what a
-        // yes costs. A free option says so in words rather than "€0" — the
-        // desk approves comps too, and a zero is not a price.
         amount_display: {
           $case: {
             branches: [{ when: { $get: { from: { $var: 'r' }, path: ['amount'] } }, then: money({ $get: { from: { $var: 'r' }, path: ['amount'] } }) }],
@@ -202,33 +181,17 @@ export const requestDecide: SeedMutation = {
   },
 };
 
-// ─── folio adjustment ────────────────────────────────────────
-// Opera owns the bill; our folio_lines is a projection of it. So the void
-// happens THERE first (the action calls /connectors/con_opera/folio/void)
-// and this only records the answer on the mirror. The row survives — a folio
-// remembers what was reversed — and every read that shows or totals a stay
-// already filters `voided_at`.
 export const folioVoid: SeedMutation = {
   fingerprint: 'opera/folioVoid',
   intent: 'Mark a folio line reversed after Opera accepted the adjustment',
   mutation: {
     op: 'update',
     table: 'folio_lines',
-    // `at` is the ambient date the engine injects ($.today), the same way
-    // resolving an issue stamps its own — never a clock the browser sent.
     set: { voided_at: { $context: 'at' }, voided_by: { $context: 'reason' } },
     where: { eq: ['folio_lines.id', { $context: 'lineId' }] },
   },
 };
 
-// ─── transfers ───────────────────────────────────────────────
-// Opera holds the car contract, so the booking goes THERE and only its answer
-// becomes our mirror row — the same order as the spa and the folio, and for the
-// same reason: a service that did not answer must leave no row claiming it did.
-//
-// The READS are core (`transfers/forStay`, `transfers/sheet`), because Mews
-// books cars too and "what is booked on this stay" has one answer whichever
-// fleet turns up. Only the write is ours.
 export const transferRecord: SeedMutation = {
   fingerprint: 'opera/transferRecord',
   intent: 'Record a transfer on the mirror after Opera confirmed the car',
@@ -246,7 +209,3 @@ export const transferRecord: SeedMutation = {
     },
   },
 };
-
-// (The stay picker the upsell and set-call surfaces open with is CORE now —
-// `stays/pick` in app/vex/stay.entries.ts — because every crew half that acts
-// for a guest starts there, whichever connector shipped it.)

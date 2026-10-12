@@ -1,8 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The slides' layouts: the one grammar at two registers — one loud thing per
-// slide (a display headline or a figure), everything else at reading size.
-
 const cell = (area: string, children: LayoutNode[], props: Record<string, unknown> = {}): LayoutNode => ({
   component: 'Cell',
   props: { area, ...props },
@@ -11,8 +8,6 @@ const cell = (area: string, children: LayoutNode[], props: Record<string, unknow
 
 const label = (words: string): LayoutNode => ({ component: 'Label', children: words });
 
-// The app's own size, counted from its source by the server — so it cannot go
-// stale (server/census.ts).
 export const censusLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['kick chart', 'head chart', 'share chart'], cols: [1, 2.1], rows: ['auto', 1, 'auto'] },

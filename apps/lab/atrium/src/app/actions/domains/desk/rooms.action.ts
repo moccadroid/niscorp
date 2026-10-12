@@ -4,18 +4,6 @@ import { deskRoomsLayout } from './rooms.layout';
 import { previewable, previewTriggers, crewCard } from '@atrium/app/actions/preview';
 import { roomsPrism, roomStatusPrism } from './desk.prism';
 
-// The desk's room board.
-//
-// This is a SPLIT of `ops.rooms` rather than a second copy of it, and the seam
-// is the role: a manager taking a room out of the estate for a fortnight is a
-// decision made once, and a clerk signing off a turned room so the person at the
-// counter can have it is a decision made forty times a day. One column, two
-// verbs, two audiences — the same shape the issue board took when it became a
-// family.
-//
-// Before this existed, `rooms.out_of_order` was the only room state in the app,
-// which meant "not sellable" and "not ready yet" were the same word and the
-// desk had no way to say either.
 export const deskRoomsAction: ActionDefinition = {
   id: 'desk.rooms',
   title: 'Rooms',
@@ -33,10 +21,6 @@ export const deskRoomsAction: ActionDefinition = {
       ref: 'release',
       do: [
         { set: 'markRoomId', value: '@event.payload.room_id' },
-        // Signing off makes a room sellable; a room already signed off goes
-        // back to needing a turn, which is what a clerk means when they press it
-        // twice. Out-of-order rooms are the manager's and this leaves them
-        // exactly where they are.
         {
           set: 'markStatus',
           value: { $if: { $eq: ['@event.payload.status', 'out_of_order'] }, $then: 'out_of_order', $else: { $if: { $eq: ['@event.payload.status', 'inspected'] }, $then: 'dirty', $else: 'inspected' } },

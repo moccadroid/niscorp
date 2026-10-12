@@ -1,8 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Late checkout — the times and prices are Opera's catalogue rows; asking
-// raises a request the DESK answers. Nothing is promised here, and the status
-// list below says exactly where each ask stands.
 export const lateLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 16 },

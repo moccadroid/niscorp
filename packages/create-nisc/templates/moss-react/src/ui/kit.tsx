@@ -2,16 +2,6 @@ import { z } from 'zod';
 import { useNovaDispatch } from '@niscorp/nova/adapters/react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 
-// ═══════════════════════════════════════════════════════════
-// The kit: domain-blind primitives. Props in, events out. Each one is
-// CONFIGURED, never styled — it reads what a thing is (a tone, a level) from a
-// closed set of names, and anything it does not know falls back to the default.
-// The look lives in kit.css alone.
-//
-// Every prop a layout passes is parsed here, at the boundary (rule 13); a
-// layout that names an unknown value gets the default, never a crash.
-// ═══════════════════════════════════════════════════════════
-
 const parsed = <T,>(schema: z.ZodType<T>, props: unknown, fallback: T): T => {
   const result = schema.safeParse(props);
   return result.success ? result.data : fallback;

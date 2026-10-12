@@ -22,10 +22,6 @@ const INITIAL: Response = {
   meta: {},
 };
 
-// ═══════════════════════════════════════════════════════════
-// Construction
-// ═══════════════════════════════════════════════════════════
-
 describe('createStream — construction', () => {
   it('accepts valid initial value', () => {
     const stream = createStream({ schema: ResponseSchema, initial: INITIAL });
@@ -49,10 +45,6 @@ describe('createStream — construction', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// Write pipeline
-// ═══════════════════════════════════════════════════════════
-
 describe('createStream — write', () => {
   it('updates current value from streamed JSON', () => {
     const stream = createStream({ schema: ResponseSchema, initial: INITIAL });
@@ -65,8 +57,8 @@ describe('createStream — write', () => {
     const stream = createStream({ schema: ResponseSchema, initial: INITIAL });
     stream.write('{"widget":{"type":"card"');
     expect(stream.current().widget.type).toBe('card');
-    expect(stream.current().widget.title).toBe(''); // base preserved
-    expect(stream.current().response).toBe(''); // base preserved
+    expect(stream.current().widget.title).toBe('');
+    expect(stream.current().response).toBe('');
   });
 
   it('handles chunked writes', () => {
@@ -104,15 +96,10 @@ describe('createStream — write', () => {
     stream.on(listener);
     const callCount = listener.mock.calls.length;
 
-    // Write the same object that matches the initial state — parses fine, but equals current
     stream.write('{"widget":{"type":"","title":""},"response":"","reasoning":"","meta":{}}');
     expect(listener.mock.calls.length).toBe(callCount);
   });
 });
-
-// ═══════════════════════════════════════════════════════════
-// Array streaming
-// ═══════════════════════════════════════════════════════════
 
 describe('createStream — arrays', () => {
   const ItemsSchema = z.object({
@@ -139,7 +126,6 @@ describe('createStream — arrays', () => {
       initial: { items: [{ name: 'base', value: 0 }], status: 'ok' },
     });
 
-    // Stream only overwrites first element name
     stream.write('{"items":[{"name":"updated","value":0}]');
     expect(stream.current().items[0]).toEqual({ name: 'updated', value: 0 });
   });
@@ -150,7 +136,6 @@ describe('createStream — arrays', () => {
     stream.select('items.0').on(v => values.push(structuredClone(v)));
 
     stream.write('{"items":[{"name":"first","value":1},{"name":"second","value":2}]');
-    // Should have received the first element
     expect(lastOf(values)).toEqual({ name: 'first', value: 1 });
   });
 
@@ -175,10 +160,6 @@ describe('createStream — arrays', () => {
     expect(stream.current().tags).toEqual(['alpha', 'beta', 'gamma']);
   });
 });
-
-// ═══════════════════════════════════════════════════════════
-// Subscriptions
-// ═══════════════════════════════════════════════════════════
 
 describe('createStream — on()', () => {
   it('fires immediately with current value', () => {
@@ -208,7 +189,7 @@ describe('createStream — on()', () => {
 
     unsub();
     stream.write('{"widget":{"type":"card","title":"Hi"}}');
-    expect(listener.mock.calls.length).toBe(1); // only the initial fire
+    expect(listener.mock.calls.length).toBe(1);
   });
 
   it('re-entrancy: subscribing inside on() callback defers immediate fire', () => {
@@ -217,28 +198,20 @@ describe('createStream — on()', () => {
     let innerUnsub: (() => void) | undefined;
 
     stream.on((_value) => {
-      // Subscribe from inside a callback — should not fire immediately during this cycle
       if (!innerUnsub) {
         innerUnsub = stream.on(v => innerValues.push(structuredClone(v)));
       }
     });
 
-    // After the initial notification cycle completes, the inner listener
-    // should have received its deferred immediate fire
     expect(innerValues.length).toBe(1);
     expect(innerValues[0]).toEqual(INITIAL);
 
-    // Now write — both listeners should fire
     stream.write('{"widget":{"type":"card","title":"Hi"}}');
     expect(innerValues.length).toBe(2);
 
     innerUnsub?.();
   });
 });
-
-// ═══════════════════════════════════════════════════════════
-// Finalization
-// ═══════════════════════════════════════════════════════════
 
 describe('createStream — final()', () => {
   it('resolves when root JSON object closes', async () => {
@@ -297,10 +270,6 @@ describe('createStream — final()', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// Select
-// ═══════════════════════════════════════════════════════════
-
 describe('createStream — select()', () => {
   it('projects subtree value', () => {
     const stream = createStream({ schema: ResponseSchema, initial: INITIAL });
@@ -346,19 +315,10 @@ describe('createStream — select()', () => {
     stream.select('widget').on(listener);
     const callCount = listener.mock.calls.length;
 
-    // Change response, not widget — widget listener should not fire
     stream.write('{"widget":{"type":"","title":""},"response":"changed"');
     expect(listener.mock.calls.length).toBe(callCount);
   });
 });
-
-// ═══════════════════════════════════════════════════════════
-// A selection's onFinal, added late
-// ═══════════════════════════════════════════════════════════
-//
-// A selection learns that the root ended from the root. One first made AFTER
-// that was never told — so its onFinal listener waited for a call that could
-// no longer come.
 
 describe('createStream — select().onFinal() added late', () => {
   const REPLY = '{"widget":{"type":"card","title":"Hi"},"response":"ok","reasoning":"because","meta":{}}';
@@ -437,8 +397,6 @@ describe('createStream — select().onFinal() added late', () => {
     stream.write(REPLY);
 
     expect(listener).toHaveBeenCalledTimes(1);
-    // The reply is ending around this listener; the selection is told the usual
-    // way, after it — not from inside its own registration.
     expect(order).toEqual(['registered before it ran']);
   });
 
@@ -469,10 +427,6 @@ describe('createStream — select().onFinal() added late', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 });
-
-// ═══════════════════════════════════════════════════════════
-// Subtree finalization
-// ═══════════════════════════════════════════════════════════
 
 describe('createStream — subtree finalization', () => {
   it('widget finalizes when parser moves past it', async () => {
@@ -517,10 +471,6 @@ describe('createStream — subtree finalization', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// Close
-// ═══════════════════════════════════════════════════════════
-
 describe('createStream — close()', () => {
   it('is idempotent', () => {
     const stream = createStream({ schema: ResponseSchema, initial: INITIAL });
@@ -532,14 +482,9 @@ describe('createStream — close()', () => {
     stream.close();
     stream.close();
 
-    // onFinal should have fired exactly once
     expect(listener).toHaveBeenCalledTimes(1);
   });
 });
-
-// ═══════════════════════════════════════════════════════════
-// Destroy
-// ═══════════════════════════════════════════════════════════
 
 describe('createStream — destroy()', () => {
   it('prevents further writes', () => {
@@ -557,9 +502,6 @@ describe('createStream — destroy()', () => {
     await expect(finalPromise).rejects.toThrow('[solid] stream destroyed');
   });
 
-  // A stream read through callbacks alone holds no promise, so nothing can catch
-  // a rejection of it — and in Node an uncaught one ends the process. Nothing
-  // here catches one either: vitest fails the run on an unhandled rejection.
   it('raises no unhandled rejection when nobody holds final()', async () => {
     const stream = createStream({ schema: ResponseSchema, initial: INITIAL });
     stream.on(() => {});
@@ -567,7 +509,8 @@ describe('createStream — destroy()', () => {
     stream.select('response').onFinal(() => {});
     stream.write('{"widget":{"type":"card"');
     stream.destroy();
-    // An unhandled rejection is reported once the microtasks have drained.
+    // Vitest fails the run on an unhandled rejection, which is reported once the
+    // microtasks have drained.
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(stream.current().widget.type).toBe('card');
   });
@@ -602,7 +545,6 @@ describe('createStream — destroy()', () => {
 
     stream.select('response').on(responseListener);
 
-    // Destroy widget selection only
     widgetStream.destroy();
 
     const widgetCalls = widgetListener.mock.calls.length;
@@ -610,9 +552,7 @@ describe('createStream — destroy()', () => {
 
     stream.write('{"widget":{"type":"card","title":"Hi"},"response":"changed"');
 
-    // Widget listener should NOT have fired
     expect(widgetListener.mock.calls.length).toBe(widgetCalls);
-    // Response listener SHOULD have fired
     expect(responseListener.mock.calls.length).toBeGreaterThan(responseCalls);
   });
 
@@ -623,16 +563,11 @@ describe('createStream — destroy()', () => {
 
     const dead = stream.select('widget');
     expect(dead.current()).toBe(undefined);
-    // final() on dead stream should reject
     dead.final().catch((err: Error) => {
       expect(err.message).toContain('destroyed');
     });
   });
 });
-
-// ═══════════════════════════════════════════════════════════
-// onFinal unsubscribe
-// ═══════════════════════════════════════════════════════════
 
 describe('createStream — onFinal unsubscribe', () => {
   it('unsubscribed onFinal listener does not fire', () => {

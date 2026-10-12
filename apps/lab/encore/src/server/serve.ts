@@ -1,5 +1,3 @@
-// The encore app server, standalone. Dev only: `pnpm --filter encore serve`.
-// `pnpm --filter encore dev` runs the same boot inside vite instead.
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { boot } from './boot';

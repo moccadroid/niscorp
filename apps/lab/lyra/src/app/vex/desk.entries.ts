@@ -1,8 +1,6 @@
 import type { CacheEntry, MutationEntry } from './index';
 import { standingOver, standingLabel, standingTone, hasSubscription, hasLivePass, onACourse, trialRunning, isStaff } from './standing';
 
-// The front desk's daily loop: who is due in this class, and who has arrived.
-
 const row = (name: string) => ({ $get: { from: { $var: 'b' }, path: [name] } });
 
 export const rosterForSession: CacheEntry = {
@@ -17,9 +15,6 @@ export const rosterForSession: CacheEntry = {
       'bookings.attended',
       { field: 'people.name', as: 'person_name' },
     ],
-    // The same derivation the roll uses, correlated on the booking's own
-    // person through the anchor's mirrors — a desk sees "On trial" beside a
-    // name without any grant on the table that says what anybody pays.
     compute: standingOver('bookings'),
     filter: { and: [{ eq: ['bookings.session_id', { $context: 'sessionId' }] }, { eq: ['bookings.status', 'booked'] }] },
     sort: [{ field: 'people.name', dir: 'asc' }],
@@ -35,8 +30,6 @@ export const rosterForSession: CacheEntry = {
         status_display: standingLabel(row('standing')),
         status_tone: standingTone(row('standing')),
         attended: row('attended'),
-        // The label the row wears. Said here rather than in a layout, because
-        // "here" and "not yet" is presentation and belongs on the way out.
         arrived_label: { $case: { branches: [{ when: row('attended'), then: 'Here' }], else: 'Due' } },
         arrived_tone: { $case: { branches: [{ when: row('attended'), then: 'good' }], else: 'neutral' } },
       },
@@ -56,7 +49,6 @@ export const walkInsToday: CacheEntry = {
   },
 };
 
-// ─── the write ───────────────────────────────────────────────
 export const checkInMark: MutationEntry = {
   fingerprint: 'check-ins/mark',
   intent: 'Check a booked person into their class',
@@ -75,15 +67,11 @@ export const checkInMark: MutationEntry = {
   ],
 };
 
-// ─── booking ─────────────────────────────────────────────────
-
 export const bookableForSession: CacheEntry = {
   fingerprint: 'people/bookable-for-session',
   intent: 'People with live access at this studio who are not booked into the given class',
-  // The PersonPicker's own option shape, emitted at the source — this read's
-  // one consumer is the walk-in picker, and `name` (never `label`) is what
-  // keeps a person's name off the language pass. `sub` is the standing word,
-  // which is prose and translates.
+  // `name`, never `label`: that keeps a person's name off the language pass.
+  // `sub` is the standing word, which translates.
   shape: [{ value: '', name: '', sub: '' }],
   dsl: {
     from: ['studio_people', 'people'],
@@ -92,8 +80,6 @@ export const bookableForSession: CacheEntry = {
       { field: 'people.name', as: 'person_name' },
     ],
     compute: standingOver('studio_people'),
-    // Live access is what makes somebody bookable: a subscription, credits, a
-    // live trial, a course seat — or working here. Exactly the "current" lens.
     filter: {
       and: [
         {
@@ -147,8 +133,6 @@ export const bookingCreate: MutationEntry = {
   },
 };
 
-// Cancelling keeps the row. "Who dropped out" is a question every studio owner
-// asks, and deleting the evidence answers it with silence.
 export const bookingCancel: MutationEntry = {
   fingerprint: 'bookings/cancel',
   intent: 'Cancel a booking, keeping the record',

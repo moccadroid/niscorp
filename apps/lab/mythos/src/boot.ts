@@ -8,20 +8,6 @@ import { prewarmCache } from './vex/prewarm';
 import { createApiFetch } from './api/routes';
 import { createAppShell } from './nova/shell/create-shell';
 
-// ───────────────────────────────────────────────────────────
-// Boot: in-memory PGlite, schema + seed, one Vex engine
-// (introspected once, cache prewarmed), the /api fetch table,
-// then the shell. `today` is read from the database ONCE and
-// injected everywhere as ambient context — no wall-clock
-// comparisons anywhere downstream.
-//
-// Memoized behind the single accessor `getApp` (AGENTS,
-// "Using Vex": one engine, one accessor). `boot` itself is
-// exported for what needs a FRESH app each time: a build
-// draws the first screen from one, and checks it against
-// another (nisc.config.ts).
-// ───────────────────────────────────────────────────────────
-
 export type App = {
   shell: Shell;
   registry: ComponentRegistry;

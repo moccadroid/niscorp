@@ -1,6 +1,5 @@
 import jsonata from 'jsonata';
 
-// qty × unitCents over the lines of the order in context, plus its shipping.
 const TOTAL = '$sum(items.(qty * unitCents)) + shippingCents';
 
 export default {

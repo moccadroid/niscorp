@@ -1,19 +1,6 @@
-// THE ASSISTANT, AS DATA. One assistant on every device; what it knows about a
-// person and what it can do for them is assembled from these declarations —
-// what a grant says about the person (`context`), what to read as them
-// (`grounding`), which host tools they get (`tools`), and the action it
-// `applies` to.
-//
-// A declaration applies to everyone who has its action. So the charter builds
-// each person's assistant: `speaker: { actions: ['speaker.*', …] }` is why only
-// the controller's can automate. Grounding
-// reads run as the person, under their policy. Tools are the host's closed set
-// (server/assistant/tools.ts): `open`, `query`, `automate`.
-//
-// `context` is a FACT about the person, never an instruction: how the
-// assistant behaves is written once, for everybody (server/assistant/
-// orchestrator.ts).
-
+// A declaration applies to everyone who has its action. `context` is a fact
+// about the person, never an instruction: how the assistant behaves is written
+// once, for everybody.
 export type AssistantDeclaration = {
   id: string;
   title: string;

@@ -3,14 +3,6 @@ import { createMemoryStore, createTide } from '../src/index';
 import type { EffectRegistry, Fact, ReflexInput, Row, SelectFn, Tide, TideConfig, TideEvent } from '../src/index';
 import { testTransform, utc } from './support';
 
-// WORK THAT MUST NOT BE LOST.
-//
-// Every test here is a defect that reached the built engine: a retry verb
-// that did nothing, a database hiccup that destroyed a billing run, a dry
-// run that promised a firing the engine then refused. They are grouped by
-// what was at stake rather than by which file was wrong, because that is
-// how they will be re-introduced.
-
 const vienna = 'Europe/Vienna';
 const T0 = utc('2026-03-01T00:00:00Z');
 const DAY = 86_400_000;
@@ -47,10 +39,6 @@ const harness = async (
   return { tide, store, calls, events };
 };
 
-// ═══════════════════════════════════════════════════════════════
-// retry() — the only documented exit from `failed`
-// ═══════════════════════════════════════════════════════════════
-
 describe('the recovery verb', () => {
   const reflex: ReflexInput = {
     id: 'billing.charge',
@@ -74,9 +62,6 @@ describe('the recovery verb', () => {
   };
 
   it('reopens a failed task AND rewinds its firing, so the next tick claims it', async () => {
-    // The defect: `claimTasks` only considers tasks whose firing is `fanned`,
-    // and a failed task had already settled its firing. `retry()` returned
-    // true, moved the task to `pending`, and the task then sat there forever.
     const { tide, calls } = await harness([reflex], flakyOnce());
     await tide.fire('billing.charge', { now: T0 });
     await tide.advance({ now: T0 });
@@ -94,9 +79,6 @@ describe('the recovery verb', () => {
   });
 
   it('re-settling a reopened firing does not announce it twice', async () => {
-    // The old reason for NOT rewinding, and it was a real one: a digest
-    // already went out saying one failed, and re-settling would send it
-    // again. `drained` is what makes the rewind safe.
     const { tide } = await harness([reflex], flakyOnce());
     await tide.fire('billing.charge', { now: T0 });
     await tide.advance({ now: T0 });
@@ -107,7 +89,6 @@ describe('the recovery verb', () => {
     expect(settlements).toHaveLength(1);
   });
 
-  // Six units, a task each, and a gateway that is down for some of them.
   const texts = (policy: ReflexInput['policy']): ReflexInput => ({
     id: 'reminders.send',
     intent: 'Text each member, and fail terminally on the first attempt.',
@@ -136,9 +117,6 @@ describe('the recovery verb', () => {
   };
 
   it('two failed tasks retried before either runs again both come off the count', async () => {
-    // The defect: the count came down only with the rewind, and the rewind
-    // expects a settled run. The first retry rewound it; the second reopened
-    // its task and left `failed` at 1 — six done, "1 failed of 6".
     const { out, effects } = gateway(['b', 'e']);
     const { tide } = await harness([texts({ retry: { max: 0, backoff: 'fixed', baseMs: 1 }, overlap: 'allow' })], effects, { select: members });
     await tide.fire('reminders.send', { now: T0 });
@@ -166,10 +144,7 @@ describe('the recovery verb', () => {
   });
 
   it('a task retried while its run is still going does not settle the run a task early', async () => {
-    // `order: 'serial'` lands one task per tick, so the run is unsettled when
-    // the first failure is retried. Its count stayed up, the run reached its
-    // total with a task still pending, and the settlement went out saying
-    // "5 done, 1 failed" about a night on which six were sent and none failed.
+    // `order: 'serial'` lands one task per tick, so the run is unsettled when the first failure is retried.
     const { out, effects } = gateway(['a']);
     const { tide } = await harness([texts({ retry: { max: 0, backoff: 'fixed', baseMs: 1 }, overlap: 'allow', order: 'serial' })], effects, { select: members });
     await tide.fire('reminders.send', { now: T0 });
@@ -182,7 +157,6 @@ describe('the recovery verb', () => {
     expect(await countsOf(tide)).toEqual({ state: 'fanned', done: 0, failed: 0 });
 
     for (let n = 0; n < 5; n += 1) await tide.advance({ now: T0 + 10 });
-    // five landed, one still to go: not settled, and nothing announced
     expect(await countsOf(tide)).toEqual({ state: 'fanned', done: 5, failed: 0 });
     expect((await tide.ledger.facts()).filter((fact) => fact.kind === 'run')).toHaveLength(0);
 
@@ -192,9 +166,6 @@ describe('the recovery verb', () => {
   });
 
   it('releasing a parked fact actually releases it', async () => {
-    // Clearing `parked` without recording the override was a ping-pong: the
-    // matcher re-parked on the next tick, because the depth that parked it
-    // had not changed and never would.
     const emitter: ReflexInput = {
       id: 'echo',
       intent: 'Emit a fact that wakes this same reflex.',
@@ -219,25 +190,15 @@ describe('the recovery verb', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// overlap governs repeats, not distinct events
-// ═══════════════════════════════════════════════════════════════
-
 describe('two things happening at once', () => {
   const receipt: ReflexInput = {
     id: 'receipt.send',
     intent: 'Send a receipt when a payment lands.',
     on: { fact: { entity: 'payments', op: 'insert' } },
     effect: { name: 'mail', input: { invoice: { $ref: '$.fact.row.invoice_id' } } },
-    // The DEFAULT policy. Nothing here is unusual — that is the point.
   };
 
   it('two payments in one tick produce two receipts', async () => {
-    // The defect: `overlap` defaults to `'skip'`, and it was applied to every
-    // cause. The first payment opened a run; the second found it unsettled and
-    // was refused — one receipt sent, one recorded as skipped, and the member
-    // who paid never heard anything. Every fact-triggered reflex was in this
-    // state, and the count it dropped grew with how fast facts arrived.
     const { tide, calls } = await harness([receipt], { mail: { run: () => ({ sent: true }) } });
     await tide.ingest({ kind: 'write', entity: 'payments', op: 'insert', row: { invoice_id: 'a' }, at: T0 });
     await tide.ingest({ kind: 'write', entity: 'payments', op: 'insert', row: { invoice_id: 'b' }, at: T0 });
@@ -257,9 +218,6 @@ describe('two things happening at once', () => {
   });
 
   it('but a human pressing the button twice still skips', async () => {
-    // The guard that overlap was FOR, kept: a manual fact is a repeat of the
-    // same intent, and a long job should not double-start because somebody
-    // clicked again.
     const manual: ReflexInput = {
       id: 'long.run',
       intent: 'Slow.',
@@ -290,16 +248,10 @@ describe('two things happening at once', () => {
     await tide.advance({ now: utc('2026-03-01T05:00:00Z') });
     await tide.advance({ now: utc('2026-03-02T05:00:00Z') });
 
-    // Next month's billing run arriving while this month's is still going is
-    // the same work coming round again. That is what the policy is for.
     const skipped = (await tide.ledger.runs()).filter((run) => run.state === 'skipped');
     expect(skipped).toHaveLength(1);
   });
 });
-
-// ═══════════════════════════════════════════════════════════════
-// a write fact belongs to the tenant whose write it was
-// ═══════════════════════════════════════════════════════════════
 
 describe('two tenants watching one table', () => {
   const watcher = (id: string, as: string, from: string): ReflexInput => ({
@@ -311,15 +263,6 @@ describe('two tenants watching one table', () => {
   });
 
   it('two tenants running the SAME automation do not act on each other’s people', async () => {
-    // The serious one, and the whole reason facts carry identity. Two
-    // studios each run "welcome somebody who joins"; both watch `members`.
-    // A fact paired with reflexes by entity alone once fanned a row out to
-    // a reflex that had never selected it — so a competitor emailed your
-    // member, under their own studio id, with your member's address inside.
-    // A scope engine cannot catch that: the ROW written is legitimately the
-    // sender's; only the data in it came from somewhere else. The bridge
-    // stamps each fact with the identity of the WRITE's own tenant, and the
-    // matcher joins on strict equality.
     const { tide, calls } = await harness(
       [watcher('lumen:welcome', 'automation@lumen', 'lumen'), watcher('rock:welcome', 'automation@northrock', 'northrock')],
       { mail: { run: () => ({}) } },
@@ -336,8 +279,6 @@ describe('two tenants watching one table', () => {
   });
 
   it('and within a tenant, one fact is a stream every watcher hears', async () => {
-    // What polls could never give: two automations watching the same entity
-    // BOTH wake on the same write — a stream, not a private delta.
     const { tide, calls } = await harness(
       [watcher('lumen:welcome', 'automation@lumen', 'welcome'), watcher('lumen:notify', 'automation@lumen', 'notify')],
       { mail: { run: () => ({}) } },
@@ -350,14 +291,7 @@ describe('two tenants watching one table', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// a fact belongs to the identity that minted it
-// ═══════════════════════════════════════════════════════════════
-
 describe('facts minted by a reflex', () => {
-  // Two tenants, the same two automations each. The first writes a note; the
-  // second reacts to notes being written. Within a tenant that chain is the
-  // whole design. Across tenants it must not exist.
   const chain = (tenant: string): ReflexInput[] => [
     {
       id: `${tenant}:writer`,
@@ -376,12 +310,6 @@ describe('facts minted by a reflex', () => {
   ];
 
   it('do not wake another tenant’s reflex', async () => {
-    // The same hole as door 4, through a different door. `ctx.emit` carries
-    // a ROW as a payload, and the matcher paired it with every reflex watching
-    // that entity — including one belonging to somebody else, whose effect
-    // then ran over data it had never selected. No database read is involved,
-    // so no scope policy is consulted: the row crossed the boundary INSIDE
-    // tide, between a handler and a matcher.
     const { tide, calls } = await harness([...chain('lumen'), ...chain('northrock')], {
       write: { run: (_input, ctx) => ctx.emit({ kind: 'write', entity: 'notes', op: 'insert', row: { secret: 'lumen-only' }, at: ctx.now }) },
       react: { run: () => ({ ok: true }) },
@@ -415,21 +343,10 @@ describe('facts minted by a reflex', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// EVERY DOOR A FACT CAN COME THROUGH
-//
-// Tide is the one place in the stack where a row travels WITHOUT being read —
-// carried as a payload in a minted fact — so no scope policy is consulted on
-// the way and nothing downstream can catch it. There are five doors, and this
-// block walks all five rather than the two that had reproductions.
-// ═══════════════════════════════════════════════════════════════
-
 describe('the tenant boundary, door by door', () => {
   const OTHER = 'automation@northrock';
   const MINE = 'automation@lumen';
 
-  // One watcher per trigger kind, one per tenant. If a fact reaches the wrong
-  // one, the wrong tenant's name appears in `calls`.
   const watchers = (as: string, tenant: string): ReflexInput[] => [
     { id: `${tenant}:on-write`, intent: 'x', on: { fact: { entity: 'notes', op: 'insert' } }, as, effect: { name: 'seen', input: { by: tenant, door: 'write' } } },
     { id: `${tenant}:on-signal`, intent: 'x', on: { fact: { signal: 'stripe' } }, as, effect: { name: 'seen', input: { by: tenant, door: 'signal' } } },
@@ -458,7 +375,6 @@ describe('the tenant boundary, door by door', () => {
   });
 
   it('...and an ingest with NO identity reaches nobody who has one', async () => {
-    // Strict, and deliberately so: an unlabelled fact used to wake everyone.
     const { tide, calls } = await harness(both, effects({ run: () => ({}) }));
     await tide.ingest({ kind: 'signal', name: 'stripe', payload: { evt: 'anon' }, at: T0 });
     await tide.advance({ now: T0 });
@@ -469,8 +385,6 @@ describe('the tenant boundary, door by door', () => {
     const { tide, calls } = await harness(both, effects({ run: () => ({}) }));
     await tide.fire('lumen:source', { now: T0 });
     for (let n = 0; n < 3; n += 1) await tide.advance({ now: T0 + n });
-    // The manual fact woke `lumen:source` and nothing else; the run fact it
-    // settled into is door 5, below.
     expect(reached(calls, 'write')).toEqual([]);
     expect(reached(calls, 'signal')).toEqual([]);
   });
@@ -486,11 +400,6 @@ describe('the tenant boundary, door by door', () => {
   });
 
   it('door 4 — a bridge-minted write fact reaches only the identity it was minted for', async () => {
-    // The bridge (moss, off vex's write observer) ingests one fact per
-    // committed row, stamped with the identity the WRITE's own scope names.
-    // The row rides the fact — tide is the one place a row travels without
-    // being read — so this stamp is the only thing between a carried row
-    // and somebody else's effect.
     const { tide, calls } = await harness(both, effects({ run: () => ({}) }));
     await tide.ingest({ kind: 'write', entity: 'notes', op: 'insert', row: { secret: 'lumen' }, at: T0 }, { as: MINE });
     for (let n = 0; n < 3; n += 1) await tide.advance({ now: T0 + n });
@@ -505,10 +414,6 @@ describe('the tenant boundary, door by door', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// a bad minute is not a bad reflex
-// ═══════════════════════════════════════════════════════════════
-
 describe('fan-out failure', () => {
   const reflex: ReflexInput = {
     id: 'nightly.bill',
@@ -519,10 +424,6 @@ describe('fan-out failure', () => {
   };
 
   it('defers a transient selection failure instead of consuming the occurrence', async () => {
-    // The defect: any throw marked the firing `skipped`. `createFiring` is
-    // idempotent on (reflexId, cause), so the occurrence could never
-    // re-materialize — one unreachable database destroyed that night's run
-    // permanently, and `skipped` is not `settled`, so fan-in waited forever.
     let attempts = 0;
     const select: SelectFn = () => {
       attempts += 1;
@@ -539,7 +440,6 @@ describe('fan-out failure', () => {
     expect(deferred?.state).toBe('pending');
     expect(deferred?.note).toContain('deferred');
 
-    // Same occurrence, next tick. The work is not lost.
     const second = await tide.advance({ now: utc('2026-03-01T05:01:00Z') });
     expect(second.tasksCreated).toBe(2);
     expect(calls).toHaveLength(2);
@@ -547,9 +447,6 @@ describe('fan-out failure', () => {
   });
 
   it('still refuses a malformed reflex loudly', async () => {
-    // The contrast that makes the distinction worth drawing: a duplicate unit
-    // key is the reflex's GRAIN being wrong, and it will be wrong again next
-    // tick. That skips, and says why.
     const select: SelectFn = () => [{ id: 'same' }, { id: 'same' }];
     const { tide } = await harness([reflex], { bill: { run: () => ({ ok: true }) } }, { select });
     await tide.advance({ now: utc('2026-03-01T05:00:00Z') });
@@ -559,10 +456,6 @@ describe('fan-out failure', () => {
     expect(firing?.note).toContain('refused');
   });
 });
-
-// ═══════════════════════════════════════════════════════════════
-// preview must agree with the engine
-// ═══════════════════════════════════════════════════════════════
 
 describe('preview truthiness', () => {
   const reflex: ReflexInput = {
@@ -574,10 +467,6 @@ describe('preview truthiness', () => {
   };
 
   it('an empty list is falsy in BOTH, so preview does not promise a firing', async () => {
-    // The defect: preview rejected only false/null/undefined while the matcher
-    // also rejects 0, '' and []. A `when` returning an empty list previewed as
-    // "this will fire" and then didn't — the exact surprise preview exists to
-    // eliminate.
     const { tide, calls } = await harness([reflex], { mail: { run: () => ({ sent: true }) } });
     const fact = { kind: 'signal', name: 'day.closed', payload: { items: [] }, at: T0 } as const;
 
@@ -599,10 +488,6 @@ describe('preview truthiness', () => {
     expect(calls).toHaveLength(1);
   });
 });
-
-// ═══════════════════════════════════════════════════════════════
-// the intake contract
-// ═══════════════════════════════════════════════════════════════
 
 describe('the fact union', () => {
   const reflex: ReflexInput = {
@@ -628,9 +513,6 @@ describe('the fact union', () => {
   });
 
   it('an effect cannot emit a manual fact and fire a disarmed reflex', async () => {
-    // The hole: manual facts are checked BEFORE enablement on purpose —
-    // arming gates triggers, not people. A handler is not a person, and
-    // `ctx.emit` was not validated at all.
     const disarmed: ReflexInput = {
       id: 'dangerous',
       intent: 'Should not run while disarmed.',
@@ -659,15 +541,8 @@ describe('the fact union', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// facts that arrive before anything is listening
-// ═══════════════════════════════════════════════════════════════
-
 describe('the load race', () => {
   it('a fact due before load() completes is still delivered afterwards', async () => {
-    // The defect: `completeFact` ran unconditionally, so a tick racing `load()`
-    // marked the whole backlog delivered against ZERO reflexes. The
-    // never-retro-fire rule then put it permanently out of reach.
     const reflex: ReflexInput = {
       id: 'late.listener',
       intent: 'Listen for a signal that arrived before boot finished.',
@@ -686,15 +561,8 @@ describe('the load race', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// the chain ceiling, and what a sweep must not reset
-// ═══════════════════════════════════════════════════════════════
-
 describe('the chain ceiling under retention', () => {
   it('holds when the firing has been swept out from under the chain', async () => {
-    // The defect: the executor read `depth` back off the firing at emit time
-    // and fell back to 0 when it was gone — defeating the backstop in exactly
-    // the swept, long-running case it exists for.
     const reflex: ReflexInput = {
       id: 'loop',
       intent: 'A guarded loop that keeps emitting.',
@@ -708,8 +576,6 @@ describe('the chain ceiling under retention', () => {
     await tide.ingest({ kind: 'signal', name: 'tick', at: T0 });
     for (let n = 0; n < 12; n += 1) {
       await tide.advance({ now: T0 + n });
-      // Every firing is gone the moment it settles. The depth has to live
-      // somewhere that survives that.
       await tide.sweep(T0 + n, { runs: 0 });
     }
 
@@ -719,15 +585,8 @@ describe('the chain ceiling under retention', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// occurrences past the per-tick cap
-// ═══════════════════════════════════════════════════════════════
-
 describe('a long outage', () => {
   it('does not drop the occurrences past the per-tick cap', async () => {
-    // The defect: the cap bounded what was minted while the watermark jumped
-    // to `now` regardless. Everything past the cap was unreachable forever,
-    // with no row anywhere saying it had existed.
     const reflex: ReflexInput = {
       id: 'daily.report',
       intent: 'Every day at 03:00.',
@@ -737,7 +596,6 @@ describe('a long outage', () => {
     };
     const { tide } = await harness([reflex], { work: { run: () => ({}) } });
 
-    // 600 days dark: more occurrences than one tick may materialize.
     const back = T0 + 600 * DAY;
     await tide.advance({ now: back });
     const afterFirst = await tide.ledger.runs({ limit: 5_000 });
@@ -747,7 +605,6 @@ describe('a long outage', () => {
     const afterSecond = await tide.ledger.runs({ limit: 5_000 });
     expect(afterSecond.length).toBeGreaterThan(595);
 
-    // Contiguous: every calendar day between the two ends has a row.
     const keys = new Set(afterSecond.map((firing) => firing.occurrence));
     expect(keys.has('2026-03-02')).toBe(true);
     expect(keys.has('2027-08-01')).toBe(true);
@@ -755,12 +612,7 @@ describe('a long outage', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// every fact that reaches the table is announced, and so is every refusal
-// ═══════════════════════════════════════════════════════════════
-
 describe('the fact door', () => {
-  // A handler continues a chain by emitting a signal; a second reflex hears it.
   const relay: ReflexInput[] = [
     { id: 'start', intent: 'Pass the baton on.', on: { manual: {} }, effect: { name: 'pass' } },
     { id: 'finish', intent: 'Catch the baton.', on: { fact: { signal: 'baton' } }, effect: { name: 'catch' } },
@@ -774,8 +626,6 @@ describe('the fact door', () => {
     events.flatMap((event) => (event.type === 'fact.ingested' ? [event.fact.id] : []));
 
   it('announces a fact a handler emits — every row in the ledger has its event', async () => {
-    // The handler's emit used to land in the ledger and never reach the event
-    // stream: a watcher saw `finish` start on a fact nobody had announced.
     const { tide, events, calls } = await harness(relay, {
       pass: { run: (_input, ctx) => ctx.emit({ kind: 'signal', name: 'baton', at: ctx.now }) },
       catch: { run: () => 'caught' },
@@ -790,8 +640,6 @@ describe('the fact door', () => {
   });
 
   it('announces an emit refused by its dedupeKey, and writes no row for it', async () => {
-    // Before, a landed emit and a refused one were the same silence — a chain
-    // that continued and a chain that was cut could not be told apart.
     const { tide, events, calls } = await harness(relay, {
       pass: { run: (_input, ctx) => ctx.emit({ kind: 'signal', name: 'baton', at: ctx.now, dedupeKey: 'lap-1' }) },
       catch: { run: () => 'caught' },
@@ -801,7 +649,7 @@ describe('the fact door', () => {
     await tide.fire('start', { now: T0 + 10 });
     for (let n = 11; n <= 15; n += 1) await tide.advance({ now: T0 + n });
 
-    expect(calls).toHaveLength(3); // pass, catch, pass — the second baton never lands
+    expect(calls).toHaveLength(3);
     const deduped = events.flatMap((event) => (event.type === 'fact.deduped' ? [event.fact] : []));
     expect(deduped).toHaveLength(1);
     expect(deduped[0]).toMatchObject({ kind: 'signal', name: 'baton', dedupeKey: 'lap-1', cause: expect.stringMatching(/^task:/) });
@@ -837,17 +685,9 @@ describe('the fact door', () => {
 });
 
 describe('the fence holds across engines', () => {
-  // Two engines over one store — two processes, in effect. Each mints its own
-  // claim tokens, so a token alone cannot tell their claims apart. An attempt
-  // that ran past its lease and finishes late — while the reclaim is still
-  // running — must be discarded: the reclaim bumped `attempt`, and the fence
-  // checks it.
   it('a late attempt from an engine whose lease lapsed does not overwrite a reclaim still in flight', async () => {
     const store = createMemoryStore();
     const reflex: ReflexInput = { id: 'slow', intent: 'Do slow work.', on: { manual: {} }, effect: { name: 'work' } };
-    // A gate an effect stalls at: it says when the effect has reached it, and
-    // opens when the test says. So each step below waits for the engine to be
-    // where the step needs it, and not for 20 ms to have been enough.
     const gate = () => {
       let open: () => void = () => undefined;
       let reach: () => void = () => undefined;
@@ -880,21 +720,17 @@ describe('the fence holds across engines', () => {
     const drain = async (tide: Tide, now: number): Promise<void> => {
       for (let i = 0; i < 10; i += 1) await tide.advance({ now });
     };
-    // A claims the task and stalls in the effect; its lease lapses; B takes
-    // the task back and stalls too.
     const aRun = drain(a, T0);
     await aGate.reached;
     const bRun = drain(b, T0 + 5_000);
     await bGate.reached;
 
-    // A finishes first, late: refused.
     aGate.open();
     await aRun;
     const [afterA] = await store.query({ table: 'task', where: {}, limit: 10 });
     expect(afterA?.state).toBe('claimed');
     expect(afterA?.output).toBeUndefined();
 
-    // B, the live claim, lands.
     bGate.open();
     await bRun;
     const [afterB] = await store.query({ table: 'task', where: {}, limit: 10 });
@@ -904,10 +740,6 @@ describe('the fence holds across engines', () => {
 });
 
 describe('the last tasks of a run landing at once', () => {
-  // Two engines over one store again, each landing one of a run's last two
-  // tasks in the same moment. Each used to read the run before the other's
-  // count was in: both found it one short, neither settled it, and the run
-  // stayed `fanned` with every task done.
   const reflexOf = (overlap: 'allow' | 'skip'): ReflexInput => ({
     id: 'reminders.send',
     intent: 'Text each member.',
@@ -948,8 +780,6 @@ describe('the last tasks of a run landing at once', () => {
   });
 
   it('so a reflex that skips while its last run is unsettled starts again', async () => {
-    // What the stuck run cost: `overlap: 'skip'` saw an unsettled run for
-    // ever, and every later firing was recorded as skipped.
     const engines = await pair('skip');
     await landTheLastTwoAtOnce(engines);
 

@@ -2,19 +2,10 @@ import type { ActionDefinition } from '@niscorp/nova';
 import { sidebarLayout } from './sidebar.layout';
 import { sidebarCountsPrism } from './sidebar.prism';
 
-// Each nav click replaces the action on the `main` canvas, emits `nav` (so an
-// open detail self-closes — see contact-detail's `nav` trigger), and emits on a
-// per-screen channel. The highlight (`$.active`) is driven by *listening* to
-// those `screen-*` channels, not set inline — so navigation from anywhere (a
-// nav click, a cross-link, or the URL router) keeps the highlight correct. A
-// channel per screen avoids needing the message payload (triggers don't expose
-// it). The topbar sets its title off the same channels.
 export const sidebarAction: ActionDefinition = {
   id: 'chrome.sidebar',
-  // `counts` holds the four nav badge numbers. ONE read fills them all: four
-  // COUNT(*)s cross-joined into a single row. Live Vex data, not literals.
-  // `nav` + `user` are seeded at boot from the principal's resolved catalog
-  // and token — each NavItem renders only when its screen is granted.
+  // `nav` and `user` are seeded at boot from the principal's resolved catalog:
+  // a nav item renders only when its screen is granted.
   data: {
     active: 'home',
     counts: { contacts: 0, companies: 0, deals: 0, tasks: 0 },
@@ -42,8 +33,6 @@ export const sidebarAction: ActionDefinition = {
     { message: 'screen-companies', do: [{ set: 'active', value: 'companies' }] },
     { message: 'screen-deals', do: [{ set: 'active', value: 'deals' }] },
     { message: 'screen-settings', do: [{ set: 'active', value: 'settings' }] },
-    // Sign-out is a server fn (moss's function seam): it REVOKES the
-    // session — every terminal closes SIGNED_OUT and the shell dies.
     { event: 'ui:click', ref: 'sign-out', do: [{ call: 'signOut' }] },
   ],
 };

@@ -6,20 +6,8 @@ import { cx } from '../lib/cx';
 import { navBack, navPopTo } from '@relay/lib/nav';
 import { Icon } from './display';
 
-// The stack context chip — per-canvas trail rendered by a canvas's
-// actionLayout. It reads the canvas's own stack (the resolved `$.instances`,
-// each carrying its `title`) and NAVIGATES through the browser's own back
-// gesture: `history.back()` lands in the terminal's back trap (one spare
-// history entry, moss/terminal/history.ts), travels the wire as `back`, and
-// the SERVER shell — the owner of navigation — walks its journal. One press
-// per level: an ancestor jump is that many presses, spaced so each popstate
-// settles before the next. No shell in the browser, same as ever; the chip
-// borrows the gesture that already works instead of inventing a channel.
-
 const StackChipProps = z.object({
-  // The canvas stack, passed from the actionLayout scope as `$.instances`.
   instances: z.array(z.any()).optional(),
-  // Which canvas this chip belongs to — a popTo names its stack.
   canvasId: z.string().optional(),
 }).strict();
 
@@ -31,7 +19,7 @@ export const StackChip: NovaComponent<z.infer<typeof StackChipProps>> = ({ insta
   const stack = instances as Inst[];
   const parent = stack[stack.length - 2];
   const root = stack[0];
-  if (parent === undefined || root === undefined) return null; // depth < 2 → nothing to go back to
+  if (parent === undefined || root === undefined) return null;
 
   return (
     <div className="rl-chip">
@@ -66,10 +54,6 @@ export const StackChip: NovaComponent<z.infer<typeof StackChipProps>> = ({ insta
                         style: { cursor: 'pointer' },
                         onClick: () => {
                           setOpen(false);
-                          // ONE message, executed atomically by the shell that
-                          // owns the stack. This used to be `steps` chained
-                          // back gestures, which raced the browser's history
-                          // repair and delivered one of N.
                           navPopTo(canvasId, i.id);
                         },
                       })}

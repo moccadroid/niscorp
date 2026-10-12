@@ -6,23 +6,11 @@ import type { PgPool } from './introspect.js';
 import { compileQuery } from './compile.js';
 import { enforcementFor, type TimeoutEnforcement } from './statement-timeout.js';
 
-// ═══════════════════════════════════════════════════════════════
-// Config
-// ═══════════════════════════════════════════════════════════════
-
 export type PostgresAdapterConfig = {
   pool: PgPool;
   schema?: string;
-  // Tables this adapter never reports. Set once at construction because the
-  // caller that knows a table is not application data is the one wiring the
-  // adapter, not each caller of `introspect()` — and `QueryEngine.introspect`
-  // takes no arguments, so per-call is not reachable from a host anyway.
   exclude?: string[];
 };
-
-// ═══════════════════════════════════════════════════════════════
-// Adapter factory
-// ═══════════════════════════════════════════════════════════════
 
 const NUMERIC_OIDS = new Set([
   20,    // int8
@@ -56,7 +44,7 @@ export const createPostgresAdapter = (config: PostgresAdapterConfig): DatabaseAd
 
   const capabilities: AdapterCapabilities = {
     vectorSearch: true,
-    fuzzyMatch: false, // Requires pg_trgm extension, not guaranteed
+    fuzzyMatch: false, // needs the pg_trgm extension, which may not be installed
     jsonFields: true,
     fullTextSearch: true,
     returningClause: true,
@@ -75,9 +63,6 @@ export const createPostgresAdapter = (config: PostgresAdapterConfig): DatabaseAd
   const compile = (resolved: ResolvedQuery): CompiledQuery =>
     compileQuery(resolved);
 
-  // How reads are bounded (./statement-timeout.ts): unbounded until the
-  // engine asks; then plain when the connection already enforces the limit,
-  // wrapped per statement when it does not.
   let perStatementMs: number | undefined;
   const limitReads = async (ms: number): Promise<TimeoutEnforcement> => {
     perStatementMs = undefined;
@@ -89,7 +74,7 @@ export const createPostgresAdapter = (config: PostgresAdapterConfig): DatabaseAd
 
   const execute = async (query: CompiledQuery, params: BoundParams): Promise<Row[]> => {
     const limit = perStatementMs;
-    // `transaction` is called ON the pool, never taken off it: a driver's own
+    // `transaction` is called on the pool, never taken off it: a driver's own
     // object (a PGlite) has it as a method that needs its receiver.
     const result =
       limit === undefined || pool.transaction === undefined

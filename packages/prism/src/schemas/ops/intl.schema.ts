@@ -6,26 +6,6 @@ export const setNodeSchema = (schema: z.ZodTypeAny): void => {
 };
 const node = (): z.ZodTypeAny => _NodeSchema;
 
-// ═══════════════════════════════════════════════════════════
-// THE LOCALE-AWARE FORMATTING FAMILY.
-//
-// `$date` (time.schema) formats with dayjs tokens and is locale-BLIND: the
-// token `MMM` is "Mar" in every language it will ever run in. That is correct
-// for a machine-readable stamp and wrong for anything a person reads, so the
-// three ops here exist beside it rather than inside it — the choice between
-// them is "who is reading this", and a caller should have to answer it.
-//
-// All three delegate to `Intl`, which the platform already ships. That is the
-// whole reason the family is small: symbol placement (`€45` vs `45 €`), the
-// decimal mark, weekday and month names, and the digit grouping are not
-// three ops' worth of rules, they are one runtime's worth of CLDR data.
-//
-// `locale` is REQUIRED on every one of them. A default here would be the same
-// bug `format.prism.ts` documents about its currency symbol: the call site
-// that forgot still renders something plausible, and the only way to find out
-// is a reader in Vienna being shown American dates.
-// ═══════════════════════════════════════════════════════════
-
 const localeField = z
   .lazy(node)
   .describe('BCP-47 locale tag ("de-AT", "en-GB"). Required — a default renders plausible nonsense for everybody it is wrong for.');
@@ -35,11 +15,6 @@ const fallbackField = z
   .optional()
   .describe('Rendered when the value is null/undefined/empty. Default: "".');
 
-// The subset of Intl.DateTimeFormatOptions worth exposing declaratively. A
-// passthrough `z.record(z.unknown())` would let a typo ride silently into a
-// formatter that ignores unknown keys — every field a screen actually asks
-// for is named here instead, and anything else is a schema error at author
-// time rather than a missing weekday at read time.
 const DateStyle = z.enum(['full', 'long', 'medium', 'short']);
 
 export const IntlDateOptionsSchema = z

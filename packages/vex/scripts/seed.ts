@@ -7,10 +7,6 @@ const CONNECTION_STRING = process.env['DATABASE_URL'] ?? 'postgresql://vex:vex@l
 const CACHE_SCHEMA = process.env['VEX_CACHE_SCHEMA'] ?? 'public';
 const CACHE_TABLE = process.env['VEX_CACHE_TABLE'] ?? 'vex_cache';
 
-// ---------------------------------------------------------------------------
-// Deterministic UUIDs — hex pattern: 00000000-0000-4000-8000-{table}{index}
-// ---------------------------------------------------------------------------
-
 const uuid = (prefix: string, index: number): string => {
   const pad = String(index).padStart(4, '0');
   return `00000000-0000-4000-8000-${prefix}${pad}`;
@@ -24,10 +20,6 @@ const orderItemUuid = (i: number) => uuid('01000000', i);
 const reviewUuid = (i: number) => uuid('0e000000', i);
 const tagUuid = (i: number) => uuid('7a000000', i);
 const accountUuid = (i: number) => uuid('ac000000', i);
-
-// ---------------------------------------------------------------------------
-// DDL — extensions, tables, indexes (idempotent, run outside transaction)
-// ---------------------------------------------------------------------------
 
 const DDL = `
 -- Extensions
@@ -127,10 +119,6 @@ CREATE INDEX IF NOT EXISTS idx_products_name_trgm
 CREATE INDEX IF NOT EXISTS idx_products_embedding_hnsw
   ON products USING hnsw (embedding vector_cosine_ops);
 `;
-
-// ---------------------------------------------------------------------------
-// Seed data generators
-// ---------------------------------------------------------------------------
 
 const CUSTOMER_STATUSES = ['active', 'active', 'active', 'inactive', 'suspended'] as const;
 
@@ -332,28 +320,21 @@ const generateProductTags = (): string[] => {
   return rows;
 };
 
-// ---------------------------------------------------------------------------
-// Seed execution
-// ---------------------------------------------------------------------------
-
 const run = async () => {
   const pool = new pg.Pool({ connectionString: CONNECTION_STRING });
 
   try {
     console.log('Connecting to PostgreSQL...');
 
-    // Run DDL outside a transaction (CREATE EXTENSION / CREATE TABLE)
     console.log('Running DDL (extensions, tables, indexes)...');
     await pool.query(DDL);
 
-    // Seed data inside a single transaction
     console.log('Seeding data...');
     const client = await pool.connect();
 
     try {
       await client.query('BEGIN');
 
-      // Customers
       const customers = generateCustomers();
       await client.query(`
         INSERT INTO customers (id, name, email, status, total_spent, order_count, created_at)
@@ -361,7 +342,6 @@ const run = async () => {
         ON CONFLICT DO NOTHING
       `);
 
-      // Categories
       const categories = generateCategories();
       await client.query(`
         INSERT INTO categories (id, name, description, parent_id)
@@ -369,7 +349,6 @@ const run = async () => {
         ON CONFLICT DO NOTHING
       `);
 
-      // Products
       const products = generateProducts();
       await client.query(`
         INSERT INTO products (id, name, description, sku, price, active, category_id, embedding, created_at)
@@ -377,7 +356,6 @@ const run = async () => {
         ON CONFLICT (id) DO UPDATE SET embedding = EXCLUDED.embedding
       `);
 
-      // Orders
       const orders = generateOrders();
       await client.query(`
         INSERT INTO orders (id, customer_id, status, total, created_at, account_id)
@@ -385,7 +363,6 @@ const run = async () => {
         ON CONFLICT DO NOTHING
       `);
 
-      // Order items
       const orderItems = generateOrderItems();
       await client.query(`
         INSERT INTO order_items (id, order_id, product_id, quantity, unit_price)
@@ -393,7 +370,6 @@ const run = async () => {
         ON CONFLICT DO NOTHING
       `);
 
-      // Reviews
       const reviews = generateReviews();
       await client.query(`
         INSERT INTO reviews (id, product_id, customer_id, rating, comment, created_at)
@@ -401,7 +377,6 @@ const run = async () => {
         ON CONFLICT DO NOTHING
       `);
 
-      // Tags
       const tags = generateTags();
       await client.query(`
         INSERT INTO tags (id, name)
@@ -409,7 +384,6 @@ const run = async () => {
         ON CONFLICT DO NOTHING
       `);
 
-      // Product tags
       const productTags = generateProductTags();
       await client.query(`
         INSERT INTO product_tags (product_id, tag_id)
@@ -425,13 +399,10 @@ const run = async () => {
       client.release();
     }
 
-    // Ensure the persistent cache table exists (idempotent). Lets the
-    // engine start warm against this DB without a separate migration.
     console.log('\nInitializing cache table...');
     await createPostgresCache({ pool, schema: CACHE_SCHEMA, table: CACHE_TABLE }).init();
     console.log(`  ${CACHE_SCHEMA}.${CACHE_TABLE} ready.`);
 
-    // Print summary
     console.log('\nSeed complete. Row counts:');
     const tables = ['customers', 'categories', 'products', 'orders', 'order_items', 'reviews', 'tags', 'product_tags'];
 

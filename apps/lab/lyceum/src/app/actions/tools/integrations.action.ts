@@ -1,12 +1,5 @@
 import type { ActionDefinition } from '@niscorp/nova';
 
-// The controller's Integrations tool: somebody else's screen, installed live.
-// The QA Company (apps/lab/lyceum-vendor-demo) is a bundle on another domain; this shows
-// where, installs it (moss fetches it and intake checks it — the answer is
-// intake's, reasons and all), approves it (every shell is rebuilt, and the
-// phones have the QA Company on their list), and removes it again for the next rehearsal. The
-// broken twin — a trigger that re-emits its own channel — is refused with the
-// loop's path. server/functions/integration.functions.ts does the calls.
 export const integrationsTool: ActionDefinition = {
   id: 'tools.integrations',
   title: 'Integrations',

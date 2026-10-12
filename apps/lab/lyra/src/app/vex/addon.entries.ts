@@ -8,12 +8,7 @@ export const addonsList: CacheEntry = {
   shape: [{ integration_id: '', title: '', tagline: '', description: '', adds: '', settings_action: '', installed: false, state_label: '', state_tone: '' }],
   dsl: {
     from: ['integrations'],
-    // The tile's words come off the row: `extension` is what the bundle said in
-    // this app's own vocabulary (../integration-extension.ts), as it was kept
-    // at import. The store never parses a bundle.
     fields: ['integrations.id', 'integrations.status', 'integrations.extension'],
-    // Only what an operator has approved is on sale. A pending integration is
-    // one nobody has looked at yet, and it should not appear in a shop.
     filter: { eq: ['integrations.status', 'approved'] },
     sort: [{ field: 'integrations.id', dir: 'asc' }],
   },
@@ -23,8 +18,6 @@ export const addonsList: CacheEntry = {
       as: 'a',
       body: {
         integration_id: row('id'),
-        // The id-or-title fallback happens in the store's stitch derivation —
-        // a bundle that shipped no meta still gets a tile named by its id.
         title: row('extension', 'meta', 'title'),
         tagline: row('extension', 'meta', 'tagline'),
         description: row('extension', 'meta', 'description'),
@@ -45,16 +38,6 @@ export const addonsInstalled: CacheEntry = {
     filter: { eq: ['studio_integrations.enabled', true] },
   },
 };
-
-// ── the two writes ───────────────────────────────────────────
-//
-// Install used to be THREE fingerprints choreographed by a server function:
-// re-enable (no-op when absent), read the installed list, insert only if
-// still missing. ON CONFLICT is that whole dance as one atomic statement —
-// fresh install inserts, a previously removed one flips back on, and there
-// is no state it starts from that it gets wrong. The tenant column is scope-
-// pinned into both the insert AND the conflict target, so the row it can
-// revive is only ever this studio's own.
 
 export const addonInstall: MutationEntry = {
   fingerprint: 'addons/install',

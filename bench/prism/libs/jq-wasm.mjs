@@ -1,12 +1,9 @@
 import { loadJq } from 'jq-wasm';
 
-// The WASM module is loaded once, here; the calls after it are synchronous.
 const jq = await loadJq();
 
-// One call: the input goes in as JSON text, the filter is compiled, jq runs, its first output comes back parsed.
 const call = (filter, input) => jq.first(input, filter);
 
-// qty × unitCents over an order's lines, plus its shipping.
 const TOTAL = 'def total: (.items | map(.qty * .unitCents) | add) + .shippingCents;';
 
 export default {

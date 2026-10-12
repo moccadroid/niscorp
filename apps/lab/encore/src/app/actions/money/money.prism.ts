@@ -1,10 +1,5 @@
 import { salesHourly, salesDaily } from '@encore/app/vex/sales.entries';
 
-// The money card's request seams.
-//
-// RANGE IS WHICH DAYS GO OVER THE WIRE. `today` sends the card's own day,
-// `weekend` sends all three, and both replay the same two plans — so a range
-// is a value, never a second entry.
 const days = {
   $case: {
     branches: [{ when: { $eq: [{ $ref: '$.range' }, 'weekend'] }, then: ['fri', 'sat', 'sun'] }],
@@ -12,9 +7,8 @@ const days = {
   },
 };
 
-// "Compared with what" is the day before, and the first day has no before — it
-// compares with itself rather than with nothing, so the overlay is visibly flat
-// instead of silently absent.
+// The first day has no day before: it compares with itself rather than with
+// nothing, so the overlay is visibly flat instead of silently absent.
 const dayBefore = {
   $case: {
     branches: [

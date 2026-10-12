@@ -7,9 +7,6 @@ import readmeContent from '../../../../../packages/charter/README.md?raw';
 import designContent from '../../../../../packages/charter/DESIGN.md?raw';
 import docsContent from '../../../../../packages/charter/DOCS.md?raw';
 
-// Charter decides what each person's app is and what the database will tell
-// them. The pages follow one made-up studio; the resolver, the verifier, vex's
-// handler and Postgres (PGlite, in the page) are real.
 const docs: readonly DocPage[] = [
   { id: 'start', title: 'What charter is for', render: () => createElement(Intro) },
   { id: 'readme', title: 'README', content: readmeContent },

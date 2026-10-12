@@ -1,12 +1,6 @@
 import { useEffect, useState } from 'react';
 import { compile, ConfigSchema, type CompiledIr } from '@niscorp/prism';
 
-// ═══════════════════════════════════════════════════════════
-// Compiles a prism config in an effect (compile() is async).
-// Returns a discriminated state: loading | ok | error.
-// Used by both the Stats and Compiled inspector tabs.
-// ═══════════════════════════════════════════════════════════
-
 export type CompileState =
   | { status: 'loading' }
   | { status: 'ok'; ir: CompiledIr }

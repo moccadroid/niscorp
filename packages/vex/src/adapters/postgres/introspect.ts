@@ -8,10 +8,6 @@ import type {
 } from '../../schemas/database.schema.js';
 import type { IntrospectOptions } from '../adapter.types.js';
 
-// ═══════════════════════════════════════════════════════════════
-// PgPool type (no dependency on `pg` package)
-// ═══════════════════════════════════════════════════════════════
-
 export type PgQuery = (
   text: string,
   values?: unknown[],
@@ -19,30 +15,13 @@ export type PgQuery = (
 
 export type PgPool = {
   query: PgQuery;
-  // Several statements land together or not at all.
-  //
-  // This was missing, and it was not a gap in a future feature: vex's own
-  // `executeMutation` throws "Batch mutations require a transactional client"
-  // whenever a mutation entry is an ARRAY, and no adapter in the repo
-  // supplied one — so every batch write failed at runtime with a message
-  // about a client nobody could construct. Optional because a pool that
-  // genuinely cannot transact should say so by omission rather than by
-  // pretending and breaking atomicity quietly.
   transaction?: <T>(fn: (tx: { query: PgQuery }) => Promise<T>) => Promise<T>;
-  // False when the database behind the pool cannot enforce
-  // `statement_timeout` at all (PGlite: single-threaded, the timer never
-  // fires) — see ./statement-timeout.ts. Absent means it can.
   statementTimeouts?: false;
 };
-
-// ═══════════════════════════════════════════════════════════════
-// Type mapping
-// ═══════════════════════════════════════════════════════════════
 
 const normalizeType = (pgType: string): NormalizedType => {
   const lower = pgType.toLowerCase();
 
-  // String types
   if (
     lower.startsWith('varchar') ||
     lower.startsWith('character varying') ||
@@ -54,7 +33,6 @@ const normalizeType = (pgType: string): NormalizedType => {
     return 'string';
   }
 
-  // Number types
   if (
     lower === 'integer' ||
     lower === 'int' ||
@@ -75,32 +53,24 @@ const normalizeType = (pgType: string): NormalizedType => {
     return 'number';
   }
 
-  // Boolean
   if (lower === 'boolean' || lower === 'bool') return 'boolean';
 
-  // Date
   if (lower === 'date') return 'date';
 
-  // Timestamp
   if (lower.startsWith('timestamp')) return 'timestamp';
 
-  // UUID
   if (lower === 'uuid') return 'uuid';
 
-  // JSON
   if (lower === 'json' || lower === 'jsonb') return 'json';
 
-  // Array types (e.g., text[], integer[], etc.)
   if (lower === 'array' || lower.endsWith('[]') || lower.startsWith('_')) return 'array';
 
-  // Vector (pgvector)
   if (lower === 'vector' || lower.startsWith('vector')) return 'vector';
 
   return 'unknown';
 };
 
 const extractVectorDimensions = (pgType: string): number | undefined => {
-  // vector(384) → 384
   const match = /vector\((\d+)\)/i.exec(pgType);
   if (match !== null && match[1] !== undefined) {
     return parseInt(match[1], 10);
@@ -108,14 +78,6 @@ const extractVectorDimensions = (pgType: string): number | undefined => {
   return undefined;
 };
 
-// ═══════════════════════════════════════════════════════════════
-// SQL queries for introspection
-// ═══════════════════════════════════════════════════════════════
-
-// A table's and a column's COMMENT is its description: what the schema's author
-// says it means, where Postgres keeps that — and what a query writer needs
-// beside a name ("members" are the people in the room). Not part of the schema
-// fingerprint: rewording a comment changes no query.
 const TABLES_QUERY = `
   SELECT t.table_name, obj_description(cl.oid, 'pg_class') AS description
   FROM information_schema.tables t
@@ -163,25 +125,11 @@ const COLUMNS_QUERY = `
   ORDER BY c.table_name, c.ordinal_position
 `;
 
-// Every key at once — primary, unique and foreign — from pg_constraint, with
-// the columns in the key's own order and a foreign key's referencing and
-// referenced columns zipped BY POSITION: a two-column key is one row with
-// two ordered pairs.
-//
-// information_schema cannot say this. key_column_usage (the referencing
-// columns) and constraint_column_usage (the referenced ones) share only the
-// constraint's name, so joining them pairs every referencing column with
-// every referenced one, and a key over N columns came back as N×N rows —
-// each read as its own relation, the first of which the resolver joined on.
-// Which came first was row order. A key referencing (id, builder_id) joined
-// on role_id = builder_id and matched nothing, and nothing said so.
-//
-// Ordered by OID, which is creation order. Where two tables reference each
-// other both ways the first-declared key wins the join, and a schema that
-// leans on that (a tenant's builder over a builder's home tenant) is leaning
-// on this ORDER BY. The referenced table must share the schema; a key into
-// another schema names a table no entity here carries and is left out, as
-// before.
+// pg_constraint, not information_schema: key_column_usage and
+// constraint_column_usage share only the constraint's name, so joining them
+// pairs every referencing column of a composite key with every referenced one.
+// ORDER BY oid is creation order: where two tables reference each other both
+// ways, the first-declared key wins the resolver's join.
 const CONSTRAINTS_QUERY = `
   SELECT
     c.contype::text AS kind,
@@ -228,17 +176,12 @@ const ROW_COUNTS_QUERY = `
   WHERE schemaname = $1
 `;
 
-// ═══════════════════════════════════════════════════════════════
-// Introspection
-// ═══════════════════════════════════════════════════════════════
-
 export const introspectPostgres = async (
   pool: PgPool,
   options?: IntrospectOptions,
 ): Promise<DatabaseSchema> => {
   const schemaName = options?.schema ?? 'public';
 
-  // Run all queries in parallel
   const [tablesResult, columnsResult, keysResult, indexesResult, rowCountsResult] = await Promise.all([
     pool.query(TABLES_QUERY, [schemaName]),
     pool.query(COLUMNS_QUERY, [schemaName]),
@@ -247,7 +190,6 @@ export const introspectPostgres = async (
     pool.query(ROW_COUNTS_QUERY, [schemaName]),
   ]);
 
-  // ─── Keys ──────────────────────────────────────────────────
   type Key = {
     kind: 'p' | 'u' | 'f';
     fromTable: string;
@@ -264,12 +206,10 @@ export const introspectPostgres = async (
     toColumns: row['to_columns'] as Array<string | null>,
   }));
 
-  // Primary keys: table -> PK column names (flags the field)
   const pkMap = new Map<string, Set<string>>();
-  // Every column set that makes a row unique — primary and unique keys,
-  // whole. A foreign key's reverse is hasOne when the key CONTAINS one of
-  // these sets, not when one of its columns appears in any of them:
-  // UNIQUE (builder_id, name) says nothing about builder_id alone.
+  // Whole column sets: a foreign key's reverse is hasOne only when the key
+  // contains one of them. UNIQUE (builder_id, name) says nothing about
+  // builder_id alone.
   const uniqueSets = new Map<string, string[][]>();
   for (const key of keys) {
     if (key.kind === 'f') continue;
@@ -289,7 +229,6 @@ export const introspectPostgres = async (
     sets.push(key.fromColumns);
   }
 
-  // Row counts: table -> count
   const rowCountMap = new Map<string, number>();
   for (const row of rowCountsResult.rows) {
     const table = row['table_name'] as string;
@@ -297,7 +236,6 @@ export const introspectPostgres = async (
     rowCountMap.set(table, count);
   }
 
-  // ─── Columns grouped by table ─────────────────────────────
   const columnsByTable = new Map<string, FieldSchema[]>();
   for (const row of columnsResult.rows) {
     const table = row['table_name'] as string;
@@ -333,9 +271,6 @@ export const introspectPostgres = async (
     fields.push(field);
   }
 
-  // ─── Foreign keys → Relations ──────────────────────────────
-  // One key, two relations: the referencing side's belongsTo and the
-  // referenced side's reverse, each carrying the whole key as ordered pairs.
   const relationsByTable = new Map<string, RelationSchema[]>();
   const addRelation = (table: string, relation: RelationSchema): void => {
     let rels = relationsByTable.get(table);
@@ -355,7 +290,6 @@ export const introspectPostgres = async (
       set.every((col) => key.fromColumns.includes(col)),
     );
 
-    // belongsTo: this table's key points at the other table
     addRelation(key.fromTable, {
       type: 'belongsTo',
       entity: key.toTable,
@@ -363,7 +297,6 @@ export const introspectPostgres = async (
       foreignFields,
     });
 
-    // hasOne or hasMany: the other table's reverse of the same key
     addRelation(key.toTable, {
       type: isFkUnique ? 'hasOne' : 'hasMany',
       entity: key.fromTable,
@@ -372,7 +305,6 @@ export const introspectPostgres = async (
     });
   }
 
-  // ─── Indexes ───────────────────────────────────────────────
   const indexesByTable = new Map<string, IndexSchema[]>();
 
   for (const row of indexesResult.rows) {
@@ -399,7 +331,6 @@ export const introspectPostgres = async (
     idxList.push(idx);
   }
 
-  // ─── Build entities ────────────────────────────────────────
   const filteredTables = tablesResult.rows.filter((row) => {
     const name = row['table_name'] as string;
     if (options?.entities !== undefined && !options.entities.includes(name)) return false;
@@ -423,10 +354,6 @@ export const introspectPostgres = async (
 
   return { entities };
 };
-
-// ═══════════════════════════════════════════════════════════════
-// Helpers
-// ═══════════════════════════════════════════════════════════════
 
 const mapIndexType = (pgType: string): IndexSchema['type'] => {
   const lower = pgType.toLowerCase();

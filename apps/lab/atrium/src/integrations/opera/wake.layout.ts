@@ -1,8 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// A wake-up call, set from the switchboard's own times. The list of times is
-// Opera's catalogue rows; "tomorrow" is the table's default — neither is
-// decided here.
 export const wakeLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 16 },

@@ -2,13 +2,6 @@ import type { FC } from 'react';
 import type { DocPage } from '@showroom/modules/types';
 import { MarkdownPane } from './markdown-pane';
 
-// ═══════════════════════════════════════════════════════════
-// DocPane — dispatcher for the doc area of the canvas. A
-// DocPage either ships markdown content (rendered via the
-// MarkdownPane) or a render function for an interactive page
-// like the signal Playground or Settings.
-// ═══════════════════════════════════════════════════════════
-
 type Props = { page: DocPage };
 
 export const DocPane: FC<Props> = ({ page }) => {

@@ -3,9 +3,6 @@ import { ClockOnceSchema, ReflexDraftSchema, ReflexSchema, anchorDraft, createMe
 import type { ReflexDraft } from '../src/index';
 import { testTransform } from './support';
 
-// A timer is written as a length and saved as an instant: anchoring fixes it
-// to a one-shot clock, to the second, at the moment of saving.
-
 const vienna = 'Europe/Vienna';
 const utc = (iso: string): number => Date.parse(iso);
 
@@ -75,7 +72,6 @@ describe('timers', () => {
     const fired: number[] = [];
     const build = () => createTide({ store, transform: testTransform, effects: { work: { run: () => { fired.push(1); return null; } } } });
 
-    // Advance to quiescence, as the driver does.
     const settle = async (tide: ReturnType<typeof build>, now: number): Promise<void> => {
       for (let i = 0; i < 20; i += 1) await tide.advance({ now });
     };
@@ -84,7 +80,6 @@ describe('timers', () => {
     await first.load([reflex], { at: saved });
     await settle(first, saved);
 
-    // "Restart" 20 s later: a new engine over the same store, loading the same stored document.
     const restarted = build();
     await restarted.load([reflex], { at: saved + 20_000 });
     await settle(restarted, saved + 20_000);
@@ -94,7 +89,6 @@ describe('timers', () => {
     await settle(restarted, saved + 45_000);
     expect(fired).toHaveLength(1);
 
-    // And a restart after it fired does not fire it again.
     const again = build();
     await again.load([reflex], { at: saved + 90_000 });
     await settle(again, saved + 90_000);

@@ -1,12 +1,6 @@
 import { useState, type FC } from 'react';
 import { clearAllKeys, clearKey, loadKeys, saveKey } from './api-key-storage';
 
-// ═══════════════════════════════════════════════════════════
-// Settings — manage per-provider API keys for the signal
-// playground and recipe runner. Plain localStorage with a
-// clear security warning.
-// ═══════════════════════════════════════════════════════════
-
 type ProviderInfo = {
   id: string;
   name: string;
@@ -36,7 +30,6 @@ const PROVIDERS: ProviderInfo[] = [
 ];
 
 export const SettingsPane: FC = () => {
-  // Initialize each input with whatever's currently in storage.
   const initialKeys = loadKeys();
   const [values, setValues] = useState<Record<string, string>>({
     openai: initialKeys['openai'] ?? '',

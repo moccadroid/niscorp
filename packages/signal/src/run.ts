@@ -17,17 +17,6 @@ import type {
   ToolCallRecord,
 } from './types';
 
-// ═══════════════════════════════════════════════════════════
-// The high-level loop — complete()/stream() as wrappers over step
-// ═══════════════════════════════════════════════════════════
-//
-// ONE pipeline: the same step/stepStream seam cortex uses, so the wire
-// layer (repairs, routing, recovery) and the same acceptance gating
-// serve both. The schema here is the caller's BARE schema — it rides
-// `output.accept` for routing and, when no native grammar exists, the
-// prompt (transport/protocol.ts). runStream is the core; runComplete
-// drains it. Request shape is immutable for the life of a run.
-
 export type RunDeps = {
   stepStream: (request: StepRequest, options?: StreamOptions) => AsyncIterable<StepStreamEvent>;
   model: string;
@@ -58,14 +47,11 @@ const stringify = (value: unknown): string => {
   }
 };
 
-// Converted by the schema's OWN zod (Standard JSON Schema), never by ours: the
-// caller's schema may come from another zod copy, and converting it here would
-// read that copy's metadata through our registry. `output` matches the
-// z.toJSONSchema default.
+// Converted by the schema's own zod, not by ours: the caller's schema may come from another
+// zod copy, whose metadata is not in our registry.
 const toJsonSchema = (schema: ZodType): Record<string, unknown> =>
   schema['~standard'].jsonSchema.output({ target: 'draft-07' });
 
-// The one request shape for the whole run.
 const buildRequest = (spec: RunSpec, caps: Capabilities): Omit<StepRequest, 'messages'> => {
   const tools = spec.tools ?? [];
   if (tools.length > 0 && !caps.nativeTools) {
@@ -116,17 +102,12 @@ const buildMeta = (
   provider: { raw: raws.length === 1 ? raws[0] : raws, errors: [] },
 });
 
-// ───────────────────────────────────────────────────────────
-// runStream — the core; every other entry point drains it
-// ───────────────────────────────────────────────────────────
-
 export async function* runStream<T>(spec: RunSpec, deps: RunDeps): AsyncGenerator<StreamEvent<T>> {
   const start = Date.now();
   const requestBase = buildRequest(spec, deps.capabilities);
   const toolMap = new Map((spec.tools ?? []).map((tool) => [tool.name, tool]));
 
   const messages: Message[] = [...spec.messages];
-  // No grammar carries the contract → the prompt does (protocol.ts).
   if (spec.schema && requestBase.responseFormat?.type !== 'json_schema') {
     messages.push({ role: 'system', content: bareSchemaPrompt(JSON.stringify(toJsonSchema(spec.schema))) });
   }
@@ -150,7 +131,6 @@ export async function* runStream<T>(spec: RunSpec, deps: RunDeps): AsyncGenerato
     };
     raws.push(result.raw);
 
-    // Tool turn — execute locally, feed results back, go again.
     const calls = result.outcome?.kind === 'tool_calls' ? result.outcome.calls : spec.schema ? [] : result.toolCalls;
     if (calls.length > 0) {
       messages.push({
@@ -182,7 +162,6 @@ export async function* runStream<T>(spec: RunSpec, deps: RunDeps): AsyncGenerato
       continue;
     }
 
-    // Final turn.
     if (!spec.schema) {
       const history: Message[] = [...messages, { role: 'assistant', content: result.content }];
       yield {
@@ -207,7 +186,6 @@ export async function* runStream<T>(spec: RunSpec, deps: RunDeps): AsyncGenerato
       }
     }
 
-    // Invalid output — correct in-run, bounded by spec.retries.
     const evidence = result.outcome?.kind === 'failed' ? result.outcome.evidence : 'output failed schema validation';
     retries += 1;
     const error = new SignalError(`Response failed schema validation: ${evidence}`, ErrorCode.VALIDATION_FAILED);
@@ -222,10 +200,6 @@ export async function* runStream<T>(spec: RunSpec, deps: RunDeps): AsyncGenerato
   }
   throw new SignalError('Max tool iterations reached', ErrorCode.MAX_ITERATIONS);
 }
-
-// ───────────────────────────────────────────────────────────
-// runComplete — drain the stream, return the result
-// ───────────────────────────────────────────────────────────
 
 export const runComplete = async <T>(spec: RunSpec, deps: RunDeps): Promise<SignalResult<T>> => {
   for await (const event of runStream<T>(spec, deps)) {

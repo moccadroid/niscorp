@@ -1,7 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// Duration parsing — '30s' / '5m' / '1h' / plain milliseconds
-// ═══════════════════════════════════════════════════════════
-
 const DURATION_REGEX = /^(\d+(?:\.\d+)?)(ms|s|m|h)$/;
 
 const UNIT_MS: Record<string, number> = { ms: 1, s: 1_000, m: 60_000, h: 3_600_000 };

@@ -1,9 +1,3 @@
-// DOM-terminal check — the swappable-terminal thesis, proven headlessly: a
-// terminal with ZERO React renders the real relay app from the same moss
-// server, and a click round-trips. moss's plain-DOM target (nova/dom + the
-// default kit) drives a jsdom DOM over the real wire; we assert relay content
-// appears as DOM and that clicking a nav dispatches → the server re-renders →
-// the deals list arrives. Same server as host-check; a different terminal.
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,9 +11,6 @@ import { domTarget } from '@niscorp/moss/terminal/dom';
 import { boot } from '../server/boot';
 import { mintToken } from '../server/users';
 
-// A DOM for nova/dom to render into — jsdom supplies document + the element
-// classes `instanceof` needs. The wire itself is host-free: it runs on
-// `nodeEnv` (token file + Node's own WebSocket), the way a TTY terminal will.
 const dom = new JSDOM('<!doctype html><html><head></head><body><div id="root"></div></body></html>', { url: 'http://localhost/' });
 const { window } = dom;
 Object.assign(globalThis, {
@@ -52,8 +43,6 @@ const main = async (): Promise<void> => {
   const address = httpServer.address();
   if (address === null || typeof address === 'string') throw new Error('no port');
 
-  // Authenticate as alex (sales + dev) — the token rides the env's token
-  // file, the way a TTY process holds it; the wire reads it on connect.
   const token = mintToken('alex');
   if (token === null) throw new Error('no alex user');
   const tokenFile = join(mkdtempSync(join(tmpdir(), 'relay-dom-terminal-')), 'token');
@@ -66,17 +55,15 @@ const main = async (): Promise<void> => {
   const text = (): string => root.textContent ?? '';
   const has = (sel: string): boolean => root.querySelector(sel) !== null;
 
-  // ── the app renders as plain DOM ──
   await until(() => has('[data-canvas="sidebar"]') && text().length > 30, 'sidebar renders');
   checks.push(['the sidebar renders as plain DOM over the wire', has('[data-canvas="sidebar"]')]);
   checks.push(['nav items render and carry their ref (nav-deals present, zero React)', has('[data-ref="nav-deals"]')]);
   checks.push(['the kit maps universal primitives to semantic elements (a real <button>)', has('button[data-component="Button"]')]);
 
-  // ── a click round-trips: DOM click → ui:click → server navigates main ──
   const deal = (await runtime.db.query('SELECT title FROM deals LIMIT 1')).rows[0] as { title: string };
   const navDeals = root.querySelector('[data-ref="nav-deals"]') as HTMLElement | null;
   if (navDeals === null) throw new Error('nav-deals element missing');
-  navDeals.click(); // jsdom dispatches a click → the renderer's ui:click listener fires
+  navDeals.click();
 
   await until(() => text().includes(deal.title), 'deals list after nav click');
   checks.push([`clicking a nav in the DOM terminal round-trips: the deals list renders live ("${deal.title}")`, text().includes(deal.title)]);

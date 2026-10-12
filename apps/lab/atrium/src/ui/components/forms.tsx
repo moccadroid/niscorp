@@ -4,9 +4,8 @@ import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/reac
 import { cx } from '../lib/cx';
 import { Icon } from './display';
 
-// Form primitives. Each holds a local draft while focused and writes back on
-// `ui:model`, so a server-side shell round trip never eats a keystroke.
-
+// A text field holds a local draft while focused, so a server-side shell round
+// trip never eats a keystroke.
 const InputProps = z.object({ placeholder: z.string().optional(), icon: z.string().optional(), type: z.string().optional(), debounce: z.number().optional(), big: z.boolean().optional(), submitRef: z.string().optional().describe('Ref fired as ui:click when Enter is pressed.') }).strict();
 
 type InputP = z.infer<typeof InputProps> & { novaRef?: string; novaModel?: { ref: string; path: string }; value?: unknown };
@@ -56,8 +55,7 @@ export const Input: NovaComponent<z.infer<typeof InputProps>> = ({ placeholder, 
             emit(draft);
             dispatch({ type: 'ui:click', ref: submitRef });
             // Enter keeps the field focused, and a focused field ignores
-            // incoming syncs (draft preservation) — so the action's own
-            // `set draft ''` would be dropped. A submit empties the composer.
+            // incoming syncs, so the action's own `set draft ''` would be dropped.
             setDraft('');
           }
         }}

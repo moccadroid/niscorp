@@ -1,10 +1,3 @@
-// Console-terminal check — the F12 thesis, proven headlessly: the built
-// console bundle (dist/console.js, `pnpm console`) is evaluated against a
-// fake page (jsdom window, captured console), connects to the real relay
-// server, and the ENTIRE login runs on the globals it installs:
-// act(1,'alex') → act(2) → act(1) → session grant → authenticated app in
-// the console log. Run manually: pnpm console && pnpm exec tsx
-// src/dev/console-terminal-check.ts
 import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
 import { serve } from '@hono/node-server';
@@ -32,15 +25,11 @@ const main = async (): Promise<void> => {
   const address = httpServer.address();
   if (address === null || typeof address === 'string') throw new Error('no port');
 
-  // The "page": a jsdom window (localStorage for the token) with the wire's
-  // url injected the way a user would set it before pasting. Node's global
-  // WebSocket carries the socket, same as every headless terminal check.
   const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://some.random.website/' });
   const pageWindow = dom.window as unknown as Record<string, unknown>;
   pageWindow['RELAY_URL'] = `ws://127.0.0.1:${address.port}/socket`;
   Object.assign(globalThis, { window: dom.window });
 
-  // Captured console: the fmt strings, %c styling stripped — the "screen".
   let screen = '';
   const original = { log: console.log, warn: console.warn, table: console.table };
   const capture = (...args: unknown[]): void => {

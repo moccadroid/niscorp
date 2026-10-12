@@ -13,8 +13,6 @@ import webhookSrc from './pages/webhook?raw';
 import { TonightsDigest } from './pages/digest';
 import digestSrc from './pages/digest?raw';
 
-// Six pages, read in order — the landing page ("What tide is for", a doc)
-// links them. Full-width: the reflexes, the phones and the ledger are on the page.
 export const stories: readonly Story[] = [
   {
     id: 'breaks-cron',

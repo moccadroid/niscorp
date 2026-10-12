@@ -1,5 +1,3 @@
-// The code baseline with a utility library: each task as the lodash calls a developer would normally write.
-
 import _ from 'lodash';
 
 const DAY = 86_400_000;

@@ -2,11 +2,6 @@ import { useEffect, useRef, useState, type CSSProperties, type FC } from 'react'
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { Query, VexRunResult } from '../index.js';
 
-// The preview component: re-runs the query whenever it changes, debounced, with a
-// sequence guard so a slow run can't overwrite a newer one. Registered under
-// PREVIEW; the plugin's mount binds the live query to it. Closes over the host's
-// `run`.
-
 type State =
   | { status: 'empty' }
   | { status: 'running' }
@@ -38,7 +33,7 @@ export const makePreview = (run: (query: Query) => Promise<VexRunResult>): NovaC
           });
       }, 250);
       return () => clearTimeout(handle);
-      // `key` is the query's content; re-run only when it actually changes.
+      // `key` is the query's content: the effect re-runs only when that changes.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [key]);
 

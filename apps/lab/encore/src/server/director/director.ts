@@ -1,28 +1,8 @@
 import { clockSet, feedOpenIncident, feedScan, feedSetCount, feedSetIncidentStatus, feedSetScanner } from '@encore/app/vex/watch.entries';
 import { seededHeadcount } from '@encore/db/seed';
 
-// ═══════════════════════════════════════════════════════════
-// THE DIRECTOR — Saturday evening, played as a feed.
-//
-// A deterministic list of cues, each ONE vex mutation at one minute of the day,
-// sent AS ITS OWN PRINCIPAL through the same door a real scanner or a real
-// incident desk would use (`/api/vex`, a bearer token, the `director` role's
-// grants and nothing more). It holds no reference to a shell, a loop, a watcher
-// or a session: it writes, moss says a write landed, and whoever is watching
-// re-reads under their own policy. Nothing downstream of the write knows this is
-// a rehearsal — which is the point of rehearsing this way.
-//
-// It advances the festival clock the same way: a write to a row.
-//
-// TWO WAYS TO RUN IT. `play()` is the operator's: real time, scaled (60× is a
-// festival minute a second). `stepTo(minute)` is a check's: every cue up to that
-// minute, in order, awaited, no timers — the same cues, the same door.
-// ═══════════════════════════════════════════════════════════
-
 export type Cue = { at: number; what: string; fingerprint: string; context: Record<string, unknown> };
 
-// `finished`: every cue has been sent and nothing is playing — the deck says so,
-// and offers `replay` where it offered `play`.
 export type DirectorState = { playing: boolean; finished: boolean; status: string; speed: number; day: string; time: string; played: number; of: number };
 
 export type Director = {
@@ -31,22 +11,14 @@ export type Director = {
   faster: () => void;
   slower: () => void;
   state: () => DirectorState;
-  // PUT THE EVENING BACK AND PLAY IT AGAIN — through the same door, as the same
-  // principal: every count it moved returns to what the hour started with, every
-  // incident it opened is closed, every scanner it failed works, and the clock
-  // row goes back to the start. Nothing is deleted; the feed has no such grant.
-  // `reset` alone is what a check uses before stepping through it again.
   reset: () => Promise<void>;
   replay: () => void;
-  // Play every cue up to and including this minute, then set the clock to it.
   stepTo: (minute: number) => Promise<void>;
-  // One cue by hand — for a check that wants a moment, not an evening.
   send: (cue: Omit<Cue, 'at'>) => Promise<void>;
   cues: () => readonly Cue[];
   close: () => void;
 };
 
-// As the feed: the request a director's write goes out as.
 export type SendAsDirector = (body: { fingerprint: string; context: Record<string, unknown> }) => Promise<{ ok: boolean; status: number; text: string }>;
 
 const DAY = 'sat';
@@ -57,8 +29,6 @@ const count = (time: string, zoneId: string, headcount: number, what: string): C
 const scans = (time: string, gateId: string, batches: number, each: number): Cue[] =>
   Array.from({ length: batches }, (): Cue => ({ at: at(time), what: `${each} scans at ${gateId}`, fingerprint: feedScan.fingerprint, context: { gateId, day: DAY, minute: at(time), scans: each } }));
 
-// SATURDAY, 18:00 → 19:10. Mostly nothing — which is what an evening is — and
-// three things that are not.
 export const SATURDAY_EVENING: readonly Cue[] = [
   ...scans('18:02', 'gate_west', 12, 25),
   count('18:05', 'zone_arena', 6980, 'Main Arena drifts up two percent'),
@@ -67,9 +37,6 @@ export const SATURDAY_EVENING: readonly Cue[] = [
   count('18:14', 'zone_food', 5580, 'Food Court 93%'),
   ...scans('18:16', 'gate_west', 10, 25),
   { at: at('18:18'), what: 'West Gate scanners fail', fingerprint: feedSetScanner.fingerprint, context: { gateId: 'gate_west', ok: false } },
-  // ...and somebody at the gate logs it, as somebody would: a fault is a state
-  // of the gate AND a line in the incident log, and a card listing open
-  // incidents under that alert should be able to show it.
   { at: at('18:19'), what: 'the fault is logged', fingerprint: feedOpenIncident.fingerprint, context: { id: 'inc_live_scanner', day: DAY, at: '18:19', zoneId: 'zone_food', kind: 'technical', severity: 2, summary: 'West Gate scanners down; the gate is open and the queue into the Food Court is not moving.' } },
   count('18:22', 'zone_food', 5760, 'Food Court 96% — over the line, and its gate cannot clear'),
   ...scans('18:26', 'gate_south', 6, 20),
@@ -94,12 +61,10 @@ export const createDirector = (send: SendAsDirector, script: readonly Cue[] = SA
   let exact = START_MINUTE;
   let speed = 60;
   let timer: ReturnType<typeof setInterval> | undefined;
-  // Which play this is. An incident is a row with an id, and a second evening's
-  // fall in The Grove is a second incident.
+  // An incident is a row with an id, and a replay's incident is a second row.
   let play = 1;
   let isSceneSet = false;
   const thisPlay = (cue: Omit<Cue, 'at'>): Omit<Cue, 'at'> => (play === 1 || typeof cue.context['id'] !== 'string' || cue.context['id'] === 'now' ? cue : { ...cue, context: { ...cue.context, id: `${cue.context['id']}_play${play}` } });
-  // One write at a time, in order: the script is a sequence, not a race.
   let queue: Promise<void> = Promise.resolve();
 
   const dispatch = async (authored: Omit<Cue, 'at'>): Promise<void> => {
@@ -141,9 +106,6 @@ export const createDirector = (send: SendAsDirector, script: readonly Cue[] = SA
     }, TICK_MS);
   };
 
-  // The undoing of everything the script does, derived FROM the script: a count
-  // goes back to what that hour was seeded with, an opened incident is closed, a
-  // failed scanner works. Scans are history and stay.
   const undoing = (): Omit<Cue, 'at'>[] => {
     const undo = new Map<string, Omit<Cue, 'at'>>();
     for (const cue of cues) {
@@ -168,10 +130,7 @@ export const createDirector = (send: SendAsDirector, script: readonly Cue[] = SA
     });
 
   return {
-    // PLAY SETS THE SCENE FIRST. An evening begins from the evening's start, and
-    // "the start" is a state of the site the feed WRITES — so the first play and
-    // every replay open with the same writes and are the same evening, not one
-    // evening and its echo.
+    // The first play resets too, so that it opens with the same writes as every replay.
     play: () => {
       if (played === 0 && !isSceneSet) void reset().then(startTimer);
       else startTimer();

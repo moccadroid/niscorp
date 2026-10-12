@@ -46,12 +46,10 @@ describe('the loop — respond strategy', () => {
     expect(result.meta.strategy).toBe('respond');
     expect(result.meta.usage.totalTokens).toBe(30);
 
-    // The second request's transcript carries the tool result.
     const second = llm.requests[1];
     expect(second).toBeDefined();
     const toolMessage = second?.messages.find((message) => message.role === 'tool');
     expect(toolMessage?.content).toBe('5');
-    // The respond tool descriptor is on every request.
     expect(second?.tools?.some((tool) => tool.name === 'respond')).toBe(true);
   });
 
@@ -64,7 +62,6 @@ describe('the loop — respond strategy', () => {
     const run = calcAgent.run('7', { llm });
     const result = await run.result;
     expect(result.ok).toBe(true);
-    // The model DELIVERED the wrong thing — revision, counted.
     expect(result.meta.outputRetries).toBe(1);
 
     const messages = llm.requests[1]?.messages ?? [];
@@ -82,13 +79,10 @@ describe('the loop — respond strategy', () => {
     const run = calcAgent.run('go', { llm });
     const result = await run.result;
     expect(result.ok).toBe(true);
-    // Prose is a TRANSPORT failure (could not deliver) — uncounted;
-    // the revision budget is reserved for wrong deliveries.
     expect(result.meta.outputRetries).toBe(0);
 
     const messages = llm.requests[1]?.messages ?? [];
     const roles = messages.map((message) => message.role);
-    // assistant prose kept, correction appended.
     expect(roles).toContain('assistant');
     const correction = messages[messages.length - 1];
     expect(correction?.role).toBe('system');
@@ -97,7 +91,6 @@ describe('the loop — respond strategy', () => {
 
   it('accepts an emitted envelope as a legal exit (respond-or-finish)', async () => {
     const llm = stubSignal([
-      // No respond call — the final text IS the envelope.
       { text: ['{"data":{"answer":9},"reasoning":"emitted"}'] },
     ]);
 
@@ -142,8 +135,6 @@ describe('the loop — respond strategy', () => {
 
   it('accepts an UNWRAPPED payload as respond args (the arrived-without-its-coat rung)', async () => {
     const llm = stubSignal([
-      // The payload itself, no envelope around it — the classic collision
-      // when the payload has its own field names (a Nova action's `data`).
       { toolCalls: [{ id: 'c1', name: 'respond', args: { answer: 12 } }] },
     ]);
 
@@ -174,8 +165,6 @@ describe('the loop — respond strategy', () => {
 
   it('a rejected pseudo-tool call carrying prose gets a correction naming it', async () => {
     const llm = stubSignal([
-      // gpt-oss speaking through a pseudo-tool named `response` — signal
-      // recovered the rejection; nothing in the prose args salvages.
       { rejection: { name: 'response', argsText: 'Created the pipeline screen.', truncated: false } },
       { toolCalls: [{ id: 'c1', name: 'respond', args: { response: 'Created the pipeline screen.', data: { answer: 1 } } }] },
     ]);
@@ -223,8 +212,6 @@ describe('the loop — respond strategy', () => {
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.output.data.answer).toBe(2);
 
-    // The domain call executed; the mixed-turn respond was dropped by
-    // the router (finish attempts must come alone) — no tool message.
     const second = llm.requests[1];
     const toolMessages = second?.messages.filter((message) => message.role === 'tool') ?? [];
     expect(toolMessages.find((message) => message.toolCallId === 'c1')?.content).toBe('2');
@@ -257,7 +244,6 @@ describe('the loop — respond strategy', () => {
       output: { schema: CalcSchema },
       stopWhen: [stepCount(20), repeatedCalls(2)],
     });
-    // The same wrong call, five times: the tool refuses it the same way each time.
     const llm = stubSignal(Array.from({ length: 5 }, (_, i) => ({ toolCalls: [{ id: `c${i}`, name: 'calc', args: {} }] })));
 
     const result = await agent.run('go', { llm }).result;
@@ -266,7 +252,6 @@ describe('the loop — respond strategy', () => {
       expect(result.error.stop).toBe('repeated_calls');
       expect(result.error.message).toContain('3 times in a row');
     }
-    // Three identical calls were made, not twenty.
     expect(llm.requests).toHaveLength(3);
   });
 
@@ -302,7 +287,6 @@ describe('the loop — respond strategy', () => {
 
   it('decodes double-encoded (stringified) tool and respond args', async () => {
     const llm = stubSignal([
-      // Reasoning models sometimes serialize the args object INTO a string.
       { toolCalls: [{ id: 'c1', name: 'calc', args: '{"a":2,"b":3}' }] },
       { toolCalls: [{ id: 'c2', name: 'respond', args: '{"data":{"answer":5}}' }] },
     ]);
@@ -328,9 +312,6 @@ describe('the loop — respond strategy', () => {
 
   it('a provider-rejected REAL tool call comes back as a normal tool call — the 400 never existed', async () => {
     const llm = stubSignal([
-      // Groq-style rejection of a calc call with incomplete args: signal
-      // recovers and routes it back to the tool; the tool's own schema
-      // judges the args (missing b → input_invalid), the model retries.
       { rejection: { name: 'calc', args: { a: 2 }, argsText: '{"a":2}', truncated: false } },
       { toolCalls: [{ id: 'c1', name: 'calc', args: { a: 2, b: 3 } }] },
       { toolCalls: [{ id: 'c2', name: 'respond', args: { data: { answer: 5 } } }] },
@@ -339,14 +320,10 @@ describe('the loop — respond strategy', () => {
     const events: CortexEvent[] = [];
     const result = await calcAgent.run('2+3', { llm, onEvent: (event) => events.push(event) }).result;
     expect(result.ok).toBe(true);
-    // Provider hiccups are not the run's fault — the output budget is intact.
     expect(result.meta.outputRetries).toBe(0);
 
-    // A rejection that ROUTED is not a retry — no event, no noise; the
-    // trace shows the tool call itself.
     expect(events.some((event) => event.type === 'retry')).toBe(false);
 
-    // The recovered call got a TOOL-shaped answer (input_invalid), not a sermon.
     const second = llm.requests[1];
     const toolMessage = second?.messages.find((message) => message.role === 'tool');
     expect(toolMessage?.content).toContain('input_invalid');
@@ -354,9 +331,6 @@ describe('the loop — respond strategy', () => {
 
   it('salvages a provider-rejected pseudo-tool call that carries a valid envelope', async () => {
     const llm = stubSignal([
-      // gpt-oss pseudo-tool fixation with a COMPLETE, correct payload:
-      // the run finishes on the recovered attempt instead of re-running
-      // finished work.
       { text: ['[attempted tool: response] {"data":{"answer":5},"reasoning":"added"}'], finishReason: 'error_recovered' },
     ]);
 
@@ -371,8 +345,6 @@ describe('the loop — respond strategy', () => {
 
   it('never treats a rejected REAL tool call as output', async () => {
     const llm = stubSignal([
-      // A real tool's rejected call whose args HAPPEN to look like a
-      // valid envelope — it is a failed tool call, not a finish attempt.
       { rejection: { name: 'calc', args: { data: { answer: 5 } }, argsText: '{"data":{"answer":5}}', truncated: false } },
       { toolCalls: [{ id: 'c1', name: 'respond', args: { data: { answer: 7 } } }] },
     ]);
@@ -394,7 +366,6 @@ describe('the loop — respond strategy', () => {
     const messages = llm.requests[1]?.messages ?? [];
     const correction = messages[messages.length - 1];
     expect(correction?.role).toBe('system');
-    // Semantic evidence comes from validateEnvelope — the one judge.
     const content = typeof correction?.content === 'string' ? correction.content : '';
     expect(content).toContain('data.answer');
   });
@@ -409,8 +380,6 @@ describe('the loop — respond strategy', () => {
     const result = await run.result;
     expect(result.ok).toBe(true);
 
-    // The gate is a container check; the SEMANTIC judge (validateEnvelope)
-    // writes the correction — here the missing data payload.
     const messages = llm.requests[1]?.messages ?? [];
     const correction = messages[messages.length - 1];
     expect(correction?.role).toBe('system');
@@ -432,7 +401,6 @@ describe('the loop — respond strategy', () => {
       output: { schema: CalcSchema },
     });
     const llm = stubSignal([
-      // The model calls the NAME (as prompts teach), not the id.
       { toolCalls: [{ id: 'c1', name: 'search', args: { q: 'x' } }] },
       { toolCalls: [{ id: 'c2', name: 'respond', args: { data: { answer: 1 } } }] },
     ]);
@@ -441,12 +409,9 @@ describe('the loop — respond strategy', () => {
     const result = await agent.run('go', { llm, onEvent: (event) => events.push(event) }).result;
     expect(result.ok).toBe(true);
 
-    // Descriptor carried the name…
     expect(llm.requests[0]?.tools?.some((tool) => tool.name === 'search')).toBe(true);
-    // …the call executed…
     const toolMessage = llm.requests[1]?.messages.find((message) => message.role === 'tool');
     expect(toolMessage?.content).toBe('hits for x');
-    // …and the observation carries the canonical id for policy/tracing.
     const toolEnd = events.find((event) => event.type === 'tool-end');
     expect(toolEnd?.type === 'tool-end' && toolEnd.observation.toolId).toBe('catalog.search');
   });
@@ -532,8 +497,6 @@ describe('the loop — reasoning channel', () => {
 
     const reasoning = events.flatMap((e) => (e.type === 'model-delta' && e.channel === 'reasoning' ? [e.text] : [])).join('');
     expect(reasoning).toBe('I should add them');
-    // Never on the text channel, and never fed to the output stream — the
-    // thinking must not bleed into the answer a caller reads.
     expect(events.some((e) => e.type === 'model-delta' && e.channel === 'text' && e.text.includes('add them'))).toBe(false);
     expect(events.some((e) => e.type === 'output-delta' && e.text.includes('add them'))).toBe(false);
     expect(result.ok).toBe(true);

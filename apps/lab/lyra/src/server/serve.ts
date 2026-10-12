@@ -2,9 +2,6 @@ import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { bootDevServer } from './boot';
 
-// THE LAB'S SIGN-IN TRANSPORT. Clicking a name is how a nonce reaches the
-// browser here, exactly as a mail link is in a deployment. Set before the app
-// is built, because `shell.inputs` reads it when it composes the login screen.
 process.env['LYRA_DEV_LOGIN'] = 'on';
 
 

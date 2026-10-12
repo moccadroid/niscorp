@@ -5,7 +5,6 @@ export const shellsLayout: LayoutNode = panel(
   'Shells',
   'Living server shells, what is mounted on each canvas, and the process behind them',
   split(
-    // ── left: who holds a shell ──
     {
       component: 'Stack',
       props: { gap: 14 },
@@ -48,7 +47,6 @@ export const shellsLayout: LayoutNode = panel(
       ],
     },
 
-    // ── right: one shell's canvases, and the process figures ──
     {
       component: 'Stack',
       props: { gap: 18 },
@@ -72,11 +70,6 @@ export const shellsLayout: LayoutNode = panel(
                       { component: 'Text', props: { size: 'xs', color: 'faint' }, children: '{{$.selected.attached}} · {{$.selected.age}}' },
                     ],
                   },
-                  // THE RESTART. Two presses, because it is the one control in
-                  // this tool that lands on a person: the first arms it and
-                  // says what it costs, the second does it. Nothing here is
-                  // undoable by pressing it again, so the guard is about
-                  // reaching it by accident while reading a roster.
                   {
                     if: '$.arming',
                     then: {

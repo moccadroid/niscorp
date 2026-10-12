@@ -7,12 +7,6 @@ import { mountShell } from '../../src/adapters/dom';
 import { renderToString } from '../../src/adapters/dom/server';
 import { defaultRegistry, fallback } from '../../src/adapters/dom/components';
 
-// ═══════════════════════════════════════════════════════════
-// The DOM adapter over a shell that lives in the same process: drawn to markup
-// where there is no browser, and mounted over that markup in the page. No
-// framework, no server.
-// ═══════════════════════════════════════════════════════════
-
 const tick = (ms = 0): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 const counter: ActionDefinition = {
@@ -22,9 +16,8 @@ const counter: ActionDefinition = {
   triggers: [{ event: 'ui:click', ref: 'bump', do: [{ increment: 'n' }] }],
 };
 
-// The app's kit, plus nova's two slot markers: a shell checks every name its
-// layouts use against its registry, and its own default frame uses these. (The
-// adapter resolves a CanvasSlot itself; an ActionSlot is drawn by the kit.)
+// A shell checks every name its layouts use against its registry, and its
+// default layouts use these two.
 const kit = (): ReturnType<typeof defaultRegistry> => {
   const registry = defaultRegistry();
   registry.register(CANVAS_SLOT_NAME, fallback);
@@ -32,7 +25,7 @@ const kit = (): ReturnType<typeof defaultRegistry> => {
   return registry;
 };
 
-// Counter ids, so the markup a build writes names its instances as the page's shell will.
+// Counted ids: the shell that writes the markup and the one mounted over it name their instances alike.
 const boot = (): Shell => {
   let minted = 0;
   return createShell({ registry: kit(), canvases: [{ id: 'main', initial: 'counter' }], actions: { counter }, instanceIdFn: () => `act-${(minted += 1)}` });
@@ -86,7 +79,6 @@ describe('mountShell — a shell that lives in this page', () => {
     expect(root.innerHTML).not.toBe(written);
     expect(root.textContent).toContain('1');
 
-    // gone means gone: no further render after destroy
     mounted.destroy();
     expect(root.innerHTML).toBe('');
   });

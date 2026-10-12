@@ -1,6 +1,5 @@
 import type { ActionDefinition } from '@niscorp/nova';
 
-// A stand-in screen for nav targets whose real screen isn't built yet.
 export const placeholderAction: ActionDefinition = {
   id: 'placeholder',
   data: {},

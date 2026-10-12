@@ -1,30 +1,11 @@
 import type { ActionDefinition } from '@action';
 import type { LayoutNode } from '@layout';
 
-// ═══════════════════════════════════════════════════════════
-// The devtools dock — pure nova, the ROOT of the devtools canvas's stack. Its
-// data is UI state + the reflect fns' results; its layout uses only generic
-// primitives (Panel, Grid, Row, Stack, Text, Badge, Button, JsonTree), so it
-// renders in ANY terminal — React, DOM, console. Three views, all ACCORDIONS
-// (detail opens in place, under the row): the live shell (canvases + the
-// shell model itself), the classified audit, and the endpoint timeline. Row
-// toggles are pure data: `$if` in the `set` value flips the open cursor.
-// Every ⚙ PUSHES a `devtools.inspect` onto this canvas — the inspector is
-// stack navigation, not dock state (see inspect.ts). All computation is
-// `fn:` (nova/reflect + the recorded telemetry).
-//
-// The ✕ COLLAPSES (a data flag — the dock stays mounted, rendering as a ⚙
-// pill that expands back). Mount/unmount itself belongs to the app's master
-// switch (`devtools.setEnabled`, e.g. a settings toggle).
-// ═══════════════════════════════════════════════════════════
-
 const dockLayout: LayoutNode = {
   if: '$.collapsed',
   then: { component: 'Button', ref: 'dock-expand', props: { size: 'sm', variant: 'ghost' }, children: '⚙ devtools' },
   else: {
   component: 'Panel',
-  // the ✕ lives in the Panel HEADER (closeRef — the same prop-ref convention
-  // as Table's rowRef); it collapses the dock to the pill
   props: { title: 'devtools', closeRef: 'dock-close' },
   children: {
     component: 'Stack',
@@ -40,7 +21,6 @@ const dockLayout: LayoutNode = {
         ],
       },
 
-      // ── shell: the live canvases + the shell model, as accordions ──
       {
         if: { $eq: ['$.tab', 'shell'] },
         then: {
@@ -48,7 +28,6 @@ const dockLayout: LayoutNode = {
           props: { gap: 4 },
           children: [
             { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'the live shell — a row opens its stack; ⚙ inspects an instance' },
-            // the shell model itself (layout store, component registry)
             {
               component: 'Grid',
               ref: 'shell-open',
@@ -69,7 +48,6 @@ const dockLayout: LayoutNode = {
                 ],
               },
             },
-            // each canvas: a row that opens its stack in place
             {
               for: '$.shell.canvases',
               as: 'c',
@@ -93,8 +71,6 @@ const dockLayout: LayoutNode = {
                       component: 'Stack',
                       props: { gap: 2, pad: 6 },
                       children: [
-                        // stack navigation: pop the top (only shown when
-                        // there's something beneath it — never empties a canvas)
                         {
                           if: '$.c.items.1',
                           then: { component: 'Button', ref: 'canvas-back', props: { size: 'sm', variant: 'ghost', value: '$.c.id' }, children: '← pop {{$.c.items.0.definitionId}}' },
@@ -109,7 +85,6 @@ const dockLayout: LayoutNode = {
                             children: [
                               { component: 'Button', ref: 'inspect', props: { size: 'sm', variant: 'ghost', value: '$.i.instanceId' }, children: '⚙ {{$.i.definitionId}}' },
                               { component: 'Badge', children: '$.i.status' },
-                              // stack position, not status — 'top' receives events
                               { if: '$.i.active', then: { component: 'Badge', children: 'top' } },
                               { component: 'Text', props: { size: 'xs', color: 'mute', mono: true }, children: '$.i.instanceId' },
                             ],
@@ -125,7 +100,6 @@ const dockLayout: LayoutNode = {
         },
       },
 
-      // ── audit: static lint of the catalog; a row opens its findings in place ──
       {
         if: { $eq: ['$.tab', 'audit'] },
         then: {
@@ -183,7 +157,6 @@ const dockLayout: LayoutNode = {
         },
       },
 
-      // ── timeline: endpoint calls; a row opens its detail in place ──
       {
         if: { $eq: ['$.tab', 'timeline'] },
         then: {
@@ -261,22 +234,13 @@ export const dockAction: ActionDefinition = {
     { event: 'ui:click', ref: 'tab-shell', do: [{ set: 'tab', value: 'shell' }, { call: 'shellState' }] },
     { event: 'ui:click', ref: 'tab-audit', do: [{ set: 'tab', value: 'audit' }, { call: 'audit' }] },
     { event: 'ui:click', ref: 'tab-timeline', do: [{ set: 'tab', value: 'timeline' }, { call: 'timeline' }] },
-    // the accordions: a row click toggles its detail open/closed in place —
-    // pure data ($if in the set value, the firing event in scope)
     { event: 'ui:click', ref: 'shell-open', do: [{ set: 'shellOpen', value: { $if: { $eq: ['$.shellOpen', '@event.payload'] }, $then: '', $else: '@event.payload' } }] },
     { event: 'ui:click', ref: 'audit-open', do: [{ set: 'auditOpen', value: { $if: { $eq: ['$.auditOpen', '@event.payload'] }, $then: '', $else: '@event.payload' } }] },
     { event: 'ui:click', ref: 'timeline-open', do: [{ set: 'timelineOpen', value: { $if: { $eq: ['$.timelineOpen', '@event.payload'] }, $then: '', $else: '@event.payload' } }] },
-    // inspect (a dock ⚙, an app slotWrapper's chip, or a timeline detail) —
-    // PUSH the inspector onto this canvas: devtools navigation is the stack
     { event: 'ui:click', ref: 'inspect', do: [{ set: 'collapsed', value: false }, { push: { action: 'devtools.inspect', input: { instanceId: '@event.payload' } } }] },
-    // stack navigation: ← pops the top of that canvas (the shell change
-    // re-announces `devtools:state`, which re-reads the tree)
     { event: 'ui:click', ref: 'canvas-back', do: [{ set: 'popCanvas', value: '@event.payload' }, { call: 'pop' }] },
-    // ✕ collapses to the ⚙ pill (the dock stays mounted); the pill expands.
     { event: 'ui:click', ref: 'dock-close', do: [{ set: 'collapsed', value: true }] },
     { event: 'ui:click', ref: 'dock-expand', do: [{ set: 'collapsed', value: false }, { call: 'shellState' }] },
-    // re-read on the app's telemetry announcements (notify-then-pull): the tree
-    // on any shell change, the timeline on any recorded endpoint call.
     { message: 'devtools:state', do: [{ call: 'shellState' }] },
     { message: 'devtools:timeline', do: [{ call: 'timeline' }] },
   ],

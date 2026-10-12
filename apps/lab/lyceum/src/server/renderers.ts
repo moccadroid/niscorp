@@ -4,24 +4,13 @@ import { surfaceRenderer } from '@lyceum/app/vex/renderer.entries';
 import { vexOver } from './vex-over';
 import { unverifiedShell } from '@niscorp/moss/unverified';
 
-// WHICH RENDERER DRAWS A SCREEN — not an action on it. The frame carries a
-// `{ ref }` for it (app/shell/frame.layout.ts); this sets what that ref draws,
-// a `Look` naming dom, react or vue, on every living shell, from the
-// `renderers` row of the shell's surface. The browser reads it off the frame
-// and draws the screen with that renderer (src/ui/target.ts).
-//
-// A shell's surface is who it is: the speaker's is the controller, the stage's
-// is the projector, everybody else's a phone. Read as each shell's own
-// principal, over its own wire — once when it is built, and again whenever the
-// speaker writes the row (the reaction below).
-
 const surfaceOf = (roles: readonly string[]): string => (roles.includes('speaker') ? 'controller' : roles.includes('stage') ? 'stage' : 'phones');
 
 export const followRenderers = (): { onSession: NonNullable<NiscApp['onSession']>; reaction: NonNullable<NiscApp['reactions']>[number] } => {
   const living = new Set<FunctionSession>();
 
-  // A disposed shell has no canvases left (nova clears them); a living one
-  // always has some. Nothing tells a session its shell is gone, so this asks.
+  // Nothing tells a session its shell is gone, so this asks: a disposed shell
+  // has no canvases left, a living one always has some.
   const gone = (session: FunctionSession): boolean => Object.keys(session.shell.getState().canvases).length === 0;
 
   const paint = async (session: FunctionSession): Promise<void> => {
@@ -38,8 +27,8 @@ export const followRenderers = (): { onSession: NonNullable<NiscApp['onSession']
   };
 
   return {
-    // Before the shell exists, like every `onSession`: the first paint waits
-    // for it to finish building.
+    // `onSession` runs before the shell exists: the first paint waits for it to
+    // finish building.
     onSession: (session) => {
       living.add(session);
       setTimeout(() => void paint(session).catch(() => living.delete(session)), 0);

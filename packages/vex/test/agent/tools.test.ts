@@ -3,10 +3,6 @@ import { z } from 'zod';
 import { createQueryTools } from '../../src/agent/tools.js';
 import { QuerySchema } from '../../src/schemas/query.schema.js';
 
-// testQuery's parameters name every top-level key a query can have — a model
-// takes the tool's schema as the whole contract for its arguments (tools.ts).
-// A key added to the DSL and not here would be a key such a model never writes.
-
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const propertiesOf = (schema: unknown): string[] => (isRecord(schema) && isRecord(schema['properties']) ? Object.keys(schema['properties']).sort() : []);
 

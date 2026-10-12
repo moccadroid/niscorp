@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { placeHead } from '../../src/document';
 import type { HeadElement } from '../../src/document';
 
-// A screen's head elements, written into the document it was drawn into.
-
 const TEMPLATE = `<!doctype html>
 <html lang="en">
   <head>
@@ -46,7 +44,6 @@ describe('placeHead — a head, in an HTML document', () => {
 
   it('an element takes the place of the tag that said the same thing, whatever order that tag’s attributes were written in', () => {
     const html = placeHead(TEMPLATE, article);
-    // where the document's own stood, marked as the screen's
     expect(html).toContain('<link rel="icon" href="/favicon.svg" />\n    <title data-nova-head>Types &amp; &lt;tags></title>\n    <meta name="description" content="A &quot;quoted&quot; &lt;lead>." data-nova-head>');
     expect(html).toContain('<meta property="og:title" content="Types &amp; &lt;tags>" data-nova-head>');
     expect(headOf(html).split('<template')[0]).not.toContain('Everything about the site.');
@@ -69,9 +66,7 @@ describe('placeHead — a head, in an HTML document', () => {
     for (const kept of ['<meta charset="UTF-8" />', '<link rel="icon" href="/favicon.svg" />', '<meta property="og:site_name" content="The site" />', '<div id="root"><h1>Drawn</h1></div>']) {
       expect(html).toContain(kept);
     }
-    // a tag written inside a stylesheet is not a tag
     expect(html).toContain('/* <meta name="description" content="not a tag"> */');
-    // with no site, where the document lives is not touched
     expect(html).toContain(`<link href='https://example.com/' rel='canonical'>`);
   });
 
@@ -83,14 +78,12 @@ describe('placeHead — a head, in an HTML document', () => {
     ]);
     expect(html).toContain('<meta name="made-up-tomorrow" content="yes" media="(prefers-color-scheme: dark)" data-nova-head>');
     expect(html).toContain('<link rel="alternate" hreflang="de" href="/de/" data-nova-head>');
-    // an attribute with no value is written bare
     expect(html).toContain('<link rel="preconnect" href="https://cdn.example.net" crossorigin data-nova-head>');
   });
 
   it('two that do not say the same thing stand side by side', () => {
     const html = placeHead(TEMPLATE, [link({ rel: 'alternate', hreflang: 'de', href: '/de/' }), link({ rel: 'alternate', hreflang: 'fr', href: '/fr/' }), link({ rel: 'icon', href: '/other.svg' })]);
     expect(html.match(/rel="alternate"/g)).toHaveLength(2);
-    // an icon is not one of the things a document has only one of: the document's own stays
     expect(html).toContain('<link rel="icon" href="/favicon.svg" />');
     expect(html).toContain('<link rel="icon" href="/other.svg" data-nova-head>');
     expect(html).not.toContain('data-nova-own');
@@ -98,12 +91,10 @@ describe('placeHead — a head, in an HTML document', () => {
 
   it('with a site, every path is given its own address — as the document’s own, head or no head', () => {
     const bare = placeHead(TEMPLATE, undefined, { site: 'https://example.com/', path: '/articles/types/?draft=1' });
-    // unmarked: this is where the document lives, whatever its screen goes on to say
     expect(bare).toContain('<link rel="canonical" href="https://example.com/articles/types/">');
     expect(bare).toContain('<meta property="og:url" content="https://example.com/articles/types/">');
     expect(bare).not.toContain(`rel='canonical'`);
     expect(bare).not.toContain('data-nova-');
-    // and nothing else moved
     expect(bare).toContain('<title>The site</title>');
   });
 
@@ -139,12 +130,10 @@ describe('placeHead — a head, in an HTML document', () => {
   it('written again, a document is first put back as it was', () => {
     const once = placeHead(TEMPLATE, article);
     const twice = placeHead(once, [title('Another screen')]);
-    // the first screen's elements are gone, the document's own are back, and only the title gave way
     expect(twice).toContain('<title data-nova-head>Another screen</title>');
     expect(twice).not.toContain('og:image:alt');
     expect(twice).toContain('<meta content="Everything about the site." name="description" />');
     expect(twice).toContain('<template data-nova-own><title>The site</title></template>');
-    // and with nothing to say, it says what it always did
     const back = headOf(placeHead(once, undefined));
     for (const own of ['<title>The site</title>', '<meta content="Everything about the site." name="description" />', '<meta property="og:title" content="The site" />']) expect(back).toContain(own);
     expect(back).not.toContain('data-nova-');

@@ -1,13 +1,5 @@
 import type { SeedEntry } from '@niscorp/vex';
 
-// What is happening, as reads. Each of these backs a section of `situation.now`
-// (or the whole of `incident.feed`) AND a context pack — on purpose the same
-// fingerprints, so the sentence the text model writes about the site and the
-// card standing beside it were read from the same rows and cannot disagree.
-
-// Sets that overlap a window of the day: on stage now, and up next. Minutes of
-// the day on both bounds, so "now" is one number the caller derives from an
-// hour.
 export const lineupAround: SeedEntry = {
   fingerprint: 'lineup/around',
   intent: 'Sets on one festival day that are still running at or start within a window of minutes, by stage then time',
@@ -16,8 +8,6 @@ export const lineupAround: SeedEntry = {
     from: ['slots', 'acts', 'stages'],
     fields: [
       { field: 'slots.id', as: 'slot_id' },
-      // The ids ride along so that whoever is handed these rows can NAME them: the
-      // assistant knows who is on stage from here, and may aim the act's card at her.
       { field: 'acts.id', as: 'act_id' },
       { field: 'acts.name', as: 'act_name' },
       'acts.billing',
@@ -42,7 +32,6 @@ export const lineupAround: SeedEntry = {
   },
 };
 
-// Hours in a window that are worse than fair: severity 1 and up.
 export const weatherWarnings: SeedEntry = {
   fingerprint: 'weather/warnings',
   intent: 'Hours of one festival day, between two hours, whose weather severity is at least 1',

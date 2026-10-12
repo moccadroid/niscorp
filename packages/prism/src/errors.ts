@@ -1,7 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// Error Codes
-// ═══════════════════════════════════════════════════════════
-
 export const ErrorCode = {
   SCHEMA: 'E_SCHEMA',
   MISSING_PATH: 'E_MISSING_PATH',
@@ -10,27 +6,17 @@ export const ErrorCode = {
   DATE_INVALID: 'E_DATE_INVALID',
   VAR_NOT_FOUND: 'E_VAR_NOT_FOUND',
   NODE_SHAPE: 'E_NODE_SHAPE',
-  // A config's own `$assert` refused its input.
   ASSERT: 'E_ASSERT',
-  // An evaluation past its budget (engine/budget.ts).
   BUDGET: 'E_BUDGET',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
-
-// ═══════════════════════════════════════════════════════════
-// Error Context
-// ═══════════════════════════════════════════════════════════
 
 export type PrismErrorContext = {
   op?: string;
   path?: string;
   details?: Record<string, unknown>;
 };
-
-// ═══════════════════════════════════════════════════════════
-// Error Class
-// ═══════════════════════════════════════════════════════════
 
 export class PrismError extends Error {
   readonly code: ErrorCode;

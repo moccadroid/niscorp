@@ -16,7 +16,6 @@ export type RenderRuntimeContext = {
   registry: ComponentRegistry;
   strict?: boolean;
   onError?: RenderOnError;
-  // Passed straight through to the renderer, which is where a language enters.
   phrases?: RenderContext['phrases'];
   phraseKeys?: RenderContext['phraseKeys'];
   onPhraseMiss?: RenderContext['onPhraseMiss'];

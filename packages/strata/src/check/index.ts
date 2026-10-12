@@ -2,34 +2,9 @@ import type { Sequence } from '../schema';
 import type { Stamp, Upgrader } from '../documents';
 import { StrataError } from '../errors';
 
-// ═══════════════════════════════════════════════════════════════
-// @niscorp/strata/check — the gate a grammar change has to pass.
-//
-// Two questions, both mechanical:
-//
-//   1. SNAPSHOT — did a kind's schema change without the grammar gaining a
-//      migration? Each kind's JSON Schema, taken through the schema's OWN
-//      Standard JSON Schema hook, is recorded per grammar version. Same version,
-//      different schema: something changed that older readers were never told.
-//      Append a migration (an empty marker is enough for an addition — strict
-//      readers still have to refuse the newer documents), then record the new
-//      version.
-//
-//   2. CORPUS — does every real document ever captured, at the stamp it was
-//      captured at, still upgrade to the current grammar and pass the current
-//      strict schema? This is the judge: a snapshot only says something moved,
-//      the corpus says whether old documents survive it. No JSON Schema diff
-//      tool is trusted to decide compatibility.
-//
-// Pure: no files, no process. A host reads and writes snapshots where it keeps
-// them (nisc's own live in the repo's `strata/` directory).
-// ═══════════════════════════════════════════════════════════════
-
 type Issue = { message: string; path?: readonly (PropertyKey | { key: PropertyKey })[] };
 type StandardResult = { value: unknown; issues?: undefined } | { issues: readonly Issue[] };
 
-// Any validator implementing Standard Schema + Standard JSON Schema (Zod ≥ 4.2,
-// Valibot, ArkType). Structural: strata depends on none of them.
 export type GrammarSchema = {
   '~standard': {
     validate: (value: unknown) => StandardResult | Promise<StandardResult>;
@@ -44,24 +19,19 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const byKey = ([a]: [string, unknown], [b]: [string, unknown]): number => (a < b ? -1 : a > b ? 1 : 0);
 
-// Sorted keys, nothing else — for documents, where every key (a `description`
-// too) is content, and for a snapshot file, which keeps what the validator wrote.
 const sortKeys = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(sortKeys);
   if (!isRecord(value)) return value;
   return Object.fromEntries(Object.entries(value).sort(byKey).map(([k, v]) => [k, sortKeys(v)]));
 };
 
-// Where a schema's keys are NAMES, not keywords — a field called `description`
-// or an op called `$ref` is grammar — and where its values are instance data
-// rather than schemas.
+// Under NAMED the keys are names, not keywords: a field called `description` or
+// an op called `$ref` is grammar. Under DATA the values are instance data, not schemas.
 const NAMED = new Set(['properties', 'patternProperties', '$defs', 'definitions', 'dependentSchemas']);
 const DATA = new Set(['const', 'enum', 'default', 'examples']);
 
-// A schema without its prose: the `description` KEYWORD is documentation, and
-// rewording a `.describe()` must not demand a migration. `$schema` is the same
-// everywhere. Applied when comparing, never to what is recorded — so what the
-// gate ignores can change without touching a snapshot file.
+// Applied when comparing, never to what is recorded: what the gate ignores can
+// then change without touching a snapshot file.
 const normalize = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(normalize);
   if (!isRecord(value)) return value;
@@ -73,14 +43,9 @@ const normalize = (value: unknown): unknown => {
   );
 };
 
-// A name → schema map, each schema through `each`, the names untouched.
 const namedSchemas = (map: Record<string, unknown>, each: (schema: unknown) => unknown): Record<string, unknown> =>
   Object.fromEntries(Object.entries(map).sort(byKey).map(([name, schema]) => [name, each(schema)]));
 
-// The grammar as it stands: every kind it declares, as JSON Schema — as the
-// validator wrote it, keys sorted. `schemas` must cover exactly the sequence's
-// kinds — a kind without a schema cannot be checked, and a schema without a
-// kind belongs to some other grammar.
 export const snapshotOf = (sequence: Sequence, schemas: Readonly<Record<string, GrammarSchema>>): Snapshot => {
   const declared = Object.keys(sequence.documents ?? {}).map((k) => `${sequence.id}/${k}`);
   const given = Object.keys(schemas);
@@ -100,13 +65,9 @@ export const snapshotOf = (sequence: Sequence, schemas: Readonly<Record<string, 
   return { sequence: sequence.id, version: sequence.migrations.length, kinds };
 };
 
-// Stable text for a snapshot file: sorted keys, two-space indent, newline.
 export const snapshotText = (snapshot: Snapshot): string => `${JSON.stringify(sortKeys(snapshot), null, 2)}
 `;
 
-// Schema arrays are compared as sets (`sets`) — all but a tuple's `prefixItems`,
-// see `diffPositions`; a document's arrays by position — `layout.children[1]` is
-// how a person finds the thing that changed.
 const diffLines = (a: unknown, b: unknown, path: string, out: string[], limit: number, canon: (v: unknown) => unknown = normalize, sets = true): void => {
   if (out.length >= limit) return;
   if (JSON.stringify(a) === JSON.stringify(b)) return;
@@ -128,11 +89,9 @@ const diffLines = (a: unknown, b: unknown, path: string, out: string[], limit: n
     return;
   }
   if (Array.isArray(a) && Array.isArray(b)) {
-    // Schema arrays are SETS more often than sequences — a union's `anyOf`, a
-    // `required` list, an `enum` — and one added branch shifts every index
-    // after it. Match elements by what they describe (an object schema by its
-    // property names — for Prism's union, the op), report the ones on one side
-    // only, and diff the ones that changed in place.
+    // Schema arrays are sets more often than sequences (`anyOf`, `required`,
+    // `enum`), and one added branch shifts every index after it: elements are
+    // matched by what they describe, an object schema by its property names.
     const text = (v: unknown): string => JSON.stringify(canon(v));
     const label = (v: unknown): string =>
       isRecord(v) && isRecord(v['properties']) ? Object.keys(v['properties']).join(',') : (text(v) ?? '').slice(0, 50);
@@ -158,10 +117,6 @@ const diffLines = (a: unknown, b: unknown, path: string, out: string[], limit: n
   out.push(`~ ${path || '(root)'}: ${JSON.stringify(a)?.slice(0, 60)} → ${JSON.stringify(b)?.slice(0, 60)}`);
 };
 
-// A tuple's `prefixItems` is the one schema array that is a SEQUENCE: position
-// is the grammar, so [string, number] and [number, string] are different tuples
-// and a document valid for one is not for the other. Compared place by place;
-// what sits IN a place is a schema again, its own arrays sets as ever.
 const diffPositions = (a: readonly unknown[], b: readonly unknown[], path: string, out: string[], limit: number, canon: (v: unknown) => unknown): void => {
   for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
     if (out.length >= limit) return;
@@ -171,21 +126,12 @@ const diffPositions = (a: readonly unknown[], b: readonly unknown[], path: strin
   }
 };
 
-// ── canonical form ──────────────────────────────────────────────
-//
-// A snapshot records what the validator WROTE, and validators spell one schema
-// many ways: they name and inline definitions as they please (zod numbers them
-// in visit order, and 4.3 and 4.4 visit differently), write a described
-// reference as `allOf: [{ $ref }]` or as `$ref`, and a union of bare types as
-// `anyOf: [{ type }, …]` or `type: […]`. None of that is the grammar, so a
-// comparison reads both sides in one spelling: every definition inlined unless
-// it is recursive, the recursive ones renamed by first use, and every schema
-// identity above written one way. A snapshot FILE stays what the validator
-// wrote — only the comparison is canonical.
-
+// Validators spell one schema many ways: they name and inline definitions as
+// they please, write a described reference as `allOf: [{ $ref }]` or as `$ref`,
+// and a union of bare types as `anyOf` or as `type: […]`. A comparison reads
+// both sides in one spelling.
 const REF_PREFIX = /^#\/(\$defs|definitions)\//;
 
-// One spelling for the equivalences the node itself can show.
 const respell = (value: Record<string, unknown>): Record<string, unknown> => {
   let node = value;
   const anyOf = node['anyOf'];
@@ -207,8 +153,6 @@ const respell = (value: Record<string, unknown>): Record<string, unknown> => {
   return node;
 };
 
-// A schema node's own children — keyword values, and each schema of a name
-// map — but never the names, and never instance data.
 const schemaChildren = (node: Record<string, unknown>): unknown[] =>
   Object.entries(node).flatMap(([key, child]) =>
     key === '$ref' || DATA.has(key) ? [] : NAMED.has(key) && isRecord(child) ? Object.values(child) : [child],
@@ -225,8 +169,6 @@ const canonical = (recorded: unknown): unknown => {
   const target = (ref: string): { key: string; node: unknown } =>
     ref === '#' ? { key: '#', node: body } : { key: ref, node: defs[ref.replace(REF_PREFIX, '')] };
 
-  // Which targets are reached from inside their own expansion: those, and
-  // only those, stay definitions.
   const recursive = new Set<string>();
   const findCycles = (value: unknown, stack: readonly string[]): void => {
     if (Array.isArray(value)) {
@@ -280,9 +222,6 @@ export type SnapshotComparison =
   | { status: 'missing' }
   | { status: 'changed'; changes: readonly { kind: string; lines: readonly string[] }[] };
 
-// `recorded` is the snapshot kept for the grammar's CURRENT version (or
-// undefined if none was kept). Changed means: a migration is owed. Both sides
-// are read in canonical form, so a validator's respelling is not a change.
 export const compareSnapshot = (recorded: Snapshot | undefined, current: Snapshot): SnapshotComparison => {
   if (recorded === undefined) return { status: 'missing' };
   const changes: { kind: string; lines: string[] }[] = [];
@@ -296,8 +235,6 @@ export const compareSnapshot = (recorded: Snapshot | undefined, current: Snapsho
   return changes.length === 0 ? { status: 'same' } : { status: 'changed', changes };
 };
 
-// ── the corpus ──────────────────────────────────────────────────
-
 export type CorpusDocument = { id: string; kind: string; stamp: Stamp; document: unknown };
 export type CorpusFailure = { id: string; kind: string; reason: string };
 export type CorpusReport = { passed: number; failures: readonly CorpusFailure[] };
@@ -307,15 +244,12 @@ const issueText = (issue: Issue): string => {
   return `${path === '' ? '' : `${path}: `}${issue.message}`;
 };
 
-// What differs between two JSON values, as short lines (`+ a.b`, `- c`,
-// `~ d: 1 → 2`) — for a report a person or an agent acts on.
 export const diffJson = (a: unknown, b: unknown, limit = 20): string[] => {
   const out: string[] = [];
   diffLines(a, b, '', out, limit, sortKeys, false);
   return out;
 };
 
-// Every document, upgraded from its stamp, must pass the current schema of its kind.
 export const checkCorpus = async (
   upgrader: Upgrader,
   schemas: Readonly<Record<string, GrammarSchema>>,

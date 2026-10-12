@@ -3,10 +3,6 @@ import type { ContextMeta } from '../schemas/request.schema.js';
 import { resolveParams } from '../utils/context.js';
 import { VexError } from '../errors.js';
 
-// ═══════════════════════════════════════════════════════════════
-// Execution
-// ═══════════════════════════════════════════════════════════════
-
 export const executeQuery = async (
   compiled: CompiledQuery,
   context: Record<string, unknown>,
@@ -23,16 +19,8 @@ export const executeQuery = async (
   return adapter.execute(compiled, boundParams);
 };
 
-// ═══════════════════════════════════════════════════════════════
-// Context contract builder
-// ═══════════════════════════════════════════════════════════════
-
 export const buildContextContract = (
   compiled: CompiledQuery,
-  // Every key that controls an `optional` condition anywhere in the STORED
-  // dsl — including the ones this run pruned away, which have no slot and so
-  // would otherwise be invisible to the caller who most needs to know they
-  // exist: the one who did not send them.
   optionalKeys: readonly string[] = [],
 ): Record<string, ContextMeta> => {
   const contract: Record<string, ContextMeta> = {};
@@ -53,13 +41,6 @@ export const buildContextContract = (
   return contract;
 };
 
-// ═══════════════════════════════════════════════════════════════
-// Missing context detection
-// ═══════════════════════════════════════════════════════════════
-
-// The CALLER's half: context keys the request did not supply. A read with
-// holes answers empty and hands back the contract it missed — the caller can
-// fix that. Scope is not in here; see requireScope.
 export const findMissingContext = (
   compiled: CompiledQuery,
   context: Record<string, unknown>,
@@ -75,15 +56,9 @@ export const findMissingContext = (
   return missing;
 };
 
-// ═══════════════════════════════════════════════════════════════
-// Missing scope — the HOST's half
-// ═══════════════════════════════════════════════════════════════
-
-// A `$scope` slot the host did not fill is not a hole a caller can mend: the
-// caller cannot supply scope, and binding it would bind NULL — which matches
-// no row on a read and STAMPS NULL on a write. So it refuses, loudly, before
-// anything runs. The keys ride in `details` for the host's logs; the HTTP
-// layer does not hand them to the client.
+// An unfilled `$scope` slot would bind NULL, which matches no row on a read
+// and stamps NULL on a write. A caller cannot supply scope, so this throws
+// where a missing context key answers empty.
 export const requireScope = (compiled: { paramSlots: readonly { kind: string; key: string }[] }, scope: Record<string, unknown>): void => {
   const missing = [...new Set(compiled.paramSlots.filter((slot) => slot.kind === 'scope' && scope[slot.key] === undefined).map((slot) => slot.key))];
   if (missing.length > 0) {

@@ -32,28 +32,18 @@ import {
   weight,
 } from './kit.shape';
 
-// ═══════════════════════════════════════════════════════════════
-// THE POSTER KIT IN VUE — the React kit's twin (./react.kit.ts): the same
-// grammar, the same class names and data attributes, the same stylesheet. Vue
-// builds the elements, from the trees moss's Vue target hands it; its mount
-// root says so (`data-v-app`) to anybody who inspects it.
-//
-// Like React, Vue's adapter leaves a node's `ref` and `model` to the kit: a
-// `ref`'d element is a `ui:click` whose payload is its `value`, a `model`'d
-// field a `ui:model` per keystroke and a `ui:key` per key.
-// ═══════════════════════════════════════════════════════════════
+// Like React's, Vue's adapter leaves a node's `ref` and `model` to the kit.
 
 type Props = Record<string, unknown>;
 
-// The node's `ref`, and the ref its `model` binds — injected by nova's walker.
 const refOf = (props: Props): string | undefined => text(props['novaRef']);
 const modelOf = (props: Props): string | undefined => {
   const model = props['novaModel'];
   return typeof model === 'object' && model !== null ? text(Reflect.get(model, 'ref')) : undefined;
 };
 
-// A stateful kit component. It declares no props, so everything the walker
-// hands it arrives as attrs — read at render, where they are always current.
+// It declares no props, so everything the walker hands it arrives as attrs,
+// read at render, where they are always current.
 const stateful = (
   setup: (props: Props, slots: SetupContext['slots']) => () => VNode,
 ): NovaComponent =>
@@ -61,18 +51,12 @@ const stateful = (
     inheritAttrs: false,
   });
 
-// The names a Sheet's narrow arrangement shows; each Sheet provides its own,
-// read when its cells draw.
 const NarrowKey: InjectionKey<() => Set<string> | undefined> = Symbol('lyceum.narrow');
 const useNarrow = (): Set<string> | undefined => inject(NarrowKey, undefined)?.();
 
 const data = (key: string, value: string | undefined): Record<string, string> =>
   value === undefined ? {} : { [`data-${key}`]: value };
 
-// What every element here carries: its area (and whether the narrow
-// arrangement leaves it out), and, if it is `ref`'d, the press. `dispatch`
-// and `narrow` are injected by the caller — during render for a functional
-// component, in setup for a stateful one.
 const placed = (
   props: Props,
   dispatch: NovaDispatch,
@@ -103,7 +87,6 @@ const placed = (
   };
 };
 
-// A functional kit component: props and the default slot in, one element out.
 const functional = (
   render: (
     props: Props,
@@ -129,7 +112,6 @@ const Page = functional((_props, children) =>
   h('div', { class: 'page' }, [...children, h('span', { class: 'renderer' }, 'Vue')]),
 );
 
-// A Sheet provides its narrow set to its own cells, so it needs a setup.
 const Sheet: NovaComponent = stateful((props, slots) => {
   const dispatch = useNovaDispatch();
   const outer = inject(NarrowKey, undefined);
@@ -200,7 +182,6 @@ const Figure = functional((props, _children, place) =>
   ]),
 );
 
-// Ticks on the viewer's clock, as in the DOM kit; zero stays zero.
 const Countdown: NovaComponent = stateful((props) => {
   const dispatch = useNovaDispatch();
   const narrow = inject(NarrowKey, undefined);
@@ -368,8 +349,6 @@ const Bar = functional((props, _children, place) => {
   );
 });
 
-// The dots start where the wall clock says, once, when the Flow first draws —
-// Vue keeps the elements across updates, so they never jump back.
 const Flow: NovaComponent = stateful((props) => {
   const dispatch = useNovaDispatch();
   const narrow = inject(NarrowKey, undefined);
@@ -450,9 +429,8 @@ const Action = functional((props, _children, place) =>
   ),
 );
 
-// A field bound with the layout's `model`. While it has focus, what the person
-// is typing is the value (nova's ADAPTER.md §6): a tree arriving a round trip
-// later must not overwrite it. `enter: 'clears'` empties it on Enter.
+// While the field has focus, what the person is typing is the value: a tree
+// arriving a round trip later must not overwrite it.
 const Field: NovaComponent = stateful((props) => {
   const dispatch = useNovaDispatch();
   const narrow = inject(NarrowKey, undefined);
@@ -495,7 +473,6 @@ const Menu = functional((props, children, place) =>
   h('details', { ...place(), class: 'menu' }, [h('summary', { class: 'menu-icon', 'aria-label': text(props['label']) ?? 'Menu' }), h('div', { class: 'menu-items' }, children)]),
 );
 
-// THIS KIT, whole — typed against the grammar, like the DOM and React ones.
 export const VUE_KIT: KitOf<NovaComponent> = {
   Page,
   Sheet,
@@ -519,13 +496,11 @@ export const VUE_KIT: KitOf<NovaComponent> = {
   Menu,
 };
 
-// moss's Vue target, with this kit. As with React (./target.ts), the DOM
-// adapter's canvas and instance boxes are drawn here, because the stylesheet
-// lays the screen out by them.
+// As with React, the DOM adapter's canvas and instance boxes are drawn here,
+// because the stylesheet lays the screen out by them.
 export const vueRenderer = (root: HTMLElement): Target => {
   const registry = createComponentRegistry<NovaComponent>();
   registry.registerAll(VUE_KIT);
-  // The instance box, as the DOM kit draws it (./registry.ts).
   const slotWrapper = functional((props, children) => {
     const action = text(props['definitionId']) ?? '';
     return h('div', { 'data-action': action, 'data-instance': text(props['instanceId']) ?? '' }, [h('span', { class: 'xray-tag' }, action), ...children]);

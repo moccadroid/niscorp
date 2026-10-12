@@ -1,26 +1,18 @@
 import React, { Children, useContext, useEffect, useRef, useState, type FC } from 'react';
 import { Box as InkBox, Text as InkText, Transform, useFocus, useInput } from 'ink';
 import TextInput from 'ink-text-input';
-// The public self-name, NOT the internal `@react` alias — this import must
-// stay external in the bundle so the ink kit shares the react adapter's
-// context instance with its host (see tsup.config).
+// The package's public name, not the `@react` alias: this import stays external
+// in the bundle, so the ink kit shares the react adapter's context with its host.
 import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/react';
 import { str, num, bool, iconGlyph, truncate, pad } from '../tty/components/props';
 import { at, cellText, columnsOf, cellKey, JsonTree as renderJsonLines } from '../tty/components/components';
 import { useMarker, markerFocusId, Mark, FrameControlsContext } from './markers';
 
-// useFocus options: adopt the marker index as the focus id when one is
-// resolved, so the host can jump focus by typed number.
 const focusOpts = (active: boolean, marker: number | undefined): { isActive: boolean; id?: string } => ({
   isActive: active,
   ...(marker !== undefined ? { id: markerFocusId(marker) } : {}),
 });
 
-// The shared interactive treatment for anything `ref`'d — leaf or container:
-// marker (value-identified, so a list's rows sharing one ref each get their
-// own number), focus-ring membership, Enter → ui:click with the payload.
-// Exported: an app's own ink components get the full convention from this
-// one hook.
 export const useActionable = (novaRef: string | undefined, value: unknown): { marker: number | undefined; isFocused: boolean } => {
   const dispatch = useNovaDispatch();
   const marker = useMarker(novaRef, value !== undefined ? { value } : undefined);
@@ -35,7 +27,6 @@ export const useActionable = (novaRef: string | undefined, value: unknown): { ma
   return { marker, isFocused };
 };
 
-// A ref'd container renders behind an action gutter: its marker + focus caret.
 const actionGutter = (marker: number | undefined, isFocused: boolean, body: React.ReactNode): React.ReactElement => (
   <InkBox flexDirection="row" gap={1}>
     <InkText color="cyan" dimColor={!isFocused}>
@@ -46,20 +37,10 @@ const actionGutter = (marker: number | undefined, isFocused: boolean, body: Reac
   </InkBox>
 );
 
-// ═══════════════════════════════════════════════════════════
-// The Ink reference kit — the same domain-blind vocabulary as the DOM and
-// TTY kits (same names, same props), rendered full-screen: Tab cycles focus
-// (ink's built-in focus manager), Enter/Space activates, typing types. The
-// kit rides the React adapter's walker — an Ink component IS a NovaComponent
-// — so dispatch, model injection, and slot semantics arrive through the same
-// provider the browser uses. What a terminal can't do it doesn't fake.
-// ═══════════════════════════════════════════════════════════
-
 type P = Record<string, unknown>;
 
-// The walker's host-specific leaf renderers (NovaRenderProvider props): ink
-// forbids bare strings outside <Text>, so served text nodes and error nodes
-// both need ink-shaped leaves — the DOM defaults crash the whole render.
+// Ink throws on a bare string outside <Text>, so text and error nodes get these
+// in place of the walker's DOM defaults.
 export const TextWrap: FC<{ children?: React.ReactNode }> = ({ children }) => <InkText>{children}</InkText>;
 export const ErrorMarker: FC<{ code: string; message: string }> = ({ code, message }) => (
   <InkText color="red">{`[${code}] ${message}`}</InkText>
@@ -70,11 +51,8 @@ const heavy = (p: P): boolean => {
   return (typeof weight === 'number' && weight >= 600) || weight === 'semibold' || weight === 'bold';
 };
 const mutedColor = (p: P): boolean => ['mute', 'muted', 'dim', 'secondary'].includes(str(p, 'color') ?? '');
-// px gaps from layouts → terminal rows: only a deliberate gap earns a blank line
 const gapRows = (p: P): number => ((num(p, 'gap') ?? 0) >= 12 ? 1 : 0);
 
-// Layout px → terminal cells, the one unit conversion the kit makes (~8px per
-// character cell). Percent strings pass straight through to yoga.
 const CELL_PX = 8;
 const toWidth = (value: unknown): number | string | undefined =>
   typeof value === 'string' ? value : typeof value === 'number' ? Math.max(2, Math.round(value / CELL_PX)) : undefined;
@@ -84,10 +62,6 @@ const JUSTIFY = {
 } as const;
 const ALIGN = { start: 'flex-start', center: 'center', end: 'flex-end', stretch: 'stretch' } as const;
 
-// The box vocabulary every container honors: side borders become rules (the
-// sidebar's divider), padding becomes a cell of breathing room, widths map
-// px→cells, `grow` fills. What has no terminal analog (bg, radius, glow) is
-// simply absent.
 const boxProps = (p: P): Record<string, unknown> => {
   const border = p['border'];
   const width = toWidth(p['w'] ?? p['width']);
@@ -110,8 +84,6 @@ const boxProps = (p: P): Record<string, unknown> => {
   };
 };
 
-// ── containers — every one honors `ref` (an app's clickable rows are often
-// ref'd Grids/Boxes; the browser wires them by convention, so must we) ──
 export const Box: NovaComponent = ({ children, novaRef, ...rest }) => {
   const { marker, isFocused } = useActionable(novaRef, rest['value']);
   const body = <InkBox flexDirection="column" {...boxProps(rest)}>{children}</InkBox>;
@@ -140,9 +112,6 @@ export const Row: NovaComponent = ({ children, novaRef, ...rest }) => {
   return novaRef === undefined ? body : actionGutter(marker, isFocused, body);
 };
 
-// The grid honors `weights` ([3,1] → flex ratios) and `columns` (N equal
-// tracks, wrapping) by wrapping each child in its own flex cell — this is
-// what lines a settings page's label/control columns up.
 export const Grid: NovaComponent = ({ children, novaRef, ...rest }) => {
   const { marker, isFocused } = useActionable(novaRef, rest['value']);
   const rawWeights = rest['weights'];
@@ -189,12 +158,11 @@ export const Text: NovaComponent = ({ children, ...rest }) => {
 export const Badge: NovaComponent = ({ children }) =>
   children === undefined || children === null ? null : <InkText inverse> {children} </InkText>;
 
-// ── controls ──
 export const Button: NovaComponent = ({ children, novaRef, ...rest }) => {
   const { marker, isFocused } = useActionable(novaRef, rest['value']);
   const icon = str(rest, 'icon');
   const label = Children.count(children) > 0 ? children : icon !== undefined ? iconGlyph(icon) : '';
-  // flexShrink 0: a squeezed row truncates a button, never wraps it mid-parens
+  // flexShrink 0: a squeezed row cuts a button off, never wraps it mid-parens.
   return (
     <InkBox flexShrink={0}>
       <InkText>
@@ -205,17 +173,12 @@ export const Button: NovaComponent = ({ children, novaRef, ...rest }) => {
   );
 };
 
-// The bound input — both remote round-trip obligations (ADAPTER.md §6) hold
-// here exactly as in the browser kit: a local draft while focused so the
-// async tree echo can't clobber mid-typing, and the `debounce` prop
-// coalescing keystrokes. Enter flushes and sends `ui:key Enter` (a served
-// form's submit-on-enter works unchanged).
+// A local draft while focused, so a tree echo that arrives mid-typing does not
+// reset what was typed.
 export const Input: NovaComponent = ({ novaModel, ...rest }) => {
   const dispatch = useNovaDispatch();
   const marker = useMarker(novaModel?.ref);
   const { isFocused } = useFocus(focusOpts(novaModel !== undefined, marker));
-  // A focused input claims typed digits as text — the host's number
-  // navigation stands down while this is set.
   const controls = useContext(FrameControlsContext);
   useEffect(() => {
     controls?.setTyping(isFocused);
@@ -241,8 +204,6 @@ export const Input: NovaComponent = ({ novaModel, ...rest }) => {
   };
   useEffect(() => clearPending, []);
 
-  // Focus edges: entering starts a draft from the server value; leaving
-  // flushes any pending keystroke and hands authority back to the server.
   useEffect(() => {
     if (isFocused) setDraft((current) => current ?? server);
     else
@@ -256,8 +217,6 @@ export const Input: NovaComponent = ({ novaModel, ...rest }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- focus edge only
   }, [isFocused]);
 
-  // Vertical arrows forward to the server as ui:key while focused — a
-  // served palette moves its highlight with them, exactly as in the browser.
   useInput(
     (_input, key) => {
       if (novaModel === undefined) return;
@@ -278,7 +237,6 @@ export const Input: NovaComponent = ({ novaModel, ...rest }) => {
     } else fire(next);
   };
   const onSubmit = (next: string): void => {
-    // flush only what hasn't fired yet — undebounced keystrokes already did
     if (timer.current !== undefined) {
       clearPending();
       fire(next);
@@ -323,13 +281,10 @@ export const Checkbox: NovaComponent = ({ novaModel, ...rest }) => {
   );
 };
 
-// ── the data-driven table: same data contract as the DOM/TTY tables, each
-// row a focusable line dispatching `rowRef` with row[clickKey] on Enter.
 const CELL_CAP = 28;
 
 const TableRow: FC<{ line: string; refId?: string; payload?: unknown; occurrence: number }> = ({ line, refId, payload, occurrence }) => {
   const dispatch = useNovaDispatch();
-  // rows share one rowRef — the payload is the identity (occurrence backstop)
   const marker = useMarker(refId, { value: payload, occurrence });
   const { isFocused } = useFocus(focusOpts(refId !== undefined, marker));
   useInput(
@@ -377,7 +332,6 @@ export const Table: NovaComponent = ({ ...rest }) => {
   );
 };
 
-// ── introspection primitives ──
 const HeaderButton: FC<{ glyph: string; refId: string }> = ({ glyph, refId }) => {
   const dispatch = useNovaDispatch();
   const marker = useMarker(refId);
@@ -414,8 +368,6 @@ export const Panel: NovaComponent = ({ children, ...rest }) => {
   );
 };
 
-// JsonTree reuses the TTY renderer verbatim — it is a pure lines function,
-// and static depth-capped output is exactly right for a TUI too.
 export const JsonTree: NovaComponent = ({ ...rest }) => {
   const block = renderJsonLines({ props: rest, children: [], register: () => 0 });
   return (
@@ -427,17 +379,8 @@ export const JsonTree: NovaComponent = ({ ...rest }) => {
   );
 };
 
-// The per-instance boundary marker a flattened shell tree carries — the Ink
-// target has no wrapper concept of its own; moss's terminal overrides this
-// with the wire-backed slot when a slotWrapper is in play.
 export const ActionSlot: NovaComponent = ({ children }) => <InkBox flexDirection="column">{children}</InkBox>;
 
-// Unmapped primitives render their children; childless ones surface their
-// primary text prop plus a `count` — the same legible degrade as the DOM
-// and TTY fallbacks. A `ref`'d unknown (an app's NavItem) is focusable and
-// clicks on Enter — the walker marks refs universally in the TTY adapter,
-// so the ink fallback must carry the same convention itself or an app's
-// custom chrome renders dead.
 export const fallback: NovaComponent = ({ children, novaRef, ...rest }) => {
   const { marker, isFocused } = useActionable(novaRef, rest['value']);
 

@@ -1,8 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Paid upgrades — offers come LIVE from the Opera connector (it knows what is
-// open tonight), asking raises a request the desk answers. Prices arrive
-// formatted from the connector; nothing here does arithmetic.
 export const upgradesLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 16 },

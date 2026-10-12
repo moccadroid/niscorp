@@ -3,11 +3,6 @@ import { Nova, useNovaRegistry } from '@niscorp/nova/adapters/react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { LayoutNode } from '@niscorp/nova';
 
-// RayView — renders a Ray-generated Nova layout against its data, inside the chat.
-// The layout binds to the data ROOT via `$` (an array, object, or scalar — Vex's
-// `result` verbatim). Uses the shell's own kit registry so the generated layout's
-// components (Table, Box, Text…) resolve. Static for now (dispatches are no-ops);
-// interactivity arrives with step 2 (an action).
 const RayViewProps = z
   .object({
     layout: z.unknown().describe('The generated Nova LayoutNode.'),

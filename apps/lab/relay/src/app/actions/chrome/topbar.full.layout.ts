@@ -1,12 +1,6 @@
 import type { LayoutNode } from '@niscorp/nova';
 import { topbarTitle, topbarSearch, topbarAssistant, topbarNotifications } from './topbar.layout';
 
-// The full topbar — ring 2, minted as `chrome.topbar.full` and granted to
-// sales (admin inherits through `extends`, like every other capability).
-// The write-path chrome rides with the write grants: New opens the create
-// flows a sales principal actually holds; the assistant push targets an
-// action a sales principal actually has. The floor (topbar.layout.ts) is
-// what everyone else gets — no denies anywhere.
 export const topbarFullLayout: LayoutNode = {
   component: 'Box',
   props: { px: 18, border: 'bottom', h: 53 },

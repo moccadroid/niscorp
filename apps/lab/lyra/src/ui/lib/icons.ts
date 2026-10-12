@@ -1,5 +1,4 @@
 export const ICON_PATHS: Record<string, string> = {
-  // ── navigation ────────────────────────────────────────────
   today: 'M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
   checkin: 'M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3',
   people: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
@@ -12,7 +11,6 @@ export const ICON_PATHS: Record<string, string> = {
   reports: 'M3 3v18h18M7 15v3M12 9v9M17 5v13',
   home: 'M3 10.5L12 3l9 7.5M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5',
 
-  // ── objects ───────────────────────────────────────────────
   belt: 'M2 10h20v4H2zM9 10v4M15 10v4',
   plan: 'M20.6 13.4L13.4 20.6a2 2 0 0 1-2.8 0l-8.2-8.2V3h9.4l8.8 8.8a2 2 0 0 1 0 1.6zM7 7h.01',
   program: 'M4 4h16v16H4zM4 9h16M9 9v11',
@@ -26,7 +24,6 @@ export const ICON_PATHS: Record<string, string> = {
   building: 'M4 21V6a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v15M15 11h4a1 1 0 0 1 1 1v9M8 9h3M8 13h3M8 17h3M2 21h20',
   tag: 'M3 3h8l10 10-8 8L3 11V3zM7.5 7.5h.01',
 
-  // ── verbs ─────────────────────────────────────────────────
   plus: 'M12 5v14M5 12h14',
   edit: 'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z',
   trash: 'M3 6h18M8 6V4h8v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6M10 11v6M14 11v6',
@@ -40,7 +37,6 @@ export const ICON_PATHS: Record<string, string> = {
   external: 'M15 3h6v6M21 3l-9 9M18 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5',
   send: 'M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z',
 
-  // ── direction ─────────────────────────────────────────────
   chevronRight: 'M9 18l6-6-6-6',
   chevronLeft: 'M15 18l-6-6 6-6',
   chevronUp: 'M18 15l-6-6-6 6',
@@ -49,7 +45,6 @@ export const ICON_PATHS: Record<string, string> = {
   arrowUp: 'M12 19V5M5 12l7-7 7 7',
   arrowDown: 'M12 5v14M19 12l-7 7-7-7',
 
-  // ── states ────────────────────────────────────────────────
   info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v5M12 8h.01',
   warning: 'M10.3 4.3L2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01',
   success: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM8.5 12.5l2.5 2.5 4.5-4.5',

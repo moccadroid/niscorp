@@ -1,14 +1,5 @@
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 
-// ── queries from words ──
-//
-// A request in plain words is answered by a fingerprint: an earlier request's
-// stored query, replayed, or a new one the model writes under the caller's own
-// policy. These rows remember which — the router reads them to know what has
-// been run before, and the projector counts them.
-
-// What the router may send a new request to: every request that got a query of
-// its own, newest first. Read as the caller.
 export const queriesKnown: SeedEntry = {
   fingerprint: 'queries/known',
   intent: 'Requests answered by a query of their own, with the fingerprint and shape they replay by, newest first',
@@ -22,9 +13,7 @@ export const queriesKnown: SeedEntry = {
   },
 };
 
-// How many queries were answered each way — the projector's tally. Counts
-// only: the words were written by people and do not go up on the wall. A way
-// nothing has been answered yet has no row: the sum of nothing is 0.
+// A way nothing has been answered yet has no row: the sum of nothing is 0.
 const countOf = (how: string): unknown => ({
   $sum: {
     over: {
@@ -51,8 +40,6 @@ export const queriesTally: SeedEntry = {
   mapping: { replayed: countOf('replayed'), generated: countOf('generated'), refused: countOf('refused') },
 };
 
-// Record one query and how it was answered, as the caller — the engine stamps
-// whose (behaviors.ts).
 export const queryRecord: SeedMutation = {
   fingerprint: 'queries/record',
   intent: 'Record a query run from words and how it was answered',

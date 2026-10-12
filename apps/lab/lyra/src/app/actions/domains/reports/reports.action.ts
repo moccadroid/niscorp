@@ -7,13 +7,11 @@ export const reportsAction: ActionDefinition = {
   id: 'reports.overview',
   title: 'Reports',
   data: {
-    // Seeded by the server: two studios on different dates do not agree on what
-    // "the last 90 days" ends on.
     from: '',
     to: '',
     rangeLabel: 'Last 90 days',
-    // The span the window fn reads. A `call` carries no arguments; a fn is
-    // handed the action's data, so "which period" is a value like any other.
+    // Read by the window fn: a `call` carries no arguments, and a fn is handed
+    // the action's data.
     days: 90,
 
     byHour: [],
@@ -50,11 +48,7 @@ export const reportsAction: ActionDefinition = {
       { call: 'statuses', onSuccess: [{ set: 'loading', value: false }] },
     ],
   },
-  // A check-in or a sign-up moves these figures, so the page listens rather
-  // than being told.
   triggers: [
-    // Three presets, three refs, no branch. The `set` lands first: a `call`
-    // before it would send the previous period.
     {
       event: 'ui:click',
       ref: 'range-30',

@@ -5,13 +5,6 @@ import { useVexRunView, type RunView } from './runtime-context';
 import { Block, prettySql } from './parts';
 import { scenarios, type VexScenario } from './scenarios';
 
-// ═══════════════════════════════════════════════════════════
-// Inspector tabs — alongside the chrome-provided Source tab, Vex
-// adds DSL, SQL and Cache views fed by the last run (published to
-// the runtime context by VexView).
-// ═══════════════════════════════════════════════════════════
-
-// A caption over a block — sentence case, like the stage.
 const Cap: FC<{ children: ReactNode }> = ({ children }) => (
   <div style={{ fontSize: 12, fontWeight: 650, color: INK.soft, margin: '14px 0 6px' }}>{children}</div>
 );
@@ -68,7 +61,6 @@ const SqlTab: FC<{ scenario: VexScenario }> = ({ scenario }) => {
   );
 };
 
-// Where the DSL came from on the last run, in words.
 const verdictText = (view: RunView | undefined): string => {
   if (view === undefined) return '—';
   if (view.live === true) return 'written by a model, then stored under the name';
@@ -99,8 +91,7 @@ const CacheTab: FC<{ scenario: VexScenario }> = ({ scenario }) => {
   );
 };
 
-// Best-effort extraction of the underlying provider error that Signal
-// recovered from (groq nests code/message/failed_generation under .error).
+// groq nests code/message/failed_generation under `.error`.
 const providerErrorText = (raw: unknown): string => {
   if (raw === null || typeof raw !== 'object') return String(raw ?? '(none)');
   const inner: unknown = Reflect.get(raw, 'error');
@@ -165,7 +156,6 @@ const DebugTab: FC<{ scenario: VexScenario }> = ({ scenario }) => {
 };
 
 export const buildInspectorTabs = (story: Story): InspectorTabDef[] => {
-  // The story rides its scenario along; finding it by id needs no cast.
   const scenario = scenarios.find((s) => s.id === story.id);
   if (scenario === undefined) return [];
   return [

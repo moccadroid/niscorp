@@ -2,18 +2,8 @@ import { z } from 'zod';
 import type { DomComponent } from '@niscorp/nova/adapters/dom';
 import { ALIGNS, INKS, LEVELS, LOOKS, MARKS, SIGILS } from './kit';
 
-// ═══════════════════════════════════════════════════════════════
-// WHAT A LAYOUT MAY SAY TO EACH KIT COMPONENT — the kit's grammar (strata's
-// `lyceum.kit`, AGENTS.md rule 18). A layout written against these props is a
-// document in this grammar, so a change here — a prop added, renamed, a set
-// narrowed — is a migration: `kit-check` snapshots this schema and refuses a
-// change the sequence does not record.
-//
-// The closed sets are the kit's own (./kit.ts), so the two cannot drift. A value
-// a layout binds to data (`'$.rows'`) is described as what it resolves to.
-// Unknown props are refused here even though the kit drops them at render —
-// the grammar is what the kit ACCEPTS, not what it survives.
-// ═══════════════════════════════════════════════════════════════
+// The `lyceum.kit` grammar: a change here (a prop added, renamed, a set
+// narrowed) is a migration in its sequence.
 
 const area = z.string().describe('A grid area name from the enclosing Sheet');
 const ink = z.enum(INKS);
@@ -81,8 +71,5 @@ export const KIT_PROPS = z
   .strict()
   .describe('The props each lyceum kit component accepts, by component name');
 
-// A KIT is one renderer per component this grammar names — every look lyceum
-// paints with implements the same set: in a browser (./kit.ts, ./plain.kit.ts)
-// a DOM component each, in a terminal (./ink.kit.ts) an ink one.
 export type KitOf<Component> = Record<keyof z.infer<typeof KIT_PROPS>, Component>;
 export type Kit = KitOf<DomComponent>;

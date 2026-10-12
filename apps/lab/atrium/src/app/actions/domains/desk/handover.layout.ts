@@ -1,12 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The shift note.
-//
-// Every hotel writes one and almost none of them write it in the hotel's own
-// software — it lives on paper, or in a group chat, which is why the thing the
-// night porter needed to know is the thing nobody told them. Putting it beside
-// the shift it describes is most of the value; drafting it from what actually
-// moved is the rest.
 export const handoverLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 18, maxWidth: 760 },

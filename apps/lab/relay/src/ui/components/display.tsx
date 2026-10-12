@@ -45,9 +45,6 @@ import {
 import { cx } from '../lib/cx';
 import { FS, TEXT_COLOR } from '../lib/tokens';
 
-// Display primitives — Text, Badge, Avatar, Icon. Read-only visuals.
-
-// ─── Text ──────────────────────────────────────────────────
 const TextProps = z
   .object({
     size: z.string().optional(),
@@ -86,10 +83,6 @@ export const Text: NovaComponent<z.infer<typeof TextProps>> = ({
 );
 Text.meta = { description: 'Inline text with size/weight/color.', propsSchema: TextProps };
 
-// ─── Stat ──────────────────────────────────────────────────
-// A metric card. Semantics in, appearance owned by .rl-stat CSS — the
-// ONE sanctioned way to show a number prominently, so screens never
-// hand-style Text into a KPI.
 const StatProps = z
   .object({
     label: z.string().describe('What the number is, e.g. "Overdue tasks".'),
@@ -114,7 +107,6 @@ Stat.meta = {
   propsSchema: StatProps,
 };
 
-// ─── Badge ─────────────────────────────────────────────────
 const BadgeProps = z
   .object({
     tone: z.enum(['slate', 'accent', 'green', 'amber', 'red', 'blue', 'pink']).optional(),
@@ -130,7 +122,6 @@ export const Badge: NovaComponent<z.infer<typeof BadgeProps>> = ({ tone = 'slate
 );
 Badge.meta = { description: 'A small status pill.', propsSchema: BadgeProps };
 
-// ─── Avatar ────────────────────────────────────────────────
 const AV_COLORS = [
   '#6366f1',
   '#8b5cf6',
@@ -176,7 +167,6 @@ Avatar.meta = {
   propsSchema: AvatarProps,
 };
 
-// ─── Icon ──────────────────────────────────────────────────
 const ICONS: Record<string, LucideIcon> = {
   home: Home,
   users: Users,

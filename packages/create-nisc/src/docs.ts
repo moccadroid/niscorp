@@ -1,19 +1,5 @@
 import type { Posture, Ui } from './generate';
 
-// ═══════════════════════════════════════════════════════════════
-// The two documents only a new app has.
-//
-// AGENTS.md says where the rules are — the installed @niscorp/nisc carries
-// them, for the version installed — and what is particular to this app. It
-// does not restate a rule: a copy would be frozen at the version it was made
-// with, and the rules move with releases.
-//
-// PLAN.md is the interview's record (AGENTS.md, "Before any code"). The
-// walkthrough asks what shapes the files; everything else is written down as
-// OPEN, and an open decision point blocks the build until it is answered or
-// delegated by name.
-// ═══════════════════════════════════════════════════════════════
-
 type Facts = { name: string; posture: Posture; ui: Ui; today: string; nisc: string };
 
 const uiName = (ui: Ui): string => (ui === 'react' ? 'React' : 'plain DOM (nova’s DOM adapter — no framework in the page)');
@@ -106,6 +92,4 @@ ${d5(facts.posture)}
 7. **Checks and polish** — a check per feature in \`src/dev/\`; empty states and transitions last.
 `;
 
-// What a nisc app keeps out of git. Lines, so an existing .gitignore can be
-// given only the ones it lacks.
 export const gitignoreLines = ['node_modules/', 'dist/', 'out/', '.strata/', '*.tsbuildinfo', '.env', '.env.*', '!.env.example'];

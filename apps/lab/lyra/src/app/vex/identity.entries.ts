@@ -1,35 +1,7 @@
 import type { CacheEntry } from './index';
 
-// ═══════════════════════════════════════════════════════════════
-// IDENTITY AS AN ARTIFACT.
-//
-// There is exactly ONE question in this application that cannot be asked
-// through the engine: "what roles does this principal wear" — because the
-// policy every engine read runs under is COMPILED from the answer. That
-// question needs three facts (a staff word, an anchor, a tenant), read by the
-// one licensed query in `server/identity.ts` and mapped to a session record by
-// the authored prism below — data the charter checks can read, not a function.
-//
-// EVERYTHING ELSE ABOUT A SESSION IS ORDINARY DATA, read through the engine
-// once a policy exists: the caller's own name (`identity/person`), their
-// studio's trading facts (`identity/studio`), and their tenant's installs
-// (`identity/installed`). Each is a single table, pinned by the `identity`
-// reach in behaviors.ts, executed by moss as the charter's `identity` role —
-// a role nobody wears, holding exactly the verbs these reads need. That is how
-// a member gets a session without members getting `people.read`.
-//
-// The `Person` type, `personCard`, `lookup.ts` and the eleven-column identity
-// query existed because this file did not: with no declared model of identity,
-// identity became whatever the next caller needed. This file is the model.
-// ═══════════════════════════════════════════════════════════════
-
-// ─── the rung table: authored, and checkable ─────────────────
-//
-// A staff role IS a charter rung, for exactly these five words. Anything else
-// on a staff row resolves DOWNWARD to member — the direction that matters when
-// the word arrives from somewhere nobody reviewed. `reads-are-vex-check`
-// asserts every value here is a charter role, and that none of them is the
-// `identity` reader role, which nobody may wear.
+// A staff role is a charter rung for exactly these words. Any other word on a
+// staff row resolves downward, to `member`.
 export const IDENTITY_RUNGS: Record<string, string> = {
   owner: 'owner',
   manager: 'manager',
@@ -38,17 +10,8 @@ export const IDENTITY_RUNGS: Record<string, string> = {
   automation: 'automation',
 };
 
-// ─── the licensed read, and the mapping that IS the person model ──
-//
-// NEVER SERVED: absent from the registered ENTRIES, executed only by
-// `server/identity.ts` before any policy exists — a pre-authorisation read
-// reachable from HTTP is the bootstrap-policy hole D4 refused. The check
-// asserts that, and pins the licensed SQL to the tables declared here.
-//
-// The mapping receives the row's three facts plus `principal`, and answers the
-// SEAM RECORD whole: roles for the charter, the tag moss forgets a tenant by,
-// and the scope half that is pure derivation. Nothing else in the codebase
-// derives any of this — one spelling, and it is data.
+// Never served: absent from ENTRIES and executed only by `server/identity.ts`,
+// before any policy exists. It must not become reachable over HTTP.
 export const identityRoles: CacheEntry = {
   fingerprint: 'identity/roles',
   intent: 'What a policy compiles from: what a studio employs this principal as, whether it knows them, and which tenant their record shares a fate with',
@@ -77,8 +40,6 @@ export const identityRoles: CacheEntry = {
         studioId: { $coalesce: [{ $ref: '$.studio_id' }, { $const: '' }] },
       },
       value: {
-        // The rung the staff word names (if the charter knows it), plus
-        // `member` when the studio holds an anchor for them.
         roles: {
           $case: {
             branches: [
@@ -88,14 +49,11 @@ export const identityRoles: CacheEntry = {
             else: ['member'],
           },
         },
-        // What this record shares a fate with — the key `invalidateTag`
-        // forgets by. Opaque to moss; here it is the studio.
         tag: { $var: 'studioId' },
         scope: {
           studioId: { $var: 'studioId' },
-          // Set only for people the studio KNOWS (the anchor row) — staff-only
-          // principals get '', which is what an integration's "only somebody the studio
-          // knows can pay" check keys on.
+          // '' for a staff-only principal (no anchor row): an integration's
+          // "only somebody the studio knows can pay" check keys on that.
           personId: { $case: { branches: [{ when: { $var: 'anchored' }, then: { $ref: '$.principal' } }], else: '' } },
           audience: { $case: { branches: [{ when: { $neq: [{ $var: 'rung' }, ''] }, then: { $var: 'rung' } }], else: 'member' } },
           trains: { $var: 'anchored' },
@@ -106,35 +64,8 @@ export const identityRoles: CacheEntry = {
   },
 };
 
-// ─── what is DELIBERATELY not here ───────────────────────────
-//
-// No actor read: an integration actor (`ig_<integration>@<studio>`) names its rung
-// and its studio in its own id, purely; whether the install is live is
-// `identity/installed`, read through the engine and checked by the app.
-// No automation read: a studio's robot IS the synthetic `automation@<studio>`
-// — the id names the tenant, nothing needs looking up, and the chain-trust
-// comparison (`userId === automationActor`) becomes exact instead of inferred.
-// No by-email read: resolving a sign-in address is credential machinery and
-// lives with the nonce in `server/links.ts`, a named no-principal door.
-//
-// The licensed budget is therefore ONE statement, over the three tables the
-// `identity/roles` dsl declares — and `reads-are-vex-check` asserts the count.
-
-// ═══════════════════════════════════════════════════════════════
-// THE ENGINE-READ HALF — seeded, served, single-table, join-free.
-//
-// Moss executes these as the `identity` role, in order, merging each mapped
-// object into the session's scope — so `identity/studio` is pinned by the
-// `studioId` the licensed read established, a value no request authored.
-// Serving them is safe by construction: a caller replays them under their OWN
-// policy, where the `identity` reach pins rows to the caller, and rungs
-// without the grants are refused outright.
-//
-// Each mapping answers `{}` for a missing row rather than a record of empty
-// strings — a merge must never let "no row" overwrite a value somebody else
-// already established (the actor path seeds its scope pre-auth).
-// ═══════════════════════════════════════════════════════════════
-
+// Moss merges each mapped object into the session's scope in order: a missing
+// row answers `{}`, so it never overwrites a value already established.
 const emptyWhenNoRow = (value: unknown): unknown => ({
   $case: { branches: [{ when: { $eq: [{ $ref: '$.result' }, null] }, then: {} }], else: value },
 });
@@ -164,54 +95,22 @@ export const identityStudio: CacheEntry = {
   },
   mapping: emptyWhenNoRow({
     studioName: { $get: { from: { $ref: '$.result' }, path: ['studio_name'], fallback: { $const: '' } } },
-    // CARRIED, not looked up: the day is volatile and derived per request from
-    // this zone by the `scope` hook — never held for a session.
     timezone: { $get: { from: { $ref: '$.result' }, path: ['timezone'], fallback: { $const: '' } } },
     country: { $get: { from: { $ref: '$.result' }, path: ['country'], fallback: { $const: '' } } },
-    // Rides beside `country` for the same reason: both decide what a payment
-    // provider asks this business for, both are the studio's own fact, and
-    // neither is a question an integration should have to put to a caller.
     legalForm: { $get: { from: { $ref: '$.result' }, path: ['legal_form'], fallback: { $const: '' } } },
-    // The registered name, for the merchant account — a payment provider puts
-    // it on documents, and "Lumen Yoga" above the door is not always what the
-    // register says.
     legalName: { $get: { from: { $ref: '$.result' }, path: ['legal_name'], fallback: { $const: '' } } },
     locale: { $get: { from: { $ref: '$.result' }, path: ['locale'], fallback: { $const: '' } } },
     currency: { $get: { from: { $ref: '$.result' }, path: ['currency'], fallback: { $const: '' } } },
   }),
 };
 
-// WHO THIS SESSION IS ANSWERABLE FOR — the children, and nothing else.
-//
-// The set half of "me and mine". Resolved ONCE per session, exactly like the
-// install list beside it, and for the same reason: it is stable for as long as
-// a session lasts, and asking per request would put a join under every member
-// read in the application.
-//
-// PINNED TO THE GUARDIAN SIDE by the `identity` reach in behaviors.ts —
-// `guardian_person_id = userId` — so this can only ever answer with the
-// children the CALLER is answerable for. That pin is what makes the set safe
-// to hand to a reach: no request authored it, and asking differently cannot
-// widen it. A guardian at another studio contributes nothing, because the
-// studio pin rides beside it.
-//
-// The empty answer is the common one — most members guard nobody — and it
-// costs a single indexed lookup. `householdIds` then resolves to the caller
-// alone, which is `personal` by another name: the whole existing member
-// surface behaves identically for anybody with no children, by construction
-// rather than by a branch.
 export const identityGuarded: CacheEntry = {
   fingerprint: 'identity/guarded',
   intent: 'The children this session may act for — the set half of the household reach, pinned to the guardian',
   reach: 'identity',
-  // IDS ONLY, and this entry may not learn the names.
-  //
-  // It reads `guardianships` alone. Joining `people` here for the name looks
-  // obvious and is a contradiction: the `identity` reach pins `people.id =
-  // userId`, so `people.id = child_person_id AND people.id = <the parent>` is
-  // unsatisfiable and the whole read answers nothing — silently, because an
-  // empty household is a legitimate answer for almost everybody. The names
-  // come from `identity/household` below, once these ids exist to pin by.
+  // Ids only. Joining `people` for the names would answer nothing, silently:
+  // the `identity` reach pins `people.id = userId`, which no child's row
+  // satisfies. The names come from `identity/household`.
   shape: [{ value: '', can_book: false }],
   dsl: {
     from: ['guardianships'],
@@ -219,9 +118,8 @@ export const identityGuarded: CacheEntry = {
       { field: 'guardianships.child_person_id', as: 'child_person_id' },
       'guardianships.can_book',
     ],
-    // `can_book` is deliberately NOT filtered on. This answers WHO the session
-    // may see, and seeing a child's classes is not booking them; the capability
-    // travels with the row and gates the verb at the screen.
+    // `can_book` is not filtered on: this answers who the session may see, and
+    // seeing a child's classes is not booking them.
   },
   mapping: {
     $map: {
@@ -235,18 +133,9 @@ export const identityGuarded: CacheEntry = {
   },
 };
 
-// THE NAMES, read at the HOUSEHOLD reach rather than the identity one.
-//
-// A member holds no `people.read` and never will — "a member cannot read the
-// roll" is an invariant three checks assert. The `identity` role does hold it,
-// but pinned to the caller's own row, which is right for `identity/person` and
-// useless for a child.
-//
-// So this entry declares `reach: 'household'`, and the host recompiles the
-// identity role's SAME grants at that profile: `people.id = ANY(householdIds)`.
-// The set is the one the read above just established and the server passes in
-// — engine-side, no request anywhere near it. That is why this is two reads
-// and not one: the second is pinned by the first's answer.
+// Read at the household reach: the identity role's grants compiled with
+// `people.id = ANY(householdIds)`, the set `identity/guarded` established and
+// the server passes in. Two reads, because this one is pinned by that answer.
 export const identityHousehold: CacheEntry = {
   fingerprint: 'identity/household',
   intent: "The names of the people this session may act for — pinned to the household the guardianship read established",
@@ -269,8 +158,6 @@ export const identityHousehold: CacheEntry = {
   },
 };
 
-// A bare list of ids, consumed wholesale: moss never reads a field off it,
-// which is what keeps the record opaque. The no-row shape is naturally [] here.
 export const identityInstalled: CacheEntry = {
   fingerprint: 'identity/installed',
   intent: "The integrations live at this session's studio — what the catalog filter and every ext.* surface key on",

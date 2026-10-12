@@ -1,5 +1,3 @@
-// The weekly grid, the term of sessions generated from it, and the two beats
-// the demo needs on the timetable itself.
 import { day, insert } from '../sql';
 import { LUMEN, NORTHROCK } from './studios';
 
@@ -34,7 +32,6 @@ export const COURSE_TEMPLATES_SQL = insert(
   ],
 );
 
-// ─── generated: a term of sessions ───────────────────────────
 export const SESSIONS_SQL = /* sql */ `
   INSERT INTO class_sessions
     (id, studio_id, template_id, program_id, name, held_on, starts_at, duration_mins, capacity, instructor_id, status, week_key, hour_key)
@@ -54,8 +51,6 @@ export const SESSIONS_SQL = /* sql */ `
   ON CONFLICT (id) DO NOTHING;
 `;
 
-// One cancelled class, so the schedule has to render a hole rather than a
-// gap. Next Tuesday at Lumen — Tobias is away.
 export const CANCELLATION_SQL = /* sql */ `
   UPDATE class_sessions SET status = 'cancelled'
   WHERE template_id = 'ct_l_tue_pm'
@@ -63,9 +58,6 @@ export const CANCELLATION_SQL = /* sql */ `
     AND held_on <= studio_today('${LUMEN}') + 7;
 `;
 
-// A class happening TODAY with somebody already booked into it, so the desk
-// screen has something to check people in to. Seeded after the check-ins
-// below, which is why nobody has attended it.
 export const TODAY_CLASS_SQL = /* sql */ `
   INSERT INTO class_sessions (id, studio_id, program_id, name, held_on, starts_at, duration_mins, capacity, instructor_id, status, week_key, hour_key)
   SELECT 'cs_today_lumen', 'st_lumen', 'pr_vinyasa', 'Open Practice', studio_today('${LUMEN}'), '12:00', 60, 12, NULL, 'scheduled',

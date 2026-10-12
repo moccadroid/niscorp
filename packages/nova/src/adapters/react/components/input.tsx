@@ -2,21 +2,6 @@ import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties } fro
 import { InputPropsSchema, type InputProps } from '../../primitive-props';
 import { useNovaDispatch, type NovaComponent, type NovaComponentProps } from '@react';
 
-// ═══════════════════════════════════════════════════════════
-// Input — text input bound to model
-//
-// Number inputs still dispatch a string payload; mutation ops
-// handle parsing on the action side.
-//
-// Two remote round-trip obligations (ADAPTER.md §6), because the shell may be
-// authoritative over a socket:
-//  - it holds local editing state while focused, so an async tree echo can't
-//    clobber the value the user is mid-typing;
-//  - it honours the layout's `debounce` prop, coalescing keystrokes before
-//    they hit the wire. A local shell echoes synchronously and neither matters,
-//    but a remote one drops keystrokes without them.
-// ═══════════════════════════════════════════════════════════
-
 export { InputPropsSchema, type InputProps };
 
 const computeStyle = (isDisabled: boolean, isFocused: boolean, isHovered: boolean): CSSProperties => {
@@ -52,18 +37,16 @@ export const Input: NovaComponent<InputProps> = ({
 }: NovaComponentProps & InputProps) => {
   const dispatch = useNovaDispatch();
   const [isHovered, setIsHovered] = useState(false);
-  // `draft` is the local editing value; `null` means "not editing — the
-  // server value is authoritative". While editing (focused) the draft wins,
-  // so an async tree echo arriving mid-type never resets what the user typed.
+  // `null` means not editing: the tree's value shows. While focused the draft
+  // wins, so a tree echo that arrives mid-typing does not reset what was typed.
   const [draft, setDraft] = useState<string | null>(null);
   const isFocused = draft !== null;
   const shown = draft ?? value ?? '';
   const isDisabled = disabled ?? false;
   const debounceMs = debounce ?? 0;
 
-  // A single pending debounced dispatch — cancelled on the next keystroke,
-  // flushed on blur, dropped on unmount (a keystroke against a screen that has
-  // gone is worse than a lost one — the same reasoning as the socket's).
+  // A pending dispatch is dropped on unmount, not flushed: a keystroke against a
+  // screen that has gone is worse than a lost one.
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const clearPending = (): void => {
     if (timer.current !== undefined) {
@@ -94,7 +77,6 @@ export const Input: NovaComponent<InputProps> = ({
 
   const onFocus = (): void => setDraft(value ?? '');
   const onBlur = (): void => {
-    // Flush any pending keystroke now, then hand authority back to the server.
     if (timer.current !== undefined && draft !== null) {
       clearPending();
       fire(draft);

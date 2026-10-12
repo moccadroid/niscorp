@@ -4,38 +4,11 @@ import { isHeadNode } from './head';
 import { chainsInFlight } from './chains';
 import { ACTION_SLOT_NAME } from './slot-names';
 
-// ═══════════════════════════════════════════════════════════
-// A shell, as something an adapter draws.
-//
-// Every adapter that draws a SERVED screen draws it through `RenderApi` — the
-// frame, a tree per canvas, events up, messages across — and has always been
-// handed one by a transport (moss's socket wire). A shell that lives in the
-// same process as its adapter is the other case that type was written for, and
-// this is it: the shell's own trees, read as they stand, and its own dispatch.
-// The DOM and TTY adapters draw a local shell through this exactly as they draw
-// a remote one; nothing about them knows the difference.
-//
-// It is also what makes a shell DRAWABLE AHEAD OF TIME. A build runs the app's
-// own boot, waits for the screen to be whole (`shellSettled`), and has an
-// adapter draw this view to markup; the browser runs the same boot and draws
-// the same view over that markup. Where the shell lives was never the
-// adapter's business.
-// ═══════════════════════════════════════════════════════════
-
 export type ShellView = {
   api: RenderApi;
-  // Called after the shell changed — coalesced, so a burst of changes (a press
-  // that sets three keys) is one call. Returns the unsubscribe.
   subscribe: (listener: () => void) => () => void;
 };
 
-// NO VISIBLE CONTENT IS AN EMPTY TREE. A canvas whose layout renders nothing but
-// empty text and empty wrappers is handed to an adapter as `[]`, so an adapter
-// collapses the chrome around it on `length` alone, knowing nothing about node
-// shapes. An ActionSlot marker is a boundary, not content — what is inside it
-// decides — and a head is the document's, not something the screen shows.
-// One rule for a canvas that is served and one that is local, so a frame looks
-// the same over both.
 export const hasVisibleContent = (nodes: readonly RenderNode[]): boolean =>
   nodes.some((node) => {
     if (node.type === 'text') return node.value !== '';
@@ -45,7 +18,6 @@ export const hasVisibleContent = (nodes: readonly RenderNode[]): boolean =>
     return true;
   });
 
-// One canvas, as an adapter is handed it.
 export const canvasTreeOf = (shell: Shell, canvasId: string): RenderNode[] => {
   const tree = shell.flattenRenderTree(shell.getCanvasRenderTree(canvasId));
   return hasVisibleContent(tree) ? tree : [];
@@ -55,10 +27,6 @@ export const shellView = (shell: Shell): ShellView => ({
   api: {
     frame: () => shell.getShellRenderTree(),
     canvasTree: (canvasId) => canvasTreeOf(shell, canvasId),
-    // An event that names no origin belongs to the canvas's ACTIVE instance — on
-    // a card deck that is the only one drawn. One that names its own (an
-    // adapter stamps it at the instance boundary, `scopeDispatch`) keeps it. A
-    // canvas with nothing mounted dispatches unstamped.
     dispatch: (canvasId, event) => {
       const active = shell.getState().canvases[canvasId]?.active;
       shell.dispatch(event.origin === undefined && active !== undefined ? { ...event, origin: active.id } : event);
@@ -86,11 +54,8 @@ export const shellView = (shell: Shell): ShellView => ({
   },
 });
 
-// A WAIT ON THE SHELL, shared by the two below. Resolves `true` once `isBusy`
-// answers no and still answers no a macrotask later — a mount can open another
-// action, which starts initializing in turn, so the question is asked again on
-// every change. Resolves `false` when `waitMs` runs out first, or `stopped`
-// says to give up.
+// Resolves `true` once `isBusy` answers no and still answers no a macrotask
+// later: a mount can open another action, which starts initializing in turn.
 type ShellWaitOptions = { waitMs?: number; stopped?: () => boolean };
 
 const shellQuietWithin = async (shell: Shell, isBusy: () => boolean, options: ShellWaitOptions): Promise<boolean> => {
@@ -111,7 +76,7 @@ const shellQuietWithin = async (shell: Shell, isBusy: () => boolean, options: Sh
           off();
           resolve();
         });
-        // a change that lands with no notification must not leave this waiting
+        // A change that lands with no notification must not leave this waiting.
         setTimeout(() => {
           off();
           resolve();
@@ -127,34 +92,13 @@ const shellQuietWithin = async (shell: Shell, isBusy: () => boolean, options: Sh
 const isMounting = (shell: Shell): boolean =>
   Object.values(shell.getState().canvases).some((canvas) => canvas.stack.some((instance) => instance.status === 'initializing'));
 
-// THE FIRST SCREEN IS WHOLE. An instance is `initializing` until its mount hook
-// — the loads, and whatever they chain to — has been awaited, so "nothing is
-// initializing" is the shell saying its opening screen is complete.
-//
-// Resolves `false` when `waitMs` runs out first: the screen is then drawn as it
-// stands, with whatever is still loading drawn as loading. Default 300ms — a
-// page should not hang on one slow endpoint.
-//
-// It asks about MOUNTS and nothing else, on purpose. A page is read whenever it
-// is asked for — also while a call somebody pressed minutes ago is still out —
-// and that read must not wait on it. `shellIdle` is the wider question.
+// `shellSettled` asks about mounts and nothing else: a page is read whenever
+// it is asked for, also while a call pressed minutes ago is still out, and
+// that read must not wait on it.
 export const DEFAULT_SETTLE_WAIT_MS = 300;
 
 export const shellSettled = (shell: Shell, options: { waitMs?: number; stopped?: () => boolean } = {}): Promise<boolean> =>
   shellQuietWithin(shell, () => isMounting(shell), options);
 
-// NOTHING THE SHELL STARTED IS STILL RUNNING. Nothing is mounting, and no chain
-// is in flight (./chains.ts): no trigger's steps, no message on its way to its
-// listeners, no hook a navigation started. It is what a check awaits after it
-// presses something — the call the press made has answered, what that chained
-// to has run, and an action a `pop` revealed has re-read itself — and what
-// anything that runs an action for somebody else awaits before it reads the
-// screen.
-//
-// It is about THIS shell's own work. A followed read's next body arrives when
-// somebody else writes, and is not waited for; neither is anything outside the
-// shell that an endpoint set going. A call that never answers holds it until
-// the call's own timeout fails it (30s by default), so `waitMs` is what bounds
-// the wait — it resolves `false` when that runs out, as `shellSettled` does.
 export const shellIdle = (shell: Shell, options: { waitMs?: number; stopped?: () => boolean } = {}): Promise<boolean> =>
   shellQuietWithin(shell, () => isMounting(shell) || chainsInFlight(shell) > 0, options);

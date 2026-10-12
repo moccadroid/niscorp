@@ -1,10 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The deal form body — the modal chrome is the `modal` fragment. Company / Stage /
-// Primary contact are id-bearing selects (options load from `options.*`), so
-// `$.company`/`$.stage`/`$.contact` hold real FK ids. Serves both create and edit
-// — the difference is data (whether `$.id` + the fields are seeded); the `upsert`
-// write keys off `$.id`.
 export const dealFormLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 13 },
@@ -27,7 +22,6 @@ export const dealFormLayout: LayoutNode = {
         { component: 'Input', model: '$.close_date', props: { label: 'Close date', type: 'date' } },
       ],
     },
-    // The form's own footer — buttons here, handled by the action's triggers.
     {
       component: 'FormFoot',
       children: [

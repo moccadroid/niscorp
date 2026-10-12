@@ -5,22 +5,6 @@ import { styleGuide, today, ambientContext, channels } from '../knowledge';
 import { componentPalette, actionCatalog } from './producers';
 import { workedExample } from './worked-example';
 
-// ═══════════════════════════════════════════════════════════
-// The action validator — a pure READER. Given the user's intent, the built
-// ActionDefinition, and the harness report, it judges the layer no
-// deterministic check can: does the screen DO what the intent says?
-// Triggers are declarative, so behavior is readable — `ref: "row" → push:
-// { action: "task.form" }` answers "what does clicking a row do" without a
-// click. No tools, no loop: one pass over big input, one small structured
-// verdict. Its `fix` lines are written FOR the architect — they become the
-// change request of a repair run (see run.ts).
-//
-// Its knowledge is the same producers the architect designs with — the
-// palette (to read component props like a Table's clickKey correctly), the
-// LIVE catalog (to judge push targets), the definition schema, and the app's
-// ambient facts. A reader needs everything the writer had.
-// ═══════════════════════════════════════════════════════════
-
 export const FindingSchema = z.object({
   severity: z
     .enum(['blocker', 'wart'])
@@ -55,8 +39,6 @@ export const validatorAgent: AgentDefinition<ValidatorVerdict> = defineAgent<Val
   id: 'action.validator',
   description: 'Judges whether a built ActionDefinition does what the intent says.',
   instructions: INSTRUCTIONS,
-  // The same producers the architect designed with, plus the definition
-  // language itself — a reader needs everything the writer had.
   context: [
     workedExample,
     actionCatalog,

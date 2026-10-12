@@ -1,29 +1,5 @@
-// Run: pnpm --filter lyra exec tsx src/dev/campaigns-check.ts
-//
-// THE STUDIO WRITES TO ITS PEOPLE.
-//
-// One decision by a human — a question, three sentences, a button — becomes
-// one message per person it honestly reaches, through the mail door that
-// already existed. The claims, in the order they would break:
-//
-//   1. THE PARTITION ANSWERS RATHER THAN FILTERS. An automation is right to
-//      select nobody it cannot write to. A compose sheet is not: "39 will be
-//      written to, 2 have opted out" is a sentence a query that already
-//      dropped the two cannot say. Both behaviours ship, over the same people.
-//   2. THE NUMBER ON THE BUTTON IS THE NUMBER THAT GOES. Counted through the
-//      filter the write uses, not through a tally of the screen's reasoning.
-//   3. ONE DECISION, ONE ROW PER PERSON, and the child's addressed to an adult.
-//   4. TWICE IS ONCE. The fan-out is a task, tasks retry, and the index is
-//      what makes a retry cost nobody a second copy.
-//   5. UNTICKING SOMEBODY LEAVES THEM OUT — subtraction from a question.
-//   6. THE CEILING REFUSES THE WHOLE CAMPAIGN, with the number in words. Half
-//      a newsletter is worse than none.
-//   7. NO HUMAN WRITES `outbox`. The charter's sentence, tested rather than
-//      trusted — it is what the whole reflex design exists to keep true.
 process.env['MAIL_SINK'] = 'log';
-// Set HERE rather than read from a developer's .env, and the seed matters:
-// marketing mail with no working opt-out is refused at dispatch, so a check
-// without one would assert against rows that failed for the wrong reason.
+// The seed is set because marketing mail with no working opt-out is refused at dispatch.
 process.env['LYRA_SIGNING_SEED'] = 'campaigns-check-seed';
 process.env['MAIL_FROM_DOMAIN'] = 'mail.lyra.test';
 
@@ -38,10 +14,6 @@ const OWNER = CAST.lumen.owner;
 const rows = async <T>(sql: string, params: unknown[] = []): Promise<T[]> => (await runtime.db.query<T>(sql, params)).rows as T[];
 const count = async (sql: string, params: unknown[] = []): Promise<number> => Number((await rows<{ n: string }>(sql, params))[0]?.n ?? -1);
 
-/** As the studio's own machinery, exactly as the fan-out effect does it —
- *  same principal, same surface, same compiled scope policy. Asking as the
- *  owner instead would answer happily and prove nothing about the rung the
- *  reflex actually runs on. */
 const asMachinery = async (fingerprint: string, context: Record<string, unknown>): Promise<unknown> => {
   const response = await server.request('/api/automation/vex', {
     method: 'POST',
@@ -55,7 +27,6 @@ const asMachinery = async (fingerprint: string, context: Record<string, unknown>
 const ask = (fingerprint: string, context: Record<string, unknown>): Promise<unknown> =>
   asPrincipal(OWNER, '/api/campaigns/vex', { fingerprint, context });
 
-/** Press Send, and let the studio's own machinery do what it does. */
 const send = async (context: Record<string, unknown>): Promise<string> => {
   const created = (await ask('campaigns/create', context)) as { id?: unknown };
   await settle(20);
@@ -68,19 +39,10 @@ const stateOf = async (id: string): Promise<{ state: string; queued_count: numbe
     [id],
   ))[0] ?? { state: '', queued_count: -1, refused_reason: '', sent_at: null };
 
-// ── arrange ──────────────────────────────────────────────────
-//
-// A child ON TRIAL, which is the ordinary way a seven-year-old appears at a
-// studio: a parent brings them to try a class. Consent is the guardian's,
-// recorded on the child's anchor, and the child has no address of their own —
-// so where their mail goes is the mirror's answer, not this check's.
 await runtime.db.query(
   "UPDATE studio_people SET marketing_ok = true, trial_ends_on = studio_today($1) + 14 WHERE person_id = 'p_emma' AND studio_id = $1",
   [LUMEN],
 );
-// Somebody the provider has already told us about. A complaint is a fact about
-// a RELATIONSHIP, so it carries this studio's id — suppressing them everywhere
-// would punish a studio they never complained about.
 await runtime.db.query(
   "INSERT INTO mail_suppressions (address, studio_id, kind, reason) VALUES ('sofia.reyes@example.com', $1, 'complained', 'reported us') ON CONFLICT DO NOTHING",
   [LUMEN],
@@ -93,34 +55,15 @@ ok(
   `${emma[0]?.mail_to} — the anchor's mirror, resynced by trigger, not a rule this check applied`,
 );
 
-// ── 1. answered, not filtered ────────────────────────────────
-//
-// THE GAP THIS FEATURE OPENED WITH. `automation/not-seen-since` filters
-// consent and reachability INSIDE the selection — correctly, because an
-// unsendable automation message is a message that should never exist, and
-// because a consent test outside the read is a test vex cannot invalidate a
-// cache on. Run over the same people, the campaign's question must answer
-// where the automation's drops.
-//
-// THE WINDOW IS AN OFFSET FROM THE STUDIO'S TODAY, never a date written out.
-// It was a literal day in August, a couple of days back when it was written,
-// against a seed that builds its sessions relative to today, so the calendar
-// walked past it: everybody had attended since, "gone quiet" answered nobody,
-// and the assertion below it went on passing on 0 = 0 - 0. automations-check
-// records the same lesson about the same people.
-//
-// Seven days is inside both of the seed's authored silences (db/seed/bookings):
-// Jonas stopped three weeks back and never opted in, so he is the one the sheet
-// must NAME; Sofia stopped ten days back and did, so she is the one the
-// automation must still FIND. Neither depends on the attendance lottery.
+// The window is an offset from the studio's today, because the seed builds its
+// sessions relative to today. Seven days is inside both of the seed's authored
+// silences: Jonas stopped three weeks back and never opted in, so the sheet
+// names him; Sofia stopped ten days back and did, so the automation finds her.
 const SINCE = (await rows<{ d: string }>('SELECT (studio_today($1) - 7)::text AS d', [LUMEN]))[0]?.d ?? '';
 const CUTOFF = { audience: 'quiet', cutoff: SINCE };
 const quietPage = (await ask('campaigns/audience-page', CUTOFF)) as { person_id: string; disposition: string }[];
 const quietAutomation = (await asMachinery('automation/not-seen-since', { cutoff: CUTOFF.cutoff })) as unknown[];
 
-// The disposition IS the why — the entry answers no other column for it. This
-// used to also require a `reason_display` the read has never carried, which
-// held for every row because `undefined` is not the empty string.
 const optedOut = quietPage.filter((p) => p.disposition === 'no_consent');
 ok(
   'the compose sheet names who will not be written to, and why',
@@ -129,7 +72,6 @@ ok(
 );
 ok(
   '...while the automation over the same people drops them, as it should',
-  // Not on an empty answer: nobody and nobody agree about everything.
   Array.isArray(quietAutomation) && quietAutomation.length > 0 && quietAutomation.length === quietPage.length - optedOut.length,
   `${quietPage.length} answered, ${optedOut.length} unwritable, ${(quietAutomation as unknown[]).length} selected by the automation`,
 );
@@ -139,7 +81,6 @@ ok(
   'a list of first names has no business carrying a studio’s mailing list',
 );
 
-// ── 2. the number on the button ──────────────────────────────
 const AUDIENCE = { audience: 'roll/current', audienceDays: 0 };
 const question = { audience: AUDIENCE.audience, cutoff: SINCE };
 const total = (await ask('campaigns/audience-count', question)) as { total: number };
@@ -162,7 +103,6 @@ ok(
   'a complaint is answered on the sheet, not discovered in the outbox',
 );
 
-// ── 3. one decision, one row per person ──────────────────────
 const before = await count('SELECT count(*) n FROM outbox');
 const first = await send({ ...AUDIENCE, excluded: [], subject: 'Winter term starts Monday', body: 'Three sentences, and a warm one.' });
 const queued = await rows<{ person_id: string; to_address: string; marketing: boolean; campaign_id: string }>(
@@ -193,7 +133,6 @@ ok(
   `${settled.state}, ${settled.queued_count} queued`,
 );
 
-// ── 4. the child's mail reached an adult ─────────────────────
 const child = queued.find((r) => r.person_id === 'p_emma');
 ok(
   'a child’s campaign mail is addressed to their guardian',
@@ -206,13 +145,8 @@ ok(
   'two rows, two people, one address — who it is ABOUT and where it GOES are different facts',
 );
 
-// ── 5. twice is once ─────────────────────────────────────────
-//
-// The fan-out is a task and tasks retry; a process that dies between writing
-// the messages and stamping the campaign runs the statement again. Replayed
-// here as the machinery itself, because the reflex would refuse a second time
-// on the selection (`state = 'sending'`) and prove the wrong thing — what is
-// being tested is the INDEX under it.
+// Replayed as the machinery itself, because the reflex would refuse a second
+// time on its selection (`state = 'sending'`): the index under it is what is tested.
 const replay = await asMachinery('campaigns/fan-out', {
   recipients: queued.map((r) => ({ person_id: r.person_id, to_address: r.to_address })),
   campaignId: first,
@@ -226,15 +160,6 @@ ok(
   `still ${queued.length} — ON CONFLICT DO NOTHING against outbox_campaign_person, and it answered ${JSON.stringify(replay).slice(0, 40)}`,
 );
 
-// ── 5b. the read that decides who receives cannot be truncated ──
-//
-// THE BUG THIS PINS SHIPPED ONCE. Every read in this engine gets a limit
-// whether it authors one or not — the pipeline gives a limitless DSL 100 —
-// and on the one read that decides who receives mail that is not a smaller
-// right answer: the hundred-and-first member is never written to and the
-// campaign row stamps itself `sent`. A seeded studio of fifteen people can
-// never notice, which is exactly why this is asserted on the ENTRY rather
-// than on an outcome.
 ok(
   'the recipient read declares its own page size rather than inheriting one',
   campaignAudienceResolve.dsl.limit === RESOLVE_PAGE,
@@ -254,7 +179,6 @@ ok(
   `${firstPage.length} then ${seeked.length} after seeking past ${firstPage[0]?.person_id ?? '—'} — the cursor is the sort key, so it cannot skip or repeat`,
 );
 
-// ── 6. unticking somebody leaves them out ────────────────────
 const struck = queued[0]?.person_id ?? '';
 const second = await send({ ...AUDIENCE, excluded: [struck], subject: 'Not for you', body: 'One sentence.' });
 ok(
@@ -264,11 +188,6 @@ ok(
   `${struck} left out, ${queued.length - 1} written to`,
 );
 
-// ── 7. the ceiling refuses the whole campaign ────────────────
-//
-// Dispatch fails a capped message rather than deferring it — right for a
-// reminder about tomorrow's class, wrong for a newsletter that would go half
-// out. So the fan-out asks BEFORE it writes anything.
 const used = await count("SELECT count(*) n FROM outbox WHERE studio_id = $1 AND created_on = CURRENT_DATE AND state IN ('queued','sending','sent')", [LUMEN]);
 await runtime.db.query('UPDATE studios SET daily_mail_cap = $2 WHERE id = $1', [LUMEN, used + 1]);
 const capped = await send({ ...AUDIENCE, excluded: [], subject: 'Too many', body: 'One sentence.' });
@@ -286,13 +205,6 @@ ok(
 );
 await runtime.db.query('UPDATE studios SET daily_mail_cap = 1000 WHERE id = $1', [LUMEN]);
 
-// ── 8. no human writes the outbox ────────────────────────────
-//
-// The sentence the automation rung's `outbox.write.update` grant is justified
-// by (charter.ts), and the reason a campaign is a row rather than a loop that
-// queues mail. If this ever passes, that paragraph is a lie and the claim,
-// the cap, the suppression list and the sweep have stopped applying to the
-// highest-volume mail in the product.
 const smuggled = (await asPrincipal(OWNER, '/api/campaigns/vex', {
   fingerprint: 'automation/queue-message',
   context: { personId: 'p_ava', toAddress: 'ava.klein@example.com', subject: 'By hand', body: 'x', source: 'by-hand', marketing: true },

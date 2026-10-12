@@ -5,13 +5,6 @@ import { SAFETY_SLIDES } from './safety.actions';
 import { MOSS_SLIDES } from './moss.actions';
 import { censusLayout } from './slide.layouts';
 
-// THE SLIDES. Each is an action only the stage is granted; the deck (`slides`
-// rows) decides which is on screen and in what order, and which tool the
-// speaker's controller shows alongside. The opening is ./opening.actions.ts;
-// the census, which the server counts, is here.
-
-// The app's size, counted from its own source by the server as the slide
-// mounts — never typed in, so never stale.
 export const censusSlide: ActionDefinition = {
   id: 'slide.census',
   title: 'Is JSON enough for a real app?',

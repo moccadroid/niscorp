@@ -5,66 +5,19 @@ import { headOf, isHeadNode, shellView } from '@shell';
 import type { RenderApi, Shell } from '@shell';
 import { createHeadKeeper } from '../../document/head-keeper';
 
-// ═══════════════════════════════════════════════════════════
-// @niscorp/nova/adapters/dom — a vanilla-DOM adapter, the platform sibling of
-// nova/react. It turns a served RenderNode tree into DOM: registry lookup →
-// element, recurse children, and wire events BY CONVENTION — a `ref`'d
-// element dispatches `ui:click`, a `model`'d element dispatches `ui:model`
-// (+ `ui:key`), the payload of a click is the node's `value` prop. Origin is
-// never stamped here — moss stamps the active instance server-side.
-//
-// No framework: the registry maps a component name to a function that builds
-// an element from props + already-rendered children. `CanvasSlot` is resolved
-// here (the frame's markers → per-canvas trees), the one piece of terminal
-// structure the renderer owns; the terminal hands in `canvasTree`/`dispatch`.
-//
-// WHAT DID NOT CHANGE IS NOT DRAWN AGAIN. The view keeps the tree it drew
-// beside the DOM that tree produced, and a render walks the two together: a
-// node that is the same as last time keeps its element — the same DOM node,
-// never taken off the page — and only what differs is built. An element that
-// stays keeps everything the tree does not hold: focus, scroll, selection, an
-// open <details>, a running animation, a timer its component started.
-// See packages/nova/ADAPTER.md for the shared adapter contract, and "The DOM
-// adapter keeps what did not change" there for the rules a kit can rely on.
-// ═══════════════════════════════════════════════════════════
-
 export type DomComponentContext = {
   props: Record<string, unknown>;
-  // the node's children, already rendered — the component appends them where
-  // it wants (most append to their own element; leaves ignore them).
   children: Node[];
-  // the dispatch in force here (canvas-scoped inside a CanvasSlot) — for
-  // data-driven components with INTERNAL interactivity (a table's row clicks,
-  // an inline checkbox); simple components ignore it and let the renderer wire
-  // their `ref`/`model` by convention.
   dispatch: (event: NovaEvent) => void;
-  // The other end of anything the component starts — a timer, an observer, a
-  // subscription. `cleanup` runs once, when the element this call returns
-  // leaves the page for good: it was removed, it was replaced because its own
-  // props changed, or the view was destroyed. An element that stays is not
-  // asked again, so what it started keeps running until then.
   onRemove: (cleanup: () => void) => void;
-  // Say that what this component drew depends on its children — it marked
-  // them, counted them, treated the first unlike the rest — rather than only
-  // holding them. A component that only holds its children has them patched in
-  // place under the element it returned; one that says this is asked again
-  // whenever it would be handed different children, and is handed the ones that
-  // stayed as it left them, so what it does to them it must be able to do twice.
   dependsOnChildren: () => void;
 };
 
-// A DOM component: props + rendered children in, one element out.
 export type DomComponent = (ctx: DomComponentContext) => HTMLElement;
 
-// What the terminal hands the view: core's `RenderApi` (the frame, per-canvas
-// trees, a canvas-scoped dispatch, publish). Aliased, not redeclared, so the
-// dom adapter, the react adapter, and moss's terminal share ONE definition —
-// drift is impossible. CanvasSlot resolution + event routing ride these; the
-// renderer never touches the wire directly.
 export type DomRenderApi = RenderApi;
 
 export type DomView = {
-  // (re)render from the current snapshot; call on every wire change
   render: () => void;
   destroy: () => void;
 };
@@ -75,36 +28,20 @@ const ACTION_SLOT = 'ActionSlot';
 type ComponentRenderNode = Extract<RenderNode, { type: 'component' }>;
 type Dispatch = (event: NovaEvent) => void;
 
-// The recursion context: the registry, the dispatch in force (frame chrome
-// dispatches nothing; a CanvasSlot switches it to that canvas's), publish,
-// and the canvas resolver.
 type Ctx = {
   registry: ComponentRegistry<DomComponent>;
   dispatch: Dispatch;
   api: DomRenderApi;
-  // used when a component name is unregistered — a permissive renderer (the
-  // html terminal's default kit) supplies one so unknown primitives render
-  // their children instead of an error; strict consumers omit it.
   fallback?: DomComponent;
 };
 
-// One node of the tree as it was last drawn, beside the DOM it produced.
 type Mount = {
   node: RenderNode;
-  // the context this node's children are drawn in
   ctx: Ctx;
-  // its top-level DOM nodes: one for a component, a text or an error; a
-  // fragment has no element of its own, so its are its children's
   dom: Node[];
   kids: Mount[];
-  // Where the kids' nodes can be patched in place: the element itself, when it
-  // holds exactly them (`holdsExactly`), or a canvas's own host. `undefined`
-  // when the component put them anywhere else — a change to which nodes it has
-  // then asks the component again.
   host: HTMLElement | undefined;
   cleanups: (() => void)[];
-  // a bound field that may not show what the tree says: it was typed in, or the
-  // tree's value changed while it was being typed in
   field: { stale: boolean };
 };
 
@@ -115,7 +52,6 @@ const errorEl = (code: string, message: string): HTMLElement => {
   return el;
 };
 
-// A tree is JSON, so sameness is structural.
 const equal = (a: unknown, b: unknown): boolean => {
   if (Object.is(a, b)) return true;
   if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
@@ -132,10 +68,8 @@ const withoutValue = (props: Record<string, unknown>): Record<string, unknown> =
 
 const sameNodes = (a: Node[], b: Node[]): boolean => a.length === b.length && a.every((node, i) => node === b[i]);
 
-// (Plain indexed loops on purpose: this runs twice for every component on every
-// render, and measured in Chrome it is what a render of a long list spends its
-// time in. `flatMap` is slower once warm; `for…of` is twice as slow while cold,
-// which is when a first draw happens.)
+// Indexed loops on purpose: this runs twice for every component on every
+// render, and `flatMap` and `for…of` are both slower here.
 const flat = (kids: Mount[]): Node[] => {
   const nodes: Node[] = [];
   for (let i = 0; i < kids.length; i += 1) {
@@ -153,17 +87,12 @@ const canvasIdOf = (node: ComponentRenderNode): string => {
   return typeof canvasId === 'string' ? canvasId : '';
 };
 
-// Which canvas or which instance a slot stands for. A different one in the
-// same place is a different screen, however alike the two look.
 const slotOf = (node: ComponentRenderNode): unknown => {
   if (node.name === CANVAS_SLOT) return node.props['canvasId'];
   if (node.name === ACTION_SLOT) return node.props['instanceId'];
   return undefined;
 };
 
-// Core's `renderNodeKey` names a node among its siblings. Two siblings that
-// share a name (looped rows that share a `ref` and carry no key) are told
-// apart by which of them comes first.
 const keyed = <T>(items: readonly T[], nodeOf: (item: T) => RenderNode): [string, T][] => {
   const seen = new Map<string, number>();
   return items.map((item, i) => {
@@ -174,9 +103,7 @@ const keyed = <T>(items: readonly T[], nodeOf: (item: T) => RenderNode): [string
   });
 };
 
-// Whether two nodes at the same index would be given the same key by core's
-// `renderNodeKey` — asked without building the key. Siblings mostly stay where
-// they are from one render to the next, and then nothing has to be looked up.
+// Whether core's `renderNodeKey` would give the two the same key at one index, without building it.
 const samePlace = (a: RenderNode, b: RenderNode): boolean => {
   if (a.key !== undefined || b.key !== undefined) return a.key === b.key;
   if (a.type === 'component' && b.type === 'component') return a.ref !== undefined || b.ref !== undefined ? a.ref === b.ref : a.name === b.name;
@@ -190,24 +117,15 @@ const gathered = (nodes: Node[]): DocumentFragment => {
   return fragment;
 };
 
-// Whether a component's children can be patched where they stand: only when the
-// element it returned holds exactly the nodes it was handed, in order, and
-// nothing else. Then adding one, taking one out or moving one is what the
-// component would have drawn anyway. Anything else — a wrapper inside, a cell
-// around each, a heading of its own before them — and the adapter cannot know
-// what the component would do with one child more (a kit that wraps each child
-// looks, with a single child, exactly like one that wraps them all), so it asks.
-// What the shape of the element cannot show — a component that marks or counts
-// the children it holds — the component says itself (`dependsOnChildren`).
+// Children are patched in place only when the element holds exactly the nodes
+// it was handed, in order. Anything else and the component is asked again: a kit
+// that wraps each child looks, with one child, like one that wraps them all.
 const holdsExactly = (el: Node, nodes: Node[]): boolean => nodes.length > 0 && el.childNodes.length === nodes.length && nodes.every((node, i) => el.childNodes[i] === node);
 
-// Of the nodes wanted, the longest run that already stands in the wanted order
-// — given where each stood before (-1: it is new). Those stay where they are
-// and the rest are put around them, so a reorder moves as few elements as it
-// can: taking an element out of the page, even to put it straight back,
-// restarts its animations and drops its scroll.
+// The longest run of nodes that already stand in the wanted order, given where
+// each stood before (-1: new). Those stay put: taking an element off the page,
+// even to put it straight back, restarts its animations and drops its scroll.
 const standing = (stoodAt: number[]): Set<number> => {
-  // ends[k]: the wanted index that ends the best run of length k + 1
   const ends: number[] = [];
   const before: number[] = [];
   stoodAt.forEach((stood, i) => {
@@ -232,23 +150,14 @@ const standing = (stoodAt: number[]): Set<number> => {
   return run;
 };
 
-// Read the model value off an event target — a checkbox reports `checked`,
-// everything else `value`.
 const readValue = (target: EventTarget | null): unknown => {
   if (target instanceof HTMLInputElement && target.type === 'checkbox') return target.checked;
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return target.value;
   return '';
 };
 
-// Attach the conventional listeners: a model'd element is an input (dispatch
-// ui:model on change, ui:key on keydown); a bare ref'd element is clickable
-// (dispatch ui:click, payload = its `value` prop). Uniform across every
-// component — the event vocabulary is the convention, not per-component code.
-//
-// The listeners close over the node they were wired for. That is safe because
-// an element is only ever kept for a node that says the same: a different
-// `ref`, `model`, or prop builds a new element with new listeners (a bound
-// field's `value` aside, which no listener reads).
+// The listeners close over `node`: an element is only kept for a node with the
+// same `ref`, `model` and props, a bound field's `value` aside, which none reads.
 const wireEvents = (el: HTMLElement, node: ComponentRenderNode, dispatch: Dispatch, field: { stale: boolean }): void => {
   if (node.model !== undefined) {
     const ref = node.model.ref;
@@ -270,9 +179,7 @@ const wireEvents = (el: HTMLElement, node: ComponentRenderNode, dispatch: Dispat
       }, debounce);
       pending = { value, timer };
     });
-    // Leaving the field sends what was still waiting (ADAPTER.md, obligation 6).
-    // Caught on the way down: blur does not bubble, and the field may sit
-    // inside the component's element rather than be it.
+    // Captured: blur does not bubble, and the field may sit inside the component's element.
     el.addEventListener(
       'blur',
       () => {
@@ -299,11 +206,9 @@ const wireEvents = (el: HTMLElement, node: ComponentRenderNode, dispatch: Dispat
   }
 };
 
-// The per-instance boundary a served tree carries. A list canvas renders
-// several live instances at once, so a click inside THIS boundary must reach
-// THIS instance: its events carry it as their origin (the server's
-// active-instance fallback only holds for a card-deck canvas). An event that
-// already has an origin keeps it — moss's react terminal does the same.
+// A list canvas shows several live instances at once, so an event inside an
+// ActionSlot carries that instance as its origin: the server's active-instance
+// fallback is right only for a card-deck canvas.
 const inInstance = (node: RenderNode, ctx: Ctx): Ctx => {
   if (node.type !== 'component' || node.name !== ACTION_SLOT) return ctx;
   const instanceId = node.props['instanceId'];
@@ -312,14 +217,9 @@ const inInstance = (node: RenderNode, ctx: Ctx): Ctx => {
   return { ...ctx, dispatch: (event) => outer(event.origin === undefined ? { ...event, origin: instanceId } : event) };
 };
 
-// A field a person types in — where what is being typed must not be written
-// over. A checkbox or a radio has no "being typed": it is on or off, and the
-// tree's answer shows at once.
 const isTypedIn = (el: Element | null): el is HTMLInputElement | HTMLTextAreaElement =>
   el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && el.type !== 'checkbox' && el.type !== 'radio');
 
-// What such a field holds that is not in the tree: what is being typed, and
-// where the caret is.
 type Typing = { value: string; start: number | null; end: number | null };
 
 const typingIn = (el: Element | null): Typing | undefined => (isTypedIn(el) ? { value: el.value, start: el.selectionStart, end: el.selectionEnd } : undefined);
@@ -328,14 +228,10 @@ const placeCaret = (el: HTMLInputElement | HTMLTextAreaElement, typing: Typing):
   try {
     el.setSelectionRange(typing.start ?? el.value.length, typing.end ?? el.value.length);
   } catch {
-    /* selectionRange throws on some input types — harmless */
+    /* setSelectionRange throws on input types that have no selection (email, number) */
   }
 };
 
-// Where a node sits under `root`, as the child index at each level — and the
-// node that sits there. Markup drawn ahead of time and the first render over it
-// are the same elements in the same places, so this is how an element of the
-// one finds its twin in the other.
 const placeUnder = (root: Node, node: Node): number[] | undefined => {
   const place: number[] = [];
   let at: Node = node;
@@ -357,27 +253,18 @@ export const createDomView = (
   api: DomRenderApi,
   options: { fallback?: DomComponent } = {},
 ): DomView => {
-  // The frame dispatches nothing (chrome); only a CanvasSlot's subtree does.
   const top: Ctx = { registry, dispatch: () => undefined, api, ...(options.fallback !== undefined ? { fallback: options.fallback } : {}) };
   let mounts: Mount[] = [];
-  // Whatever is in the root before the first render is not this view's: markup
-  // that arrived with the page is replaced by the first render, once.
   let drawn = false;
-  // Counts every node built and every write to the page, so a component can
-  // tell "nothing below me changed" from "something did".
   let writes = 0;
-  // Focus is the element's, so it follows the element: `from` held it when the
-  // render began, `to` is what was built in its place if it had to be.
   const refocus: { from: Element | null; to: HTMLElement | undefined } = { from: null, to: undefined };
-  // a bound component's field state (Mount.field), found from its element
   const fields = new WeakMap<Node, { stale: boolean }>();
 
   const builderOf = (node: ComponentRenderNode, ctx: Ctx): DomComponent | undefined => ctx.registry.get(node.name)?.component ?? ctx.fallback;
 
   const leaf = (node: RenderNode, ctx: Ctx, el: Node): Mount => ({ node, ctx, dom: [el], kids: [], host: undefined, cleanups: [], field: { stale: false } });
 
-  // The element is going: whatever its component started stops. Its kids are
-  // not touched — they may be living on under the element built in its place.
+  // Only its own cleanups: its kids may live on under the element built in its place.
   const leave = (mount: Mount): void => {
     if (mount.cleanups.length === 0) return;
     for (const cleanup of mount.cleanups.splice(0)) cleanup();
@@ -388,9 +275,6 @@ export const createDomView = (
     for (const kid of mount.kids) drop(kid);
   };
 
-  // Ask the component for its element. Children go in as they always have: one
-  // Node per child, a fragment child (a loop) as a DocumentFragment. Kids that
-  // were on the page already are moved into the new element by the component.
   const assemble = (node: ComponentRenderNode, ctx: Ctx, kids: Mount[], replaced?: Mount): Mount => {
     if (replaced !== undefined) leave(replaced);
     const builder = builderOf(node, ctx);
@@ -398,7 +282,6 @@ export const createDomView = (
       for (const kid of kids) drop(kid);
       return leaf(node, ctx, errorEl('COMPONENT_NOT_FOUND', node.name));
     }
-    // a head among them draws nothing, so the component is not handed one
     const children = kids.filter((kid) => !isHeadNode(kid.node)).map((kid): Node => {
       const [only] = kid.dom;
       if (kid.node.type !== 'fragment' && only !== undefined) return only;
@@ -440,23 +323,16 @@ export const createDomView = (
       const canvasId = canvasIdOf(node);
       const host = document.createElement('div');
       host.setAttribute('data-canvas', canvasId);
-      // Switch dispatch to this canvas's; the server stamps origin, so the
-      // terminal just tags the canvas.
       const canvasCtx: Ctx = { ...ctx, dispatch: (event) => ctx.api.dispatch(canvasId, event) };
       const kids = canvasId === '' ? [] : ctx.api.canvasTree(canvasId).map((child) => build(child, canvasCtx));
       host.append(...flat(kids));
       return { node, ctx: canvasCtx, dom: [host], kids, host, cleanups: [], field: { stale: false } };
     }
-    // A head is the document's, not the screen's: no element, for it or for what it holds.
     if (isHeadNode(node)) return { node, ctx, dom: [], kids: [], host: undefined, cleanups: [], field: { stale: false } };
     if (builderOf(node, ctx) === undefined) return leaf(node, ctx, errorEl('COMPONENT_NOT_FOUND', node.name));
     return assemble(node, ctx, node.children.map((child) => build(child, ctx)));
   };
 
-  // Make `host` hold `after` where it held `before`: what left is taken out,
-  // what is new is put in, and a node that already stands where it belongs is
-  // not touched. The writes are as few as they can be: nodes that go in side by
-  // side go in together, and a host none of whose nodes stay is refilled in one.
   const place = (host: HTMLElement, before: Node[], after: Node[]): void => {
     if (sameNodes(before, after)) return;
     const wanted = new Set(after);
@@ -472,8 +348,6 @@ export const createDomView = (
     }
     const stoodAt = new Map(before.map((node, i) => [node, i]));
     const stays = standing(after.map((node) => stoodAt.get(node) ?? -1));
-    // right to left: what goes in between two nodes that stay is gathered, and
-    // put in before the one on its right
     let anchor: Node | null = null;
     let run: Node[] = [];
     const putIn = (): void => {
@@ -494,10 +368,7 @@ export const createDomView = (
     putIn();
   };
 
-  // Siblings are matched by key. A match is patched, a node with no match is
-  // built, and what was drawn and has no match any more is let go.
   const reconcile = (olds: Mount[], nexts: readonly RenderNode[], ctx: Ctx): Mount[] => {
-    // the usual case: the same siblings in the same places
     if (olds.length === nexts.length && olds.every((old, i) => samePlace(old.node, nexts[i] ?? old.node))) {
       return olds.map((old, i) => patch(old, nexts[i] ?? old.node, ctx));
     }
@@ -528,16 +399,15 @@ export const createDomView = (
       return old;
     }
     if (prev.type === 'fragment' && next.type === 'fragment') {
-      // no element of its own: the host above it puts its nodes in place
+      // No element of its own: the host above it puts its nodes in place.
       old.kids = reconcile(old.kids, next.children, old.ctx);
       old.dom = flat(old.kids);
       old.node = next;
       return old;
     }
     if (prev.type !== 'component' || next.type !== 'component') return equal(prev, next) ? old : afresh();
-    // A different component, or a different canvas or instance in the same
-    // place: nothing of the old one is kept. Its listeners dispatch as the old
-    // instance; kept, a press would reach an instance that is no longer here.
+    // A different component, canvas or instance in the same place keeps nothing
+    // of the old one: its listeners would go on dispatching as the old instance.
     if (prev.name !== next.name || !Object.is(slotOf(prev), slotOf(next))) return afresh();
 
     if (isHeadNode(next)) {
@@ -562,25 +432,20 @@ export const createDomView = (
     if (next.model !== undefined) {
       const active = el.ownerDocument?.activeElement ?? null;
       if (isTypedIn(active) && el.contains(active)) {
-        // WHILE A BOUND FIELD IS BEING TYPED IN, what the person is typing wins
-        // over the tree (ADAPTER.md, obligation 6) — so a tree that differs only
-        // in the field's value is not a reason to build another field. The one
-        // being typed in stays, with its caret, its composition and its pending
-        // debounce; it is marked as showing something the tree does not say.
+        // While a bound field is being typed in, the typing wins: a tree that differs only in
+        // the field's value keeps the field, with its caret, composition and pending debounce.
         if (!own && prev.ref === next.ref && equal(prev.model, next.model) && equal(withoutValue(prev.props), withoutValue(next.props))) {
           old.field.stale = true;
           own = true;
         }
       } else if (old.field.stale) {
-        // Released — or never a field one types in (a checkbox that was
-        // pressed): the tree's value is the field's again. How a value is shown
-        // is the kit's business, so the kit is asked for the field afresh.
+        // No longer typed in, or a checkbox that was pressed: the tree's value
+        // is the field's again. How a value is shown is the kit's business, so
+        // the kit is asked for the field afresh.
         own = false;
       }
     }
 
-    // what the component was handed, child by child — asked only of one that
-    // did something of its own with its children
     const handed = old.host === undefined ? old.kids.map((kid) => kid.dom) : undefined;
     const before = flat(old.kids);
     const mark = writes;
@@ -593,25 +458,18 @@ export const createDomView = (
     };
     if (own) {
       if (old.host !== undefined) {
-        // Its element holds exactly its children's nodes, so they are put in
-        // place there. (Down to none at all is left to the component: it may
-        // draw itself differently when empty.)
+        // Down to none is left to the component: it may draw itself differently when empty.
         if (after.length > 0) {
           place(old.host, before, after);
           return kept();
         }
       } else if (handed !== undefined && handed.length === kids.length && kids.every((kid, i) => sameNodes(handed[i] ?? [], kid.dom))) {
-        // It did something of its own with its children, and it would be handed
-        // the same nodes, child for child, so it would draw the same. Whatever
-        // changed further down was patched where it stands — which is on the
+        // It would be handed the same nodes, so it would draw the same. What
+        // changed further down was patched where it stands, which is on the
         // page only if this component put its children on the page.
         if (writes === mark || after.every((node) => el.contains(node))) return kept();
       }
     }
-    // Its own props changed, or its children changed where they cannot be
-    // reached: ask the component again. What is below was reconciled all the
-    // same, so a descendant that did not change is the same node in the new
-    // element — moved, not rebuilt.
     return assemble(next, old.ctx, kids, old);
   };
 
@@ -620,8 +478,7 @@ export const createDomView = (
     const active = doc.activeElement !== null && root.contains(doc.activeElement) ? doc.activeElement : null;
     const typing = typingIn(active);
     // The first render replaces markup that arrived with the page. Somebody may
-    // already be in it — in a field, typing — so where they are is noted, to be
-    // found again in the elements drawn over it.
+    // already be typing in it, so where they are is noted.
     const adopted = !drawn && active !== null ? placeUnder(root, active) : undefined;
     refocus.from = active;
     refocus.to = undefined;
@@ -631,10 +488,8 @@ export const createDomView = (
     mounts = reconcile(mounts, api.frame(), top);
     place(root, before, flat(mounts));
     const twin = adopted === undefined ? undefined : nodeUnder(root, adopted);
-    // An element that stayed where it was still has focus. One that was moved
-    // lost it in the move, and one that was built again never had it: give it
-    // back — and to a field built again, what was being typed in the one it
-    // replaced, because the in-progress value wins over the tree's.
+    // An element that was moved lost focus in the move, and one built again never had it.
+    // A field built again also gets what was being typed in the one it replaced.
     const rebuilt = refocus.to ?? (twin instanceof HTMLElement && twin.tagName === active?.tagName ? twin : undefined);
     const target = rebuilt ?? (active instanceof HTMLElement && active.isConnected ? active : undefined);
     refocus.from = null;
@@ -659,17 +514,6 @@ export const createDomView = (
   return { render, destroy };
 };
 
-// A SHELL THAT LIVES IN THIS PAGE, drawn into `root` and kept current: the
-// shell's own view (`shellView`), this adapter over it, and a render on every
-// change — which touches only what that change touched. The whole of a browser
-// entry for an app whose shell runs in the browser:
-//
-//   mountShell(root, registry, await boot());
-//
-// A `root` that already holds the same screen as markup — drawn ahead of time
-// by `renderToString` (./server) from the same boot — is picked up by the first
-// render: it replaces those elements with the same elements in one step, so
-// nothing can disagree with them. From the second render on, elements stay.
 export const mountShell = (
   root: HTMLElement,
   registry: ComponentRegistry<DomComponent>,
@@ -677,9 +521,7 @@ export const mountShell = (
   options: { fallback?: DomComponent } = {},
 ): { destroy: () => void } => {
   const view = shellView(shell);
-  // ONE READING OF THE SHELL PER RENDER. The view draws from it and the page's
-  // head is read off the same trees, so keeping the head costs a walk over
-  // what was just drawn and never a second render of the shell.
+  // One reading of the shell per render: the head is read off the trees the view just drew.
   let read: { frame?: RenderNode[]; trees: Map<string, RenderNode[]> } = { trees: new Map() };
   const api: DomRenderApi = {
     ...view.api,
@@ -697,7 +539,6 @@ export const mountShell = (
   const render = (): void => {
     read = { trees: new Map() };
     dom.render();
-    // a root that is not on a page has no head to keep
     if (root.isConnected) keepHead(headOf(api)?.elements);
   };
   render();

@@ -1,17 +1,5 @@
 import type { ActionFragment } from '@niscorp/nova';
 
-// The chrome a PREVIEWED layout wears.
-//
-// The preview action's layout is not ours — it is whatever the app server sent
-// back for the action being inspected, registered onto this shell and pushed.
-// So the frame around it cannot live in the layout: it is composed on at push
-// time, exactly the way atrium's own sheet chrome wraps eight different actions
-// without knowing what any of them are.
-//
-// What renders inside is the real thing: real components from the real kit, no
-// endpoints and no triggers, filled with sample data derived from the layout's
-// own bindings (see sample.ts — a layout says exactly which fields it will
-// touch, so the shape is already written down).
 export const previewFragment: ActionFragment = {
   kind: 'fragment',
   id: 'preview',
@@ -49,8 +37,6 @@ export const previewFragment: ActionFragment = {
             ],
           },
         },
-        // The app's own ground, so the layout sits on the surface it was drawn
-        // for rather than on our panel.
         { component: 'Box', props: { grow: true, scroll: true, shrink: true, bg: 'ground', px: 16, py: 16 }, children: { slot: 'body' } },
       ],
     },

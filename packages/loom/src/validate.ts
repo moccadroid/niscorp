@@ -2,18 +2,10 @@ import type { Shell } from '@niscorp/nova';
 import type { ZodType } from 'zod';
 import { ERROR_NAMESPACE } from './compile/to-nova.js';
 
-// Validate-on-edit. The Zod schema is the truth: on each change, the working
-// document (everything except the reserved error channel) is parsed, and a
-// nested error tree — mirroring the document, keyed by Zod's issue paths —
-// is written back under that channel for the fields to bind to. The document
-// itself stays clean; `onDocument` reports it without the error channel.
-
 type Doc = Record<string, unknown>;
 
 type Issue = { readonly path: ReadonlyArray<PropertyKey>; readonly message: string };
 
-// Place a message at a nested path, mirroring the document shape. First issue
-// per path wins (the most specific message Zod emits first).
 const setPath = (root: Doc, path: ReadonlyArray<PropertyKey>, message: string): void => {
   let node = root;
   for (let i = 0; i < path.length - 1; i += 1) {
@@ -51,7 +43,7 @@ export const attachValidation = (
   const handle = (data: Doc): void => {
     const document = stripErrors(data);
     const fingerprint = JSON.stringify(document);
-    if (fingerprint === lastDocument) return; // our own error write — not a real edit
+    if (fingerprint === lastDocument) return; // our own error write, arriving back as a change
     lastDocument = fingerprint;
 
     const result = schema.safeParse(document);

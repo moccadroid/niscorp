@@ -1,27 +1,5 @@
-// Encore's Postgres schema, run once against PGlite at boot.
-//
-// Three kinds of table, and the difference matters to the intent loop:
-//
-//   THE BILL     — stages, acts, slots. What is supposed to happen. `slots` is
-//                  the running order and the only one of these anybody edits.
-//   THE SITE     — zones, gates, crew. Where things are and who is on them.
-//   THE READINGS — weather_hours, zone_counts, sales_hourly, incidents. What is
-//                  actually happening, hour by hour. Nobody writes these from a
-//                  screen; they are the fixture's instruments.
-//   THE LEDGER   — delays, pushes. What the ops tent DID. Insert-only, stamped
-//                  with who did it by the engine, never by the form.
-//   THE THREAD   — agent_turns. What was SAID, and what either speed made of
-//                  it: the text model's memory, as rows (DESIGN.md).
-//
 // Vex introspects this DDL to compile the authored queries, so the foreign keys
-// are load-bearing: `slots → acts` and `slots → stages` are the joins every
-// running-order read rides.
-//
-// `label` and `search` are GENERATED. A candidate row leaves the process as a
-// label — a name plus one disambiguator — and is found by a lowercase search
-// document. Both are derivations of columns already here, so the database
-// derives them; a seed that spelled them out would be one fact in three places.
-
+// are load-bearing: they are the joins the reads ride.
 export const DDL = /* sql */ `
   -- What vex's fuzzy filter compiles to is the pg_trgm % operator. The
   -- extension is loaded into PGlite by the runtime; this switches it on.

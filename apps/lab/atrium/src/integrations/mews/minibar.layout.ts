@@ -1,12 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The honesty bar. Every item is a Mews catalogue row with its price.
-//
-// Tapping CHOOSES; a separate press charges it. It used to post the moment you
-// touched a tile, which made a mis-tap money on your bill with nothing to undo
-// it — and the guest's only recourse was to message the desk, which is how we
-// ended up needing folio adjustment at all. Tap the chosen one again to
-// unchoose it.
 export const minibarLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 16 },

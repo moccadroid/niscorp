@@ -1,11 +1,6 @@
 import type { Unsubscribe } from '../common';
 import type { ChannelHandler, MessageBus } from './types';
 
-// ═══════════════════════════════════════════════════════════
-// Pure channel-based message bus. Internal subscriber map;
-// does NOT depend on the event bus.
-// ═══════════════════════════════════════════════════════════
-
 export const createMessageBus = (): MessageBus => {
   const handlers = new Map<string, ChannelHandler[]>();
 
@@ -15,9 +10,7 @@ export const createMessageBus = (): MessageBus => {
     for (const handler of list.slice()) {
       try {
         handler(payload, from, cause);
-      } catch {
-        // handler errors must not crash the bus
-      }
+      } catch {}
     }
   };
 

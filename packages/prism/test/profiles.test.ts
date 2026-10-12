@@ -3,11 +3,6 @@ import { getConfigJsonSchema, getProfileJsonSchema, MAPPING_OPS, type JsonSchema
 import { narrowConfigJsonSchema } from '../src/engine/documentation';
 import { OP_KEYS } from '../src/schemas/node.schema';
 
-// A profile narrows what the config schema DOCUMENTS to some ops, derived
-// from the full schema. It must document exactly its ops, keep everything that
-// is not an op, leave no dangling or orphaned definition — and never touch the
-// full schema, which is what validation and the grammar gate read.
-
 type Json = Record<string, unknown>;
 const isObject = (value: unknown): value is Json => typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -18,9 +13,6 @@ const unwrapRef = (value: unknown): unknown => {
   return isObject(only) && '$ref' in only ? only : value;
 };
 
-// The schema in the other spelling: every `$ref` with keywords beside it moved
-// into `allOf: [{ $ref }]` — what zod writes for drafts 4–7 in every version but
-// 4.3, the one this workspace locks. Without it the tests could not see them.
 const respell = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(respell);
   if (!isObject(value)) return value;
@@ -105,10 +97,7 @@ describe.each(CASES)('the mapping profile ($name)', ({ target, wrapped, full: fu
 
   it('keeps every alternative that is not an op, the plain-object key pattern included', () => {
     expect(otherAlternatives(profile)).toEqual(otherAlternatives(full));
-    // The template branch still refuses EVERY op name as a key, documented or
-    // not — wherever the draft can say so: draft-4 has no `propertyNames`. Held
-    // to what the pattern does, not to how it is spelled: every op name fails
-    // it, a plain key passes.
+    // The template branch refuses every op name as a key wherever the draft can say so: draft-4 has no `propertyNames`.
     const templateKeyPatterns = (schema: Json): RegExp[] =>
       alternativesOf(schema).flatMap((alternative) => {
         const names = isObject(alternative) ? alternative['propertyNames'] : undefined;

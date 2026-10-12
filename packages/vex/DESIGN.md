@@ -151,21 +151,29 @@ JSON Schema and better model adherence.
 
 ### Scope
 
-Two pure functions over the DSL:
+Three functions, in two stages:
 
 - `discoverEntities(dsl)` walks every place an entity name can appear — `from`,
   field paths, filter paths (recursively through `and`/`or`/`not`), compute and
   aggregate references, `groupBy`, `sort`, and into subqueries — and returns the
   set of referenced entities. No schema needed; pure string extraction.
-- `applyScope(dsl, entities, policy)` looks up each discovered entity in the
-  policy and produces a new DSL. `public` rules pass through; `deny` (or no rule
-  under a `default: 'deny'` policy) throws `VexScopeError`; filter rules become
-  `{ eq|neq|in: ["entity.field", { $scope: "source" }] }` clauses AND-merged
-  into the existing filter. It recurses into subqueries.
+- `checkScope(entities, policy)` looks up each discovered entity in the policy.
+  `public` rules pass; `deny` (or no rule under a `default: 'deny'` policy)
+  throws `VexScopeError`. It runs before resolution and changes nothing.
+- `scopeResolved(resolved, policy)` places each table's row rules on the
+  resolved query, as `column = $scope` predicates: in WHERE for a driving or
+  inner-joined table, in the join's ON for a left-joined one, and inside every
+  subquery and `exists`. It runs after resolution, because where a rule goes
+  depends on how its table is joined (see decision 4 under *Key design
+  decisions*).
 
-Scope runs after generation and before resolution. The resolver, analyzer, and
-compiler never know scope exists — they just process a DSL that happens to carry
-extra filter clauses.
+The analyzer and the compiler never know scope exists: they process a resolved
+query that happens to carry extra predicates.
+
+`applyScope(dsl, entities, policy)` is deprecated. It runs `checkScope` and
+returns the query as it came, with no row rule added; a caller that needs rows
+filtered goes through the engine, or calls `scopeResolved` on the resolved
+query.
 
 ### Engine (deterministic pipeline)
 

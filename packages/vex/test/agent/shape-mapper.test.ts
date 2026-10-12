@@ -2,9 +2,6 @@ import { describe, it, expect } from 'vitest';
 import type { SignalClient } from '@niscorp/cortex';
 import { createShapeMapper, rowsFitShape } from '../../src/agent/index.js';
 
-// Rows that already ARE the shape skip the mapping agent: the identity IR,
-// no model call. Everything else still maps.
-
 describe('rowsFitShape', () => {
   it('fits a flat array shape whose keys and kinds the rows already have', () => {
     expect(rowsFitShape([{ name: 'Ada', count: 3 }], [{ name: '', count: 0 }])).toBe(true);
@@ -35,7 +32,6 @@ describe('rowsFitShape', () => {
 });
 
 describe('createShapeMapper', () => {
-  // A client that fails the test if the mapper ever asks it anything.
   const called = (): never => {
     throw new Error('the model was called');
   };

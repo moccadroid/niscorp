@@ -1,8 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Phone-shaped: a narrow column, generous targets, no table. The same `Rows`
-// primitive would work and would be wrong — this is a list of jobs, read at
-// arm's length.
 export const serviceTasksLayout: LayoutNode = {
   component: 'Box',
   props: {},

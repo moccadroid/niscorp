@@ -30,9 +30,6 @@ describe('event bus — typed NovaEvent', () => {
     const handler = vi.fn();
     bus.on(/^ui:/, handler);
     bus.emit({ type: 'ui:click', ref: 'a' });
-    // What an input carries rides in `payload` — a ui event has no `value`
-    // field, and never has. Excess-property checking was the only thing that
-    // would have said so, and it was switched off for this whole directory.
     bus.emit({ type: 'ui:input', ref: 'b', payload: 'y' });
     expect(handler).toHaveBeenCalledTimes(2);
   });
@@ -113,7 +110,6 @@ describe('event bus — generic + scoped', () => {
     const childHandler = vi.fn();
     child.on('tick', childHandler);
     bus.emit({ type: 'tick' });
-    // Parent emissions do NOT bubble down to children.
     expect(childHandler).not.toHaveBeenCalled();
   });
 });

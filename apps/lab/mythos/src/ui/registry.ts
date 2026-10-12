@@ -4,8 +4,6 @@ import { Button, Card, Checkbox, Chip, Input, Meter, Stack, Surface, Text, TextA
 import { Doodle } from './doodle';
 import { Confetti } from './confetti';
 
-// The one registry, assembled once (AGENTS rule 2). Every component is a
-// domain-blind primitive; registerAll picks up each component's static meta.
 export const createAppRegistry = (): ComponentRegistry => {
   const registry = createComponentRegistry();
   registry.registerAll({

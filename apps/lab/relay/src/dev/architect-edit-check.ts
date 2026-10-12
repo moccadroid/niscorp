@@ -1,13 +1,3 @@
-// The REFINEMENT loop, held to oracles. Build the byMonth screen, then ask
-// for ONE small change — "add September" — and verify like a skeptic:
-//   1. the change LANDED (a September option with the right literals —
-//      2026-09-01..2026-09-30; 30 days is itself a calendar trap),
-//   2. the September query is REAL (replay the artifact's fingerprint with
-//      those literals; count must equal SQL truth),
-//   3. nothing else DRIFTED (canonical-JSON diff per top-level section —
-//      an edit that rebuilds the world to add an option is a failure even
-//      when the option works),
-//   4. the edited screen still RENDERS its rows live.
 import { shell, runtime } from './check-shell';
 import { architectLlms, runActionArchitect } from '@relay/server/functions/ray/architect';
 import { rayEngine, type RayContext } from '@relay/server/functions/ray/engine';
@@ -79,7 +69,6 @@ const main = async (): Promise<void> => {
   if (!edited.ok) { console.error('edit failed:', edited.error, edited.issues ?? ''); process.exit(1); }
   console.log(`edited in ${Math.round((Date.now() - t1) / 1000)}s`);
 
-  // 1 — the change landed, with the right literals
   const editedJson = JSON.stringify(edited.action);
   const hasSeptember = editedJson.includes('September');
   const sepStart = editedJson.includes('2026-09-01');
@@ -87,7 +76,6 @@ const main = async (): Promise<void> => {
   const sepEndBad = editedJson.includes('2026-09-31');
   console.log(`1. change landed   : September=${hasSeptember} start-ok=${sepStart} end-ok=${sepEndOk}${sepEndBad ? '  END 2026-09-31 DOES NOT EXIST' : ''}`);
 
-  // 2 — the September query is real: replay the artifact's fingerprint
   const fp = /"(fp_[0-9a-f]{16})"/.exec(editedJson)?.[1];
   let sepVerdict = 'no fp found';
   if (fp !== undefined) {
@@ -106,14 +94,12 @@ const main = async (): Promise<void> => {
   }
   console.log('2. September query :', sepVerdict);
 
-  // 3 — drift per section
   const drifted: string[] = [];
   for (const key of ['data', 'endpoints', 'triggers', 'lifecycle', 'layout']) {
     if (section(built.action, key) !== section(edited.action, key)) drifted.push(key);
   }
   console.log('3. sections changed:', drifted.join(', ') || '(none)');
 
-  // 4 — still renders
   const editedRows = await mountRows(edited.action);
   console.log(`4. edited renders  : ${editedRows} rows (was ${baseRows})`);
 

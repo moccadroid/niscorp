@@ -1,9 +1,5 @@
 import type { ActionFragment } from '@niscorp/nova';
 
-// THE SHEET — chrome for anything opened over the screen (rule 3: modality is
-// arrangement). An action pushed onto the `overlay` canvas `with: ['sheet']`
-// gets a title row, a Close that pops it, and its own layout as a body that
-// scrolls inside itself. The action never knows it is in a sheet.
 export const sheetFragment: ActionFragment = {
   kind: 'fragment',
   id: 'sheet',

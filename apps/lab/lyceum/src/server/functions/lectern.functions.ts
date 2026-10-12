@@ -6,16 +6,11 @@ import { loginIssue } from '@lyceum/app/vex/login.entries';
 import { hashLinkToken, LINK_TTL_MS } from '../login';
 import type { SendMail } from '../mail';
 
-// THE SPEAKER'S SIGN-IN DESK (actions/lectern/) — asking for a link. A
-// function for what cannot be data: an outside call (the mail). It mails a
-// one-time link if the address is the speaker's — only the one address the
-// deployment names (LYCEUM_SPEAKER_EMAIL) ever gets one — and answers the same
-// either way, so the desk says nothing about which address that is. The link
-// is stored as the `gatekeeper` machinery role: nobody is signed in yet.
+// `lectern.request` mails a link only to the speaker's address and answers the
+// same either way, so the desk says nothing about which address that is.
 
 export type SpeakerMail = {
   publicUrl: string;
-  // The speaker's address. Empty: nobody can ask for a link, only `pnpm mint`.
   speakerEmail: string;
   send: SendMail;
 };

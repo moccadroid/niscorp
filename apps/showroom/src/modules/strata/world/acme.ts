@@ -4,18 +4,6 @@ import { NOVA_SEQUENCE } from '@niscorp/nova/migrations';
 import { evaluate } from '@niscorp/prism';
 import { PRISM_SEQUENCE } from '@niscorp/prism/migrations';
 
-// ═══════════════════════════════════════════════════════════
-// Acme Studio — the one app every strata page follows.
-//
-// Four releases over a year. Each of the last three changes the app's component
-// kit in a way that breaks every screen saved before it: a prop renamed, a
-// prop's values changed, a component renamed. Each change ships ONE migration —
-// a Prism config over one layout node — appended to the kit's grammar.
-//
-// Everything below is real: nova's and Prism's grammars as they ship, strata's
-// upgrader, Prism's evaluator. Only the app is made up.
-// ═══════════════════════════════════════════════════════════
-
 const node = { $ref: '$.document' };
 const componentIs = (name: string) => ({ $eq: [{ $get: { from: node, path: ['component'], fallback: null } }, { $const: name }] });
 const hasProp = (key: string) => ({ $has: { from: node, path: ['props', key] } });
@@ -56,8 +44,6 @@ export type Release = {
   name: string;
   when: string;
   change: string;
-  // What a screen saved BEFORE this release looks like when this release's kit
-  // draws it raw — and what a screen saved AT it looks like to the kit before.
   breaksOlder?: string;
   breaksNewer?: string;
   migration?: { description: string; transform: unknown };
@@ -96,8 +82,6 @@ export const RELEASES: readonly Release[] = [
 
 export const LATEST = RELEASES.length - 1;
 
-// The kit's grammar as release `n` ships it: the first `n` migrations. It owns a
-// document kind (its props) the way a real app kit does — lyceum.kit is the model.
 export const kitAt = (n: number): Sequence => ({
   id: 'acme.kit',
   documents: { props: { embeds: {} } },
@@ -109,7 +93,6 @@ export const kitAt = (n: number): Sequence => ({
 
 export const grammarsAt = (n: number): readonly Sequence[] => [NOVA_SEQUENCE, PRISM_SEQUENCE, kitAt(n)];
 
-// What a document written by release `n` carries.
 export const stampAt = (n: number): Stamp => ({
   'nisc.nova': NOVA_SEQUENCE.migrations.length,
   'nisc.prism': PRISM_SEQUENCE.migrations.length,
@@ -127,9 +110,6 @@ export const upgraderAt = (n: number): Promise<Upgrader> => {
 
 export const KIND = 'nisc.nova/action';
 
-// The Classes screen as release v1 wrote it. Every later shape of it is derived
-// below by the real upgrader — so the document "saved by v3" is exactly what v3
-// would have written, not a hand-copied guess.
 export const CLASSES_V1 = {
   id: 'acme.classes',
   title: 'Classes',
@@ -175,6 +155,5 @@ export const CLASSES_V1 = {
 
 export type Doc = Record<string, unknown>;
 
-// The Classes screen exactly as release `n` would have saved it.
 export const classesAt = async (n: number): Promise<Doc> =>
   (await upgraderAt(n)).upgrade(CLASSES_V1, { kind: KIND, stamp: stampAt(0) }).document;

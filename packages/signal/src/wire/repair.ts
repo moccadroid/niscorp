@@ -1,39 +1,6 @@
-// ═══════════════════════════════════════════════════════════
-// JSON wire repair — pure mechanisms over model-emitted bytes
-// ═══════════════════════════════════════════════════════════
-//
-// "Models mangle JSON on the wire" is PROVIDER knowledge, so the
-// mechanisms live in signal, next to the wire layer that composes
-// them. Each does one thing, none validates against a schema, none
-// knows a specific provider. Policy (which mechanism runs when, and
-// whether a candidate is accepted) belongs to the caller; the house
-// rule is rescue-only: a repaired candidate counts ONLY if it passes
-// the caller's own validation, otherwise the original bytes and the
-// original error stand. Mechanisms can therefore be aggressive
-// without being able to invent truth.
-//
-//   extractJson        — find the JSON value buried in noise
-//   repairEscapeDamage — candidate texts with common escape damage undone
-//   decodeJsonish      — one string that should have been a value
-//   deepDecodeJsonish  — stringified values anywhere in a tree
-//   closeTruncated     — a cut-off container, closed at the last
-//                        complete boundary (drops the torn tail —
-//                        never fabricates clipped content)
-//   isTruncatedJson    — does the text end mid-structure?
-
-// ───────────────────────────────────────────────────────────
-// extractJson — the JSON value buried in noise
-// ───────────────────────────────────────────────────────────
-//
-// Handles, in order: clean JSON; invisible characters (BOM,
-// zero-width); markdown fences; prose around the value (the longest
-// {...} or [...] span that parses). Returns the PARSED value — parse
-// success is what makes an extraction an extraction.
-
 export type ExtractResult = { ok: true; value: unknown } | { ok: false };
 
-// BOM, zero-width space/joiner/non-joiner, word joiner — characters
-// models occasionally leak around JSON that break JSON.parse.
+// BOM, zero-width space, non-joiner and joiner, word joiner.
 const INVISIBLES = /[﻿​‌‍⁠]/g;
 
 const tryParse = (text: string): ExtractResult => {
@@ -48,11 +15,9 @@ const spanCandidates = (text: string, open: string, close: string): string[] => 
   const first = text.indexOf(open);
   if (first < 0) return [];
   const candidates: string[] = [];
-  // Longest span first, shrinking from the right: prose after the value
-  // ("} — done!") is more common than braces inside trailing prose.
   for (let last = text.lastIndexOf(close); last > first; last = text.lastIndexOf(close, last - 1)) {
     candidates.push(text.slice(first, last + 1));
-    if (candidates.length >= 8) break; // bounded — noise, not a search space
+    if (candidates.length >= 8) break;
   }
   return candidates;
 };
@@ -78,15 +43,6 @@ export const extractJson = (content: string): ExtractResult => {
   return { ok: false };
 };
 
-// ───────────────────────────────────────────────────────────
-// repairEscapeDamage — common over-escaping, as candidate texts
-// ───────────────────────────────────────────────────────────
-//
-// Reasoning models sometimes emit `\'` (not a legal JSON escape) or an
-// extra escaping layer over the whole payload (`\"` where `"` was
-// meant). Returns candidate TEXTS (only those that differ) — the
-// caller parses and validates; this never parses.
-
 export const repairEscapeDamage = (text: string): string[] => {
   const candidates: string[] = [];
   const noQuoteEscapes = text.replace(/\\'/g, "'");
@@ -95,10 +51,6 @@ export const repairEscapeDamage = (text: string): string[] => {
   if (unescaped !== text) candidates.push(unescaped);
   return candidates;
 };
-
-// ───────────────────────────────────────────────────────────
-// decodeJsonish — one string that should have been a value
-// ───────────────────────────────────────────────────────────
 
 export const decodeJsonish = (value: unknown): unknown => {
   if (typeof value !== 'string') return value;
@@ -113,12 +65,7 @@ export const decodeJsonish = (value: unknown): unknown => {
   return value;
 };
 
-// Deep variant: decode every JSON-looking string INSIDE a tree. The
-// corruption this rescues (observed: Groq gpt-oss tool-call args)
-// stringifies NESTED arrays/objects inside an otherwise well-formed
-// payload ("children": "[{\"component\":..."). Strings that do not
-// decode stay untouched; prose survives.
-
+// Some models send a nested array or object inside tool-call arguments as a JSON string.
 export const deepDecodeJsonish = (value: unknown): unknown => {
   if (typeof value === 'string') {
     const decoded = decodeJsonish(value);
@@ -133,22 +80,12 @@ export const deepDecodeJsonish = (value: unknown): unknown => {
   return value;
 };
 
-// ───────────────────────────────────────────────────────────
-// Structural scan — shared by closeTruncated / isTruncatedJson
-// ───────────────────────────────────────────────────────────
-//
-// One pass tracking the open-container stack, string/escape state and
-// object phases (a closing quote ends a KEY or a VALUE — only values
-// mark boundaries). A "boundary" is a position where cutting the text
-// and appending the closers of everything still open yields valid
-// JSON: right after a completed value or a closed container.
-
+// A boundary is a position where cutting the text and appending the closers of everything
+// still open yields valid JSON: right after a completed value or a closed container.
 type Frame = { type: 'obj' | 'arr'; expectingValue: boolean };
 
 type Scan = {
-  // Open containers at end of text (empty = balanced).
   openAtEnd: number;
-  // Last boundary: cut index (exclusive) + the closers to append.
   boundary?: { end: number; closers: string };
 };
 
@@ -221,7 +158,7 @@ const scan = (text: string): Scan | undefined => {
       }
       case '}':
       case ']': {
-        if (stack.length === 0) return undefined; // not JSON-shaped
+        if (stack.length === 0) return undefined;
         stack.pop();
         valueDone(i + 1);
         break;
@@ -230,8 +167,6 @@ const scan = (text: string): Scan | undefined => {
         const top = stack[stack.length - 1];
         inString = true;
         escape = false;
-        // In an object a string is a KEY unless a value is expected;
-        // at root or in an array it is always a value.
         stringIsValue = top === undefined || top.type === 'arr' || top.expectingValue;
         break;
       }
@@ -256,20 +191,12 @@ const scan = (text: string): Scan | undefined => {
   return { openAtEnd: stack.length + (inString ? 1 : 0), ...(boundary && { boundary }) };
 };
 
-// ───────────────────────────────────────────────────────────
-// closeTruncated / isTruncatedJson
-// ───────────────────────────────────────────────────────────
-//
-// closeTruncated cuts at the LAST complete boundary and appends the
-// closers — the torn tail (a half-written key, a clipped string value)
-// is DROPPED, never patched into plausible-looking content: a clipped
-// string that validates would be fabricated data, a dropped member is
-// an honest absence the caller's schema can catch.
-
+// The torn tail is dropped, not closed: a clipped string that validates would be invented
+// data, and a missing member is something the caller's schema can catch.
 export const closeTruncated = (content: string): string | undefined => {
   const cleaned = content.replace(INVISIBLES, '').trim();
   if (!cleaned.startsWith('{') && !cleaned.startsWith('[')) return undefined;
-  if (tryParse(cleaned).ok) return undefined; // nothing to close
+  if (tryParse(cleaned).ok) return undefined;
   const result = scan(cleaned);
   if (!result?.boundary || result.openAtEnd === 0) return undefined;
   const candidate = cleaned.slice(0, result.boundary.end) + result.boundary.closers;

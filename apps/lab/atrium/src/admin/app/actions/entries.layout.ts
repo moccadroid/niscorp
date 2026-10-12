@@ -5,7 +5,6 @@ export const entriesLayout: LayoutNode = panel(
   'Entries',
   'Every read and write the app can make — warm-only, so this list IS the API',
   split(
-    // ── left: the whole API, filterable ──
     {
       component: 'Stack',
       props: { gap: 12 },
@@ -13,8 +12,6 @@ export const entriesLayout: LayoutNode = panel(
         errorNotice,
         { component: 'Input', ref: 'filter', props: { placeholder: 'Filter by fingerprint or intent…', icon: 'search', debounce: 200 } },
 
-        // Called, never seeded. First, because in a warm-only app it is not a
-        // warning — it is a 500 nobody has clicked yet.
         {
           if: '$.api.missing.length',
           then: {
@@ -52,7 +49,6 @@ export const entriesLayout: LayoutNode = panel(
       ],
     },
 
-    // ── right: one entry, opened up ──
     {
       if: '$.selected.fingerprint',
       then: {
@@ -79,7 +75,6 @@ export const entriesLayout: LayoutNode = panel(
             ],
           },
 
-          // Who calls it — and the orphan case, which is the finding.
           {
             if: '$.selected.callers.length',
             then: {

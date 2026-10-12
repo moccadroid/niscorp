@@ -1,18 +1,6 @@
 import { createMemoryStore, createTide, zonedToUtc, type EffectRegistry, type ReflexInput, type Tide } from '@niscorp/tide';
 import { MINUTE, readLedger, recordOf, runUntil, str, transform, TZ, drain, type Snapshot } from './ledger';
 
-// ═══════════════════════════════════════════════════════════
-// Tonight's digest for Olivia — fan-in, with no "am I the last one?" code.
-//
-// REAL: two reflexes. One texts every member booked into tomorrow's class, one
-// per member. The other watches the FIRST reflex's runs: when a run settles,
-// tide itself mints a fact carrying its counts, and that fact is what emails
-// Olivia her one summary. `retry()` on a failed task re-settles the run — and
-// does not send the digest again.
-// SIMULATED, and labelled on the page: the SMS gateway (the reader chooses
-// whose carrier it times out for tonight) and Olivia's mailer.
-// ═══════════════════════════════════════════════════════════
-
 export const NIGHT_START = zonedToUtc({ year: 2026, month: 3, day: 3 }, 20, 55, TZ);
 export const NIGHT_END = zonedToUtc({ year: 2026, month: 3, day: 3 }, 21, 45, TZ);
 export const RECOVERED = zonedToUtc({ year: 2026, month: 3, day: 3 }, 22, 0, TZ);
@@ -32,14 +20,12 @@ export const REMINDERS: ReflexInput = {
   on: { clock: { every: 'day', at: '21:00', tz: TZ } },
   select: { query: { table: 'bookings', day: 'tomorrow' }, mode: 'each', unitKey: 'id' },
   effect: { name: 'sms.send', input: { to: { $ref: '$.row.id' }, text: { $interpolate: { template: 'Hi {{name}} — Core & breath tomorrow at 18:00.', values: { $ref: '$.row' } } } } },
-  // A gateway timeout is worth one more try, five minutes on.
   policy: { retry: { max: 1, backoff: 'fixed', baseMs: 5 * MINUTE } },
 };
 
 export const DIGEST: ReflexInput = {
   id: 'reminders.digest',
   intent: 'When the nightly reminders have all finished, email Olivia one summary.',
-  // Fan-in: fires on the SETTLEMENT of the other reflex's run.
   on: { fact: { run: 'reminders.nightly' } },
   effect: {
     name: 'mail.send',
@@ -71,7 +57,6 @@ export const createNight = async (failing: ReadonlySet<string>): Promise<Night> 
         const member = str(rec['to']);
         const ok = !down.has(member);
         sms.push({ at: ctx.now, member, text: str(rec['text']), ok });
-        // A timeout is a bad minute, not an answer: throw, and tide retries.
         if (!ok) throw new Error('SMS gateway timed out (carrier unreachable)');
         return { sent: true };
       },
@@ -99,8 +84,6 @@ export const createNight = async (failing: ReadonlySet<string>): Promise<Night> 
 
   return {
     state: () => snapshot,
-    // An hour later the carrier is back. A person presses retry on the failed
-    // task: the task reopens, its run rewinds and re-settles.
     retry: async (member) => {
       const [task] = await tide.ledger.tasks({ reflexId: 'reminders.nightly', state: 'failed' }).then((ts) => ts.filter((t) => t.unit === member));
       if (task === undefined) return snapshot;

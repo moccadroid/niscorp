@@ -1,14 +1,8 @@
 import { z } from 'zod';
 import type { DomComponent } from '@niscorp/nova/adapters/dom';
 
-// ═══════════════════════════════════════════════════════════
-// The kit: domain-blind primitives, as plain DOM — no framework in the page.
-// Props in, an element out; nova's DOM adapter wires a `ref`'d element's clicks
-// by convention, so a button is just a button. Each one is CONFIGURED, never
-// styled: it reads what a thing is (a tone) from a closed set of names, and
-// anything it does not know falls back to the default. The look lives in
-// kit.css alone.
-// ═══════════════════════════════════════════════════════════
+// nova's DOM adapter wires the clicks of an element with a `ref` itself, so
+// `Button` adds no listener.
 
 const parsed = <T>(schema: z.ZodType<T>, props: unknown, fallback: T): T => {
   const result = schema.safeParse(props);

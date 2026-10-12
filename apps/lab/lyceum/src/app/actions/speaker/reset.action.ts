@@ -1,9 +1,5 @@
 import type { ActionDefinition } from '@niscorp/nova';
 
-// "Reset the talk?" — opened over the controller from the head's menu, on the
-// `overlay` canvas with the `sheet` fragment. Yes runs the reset
-// (server/functions/reset.functions.ts) and closes; No closes. Nothing is
-// reset by opening it.
 export const resetAction: ActionDefinition = {
   id: 'speaker.reset',
   title: 'Reset the talk',

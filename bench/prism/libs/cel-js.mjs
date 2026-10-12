@@ -1,12 +1,9 @@
 import { evaluate, parse } from '@marcbachmann/cel-js';
 
-// CEL has no aggregation over a list (no sum, no fold) and this package has no list sorting or slicing.
 const NO_SUM = 'CEL has no sum or fold over a list: its macros are all, exists, exists_one, map and filter.';
 
-// The whole days come back as a CEL int, which this package hands over as a BigInt.
 const withNumberAgeDays = (answer) => ({ ...answer, ageDays: Number(answer.ageDays) });
 
-// CEL can ask whether a field of a value is there (has(order.notes)), not whether a variable is.
 const asOrder = (input) => ({ order: input });
 
 export default {

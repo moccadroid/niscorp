@@ -61,14 +61,6 @@ import {
 import { deployConnectorsAction, deployConnectorsInputSchema } from './actions/domains/deploy/connectors.action';
 import { deployRolloutAction, deployRolloutInputSchema } from './actions/domains/deploy/rollout.action';
 
-// Ring 1: every action the application ships. The charter selects which of these
-// ids exist for a principal; `property_slots` decides which of the ones they hold
-// are PLACED right now. Both filters are needed and neither lives here — this is
-// simply the complete list.
-//
-// An action's `input` is its public contract: the data keys an opener may seed.
-// The concierge is an opener like any other, which is the whole reason it can
-// place these without knowing anything about them.
 const withInput = (
   definition: ActionDefinition,
   input: Record<string, unknown>,
@@ -81,7 +73,6 @@ export const CATALOG_DEFINITIONS: Record<string, ActionDefinition> = {
   'chrome.guest': guestChromeAction,
   'chrome.staff': staffChromeAction,
 
-  // the about page (app/pages.ts) — drawn at /about, kept by nothing
   'about.page': aboutPageAction,
   'about.who': aboutWhoAction,
 
@@ -92,37 +83,20 @@ export const CATALOG_DEFINITIONS: Record<string, ActionDefinition> = {
   'stay.checkout': withInput(stayCheckoutAction, stayCheckoutInputSchema),
   'stay.folio': withInput(stayFolioAction, stayFolioInputSchema),
   'stay.message': withInput(stayMessageAction, stayMessageInputSchema),
-  // One request action for spa, housekeeping and fault reports — the menu is
-  // loaded from the integration per the capability the slot carries.
   'stay.request': withInput(stayRequestAction, stayRequestInputSchema),
 
-  // The issue family: `desk.board` split along the seam its layout already had.
-  // The type is the LAST segment so the app can derive from it, and every part
-  // takes its subject as input — which is what makes an issue something a push,
-  // a link or the assistant can open.
   'staff.menu': withInput(staffMenuAction, staffMenuInputSchema),
   'staff.settings.form': withInput(staffSettingsAction, staffSettingsInputSchema),
   'desk.issue.tile': withInput(issueTileAction, issueTileInputSchema),
   'desk.issue.list': withInput(issueListAction, issueListInputSchema),
   'desk.issue.detail': withInput(issueDetailAction, issueDetailInputSchema),
-  // The message family. `desk.thread.detail` is the conversation AND the box you
-  // answer in, and it takes `draft` as input — which is what lets a drafted reply
-  // be handed over already written instead of as a second surface to open.
   'desk.message.tile': withInput(messageTileAction, messageTileInputSchema),
   'desk.message.list': withInput(messageListAction, messageListInputSchema),
   'desk.thread.detail': withInput(threadDetailAction, threadDetailInputSchema),
-  // One movements list. `desk.arrivals` and the old house-level `desk.keys`
-  // both read `stays/movements`, the second only because cutting a key needed a
-  // guest and a verb could not be aimed at a row. Keys became stay-scoped and
-  // the duplicate list went with it.
   'desk.movements': withInput(deskMovementsAction, deskMovementsInputSchema),
   'desk.keys': withInput(deskKeysAction, deskKeysInputSchema),
   'desk.guest': withInput(deskGuestAction, deskGuestInputSchema),
-  // What is waiting on a person, derived — the surface that answers "what
-  // should I do next" instead of counting things that need doing.
   'desk.attention': withInput(deskAttentionAction, deskAttentionInputSchema),
-  // The workspace's own family: who this is, where to put them, what we know
-  // about them, and who to hand it to.
   'desk.brief': withInput(deskBriefAction, deskBriefInputSchema),
   'desk.move': withInput(deskMoveAction, deskMoveInputSchema),
   'desk.note': withInput(deskNoteAction, deskNoteInputSchema),

@@ -1,8 +1,7 @@
 import { tasksAssigned, taskSetStatus } from '@atrium/app/vex/service.entries';
 
-// Status as a RANGE, the same trick the desk board uses on issues: 'done' sorts
-// before 'open' in Postgres text order, so one cached plan serves all three
-// tabs by moving the bounds.
+// The tab is a status range: Postgres orders text and 'done' sorts before
+// 'open', so one cached plan serves all three tabs.
 export const myTasksPrism = {
   fingerprint: tasksAssigned.fingerprint,
   context: {

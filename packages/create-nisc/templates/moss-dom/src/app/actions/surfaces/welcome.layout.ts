@@ -1,7 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// JSON, bound to the action's data. Every component name is one the kit in
-// src/ui registers; `ref` is what the action's trigger catches.
 export const welcomeLayout: LayoutNode = {
   component: 'Page',
   children: [

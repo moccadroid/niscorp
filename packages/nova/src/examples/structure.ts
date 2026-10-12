@@ -1,7 +1,5 @@
 import type { NovaExample } from './example.types';
 
-// The layout grammar, put together: conditions inside conditions and inside
-// loops, a list with nothing in it, and a layout kept once and used twice.
 export const STRUCTURE_EXAMPLES: readonly NovaExample[] = [
   {
     id: 'nested-conditionals',

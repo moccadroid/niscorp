@@ -65,7 +65,6 @@ describe('nested operations', () => {
         body: { $add: [{ $var: 'acc' }, { $var: 'n' }] },
       },
     };
-    // numbers: [5,3,8,1] → doubled: [10,6,16,2] → filtered >5: [10,6,16] → sum: 32
     expect(evaluate(config, source)).toBe(32);
   });
 
@@ -109,7 +108,6 @@ describe('$case with evaluated conditions', () => {
         else: { $const: 'small' },
       },
     };
-    // numbers[0] = 5, 5 > 10 = false, 5 > 3 = true → 'medium'
     expect(evaluate(config, { numbers: [5] })).toBe('medium');
   });
 });

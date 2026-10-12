@@ -7,26 +7,14 @@ import { Button, MenuItem } from './controls';
 import { Popover } from './layout';
 import { Skeleton } from './feedback';
 
-// ─── Table ─────────────────────────────────────────────────
-// A data-driven list table. Everything that varies between tables is declared
-// in the layout as DATA: the `columns` (each a label and a cell spec), the
-// grid `cols` class, and the optional row `⋯` menu. The component is a pure
-// interpreter — it renders the scaffold (header + rows + skeleton + empty)
-// from existing primitives and dispatches `ui:click` for the same refs an
-// action's triggers already handle. All data shaping/formatting stays in
-// Vex/Prism: cells display `row[key]` verbatim (the date is already "Jun 8").
-
 const CellSchema = z
   .object({
     kind: z.enum(['text', 'badge', 'primary', 'check']),
     key: z.string().describe('Row field to display. For `check`, the boolean field it reflects.'),
     ref: z.string().optional().describe('`check` only: the ui:click ref fired on toggle, carrying { id: row[rowKey], done: <new state> }.'),
-    // text
     color: z.string().optional(),
     redIf: z.string().optional().describe('`text` only: a row field; when truthy the cell renders red (e.g. an overdue flag).'),
-    // badge
     toneMap: z.record(z.string(), z.string()).optional().describe('Map field value → badge tone; `_` is the fallback.'),
-    // primary
     sub: z.string().optional().describe('Secondary line; `{field}` tokens are filled from the row.'),
   })
   .strict();
@@ -146,8 +134,6 @@ export const Table: NovaComponent<TableP> = ({
               {columns.map((col, ci) => (
                 <div key={ci} className={cx('fb-tbl__cell', col.align === 'end' && 'fb-tbl__cell--end')}>
                   {col.cell.kind === 'check' ? (
-                    // Inline toggle: fires the cell's ref with the row id + the
-                    // NEW state. The action persists it via its endpoint.
                     <input
                       type="checkbox"
                       className="fb-tbl__check"
@@ -170,9 +156,6 @@ export const Table: NovaComponent<TableP> = ({
                       {kebab(id)}
                       <div className="fb-menu fb-rowmenu">
                         {menu.items.map((it) => (
-                          // Item clicks carry the WHOLE row — so the action's
-                          // row-edit/row-delete can seed an edit form or a
-                          // confirm label straight from the row, no second read.
                           <MenuItem key={it.ref} icon={it.icon} danger={it.danger} value={row} novaRef={it.ref}>
                             {it.label}
                           </MenuItem>

@@ -2,12 +2,6 @@ import { type ReactNode } from 'react';
 import { z } from 'zod';
 import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/react';
 
-// The one genuinely-CSS part of a modal: a fixed, dimmed backdrop that centers
-// its children. Everything else — the card, header, title, ✕, footer buttons,
-// and their behaviour — is the `modal` ActionFragment (data, not code), dropped
-// in here as `children`. A backdrop click fires `ui:click ref="close"`, which
-// the fragment's close trigger pops; that dismiss is the only behaviour the
-// backdrop owns.
 const OverlayProps = z.object({}).strict();
 
 export const Overlay: NovaComponent<z.infer<typeof OverlayProps>> = ({

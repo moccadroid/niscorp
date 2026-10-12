@@ -3,23 +3,18 @@ import { z } from 'zod';
 import { JsonValueSchema } from '../json.schema';
 import { isReadablePath, pathRefusal } from '../../utils/jsonpath';
 
-// Forward reference — set by node.schema.ts after NodeSchema is created
 let _NodeSchema: z.ZodTypeAny = z.any();
 export const setNodeSchema = (schema: z.ZodTypeAny): void => {
   _NodeSchema = schema;
 };
 const node = (): z.ZodTypeAny => _NodeSchema;
 
-// ═══════════════════════════════════════════════════════════
-// $ref — Resolve JSONPath against source
-// ═══════════════════════════════════════════════════════════
-
 export const RefNodeSchema = z
   .object({
     $ref: z
       .string()
       .regex(/^\$(\..*)?$/)
-      // Said here and not in the pattern: the pattern is the published JSON
+      // A refinement, not a tighter pattern: the pattern is the published JSON
       // Schema, and what the parser reads is the parser's to say.
       .refine(isReadablePath, { error: (issue) => pathRefusal(String(issue.input)) })
       .describe('JSONPath from the source root: "$" is the whole source; "$.user.name", "$.items[0].sku" reach into it. Only reads from source data, not variables. For variables use $var, for navigating into variables use $get.'),
@@ -28,10 +23,6 @@ export const RefNodeSchema = z
   .describe('Read a value from the source data by static JSONPath. Use $ref for source access, $var for variables, $get for navigating into variables or dynamic paths.');
 
 export type RefNode = z.infer<typeof RefNodeSchema>;
-
-// ═══════════════════════════════════════════════════════════
-// $const — Literal value
-// ═══════════════════════════════════════════════════════════
 
 export const ConstNodeSchema = z
   .object({
@@ -42,10 +33,6 @@ export const ConstNodeSchema = z
 
 export type ConstNode = z.infer<typeof ConstNodeSchema>;
 
-// ═══════════════════════════════════════════════════════════
-// $var — Read variable from scope
-// ═══════════════════════════════════════════════════════════
-
 export const VarNodeSchema = z
   .object({
     $var: z.string().min(1).describe('Variable name bound by $with, $map, $filter, $reduce, or $sortBy.'),
@@ -54,10 +41,6 @@ export const VarNodeSchema = z
   .describe('Read a scoped variable by name. Variables are created by $with (let bindings), $map/$filter/$reduce/$sortBy (loop element). Returns the whole variable — use $get to navigate into it.');
 
 export type VarNode = z.infer<typeof VarNodeSchema>;
-
-// ═══════════════════════════════════════════════════════════
-// $get — Dynamic path access
-// ═══════════════════════════════════════════════════════════
 
 export const GetNodeSchema = z
   .object({
@@ -76,10 +59,6 @@ export const GetNodeSchema = z
   .describe('Navigate into a value by path. Use to access fields on variables: {$get: {from: {$var: "item"}, path: ["name"]}}. Also supports dynamic path segments (nodes as segments) and fallback values. Prefer $ref for simple source access.');
 
 export type GetNode = z.infer<typeof GetNodeSchema>;
-
-// ═══════════════════════════════════════════════════════════
-// $with — Variable scoping
-// ═══════════════════════════════════════════════════════════
 
 export const WithNodeSchema = z
   .object({

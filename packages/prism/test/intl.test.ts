@@ -1,9 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { evaluate, compile, execute, PrismError } from '../src';
 
-// Non-breaking and narrow-non-breaking spaces are what Intl actually emits
-// between a number and its unit. Comparing against a plain space is how a test
-// like this passes on one Node build and fails on the next.
+// Intl emits non-breaking and narrow non-breaking spaces between a number and its unit.
 const flat = (value: unknown): string => String(value).replace(/[  ]/g, ' ');
 
 const source = {
@@ -19,11 +17,6 @@ describe('$localeMoney', () => {
     const money = (locale: string): string =>
       flat(evaluate({ $localeMoney: { value: { $ref: '$.cents' }, currency: { $ref: '$.currency' }, locale } }, source));
 
-    // THE WHOLE ARGUMENT FOR THIS OP, in four lines. Not "English versus
-    // German" — three GERMAN locales disagree with each other about where the
-    // symbol goes, what separates the decimals, and whether a glyph is used at
-    // all. Any hand-written symbol table gets at least two of these wrong, and
-    // `€45` (what lyra shipped) is wrong for all three.
     expect(money('de-AT')).toBe('€ 45,00');
     expect(money('de-DE')).toBe('45,00 €');
     expect(money('de-CH')).toBe('EUR 45.00');
@@ -31,7 +24,6 @@ describe('$localeMoney', () => {
   });
 
   it('takes the divisor from the currency, not from a hardcoded 100', () => {
-    // JPY has no minor unit — 4500 yen is ¥4,500, not ¥45.
     const jpy = evaluate({ $localeMoney: { value: { $ref: '$.cents' }, currency: 'JPY', locale: 'en-US' } }, source);
     expect(flat(jpy)).toBe('¥4,500');
   });
@@ -71,14 +63,11 @@ describe('$localeDate', () => {
   });
 
   it('reads a DATE-only value as UTC so it cannot render as the day before', () => {
-    // The classic off-by-one: '2026-03-14' is UTC midnight, and formatting that
-    // in any zone west of Greenwich without pinning the zone prints the 13th.
     const formatted = evaluate(
       { $localeDate: { value: { $ref: '$.day' }, locale: 'en-GB', options: { day: 'numeric', month: 'numeric', year: 'numeric', timeZone: 'America/Los_Angeles' } } },
       source,
     );
-    // Explicit zone wins — this one IS the 13th, which proves the default is a
-    // default and not a hardcode.
+    // An explicit zone wins: this one is the 13th.
     expect(String(formatted)).toContain('13');
     const pinned = evaluate({ $localeDate: { value: { $ref: '$.day' }, locale: 'en-GB', options: { day: 'numeric', month: 'numeric', year: 'numeric' } } }, source);
     expect(String(pinned)).toContain('14');
@@ -104,8 +93,6 @@ describe('$localeDate', () => {
 describe('$localeNumber', () => {
   it('uses the locale decimal mark and grouping', () => {
     const number = (locale: string): string => flat(evaluate({ $localeNumber: { value: { $const: 1234.5 }, locale, minDigits: 1 } }, source));
-    // Austria groups with a narrow no-break space where Germany uses a full
-    // stop — the same disagreement the money case shows, on a bare number.
     expect(number('de-AT')).toBe('1 234,5');
     expect(number('de-DE')).toBe('1.234,5');
     expect(number('en-GB')).toBe('1,234.5');
@@ -122,10 +109,6 @@ describe('$localeNumber', () => {
 
 describe('compiled path', () => {
   it('runs the ops through the optimizer as well as the interpreter', async () => {
-    // The optimizer attaches a handler per op and skips the discriminant chain.
-    // An op wired into `evaluate` but not into `optimize` passes every test
-    // above and then fails the moment a vex mapping (which is always compiled)
-    // replays it — so the compiled path gets its own case.
     const ir = await compile({
       price: { $localeMoney: { value: { $ref: '$.cents' }, currency: { $ref: '$.currency' }, locale: 'de-AT' } },
       when: { $localeDate: { value: { $ref: '$.day' }, locale: 'de-AT', options: { day: 'numeric', month: 'long' } } },

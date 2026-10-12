@@ -2,10 +2,6 @@ import type { Stream, Listener, FinalState, SelectedStreamDeps, StreamError } fr
 import { createPendingFinal } from './types';
 import { splitPath, getByPath, resolvePath } from './path';
 
-// ═══════════════════════════════════════════════════════════
-// Selected stream — lightweight projection over root state
-// ═══════════════════════════════════════════════════════════
-
 export const createSelectedStream = <P>(deps: SelectedStreamDeps): Stream<P> => {
   const segments = splitPath(deps.path);
   const listeners = new Set<Listener<P>>();
@@ -15,13 +11,10 @@ export const createSelectedStream = <P>(deps: SelectedStreamDeps): Stream<P> => 
   let lastEmitted: { hasValue: false } | { hasValue: true; value: P } = { hasValue: false };
   let isDestroyed = false;
 
-  // Re-entrancy protection
   let isNotifying = false;
   const pendingImmediateFires: Array<() => void> = [];
 
   const project = (): P => getByPath(deps.getRootValue(), segments) as P;
-
-  // ─── Notification ───
 
   const notifyListeners = (value: P): void => {
     isNotifying = true;
@@ -47,14 +40,12 @@ export const createSelectedStream = <P>(deps: SelectedStreamDeps): Stream<P> => 
     finalListeners.clear();
   };
 
-  // ─── Root subscriptions ───
-
   const unsubChange = deps.onRootChange(() => {
     if (isDestroyed) return;
     const projected = project();
 
-    // Reference equality — structural sharing ensures unchanged subtrees
-    // keep the same reference, so === is sufficient for change detection.
+    // Reference equality is enough: a snapshot keeps the reference of every
+    // subtree that did not change.
     if (!lastEmitted.hasValue || lastEmitted.value !== projected) {
       lastEmitted = { hasValue: true, value: projected };
       notifyListeners(projected);
@@ -77,8 +68,6 @@ export const createSelectedStream = <P>(deps: SelectedStreamDeps): Stream<P> => 
     if (!coversPath(err.path, deps.path)) return;
     for (const listener of errorListeners) listener(err);
   });
-
-  // ─── Public interface ───
 
   const current = (): P => project();
 
@@ -110,9 +99,8 @@ export const createSelectedStream = <P>(deps: SelectedStreamDeps): Stream<P> => 
 
   const onFinal = (listener: Listener<P>): (() => void) => {
     if (isDestroyed) return () => {};
-    // A selection first made after the reply ended missed the root's word that
-    // it had, and nothing will say it again: settle here, as final() does, or
-    // this listener is never called.
+    // A selection made after the root finalized is never told of it: settle
+    // here, or this listener is never called.
     if (!finalState.resolved && deps.hasRootFinalized()) resolveFinal(project());
     if (finalState.resolved) {
       listener(finalState.value);
@@ -142,8 +130,8 @@ export const createSelectedStream = <P>(deps: SelectedStreamDeps): Stream<P> => 
     errorListeners.clear();
     pendingImmediateFires.length = 0;
     if (!finalState.resolved) {
-      // Pre-caught — see the root's destroy(): a selection nobody awaited must
-      // not raise an unhandled rejection; a held promise still rejects.
+      // Pre-caught so a selection nobody awaited raises no unhandled rejection;
+      // a held promise still rejects.
       finalState.promise.catch(() => {});
       finalState.reject(new Error('[solid] stream destroyed'));
     }
@@ -152,20 +140,14 @@ export const createSelectedStream = <P>(deps: SelectedStreamDeps): Stream<P> => 
   return { write: () => {}, close: () => {}, destroy, current, final, on, onFinal, onError, select };
 };
 
-// An error at `errPath` is observed by a selection at `selPath` if
-// errPath === selPath or errPath is a descendant of selPath.
 const coversPath = (errPath: string, selPath: string): boolean => {
   if (selPath === '') return true;
   if (errPath === selPath) return true;
   return errPath.startsWith(selPath + '.');
 };
 
-// ═══════════════════════════════════════════════════════════
-// Dead stream — returned after destroy
-// ═══════════════════════════════════════════════════════════
-
 const DEAD_REJECTION = Promise.reject(new Error('[solid] stream destroyed'));
-DEAD_REJECTION.catch(() => {}); // pre-caught — prevents unhandled rejection
+DEAD_REJECTION.catch(() => {});
 
 export const createDeadStream = <P>(): Stream<P> => ({
   write: () => {},

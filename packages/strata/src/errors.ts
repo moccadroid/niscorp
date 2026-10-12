@@ -1,29 +1,14 @@
-// Every refusal strata makes, by name. The message is a sentence for a person;
-// the code is for the program that has to decide what to do about it.
 export type StrataErrorCode =
-  // A sequence failed its schema, or two sequences share an id.
   | 'INVALID_SEQUENCE'
-  // An applied migration's steps no longer match what the code says it ran.
   | 'EDITED'
-  // The database has migrations of a sequence this code does not know yet —
-  // it was migrated by newer code.
   | 'TOO_NEW'
-  // A `dependsOn` names a migration nobody provides and the ledger lacks.
   | 'UNKNOWN_DEPENDENCY'
-  // Pending migrations wait on each other.
   | 'CYCLE'
-  // Verify mode found work to do.
   | 'PENDING'
-  // A step threw; the whole run was rolled back.
   | 'STEP_FAILED'
-  // The run's guard said the result does not fit; the whole run was rolled back.
   | 'DOES_NOT_FIT'
-  // The pool cannot hold one connection for a transaction.
   | 'NO_TRANSACTION'
-  // A document kind nobody declares — as the root being upgraded, a step's
-  // `at`, or an embedding's target.
   | 'UNKNOWN_KIND'
-  // A grammar sequence handed to the ledger, or a table sequence to upgrade().
   | 'WRONG_OWNER';
 
 export class StrataError extends Error {

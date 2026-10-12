@@ -20,23 +20,14 @@ export type ResolvedField = {
 
 export type ResolvedJoin = {
   fromAlias: string;
-  // Paired by position with `toColumns`: the whole key, every pair of which
-  // the compiled ON clause carries.
+  // Paired by position with `toColumns`.
   fromColumns: string[];
   toAlias: string;
   toColumns: string[];
   toTable: string;
-  // 'left' when any referencing FK column is nullable: a null FK must never
-  // drop the referencing row from the read. Non-nullable FKs compile to an
-  // inner JOIN (equivalent — the column can't be null).
   kind: 'inner' | 'left';
-  // Predicates that belong in this join's ON clause rather than in WHERE.
-  //
-  // Scope puts its row rules here for LEFT joins, and the distinction is not
-  // cosmetic: `LEFT JOIN rooms ON ... WHERE rooms.tenant = $1` is an INNER join
-  // wearing a LEFT keyword, because a null-padded row fails the WHERE and takes
-  // its driving row with it. The same predicate in ON filters which rows may
-  // join without ever dropping the row that had none.
+  // Scope's row rules for a LEFT join go in ON, not WHERE: there a null-padded
+  // row would fail the rule and take its driving row with it.
   on?: ResolvedFilter[];
 };
 
@@ -51,10 +42,6 @@ export type ResolvedSemantic = {
   minScore?: number;
 };
 
-// An EXISTS, resolved. It carries its own sources, joins and alias map, and its
-// filter may reference OUTER aliases — that is the correlation, and it is why
-// the inner alias map is layered over the outer one at compile time rather than
-// replacing it.
 export type ResolvedExists = {
   sources: ResolvedSource[];
   joins: ResolvedJoin[];
@@ -65,8 +52,7 @@ export type ResolvedExists = {
 export type ResolvedQuery = {
   sources: ResolvedSource[];
   joins: ResolvedJoin[];
-  // Keyed by the `exists` node itself, so the compiler can find the resolution
-  // for the node it is looking at while walking the raw filter tree.
+  // Keyed by the filter's `exists` node itself.
   existsMap?: Map<object, ResolvedExists>;
   fields: ResolvedField[];
   filter?: ResolvedFilter;

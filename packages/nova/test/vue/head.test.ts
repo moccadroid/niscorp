@@ -9,11 +9,6 @@ import { createShell } from '@shell';
 import type { Shell } from '@shell';
 import { NovaShell } from '../../src/adapters/vue';
 
-// ═══════════════════════════════════════════════════════════
-// A head under the Vue adapter: nothing is drawn for it or what it holds, and
-// the page's <head> follows it for as long as the shell lives in the page.
-// ═══════════════════════════════════════════════════════════
-
 const article: ActionDefinition = {
   id: 'article',
   data: { title: 'First title' },
@@ -69,7 +64,6 @@ describe('a head node, under the Vue adapter', () => {
     await settle();
     expect(document.title).toBe('Second title');
 
-    // a screen with no head has the document's own title again
     await leave?.trigger('click');
     await settle();
     expect(wrapper.text()).toContain('no head here');

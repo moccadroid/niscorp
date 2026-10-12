@@ -1,6 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// A line for the question, Send, and whether it went.
 export const sendLayout: LayoutNode = {
   component: 'Sheet',
   props: { areas: ['kick', 'field', 'go', 'out'], rows: ['auto', 'auto', 'auto', 'auto'] },

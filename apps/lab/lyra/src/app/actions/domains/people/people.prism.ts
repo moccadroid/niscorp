@@ -14,22 +14,8 @@ import {
   purchasesForPerson,
 } from '@lyra/app/vex/subscription.entries';
 
-// The wildcards are built HERE because a request prism is evaluated and a
-// trigger's `set` is not — a `$join` in a trigger sends the literal expression.
-//
-// ONE FINGERPRINT, and the lens as a value. The tab used to carry which READ
-// it meant; it now carries which lens it means, and the read is the same read.
-// Replay-only holds either way — but a lens the caller invents now matches no
-// arm and returns nothing, rather than being a fingerprint that does not exist.
-//
-// `after`/`afterId`/`order` are the SEEK: the last row already on screen, and
-// which ordering that position is in. See the roll's entry for why a cursor
-// belongs to one order, and why the orders are declared rather than assumed.
-//
-// EACH KEY IS A QUESTION, and null is how a prism declines to ask one — it
-// assembles a fixed object and cannot drop a key, so vex counts null as absent
-// for optional conditions. An empty search box sends no search; a first page
-// sends no cursor. Neither sends a sentinel that has to mean "everything".
+// Null declines a condition: a prism assembles a fixed object and cannot drop a
+// key, and vex counts null as absent for an optional condition.
 const SEARCH_OR_NOTHING = {
   $case: {
     branches: [{ when: { $eq: [{ $ref: '$.search' }, ''] }, then: null }],
@@ -49,16 +35,6 @@ export const peopleListPrism = {
     holding: { $ref: '$.holding' },
     q: SEARCH_OR_NOTHING,
     afterId: CURSOR_OR_NOTHING('$.afterId'),
-    // ONE CURSOR KEY PER ORDER, and only the live one carries a value.
-    //
-    // The screen holds a single `after` — the last row's value on whatever
-    // column it is sorted by — and this routes it to the key belonging to the
-    // order actually in force. Every other order's key goes null, so its arm
-    // drops out and binds nothing: that is what keeps a name out of a date
-    // comparison, which is a 500 rather than a wrong answer.
-    //
-    // Generated from ROLL_ORDERS, so a new sortable column is one entry there
-    // and nothing here.
     ...Object.fromEntries(
       ROLL_ORDERS.map((o) => [
         o.cursor,
@@ -87,8 +63,6 @@ export const peopleCountPrism = {
   },
 };
 
-// The price list, shaped for choosing — one read, and the screen says which
-// kind it is asking for.
 export const planOptionsPrism = { fingerprint: offeringOptions.fingerprint, context: { kind: 'recurring' } };
 export const passOptionsPrism = { fingerprint: offeringOptions.fingerprint, context: { kind: 'pass' } };
 
@@ -97,11 +71,6 @@ export const personByIdPrism = {
   context: { personId: { $ref: '$.personId' } },
 };
 
-// The whole signup as one replay — what `members.create` (a server function)
-// used to orchestrate. The normalisation the function did (trim, lowercase
-// the login identity, '' → NULL for the trial date) happens HERE, in the
-// evaluated request, so the entry receives values in the shape the columns
-// hold. Idempotent from every starting state — see `people/enroll`.
 export const enrollPrism = {
   fingerprint: peopleEnroll.fingerprint,
   context: {
@@ -114,20 +83,12 @@ export const enrollPrism = {
   },
 };
 
-// WHO WAS JUST WRITTEN DOWN, found by the address that wrote them.
-//
-// Not read off the write's own answer: `people/enroll` is a mutation ARRAY —
-// ensure the human, then anchor them — and what an endpoint target holds after
-// one is not the row shape a prism can walk. Asking the roll is one call, uses
-// a read that already exists, and gives the same answer whether the person was
-// new or already known, which is the case `people/enroll` exists to make
-// identical.
+// Not read off the write's own answer: `people/enroll` is a mutation array, and
+// what an endpoint target holds after one is not a row shape a prism can walk.
 export const findSignedUpPrism = {
   fingerprint: peopleList.fingerprint,
   context: {
     q: { $join: { parts: ['%', { $ref: '$.signedUpEmail' }, '%'], sep: '' } },
-    // The whole roll, in its default order: somebody just written down holds
-    // nothing yet, so a narrowing lens would answer nobody.
     lens: 'everyone',
     holding: 'any',
     sortBy: 'people.name',
@@ -135,12 +96,6 @@ export const findSignedUpPrism = {
   },
 };
 
-// Putting them onto a plan without leaving the screen. The SAME mutation the
-// record replays — one write, two places it can be reached from.
-// The id is walked out of the answer HERE, and that is not a style choice: a
-// request prism is evaluated and a trigger's `set` is not (see the top of this
-// file), so lifting the id into a field first would store the expression and
-// then bind the expression.
 export const startAtSignupPrism = {
   fingerprint: subscriptionStart.fingerprint,
   context: {
@@ -164,11 +119,6 @@ export const memberEnrolmentsPrism = { fingerprint: enrolmentsForMember.fingerpr
 export const enrolPrism = { fingerprint: enrolMember.fingerprint, context: { courseId: { $ref: '$.courseId' }, personId: { $ref: '$.personId' } } };
 export const withdrawPrism = { fingerprint: withdrawMember.fingerprint, context: { enrolmentId: { $ref: '$.enrolmentId' } } };
 
-// ── what they hold, and granting more of it ──────────────────
-//
-// A separate read rather than widening `people/byId`: that shape is a contract
-// several screens hold, and "what is this person paying and until when" is a
-// different question from "who is this person".
 export const memberSubscriptionPrism = {
   fingerprint: subscriptionForMember.fingerprint,
   context: { personId: { $ref: '$.personId' } },
@@ -179,15 +129,6 @@ export const personPassesPrism = {
   context: { personId: { $ref: '$.personId' } },
 };
 
-// ── the family ───────────────────────────────────────────────
-//
-// Whose children this person looks after, and the form that writes one down.
-//
-// The child's id is minted HERE rather than by the database, for the same
-// reason `people/enroll`'s ids are: three statements have to agree about who
-// they are writing, and a DEFAULT that fires inside statement one is not
-// available to statements two and three. `$uuid` is the request prism's, so
-// the browser never authors an id either.
 export const personFamilyPrism = {
   fingerprint: familyForPerson.fingerprint,
   context: { personId: { $ref: '$.personId' } },
@@ -197,13 +138,10 @@ export const createChildPrism = {
   fingerprint: childCreate.fingerprint,
   context: {
     name: { $trim: { $ref: '$.childName' } },
-    // '' → NULL, so an unanswered date is absent rather than an epoch.
     bornOn: { $case: { branches: [{ when: { $eq: [{ $ref: '$.childBornOn' }, ''] }, then: null }], else: { $ref: '$.childBornOn' } } },
   },
 };
 
-// The id comes off the row the call above returned — see the entries' own
-// comment for why it cannot ride inside one artifact.
 export const attachChildPrism = {
   fingerprint: childAttach.fingerprint,
   context: {
@@ -214,8 +152,6 @@ export const attachChildPrism = {
   },
 };
 
-// What they have bought outright — the desk's answer to "did they pay the
-// joining fee?", which had no answer anywhere before there was a table for it.
 export const personPurchasesPrism = {
   fingerprint: purchasesForPerson.fingerprint,
   context: { personId: { $ref: '$.personId' } },
@@ -251,17 +187,13 @@ export const sellPassPrism = {
     personId: { $ref: '$.personId' },
     offeringId: { $ref: '$.sellOfferingId' },
     paidVia: { $ref: '$.sellPaidVia' },
-    // NULL from a desk. The reference names an OUTSIDE payment so a redelivered
-    // one cannot sell a second pass (schema.ts) — and somebody standing at a
-    // counter taking money is already the thing that happens once. Null rather
-    // than empty because nulls do not collide, so two hand-sold passes are two
-    // passes.
+    // The reference names an outside payment, so a redelivered one cannot sell a
+    // second pass. Null from a desk, not empty: nulls do not collide, so two
+    // hand-sold passes are two passes.
     purchaseRef: null,
   },
 };
 
-// The browser sends an id and nothing else. The DATE is stamped by the trigger
-// from the studio's own clock — see subscription.entries.ts.
 export const giveNoticePrism = {
   fingerprint: subscriptionGiveNotice.fingerprint,
   context: { subscriptionId: { $ref: '$.subscription.subscription_id' } },

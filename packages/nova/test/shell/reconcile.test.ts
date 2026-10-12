@@ -6,19 +6,6 @@ import { createShell, reconcileCanvas } from '@shell';
 
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
-// ═══════════════════════════════════════════════════════════
-// reconcileCanvas — make a canvas equal a desired list.
-//
-// The axis under test is OWNERSHIP, because it is the one a caller gets wrong
-// silently. `own: 'pushed'` (the default) is authorship: only what this caller
-// put there is its to move. `own: 'canvas'` is ownership: the whole column is,
-// whoever pushed it.
-//
-// The difference matters wherever a person and an agent work the same column —
-// under the default an agent cannot write into or close a record the person
-// opened, while the complete-state answer it returned says it did both.
-// ═══════════════════════════════════════════════════════════
-
 const thread: ActionDefinition = { id: 'thread', data: { draft: '', stayId: '' } };
 const brief: ActionDefinition = { id: 'brief', data: { note: '' } };
 
@@ -43,7 +30,6 @@ describe('reconcileCanvas — ownership', () => {
 
     expect(result.changed).toBe(false);
     expect(result.notes).toContain('left thread: not mine');
-    // The refusal is the point: their card, their data.
     expect(shell.getRuntime(theirs)?.getData()['draft']).toBe('');
   });
 
@@ -66,7 +52,6 @@ describe('reconcileCanvas — ownership', () => {
 
     expect(result.changed).toBe(true);
     expect(shell.getRuntime(theirs)?.getData()['draft']).toBe('Happy anniversary.');
-    // Written in place, so the record stays the one they were reading.
     expect(shell.getRuntime(theirs)?.getData()['stayId']).toBe('stay_olav');
   });
 
@@ -89,8 +74,6 @@ describe('reconcileCanvas — ownership', () => {
     reconcileCanvas(shell, 'work', [{ actionId: 'thread', input: { stayId: 'stay_nadia' } }], { origin: 'agent', own: 'canvas' });
     await tick();
 
-    // The one they had is gone, the one it wanted is there, and the new card is
-    // attributable — `origin` is required whichever ownership is in force.
     const stack = shell.getState().canvases['work']?.stack ?? [];
     expect(stack.map((item) => item.definitionId)).toEqual(['thread']);
     expect(shell.originOf(stack[0]?.id ?? '')).toBe('agent');
@@ -101,9 +84,8 @@ describe('reconcileCanvas — ownership', () => {
     const theirs = shell.push('detail', 'thread', { stayId: 'stay_olav' });
     await tick();
 
-    // A surface whose mount-time load reads `stayId`, which is what makes that
-    // key a re-aim rather than a write: the endpoint is called on mount, the
-    // request references the key, and the key is declared input.
+    // `stayId` is a mount key: declared input, and read by the request of an
+    // endpoint the mount hook calls.
     const loadsByStay = {
       ...thread,
       input: { type: 'object', properties: { stayId: { type: 'string' }, draft: { type: 'string' } } },
@@ -118,8 +100,6 @@ describe('reconcileCanvas — ownership', () => {
     });
     await tick();
 
-    // A new instance, because leaving the previous guest's loaded data under a
-    // new id is the bug this rule exists for.
     const stack = shell.getState().canvases['detail']?.stack ?? [];
     expect(stack).toHaveLength(1);
     expect(stack[0]?.id).not.toBe(theirs);

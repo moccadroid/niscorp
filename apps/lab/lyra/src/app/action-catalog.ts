@@ -73,6 +73,3 @@ export const CATALOG_DEFINITIONS: Record<string, ActionDefinition> = {
   'me.bookings': { ...meBookingsAction, input: meBookingsInputSchema },
   'me.membership': { ...meMembershipAction, input: meMembershipInputSchema },
 };
-
-// The hubs, from the one navigation table. Registered in a loop because
-// adding an area should be a row in `nav/sections.ts` and nothing else.

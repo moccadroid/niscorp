@@ -1,7 +1,5 @@
 import type { FC } from 'react';
 
-// Blinking text cursor shown at the tail of a streaming string.
-
 export const Cursor: FC = () => (
   <span
     style={{

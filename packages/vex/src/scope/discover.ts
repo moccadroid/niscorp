@@ -6,35 +6,22 @@ import type { FieldOrValue } from '../schemas/value.schema.js';
 import { refuseOptional } from '../engine/optional.js';
 import { isFieldPathShape } from '../schemas/identifier.schema.js';
 
-// ───────────────────────────────────────────────────────────────
-// Helpers
-// ───────────────────────────────────────────────────────────────
-
 export const extractEntityFromPath = (path: string): string | undefined => {
   const parts = path.split('.');
   return parts.length === 2 ? parts[0] : undefined;
 };
 
-// A VALUE is a column only when it is shaped like one — the resolver and the
-// compiler use the same rule, so a literal like "u1@x.com" is never mistaken
-// for a table here and refused as one. (Field positions below keep the looser
-// split: over-collecting there can only refuse more, and the resolver refuses
-// anything in a field position that is not a real column anyway.)
+// A value is a column only when it is shaped like one, the rule the resolver
+// and compiler use: a literal like "u1@x.com" is not taken for a table and
+// refused. Field positions keep the looser split, which can only refuse more.
 const collectFromFieldOrValue = (fov: FieldOrValue, out: Set<string>): void => {
   if (isFieldPathShape(fov)) {
     const entity = extractEntityFromPath(fov);
     if (entity !== undefined) out.add(entity);
   }
-  // numbers, booleans, null, $context, $scope — no entity to extract
 };
 
-// ───────────────────────────────────────────────────────────────
-// Filter walker
-// ───────────────────────────────────────────────────────────────
-
 const collectFromFilter = (filter: Filter, out: Set<string>): void => {
-  // An EXISTS reads tables, so its tables are discovered like any other — a
-  // denied entity cannot be reached by hiding it inside a subquery.
   if ('exists' in filter) {
     for (const entity of filter.exists.from) out.add(entity);
     if (filter.exists.filter !== undefined) collectFromFilter(filter.exists.filter, out);
@@ -63,7 +50,6 @@ const collectFromFilter = (filter: Filter, out: Set<string>): void => {
         collectFromFieldOrValue(v, out);
       }
     }
-    // ContextRef / ScopeRef — no entity
     return;
   }
 
@@ -118,18 +104,11 @@ const collectFromFilter = (filter: Filter, out: Set<string>): void => {
     return;
   }
 
-  // THE ONE THAT MATTERS. This walker decides which entities get scope
-  // injected; a node it does not recognise falls through and contributes
-  // nothing, so an entity mentioned only inside an unrecognised node would be
-  // read WITHOUT a tenant filter. `optional` is resolved before the pipeline
-  // (engine/optional.ts) precisely so it can never reach here — and if it ever
-  // does, that is a scope hole, not a missing feature.
+  // A node this walker does not recognise contributes nothing, so a table
+  // named only inside it would escape the scope check. `optional` is resolved
+  // before the pipeline (engine/optional.ts) and is refused if it reaches here.
   if ('optional' in filter) refuseOptional('scope discovery');
 };
-
-// ───────────────────────────────────────────────────────────────
-// Compute walker
-// ───────────────────────────────────────────────────────────────
 
 const collectFromCompute = (expr: ComputeExpression, out: Set<string>): void => {
   if ('add' in expr || 'subtract' in expr || 'multiply' in expr || 'divide' in expr) {
@@ -166,10 +145,6 @@ const collectFromCompute = (expr: ComputeExpression, out: Set<string>): void => 
   }
 };
 
-// ───────────────────────────────────────────────────────────────
-// Aggregate walker
-// ───────────────────────────────────────────────────────────────
-
 const collectFromAggregate = (expr: AggregateExpression, out: Set<string>): void => {
   const arg = ('count' in expr) ? expr.count
     : ('countDistinct' in expr) ? expr.countDistinct
@@ -177,7 +152,6 @@ const collectFromAggregate = (expr: AggregateExpression, out: Set<string>): void
     : ('avg' in expr) ? expr.avg
     : ('min' in expr) ? expr.min
     : expr.max;
-  // sum/avg/min/max may take a compute expression — walk it for entities.
   if (typeof arg !== 'string') {
     collectFromCompute(arg, out);
     return;
@@ -186,20 +160,10 @@ const collectFromAggregate = (expr: AggregateExpression, out: Set<string>): void
   if (entity !== undefined) out.add(entity);
 };
 
-// ───────────────────────────────────────────────────────────────
-// Public API
-// ───────────────────────────────────────────────────────────────
-
 const collectFromQuery = (dsl: Query, out: Set<string>): void => {
-  // A subquery source introduces an ALIAS (`{ as: 'c', query }`): a derived
-  // relation, not a table. References to the alias at this level (`c.n`) are
-  // not entities — the subquery's REAL tables are collected (and scoped) by
-  // the recursion. Everything referenced at this level lands in `local`
-  // first, and aliases are subtracted before merging into `out`.
   const aliases = new Set<string>();
   const local = new Set<string>();
 
-  // from
   for (const source of dsl.from) {
     if (typeof source === 'string') {
       out.add(source);
@@ -209,18 +173,15 @@ const collectFromQuery = (dsl: Query, out: Set<string>): void => {
     }
   }
 
-  // fields (optional; an entry may be a bare path or { field, as })
   for (const ref of dsl.fields ?? []) {
     const entity = extractEntityFromPath(typeof ref === 'string' ? ref : ref.field);
     if (entity !== undefined) local.add(entity);
   }
 
-  // filter
   if (dsl.filter !== undefined) {
     collectFromFilter(dsl.filter, local);
   }
 
-  // compute
   if (dsl.compute !== undefined) {
     for (const key of Object.keys(dsl.compute)) {
       const expr = dsl.compute[key];
@@ -230,7 +191,6 @@ const collectFromQuery = (dsl: Query, out: Set<string>): void => {
     }
   }
 
-  // aggregate
   if (dsl.aggregate !== undefined) {
     for (const key of Object.keys(dsl.aggregate)) {
       const expr = dsl.aggregate[key];
@@ -240,7 +200,6 @@ const collectFromQuery = (dsl: Query, out: Set<string>): void => {
     }
   }
 
-  // groupBy
   if (dsl.groupBy !== undefined) {
     for (const path of dsl.groupBy) {
       const entity = extractEntityFromPath(path);
@@ -248,7 +207,6 @@ const collectFromQuery = (dsl: Query, out: Set<string>): void => {
     }
   }
 
-  // sort
   if (dsl.sort !== undefined) {
     for (const entry of dsl.sort) {
       const entity = extractEntityFromPath(entry.field);

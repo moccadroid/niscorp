@@ -28,46 +28,15 @@ import { opDate, opDateAdd, opDateDiff } from '../ops/time.ops';
 import { opLocaleDate, opLocaleMoney, opLocaleNumber } from '../ops/intl.ops';
 import { createBudget } from './budget';
 
-// ═══════════════════════════════════════════════════════════
-// Compile-time optimizer
-//
-// Walks the desugared AST and produces an annotated tree:
-//
-//   1. RefsInlined  — every $ref node carries a non-enumerable
-//                     `__segments: JsonPathSegment[]` so the runtime
-//                     skips JSONPath parsing/lookup.
-//
-//   2. HandlersAttached — every recognized op node carries a non-
-//                     enumerable `__op` pointing at its handler. The
-//                     evaluator dispatches via this directly, skipping
-//                     the long discriminant chain.
-//
-//   3. ConstantsFolded — any node whose result depends only on
-//                     literal subtrees is pre-evaluated at compile
-//                     time and replaced with `{$const: <result>}`.
-//
-// All annotations use NON-ENUMERABLE properties so:
-//   - JSON.stringify(node) still returns pure JSON
-//   - The fingerprint stays stable
-//   - Consumers that serialize the IR (showroom Compiled tab, on-disk
-//     IR caches, hot-reload) don't see the metadata leak through
-// ═══════════════════════════════════════════════════════════
-
+// Both are written as non-enumerable properties, so an optimized tree still
+// serializes as the JSON it is: the fingerprint and a stored IR carry neither.
 export const HANDLER_KEY = '__op';
 export const SEGMENTS_KEY = '__segments';
 
-// At runtime every op handler has the same shape: (node, ctx, eval) -> JsonValue.
-// Statically, each typed op (opRef, opAdd, ...) declares its own narrow `node`
-// parameter type that TypeScript can't unify with `unknown`. The dispatcher
-// below only stores a handler AFTER its guard has matched the node, so the
-// runtime contract is sound — TypeScript just can't track it across the
-// property attachment boundary.
 type OpHandler = (node: unknown, context: EvalContext, evaluate: EvaluateFn) => JsonValue;
 
-// A typed op as an OpHandler: the op itself, under the wider type. It used to
-// be a function around the op, which made every node of a compiled tree two
-// calls where one does. Nothing is checked here — `resolveHandler` only ever
-// attaches an op to a node that has passed that op's guard.
+// Nothing is checked here: `resolveHandler` attaches an op only to a node that
+// has passed that op's guard.
 const eraseOp = <T>(op: (n: T, c: EvalContext, e: EvaluateFn) => JsonValue): OpHandler => op as OpHandler;
 
 export type OptimizeStats = {
@@ -90,30 +59,20 @@ const attachNonEnumerable = (target: Record<string, unknown>, key: string, value
   });
 };
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> => isJsonObject(value);
-
-// A constant of a compiled tree is handed out by every execute of it, to
-// whoever called. Frozen, so that a caller cannot change what the next caller
-// is given: `result.tags.push(x)` on an answer that came from `{ $const: [] }`
-// used to put x into every later answer of that IR. Now it throws where it is
-// written. Scalars need nothing; a list or an object is frozen all the way down.
+// A constant of a compiled tree is handed out by every execute of it. Frozen,
+// so that a caller cannot change what the next caller is given.
 const freezeConstant = (value: unknown): void => {
   if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return;
   Object.freeze(value);
   for (const inner of Object.values(value)) freezeConstant(inner);
 };
 
-// Resolve an op handler for a node, or undefined if it's not a recognized op.
-// The returned handler is type-erased via `eraseOp` so all 50+ ops fit a
-// uniform OpHandler slot for attachment to the node.
 const resolveHandler = (node: Record<string, unknown>): OpHandler | undefined => {
-  // Core ops
   if (isRefNode(node)) return eraseOp(opRef);
   if (isConstNode(node)) return eraseOp(opConst);
   if (isVarNode(node)) return eraseOp(opVar);
   if (isGetNode(node)) return eraseOp(opGet);
   if (isWithNode(node)) return eraseOp(opWith);
-  // Array ops
   if (isMapNode(node)) return eraseOp(opMap);
   if (isFilterNode(node)) return eraseOp(opFilter);
   if (isReduceNode(node)) return eraseOp(opReduce);
@@ -121,7 +80,6 @@ const resolveHandler = (node: Record<string, unknown>): OpHandler | undefined =>
   if (isFlattenNode(node)) return eraseOp(opFlatten);
   if (isUniqueNode(node)) return eraseOp(opUnique);
   if (isSortByNode(node)) return eraseOp(opSortBy);
-  // Math ops
   if (isAddNode(node)) return eraseOp(opAdd);
   if (isSubNode(node)) return eraseOp(opSub);
   if (isMulNode(node)) return eraseOp(opMul);
@@ -129,7 +87,6 @@ const resolveHandler = (node: Record<string, unknown>): OpHandler | undefined =>
   if (isRoundNode(node)) return eraseOp(opRound);
   if (isModNode(node)) return eraseOp(opMod);
   if (isToNumberNode(node)) return eraseOp(opToNumber);
-  // String ops
   if (isJoinNode(node)) return eraseOp(opJoin);
   if (isToStringNode(node)) return eraseOp(opToString);
   if (isInterpolateNode(node)) return eraseOp(opInterpolate);
@@ -139,7 +96,6 @@ const resolveHandler = (node: Record<string, unknown>): OpHandler | undefined =>
   if (isUpperNode(node)) return eraseOp(opUpper);
   if (isSplitNode(node)) return eraseOp(opSplit);
   if (isReplaceNode(node)) return eraseOp(opReplace);
-  // Predicate ops
   if (isEqNode(node)) return eraseOp(opEq);
   if (isNeqNode(node)) return eraseOp(opNeq);
   if (isGtNode(node)) return eraseOp(opGt);
@@ -150,18 +106,15 @@ const resolveHandler = (node: Record<string, unknown>): OpHandler | undefined =>
   if (isStartsWithNode(node)) return eraseOp(opStartsWith);
   if (isEndsWithNode(node)) return eraseOp(opEndsWith);
   if (isContainsNode(node)) return eraseOp(opContains);
-  // Logic ops
   if (isNotNode(node)) return eraseOp(opNot);
   if (isAndNode(node)) return eraseOp(opAnd);
   if (isOrNode(node)) return eraseOp(opOr);
-  // Structure ops
   if (isMergeNode(node)) return eraseOp(opMerge);
   if (isCoalesceNode(node)) return eraseOp(opCoalesce);
   if (isCaseNode(node)) return eraseOp(opCase);
   if (isEntriesOfNode(node)) return eraseOp(opEntriesOf);
   if (isKeyByNode(node)) return eraseOp(opKeyBy);
   if (isGroupByNode(node)) return eraseOp(opGroupBy);
-  // Object ops
   if (isKeysNode(node)) return eraseOp(opKeys);
   if (isValuesNode(node)) return eraseOp(opValues);
   if (isFromEntriesNode(node)) return eraseOp(opFromEntries);
@@ -169,59 +122,32 @@ const resolveHandler = (node: Record<string, unknown>): OpHandler | undefined =>
   if (isOmitNode(node)) return eraseOp(opOmit);
   if (isTypeNode(node)) return eraseOp(opType);
   if (isLengthNode(node)) return eraseOp(opLength);
-  // Transform ops
   if (isHasNode(node)) return eraseOp(opHas);
   if (isRenameKeysNode(node)) return eraseOp(opRenameKeys);
   if (isUpdateNode(node)) return eraseOp(opUpdate);
   if (isAssertNode(node)) return eraseOp(opAssert);
   if (isWalkNode(node)) return eraseOp(opWalk);
-  // Time ops
   if (isDateNode(node)) return eraseOp(opDate);
   if (isDateAddNode(node)) return eraseOp(opDateAdd);
   if (isDateDiffNode(node)) return eraseOp(opDateDiff);
-  // Locale-aware formatting ops
   if (isLocaleDateNode(node)) return eraseOp(opLocaleDate);
   if (isLocaleMoneyNode(node)) return eraseOp(opLocaleMoney);
   if (isLocaleNumberNode(node)) return eraseOp(opLocaleNumber);
   return undefined;
 };
 
-// ═══════════════════════════════════════════════════════════
-// Constant folding
-//
-// A node is "pure-constant" if its evaluation result doesn't
-// depend on the source/vars at all. The conservative rule:
-//   - JSON primitives (null/number/string/boolean) are constant
-//   - Arrays of constants are constant
-//   - {$const: anything} is constant
-//   - Object literals (no $-key) whose values are all constant
-//
-// $ref, $var, $get from a $var, $with, $map etc. are NOT constant
-// because they read from source or scope. We only fold ops whose
-// inputs are 100% constant — these can be evaluated at compile
-// time with an empty context.
-// ═══════════════════════════════════════════════════════════
-
 const isFoldableLiteral = (node: unknown): boolean => {
   if (node === null || node === undefined) return true;
   const t = typeof node;
   if (t === 'string' || t === 'number' || t === 'boolean') return true;
   if (Array.isArray(node)) return node.every(isFoldableLiteral);
-  if (!isPlainObject(node)) return false;
-  // {$const: x} is foldable iff x is foldable
+  if (!isJsonObject(node)) return false;
   if (isConstNode(node)) return isFoldableLiteral(node.$const);
-  // Any other op or object containing a $-key is NOT a literal — those need
-  // a fold pass first. The fold pass checks foldability AFTER recursing into
-  // children, so by the time we ask isFoldableLiteral on an op node it's
-  // already been folded if possible.
+  // An op is no literal: children are optimized before their parent, so one
+  // that could fold is a `$const` by now.
   if (Object.keys(node).some((k) => k.startsWith('$'))) return false;
-  // Plain object: foldable iff all values are foldable
   return Object.values(node).every(isFoldableLiteral);
 };
-
-// ═══════════════════════════════════════════════════════════
-// Visitor — single recursive pass that folds, inlines, and attaches
-// ═══════════════════════════════════════════════════════════
 
 type Stats = OptimizeStats;
 
@@ -234,18 +160,15 @@ const optimizeNode = (
   if (typeof node !== 'object') return node;
 
   if (Array.isArray(node)) {
-    // Optimize each element. The array itself isn't an op so no handler.
     const out: unknown[] = [];
     for (const child of node) out.push(optimizeNode(child, stats, evaluate));
     return out;
   }
 
-  if (!isPlainObject(node)) return node;
+  if (!isJsonObject(node)) return node;
 
-  // A $const payload is DATA, returned verbatim — never a subtree to optimize.
-  // Recursing into it folded op-shaped values inside the literal
-  // (`{ $const: [{ $upper: 'x' }] }` came back as `[{ $const: 'X' }]`), which
-  // evaluate() never did.
+  // A `$const` payload is data, never a subtree to optimize: an op-shaped value
+  // inside it (`{ $const: [{ $upper: 'x' }] }`) stays as written.
   if (isConstNode(node)) {
     const literal: Record<string, unknown> = { ...node };
     freezeConstant(literal['$const']);
@@ -254,20 +177,15 @@ const optimizeNode = (
     return literal;
   }
 
-  // Recursively optimize all values first (post-order — children optimized
-  // before parents). After this, every op subtree is already folded if
-  // possible, so the parent can check isFoldableLiteral on its children.
   const optimizeValues = (record: Record<string, unknown>): Record<string, unknown> => {
     const out: Record<string, unknown> = {};
     for (const key of Object.keys(record)) out[key] = optimizeNode(record[key], stats, evaluate);
     return out;
   };
 
-  // Two ops hold a record keyed by NAMES, and a name may be an op's: a `$with`
+  // Two ops hold a record keyed by names, and a name may be an op's: a `$with`
   // binding called `$upper`, a `$renameKeys` map that renames a key called
-  // `$type`. The record is not a node. Read as one, `let: { $upper: 'x' }`
-  // was folded to `{ $const: 'X' }` — the variable gone — and `let: { $ref: 2 }`
-  // threw from the path parser; evaluate() never did either.
+  // `$type`. The record is not a node.
   let optimized: Record<string, unknown>;
   if (isWithNode(node)) {
     optimized = { $with: { let: optimizeValues(node.$with.let), value: optimizeNode(node.$with.value, stats, evaluate) } };
@@ -277,7 +195,6 @@ const optimizeNode = (
     optimized = optimizeValues(node);
   }
 
-  // 1. RefsInlined — $ref nodes get parsed segments attached.
   if (isRefNode(optimized)) {
     const segments: JsonPathSegment[] = parseJsonPath(optimized.$ref);
     if (segments.length > 0) {
@@ -286,48 +203,21 @@ const optimizeNode = (
     }
   }
 
-  // 2. HandlersAttached — every recognized op gets its handler attached.
   const handler = resolveHandler(optimized);
   if (handler !== undefined) {
     attachNonEnumerable(optimized, HANDLER_KEY, handler);
     stats.handlersAttached += 1;
   }
 
-  // 3. ConstantsFolded — if this is an op node AND all its inputs are
-  //    foldable literals, evaluate it now and replace with {$const: result}.
-  //
-  //    "All inputs foldable" means every value in the node is a literal —
-  //    no $ref/$var/$get etc. anywhere. Since we already optimized children,
-  //    a literal child either is a primitive, an array of literals, a
-  //    {$const: x}, or a plain object of literals. Op nodes whose children
-  //    are all $const have already been folded by their respective recursive
-  //    optimizeNode calls.
-  //
-  //    Skip $const itself (folding it is a no-op).
-  //    Skip ops whose semantics depend on context shape ($var/$ref/$get/$with
-  //    and friends will never satisfy the foldability check anyway, so this
-  //    is implicit, but documenting for clarity).
-  // $ref and $var READ the context; their only input is a literal string, so
-  // the literal check below would fold them — evaluated against an empty
-  // source. `$ref: '$.x'` escaped by accident (the fold throws "path not
-  // found" and is abandoned); `$ref: '$'` and '$.' folded to `{}` for good.
-  // Never fold what reads the context.
+  // `$ref` and `$var` read the context, and their only input is a literal
+  // string: the literal check below would fold them against an empty source.
   if (handler !== undefined && !isConstNode(optimized) && !isRefNode(optimized) && !isVarNode(optimized)) {
-    // Check whether every non-handler/non-segments value in the node is
-    // foldable. We test all keys (since the structure of each op differs):
-    // for math ops the values are arrays; for $with the value is an object
-    // containing $-keys; etc. The conservative rule "every leaf must be a
-    // primitive or {$const: ...}" handles all of them.
     const allFoldable = Object.entries(optimized).every(([key, value]) => {
-      // skip non-enumerable internal props (they're not in entries anyway,
-      // but defensive)
       if (key === HANDLER_KEY || key === SEGMENTS_KEY) return true;
       return isFoldableLiteral(value);
     });
     if (allFoldable) {
-      // Try to evaluate at compile time. Use an empty source/vars context.
-      // Budgeted like any evaluation: a literal subtree can blow up too, and
-      // one that would is left for the runtime, which refuses it there.
+      // Budgeted like any evaluation: a literal subtree can blow up too.
       const emptyCtx: EvalContext = { source: {}, vars: {}, budget: createBudget() };
       try {
         const folded = handler(optimized, emptyCtx, evaluate);
@@ -335,13 +225,9 @@ const optimizeNode = (
         freezeConstant(folded);
         attachNonEnumerable(replacement, HANDLER_KEY, eraseOp(opConst));
         stats.constantsFolded += 1;
-        // Note: we DO NOT decrement refsInlined/handlersAttached for the
-        // folded subtree — the stats reflect the BEFORE state of the
-        // optimization (and the folded children no longer ship to runtime).
         return replacement;
       } catch {
-        // If folding throws (rare — the foldability check should prevent
-        // most cases), leave the node as-is. The runtime will evaluate it.
+        // The node stays as it is: the runtime evaluates it and refuses it there.
       }
     }
   }
@@ -355,28 +241,13 @@ export const optimize = (node: unknown, evaluate: EvaluateFn): OptimizeResult =>
   return { node: result, stats };
 };
 
-// ═══════════════════════════════════════════════════════════
-// Rehydrate — restore the annotations an IR loses in storage
-//
-// Passes 1 and 2 above write NON-ENUMERABLE properties, so an IR that went
-// through JSON (a jsonb row, a file, the wire) comes back as the bare tree:
-// correct, but every node falls through the evaluator's discriminant chain.
-// This re-attaches exactly those two annotations, in place, to a core that is
-// already desugared and folded — no validation, no folding, no new objects.
-//
-// It does not descend into a `$const` payload: that is data the evaluator
-// returns as-is, and annotating it would hang handlers on values handed back
-// to the caller.
-// ═══════════════════════════════════════════════════════════
-
 const annotateNode = (node: unknown): void => {
   if (Array.isArray(node)) {
     for (const child of node) annotateNode(child);
     return;
   }
-  if (!isPlainObject(node)) return;
+  if (!isJsonObject(node)) return;
 
-  // A record keyed by names is not a node (see optimizeNode).
   if (isWithNode(node)) {
     for (const value of Object.values(node.$with.let)) annotateNode(value);
     annotateNode(node.$with.value);
@@ -385,8 +256,6 @@ const annotateNode = (node: unknown): void => {
   } else if (!isConstNode(node)) {
     for (const value of Object.values(node)) annotateNode(value);
   } else {
-    // Read back from storage, a constant is a new object again: freeze it as
-    // compile did.
     freezeConstant(node.$const);
   }
 

@@ -2,17 +2,6 @@ import type { Unsubscribe } from '../common';
 import type { EventBus, EventHandler, EventMatcher } from './types';
 import type { NovaEvent } from './schemas';
 
-// ═══════════════════════════════════════════════════════════
-// Typed event bus. Factory function.
-//
-// Generic over TEvent (a discriminated union of events, defaulting
-// to NovaEvent). The bus only ever inspects `event.type` for matching.
-//
-// `scoped()` returns a child bus that forwards every event it emits
-// to its parent. No type mangling, no string prefixing — if you want
-// namespacing, put it in your event payload.
-// ═══════════════════════════════════════════════════════════
-
 type Subscription<TEvent extends { type: string }> = {
   matcher: EventMatcher;
   handler: EventHandler<TEvent>;
@@ -33,9 +22,7 @@ const createChildBus = <TEvent extends { type: string }>(
       if (!typeMatches(sub.matcher, event.type)) continue;
       try {
         sub.handler(event);
-      } catch {
-        // handler failures must not crash the bus
-      }
+      } catch {}
     }
     if (parent !== undefined) parent.emit(event);
   };

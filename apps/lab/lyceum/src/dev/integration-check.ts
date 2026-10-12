@@ -1,22 +1,3 @@
-// INTEGRATION CHECK — somebody else's screen, installed live.
-//
-// The QA Company (apps/lab/lyceum-vendor-demo) is served here from a local HTTP server —
-// at the talk it is a file on GitHub Pages — and lyceum knows it only by its
-// address (LYCEUM_VENDOR_URL).
-//
-//   1. before anything is installed, no phone has the QA Company;
-//   2. the speaker's Integrations tool is on its slide; installing the BROKEN
-//      bundle is refused by intake, with the path round its loop, and no phone
-//      changes;
-//   3. installing the QA Company is accepted and held as pending — still on no phone;
-//   4. approved, each of the QA Company's screens is on the seat it attached to: the
-//      ask on every phone's list, drawn from its own layout; every question
-//      on the controller; the fit ones on the last slide;
-//   5. a question asked there lands in lyceum's Q&A as the person who asked;
-//      the controller shows it with the moderator's verdict — a question not
-//      fit to show too, marked so — and the last slide, on the projector,
-//      shows the fit one and never the other;
-//   6. removed, it is gone again, from every seat.
 import { createServer } from 'node:http';
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
@@ -29,7 +10,6 @@ import { check, connect, finish, waitUntil } from './harness';
 import type { Terminal } from './harness';
 
 const main = async (): Promise<void> => {
-  // The QA Company's host: two static files, nothing else.
   const vendor = createServer((req, res) => {
     const bundle = req.url === '/vendor/bundle' ? QA_BUNDLE : req.url === '/vendor-broken/bundle' ? QA_BROKEN_BUNDLE : undefined;
     res.writeHead(bundle === undefined ? 404 : 200, { 'content-type': 'application/octet-stream' });
@@ -66,11 +46,9 @@ const main = async (): Promise<void> => {
   const stage = await connect(base, await mintSession(runtime.pool, 'stage', 60_000));
   await stage.hello();
 
-  // ── 1 ──
   check('before anything is installed, no phone has the QA Company', !ada.showsNow('body', 'ext.member.qa.ask'));
   check('...nor the controller, nor the projector', !speaker.showsNow('attached', 'ext.speaker.qa') && !stage.showsNow('attached', 'ext.stage.qa'));
 
-  // ── 2 ──
   const at = SLIDES.findIndex((slide) => slide.tools.includes('tools.integrations'));
   check(`the Integrations tool is on a slide (${SLIDES[at]?.title ?? 'none'})`, at >= 0);
   for (let step = 0; step < at; step += 1) {
@@ -87,14 +65,12 @@ const main = async (): Promise<void> => {
   check('...and why: the trigger from the QA Company’s own file, which sends what it listens for', (await stage.shows('main', 'qa-echo')) && stage.showsNow('main', 'emit'));
   check('...and no phone has it', !ada.showsNow('body', 'ext.member.qa.ask'));
 
-  // ── 3 ──
   speaker.click('tools', 'install');
   check('installing the QA Company is accepted and pending', await speaker.shows('tools', '"value":"pending"'));
   check('...and the stage shows it passed: all four checks, the trigger gone', (await stage.shows('main', '"Passed"')) && !stage.showsNow('main', 'qa-echo') && !stage.showsNow('main', '"passed":"x"') && stage.textOf('main').split('"passed":"check"').length === 5);
   await new Promise((resolve) => setTimeout(resolve, 300));
   check('...and still no phone has it', !ada.showsNow('body', 'ext.member.qa.ask'));
 
-  // ── 4 ──
   speaker.click('tools', 'approve');
   check('approved', await speaker.shows('tools', '"value":"approved"'));
   check('...the QA Company is on the first phone, on its list', await ada.shows('body', 'ext.member.qa.ask'));
@@ -104,7 +80,6 @@ const main = async (): Promise<void> => {
   check('...and the projector holds the fit ones, for the last slide', await stage.shows('attached', 'ext.stage.qa.questions'));
   check('...a phone has neither: each screen is on its own seat', !ada.showsNow('body', 'ext.speaker.qa') && !ada.showsNow('body', 'ext.stage.qa'));
 
-  // ── 5 ──
   ada.type('body', 'question', 'Who wrote this screen?');
   await new Promise((resolve) => setTimeout(resolve, 200));
   ada.click('body', 'ask');
@@ -113,7 +88,6 @@ const main = async (): Promise<void> => {
   const ids = (await runtime.db.query<{ member_id: string }>('SELECT member_id FROM members ORDER BY joined_at, member_id')).rows.map((row) => row.member_id);
   check('...and it is in lyceum’s Q&A, as the person who asked', asked.rows.length === 1 && asked.rows[0]?.member_id === ids[0]);
   check('...and on the QA Company’s own list of their questions', await ada.shows('body', 'Who wrote this screen?'));
-  // The moderator judges it (fit), and then the projector may show it.
   const stageRead = async (): Promise<string> =>
     (await server.request('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${await mintSession(runtime.pool, 'stage', 60_000)}` }, body: JSON.stringify({ fingerprint: questionsShown.fingerprint, context: {} }) })).text();
   let seen = '';
@@ -124,7 +98,6 @@ const main = async (): Promise<void> => {
   check('...and, found fit to show, the projector may read it', seen.includes('Who wrote this screen?'));
   check('...on the controller, marked fit to show', await speaker.shows('attached', '"shown":"check"') && speaker.showsNow('attached', 'Who wrote this screen?'));
 
-  // One not fit to show: the controller has it, marked; the projector never.
   ada.type('body', 'question', 'Is the speaker an idiot?');
   await new Promise((resolve) => setTimeout(resolve, 200));
   ada.click('body', 'ask');
@@ -138,8 +111,6 @@ const main = async (): Promise<void> => {
   check('on the last slide, the projector shows the QA Company’s list', (await stage.shows('main', '"canvasId":"attached"')) && (await stage.shows('attached', 'Who wrote this screen?')));
   check('...and never the question not fit to show', !stage.showsNow('attached', 'idiot') && !stage.showsNow('main', 'idiot'));
 
-  // ── 6 ──
-  // Back to the Integrations tool's slide, where Remove is.
   for (let step = last - 1; step > at; step -= 1) {
     speaker.click('controls', 'back');
     await speaker.shows('head', `slide ${step} of`);

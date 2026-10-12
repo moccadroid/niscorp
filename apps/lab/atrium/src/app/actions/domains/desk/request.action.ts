@@ -4,22 +4,6 @@ import { requestLayout } from './request.layout';
 import { previewable, previewTriggers, crewCard } from '@atrium/app/actions/preview';
 import { deskStayPrism, staffPrism, requestSendPrism } from './desk.prism';
 
-// SOMETHING A GUEST ASKED FOR, sent to whoever does it.
-//
-// The desk could read an ask, note an ask, and escalate an ask. It could not DO
-// one. A guest wanting two extra pillows and breakfast at ten produced a queue
-// row saying somebody was waiting and no action that answered it, so the
-// assistant reached for the nearest thing whose description sounded close —
-// arrival prep, for a guest three days into his stay.
-//
-// The distinction this action holds, and the reason it is not `desk.issue.*`: an
-// ask is not a fault. Nothing is broken, nobody is owed anything, and the guest
-// is not complaining. It lands as a task like a dispatch does, because the floor
-// works one list.
-//
-// `title` and `detail` are declared input: the words a guest used are in the
-// thread the assistant is reading, and the person on the floor only ever sees
-// what reaches this box.
 export const deskRequestAction: ActionDefinition = {
   id: 'desk.request',
   title: 'Guest request',
@@ -33,8 +17,6 @@ export const deskRequestAction: ActionDefinition = {
     loadStaff: { url: '/api/service/vex', method: 'POST', request: staffPrism, target: 'staff' },
     send: { url: '/api/service/vex', method: 'POST', request: requestSendPrism },
   },
-  // The floor is read on mount rather than on the first press, so a card the
-  // assistant opens with a trade already chosen arrives with the people on it.
   lifecycle: {
     mount: [
       { call: 'load', onSuccess: [{ set: 'loading', value: false }] },

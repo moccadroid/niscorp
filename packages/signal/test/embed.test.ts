@@ -27,16 +27,12 @@ describe('embed()', () => {
 });
 
 describe('embed() onUsage', () => {
-  // A signal whose openai-compatible adapter is fed a canned provider response
-  // through the injected client — so the real adapter parses the usage and the
-  // real embed() wiring hands it to onUsage. `create` optionally throws.
   const signalWith = (body: { data?: unknown; usage?: unknown } | (() => never)) =>
     createSignal(
       { baseUrl: 'https://fake.api.com/v1', apiKey: 'test-key', model: 'text-embedding-3-small', adapter: 'openai-compatible' },
       {
         client: {
-          // The adapter validates the whole injected client at construction, chat
-          // included, so a chat stub rides along though these tests only embed.
+          // The adapter checks the injected client's chat at construction.
           chat: { completions: { create: async () => ({}) } },
           embeddings: { create: async () => (typeof body === 'function' ? body() : body) },
         },

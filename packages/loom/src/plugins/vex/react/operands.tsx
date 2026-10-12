@@ -8,16 +8,12 @@ import { Combo } from './combobox.js';
 import { fieldStyle } from './styles.js';
 import type { WidgetProps } from './widget.js';
 
-// A standalone field path: a sort key, `isNull`/`isNotNull`, or a `fields` /
-// `groupBy` item. A combobox that autocompletes against the scoped columns.
 const FieldPath: FC<{ value: unknown; catalog: Catalog; model: NovaModelBinding | undefined }> = ({ value, catalog, model }) => {
   const set = useModelWrite(model);
   const columns = useScopedColumns(catalog);
   return <Combo value={String(value ?? '')} placeholder="entity.field" options={columns} onPick={set} style={{ width: '100%' }} />;
 };
 
-// The right operand, typed by the left column: a number box for numeric columns,
-// a true/false select for booleans, a text box otherwise.
 const Operand: FC<{ type: NormalizedType | undefined; value: unknown; onChange: (value: unknown) => void }> = ({ type, value, onChange }) => {
   const style: CSSProperties = { ...fieldStyle, flex: 1, minWidth: 0 };
   if (type === 'number') {
@@ -54,8 +50,6 @@ const Operand: FC<{ type: NormalizedType | undefined; value: unknown; onChange: 
   );
 };
 
-// A comparison `[left, right]`: a field-path picker + an operand typed by the
-// chosen column, instead of editing the tuple as raw JSON.
 const Comparison: FC<{ value: unknown; catalog: Catalog; model: NovaModelBinding | undefined }> = ({ value, catalog, model }) => {
   const set = useModelWrite(model);
   const columns = useScopedColumns(catalog);
@@ -77,8 +71,6 @@ const Comparison: FC<{ value: unknown; catalog: Catalog; model: NovaModelBinding
   );
 };
 
-// The role components — closures over the catalog, registered under the widget
-// roles. Each receives `{ value, novaModel }` from the compiler.
 export const fieldPathWidget = (catalog: Catalog): NovaComponent<WidgetProps> =>
   ({ value, novaModel }) => <FieldPath value={value} catalog={catalog} model={novaModel} />;
 

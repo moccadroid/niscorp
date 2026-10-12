@@ -4,9 +4,6 @@ import { jsonSchemaOf } from '../../../lib/schema';
 import { todoPayloadRequest } from './todo-form.prism';
 import { todoFormLayout } from './todo-form.layout';
 
-// One form action for the entity (working pattern: create + edit). Loaded
-// bare it creates; loaded with the record's raw fields seeded it edits —
-// the layout picks the save button (and endpoint) off `todo_id`.
 const TodoFormInputSchema = z
   .object({
     todo_id: z.string().describe('Existing todo id. Present ⇒ the form edits; absent ⇒ it creates.'),

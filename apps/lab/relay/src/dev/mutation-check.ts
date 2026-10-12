@@ -1,10 +1,3 @@
-// Mutations (write phase). Drives a CREATE end-to-end through the real Nova path
-// — open the form modal, fill it, confirm — and proves the row lands in PGlite
-// and the list re-reads to show it. Also checks the security model: CRM
-// ownership is never writer-derived (no `set` behavior — the column stays
-// null), `$scope` is unauthorable in the DSL, the input prism bridges form →
-// columns, plus DB-defaulted id and the closed-grammar gates.
-// Run: pnpm --filter relay exec tsx src/dev/mutation-check.ts
 import { evaluate } from '@niscorp/prism';
 import { shell } from './check-shell';
 import { getVexRuntime } from './engine';
@@ -35,8 +28,6 @@ const main = async (): Promise<void> => {
   }
   const checks: [string, boolean][] = [];
 
-  // ── Engine: a direct upsert with NO id desugars to insert — proves the DB write
-  // + RETURNING + scope + id default.
   const inserted = await executeMutation(rt.db, companyUpsert.mutation, {
     context: { name: 'Probe Inc', domain: 'probe.io', industry: 'finance', size: '1-10' },
     scope: { userId: 'usr_001' },
@@ -46,15 +37,10 @@ const main = async (): Promise<void> => {
   const row = inserted[0] ?? {};
   checks.push([`insert returns the row (name=${String(row['name'])})`, row['name'] === 'Probe Inc']);
   checks.push([`id defaulted in the DB (got "${String(row['id']).slice(0, 8)}…")`, typeof row['id'] === 'string' && row['id'] !== '']);
-  // CRM ownership is NOT writer-derived: companies carry no `set` behavior
-  // (a `set` applies on EVERY write, so it would reassign the owner on each
-  // edit). The engine writes no owner — the column stays null unless data
-  // says otherwise. (The set/pin mechanism itself is proven on tasks in
-  // rls-check and in vex's own suite.)
+  // Companies carry no `set` behavior: a `set` applies on every write, so it
+  // would reassign the owner on each edit.
   checks.push([`owner is not writer-derived (got ${String(row['owner_id'])})`, row['owner_id'] == null]);
 
-  // And `$scope` simply cannot be authored in a mutation — rejected at parse, so
-  // the owner-forging swap ($scope → $context) has nothing to target.
   let scopeInDslRejected = false;
   try {
     MutationDefinitionSchema.parse({ op: 'insert', table: 'companies', values: { owner_id: { $scope: 'userId' } } });
@@ -63,13 +49,8 @@ const main = async (): Promise<void> => {
   }
   checks.push(['`$scope` cannot be authored in a mutation (rejected at parse)', scopeInDslRejected]);
 
-  // ── The seam: the form's data (a single "Name", a "Relationship") is mapped to
-  // DB columns by the input prism — split name → first/last, drop relationship —
-  // BEFORE the write. Action shape ≠ DB shape.
-  // The prism is now the full request body `{ mutation, context }`; the input seam
-  // we're testing is its `.context` (form data → DB columns).
   const ctx = (evaluate(upsertContactPrism, {
-    id: '', // the form always carries an id (default ''); empty → the upsert inserts
+    id: '', // the form always carries an id; '' makes the upsert insert
     name: 'Ada Lovelace',
     email: 'ada@analytical.io',
     phone: '+1 (555) 010-1010',
@@ -81,14 +62,12 @@ const main = async (): Promise<void> => {
   checks.push([`prism splits "Ada Lovelace" → first/last (${String(contactRow['first_name'])}/${String(contactRow['last_name'])})`, contactRow['first_name'] === 'Ada' && contactRow['last_name'] === 'Lovelace']);
   checks.push(['form-only "relationship" (no column) never reaches the row', !('relationship' in contactRow)]);
 
-  // ── Update: the SAME upsert WITH an id desugars to update — edits by id.
   const edited = (await executeMutation(rt.db, contactUpsert.mutation, {
     context: { id: contactRow['id'], first_name: 'Augusta', last_name: 'King', email: 'augusta@x.io', phone: '', title: 'Countess', company_id: null },
     scope: { userId: 'usr_001' }, policy: systemPolicy, schema,
   }))[0] ?? {};
   checks.push([`upsert with id edits the row (${String(contactRow['first_name'])} → ${String(edited['first_name'])})`, edited['first_name'] === 'Augusta' && edited['id'] === contactRow['id']]);
 
-  // ── Deal create: real FK ids (company + stage), no owner stamp, status defaults.
   const co = (await rt.db.query('SELECT id FROM companies LIMIT 1')).rows[0] as { id: string };
   const stg = (await rt.db.query("SELECT id FROM stages WHERE name='Lead' LIMIT 1")).rows[0] as { id: string };
   const newDeal = (await executeMutation(rt.db, dealUpsert.mutation, {
@@ -97,7 +76,6 @@ const main = async (): Promise<void> => {
   }))[0] ?? {};
   checks.push([`deal create writes FK ids, no owner stamp (stage=${String(newDeal['stage_id'])}, owner=${String(newDeal['owner_id'])}, status=${String(newDeal['status'])})`, newDeal['stage_id'] === stg.id && newDeal['owner_id'] == null && newDeal['status'] === 'open']);
 
-  // ── Safety gates.
   let unknownColRejected = false;
   try {
     await executeMutation(rt.db, { op: 'insert', table: 'companies', values: { naem: 'x' } } as never, { context: {}, scope: {}, policy: systemPolicy, schema });
@@ -114,13 +92,11 @@ const main = async (): Promise<void> => {
   }
   checks.push(['blanket update (empty WHERE) rejected by the schema', blankWriteRejected]);
 
-  // ── End-to-end through the shell: open the form, fill it, confirm.
   shell.dispatch({ type: 'ui:click', ref: 'nav-companies' });
   await settle();
   const before = companyRows().length;
   shell.publish('new'); // same channel the topbar's "+ New" emits
   await settle();
-  // No `id` in the form data → the `company.upsert` write desugars to insert.
   modalRt()?.setData({ id: '', name: 'Shell Co', domain: 'shell.co', industry: 'technology', size: '11-50', modalTitle: 'New company', confirmLabel: 'Create' });
   shell.dispatch({ type: 'ui:click', ref: 'confirm' });
   await settle(300);

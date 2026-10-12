@@ -6,8 +6,6 @@ const page = (children: LayoutNode | LayoutNode[]): LayoutNode => ({
   children,
 });
 
-// The day's timetable, shared by all three. Same rows, same spec — what differs
-// between audiences is what sits ABOVE it.
 const todaysClasses: LayoutNode = {
   component: 'Section',
   props: { title: "Today's classes" },
@@ -34,8 +32,6 @@ const todaysClasses: LayoutNode = {
 
 const hero: LayoutNode = { component: 'Hero', props: { eyebrow: '$.studioName', title: '$.greeting' } };
 
-// ── the owner's and manager's view ───────────────────────────
-// The only one with money on it.
 export const overviewLayout: LayoutNode = page([
   hero,
   {
@@ -51,7 +47,6 @@ export const overviewLayout: LayoutNode = page([
   todaysClasses,
 ]);
 
-// ── the front desk's view ────────────────────────────────────
 export const deskLayout: LayoutNode = page([
   hero,
   {
@@ -66,5 +61,4 @@ export const deskLayout: LayoutNode = page([
   todaysClasses,
 ]);
 
-// ── the instructor's and member's view ───────────────────────
 export const classesLayout: LayoutNode = page([hero, todaysClasses]);

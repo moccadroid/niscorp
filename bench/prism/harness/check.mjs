@@ -1,15 +1,3 @@
-// Holds every library to every task's answer, before anything is timed.
-//
-//   node harness/check.mjs                  every adapter in libs/
-//   node harness/check.mjs jsonata mingo    these adapters
-//   node harness/check.mjs --json           the matrix as JSON on stdout (what report.mjs reads)
-//
-// For each task a library says it can express, on every check input (tasks.mjs, checkInputs):
-//   - run(prepare(source), input), run again on the same prepared form, and oneShot(source, input) must each equal
-//     reference(input) after one JSON round trip: same keys, same values, key order aside;
-//   - the input must be as it was. It is handed over deep-frozen.
-// Exit code 1 if any library fails a task it claims.
-
 import { readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -32,7 +20,6 @@ export const loadAdapter = async (id) => {
   return adapter;
 };
 
-// What a task of an adapter runs with: its own functions, or the adapter's.
 export const entryOf = (adapter, taskId) => {
   const entry = adapter.tasks?.[taskId];
   if (entry === undefined) return { missing: true };

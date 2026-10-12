@@ -120,9 +120,7 @@ describe('renderLayout — loops', () => {
     };
     const [frag] = renderLayout(node, { rows: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] }, makeCtx());
     if (!frag || frag.type !== 'fragment') throw new Error('expected fragment');
-    // Identity comes from the row id — so rows survive sort/filter without remount...
     expect(frag.children.map((c) => c.key)).toEqual(['a', 'b', 'c']);
-    // ...while every row keeps the SAME ref (the event-target the trigger matches).
     for (const c of frag.children) {
       if (c.type !== 'component') throw new Error('expected component');
       expect(c.ref).toBe('row');
@@ -160,7 +158,7 @@ describe('renderLayout — loops', () => {
     if (!frag || frag.type !== 'fragment') throw new Error('expected fragment');
     const first = frag.children[0];
     if (!first || first.type !== 'component') throw new Error('expected component');
-    expect(first.props['all']).toEqual(['x', 'y']); // the array, not the element
+    expect(first.props['all']).toEqual(['x', 'y']);
     expect(first.props['v']).toBe('x');
   });
 
@@ -174,8 +172,6 @@ describe('renderLayout — loops', () => {
     if (!frag || frag.type !== 'fragment') throw new Error('expected fragment');
     const first = frag.children[0];
     if (!first || first.type !== 'component') throw new Error('expected component');
-    // Resolves to the array's own path (not an element's), and auto-derives its
-    // value from it — a control can read the list and write a new one back.
     expect(first.model?.path).toBe('items');
     expect(first.props['value']).toEqual(['x', 'y']);
   });
@@ -197,7 +193,6 @@ describe('renderLayout — loops', () => {
     if (!innerFrag || innerFrag.type !== 'fragment') throw new Error('expected nested fragment');
     const leaf = innerFrag.children[0];
     if (!leaf || leaf.type !== 'component') throw new Error('expected component');
-    // The inner loop's `$items` is the inner list (the outer's doesn't leak).
     expect(leaf.props['here']).toEqual(['a', 'b']);
     expect(leaf.model?.path).toBe('groups.0.tags');
   });

@@ -1,11 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The two surfaces about people who have not walked in yet.
-
-// ─── one arrival, prepared ───────────────────────────────────
-// Is the room ready, what have they asked for, and what does the house already
-// know about them. Three questions a good clerk asks before somebody reaches the
-// counter, in one card, opened at a stay.
 export const arrivalLayout: LayoutNode = {
   if: '$.stayId',
   then: {
@@ -20,7 +14,6 @@ export const arrivalLayout: LayoutNode = {
           { component: 'Text', props: { size: 'sm', color: 'mute' }, children: 'Room {{$.stay.room_number}} · {{$.stay.room_kind}} · {{$.stay.arrival_display}} to {{$.stay.departure_display}}' },
         ],
       },
-      // The one thing that decides whether this is a welcome or an apology.
       {
         if: '$.room.sellable',
         then: { component: 'Notice', props: { tone: 'good', icon: 'check' }, children: 'Room {{$.stay.room_number}} is signed off and ready.' },
@@ -76,11 +69,6 @@ export const arrivalLayout: LayoutNode = {
   else: { component: 'Empty', props: { icon: 'check', title: 'No arrival in hand', hint: 'Open somebody due in and this prepares them.' } },
 };
 
-// ─── a block, checked in together ────────────────────────────
-// Five rooms arriving at half past four is the worst hour a front desk has, and
-// the thing that makes it bad is doing the same four gestures five times while
-// five people watch. This does the ones that are ready, and says plainly which
-// are not.
 export const groupLayout: LayoutNode = {
   if: '$.groupId',
   then: {

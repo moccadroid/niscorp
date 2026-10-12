@@ -2,9 +2,6 @@ import { z } from 'zod';
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
 import { staffEnroll } from '@lyra/app/vex/staff.entries';
 
-// The whole hire as one replay — `staff/enroll` ensures the person and puts
-// them on staff in a single transaction; the role select's options are the
-// contract, so no role check is needed beyond the DB's own.
 const hirePrism = {
   fingerprint: staffEnroll.fingerprint,
   context: {
@@ -15,8 +12,6 @@ const hirePrism = {
   },
 };
 
-// Refused by never enabling the button rather than by a thrown error: a blank
-// name, or an address without an @.
 const hireBlocked = {
   $prism: {
     $or: [
@@ -72,8 +67,8 @@ export const staffFormAction: ActionDefinition = {
     create: { url: '/api/staff/vex', method: 'POST', request: hirePrism, errorTarget: 'error' },
   },
   triggers: [
-    // Two triggers per field, not two steps — buffered sets in one trigger
-    // resolve against the same pre-write snapshot (see people.signup).
+    // Two triggers per field, not two steps: the sets of one trigger resolve
+    // against the same pre-write snapshot.
     { event: 'ui:model', ref: 'newName', do: [{ set: 'newName', value: '@event.payload' }] },
     { event: 'ui:model', ref: 'newEmail', do: [{ set: 'newEmail', value: '@event.payload' }] },
     { event: 'ui:model', ref: 'newName', do: [{ set: 'blocked', value: hireBlocked }] },

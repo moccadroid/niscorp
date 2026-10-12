@@ -1,12 +1,4 @@
-// The live pass — the real model, the real keys, the whole assistant.
-//
-// NOT in all-checks: it costs money, needs a network, and asserts on model
-// behaviour, which is probabilistic. Every assertion is chosen to survive a dumb
-// model: structural effects on the shell and on rows, never exact wording.
-//
-// Run: pnpm --filter atrium exec tsx src/dev/ai-check.ts [--trace]
-// Its own integrations port (8790): boot pulls the bundles, and this pass must
-// not collide with the dev service (8788) or the hermetic suite (8789).
+// Its own integrations port: the dev service holds 8788 and the hermetic suite 8789.
 process.env['INTEGRATIONS_PORT'] = '8790';
 process.env['WATCH_QUIET_MS'] = '300';
 process.env['WATCH_WARMUP_MS'] = '400';
@@ -77,8 +69,6 @@ const ask = async (shell: Shell, text: string, waitMs = 40_000): Promise<string>
   }
 };
 
-// The watcher is asynchronous and the model is slow. Wait for a run that reached
-// the model rather than for a fixed interval.
 const settledWake = async (principal: string, waitMs = 60_000): Promise<Wake | undefined> => {
   const until = Date.now() + waitMs;
   while (Date.now() < until) {
@@ -96,7 +86,6 @@ const check = (label: string, pass: boolean): void => {
 };
 
 const main = async (): Promise<void> => {
-  // ═══ the dock, as a guest ═══
   const amara = await login('amara');
   await settle(1000);
   tap(amara, 'assistant', 'open');
@@ -118,7 +107,6 @@ const main = async (): Promise<void> => {
   console.log(`  ↳ "${nosy}"`);
   check('a desk surface never reaches a guest', !ids(amara, 'sheet').some((id) => id.startsWith('desk.')));
 
-  // ═══ the watcher, as the desk ═══
   await runtime.pool.query(`UPDATE staff SET layout_control = 'full' WHERE id = 'stf_rosa'`, []);
   const rosa = await login('rosa');
   await settle(2500);
@@ -133,9 +121,8 @@ const main = async (): Promise<void> => {
   const feed = (dataOf(rosa, 'desk.message.list')['feed'] ?? []) as Record<string, unknown>[];
   check(`her inbox has something in it (${feed.length})`, feed.length > 0);
 
-  // Opening the inbox is itself a gesture and its run is probably still in
-  // flight. Let the gate go quiet, or the row click's run is not the one read
-  // back here.
+  // Opening the inbox is a gesture whose run may still be in flight: wait it
+  // out, or the row click's run is not the one read back.
   let drained = -1;
   while (drained !== wakes('stf_rosa').length) {
     drained = wakes('stf_rosa').length;
@@ -160,9 +147,8 @@ const main = async (): Promise<void> => {
   check('her own list is where she left it', JSON.stringify(ids(rosa, 'work')) === hers);
   check('her conversation was not taken from her', ids(rosa, 'detail').includes('desk.thread.detail'));
 
-  // An unchanged screen must not wake it again. The gate has to be QUIET first:
-  // two gestures in a row means two runs, and the second one lands while this is
-  // still counting. Drain until nothing new arrives, then watch a still screen.
+  // Drain first: two gestures in a row mean two runs, and the second would land
+  // while the still screen is being watched.
   let seen = -1;
   while (seen !== wakes('stf_rosa').length) {
     seen = wakes('stf_rosa').length;
@@ -172,33 +158,15 @@ const main = async (): Promise<void> => {
   await settle(6000);
   check('a still screen produces no further runs', wakes('stf_rosa').length === 0);
 
-  // ═══ what it cost ═══
-  // cortex reports real provider counts; the app records one row per run through
-  // the caller's own wire. Both entry points must appear, and the numbers must be
-  // numbers rather than the zeros an estimate-shaped bug would leave.
   const runs = (
     await runtime.pool.query(`SELECT user_id, label, provider, model, input_tokens, output_tokens, total_tokens, reported, steps, elapsed_ms, outcome, turns FROM assistant_runs`, [])
   ).rows;
   check(`every model run was recorded (${runs.length})`, runs.length > 0);
-  // Only a run that REACHED the provider has counts. A run that failed before
-  // the call spent nothing, and recording it as zero is the honest answer — the
-  // row exists so the failure is visible, not so it can be summed.
-  //
-  // Single-step runs used to read as free: on the Groq emit path the step that
-  // produces the envelope is routinely a rejected-and-recovered generation, and
-  // signal returned zeros for it. Those runs — the ones nobody asked for, the
-  // ones most worth watching — undercounted to nothing. signal now estimates
-  // when the provider reports nothing and marks the row `reported: false`, so
-  // every run carries a number and says whether it is the provider's.
   const reached = runs.filter((row) => row['outcome'] === 'ok');
   check(`...with real token counts on the ${reached.length} that reached it`, reached.length > 0 && reached.every((row) => Number(row['total_tokens']) > 0));
   const empty = runs.filter((row) => Number(row['total_tokens']) === 0);
   if (empty.length > 0) console.log(`  ↳ no tokens on: ${empty.map((row) => `${String(row['label'])}/${String(row['outcome'])}/${String(row['steps'])} steps`).join(', ')}`);
   console.log(`  ↳ counted   on: ${reached.filter((row) => Number(row['total_tokens']) > 0).map((row) => `${String(row['label'])}/${String(row['steps'])} steps`).join(', ')}`);
-  // The exchange itself, turn by turn — the record is what the admin pane reads,
-  // so what it holds is worth asserting rather than assuming. A run that reached
-  // the provider carries the assembled prompt at minimum: instructions, the
-  // catalogs, the screen, the input.
   type Turn = { role: string; content: string; name?: string; calls?: { name: string; args: string }[] };
   const turnsOf = (row: Record<string, unknown>): Turn[] => {
     try {
@@ -209,9 +177,6 @@ const main = async (): Promise<void> => {
   };
   check('...and the whole exchange, turn by turn', reached.every((row) => turnsOf(row).length > 1));
   check('...with the static prefix first', reached.every((row) => turnsOf(row)[0]?.role === 'system'));
-  // A tool call and its result are two turns. The dock queries on the way to an
-  // answer, so at least one run must carry both halves — if it does not, the
-  // record is silently dropping the most useful half of a transcript.
   const withCalls = runs.filter((row) => turnsOf(row).some((turn) => (turn.calls ?? []).length > 0));
   check(`the tools a run called are recorded (${withCalls.length} runs)`, withCalls.length > 0);
   check(
@@ -224,8 +189,6 @@ const main = async (): Promise<void> => {
     }),
   );
 
-  // Latency is the point of the prompt work, so read it back rather than trust
-  // it: a one-step glance is nearly all prefill.
   for (const label of ['chat', 'watch']) {
     const of = runs.filter((row) => row['label'] === label);
     if (of.length === 0) continue;
@@ -241,9 +204,6 @@ const main = async (): Promise<void> => {
   const unasked = runs.filter((row) => row['label'] === 'watch');
   console.log(`  ↳ ${asked.length} asked, ${unasked.length} unasked, ${runs.reduce((sum, row) => sum + Number(row['total_tokens']), 0)} tokens total`);
 
-  // The conversation is the dock's alone: the watcher's lines are a record of
-  // what it did, not turns in a conversation, and feeding them back would tell
-  // the chat agent it said things it never said.
   const turns = (await runtime.pool.query(`SELECT origin FROM assistant_turns`, [])).rows;
   check('chat wrote to the conversation', turns.some((row) => row['origin'] === 'chat'));
   check('...and the watcher did not', !turns.some((row) => row['origin'] === 'watch' && unasked.length === 0));

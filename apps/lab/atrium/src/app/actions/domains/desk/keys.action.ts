@@ -4,16 +4,6 @@ import { keysLayout } from './keys.layout';
 import { previewable, previewTriggers, crewCard } from '@atrium/app/actions/preview';
 import { deskStayPrism, deskKeyPrism } from './desk.prism';
 
-// Cut a credential from the desk. Placed by the SAME capability that places the
-// guest's own key tile — so when Opera v2 goes live, the clerk gains this tool
-// in the same instant the guests gain theirs, from one row change.
-//
-// It is now STAY-SCOPED, and that change deleted more than it added. As a
-// house-level tool it had to find a guest, so it carried its own copy of the
-// movements list plus a search box — a second list of the same rows, existing
-// only because a verb could not be aimed at a row. Declaring `stayId` moved it
-// into the workspace beside every other thing the desk can do for the person in
-// hand, and took the list, the search and the second read with it.
 export const deskKeysAction: ActionDefinition = {
   id: 'desk.keys',
   title: 'Issue a key',
@@ -24,9 +14,6 @@ export const deskKeysAction: ActionDefinition = {
   ),
   endpoints: {
     load: { url: '/api/stay/vex', method: 'POST', request: deskStayPrism, target: 'stay' },
-    // The connector cuts it. If that service is down the clerk reads which one
-    // did not answer and our database records nothing — a credential is never
-    // claimed to exist because a process was up.
     cut: { fn: 'connector.issueKey', target: 'credential', errorTarget: 'error' },
     persist: { url: '/api/stay/vex', method: 'POST', request: deskKeyPrism },
   },

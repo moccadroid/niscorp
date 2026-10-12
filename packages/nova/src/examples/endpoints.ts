@@ -1,8 +1,5 @@
 import type { NovaExample } from './example.types';
 
-// How an action reaches outside itself. What answers is said beside the
-// action (`replies`, `fetches`), so the example comes to the same thing wherever
-// it is run.
 export const ENDPOINT_EXAMPLES: readonly NovaExample[] = [
   {
     id: 'function-endpoint',

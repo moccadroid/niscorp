@@ -1,16 +1,3 @@
-// One case, in a process of its own: one library, one task, one size, one of the things that are timed.
-//
-//   node --expose-gc harness/case.mjs <library> <task> <size> <phase>
-//
-// phase:
-//   prepare   the stored form parsed or compiled, from a fresh copy each call
-//   run       what prepare made, over the input
-//   oneshot   stored form to answer, from a fresh copy each call
-//   rotate    every one-order task the library can do, prepared once, called in turn (task and size are ignored)
-//   cold      import the library and answer `project` once (task and size are ignored)
-//
-// Prints one line of JSON. Times are nanoseconds for one call.
-
 import { performance } from 'node:perf_hooks';
 import { TASKS, taskOf } from '../tasks.mjs';
 import { entryOf, loadAdapter } from './check.mjs';
@@ -30,7 +17,6 @@ export const lastAnswer = () => kept;
 
 const isThenable = (value) => value !== null && typeof value === 'object' && typeof value.then === 'function';
 
-// `make(count)` hands back the arguments of `count` calls, made outside the clock; `call(argument)` is what is timed.
 // `fresh` says the arguments are new objects for each call: the ones of the batch before are collected before the
 // clock starts, so that their collection is not charged to the batch after.
 const measure = async (make, call, fresh = false) => {
@@ -43,7 +29,6 @@ const measure = async (make, call, fresh = false) => {
     else for (let i = 0; i < args.length; i += 1) kept = call(args[i]);
     return performance.now() - from;
   };
-  // Warm up, and find how many calls fill a batch.
   let calls = 0;
   let spent = 0;
   let size = 1;
@@ -55,7 +40,6 @@ const measure = async (make, call, fresh = false) => {
     if (spent > MAX_MS) break;
   }
   const perCall = spent / calls;
-  // Fresh arguments are made a batch at a time and held until it has run: no more than 4096 of them.
   const batchSize = Math.max(1, Math.min(fresh ? 4096 : 1 << 20, Math.round(BATCH_MS / Math.max(perCall, 1e-6))));
   globalThis.gc?.();
   const samples = [];

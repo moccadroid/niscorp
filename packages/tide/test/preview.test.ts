@@ -3,11 +3,6 @@ import { createMemoryStore, createTide } from '../src/index';
 import type { EffectRegistry, ReflexInput, Row, Tide } from '../src/index';
 import { testTransform, utc } from './support';
 
-// Preview is a VERB, not a flag. The real pipeline runs — the occurrence is
-// computed, the selection hits real data, every template is evaluated — and
-// exactly one function is stubbed. Because that function is the only door
-// out of tide, a reflex cannot opt out of being previewable.
-
 const vienna = 'Europe/Vienna';
 const NOW = utc('2026-03-10T12:00:00Z');
 
@@ -55,9 +50,7 @@ describe('preview', () => {
     expect(report.units.map((unit) => unit.unit)).toEqual(['m1', 'm2']);
     expect(report.units[0]?.input).toEqual({ to: 'ada@example.com', name: 'Ada', day: '2026-03-10' });
 
-    // The whole point: no effect ran…
     expect(sent).toHaveLength(0);
-    // …and nothing was written to the ledger either.
     expect(await tide.ledger.runs()).toHaveLength(0);
     expect(await tide.ledger.tasks()).toHaveLength(0);
   });
@@ -118,9 +111,6 @@ describe('preview', () => {
 
   it('previews a reflex that is disarmed — that is what preview is for', async () => {
     const { tide } = await build({ 'mail.send': { run: () => null } });
-    // Disarming is the host writing its own column and loading again, not a
-    // method on the engine. Preview does not consult the switch either way:
-    // looking before arming is most of what the verb is for.
     await tide.load([{ ...dunning, enabled: false }], { at: NOW - 86_400_000 });
     const report = await tide.preview('billing.dunning', { now: NOW });
     expect(report.selected).toBe(2);

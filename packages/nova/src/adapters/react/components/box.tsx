@@ -2,10 +2,6 @@ import type { CSSProperties } from 'react';
 import { BoxPropsSchema, type BoxProps } from '../../primitive-props';
 import type { NovaComponent, NovaComponentProps } from '@react';
 
-// ═══════════════════════════════════════════════════════════
-// Box — generic styled container
-// ═══════════════════════════════════════════════════════════
-
 export { BoxPropsSchema, type BoxProps };
 
 export const Box: NovaComponent<BoxProps> = ({

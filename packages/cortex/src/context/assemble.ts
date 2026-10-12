@@ -1,20 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// Context assembly — ENTRIES enter, PRODUCERS make them
-// ═══════════════════════════════════════════════════════════
-//
-// Per DESIGN.md §5. Two words, two types: a ContextEntry is what enters
-// the prefix (a string chunk, several chunks, or raw messages); a
-// Producer is a FUNCTION that makes one. How a producer constructs its
-// entry is irrelevant — a library export (vexGuide), an app's ambient
-// fact ("today is …"), a registry render — same contract. Annotate
-// definitions with `satisfies Producer` so what a thing is stays
-// obvious at the definition site. Order in the array IS placement (no
-// priorities). Producers run ONCE, at run start; the transcript is
-// append-only afterwards — dynamic steering belongs to prepareStep.
-// Tools contribute their own guides through a separate section (below):
-// a tool's usage knowledge travels with the tool, never hand-copied
-// into instructions.
-
 import type { Message } from '@niscorp/signal';
 import type { ToolDefinition } from '../tool/define-tool';
 
@@ -31,11 +14,8 @@ export type ProducerArgs<TDeps> = {
   agent: AgentInfo;
 };
 
-// What enters context: one system chunk, several (each string becomes its
-// own system message — a producer can emit a GROUP), or raw messages.
 export type ContextEntry = string | string[] | Message[];
 
-// What makes one. Always a function — the name says so.
 export type Producer<TDeps = undefined> = (
   args: ProducerArgs<TDeps>,
 ) => ContextEntry | Promise<ContextEntry>;
@@ -51,17 +31,12 @@ const isMessageArray = (value: unknown): value is Message[] =>
       typeof (item as { role: unknown }).role === 'string',
   );
 
-// The user turn(s) for a run input. Strings become one user message;
-// Message[] passes through (caller-owned multi-turn history); any
-// other value is minified JSON in a user message.
 export const inputMessages = (input: RunInput): Message[] => {
   if (typeof input === 'string') return [{ role: 'user', content: input }];
   if (isMessageArray(input)) return input;
   return [{ role: 'user', content: JSON.stringify(input) }];
 };
 
-// Normalize one entry into messages: string → one system chunk (empty
-// skipped); string[] → one system chunk PER string; Message[] → passthrough.
 const entryMessages = (entry: ContextEntry): Message[] => {
   if (typeof entry === 'string') {
     return entry.length > 0 ? [{ role: 'system', content: entry }] : [];
@@ -84,9 +59,6 @@ export const assembleContext = async <TDeps>(
   return messages;
 };
 
-// One system chunk built from the ACTIVE tools' own guides — the tool-owned
-// half of the producer principle. A tool that defines `guide` teaches every
-// run that carries it; agents never restate tool usage in instructions.
 export const toolGuidesMessage = (tools: ReadonlyArray<ToolDefinition>): Message[] => {
   const guides = tools
     .map((tool) => {
@@ -105,8 +77,6 @@ export const toolGuidesMessage = (tools: ReadonlyArray<ToolDefinition>): Message
   ];
 };
 
-// Rough token estimate for previews and budget conditions:
-// ~4 chars per token plus a small per-message overhead.
 export const estimateTokens = (messages: ReadonlyArray<Message>): number => {
   let total = 0;
   for (const message of messages) {

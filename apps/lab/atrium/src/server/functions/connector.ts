@@ -4,41 +4,15 @@ import type { FunctionSession, NiscRuntime } from '@niscorp/moss';
 import { resolveStatements } from '@atrium/db/resolve';
 import { refreshServer, syncIntegrations } from '@atrium/server/bundles';
 
-// The integration seam. Two handlers, and the difference between them is the
-// whole point of running connectors as their own service.
-//
-//   `connector.issueKey` — talks to a SEPARATE PROCESS over HTTP. New PMS
-//     integrations deploy on their own clock, and if one is unreachable the main
-//     app keeps serving: the guest gets a sentence and our database does not
-//     record a credential that was never cut.
-//
-//   `connector.resync`   — recomputes the resolved layer in our own database.
-//     This is the deployment: no process restarts. It does NOT push to other
-//     shells — the database is now correct, and every shell reads the resolved
-//     surface fresh on its next mount/resume. Liveness is best-effort by
-//     design; correctness is the DB.
-//
-// The connector service being separate is what makes "our main app never goes
-// down" true rather than aspirational: shipping Opera v3 is a deploy of a
-// process that this one only ever calls.
-
 const CONNECTOR_TIMEOUT_MS = 2500;
 
-// Rule 13: a fn payload crosses a boundary, so it is parsed, not cast. Zod
-// strips keys it does not name — the whole action-data blob narrows to what
-// each handler actually uses.
 const KeyPayload = z.object({ stayId: z.string().optional(), keyStayId: z.string().optional() });
 const ResyncPayload = z.object({ selected: z.object({ connector_id: z.string().optional() }).optional() });
 
-// `runtime` is the app's own, handed in by its boot (the manifest is built
-// there, over it): a session says who is calling and carries no database.
-// What these two do with it is machinery no caller's policy describes: a join
-// across the connector registry, a pull from a vendor's service, the
-// deployment's own resolve. They run for whoever the charter grants the
-// action that calls them.
+// These run on the app's own `runtime`, under no caller's policy, for whoever
+// the charter grants the action that calls them.
 export const connectorFunctions = (_session: FunctionSession, runtime: NiscRuntime): Record<string, FunctionHandler> => ({
-  // Cut a door credential. `stayId` comes from the action's data, which lives in
-  // the server's shell — a terminal cannot forge it.
+  // `stayId` comes from the action's data in the server's shell: a terminal cannot forge it.
   'connector.issueKey': async (data) => {
     const payload = KeyPayload.parse(data);
     const stayId = payload.stayId ?? payload.keyStayId ?? '';
@@ -73,8 +47,6 @@ export const connectorFunctions = (_session: FunctionSession, runtime: NiscRunti
       const body = (await response.json()) as { credential?: string };
       return body.credential ?? '';
     } catch (error) {
-      // A connector that is down is an ordinary condition, not a crash. The
-      // caller shows the sentence and writes nothing.
       const reason = error instanceof Error && error.name === 'AbortError' ? 'it did not answer in time' : error instanceof Error ? error.message : 'it is unreachable';
       throw new Error(`The ${String(row['connector_name'])} door service could not cut a key — ${reason}. Nothing was charged and no key was issued.`);
     } finally {
@@ -82,27 +54,14 @@ export const connectorFunctions = (_session: FunctionSession, runtime: NiscRunti
     }
   },
 
-  // THE deployment step, now with the pull in front: fetch the connector's
-  // current /bundle through intake (a go-live picks up whatever the vendor
-  // shipped since), then recompute what is live and refresh the running
-  // server — bundle actions re-load from rows, memos drop, and every living
-  // shell adopts the re-resolved definitions in place. A guest holding their
-  // phone in the lobby sees a tile arrive without touching anything.
-  //
-  // The pull is best-effort ON PURPOSE: a switch flip must resolve even when
-  // the service is unreachable (the rows it flipped are ours), so refusals
-  // and downtime are reported in the result, never thrown.
+  // The pull is best-effort: a switch flip must resolve even when the service is
+  // unreachable, so refusals and downtime are reported in the result, never thrown.
   'connector.resync': async (data) => {
-    // Scope the resync to the shipped connector when the console names one;
-    // a property-level toggle resolves the whole estate.
     const connectorId = ResyncPayload.parse(data).selected?.connector_id ?? '';
     const scoped = connectorId === '' ? undefined : connectorId;
     const reports = await syncIntegrations(runtime, scoped);
     for (const statement of resolveStatements(scoped)) await runtime.pool.query(statement, []);
     await refreshServer(runtime);
-    // The console renders this: what each connector's service said. A refusal
-    // is a row here and old rows on disk — never a thrown call, because the
-    // switch flip itself succeeded.
     return reports.map((r) => ({ connector: r.connector, ok: r.ok, detail: r.ok ? 'bundle pulled and validated' : r.reasons.join(' · ') }));
   },
 });

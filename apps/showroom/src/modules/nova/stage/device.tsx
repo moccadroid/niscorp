@@ -1,19 +1,8 @@
 import type { FC, ReactNode } from 'react';
 import { PhoneFrame, type PhoneTone } from '@showroom/chrome/stage/phone';
 
-// ═══════════════════════════════════════════════════════════
-// The devices nova's stories render on.
-//
-// A layout is a screen, so every nova story is drawn on one: the stage's phone
-// for most, and a tablet — the same bezel, wider — for the few whose point is
-// several canvases side by side (a kanban, a dashboard, a list beside a
-// detail). Both are plain frames; what is inside is the real nova renderer.
-// ═══════════════════════════════════════════════════════════
-
 const RING: Record<PhoneTone, string> = { ok: '#10b981', bad: '#ef4444', plain: '#e5e7eb', accent: '#6366f1' };
 
-// PhoneFrame's wide sibling. Same bezel, same status bar, same screen colour —
-// only the width and the corner radius change, so the two read as one family.
 export const TabletFrame: FC<{ tone?: PhoneTone; width?: number; status?: ReactNode; minHeight?: number; children: ReactNode }> = ({
   tone = 'plain',
   width = 780,
@@ -46,9 +35,8 @@ export const TabletFrame: FC<{ tone?: PhoneTone; width?: number; status?: ReactN
 
 export type DeviceSize = 'phone' | 'tablet';
 
-// One entry point for both. The inner box is `position: relative` so a story
-// that draws an overlay (the modal) is scoped to the screen, and scrolls
-// sideways rather than spilling out of the bezel if a layout is wider than it.
+// The inner box is `position: relative` so a story that draws an overlay (the
+// modal) is scoped to the screen.
 export const Device: FC<{ size?: DeviceSize; tone?: PhoneTone; status?: ReactNode; minHeight?: number; children: ReactNode }> = ({
   size = 'phone',
   tone = 'plain',

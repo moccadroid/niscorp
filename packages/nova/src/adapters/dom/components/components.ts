@@ -1,14 +1,6 @@
 import type { DomComponent } from '../index';
 import { boxStyle, flexStyle, gridStyle, textStyle, css, str, num, bool, iconGlyph } from './props';
 
-// ═══════════════════════════════════════════════════════════
-// The DOM reference kit — domain-blind primitives (no entity nouns) that map
-// nova's presentational props to semantic elements. A component is a component;
-// the registry (registry.ts) only registers them, and the look lives in
-// styles.ts. Unmapped names fall back to a div (fallback), so any app's tree
-// still renders its content.
-// ═══════════════════════════════════════════════════════════
-
 const elem = (tag: string, children: Node[]): HTMLElement => {
   const node = document.createElement(tag);
   for (const child of children) node.appendChild(child);
@@ -49,8 +41,6 @@ export const Button: DomComponent = ({ props, children }) => {
   const el = elem('button', children);
   const icon = str(props, 'icon');
   if (children.length === 0 && icon !== undefined) el.textContent = iconGlyph(icon);
-  // Expose variant + size as data-attrs so styles.ts can dress every variant
-  // (primary/ghost/danger/…), not just primary. The look stays in the CSS.
   const variant = str(props, 'variant');
   if (variant !== undefined) el.setAttribute('data-variant', variant);
   const size = str(props, 'size');
@@ -86,7 +76,6 @@ export const Textarea: DomComponent = ({ props }) => {
   return el;
 };
 
-// Dotted-path field access for the data-driven table.
 const at = (row: unknown, key: string): unknown => {
   let cursor: unknown = row;
   for (const segment of key.split('.')) {
@@ -108,9 +97,6 @@ const columnsOf = (props: Record<string, unknown>): Column[] => {
 };
 const cellKey = (column: Column): string => (typeof column.cell?.key === 'string' ? column.cell.key : '');
 
-// The one data-driven primitive worth interpreting so lists show content: a
-// header from `columns`, a body from `rows`, and a row click dispatching
-// `rowRef` with row[clickKey ?? rowKey].
 export const Table: DomComponent = ({ props, dispatch }) => {
   const columns = columnsOf(props);
   const rows = Array.isArray(props['rows']) ? props['rows'] : [];
@@ -156,8 +142,6 @@ export const Table: DomComponent = ({ props, dispatch }) => {
   return table;
 };
 
-// Panel — a framed, elevated surface with an optional title header. The
-// generic version of a devtools/dashboard panel.
 export const Panel: DomComponent = ({ props, children, dispatch }) => {
   const el = document.createElement('div');
   el.setAttribute('data-panel', '');
@@ -165,8 +149,6 @@ export const Panel: DomComponent = ({ props, children, dispatch }) => {
   if (title !== undefined) {
     const head = document.createElement('div');
     head.setAttribute('data-panel-title', '');
-    // `backRef`/`closeRef` — header ← and ✕, same prop-ref convention as
-    // Table's rowRef: ← before the title, ✕ after it
     const backRef = str(props, 'backRef');
     if (backRef !== undefined) {
       const back = document.createElement('button');
@@ -196,9 +178,6 @@ export const Panel: DomComponent = ({ props, children, dispatch }) => {
   return el;
 };
 
-// JsonTree — a collapsible view of any JSON value. Uses native <details> so it
-// folds without a line of script. The value arrives resolved in props (the
-// server rendered it); `label` names the root.
 const jsonNode = (value: unknown, key: string | undefined): HTMLElement => {
   if (value !== null && typeof value === 'object') {
     const entries = Array.isArray(value) ? value.map((item, i): [string, unknown] => [String(i), item]) : Object.entries(value);
@@ -226,22 +205,12 @@ export const JsonTree: DomComponent = ({ props }) => {
   return el;
 };
 
-// The per-instance boundary marker a flattened shell tree carries (identity in
-// props, the instance's rendered content as children). The DOM target has no
-// wrapper concept, so it passes the content straight through — the marker is
-// wire protocol, decoration is a per-target concern.
 export const ActionSlot: DomComponent = ({ children }) => elem('div', children);
 
-// Unmapped primitives (an app's own NavItem, KanbanBoard, …) render as a div
-// with their children — content shows, and a `ref` still wires a click. When a
-// prop-driven component carries NO children, surface its primary text prop
-// (label / title / name / text) plus a `count` — so a nav link or list row
-// still reads instead of vanishing into an empty box. A legible degrade, not a
-// full port: the app's own DOM kit is what makes it pretty (icons, theme).
 export const fallback: DomComponent = ({ props, children }) => {
   const el = elem('div', children);
   if (children.length > 0) return el;
-  // Only unambiguous display strings — NOT `name` (Icon/field id) or `value`.
+  // Not `name` (an icon or a field id) and not `value`: neither is a display string.
   const label = str(props, 'label') ?? str(props, 'title');
   if (label !== undefined) el.appendChild(document.createTextNode(label));
   const count = props['count'];

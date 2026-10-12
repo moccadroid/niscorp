@@ -1,17 +1,14 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The company form body — the modal chrome is the `modal` fragment. Each field is
-// two-way bound to the action data (`$.name`, …): the FORM's shape, not the
-// table's. The `company.upsert` input prism maps it to DB columns.
 export const companyFormLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 13 },
   children: [
     { component: 'Input', model: '$.name', props: { label: 'Name', placeholder: 'Company name', required: true } },
     { component: 'Input', model: '$.domain', props: { label: 'Domain', placeholder: 'example.com' } },
-    // Option values MATCH the stored column values (see vex/seed.ts INDUSTRY /
-    // SIZE) — otherwise an existing company's value won't pre-select on edit, and
-    // saving would overwrite it with a non-matching slug.
+    // Option values are the stored column values (the seed's INDUSTRY and SIZE):
+    // any other value would not pre-select on edit, and saving would overwrite
+    // the stored one.
     {
       component: 'Select',
       model: '$.industry',
@@ -48,8 +45,6 @@ export const companyFormLayout: LayoutNode = {
         ],
       },
     },
-    // The form's own footer — its buttons live here, in its layout, handled by
-    // its action's `cancel`/`confirm` triggers. Renders on every canvas.
     {
       component: 'FormFoot',
       children: [

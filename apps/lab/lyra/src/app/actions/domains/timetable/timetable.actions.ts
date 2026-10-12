@@ -26,7 +26,6 @@ const WEEKDAYS = [
   { value: '0', label: 'Sunday' },
 ];
 
-// ── the grid ─────────────────────────────────────────────────
 export const timetableListAction: ActionDefinition = {
   id: 'timetable.list',
   title: 'Classes',
@@ -44,21 +43,15 @@ export const timetableListAction: ActionDefinition = {
   },
   lifecycle: {
     mount: [{ call: 'load', onSuccess: [{ set: 'loading', value: false }] }],
-    // Coming back from the form: re-read rather than trust what was left
-    // behind.
     resume: [{ call: 'load' }],
   },
   triggers: [
     { event: 'ui:click', ref: 'add', do: [{ push: { action: 'timetable.form', canvas: 'sheet', with: ['sheet'], input: { templateId: '', heading: 'Add a class' } } }] },
     { event: 'ui:click', ref: 'addEvent', do: [{ push: { action: 'timetable.event', canvas: 'sheet', with: ['sheet'], input: { heading: 'Add a one-off' } } }] },
-    // A course is the same kind of thing with an end date and a price, so it
-    // belongs behind a button here rather than on a screen of its own.
     { event: 'ui:click', ref: 'addCourse', do: [{ push: { action: 'courses.form', canvas: 'sheet', with: ['sheet'], input: { heading: 'Add a course' } } }] },
     { event: 'ui:click', ref: 'roster', do: [{ push: { action: 'courses.roster', canvas: 'sheet', with: ['sheet'], input: { courseId: '@event.payload.course_id', courseName: '@event.payload.name' } } }] },
     { message: 'courses-changed', do: [{ call: 'load' }] },
     { event: 'ui:click', ref: 'edit', do: [{ push: { action: 'timetable.form', canvas: 'sheet', with: ['sheet'], input: { templateId: '@event.payload.template_id', heading: 'Edit class' } } }] },
-    // Two controls, one write. The menu item that fired says which way it
-    // means, and `pendingActive` carries that into the request.
     {
       event: 'ui:click',
       ref: 'retire',
@@ -85,16 +78,12 @@ export const timetableListAction: ActionDefinition = {
 
 export const timetableListInputSchema = z.toJSONSchema(z.object({}));
 
-// ── the slot form ────────────────────────────────────────────
 export const timetableFormAction: ActionDefinition = {
   id: 'timetable.form',
-  // The sheet renders this, so it has to be the real heading.
   title: '$.heading',
   data: {
     heading: 'Add a class',
     templateId: '',
-    // The editable slot, every key defaulted so a bare load is a usable form
-    // rather than an empty one.
     name: '',
     programId: '',
     weekday: '1',
@@ -102,8 +91,6 @@ export const timetableFormAction: ActionDefinition = {
     durationMins: 60,
     capacity: 20,
     instructorId: '',
-    // Option lists, fetched rather than authored — a studio's programs and
-    // teachers are its own.
     programOptions: [],
     teacherOptions: [],
     weekdayOptions: WEEKDAYS,
@@ -123,8 +110,6 @@ export const timetableFormAction: ActionDefinition = {
     mount: [
       { call: 'programs' },
       { call: 'teachers' },
-      // Then the record, when there is one. Loaded bare, `templateId` is empty
-      // and this read answers the empty shape — which is exactly the blank form.
       {
         call: 'load',
         onSuccess: [
@@ -175,7 +160,6 @@ export const timetableFormInputSchema = z.toJSONSchema(
   }),
 );
 
-// ── programs ─────────────────────────────────────────────────
 export const programsAction: ActionDefinition = {
   id: 'programs.list',
   title: 'Class types',
@@ -186,8 +170,6 @@ export const programsAction: ActionDefinition = {
   },
   lifecycle: { mount: [{ call: 'load', onSuccess: [{ set: 'loading', value: false }] }] },
   triggers: [
-    // Open the form, do not become it: the screen holds no draft, it seeds one
-    // into the sheet.
     { event: 'ui:click', ref: 'add', do: [{ push: { action: 'programs.form', canvas: 'sheet', with: ['sheet'], input: { heading: 'Add a class type' } } }] },
     {
       event: 'ui:click',
@@ -215,7 +197,6 @@ export const programsAction: ActionDefinition = {
 
 export const programsInputSchema = z.toJSONSchema(z.object({}));
 
-// ── a one-off ────────────────────────────────────────────────
 export const eventFormAction: ActionDefinition = {
   id: 'timetable.event',
   title: '$.heading',

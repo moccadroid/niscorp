@@ -3,8 +3,6 @@ import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { HUES, TONES, clamp01, classes, num, oneOf, rowsOf, text } from './props';
 import type { Props } from './props';
 
-// Content primitives: words, labels, records and lists of them.
-
 const TEXT_VARIANTS = ['body', 'label', 'title', 'display', 'mono', 'tag', 'kicker', 'story'] as const;
 
 export const Text: NovaComponent<Props> = ({ children, value, variant, tone }) => (
@@ -13,8 +11,6 @@ export const Text: NovaComponent<Props> = ({ children, value, variant, tone }) =
   </span>
 );
 
-// Renders nothing without a label: a badge bound to a record that has not
-// loaded yet must not flash an empty pill.
 export const Badge: NovaComponent<Props> = ({ label, tone }) => {
   const shown = text(label);
   if (shown === '') return null;
@@ -33,8 +29,6 @@ export const Card: NovaComponent<Props> = ({ children, title, subtitle, tone }) 
   </section>
 );
 
-// `items: [{ label, value }]`. Pairs whose value is empty are dropped, so a
-// record that is still loading shows fewer rows rather than a column of blanks.
 export const KeyValue: NovaComponent<Props> = ({ items, inline }) => {
   const pairs = rowsOf(items).filter((item) => text(item['value']) !== '');
   if (pairs.length === 0) return null;
@@ -50,18 +44,11 @@ export const KeyValue: NovaComponent<Props> = ({ items, inline }) => {
   );
 };
 
-// Repeated structure is a spec prop, not a component: which key is the primary
-// line, which the secondary, which sits at the right edge. A row with a ref on
-// the node is clickable and hands the row back as the payload.
 export const List: NovaComponent<Props> = ({ rows, rowKey, title, primaryKey, primarySuffix, secondaryKey, secondaryPrefix, secondarySuffix, metaKey, metaSuffix, badgeKey, max, empty, tone, novaRef }) => {
   const dispatch = useNovaDispatch();
-  // `max` shows the first few and says how many were left out: a glance, not a
-  // feed — and never a silent truncation.
   const all = rowsOf(rows);
   const limit = num(max, all.length);
   const list = all.slice(0, limit);
-  // Units around a value are the spec's, not the data's: ' kph', ':00'. A cell
-  // with no value shows nothing, not an orphaned suffix.
   const dressed = (value: unknown, prefix: unknown, suffix: unknown): string => (text(value) === '' ? '' : `${text(prefix)}${text(value)}${text(suffix)}`);
   return (
     <div className="en-list">
@@ -94,9 +81,6 @@ export const List: NovaComponent<Props> = ({ rows, rowKey, title, primaryKey, pr
   );
 };
 
-// A row of small labelled tags behind one muted prefix: `prefix` says what
-// KIND of thing they are ("heard", "filters", "selected"), each item carries a
-// label and optionally a tone. Renders nothing when there are none.
 export const Tags: NovaComponent<Props> = ({ items, prefix }) => {
   const tags = rowsOf(items).filter((item) => text(item['label']) !== '');
   if (tags.length === 0) return null;
@@ -112,9 +96,6 @@ export const Tags: NovaComponent<Props> = ({ items, prefix }) => {
   );
 };
 
-// A bar from 0 to 1. `compact` is the trace's variant: label and number on one
-// line over a hairline bar.
-// `note` is a few words beside a compact reading — why it came to nothing, say.
 export const Meter: NovaComponent<Props> = ({ value, label, tone, compact, note }) => {
   const level = clamp01(num(value, 0));
   return (
@@ -131,8 +112,6 @@ export const Meter: NovaComponent<Props> = ({ value, label, tone, compact, note 
   );
 };
 
-// An offered option. The click carries `value` — whatever the layout bound to
-// it — and the meter underneath says how sure whoever offered it was.
 export const Chip: NovaComponent<Props> = ({ label, value, meter, done, accent, novaRef }) => {
   const dispatch = useNovaDispatch();
   return (

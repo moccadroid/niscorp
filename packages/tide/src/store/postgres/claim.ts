@@ -27,19 +27,16 @@ export const claimOver =
         [...where.params, ...set.params],
       );
       // ORDER BY inside the subquery decides which rows are taken, not the order RETURNING hands them
-      // back, and the engine runs tasks in the order a claim returns them: re-sorted, a fan-out runs
-      // in insertion order here as it does in memory.
+      // back, and the engine runs tasks in the order a claim returns them.
       return sortRows(result.rows.map((row) => rowToEntity(spec.table, row)), spec.order);
     };
 
     if (spec.onePer === undefined) return take(client, {}, spec.limit);
 
-    // At most one held row per group, counting what an earlier claim already holds. Postgres refuses
-    // a window function beside FOR UPDATE, so the restricted groups are claimed one at a time. Asking
-    // whether a group is held and then claiming in it are two statements: they run in a transaction
-    // behind an advisory lock on the group, because under READ COMMITTED two instances would both be
-    // told nothing is held. Whoever does not get the lock leaves the group, as SKIP LOCKED leaves a
-    // row.
+    // Postgres refuses a window function beside FOR UPDATE, so the restricted groups are claimed one
+    // at a time. Asking whether a group is held and then claiming in it are two statements: they run
+    // in a transaction behind an advisory lock on the group, because under READ COMMITTED two
+    // instances would both be told nothing is held.
     const { column, held, only } = spec.onePer;
     const restricted = [...only];
     // Room is reserved for the serial groups before the bulk claim, or a busy parallel reflex starves them.

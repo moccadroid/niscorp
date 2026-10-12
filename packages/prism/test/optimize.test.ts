@@ -1,17 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { compile, execute, evaluate, type JsonObject } from '../src';
 
-// ═══════════════════════════════════════════════════════════
-// Optimizer tests — verify that compile() actually does the
-// three optimizations and that execute() produces the same
-// answer as evaluate().
-// ═══════════════════════════════════════════════════════════
-
 describe('compile — constant folding', () => {
   it('folds a pure-literal $add expression to a single $const', async () => {
     const ir = await compile({ $add: [{ $const: 2 }, { $const: 3 }] });
     expect(ir.meta.stats.optimizations.constantsFolded).toBeGreaterThanOrEqual(1);
-    // The fold replaces the $add with {$const: 5}; nodeCount drops
     expect(ir.meta.stats.nodeCount).toBeLessThanOrEqual(4);
   });
 
@@ -55,7 +48,6 @@ describe('compile — handler attachment', () => {
         body: { $get: { from: { $var: 'item' }, path: ['name'] } },
       },
     });
-    // 4 ops: $map, $ref, $get, $var
     expect(ir.meta.stats.optimizations.handlersAttached).toBe(4);
   });
 
@@ -108,7 +100,6 @@ describe('compile — $ref segment inlining', () => {
 
 describe('compile — fingerprint stability', () => {
   it('produces the same fingerprint regardless of optimization', async () => {
-    // Two identical configs should have the same fingerprint
     const a = await compile({ $add: [{ $const: 1 }, { $const: 2 }] });
     const b = await compile({ $add: [{ $const: 1 }, { $const: 2 }] });
     expect(a.meta.fingerprint).toBe(b.meta.fingerprint);
@@ -154,8 +145,6 @@ describe('execute — equivalence with evaluate', () => {
 });
 
 describe('execute — an IR read back from storage', () => {
-  // The annotations are non-enumerable, so JSON (a jsonb row, a file) drops
-  // them. execute() must restore them rather than run the slow chain forever.
   const stored = async (config: unknown): Promise<Awaited<ReturnType<typeof compile>>> =>
     JSON.parse(JSON.stringify(await compile(config)));
 
@@ -172,7 +161,6 @@ describe('execute — an IR read back from storage', () => {
     const map = core['$map'] as Record<string, unknown>;
     const segments = Object.getOwnPropertyDescriptor(map['over'], '__segments');
     expect(Array.isArray(segments?.value)).toBe(true);
-    // Still pure JSON on the way back out.
     expect(JSON.stringify(ir.core)).toBe(JSON.stringify((await compile({ $map: { over: { $ref: '$.rows' }, as: 'r', body: { $upper: { $var: 'r' } } } })).core));
   });
 
@@ -197,9 +185,6 @@ describe('execute — an IR read back from storage', () => {
   });
 });
 
-// A `$with` binding and a `$renameKeys` map are keyed by NAMES, and a `$const`
-// holds DATA; a `$` key among them may be an op's name. The optimizer read such
-// a record as that op, and the desugar step read a sugar op's name as sugar.
 describe('a name or a constant that looks like an op', () => {
   const stored = async (config: unknown): Promise<Awaited<ReturnType<typeof compile>>> =>
     JSON.parse(JSON.stringify(await compile(config)));
@@ -210,12 +195,10 @@ describe('a name or a constant that looks like an op', () => {
     { name: 'a binding called $ref, holding a ref', config: { $with: { let: { $ref: { $ref: '$.a' } }, value: { $var: '$ref' } } }, source: { a: 7 }, expected: 7 },
     { name: 'a key called $upper, renamed', config: { $renameKeys: { from: { $ref: '$' }, map: { $upper: 'x' } } }, source: { $upper: 1, b: 2 }, expected: { x: 1, b: 2 } },
     { name: 'a key called $type, renamed', config: { $renameKeys: { from: { $ref: '$' }, map: { $type: 'kind' } } }, source: { $type: 'a' }, expected: { kind: 'a' } },
-    // The sugar ops' names: the desugar step read these as sugar, in evaluate too.
     { name: 'a binding called $sum', config: { $with: { let: { $sum: [1, 2] }, value: { $var: '$sum' } } }, source: {}, expected: [1, 2] },
     { name: 'a binding called $const, whose value is sugar', config: { $with: { let: { $const: { $sum: { over: [1, 2] } } }, value: { $var: '$const' } } }, source: {}, expected: 3 },
     { name: 'a key called $count, renamed', config: { $renameKeys: { from: { $ref: '$' }, map: { $count: 'n' } } }, source: { $count: 1 }, expected: { n: 1 } },
     { name: 'sugar where a $renameKeys reads from', config: { $renameKeys: { from: { total: { $sum: { over: { $ref: '$.xs' } } } }, map: { total: 'sum' } } }, source: { xs: [1, 2, 3] }, expected: { sum: 6 } },
-    // A $const is data, returned as it is written.
     { name: 'a constant with a $sum key', config: { $const: { total: { $sum: 1 } } }, source: {}, expected: { total: { $sum: 1 } } },
     { name: 'a constant that is a pipeline of $match and $count', config: { $const: [{ $match: { status: 'A' } }, { $count: 'n' }] }, source: {}, expected: [{ $match: { status: 'A' } }, { $count: 'n' }] },
     { name: 'a constant that is a Prism config', config: { $const: { $sum: { over: { $ref: '$.xs' } } } }, source: { xs: [1] }, expected: { $sum: { over: { $ref: '$.xs' } } } },
@@ -232,8 +215,6 @@ describe('a name or a constant that looks like an op', () => {
   }
 });
 
-// Every execute of an IR hands out the IR's own constants. A caller that wrote
-// to one changed what every later caller was given.
 describe('a constant that a compiled config hands out', () => {
   const stored = async (config: unknown): Promise<Awaited<ReturnType<typeof compile>>> =>
     JSON.parse(JSON.stringify(await compile(config)));

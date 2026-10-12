@@ -3,10 +3,6 @@ import { getApp } from '../boot';
 import { streakFromDoneDays } from '../nova/chrome/topbar.prism';
 import { activeData, check, fail, finish, isRecord, records, waitFor } from './harness';
 
-// The mood palette and streak derivations: seed state (blush, streak 3),
-// the streak transform against synthetic day sets, and the mood calming
-// down as the overdue todos get completed through the real list UI.
-
 const shiftDay = (today: string, days: number): string => {
   const date = new Date(`${today}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
@@ -31,7 +27,6 @@ const run = async (): Promise<never> => {
   await waitFor(() => activeData(shell, 'chrome')['streak'] === 3);
   check('seed streak is 3 consecutive days', activeData(shell, 'chrome')['streak'] === 3);
 
-  // ── The streak transform, against synthetic day sets ──────
   const parsed = validate(streakFromDoneDays);
   check('streak transform config validates', parsed.ok);
   if (parsed.ok) {
@@ -49,7 +44,6 @@ const run = async (): Promise<never> => {
     );
   }
 
-  // ── Garden therapy: complete the overdue todos, watch the mood calm ──
   const overdueIds = listTodos()
     .filter((t) => t['overdue'] === true)
     .map((t) => t['todo_id']);

@@ -7,28 +7,8 @@ import { resolveStatements } from '@atrium/db/resolve';
 import { intakeBundle } from './intake';
 import type { IntakeContext, PulledBundle } from './intake';
 
-// ═══════════════════════════════════════════════════════════
-// DISCOVERY — the app learns its integrations by PULLING them.
-//
-// The app ships with zero built-in knowledge of Opera, Mews or HotelFix.
-// `syncIntegrations` walks the connector registry, fetches each service's
-// `/bundle` (capability matrix, actions, queries, slots, menus, table
-// footprint), validates the WHOLE payload at intake, and only then upserts —
-// one transaction per connector. A refusal or an unreachable service leaves
-// that connector's last-synced rows serving and reports the reasons; the
-// others still land.
-//
-// After the pull, the database is the only source: `loadBundles` reads the
-// rows back into `bundleState`, which is what boot hands the manifest and
-// what the assistant's knowledge derives from. Shipping an integration is
-// deploying ITS service and syncing — this process never restarts.
-// ═══════════════════════════════════════════════════════════
-
 const PULL_TIMEOUT_MS = 2500;
 
-// What the rows currently say — the running image of every synced bundle.
-// One module-level registry, refilled by loadBundles; readers (the manifest
-// merge, the assistant's knowledge) always see the latest sync.
 export type BundleState = {
   actions: Record<string, ActionDefinition>;
   entries: (SeedEntry | SeedMutation)[];
@@ -50,17 +30,8 @@ export const loadBundles = async (runtime: NiscRuntime): Promise<BundleState> =>
   return bundleState;
 };
 
-// ─── the pull ────────────────────────────────────────────────
-
-// `kind` separates the two failures that deserve different treatment: a
-// service that did not answer is a transient condition worth chasing, a
-// payload intake refused is a vendor bug that will still be a bug in thirty
-// seconds. Boot retries the first and only the first.
 export type SyncReport = { connector: string; ok: boolean; kind: 'ok' | 'unreachable' | 'refused' | 'failed'; reasons: string[] };
 
-// What the last pull said, kept because a report that only reaches the console
-// that triggered it cannot answer "is the estate healthy right now". `at: 0`
-// means no pull has finished yet, which on a booting process is the truth.
 export const lastSync: { at: number; reports: SyncReport[] } = { at: 0, reports: [] };
 
 const pull = async (serviceUrl: string): Promise<unknown> => {
@@ -90,10 +61,8 @@ const intakeContext = async (runtime: NiscRuntime, connectorId: string): Promise
   schemaTables: new Set(TABLES),
 });
 
-// The transactional upsert — everything one connector's bundle owns, replaced
-// in one go. Capability switches are the ONE thing preserved: the vendor
-// console owns `enabled`, so an existing row only takes the new version, and
-// only rows for capabilities the service no longer reports are dropped.
+// An existing capability row takes only the new version: the vendor console
+// owns `enabled`, and a pull does not flip it.
 const land = async (runtime: NiscRuntime, connectorId: string, bundle: PulledBundle): Promise<void> => {
   const versionOf = new Map(bundle.capabilities.map((c) => [c.id, c.version]));
   const existing = await column(runtime, 'SELECT capability_id FROM connector_capabilities WHERE connector_id = $1', [connectorId]);
@@ -122,10 +91,6 @@ const land = async (runtime: NiscRuntime, connectorId: string, bundle: PulledBun
       await runtime.pool.query('INSERT INTO bundle_entries (fingerprint, connector_id, definition) VALUES ($1, $2, $3)', [entry.fingerprint, connectorId, JSON.stringify(entry)]);
     }
 
-    // Slots are replaced wholesale, so the OPERATOR's switch has to survive the
-    // replacement — exactly like `connector_capabilities.enabled` above. A
-    // surface we withdrew stays withdrawn when its vendor re-ships it; a pull
-    // is not a way to undo our own decision.
     const withdrawn = await column(runtime, 'SELECT id FROM surface_slots WHERE source = $1 AND enabled = false', [connectorId]);
     await runtime.pool.query('DELETE FROM surface_slots WHERE source = $1', [connectorId]);
     for (const [audience, id, actionId, title, blurb, icon, capability, stayState, keywords, canvas, position] of bundle.slots) {
@@ -155,9 +120,6 @@ const land = async (runtime: NiscRuntime, connectorId: string, bundle: PulledBun
   }
 };
 
-// Pull one connector (or all of them), gate, land, reseed, refresh. The
-// returned reports are the console's material: per connector, landed or the
-// exact reasons it did not.
 export const syncIntegrations = async (runtime: NiscRuntime, connectorId?: string): Promise<SyncReport[]> => {
   const where = connectorId === undefined ? '' : ' WHERE id = $1';
   const connectors = await runtime.pool.query(`SELECT id, service_url FROM connectors${where} ORDER BY id`, connectorId === undefined ? [] : [connectorId]);
@@ -200,8 +162,6 @@ export const syncIntegrations = async (runtime: NiscRuntime, connectorId?: strin
     landed = true;
   }
 
-  // One reload + refresh for the whole pass: rows → bundleState → the running
-  // manifest, memos dropped, living shells adopt.
   if (landed) {
     await loadBundles(runtime);
     await refreshServer(runtime);
@@ -211,23 +171,13 @@ export const syncIntegrations = async (runtime: NiscRuntime, connectorId?: strin
   return reports;
 };
 
-// ─── the refresh seam ────────────────────────────────────────
-// boot() registers the whole reload: re-read the bundle rows, then hand their
-// entries and actions to moss as the 'bundles' set (verify → drop memos →
-// shells adopt).
-// Keyed by the RUNTIME it refreshes, not held in one module-level slot: a
-// process can boot more than one server (the checks do), and a refresh belongs
-// to the server standing over that database. Weakly held, so a runtime that is
-// dropped takes its refresher with it.
+// Keyed by the runtime: a process can boot more than one server (the checks do).
 const refreshers = new WeakMap<NiscRuntime, () => Promise<void>>();
 
 export const registerRefresh = (runtime: NiscRuntime, fn: () => Promise<void>): void => {
   refreshers.set(runtime, fn);
 };
 
-// Re-load and re-verify the running server. Throws if the new artifact set is
-// incoherent — the caller surfaces that as an ordinary failed call and the old
-// resolution keeps serving.
 export const refreshServer = async (runtime: NiscRuntime): Promise<void> => {
   await refreshers.get(runtime)?.();
 };

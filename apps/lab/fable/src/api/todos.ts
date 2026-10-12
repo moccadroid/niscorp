@@ -3,17 +3,6 @@ import type { Query } from '@niscorp/vex';
 import type { CacheEntry } from './index';
 import { dateText } from '@fable/lib/format.prism';
 
-// ═══════════════════════════════════════════════════════════
-// Reads — the prewarmed cache entries, each under its NAMED fingerprint (the
-// identity the prisms replay). Three list scopes, three DISTINCT shapes: Open
-// carries a computed `overdue` flag, Today adds a const `today` marker on top
-// of it, Done swaps the flag for `done_at_display`. `due_date` is kept RAW
-// alongside `due_date_display` so a row's ⋯ → Edit can seed the form's date
-// input.
-// ═══════════════════════════════════════════════════════════
-
-// Fields shared by every list mapping — each body key reads the aliased row
-// column; the display fields format on the way out of Vex.
 const listBody = {
   todo_id: { $get: { from: { $var: 'r' }, path: ['todo_id'] } },
   title: { $get: { from: { $var: 'r' }, path: ['title'] } },
@@ -33,8 +22,8 @@ const listFields = [
   'todos.done',
 ];
 
-// `overdue` is computed in the DSL (not the mapping) because only the query
-// sees `$context.today` — the mapping runs over bare rows.
+// `overdue` is computed in the query, not the mapping: only the query sees
+// `$context.today`.
 const overdueCompute: NonNullable<Query['compute']> = {
   overdue: {
     case: {
@@ -44,7 +33,6 @@ const overdueCompute: NonNullable<Query['compute']> = {
   },
 };
 
-// Open todos, soonest due first (dateless last). Overdue rows are flagged.
 export const todosOpen: CacheEntry = {
   fingerprint: 'todos/open',
   intent: 'List open todos ordered by due date, flagging overdue ones',
@@ -71,8 +59,6 @@ export const todosOpen: CacheEntry = {
   },
 };
 
-// The Today scope: open todos due on or before today — today's plus the
-// overdue backlog. The const `today` key labels the rows.
 export const todosToday: CacheEntry = {
   fingerprint: 'todos/today',
   intent: 'List open todos due today or earlier (today plus overdue)',
@@ -104,8 +90,6 @@ export const todosToday: CacheEntry = {
   },
 };
 
-// Done todos, most recently completed first. `done_at_display` replaces the
-// overdue flag — distinct shape, and the Done tab shows when it was finished.
 export const todosDone: CacheEntry = {
   fingerprint: 'todos/done',
   intent: 'List done todos, most recently completed first',
@@ -131,12 +115,9 @@ export const todosDone: CacheEntry = {
   },
 };
 
-// The stat row — four counts in ONE read, as conditional sums over a single
-// scan (one aggregated row → an object shape; identity mapping returns it
-// as-is). NOT four cross-joined COUNT(*) subqueries: Vex restarts parameter
-// numbering inside each `from` subquery, so two subqueries that each use
-// `$context.today` collide on `$1` — a platform bug to report, dodged here
-// by keeping the query flat.
+// Conditional sums over one scan, not four cross-joined COUNT(*) subqueries:
+// Vex restarts parameter numbering inside each `from` subquery, so two
+// subqueries that each use `$context.today` collide on `$1`.
 export const todoStats: CacheEntry = {
   fingerprint: 'todos/stats',
   intent: 'Todo counts — open, due today, overdue, done',
@@ -167,20 +148,12 @@ export const todoStats: CacheEntry = {
   mapping: { $ref: '$.result' },
 };
 
-// ═══════════════════════════════════════════════════════════
-// Writes — the endpoint body contracts (D4: plain handlers). Each body is
-// parsed `.strict()` at the boundary by the handler in vex/http/writes.ts.
-// `done_at` has no contract on purpose: the endpoint stamps it.
-// ═══════════════════════════════════════════════════════════
-
 const dueDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
   .nullable()
   .describe('ISO date (YYYY-MM-DD), or null for no due date');
 
-// Create-or-edit: a null `todo_id` inserts (the DB mints the id), a non-null
-// one updates.
 export const TodoSaveBody = z
   .object({
     todo_id: z.string().nullable().describe('Existing todo id to update, or null to create'),

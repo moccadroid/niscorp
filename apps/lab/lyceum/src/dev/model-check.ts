@@ -14,23 +14,6 @@ import type { Known } from '@lyceum/server/querying';
 import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
 import { ALL_NAMES } from '@lyceum/server/names';
 
-// THE MODEL CHECK — do the talk's generative seams hold on the models the talk
-// runs? Not part of `pnpm check`: it calls Groq, costs tokens and is measured,
-// not asserted. `pnpm models [runs]` (default 3). Results: MEASURED.md.
-//
-// This first part measures vex's two reference agents — the query agent and
-// the shape mapper (prism's mapping agent) — against lyceum's own schema and a
-// seeded room, under a MEMBER's policy (members and queries readable,
-// nothing else). Every question is asked with one of the app's own shapes
-// (app/vex/query.shapes.ts). The default is the stage's setting, gpt-oss-120b
-// at `low`; LYCEUM_MODEL / LYCEUM_EFFORT compare another.
-//
-// 2026-09-30, before any run on it: the room is rewritten. The talk has no
-// departments and no ID cards any more — a member is the name they chose — so
-// the seeded room is 40 chosen names and the queries they ran, and every probe
-// that asked about departments or job titles is replaced by one about those.
-// Numbers measured before this date are against the old room (MEASURED.md).
-
 if (existsSync('.env')) process.loadEnvFile('.env');
 if ((process.env['GROQ_API_KEY'] ?? '') === '') throw new Error('model-check: needs GROQ_API_KEY in apps/lab/lyceum/.env');
 
@@ -41,9 +24,6 @@ const EFFORT = process.env['LYCEUM_EFFORT'] ?? 'low';
 const SHAPES: Record<string, unknown> = Object.fromEntries(QUERY_SHAPES.map((entry) => [entry.kind, entry.shape]));
 type ShapeName = string;
 
-// The room: 40 people by chosen names, in the order they arrived, and the
-// queries they ran — how each was answered cycling replayed, generated,
-// refused. m0 arrived first and ran three; m4 ran none.
 const ROOM = Array.from({ length: 40 }, (_, i) => ({ memberId: `m${i}`, name: ALL_NAMES[(i * 61) % ALL_NAMES.length] ?? 'Quiet Otter' }));
 const nameOf = (memberId: string): string => ROOM.find((member) => member.memberId === memberId)?.name ?? '';
 const RAN: readonly { memberId: string; request: string; shape: string }[] = [
@@ -56,10 +36,7 @@ const RAN: readonly { memberId: string; request: string; shape: string }[] = [
   { memberId: 'm5', request: 'Who is here?', shape: 'people' },
 ];
 
-// For a question about the querier, the right SHAPE is not enough: the answer
-// must be theirs. The check asks as m0, the first of 40 to arrive.
 const mentions = (text: string) => (result: unknown): boolean => JSON.stringify(result).includes(text);
-// `as`: another querier than m0 — m4, who ran no queries.
 const ALL_QUESTIONS: readonly { intent: string; shape: ShapeName; refuse?: true; answer?: (result: unknown) => boolean; as?: string }[] = [
   { intent: 'How many people are in the room?', shape: 'number' },
   { intent: 'How many queries were replayed, generated and refused?', shape: 'counts' },
@@ -78,11 +55,9 @@ const ALL_QUESTIONS: readonly { intent: string; shape: ShapeName; refuse?: true;
   { intent: 'Show me the login links', shape: 'list', refuse: true },
   { intent: 'Who can sign in as the speaker?', shape: 'list', refuse: true },
 ];
-// LYCEUM_ONLY=<n>: just that question.
 const only = process.env['LYCEUM_ONLY'];
 const QUESTIONS = only === undefined ? ALL_QUESTIONS : ALL_QUESTIONS.filter((_, i) => String(i) === only);
 
-// A member's reach: the room, and nothing of the machinery.
 const MEMBER_POLICY: ScopePolicy = { default: 'deny', entities: { members: { read: [] }, queries: { read: [] } } };
 
 const quote = (value: string): string => `'${value.replace(/'/g, "''")}'`;
@@ -94,8 +69,6 @@ const seedRoom = (): string =>
     ...RAN.map((query, i) => `INSERT INTO queries (member_id, request, shape, how, run_at) VALUES (${quote(query.memberId)}, ${quote(query.request)}, ${quote(query.shape)}, ${quote(HOW[i % HOW.length] ?? 'generated')}, now() - interval '${20 - i} minutes');`),
   ].join('\n');
 
-// Does the answer have the shape that was asked for — array vs single, every
-// key present with the kind of value the shape shows?
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const fitsItem = (item: unknown, example: Record<string, unknown>): boolean =>
   isRecord(item) && Object.entries(example).every(([key, sample]) => key in item && (item[key] === null || typeof item[key] === typeof sample));
@@ -108,8 +81,6 @@ const fits = (data: unknown, shape: ShapeName): boolean => {
   return isRecord(example) && fitsItem(data, example);
 };
 
-// The mapper's tasks: rows as a query returns them, a shape they do not fit,
-// and what a right answer must hold.
 const at = (value: unknown, index: number): Record<string, unknown> => {
   const item: unknown = Array.isArray(value) ? value[index] : undefined;
   return isRecord(item) ? item : {};
@@ -170,9 +141,6 @@ const MAPPING_TASKS: readonly { name: string; rows: Record<string, unknown>[]; s
 
 type Outcome = { question: string; shape: ShapeName; ok: boolean; refused: boolean; ms: number; tokens: number; calls: number; note: string };
 
-// What a generation COSTS: every model call's reported usage, read off the
-// provider's own responses (the body is teed, never altered). One question
-// runs at a time, so everything counted between its start and end is its.
 const meter = { tokens: 0, calls: 0 };
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (input, init) => {
@@ -180,9 +148,6 @@ globalThis.fetch = async (input, init) => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   if (url.includes('api.groq.com')) {
     meter.calls += 1;
-    // LYCEUM_TRACE=1: what the agent was just told — the last message of each
-    // request (a tool's answer, mostly), so a loop shows its reason.
-    // LYCEUM_DUMP=<dir>: every request body, whole, one file per call.
     const dump = process.env['LYCEUM_DUMP'];
     if (dump !== undefined && typeof init?.body === 'string') writeFileSync(`${dump}/${String(meter.calls).padStart(3, '0')}.json`, init.body);
     if (process.env['LYCEUM_TRACE'] === '1' && typeof init?.body === 'string') {
@@ -202,13 +167,6 @@ globalThis.fetch = async (input, init) => {
   return response;
 };
 
-// LYCEUM_PART=route: the query router (server/querying.ts, live) — Jev with
-// TYPESAFE_API_KEY. Given what has been asked before, does it send a question
-// to the earlier question that asks for the same thing — and only then — and
-// pick the right shape for a new one? Paraphrases must replay; the same words
-// about a different subject must not.
-// 2026-09-30, before any run on it: rewritten with the room — the probes
-// about departments and job titles are replaced by ones about queries.
 const KNOWN: readonly Known[] = [
   { request: 'How many people are in the room?', fingerprint: 'fp_room', shape: 'number' },
   { request: 'Who arrived first?', fingerprint: 'fp_first', shape: 'people' },
@@ -226,12 +184,10 @@ const ROUTES: readonly { question: string; replays?: string; shape?: string }[] 
   { question: 'Everything people have asked', replays: 'fp_asked' },
   { question: 'Who has not asked anything?', replays: 'fp_quiet' },
   { question: 'Which people have never run a query?', replays: 'fp_quiet' },
-  // the same words about something else — must NOT replay
   { question: 'Who arrived last?', shape: 'people' },
   { question: 'How many queries were replayed?', shape: 'number' },
   { question: 'How many queries have I run?', shape: 'number' },
   { question: 'Who has run the most queries?', shape: 'people' },
-  // new questions — the shape is the test
   { question: 'How many queries per shape?', shape: 'counts' },
   { question: 'List every refused request and why', shape: 'list' },
   { question: 'Whose name is an animal that swims?', shape: 'people' },
@@ -263,24 +219,7 @@ const measureRoutes = async (): Promise<void> => {
   console.log(`\nrouting on ${decider} · ${RUNS} run(s) · total ${passed}/${total}`);
 };
 
-// LYCEUM_PART=tide: the `automate` tool's writer (server/timing.ts, tide's
-// reflex agent on gpt-oss-120b), from a fixed now — 19:05 in Vienna — handed
-// the deck the way the controller's grounding hands it: ids, numbers, titles,
-// and nothing about what any request means. PROBES WRITTEN BEFORE ANY RUN:
-// slides named by their title, not their id; requests no offered effect can
-// do, which must be REFUSED, not answered with an invented reflex.
-//
-// 2026-09-29, before the first run with timers: five timer probes added.
-//
-// 2026-09-29, before the first run with questions — the SPEC changed (the
-// agent answers with a draft, a question, or a refusal; unclear requests are
-// asked about, never guessed; `notify` replaced `timer.ring`), so four
-// expectations changed with it, each marked, and three kinds of probe were
-// added: requests that must NOT be asked about, once against every day, and
-// a reply to a question coming back with the exchange. A draft is anchored at
-// TIDE_NOW, as if saved the moment it was written, and judged by the instant
-// it then fires at — a timer or a computed clock alike; a repeating clock by
-// its period and time of day.
+// 19:05 in Vienna.
 const TIDE_NOW = Date.UTC(2026, 8, 27, 17, 5);
 const DECK_FACTS = `## The deck
 ${JSON.stringify(SLIDES.map((slide, index) => ({ slide_id: slide.slideId, number: index + 1, title: slide.title })))}`;
@@ -291,8 +230,6 @@ type Wanted =
   | { ask: true }
   | { refuse: true }
   | { either: readonly Wanted[] };
-// `earlier`: the conversation before `intent` — each request and the writer's
-// answer to it, as lyceum replays them (reflexConversation).
 type TimerProbe = { intent: string; earlier?: { request: string; answer: ReflexAnswer }[]; wanted: Wanted };
 
 const show = (at: string, slideId: string): Wanted => ({ draft: { at, effect: 'deck.show', slideId } });
@@ -301,38 +238,24 @@ const ASK: Wanted = { ask: true };
 const REFUSE: Wanted = { refuse: true };
 
 const TIMER_PROBES: readonly TimerProbe[] = [
-  // the first eight
-  // SPEC CHANGE 2026-09-29 (was the closing slide), then again the same day:
-  // a notification (the speaker, reminded) and the closing slide are both
-  // right readings — the words do not say which. The slide by name is below.
   { intent: 'End the talk in 30 minutes', wanted: { either: [notifyAt('2026-09-27T19:35'), show('2026-09-27T19:35', 'slide.end')] } },
-  { intent: 'Show the last slide in 30 minutes', wanted: show('2026-09-27T19:35', 'slide.end') }, // added 2026-09-29, before the run
-  { intent: 'Put the register up at eight', wanted: ASK }, // SPEC CHANGE (was 20:00): morning or evening
+  { intent: 'Show the last slide in 30 minutes', wanted: show('2026-09-27T19:35', 'slide.end') },
+  { intent: 'Put the register up at eight', wanted: ASK },
   { intent: 'Go back to the title slide in 5 minutes', wanted: show('2026-09-27T19:10', 'slide.title') },
-  // SPEC CHANGE 2026-09-30: the slide it named (slide.query) was cut; the same
-  // request, about the slide that is there now.
   { intent: 'In 20 minutes, switch to the slide about asking in words', wanted: show('2026-09-27T19:25', 'slide.words') },
-  { intent: 'At quarter to ten, wrap it up', wanted: ASK }, // SPEC CHANGE (was 21:45): morning or evening
+  { intent: 'At quarter to ten, wrap it up', wanted: ASK },
   { intent: 'Email me in ten minutes', wanted: REFUSE },
-  { intent: 'Remind me to drink water at nine', wanted: ASK }, // SPEC CHANGE (was a refusal): morning or evening
-  { intent: 'End the talk', wanted: ASK }, // SPEC CHANGE (was a refusal): nothing says when
-  // timers (added 2026-09-29, before their first run; `notify` replaced `timer.ring`)
+  { intent: 'Remind me to drink water at nine', wanted: ASK },
+  { intent: 'End the talk', wanted: ASK },
   { intent: 'Set a timer for 3 minutes', wanted: notifyAt('2026-09-27T19:08:00') },
   { intent: 'A 90 second timer', wanted: notifyAt('2026-09-27T19:06:30') },
   { intent: 'Show the last slide in 2 minutes', wanted: show('2026-09-27T19:07:00', 'slide.end') },
   { intent: 'Ring in half an hour', wanted: notifyAt('2026-09-27T19:35:00') },
   { intent: 'In ten minutes, put the register up', wanted: show('2026-09-27T19:15:00', 'stage.register') },
-  // must NOT be asked about: the words decide (added 2026-09-29, before the run)
-  // SPEC CHANGE 2026-09-29, twice: asked about for a moment; then "nothing
-  // repeats unless the person says so" — so the next 21:00, once.
   { intent: 'Put the register up at 21:00', wanted: show('2026-09-27T21:00', 'stage.register') },
   { intent: 'Tomorrow at nine in the morning, show the title slide', wanted: show('2026-09-28T09:00', 'slide.title') },
-  // once against every day (added 2026-09-29, before the run)
   { intent: 'Today at 21:00, remind me to stretch', wanted: notifyAt('2026-09-27T21:00') },
-  // SPEC CHANGE 2026-09-29: "9:00" is not plainly a 24-hour time — asking
-  // "morning or evening?" is as right as writing 09:00.
   { intent: 'Every day at 9:00, remind me to drink water', wanted: { either: [{ draft: { every: 'day', at: '09:00', effect: 'notify' } }, ASK] } },
-  // a reply to a question, with the conversation (added 2026-09-29, before the run)
   {
     intent: 'In the evening',
     earlier: [{ request: 'Put the register up at eight', answer: { question: 'At eight in the morning or eight in the evening?' } }],
@@ -343,7 +266,6 @@ const TIMER_PROBES: readonly TimerProbe[] = [
     earlier: [{ request: 'Remind me to drink water at nine', answer: { question: 'Nine in the morning or nine in the evening — and just once, or every day?' } }],
     wanted: notifyAt('2026-09-27T21:00'),
   },
-  // a correction of a draft not yet saved (added 2026-09-29, before its first run)
   {
     intent: 'Nah, I meant put up the last slide',
     earlier: [
@@ -352,13 +274,10 @@ const TIMER_PROBES: readonly TimerProbe[] = [
         answer: { id: 'end-talk-reminder', intent: 'Notify the speaker in 30 minutes that it is time to end the talk.', on: { timer: { minutes: 30 } }, effect: { name: 'notify', input: { text: 'Time to end the talk.' } } },
       },
     ],
-    // SPEC CHANGE 2026-09-29, before its second measurement: "Nah" can reject the
-    // whole draft, its 30 minutes too — asking when is as right as keeping them.
     wanted: { either: [show('2026-09-27T19:35', 'slide.end'), ASK] },
   },
 ];
 
-// "YYYY-MM-DDTHH:MM" and "…:SS" name the same instant when the seconds are 00.
 const toSecond = (at: string): string => (at.length === 16 ? `${at}:00` : at);
 
 const describeWanted = (wanted: Wanted): string =>
@@ -370,7 +289,6 @@ const describeWanted = (wanted: Wanted): string =>
         ? 'a refusal'
         : `${'every' in wanted.draft ? `every ${wanted.draft.every} ` : ''}${wanted.draft.at} ${wanted.draft.effect}${'slideId' in wanted.draft ? ` ${wanted.draft.slideId}` : ''}`;
 
-// What came back, in the terms a probe is judged in.
 type Got = { kind: 'ask' | 'refuse'; text: string } | { kind: 'draft'; clock: { at: string; every?: string } | undefined; effect: string; slideId: string; text: string };
 
 const gotOf = (written: Written): Got => {
@@ -445,8 +363,7 @@ const main = async (): Promise<void> => {
   const adapter = createPostgresAdapter({ pool: runtime.pool });
   const dslJsonSchema = createQueryEngine({ adapter }).getDslSchema();
 
-  // LYCEUM_PART=mapping: the shape mapper alone (prism's mapping agent) on
-  // rows that do NOT already fit their shape, so every task calls the model.
+  // The tasks' rows do not already fit their shape, so every task calls the model.
   if (process.env['LYCEUM_PART'] === 'mapping') {
     const mapper = createShapeMapper(llm);
     const tally: { task: string; ok: boolean; tokens: number }[] = [];

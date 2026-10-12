@@ -2,19 +2,13 @@ import { actById, slotSwap, delayAdd } from '@encore/app/vex/lineup.entries';
 import { candidateStages } from '@encore/app/vex/candidates.entries';
 import { pushesRecent, pushSend } from '@encore/app/vex/push.entries';
 
-// The `do` forms' request seams. A write is the same wire shape as a read —
-// `{ fingerprint, context }` — and the context is the form's own data. Note
-// what no body carries: who is pressing the button. `created_by` is stamped by
-// the engine from the session (vex/behaviors.ts).
-
 export const formActPrism = {
   fingerprint: actById.fingerprint,
   context: { actId: { $ref: '$.actId' } },
 };
 
-// The stage picker's options are the same labelled rows the model chose among.
-// One list, two readers — so what the operator can pick and what the model
-// could have picked cannot drift apart.
+// The same labelled rows the model chooses among, so what the operator can pick
+// and what the model can pick cannot drift apart.
 export const stageOptionsPrism = { fingerprint: candidateStages.fingerprint, context: {} };
 
 export const slotSwapPrism = {

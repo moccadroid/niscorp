@@ -3,10 +3,6 @@ import { deckCurrent, slidesAll } from '@lyceum/app/vex/deck.entries';
 import { deckPickPrism } from './console.prism';
 import { slidesLayout } from './slides.layout';
 
-// EVERY SLIDE, over the controller: the deck as a numbered list, the slide on
-// screen marked. Press one and it goes up, and the sheet closes. Opened from
-// the controller onto the `overlay` canvas with the `sheet` fragment — it has
-// no idea it is a popup.
 export const slidesAction: ActionDefinition = {
   id: 'speaker.slides',
   title: 'All slides',

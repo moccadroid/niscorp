@@ -31,7 +31,7 @@ describe('event channel', () => {
 
   it('async iterator sees buffered AND live events, ends on close', async () => {
     const channel = createEventChannel('run_1', ['a']);
-    channel.emit({ type: 'step-start', step: 1 }); // buffered before iteration
+    channel.emit({ type: 'step-start', step: 1 });
 
     const collected: string[] = [];
     const iteration = (async () => {

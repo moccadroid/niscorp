@@ -1,8 +1,3 @@
-// Mutations — the write pipeline. Grammar (schema.ts), derived contracts
-// (signature.ts), and the validate→scope→compile→execute engine (engine.ts).
-// Writes are replay-only artifacts: a mutation lives in the cache as a
-// `kind: 'mutation'` entry and is invoked by fingerprint; there is no
-// generation path (dev-authored seeds only).
 export { MutationSchema, MutationDefinitionSchema } from './schema.js';
 export type { Mutation, MutationDefinition, CoreMutation, ResolvedMutation, ResolvedOnConflict, MutationValue, LookupValue, ReturnedRef, ItemRef } from './schema.js';
 export { executeMutation, executeWrites, mutationMisfits } from './engine.js';

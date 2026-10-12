@@ -2,14 +2,6 @@ import { z } from 'zod';
 import type { ActionDefinition, LayoutNode, Step } from '@niscorp/nova';
 import { oneOffOptionsPrism, planCreatePrism, planDeletePrism, planRestorePrism, planRetirePrism, planUpdatePrism } from './plans.prism';
 
-// A NAME IS THE ONLY ANSWER THIS FORM INSISTS ON, and it did not insist on it:
-// the sheet opened, Add was live, and pressing it wrote a nameless row at zero
-// that could then only be retired. The column refuses it now too — see the
-// CHECK on offerings.name — and this is what stops somebody meeting that
-// refusal as a database error.
-//
-// Zero is NOT blocked. A studio giving something away is a studio selling it
-// for nothing, and the form has no business arguing.
 const nameMissing = { $prism: { $eq: [{ $trim: { $ref: '$.name' } }, ''] } };
 
 const planFormLayout: LayoutNode = {
@@ -17,8 +9,6 @@ const planFormLayout: LayoutNode = {
   props: { gap: 16 },
   children: [
     { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
-    // What KIND of thing is on sale decides which questions below make sense.
-    // Fixed once created: everybody holding one was sold that shape.
     {
       if: '$.planId',
       then: '',
@@ -29,9 +19,6 @@ const planFormLayout: LayoutNode = {
           options: [
             { value: 'recurring', label: 'A plan — billed on repeat' },
             { value: 'pass', label: 'A pass — classes bought up front' },
-            // Sold once and granting nothing: the joining fee, the deposit, the
-            // workshop ticket, the gi. It asks no further questions, because
-            // there are none — no period, no terms, no credits.
             { value: 'one_off', label: 'A one-off — sold once, grants nothing' },
           ],
         },
@@ -69,7 +56,6 @@ const planFormLayout: LayoutNode = {
           },
         ],
       },
-      // A one-off has no period and no allowance — it is a name and a price.
       else: {
         if: { $eq: ['$.kind', 'one_off'] },
         then: '',
@@ -77,16 +63,8 @@ const planFormLayout: LayoutNode = {
         component: 'Stack',
         props: { gap: 16 },
         children: [
-          // ── HOW OFTEN, AS A PAIR ───────────────────────────────
-          //
-          // A unit and a count, because "quarterly" is not a fifth word — it is
-          // every three months, and a studio billing every ten weeks is doing
-          // the same thing with different numbers. Two fields say all of it;
-          // a menu of named periods would be back to guessing which ones exist.
-          //
-          // The four units are Stripe's, and that is the one limit here that is
-          // not ours: a period a processor cannot express is one nobody can be
-          // charged.
+          // The four units are Stripe's: a period a processor cannot express is
+          // one nobody can be charged.
           {
             component: 'Row',
             props: { gap: 12, align: 'end', wrap: true },
@@ -122,9 +100,6 @@ const planFormLayout: LayoutNode = {
             props: {
               label: 'Classes included',
               type: 'number',
-              // Empty is a real answer here — NULL means unlimited — so the
-              // hint says so rather than leaving somebody guessing what a blank
-              // field will do to their price list.
               hint: 'How many classes a period buys. Leave it empty for unlimited.',
             },
             ref: 'classAllowance',
@@ -135,14 +110,6 @@ const planFormLayout: LayoutNode = {
       },
     },
 
-    // ── WHAT THEY ARE COMMITTING TO ────────────────────────────
-    //
-    // A plan is not only a price. "Twelve months, one month's notice" and
-    // "rolling, cancel any time" are different products at the same number, and
-    // the difference is most of what a studio is actually selling — revenue
-    // inside a minimum term is money it HAS; outside one it is money it hopes
-    // for. Neither a pass nor a one-off commits anybody to anything, so neither
-    // question is asked of them.
     {
       if: { $eq: ['$.kind', 'recurring'] },
       then: {
@@ -169,16 +136,6 @@ const planFormLayout: LayoutNode = {
             ref: 'noticeDays',
             model: '$.noticeDays',
           },
-          // ── WHAT JOINING COSTS ON TOP ────────────────────────
-          //
-          // A joining fee is a one-off that is not CHOSEN — it is charged
-          // because somebody joined. A studio could create one and price it and
-          // nothing ever charged it: it appeared on the member's Buy screen as
-          // something they might voluntarily purchase, which nobody does.
-          //
-          // It names another offering rather than holding an amount, so the fee
-          // has a name and a price of its own, shows on this same list, and can
-          // be shared by two plans without being typed twice.
           {
             component: 'Select',
             props: {
@@ -204,17 +161,8 @@ const planFormLayout: LayoutNode = {
           else: { component: 'Button', props: { variant: 'solid', big: true, label: 'Add plan', disabled: '$.blocked' }, ref: 'create' },
         },
 
-        // ── THE WAY OUT, AND THERE ARE TWO OF THEM ───────────
-        //
-        // Retiring is for a product a studio has stopped selling: everybody on
-        // it stays on it, which is the whole reason the verb exists. Deleting is
-        // for a row that was never a product — the mistyped price, the sheet
-        // opened by accident — and it had no verb at all, so every mistake
-        // became another permanently retired line on the price list.
-        //
-        // Which one shows is decided by the row, which arrives carrying how
-        // many things hold it. If that count is stale the database refuses in a
-        // sentence, so the worst this can be is wrong about a button.
+        // `planHeld` arrives with the row and can be stale: the database refuses
+        // to delete a row something holds.
         {
           if: '$.planId',
           then: {
@@ -230,21 +178,6 @@ const planFormLayout: LayoutNode = {
         },
       ],
     },
-    // WHAT EITHER BUTTON WILL DO. A danger button with no sentence beside it
-    // makes somebody guess whether they are about to take a price off the list
-    // or take it away from the people paying it.
-    //
-    // THE WORDS LIVE HERE, and the query answers only the number they turn on.
-    // They used to be assembled in the mapping, which put a phrase-book pattern
-    // into a plain data field: every offering with two holders or more said
-    // "[object Object]" to its owner. Prose in a layout is also prose a
-    // translator can find.
-    //
-    // And it says SOMEBODY rather than how many, which is the whole reason this
-    // now fits in two strings: a sentence carrying a count needs one phrasing
-    // for one holder and another for several, in every language it is ever
-    // written in. What the owner has to know here is that this is not a mistake
-    // they can delete.
     {
       if: '$.planId',
       then: {
@@ -257,8 +190,6 @@ const planFormLayout: LayoutNode = {
   ],
 };
 
-// Save, announce, close. Three steps, and the middle one is what keeps the
-// list in step without either action naming the other.
 const done = (call: string): Step => ({
   call,
   onSuccess: [{ set: 'saving', value: false }, { emit: { channel: 'plans-changed' } }, { pop: true }],
@@ -267,8 +198,6 @@ const done = (call: string): Step => ({
 
 export const planFormAction: ActionDefinition = {
   id: 'plans.form',
-  // The sheet's header renders this, so the form carries its own heading and
-  // the layout does not print one.
   title: '$.heading',
   data: {
     heading: 'Add to the price list',
@@ -286,11 +215,7 @@ export const planFormAction: ActionDefinition = {
     validDays: '',
     joiningFeeId: '',
     oneOffOptions: [],
-    // Nothing is typed yet, so nothing can be saved yet.
     blocked: true,
-    // How many things hold this. Zero is what makes the row deletable; the
-    // create case is zero because it does not exist yet, and the Delete button
-    // is behind `planId` anyway.
     planHeld: 0,
     saving: false,
     error: '',
@@ -306,9 +231,8 @@ export const planFormAction: ActionDefinition = {
   },
   lifecycle: { mount: [{ call: 'oneOffs' }] },
   triggers: [
-    // The name decides whether anything can be saved, so every keystroke in it
-    // re-asks. Set from the event rather than read back from the field, for the
-    // buffered-snapshot reason people.actions.ts spells out.
+    // Two triggers, not two steps: the sets of one trigger resolve against the
+    // same pre-write snapshot.
     { event: 'ui:model', ref: 'name', do: [{ set: 'name', value: '@event.payload' }] },
     { event: 'ui:model', ref: 'name', do: [{ set: 'blocked', value: nameMissing }] },
     { event: 'ui:click', ref: 'create', do: [{ set: 'error', value: '' }, { set: 'saving', value: true }, done('create')] },
@@ -319,8 +243,6 @@ export const planFormAction: ActionDefinition = {
   ],
 };
 
-// Rule 14: what an opener may seed. A create seeds nothing; an edit seeds the
-// row. Neither can seed anything the form does not already declare.
 export const planFormInputSchema = z.toJSONSchema(
   z.object({
     heading: z.string().optional(),

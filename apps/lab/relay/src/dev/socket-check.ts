@@ -1,10 +1,3 @@
-// Socket check — the transport + protocol through a REAL websocket:
-// node's native WebSocket client against the served socket. Token auth at
-// upgrade (anonymous is a principal, garbage is a 4401 close), the catalog
-// channel on every (re)connect with the SAME version token the HTTP
-// surface serves, and envelope enforcement. Render frames stream too now
-// (the shell host stands behind the socket) — this check reads CONTROL
-// frames only; host-check owns the canvas streams.
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { CLOSE_INVALID_TOKEN, offerToken, PROTOCOL } from '@niscorp/moss/protocol';
@@ -16,8 +9,6 @@ const checks: [string, boolean][] = [];
 
 type Frame = ServerMessage;
 
-// A tiny client harness over node's built-in WebSocket: collects frames,
-// resolves on demand, notices the close code.
 const connect = (base: string, token?: string): Promise<{
   next: () => Promise<Frame>;
   send: (body: unknown) => void;
@@ -32,7 +23,7 @@ const connect = (base: string, token?: string): Promise<{
     const closeWaiters: ((code: number) => void)[] = [];
     ws.addEventListener('message', (e) => {
       const frame = JSON.parse(String(e.data)) as Frame;
-      if (frame.type === 'render' || frame.type === 'frame' || frame.type === 'session') return; // canvas/session streams are host-check's subject
+      if (frame.type === 'render' || frame.type === 'frame' || frame.type === 'session') return; // this check reads control frames only
       const waiter = waiters.shift();
       if (waiter !== undefined) waiter(frame);
       else frames.push(frame);
@@ -68,7 +59,6 @@ const main = async (): Promise<void> => {
   if (address === null || typeof address === 'string') throw new Error('no port');
   const base = `ws://127.0.0.1:${address.port}`;
 
-  // ── the catalog channel, per principal, token-authenticated ──
   const alexToken = mintToken('alex');
   if (alexToken === null) throw new Error('no alex');
   const alex = await connect(base, alexToken);
@@ -85,25 +75,20 @@ const main = async (): Promise<void> => {
   const anonHello = await anon.next();
   checks.push(['anonymous is a principal: hello with the lock screen alone', anonHello.type === 'hello' && anonHello.principal === null && anonHello.type === 'hello' && anonHello.catalog.actions.length === 1 && anonHello.catalog.actions[0] === 'auth.login']);
 
-  // ── garbage token → error + application close 4401 ──
   const bad = await connect(base, 'garbage');
   const badFrame = await bad.next();
   const badClose = await bad.closed();
   checks.push([`a garbage token is refused (got ${badFrame.type === 'error' ? badFrame.code : badFrame.type}, close ${badClose})`, badFrame.type === 'error' && badFrame.code === 'invalid_token' && badClose === CLOSE_INVALID_TOKEN]);
 
-  // ── the envelope is enforced; events are answered honestly ──
   alex.send('not json{');
   const malformed = await alex.next();
   checks.push([`a malformed frame is an error (got ${malformed.type === 'error' ? malformed.code : malformed.type})`, malformed.type === 'error' && malformed.code === 'invalid_message']);
 
-  // A valid event envelope is ACCEPTED into the session's shell — no error
-  // frame comes back (the render consequences are host-check's subject).
   alex.send({ type: 'event', canvas: 'main', event: { type: 'ui:click', ref: 'nav-deals' } });
   alex.send('also not json');
   const afterEvent = await alex.next();
   checks.push([`a valid event produces no error; the next control frame is the NEXT probe's (got ${afterEvent.type === 'error' ? afterEvent.code : afterEvent.type})`, afterEvent.type === 'error' && afterEvent.code === 'invalid_message']);
 
-  // ── reconnect re-sends current state — no replay machinery ──
   alex.close();
   const again = await connect(base, alexToken);
   const againHello = await again.next();
@@ -112,8 +97,8 @@ const main = async (): Promise<void> => {
   again.close();
   anon.close();
   httpServer.close();
-  // Wind the handles down BEFORE exiting — ws + PGlite teardown racing
-  // process.exit trips a libuv assertion on Windows.
+  // ws and PGlite teardown racing process.exit trips a libuv assertion on
+  // Windows.
   await new Promise((r) => setTimeout(r, 150));
   await runtime.db.close();
 

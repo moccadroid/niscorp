@@ -5,14 +5,11 @@ import { parseJsonPathCached, getByPath, type JsonPathSegment } from '../utils/j
 import { isJsonObject, isJsonArray } from '../schemas/guards';
 import { measure } from '../engine/budget';
 
-// The optimizer attaches pre-parsed segments here at compile time so the
-// runtime can skip the JSONPath parser entirely.
 const SEGMENTS_KEY = '__segments';
 
 const isSegmentsArray = (value: unknown): value is JsonPathSegment[] => Array.isArray(value);
 
 export const opRef = (node: RefNode, context: EvalContext, _evaluate: EvaluateFn): JsonValue => {
-  // Fast path: pre-parsed segments attached by the optimizer.
   const attached = Reflect.get(node, SEGMENTS_KEY);
   const segments = isSegmentsArray(attached) ? attached : parseJsonPathCached(node.$ref);
   const resolved = getByPath(context.source, segments);

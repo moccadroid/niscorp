@@ -34,7 +34,6 @@ export const removeAtOp: MutationOp<RemoveAtMutation> = {
       }
       return data;
     }
-    // Index may be a literal number or a resolved template; coerce and guard.
     const index = Number(mutation.index);
     if (!Number.isInteger(index)) return data;
     const arr = current.slice();

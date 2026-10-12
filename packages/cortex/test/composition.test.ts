@@ -48,7 +48,6 @@ describe('manifold', () => {
 
 describe('asTool — delegation is a tool call', () => {
   it('runs the child agent, forwards its events with the extended agentPath', async () => {
-    // Child: one respond turn. Parent: delegate → respond.
     const childLlm = stubSignal([
       { toolCalls: [{ id: 'k1', name: 'respond', args: { data: { answer: 21 } } }] },
     ]);
@@ -68,14 +67,11 @@ describe('asTool — delegation is a tool call', () => {
     const result = await run.result;
     expect(result.ok).toBe(true);
 
-    // The child's run-start forwarded into the parent stream, tagged
-    // with the nested agentPath.
     const childStart = events.find(
       (event) => event.type === 'run-start' && event.agentPath.length === 2,
     );
     expect(childStart?.agentPath).toEqual(['orchestrator', 'specialist']);
 
-    // The child's envelope data became the tool result the parent saw.
     const toolMessage = parentLlm.requests[1]?.messages.find((message) => message.role === 'tool');
     expect(toolMessage?.content).toBe(JSON.stringify({ answer: 21 }));
   });
@@ -125,11 +121,9 @@ describe('asTool — delegation is a tool call', () => {
 
   it('manifold.asTool wires defaults the same way', async () => {
     const llm = stubSignal([
-      // parent turn 1: delegate
       { toolCalls: [{ id: 'c1', name: 'specialist', args: { input: 'q' } }] },
-      // child turn (same default llm): respond
+      // The child's turn: parent and child share the manifold's llm, so one script serves both.
       { toolCalls: [{ id: 'k1', name: 'respond', args: { data: { answer: 8 } } }] },
-      // parent turn 2: respond
       { toolCalls: [{ id: 'c2', name: 'respond', args: { response: 'ok' } }] },
     ]);
     const manifold = createManifold({ llm });

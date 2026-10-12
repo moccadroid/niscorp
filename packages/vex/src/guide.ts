@@ -1,13 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// The agent-facing Vex guide — exported knowledge, not app prose.
-//
-// Any agent that reads or embeds Vex endpoints injects THIS text
-// (plus `handleDiscovery` output for the live per-endpoint facts:
-// entities, existing fingerprints, the DSL schema). Apps add only
-// their genuinely app-specific lines (URLs, house rules) — they
-// never re-explain Vex, so the contract can't drift per app.
-// ═══════════════════════════════════════════════════════════
-
 export const vexGuide = (): string =>
   [
     'VEX — how to read data. A Vex endpoint answers POST with a JSON body and returns { result, meta }.',

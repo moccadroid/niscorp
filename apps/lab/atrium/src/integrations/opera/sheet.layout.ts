@@ -1,7 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The call sheet — scheduled wake calls in ringing order. One button per row:
-// rung. Done calls leave the sheet on the re-read, which is the whole workflow.
 export const sheetLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 12 },

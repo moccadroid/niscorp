@@ -5,50 +5,17 @@ import type { FetchFn } from '@niscorp/nova';
 import type { ScopePolicy, SeedEntry, SeedMutation, Source } from '@niscorp/vex';
 import { canRead } from '@encore/server/intent/context-packs';
 
-// ═══════════════════════════════════════════════════════════
-// THE AGENT'S TWO TOOLS. Both read. Neither touches the screen. There is no
-// third tool (DESIGN.md § What it is handed).
-//
-//   list_queries   which named reads exist for THIS principal — fetched on
-//                  demand, not recited in every prompt (atrium: ~1,100 tokens
-//                  on every run, and most runs never query);
-//   query          replay one of them by fingerprint, as the operator.
-//
-// REPLAY ONLY. A fingerprint is a row in app/vex — a query somebody wrote,
-// reviewed and seeded. The agent cannot compose one, and moss serves the cache
-// locked, so even a fingerprint it invented is a refusal, never a generated
-// query (PLAN.md D3).
-//
-// THE ALLOW-SET DERIVES FROM THE SESSION'S POLICY. A read is offered when the
-// caller's policy can read EVERY table it touches; a principal with a narrower
-// role gets a shorter list, with no list of its own to keep in step. Mutations
-// are never in it. And the refusal happens HERE, before the wire: vex would
-// refuse too, but a refused write that reached the engine is a write that was
-// attempted, and the law is that the agent never attempts one.
-//
-// A REFUSAL IS THE TOOL'S ANSWER, not an exception: the model reads why and
-// tries something that exists.
-//
-// `context` IS A JSON OBJECT. A model that stringifies nested tool arguments
-// (signal's `manglesNestedToolArgs`) is rescued below this file: cortex decodes
-// a stringified value and re-validates before the tool ever runs, so the tool
-// declares the shape it means rather than the shape one model used to send.
-// ═══════════════════════════════════════════════════════════
+// `query` refuses a write before the wire: one refused by the engine is a write that was attempted.
 
 export type ReadToolsConfig = {
-  // The session's own wire: the agent reads as the operator, under their policy.
   wire: FetchFn;
   policy: ScopePolicy;
   entries: readonly (SeedEntry | SeedMutation)[];
-  // The rows a `query` SHOWED the model (after the cap) — what the answer that
-  // read them may name.
   onRows?: (rows: readonly unknown[]) => void;
 };
 
 export type ReadableQuery = { fingerprint: string; returns: string; context: string[] };
 
-// What one lookup may hand back. A model that asked for the running order does
-// not need row 41, and a tool result is paid for on every later step.
 export const QUERY_MAX_ROWS = 40;
 export const QUERY_MAX_CHARS = 6_000;
 
@@ -56,7 +23,6 @@ const tablesOf = (sources: readonly Source[]): string[] => sources.flatMap((sour
 
 const Json = z.record(z.string(), z.unknown());
 
-// Every `{ $context: name }` in a stored query: the parameters a caller binds.
 const contextKeysIn = (value: unknown): string[] => {
   if (Array.isArray(value)) return value.flatMap(contextKeysIn);
   const record = Json.safeParse(value);
@@ -112,7 +78,6 @@ export const createReadTools = (config: ReadToolsConfig): ToolDefinition[] => {
     ],
     input: z.object({ fingerprint: z.string().describe('A fingerprint from list_queries, exactly as listed.'), context: ContextArgument }),
     execute: async ({ fingerprint, context }) => {
-      // REFUSED BEFORE THE WIRE — both of these return without a request.
       if (writes.has(fingerprint)) return { refused: `"${fingerprint}" changes data. You only read; a person makes changes with the forms on screen.` };
       if (!allowed.has(fingerprint)) return { refused: `"${fingerprint}" is not a read available here. Call list_queries for the ones that are.` };
 

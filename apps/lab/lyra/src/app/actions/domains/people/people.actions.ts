@@ -3,8 +3,6 @@ import type { ActionDefinition, Step } from '@niscorp/nova';
 import { peopleListLayout, peopleDetailLayout, peopleFormLayout, peopleSignupLayout } from './people.layouts';
 import { HOLDINGS, LENSES, ROLL_PAGE, ROLL_ORDERS } from '@lyra/app/vex/member.entries';
 
-// The order the roll opens in — first in the entry's own declaration, so the
-// screen and the query agree about the default without either naming it twice.
 const DEFAULT_ORDER = ROLL_ORDERS[0]!;
 const DEFAULT_ROW_KEY = DEFAULT_ORDER.rowKey;
 import {
@@ -35,37 +33,17 @@ import {
   withdrawPrism,
 } from './people.prism';
 
-// A tab is a VALUE now. It used to carry the fingerprint pair its lens meant;
-// the reads are one read taking `lens`, so the option carries the lens name and
-// the request prism sends it like any other context.
 const LENS_OPTIONS = LENSES.map((l) => ({ value: l.lens, label: l.label }));
-// The second question, built from the same constant the query is — so the
-// control and the filter cannot drift apart, which is the property the old
-// single strip had and the reason it was worth keeping.
 const HOLDING_OPTIONS = HOLDINGS.map((h) => ({ value: h.holding, label: h.label }));
 
-// The last row of a just-arrived page, which is the next page's seek. Read off
-// the PAGE (`$.more`) rather than off the appended list, because a `$prism`
-// reads the batch's opening data: the appended `rows` is not visible yet in
-// the same step list, and the page is.
+// Read off the page (`$.more`), not the appended list: a `$prism` reads the
+// data as it stood before the run of sets, where `rows` is not yet appended.
 const lastOf = (page: string, field: string) => ({
   $prism: { $get: { from: { $slice: { from: { $ref: page }, start: -1 } }, path: ['0', field], fallback: { $const: '' } } },
 });
 
-// Whether a full page came back. A short page is the end of the list; there is
-// no count to compare against, and asking for one would be a second read that
-// can disagree with the first.
-//
-// This used to be false whenever a sort was active — the seek only knew the
-// name order, so any other order got one page and no "show more". The entry
-// declares its orders now (ROLL_ORDERS) and carries one seek arm per order, so
-// paging works in all of them and there is nothing left to special-case.
 const FULL_PAGE = (page: string) => ({ $prism: { $eq: [{ $length: { $ref: page } }, ROLL_PAGE] } });
 
-// THE CURSOR'S VALUE IS THE SORTED COLUMN'S, whichever that is — a position in
-// the name order is a name, and in the first-seen order a date. Read off the
-// row by the key the order declares, so adding a sortable column is one entry
-// in ROLL_ORDERS rather than a branch here and a clause there.
 const CURSOR_VALUE = (page: string) => ({
   $prism: {
     $case: {
@@ -78,8 +56,6 @@ const CURSOR_VALUE = (page: string) => ({
   },
 });
 
-// A fresh read: forget where we were. The seek is a position in a list that
-// the new lens, search or write has just replaced.
 const REWIND: Step[] = [
   { set: 'after', value: '' },
   { set: 'afterId', value: '' },
@@ -91,15 +67,12 @@ const AFTER_FIRST_PAGE: Step[] = [
   { set: 'hasMore', value: FULL_PAGE('$.rows') },
 ];
 
-// ── the list ─────────────────────────────────────────────────
 export const peopleListAction: ActionDefinition = {
   id: 'people.list',
   title: 'People',
   data: {
     rows: [],
     loading: true,
-    // Which lens is on screen. One value, sent as context on both reads — which
-    // is why there is no branch anywhere below.
     scope: 'current',
     scopes: LENS_OPTIONS,
     holdings: HOLDING_OPTIONS,
@@ -109,29 +82,17 @@ export const peopleListAction: ActionDefinition = {
     search: '',
     totalDisplay: '',
 
-    // THE SEEK, and the page it produced. `after`/`afterId` are the last row
-    // on screen — empty for a first page — and `more` is where the next page
-    // lands before it is appended. Every fresh read (a lens, a keystroke, a
-    // member changing) clears the seek first, because it is a position in a
-    // list that no longer exists.
     after: '',
     afterId: '',
     more: [],
     hasMore: false,
 
-    // NAMED, not empty. The roll opens in the entry's own order and now SAYS
-    // which one that is — the cursor is a position in a named ordering, so
-    // "whatever the entry does" is not something a seek can be in. It also
-    // makes the header light up on the column the list is actually sorted by,
-    // which an empty value could never do.
     sortBy: DEFAULT_ORDER.field,
     sortDir: DEFAULT_ORDER.dir,
   },
   layout: peopleListLayout,
   endpoints: {
     load: { url: '/api/member/vex', method: 'POST', request: peopleListPrism, target: 'rows' },
-    // The SAME read, landing somewhere else: `more` is appended to `rows`
-    // rather than replacing them.
     loadMore: { url: '/api/member/vex', method: 'POST', request: peopleListPrism, target: 'more' },
     count: { url: '/api/member/vex', method: 'POST', request: peopleCountPrism, target: 'countRow' },
   },
@@ -145,12 +106,8 @@ export const peopleListAction: ActionDefinition = {
   triggers: [
     { event: 'ui:click', ref: 'scope', do: [{ set: 'scope', value: '@event.payload.value' }, { set: 'loading', value: true }, ...REWIND, { call: 'load', onSuccess: [{ set: 'loading', value: false }, ...AFTER_FIRST_PAGE] }, { call: 'count', onSuccess: [{ set: 'totalDisplay', value: '$.countRow.total_display' }] }] },
 
-    // A new holding is a new list, so the cursor goes with it — REWIND first,
-    // exactly like a lens change or a keystroke.
     { event: 'ui:model', ref: 'holding', do: [{ set: 'holding', value: '@event.payload' }, { set: 'loading', value: true }, ...REWIND, { call: 'load', onSuccess: [{ set: 'loading', value: false }, ...AFTER_FIRST_PAGE] }, { call: 'count', onSuccess: [{ set: 'totalDisplay', value: '$.countRow.total_display' }] }] },
 
-    // A new order is a new list, so the cursor goes with it — REWIND first,
-    // exactly like a lens change or a keystroke.
     {
       event: 'ui:click',
       ref: 'sort',
@@ -162,19 +119,14 @@ export const peopleListAction: ActionDefinition = {
       ],
     },
 
-    // A row opens the record on top, so Back returns to the list — with the
-    // lens it was showing, because the list instance was never unmounted.
     { event: 'ui:click', ref: 'open', do: [{ push: { action: 'people.detail', canvas: 'sheet', with: ['sheet'], input: { personId: '@event.payload.person_id' } } }] },
 
     { event: 'ui:click', ref: 'add', do: [{ push: { action: 'people.signup', canvas: 'sheet', with: ['sheet'] } }] },
 
-    // Typing is the whole interaction — no search button.
     {
       event: 'ui:model',
       ref: 'search',
       do: [
-        // The write lands FIRST: the read below reads `$.search`, and a `call`
-        // before the `set` sends the previous keystroke's value.
         { set: 'search', value: '@event.payload' },
         ...REWIND,
         { call: 'load', onSuccess: AFTER_FIRST_PAGE },
@@ -182,8 +134,6 @@ export const peopleListAction: ActionDefinition = {
       ],
     },
 
-    // ONE MORE PAGE, appended. `rows` keeps what is already read and gains
-    // what just arrived; the seek moves to the end of the new page.
     {
       event: 'ui:click',
       ref: 'more',
@@ -210,7 +160,6 @@ export const peopleListInputSchema = z.toJSONSchema(
   }),
 );
 
-// ── the record ───────────────────────────────────────────────
 export const peopleDetailAction: ActionDefinition = {
   id: 'people.detail',
   title: 'Person',
@@ -245,9 +194,6 @@ export const peopleDetailAction: ActionDefinition = {
   layout: peopleDetailLayout,
   endpoints: {
     load: { url: '/api/member/vex', method: 'POST', request: personByIdPrism, target: 'member' },
-    // Its own call, because it is its own question — and because the rung that
-    // may read a subscription is not the rung that may read a name. A desk gets
-    // nothing here and the section simply does not draw.
     subscription: { url: '/api/member/vex', method: 'POST', request: memberSubscriptionPrism, target: 'subscription' },
     passes: { url: '/api/member/vex', method: 'POST', request: personPassesPrism, target: 'passes' },
     purchases: { url: '/api/member/vex', method: 'POST', request: personPurchasesPrism, target: 'purchases' },
@@ -265,9 +211,6 @@ export const peopleDetailAction: ActionDefinition = {
     withdraw: { url: '/api/schedule/vex', method: 'POST', request: withdrawPrism, errorTarget: 'error' },
     attachments: { fn: 'nav.attachments', target: 'attachments' },
     family: { url: '/api/member/vex', method: 'POST', request: personFamilyPrism, target: 'family' },
-    // Two calls, chained by the trigger below: the first mints the child (the
-    // database owns the id), the second puts them on the roll and says whose
-    // they are. See intake.entries.ts for why one artifact cannot do it.
     createChild: { url: '/api/member/vex', method: 'POST', request: createChildPrism, target: 'newChild', errorTarget: 'error' },
     attachChild: { url: '/api/member/vex', method: 'POST', request: attachChildPrism, errorTarget: 'error' },
   },
@@ -284,21 +227,13 @@ export const peopleDetailAction: ActionDefinition = {
       { call: 'passOptions' },
       { call: 'family' },
     ],
-    // Coming back from the form: re-read rather than trust what was left
-    // behind. The form may have written something this record has not seen.
     resume: [{ call: 'load' }, { call: 'subscription' }, { call: 'passes' }, { call: 'purchases' }, { call: 'enrolments' }, { call: 'courses' }, { call: 'family' }],
   },
   triggers: [
     { event: 'ui:click', ref: 'edit', do: [{ push: { action: 'people.form', canvas: 'sheet', with: ['sheet'], input: { personId: '$.personId' } } }] },
 
-    // ── writing a child down ──
     { event: 'ui:click', ref: 'addChild', do: [{ set: 'addingChild', value: true }, { set: 'error', value: '' }] },
     { event: 'ui:click', ref: 'cancelChild', do: [{ set: 'addingChild', value: false }, { set: 'childName', value: '' }, { set: 'childBornOn', value: '' }] },
-    // THE CHAIN, and the only place the two halves are joined. `attachChild`
-    // runs from the FIRST call's success, so it cannot fire with a stale id
-    // from a previous attempt — and if it never fires, what is left is an
-    // orphan `people` row nobody can see rather than a child nobody can act
-    // for. See intake.entries.ts.
     {
       event: 'ui:click',
       ref: 'saveChild',
@@ -320,8 +255,8 @@ export const peopleDetailAction: ActionDefinition = {
       ],
     },
 
-    // The implementation of the `attachable` declaration: the offered keys are
-    // bound HERE, once, by the host, and a rider cannot reach past them.
+    // The keys the `attachable` declaration offers; an attached action cannot
+    // reach past them.
     {
       event: 'ui:click',
       ref: 'openAttachment',
@@ -337,8 +272,6 @@ export const peopleDetailAction: ActionDefinition = {
       ],
     },
 
-    // Granting access, three shapes. Each write names the offering and the
-    // record on screen; how it is paid rides along; nothing names a studio.
     {
       event: 'ui:click',
       ref: 'startPlan',
@@ -364,8 +297,6 @@ export const peopleDetailAction: ActionDefinition = {
       ],
     },
 
-    // Enrolling from the counter. The write names the course and the record on
-    // screen; nothing in it names a human the screen does not already show.
     {
       event: 'ui:click',
       ref: 'enrol',
@@ -384,9 +315,6 @@ export const peopleDetailAction: ActionDefinition = {
         { call: 'withdraw', onSuccess: [{ call: 'enrolments' }, { call: 'courses' }, { emit: { channel: 'courses-changed' } }] },
       ],
     },
-    // Giving notice is a DECISION, so it asks first — the same confirm sheet
-    // every other consequential act here uses. Taking it back does not: undoing
-    // a mistake should cost one click, not two.
     {
       event: 'ui:click',
       ref: 'giveNotice',
@@ -398,7 +326,6 @@ export const peopleDetailAction: ActionDefinition = {
       ref: 'withdrawNotice',
       do: [{ call: 'withdrawNotice', onSuccess: [{ call: 'subscription' }, { emit: { channel: 'members-changed' } }] }],
     },
-    // Ending now is also a decision — same sheet, same rule.
     {
       event: 'ui:click',
       ref: 'end',
@@ -415,15 +342,12 @@ export const peopleDetailInputSchema = z.toJSONSchema(
   }),
 );
 
-// ── the form ─────────────────────────────────────────────────
 export const peopleFormAction: ActionDefinition = {
   id: 'people.form',
   title: 'Edit person',
   data: {
     personId: '',
     member: {},
-    // The editable fields, held apart from `member` so a cancel is a pop and
-    // not an undo.
     trialEndsOn: '',
     notes: '',
     marketingOk: false,
@@ -434,10 +358,8 @@ export const peopleFormAction: ActionDefinition = {
   endpoints: {
     load: { url: '/api/member/vex', method: 'POST', request: personByIdPrism, target: 'member' },
     save: { url: '/api/member/vex', method: 'POST', request: personUpdatePrism, errorTarget: 'error' },
-    // CONSENT SAVES ON THE FLIP, not on Save. It is not an edit to a note: the
-    // studio is recording that somebody said yes, and a person who says it at
-    // the counter and walks away should not depend on the desk pressing a
-    // button afterwards.
+    // Consent saves on the flip, not on Save: somebody who says yes at the
+    // counter does not depend on the desk pressing a button afterwards.
     consent: {
       url: '/api/member/vex',
       method: 'POST',
@@ -446,8 +368,6 @@ export const peopleFormAction: ActionDefinition = {
     },
   },
   lifecycle: {
-    // The raw values travel alongside their display strings precisely so a
-    // form can round-trip without re-parsing a translated label.
     mount: [
       {
         call: 'load',
@@ -483,10 +403,6 @@ export const peopleFormInputSchema = z.toJSONSchema(
   }),
 );
 
-// What the server function used to refuse with a thrown error, the form now
-// refuses by never enabling the button: a blank name, or an address without
-// an @. Recomputed as the fields are typed; `blocked` also holds the button
-// down while a save is in flight.
 const signupBlocked = {
   $prism: {
     $or: [
@@ -496,7 +412,6 @@ const signupBlocked = {
   },
 };
 
-// ── writing somebody down ────────────────────────────────────
 export const peopleSignupAction: ActionDefinition = {
   id: 'people.signup',
   title: 'New person',
@@ -516,16 +431,10 @@ export const peopleSignupAction: ActionDefinition = {
     saving: false,
     blocked: true,
     error: '',
-    // The confirmation. A kiosk stays on it and signs the next person up;
-    // a desk reads it and goes back.
     done: false,
     signedUpName: '',
   },
   layout: peopleSignupLayout,
-  // One replay, idempotent from every starting state — `people/enroll` ensures
-  // the person and anchors them to the studio in a single transaction. Signing
-  // up somebody already on the roll lands on the same done screen ("is on the
-  // roll") without minting a duplicate — the DB arbitrates, not a lookup race.
   endpoints: {
     create: { url: '/api/member/vex', method: 'POST', request: enrollPrism, errorTarget: 'error' },
     findSignedUp: { url: '/api/member/vex', method: 'POST', request: findSignedUpPrism, target: 'signedUpRows', errorTarget: 'error' },
@@ -534,10 +443,9 @@ export const peopleSignupAction: ActionDefinition = {
   },
   lifecycle: { mount: [{ call: 'plans' }] },
   triggers: [
-    // The first trigger writes the value; the SECOND re-answers "may this be
-    // submitted yet". Two triggers, not two steps: buffered sets in one
-    // trigger all resolve against the same pre-write snapshot, so a recompute
-    // sharing the buffer would read the field as it was a keystroke ago.
+    // Two triggers, not two steps: the sets of one trigger resolve against the
+    // same pre-write snapshot, so `blocked` would read the field as it was a
+    // keystroke ago.
     { event: 'ui:model', ref: 'newName', do: [{ set: 'newName', value: '@event.payload' }] },
     { event: 'ui:model', ref: 'newEmail', do: [{ set: 'newEmail', value: '@event.payload' }] },
     { event: 'ui:model', ref: 'newName', do: [{ set: 'blocked', value: signupBlocked }] },
@@ -551,19 +459,10 @@ export const peopleSignupAction: ActionDefinition = {
         { set: 'blocked', value: true },
         {
           call: 'create',
-          // Captured BEFORE the fields are cleared: the steps run in order, and
-          // reading it afterwards would confirm an empty string.
           onSuccess: [
             { set: 'saving', value: false },
             { set: 'signedUpName', value: '$.newName' },
-            // CAPTURED BEFORE THE FIELDS ARE CLEARED, like the name beside it:
-            // the steps run in order, and reading it afterwards would search for
-            // an empty string.
             { set: 'signedUpEmail', value: '$.newEmail' },
-            // ON THE ROLL, not a member — and the difference is the whole point
-            // of saying it. Standing is derived from what somebody HOLDS, so
-            // until a plan starts they are a prospect, and the sentence should
-            // not flatter the situation.
             { set: 'standingLine', value: 'is on the roll and can be booked from today.' },
             { set: 'onAPlan', value: false },
             { set: 'done', value: true },
@@ -578,19 +477,6 @@ export const peopleSignupAction: ActionDefinition = {
       ],
     },
     {
-      // WHO WAS JUST WRITTEN DOWN IS LOOKED UP WHEN A PLAN IS CHOSEN, one beat
-      // before it is needed. Not on the click, and not chained onto the signup:
-      // buffered steps in one trigger all resolve against the same pre-write
-      // snapshot (see the two triggers above), and an `emit` is dispatched in
-      // that same flush -- so a call waiting on the answer would read the field
-      // as it was before the answer landed.
-      //
-      // Asked at all because `people/enroll` is a mutation ARRAY -- ensure the
-      // human, then anchor them -- and what an endpoint target holds after one
-      // is not a row shape a prism can walk. Asking the roll uses a read that
-      // already exists, and answers the same way whether the person was new or
-      // already known, which is the case `people/enroll` exists to make
-      // identical.
       event: 'ui:model',
       ref: 'signupOffering',
       do: [{ set: 'signupOfferingId', value: '@event.payload' }, { call: 'findSignedUp' }],
@@ -606,8 +492,6 @@ export const peopleSignupAction: ActionDefinition = {
           onSuccess: [
             { set: 'starting', value: false },
             { set: 'onAPlan', value: true },
-            // THE ENDING, SAID. The moment that row exists they read as a member
-            // everywhere -- and nothing ever told the person who did it.
             { set: 'standingLine', value: 'is a member from today.' },
             { emit: { channel: 'members-changed' } },
           ],

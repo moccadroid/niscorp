@@ -1,4 +1,3 @@
-// Run: pnpm --filter lyra exec tsx src/dev/timetable-check.ts
 import { CAST } from '@lyra/db/seed';
 import { asPrincipal, login, ok, report, runtime, settle, treeOf } from './world';
 
@@ -10,7 +9,6 @@ const count = async (sql: string, params: unknown[] = []): Promise<number> => {
 const shell = await login(CAST.lumen.owner);
 await settle();
 
-// ── the grid ──
 shell.dispatch({ type: 'ui:click', ref: 'nav', payload: 'timetable.list' });
 await settle();
 let tree = treeOf(shell);
@@ -24,7 +22,6 @@ shell.dispatch({ type: 'ui:click', ref: 'nav', payload: 'timetable.list' });
 await settle();
 ok('a slot with no teacher still appears', treeOf(shell).includes('Unassigned'), 'nullable FK left-joins');
 
-// ── creating a slot generates classes ──
 const before = await count("SELECT count(*) n FROM class_sessions WHERE studio_id = 'st_lumen'");
 const created = await asPrincipal(CAST.lumen.owner, '/api/schedule/vex', {
   fingerprint: 'templates/create',
@@ -44,7 +41,6 @@ ok('...carrying the slot’s capacity and teacher', (await count("SELECT count(*
 ok('...and the studio was stamped engine-side', (await count("SELECT count(*) n FROM class_sessions WHERE template_id = $1 AND studio_id <> 'st_lumen'", [templateId])) === 0);
 ok('the total grew', (await count("SELECT count(*) n FROM class_sessions WHERE studio_id = 'st_lumen'")) > before);
 
-// ── moving the rule moves the unbooked classes ──
 await asPrincipal(CAST.lumen.owner, '/api/schedule/vex', {
   fingerprint: 'templates/update',
   context: { templateId, programId: 'pr_vinyasa', name: 'Sunrise Flow', weekday: 4, startsAt: '06:45', durationMins: 45, capacity: 12, instructorId: 'sf_maren' },
@@ -62,10 +58,8 @@ await asPrincipal(CAST.lumen.owner, '/api/schedule/vex', {
 });
 ok('moving the rule does NOT cancel a class people booked', (await count('SELECT count(*) n FROM class_sessions WHERE id = $1', [victimId])) === 1, 'a commitment survives a schedule change');
 
-// ── the booked counter is the database’s job ──
 ok('booking moved the counter without anybody asking', (await count('SELECT count(*) n FROM class_sessions WHERE id = $1 AND booked_count = 1', [victimId])) === 1);
 
-// ── capacity is enforced where it cannot be raced ──
 const tiny = await runtime.db.query<{ id: string }>("SELECT id FROM class_sessions WHERE studio_id='st_lumen' AND status='scheduled' ORDER BY held_on DESC LIMIT 1");
 const tinyId = tiny.rows[0]?.id ?? '';
 await runtime.db.query('UPDATE class_sessions SET capacity = 1 WHERE id = $1', [tinyId]);
@@ -79,13 +73,11 @@ ok('a full class queues the next booking rather than refusing', !JSON.stringify(
 ok('...as waitlisted', (await count("SELECT count(*) n FROM bookings WHERE session_id = $1 AND person_id = $2 AND status = 'waitlisted'", [tinyId, nextUp])) === 1, 'demand above the room is a fact a studio wants kept');
 ok('...and the class is not overbooked', (await count('SELECT count(*) n FROM bookings WHERE session_id = $1 AND status = $2', [tinyId, 'booked'])) === 1);
 
-// ── retiring keeps history ──
 const retired = await asPrincipal(CAST.lumen.owner, '/api/schedule/vex', { fingerprint: 'templates/set-active', context: { templateId, active: false } });
 void retired;
 ok('retiring a slot keeps the rule', (await count('SELECT count(*) n FROM class_templates WHERE id = $1', [templateId])) === 1);
 ok('...and drops only the unbooked future classes', (await count('SELECT count(*) n FROM class_sessions WHERE id = $1', [victimId])) === 1, 'the booked one stays');
 
-// ── who may do any of this ──
 const asDesk = await asPrincipal(CAST.lumen.desk, '/api/schedule/vex', {
   fingerprint: 'templates/create',
   context: { programId: 'pr_vinyasa', name: 'Nope', weekday: 1, startsAt: '10:00', durationMins: 60, capacity: 10, instructorId: '', courseId: null, startsOn: null, endsOn: null },
@@ -97,7 +89,6 @@ const foreign = await asPrincipal(CAST.northrock.owner, '/api/schedule/vex', { f
 void foreign;
 ok('another studio cannot edit this one’s timetable', (await count("SELECT count(*) n FROM class_templates WHERE name = 'Hijacked'")) === 0);
 
-// ── the grid is reachable and says which screen it is ────────
 const boss2 = await login(CAST.lumen.owner);
 await settle(8);
 boss2.dispatch({ type: 'ui:click', ref: 'nav', payload: 'timetable.list' });

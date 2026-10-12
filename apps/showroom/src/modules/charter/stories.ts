@@ -9,8 +9,6 @@ import refusedSrc from './pages/refused?raw';
 import { Build } from './pages/build';
 import buildSrc from './pages/build?raw';
 
-// Three pages, read in order — the landing page ("What charter is for", a doc)
-// links them. Full-width: the charter, the phones and the SQL are on the page.
 export const stories: readonly Story[] = [
   {
     id: 'who-sees-what',

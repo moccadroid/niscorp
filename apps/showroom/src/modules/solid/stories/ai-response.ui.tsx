@@ -2,13 +2,6 @@ import type { FC } from 'react';
 import { Cursor, FinalBadge, Placeholder, type PathStatus } from '@showroom/modules/solid/atoms';
 import type { Response } from './ai-response.demo';
 
-// ═══════════════════════════════════════════════════════════
-// Chat response card that fills in as solid drives its value.
-// Purely presentational — nothing in this file talks to solid
-// directly. The recipe subscribes and passes `value` + path
-// statuses (for the FINAL badges) down.
-// ═══════════════════════════════════════════════════════════
-
 type Props = { value: Response; pathStatuses: Map<string, PathStatus> };
 
 const iconChar = (icon: string): string => {

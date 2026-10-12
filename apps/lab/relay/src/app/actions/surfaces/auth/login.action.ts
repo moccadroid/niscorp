@@ -1,12 +1,8 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { loginLayout } from './login.layout';
 
-// Sign-in: username → fake magic link → token. The fns live in
-// src/server/auth — SERVER-side, on the anonymous session; this action is
-// just the surface. Granted to the anonymous principal only. Redeeming
-// publishes the token on `session.grant`; moss sends it down the socket
-// and the terminal reconnects authenticated — this action never navigates
-// anywhere itself.
+// `redeem` grants the session on the server and the terminal reconnects signed
+// in: this action navigates nowhere itself.
 export const loginAction: ActionDefinition = {
   id: 'auth.login',
   name: 'Sign in',

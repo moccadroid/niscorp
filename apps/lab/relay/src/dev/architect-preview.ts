@@ -1,13 +1,3 @@
-// Preview: the EXACT prefix the architect (or validator) would send —
-// every system chunk with its size, the resolved output strategy, and
-// the real tool descriptors. No model call, no key needed. Run:
-//
-//   pnpm --filter relay exec tsx src/dev/architect-preview.ts
-//   ... [--agent=validator] [--edit] [--full] [--intent="..."]
-//
-// Capabilities come from the model the ARCHITECT is assigned to (the LLM
-// seam), because the output strategy is resolved from them and they differ
-// per model — so the preview shows the strategy the real run would use.
 try {
   process.loadEnvFile();
 } catch {
@@ -25,8 +15,6 @@ import { makeArchitectTools } from '@relay/server/functions/ray/architect/tools'
 const DEFAULT_INTENT =
   'A searchable table of all companies showing name, industry and size. Typing in the search box filters the list; clicking a row opens that company.';
 
-// preview() never calls the model, so a key is optional: without one we build
-// the assigned model's client anyway and read nothing but its capabilities.
 const previewLlm = (): SignalClient => {
   const resolved = llmFor('architect');
   if ('llm' in resolved) return resolved.llm;

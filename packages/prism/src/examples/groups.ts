@@ -1,13 +1,8 @@
 import type { PrismExampleGroup } from './example.types';
 
-// The groups the examples come in, in reading order, each with what it holds.
-// Whoever shows the examples takes the grouping from here, so a group is named
-// in one place. The operators are in the groups the reference (DOCS.md) puts
-// them in, in the same order.
 export type PrismExampleGroupInfo = {
   id: PrismExampleGroup;
   title: string;
-  // One or two sentences: what the examples in the group have in common.
   description: string;
 };
 

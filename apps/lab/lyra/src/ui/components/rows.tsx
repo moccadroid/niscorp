@@ -19,23 +19,12 @@ const CellSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('primary'), key: z.string(), subKey: z.string().optional(), dotKey: z.string().optional().describe('Row key holding a tone token — the stream marker') }).strict(),
   z.object({ kind: z.literal('badge'), key: z.string(), toneKey: z.string().optional(), hueKey: z.string().optional(), showKey: z.string().optional().describe('Row key that must be true for the badge to appear') }).strict(),
   z.object({ kind: z.literal('bands'), key: z.string() }).strict(),
-  // A DOCUMENT THIS ROW IS ABOUT, somewhere else. An `action` cell dispatches a
-  // click; this one is a link, because an invoice PDF is a thing to open rather
-  // than a verb to perform.
-  //
-  // The URL comes from the ROW, which on an integration's screen came from the
-  // integration — so it is not followed blindly: anything that is not plain
-  // http(s) renders as nothing at all, and the link opens detached from this
-  // document. A `javascript:` or `data:` href in a list is the shape of that bug.
+  // The URL comes from the row, which on an integration's screen came from the
+  // integration: anything that is not plain http(s) renders as nothing, and the
+  // link opens detached from this document.
   z.object({ kind: z.literal('link'), key: z.string(), label: z.string(), showKey: z.string().optional() }).strict(),
-  // An icon by name, from the row or fixed on the column. For the leading
-  // glyph a list of kinds wants — a class type, a source, a channel.
   z.object({ kind: z.literal('icon'), key: z.string().optional(), icon: z.string().optional(), hueKey: z.string().optional() }).strict(),
-  // A quantity against its limit, drawn. Replaces "12 of 20" in a coloured
-  // badge — the reader stops doing the division.
   z.object({ kind: z.literal('meter'), key: z.string(), maxKey: z.string(), captionKey: z.string().optional() }).strict(),
-  // The overflow. Without it verbs eat the table — four of eight columns on
-  // buttons — and a row on a phone is a button bar with a name squeezed in.
   z
     .object({
       kind: z.literal('menu'),
@@ -50,8 +39,6 @@ const CellSchema = z.discriminatedUnion('kind', [
       label: z.string(),
       ref: z.string(),
       variant: z.enum(['solid', 'accent', 'ghost', 'outline', 'danger']).optional(),
-      // Two ways to say which rows get the control, because a spec should be
-      // able to express "only the retired ones" without a layout branching.
       hideKey: z.string().optional().describe('Row key that, when true, HIDES the control for that row'),
       showKey: z.string().optional().describe('Row key that must be true for the control to appear'),
     })
@@ -64,7 +51,6 @@ const ColumnSchema = z
     w: z.union([z.number(), z.literal('auto')]).optional(),
     px: z.number().optional(),
     align: z.enum(['left', 'right']).optional(),
-    // Which key this column sorts by. Present = the header is a button.
     sortable: z.string().optional(),
     cell: CellSchema,
   })
@@ -82,13 +68,9 @@ const RowsProps = z
     headers: z.boolean().optional(),
     onRowRef: z.string().optional().describe('Ref fired when a row is clicked; the payload is the whole row'),
     groupKey: z.string().optional(),
-    // The component owns which header is live and which way; the ref carries
-    // `{ key, dir }` and the caller re-reads.
     sortKey: z.string().optional(),
     sortDir: z.enum(['asc', 'desc']).optional(),
     onSortRef: z.string().optional(),
-    // `selectedKeys` holds rowKey values; the ref fires with the row and the
-    // next state. Without it a list cannot express a bulk act at all.
     selectRef: z.string().optional(),
     selectedKeys: z.array(z.string()).optional(),
   })
@@ -99,9 +81,6 @@ type Row = Record<string, unknown>;
 
 const str = (row: Row, key: string | undefined): string => {
   if (key === undefined) return '';
-  // A counted phrase arrives already filled. The renderer fills patterns at
-  // any prose key whether or not there is a book, so a source-language session
-  // no longer needs the kit to know what a `{ phrase, slots }` shape is.
   const v = row[key];
   return v === undefined || v === null ? '' : String(v);
 };
@@ -147,7 +126,7 @@ export const Rows: NovaComponent<Partial<z.infer<typeof RowsProps>>> = ({
 
   // Every fraction gets a floor: bare `2fr` is `minmax(auto, 2fr)`, so once the
   // fixed columns exceed the container it collapses toward zero and its text
-  // paints OVER the next cell.
+  // paints over the next cell.
   const template = [selectable ? '26px' : '', ...cols.map((c) => (c.px !== undefined ? `${c.px}px` : c.w === 'auto' ? 'auto' : `minmax(150px, ${c.w ?? 1}fr)`))].filter((t) => t !== '').join(' ');
   const minWidth = cols.reduce((total, c) => total + (c.px ?? 150) + 14, selectable ? 40 : 0);
 
@@ -304,7 +283,6 @@ export const Rows: NovaComponent<Partial<z.infer<typeof RowsProps>>> = ({
   );
 };
 
-// ── THE OVERFLOW MENU ────────────────────────────────────────
 const RowMenu = ({ items, row, dispatch }: { items: MenuItem[]; row: Row; dispatch: ReturnType<typeof useNovaDispatch> }): React.ReactElement | null => {
   const [at, setAt] = useState<{ top: number; right: number } | null>(null);
   const shown = items.filter((item) => {
@@ -475,9 +453,6 @@ const renderCell = (cell: z.infer<typeof CellSchema>, row: Row, dispatch: Return
     case 'link': {
       if (cell.showKey !== undefined && row[cell.showKey] !== true) return null;
       const href = typeof row[cell.key] === 'string' ? String(row[cell.key]) : '';
-      // Only the two schemes a document can honestly live at. Everything else —
-      // including an empty cell — draws nothing, so a row with no document has
-      // no dead control on it.
       if (!/^https?:\/\//i.test(href)) return null;
       return (
         <a

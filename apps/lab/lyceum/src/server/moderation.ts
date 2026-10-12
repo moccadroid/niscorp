@@ -8,14 +8,7 @@ import { createDecider } from './decider';
 import { freshNames } from './names';
 import { vexOver, wireAs } from './vex-over';
 
-// IS THIS FIT TO SHOW? Everything a person in the room writes that the room
-// could see — the name they type at the door, a question for the speaker —
-// is asked of the one decider (./decider.ts), one yes/no question, the same
-// every time. What is not fit is kept, for reference, and never shown.
-//
-// `score` is the decider's probability of yes; yes is 0.5 and above. The fake,
-// for the checks, refuses a few words and passes everything else.
-
+// `score` is the decider's probability of yes; yes is 0.5 and above.
 export type Verdict = { appropriate: boolean; score: number };
 export type Moderator = { kind: 'live' | 'fake'; judge: (text: string) => Promise<Verdict> };
 
@@ -45,7 +38,6 @@ const liveModerator = (env: Record<string, string | undefined>): Moderator => {
   };
 };
 
-// The checks' moderator: these words are not fit, nothing else is caught.
 const REFUSED = /\b(idiot|stupid|damn)\b/i;
 const fakeModerator = (): Moderator => ({
   kind: 'fake',
@@ -60,26 +52,15 @@ export const createModerator = (env: Record<string, string | undefined>): Modera
   return liveModerator(env);
 };
 
-// ── the moderator at work ──
-//
-// A principal that is not a person (`moderator`, charter.ts), reading and
-// writing through the same governed door as everybody else: who has which
-// name, the questions and the verdicts, the refused names. Every call mints
-// its own short session.
 const MODERATOR_TTL_MS = 5 * 60 * 1000;
 const NamesSchema = z.array(z.object({ name: z.string() }));
 const QuestionsSchema = z.array(z.object({ question_id: z.string(), text: z.string() }));
 const VerdictsSchema = z.array(z.object({ question_id: z.string() }));
 
 export type Moderation = {
-  // Names nobody has, for the door.
   offer: (count: number) => Promise<string[]>;
-  // Whether a name is taken.
   taken: (name: string) => Promise<boolean>;
-  // A name somebody typed: judged, and kept if it is refused.
   judgeName: (text: string) => Promise<Verdict>;
-  // Judge every question nobody has judged yet. Runs one pass at a time; asked
-  // while one runs, it runs once more after.
   judgeQuestions: () => void;
 };
 

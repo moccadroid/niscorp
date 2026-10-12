@@ -1,9 +1,5 @@
 import type { ParserEvent } from './types';
 
-// ═══════════════════════════════════════════════════════════
-// Finalization tracker — determines when paths become final
-// ═══════════════════════════════════════════════════════════
-
 export type FinalizationTracker = {
   process: (events: ParserEvent[]) => void;
   isFinal: (path: string) => boolean;
@@ -15,7 +11,6 @@ export const createFinalizationTracker = (): FinalizationTracker => {
   const finalized = new Set<string>();
   let isRootFinal = false;
 
-  // Keys seen per object/array path, in insertion order
   const keysPerContainer = new Map<string, string[]>();
 
   const finalizePath = (path: string): void => {
@@ -23,7 +18,6 @@ export const createFinalizationTracker = (): FinalizationTracker => {
     finalized.add(path);
   };
 
-  // When a new key appears, all earlier sibling keys are final
   const finalizePreviousSiblings = (containerPath: string, newKey: string): void => {
     const keys = keysPerContainer.get(containerPath);
     if (!keys) return;
@@ -79,7 +73,6 @@ export const createFinalizationTracker = (): FinalizationTracker => {
 
         case 'leaveObject':
         case 'leaveArray': {
-          // Container closed — all children are final
           const keys = keysPerContainer.get(event.path);
           if (keys) {
             for (const key of keys) {

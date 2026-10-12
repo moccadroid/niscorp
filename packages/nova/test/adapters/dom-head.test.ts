@@ -10,12 +10,6 @@ import { renderToString } from '../../src/adapters/dom/server';
 import { defaultRegistry, fallback } from '../../src/adapters/dom/components';
 import { createHeadKeeper, placeHead } from '../../src/document';
 
-// ═══════════════════════════════════════════════════════════
-// A head under the DOM adapter: nothing is drawn for it or for what it holds,
-// and the page's <head> is kept on it for as long as the shell lives in the
-// page.
-// ═══════════════════════════════════════════════════════════
-
 const tick = (ms = 0): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 const article: ActionDefinition = {
@@ -45,7 +39,6 @@ const article: ActionDefinition = {
 
 const plain: ActionDefinition = { id: 'plain', data: {}, layout: { component: 'Text', children: 'no head here' } };
 
-// A kit whose container gives every child a cell: what a head must never be handed to.
 const cells: DomComponent = ({ children }) => {
   const el = document.createElement('div');
   for (const child of children) {
@@ -72,7 +65,6 @@ const boot = (): Shell => {
 
 const press = (root: HTMLElement, ref: string): void => root.querySelector<HTMLElement>(`[data-ref="${ref}"]`)?.click();
 
-// the page's own head, as index.html wrote it
 const OWN = '<meta charset="UTF-8"><title>The site</title><meta name="description" content="Everything about the site."><link rel="icon" href="/i.svg">';
 const descriptions = (): (string | null)[] => [...document.head.querySelectorAll('meta[name="description"]')].map((node) => node.getAttribute('content'));
 
@@ -91,7 +83,6 @@ describe('a head, under the DOM adapter', () => {
     const html = renderToString(kit(), shellView(shell).api, { window, fallback });
     expect(html).not.toContain('nova:');
     expect(html).not.toContain('About First title');
-    // three children drawn, three cells — none for the head
     expect(html.match(/class="cell"/g)).toHaveLength(3);
   });
 
@@ -124,7 +115,6 @@ describe('a head, under the DOM adapter', () => {
     expect(document.title).toBe('First title');
     expect(descriptions()).toEqual(['About First title.']);
     expect(document.head.querySelector('meta[property="og:image:alt"]')?.getAttribute('content')).toBe('First title');
-    // what the screen did not speak of is where it was
     expect(document.head.querySelector('link[rel="icon"]')?.getAttribute('href')).toBe('/i.svg');
 
     press(root, 'rename');
@@ -132,7 +122,6 @@ describe('a head, under the DOM adapter', () => {
     expect(document.title).toBe('Second title');
     expect(descriptions()).toEqual(['About Second title.']);
 
-    // a screen with no head: the document says what it always did, in the order it did
     press(root, 'leave');
     await tick(5);
     expect(root.textContent).toContain('no head here');
@@ -143,7 +132,6 @@ describe('a head, under the DOM adapter', () => {
   it('a shell with no head never touches the page’s', async () => {
     const root = document.createElement('div');
     document.body.appendChild(root);
-    // another shell's elements are in the head; this one has nothing to say about them
     document.head.innerHTML = '<title data-nova-head>Named by another</title><template data-nova-own><title>The site</title></template>';
     const written = document.head.innerHTML;
     const shell = createShell({ registry: kit(), canvases: [{ id: 'main', initial: 'plain' }], actions: { plain } });
@@ -161,21 +149,18 @@ describe('createHeadKeeper — a page that arrived drawn', () => {
     const shell = boot();
     await shellSettled(shell);
     const said = headOf(shellView(shell).api)?.elements ?? [];
-    // the head of the file `nisc export` writes for this screen
     const file = placeHead(`<html><head>${OWN}</head><body></body></html>`, said, { site: 'https://example.com', path: '/articles/first/' });
     document.head.innerHTML = file.slice(file.indexOf('<head>') + 6, file.indexOf('</head>'));
     expect(document.title).toBe('First title');
 
     const keep = createHeadKeeper(document);
     keep(said);
-    // the same head, said once
     expect(document.title).toBe('First title');
     expect(descriptions()).toEqual(['About First title.']);
     expect(document.head.querySelector('template')).toBeNull();
 
     keep([{ tag: 'title', attributes: {}, text: 'Another screen' }]);
     expect(document.title).toBe('Another screen');
-    // the description is the document's own again; the address it was written at stays
     expect(descriptions()).toEqual(['Everything about the site.']);
     expect(document.head.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe('https://example.com/articles/first/');
 

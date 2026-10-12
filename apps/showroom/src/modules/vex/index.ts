@@ -19,9 +19,6 @@ import readmeContent from '../../../../../packages/vex/README.md?raw';
 import designContent from '../../../../../packages/vex/DESIGN.md?raw';
 import docsContent from '../../../../../packages/vex/DOCS.md?raw';
 
-// The landing page asks a made-up studio's database real questions through a
-// real engine (world/studio.ts); the stories below run the same engine over a
-// seeded shop database (runtime/).
 const docs: readonly DocPage[] = [
   { id: 'start', title: 'What vex is for', render: () => createElement(Intro) },
   { id: 'readme', title: 'README', content: readmeContent },

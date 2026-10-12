@@ -1,19 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Putting something right. The single most sensitive surface in the app, and the
-// design of it is one sentence: THE MACHINE PICKS FROM A MENU AND WRITES THE
-// WORDS; THE PRICE AND THE PRESS ARE BOTH HUMAN.
-//
-// The gestures are connector catalogue rows — label, description and value all
-// shipped and priced by somebody who is allowed to price things. Nothing here,
-// and nothing an assistant returns, can produce an amount that is not on one of
-// those rows. So the worst a bad suggestion can do is offer the wrong gesture
-// from a list the hotel wrote, at a price the hotel set, to a clerk who has to
-// press the button.
-//
-// What the assistant is genuinely good at is the other half: knowing that this
-// is the guest with two nights of a rattling air conditioner and a note saying
-// she reported the same fault last time, and writing the apology that says so.
 export const goodwillLayout: LayoutNode = {
   if: '$.done',
   then: {

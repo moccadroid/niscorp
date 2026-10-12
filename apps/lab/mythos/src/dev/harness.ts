@@ -1,9 +1,6 @@
 import process from 'node:process';
 import type { RenderNode, Shell } from '@niscorp/nova';
 
-// Shared bones of every headless check: [pass]/[fail] lines, a non-zero
-// exit on any failure, polling for async action data, and tree helpers.
-
 let failures = 0;
 
 export const check = (name: string, passed: boolean, detail?: string): void => {
@@ -47,8 +44,8 @@ export const activeData = (shell: Shell, canvasId: string): Record<string, unkno
 export const activeDefinition = (shell: Shell, canvasId: string): string =>
   shell.getCanvasState(canvasId).active?.definitionId ?? '';
 
-// Model listeners are installed by render() (the React adapter renders on
-// every change; headless checks must render explicitly before ui:model).
+// render() installs the model listeners: a headless check must render
+// before it dispatches ui:model.
 export const renderActive = (shell: Shell, canvasId: string): void => {
   const active = shell.getCanvasState(canvasId).active;
   if (active !== undefined) shell.getRuntime(active.id)?.render();

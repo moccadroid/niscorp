@@ -2,46 +2,17 @@ import { factOf } from '../schemas';
 import type { Reflex } from '../schemas';
 import type { EffectRegistry } from '../types';
 
-// ═══════════════════════════════════════════════════════════════
-// The flow graph — derived, never drawn
-//
-// Reflexes WATCH entities (their triggers name them); effects
-// WRITE entities. An edge is a write meeting a watch. The graph is
-// therefore STATIC DATA computed from the artifacts — under moss,
-// `writes` is DERIVED from the vex mutation behind each effect —
-// which is what makes it impossible for the flowchart to drift
-// from the flow.
-//
-// Cycles are CLASSIFIED, not banned. Tide's own best patterns are
-// cycles on purpose — a drip campaign is a reflex whose delayed
-// fact fires itself; a drain loop subscribes to its own firing —
-// and they converge because every loop passes a GUARD. Static
-// analysis cannot tell a convergent cycle from a divergent one,
-// so it does not pretend to: only a wholly unguarded loop, which
-// diverges by construction, is refused.
-// ═══════════════════════════════════════════════════════════════
-
 export type Edge = { from: string; to: string; via: string };
 
 export type GraphReport = {
   edges: readonly Edge[];
   cycles: readonly { reflexIds: readonly string[]; guarded: boolean }[];
-  // Effects with no declared (or derived) `writes` — the checker cannot
-  // see through them. Under moss, where `writes` derives from the vex
-  // mutation, a blind edge means something BYPASSED vex, which is exactly
-  // when a loud word is wanted.
   blind: readonly { reflexId: string; effect: string }[];
   errors: readonly string[];
-  // The same refusals as `errors`, each with the code it is refused under.
   refusals: readonly { code: 'unknown_reflex' | 'unknown_effect' | 'unguarded_cycle'; message: string }[];
   warnings: readonly string[];
 };
 
-// A guard is what makes a loop convergent: a selection that re-checks
-// reality, or a predicate that can say no. `notBefore` also guards, but it
-// is a runtime property of an emitted fact and cannot be seen from here —
-// which is why an unguarded cycle is reported as an error the author can
-// argue with, not a silent refusal.
 const isGuarded = (reflex: Reflex): boolean => reflex.select !== undefined || reflex.when !== undefined;
 
 export const buildGraph = (reflexes: readonly Reflex[], effects: EffectRegistry): GraphReport => {
@@ -103,8 +74,6 @@ export const buildGraph = (reflexes: readonly Reflex[], effects: EffectRegistry)
   return { edges, cycles, blind, errors: refusals.map((refusal) => refusal.message), refusals, warnings };
 };
 
-// Tarjan's SCC. Components of size > 1 are cycles; a size-1 component is
-// one only when it edges to itself.
 const findCycles = (reflexes: readonly Reflex[], edges: readonly Edge[]): string[][] => {
   const adjacency = new Map<string, string[]>();
   for (const reflex of reflexes) adjacency.set(reflex.id, []);

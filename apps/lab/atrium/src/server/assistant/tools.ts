@@ -3,26 +3,9 @@ import { defineTool, type ToolDefinition } from '@niscorp/cortex';
 import type { Shell, FetchFn } from '@niscorp/nova';
 import { queriesNow, queryFingerprintsNow, type AvailableAction } from './knowledge';
 
-// The assistant's hands. Two tools, and neither of them touches the screen.
-//
-//   query         run one of QUERIES — the caller's own vex API, replay-only,
-//                 under the caller's compiled scope policy.
-//   message_desk  guests only. The same messages/send write the guest's own
-//                 thread uses: sender pinned server-side, stay pinned to the
-//                 session. A claim of "sent" can only follow this row existing.
-//
-// The screen is not operated through tools. Both paths return a state and
-// contract.ts applies it, so there is no push, update, pop or remove here — a
-// screen described as a sequence of edits needs a guard per failure mode, and a
-// declared state needs none.
-
 export type ToolSession = { audience: string; stayId: string; propertyId: string; principal: string | null };
 
 export const makeTools = (shell: Shell, wire: FetchFn, actions: readonly AvailableAction[], session: ToolSession): ToolDefinition[] => {
-  // The data API, fetched rather than recited. It was ~1,100 tokens of prompt on
-  // every run, and most runs never query — a 1-step glance at a screen is nearly
-  // all prefill, so the list was latency paid for nothing. Filtered by the
-  // charter, so it lists only what this person could actually read.
   const listTool = defineTool({
     id: 'assistant.listQueries',
     name: 'list_queries',
@@ -51,9 +34,8 @@ export const makeTools = (shell: Shell, wire: FetchFn, actions: readonly Availab
     }),
     execute: async ({ fingerprint, context }) => {
       if (!queryFingerprintsNow(session.principal).has(fingerprint)) return `Unknown fingerprint "${fingerprint}". Call list_queries to see what exists.`;
-      // A guest's stay is theirs — a stayId they name is overwritten with the
-      // session's. Staff carry no stay, so one they name passes through and
-      // tenancy still holds engine-side.
+      // A guest's `stayId` is overwritten with the session's. Staff carry no stay,
+      // so one they name passes through; tenancy still holds engine-side.
       const pinned: Record<string, unknown> = { ...(context ?? {}) };
       if (session.stayId !== '' && 'stayId' in pinned) pinned['stayId'] = session.stayId;
       if ('propertyId' in pinned) pinned['propertyId'] = session.propertyId;
@@ -84,10 +66,6 @@ export const makeTools = (shell: Shell, wire: FetchFn, actions: readonly Availab
       'Write ON BEHALF, never AS the guest. Say what they want, quote their words where useful, and include every detail the desk needs to act without asking back. The desk sees room and name automatically.',
     input: z.object({ body: z.string().min(1).describe('the handoff note to the desk: what the guest wants, with all actionable details') }),
     execute: (() => {
-      // An ask a live surface serves is REDIRECTED to that surface, once. The
-      // latch keeps the desk reachable — a deliberate retry after reading the
-      // redirect goes through — while making "forward the bookable thing" a
-      // refusal the model has to read before it can insist.
       const bounced = new Set<string>();
       return async ({ body }: { body: string }) => {
         const said = body.toLowerCase();

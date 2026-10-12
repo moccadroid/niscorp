@@ -1,46 +1,17 @@
 import type { Row } from '../adapters/adapter.types.js';
 import { hashText } from '../utils/canonical.js';
 
-// ═══════════════════════════════════════════════════════════════
-// LIVE ROWS — what makes a `refresh: 'reactive'` read reactive.
-//
-// Two structures, kept apart on purpose:
-//
-//   ROWS    — key → the rows a query returned. A cache: bounded by entries,
-//             by bytes and by age, least-recently-used first out. Evicting
-//             one never breaks anything; it costs one query.
-//   FOLLOWS — key → what somebody is watching: the tables the query reads,
-//             how to run it again, and who to tell. Small, and bounded by
-//             what is mounted, not by this module: a follow ends when its
-//             last follower's signal aborts.
-//
-// THE KEY IS THE COMPILED SQL AND ITS BOUND VALUES, which the engine hashes
-// before it gets here. Scope compiles into both — row rules into the SQL,
-// scope values into the parameters — so two callers share rows exactly when
-// they would provably have got the same rows. Nothing here reasons about
-// policy, and nothing needs to.
-//
-// A WRITE BUMPS ITS TABLES' VERSIONS. Rows remember the versions they were
-// read at; a stored entry whose tables moved is stale, checked on read — so
-// invalidation is a counter bump, not a walk over the cache. The same stamp
-// closes the race that would otherwise poison it: rows fetched by a read
-// that started BEFORE a write and finished after it carry the versions from
-// before, so they are stale the moment they land.
-//
-// Followed keys are refetched once per burst (debounced, trailing), and a
-// follower hears only when its own answer changed.
-// ═══════════════════════════════════════════════════════════════
+// Stored rows are a cache: evicting one costs a query and breaks nothing. A
+// follow is not one, and ends only when its last follower's signal aborts, so
+// the two are kept apart. Rows carry the table versions from before their
+// fetch began, so a read that straddles a write lands already stale.
 
 export type LiveRowsConfig = {
-  /** How long stored rows are trusted, and how often a followed read is re-checked when nothing wrote. Default 60 000. */
   ttlMs?: number;
-  /** Most stored results. Default 5 000. */
   maxEntries?: number;
-  /** Most stored text, measured as the length of each result's JSON. Default 64 MiB. */
+  /** Measured as the length of each result's JSON. */
   maxBytes?: number;
-  /** Largest single result worth storing; bigger ones are refetched every time. Default a tenth of `maxBytes`. */
   maxEntryBytes?: number;
-  /** How long a burst of writes is gathered before followed reads refetch. Default 10. */
   debounceMs?: number;
 };
 
@@ -60,25 +31,20 @@ export type LiveRowsEvent =
   | { type: 'rows.evict'; reason: 'capacity' | 'oversized'; bytes: number }
   | { type: 'rows.error'; message: string };
 
-// What running a query again needs, and which tables it reads.
 export type RowsSource = {
   tables: readonly string[];
   fetch: () => Promise<Row[]>;
 };
 
 export type RowsFollower = {
-  // New rows for the key. The follower decides whether its own answer changed.
   deliver: (rows: Row[]) => void;
 };
 
 export type LiveRows = {
   read: (key: string, source: RowsSource) => Promise<Row[]>;
-  // Start following `key`. `rows` is what the follower was just answered
-  // with. Ends when `signal` aborts.
   follow: (key: string, source: RowsSource, rows: Row[], follower: RowsFollower, signal: AbortSignal) => void;
   invalidate: (tables: readonly string[]) => void;
   stats: () => LiveRowsStats;
-  // Stop every timer — for hosts that outlive the engine (tests, embedded tools).
   stop: () => void;
 };
 
@@ -86,8 +52,6 @@ const DEFAULT_TTL_MS = 60_000;
 const DEFAULT_MAX_ENTRIES = 5_000;
 const DEFAULT_MAX_BYTES = 64 * 1024 * 1024;
 const DEFAULT_DEBOUNCE_MS = 10;
-// A cache that evicts faster than it answers is too small for what it holds.
-// Said at most once a minute, and only past a floor, so a cold start is quiet.
 const THRASH_WINDOW_MS = 60_000;
 const THRASH_FLOOR = 100;
 
@@ -96,10 +60,7 @@ type Flight = { promise: Promise<Row[]>; tables: readonly string[]; seen: readon
 type Follow = {
   source: RowsSource;
   followers: Set<RowsFollower>;
-  // The rows every follower was last brought up to, as a hash — when a refetch
-  // returns the same, nobody's answer can have changed and nobody is mapped.
   rowsHash: string;
-  // Refetches are numbered so a slow one landing after a newer one is dropped.
   issued: number;
   landed: number;
   timer?: ReturnType<typeof setTimeout>;
@@ -193,8 +154,8 @@ export const createLiveRows = (
       drop(key);
     }
     counts.misses += 1;
-    // Join a fetch already out — but only one that started after the last
-    // write to these tables; an older one is about to return stale rows.
+    // Join a fetch already out, but only one that started after the last write
+    // to these tables: an older one is about to return stale rows.
     const flight = flights.get(key);
     if (flight !== undefined && unchanged(flight.tables, flight.seen)) return flight.promise;
 
@@ -212,8 +173,6 @@ export const createLiveRows = (
     return promise;
   };
 
-  // ── follows ───────────────────────────────────────────────
-
   const dirty = new Set<string>();
   let flushTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -229,9 +188,9 @@ export const createLiveRows = (
     unref(flushTimer);
   };
 
-  // Nothing wrote, but a lost invalidation (a write vex never saw, a signal
-  // from another process that never came) must not leave a screen stale for
-  // ever: every followed read is re-checked once per TTL, bypassing the cache.
+  // A lost invalidation (a write vex never saw, a signal from another process
+  // that never came) must not leave a follower stale for ever: each followed
+  // read is re-checked once per TTL, bypassing the cache.
   const arm = (key: string, follow: Follow): void => {
     if (follow.timer !== undefined) clearTimeout(follow.timer);
     if (!Number.isFinite(ttlMs)) return;
@@ -249,7 +208,6 @@ export const createLiveRows = (
     try {
       rows = await read(key, follow.source);
     } catch (err) {
-      // The screen keeps its last good answer; the next write or TTL tries again.
       emit({ type: 'rows.error', message: err instanceof Error ? err.message : String(err) });
       if (follows.get(key) === follow) arm(key, follow);
       return;
@@ -301,10 +259,9 @@ export const createLiveRows = (
       }
       arm(key, existing);
     }
-    // A follower joining a follow that already exists keeps the follow's own
-    // record of what everybody was last brought up to — if its rows are
-    // newer, the refresh already scheduled will say so to everyone, and the
-    // newcomer's own comparison drops the repeat.
+    // A follower joining an existing follow leaves `rowsHash` alone: were its
+    // rows newer and the hash moved to them, the refresh already scheduled
+    // would find no change and the earlier followers would never hear.
     existing.followers.add(follower);
     signal.addEventListener('abort', () => unfollow(key, follower), { once: true });
   };

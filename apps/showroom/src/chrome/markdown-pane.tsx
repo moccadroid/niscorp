@@ -3,9 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useIsMobile } from './use-is-mobile';
 import Prism from 'prismjs';
-// Grammar load order matters — each prism component depends on its base.
-// markup → markup-templating → typescript/javascript → jsx → tsx, and the
-// utility languages (json, bash) are independent.
+// Load order matters: each prism component depends on its base.
 import 'prismjs/components/prism-markup';
 import 'prismjs/components/prism-markup-templating';
 import 'prismjs/components/prism-javascript';
@@ -15,8 +13,6 @@ import 'prismjs/components/prism-tsx';
 import 'prismjs/components/prism-json';
 import 'prismjs/components/prism-bash';
 
-// Aliases for common shorthand language hints in fenced code blocks. Maps a
-// hint to a grammar name that prism actually has loaded above.
 const LANG_ALIASES: Record<string, string> = {
   ts: 'typescript',
   js: 'javascript',
@@ -27,13 +23,6 @@ const LANG_ALIASES: Record<string, string> = {
   html: 'markup',
   xml: 'markup',
 };
-
-// ═══════════════════════════════════════════════════════════
-// MarkdownPane — renders a markdown string with prism.js
-// syntax highlighting on fenced code blocks. Library-agnostic;
-// used by the canvas pane when the user selects a doc page
-// instead of a story.
-// ═══════════════════════════════════════════════════════════
 
 type Props = {
   title?: string;
@@ -59,8 +48,6 @@ type CodeProps = {
   children?: ReactNode;
 };
 
-// Inline code renderer — used for `inline.code`. Subtle background, no border,
-// monospace family, slightly smaller than body text.
 const InlineCode: FC<{ children?: ReactNode }> = ({ children }) => (
   <code
     style={{
@@ -78,8 +65,6 @@ const InlineCode: FC<{ children?: ReactNode }> = ({ children }) => (
   </code>
 );
 
-// Block code (inside <pre>) — syntax highlighted via prism.js when a
-// language hint is present. Plain pre when not.
 const BlockCode: FC<CodeProps> = ({ className, children }) => {
   const lang = langOf(className);
   const text = typeof children === 'string' ? children : String(children);
@@ -112,16 +97,12 @@ const BlockCode: FC<CodeProps> = ({ className, children }) => {
   );
 };
 
-// Code dispatcher: react-markdown's `code` slot is used for both inline and
-// block code. The `inline` prop's reliability depends on the plugin chain,
-// so we don't trust it alone — instead we use it as a hint AND fall back
-// to a content-based heuristic: block code (anything inside a fenced ```)
-// always contains a trailing newline; inline code never does. A code element
-// with a `language-*` className is also unambiguously a block.
+// react-markdown uses the `code` slot for inline and block code, and its
+// `inline` prop depends on the plugin chain. Fenced code always contains a
+// trailing newline; inline code never does.
 const isBlockCode = (className: string | undefined, children: ReactNode, inline: boolean | undefined): boolean => {
   if (inline === true) return false;
   if (className !== undefined && className.includes('language-')) return true;
-  // Trailing newline = block code (markdown adds it before the closing ```).
   if (typeof children === 'string' && children.includes('\n')) return true;
   return false;
 };

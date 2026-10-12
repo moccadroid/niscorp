@@ -1,21 +1,8 @@
 import { createMemoryStore, createTide, occurrencesBetween, zonedToUtc, type EffectRegistry, type PreviewReport, type ReflexInput, type Row, type Tide } from '@niscorp/tide';
 import { DAY, HOUR, localDate, MINUTE, readLedger, recordOf, runUntil, str, transform, TZ, drain, type Snapshot } from './ledger';
 
-// ═══════════════════════════════════════════════════════════
-// Build a reflex — the parts a reader picks, and the reflex they make.
-//
-// REAL: the reflex JSON (parsed by tide's own schema on load), `preview()`,
-// the week it runs through the engine, the ledger it leaves.
-// SIMULATED, and labelled on the page: the studio's members and bookings (a
-// few rows in memory standing in for the database behind the `select` seam),
-// and the three senders — email, SMS and push — which record what they were
-// handed instead of sending it.
-// ═══════════════════════════════════════════════════════════
-
-// The week the reader runs: Monday 2 March to Monday 9 March 2026, Vienna.
 export const WEEK_START = zonedToUtc({ year: 2026, month: 3, day: 2 }, 0, 0, TZ);
 export const WEEK_END = WEEK_START + 7 * DAY;
-// When "by hand" is pressed: Wednesday 10:00.
 export const BY_HAND_AT = WEEK_START + 2 * DAY + 10 * HOUR;
 
 export type Member = { id: string; name: string; email: string; phone: string; app: boolean; renews: string };
@@ -40,7 +27,6 @@ export type ClassId = keyof typeof CLASSES;
 
 export type Booking = { member: string; cls: ClassId; date: string; madeAt?: number };
 
-// Already on the books when the week starts.
 export const BOOKINGS: readonly Booking[] = [
   { member: 'ada', cls: 'morning', date: '2026-03-02' },
   { member: 'grace', cls: 'power', date: '2026-03-02' },
@@ -52,8 +38,6 @@ export const BOOKINGS: readonly Booking[] = [
   { member: 'grace', cls: 'weekend', date: '2026-03-07' },
 ];
 
-// Made DURING the week — the host inserts each one at its moment and pushes
-// a write fact, which is how "when a booking is created" gets its stimulus.
 export const NEW_BOOKINGS: readonly Booking[] = [
   { member: 'mia', cls: 'core', date: '2026-03-04', madeAt: WEEK_START + 9 * HOUR + 12 * MINUTE },
   { member: 'alan', cls: 'weekend', date: '2026-03-07', madeAt: WEEK_START + 3 * DAY + 20 * HOUR + 5 * MINUTE },
@@ -61,8 +45,6 @@ export const NEW_BOOKINGS: readonly Booking[] = [
 ];
 
 export const nameOf = (id: string): string => MEMBERS.find((m) => m.id === id)?.name ?? id;
-
-// ── the choices ─────────────────────────────────────────────────
 
 export type TriggerId = 'daily' | 'monday' | 'booking' | 'manual';
 export type WhoId = 'all' | 'tomorrow' | 'renewing' | 'booker';
@@ -90,8 +72,6 @@ export const CHANNELS: readonly { id: ChannelId; label: string; icon: string }[]
   { id: 'push', label: 'Push', icon: '🔔' },
 ];
 
-// Why a "who" can't go with a trigger — or undefined when it can. The page
-// disables the chip and prints this as its reason.
 export const whyNot = (trigger: TriggerId, who: WhoId): string | undefined => {
   if (trigger === 'booking' && who !== 'booker')
     return 'A booking is one event about one member — the fact already carries their row. Pick “The member who booked”.';
@@ -99,7 +79,6 @@ export const whyNot = (trigger: TriggerId, who: WhoId): string | undefined => {
   return undefined;
 };
 
-// The one legal "who" nearest the reader's last pick, after they change trigger.
 export const settle = (c: Choice): Choice =>
   whyNot(c.trigger, c.who) === undefined ? c : { ...c, who: c.trigger === 'booking' ? 'booker' : 'all' };
 
@@ -109,8 +88,6 @@ const TEXT: Record<WhoId, string> = {
   renewing: 'Hi {{name}}, your plan renews on {{renews}} — €89.00.',
   booker: 'Booked: {{className}} on {{day}} at {{time}}. See you there, {{name}}.',
 };
-
-// ── the reflex the choices make ─────────────────────────────────
 
 export const reflexOf = (c: Choice): ReflexInput => {
   const on: ReflexInput['on'] =
@@ -124,17 +101,14 @@ export const reflexOf = (c: Choice): ReflexInput => {
   const when = c.trigger === 'daily' ? `every day at ${c.at}` : c.trigger === 'monday' ? 'every Monday at 08:00' : c.trigger === 'booking' ? 'when a booking is created' : 'when someone presses “run now”';
   const whom = WHO.find((w) => w.id === c.who)?.label.toLowerCase() ?? '';
   const channel = CHANNELS.find((x) => x.id === c.channel)?.label ?? '';
-  // "The day this run is about": the occurrence's instant on a clock run (so a
-  // run caught up late still asks about ITS day), the logical now by hand.
-  // Handed to the selection so it answers for that day. (Prism's `$ref`
-  // refuses a missing path, so the template names the one that exists.)
+  // A clock run selects for its occurrence's day, so a run caught up late still asks
+  // about its own day. Prism's `$ref` refuses a missing path, so each names the one that exists.
   const day = { $ref: 'clock' in on ? '$.occurrence.at' : '$.now' };
   return {
     id: `studio.${c.channel}-${c.who}`,
     intent: `${channel} to ${whom}, ${when}.`,
     on,
-    // The booker needs no selection: a write fact carries the row that was
-    // written, and with no selection declared that row IS the unit.
+    // With no selection declared, the row a write fact carries is the unit.
     ...(c.who === 'booker' ? {} : { select: { query: { table: 'members', who: c.who, day }, mode: 'each' as const, unitKey: 'id' } }),
     effect: {
       name: `${c.channel}.send`,
@@ -146,8 +120,6 @@ export const reflexOf = (c: Choice): ReflexInput => {
     policy: { retry: { max: 2, backoff: 'exponential', baseMs: 5 * MINUTE } },
   };
 };
-
-// ── the world behind the seams ──────────────────────────────────
 
 export type Message = { at: number; member: string; channel: ChannelId; text: string; delivered: boolean; reason?: string };
 
@@ -166,7 +138,6 @@ const bookingRow = (b: Booking): Row => {
 
 type World = { tide: Tide; messages: Message[]; bookings: Booking[] };
 
-// The address each channel needs, or why this member can't get one.
 const reach = (m: Member | undefined, channel: ChannelId): string | undefined => {
   if (m === undefined) return 'no such member';
   if (channel === 'sms' && m.phone === '') return 'no phone number on file';
@@ -183,9 +154,7 @@ const makeWorld = (): World => {
       const rec = recordOf(input);
       const member = str(rec['to']);
       const why = reach(MEMBERS.find((m) => m.id === member), channel);
-      // A missing number is an ANSWER, not a bad minute: retrying won't grow
-      // Linus a phone. So the handler returns it — the task is done, and its
-      // output says what happened.
+      // An unreachable member is returned, not thrown: a retry would not change it.
       messages.push({ at: ctx.now, member, channel, text: str(rec['text']), delivered: why === undefined, ...(why === undefined ? {} : { reason: why }) });
       return why === undefined ? { sent: true } : { sent: false, reason: why };
     },
@@ -218,8 +187,6 @@ const makeWorld = (): World => {
 
 const bookingFact = (b: Booking, at: number) => ({ kind: 'write' as const, entity: 'bookings', op: 'insert' as const, row: bookingRow(b), at });
 
-// When the preview is asked about: the first moment in the week this reflex
-// would actually do something.
 export const previewAt = (c: Choice): number => {
   const reflex = reflexOf(c);
   if ('clock' in reflex.on && 'every' in reflex.on.clock) {
@@ -230,7 +197,6 @@ export const previewAt = (c: Choice): number => {
   return BY_HAND_AT;
 };
 
-// preview(): the real pipeline against the week's data, nothing sent.
 export const previewOf = async (c: Choice): Promise<PreviewReport> => {
   const { tide } = makeWorld();
   const reflex = reflexOf(c);
@@ -242,8 +208,6 @@ export const previewOf = async (c: Choice): Promise<PreviewReport> => {
 
 export type WeekResult = { messages: readonly Message[]; ledger: Snapshot };
 
-// Switch it on and let the week happen: the clock ticks, bookings arrive, and
-// — for a by-hand reflex — Olivia presses "run now" on Wednesday at 10:00.
 export const runWeek = async (c: Choice): Promise<WeekResult> => {
   const { tide, messages, bookings } = makeWorld();
   const reflex = reflexOf(c);

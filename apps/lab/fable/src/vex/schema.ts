@@ -1,7 +1,3 @@
-// The Fable schema — one table. TEXT PK with a uuid default so the DB mints
-// ids on create; `done_at` is stamped by the set-done endpoint, never the
-// client. The trigram index backs the list search's `ilike`; the btree
-// indexes back the done/due filters (Vex warns on unindexed filters).
 export const DDL = `
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 

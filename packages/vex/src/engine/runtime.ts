@@ -30,41 +30,24 @@ import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import type { CompiledIr, JsonObject, JsonValue } from '@niscorp/prism';
 import { execute as executePrism } from '@niscorp/prism';
 
-// `sortBy`/`sortDir` are reserved context keys: when present they replace the
-// query's literal `sort` (its default) with a single ORDER BY for this run. The
-// column is validated downstream by resolve()/resolveFieldPath — an unknown
-// column throws — and never becomes a param (operators.ts guards $context refs).
+// `sortBy` is the caller's and becomes SQL text: resolve() refuses it unless
+// it names a column of a `from` entity or one of the query's computes or
+// aggregates.
 export const applySortContext = (dsl: Query, context: Record<string, unknown>): Query => {
   const sortBy = context['sortBy'];
   if (typeof sortBy !== 'string' || sortBy === '') return dsl;
   const dir: 'asc' | 'desc' = context['sortDir'] === 'desc' ? 'desc' : 'asc';
-  // The caller's column LEADS; the entry's own keys stay behind it as
-  // tiebreakers. This used to replace the sort outright, which quietly broke
-  // any entry whose last sort key was there to make the order TOTAL — a keyset
-  // page ordered by (name, id) became ordered by name alone, and two people
-  // sharing a name could straddle a page boundary and never be reached.
-  // A trailing key is not decoration; it is what makes "the next fifty" mean
-  // anything. The caller's own column is dropped from the tail so it cannot
-  // appear twice with two directions.
+  // The entry's own sort keys stay behind the caller's column as tiebreakers:
+  // a keyset page needs a total order.
   const tiebreakers = (dsl.sort ?? []).filter((entry) => entry.field !== sortBy);
   return { ...dsl, sort: [{ field: sortBy, dir }, ...tiebreakers] };
 };
 
-// ═══════════════════════════════════════════════════════════════
-// Pipeline result (compiled query + analysis warnings)
-// ═══════════════════════════════════════════════════════════════
-
 type PipelineResult = {
   compiled: CompiledQuery;
   warnings: string[];
-  // Set when the LIMIT in `compiled` is the engine's number rather than the
-  // query's own: the default it was given, or the maximum it was clamped to.
   engineLimit?: number;
 };
-
-// ═══════════════════════════════════════════════════════════════
-// Configuration defaults
-// ═══════════════════════════════════════════════════════════════
 
 const DEFAULT_MAX_NESTING_DEPTH = 2;
 const DEFAULT_LIMIT = 100;
@@ -72,10 +55,6 @@ const DEFAULT_MAX_LIMIT = 1000;
 const DEFAULT_STATEMENT_TIMEOUT_MS = 10_000;
 const DEFAULT_UNSATISFIABLE_TTL_MS = 300_000;
 const DEFAULT_MAX_PRESENCE_VARIANTS = 32;
-
-// ═══════════════════════════════════════════════════════════════
-// Runtime factory
-// ═══════════════════════════════════════════════════════════════
 
 export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine => {
   const { adapter, scope: scopePolicy, generateDsl, mapToShape, embed, behaviors } = engineConfig;
@@ -96,27 +75,12 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     rejectUnindexedFilters,
   };
 
-  // The rows behind `refresh: 'reactive'` entries (engine/live.ts). Snapshot
-  // reads never touch it.
   const live = createLiveRows(engineConfig.rows, emit);
 
   let cachedSchema: DatabaseSchema | undefined;
   let cachedFingerprint: string | undefined;
   const cache: CacheBackend = engineConfig.cache ?? createMemoryCache();
 
-  // ── how many SHAPES one entry is being asked for ──
-  //
-  // Optional conditions trade one artifact for up to 2^n compiled forms. That
-  // is the deal and it is a good one — but it is worth SAYING when an entry
-  // starts behaving like a query builder, because at that point a caller is
-  // composing rather than choosing, and the closed grammar is doing less work
-  // than it looks like it is.
-  //
-  // A warning rather than a refusal: every variant is still a query the author
-  // wrote, scope still applies, and failing a legitimate read to make a point
-  // about authoring would be the wrong trade. There is no per-call cost here
-  // either — vex compiles per request already, so a new shape is not a cache
-  // miss, it is just a different string.
   const variantsSeen = new Map<string, Set<string>>();
   const maxPresenceVariants = engineConfig.config?.maxPresenceVariants ?? DEFAULT_MAX_PRESENCE_VARIANTS;
 
@@ -136,28 +100,17 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     }
   };
 
-  // Single-flight: collapse concurrent identical misses (same request
-  // identity) so a burst of N requests triggers one agent generation,
-  // not N. Keyed by request hash; only the shared generation is pooled,
-  // each request still runs its own scope/execute.
   const inFlight = new Map<string, Promise<Query>>();
-
-  // ─── Introspect ────────────────────────────────────────────
 
   const introspect = async (): Promise<DatabaseSchema> => {
     const options = engineConfig.config?.entities !== undefined
       ? { entities: engineConfig.config.entities }
       : undefined;
     const schema = await adapter.introspect(options);
-    // Every read bounded, from here on. Said once when the database cannot
-    // enforce it (PGlite, a pool that cannot transact) — dev, not production.
     const readLimit = engineConfig.config?.statementTimeoutMs ?? DEFAULT_STATEMENT_TIMEOUT_MS;
     if (adapter.limitReads !== undefined && (await adapter.limitReads(readLimit)) === 'unenforced' && readLimit > 0) {
       console.warn(`[vex] reads are not bounded: this database cannot enforce statement_timeout (${readLimit}ms asked). Fine for development; production wants Postgres.`);
     }
-    // The behaviors are read for who a caller is (GenerationCaller.bindings):
-    // a rule naming a table or a column the database does not have would tell
-    // a generation something false, so it refuses here, at boot.
     if (behaviors !== undefined) {
       const missing = behaviorColumns(behaviors).filter(({ entity, field }) => !schema.entities.some((e) => e.name === entity && e.fields.some((f) => f.name === field)));
       if (missing.length > 0) {
@@ -169,8 +122,6 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     return schema;
   };
 
-  // ─── Internal pipeline ─────────────────────────────────────
-
   const ensureSchema = (): DatabaseSchema => {
     if (cachedSchema === undefined) {
       throw new VexError(
@@ -181,19 +132,10 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     return cachedSchema;
   };
 
-  // WHO IS ASKING never decides WHETHER the policy applies. An engine with a
-  // policy enforces it on every run; the caller's scope values only fill the
-  // row rules' `$scope` slots at bind time, and a slot nobody filled is a
-  // refusal (`requireScope`), not a pass. Omitting the values used to switch
-  // the whole policy off — table access included — so a call that forgot to
-  // say who it was for read as everybody.
-  //
-  // THE LIMIT, AND WHOSE NUMBER IT IS. Every query runs with one. A query that
-  // states none is given `defaultLimit`. One that states more than `maxLimit`
-  // is clamped to it — unless its author SEEDED it: `maxLimit` is a guard on a
-  // query nobody reviewed, and clamping a seeded entry replaces the number its
-  // author chose with a smaller one, in a reply that does not say so.
-  // `capAuthored` puts the clamp back on seeded entries too.
+  // The policy applies on every run, whoever asks: scope values only fill the
+  // row rules' `$scope` slots at bind time, and an unfilled slot is refused
+  // (`requireScope`). `maxLimit` guards a query nobody reviewed, so a seeded
+  // entry keeps the limit its author chose unless `capAuthored`.
   const runPipeline = (dsl: Query, policyOverride?: ScopePolicy, seeded = false): PipelineResult => {
     const schema = ensureSchema();
 
@@ -207,25 +149,16 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       engineLimit = maxLimit;
     }
 
-    // Discover entities
     const entities = discoverEntities(processedDsl);
 
-    // Scope, in two halves. A per-request policy (from ExecuteOptions)
-    // overrides the engine's configured default for this run.
-    //
-    // The ACCESS CHECK runs first, on entity names alone, so a denied table is
-    // refused before any work is done. The ROW RULES are placed AFTER
-    // resolution, because only the resolver knows which tables are left-joined
-    // and a row rule in the WHERE of a left join silently deletes rows whose
-    // optional FK is null. See scope/apply.ts.
+    // Access is checked on entity names, before any work. Row rules are placed
+    // after resolution: only the resolver knows which tables are left-joined.
     const activePolicy = policyOverride ?? scopePolicy;
     if (activePolicy !== undefined) checkScope(entities, activePolicy);
 
-    // Resolve
     const resolved = resolve(processedDsl, schema);
     if (activePolicy !== undefined) scopeResolved(resolved, activePolicy);
 
-    // Analyze
     const analysis = analyze(resolved, analysisConfig);
     if (analysis.errors.length > 0) {
       throw new VexError(
@@ -235,22 +168,11 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       );
     }
 
-    // Compile
     const compiled = adapter.compile(resolved);
 
     return { compiled, warnings: analysis.warnings, ...(engineLimit !== undefined ? { engineLimit } : {}) };
   };
 
-  // ── when the engine's number may have ended a list ──
-  //
-  // A list that comes back with exactly as many rows as a limit its author
-  // never chose has probably been cut, and until this said so nothing did: the
-  // reply looked complete. It is "may": no extra row is fetched to find out,
-  // so a list of exactly that many rows is told the same thing. Only for a
-  // list — a single-row answer uses the first row and cannot be cut.
-  //
-  // Said in the reply, and once per named entry on the console: a host that
-  // hands its callers `result` without `meta` would otherwise show it to no one.
   const cutSaid = new Set<string>();
 
   const cutNote = (engineLimit: number | undefined, stated: number | undefined, rowCount: number, shape: unknown, fingerprint: string | undefined): string | undefined => {
@@ -267,27 +189,17 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     return note;
   };
 
-  // ─── Compile ───────────────────────────────────────────────
-
-  // No caller, so no presence to resolve against: `all` compiles the WIDEST
-  // form of the query, every optional condition included. That is the right
-  // default for both of these — a compile is asking "does this query build",
-  // and a test is asking "does the hardest version of it run".
   const compile = (dsl: Query): CompiledQuery =>
     runPipeline(pruneOptional(dsl, 'all')).compiled;
 
-  // ─── Test ──────────────────────────────────────────────────
-
   const test = async (dsl: Query, scopeValues?: ScopeValues): Promise<TestResult> => {
     try {
-      // Override limit to 5 for test queries
       const testDsl: Query = { ...pruneOptional(dsl, 'all'), limit: 5 };
       const { compiled, warnings } = runPipeline(testDsl);
 
-      // Build synthetic context for testing
       const syntheticContext = buildValidationContext(compiled.contextContract);
 
-      // Scope is never synthetic: a test runs AS somebody or it is refused.
+      // Scope is never synthetic: a test runs as somebody or it is refused.
       const scope: ScopeValues = scopeValues ?? {};
       requireScope(compiled, scope);
 
@@ -300,42 +212,27 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     }
   };
 
-  // ─── Cache resolution (fingerprint identity) ───────────────
-
   type Resolution = {
     fingerprint: string;
-    // Present on a hit — the stored artifact.
     dsl?: Query;
     cachedIr?: CompiledIr;
     intent?: string;
-    // The stored shape — drives the array-vs-single mapping envelope on
-    // fingerprint-only replays (the request carries no shape then).
     shape?: unknown;
     refresh?: Refresh;
-    // The entry was put there by the host: protected, and carrying no request
-    // hash. That is what `seedCache` writes, and what a host writes when it
-    // stores an entry through the cache backend itself. No request can produce
-    // it — a generated entry always carries the hash of the request it was
-    // born from, and the one field a wire call can change on a stored entry is
-    // `protected`.
+    // Put there by the host: protected, and with no request hash. No request
+    // can produce that: a generated entry always carries its request's hash,
+    // and the one field a wire call can change on a stored entry is `protected`.
     seeded?: boolean;
     hit: boolean;
-    // A named slot existed but its stored request differed — this run
-    // regenerates and REPLACES it.
     replaced: boolean;
   };
 
-  // Fresh = not past TTL and written against the current schema. A
-  // non-fresh entry is evicted here, then treated as a miss.
   const freshOrEvict = (entry: CacheEntry, key: string): boolean => {
     if (isEntryFresh(entry, cachedFingerprint)) return true;
     void cache.delete(key);
     return false;
   };
 
-  // Lifetime = usage: a hit stamps lastUsedAt (off the hot path) so a GC
-  // sweep can evict entries that stopped being replayed — at most once per
-  // TOUCH_EVERY_MS, not on every replay (cache/util.ts).
   const touch = (key: string, entry: CacheEntry): void => {
     const now = Date.now();
     if (isTouchDue(entry, now)) fireAndForget(cache.set(key, { ...entry, lastUsedAt: now }));
@@ -348,7 +245,6 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
   ): Promise<Resolution> => {
     const fp = validRequest.fingerprint;
     if (fp === undefined) {
-      // Explore: always a fresh generation under a minted, immutable pin.
       return { fingerprint: mintFingerprint(), hit: false, replaced: false };
     }
 
@@ -380,7 +276,6 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
           `Fingerprint "${fp}" is protected and this request no longer matches its stored one. Replay it with the fingerprint alone, or use a new name.`,
         );
       }
-      // The name is the caller's; its content follows the caller's request.
       return { fingerprint: fp, hit: false, replaced: true };
     }
 
@@ -390,14 +285,6 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     return { fingerprint: fp, hit: false, replaced: false };
   };
 
-  // ─── DSL generation (single-flight + negative caching) ─────
-
-  // WHAT A GENERATION MAY TOUCH is what its caller may touch. The hook is
-  // handed a `read` capability that runs the engine's own pipeline under the
-  // caller's policy and scope values — the only way anything it does reaches
-  // the database — and a schema holding only the tables that policy lets the
-  // caller read. The DSL it writes is still caller-neutral (scope is applied
-  // again on every replay); what it SAW while writing it is the caller's.
   const callerOf = (policy: ScopePolicy | undefined, scope: ScopeValues, tables: readonly string[]): GenerationCaller => ({
     bindings: scopeBindings(behaviors ?? {}, tables, scope),
     read: async (dsl) => {
@@ -406,11 +293,9 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       if (compiled.paramSlots.some((slot) => slot.kind === 'semantic')) {
         return { rows: [], sql: compiled.sql, warnings: [...warnings, 'Semantic params present — execution skipped, SQL structure validated only'] };
       }
-      // `$context` binds NULL — a probe asks whether a query runs, not what it
-      // answers, and NULL compares against a column of any type. Typed guesses
-      // were a trap: an empty string against a date column is a cast ERROR,
-      // which taught the agent the DSL could not compare dates. Scope binds the
-      // caller's own values.
+      // `$context` binds NULL: a probe asks whether the query runs, and NULL
+      // compares against a column of any type, where a typed guess ('' against
+      // a date column) is a cast error.
       const params = compiled.paramSlots.map((slot) => (slot.kind === 'scope' ? scope[slot.key] : null));
       return { rows: await adapter.execute(compiled, params), sql: compiled.sql, warnings };
     },
@@ -440,8 +325,6 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       try {
         return await generateDsl(validRequest, agentSchema, callerOf(policy, scope, agentSchema.entities.map((e) => e.name)));
       } catch (err) {
-        // Cache a negative result so a known-impossible request doesn't
-        // re-run the agent. TTL'd — a schema change may make it possible.
         if (isVexError(err) && err.code === 'unsatisfiable') {
           const now = Date.now();
           await cache.set(negKey, {
@@ -458,12 +341,8 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       }
     };
 
-    // Single-flight: a burst of identical requests (same request
-    // identity) triggers one generation, not N.
-    //
-    // Keyed by request AND policy: two callers who can see different tables
-    // are asking different agents, and one's answer — or one's "cannot
-    // satisfy" — is not the other's.
+    // Keyed by request and policy: callers who can see different tables get
+    // different generations, and one's "unsatisfiable" is not the other's.
     const existing = inFlight.get(flightKey);
     if (existing !== undefined) return existing;
 
@@ -476,32 +355,10 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     }
   };
 
-  // ─── Execute SQL + map to shape ────────────────────────────
-
   type MapResult = { result: JsonValue; rowCount: number; executionMs: number; mappingMs?: number; mappedIr?: CompiledIr };
 
-  // Prism runs ONCE and its output IS the result. The shape decides the
-  // envelope: an ARRAY shape maps over the whole row set (`$.result` is the
-  // array — a `$map`/identity); a non-array shape maps the SINGLE (first)
-  // row (`$.result` is that row — a detail/aggregate reads `$.result.field`,
-  // no `[0]`). Vex never forces an array: the mapping owns the shape.
-  //
-  // `$.result` is the rows, and it is what every mapping was written
-  // against. `$.context` and `$.scope` sit BESIDE it — additive, so nothing
-  // authored before this line changes meaning.
-  //
-  // WHY A MAPPING NEEDS THE SCOPE. A mapping is where a row becomes words
-  // ("Active", "Fri 14 Mar", "€45"), and words have a language. Without
-  // this, the deepest layer of an application's display strings is the one
-  // layer that structurally cannot be localised — and the only escape is to
-  // stop mapping in vex and re-derive the same fields somewhere further out,
-  // which is worse in every direction.
-  //
-  // Scope values are ENGINE-side (moss injects them per session; a request
-  // cannot author one), so reading them here does not widen what a caller
-  // can reach — it widens what the app can say about a caller it already
-  // knows. It is also why a reactive read shares ROWS between callers and
-  // maps them per caller: the rows are the same, the words may not be.
+  // A mapping reads `$.context` and `$.scope` beside `$.result`, so a reactive
+  // read shares rows between callers and maps them per caller.
   const mapRows = (
     rows: Row[],
     shape: unknown,
@@ -530,7 +387,6 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     const executionMs = Date.now() - execStart;
     emit({ type: 'query.rows', count: rows.length, executionMs });
 
-    // No shape declared → hand back the raw rows untouched.
     let result: JsonValue = rows as unknown as JsonValue;
     let mappingMs: number | undefined;
     let mappedIr: CompiledIr | undefined = cachedIr;
@@ -552,8 +408,6 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
 
     return { result, rowCount: rows.length, executionMs, mappingMs, mappedIr };
   };
-
-  // ─── Execute ───────────────────────────────────────────────
 
   const execute = async (
     request: QueryRequest,
@@ -585,11 +439,9 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       entities: options?.entities,
     });
 
-    // Resolve identity: replay a pin/name, or decide to generate.
     const cached = await resolveFingerprint(validRequest, hasRequest, requestHash);
     emit({ type: 'query.cache', hit: cached.hit, fingerprint: cached.fingerprint, replaced: cached.replaced });
 
-    // Generate on miss (consulting the negative cache first).
     let dsl = cached.dsl;
     let agentMs: number | undefined;
     if (dsl === undefined) {
@@ -610,20 +462,12 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       emit({ type: 'query.dsl', dsl, agentMs });
     }
 
-    // Run the pipeline. Two caller-driven rewrites happen here and NOWHERE
-    // else, both against the stored `dsl` rather than replacing it:
-    //   · `sortBy`/`sortDir` override the literal `sort` for this run
-    //   · optional conditions the caller did not key are pruned OUT entirely
-    // The cached entry keeps its full form — every run re-derives its own
-    // shape, so one stored artifact answers every combination of keys.
     const presence = presenceOf(validRequest.context);
     const shaped = pruneOptional(applySortContext(dsl, validRequest.context), presence);
     const { compiled, warnings, engineLimit } = runPipeline(shaped, activePolicy, cached.seeded === true);
     noteVariant(cached.fingerprint, presenceSignature(dsl, presence), warnings);
     emit({ type: 'query.sql', sql: compiled.sql, warnings });
 
-    // A missing SCOPE value is the host's fault and refuses; a missing CONTEXT
-    // value is the caller's and answers empty with the contract it missed.
     requireScope(compiled, scope);
     const context = validRequest.context;
     const missingKeys = findMissingContext(compiled, context);
@@ -645,14 +489,10 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       };
     }
 
-    // Execute SQL + map rows to the requested shape. A fingerprint-only
-    // replay carries no shape — the stored one drives the envelope.
     const effectiveRequest = hasRequest ? validRequest : { ...validRequest, shape: cached.shape };
 
-    // A REACTIVE READ answers from the shared rows and, when the caller asks
-    // to follow it, keeps answering. Only a stored entry can be reactive —
-    // the mode is authored, never generated — and only one whose mapping is
-    // already compiled, because a later answer must never wait on a model.
+    // Reactive only when the mapping is already compiled: a later answer must
+    // never wait on a model.
     const reactiveIr = cached.cachedIr;
     if (cached.hit && cached.refresh === 'reactive' && (effectiveRequest.shape === undefined || reactiveIr !== undefined)) {
       const shape = effectiveRequest.shape;
@@ -668,8 +508,6 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       const executionMs = Date.now() - execStart;
       emit({ type: 'query.rows', count: rows.length, executionMs });
       const result = shapeRows(rows);
-      // Per answer: a followed list that grows to the engine's limit says so
-      // then, and one that shrinks below it stops saying so.
       const metaOf = (rowCount: number): Omit<QueryResponse['meta'], 'timing'> => {
         const cut = cutNote(engineLimit, shaped.limit, rowCount, shape, validRequest.fingerprint);
         const said = cut === undefined ? warnings : [...warnings, cut];
@@ -705,8 +543,6 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     const cut = cutNote(engineLimit, shaped.limit, rowCount, effectiveRequest.shape, validRequest.fingerprint);
     const said = cut === undefined ? warnings : [...warnings, cut];
 
-    // Store the artifact under its fingerprint. Runtime writes are never
-    // protected — that bit belongs to seeds and explicit PATCHes only.
     if (!cached.hit) {
       const now = Date.now();
       const entry: OkCacheEntry = {
@@ -745,12 +581,8 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     };
   };
 
-  // ─── getDslSchema ─────────────────────────────────────────
-
   const getDslSchema = (): object =>
     z.toJSONSchema(QuerySchema, { target: 'draft-7', reused: 'ref' });
-
-  // ─── getSchema ─────────────────────────────────────────────
 
   const getSchema = (): DatabaseSchema | undefined => cachedSchema;
 

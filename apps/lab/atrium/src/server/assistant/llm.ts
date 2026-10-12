@@ -3,18 +3,8 @@ import { createSignal } from '@niscorp/signal';
 import type { Signal } from '@niscorp/signal';
 import { tuningFor } from './profiles';
 
-// The LLM provider seam. A persona row names its provider + model; this file
-// turns that pair into a client. Keys are server configuration (.env) — nothing
-// LLM-shaped reaches a browser.
-//
-// Everything model-SPECIFIC comes from `tuningFor`. This file knows how to reach
-// a provider and nothing about which models are good at what; switching on the
-// provider to answer a question about one model is how a per-model fact becomes
-// a per-provider rule.
-//
 // The OpenAI SDK client is built statically and injected: vite's SSR runner
-// cannot resolve signal's dynamic `import('openai')` from the workspace dist
-// (relay hit the same wall).
+// cannot resolve signal's dynamic `import('openai')` from the workspace dist.
 
 type Provider = 'groq' | 'openrouter';
 
@@ -30,15 +20,8 @@ const KEY_VARS: Record<Provider, string> = {
 
 const isProvider = (value: string): value is Provider => value === 'groq' || value === 'openrouter';
 
-// A fetch shim rather than a signal option: `SignalOptions` carries
-// temperature/maxTokens/topP/seed and has no passthrough for a provider-specific
-// body field, so this is atrium's own client shaping atrium's own request.
-//
-// `enabled: false` is the only setting that actually silences GLM — measured,
-// `effort: 'minimal'` still produced 370 reasoning characters and
-// `max_tokens: 1` produced 621.
-//
-// WHICH models get this is `tuningFor`'s call, not this file's.
+// A fetch shim, as `SignalOptions` has no passthrough for a provider-specific body field.
+// `enabled: false` is the only setting that silences GLM: `effort: 'minimal'` and `max_tokens: 1` do not.
 const withoutReasoning = (base: typeof fetch): typeof fetch =>
   async (url, init) => {
     if (init === undefined || typeof init.body !== 'string') return base(url, init);
@@ -51,11 +34,6 @@ const withoutReasoning = (base: typeof fetch): typeof fetch =>
     }
   };
 
-// The client for a persona's provider + model, or undefined when the provider
-// is unknown or its key is not configured — the caller says so in one plain
-// sentence and the app carries on.
-// Returns the full Signal builder: cortex's SignalClient is a structural
-// slice of it, so agent runs and direct schema completions share one client.
 export const createLlmClient = (provider: string, model: string): Signal | undefined => {
   if (!isProvider(provider)) return undefined;
   const apiKey = process.env[KEY_VARS[provider]];
@@ -67,8 +45,5 @@ export const createLlmClient = (provider: string, model: string): Signal | undef
     dangerouslyAllowBrowser: true,
     ...(tuning.reasoning ? {} : { fetch: withoutReasoning(fetch) }),
   });
-  // What the model can do is signal's registry row for (provider, model): the
-  // transport resolves from it, so one client lands on `native` with tools still
-  // on the request while another stays on `emit`, neither told which to use.
   return createSignal(provider, { client, model, apiKey });
 };

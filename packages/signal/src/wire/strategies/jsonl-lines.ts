@@ -1,11 +1,7 @@
 import type { ResponseWireStrategy } from './index';
 
-// 4o-era OpenAI models occasionally emit one JSON object per line
-// (JSONL) where one value was asked for. Contribute each JSON-looking
-// line as a candidate, last line first — the final line is usually the
-// final answer. The acceptance gate decides; on providers that never
-// do this the strategy simply never wins.
-
+// OpenAI's 4o models sometimes answer with one JSON object per line where one value was
+// asked for. Last line first: the final line is usually the answer.
 export const jsonlLines: ResponseWireStrategy = {
   id: 'jsonl-lines',
   hook: 'response',

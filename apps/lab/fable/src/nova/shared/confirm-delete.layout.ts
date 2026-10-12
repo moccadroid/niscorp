@@ -1,9 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The confirm dialog's content — the `modal` fragment supplies the backdrop,
-// card, title and ✕; this is just the message and the Cancel / Delete
-// buttons. Confirm announces `confirm-delete`; the list that opened it holds
-// the id and runs the delete.
 export const confirmDeleteLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 14 },

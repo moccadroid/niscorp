@@ -1,19 +1,3 @@
-// THE TWO MODELS FINISH EACH OTHER'S WORK — and the room says why a card is not up.
-//
-// Seen on the real models: "who's playing right now?" — Jev wanted the act's card
-// (0.70) and could not aim it, because the sentence names no act; the assistant's
-// own answer NAMED the act on stage, from the facts it was handed, and could not
-// aim the card either, because only rows retrieved from the operator's words were
-// admissible. Both halves were right, and the card stayed a chip.
-//
-//   a. x-ray's story gives the reason for every card above the line that is not up
-//   b. the assistant is told what Jev wanted and could not aim — and aims it, from
-//      the facts it was handed; the card mounts, says so in "why?", and stays put
-//   c. a row it LOOKED UP in this run is as nameable as a row of a pack
-//   d. an id from nowhere still rejects the whole answer — the law is unchanged
-//   e. the liaison's packs never widen what they can aim at
-//   f. with the agent off the card stays a chip, and the story says why
-//   g. x-ray's key is a chord: nothing is typed into the line
 import { z } from 'zod';
 import { XRAY_CHORD } from '@encore/app/actions/frame/intent-trace.layout';
 import { LIAISON_PRINCIPAL, OPERATOR_PRINCIPAL } from '@encore/app/charter/assignments';
@@ -35,7 +19,6 @@ const press = (key: string, held: { ctrl?: boolean; meta?: boolean; alt?: boolea
 const main = async (): Promise<void> => {
   const OP = OPERATOR_PRINCIPAL;
 
-  // ═══ f, a. the agent off: a chip, and a reason ═══════════
   const alone = await createWorld({ agent: { kind: 'off' }, decider: { noulFloor: FLOOR } });
   const aloneShell = await alone.login(OP);
   await settle();
@@ -55,7 +38,6 @@ const main = async (): Promise<void> => {
   const panel = alone.servedTo(OP).filter((message) => message.includes('"canvas":"trace"')).at(-1) ?? '';
   check('...and the terminal is served it, in x-ray’s panel — and nowhere in the app', panel.includes('"note":"not shown — it needs an act, and the sentence names none') && !alone.servedTo(OP).filter((message) => !message.includes('"canvas":"trace"')).some((message) => message.includes('not shown —')));
 
-  // ═══ b. the assistant finishes it ════════════════════════
   const controls: FakeAgentControls = { latencyMs: 0, chunkMs: 0, seen: [] };
   const world = await createWorld({ agent: { kind: 'fake', fake: controls }, decider: { noulFloor: FLOOR } });
   const shell = await world.login(OP);
@@ -80,7 +62,6 @@ const main = async (): Promise<void> => {
   await world.settled(OP);
   check('...and it STAYS: the pass the landing set off, and the next keystroke’s, keep the very same instance — Jev still cannot aim it, and does not take it down', aimedInstance !== undefined && shell.getState().canvases['about']?.stack.find((item) => item.definitionId === 'act.card')?.id === aimedInstance && actCard()['actId'] === actOnStage.id);
 
-  // ═══ d. the law is unchanged ═════════════════════════════
   const friday = await world.sql(`SELECT a.id, a.name FROM acts a WHERE NOT EXISTS (SELECT 1 FROM slots s WHERE s.act_id = a.id AND s.day = 'sat') LIMIT 1`);
   const elsewhere = { id: String(friday[0]?.['id'] ?? ''), name: String(friday[0]?.['name'] ?? '') };
   const aimAt = (actId: string): void => {
@@ -96,7 +77,6 @@ const main = async (): Promise<void> => {
     check(`AN ANSWER AIMED AT ${label} IS REJECTED WHOLE (${refused?.status}): "${refused?.reason.slice(0, 110)}…" — and nothing mounted`, elsewhere.id !== '' && refused?.status === 'failed' && refused.reason.includes('act.card') && refused.cardsMounted.length === 0 && !mounted(shell, 'about').includes('act.card'));
   }
 
-  // ═══ c. a row it looked up counts ════════════════════════
   await world.typeLine(OP, '');
   await world.settled(OP);
   controls.script = (turn) => {
@@ -109,7 +89,6 @@ const main = async (): Promise<void> => {
   const lookedUp = world.runsOf(OP).at(-1);
   check(`A ROW IT LOOKED UP IN THIS RUN IS NAMEABLE: the same act, once a query of this run had returned it, is admitted (${lookedUp?.status}, ${lookedUp?.lookups.length} lookup) — "${String(actCard()['why'])}"`, lookedUp?.status === 'landed' && lookedUp.lookups.length === 1 && actCard()['actId'] === elsewhere.id && (String(actCard()['why']).endsWith(`the assistant picked ${elsewhere.name} from what it looked up.`) || String(actCard()['why']).startsWith('Added by the assistant')));
 
-  // ═══ e. the liaison ══════════════════════════════════════
   const liaisonShell = await world.login(LIAISON_PRINCIPAL);
   await settle();
   const seenBefore = controls.seen.length;
@@ -123,7 +102,6 @@ const main = async (): Promise<void> => {
   check(`THE LIAISON'S PACKS NEVER WIDEN WHAT THEY CAN AIM AT: handed rows of ${JSON.stringify(Object.keys(liaisonHanded?.rows ?? {}))}, no act among them, nothing WANTED they do not hold (${JSON.stringify(liaisonHanded?.wanted)})`, liaisonHanded !== undefined && liaisonHanded.rows['acts'] === undefined && !JSON.stringify(liaisonHanded.facts).includes('"act_id"') && liaisonHanded.wanted.every((line) => !line.startsWith('act.card')));
   check(`...and an answer that aims the act's card anyway is rejected whole (${liaisonRun?.status}): "${liaisonRun?.reason.slice(0, 100)}…"`, liaisonRun?.status === 'failed' && liaisonRun.reason.includes('act.card') && mounted(liaisonShell, 'about').length === 0);
 
-  // ═══ g. the key is a chord ═══════════════════════════════
   const chords = chordsOf(XRAY_CHORD);
   check(`X-RAY'S KEY IS A CHORD (${XRAY_CHORD}): no chord of it is a character, so nothing can be typed into the line`, chords.length >= 1 && chords.every((chord) => !isCharacter(chord) && chord.mod));
   check('...a bare backtick while somebody is typing fires NOTHING (it is a character in their sentence); Ctrl+. and ⌘+` fire wherever focus is', !fires(chords, press('`'), true) && !fires(chords, press('`'), false) && !fires(chords, press('.'), true) && fires(chords, press('.', { ctrl: true }), true) && fires(chords, press('`', { meta: true }), true) && fires(chords, press('.', { ctrl: true }), false));

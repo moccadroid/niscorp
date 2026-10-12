@@ -1,10 +1,5 @@
-// Relay's Postgres schema, run once against PGlite at boot.
-//
-// Every read in Relay is a Vex shape over these tables; Vex introspects
-// the DDL (columns, types, primary keys, foreign-key relations, indexes)
-// to validate and compile the authored queries. Keep foreign keys honest
-// — Vex's join planning reads them.
-
+// Vex introspects this DDL to compile the authored queries; its join planning
+// reads the foreign keys.
 export const DDL = /* sql */ `
   CREATE EXTENSION IF NOT EXISTS vector;
   CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -152,10 +147,7 @@ export const DDL = /* sql */ `
   CREATE INDEX idx_contacts_name_trgm  ON contacts  USING gin ((first_name || ' ' || last_name) gin_trgm_ops);
 `;
 
-// The tables the schema defines — the `data` universe is TABLES × verbs.
-// Derived by hand from the DDL (schema.ts) for the client proof; the server
-// derives it from vex introspection. The single source charter's data
-// section resolves against and the engine's full policy is built from.
+// Derived by hand from the DDL.
 export const TABLES = [
   'users',
   'companies',

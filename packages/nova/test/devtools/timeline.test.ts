@@ -9,7 +9,6 @@ import { createDevtoolsFunctions, DEVTOOLS_CANVAS, type TimelineEntry } from '..
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 const signal = (): AbortSignal => new AbortController().signal;
 
-// An action that calls a fn endpoint on mount — one recorded endpoint call.
 const Probe: ActionDefinition = {
   id: 'Probe',
   data: { out: null },
@@ -19,8 +18,6 @@ const Probe: ActionDefinition = {
 
 describe('devtools — endpoint timeline (fed by shell.onEndpoint telemetry)', () => {
   it('records non-devtools endpoint calls and excludes the dock’s own', async () => {
-    // The devtools fns close over the session shell (lazy thunk); the shell's
-    // functions include them — the tap subscribes to shell.onEndpoint.
     let shell: Shell;
     const fns = createDevtoolsFunctions({ shell: () => shell });
     shell = createShell({
@@ -32,9 +29,9 @@ describe('devtools — endpoint timeline (fed by shell.onEndpoint telemetry)', (
     });
     await tick(); // let the tap's microtask subscribe
 
-    shell.push('main', 'Probe'); // recorded
+    shell.push('main', 'Probe');
     await tick();
-    shell.push(DEVTOOLS_CANVAS, 'Probe'); // excluded — the observer, not the observed
+    shell.push(DEVTOOLS_CANVAS, 'Probe');
     await tick();
 
     const result = (await fns['devtools.timeline']!({}, signal())) as { rows: TimelineEntry[]; count: number };
@@ -58,7 +55,6 @@ describe('devtools — endpoint timeline (fed by shell.onEndpoint telemetry)', (
     });
     await tick();
 
-    // three mounts → three recorded calls, newest first by seq
     shell.push('main', 'Probe');
     shell.push('main', 'Probe');
     shell.push('main', 'Probe');

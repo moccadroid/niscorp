@@ -6,10 +6,6 @@ import { createShell } from '@shell';
 
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
-// ═══════════════════════════════════════════════════════════
-// The popTo + resetTo navigation effects (stack-nav primitives).
-// ═══════════════════════════════════════════════════════════
-
 describe('shell — popTo / resetTo navigation effects', () => {
   const setup = (actions: Record<string, ActionDefinition>) =>
     createShell({
@@ -36,7 +32,6 @@ describe('shell — popTo / resetTo navigation effects', () => {
     await tick();
     expect(shell.getCanvasState('main').stack.length).toBe(3);
 
-    // The active C fires popTo back to A (suspended B/A under it no-op).
     shell.dispatch({ type: 'ui:click', ref: 'jump' });
     await tick();
     const st = shell.getCanvasState('main');
@@ -54,7 +49,6 @@ describe('shell — popTo / resetTo navigation effects', () => {
     await tick();
     shell.dispatch({ type: 'ui:click', ref: 'jump' });
     await tick();
-    // Stack untouched — a stale crumb can't clear the canvas.
     expect(shell.getCanvasState('main').stack.length).toBe(1);
   });
 

@@ -1,4 +1,3 @@
-// Things bought once, that grant nothing: the joining fee, the gi, the ticket.
 export const PURCHASES_DDL = /* sql */ `
   -- The joining fee, the deposit, the workshop ticket, the gi. A studio sells
   -- these and had nowhere to put them: the only entitlements this app knew were

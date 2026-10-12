@@ -24,11 +24,9 @@ describe('defineTool', () => {
       execute: ({ a, b }) => a + b,
     });
 
-    // Valid input
     const parsed = tool.inputSchema.safeParse({ a: 1, b: 2 });
     expect(parsed.success).toBe(true);
 
-    // Invalid input
     const bad = tool.inputSchema.safeParse({ a: 'not a number', b: 2 });
     expect(bad.success).toBe(false);
   });
@@ -53,8 +51,6 @@ describe('defineTool', () => {
   });
 });
 
-// What DOCS.md says of a tool's input schema: the model is sent its JSON
-// Schema, so a schema that has none is refused when the request is built.
 describe('a tool input schema with no JSON Schema', () => {
   const cases: [string, z.ZodType][] = [
     ['a transform', z.object({ when: z.string().transform((text) => text.length) })],

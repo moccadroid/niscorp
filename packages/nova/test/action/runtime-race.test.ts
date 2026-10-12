@@ -6,11 +6,6 @@ import type { ActionDefinition } from '@action/schemas';
 import type { FetchFn, FetchResponse } from '@action/types';
 import { createPermissiveRegistry } from '../helpers';
 
-// ═══════════════════════════════════════════════════════════
-// A controllable fake fetch: each call returns a promise whose
-// resolve/reject is exposed, so tests can unmount before resolution.
-// ═══════════════════════════════════════════════════════════
-
 type PendingCall = {
   resolve: (response: FetchResponse) => void;
   reject: (err: unknown) => void;
@@ -80,7 +75,6 @@ describe('runtime — abort races', () => {
 
     await runtime.unmount();
 
-    // After unmount: resolve the fetch promise — the success path should be skipped.
     const first = pending[0];
     if (first === undefined) throw new Error('expected pending');
     first.resolve(okResponse({ name: 'X' }));
@@ -131,7 +125,6 @@ describe('runtime — abort races', () => {
     const runtime = createActionRuntime({ definition, ...deps });
     await runtime.mount();
     await runtime.unmount();
-    // trigger unsubscribed on unmount; emitting should not mutate.
     deps.eventBus.emit({ type: 'ui:click' });
     await tick();
     expect(runtime.getData()).toEqual({ n: 0 });

@@ -7,8 +7,6 @@ import { VexScopeError } from '../../src/scope/apply.js';
 import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
 import type { ScopePolicy } from '../../src/scope/scope.types.js';
 
-// ─── Fixtures ───────────────────────────────────────────────────
-
 const field = (name: string, normalizedType = 'string', primaryKey = false) => ({
   name,
   type: normalizedType,
@@ -83,8 +81,6 @@ const upsertTask = {
   insert: { deal_id: { $context: 'deal_id' } },
 };
 
-// ─── Grammar ────────────────────────────────────────────────────
-
 describe('mutation grammar', () => {
   it('rejects $scope in authored values', () => {
     expect(() => MutationDefinitionSchema.parse({ op: 'insert', table: 'companies', values: { owner_id: { $scope: 'userId' } } })).toThrow();
@@ -98,8 +94,6 @@ describe('mutation grammar', () => {
     expect(() => MutationDefinitionSchema.parse({ op: 'insert', table: 'companies', values: {} })).toThrow();
   });
 });
-
-// ─── Scope (engine-applied, never authored) ─────────────────────
 
 describe('scopeMutation via executeMutation', () => {
   it('stamps identity on insert from the policy set rule', async () => {
@@ -147,16 +141,11 @@ describe('scopeMutation via executeMutation', () => {
   });
 });
 
-// ─── Specific write phases (write is the umbrella) ─────────────
-
 describe('specific write phases', () => {
   const phased: ScopePolicy = {
     default: 'deny',
     entities: {
-      // insert-only: create allowed (with its rules), update/delete are not
       companies: { insert: [{ set: 'owner_id', to: 'userId' }] },
-      // umbrella + specific: umbrella rules apply to every op, the specific
-      // phase's stack on top for that op
       tasks: {
         write: [{ set: 'assignee_id', to: 'userId' }],
         update: [{ match: 'assignee_id', to: 'userId' }],
@@ -189,7 +178,6 @@ describe('specific write phases', () => {
     await executeMutation(client, { op: 'update', table: 'tasks', set: { done: { $context: 'done' } }, where: { eq: ['tasks.id', { $context: 'id' }] } }, {
       context: { id: 't_1', done: true }, scope: { userId: 'usr_1' }, policy: phased, schema,
     });
-    // umbrella `set` lands in SET, specific `match` lands in WHERE
     expect(calls[0]!.sql).toMatch(/SET .*assignee_id\s*=/);
     expect(calls[0]!.sql).toMatch(/WHERE .*assignee_id\s*=/);
   });
@@ -203,8 +191,6 @@ describe('specific write phases', () => {
     ).resolves.toBeDefined();
   });
 });
-
-// ─── Validation ─────────────────────────────────────────────────
 
 describe('validation gates', () => {
   it('rejects an unknown column before any SQL runs', async () => {
@@ -231,8 +217,6 @@ describe('validation gates', () => {
   });
 });
 
-// ─── Upsert desugar ─────────────────────────────────────────────
-
 describe('upsert desugar', () => {
   it('inserts when the key is absent/empty (insert-only columns included)', async () => {
     const { client, calls } = fakeClient();
@@ -258,8 +242,6 @@ describe('upsert desugar', () => {
     expect(calls[0]!.sql).not.toContain('deal_id');
   });
 });
-
-// ─── Asking without running ─────────────────────────────────────
 
 describe('mutationMisfits', () => {
   const without = (table: string, column: string): DatabaseSchema => ({
@@ -295,13 +277,10 @@ describe('mutationMisfits', () => {
   });
 
   it('asks an upsert as both statements it can become', () => {
-    // the key is in the update's WHERE only; the insert-only column in the insert only
     expect(mutationMisfits(upsertTask, without('tasks', 'id'))).toEqual(['"tasks.id" in the WHERE is not a column of "tasks".']);
     expect(mutationMisfits(upsertTask, without('tasks', 'deal_id'))).toEqual(['Unknown column "tasks.deal_id".']);
   });
 });
-
-// ─── Batches ────────────────────────────────────────────────────
 
 describe('batches', () => {
   const batch = [

@@ -24,14 +24,6 @@ export const Button: NovaComponent<z.infer<typeof ButtonProps>> = ({ variant = '
   const className = cx('ly-btn', `ly-btn--${variant}`, big === true && 'ly-btn--big');
   const style = full === true ? { width: '100%' } : undefined;
 
-  // A LINK THAT LOOKS LIKE A BUTTON. Set `href` and this navigates instead of
-  // dispatching — the only honest way to send somebody OUT of the app, to a
-  // payment page or a provider's onboarding, where a dispatched click could
-  // never take them. Silently ignoring `href` on a plain button (as this did)
-  // renders a dead control on exactly the screen where "continue" matters most.
-  //
-  // New tab, and `noopener` — an external page must not get a handle back to the
-  // window that opened it.
   if (href !== undefined && href !== '') {
     return (
       <a

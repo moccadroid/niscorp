@@ -3,14 +3,6 @@ import type { ActionDefinition } from '@niscorp/nova';
 import { messageLayout } from './message.layout';
 import { threadPrism, sendMessagePrism } from './stay.prism';
 
-// The thread with the desk. This is the surface a guest reaches for when
-// something is wrong, and it is where the demo's causal line starts: what is
-// typed here lands on a clerk's board.
-//
-// Nothing here can promise anything. There is no comp control, no upgrade
-// control and no refund control, because the guest role holds no verb that
-// would grant one — a request for a discount becomes a line the desk reads, and
-// the desk's own surface is where the authority to answer it lives.
 export const stayMessageAction: ActionDefinition = {
   id: 'stay.message',
   title: 'Message the desk',

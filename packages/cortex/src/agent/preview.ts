@@ -1,12 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// preview — the exact messages and tools a run would send
-// ═══════════════════════════════════════════════════════════
-//
-// Runs the context functions and strategy resolution without a
-// model call. Anything you can't explain in the preview, the
-// model can't either. Shows the REAL exit-tool params and the
-// resolved strategy, so output plumbing is never mystery-meat.
-
 import { resolveTransport } from '@niscorp/signal';
 import type { Message, StepToolDescriptor, Capabilities } from '@niscorp/signal';
 import type { OutputStrategy } from '../types';
@@ -35,9 +26,6 @@ export type ResolvedPreview = {
   estimatedTokens: number;
 };
 
-// Without an llm to describe(), resolution assumes a plain provider
-// that neither validates nor mangles tool args — respond for a small
-// contract, emit for one too large to enforce in tool params.
 const FALLBACK_CAPABILITIES: Capabilities = {
   nativeTools: true,
   nativeJsonSchema: false,
@@ -61,9 +49,6 @@ export const previewAgent = async <TData, TDeps>(
 
   const outputSchema = config.output?.schema;
   const responseMode = config.output?.response ?? (outputSchema ? 'optional' : 'required');
-  // The run's resolution exactly (see run.ts) — same pure function,
-  // same capabilities, so the preview never explains a request that
-  // would not go out.
   const resolved = resolveTransport(
     {
       wire: envelopeWireSchema({ ...(outputSchema && { schema: outputSchema }), responseMode }),
@@ -83,9 +68,6 @@ export const previewAgent = async <TData, TDeps>(
     input,
     agent: { id: config.id, ...(config.description !== undefined && { description: config.description }) },
   };
-  // Mirrors the run's prefix order exactly (see run.ts) so the preview's
-  // token estimate is honest: instructions → context → run producers →
-  // tool guides → schema doc → finish protocol → input.
   const items: ReadonlyArray<ContextEntry | Producer<TDeps>> = [
     config.instructions,
     ...(config.context ?? []),
@@ -99,8 +81,7 @@ export const previewAgent = async <TData, TDeps>(
       ? [{ role: 'system', content: typeof doc === 'string' && doc !== 'auto' ? doc : schemaDoc(outputSchema) }]
       : [];
   const finishMessage: Message = { role: 'system', content: resolved.finishProtocol };
-  // Identical to run.ts, and it has to be — a preview that explained a
-  // different order would be explaining a request that never goes out.
+  // The same order as run.ts: a preview shows the request the run sends.
   const [identity, ...rest] = contextMessages;
   const messages = [
     ...(identity ? [identity] : []),
@@ -112,8 +93,6 @@ export const previewAgent = async <TData, TDeps>(
   ];
 
   const tools: StepToolDescriptor[] = [
-    // The run's own builder — the preview shows the model-visible NAME,
-    // not the id, or it would explain a request that never goes out.
     ...allTools.map(buildToolDescriptor),
     ...(resolved.respondDescriptor ? [resolved.respondDescriptor] : []),
   ];

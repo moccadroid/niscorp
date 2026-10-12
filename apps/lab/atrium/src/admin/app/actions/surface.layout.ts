@@ -5,9 +5,6 @@ export const surfaceLayout: LayoutNode = panel(
   'Surface',
   'Every slot × every property, live or dark, and the reason the resolver gave',
   split(
-    // ── left: which property we are looking through ──
-    // The resolution is per property, so there is no "all" view to offer: the
-    // same slot is live at one and dark at the next, and that IS the subject.
     {
       component: 'Stack',
       props: { gap: 14 },
@@ -43,7 +40,6 @@ export const surfaceLayout: LayoutNode = panel(
       ],
     },
 
-    // ── right: the slots, with verdict and switch ──
     {
       component: 'Stack',
       props: { gap: 12 },

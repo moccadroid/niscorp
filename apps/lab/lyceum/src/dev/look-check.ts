@@ -1,18 +1,3 @@
-// LOOK CHECK — one tree, three renderers. Which renderer draws a screen is a
-// row per surface (the phones, the projector, the controller); the server
-// puts it in each screen's frame (server/renderers.ts), and the terminal draws
-// with the renderer the frame names (src/ui/target.ts). It is not an action:
-// nobody's screen has it as something on it.
-//
-//   1. every screen's frame names DOM — a stranger at the door, a phone, the
-//      projector, the controller — and no screen has a renderer action;
-//   2. the speaker's switch is a tool on a slide; pressing React for the phones
-//      moves the phones' frames and no other surface's, the trees otherwise
-//      the same; the stage and the controller move on their own rows;
-//   3. surfaces and renderers are closed sets, kept by the table: any other
-//      word is refused;
-//   4. every kit implements exactly the grammar's components (the types say
-//      so; this says it at runtime too, where a kit would be handed a tree).
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { mintSession } from '@niscorp/moss';
@@ -51,13 +36,11 @@ const main = async (): Promise<void> => {
   ];
   const named = (screen: Terminal, renderer: string): Promise<boolean> => screen.shows('frame', `"look":"${renderer}"`);
 
-  // ── 1 ──
   for (const { name, screen, surface } of screens) {
     check(`${name}: its frame names DOM (the ${surface})`, await named(screen, 'dom'));
     check('...and no action on it is about renderers', !(await screen.hello()).catalog.actions.some((id) => id.startsWith('look.')));
   }
 
-  // ── 2 ──
   const at = SLIDES.findIndex((slide) => slide.tools.includes('tools.look'));
   check(`the switch is a tool on a slide (${SLIDES[at]?.title ?? 'none'})`, at >= 0);
   for (let step = 0; step < at; step += 1) {
@@ -65,7 +48,6 @@ const main = async (): Promise<void> => {
     await speaker.shows('head', `slide ${step + 2} of`);
   }
   check('...and it is on the controller there', await speaker.shows('tools', 'Which renderer draws'));
-  // The phone's card is still being written (the issuer); wait for it to settle.
   const settled = async (screen: Terminal, canvas: string): Promise<string> => {
     for (let last = screen.textOf(canvas); ; ) {
       await new Promise((resolve) => setTimeout(resolve, 400));
@@ -91,7 +73,6 @@ const main = async (): Promise<void> => {
   for (const surface of ['phones', 'stage', 'controller']) speaker.click('tools', 'renderer', { surface, renderer: 'dom' });
   check('pressing DOM on each row brings every screen back', (await Promise.all(screens.map(({ screen }) => named(screen, 'dom')))).every(Boolean));
 
-  // ── 3 ──
   const rows = async (): Promise<string> =>
     (await runtime.db.query<{ surface: string; renderer: string }>('SELECT surface, renderer FROM renderers ORDER BY position')).rows.map((row) => `${row.surface}:${row.renderer}`).join();
   speaker.click('tools', 'renderer', { surface: 'phones', renderer: 'purple' });
@@ -100,7 +81,6 @@ const main = async (): Promise<void> => {
   const after = await rows();
   check(`a word the table does not have is refused: ${after}`, after === 'phones:dom,stage:dom,controller:dom');
 
-  // ── 4 ──
   const { POSTER_KIT } = await import('@lyceum/ui/kit');
   const { REACT_KIT } = await import('@lyceum/ui/react.kit');
   const { VUE_KIT } = await import('@lyceum/ui/vue.kit');

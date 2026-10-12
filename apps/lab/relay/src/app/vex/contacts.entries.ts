@@ -1,10 +1,7 @@
 import type { CacheEntry } from './index';
 import type { MutationEntry } from './index';
 
-// Contacts list — `contact_id` and the company name are aliased in the DSL (so
-// the array shape is distinct and the joined name doesn't collide). `phone` is
-// carried (not shown in the table) so a row's ⋯ → Edit can seed the form without
-// a second read. The mapping builds the shape explicitly and nests the company.
+// `phone` is not shown in the table: the row's Edit seeds the form from it.
 export const contactsList: CacheEntry = {
   fingerprint: 'contacts/list',
   intent: 'List all contacts with the company each belongs to',
@@ -50,8 +47,6 @@ export const contactsList: CacheEntry = {
   },
 };
 
-// One contact by id — an object shape, so Vex maps the single row: the mapping
-// reads `$.result.field` (no index). Reused by the deal modal.
 export const contactById: CacheEntry = {
   fingerprint: 'contacts/byId',
   intent: 'Load one contact by id, with the company nested',
@@ -80,8 +75,6 @@ export const contactById: CacheEntry = {
   },
 };
 
-// A company's contacts — flat, all keys aliased/computed to the shape, so the
-// rows ARE the shape: no mapping.
 export const contactsByCompany: CacheEntry = {
   fingerprint: 'contacts/byCompany',
   intent: "List a company's contacts",
@@ -96,14 +89,6 @@ export const contactsByCompany: CacheEntry = {
   },
 };
 
-// Create a contact. `first_name`/`last_name` are the NOT NULL columns the list
-// concatenates back into `name` (the input prism splits the form's single
-// "Name"). `owner_id` is NOT here — the engine stamps identity from the scope
-// policy. `id`/`created_at` default in the DB. (No company yet — that needs an
-// id-bearing company picker.)
-// Create-or-edit a contact. `upsert` keys on `id` — present → update that row,
-// absent → insert. `owner_id` is stamped by scope on the insert branch (not
-// reassigned on edit); `id`/`created_at` default in the DB on create.
 export const contactUpsert: MutationEntry = {
   fingerprint: 'contacts/upsert',
   intent: 'Create a contact, or edit one by id',
@@ -122,9 +107,6 @@ export const contactUpsert: MutationEntry = {
   },
 };
 
-// Delete a contact by id (the row ⋯ → Delete, behind a confirm). The schema's
-// FKs SET NULL the soft references (a deal's primary contact, activities, tasks)
-// and CASCADE owned rows (list memberships), so the delete never FK-fails.
 export const contactDelete: MutationEntry = {
   fingerprint: 'contacts/delete',
   intent: 'Delete a contact by id',

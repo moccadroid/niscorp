@@ -1,11 +1,3 @@
-// The tasks. Each one is its input and a plain function: what that function returns IS the answer, and every
-// library is held to it before it is timed (harness/check.mjs). The function is also the "hand-written" row.
-//
-// Two kinds of input:
-//   record      one order                       sizes: [1]
-//   collection  { orders: Order[], now }        sizes: [100, 10000]
-// The order shape is in data.mjs.
-
 import { makeOrder, makeOrders, NOW } from './data.mjs';
 
 const totalCents = (order) => order.items.reduce((sum, item) => sum + item.qty * item.unitCents, 0) + order.shippingCents;
@@ -163,8 +155,8 @@ export const taskOf = (id) => {
   return task;
 };
 
-// The inputs a library is checked against: the timed input of each size, and others chosen so that every branch
-// of every task is taken (each status, each tier, a note and none, a coupon and none, free shipping and not).
+// The inputs beyond the timed ones are chosen so that every branch of every task is taken: each status, each tier,
+// a note and none, a coupon and none, free shipping and not.
 export const checkInputs = (task) => {
   const inputs = task.sizes.map((size) => task.input(size, 1));
   if (task.kind === 'record') for (let index = 0; index < 40; index += 1) inputs.push(task.input(100 + index, 2));

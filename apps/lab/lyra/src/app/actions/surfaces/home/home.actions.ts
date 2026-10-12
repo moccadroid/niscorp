@@ -23,7 +23,6 @@ const listen = [
   { message: 'members-changed', do: [{ call: 'members', onSuccess: [{ set: 'memberCount', value: '$.memberCountRow.total' }] }] },
 ];
 
-// ── manager and owner ────────────────────────────────────────
 export const homeOverviewAction: ActionDefinition = {
   id: 'home.overview',
   title: 'Today',
@@ -48,7 +47,6 @@ export const homeOverviewAction: ActionDefinition = {
   triggers: listen,
 };
 
-// ── the front desk ───────────────────────────────────────────
 export const homeDeskAction: ActionDefinition = {
   id: 'home.desk',
   title: 'Today',
@@ -71,7 +69,6 @@ export const homeDeskAction: ActionDefinition = {
   triggers: listen.filter((t) => t.message !== 'members-changed').concat([{ message: 'members-changed', do: [{ call: 'members', onSuccess: [{ set: 'memberCount', value: '$.memberCountRow.total' }] }] }]),
 };
 
-// ── instructors and members ──────────────────────────────────
 export const homeClassesAction: ActionDefinition = {
   id: 'home.classes',
   title: 'Today',

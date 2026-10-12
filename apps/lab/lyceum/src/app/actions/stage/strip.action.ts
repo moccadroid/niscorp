@@ -3,10 +3,6 @@ import { memberCounts } from '@lyceum/app/vex/member.entries';
 import { deckCurrent } from '@lyceum/app/vex/deck.entries';
 import { stripLayout } from './strip.layout';
 
-// The projector's strip, over every slide: where the talk is, the address to
-// step in at (for whoever arrives after the first slide), and the room.
-// Its own canvas, so it never remounts when a slide does; every read is
-// reactive, so it follows the deck and the room on its own.
 export const stripAction: ActionDefinition = {
   id: 'stage.strip',
   title: 'The strip',

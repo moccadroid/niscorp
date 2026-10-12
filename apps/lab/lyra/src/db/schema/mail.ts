@@ -1,4 +1,3 @@
-// Mail: what is queued to go out, and who we must not write to again.
 export const MAIL_DDL = /* sql */ `
   CREATE TABLE outbox (
     id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,

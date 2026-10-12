@@ -4,32 +4,19 @@ import { dealsLayout } from './deals.layout';
 import { listDealsPrism, moveDealPrism, deleteDealPrism } from './deals.prism';
 import { dealsBoard, dealsOpenByStage, dealsForecast } from '@relay/app/vex/deals.entries';
 
-// The deals collection — ONE action, two layouts (`$.view`: 'table' | 'board').
-// Navigation sets the initial view (sidebar Deals → table, Pipeline → board; the
-// /deals vs /pipeline URLs likewise). Because Nova has no conditional lifecycle,
-// mount loads BOTH views' data — all cached/prewarmed Vex reads — and the
-// inactive layout simply isn't rendered. The table view's reads/triggers and the
-// board view's reads/triggers coexist here; `deals-changed` refreshes both.
 export const dealsAction: ActionDefinition = {
   id: 'crm.deals',
   title: 'Deals',
   data: {
     view: 'table',
-    // ── table view ──
-    // `highlight_id` marks the row open in the detail panel; `menuOpenId` is the
-    // row whose `⋯` menu is open. `sortBy`/`sortDir` are Vex's reserved sort keys
-    // (created_at desc by default). `ownerId` scopes the list: '' = All, 'me' =
-    // the current user, an id = an owner cross-link.
     search: '', ownerId: '', rows: [], loading: true, highlight_id: '', menuOpenId: '',
     sortBy: 'deals.created_at', sortDir: 'desc', pendingDeleteId: '', pendingDeleteLabel: '',
-    // ── board view ──
     stages: [], deals: [], summary: {}, boardLoading: true, moveId: '', moveStage: '',
   },
   layout: dealsLayout,
   endpoints: {
     load:        { url: '/api/deals/vex', method: 'POST', request: listDealsPrism, target: 'rows' },
     remove:      { url: '/api/deals/vex',           method: 'POST', request: deleteDealPrism },
-    // Board reads take no caller input — plain JSON replays, no prism seam.
     loadStages:  { url: '/api/deals/vex', method: 'POST', request: { fingerprint: dealsOpenByStage.fingerprint, context: {} }, target: 'stages' },
     loadDeals:   { url: '/api/deals/vex', method: 'POST', request: { fingerprint: dealsBoard.fingerprint, context: {} }, target: 'deals' },
     loadSummary: { url: '/api/deals/vex', method: 'POST', request: { fingerprint: dealsForecast.fingerprint, context: {} }, target: 'summary' },
@@ -42,12 +29,9 @@ export const dealsAction: ActionDefinition = {
       { call: 'loadDeals' },
       { call: 'loadSummary' },
     ],
-    // On resume (a drilled deal popped back to the list) clear the row highlight —
-    // the chip's Back pops the record directly, so there's no `deselect` to do it.
     resume: [{ set: 'highlight_id', value: '' }],
   },
   triggers: [
-    // ── table view ──
     { event: 'ui:model', ref: 'search', do: [{ set: 'search', value: '@event.payload' }, { call: 'load' }] },
     { event: 'ui:click', ref: 'sort', do: [{ set: 'sortBy', value: '@event.payload.sortBy' }, { set: 'sortDir', value: '@event.payload.sortDir' }, { call: 'load' }] },
     { event: 'ui:click', ref: 'tab', do: [{ set: 'ownerId', value: '@event.payload' }, { call: 'load' }] },
@@ -56,8 +40,6 @@ export const dealsAction: ActionDefinition = {
     { event: 'ui:click', ref: 'menu-open', do: [{ set: 'menuOpenId', value: '@event.payload' }] },
     { event: 'ui:click', ref: 'menu-close', do: [{ set: 'menuOpenId', value: '' }] },
     { event: 'ui:click', ref: 'row-open', do: [{ set: 'highlight_id', value: '@event.payload.deal_id' }, { push: { action: 'crm.deal.view', input: { id: '@event.payload.deal_id' } } }, { set: 'menuOpenId', value: '' }] },
-    // Edit opens the deal form seeded from the row: the seeded `id` makes the
-    // `upsert` write an update, the rest seeds the record's fields.
     {
       event: 'ui:click',
       ref: 'row-edit',
@@ -77,7 +59,6 @@ export const dealsAction: ActionDefinition = {
       ],
     },
     { message: 'confirm-delete', do: [{ call: 'remove', onSuccess: [{ emit: { channel: 'deals-changed' } }, { set: 'pendingDeleteId', value: '' }] }] },
-    // ── board view ──
     { event: 'ui:click', ref: 'card', do: [{ push: { action: 'crm.deal.view', input: { id: '@event.payload' } } }] },
     {
       event: 'ui:drop',
@@ -88,18 +69,11 @@ export const dealsAction: ActionDefinition = {
         { call: 'move', onSuccess: [{ call: 'loadStages' }, { call: 'loadDeals' }, { call: 'loadSummary' }] },
       ],
     },
-    // ── shared ──
-    // The topbar's + New (and the Pipeline view) open the deal form bare — no
-    // `id`, so the `upsert` write inserts.
     { message: 'new', do: [{ push: { action: 'crm.deal.form', canvas: 'modal', with: ['modal'] } }] },
-    // A deal changed elsewhere → refresh BOTH views' data.
     { message: 'deals-changed', do: [{ call: 'load' }, { call: 'loadStages' }, { call: 'loadDeals' }, { call: 'loadSummary' }] },
   ],
 };
 
-// The settable inputs an opener (Ray, a URL, a command palette) may pass — authored
-// in zod for concision, exported as JSON Schema (serializable). The catalog pairs
-// it with this action's id + description.
 export const dealsInputSchema = z.toJSONSchema(
   z.object({
     view: z.enum(['table', 'board']).optional().describe("'board' for the pipeline Kanban, else the table"),

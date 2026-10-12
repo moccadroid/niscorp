@@ -7,19 +7,6 @@ import type { Query } from '../../src/schemas/query.schema.js';
 import type { ScopePolicy } from '../../src/scope/scope.types.js';
 import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
 
-// WHERE A ROW RULE GOES.
-//
-// This file exists because of a bug that returned results instead of an error
-// for as long as no data had a null foreign key. Scope merged its row rules
-// into the DSL's `filter`, which compiles to WHERE. On a LEFT join that is not
-// a filter, it is a demotion: the null-padded row fails `null = $tenant`, and
-// it takes the driving row down with it. A read of "every issue, with its room
-// if it has one" silently became "every issue that has a room".
-//
-// The assertions are on compiled SQL rather than on a resolved structure,
-// because ON versus WHERE is exactly the distinction that only exists once the
-// SQL is written down.
-
 const text = (name: string, nullable = false) => ({ name, type: 'text', normalizedType: 'string' as const, nullable, primaryKey: false });
 
 const schema: DatabaseSchema = {
@@ -28,8 +15,6 @@ const schema: DatabaseSchema = {
       name: 'issues',
       table: 'issues',
       fields: [{ ...text('id'), primaryKey: true }, text('property_id'), text('room_id', true), text('summary')],
-      // The FK lives on the referencing side and is NULLABLE — an issue need
-      // not be about a room. That is what makes the join LEFT.
       relations: [{ type: 'belongsTo', entity: 'rooms', localFields: ['room_id'], foreignFields: ['id'] }],
       indexes: [],
     },
@@ -43,8 +28,6 @@ const schema: DatabaseSchema = {
     {
       name: 'tasks',
       table: 'tasks',
-      // A REQUIRED FK — the join to issues is inner, and a row rule on it may
-      // safely stay in WHERE.
       fields: [{ ...text('id'), primaryKey: true }, text('property_id'), text('issue_id')],
       relations: [{ type: 'belongsTo', entity: 'issues', localFields: ['issue_id'], foreignFields: ['id'] }],
       indexes: [],
@@ -87,7 +70,6 @@ describe('scope placement — a row rule on a LEFT join', () => {
   it('...so an issue with no room is not filtered out by the room rule', () => {
     const sql = sqlFor(withRoom);
     const where = sql.slice(sql.indexOf('WHERE'));
-    // The only property_id test left in WHERE belongs to the driving table.
     const roomAlias = /LEFT JOIN rooms AS (\w+)/.exec(sql)?.[1];
     expect(roomAlias).toBeDefined();
     expect(where).not.toContain(`${roomAlias!}.property_id`);

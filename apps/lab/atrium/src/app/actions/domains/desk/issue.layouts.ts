@@ -1,12 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The issue family's four faces. Each is ONE shape with no branch at its root —
-// that rule is what killed the old board's nested collapsed/expanded and
-// open/not-open conditions. A branch inside a layout is fine (an absent detail
-// line, an empty task list); a branch at the ROOT means two surfaces wearing one
-// id.
-
-// ── tile ────────────────────────────────────────────────────
 export const issueTileLayout: LayoutNode = {
   component: 'Tile',
   ref: 'open',
@@ -17,7 +10,6 @@ export const issueTileLayout: LayoutNode = {
   },
 };
 
-// ── list ────────────────────────────────────────────────────
 export const issueListLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 16 },
@@ -61,7 +53,6 @@ export const issueListLayout: LayoutNode = {
   ],
 };
 
-// ── detail ──────────────────────────────────────────────────
 const issueDetailBody: LayoutNode = {
   component: 'Stack',
   props: { gap: 15 },
@@ -111,11 +102,6 @@ const issueDetailBody: LayoutNode = {
       else: '',
     },
     { component: 'Rule', props: {} },
-    // ONE STATE. The controls that send this to somebody are always on the
-    // record, because there is no reading of an open fault where they are not
-    // the next thing. A first state whose only content was a button revealing
-    // the second cost a click, made `dispatching` a thing the assistant had to
-    // know to set, and showed the user less than the surface already knew.
     {
       component: 'Stack',
       props: { gap: 12 },
@@ -159,9 +145,6 @@ const issueDetailBody: LayoutNode = {
   ],
 };
 
-// The record sits ON a card, like the queue beside it. It came out of the
-// monolith without one — the card used to come from the collapsible frame — and
-// a record on the bare page ground next to a carded list reads as unfinished.
 export const issueDetailLayout: LayoutNode = {
   component: 'Box',
   props: { maxWidth: 720 },

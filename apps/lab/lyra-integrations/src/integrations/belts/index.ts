@@ -3,23 +3,6 @@ import type { Integration } from '../../integration';
 import { BELTS_BUNDLE } from './bundle';
 import { BELTS, RANKS, bandsFor, beltView, labelFor, nextRank, ordinal, sinceFor, toneOf } from './store';
 
-// ═══════════════════════════════════════════════════════════════
-// BELTS — rank tracking for grappling gyms, as an integration.
-//
-// Every route here is RELATIVE and every one asks `ctx.identity(c)` with no
-// audience argument: the mounting bound this integration's id to both. The nine
-// hand-written `/belts/...` paths and nine `identity(c, 'belts')` calls this
-// replaces were nine chances to write the wrong string.
-// ═══════════════════════════════════════════════════════════════
-
-// ── the second direction: the integration acts as ITSELF ─────
-//
-// The person driving is in the assertion; the write lands in OUR storage. Then
-// this service presents its OWN KEY and leaves a message in Lyra's
-// notifications — the studio's inbox learns about the grading without Lyra ever
-// growing a belt column. The key and Lyra's address come from the environment;
-// absent either, the promotion still stands and the message is simply not sent
-// (`notified` says which happened).
 const notifyLyra = async (env: (name: string) => string, studioId: string, subject: string): Promise<boolean> => {
   const key = env('BELTS_KEY');
   const base = env('LYRA_BASE').replace(/\/$/, '');
@@ -44,15 +27,10 @@ const rankRows = (): unknown[] => RANKS.map((r) => ({ name: r.name, tone: r.tone
 export const beltsIntegration: Integration = {
   id: 'belts',
   bundle: () => BELTS_BUNDLE,
-  // Named, so they are fenced: this integration cannot read a secret belonging to
-  // another one even by knowing its name.
   env: ['BELTS_KEY', 'LYRA_BASE', 'BELTS_HOOK_SECRET'],
 
   mount: (r, ctx) => {
     r.post('/roster', (c) => {
-      // SCOPED BY THE ASSERTION, not by the body. Two gyms can install this and
-      // each sees its own — and the caller cannot ask for the other one, because
-      // the only place a studio id comes from is a token they cannot mint.
       const who = ctx.identity(c);
       if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
       const rows = BELTS.filter((b) => b.studioId === who.studioId).map((b) => ({
@@ -73,9 +51,6 @@ export const beltsIntegration: Integration = {
       return c.json(beltView(BELTS.find((b) => b.personId === who.personId)));
     });
 
-    // THE STRIP'S PREVIEW — display atoms for the row that opens the panel: the
-    // belt as colors and one line of words. This is what lets the member record
-    // SHOW a purple belt without Lyra ever learning what one is.
     r.post('/preview', async (c) => {
       const who = ctx.identity(c);
       if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
@@ -86,9 +61,6 @@ export const beltsIntegration: Integration = {
       return c.json({ bands: view.bands, hint: held === undefined ? 'White' : `${view.label} · since ${view.since}` });
     });
 
-    // The panel's read: about the member the HOST screen handed over, inside the
-    // studio the ASSERTION names. The body says which record; the token says which
-    // studio may be looked in — asking about another studio's member finds nothing.
     r.post('/member', async (c) => {
       const who = ctx.identity(c);
       if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
@@ -106,8 +78,6 @@ export const beltsIntegration: Integration = {
 
       const today = new Date().toISOString().slice(0, 10);
       let held = BELTS.find((b) => b.studioId === who.studioId && b.personId === personId);
-      // No record is a white belt, so the first promotion anybody records is to
-      // Blue — the White they already were is written into the history with it.
       const to = nextRank(held?.belt ?? 'White');
       if (personId === '' || to === null) return c.json({ message: 'Nothing to promote to.' }, 400);
 
@@ -115,7 +85,6 @@ export const beltsIntegration: Integration = {
         held = { personId, studioId: who.studioId, belt: to, stripes: 0, since: today, classes: 0, history: [{ belt: to, stripes: 0, on: today }, { belt: 'White', stripes: 0, on: '—' }] };
         BELTS.push(held);
       } else {
-        // A promotion RESETS THE BAR: the stripes belonged to the old belt.
         held.belt = to;
         held.stripes = 0;
         held.since = today;
@@ -126,11 +95,6 @@ export const beltsIntegration: Integration = {
       return c.json({ ...beltView(held), notified });
     });
 
-    // ── THE STRIPE: an advancement, not a promotion ────────────
-    //
-    // Up to four per belt, and the fourth is the wall — there is no fifth stripe,
-    // and reaching four does not promote anybody: the next step is a decision a
-    // coach makes on the mat, recorded with the button above.
     r.post('/stripe', async (c) => {
       const who = ctx.identity(c);
       if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
@@ -146,7 +110,6 @@ export const beltsIntegration: Integration = {
       }
 
       if (held === undefined) {
-        // A white belt earning their first stripe is what mints the record.
         held = { personId, studioId: who.studioId, belt: 'White', stripes: 1, since: today, classes: 0, history: [{ belt: 'White', stripes: 1, on: today }] };
         BELTS.push(held);
       } else {
@@ -158,15 +121,6 @@ export const beltsIntegration: Integration = {
       return c.json({ ...beltView(held), notified });
     });
 
-    // ── UNDO: the ledger wound back one step ───────────────────
-    //
-    // Every edit here is an EVENT on the history, so reversing one is not a
-    // special case per verb — pop the newest event and the record becomes
-    // whatever the ledger then says. A promotion comes back off, a stripe comes
-    // back off, and when the last event goes, the record goes with it: back to
-    // the white-belt floor, exactly as if nothing had ever been written. The
-    // correction is announced to the studio's inbox like the edit was — an undone
-    // mistake is still a thing that happened at the desk.
     r.post('/undo', async (c) => {
       const who = ctx.identity(c);
       if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
@@ -193,7 +147,6 @@ export const beltsIntegration: Integration = {
       return c.json({ ...beltView(held), notified });
     });
 
-    // ── the settings door's two endpoints ──────────────────────
     r.post('/ranks', (c) => {
       const who = ctx.identity(c);
       if (who === undefined) return c.json({ message: 'Who are you?' }, 401);
@@ -207,17 +160,12 @@ export const beltsIntegration: Integration = {
       const name = typeof body.name === 'string' ? body.name.trim() : '';
       if (name === '') return c.json({ message: 'Name the rank.' }, 400);
       if (RANKS.some((r2) => r2.name.toLowerCase() === name.toLowerCase())) return c.json({ message: 'That rank exists.' }, 400);
-      // A rank added by name gets a neutral body until somebody teaches the
-      // settings screen about color pickers. Honest gray, not a guess.
       RANKS.push({ name, tone: 'stone', color: '#8a8f98' });
       return c.json(rankRows());
     });
 
-    // A checkable statement about the tenancy rule above, without a running Lyra.
-    //
-    // NOT DECLARED in the bundle, on purpose: it is the undeclared route the
-    // host's allow-list must refuse (integrations-check). An integration always has one
-    // of these; the point is that having one costs the host nothing.
+    // Not declared in the bundle on purpose: it is the undeclared route the
+    // host's allow-list must refuse.
     r.get('/_selftest', (c) => {
       const north = BELTS.filter((b) => b.studioId === 'st_northrock').length;
       const lumen = BELTS.filter((b) => b.studioId === 'st_lumen').length;
@@ -225,20 +173,8 @@ export const beltsIntegration: Integration = {
     });
   },
 
-  // ── THE WEBHOOK DOOR, from this side ─────────────────────────
-  //
-  // Nothing signs anything to Belts — it has no vendor. This holds the SHAPE
-  // Stripe's will need, and is checkable now.
-  //
-  // The context here has NO `identity` — not "unset", absent from the type. The
-  // host mints no assertion on this path, so there is nobody to be, and
-  // authenticating the caller is this handler's own job against a secret only it
-  // and the vendor hold.
-  //
-  // It answers with what it received, byte for byte, because the one property
-  // that cannot be checked from outside is whether the body survived the trip
-  // unparsed — and a signature over re-serialized JSON fails for reasons nobody
-  // enjoys finding.
+  // Belts has no vendor. The hook answers with a digest of the bytes it
+  // received, because a signature over re-serialized JSON fails.
   hooks: (r, ctx) => {
     r.post('/:event', async (c) => {
       const raw = Buffer.from(await c.req.arrayBuffer());
@@ -248,9 +184,6 @@ export const beltsIntegration: Integration = {
       const secret = ctx.env('BELTS_HOOK_SECRET');
       const offered = c.req.header('x-belts-signature') ?? '';
       const expected = secret === '' ? '' : createHash('sha256').update(secret).update(raw).digest('hex');
-      // Unsigned, wrongly signed, and "this deployment holds no secret" are one
-      // answer: we do not know who you are. The body is echoed either way — it
-      // is not a secret, it is what the caller just sent us.
       if (expected === '' || offered !== expected) return c.json({ message: 'Who are you?', ...received }, 401);
       return c.json({ ok: true, ...received });
     });

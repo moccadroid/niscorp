@@ -1,17 +1,11 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The member's side: bigger type, fewer columns, one action per row. These
-// screens are read on a phone in a changing room, not at a desk.
-
 const page = (children: LayoutNode | LayoutNode[]): LayoutNode => ({
   component: 'Stack',
   props: { gap: 22 },
   children,
 });
 
-// The standing card, the plan panel and the passes list are three separate
-// facts about the same person — held apart because any of them can be absent:
-// a prospect has only the first, a drop-in only the third.
 const card: LayoutNode = {
   component: 'Card',
   props: { pad: 22 },
@@ -43,8 +37,6 @@ const card: LayoutNode = {
           },
         ],
       },
-      // The trial CTA — the cliff Tom Vogel stands on, with the way forward
-      // ON it. A dead card was the old model's tell; this one has a door.
       {
         if: '$.card.on_trial',
         then: {
@@ -117,12 +109,6 @@ export const meMembershipLayout: LayoutNode = page([
   { if: '$.notice', then: { component: 'Notice', props: { tone: 'good', message: '$.notice' } }, else: '' },
   card,
 
-  // ── THE CLIFF (D2) ─────────────────────────────────────────
-  //
-  // No subscription: the choice is theirs to make, immediately, behind a
-  // hard confirm whose words ARE the terms. This is the screen Tom Vogel's
-  // whole arc walks to — a prospect on a trial, choosing for himself, with
-  // the studio settling the money side however it settles it.
   {
     if: '$.membership.subscription_id',
     then: '',
@@ -162,23 +148,13 @@ export const meMembershipLayout: LayoutNode = page([
             component: 'Row',
             props: { gap: 22, wrap: true },
             children: [
-              // `phrase`, not `value`: these carry VOCABULARY and counted
-              // patterns — the binding's key dies at resolution, so the prop
-              // itself declares proseness. Committed-until stays `value`: a
-              // date is data, already in the reader's locale.
               { component: 'Field', props: { label: 'Minimum term', phrase: '$.membership.term_display' } },
               { component: 'Field', props: { label: 'Notice', phrase: '$.membership.notice_display' } },
               { component: 'Field', props: { label: 'Committed until', value: '$.membership.committed_display', empty: 'No commitment' } },
               { component: 'Field', props: { label: 'Paid', phrase: '$.membership.paid_via_display' } },
-              // HOW FAR THEIR MONEY REACHES. The read has returned this since
-              // the beginning and this screen dropped it, so a member could see
-              // WHO collects and never WHEN it runs out — which is the one
-              // number they came to this screen for, and the one that tells them
-              // a card has quietly stopped working.
               { component: 'Field', props: { label: 'Paid until', value: '$.membership.paid_until_display', empty: 'Nothing recorded yet' } },
             ],
           },
-          // ── their own way out, and their own hold ────────────
           {
             if: '$.membership.notice_given',
             then: {
@@ -222,8 +198,6 @@ export const meMembershipLayout: LayoutNode = page([
   },
 ]);
 
-// The single-classes list, which differs between "booking for me" and "booking
-// for a child" only in which verb its last column fires.
 const classList = (book: { label: string; ref: string }): LayoutNode => ({
   component: 'Card',
   props: { flush: true },
@@ -239,11 +213,9 @@ const classList = (book: { label: string; ref: string }): LayoutNode => ({
         { label: 'When', px: 112, cell: { kind: 'text', key: 'day_display', color: 'ink' } },
         { label: 'Time', px: 78, cell: { kind: 'text', key: 'time_display' } },
         { label: 'Places', px: 84, align: 'right', cell: { kind: 'text', key: 'booked_display', color: 'ink' } },
-        // A class they already hold says so instead of offering Book — the
-        // button could only ever have answered with an error message.
-        // NOTE this marks what the CALLER holds; a child's own bookings are
-        // not in `me/booked-sessions`, so the mark is absent when booking for
-        // one. The capacity trigger refuses a duplicate either way.
+        // The mark is what the caller holds: a child's bookings are not in
+        // `me/booked-sessions`, so it is absent when booking for one. The
+        // database refuses a duplicate either way.
         { label: '', px: 92, align: 'right', cell: { kind: 'badge', key: 'mine_display', toneKey: 'mine_tone', showKey: 'already_booked' } },
         { label: '', px: 96, align: 'right', cell: { kind: 'action', label: book.label, ref: book.ref, variant: 'outline', hideKey: 'unbookable' } },
       ],
@@ -257,8 +229,6 @@ export const meClassesLayout: LayoutNode = page([
   { if: '$.error', then: { component: 'Notice', props: { tone: 'alert', message: '$.error' } }, else: '' },
   { if: '$.notice', then: { component: 'Notice', props: { tone: 'good', message: '$.notice' } }, else: '' },
 
-  // Courses first: the bigger commitment, and a member who joins one never has
-  // to book its classes individually.
   {
     component: 'Section',
     props: { title: 'Courses', subtitle: 'Join once and your place is held for every week of the block.' },
@@ -310,17 +280,6 @@ export const meClassesLayout: LayoutNode = page([
 
   { component: 'Text', props: { size: 'lg', weight: 'semi' }, children: 'Single classes' },
 
-  // ── WHO AM I BOOKING FOR ─────────────────────────────────────
-  //
-  // Absent for anybody who guards nobody, which is nearly everybody: the
-  // picker exists only where there is a choice to make. When it IS shown, the
-  // row's Book button carries the chosen subject and calls `me/book-for`
-  // instead of `me/book`.
-  //
-  // THE PICKER IS CONVENIENCE, NEVER PERMISSION. What makes booking for Emma
-  // allowed is the guardianship the engine reads inside the write; this only
-  // makes it reachable. If the two ever disagree, the engine wins and the
-  // write fails — which is the right way round.
   {
     if: '$.family',
     then: {
@@ -334,14 +293,6 @@ export const meClassesLayout: LayoutNode = page([
     else: '',
   },
 
-  // ONE LIST, TWO VERBS — and the verb is chosen by the picker above rather
-  // than inside the row, because the step grammar has no conditional and a
-  // single button cannot decide at click time which write it means.
-  //
-  // The duplication is the honest shape: `me/book` stamps person_id from the
-  // caller and CANNOT name anybody else; `me/book-for` carries a subject the
-  // engine validates through guardianships. Collapsing them into one control
-  // would mean one of the two lost its guarantee.
   {
     if: '$.subjectId',
     then: classList({ label: 'Book for them', ref: 'bookFor' }),
@@ -369,29 +320,13 @@ export const meBookingsLayout: LayoutNode = page([
         columns: [
           { label: 'Class', w: 2, cell: { kind: 'primary', key: 'class_name', subKey: 'program_name', dotKey: 'tone' } },
           { label: 'When', px: 150, cell: { kind: 'text', key: 'when_display', color: 'ink' } },
-          // In words: the states a member has to understand without being
-          // told what the app means by them — including the studio calling
-          // the class off after they booked it.
           { label: '', px: 92, cell: { kind: 'badge', key: 'state_label', toneKey: 'state_tone' } },
-          // Hidden on a cancelled session: there is nothing left to cancel.
           { label: '', px: 96, align: 'right', cell: { kind: 'action', label: 'Cancel', ref: 'cancel', variant: 'ghost', hideKey: 'session_cancelled' } },
         ],
       },
     },
   },
 
-  // ── THE FAMILY'S WEEK ────────────────────────────────────────
-  //
-  // Drawn only for somebody who actually guards a child — `$.family` is empty
-  // for everybody else, and this whole block is absent for them. That is the
-  // screen agreeing with the engine rather than duplicating it: the reach
-  // already answers personally for a member with no children, so a member
-  // with no children could see this list and learn nothing from it.
-  //
-  // ONE LIST FOR THE WHOLE HOUSEHOLD, with a name against each row, because
-  // that is the question a parent is actually asking on a Saturday morning —
-  // "where does anybody have to be today". A per-child tab would make them
-  // ask it once per child and assemble the answer themselves.
   {
     if: '$.family',
     then: {

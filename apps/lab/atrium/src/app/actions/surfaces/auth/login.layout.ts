@@ -1,8 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// One page, five audiences described in their own words. The point of showing
-// the descriptions is that the reader should be able to predict what each token
-// will produce — and then be a little surprised by how different they are.
 export const loginLayout: LayoutNode = {
   component: 'Box',
   props: { py: 56, px: 20 },

@@ -3,8 +3,6 @@ export type NavArea = { id: string; label: string; blurb: string; items: NavItem
 
 export const AREAS: NavArea[] = [
   {
-    // Check in is the LANDING screen rather than a hub: an extra tap here is an
-    // extra tap two hundred times a day. Notices sits in a tab above it.
     id: 'hub.desk',
     icon: 'checkin',
     label: 'Check in',
@@ -20,8 +18,6 @@ export const AREAS: NavArea[] = [
     label: 'People',
     blurb: 'Everyone the studio deals with, filtered by relationship.',
     items: [
-      // "Enquiries" is not a screen any more — a prospect is a lens on the
-      // same roll, because an enquiry was never a different kind of human.
       { icon: 'people', action: 'people.list', label: 'People', blurb: 'Everyone — members, prospects, pass holders, contacts — one list, filtered by relationship.' },
       { icon: 'person', action: 'staff.list', label: 'Staff', blurb: 'Who works here and what they can do. Changing a role changes their whole application.' },
     ],
@@ -38,13 +34,6 @@ export const AREAS: NavArea[] = [
     ],
   },
   {
-    // ── WHAT THE STUDIO SELLS ────────────────────────────────
-    //
-    // Its own hub, and the reason is a job rather than a noun: deciding what is
-    // on offer is SETUP, and it sat beside Reports and Retention, which are
-    // analysis. They shared a roof because they all involve numbers, which is
-    // not a reason — and the practical cost was that the commonest task a new
-    // studio has ("create my membership") lived behind the least likely word.
     id: 'hub.selling',
     icon: 'plan',
     label: 'Selling',
@@ -64,14 +53,6 @@ export const AREAS: NavArea[] = [
     ],
   },
   {
-    // ── WRITING TO EVERYBODY AT ONCE ─────────────────────────
-    //
-    // Its own area rather than a screen under Money or Studio, because of what
-    // it IS rather than where it fits: Money is analysis, Studio is setup, and
-    // this is a job an owner does twice a week. It also gives the outbox a
-    // home — every message the product sends has been visible only from inside
-    // the Automations screen, which is the wrong place to look for the mail a
-    // human decided to send.
     id: 'hub.marketing',
     icon: 'mail',
     label: 'Marketing',
@@ -81,15 +62,6 @@ export const AREAS: NavArea[] = [
     ],
   },
   {
-    // ── THE STUDIO ITSELF ────────────────────────────────────
-    //
-    // Was "Settings", holding a look, some automations and a mail address —
-    // while the studio's legal identity sat inside the APPEARANCE screen, under
-    // a heading that says "Pick a look". Those fields decide what a payment
-    // provider demands before money can move; they are not a look.
-    //
-    // Add-ons joins them: turning an integration on is configuration, not a peer
-    // of People.
     id: 'hub.settings',
     icon: 'settings',
     label: 'Studio',
@@ -103,8 +75,6 @@ export const AREAS: NavArea[] = [
     ],
   },
   {
-    // One question ("what about me") with several answers, which is also where a
-    // payment history and a waiver will go.
     id: 'hub.me',
     icon: 'person',
     label: 'Booking',
@@ -129,7 +99,5 @@ export const landingFor = (area: NavArea): string => area.items[0]?.action ?? ar
 export const contextFor = (action: string, granted: readonly string[]): { areaId: string; areaLabel: string; tabs: NavItem[] } => {
   const area = areasFor(granted).find((a) => a.id === action || a.items.some((item) => item.action === action));
   if (area === undefined) return { areaId: '', areaLabel: '', tabs: [] };
-  // A single tab is a label pretending to be a control — an area with one
-  // screen shows none, and the screen's own Hero says where you are.
   return { areaId: area.id, areaLabel: area.label, tabs: area.items.length > 1 ? area.items : [] };
 };

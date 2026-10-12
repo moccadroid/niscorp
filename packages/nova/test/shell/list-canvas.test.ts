@@ -6,13 +6,6 @@ import { createShell } from '@shell';
 
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
-// ═══════════════════════════════════════════════════════════
-// A `mode: 'list'` canvas is a tray: every card stays LIVE and visible at
-// once, instead of the default stack where only the top is active. Push does
-// not suspend; a card closes ITSELF (not the top) via `{ removeSelf: true }`;
-// removeInstance drops any one card and leaves the rest running.
-// ═══════════════════════════════════════════════════════════
-
 describe('shell — list-mode canvas', () => {
   const card = (id: string): ActionDefinition => ({
     id,
@@ -42,7 +35,6 @@ describe('shell — list-mode canvas', () => {
 
     expect(ids(shell)).toEqual([a, b]);
 
-    // In a stack, pushing B would suspend A and this ping would be ignored.
     shell.dispatch({ type: 'ui:click', ref: 'ping', origin: a });
     await tick();
     shell.dispatch({ type: 'ui:click', ref: 'ping', origin: b });
@@ -65,7 +57,6 @@ describe('shell — list-mode canvas', () => {
 
     expect(shell.getRuntime(b)).toBeUndefined();
     expect(ids(shell)).toEqual([a, c]);
-    // A — never the top — is still live after a middle card was removed.
     shell.dispatch({ type: 'ui:click', ref: 'ping', origin: a });
     await tick();
     expect(shell.getRuntime(a)?.getData()['pings']).toBe(1);
@@ -78,7 +69,6 @@ describe('shell — list-mode canvas', () => {
     const b = shell.push('tray', 'B');
     await tick();
 
-    // Close A while B is on top — removeSelf must remove the firing card.
     shell.dispatch({ type: 'ui:click', ref: 'close', origin: a });
     await tick();
 
@@ -98,8 +88,6 @@ describe('shell — list-mode canvas', () => {
   });
 });
 
-// A stack canvas still suspends and resumes, and removeSelf there removes the
-// firing (top) instance, resuming the one beneath — the default is untouched.
 describe('shell — removeSelf on a stack canvas', () => {
   it('removes the firing instance and resumes the one beneath', async () => {
     const A: ActionDefinition = { id: 'A', data: { resumed: false }, lifecycle: { resume: [{ set: 'resumed', value: true }] } };
@@ -124,11 +112,6 @@ describe('shell — removeSelf on a stack canvas', () => {
   });
 });
 
-// ── `reload` — re-read ONE card in place ────────────────────
-// A stack canvas suspends what it covers, and `resume` re-runs mount, so a
-// revealed action is never stale. A list canvas suspends nothing: every card
-// stays active, so nothing would ever re-read one. `reload` re-runs the firing
-// instance's own mount hook — same instance, same data object, no navigation.
 describe('shell — the reload effect', () => {
   const reader = (id: string): ActionDefinition => ({
     id,
@@ -154,17 +137,14 @@ describe('shell — the reload effect', () => {
     expect(shell.getRuntime(a)?.getData()['value']).toBe('first');
     expect(shell.getRuntime(b)?.getData()['value']).toBe('first');
 
-    // The world moves under both cards while they sit there, live.
     served = 'second';
     shell.dispatch({ type: 'ui:click', ref: 'open', origin: a });
     await tick();
 
     expect(shell.getRuntime(a)?.getData()['value']).toBe('second');
     expect(shell.getRuntime(a)?.getData()['mounts']).toBe(2);
-    // The card nobody opened is untouched — this is not a canvas refresh.
     expect(shell.getRuntime(b)?.getData()['value']).toBe('first');
     expect(shell.getRuntime(b)?.getData()['mounts']).toBe(1);
-    // And the stack is unchanged: a re-read, not a remount.
     expect(shell.getCanvasState('tray').stack.map((i) => i.id)).toEqual([a, b]);
   });
 
@@ -203,7 +183,6 @@ describe('shell — the reload effect', () => {
     await tick();
     expect(statuses('tray')).toEqual(['active', 'active']);
 
-    // The same id, re-added without a mode, is a stack again.
     shell.removeCanvas('tray');
     shell.addCanvas({ id: 'tray' });
     shell.push('tray', 'A');

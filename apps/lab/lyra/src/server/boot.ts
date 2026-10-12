@@ -7,17 +7,12 @@ import { createTideDriver } from '@niscorp/tide';
 import type { Tide, TideDriver } from '@niscorp/tide';
 import { buildLyra } from '@lyra/app/app';
 import { COMPONENT_NAMES } from '@lyra/ui/registry';
-// The lab's integration registrar is HARNESS — it seeds the lab world the way
-// db/seed/ seeds rows — and lives with the rest of the harness in dev/.
 import { registerDevIntegrations } from '../dev/dev-integrations';
 import { devRuntime } from './runtime';
 import { reflexesForEveryStudio, wireTide } from './tide';
 import type { DevRuntime } from './runtime';
 
 export const reloadReflexes = async (runAs: ExecuteAs, tide: Tide): Promise<number> => {
-  // Through the engine, as the charter's `scheduler` role: the automations
-  // engine schedules for every studio, and that reach is DECLARED rather than
-  // being whatever a pool handle happens to allow.
   const studios = await runAs('scheduler', 'scheduler/studio-zones', {});
   const rows = await runAs('scheduler', 'scheduler/reflex-rows', {});
   const reflexes = reflexesForEveryStudio(
@@ -25,14 +20,10 @@ export const reloadReflexes = async (runAs: ExecuteAs, tide: Tide): Promise<numb
     (Array.isArray(rows) ? rows : []) as never,
   );
   await tide.load(reflexes, { at: Date.now() });
-  // The loaded set changed, so what is due changed with it — re-plan the
-  // sleep and drain anything the new set can now consume.
   void driver?.wake();
   return reflexes.length;
 };
 
-// Module-level so `reloadReflexes` (called by the automations screen long
-// after boot) can nudge it without threading it through every caller.
 let driver: TideDriver | undefined;
 export const tideDriver = (): TideDriver => {
   if (driver === undefined) throw new Error('boot: the tide driver is not up yet');
@@ -44,15 +35,6 @@ export const boot = async (): Promise<{ server: MossServer; runtime: DevRuntime;
   const runtime = await devRuntime();
   let built: MossServer | undefined;
   let tide: Tide | undefined;
-  // A FIXED SIGNING SEED, dev only. Lyra's database is in-memory and replayed on
-  // every boot, so without this the assertion keypair is fresh each restart —
-  // and the payments integration, a SEPARATE process holding lyra's old public key,
-  // starts answering "who are you?" to every call until somebody re-copies the
-  // new one. Set `LYRA_SIGNING_SEED` (32 bytes base64) and the public half stays
-  // put across restarts, so the integration's env stays valid. Unset in production,
-  // where the ephemeral key is the right default. It is the integrations
-  // feature's setting, so it goes to where the feature is created and not onto
-  // the runtime.
   const signingSeed = process.env['LYRA_SIGNING_SEED'] ?? '';
   const app = buildLyra(
     {
@@ -71,14 +53,8 @@ export const boot = async (): Promise<{ server: MossServer; runtime: DevRuntime;
 
   const server = await createServer(app, runtime);
 
-  // ── THE OTHER DOOR NOBODY SIGNS IN AT ────────────────────────
-  //
-  // GET, because a mailbox provider's one-click unsubscribe issues a POST and
-  // a human clicking the footer issues a GET, and both must work. It is
-  // idempotent either way: unsubscribing twice is unsubscribing.
-  //
-  // Answers HTML rather than JSON — the only surface in this app a person
-  // reaches without a shell, so it has to say something a human can read.
+  // Unsubscribe is served on GET and POST: a person clicking the footer link
+  // sends a GET, a mailbox provider's one-click unsubscribe sends a POST.
   const buildUnsubscribePage = (message: string): string =>
     `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
     `<title>Unsubscribed</title><body style="font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:20vh auto;padding:0 1.5rem">` +
@@ -86,8 +62,6 @@ export const boot = async (): Promise<{ server: MossServer; runtime: DevRuntime;
 
   const handleUnsubscribeRequest = async (c: { req: { param: (name: string) => string | undefined } }): Promise<Response> => {
     const done = await unsubscribe(server.executeAs, c.req.param('token') ?? '');
-    // ONE ANSWER EITHER WAY. A forged token and an already-unsubscribed person
-    // read the same, because the alternative is a page that confirms guesses.
     return new Response(
       buildUnsubscribePage(
         done === null
@@ -98,16 +72,9 @@ export const boot = async (): Promise<{ server: MossServer; runtime: DevRuntime;
     );
   };
 
-  // ── WHAT HAPPENED AFTER WE HANDED IT OVER ────────────────────
-  //
-  // The provider's own voice, and the only thing that can make "Sent" mean
-  // more than "they took it". No principal — a vendor calling in has none and
-  // could not have one — so the signature IS the authentication, checked over
-  // the RAW body before anything is parsed.
-  //
-  // ALWAYS 200, even for a forged call. A webhook sender reads a 4xx as "retry
-  // this forever"; a refusal that says so is a refusal that gets replayed at
-  // us all night. Nothing happened, and nothing needs to be said about it.
+  // No principal: the signature is the authentication, checked over the raw
+  // body before anything is parsed. Always 200, even for a forged call: a
+  // webhook sender retries on a 4xx.
   server.post('/api/mail/events', async (c) => {
     const raw = await c.req.text();
     const headers: Record<string, string> = {};
@@ -115,9 +82,6 @@ export const boot = async (): Promise<{ server: MossServer; runtime: DevRuntime;
     const event = readMailEvent(headers, raw, Date.now());
     if (event === null) return c.json({ ok: true }, 200);
 
-    // Through the engine, as the charter's `mailer` role: a vendor calling in
-    // has no principal and could not have one, so the role IS the identity —
-    // declared verbs, declared reach, nothing wider reachable.
     if (event.kind === 'delivered') {
       await server.executeAs('mailer', 'mailer/record-delivered', { providerMessageId: event.id, at: new Date().toISOString() });
       return c.json({ ok: true });
@@ -126,13 +90,11 @@ export const boot = async (): Promise<{ server: MossServer; runtime: DevRuntime;
       const origin = (await server.executeAs('mailer', 'mailer/outbox-origin', { providerMessageId: event.id })) as { studio_id?: unknown; person_id?: unknown } | null;
       const studioId = String(origin?.studio_id ?? '');
       const personId = String(origin?.person_id ?? '');
-      // A BOUNCE IS ABOUT THE ADDRESS and holds everywhere; a COMPLAINT is
+      // A bounce is about the address and holds everywhere; a complaint is
       // about the relationship and holds at the studio complained about.
       const suppressAt = event.kind === 'bounced' ? '' : studioId;
       await server.executeAs('mailer', 'mailer/suppress', { address: event.to, studioId: suppressAt, kind: event.kind, reason: event.reason });
       await server.executeAs('mailer', 'mailer/record-failed', { providerMessageId: event.id, reason: event.reason });
-      // Somebody reporting a studio's mail as spam has withdrawn consent by
-      // any reading of it, whatever a checkbox says.
       if (event.kind === 'complained' && studioId !== '' && personId !== '') {
         await server.executeAs('mailer', 'mailer/opt-out', { studioId, personId }, { studioId, personId });
       }
@@ -143,61 +105,26 @@ export const boot = async (): Promise<{ server: MossServer; runtime: DevRuntime;
   server.get('/api/unsubscribe/:token', handleUnsubscribeRequest);
   server.post('/api/unsubscribe/:token', handleUnsubscribeRequest);
 
-  // ── THE ONE DOOR A SIGN-IN LINK KNOCKS ON ────────────────────
-  //
-  // Public, because nobody redeeming a link has a session yet — that is what
-  // they are here to get. The nonce is the whole credential and it is spent by
-  // the same statement that reads it, so this route holds no logic worth
-  // attacking: it either names a live row or it does not.
-  //
-  // Under `/api/` because the dev server forwards that prefix (vite.config)
-  // and moss's own `/api/*` middleware only attaches the tide chain context —
-  // there is no principal gate to slip past, and `/api/:resource/vex` cannot
-  // collide with a literal second segment.
-  //
-  // ⟲ The link used to BE the session: `?token=` went into localStorage
-  // untouched. Trading it here is the difference between mailing somebody a
-  // key and mailing them a doorbell.
   server.post('/api/auth/redeem', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { nonce?: unknown };
     const personId = await redeemLink(server.executeAs, String(body.nonce ?? ''), Date.now());
-    // One sentence for expired, spent and never-existed alike. Which of the
-    // three it was is not the caller's business, and answering differently
-    // would make this a place to test nonces against.
     if (personId === null) return c.json({ message: 'That sign-in link has expired or has already been used.' }, 401);
-    // The session goes into the browser's own cookie, which no script can read
-    // — set by this answer. The page that asked is handed nothing.
+    // The session goes into a cookie no script can read; the page is handed nothing.
     for (const cookie of sessionCookies(c.req.raw, mintDevToken(personId))) c.header('set-cookie', cookie, { append: true });
     return c.body(null, 204);
   });
   built = server;
 
   tide = wireTide({ server: () => server, now: () => Date.now(), pool: runtime.pool, base: () => process.env['LYRA_BASE'] ?? 'http://localhost:5180' });
-  // No beat. The driver wakes on every ingest (the vex bridge mints through
-  // it), sleeps until tide's own nextDue instant, and keeps a slow janitor
-  // for recovery — the 60-second metronome this replaced was both a latency
-  // floor and a throughput ceiling.
   driver?.stop();
   driver = createTideDriver({ tide, retention: { facts: 7 * 24 * 3_600_000, tasks: 30 * 24 * 3_600_000, runs: 30 * 24 * 3_600_000 } });
-  // AFTER the first load, not merely after the store is constructed: the
-  // store migrates lazily on first use, so `tide_run` does not exist until
-  // something reads it — and `load` is the first thing that does.
   await reloadReflexes(server.executeAs, tide);
 
   return { server, runtime, app, tide };
 };
 
-// DEV ONLY, and DELIBERATELY NOT PART OF `boot()`.
-//
-// `boot()` is shared: the dev server calls it, and so does every check (via
-// world.ts). Auto-registering integrations inside it leaked into the checks — a check
-// imports the integrations service, whose module load reads THIS app's `.env`,
-// so `LYRA_DEV_INTEGRATIONS` was set by the time boot ran and the store came up
-// pre-registered, breaking the check's own registration.
-//
-// So it lives here, called only by the two real dev entry points (the vite
-// plugin and the standalone listener). A check never calls it. No-op unless
-// `LYRA_DEV_INTEGRATIONS` is set — see dev-integrations.ts.
+// Not part of `boot()`: every check calls `boot()` too, and integrations
+// registered there would break a check's own registration.
 export const bootDevServer = async (): Promise<Awaited<ReturnType<typeof boot>>> => {
   const booted = await boot();
   await registerDevIntegrations(booted.server, booted.runtime.pool, booted.runtime.operatorKey ?? '', async () => { booted.server.refresh(); });

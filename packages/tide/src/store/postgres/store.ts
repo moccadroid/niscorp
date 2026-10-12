@@ -21,11 +21,10 @@ export type TideStoreOptions = {
 };
 
 export const createTideStore = (pool: TidePool, options: TideStoreOptions = {}): TideStore & { ready: Promise<void> } => {
-  // Every method awaits this: on a real pool one that did not would race the DDL and throw `42P01 undefined_table`
-  // inside a transaction, which the fan-out would turn into a permanently skipped run.
+  // Every method awaits this: one that did not would race the DDL and throw `42P01 undefined_table`.
   const ready: Promise<void> = options.migrate === false ? Promise.resolve() : migrateLedger(pool, [TIDE_SEQUENCE]).then(() => undefined);
-  // An unhandled rejection here is process-fatal on Node ≥ 15, and the
-  // failure it reports would be a database that is not up yet.
+  // An unhandled rejection is process-fatal on Node ≥ 15. Every method that
+  // awaits `ready` still rejects with it.
   ready.catch(() => undefined);
 
   const overPool: Atomically = (fn) => {
@@ -47,7 +46,6 @@ export const createTideStore = (pool: TidePool, options: TideStoreOptions = {}):
         return result.rows.map((row) => rowToEntity(spec.table, row));
       },
 
-      // The refusal is the database's, decided under the constraint, not a read the caller races.
       appendIfAbsent: async <T extends TableName>(table: T, input: Omit<TideTables[T], 'id'> & { id?: string }) => {
         await ready;
         const given: Fields = input;
@@ -88,15 +86,13 @@ export const createTideStore = (pool: TidePool, options: TideStoreOptions = {}):
       remove: async <T extends TableName>(spec: RemoveSpec<T>) => {
         await ready;
         const where = compileWhere(spec.where, 1);
-        // Work goes with its run through the foreign key, not through a
-        // second statement somebody can forget.
+        // A run's work goes with it through the foreign key (ON DELETE CASCADE).
         const result = await client.query(`DELETE FROM ${SQL_TABLE[spec.table]} WHERE ${where.sql} RETURNING ${snake(PRIMARY_KEY[spec.table])}`, where.params);
         return result.rows.length;
       },
 
       transact: async <T>(fn: (tx: TideStore) => Promise<T>): Promise<T> => {
         await ready;
-        // Steps this store runs as one (`atomically`) run inside this transaction; none opens a second one.
         return atomically((tx) => fn(build(tx, (inner) => inner(tx))));
       },
     };

@@ -4,19 +4,8 @@ import { pathToFileURL } from 'node:url';
 import { configFileOf, isProject, isShellProject, loadProject } from './project';
 import type { NiscMossProject } from './project';
 
-// ═══════════════════════════════════════════════════════════════
-// `nisc dev` — the app's own vite, started from here.
-//
-// An app with its own shell is a vite app and nothing more. An app behind moss
-// also needs its server inside that dev process, and that is moss's plugin
-// (`@niscorp/moss/vite`): added here, fed from the app's nisc.config.ts — the
-// same boot and the same drawing `nisc build` and `nisc start` use, loaded
-// through vite so an edit is a fresh boot. The app's vite.config.ts stays what
-// it is: its framework's plugin, its aliases.
-// ═══════════════════════════════════════════════════════════════
-
-// What is used of the app's vite — described here rather than imported, since
-// the vite is the app's and its types are the app's too.
+// Declared here rather than imported: vite is the app's dependency, and so are
+// its types.
 type DevServer = {
   listen: () => Promise<unknown>;
   printUrls: () => void;
@@ -28,7 +17,6 @@ type ViteApi = { createServer: (config: { root: string; server?: { port: number 
 const isViteApi = (value: unknown): value is ViteApi =>
   value !== null && typeof value === 'object' && typeof Reflect.get(value, 'createServer') === 'function';
 
-// The app's vite — the command carries none of its own.
 const viteOf = async (root: string): Promise<ViteApi> => {
   let entry: string;
   try {
@@ -41,15 +29,14 @@ const viteOf = async (root: string): Promise<ViteApi> => {
   return loaded;
 };
 
-// What of the config's `dev` block the plugin is told when it is made. Read
-// once, when the command starts: changing one takes a restart of `nisc dev`.
+// Read once, when the command starts: a change to one takes a restart of
+// `nisc dev`, unlike the rest of the config, which vite reloads.
 export const devPluginOptionsOf = (dev: NiscMossProject['dev']): { watch?: RegExp; owned?: RegExp; signInFromNetwork?: boolean } => ({
   ...(dev?.watch !== undefined ? { watch: dev.watch } : {}),
   ...(dev?.owned !== undefined ? { owned: dev.owned } : {}),
   ...(dev?.signInFromNetwork !== undefined ? { signInFromNetwork: dev.signInFromNetwork } : {}),
 });
 
-// moss's dev plugin, fed from the config as vite loads it.
 const mossPlugin = async (configFile: string, dev: NiscMossProject['dev']): Promise<unknown> => {
   const { mossDev } = await import('@niscorp/moss/vite');
   return mossDev({

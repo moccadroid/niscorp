@@ -1,4 +1,3 @@
-// .env first — OPERATOR_KEY lives there, on both sides of the seam.
 try {
   process.loadEnvFile();
 } catch {
@@ -9,17 +8,6 @@ import { defineConfig, type Plugin, type ViteDevServer } from 'vite';
 import react from '@vitejs/plugin-react';
 import { getRequestListener } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
-
-// THE TOOL'S OWN PAGE, ON ITS OWN PORT.
-//
-// It used to be a strip injected into Lyra's page, which borrowed Lyra's
-// component kit and put operator credentials in a tenant's browsing context to
-// save writing a registry. It has its own now (src/ui/registry.tsx), so it can
-// be what it always should have been: a separate application at a separate
-// address that happens to administer another one.
-//
-// The moss server runs INSIDE this vite process, the same arrangement Lyra
-// uses: one command, one port, no proxy.
 
 type BootedServer = {
   fetch: (req: Request) => Response | Promise<Response>;
@@ -68,8 +56,6 @@ const adminServer = (): Plugin => ({
     viteServer.watcher.on('change', rebuild);
 
     viteServer.middlewares.use((req, res, next) => {
-      // The tool's server owns `/catalog` and nothing else — it has no vex and
-      // no data layer, so there is no `/api` to route.
       if (req.url?.startsWith('/catalog') === true) {
         void current.then(({ listener }) => listener(req, res));
         return;

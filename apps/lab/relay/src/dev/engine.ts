@@ -8,10 +8,6 @@ import type { Shell } from '@niscorp/nova';
 import { rayEngine } from '@relay/server/functions/ray/engine';
 import type { RayContext, RayEngine } from '@relay/server/functions/ray/engine';
 
-// The checks' headless ground: Ray's engine over the dev database under
-// the charter's `system` role (the trusted floor). App sessions never see
-// this — moss compiles per principal; only dev checks run as `system`.
-
 export const systemPolicy = createScopePolicy(
   resolvePrincipal(CHARTER, scopeGrants(TABLES), ['system'], 'data'),
   scopeBehaviors,
@@ -23,10 +19,6 @@ export const getVexRuntime = (): Promise<RayEngine> => {
   return booted;
 };
 
-// A RayContext for harnesses that run WITHOUT a session shell (the
-// architect checks mount throwaway shells of their own): system authority,
-// an explicit user, and a loud failure if anything reaches for the
-// session shell.
 export const devRayContext = (userId = 'usr_001'): RayContext => ({
   get shell(): Shell {
     throw new Error('no session shell in this harness');

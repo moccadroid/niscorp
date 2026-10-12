@@ -25,7 +25,6 @@ const str = (row: Record<string, unknown>, key: string): string => {
 
 const dayKey = (value: string): string => value.slice(0, 10);
 
-/** UTC midnight for an ISO date, so a column never shifts under a local zone. */
 const utc = (iso: string): Date => new Date(`${iso}T00:00:00Z`);
 
 const dayNumber = (iso: string): string => String(Number(iso.slice(8, 10)));
@@ -35,8 +34,6 @@ export const Calendar: NovaComponent<Partial<z.infer<typeof CalendarProps>>> = (
   if (loading === true) return <div className="ly-cal__wait">Loading the week…</div>;
 
   const rows = sessions ?? [];
-  // EVERY DAY IN THE RANGE, not every day that has something on it. The empty
-  // ones are the information.
   const first = rows.length > 0 ? dayKey(str(rows[0] as Record<string, unknown>, 'held_on')) : '';
   if (first === '') return <div className="ly-cal__wait">{empty ?? 'Nothing scheduled.'}</div>;
 
@@ -46,18 +43,6 @@ export const Calendar: NovaComponent<Partial<z.infer<typeof CalendarProps>>> = (
     return { date, sessions: rows.filter((row) => dayKey(str(row as Record<string, unknown>, 'held_on')) === date) };
   });
 
-  // THE ONE COMPONENT THAT FORMATS A DATE, and the empty days are the reason.
-  //
-  // Everywhere else a screen is HANDED its words: a read maps `$localeDate` at
-  // the source and the component prints what it got. A calendar cannot be
-  // served that way — it lays out every day in the range, and the days with
-  // nothing on them have no row to be handed. So it takes the studio's tag and
-  // asks `Intl`, which is the same thing the read does, one seam later.
-  //
-  // What must never grow back here is a table of weekday names. That is what
-  // this was: seven English strings a German studio read as "Sun Mon Tue",
-  // unreachable by the phrase book because the render pass swaps PROPS and
-  // these were invented after it ran.
   const weekdayFormat = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' });
   const monthFormat = new Intl.DateTimeFormat(locale, { month: 'short', timeZone: 'UTC' });
   const monthOf = (iso: string): string => monthFormat.format(utc(iso));
@@ -94,8 +79,6 @@ export const Calendar: NovaComponent<Partial<z.infer<typeof CalendarProps>>> = (
             <span className="ly-cal__num">{dayNumber(column.date)}</span>
           </div>
           {column.sessions.length === 0 ? (
-            // Said out loud, because "nothing on Tuesday" is a thing a studio
-            // wants to notice rather than scroll past.
             <div className="ly-cal__none">—</div>
           ) : (
             column.sessions.map((session) => {

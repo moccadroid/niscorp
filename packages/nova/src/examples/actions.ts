@@ -1,7 +1,5 @@
 import type { NovaExample } from './example.types';
 
-// Actions at work: data, a layout over it, and triggers. Each says what is
-// pressed, and what the action then holds and says.
 export const ACTION_EXAMPLES: readonly NovaExample[] = [
   {
     id: 'counter',

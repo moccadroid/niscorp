@@ -2,15 +2,8 @@ import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 import { timersSaved } from '@lyceum/app/vex/timer.entries';
 
-// THE SAVED TIMERS, opened over the controller — by the assistant, when the
-// speaker asks to see, cancel or delete one. The assistant cannot delete
-// anything: it has no tool that writes. What it can do is open this, saying
-// which timer it understood was meant (`about`); deleting is a press, and the
-// press is the speaker's.
-//
-// Delete runs a function (server/functions/assistant.functions.ts,
-// `timers.delete`): the row goes, as the speaker, and tide unloads it — the
-// second half is not data. The list is a reactive read, so it follows.
+// Delete runs a function: the row goes, as the speaker, and tide unloads the
+// timer, which a write alone would not do.
 export const timersAction: ActionDefinition = {
   id: 'speaker.timers',
   description: 'The saved timers (automations): each one with what it does and when it fires, and a Delete button the person presses themselves. Open it when they ask to see, cancel, stop or delete a saved timer.',

@@ -1,45 +1,23 @@
 import type { Charter } from '@niscorp/charter';
 
-// Relay's charter — which actions exist for whom, and which data verbs each
-// principal may exercise. Two sections, one grammar: `actions` selects Nova
-// action ids, `data` selects vex verb leaves that vex's own
-// `createScopePolicy` turns into a ScopePolicy. `extends` composes both sections at once.
-//
-// The `dev` role is deliberately orthogonal — admin does not imply devtools.
-// Agent roles (ray, agent-unsafe) return when the app server is up.
-// The engine's own tables sit in the same database, so a `*.read` reaches
-// them too: moss's `integrations` (which holds integration key HASHES) and
-// `integration_actions`, its generation pointer, the strata migration ledger,
-// and the vex cache of query definitions. Nobody reading CRM records needs any
-// of it, and the key hashes are credentials. Denied wherever `*.read` is
-// granted — denies do not inherit, so every role that says `*.read` says this.
+// The engine's own tables sit in the same database, so `*.read` reaches them,
+// and moss's `integrations` holds integration key hashes, which are
+// credentials. A deny does not inherit, so every role that allows `*.read`
+// denies these itself.
 const ENGINE_TABLES = ['integrations.*', 'integration_actions.*', 'moss_generation.*', 'strata_ledger.*', 'vex_cache.*'];
 
 export const CHARTER: Charter = {
   public: ['auth.login'],
-  // The authenticated floor — every logged-in principal. `settings` is personal
-  // (profile, notifications, Ray prefs), so it lives here: everyone manages
-  // their own, not just admins.
   member: ['chrome.*', 'home', 'placeholder', 'confirm-delete', 'settings'],
   viewer: {
     extends: ['member'],
     actions: ['crm.contacts', 'crm.companies', 'crm.deals', 'crm.*.view'],
-    // Read everything — reference data and CRM records alike. No write phase
-    // exists in a viewer's compiled policy, so vex refuses every mutation.
-    // No layout variant either: the base topbar IS the viewer's shape (the
-    // floor) — variants enrich upward, never reduce.
     data: { allow: ['*.read'], deny: ENGINE_TABLES },
   },
   sales: {
     extends: ['viewer'],
     actions: ['crm.*', 'tasks.*', 'assistant'],
-    // Ring 2: the full topbar (New + assistant) rides with the write grants
-    // — a capability like any other, so admin inherits it through extends.
     layouts: ['chrome.topbar.full'],
-    // Inherits `*.read` from viewer; adds create + edit on the CRM entities
-    // and the full write namespace on tasks (personal rows, pinned to the
-    // assignee). CRM delete is deliberately ABSENT — deleting shared records
-    // is the admin's verb. Reference tables and activities stay read-only.
     data: [
       'deals.write.insert', 'deals.write.update',
       'contacts.write.insert', 'contacts.write.update',
@@ -49,18 +27,10 @@ export const CHARTER: Charter = {
   },
   admin: {
     extends: ['sales'],
-    // Admin adds no actions of its own now (settings moved to the floor) — its
-    // whole distinction is the delete tier: shared CRM records die only by an
-    // admin's hand.
     data: ['deals.write.delete', 'contacts.write.delete', 'companies.write.delete'],
   },
   dev: ['devtools.*'],
-  // The engine's own principal — the trusted path (dev checks, Ray's query
-  // tool, the architect's generative reads). Never assigned to a human. The
-  // charter owns the trusted floor too: all reads, the full write namespace
-  // where a mutation surface exists; an unlisted verb dies even for the
-  // engine.
-  // Its reads include generative ones (the architect), so the engine's tables
-  // are denied here as well: a model-written query is still not a key reader.
+  // The engine's own principal, never assigned to a human. Its reads include
+  // model-written queries, so the engine's tables are denied here too.
   system: { data: { allow: ['*.read', 'deals.write.*', 'contacts.write.*', 'companies.write.*', 'tasks.write.*'], deny: ENGINE_TABLES } },
 };

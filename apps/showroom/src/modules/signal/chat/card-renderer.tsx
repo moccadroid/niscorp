@@ -1,12 +1,5 @@
 import type { FC } from 'react';
 
-// ═══════════════════════════════════════════════════════════
-// CardRenderer — renders the structured Card output from the
-// ui-card recipe as an actual styled card. The point: model
-// output drives UI directly. Schema mismatch falls back to
-// JSON viewer in the calling Bubble.
-// ═══════════════════════════════════════════════════════════
-
 type Tone = 'neutral' | 'positive' | 'warning' | 'danger';
 type Intent = 'primary' | 'secondary';
 

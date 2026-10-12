@@ -1,14 +1,5 @@
 import type { CacheEntry } from './index';
 
-// ═══════════════════════════════════════════════════════════
-// The hotel's view of its integrations — what the ops manager reads.
-//
-// Two reads, one story: the connectors this property runs, and per connector
-// the services it OFFERS crossed with the property's own switch. The manager
-// picks from the offer; the offer itself is the vendor's row, visible here but
-// never writable from an ops shell (ring 3 has no verb for it).
-// ═══════════════════════════════════════════════════════════
-
 export const propertyIntegrations: CacheEntry = {
   fingerprint: 'integrations/forProperty',
   intent: 'The integrations one property runs, with kind and notes',
@@ -22,9 +13,6 @@ export const propertyIntegrations: CacheEntry = {
   },
 };
 
-// One connector's services at one property: everything the integration
-// implements, whether the vendor has it ON, and whether the hotel offers it.
-// `row_id` targets the property's own switch — the one column ops may write.
 export const propertyServices: CacheEntry = {
   fingerprint: 'integrations/services',
   intent: "A connector's capabilities crossed with one property's switches",

@@ -1,6 +1,5 @@
 import type { PrismExample } from './example.types';
 
-// Operators working together: templates, nesting, naming a value once.
 export const COMPOSITION: readonly PrismExample[] = [
   {
     id: 'pick-and-rename',

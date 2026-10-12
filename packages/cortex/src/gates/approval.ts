@@ -1,14 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// Approval bridge — suspend a tool call for a human decision
-// ═══════════════════════════════════════════════════════════
-//
-// An `ask` gate decision emits `approval-required` and awaits a
-// decision here. run.approve(id) may rewrite the call's args
-// (the Claude Code pattern: approve-with-edits). Tools execute
-// sequentially, so at most one approval is pending per run at a
-// time. Timeouts deny the call — an observation, not a run
-// failure.
-
 export type ApprovalDecision =
   | { approved: true; args?: unknown }
   | { approved: false; reason: string };
@@ -24,7 +13,7 @@ export const createApprovalBridge = (): ApprovalBridge => {
 
   const settle = (approvalId: string, decision: ApprovalDecision): void => {
     const resolve = pending.get(approvalId);
-    if (!resolve) return; // unknown or already settled — ignore (UI double-clicks)
+    if (!resolve) return; // already settled: a UI double-click decides the same id twice
     pending.delete(approvalId);
     resolve(decision);
   };

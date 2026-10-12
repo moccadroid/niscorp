@@ -3,15 +3,6 @@ import { providerRegistry, chatProviderEntry, modelRegistry, modelEntry, modelKe
 import { REASONING_EFFORTS } from '../src/types';
 import { createSignal } from '../src';
 
-// ═══════════════════════════════════════════════════════════
-// THE REGISTRY'S INVARIANTS. These are what keep two records from turning
-// into a pile: rows that point at nothing, rows nobody measured, and defaults
-// that name a model no row describes.
-// ═══════════════════════════════════════════════════════════
-
-// Providers whose default model has NO measured row, and why. An entry here is
-// debt with a reason, not a way out: measure the model with
-// scripts/probe-model.ts, paste the row, delete the entry.
 const UNMEASURED_DEFAULTS: Record<string, string> = {
   anthropic: 'no ANTHROPIC_API_KEY on 2026-09-24, and the probe speaks openai-compatible only',
   google: 'no GOOGLE_API_KEY on 2026-09-24, and the probe speaks openai-compatible only',

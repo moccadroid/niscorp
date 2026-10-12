@@ -4,19 +4,6 @@ import { StructureTab } from './structure-tab';
 import { DataTab } from './data-tab';
 import { RegistryTab } from './registry-tab';
 
-// ═══════════════════════════════════════════════════════════
-// Nova inspector tabs — added to the chrome-provided Source tab.
-//
-//   Structure — the flattened/resolved component tree. For shell
-//               and action stories: shell.flattenRenderTree(...)
-//               live via onStateChange. For layout stories: the
-//               rendered layout against fresh builtins.
-//   Data      — live per-canvas active-action data (shell stories
-//               and action stories with a shell).
-//   Registry  — names of registered components with builtin/custom
-//               tag. Always shown.
-// ═══════════════════════════════════════════════════════════
-
 export const buildInspectorTabs = (story: Story): InspectorTabDef[] => {
   if (!isNovaStory(story)) return [];
   const tabs: InspectorTabDef[] = [];

@@ -6,17 +6,6 @@ import type { PGlite } from '@electric-sql/pglite';
 import { createTodo, deleteTodo, setTodoDone, updateTodo } from './todos.write';
 import type { HandlerResult } from './todos.write';
 
-// ───────────────────────────────────────────────────────────
-// The endpoint contract (D2): actions fetch URLs; this table
-// serves them in-process over PGlite. Swapping it for a real
-// server never touches an action.
-//
-// Reads go through ONE reader: POST /api/query with
-// `{ fingerprint, context }` — replay-only (locked), so an unknown
-// fingerprint (a missed prewarm, a discipline break) is a loud 500,
-// not a silent LLM call. `today` is stamped server-side.
-// ───────────────────────────────────────────────────────────
-
 const QueryBodySchema = z
   .object({
     fingerprint: z.string().min(1),
@@ -81,7 +70,7 @@ export const createApiFetch = (deps: ApiDeps): FetchFn => async (url, init) => {
     return respond(result.status, result.body);
   } catch (err) {
     if (err instanceof VexError) {
-      // cache_miss = a read nobody prewarmed. That is a bug, not a 4xx.
+      // A cache_miss is a read nobody prewarmed: a bug, not a 4xx.
       const status = err.code === 'cache_miss' || err.code === 'agent_failed' ? 500 : 400;
       return respond(status, { message: `${err.code}: ${err.message}` });
     }

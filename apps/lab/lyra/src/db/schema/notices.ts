@@ -1,4 +1,3 @@
-// Giving notice: a ledger of it, and the subscription's own copy kept true.
 export const NOTICES_DDL = /* sql */ `
   -- ITS OWN TABLE, BECAUSE ITS OWN VERB IS THE ONLY THING THAT CAN GATE IT.
   --

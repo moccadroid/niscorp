@@ -3,13 +3,6 @@ import { z } from 'zod';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import type { NovaManifestEntry } from '@niscorp/loom/plugins/nova/react';
 
-// The content library — a tiny Nova component set, passed to the Nova plugin as
-// its manifest. Each entry declares its name, a Zod schema for its props, the
-// render, and whether it nests children. A loud neon kit, so the thing being
-// edited never looks like the editor editing it.
-
-// ─── Box — a glowing panel ───────────────────────────────────
-
 const Box: NovaComponent<{ padding?: number; background?: string; radius?: number }> = ({
   padding = 16,
   background = '#16213e',
@@ -40,8 +33,6 @@ const boxDef: NovaManifestEntry = {
   }),
 };
 
-// ─── Stack — flex layout ─────────────────────────────────────
-
 const ALIGN: Record<string, CSSProperties['alignItems']> = {
   start: 'flex-start',
   center: 'center',
@@ -69,8 +60,6 @@ const stackDef: NovaManifestEntry = {
     align: z.enum(['start', 'center', 'end']).meta({ title: 'Align' }).default('start'),
   }),
 };
-
-// ─── Text — neon type ────────────────────────────────────────
 
 const SIZE: Record<string, number> = { sm: 13, md: 16, lg: 22, xl: 32 };
 
@@ -104,8 +93,6 @@ const textDef: NovaManifestEntry = {
   }),
 };
 
-// ─── Button — gradient pill ──────────────────────────────────
-
 const Button: NovaComponent<{ label?: string; variant?: string }> = ({ label = 'Click', variant = 'primary' }) => (
   <button
     type="button"
@@ -133,7 +120,5 @@ const buttonDef: NovaManifestEntry = {
     variant: z.enum(['primary', 'ghost']).meta({ title: 'Variant' }).default('primary'),
   }),
 };
-
-// ─── The manifest ────────────────────────────────────────────
 
 export const library: readonly NovaManifestEntry[] = [boxDef, stackDef, textDef, buttonDef];

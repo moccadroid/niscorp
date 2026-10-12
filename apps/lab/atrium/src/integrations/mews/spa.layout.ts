@@ -1,10 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Book the spa — the whole loop on one sheet. Treatments come from the Mews
-// catalogue rows, the SLOTS come live from the connector (it owns availability),
-// booking goes through the connector and only then lands as our mirror row plus
-// a folio line. Nothing here knows a price or a time; every figure arrived from
-// the integration.
 export const spaLayout: LayoutNode = {
   if: '$.done',
   then: {

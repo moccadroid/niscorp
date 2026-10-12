@@ -12,20 +12,6 @@ import type { RecipeProvider } from '@showroom/modules/signal/openai-client';
 import type { VexScenario } from './scenarios';
 import type { Query, ScopeRule, VexEvent } from '@niscorp/vex';
 
-// ═══════════════════════════════════════════════════════════
-// VexView — the showroom canvas for a Vex scenario. Runs the real
-// engine against PGlite ONLY when Run is pressed, and advances the
-// pipeline from the LIVE event stream: Intent/Cache light up the
-// instant they happen, Generate pulses while the LLM works, and each
-// artifact panel pops in as its stage completes. A displayed
-// "frontier" chases the event-driven target at a capped rate so even
-// the (instant) stored-entry path sweeps through visibly.
-//
-// Real: the engine, the compiler, Postgres (PGlite), the cache, the
-// handler. Authored: each story's DSL — with no model key it stands in
-// for what a model would have written, and the stage labels say so.
-// ═══════════════════════════════════════════════════════════
-
 const KEYFRAMES = `
 @keyframes vexPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(79,70,229,0); } 50% { box-shadow: 0 0 0 5px rgba(79,70,229,0.22); } }
 @keyframes vexPop { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -38,18 +24,11 @@ const accountLabelMaybe = (id: string): string => (ACCOUNTS.includes(id) ? ACCOU
 const delay = (n: number): Promise<void> => new Promise((r) => setTimeout(r, n));
 const ms = (n: number | undefined): string => (n === undefined ? '' : `${Math.max(0, Math.round(n))}ms`);
 
-// ─── Live facts, accumulated from the event stream ───────────
-
 type Facts = {
   scoped: boolean;
   reshape: boolean;
   live: boolean;
-  // Was the stored DSL found under the story's name? For a live run this
-  // comes off the engine's own cache event; for a stored-entry run it is
-  // known once the run returns.
   cacheHit?: boolean;
-  // This stored-entry run found the slot empty and filled it with the
-  // story's hand-written DSL before replaying it. No model was involved.
   seeded?: boolean;
   agentMs?: number;
   warnings?: string[];
@@ -58,7 +37,7 @@ type Facts = {
   mappingMs?: number;
   totalMs?: number;
   error?: string;
-  errorCode?: string; // wire error code ('mutate' refusals) — picks the failed stage
+  errorCode?: string;
 };
 
 type StageStatus = 'done' | 'active' | 'skipped' | 'warn' | 'error' | 'idle';
@@ -80,8 +59,6 @@ const STAGES_COMPILE: StageDef[] = [
   { label: 'Analyze', panel: 'error' },
   { label: 'Compile SQL', panel: 'sql' },
 ];
-// The write pipeline: replay the seeded definition → satisfy its derived
-// context signature → pass the write phases → execute with RETURNING.
 const STAGES_MUTATE: StageDef[] = [
   { label: 'Intent' },
   { label: 'Replay', panel: 'mutation' },
@@ -93,8 +70,6 @@ const STAGES_MUTATE: StageDef[] = [
 const stageDefs = (scenario: VexScenario): StageDef[] =>
   scenario.mode === 'compile' ? STAGES_COMPILE : scenario.mode === 'mutate' ? STAGES_MUTATE : STAGES_EXECUTE;
 
-// Which mutate stage a wire refusal belongs to — everything after it was
-// never reached.
 const MUTATE_FAIL_STAGE: Record<string, string> = {
   invalid_request: 'Replay',
   missing_context: 'Context',
@@ -107,16 +82,15 @@ const MUTATE_FAIL_DETAIL: Record<string, string> = {
   Execute: 'failed',
 };
 
-// Map an event to how many stages should now be "reached" (the chase
-// target). Indices follow STAGES_EXECUTE.
+// How many stages an event shows as reached; the counts follow STAGES_EXECUTE.
 const eventTarget = (e: VexEvent): number | undefined => {
   switch (e.type) {
-    case 'query.start': return 1;   // Intent done, Cache active
-    case 'query.cache': return 2;   // Cache done, Generate active
-    case 'query.dsl': return 3;     // Generate done (fires only on a miss)
-    case 'query.sql': return 6;     // Scope + Analyze + Compile done
-    case 'query.rows': return 7;    // Execute done
-    case 'query.mapped': return 8;  // Shape done
+    case 'query.start': return 1;
+    case 'query.cache': return 2;
+    case 'query.dsl': return 3;
+    case 'query.sql': return 6;
+    case 'query.rows': return 7;
+    case 'query.mapped': return 8;
     case 'query.done': return 8;
     default: return undefined;
   }
@@ -124,9 +98,8 @@ const eventTarget = (e: VexEvent): number | undefined => {
 
 const applyEvent = (f: Facts, e: VexEvent): Facts => {
   switch (e.type) {
-    // A stored-entry run always replays a warm slot (it fills an empty one
-    // first), so the engine's own verdict would say "hit" even on the run
-    // that filled it. Only a live run's verdict says something here.
+    // A stored-entry run fills an empty slot before replaying it, so the engine's
+    // verdict says "hit" even on the run that filled it. Only a live run's is taken.
     case 'query.cache': return f.live ? { ...f, cacheHit: e.hit } : f;
     case 'query.dsl': return { ...f, agentMs: e.agentMs };
     case 'query.sql': return { ...f, warnings: e.warnings };
@@ -137,8 +110,6 @@ const applyEvent = (f: Facts, e: VexEvent): Facts => {
   }
 };
 
-// Per-stage detail text + final (passed-frontier) status, sourced from
-// live facts so it's correct mid-run.
 const stageInfo = (scenario: VexScenario, label: string, f: Facts): { detail: string; status: StageStatus } => {
   if (scenario.mode === 'mutate') {
     const failedAt = f.error !== undefined ? (MUTATE_FAIL_STAGE[f.errorCode ?? ''] ?? 'Execute') : undefined;
@@ -199,11 +170,6 @@ const STATUS_COLOR: Record<StageStatus, { fg: string; bg: string; border: string
   idle: { fg: INK.faint, bg: '#fff', border: INK.line },
 };
 
-// ─── What happened, in one line ──────────────────────────────
-// Where the DSL came from on this run. Three honest answers for a read:
-// a model wrote it just now, the story's hand-written DSL was stored and
-// replayed (first run), or the stored DSL was found and replayed.
-
 const verdictOf = (outcome: RunOutcome, mode: VexScenario['mode']): { tone: Tone; text: string } => {
   if (mode === 'mutate') {
     return outcome.cacheHit
@@ -221,10 +187,6 @@ const dslAside = (outcome: RunOutcome | undefined): ReactNode => {
   return <Chip>written by hand for this story</Chip>;
 };
 
-// ─── Panels ──────────────────────────────────────────────────
-
-// A stage panel that pops in when its stage is reached, and rings when
-// its stage chip is clicked.
 const Artifact: FC<{ id?: string; title: ReactNode; focused?: boolean; aside?: ReactNode; tone?: 'plain' | 'ok' | 'bad'; children: ReactNode }> = ({
   id,
   title,
@@ -288,8 +250,6 @@ const scopeClauseText = (dsl: Query | undefined, scopeKey: string): string | und
   return undefined;
 };
 
-// The write phases for the mutated table — rendered from the SAME policy
-// object the handler enforces, so the panel can't drift from the truth.
 const writeRulesText = (scenario: VexScenario): string => {
   const m = scenario.mutation;
   if (m === undefined || Array.isArray(m)) return '';
@@ -341,8 +301,6 @@ const Select: FC<{ label: string; value: string; options: { value: string; label
 
 const isProvider = (v: string): v is RecipeProvider => v === 'groq' || v === 'openrouter' || v === 'openai';
 
-// ─── Stage strip ─────────────────────────────────────────────
-
 const StageStrip: FC<{ scenario: VexScenario; facts: Facts; frontier: number; finished: boolean; errored: boolean; focused: string | undefined; started: boolean; onPick: (panel: string | undefined) => void }> = ({
   scenario,
   facts,
@@ -359,7 +317,7 @@ const StageStrip: FC<{ scenario: VexScenario; facts: Facts; frontier: number; fi
       {defs.map((d, i) => {
         const reached = i < frontier;
         const isFrontier = i === frontier && !finished && started;
-        const isError = errored && finished && i === frontier; // the stage the run died on
+        const isError = errored && finished && i === frontier;
         const info = stageInfo(scenario, d.label, facts);
         const status: StageStatus = !started ? 'idle' : isError ? 'error' : isFrontier ? 'active' : reached ? info.status : 'idle';
         const col = STATUS_COLOR[status];
@@ -400,8 +358,6 @@ const StageStrip: FC<{ scenario: VexScenario; facts: Facts; frontier: number; fi
   );
 };
 
-// ─── Main ────────────────────────────────────────────────────
-
 const initialContext = (s: VexScenario): Record<string, unknown> => ({ ...(s.context ?? {}) });
 const initialScope = (s: VexScenario): Record<string, unknown> => ({ ...(s.scope ?? {}) });
 
@@ -419,8 +375,6 @@ export const VexView: FC<{ scenario: VexScenario }> = ({ scenario }) => {
   const [started, setStarted] = useState(false);
   const [running, setRunning] = useState(false);
   const [focused, setFocused] = useState<string | undefined>(undefined);
-  // getLiveConfig already returns a corrected, usable config (provider
-  // with a key, model in presets), so the UI and live.ts stay in sync.
   const [liveProvider, setLiveProvider] = useState<RecipeProvider>(() => getLiveConfig().provider);
   const [liveModel, setLiveModel] = useState<string>(() => getLiveConfig().model);
   const runSeq = useRef(0);
@@ -441,7 +395,7 @@ export const VexView: FC<{ scenario: VexScenario }> = ({ scenario }) => {
   };
 
   useEffect(() => {
-    runSeq.current += 1; // cancel any in-flight run/animation
+    runSeq.current += 1;
     setContext(initialContext(scenario));
     setScope(initialScope(scenario));
     setLive(false);
@@ -461,7 +415,6 @@ export const VexView: FC<{ scenario: VexScenario }> = ({ scenario }) => {
     const stageCount = defs.length;
     const isLive = live && keyAvailable && scenario.mode === 'execute';
 
-    // Reset + arm.
     setRunning(true);
     setStarted(true);
     setFinished(false);
@@ -475,9 +428,8 @@ export const VexView: FC<{ scenario: VexScenario }> = ({ scenario }) => {
 
     let resolved = false;
 
-    // Chase loop: advance the displayed frontier toward the event-driven
-    // target at a capped rate, so fast (stored-entry) runs still sweep and
-    // slow (live) runs pause on the in-progress stage.
+    // The displayed frontier chases the event-driven target at a capped rate, so
+    // an instant stored-entry run still sweeps through the stages.
     const chase = async (): Promise<void> => {
       for (;;) {
         if (seq !== runSeq.current) return;
@@ -486,16 +438,14 @@ export const VexView: FC<{ scenario: VexScenario }> = ({ scenario }) => {
           setFrontier(displayed);
           await delay(DWELL);
         } else if (resolved && displayed >= targetRef.current) {
-          return; // caught up to where the run actually got
+          return;
         } else {
-          await delay(40); // idle: waiting for the next event
+          await delay(40);
         }
       }
     };
     const chasePromise = chase();
 
-    // Execute mode advances from real events; compile mode has none, so
-    // we drive the (instant) target straight to the end.
     startRecording();
     const result = await runScenario(boot.runtime, scenario, {
       context,
@@ -537,9 +487,8 @@ export const VexView: FC<{ scenario: VexScenario }> = ({ scenario }) => {
       ...result.timing,
     }));
     resolved = true;
-    // On success (or a compile/mutate rejection, whose error IS the point —
-    // stageInfo marks the stage the wire refused at) sweep through every
-    // stage. On an execute-mode error, stop where the run actually got.
+    // A compile or mutate rejection also sweeps every stage: stageInfo marks the one
+    // it was refused at. An execute error stops where the run got.
     if (result.error === undefined || scenario.mode !== 'execute') {
       targetRef.current = stageCount;
     }

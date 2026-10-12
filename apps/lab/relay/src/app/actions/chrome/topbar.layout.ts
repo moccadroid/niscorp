@@ -1,19 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The topbar: the active screen title on the left; the action search + actions
-// on the right. The search is a Popover (dismissed on outside click via
-// `closeRef`): a search Input over the action catalog, then a results panel
-// rendered whenever the query is non-empty — the matching actions, or a "no
-// results" line. Each result is a clickable row carrying its whole record
-// (`$.r`), highlighted when its loop `index` matches `$.highlight` (the ↑/↓
-// keys). Literal + serializable.
-//
-// This layout is the FLOOR — the shape for the least-privileged holder of
-// the action (a viewer: no write phase, no assistant). Variants enrich
-// upward (topbar.full.layout.ts adds the write-path chrome); a variant that
-// reduces is authored backwards — it forces deny-it-back in every richer
-// role. The pieces are exported so variants compose from the same nodes.
-
 export const topbarTitle: LayoutNode = { component: 'Text', props: { size: 'lg', weight: 620 }, children: '{{$.title}}' };
 
 export const topbarSearch: LayoutNode = {

@@ -1,19 +1,5 @@
-// Deterministic seed generator. A fixed-seed PRNG produces the same
-// coherent dataset on every boot — stable for demos and screenshots.
-// Emits one SQL string; the bootstrap runs it after the DDL.
-//
-// "Coherent" means the relationships hold: contacts belong to real
-// companies, deals reference real contacts, activities and tasks hang off
-// real deals, and the timeline clusters around the REAL current date at
-// seed time, so overdue/today/upcoming tasks and recent activity all look
-// real on any day the app boots.
-
-// Noon UTC of the current date — every seeded date is an offset from this,
-// so the whole dataset shifts with the clock and stays deterministic
-// relative to it.
 const TODAY = new Date(`${new Date().toISOString().slice(0, 10)}T12:00:00.000Z`);
 
-// ─── PRNG (mulberry32) ───────────────────────────────────────
 const makeRng = (seed: number) => () => {
   seed |= 0;
   seed = (seed + 0x6d2b79f5) | 0;
@@ -39,7 +25,6 @@ const dayMs = 86_400_000;
 const dateOffset = (days: number): string => new Date(TODAY.getTime() + days * dayMs).toISOString().slice(0, 10);
 const tsOffset = (days: number): string => new Date(TODAY.getTime() + days * dayMs).toISOString();
 
-// ─── SQL emission ────────────────────────────────────────────
 type Val = string | number | boolean | null;
 const lit = (v: Val): string => {
   if (v === null) return 'NULL';
@@ -53,7 +38,6 @@ const insert = (table: string, cols: string[], rows: Val[][]): string => {
   return `INSERT INTO ${table} (${cols.join(', ')}) VALUES\n  ${values};\n`;
 };
 
-// ─── Data pools ──────────────────────────────────────────────
 const FIRST = ['Alex', 'Jordan', 'Sam', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Jamie', 'Avery', 'Quinn', 'Drew', 'Cameron', 'Skyler', 'Reese', 'Frank', 'Dana', 'Elliot', 'Harper', 'Logan', 'Parker', 'Rowan', 'Sasha', 'Noah', 'Mila', 'Omar', 'Priya', 'Wei', 'Ingrid', 'Diego', 'Yuki'];
 const LAST = ['Morgan', 'Chen', 'Patel', 'Nguyen', 'Kim', 'Okafor', 'Silva', 'Müller', 'Rossi', 'Andersson', 'Drebbin', 'Holloway', 'Vance', 'Castellanos', 'Bauer', 'Larsen', 'Whitfield', 'Osei', 'Romano', 'Fischer', 'Novak', 'Ibrahim', 'Petrov', 'Costa', 'Hughes'];
 const COMPANY_BASE = ['Northwind', 'Globex', 'Initech', 'Umbrella', 'Hooli', 'Stark', 'Wayne', 'Acme', 'Soylent', 'Vandelay', 'Wonka', 'Tyrell', 'Cyberdyne', 'Massive Dynamic', 'Pied Piper', 'Aperture', 'Black Mesa', 'Oscorp', 'Gringotts', 'Bluth', 'Dunder', 'Prestige', 'Sterling', 'Pearson', 'Paper Street', 'Monarch', 'Wernham', 'Krystal', 'Sirius', 'Helix'];
@@ -76,7 +60,7 @@ const STAGES = [
   { name: 'Closed Won', prob: 100 },
   { name: 'Closed Lost', prob: 0 },
 ];
-const OPEN_STAGE_COUNT = 4; // Lead..Negotiation
+const OPEN_STAGE_COUNT = 4;
 const ACTIVITY = {
   call: ['Discovery call', 'Follow-up call', 'Check-in call', 'Demo call', 'Renewal call'],
   email: ['Sent proposal', 'Replied to pricing question', 'Intro email', 'Shared case study', 'Follow-up email'],
@@ -86,11 +70,9 @@ const ACTIVITY = {
 const TASK = ['Send follow-up', 'Prepare proposal', 'Schedule demo', 'Call back', 'Send contract', 'Check in on trial', 'Update CRM notes', 'Loop in solutions engineer', 'Confirm budget', 'Send onboarding deck'];
 const LISTS = ['Key Accounts', 'Q3 Targets', 'Newsletter', 'At-Risk Renewals'];
 
-// ─── Generation ──────────────────────────────────────────────
 export const buildSeedSql = (): string => {
   const sql: string[] = [];
 
-  // Users — usr_001 is the signed-in demo user ("me").
   const userCount = 6;
   const users = Array.from({ length: userCount }, (_, i) => ({
     id: id('usr', i + 1),
@@ -113,7 +95,6 @@ export const buildSeedSql = (): string => {
   );
   const userIds = users.map((u) => u.id);
 
-  // Companies.
   const companyCount = 40;
   const companies = Array.from({ length: companyCount }, (_, i) => {
     const base = COMPANY_BASE[i % COMPANY_BASE.length]!;
@@ -133,7 +114,6 @@ export const buildSeedSql = (): string => {
     ),
   );
 
-  // Contacts — each belongs to a company; companies get 2-8.
   const contacts: { id: string; company: string; owner: string }[] = [];
   let ci = 0;
   for (const c of companies) {
@@ -164,7 +144,6 @@ export const buildSeedSql = (): string => {
     }
   }
 
-  // Pipeline + stages.
   sql.push(insert('pipelines', ['id', 'name', 'is_default'], [[id('pip', 1), 'Sales Pipeline', true]]));
   const stageIds = STAGES.map((_, i) => id('stg', i + 1));
   sql.push(
@@ -175,7 +154,6 @@ export const buildSeedSql = (): string => {
     ),
   );
 
-  // Products.
   sql.push(
     insert(
       'products',
@@ -184,7 +162,6 @@ export const buildSeedSql = (): string => {
     ),
   );
 
-  // Deals.
   const dealCount = 120;
   const deals: { id: string; company: string; owner: string; stageIdx: number; status: string; contact: string | null }[] = [];
   for (let i = 0; i < dealCount; i++) {
@@ -193,7 +170,6 @@ export const buildSeedSql = (): string => {
     const roll = rng();
     const status = roll < 0.65 ? 'open' : roll < 0.85 ? 'won' : 'lost';
     const stageIdx = status === 'open' ? int(0, OPEN_STAGE_COUNT - 1) : status === 'won' ? 4 : 5;
-    // Owner: bias toward the demo user so "my deals" is populated.
     const owner = chance(0.4) ? me : pick(userIds);
     const close = status === 'open' ? dateOffset(int(3, 90)) : dateOffset(-int(3, 180));
     const primaryContact = companyContacts.length > 0 ? pick(companyContacts).id : null;
@@ -221,7 +197,6 @@ export const buildSeedSql = (): string => {
     );
   }
 
-  // Deal line items — about half the deals get 1-3.
   let dpi = 0;
   for (const d of deals) {
     if (!chance(0.5)) continue;
@@ -238,13 +213,12 @@ export const buildSeedSql = (): string => {
     }
   }
 
-  // Activities — clustered in the last 120 days, weighted recent.
   const activityCount = 600;
   const types = ['call', 'email', 'meeting', 'note'] as const;
   for (let i = 0; i < activityCount; i++) {
     const type = pick(types);
     const d = pick(deals);
-    const daysAgo = -Math.floor(Math.pow(rng(), 1.8) * 120); // skew recent
+    const daysAgo = -Math.floor(Math.pow(rng(), 1.8) * 120);
     sql.push(
       insert(
         'activities',
@@ -255,8 +229,6 @@ export const buildSeedSql = (): string => {
             type,
             pick(ACTIVITY[type]),
             null,
-            // The person on the deal, not a random bystander — so a contact's
-            // activity timeline reflects the deals they're actually on.
             d.contact,
             d.company,
             d.id,
@@ -268,18 +240,14 @@ export const buildSeedSql = (): string => {
     );
   }
 
-  // Tasks — a believable mix of overdue / today / upcoming. Assignees spread
-  // deterministically across the three sign-in principals (60% alex, 25%
-  // jordan, 15% sam): task reads are assignee-scoped (see vex/behaviors.ts), so
-  // every principal signs in to a real, different task list.
+  // Assignees are the three sign-in principals, spread by index: task reads are
+  // assignee-scoped, so each principal signs in to a different task list.
   const taskCount = 150;
   for (let i = 0; i < taskCount; i++) {
     const bucket = rng();
     const due = bucket < 0.3 ? dateOffset(-int(1, 21)) : bucket < 0.45 ? dateOffset(0) : dateOffset(int(1, 30));
     const done = bucket < 0.3 ? chance(0.7) : chance(0.15);
     const d = pick(deals);
-    // Most tasks that hang off a deal also belong to that deal's primary contact,
-    // so a contact's profile shows its open to-dos (not just the deal's).
     const taskContact = d.contact !== null && chance(0.7) ? d.contact : null;
     const assignee = i % 20 < 12 ? me : i % 20 < 17 ? users[1]!.id : users[2]!.id;
     sql.push(
@@ -303,7 +271,6 @@ export const buildSeedSql = (): string => {
     );
   }
 
-  // Lists + members.
   sql.push(
     insert(
       'lists',
@@ -319,10 +286,6 @@ export const buildSeedSql = (): string => {
     }
   });
 
-  // Action catalog — what the action search searches. `id` is the Nova action
-  // id run when chosen; `kind` decides how it runs ('screen' → navigate the main
-  // canvas, 'create' → open in the modal). v1 is a hand-list; later this is
-  // generated from the live registry.
   sql.push(
     insert(
       'actions',
@@ -333,9 +296,6 @@ export const buildSeedSql = (): string => {
         ['crm.contacts', 'Contacts', 'Browse all people', 'crm', 'screen', '{}'],
         ['crm.companies', 'Companies', 'Browse all accounts', 'crm', 'screen', '{}'],
         ['crm.deals', 'Deals', 'Browse all deals as a table', 'crm', 'screen', '{}'],
-        // Pipeline (the deals board view) is reachable via the sidebar; it returns
-        // to the search catalog in Phase 6, when a row carries a full invocation
-        // descriptor (action + `$.view`) instead of just an id.
         ['settings', 'Settings', 'Workspace preferences', 'crm', 'screen', '{}'],
         ['crm.contact.form', 'New contact', 'Add a person to the workspace', 'crm', 'create', '{}'],
         ['crm.company.form', 'New company', 'Add a company or account', 'crm', 'create', '{}'],

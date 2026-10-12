@@ -1,9 +1,6 @@
 import type { ZodType } from 'zod';
 import type { Story as BaseStory } from '@showroom/modules/types';
 
-// Loom stories carry the schema they edit, so the inspector can compile it
-// and show the resulting Nova ActionDefinition alongside the live demo.
-
 export type LoomStory = BaseStory & {
   kind: 'basics' | 'structure' | 'resolver' | 'plugins';
   schema?: ZodType;

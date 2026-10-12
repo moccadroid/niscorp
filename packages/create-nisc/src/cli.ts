@@ -5,18 +5,6 @@ import { generate, validName } from './generate';
 import type { Posture, Ui } from './generate';
 import { testedSet } from './set';
 
-// ═══════════════════════════════════════════════════════════════
-// npm create nisc [dir] [--moss | --page] [--react | --dom] [--yes]
-//
-// Three questions — where the app goes, where its shell runs (D1), what draws
-// the screen — because those are what shape the files. Everything else the
-// rulebook's interview asks is written into the app's PLAN.md as open, for the
-// conversation that comes next. A flag answers its question; `--yes` takes the
-// defaults for the rest (moss, React); with no terminal to ask in, the flags
-// are all there is. A flag it does not know is an error, never ignored: a typo
-// must not quietly make a different app.
-// ═══════════════════════════════════════════════════════════════
-
 const USAGE = `npm create nisc [dir] [--moss | --page] [--react | --dom] [--yes]
 
   dir        where the app goes (default: my-nisc-app); its name is the folder's
@@ -34,7 +22,6 @@ const refuse = (message: string): never => {
   process.exit(1);
 };
 
-// An answer, or the walkthrough was cancelled (Ctrl-C) and nothing is made.
 const answered = <T extends string | boolean>(value: T | symbol): T => {
   if (typeof value === 'symbol' || isCancel(value)) {
     cancel('Nothing was made.');
@@ -43,7 +30,6 @@ const answered = <T extends string | boolean>(value: T | symbol): T => {
   return value;
 };
 
-// The package manager this was run with, to say the next commands in its words.
 const manager = (): string => {
   const agent = process.env['npm_config_user_agent'] ?? '';
   return ['pnpm', 'yarn', 'bun'].find((name) => agent.startsWith(name)) ?? 'npm';
@@ -84,9 +70,6 @@ const main = async (): Promise<void> => {
   const name = basename(dir);
   if (!validName(name)) refuse(`"${name}" cannot be a package name — the folder’s name becomes it: lowercase letters, digits, - . _`);
 
-  // A folder that already holds something: nothing in it is overwritten (the
-  // generator refuses if anything would be), but making an app in the wrong
-  // place is worth one question.
   const holds = existsSync(dir) ? readdirSync(dir).length : 0;
   if (holds > 0 && ask) {
     const proceed = answered<boolean>(

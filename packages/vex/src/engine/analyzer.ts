@@ -5,10 +5,6 @@ import type {
   AnalysisConfig,
 } from './engine.types.js';
 
-// ═══════════════════════════════════════════════════════════════
-// Nesting depth
-// ═══════════════════════════════════════════════════════════════
-
 const measureNestingDepth = (source: ResolvedSource): number => {
   if (source.subquery === undefined) return 0;
   let maxChild = 0;
@@ -28,17 +24,10 @@ const getMaxNestingDepth = (resolved: ResolvedQuery): number => {
   return max;
 };
 
-// ═══════════════════════════════════════════════════════════════
-// Cartesian product detection
-// ═══════════════════════════════════════════════════════════════
-
 const hasCartesianProduct = (resolved: ResolvedQuery): boolean => {
-  // Only relevant when there are multiple entity sources (not subqueries)
   const entitySources = resolved.sources.filter((s) => s.entity !== undefined);
   if (entitySources.length <= 1) return false;
 
-  // Check that each source after the first has at least one join connecting it
-  // to a previously-seen source
   const seenAliases = new Set<string>();
   const firstSource = entitySources[0];
   if (firstSource !== undefined) {
@@ -63,26 +52,19 @@ const hasCartesianProduct = (resolved: ResolvedQuery): boolean => {
   return false;
 };
 
-// ═══════════════════════════════════════════════════════════════
-// Unindexed filter check
-// ═══════════════════════════════════════════════════════════════
-
 const findUnindexedFilterColumns = (resolved: ResolvedQuery): string[] => {
   if (resolved.filter === undefined) return [];
 
   const unindexed: string[] = [];
 
   for (const [path, res] of resolved.filter.resolvedPaths) {
-    // Find the entity for this alias
     const source = resolved.sources.find((s) => s.alias === res.alias);
     if (source === undefined || source.entity === undefined) continue;
 
-    // Check if the column appears in any index
     const isIndexed = source.entity.indexes.some((idx) =>
       idx.fields.includes(res.column),
     );
 
-    // Also consider primary keys as indexed
     const isPrimaryKey = source.entity.fields.some(
       (f) => f.name === res.column && f.primaryKey,
     );
@@ -95,22 +77,13 @@ const findUnindexedFilterColumns = (resolved: ResolvedQuery): string[] => {
   return unindexed;
 };
 
-// ═══════════════════════════════════════════════════════════════
-// Aggregates without groupBy
-// ═══════════════════════════════════════════════════════════════
-
 const hasAggregatesWithoutGroupBy = (resolved: ResolvedQuery): boolean =>
   resolved.aggregates.length > 0 && resolved.groupBy.length === 0;
-
-// ═══════════════════════════════════════════════════════════════
-// Public API
-// ═══════════════════════════════════════════════════════════════
 
 export const analyze = (resolved: ResolvedQuery, config: AnalysisConfig): AnalysisResult => {
   const warnings: string[] = [];
   const errors: string[] = [];
 
-  // Check nesting depth
   const depth = getMaxNestingDepth(resolved);
   if (depth > config.maxNestingDepth) {
     errors.push(
@@ -118,14 +91,12 @@ export const analyze = (resolved: ResolvedQuery, config: AnalysisConfig): Analys
     );
   }
 
-  // Check for cartesian products
   if (config.rejectCartesianProducts && hasCartesianProduct(resolved)) {
     errors.push(
       'Cartesian product detected: multiple sources with no join between them. Add a join or reduce sources.',
     );
   }
 
-  // Check for unindexed filter columns
   const unindexed = findUnindexedFilterColumns(resolved);
   if (unindexed.length > 0) {
     const message = `Unindexed filter columns: ${unindexed.join(', ')}. Consider adding indexes for better performance.`;
@@ -136,14 +107,12 @@ export const analyze = (resolved: ResolvedQuery, config: AnalysisConfig): Analys
     }
   }
 
-  // Check for aggregates without groupBy
   if (hasAggregatesWithoutGroupBy(resolved)) {
     warnings.push(
       'Aggregate functions used without groupBy. The result will be a single aggregated row.',
     );
   }
 
-  // Check for unindexed vector field in semantic search
   if (resolved.semantic !== undefined) {
     const semanticField = resolved.semantic.field;
     const vectorSource = resolved.sources.find(

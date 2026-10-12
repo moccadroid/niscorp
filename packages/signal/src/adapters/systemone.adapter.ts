@@ -2,16 +2,6 @@ import { z } from 'zod';
 import type { DecisionAdapter, DecisionRequest, DecisionResponse } from '../types';
 import { SignalError, ErrorCode } from '../errors';
 
-// ═══════════════════════════════════════════════════════════
-// The System One wire — state and typed questions in, answers out
-// ═══════════════════════════════════════════════════════════
-//
-// One POST, one JSON body back: `{ model, answers, usage }`. TypeSafe's Jev is
-// the first provider to speak it; like every adapter this one exists per wire
-// protocol, and the vendor is a registry row over it. There is no SDK to load —
-// the protocol is a single fetch — so the injected client is just a `fetch`,
-// which is also how a check points it at a fake provider.
-
 export type SystemOneConfig = {
   apiKey: string;
   baseUrl: string;
@@ -65,14 +55,12 @@ export const createSystemOneAdapter = async (config: SystemOneConfig): Promise<D
       status = response.status;
       body = jsonOrText(await response.text());
     } catch (error) {
-      // Adapters are dumb: wrap and throw, ORIGINAL error under raw. An abort
-      // lands here too — the caller holds the signal and knows it fired.
+      // An abort is wrapped too: the caller holds the signal and knows it fired.
       throw providerError(error instanceof Error ? error.message : String(error), error);
     }
     if (status < 200 || status >= 300) throw providerError(`HTTP ${status}`, { status, body });
 
-    // A body that is not the protocol's shape still goes back as it arrived:
-    // the gate rejects it, with these bytes as the evidence.
+    // Not thrown: the gate rejects a body of the wrong shape, with these bytes as evidence.
     const parsed = BodySchema.safeParse(body);
     if (!parsed.success) return { answers: undefined, raw: body };
     return {

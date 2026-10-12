@@ -9,23 +9,11 @@ import type { Query } from '../schemas/query.schema.js';
 import type { GenerateDsl, MapToShape } from '../types.js';
 import type { SignalClient } from '@niscorp/cortex';
 
-// ═══════════════════════════════════════════════════════════════
-// Re-exports
-// ═══════════════════════════════════════════════════════════════
-
 export { vexQueryDslAgent, describeCaller } from './query.agent.js';
 export type { VexQueryDeps } from './query.agent.js';
 export { createQueryTools } from './tools.js';
 export type { QueryToolDeps } from './tools.js';
 
-// ═══════════════════════════════════════════════════════════════
-// generateDsl hook factory — runs vexQueryDslAgent
-// ═══════════════════════════════════════════════════════════════
-
-// What the agent is built from. Who it runs FOR is not here: the engine hands
-// every generation its caller (a `read` capability under that caller's policy
-// and scope) and the schema that caller may see, so one hook serves every
-// principal and cannot be built with the wrong one baked in.
 export type QueryDslConfig = {
   llm: SignalClient;
   queryJsonSchema: object;
@@ -47,11 +35,6 @@ export const createQueryDsl = (config: QueryDslConfig): GenerateDsl => {
       contextKeys: Object.keys(request.context),
     };
 
-    // The agent signals "cannot satisfy" by calling its cannotSatisfy
-    // tool. We watch the run's event stream for that observation,
-    // capture the reason, and abort — distinguishing a real
-    // unsatisfiable result (worth negative-caching) from a transient
-    // failure.
     let unsatisfiableReason: string | undefined;
     let run: RunHandle<Query> | undefined;
     run = vexQueryDslAgent.run(agentInput, {
@@ -85,31 +68,11 @@ export const createQueryDsl = (config: QueryDslConfig): GenerateDsl => {
   };
 };
 
-// ═══════════════════════════════════════════════════════════════
-// mapToShape hook factory — runs Prism's mappingAgent
-//
-// The mapping runs ONCE over { result }, and its output IS the result (array /
-// object / scalar). An array shape puts the rows in $.result; an object shape
-// puts the single (first) row there. The envelope here must match the
-// runtime's cache-hit path (engine/runtime.ts), which replays the cached IR against the same envelope. Keep them in lockstep.
-//
-// NOTE: for the agent to actually author a whole-set mapping (a `$map` over
-// `$.result` for arrays), its instructions must teach that — tracked as a
-// follow-up. Canned/relay paths use a hand-authored, seeded IR and are correct
-// today; this affects only live generation.
-// ═══════════════════════════════════════════════════════════════
-
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-// ROWS THAT ARE ALREADY THE SHAPE need no mapping. True only when the shape is
-// flat (every value a scalar example) and the first row has EXACTLY the
-// shape's keys — nothing extra, nothing missing — each holding the kind of
-// value the shape shows (or null). The query agent aliases its columns to a
-// flat shape's keys for exactly this reason. Anything else — a nested shape, a
-// renamed or extra column, a count that came back as text — goes to the
-// mapping agent. No rows is not a fit: there is nothing to prove the columns
-// by, and the IR minted here is replayed later against rows that exist.
+// No rows is not a fit: nothing proves the columns, and the identity IR is
+// replayed later against rows that exist.
 export const rowsFitShape = (rows: readonly Record<string, unknown>[], shape: unknown): boolean => {
   const example = Array.isArray(shape) ? shape[0] : shape;
   const first = rows[0];
@@ -125,17 +88,14 @@ export const rowsFitShape = (rows: readonly Record<string, unknown>[], shape: un
   });
 };
 
-// The identity mapping over the envelope — what a fitting row set replays as.
 const IDENTITY = { $ref: '$.result' };
 
 export const createShapeMapper = (llm: SignalClient): MapToShape => {
   return async (rows, shape) => {
-    // Array shape → map the whole set; a non-array shape → map the single
-    // (first) row. The envelope here must match the runtime's (engine/runtime.ts).
+    // `result` must match the envelope engine/runtime.ts replays the IR against.
     const single = !Array.isArray(shape);
     const envelope = { result: single ? (rows[0] ?? null) : rows } as unknown as JsonObject;
 
-    // Already the shape: the identity, with no model call.
     if (rowsFitShape(rows, shape)) {
       const ir = await compile(IDENTITY);
       return { ir, transformed: execute(ir, envelope) };

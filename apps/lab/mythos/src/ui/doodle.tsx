@@ -3,14 +3,6 @@ import type { ReactNode } from 'react';
 import { useNovaDispatch } from '@niscorp/nova/adapters/react';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 
-// ═══════════════════════════════════════════════════════════
-// Doodle — a pastel glyph: a plant drawn by `kind`, in one of
-// three stages. Domain-blind: it knows kinds and stages, not
-// what they mean upstream. With a ref it is clickable and
-// dispatches ui:click (payload included), so a glyph can be a
-// control as well as a decoration.
-// ═══════════════════════════════════════════════════════════
-
 const DoodlePropsSchema = z
   .object({
     kind: z.string().optional().describe('Glyph kind: tulip | daisy | poppy | lotus | bell | fern.'),
@@ -39,7 +31,6 @@ const KINDS: Record<string, Palette> = {
 const STEM = '#7fae8e';
 const LEAF = '#a5d4b4';
 
-// Flower heads, drawn around (32, 18) in a 64×80 viewBox.
 const head = (kind: string, p: Palette): ReactNode => {
   if (kind === 'daisy') {
     return (
@@ -88,7 +79,6 @@ const head = (kind: string, p: Palette): ReactNode => {
       </g>
     );
   }
-  // tulip (and the fallback shape)
   return (
     <g>
       <path d="M20 20 C20 6 26 6 32 12 C38 6 44 6 44 20 C44 28 38 32 32 32 C26 32 20 28 20 20" fill={p.a} />
@@ -120,7 +110,6 @@ const drawing = (kind: string, stage: string, p: Palette): ReactNode => {
       </g>
     );
   }
-  // sprout
   return (
     <g>
       {ground}

@@ -1,8 +1,5 @@
 import type { FC } from 'react';
 
-// Inline red banner for runtime errors from the signal call
-// (network failure, provider rejection, abort). Renders null
-// when message is empty so callers don't need a conditional.
 export const ErrorBanner: FC<{ message: string }> = ({ message }) =>
   message === '' ? null : (
     <div

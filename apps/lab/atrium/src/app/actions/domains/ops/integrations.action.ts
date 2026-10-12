@@ -4,19 +4,6 @@ import { opsIntegrationsLayout } from './integrations.layout';
 import { previewable, previewTriggers, crewCard } from '@atrium/app/actions/preview';
 import { integrationsPrism, servicesPrism, offerOnPrism, offerOffPrism } from './ops.prism';
 
-// The hotel's Integrations pane — where a property CHOOSES from what its
-// connectors offer.
-//
-// Three layers meet here and only one is the manager's:
-//
-//   provided — the vendor switched it on in the connector (read-only here)
-//   offered  — this property's own switch (the one write on this screen)
-//   placed   — the resolved surface, recomputed by the resync that follows
-//              every flip, which is why nothing here computes what is live
-//
-// A service the connector does not provide renders grey with the reason — the
-// row exists so the manager can SEE what a connector could do; asking for it
-// is a phone call to us, not a control.
 export const opsIntegrationsAction: ActionDefinition = {
   id: 'ops.integrations',
   title: 'Integrations',
@@ -27,13 +14,10 @@ export const opsIntegrationsAction: ActionDefinition = {
     loadServices: { url: '/api/deploy/vex', method: 'POST', request: servicesPrism, target: 'services' },
     offerOn: { url: '/api/deploy/vex', method: 'POST', request: offerOnPrism },
     offerOff: { url: '/api/deploy/vex', method: 'POST', request: offerOffPrism },
-    // A property flipping a service is the small version of a vendor go-live:
-    // write the switch, re-resolve, refresh — same seam, same honesty.
     resync: { fn: 'connector.resync' },
   },
-  // loadServices also runs at mount: with no `selected` seeded it reads
-  // against an empty connector id and returns nothing, harmlessly; seeded
-  // (an opener or the agent aiming the screen), the section arrives open.
+  // loadServices runs at mount for an opener that seeds `selected`; unseeded
+  // it reads an empty connector id and returns nothing.
   lifecycle: { mount: [{ call: 'loadIntegrations', onSuccess: [{ set: 'loading', value: false }] }, { call: 'loadServices' }] },
   triggers: [
     { event: 'ui:click', ref: 'pick', do: [{ set: 'selected', value: '@event.payload' }, { call: 'loadServices' }] },

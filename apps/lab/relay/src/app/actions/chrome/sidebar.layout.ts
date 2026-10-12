@@ -1,9 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Literal sidebar layout: a workspace header, two nav sections, a Settings item,
-// and a user footer. Each NavItem carries its own `id` and the bound `activeId`
-// ($.active) so exactly one highlights; its `ref` lets the action's triggers
-// route + update `$.active` on click.
 export const sidebarLayout: LayoutNode = {
   component: 'Box',
   props: { bg: 'sunken', border: 'right', width: 232, h: '100%' },
@@ -11,7 +7,6 @@ export const sidebarLayout: LayoutNode = {
     component: 'Stack',
     props: { h: '100%' },
     children: [
-      // ─── Workspace header ──────────────────────────────────
       {
         component: 'Box',
         props: { px: 14, py: 13, border: 'bottom' },
@@ -38,8 +33,6 @@ export const sidebarLayout: LayoutNode = {
           ],
         },
       },
-      // ─── Nav — each item renders only when the screen is granted (the
-      //     `nav` flags come from the principal's resolved catalog) ─────
       {
         component: 'Stack',
         props: { gap: 1, pad: 10, grow: true },
@@ -54,7 +47,6 @@ export const sidebarLayout: LayoutNode = {
           { if: '$.nav.deals', then: { component: 'NavItem', ref: 'nav-deals', props: { id: 'deals', activeId: '$.active', icon: 'target', label: 'Deals', count: '$.counts.deals' } } },
         ],
       },
-      // ─── Settings + user footer ────────────────────────────
       {
         if: '$.nav.settings',
         then: {

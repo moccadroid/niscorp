@@ -3,46 +3,22 @@ import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { agentsDoc, gitignoreLines, planDoc } from './docs';
 
-// ═══════════════════════════════════════════════════════════════
-// A new app, from a template — and nothing in it that the walkthrough did not
-// decide or PLAN.md does not record.
-//
-// The templates (../templates) are real apps: members of the nisc repository's
-// workspace, typechecked, built and checked by its CI like any other. What a
-// new app gets is one of them, copied, with three things changed: its name, the
-// `workspace:^` versions turned into the released set the template was checked
-// against, and the two documents that only exist for a new app — PLAN.md (the
-// decisions) and AGENTS.md (where the rules are).
-//
-// It never overwrites. A folder that already holds something is fine — a fresh
-// repository's .git, a LICENSE — as long as nothing it would write is there
-// already; if anything is, it writes nothing at all and says which files.
-// ═══════════════════════════════════════════════════════════════
-
-// Where the shell runs (D1): on a server (moss), or in the page.
 export type Posture = 'moss' | 'page';
-// What draws the screen: React, or plain DOM.
 export type Ui = 'react' | 'dom';
 
 export type CreateOptions = {
-  // where the app goes
   dir: string;
-  // its package name
   name: string;
   posture: Posture;
   ui: Ui;
-  // the @niscorp versions to depend on: package name → version
   versions: Readonly<Record<string, string>>;
-  // the day it was made (PLAN.md), as YYYY-MM-DD
+  // YYYY-MM-DD
   today: string;
 };
 
 export type Created = {
-  // every file written, relative to the app
   files: string[];
-  // files that were already there and were left as they were
   kept: string[];
-  // files that were already there and were added to
   extended: string[];
 };
 
@@ -50,16 +26,13 @@ export const TEMPLATES = fileURLToPath(new URL('../templates', import.meta.url))
 
 export const templateOf = (posture: Posture, ui: Ui): string => `${posture === 'moss' ? 'moss' : 'shell'}-${ui}`;
 
-// The token each template is named by — its package name, and wherever the
-// name shows (the page title, the welcome screen, its README).
 const tokenOf = (template: string): string => `nisc-template-${template}`;
 
 const SKIP = new Set(['node_modules', 'dist', 'out', '.turbo']);
 const TEXT = new Set(['.ts', '.tsx', '.json', '.html', '.css', '.md']);
-// A file of the app's own that an existing folder may already have, and keeps.
 const KEEP_THEIRS = new Set(['README.md']);
 
-// npm's rule for a package name, as the app's directory will mostly be named.
+// npm's rule for a package name.
 export const validName = (name: string): boolean => /^[a-z0-9][a-z0-9._-]*$/.test(name) && name.length <= 214;
 
 const filesIn = (dir: string, base = ''): string[] =>
@@ -71,9 +44,6 @@ const filesIn = (dir: string, base = ''): string[] =>
 
 const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 
-// `workspace:^` → `^<the released version>`, for every dependency the template
-// takes from the workspace. A version the set does not have is a broken set,
-// not something to guess.
 const pinned = (deps: unknown, versions: Readonly<Record<string, string>>): Record<string, string> => {
   if (!isRecord(deps)) return {};
   return Object.fromEntries(
@@ -94,7 +64,6 @@ export const generate = (options: CreateOptions): Created => {
   if (!validName(options.name)) throw new Error(`create-nisc: "${options.name}" is not a package name (lowercase letters, digits, - . _)`);
   if (existsSync(options.dir) && !statSync(options.dir).isDirectory()) throw new Error(`create-nisc: ${options.dir} is a file`);
 
-  // ── everything it would write, worked out before anything is written ──
   const token = tokenOf(template);
   const planned = new Map<string, string | Buffer>();
   for (const rel of filesIn(source)) {
@@ -119,7 +88,6 @@ export const generate = (options: CreateOptions): Created => {
   planned.set('AGENTS.md', agentsDoc(facts));
   planned.set('PLAN.md', planDoc(facts));
 
-  // ── what is already there ──
   const there = (rel: string): boolean => existsSync(join(options.dir, rel));
   const kept = [...planned.keys()].filter((rel) => KEEP_THEIRS.has(rel) && there(rel));
   const collisions = [...planned.keys()].filter((rel) => !KEEP_THEIRS.has(rel) && there(rel)).sort();
@@ -130,7 +98,6 @@ export const generate = (options: CreateOptions): Created => {
   }
   for (const rel of kept) planned.delete(rel);
 
-  // .gitignore is the one file that is added to: theirs, plus what is missing.
   const ignorePath = join(options.dir, '.gitignore');
   const theirs = existsSync(ignorePath) ? readFileSync(ignorePath, 'utf8') : undefined;
   const have = new Set((theirs ?? '').split('\n').map((line) => line.trim()));
@@ -139,7 +106,6 @@ export const generate = (options: CreateOptions): Created => {
   if (theirs === undefined) planned.set('.gitignore', `${gitignoreLines.join('\n')}\n`);
   else if (missing.length > 0) planned.set('.gitignore', `${theirs.replace(/\n*$/, '\n')}${missing.join('\n')}\n`);
 
-  // ── only now ──
   for (const [rel, content] of planned) {
     const to = join(options.dir, rel);
     mkdirSync(dirname(to), { recursive: true });

@@ -1,4 +1,3 @@
-// Run: pnpm --filter lyra exec tsx src/dev/acl-check.ts
 import { evaluate } from '@niscorp/prism';
 import { identityRoles } from '@lyra/app/vex/identity.entries';
 import { CAST } from '@lyra/db/seed';
@@ -17,7 +16,6 @@ const revenueFor = async (email: string): Promise<string> =>
 
 const TAKINGS = await revenueFor(OWNER);
 
-// ── before ──
 ok('Tobias is an instructor', (await roleOf('sf_tobias')) === 'instructor');
 ok('...and holds no overview', !(await idsFor(INSTRUCTOR)).includes('home.overview'));
 ok('...and cannot touch the timetable', !(await idsFor(INSTRUCTOR)).includes('timetable.list'));
@@ -29,7 +27,6 @@ ok('...and his screen shows no revenue', !treeOf(tobiasSession.shell).toLowerCas
 const revenueBefore = await revenueFor(INSTRUCTOR);
 ok('...and the engine does not give him the takings', revenueBefore !== TAKINGS, `${revenueBefore} against the studio's ${TAKINGS}`);
 
-// ── the owner promotes him, through the real screen ──
 const owner = await login(OWNER);
 await settle();
 owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'staff.list' });
@@ -57,7 +54,6 @@ ok('...and the nav grew the surfaces he now holds', after.includes('Classes') ||
 const revenueAfter = await revenueFor(INSTRUCTOR);
 ok('...and the engine now gives him the studio figure', revenueAfter === TAKINGS, revenueAfter);
 
-// ── it goes back down, too ──
 owner.dispatch({ type: 'ui:click', ref: 'role', payload: { staff_id: 'sf_tobias', person_id: 'p_tobias', role: 'desk' } });
 await settle(4);
 ok('...and a confirmation asks first', treeOf(owner).includes('Change their role?'), 'the question must be ON SCREEN, not merely staged');
@@ -68,7 +64,6 @@ ok('...and takes the overview away again', !(await idsFor(INSTRUCTOR)).includes(
 const revenueDemoted = await revenueFor(INSTRUCTOR);
 ok('...and the engine takes the studio figure back', revenueDemoted !== TAKINGS, `${revenueDemoted} against the studio's ${TAKINGS}`);
 
-// ── saying no — the half that makes the question worth asking ──
 owner.dispatch({ type: 'ui:click', ref: 'role', payload: { staff_id: 'sf_tobias', person_id: 'p_tobias', role: 'owner' } });
 await settle(4);
 ok('an accidental Owner asks first', treeOf(owner).includes('Change their role?'));
@@ -77,7 +72,6 @@ await settle(10);
 ok('...and saying no writes nothing', (await roleOf('sf_tobias')) === 'desk', 'a mistap must be recoverable');
 ok('...and takes the question away with it', !treeOf(owner).includes('Change their role?'));
 
-// ── what the screen CANNOT do ──
 let refusedByColumn = false;
 try {
   await runtime.db.query("UPDATE staff SET role = 'superuser' WHERE id = 'sf_tobias'");
@@ -95,16 +89,10 @@ const memberIds = await idsFor(CAST.lumen.member);
 ok('...and that rung is a working application', memberIds.length > 0, `${memberIds.length} actions`);
 ok('...with no staff surface on it', !memberIds.includes('desk.checkin') && !memberIds.includes('staff.list') && !memberIds.includes('reports.overview'));
 
-// PUT HIM BACK, and let the engine notice. There is no assignment map to
-// rebuild any more: roles are resolved per principal from rows, so forgetting
-// the held record is the whole of what a role change requires. This used to be
-// three lines of the check re-deriving the world by hand — and the way that
-// went wrong was silent.
 await runtime.db.query("UPDATE staff SET role = 'instructor' WHERE id = 'sf_tobias'");
 server.invalidateIdentity(idFor(INSTRUCTOR));
 server.refresh();
 
-// ── hiring ──
 owner.dispatch({ type: 'ui:click', ref: 'nav', payload: 'staff.list' });
 await settle(8);
 
@@ -144,7 +132,6 @@ const deskHire = await asPrincipal(CAST.lumen.desk, '/api/staff/vex', { fingerpr
 ok('a desk cannot put anybody on staff', JSON.stringify(deskHire).includes('status'), JSON.stringify(deskHire).slice(0, 70));
 ok('...and no row appeared', (await runtime.db.query("SELECT 1 FROM staff WHERE id = 'forged'")).rows.length === 0);
 
-// ── who may do any of this ──
 const asManager = await asPrincipal(CAST.northrock.manager, '/api/staff/vex', { fingerprint: 'staff/set-role', context: { staffId: 'sf_kaya', role: 'owner' } });
 ok('a manager cannot promote themselves', JSON.stringify(asManager).includes('status'), JSON.stringify(asManager).slice(0, 70));
 ok('...and the row did not move', (await roleOf('sf_kaya')) === 'manager');

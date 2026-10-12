@@ -4,51 +4,19 @@ import { salesDayTotals } from './sales.entries';
 import { attendanceByZone, attendanceTotal } from './site.entries';
 import { delaysRecent, incidentsOpen, lineupAround, weatherWarnings } from './situation.entries';
 
-// CONTEXT PACKS — the facts a text model may be handed, declared as data.
-//
-// The agent is handed Jev's pre-decisions, and these are the FACTS among them:
-// each pack is one or more NAMED, SEEDED vex reads, replayed over the session's
-// own wire under the caller's policy, exactly like a card's load. There is no
-// hand-written query on this path and there never will be — a pack is one row
-// in this file plus entries beside it.
-//
-// Each pack becomes one `context/<id>` noul in the same wide pass that decides
-// the cards ("does answering this need the running order?"), so choosing the
-// context costs no round trip. `description` is that question's subject: write
-// it for a model choosing what to fetch, the way an action's description is
-// written for a model choosing what to open.
-//
-// THE CARDS' PACKS READ THE CARDS' ROWS. `situation`, `incidents` and
-// `attendance` replay the very fingerprints `situation.now`, `incident.feed`
-// and `attendance.now` load — so what the agent says about the site and the
-// card standing beside its words were read from the same rows, and the two
-// cannot disagree (DESIGN.md § Cards the questions need).
-//
-// `tables` names what the reads touch. A principal whose policy cannot read one
-// of them is never ASKED about the pack — the same rule that keeps an action
-// they lack from ever being a question.
-//
-// A read's `context` binds the entry's parameters. `{ heard }` takes what the
-// parser read from the sentence, falling back to the festival clock; `offset`
-// shifts an hour (clamped to the day), `times` scales it — minutes of the day
-// are `{ heard: 'hour', times: 60 }`. Anything else is a literal.
-
+// `{ heard }` takes what the parser read from the sentence, falling back to the
+// festival clock; `offset` shifts an hour (clamped to the day), then `times`
+// scales it: minutes of the day are `{ heard: 'hour', times: 60 }`.
 export type PackValue = { heard: 'day' } | { heard: 'hour'; offset?: number; times?: number } | { value: string | number };
 
-// ROWS A READ PUTS ON THE TABLE. A row of facts names other rows — the act in
-// an exposed set, the stage it stands on — and once the agent has been handed
-// them it may NAME them: open a form for that act, cite that set. `refs` says
-// which keys of a read's rows are ids of which table, and which key words them;
-// the loop harvests them into the rows an answer is admitted against, and keeps
-// them for the rest of the thread. Undeclared keys are just data.
+// Which keys of a read's rows are ids of which table, and which key words them:
+// the loop harvests them into the rows an answer is admitted against.
 export type PackRef = { table: string; id: string; label: string };
 
 export type PackRead = { name: string; fingerprint: string; context: Record<string, PackValue>; refs?: readonly PackRef[] };
 
 export type ContextPack = {
   id: string;
-  // What this is, in the operator's words, for the status line under an answer:
-  // "read the running order and the weather · 2.1 s".
   noun: string;
   description: string;
   tables: readonly string[];
@@ -100,9 +68,6 @@ export const CONTEXT_PACKS: readonly ContextPack[] = [
     reads: [{ name: 'sets', fingerprint: lineupForDay.fingerprint, context: { day: DAY }, refs: ACT_AND_STAGE }],
   },
   {
-    // The rows the running order LIGHTS, handed over as rows: the same column
-    // and the same words (vex/lineup.entries.ts), so "three sets are exposed"
-    // and three lit bars are one fact read twice.
     id: 'exposure',
     noun: 'which sets are exposed',
     description: 'Which sets are exposed to bad weather — acts on an open-air stage while a rain, wind or storm warning is in force, with each act\'s expected crowd; needed whenever a storm, rain, wind, lightning or the weather threatens the programme.',

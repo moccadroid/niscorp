@@ -5,8 +5,6 @@ import { createEventBus, createMessageBus } from '@shared';
 import { createActionRuntime } from '@action/runtime/runtime';
 import type { ActionDefinition } from '@action/schemas';
 
-// Proves the unified data store: an action mutation propagates into the
-// renderer reading from the same store instance on the very next render.
 describe('cross-system — unified data store', () => {
   it('action mutation is reflected in the next layout render', async () => {
     const definition: ActionDefinition = {

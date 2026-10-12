@@ -14,8 +14,6 @@ const roleText = (value: unknown) => ({
   },
 });
 
-// A role is an identity, so it wears a HUE rather than a status tone: seniority
-// is not a state of alarm. Ordered senior to junior so the ladder is legible.
 const roleHue = (value: unknown) => ({
   $case: {
     branches: [
@@ -42,9 +40,6 @@ export const staffList: CacheEntry = {
       { field: 'people.name', as: 'person_name' },
       'people.email',
     ],
-    // The search is OPTIONAL: an empty box is not a search for '%%', it is the
-    // absence of one, and the condition is not in the query at all. Before,
-    // every caller had to know the wildcard sentinel to ask for "everyone".
     filter: {
       and: [
         { neq: ['staff.role', 'automation'] },
@@ -110,8 +105,6 @@ export const staffById: CacheEntry = {
   },
 };
 
-// ─── writes ──────────────────────────────────────────────────
-
 export const staffSetRole: MutationEntry = {
   fingerprint: 'staff/set-role',
   intent: "Change a staff member's role",
@@ -123,7 +116,6 @@ export const staffSetRole: MutationEntry = {
   },
 };
 
-// One verb, the flag as its argument — see `templates/set-active`.
 export const staffSetActive: MutationEntry = {
   fingerprint: 'staff/set-active',
   intent: 'Take somebody off staff, or put them back — the record is kept either way',
@@ -149,12 +141,6 @@ export const staffCreate: MutationEntry = {
   },
 };
 
-// The whole hire, as one artifact — the staff twin of `people/enroll` (see
-// intake.entries.ts for the pattern). A member who starts teaching keeps the
-// same person row: statement 1 conflicts on their email and steps aside,
-// statement 2 finds them by it. Someone already on staff conflicts on
-// (studio_id, person_id) and returns no row — a repeat hire is a no-op, and
-// "change their role instead" lives on the roster where it belongs.
 export const staffEnroll: MutationEntry = {
   fingerprint: 'staff/enroll',
   intent: 'Hire somebody: ensure the person exists, then put them on staff at this studio',

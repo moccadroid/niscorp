@@ -11,31 +11,10 @@ import { migrate } from '@niscorp/strata/postgres';
 
 export type { PgPool };
 
-// ═══════════════════════════════════════════════════════════════
-// Postgres cache backend (L2 — durable source of truth)
-//
-// Stores entries as jsonb in a configurable schema/table. Designed to
-// sit *behind* an in-memory tier (see createTieredCache): on its own it
-// reads from Postgres on every get, which is correct but not what you
-// want on the hot path. Use it directly only when you don't want an L1.
-//
-// Guarantees:
-//   - Every write is schema-validated first. An invalid entry is never
-//     written — it is logged via onError (or thrown if no handler).
-//   - Reads are validated too (rare: L2 misses / warm-up). A corrupt or
-//     schema-drifted row is evicted on read so it can't keep failing.
-//   - TTL (expires_at) is enforced server-side; expired rows read as
-//     misses and are excluded from keys()/entries().
-// ═══════════════════════════════════════════════════════════════
-
 export type PostgresCacheConfig = {
-  /** A pg Pool (or anything matching its query shape). The caller owns its lifecycle. */
   pool: PgPool;
-  /** Schema to place the cache table in. Default: 'public'. */
   schema?: string;
-  /** Table name. Default: 'vex_cache'. */
   table?: string;
-  /** Called on rejected writes and evicted-on-read invalid rows. */
   onError?: (err: unknown) => void;
 };
 
@@ -45,8 +24,6 @@ export type PostgresCache = CacheBackend & {
   entries: () => Promise<Array<{ key: string; entry: CacheEntry }>>;
 };
 
-// Identifiers cannot be parameterized in SQL, so they are validated
-// against a strict allowlist and double-quoted.
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const quoteIdent = (name: string, label: string): string => {
   if (!IDENT.test(name)) {
@@ -77,8 +54,7 @@ const rowToEntry = (row: Record<string, unknown>): CacheEntry => {
   if (row['kind'] === 'unsatisfiable') {
     return { kind: 'unsatisfiable', reason: String(row['reason'] ?? ''), ...meta };
   }
-  // A mutation entry stores its def in the same jsonb slot a query's DSL
-  // uses — one column, discriminated by `kind`.
+  // A mutation's definition is stored in the `dsl` column.
   if (row['kind'] === 'mutation') {
     return {
       kind: 'mutation',
@@ -91,13 +67,7 @@ const rowToEntry = (row: Record<string, unknown>): CacheEntry => {
     kind: 'ok',
     dsl: row['dsl'] as Query,
     ...(row['prism_ir'] != null ? { prismIr: row['prism_ir'] as CompiledIr } : {}),
-    // A DECLARED REACH IS PART OF THE ENTRY, so it has to survive the round
-    // trip. Dropping it here would not fail loudly — the read would simply be
-    // served at the caller's own, wider reach, which is the exact thing the
-    // field exists to prevent.
     ...(row['reach'] != null ? { reach: row['reach'] as string } : {}),
-    // So must the refresh mode: dropped, a reactive read would quietly answer
-    // once and never again.
     ...(isRefresh(row['refresh']) ? { refresh: row['refresh'] } : {}),
     ...meta,
   };
@@ -109,14 +79,9 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
   const table = quoteIdent(config.table ?? 'vex_cache', 'table');
   const qualified = `${schema}.${table}`;
 
-  // THE TABLE, AS A STRATA SEQUENCE. Migration 1 is the DDL every boot used to
-  // run, verbatim — CREATE … IF NOT EXISTS plus the ADD COLUMN IF NOT EXISTS
-  // that caught older tables up — so it converges ANY earlier shape of the
-  // table to the current one: a fresh database and a deployment from months
-  // ago both land here, once, and the ledger remembers. Changes from now on are
-  // appended as plain migrations; this list is never edited.
-  //
-  // One sequence per table: a cache under a non-default name is its own owner.
+  // The first migration converges a table of any earlier shape: its ADD COLUMN
+  // IF NOT EXISTS steps catch up one created before those columns. A change is
+  // appended as a new migration; this one is never edited.
   const isDefault = (config.schema ?? 'public') === 'public' && (config.table ?? 'vex_cache') === 'vex_cache';
   const slug = `${config.schema ?? 'public'}-${config.table ?? 'vex_cache'}`.toLowerCase().replace(/[^a-z0-9-]/g, '-');
   const sequence: Sequence = {
@@ -156,7 +121,6 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
     ],
   };
 
-  // Applies the sequence through the ledger — once, recorded — not every boot.
   const init = async (): Promise<void> => {
     await migrate(pool, [sequence]);
   };
@@ -251,7 +215,6 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
     return res.rows.map((r) => String(r['key']));
   };
 
-  // Bulk read for warm-up. Validates and evicts invalid rows (same as get).
   const entries = async (): Promise<Array<{ key: string; entry: CacheEntry }>> => {
     const res = await pool.query(
       `SELECT ${SELECT_COLS} FROM ${qualified}

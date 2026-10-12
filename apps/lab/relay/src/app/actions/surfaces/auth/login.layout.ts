@@ -1,16 +1,10 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The sign-in surface — the anonymous principal's ENTIRE application. Two
-// stages driven by `$.stage`: 'user' (enter a username, send the link) and
-// 'sent' (the fake magic link, standing in for the email — real magic-link
-// auth replaces the auth fns, not this layout).
 const form: LayoutNode = {
   component: 'Stack',
   props: { gap: 13 },
   children: [
     { component: 'Input', model: '$.username', ref: 'username', props: { label: 'Username', placeholder: 'alex, jordan or sam' } },
-    // errorTarget stores the endpoint's { status, message, data } — render the
-    // message, not the object (String(object) is "[object Object]" everywhere).
     { if: '$.error', then: { component: 'Text', props: { size: 'sm', color: 'secondary' }, children: '{{$.error.message}}' } },
     { component: 'Button', ref: 'send', props: { variant: 'primary' }, children: 'Send magic link' },
   ],

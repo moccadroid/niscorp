@@ -5,10 +5,6 @@ import { EndpointConfigSchema } from './endpoints';
 import { LifecycleConfigSchema } from './lifecycle';
 import { TriggerConfigSchema } from './triggers';
 
-// ═══════════════════════════════════════════════════════════
-// Action Definition — composes all sibling schemas.
-// ═══════════════════════════════════════════════════════════
-
 export const ActionDefinitionSchema = z
   .object({
     id: z.string().describe('Stable definition id.'),
@@ -43,19 +39,6 @@ export const ActionDefinitionSchema = z
 
 export type ActionDefinition = z.infer<typeof ActionDefinitionSchema>;
 
-// ═══════════════════════════════════════════════════════════
-// Action Fragment — a reusable PARTIAL action (every field optional) that is
-// MERGED into a concrete action at a push/replace `with`, producing the
-// effective ActionDefinition that gets instantiated. This is composition, not
-// inheritance: `Action + ActionFragment ⇒ Action`. A fragment is abstract — it
-// only exists merged, lives in its own registry, and cannot be pushed as an
-// action on its own. Its `layout` is the chrome that WRAPS the action; a
-// `{ slot: 'body' }` node in it is filled with the composing action's layout.
-// On merge: the action's layout fills the slot; data/endpoints deep-merge with
-// the action winning; triggers and per-hook lifecycle steps concatenate
-// (fragment first). See `composeAction`.
-// ═══════════════════════════════════════════════════════════
-
 export const ActionFragmentSchema = z
   .object({
     kind: z.literal('fragment').describe('Discriminator — marks this as an abstract, merge-only fragment.'),
@@ -79,11 +62,9 @@ export const ActionFragmentSchema = z
 
 export type ActionFragment = z.infer<typeof ActionFragmentSchema>;
 
-// Re-export mutations schema (for backwards-compatible imports within action/)
 export { MutationSchema };
 export type { Mutation } from '../mutations';
 
-// Re-export sibling schemas + inferred types
 export { EffectSchema, StepSchema } from './effects';
 export type { Effect, Step, CallEffect, EmitEffect, PushEffect, PopEffect, ReplaceEffect, PopToEffect, ResetToEffect, RemoveInstanceEffect, RemoveSelfEffect, ReconcileEffect, ReloadEffect } from './effects';
 export { TriggerConfigSchema } from './triggers';

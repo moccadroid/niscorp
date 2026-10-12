@@ -2,11 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { auditAction, collectChannels } from '../../src/action/audit';
 import type { ActionDefinition } from '../../src/action/schemas';
 
-// auditAction cross-references a definition's own parts: layout bindings ↔
-// data defaults, refs ↔ triggers, call steps ↔ endpoints, targets ↔ data,
-// pushes ↔ catalog. Every failure it reports would mount and render politely
-// while being broken at click time.
-
 const CATALOG = [
   { id: 'deal', input: { type: 'object', properties: { id: {} } } },
   { id: 'task.form', input: { type: 'object', properties: { title: {} } } },
@@ -142,7 +137,6 @@ describe('auditAction', () => {
         { event: 'ui:model', ref: 'search', do: [{ call: 'load' }] },
         { event: 'ui:click', ref: 'row', do: [{ emit: { channel: 'tasks:changed' } }] },
         { message: 'tasks-changed', do: [{ call: 'load' }] },
-        // A self-pair: emitting AND listening on a private channel is legal.
         { message: 'my-own-refresh', do: [{ call: 'load', onSuccess: [{ emit: { channel: 'my-own-refresh' } }] }] },
       ],
     };
