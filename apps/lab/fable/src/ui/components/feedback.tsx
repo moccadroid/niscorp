@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 
-// ─── Skeleton ──────────────────────────────────────────────
 const SkeletonProps = z
   .object({ width: z.union([z.number(), z.string()]).optional(), height: z.number().optional() })
   .strict();

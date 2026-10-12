@@ -1,12 +1,4 @@
-// Boot + reads. Proves the data layer end-to-end: every prewarmed entry
-// compiles and executes as a cache HIT (no LLM in this app), then the real
-// shell mounts and the list/stat reads land in the todos action's data,
-// matching the seed's buckets. Run: pnpm --filter fable check:boot
 import { ENTRIES } from '../api';
-// A check runs under node, not in a browser — imported rather than assumed.
-// `types` is ["vite/client"] here, so node's globals are ambient only when
-// something drags them in; the other apps get them by accident, from an
-// unrelated `node:` import elsewhere in the file.
 import process from 'node:process';
 import { getVexRuntime, CURRENT_DATE } from '../vex/runtime';
 import { SEED_COUNTS } from '../vex/seed';
@@ -43,7 +35,6 @@ const main = async (): Promise<void> => {
   const { engine } = await getVexRuntime();
   const checks: [string, boolean][] = [];
 
-  // Data layer: every entry compiles and cache-hits with real rows.
   const context = { today: CURRENT_DATE, q: '%%' };
   for (const e of ENTRIES) {
     const sql = engine.compile(e.dsl).sql;
@@ -53,7 +44,6 @@ const main = async (): Promise<void> => {
     checks.push([`entry "${e.intent ?? '?'}" compiles + serves from cache (${sql.length} chars of SQL)`, okShape]);
   }
 
-  // The shell booted with the topbar and the todos list mounted.
   await settle(500);
   checks.push([`topbar mounted`, shell.getRuntime(active('topbar')?.id ?? '')?.definition.id === 'topbar']);
   checks.push([`todos mounted on main`, shell.getRuntime(active('main')?.id ?? '')?.definition.id === 'todos']);
@@ -68,7 +58,6 @@ const main = async (): Promise<void> => {
     Number(s['done']) === SEED_COUNTS.done;
   checks.push([`stats match seed (got ${JSON.stringify(s)})`, statOk]);
 
-  // Scope tabs read their own prewarmed shapes.
   shell.dispatch({ type: 'ui:click', ref: 'tab', payload: 'today' });
   await settle();
   checks.push([`Today scope = due today + overdue (got ${rows().length}, want ${SEED_COUNTS.today})`, rows().length === SEED_COUNTS.today]);
@@ -78,7 +67,6 @@ const main = async (): Promise<void> => {
   await settle();
   checks.push([`Done scope (got ${rows().length}, want ${SEED_COUNTS.done})`, rows().length === SEED_COUNTS.done]);
 
-  // Search re-runs the same read in place.
   shell.dispatch({ type: 'ui:click', ref: 'tab', payload: 'open' });
   await settle();
   shell.dispatch({ type: 'ui:model', ref: 'search', payload: 'domain' });

@@ -17,13 +17,12 @@ export default defineConfig({
     port: 5175,
     open: true,
     fs: {
-      // Allow Vite to read the workspace-linked package source.
       allow: [workspaceRoot],
     },
   },
   optimizeDeps: {
-    // PGlite ships its Postgres WASM assets and resolves them via
-    // import.meta.url at runtime; pre-bundling breaks that, so exclude it.
+    // PGlite resolves its WASM assets via import.meta.url at runtime, which
+    // pre-bundling breaks.
     exclude: ['@electric-sql/pglite'],
   },
 });

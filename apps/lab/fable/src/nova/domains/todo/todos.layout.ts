@@ -1,8 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// A stat tile: the count over a small caption. The value is a binding into
-// `$.stats`; `color` may be a bind-time conditional (the overdue tile turns
-// red only when there is something overdue).
 const stat = (value: string, label: string, color?: unknown): LayoutNode => ({
   component: 'Box',
   props: { class: 'fb-stat' },
@@ -12,9 +9,6 @@ const stat = (value: string, label: string, color?: unknown): LayoutNode => ({
   ],
 });
 
-// The todos surface: a stat row over one list card (toolbar + Table). The
-// toolbar tabs switch `$.scope`; the search re-runs the same read in place.
-// Cells show Vex/Prism-shaped fields verbatim. Literal + serializable.
 export const todosLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 0 },

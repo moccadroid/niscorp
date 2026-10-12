@@ -3,10 +3,6 @@ import { z } from 'zod';
 import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/react';
 import { ALIGN, JUSTIFY, LINE, border, dim } from '../lib/tokens';
 
-// Layout primitives — Box, Stack, Row, Popover. Thin styled divs that turn
-// JSON props into inline styles. No feature logic.
-
-// ─── Box ───────────────────────────────────────────────────
 const BoxProps = z
   .object({
     pad: z.number().optional(),
@@ -37,9 +33,8 @@ export const Box: NovaComponent<z.infer<typeof BoxProps>> = ({
   class: cls,
   children,
 }) => {
-  // Only emit the keys that are actually set. Mixing a shorthand (`border`)
-  // with undefined longhands makes React write the longhands as empty
-  // strings, which wipes the shorthand — so build the style additively.
+  // Only the set keys are emitted: React writes an undefined longhand as an
+  // empty string, which wipes a shorthand (`border`) set beside it.
   const style: CSSProperties = {
     ...(pad !== undefined ? { padding: pad } : {}),
     ...(px !== undefined ? { paddingLeft: px, paddingRight: px } : {}),
@@ -67,7 +62,6 @@ Box.meta = {
   propsSchema: BoxProps,
 };
 
-// ─── Stack (column) ────────────────────────────────────────
 const StackProps = z
   .object({
     gap: z.number().optional(),
@@ -109,7 +103,6 @@ export const Stack: NovaComponent<z.infer<typeof StackProps>> = ({
 );
 Stack.meta = { description: 'Vertical flex stack with a gap.', propsSchema: StackProps };
 
-// ─── Row ───────────────────────────────────────────────────
 const RowProps = z
   .object({
     gap: z.number().optional(),
@@ -153,11 +146,6 @@ export const Row: NovaComponent<z.infer<typeof RowProps>> = ({
 );
 Row.meta = { description: 'Horizontal flex row with a gap.', propsSchema: RowProps };
 
-// ─── Popover ───────────────────────────────────────────────
-// A positioning anchor for a floating panel (the row ⋯ menu). Whether the
-// panel renders is a layout conditional over data, so the open state stays
-// visible as data. The one bit of behaviour: `closeRef` — a mousedown outside
-// the popover fires `ui:click` with that ref, so a trigger can dismiss it.
 const PopoverProps = z
   .object({ closeRef: z.string().optional().describe('Ref fired as ui:click on an outside click, to dismiss the panel.') })
   .strict();
@@ -178,8 +166,6 @@ export const Popover: NovaComponent<z.infer<typeof PopoverProps>> = ({
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [closeRef, dispatch]);
-  // Clicks inside the popover are self-contained — stop them bubbling so an
-  // enclosing clickable element does not also fire.
   return (
     <div className="fb-popover" ref={ref} onClick={(e) => e.stopPropagation()}>
       {children}

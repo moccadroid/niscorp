@@ -1,9 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The shell FRAME — fixed, author-owned chrome. The topbar canvas sits over a
-// scrolling content region holding the `main` canvas (centered by .fb-main);
-// the `modal` canvas is an overlay layer that renders nothing until an action
-// is pushed onto it.
 export const frameLayout: LayoutNode = {
   component: 'Box',
   props: { h: '100vh' },

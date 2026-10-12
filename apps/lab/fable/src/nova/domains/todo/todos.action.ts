@@ -3,11 +3,6 @@ import { todosLayout } from './todos.layout';
 import { listTodosPrism, statsTodosPrism, setDoneTodoPrism, deleteTodoPrism } from './todos.prism';
 import { resultPrism } from '@fable/nova/shared/result.prism';
 
-// The one list surface. `$.scope` (Open / Today / Done) picks which prewarmed
-// read serves the table; search re-runs it in place. Each row has an inline
-// checkbox (complete/reopen) and a ⋯ menu (Edit seeds the form from the row;
-// Delete confirms then removes). Every write announces `todos-changed`; this
-// action listens and re-reads both the rows and the stat row.
 export const todosAction: ActionDefinition = {
   id: 'todos',
   title: 'Todos',
@@ -36,11 +31,8 @@ export const todosAction: ActionDefinition = {
     ],
   },
   triggers: [
-    // Toolbar: search + scope tabs each re-run the list.
     { event: 'ui:model', ref: 'search', do: [{ set: 'search', value: '@event.payload' }, { call: 'load' }] },
     { event: 'ui:click', ref: 'tab', do: [{ set: 'scope', value: '@event.payload' }, { call: 'load' }] },
-    // Inline checkbox → persist the new done state. The check cell hands
-    // { id, done }; on success announce the change so every reader re-reads.
     {
       event: 'ui:click',
       ref: 'toggle',
@@ -50,11 +42,7 @@ export const todosAction: ActionDefinition = {
         { call: 'setDone', onSuccess: [{ emit: { channel: 'todos-changed' } }] },
       ],
     },
-    // A create/complete/edit/delete anywhere → re-read rows AND stats.
     { message: 'todos-changed', do: [{ call: 'load' }, { call: 'loadStats' }] },
-    // Row ⋯ menu. Items carry the whole row (the Table passes it). Edit opens
-    // the form seeded from the row (raw values, so it round-trips); Delete
-    // stashes the id and confirms first.
     { event: 'ui:click', ref: 'menu-open', do: [{ set: 'menuOpenId', value: '@event.payload' }] },
     { event: 'ui:click', ref: 'menu-close', do: [{ set: 'menuOpenId', value: '' }] },
     {

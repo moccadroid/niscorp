@@ -1,8 +1,5 @@
-// Curated, deterministic seed. Every date hangs off a FIXED reference day —
-// `TODAY_ISO` — so the date-relative reads (overdue, due today) are stable on
-// every boot and every day the demo runs. The runtime injects the same value
-// as ambient `$.today`; nothing anywhere compares to the wall clock.
-
+// A fixed day, not the wall clock: every seed date hangs off it, so the
+// overdue and due-today reads are the same on every boot.
 export const TODAY_ISO = '2026-06-20';
 
 const TODAY = new Date(`${TODAY_ISO}T12:00:00.000Z`);
@@ -23,14 +20,12 @@ type TodoSeed = {
   title: string;
   notes: string | null;
   priority: 'low' | 'medium' | 'high';
-  due: number | null; // days from TODAY
+  due: number | null;
   done: boolean;
-  doneAt: number | null; // days from TODAY
-  createdAt: number; // days from TODAY (negative)
+  doneAt: number | null;
+  createdAt: number;
 };
 
-// A believable week: three overdue, two due today, a handful upcoming, two
-// dateless, three done. The dev checks assert against these buckets.
 const TODOS: TodoSeed[] = [
   { id: 'todo_001', title: 'Renew the domain', notes: 'It expires silently; the registrar will not warn twice.', priority: 'high', due: -12, done: false, doneAt: null, createdAt: -30 },
   { id: 'todo_002', title: 'Return library books', notes: null, priority: 'medium', due: -4, done: false, doneAt: null, createdAt: -18 },
@@ -48,8 +43,6 @@ const TODOS: TodoSeed[] = [
   { id: 'todo_014', title: 'Update the router firmware', notes: null, priority: 'low', due: null, done: true, doneAt: -1, createdAt: -25 },
 ];
 
-// Seed buckets, exported so the dev checks assert against the same source of
-// truth the seed was built from.
 export const SEED_COUNTS = {
   open: TODOS.filter((t) => !t.done).length,
   dueToday: TODOS.filter((t) => !t.done && t.due === 0).length,

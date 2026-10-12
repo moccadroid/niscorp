@@ -4,10 +4,6 @@ import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/reac
 import { cx } from '../lib/cx';
 import { Icon } from './display';
 
-// Interactive primitives — Button, Tabs, MenuItem. Each fires `ui:click`
-// carrying the node's ref (injected as novaRef) for a trigger to match.
-
-// ─── Button ────────────────────────────────────────────────
 const ButtonProps = z
   .object({
     variant: z.enum(['primary', 'default', 'ghost', 'danger']).optional(),
@@ -32,7 +28,6 @@ export const Button: NovaComponent<z.infer<typeof ButtonProps>> = ({
     <button
       className={cx('fb-btn', `fb-btn--${variant}`, size !== 'md' && `fb-btn--${size}`)}
       onClick={(e) => {
-        // Don't bubble to an enclosing clickable row (the ⋯ kebab lives in one).
         e.stopPropagation();
         if (novaRef !== undefined) dispatch({ type: 'ui:click', ref: novaRef, payload: value });
       }}
@@ -47,10 +42,6 @@ Button.meta = {
   propsSchema: ButtonProps,
 };
 
-// ─── Tabs ──────────────────────────────────────────────────
-// A compact segmented control (Open / Today / Done). `value` is the active
-// option (bound to data); a click fires `ui:click` carrying the chosen
-// option's value, so a trigger can set state + re-run the list query.
 const TabsProps = z
   .object({
     options: z.array(z.object({ value: z.string(), label: z.string() })),
@@ -80,10 +71,6 @@ export const Tabs: NovaComponent<z.infer<typeof TabsProps>> = ({ options, value,
 };
 Tabs.meta = { description: 'Segmented control; active = `value`, fires ui:click with the chosen value.', propsSchema: TabsProps };
 
-// ─── MenuItem ──────────────────────────────────────────────
-// One row of a dropdown menu (the row ⋯ menu). Fires `ui:click` with its ref
-// (and optional `value`, e.g. the whole row) so a trigger can act. `danger`
-// tints it red.
 const MenuItemProps = z
   .object({
     icon: z.string().optional(),

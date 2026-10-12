@@ -3,17 +3,11 @@ import { z } from 'zod';
 import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/react';
 import { Icon } from './display';
 
-// Form inputs — Input, Select, Textarea. Each is two-way bound via a layout
-// `model: "$.path"`: the renderer feeds the current value in as `value`, and
-// a change dispatches `ui:model`, which the runtime turns into a `set` on the
-// bound path (no per-field trigger).
-
 type Bound = { novaModel?: { ref: string; path: string } };
 
 const asText = (v: unknown): string =>
   typeof v === 'string' || typeof v === 'number' ? String(v) : '';
 
-// Wrap a control in a labelled field (label + control) when `label` is given.
 const field = (label: string | undefined, required: boolean | undefined, control: ReactNode): ReactNode =>
   label === undefined ? (
     control
@@ -27,7 +21,6 @@ const field = (label: string | undefined, required: boolean | undefined, control
     </label>
   );
 
-// ─── Input ─────────────────────────────────────────────────
 const InputProps = z
   .object({
     type: z.string().optional(),
@@ -55,11 +48,8 @@ export const Input: NovaComponent<z.infer<typeof InputProps>> = ({
 }: z.infer<typeof InputProps> & Bound) => {
   const dispatch = useNovaDispatch();
   const debounced = typeof debounce === 'number' && debounce > 0;
-  // Debounced mode keeps a local echo of the text so typing is instant while
-  // the `ui:model` dispatch (which re-runs the query) fires on a trailing
-  // timer. `lastSent` lets the effect adopt *external* changes to the bound
-  // value without clobbering keystrokes mid-type. Unset/0 = fully controlled
-  // + immediate (form fields).
+  // `lastSent` lets the effect adopt an external change to the bound value
+  // without overwriting keystrokes mid-type.
   const [local, setLocal] = useState(asText(value));
   const lastSent = useRef(asText(value));
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -108,7 +98,6 @@ export const Input: NovaComponent<z.infer<typeof InputProps>> = ({
 };
 Input.meta = { description: 'Text input. Two-way bound via `model:`.', propsSchema: InputProps };
 
-// ─── Select ────────────────────────────────────────────────
 const SelectProps = z
   .object({
     options: z.array(z.object({ value: z.string(), label: z.string() })).optional(),
@@ -152,7 +141,6 @@ Select.meta = {
   propsSchema: SelectProps,
 };
 
-// ─── Textarea ──────────────────────────────────────────────
 const TextareaProps = z
   .object({
     placeholder: z.string().optional(),

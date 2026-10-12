@@ -1,9 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Fields are two-way bound to the FORM's own data (`$.title`, `$.due`, …) —
-// not the DB shape; the .prism.ts seam maps on save. The modal chrome
-// (overlay/card/title/✕) comes from the `modal` fragment at push time; the
-// form owns its own footer so it submits on any canvas.
 export const todoFormLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 13 },

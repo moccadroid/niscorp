@@ -4,10 +4,6 @@ import { todoFormLayout } from './todo.form.layout';
 import { saveTodoPrism } from './todo.form.prism';
 import { resultPrism } from '@fable/nova/shared/result.prism';
 
-// ONE form action, create and edit. Loaded bare it creates; loaded with the
-// record's raw fields seeded (id, title, notes, priority, due) it edits —
-// the save endpoint's handler inserts or updates on the blank/non-blank id.
-// Pushed onto the `modal` canvas `with: ['modal']` for the dialog chrome.
 export const todoFormAction: ActionDefinition = {
   id: 'todo.form',
   data: {

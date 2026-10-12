@@ -2,22 +2,6 @@ import { handleQuery, handleDiscovery } from '@niscorp/vex';
 import { getVexRuntime } from '../runtime';
 import { handleWrite } from './writes';
 
-// ═══════════════════════════════════════════════════════════
-// Fable's API, in the browser.
-//
-// Nova's HTTP endpoints call an injected `fetch`. Reads are served by Vex's
-// OWN HTTP handler against the in-process PGlite engine — the SAME handler a
-// real server runs. Writes are plain handlers (writes.ts). So this is the
-// production shape: when there is a real backend, drop this shim and point
-// the URLs at it, nothing changes.
-//
-//   GET  /api/todos/vex        → discovery
-//   POST /api/todos/vex        → a query { fingerprint, context }
-//   POST /api/todos/<write>    → save / set-done / delete
-//
-// Real URLs fall through to fetch.
-// ═══════════════════════════════════════════════════════════
-
 const ENTITIES = ['todos'];
 
 const pathOf = (url: string): string => {
