@@ -345,7 +345,7 @@ export const runLoop = async <TData, TDeps>(
   };
 
   const streamEmittedOutput = cfg.resolved.transport !== 'respond';
-  const streamOneStep = async (llm: SignalClient, request: StepRequest): Promise<Result<StepResult>> => {
+  const oneStep = async (llm: SignalClient, request: StepRequest): Promise<Result<StepResult>> => {
     if (cfg.transport === 'step') {
       try {
         return ok(await llm.step(request));
@@ -459,7 +459,7 @@ export const runLoop = async <TData, TDeps>(
         ...(cfg.resolved.outputToolName !== undefined && { outputTool: cfg.resolved.outputToolName }),
       },
     };
-    const stepOutcome = await streamOneStep(llm, request);
+    const stepOutcome = await oneStep(llm, request);
     if (!stepOutcome.ok) return fail(stepOutcome.error);
     const result = stepOutcome.data;
     s.usage = addUsage(s.usage, result.usage);

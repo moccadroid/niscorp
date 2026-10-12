@@ -68,8 +68,6 @@ export type EnvelopeVerdict<TData> =
 
 const KNOWN_KEYS = new Set(['response', 'data', 'reasoning']);
 
-const decodeData = decodeJsonish;
-
 // A schema that takes an object of one unknown key cannot tell a bare payload
 // from an envelope with a misspelt key.
 const takesAnyObject = (schema: ZodType): boolean => schema.safeParse({ 'cortex:no-such-field': true }).success;
@@ -114,7 +112,7 @@ export const validateEnvelope = <TData>(raw: unknown, spec: EnvelopeSpec<TData>)
   }
 
   if (spec.schema) {
-    const data = decodeData(record['data']);
+    const data = decodeJsonish(record['data']);
     let parsed = spec.schema.safeParse(data);
     if (!parsed.success) {
       // Some providers stringify nested values inside the payload.
