@@ -79,6 +79,17 @@ export type NiscMossProject = Common & {
     // mints and goes to `/`. `null` is nobody of that name. It exists in the
     // dev server and nowhere else.
     signIn?: (server: MossServer, who: string) => string | null | Promise<string | null>;
+    // Let `/dev/as/<who>` answer a device other than this machine (default:
+    // this machine only). Anybody who can reach the dev server then signs in
+    // as anybody.
+    signInFromNetwork?: boolean;
+    // Which changed files re-boot the app server (default: `src/app`,
+    // `src/server`, `src/db`, `src/ui` and the config).
+    watch?: RegExp;
+    // Which paths go to the app server and not to vite (default: moss's own
+    // prefixes). An app with routes of its own under another prefix names
+    // moss's prefixes and its own.
+    owned?: RegExp;
   };
 };
 

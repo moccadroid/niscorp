@@ -66,7 +66,7 @@ page in the manifest), and what each one needs once it has been drawn.
 | `checks?` | the check suite `nisc check` runs (default `src/dev/all-checks.ts`) |
 | `app?`, `runtime?` | what `nisc migrate` needs: the manifest, and a function that opens the environment it runs on (`NiscRuntime`, plus `close` if there is something to let go of) |
 | `tokenKey?` | the wire's token key, when it is not `nisc.token` |
-| `dev?` | what only `nisc dev` uses: `dev.signIn(server, who)` mints a token for `/dev/as/<who>` (`null`: nobody of that name) |
+| `dev?` | what only `nisc dev` uses: `dev.signIn(server, who)` mints a token for `/dev/as/<who>` (`null`: nobody of that name); `dev.signInFromNetwork`, `dev.watch` and `dev.owned` are handed to moss's dev plugin |
 
 ### An app with its own shell
 
@@ -330,8 +330,12 @@ and `start` do:
 - `dev.signIn(server, who)` in the config, if the app gives one, makes
   `/dev/as/<who>` a signed-in URL — in the dev server and nowhere else, and
   for a request from this machine only: one from another device is answered
-  `403` (moss's dev plugin, `signInFromNetwork`; `nisc dev` does not turn it
-  on).
+  `403`, unless the config says `dev.signInFromNetwork: true`;
+- `dev.watch` (a `RegExp`) says which changed files re-boot the app, in place
+  of the folders above, and `dev.owned` (a `RegExp`) which paths go to the app
+  server, in place of moss's own prefixes: an app with routes of its own under
+  another prefix names moss's and its own. All three are read when the command
+  starts.
 
 The app's `vite.config.ts` holds its framework's plugin and nothing about the
 server. An app with its own shell is a vite app and nothing more.

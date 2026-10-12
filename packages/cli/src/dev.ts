@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { configFileOf, isProject, isShellProject, loadProject } from './project';
+import type { NiscMossProject } from './project';
 
 // ═══════════════════════════════════════════════════════════════
 // `nisc dev` — the app's own vite, started from here.
@@ -40,11 +41,20 @@ const viteOf = async (root: string): Promise<ViteApi> => {
   return loaded;
 };
 
+// What of the config's `dev` block the plugin is told when it is made. Read
+// once, when the command starts: changing one takes a restart of `nisc dev`.
+export const devPluginOptionsOf = (dev: NiscMossProject['dev']): { watch?: RegExp; owned?: RegExp; signInFromNetwork?: boolean } => ({
+  ...(dev?.watch !== undefined ? { watch: dev.watch } : {}),
+  ...(dev?.owned !== undefined ? { owned: dev.owned } : {}),
+  ...(dev?.signInFromNetwork !== undefined ? { signInFromNetwork: dev.signInFromNetwork } : {}),
+});
+
 // moss's dev plugin, fed from the config as vite loads it.
-const mossPlugin = async (configFile: string): Promise<unknown> => {
+const mossPlugin = async (configFile: string, dev: NiscMossProject['dev']): Promise<unknown> => {
   const { mossDev } = await import('@niscorp/moss/vite');
   return mossDev({
     label: 'nisc',
+    ...devPluginOptionsOf(dev),
     app: async (load) => {
       const loaded = await load(`/${configFile}`);
       const project: unknown = Reflect.get(loaded, 'project');
@@ -71,7 +81,7 @@ export const devServer = async (options: { root: string; port?: number }): Promi
   const server = await vite.createServer({
     root: options.root,
     ...(options.port !== undefined ? { server: { port: options.port } } : {}),
-    plugins: isShellProject(project) || configFile === undefined ? [] : [await mossPlugin(configFile)],
+    plugins: isShellProject(project) || configFile === undefined ? [] : [await mossPlugin(configFile, project.dev)],
   });
   await server.listen();
   server.printUrls();
