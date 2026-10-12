@@ -57,6 +57,8 @@ own tables, the sessions table, the vex cache — in one ledgered run at boot.
   at once serialize; the second finds the work done.
 - **A database migrated by newer code is refused** (`TOO_NEW`), never guessed at.
 - **Sequence ids are namespaced**: `nisc.vex.cache`, `nisc.moss`, `acme.app`.
+  An id is lowercase, in at least two dot-separated parts (`<owner>.<name>`),
+  each a letter followed by letters, digits or hyphens.
   Order across sequences is the order you pass them, bent only by `dependsOn`
   (`"nisc.moss/1"`) — deterministic, the same every time.
 
@@ -67,8 +69,9 @@ own tables, the sessions table, the vex cache — in one ledgered run at boot.
 | | |
 |---|---|
 | `defineSequence(seq)` | Type-checks a sequence where it is written. |
-| `prepare(sequences)` | Parses (Zod, at the boundary), numbers and checksums. Throws `INVALID_SEQUENCE`. |
-| `planMigrations(prepared, ledger)` | Pure: what is pending, in order, and every problem (`EDITED`, `TOO_NEW`, `UNKNOWN_DEPENDENCY`, `CYCLE`). |
+| `prepare(sequences)` | Parses (Zod, at the boundary), numbers and checksums. Throws `INVALID_SEQUENCE`. Two sequences with the same id are refused the same way. |
+| `planMigrations(prepared, ledger)` | Pure: what is pending, in order, and every problem (`EDITED`, `TOO_NEW`, `UNKNOWN_DEPENDENCY`, `CYCLE`). Returns `{ applied, pending, problems }`; `applied` is, per sequence given, how many of its migrations the ledger records. `UNKNOWN_DEPENDENCY` is a `dependsOn` naming a migration that no sequence given provides and the ledger does not record. |
+| `refuseProblems(plan)` | Throws a plan's problems as one `StrataError`: its `code` is the first problem's, its `details` list them all. Returns when the plan has none. `migrate` refuses a plan this way. |
 | `checksumOf(migration)` | SHA-256 over the steps (WebCrypto — Node ≥ 22 and every browser). |
 | `sqlSteps(ddl)` | A DDL file as one step per statement, for a file where every statement ends its line with `;`. Cuts at each line that ends in `;`, full-line `--` comments excepted. Not a SQL parser. |
 | `SequenceSchema`, `MigrationSchema`, `StepSchema` | The grammar, as Zod. |
@@ -78,14 +81,17 @@ own tables, the sessions table, the vex cache — in one ledgered run at boot.
 
 | | |
 |---|---|
-| `migrate(pool, sequences, { mode, guard, dryRun, table, schema })` | The run. `mode: 'apply'` (default) or `'verify'`. Returns `{ applied, plan }`. `guard(tx)` is asked inside the run, after the last pending step — when nothing was pending too: every sentence it returns refuses the run (`DOES_NOT_FIT`), and nothing was applied. `dryRun` does all of it, guard included, then rolls it back — the report says what would be applied, and it takes the locks a real run takes. |
+| `migrate(pool, sequences, { mode, guard, dryRun, table, schema })` | The run. `mode: 'apply'` (default) or `'verify'`. Returns `{ applied, plan }`. `guard(tx)` is asked inside the run, after the last pending step — when nothing was pending too: every sentence it returns refuses the run (`DOES_NOT_FIT`), and nothing was applied. `dryRun` does all of it, guard included, then rolls it back — the report says what would be applied, and it takes the locks a real run takes. `applied` is what this run applied, in order; `plan` is the plan it acted on, so `plan.applied` holds each sequence's position before the run. `'verify'` refuses with `PENDING` when anything is pending, and a step that throws refuses the run with `STEP_FAILED`. |
 | `status(pool, sequences, options)` | The plan, read-only — creates nothing, not even the ledger. |
 | `readLedger(pool, options)` | The ledger's rows; empty for a database never migrated. |
 | `ledgerDdl(options)` | The ledger table's DDL — the one statement strata runs outside a ledger. |
 
 The pool is structural — `{ query, transaction }`, the shape vex's PGlite pool
 and a wrapped `pg` pool already have. A pool without `transaction` is refused
-(`NO_TRANSACTION`): a run must land whole or not at all.
+(`NO_TRANSACTION`): a run must land whole or not at all. `query` and
+`transaction` are called on the object that has them, so a driver's own object
+whose methods reach for `this` — a PGlite, a `pg` client handed through as the
+transaction — works as it is.
 
 The ledger defaults to `strata_ledger` in the connection's schema, beside the
 app's tables; `table` and `schema` move it.
@@ -103,6 +109,9 @@ so it never runs again. From then on changes are plain appended migrations.
 A **grammar** sequence owns document kinds instead of tables. It declares its
 kinds and where other documents nest inside them (its **embeddings**), and its
 migrations are **document steps** — a transform over one document of one kind.
+A kind's name in `documents` is lowercase — a letter, then letters, digits or
+hyphens — and everywhere else the kind is written `<sequence id>/<name>`
+(`nisc.nova/layout`).
 
 ```ts
 export const NOVA_SEQUENCE = {
@@ -131,7 +140,8 @@ const { document, stamp, applied } = upgrader.upgrade(storedAction, { kind: 'nis
   along each grammar its writer was — and is upgraded where it is read. Grammars
   are never recorded in a ledger: documents travel (an add-on built on older
   code submits older documents), so their version travels with them. One
-  sequence owns tables or documents, never both.
+  sequence owns tables or documents, never both. `migrate` refuses a grammar
+  sequence (`WRONG_OWNER`).
 - **A grammar declares `documents`**, from its first release — `{}` if it has
   no kinds of its own. That is how strata tells the two owners apart: a sequence
   is a grammar when it declares `documents` or has a document step, and anything
@@ -153,8 +163,10 @@ const { document, stamp, applied } = upgrader.upgrade(storedAction, { kind: 'nis
 
 | | |
 |---|---|
-| `createUpgrader(grammars, { transform })` | `{ stamp, upgrade, locate, behind }` — the stamp a document written now carries; upgrade one; every document inside one, by kind; is a stamp behind (throws if ahead). |
-| `upgradeStore(pool, store, upgrader)` | `@niscorp/strata/postgres`. Rewrites every row of a table holding documents that is behind, in one transaction; a row from newer code refuses the pass. |
+| `createUpgrader(grammars, { transform })` | `{ stamp, upgrade, locate, behind }` — the stamp a document written now carries; upgrade one; every document inside one, by kind; is a stamp behind (throws if ahead). A kind no sequence given declares is refused (`UNKNOWN_KIND`): a step's `at` or an embedding's target when the upgrader is created, the `kind` passed to `upgrade` or `locate` when it is called. |
+| `upgrader.upgrade(document, { kind, stamp })` | Returns `{ document, stamp, applied }`: `stamp` is what to store with the document, `applied` the refs of the migrations that ran, in order — empty when the document was already current. |
+| `upgrader.locate(document, kind)` | Given the root's kind, `{ path, kind, value }` for the root itself and every document embedded in it; `path` is the keys and indexes from the root. |
+| `upgradeStore(pool, store, upgrader)` | `@niscorp/strata/postgres`. Rewrites every row of a table holding documents that is behind, in one transaction; a row from newer code refuses the pass. `store` is `{ table, schema?, column, stamp, kind, key }`: `column` and `stamp` name the jsonb columns holding the document and its stamp, `kind` is the kind of every document in the store (`"nisc.nova/action"`), `key` lists the columns that identify a row. Returns `{ total, upgraded, applied }`: rows read, rows that were behind and rewritten, and per migration ref the number of rows it was applied to. |
 
 ## The check
 
@@ -164,9 +176,10 @@ host keeps the files.
 | | |
 |---|---|
 | `snapshotOf(sequence, schemas)` | Each kind's JSON Schema, through the schema's own Standard JSON Schema hook (Zod ≥ 4.2, Valibot, ArkType), as the validator wrote it — keys sorted, nothing removed. `schemas` must cover exactly the grammar's kinds. |
-| `compareSnapshot(recorded, current)` | `same`, `missing`, or `changed` with short diff lines (`+ properties.retry`, `- required["id"]`, `+ required["key"]`). Changed at the same version = a migration is owed. Both sides are compared without prose (the `description` keyword — a field named `description` is grammar) and in one spelling (definitions inlined unless recursive, `allOf: [{ $ref }]` as `$ref`, a union of bare types as a type list), so a reworded `.describe()` or a validator's respelling is not a change. |
+| `compareSnapshot(recorded, current)` | `same`, `missing`, or `changed` with short diff lines (`+ properties.retry`, `- required["id"]`, `+ required["key"]`). Changed at the same version = a migration is owed. Both sides are compared without prose (the `description` keyword — a field named `description` is grammar) and in one spelling (definitions inlined unless recursive, `allOf: [{ $ref }]` as `$ref`, a union of bare types as a type list), so a reworded `.describe()` or a validator's respelling is not a change. `recorded` is the snapshot kept for the grammar's current version, `undefined` when none was kept (`missing`). |
 | `snapshotText(snapshot)` | Stable file text: sorted keys. |
 | `checkCorpus(upgrader, schemas, documents)` | Every captured document, upgraded from its stamp, must pass its kind's current schema. |
+| `diffJson(a, b, limit)` | What differs between two JSON values, as short lines: `+ a.b` (added), `- c` (removed), `~ d: 1 → 2` (changed). At most `limit` lines, 20 by default. |
 
 A snapshot only says *something moved*; the corpus of real documents is the
 judge of whether old ones survive. nisc runs both on its own grammars in CI
@@ -201,8 +214,8 @@ lock for a source that has never had one.
 
 | | |
 |---|---|
-| `@niscorp/strata/upgrade` | Pure: `planSourceUpgrade`, `verifySourceUpgrade`, `renderReport`, `changedStrings`. |
-| `@niscorp/strata/node` | `runSourceUpgrade(options, argv)` — the lock, the work directory, the report, "look in" hints from the source. |
+| `@niscorp/strata/upgrade` | Pure: `planSourceUpgrade`, `verifySourceUpgrade`, `renderReport`, `changedStrings`. `planSourceUpgrade`'s `describe(ref)` returns the description of the migration `ref` names, for the report; it is asked for every migration between the source's stamp and the upgrader's. |
+| `@niscorp/strata/node` | `runSourceUpgrade(options, argv)` — the lock, the work directory, the report, "look in" hints from the source. `sources` is the directory under `root` that is searched for the files an artifact is written in (default `src`). |
 
 See [DESIGN.md](./DESIGN.md) and [the plan](../../docs/plans/versioning.md).
 
