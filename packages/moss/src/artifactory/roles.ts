@@ -1,18 +1,8 @@
 import { resolvePrincipal } from '@niscorp/charter';
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
 import { assignedRoles, memoKey } from '../identity';
-import type { LayoutVariant, NiscApp } from './app';
-
-export const wearableOf = (app: Pick<NiscApp, 'wearable' | 'assignments'>): readonly (readonly string[])[] => {
-  const declared = app.wearable;
-  const source = declared ?? Object.values(app.assignments ?? {});
-  const seen = new Map<string, readonly string[]>();
-  for (const roles of source) {
-    const key = [...roles].sort().join('\0');
-    if (!seen.has(key)) seen.set(key, roles);
-  }
-  return [...seen.values()];
-};
+import { variantLayouts, withVariants } from '../manifest';
+import type { NiscApp } from '../manifest';
 
 export type Catalog = { ids: readonly string[]; hash: string };
 
@@ -36,31 +26,10 @@ export const catalogFor = (
   return { ids, hash: versionToken(ids) };
 };
 
-export const variantLayouts = (variants: Readonly<Record<string, LayoutVariant>>, held: Iterable<string>): ReadonlyMap<string, LayoutNode> => {
-  const layouts = new Map<string, LayoutNode>();
-  for (const id of held) {
-    const variant = variants[id];
-    if (variant !== undefined) layouts.set(variant.action, variant.layout);
-  }
-  return layouts;
-};
-
 export const resolveVariantsForRoles = (app: Pick<NiscApp, 'charter' | 'layouts'>, roles: readonly string[]): ReadonlyMap<string, LayoutNode> => {
   const variants = app.layouts ?? {};
   return variantLayouts(variants, resolvePrincipal(app.charter, Object.keys(variants), roles, 'layouts'));
 };
-
-export const withVariants = (
-  actions: Readonly<Record<string, ActionDefinition>>,
-  ids: readonly string[],
-  layouts: ReadonlyMap<string, LayoutNode>,
-): [string, ActionDefinition][] =>
-  ids.flatMap((id): [string, ActionDefinition][] => {
-    const definition = actions[id];
-    if (definition === undefined) return [];
-    const layout = layouts.get(id);
-    return [[id, layout === undefined ? definition : { ...definition, layout }]];
-  });
 
 export const definitionsFor = (
   actions: Readonly<Record<string, ActionDefinition>>,

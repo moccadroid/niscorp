@@ -3,8 +3,10 @@ import { createIdentity, sessionRemainingMs, sessionRevokerOf, sessionVerifierOf
 import type { Identity } from '../identity';
 import { createData, featureTablesOf } from '../data';
 import type { Data } from '../data';
-import { createRunningManifest, receiveManifest } from '../manifest';
-import type { NiscApp, RunningManifest } from '../manifest';
+import { createRunningManifest } from '../artifactory';
+import type { RunningManifest } from '../artifactory';
+import { receiveManifest } from '../manifest';
+import type { NiscApp } from '../manifest';
 import type { NiscRuntime, SessionVerifier } from '../runtime';
 import { DEFAULT_REVALIDATE_MS, createSocket } from '../socket';
 import type { SocketAccept } from '../socket';

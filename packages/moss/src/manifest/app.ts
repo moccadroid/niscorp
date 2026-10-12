@@ -123,3 +123,5 @@ export type PageManifest = ShellManifest & {
 };
 
 export const defineApp = (app: NiscApp): NiscApp => app;
+
+export const entriesOf = (app: Pick<NiscApp, 'entries'>): readonly (SeedEntry | SeedMutation)[] => app.entries ?? [];

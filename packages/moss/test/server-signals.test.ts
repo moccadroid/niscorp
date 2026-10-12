@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
 import type { ActionDefinition } from '@niscorp/nova';
 import { createIdentityCache } from '../src/identity/cache';
-import { createRunningManifest } from '../src/manifest';
+import { createRunningManifest } from '../src/artifactory';
 import type { NiscApp } from '../src/manifest';
 import type { Fabric } from '../src/runtime';
 import type { FabricMessage } from '../src/runtime/runtime';

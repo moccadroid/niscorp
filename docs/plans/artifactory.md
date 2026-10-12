@@ -2,7 +2,8 @@
 
 **Status: Proposed (2026-10-12), ready to build from. What it has to do
 (part 2) and its ten design decisions (part 9) are the owner's and are
-settled. Nothing is built. Part 0 is for whoever builds it, part 6 is the
+settled. Step 1 of part 6 is built (2026-10-12), on the branch
+`worktree-artifactory`; nothing else is. Part 0 is for whoever builds it, part 6 is the
 build, step by step, and part 7 is what needs the owner's word before it is
 touched.**
 
@@ -19,7 +20,7 @@ part, "Changing a package", binds this work. `packages/nisc/STYLE_GUIDE.md`.
 owner's standing decisions. Then this file. Then the code part 4 names.
 
 **Where the repository stands.** Start from `main`. Moss is
-`packages/moss/src`: 89 files in 15 modules, about 7,400 lines of code and
+`packages/moss/src`: 90 files in 16 modules, about 7,400 lines of code and
 370 comment lines. `pnpm verify` passes and CI passes.
 
 **The owner's rules.** Each was learned the hard way.
@@ -264,13 +265,13 @@ Read against the code on 2026-10-12. Paths are under `packages/moss/src/`.
 
 | File | It holds |
 |---|---|
-| `manifest/app.ts` | the types an app is written in (`NiscApp`, `ShellManifest`), `defineApp` |
+| `manifest/app.ts` | the types an app is written in (`NiscApp`, `ShellManifest`), `defineApp`, `entriesOf` |
 | `manifest/schema.ts` | the schema that parses a manifest and freezes it |
-| `manifest/verify.ts` | `verifyManifest` (what a boot checks), `layoutMisfits`, `endlessChains` |
-| `manifest/running.ts` | `createRunningManifest`: the actions in force (the build's, then each named set), `catalogFor`, `artifactsFor`, `onChange`, `claim` and `replace` for named sets |
-| `manifest/roles.ts` | what a set of roles holds, kept per set of roles; layout variants put in place |
-| `manifest/artifacts.ts` | `ShellArtifacts`, `entriesOf` |
-| `manifest/generation.ts` | the generation pointer: a counter every process polls, so a change in one reaches the others |
+| `manifest/verify.ts` | `verifyManifest` (what a boot checks), `layoutMisfits`, `endlessChains`, and what it is built from: `wearableOf`, and a layout variant put in place (`variantLayouts`, `withVariants`) |
+| `artifactory/running.ts` | `createRunningManifest`: the actions in force (the build's, then each named set), `catalogFor`, `artifactsFor`, `onChange`, `claim` and `replace` for named sets |
+| `artifactory/roles.ts` | what a set of roles holds, kept per set of roles |
+| `artifactory/artifacts.ts` | `ShellArtifacts`, `shellComponents` |
+| `artifactory/generation.ts` | the generation pointer: a counter every process polls, so a change in one reaches the others |
 | `data/engine.ts` | `createDataLayer`: the vex engine and the cache it is built with |
 | `data/data.ts` | `createData`: `seed`, `fingerprints`, policies, `executeAs`, the pointer's row |
 | `data/own-entries.ts` | how moss reads and writes its own rows through vex (`createOwnEntries`, `POINTER`) |
@@ -298,7 +299,7 @@ Read against the code on 2026-10-12. Paths are under `packages/moss/src/`.
   `ShellHostConfig.composition(principal)` is already by principal and
   awaited.
 - **`catalogFor(roles, installed)` is the same**, with four callers outside
-  `manifest`: `server.catalogOf` and the socket's catalog
+  `artifactory`: `server.catalogOf` and the socket's catalog
   (`server/server.ts`), the catalog route (`server/routes.ts`), and the seam
   `grantedActionIds` (`server/features.ts`), which the integrations proxy asks
   on every call it forwards.
@@ -318,9 +319,10 @@ Read against the code on 2026-10-12. Paths are under `packages/moss/src/`.
 **The module.** `artifactory/` takes over the question `manifest` answers
 while a server runs: what the app consists of right now, and what of it exists
 for somebody. `running.ts`, `roles.ts`, `artifacts.ts` and `generation.ts`
-move into it. `manifest` keeps the app as it is handed over: its types, its
-schema and its verification. The artifactory imports `manifest` and
-`identity`.
+are in it. `manifest` keeps the app as it is handed over: its types, its
+schema, its verification, and the four functions that verification is built
+from (`entriesOf`, `wearableOf`, `variantLayouts`, `withVariants`). The
+artifactory imports `manifest` and `identity`.
 
 **The live list.** What it answers from while a server runs: the build's
 artifacts, the published defaults, and the sets that are handed to it (an
@@ -440,11 +442,17 @@ Each step is its own go from the owner, and moss works after each (part 0).
 Before building a step, say to the owner what it adds to moss's public API and
 by what names, and wait.
 
-**Step 1. The module.** Moves only. `artifactory/` gets `running.ts`,
-`roles.ts`, `artifacts.ts` and `generation.ts` from `manifest/`, its own
-`index.ts`, and a line in the table of `scripts/check-modules.mts`. Nothing
-behaves differently. *Done when:* the source holds the same top-level
-statements as before, and part 0's "works" holds.
+**Step 1. The module. Built (2026-10-12).** Moves only. `artifactory/` has
+`running.ts` and `generation.ts` from `manifest/`, and `roles.ts` and
+`artifacts.ts` but for four functions: `entriesOf`, `wearableOf`,
+`variantLayouts` and `withVariants` stay in `manifest`, because its
+verification is built from them and the artifactory imports `manifest`. It
+has its own `index.ts` and a line in the table of `scripts/check-modules.mts`.
+`data` writes out the two shapes it took from `manifest` (the pointer, and the
+listener it subscribes with), so that it imports nothing of the artifactory.
+Nothing behaves differently. *Done when:* the source holds the same top-level
+statements as before, but for that one type in `data`, and part 0's "works"
+holds.
 
 **Step 2. Entries through the cache.** The engine's cache asks the artifactory
 first (part 5, "Entries"), for the build's entries only. `Data.seed` and its

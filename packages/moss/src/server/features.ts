@@ -1,10 +1,11 @@
 import type { Hono } from 'hono';
 import type { FetchFn } from '@niscorp/nova';
+import type { OwnedActions, RunningManifest } from '../artifactory';
 import type { Data } from '../data';
 import type { Feature, FeatureSeams } from '../feature';
 import type { Identity } from '../identity';
 import { endlessChains, layoutMisfits, refusalOf } from '../manifest';
-import type { KitComponents, NiscApp, OwnedActions, RunningManifest } from '../manifest';
+import type { KitComponents, NiscApp } from '../manifest';
 import type { NiscRuntime } from '../runtime';
 import type { FeatureCredential } from './routes';
 import type { Env } from './moss-server';

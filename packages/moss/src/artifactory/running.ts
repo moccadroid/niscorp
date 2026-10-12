@@ -1,15 +1,13 @@
 import type { ActionDefinition } from '@niscorp/nova';
-import type { ShellManifest } from './app';
-import type { ShellArtifacts } from './artifacts';
-import { entriesOf, shellComponents } from './artifacts';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
+import { candidateOf, entriesOf, freezeDeep, refusalOf, verifyManifest } from '../manifest';
+import type { ManifestCandidate, ManifestReport, ShellManifest, ShippedManifest } from '../manifest';
+import type { ShellArtifacts } from './artifacts';
+import { shellComponents } from './artifacts';
 import { createGeneration } from './generation';
 import type { Generation, Pointer } from './generation';
-import { freezeDeep } from './schema';
 import { createRoleMemo, narrowedBy } from './roles';
 import type { Catalog, CatalogFilter } from './roles';
-import { candidateOf, refusalOf, verifyManifest } from './verify';
-import type { ManifestCandidate, ManifestReport, ShippedManifest } from './verify';
 
 type Actions = Readonly<Record<string, ActionDefinition>>;
 

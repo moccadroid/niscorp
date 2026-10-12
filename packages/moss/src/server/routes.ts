@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
 import type { Context, MiddlewareHandler } from 'hono';
 import { createHash, timingSafeEqual } from 'node:crypto';
+import type { RunningManifest } from '../artifactory';
 import type { Data } from '../data';
 import type { Identity } from '../identity';
-import type { NiscApp, RunningManifest } from '../manifest';
+import type { NiscApp } from '../manifest';
 import type { NiscRuntime, SessionVerifier } from '../runtime';
 import type { CredentialAnswer } from '../feature';
 import type { Env } from './moss-server';

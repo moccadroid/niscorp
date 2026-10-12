@@ -3,8 +3,8 @@ import { scopeGrants } from '@niscorp/vex';
 import { assignedRoles } from '../src/identity';
 import { resolvePolicyForRoles } from '../src/data/policy';
 import type { NiscApp } from '../src/manifest';
-import { catalogFor, resolveVariantsForRoles } from '../src/manifest/roles';
-import type { Catalog } from '../src/manifest/roles';
+import { catalogFor, resolveVariantsForRoles } from '../src/artifactory/roles';
+import type { Catalog } from '../src/artifactory/roles';
 import { verifyVariants } from '../src/manifest/verify';
 
 const app = {

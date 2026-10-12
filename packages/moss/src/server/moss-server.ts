@@ -4,7 +4,8 @@ import type { ActionDefinition } from '@niscorp/nova';
 import type { ScopePolicy } from '@niscorp/vex';
 import type { ExecuteAs } from '../data';
 import type { IdentityRecord, IdentityReport, ResolvedIdentity } from '../identity';
-import type { Catalog, ManifestReport } from '../manifest';
+import type { Catalog } from '../artifactory';
+import type { ManifestReport } from '../manifest';
 import type { ShellHost } from '../shells';
 import type { SocketAccept } from '../socket';
 

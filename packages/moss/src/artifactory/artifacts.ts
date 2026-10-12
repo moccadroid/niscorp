@@ -2,7 +2,7 @@ import { ACTION_SLOT_NAME, CANVAS_SLOT_NAME } from '@niscorp/nova';
 import type { ActionDefinition, ActionFragment, LayoutNode } from '@niscorp/nova';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { componentsOf } from '@niscorp/nova/reflect';
-import type { NiscApp, ShellCanvas, ShellManifest } from './app';
+import type { NiscApp, ShellCanvas, ShellManifest } from '../manifest';
 
 export type ShellArtifacts = {
   actions: Readonly<Record<string, ActionDefinition>>;
@@ -13,8 +13,6 @@ export type ShellArtifacts = {
   entries: ReadonlyMap<string, SeedEntry | SeedMutation>;
   components: Readonly<Record<string, NonNullable<ShellManifest['components']>[string]>>;
 };
-
-export const entriesOf = (app: Pick<NiscApp, 'entries'>): readonly (SeedEntry | SeedMutation)[] => app.entries ?? [];
 
 type Contract = NonNullable<ShellManifest['components']>[string];
 

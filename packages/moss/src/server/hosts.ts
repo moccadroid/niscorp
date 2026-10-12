@@ -1,11 +1,12 @@
 import type { FetchFn } from '@niscorp/nova';
 import type { Hono } from 'hono';
 import { VEX_LIVE_ENV } from '@niscorp/vex/hono';
+import type { RunningManifest } from '../artifactory';
 import { createWireFollower } from '../data';
 import type { Data } from '../data';
 import { createPageRouter } from '../documents';
 import type { Identity } from '../identity';
-import type { NiscApp, RunningManifest, ShellManifest } from '../manifest';
+import type { NiscApp, ShellManifest } from '../manifest';
 import type { NiscRuntime } from '../runtime';
 import { createShellHost } from '../shells';
 import type { ShellHost, ShellHostConfig } from '../shells';

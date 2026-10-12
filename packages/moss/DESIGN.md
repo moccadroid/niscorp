@@ -68,7 +68,7 @@ process's alone. A library every process reads is the part that is unbuilt.
 And there is one place it will be asked. Everything a shell loads that
 somebody authored (its actions, its frame and layout store, its fragments, the
 entries its reads replay) is answered by the running manifest in one function,
-for a shell and a set of roles (`src/manifest/artifacts.ts`). A shell is built
+for a shell and a set of roles (`src/artifactory/artifacts.ts`). A shell is built
 from that answer and adopts it: an adopt puts in place the actions that are
 held now, and the frame, each `{ ref }` of the layout store and each fragment
 that the answer says differently from the last time. (The canvases are what a
@@ -180,13 +180,15 @@ entry.
 1. **Who is calling?** `identity`: a token is a principal (the deployment's
    verifier, moss's stored credential, the browser's cookie and its seal), and
    a principal is a record (roles, scope values, what is installed for them).
-2. **What exists for them?** `manifest`: what the app handed over, read by a
-   schema and frozen; what it consists of right now, with one writer; whether
-   that may be served; and what a set of roles holds of it. Every artifact a
+2. **What exists for them?** `artifactory`: what the app consists of right
+   now, with one writer, and what a set of roles holds of it. Every artifact a
    shell is handed is asked of it: the actions, the frame and the layout
    store, the fragments and the entries, in one answer for a shell and a set
    of roles, and read off the app by nothing else. Of the entries it is the
-   source and not the only holder: see `data`, next.
+   source and not the only holder: see `data`, next. It stands on `manifest`,
+   the app as it was handed over: the types an app is written in, the schema
+   it is read by and frozen under, and the one verification of whether what
+   is in force may be served.
 3. **What may they read and write?** `data`: the vex engine, the policy a set
    of roles reads and writes under, the routes, a seeded entry run as a
    charter role, and the tables with their migration. The engine's cache is
@@ -196,7 +198,7 @@ entry.
    cache holds what the list does not, a query written for an intent while
    the app runs and any row it held before this boot. So what a fingerprint
    resolves to is decided in `data` today, and what an action, a layout or a
-   fragment resolves to in `manifest`.
+   fragment resolves to in `artifactory`.
 4. **What are they looking at?** `shells`: the shell host, one shell's build,
    the stream of frames, and the screen read without attaching.
 5. **How does it reach them?** `socket` for the live wire, `documents` for a
@@ -247,6 +249,7 @@ this is a copy of it:
 | `feature` | `runtime` |
 | `identity` | `runtime`, `protocol` |
 | `manifest` | `identity`, `feature` |
+| `artifactory` | `identity`, `manifest` |
 | `data` | `runtime`, `identity`, `manifest` |
 | `shells` | `runtime`, `protocol`, `manifest`, `data` |
 | `socket` | `runtime`, `protocol`, `identity`, `shells` |
@@ -261,7 +264,10 @@ this is a copy of it:
 The table has no cycle, and what it leaves out is as deliberate as what it
 names. `shells` does not import `identity`: who somebody is, it is told.
 `socket` does not import `manifest`: what somebody holds is a function it is
-handed. `integrations` does not import `data`: what it reads and writes it
+handed. `artifactory` and `data` do not import each other: the generation
+pointer's row is `data`'s, when it moves is the artifactory's, and each
+reaches the other as functions the server hands over. `integrations` does not
+import `data`: what it reads and writes it
 authors as vex entries and replays through a seam. Nor `manifest`: what it
 asks about a bundle before letting it in (does a layout fit the kit, which
 chains of steps never end) it asks through two seams. A feature imports `feature`, and `runtime` for where a span
@@ -285,7 +291,7 @@ that made the table:
 | Table | Whose | Where its statements are written | What is somewhere else, and why |
 |---|---|---|---|
 | `sessions` | `identity` | `identity/sessions.ts`: five statements straight to the pool, before anybody is signed in | Its table is made in `data`'s one migration run, from a sequence `identity` declares |
-| `moss_generation` | `data` | `data/own-entries.ts`: two entries, one that reads and one that moves | `manifest` decides when it moves (`manifest/generation.ts`), through a function `data` hands over |
+| `moss_generation` | `data` | `data/own-entries.ts`: two entries, one that reads and one that moves | `artifactory` decides when it moves (`artifactory/generation.ts`), through a function `data` hands over |
 | `integrations`, `integration_actions` | the `integrations` feature | `integrations/entries.ts`: vex entries, replayed through the seam the feature is handed | The two tables are made by the core's own sequence (`data/tables.ts`, `nisc.moss`): that is the history every database has run, and it is not edited. The documents stored in `integration_actions` are brought to the current grammars by `data`, which holds the pool, when the feature asks through its seam |
 
 `data` holds the engine and the one ledgered migration run, so every owner's
@@ -851,7 +857,7 @@ On the record, so nothing reads as finished that isn't:
   context management for models — one mechanism, two products.
 - **Scale-out** beyond sticky sessions pinned by session id. What crosses
   processes today is invalidation only: `refresh` moves a generation pointer
-  every process polls (`src/manifest/generation.ts` holds the clock; the row is
+  every process polls (`src/artifactory/generation.ts` holds the clock; the row is
   read and moved through vex, `src/data/own-entries.ts`), and an optional fabric
   (`runtime.fabric`, `src/server/signals.ts`) carries identity invalidations and nudges.
   A set of actions does not cross: a process that follows the pointer reads

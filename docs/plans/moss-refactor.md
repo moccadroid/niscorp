@@ -4,7 +4,8 @@
 moss 0.4.0), on main since 2026-10-12 and released as moss 0.5.0. What is
 open is in part 7. Midas and the two websites are other repositories and follow
 at their next bump (part 9). Next is the artifactory (part 10), which is its
-own plan and is not started.**
+own plan: its first step, the module, is built, and the running manifest is in
+`artifactory` since.**
 
 The audit that led here, the build order and the record of each step are in
 this file's history: `git log -- docs/plans/moss-refactor.md`.
@@ -17,7 +18,7 @@ Moss answers five questions about a request. Each has one owner under
 | Question | Module | It owns |
 |---|---|---|
 | Who is calling? | `identity` | a token is a principal, a principal is a record; the session cookie; the stored sessions |
-| What exists for them? | `manifest` | the app as authored artifacts, parsed and frozen once; one verification; the running manifest, which answers what a shell is made of |
+| What exists for them? | `artifactory`, on `manifest` | the running manifest, which answers what a shell is made of; under it, in `manifest`, the app as authored artifacts, parsed and frozen once, and one verification |
 | What may they read and write? | `data` | the vex engine, the policy for a set of roles, `executeAs`, the routes, moss's own tables and their migrations |
 | What are they looking at? | `shells` | the living nova shells: build, keep, stream, reset, adopt, snapshot |
 | How does it reach them? | `socket`, `documents` | the live connection; the drawn page, and pages as files |
@@ -117,7 +118,7 @@ turn. A build runs under `runtime.endpointTimeoutMs` (30 seconds unless set)
 and fails when it has not landed by then, so whoever waits on one waits that
 long at most, and app code that hangs inside a build holds up nobody else.
 
-**What a shell is made of is one answer** (`manifest/running.ts`,
+**What a shell is made of is one answer** (`artifactory/running.ts`,
 `artifactsFor`): the definitions a set of roles holds with their layout variant
 in place, the shell's canvases, frame, layout store and fragments, the entries
 by fingerprint, and the component names. A shell host asks it once for each
@@ -248,7 +249,8 @@ None of them is edited from here.
 
 Its own plan: [artifactory.md](artifactory.md). It holds what is decided, what
 was run, the last design proposed, and what moss still has to change for it.
-Not started.
+Its step 1 is built: the module, which took the running manifest, what a set
+of roles holds and the generation pointer's clock from `manifest`.
 
 What this refactor did for it: while a server runs, one place answers what a
 shell is made of (part 5); a living shell is brought level in place when that

@@ -1211,7 +1211,7 @@ tables changed, so a reactive read over one of them answers again.
   what they derived and adopt again.
   The row is read and moved through vex, by two
   entries of moss's own that no route serves (`src/data/own-entries.ts`);
-  `src/manifest/generation.ts` holds the clock and no SQL. A move is a compare
+  `src/artifactory/generation.ts` holds the clock and no SQL. A move is a compare
   and a set: the next number is written where the counter is still what was
   read, and read again where it is not. A move a process could not follow is
   tried again at every poll until it is followed, and logged when that is
@@ -1334,7 +1334,7 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
   `onSession`, `runs`), the wire for a token, and its limits. Everything in
   that answer but who somebody is comes from the running manifest, which is
   asked once for each build and once for each adopt
-  (`src/manifest/artifacts.ts`): an action, a layout, a fragment and an entry
+  (`src/artifactory/artifacts.ts`): an action, a layout, a fragment and an entry
   reach a shell through that one answer, and the server's wiring reads none
   of them off the app. For an entry that is what a shell is told of the reads
   on its screens. What a read replays is not in the answer: the entries have

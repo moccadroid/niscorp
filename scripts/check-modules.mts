@@ -20,6 +20,8 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       feature: ['runtime'],
       identity: ['runtime', 'protocol'],
       manifest: ['identity', 'feature'],
+      // Not data, and data not it: what each needs of the other is a function the server hands over.
+      artifactory: ['identity', 'manifest'],
       data: ['runtime', 'identity', 'manifest'],
       // Not identity or feature: they reach it as functions the server hands over.
       shells: ['runtime', 'protocol', 'manifest', 'data'],
@@ -29,7 +31,7 @@ const PACKAGES: Readonly<Record<string, Shape>> = {
       socket: ['runtime', 'protocol', 'identity', 'shells'],
       // Not manifest or the server: a page's path, and what a document asks a server, are types written out in the module.
       documents: ['protocol', 'identity', 'shells'],
-      server: ['runtime', 'protocol', 'feature', 'identity', 'manifest', 'data', 'shells', 'socket', 'documents'],
+      server: ['runtime', 'protocol', 'feature', 'identity', 'manifest', 'artifactory', 'data', 'shells', 'socket', 'documents'],
       node: ['runtime', 'protocol', 'identity', 'manifest', 'socket', 'documents', 'server'],
       tide: ['feature'],
       client: ['protocol'],

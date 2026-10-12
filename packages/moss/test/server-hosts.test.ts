@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
 import type { ActionDefinition, ActionFragment, LayoutNode } from '@niscorp/nova';
 import type { SeedEntry } from '@niscorp/vex';
-import { createRunningManifest } from '../src/manifest';
+import { createRunningManifest } from '../src/artifactory';
 import type { FunctionSession, NiscApp, ShellManifest } from '../src/manifest';
 import { buildShellHosts } from '../src/server/hosts';
 import type { ShellHostsDeps } from '../src/server/hosts';

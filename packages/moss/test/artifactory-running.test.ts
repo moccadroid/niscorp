@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
 import type { ActionDefinition } from '@niscorp/nova';
-import { createRunningManifest } from '../src/manifest';
-import type { Pointer, RunningManifest, ShellManifest } from '../src/manifest';
-import type { RunningManifestConfig } from '../src/manifest/running';
+import { createRunningManifest } from '../src/artifactory';
+import type { RunningManifest } from '../src/artifactory';
+import type { Pointer } from '../src/artifactory/generation';
+import type { ShellManifest } from '../src/manifest';
+import type { RunningManifestConfig } from '../src/artifactory/running';
 import type { ShippedManifest } from '../src/manifest/verify';
 
 const home: ActionDefinition = { id: 'home' };

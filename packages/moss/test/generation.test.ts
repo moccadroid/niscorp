@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createGeneration } from '../src/manifest/generation';
-import type { Pointer } from '../src/manifest/generation';
+import { createGeneration } from '../src/artifactory/generation';
+import type { Pointer } from '../src/artifactory/generation';
 
 const fakePool = (start = 0): Pointer & { poke: () => number; value: () => number } => {
   let n = start;

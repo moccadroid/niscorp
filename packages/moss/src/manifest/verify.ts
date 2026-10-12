@@ -1,16 +1,26 @@
 import { resolvePrincipal, verifyCharter } from '@niscorp/charter';
 import type { Charter, ClosureAuditor, VerifyReport } from '@niscorp/charter';
 import { ActionDefinitionSchema, auditAction, collectChannels } from '@niscorp/nova';
-import type { ActionDefinition } from '@niscorp/nova';
+import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
 import { chainCycles, isRecord, walkNodes } from '@niscorp/nova/reflect';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { scopeProfiles } from '@niscorp/vex';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { z } from 'zod';
 import { isBinding } from '@niscorp/nova/i18n';
+import { entriesOf } from './app';
 import type { LayoutVariant, NiscApp } from './app';
-import { entriesOf } from './artifacts';
-import { variantLayouts, wearableOf, withVariants } from './roles';
+
+export const wearableOf = (app: Pick<NiscApp, 'wearable' | 'assignments'>): readonly (readonly string[])[] => {
+  const declared = app.wearable;
+  const source = declared ?? Object.values(app.assignments ?? {});
+  const seen = new Map<string, readonly string[]>();
+  for (const roles of source) {
+    const key = [...roles].sort().join('\0');
+    if (!seen.has(key)) seen.set(key, roles);
+  }
+  return [...seen.values()];
+};
 
 export type ManifestCandidate = {
   charter: Charter;
@@ -147,6 +157,27 @@ export const verifyVariants = (app: Pick<NiscApp, 'charter' | 'actions' | 'layou
   }
   return errors;
 };
+
+export const variantLayouts = (variants: Readonly<Record<string, LayoutVariant>>, held: Iterable<string>): ReadonlyMap<string, LayoutNode> => {
+  const layouts = new Map<string, LayoutNode>();
+  for (const id of held) {
+    const variant = variants[id];
+    if (variant !== undefined) layouts.set(variant.action, variant.layout);
+  }
+  return layouts;
+};
+
+export const withVariants = (
+  actions: Readonly<Record<string, ActionDefinition>>,
+  ids: readonly string[],
+  layouts: ReadonlyMap<string, LayoutNode>,
+): [string, ActionDefinition][] =>
+  ids.flatMap((id): [string, ActionDefinition][] => {
+    const definition = actions[id];
+    if (definition === undefined) return [];
+    const layout = layouts.get(id);
+    return [[id, layout === undefined ? definition : { ...definition, layout }]];
+  });
 
 export const auditClosure = (definitions: Record<string, ActionDefinition>, variants: Record<string, LayoutVariant> = {}): ClosureAuditor => {
   return (grantedIds, layoutIds = []) => {
