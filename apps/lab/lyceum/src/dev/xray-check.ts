@@ -91,6 +91,8 @@ const main = async (): Promise<void> => {
   check('an id tapped: that action opens over the screen', await ada.shows('overlay', 'assistant.thread'));
   check('...as the document it is: its data', await ada.shows('overlay', '\\"data\\"'));
   check('...its triggers and its layout too', ada.showsNow('overlay', '\\"triggers\\"') && ada.showsNow('overlay', '\\"layout\\"'));
+  // The layout as it is drawn: where the server keeps it is not part of the document.
+  check('...the layout itself, not the name it is kept under', ada.showsNow('overlay', '\\"component\\"') && !ada.showsNow('overlay', 'action/assistant.thread'));
   ada.click('overlay', 'close');
   await waitUntil(() => !ada.showsNow('overlay', '"ref":"close"'));
   // The X-ray is an action on the list like any other: its own id opens too.
