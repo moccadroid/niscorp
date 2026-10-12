@@ -230,4 +230,23 @@ describe('generation pointer', () => {
     await looks(20);
     expect(moves).toBe(0);
   });
+
+  it('an interval longer than Node can hold is no poll — it does not become a read every millisecond', async () => {
+    // Real timers: the fake ones do not cut a delay the way Node does.
+    vi.useRealTimers();
+    for (const everyMs of [Infinity, 2 ** 31]) {
+      let reads = 0;
+      const pointer: Pointer = {
+        read: async () => {
+          reads += 1;
+          return 0;
+        },
+        move: async () => true,
+      };
+      const gen = createGeneration(pointer, { onMoved: () => undefined, everyMs });
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      gen.stop();
+      expect(reads).toBe(1);
+    }
+  });
 });

@@ -4,6 +4,10 @@ import type { Connection, SocketConfig } from './socket';
 
 export const DEFAULT_REVALIDATE_MS = 60 * 1000;
 
+// Node holds a timer's delay in 31 bits and cuts a longer one to 1 ms: an
+// interval above this is no revalidation, as `0` is.
+const MAX_INTERVAL_MS = 2 ** 31 - 1;
+
 export type Credential = { token: string; principal: string } | null;
 
 export type Revalidation = {
@@ -67,7 +71,7 @@ export const createRevalidation = (config: Pick<SocketConfig, 'session' | 'reval
 
   const revalidateMs = config.revalidateMs ?? DEFAULT_REVALIDATE_MS;
   let sweeper: ReturnType<typeof setInterval> | undefined;
-  if (revalidateMs > 0 && Number.isFinite(revalidateMs)) {
+  if (revalidateMs > 0 && revalidateMs <= MAX_INTERVAL_MS) {
     sweeper = setInterval(() => void pass(), revalidateMs);
     sweeper.unref?.();
   }

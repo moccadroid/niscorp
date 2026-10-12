@@ -489,6 +489,17 @@ describe('socket — revalidating a live connection', () => {
     }
   });
 
+  it('an interval longer than Node can hold disables it too — it does not become a pass every millisecond', async () => {
+    let asked = 0;
+    const accept = createSocket(ctxWith({ session: (token) => ((asked += 1), token === 'good' ? 'usr_1' : null), revalidateMs: 2 ** 31 }));
+    const conn = new FakeConnection();
+    await accept(SOCKET, conn.offering('good'));
+    const atOpen = asked;
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(asked).toBe(atOpen);
+    accept.stop();
+  });
+
   it('the shell is detached when a connection expires — no leak behind a dead socket', async () => {
     vi.useFakeTimers();
     try {
