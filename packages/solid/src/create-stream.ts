@@ -6,16 +6,11 @@ import { createFinalizationTracker } from './finalization-tracker';
 import { createSelectedStream, createDeadStream } from './selected-stream';
 import { createValidator } from './validator';
 
-// ═══════════════════════════════════════════════════════════
-// createStream — root stream factory
-// ═══════════════════════════════════════════════════════════
-
 export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
   const base = resolveBase(options);
   const mode = options.mode ?? 'recover';
   const constraints = options.constraints ?? 'kind';
 
-  // ─── State ───
   let currentValue: T = structuredClone(base);
   let isClosed = false;
   let isDestroyed = false;
@@ -23,7 +18,6 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
   let failureError: Error | null = null;
   let hasNotifiedFinal = false;
 
-  // ─── Listeners ───
   const listeners = new Set<Listener<T>>();
   const finalListeners = new Set<Listener<T>>();
   const errorListeners = new Set<(error: StreamError) => void>();
@@ -33,11 +27,8 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
   let finalState: FinalState<T> = createPendingFinal<T>();
   const selectedStreams = new Map<string, Stream<unknown>>();
 
-  // Re-entrancy protection
   let isNotifying = false;
   const pendingImmediateFires: Array<() => void> = [];
-
-  // ─── Validator + parser + tracker ───
 
   const emitError = (err: StreamError): void => {
     for (const listener of errorListeners) listener(err);
@@ -50,11 +41,9 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
     isClosed = true;
     const error = new Error('[solid] stream failed validation');
     failureError = error;
-    // A final() taken before the violation is holding this promise; it must
-    // reject too, not wait for a close() that the failed state ignores.
     if (!finalState.resolved) {
-      // Pre-caught so a stream nobody awaited doesn't raise an unhandled
-      // rejection; callers holding the promise still see it reject.
+      // Pre-caught so a stream nobody awaited raises no unhandled rejection; a
+      // caller holding the promise still sees it reject.
       finalState.promise.catch(() => {});
       finalState.reject(error);
     }
@@ -74,8 +63,6 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
   const parser = createIncrementalParser(base, {
     valueOpenHook: validator.valueOpen,
   });
-
-  // ─── Notification ───
 
   const notify = (value: T): void => {
     isNotifying = true;
@@ -105,39 +92,35 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
     for (const sub of finalizeSubscribers) {
       sub();
     }
-    // Set last: a selection made while the listeners above run is still told
-    // by this loop, in the order it always was.
+    // Set last: a selection made while the listeners above run is told by this
+    // loop in its turn, not settled early by its own onFinal().
     hasNotifiedFinal = true;
   };
-
-  // ─── Write pipeline ───
 
   const write = (chunk: string): void => {
     if (isClosed || isDestroyed || isFailed) return;
 
     const events = parser.write(chunk);
 
-    // The valueOpenHook may have tripped strict mode during parse.
+    // The parse above can fail the stream: strict mode trips in the valueOpenHook.
     if (isFailed) return;
 
     tracker.process(events);
 
-    // Structural sharing: only objects along dirty paths get new references.
     const snap = parser.snapshot(currentValue);
     if (snap.changed) {
       currentValue = snap.value;
       notify(currentValue);
     }
 
-    // Events may finalize paths even when the value didn't change
-    // (e.g. closing `}` doesn't change values but completes containers).
+    // A closing `}` changes no value but can finalize paths, which a selection
+    // checks for on this call.
     if (!snap.changed && events.length > 0) {
       for (const sub of changeSubscribers) {
         sub();
       }
     }
 
-    // Validator owns finalize orchestration (key tracking + safeParse).
     if (events.length > 0) {
       validator.processEvents(events, () => currentValue);
       if (isFailed) return;
@@ -170,9 +153,6 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
     pendingImmediateFires.length = 0;
 
     if (!finalState.resolved) {
-      // Pre-caught, as the strict failure above is: a stream read through
-      // callbacks alone holds no promise, and its teardown must not raise an
-      // unhandled rejection. A caller holding the promise still sees it reject.
       finalState.promise.catch(() => {});
       finalState.reject(new Error('[solid] stream destroyed'));
     }
@@ -182,8 +162,6 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
     }
     selectedStreams.clear();
   };
-
-  // ─── Read interface ───
 
   const current = (): T => currentValue;
 
@@ -222,8 +200,6 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
     return () => { errorListeners.delete(listener); };
   };
 
-  // ─── Selection ───
-
   const select = <P = unknown>(path: string): Stream<P> => {
     if (isDestroyed) return createDeadStream<P>();
 
@@ -257,10 +233,6 @@ export const createStream = <T>(options: CreateStreamOptions<T>): Stream<T> => {
 
   return { write, close, destroy, current, final, on, onFinal, onError, select };
 };
-
-// ───────────────────────────────────────────────────────────
-// Base resolution
-// ───────────────────────────────────────────────────────────
 
 const resolveBase = <T>(options: CreateStreamOptions<T>): T => {
   const { schema, initial } = options;

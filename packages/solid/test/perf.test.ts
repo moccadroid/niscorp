@@ -4,14 +4,6 @@ import { z } from 'zod';
 import { createStream } from '../src/create-stream';
 import { simulateStream, generateLargePayload } from './helpers/simulate-stream';
 
-// ═══════════════════════════════════════════════════════════
-// Performance benchmarks
-//
-// These measure wall-clock time for streaming different payload sizes
-// through different chunk strategies. They establish a baseline and
-// reveal the O(n²) characteristic of JSON.parse per-write.
-// ═══════════════════════════════════════════════════════════
-
 const LargeSchema = z.object({
   status: z.string(),
   count: z.number(),
@@ -42,7 +34,6 @@ const bench = (sizeKb: number, chunkSize: number): BenchResult => {
   const chunks = simulateStream(stream, json, { mode: 'fixed', chunkSize });
   const totalMs = performance.now() - start;
 
-  // Verify correctness
   const expected = JSON.parse(json);
   const current = stream.current();
   if (current.items.length !== expected.items.length) {
@@ -59,7 +50,6 @@ const bench = (sizeKb: number, chunkSize: number): BenchResult => {
 };
 
 describe('perf — payload size scaling', () => {
-  // Fixed chunk size, varying payload — reveals O(n²) characteristic
   const CHUNK_SIZE = 50;
 
   it('1 KB payload', () => {
@@ -88,7 +78,6 @@ describe('perf — payload size scaling', () => {
 });
 
 describe('perf — chunk size impact', () => {
-  // Fixed payload, varying chunk size — larger chunks = fewer writes = faster
   const SIZE_KB = 10;
 
   it('char-by-char (1 byte chunks)', () => {
@@ -135,8 +124,6 @@ describe('perf — O(n²) analysis', () => {
       console.log(`  ${String(r.sizeKb).padStart(7)}  | ${String(r.chunks).padStart(6)} | ${String(r.totalMs).padStart(9)} | ${String(r.msPerKb).padStart(5)} | ${String(r.msPerChunk).padStart(7)}`);
     }
 
-    // If O(n²), ms/KB should increase roughly linearly with size
-    // If O(n), ms/KB should stay roughly constant
     const firstMsPerKb = at(results, 0).msPerKb;
     const lastMsPerKb = lastOf(results).msPerKb;
     const ratio = lastMsPerKb / firstMsPerKb;
@@ -144,7 +131,6 @@ describe('perf — O(n²) analysis', () => {
     console.log(`\n  Scaling ratio (last/first ms/KB): ${Math.round(ratio * 10) / 10}x`);
     console.log(`  (1.0x = O(n) linear, >2x suggests O(n²) quadratic)`);
 
-    // Just verify it completes — the scaling ratio is informational
     expect(lastOf(results).totalMs).toBeGreaterThan(0);
   });
 });

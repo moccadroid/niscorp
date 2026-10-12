@@ -3,10 +3,6 @@ import { z } from 'zod';
 import { createStream } from '../src/create-stream';
 import type { StreamError } from '../src/types';
 
-// ═══════════════════════════════════════════════════════════
-// Validator — kind checks at value-open
-// ═══════════════════════════════════════════════════════════
-
 const Schema = z.object({
   name: z.string(),
   count: z.number(),
@@ -25,10 +21,6 @@ const INITIAL: Doc = {
   meta: { id: 'init-id' },
 };
 
-// ───────────────────────────────────────────────────────────
-// recover mode (default) — kind checks
-// ───────────────────────────────────────────────────────────
-
 describe('recover mode — kind violations', () => {
   it('rejects number where string expected, preserves prior value', () => {
     const errors: StreamError[] = [];
@@ -37,7 +29,7 @@ describe('recover mode — kind violations', () => {
 
     stream.write('{"name":42}');
 
-    expect(stream.current().name).toBe('init-name'); // prior preserved
+    expect(stream.current().name).toBe('init-name');
     expect(errors).toHaveLength(1);
     expect(errors[0]?.path).toBe('name');
     expect(errors[0]?.received).toBe('number');
@@ -87,8 +79,8 @@ describe('recover mode — kind violations', () => {
 
     stream.write('{"count":"bad","name":"good"}');
 
-    expect(stream.current().count).toBe(42); // preserved
-    expect(stream.current().name).toBe('good'); // sibling parsed
+    expect(stream.current().count).toBe(42);
+    expect(stream.current().name).toBe('good');
     expect(errors).toHaveLength(1);
   });
 
@@ -99,17 +91,12 @@ describe('recover mode — kind violations', () => {
 
     stream.write('{"tags":["a",42,"c"]}');
 
-    // Element 1 should be rejected (number where string expected),
-    // elements 0 and 2 written.
     expect(stream.current().tags[0]).toBe('a');
     expect(stream.current().tags[2]).toBe('c');
     expect(errors).toHaveLength(1);
     expect(errors[0]?.path).toBe('tags.1');
   });
 
-  // What the README says of a rejected element: the position keeps what the
-  // list held there. INITIAL holds one tag, so position 1 held nothing — it is
-  // left `undefined` between its neighbours, and the value fails the schema.
   it('a rejected element with nothing before it at its position leaves undefined there', () => {
     const stream = createStream({ schema: Schema, initial: INITIAL });
     stream.write('{"tags":["a",42,"c"]}');
@@ -157,10 +144,6 @@ describe('recover mode — kind violations', () => {
   });
 });
 
-// ───────────────────────────────────────────────────────────
-// Optional / nullable / default handling
-// ───────────────────────────────────────────────────────────
-
 describe('recover mode — optional, nullable, default', () => {
   const OptSchema = z.object({
     a: z.string().optional(),
@@ -201,10 +184,6 @@ describe('recover mode — optional, nullable, default', () => {
   });
 });
 
-// ───────────────────────────────────────────────────────────
-// strict mode
-// ───────────────────────────────────────────────────────────
-
 describe('strict mode', () => {
   it('halts the stream on first violation', () => {
     const errors: StreamError[] = [];
@@ -213,8 +192,6 @@ describe('strict mode', () => {
 
     stream.write('{"name":"good","count":"bad","active":false}');
 
-    // The entire write that triggered the failure is discarded — no partial
-    // state from that write is committed.
     expect(stream.current().name).toBe('init-name');
     expect(stream.current().count).toBe(42);
     expect(stream.current().active).toBe(true);
@@ -238,10 +215,6 @@ describe('strict mode', () => {
   });
 });
 
-// ───────────────────────────────────────────────────────────
-// trust mode — escape hatch, no validation
-// ───────────────────────────────────────────────────────────
-
 describe('trust mode', () => {
   it('writes invalid data into the tree without errors', () => {
     const errors: StreamError[] = [];
@@ -250,13 +223,10 @@ describe('trust mode', () => {
 
     stream.write('{"count":"three"}');
 
-    // No validation — the bad value lands in the tree
     expect(stream.current().count as unknown).toBe('three');
     expect(errors).toHaveLength(0);
   });
 
-  // With no validation nothing skips a string that opens outside any container,
-  // so the parser reaches its write with nowhere to put it. write() never throws.
   it('does not throw on a quoted word before the reply, and still reads the reply', () => {
     const stream = createStream({ schema: Schema, initial: INITIAL, mode: 'trust' });
 
@@ -277,14 +247,7 @@ describe('trust mode', () => {
   });
 });
 
-// ───────────────────────────────────────────────────────────
-// a root that is not a container — write() never throws
-// ───────────────────────────────────────────────────────────
-
 describe('a string root', () => {
-  // A string root passes the kind check in every mode, and there is no
-  // container to write it into. Nothing arrives — as for a number or boolean
-  // root — and nothing is thrown.
   it.each(['trust', 'recover', 'strict'] as const)('write() does not throw in %s mode', (mode) => {
     const errors: StreamError[] = [];
     const stream = createStream({ schema: z.string(), initial: 'start', mode });
@@ -295,10 +258,6 @@ describe('a string root', () => {
     expect(errors).toHaveLength(0);
   });
 });
-
-// ───────────────────────────────────────────────────────────
-// constraints: 'finalize' — post-finalize sub-schema check
-// ───────────────────────────────────────────────────────────
 
 describe('finalize-phase constraints', () => {
   const ConSchema = z.object({
@@ -316,14 +275,11 @@ describe('finalize-phase constraints', () => {
     });
     stream.onError((e) => errors.push(e));
 
-    // Write a long-enough name char by char — partial string is briefly < 5
     for (const ch of '{"name":"hello world"') {
       stream.write(ch);
     }
-    // No errors yet — finalize doesn't fire until next sibling key arrives
     expect(errors).toHaveLength(0);
 
-    // Now another sibling — name finalizes, .min(5) passes
     stream.write(',"count":');
     expect(errors).toHaveLength(0);
   });
@@ -367,16 +323,11 @@ describe('finalize-phase constraints', () => {
 
     stream.write('{"name":"hi","count":99}');
     expect(errors).toHaveLength(1);
-    // After failure, further writes are ignored
     const before = stream.current();
     stream.write(',"items":["x"]}');
     expect(stream.current()).toBe(before);
   });
 });
-
-// ───────────────────────────────────────────────────────────
-// Selected stream onError
-// ───────────────────────────────────────────────────────────
 
 describe('selected stream — onError filtering', () => {
   it('only fires for errors at-or-below its path', () => {
@@ -402,10 +353,6 @@ describe('selected stream — onError filtering', () => {
   });
 });
 
-// ───────────────────────────────────────────────────────────
-// Skip-mode end-to-end — verify chunked skip is correct
-// ───────────────────────────────────────────────────────────
-
 describe('skip-mode chunking', () => {
   it('skips a bad object value across chunk boundaries', () => {
     const errors: StreamError[] = [];
@@ -415,7 +362,7 @@ describe('skip-mode chunking', () => {
     const json = '{"meta":[1,{"nested":"value"},3],"name":"after"}';
     for (const ch of json) stream.write(ch);
 
-    expect(stream.current().meta).toEqual({ id: 'init-id' }); // preserved
+    expect(stream.current().meta).toEqual({ id: 'init-id' });
     expect(stream.current().name).toBe('after');
     expect(errors).toHaveLength(1);
   });
@@ -425,8 +372,6 @@ describe('skip-mode chunking', () => {
     const stream = createStream({ schema: Schema, initial: INITIAL });
     stream.onError((e) => errors.push(e));
 
-    // The bad meta value contains a string with } and ] that must not
-    // confuse the skip-depth counter.
     stream.write('{"meta":[{"a":"oops}]inside"},2],"name":"after"}');
 
     expect(stream.current().meta).toEqual({ id: 'init-id' });
@@ -439,7 +384,6 @@ describe('skip-mode chunking', () => {
     stream.onError((e) => errors.push(e));
 
     stream.write('{"name":[1,2],"count":7}');
-    // name is array (bad) — skip the array
     expect(stream.current().name).toBe('init-name');
     expect(stream.current().count).toBe(7);
   });
@@ -493,16 +437,11 @@ describe('skip-mode chunking', () => {
     const stream = createStream({ schema: Schema, initial: INITIAL });
     stream.onError((e) => errors.push(e));
 
-    // meta expects object, sending a deeply nested array instead
     stream.write('{"meta":[[{"a":{"b":[1,2,3]}}]],"name":"ok"}');
     expect(stream.current().meta).toEqual({ id: 'init-id' });
     expect(stream.current().name).toBe('ok');
   });
 });
-
-// ───────────────────────────────────────────────────────────
-// Multiple violations in a single write
-// ───────────────────────────────────────────────────────────
 
 describe('recover mode — multiple violations per write', () => {
   it('reports and skips each bad field independently', () => {
@@ -520,10 +459,6 @@ describe('recover mode — multiple violations per write', () => {
     expect(errors).toHaveLength(5);
   });
 });
-
-// ───────────────────────────────────────────────────────────
-// Strict mode — deep violation
-// ───────────────────────────────────────────────────────────
 
 describe('strict mode — deep violation', () => {
   it('halts on a nested field violation', () => {
@@ -549,10 +484,6 @@ describe('strict mode — deep violation', () => {
   });
 });
 
-// ───────────────────────────────────────────────────────────
-// Strict mode — on() listeners stop after failure
-// ───────────────────────────────────────────────────────────
-
 describe('strict mode — listener lifecycle', () => {
   it('on() listeners stop firing after failure', () => {
     const listener = vi.fn();
@@ -573,10 +504,6 @@ describe('strict mode — listener lifecycle', () => {
   });
 });
 
-// ───────────────────────────────────────────────────────────
-// Violation followed by close()
-// ───────────────────────────────────────────────────────────
-
 describe('recover mode — violation then close', () => {
   it('close() after violations resolves final() with current value', async () => {
     const stream = createStream({ schema: Schema, initial: INITIAL });
@@ -588,10 +515,6 @@ describe('recover mode — violation then close', () => {
     expect(result.count).toBe(42);
   });
 });
-
-// ───────────────────────────────────────────────────────────
-// First write is a violation
-// ───────────────────────────────────────────────────────────
 
 describe('recover mode — first write violation', () => {
   it('handles the very first value being bad', () => {
@@ -606,10 +529,6 @@ describe('recover mode — first write violation', () => {
     expect(errors).toHaveLength(1);
   });
 });
-
-// ───────────────────────────────────────────────────────────
-// ZodEnum and ZodLiteral kind checks
-// ───────────────────────────────────────────────────────────
 
 describe('recover mode — enum and literal schemas', () => {
   const EnumSchema = z.object({
@@ -657,10 +576,6 @@ describe('recover mode — enum and literal schemas', () => {
   });
 });
 
-// ───────────────────────────────────────────────────────────
-// Nullable — reject null where non-nullable
-// ───────────────────────────────────────────────────────────
-
 describe('recover mode — null where non-nullable', () => {
   it('rejects null for a non-nullable field', () => {
     const errors: StreamError[] = [];
@@ -673,10 +588,6 @@ describe('recover mode — null where non-nullable', () => {
     expect(errors[0]?.received).toBe('null');
   });
 });
-
-// ───────────────────────────────────────────────────────────
-// Selected stream — negative path filtering
-// ───────────────────────────────────────────────────────────
 
 describe('selected stream — negative path filtering', () => {
   it('does NOT fire onError for unrelated paths', () => {
@@ -692,16 +603,11 @@ describe('selected stream — negative path filtering', () => {
     });
     stream.select('widget').onError((e) => widgetErrors.push(e));
 
-    // Only response has a violation — widget.onError should NOT fire
     stream.write('{"widget":{"title":"ok"},"response":42}');
 
     expect(widgetErrors).toHaveLength(0);
   });
 });
-
-// ───────────────────────────────────────────────────────────
-// Finalize constraints — additional coverage
-// ───────────────────────────────────────────────────────────
 
 describe('finalize constraints — additional', () => {
   it('catches .email() violation at finalize', () => {
@@ -760,22 +666,12 @@ describe('finalize constraints — additional', () => {
     });
     stream.onError((e) => errors.push(e));
 
-    // "a" finalizes when "b" arrives, "b" finalizes when "c" arrives.
-    // "a" should NOT be re-validated when "c" arrives.
     stream.write('{"a":"hi","b":"hello world","c":"end"}');
 
     const aErrors = errors.filter((e) => e.path === 'a');
     expect(aErrors).toHaveLength(1);
   });
 });
-
-// ───────────────────────────────────────────────────────────
-// Empty containers
-// ───────────────────────────────────────────────────────────
-
-// ───────────────────────────────────────────────────────────
-// Integration: strict + finalize + selected stream onError
-// ───────────────────────────────────────────────────────────
 
 describe('integration — strict + finalize + select.onError', () => {
   it('selected stream receives finalize error before halt', () => {
@@ -795,9 +691,6 @@ describe('integration — strict + finalize + select.onError', () => {
     stream.onError((e) => rootErrors.push(e));
     stream.select('user').onError((e) => userErrors.push(e));
 
-    // user.name "ab" (length 2) violates .min(3) at finalize.
-    // Finalize fires after snapshot, so this write's data IS committed.
-    // The halt prevents further writes.
     stream.write('{"user":{"name":"ab"},"data":"hello"}');
 
     expect(rootErrors).toHaveLength(1);
@@ -807,8 +700,6 @@ describe('integration — strict + finalize + select.onError', () => {
     expect(userErrors).toHaveLength(1);
     expect(userErrors[0]?.path).toBe('user.name');
 
-    // Data from this write is committed (finalize fires post-snapshot),
-    // but further writes are blocked.
     expect(stream.current().data).toBe('hello');
     const before = stream.current();
     stream.write('{"data":"more"}');
@@ -816,23 +707,16 @@ describe('integration — strict + finalize + select.onError', () => {
   });
 });
 
-// ───────────────────────────────────────────────────────────
-// Strict mode — verify no snapshot/notify after failure
-// ───────────────────────────────────────────────────────────
-
 describe('strict mode — no snapshot after value-open failure', () => {
   it('does not fire on() listeners for the failing write', () => {
     const listener = vi.fn();
     const stream = createStream({ schema: Schema, initial: INITIAL, mode: 'strict' });
 
-    // Skip the initial fire from on() subscription
     stream.on(listener);
     listener.mockClear();
 
-    // First field is bad — strict should halt before snapshot/notify
     stream.write('{"count":"bad","name":"good"}');
 
-    // The listener should NOT have been called with any partial state
     expect(listener).not.toHaveBeenCalled();
   });
 });
@@ -844,7 +728,6 @@ describe('recover mode — empty containers', () => {
     stream.onError((e) => errors.push(e));
 
     stream.write('{"meta":{}}');
-    // Parser merges into existing object — initial data preserved.
     expect(stream.current().meta).toEqual({ id: 'init-id' });
     expect(errors).toHaveLength(0);
   });
@@ -855,7 +738,6 @@ describe('recover mode — empty containers', () => {
     stream.onError((e) => errors.push(e));
 
     stream.write('{"tags":[]}');
-    // Parser merges into existing array — initial data preserved.
     expect(stream.current().tags).toEqual(['init-tag']);
     expect(errors).toHaveLength(0);
   });

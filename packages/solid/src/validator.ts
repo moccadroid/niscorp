@@ -4,26 +4,6 @@ import type { ParserEvent } from './types';
 import { walkSchema, type SchemaInfo } from './schema-walker';
 import { splitPath, getByPath } from './path';
 
-// ═══════════════════════════════════════════════════════════
-// Validator — enforces the structural invariant during streaming.
-//
-// Two phases:
-//
-//   value-open  — kind check the moment a value's type is known.
-//                 Always on (when mode != trust).
-//                 O(1) per value: schema lookup + Set.has.
-//
-//   finalize    — full sub-schema safeParse when a path closes.
-//                 Opt-in via constraints: 'finalize'.
-//                 Catches .min/.max/.regex/.refine.
-//
-// Three modes:
-//
-//   trust       — no validation. Today's behavior. Debug only.
-//   recover     — emit error, fall back to prior valid value, keep going.
-//   strict      — emit error, mark stream failed; no further updates.
-// ═══════════════════════════════════════════════════════════
-
 export type ValidationMode = 'trust' | 'recover' | 'strict';
 export type ConstraintsMode = 'kind' | 'finalize';
 
@@ -51,8 +31,6 @@ export type Validator = {
   processEvents: (events: ParserEvent[], getRoot: () => unknown) => void;
   isFailed: () => boolean;
 };
-
-// ───────────────────────────────────────────────────────────
 
 export const createValidator = (deps: ValidatorDeps): Validator => {
   let failed = false;
@@ -154,10 +132,6 @@ export const createValidator = (deps: ValidatorDeps): Validator => {
 
   return { valueOpen, processEvents, isFailed };
 };
-
-// ───────────────────────────────────────────────────────────
-// Helpers
-// ───────────────────────────────────────────────────────────
 
 const kindAccepted = (info: SchemaInfo, kind: ValueKind): boolean => {
   if (info.acceptedKinds === 'any') return true;

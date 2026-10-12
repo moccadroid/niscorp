@@ -1,28 +1,6 @@
 import type { ParserEvent } from './types';
 import type { ValueKind } from './schema-walker';
 
-// ═══════════════════════════════════════════════════════════
-// Incremental JSON parser with structural sharing
-//
-// write(chunk) — processes new characters only, O(chunk).
-//   Mutates an internal root object. Returns parser events.
-//
-// snapshot(previous) — produces an immutable snapshot with
-//   structural sharing from `previous`. Only objects along
-//   dirty paths get new references; everything else is shared.
-//   O(dirty_paths × depth), not O(object_size).
-//
-// Together these eliminate both JSON.parse and structuredClone
-// from the hot path.
-//
-// valueOpenHook — fired the moment a value's kind is known
-// (object/array/string/number/boolean/null) at a known path.
-// Returning 'skip' transitions the parser into skip-mode for
-// that subtree: the value is not written, no events are emitted
-// for it, and parsing resumes after the structural close. Used
-// by the validator to enforce the kind-check invariant.
-// ═══════════════════════════════════════════════════════════
-
 export type ValueOpenDecision = 'accept' | 'skip';
 
 export type ValueOpenHook = (path: string, kind: ValueKind) => ValueOpenDecision;
@@ -47,27 +25,20 @@ export const createIncrementalParser = (
   const valueOpenHook = opts.valueOpenHook;
   const root = structuredClone(base);
 
-  // ─── Navigation ───
   const containerStack: unknown[] = [];
   const containerTypeStack: ('object' | 'array')[] = [];
   const arrayIndexStack: number[] = [];
   let currentKey = '';
 
-  // ─── Path tracking (for events + dirty marking) ───
   const pathStack: string[] = [];
   let hasUnpoppedValue = false;
 
-  // ─── Dirty tracking ───
-  // Maps parent path → set of dirty child keys.
-  // e.g. modifying widget.type records: '' → {'widget'}, 'widget' → {'type'}
   const dirtyParents = new Map<string, Set<string>>();
   let isDirty = false;
 
-  // ─── Scanner state ───
   let afterColon = false;
   let expectingValue = false;
 
-  // ─── Value accumulation ───
   let collectingKey = false;
   let accumulatingString = false;
   let accumulatingLiteral = false;
@@ -76,18 +47,13 @@ export const createIncrementalParser = (
   let unicodeDigits = '';
   let inUnicodeEscape = false;
 
-  // ─── Skip-mode state ───
-  // Triggered when valueOpenHook returns 'skip' for a value-open. The parser
-  // consumes characters without writing values, emitting events, or marking
-  // anything dirty. The path remains on the stack with hasUnpoppedValue=true,
-  // so the next ',' or '}' / ']' pops it normally.
+  // A skipped value's path stays on pathStack with hasUnpoppedValue set, so the
+  // next ',', '}' or ']' pops it as it does an accepted value's.
   let skipping = false;
   let skipKind: 'string' | 'object' | 'array' | 'literal' = 'string';
   let skipDepth = 0;
   let skipInString = false;
   let skipStringEscape = false;
-
-  // ─── Helpers ───
 
   const currentPath = (): string => pathStack.join('.');
 
@@ -116,9 +82,8 @@ export const createIncrementalParser = (
   };
 
   const setValue = (value: unknown): void => {
-    // No container is open: a string that begins outside the reply (a quoted
-    // word in the text around it, where nothing validates), or a root that is
-    // not a container. There is nowhere to write it, and write() never throws.
+    // No container is open when a string begins in the text around the reply or
+    // the root is not a container. write() does not throw: the value is dropped.
     if (containerStack.length === 0) return;
     const container = topContainer();
     let existing: unknown;
@@ -132,10 +97,6 @@ export const createIncrementalParser = (
       existing = arr[idx];
       arr[idx] = value;
     }
-    // Only mark dirty if the value actually changed.
-    // For primitives, === catches identity. For containers (objects/arrays
-    // created by enterContainer), the reference is always new so this
-    // always marks dirty — which is correct.
     if (value !== existing) {
       markDirty();
     }
@@ -176,9 +137,6 @@ export const createIncrementalParser = (
     containerTypeStack.push(type);
   };
 
-  // ─── Skip-mode helper ───
-  // Returns true if the hook accepted the value (continue normally),
-  // false if the parser is now in skip-mode (caller should `continue`).
   const checkValueOpen = (path: string, kind: ValueKind): boolean => {
     if (!valueOpenHook) return true;
     const decision = valueOpenHook(path, kind);
@@ -210,13 +168,10 @@ export const createIncrementalParser = (
     skipKind = 'literal';
   };
 
-  // ─── Write ───
-
   const write = (chunk: string): ParserEvent[] => {
     const events: ParserEvent[] = [];
 
     for (const ch of chunk) {
-      // ── Skip mode ──
       if (skipping) {
         switch (skipKind) {
           case 'string': {
@@ -270,16 +225,13 @@ export const createIncrementalParser = (
           }
           case 'literal': {
             if (isLiteralChar(ch)) continue;
-            // Delimiter — exit skip and let outer switch process it.
             skipping = false;
-            // Fall through to normal handling.
             break;
           }
         }
         if (skipping) continue;
       }
 
-      // ── String accumulation ──
       if (accumulatingString) {
         if (inUnicodeEscape) {
           unicodeDigits += ch;
@@ -325,7 +277,6 @@ export const createIncrementalParser = (
         continue;
       }
 
-      // ── Literal accumulation ──
       if (accumulatingLiteral) {
         if (isLiteralChar(ch)) {
           valueBuffer += ch;
@@ -337,10 +288,8 @@ export const createIncrementalParser = (
         }
         valueBuffer = '';
         accumulatingLiteral = false;
-        // Fall through — ch is a delimiter
       }
 
-      // ── Structural tokens ──
       switch (ch) {
         case '{': {
           const isRoot = containerStack.length === 0;
@@ -426,7 +375,6 @@ export const createIncrementalParser = (
 
         case '"': {
           if (topContainerType() === 'object' && !afterColon) {
-            // Key, not a value — never validated by hook
             accumulatingString = true;
             valueBuffer = '';
             collectingKey = true;
@@ -441,8 +389,6 @@ export const createIncrementalParser = (
           }
           if (!checkValueOpen(currentPath(), 'string')) {
             enterSkipString();
-            // Match accept-side state changes that happen on string close.
-            // hasUnpoppedValue stays true; ',' or '}' will pop.
             break;
           }
           accumulatingString = true;
@@ -505,7 +451,6 @@ export const createIncrementalParser = (
       }
     }
 
-    // Flush partial literal at end of chunk
     if (accumulatingLiteral && valueBuffer.length > 0) {
       const parsed = parseLiteral(valueBuffer);
       if (parsed.ok) {
@@ -516,8 +461,6 @@ export const createIncrementalParser = (
     return events;
   };
 
-  // ─── Snapshot with structural sharing ───
-
   const snapshot = <T>(previous: T): SnapshotResult<T> => {
     if (!isDirty) return { changed: false };
 
@@ -527,13 +470,10 @@ export const createIncrementalParser = (
     return { changed: true, value };
   };
 
-  // A dirty child with no dirty children of its own is a value the parser has
-  // just written. A primitive is handed over as it is. A container is one the
-  // parser has only now opened and will go on writing into, so the snapshot
-  // takes a copy of it — or a value a consumer kept would gain keys under them.
-  // It is empty in every ordinary case, so the copy is one allocation; it goes
-  // deep because an empty-string key is never marked dirty, and a container
-  // reached only through one would otherwise still be the parser's own.
+  // A dirty container with no dirty children is one the parser has just opened
+  // and will go on writing into, so the snapshot copies it: a value a consumer
+  // kept would otherwise gain keys. Deep, because markDirty skips an
+  // empty-string key and a container under one would still be the parser's own.
   const detachValue = (value: unknown): unknown => {
     if (Array.isArray(value)) return value.map(detachValue);
     if (typeof value === 'object' && value !== null) {
@@ -545,7 +485,6 @@ export const createIncrementalParser = (
   const shareStructure = (source: unknown, previous: unknown, path: string): unknown => {
     const dirtyKeys = dirtyParents.get(path);
 
-    // No dirty children at this path — reuse previous reference entirely
     if (!dirtyKeys) return previous;
 
     if (Array.isArray(source)) {
@@ -590,10 +529,6 @@ export const createIncrementalParser = (
   return { write, snapshot };
 };
 
-// ───────────────────────────────────────────────────────────
-// String unescape
-// ───────────────────────────────────────────────────────────
-
 const unescapeChar = (ch: string): string => {
   switch (ch) {
     case '"': return '"';
@@ -607,10 +542,6 @@ const unescapeChar = (ch: string): string => {
     default: return ch;
   }
 };
-
-// ───────────────────────────────────────────────────────────
-// Literal parsing
-// ───────────────────────────────────────────────────────────
 
 const isLiteralChar = (ch: string): boolean =>
   (ch >= '0' && ch <= '9') || ch === '.' || ch === '-' || ch === '+' ||
@@ -628,7 +559,6 @@ const parseLiteral = (buf: string): LiteralResult => {
   return { ok: false };
 };
 
-// First-char heuristic to determine literal value kind for value-open hook.
 const literalKindFromChar = (ch: string): ValueKind => {
   if (ch === 't' || ch === 'f') return 'boolean';
   if (ch === 'n') return 'null';

@@ -2,10 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import { walkSchema, inspectSchema, allowsUndefined } from '../src/schema-walker';
 
-// ═══════════════════════════════════════════════════════════
-// Schema walker
-// ═══════════════════════════════════════════════════════════
-
 describe('walkSchema — path traversal', () => {
   const schema = z.object({
     name: z.string(),

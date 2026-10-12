@@ -87,7 +87,6 @@ describe('createFinalizationTracker', () => {
     ]);
 
     expect(tracker.isRootFinal()).toBe(true);
-    // Any path is considered final when root is final
     expect(tracker.isFinal('anything')).toBe(true);
   });
 
@@ -100,8 +99,7 @@ describe('createFinalizationTracker', () => {
     ];
 
     tracker.process(events);
-    tracker.process(events); // duplicate
-    // Should not throw or double-finalize
+    tracker.process(events);
     expect(tracker.isFinal('a')).toBe(false);
   });
 });
