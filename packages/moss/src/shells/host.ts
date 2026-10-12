@@ -72,15 +72,15 @@ const takeLayouts = (live: Live, made: ShellComposition): void => {
 const adopt = (host: HostState, cell: Cell): void => {
   const adopting = async (): Promise<void> => {
     if (cell.live.ended) return;
-    // Read before the await, so the answer reflects at least this change.
-    const number = host.changeNumber;
+    // Read before the await, so the answer reflects at least this many changes.
+    const changes = host.changes;
     const made = await host.config.composition(cell.principal);
     // Read after the await: a reset may have replaced the cell's shell meanwhile.
     const live = cell.live;
     // Two changes are answered by app code in either order. An answer for a
-    // number the shell already reflects is the older one, and is dropped.
-    if (live.ended || number <= cell.number) return;
-    cell.number = number;
+    // change the shell already reflects is the older one, and is dropped.
+    if (live.ended || changes <= cell.changes) return;
+    cell.changes = changes;
     for (const [name, contract] of Object.entries(made.components)) {
       if (!live.shell.registry.has(name)) live.shell.registry.register(name, contract);
     }
@@ -95,22 +95,21 @@ const adopt = (host: HostState, cell: Cell): void => {
   });
 };
 
-// A shell whose build is under way is not walked: it lands with a number
-// below the change's, and adopts then (`settleIn`).
+// A shell whose build is under way is not walked: it lands reflecting fewer
+// changes than there have been, and adopts then (`settleIn`).
 const adoptAll = (host: HostState): void => {
-  host.lastNumber += 1;
-  host.changeNumber = host.lastNumber;
+  host.changes += 1;
   for (const cell of [...host.living.values()]) adopt(host, cell);
 };
 
-type Built = { live: Live; number: number };
+type Built = { live: Live; changes: number };
 
 // Bounded, because a build runs app code, which can hang: past the limit
 // whoever waited is refused. `undefined`: it stopped because nobody wanted it
 // any more (`wanted`), and nobody is refused.
 const build = (host: HostState, asked: Omit<BuildRequest, 'wanted'>, wanted: () => boolean = () => true): Promise<Built | undefined> => {
-  host.lastNumber += 1;
-  const number = host.lastNumber;
+  // Read before the build asks anything, so its shell reflects at least these.
+  const changes = host.changes;
   const limit = host.config.limits?.endpointTimeoutMs ?? DEFAULT_BUILD_TIMEOUT_MS;
   return new Promise((resolve, reject) => {
     let inTime = true;
@@ -120,7 +119,7 @@ const build = (host: HostState, asked: Omit<BuildRequest, 'wanted'>, wanted: () 
     }, limit);
     timer.unref?.();
     buildShell(host, { ...asked, wanted: () => inTime && wanted() })
-      .then((live) => resolve(live === undefined ? undefined : { live, number }), reject)
+      .then((live) => resolve(live === undefined ? undefined : { live, changes }), reject)
       .finally(() => clearTimeout(timer));
   });
 };
@@ -135,12 +134,12 @@ const whole = (built: Built | undefined): Built => {
 const settleIn = (host: HostState, cell: Cell): void => {
   if (cell.live.ended) return;
   host.living.set(cell.live, cell);
-  if (cell.number < host.changeNumber) adopt(host, cell);
+  if (cell.changes < host.changes) adopt(host, cell);
 };
 
 const open = async (host: HostState, asked: Omit<BuildRequest, 'reset' | 'wanted'>, keep: boolean): Promise<Cell> => {
-  const { live, number } = whole(await build(host, { ...asked, reset: false }));
-  const cell: Cell = { live, token: asked.token, principal: asked.principal, ...(asked.opening !== undefined ? { opening: asked.opening } : {}), number };
+  const { live, changes } = whole(await build(host, { ...asked, reset: false }));
+  const cell: Cell = { live, token: asked.token, principal: asked.principal, ...(asked.opening !== undefined ? { opening: asked.opening } : {}), changes };
   if (keep && asked.principal !== null) host.durable.set(asked.principal, cell);
   settleIn(host, cell);
   return cell;
@@ -182,7 +181,7 @@ const replaceShell = async (host: HostState, cell: Cell): Promise<void> => {
   old.connections.clear();
   old.shell.dispose();
   cell.live = built.live;
-  cell.number = built.number;
+  cell.changes = built.changes;
   settleIn(host, cell);
   for (const { connection, wants } of carried) attach(built.live, connection, host.delta && wants);
 };
@@ -259,8 +258,7 @@ export const createShellHost = (config: ShellHostConfig): OwnedShellHost => {
     durable: new Map(),
     building: new Map(),
     living: new Map(),
-    lastNumber: 0,
-    changeNumber: 0,
+    changes: 0,
   };
   const reset = (cell: Cell): void => resetCell(host, cell);
 

@@ -43,8 +43,8 @@ export type Cell = {
   principal: string | null;
   opening?: ShellOpening;
   resetting?: Promise<void>;
-  // Of the build its shell came from, or of the change it last adopted.
-  number: number;
+  // How many of the host's changes its shell reflects.
+  changes: number;
 };
 
 export type HostState = {
@@ -55,8 +55,8 @@ export type HostState = {
   durable: Map<string, Cell>;
   building: Map<string, Promise<Cell>>;
   living: Map<Live, Cell>;
-  lastNumber: number;
-  changeNumber: number;
+  // How many times what is in force has changed since the host was made.
+  changes: number;
 };
 
 // Disposing stays with the caller: the shell of a session that signs out
