@@ -94,7 +94,18 @@ export const secretsEqual = (a: string, b: string): boolean =>
 // is: a stranger cannot tell the prefix is there.
 export const guardOperator = (operator: Hono<Env>, opts: { key: string; gate?: NiscRuntime['operatorGate'] }): void => {
   const gate = opts.gate;
-  if (gate !== undefined) operator.use('*', (c: Context<Env>, next) => Promise.resolve(gate(c, next)));
+  if (gate !== undefined) {
+    operator.use('*', async (c: Context<Env>, next) => {
+      let wentOn = false;
+      const answer = await gate(c, async () => {
+        wentOn = true;
+        await next();
+      });
+      // A gate that answers nothing has not refused: the key check decides.
+      if (answer === undefined && !wentOn) await next();
+      return answer;
+    });
+  }
   operator.use('*', async (c, next) => {
     const presented = c.req.header('x-operator-key') ?? '';
     if (opts.key === '' || !secretsEqual(presented, opts.key)) return c.json({ message: 'Not found.' }, 404);

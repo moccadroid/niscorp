@@ -59,6 +59,12 @@ describe('guardOperator — the app gate governs the whole prefix', () => {
     expect(seen).toContain('/operator/integrations');
   });
 
+  it('a gate that returns nothing and does not call next falls through to moss’s key check', async () => {
+    const server = prefix({ key: 'K', gate: () => undefined });
+    expect((await call(server, 'K')).status).toBe(200);
+    expect((await call(server, 'wrong')).status).toBe(404);
+  });
+
   it('a gate that returns a Response refuses BEFORE moss’s key check', async () => {
     const server = prefix({ key: 'K', gate: () => new Response('nope', { status: 401 }) });
     expect((await call(server, 'K')).status).toBe(401);
