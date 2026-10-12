@@ -165,7 +165,11 @@ Cortex registers one synthetic tool per run:
   own `data`-named field (a Nova action) colliding with the
   envelope's. When the output is not a plausible envelope but
   validates cleanly against the data schema, it is accepted as
-  `{ data: <raw> }`. Envelope-first precedence; safe only because
+  `{ data: <raw> }`. That reading is taken only when the data schema
+  refuses an object that holds one unknown key: a schema that accepts
+  such an object cannot tell a bare payload from an envelope with a
+  misspelt key, and the output is then judged as an envelope.
+  Envelope-first precedence; safe only because
   real data schemas are strict and discriminating — a correct
   answer is never failed for missing its coat.
 - **Validation feedback in-loop.** Invalid `respond` args are

@@ -67,7 +67,9 @@ A chat agent omits `output.schema` (its `response` becomes required);
 a data agent sets it; a rich assistant returns both — prose *and* a
 payload in one turn. Run-level metadata (usage, resolved strategy,
 attempts, elapsed) is authored by cortex on `result.meta`, never by
-the model.
+the model. `meta.usage.reported` is `false` when any step's tokens
+were counted by Signal instead of reported by the provider; the
+totals are then an estimate.
 
 ```ts
 const result = await agent.run(input, { llm, deps }).result;
@@ -136,12 +138,25 @@ Defaults when `stopWhen` is omitted: `stepCount(20)`,
 a turn of prose with no envelope in it is corrected without being
 counted. `outputRetries(n)` ends the run at the n-th refused answer:
 n attempts, n − 1 corrections, so `outputRetries(1)` allows no
-second attempt.
+second attempt. `repeatedCalls(n)` ends the run when a tool call has
+got the same answer as the call before it n times in a row — the same
+tool, the same arguments, the same result or error — which is n + 1
+identical calls.
 
 `policy.tools` lists take tool **ids** (`tool.id`), not the names
 the model calls: a name in `deny` or `requireApproval` matches
 nothing and says nothing, and a name in `allow` leaves the tool off
 the list.
+
+`prepareStep`'s `activeTools` is the other way round: it takes the
+**names** the model calls, the strings its `tools` argument lists,
+and a tool whose name is not in it is not offered on that step. The
+`respond` tool cannot be masked.
+
+`transport: 'step'` calls the model without streaming: the run emits
+no `model-delta`, `output-delta` or `output-partial`. It is for a
+provider and model pair that assembles tool-call arguments more
+reliably outside streaming. The default is `'stream'`.
 
 Multi-turn history is caller-owned: `input` accepts a `string`, a
 `Message[]` transcript, or any JSON value.
@@ -153,7 +168,7 @@ agent.run(input, {
   llm, deps,
   tools: [perRequestTool],   // appended to the agent's static tools
   gates: [uiApprovalGate],
-  onToolResult: [traceHook],
+  onToolResult: [traceHook], // run after the agent's own hooks
   onEvent: (e) => …,
   signal: abortController.signal,
 });
@@ -172,6 +187,9 @@ for await (const e of run.events) {
 const result = await run.result;   // the no-streaming opt-out
 ```
 
+- `run-start` is emitted before `agent.run()` returns: the `onEvent`
+  option and `run.events` deliver it, a listener added with
+  `run.onEvent` does not.
 - `tool-start` fires **before** execution — drives live "running…" UIs.
 - `tool-end` carries a typed `ToolObservation` union (result / error /
   denied / unknown-tool). No casting. Through Signal, `unknown-tool`
@@ -189,9 +207,16 @@ const result = await run.result;   // the no-streaming opt-out
   Both stream before cortex knows how the step ends: words written
   beside a tool call (under `emit` and `native`) and a `respond` sent
   beside other calls arrive as `output-delta` too and are not the
-  answer. The answer is what the last step streamed.
+  answer. The answer is what the last step streamed. `output-partial`
+  is best-effort: a run emits none when Solid cannot follow the
+  schema or the text, and the run's result is validated on its own
+  either way.
 - `retry` resets partial-output state (same contract consumers had
-  in v1).
+  in v1). Its `kind` says what is retried: `output` — an envelope
+  arrived and was refused; `termination` — the step ended with no
+  envelope in it; `provider` — the provider rejected the model's
+  attempt on its side. Only `output` counts against `outputRetries`,
+  and `attempt` numbers each kind on its own.
 - Nested runs (`asTool`) forward their events into the parent stream
   with an extended `agentPath` — one subscription sees the tree.
 
@@ -201,7 +226,9 @@ const result = await run.result;   // the no-streaming opt-out
 
 All steering is plain typed functions; `policy` is sugar that
 compiles into one gate. Gates run **before** the call; a deny becomes
-a tool error the model reacts to; the run continues.
+a tool error the model reacts to; the run continues. They run in
+order — the `policy` gate, the agent's `toolGates`, the manifold's
+`gates`, the run's `gates` — and the first deny ends the chain.
 
 ```ts
 type GateDecision =
@@ -230,8 +257,12 @@ pending call and `approval-required` fires again, with a **new** id.
 Answer with that event's id, as above. `snapshot.pending.approvalId` is
 the ask of the run the snapshot was taken from; the resumed run did not
 ask under it, and `approve` or `deny` with it does nothing.
+The resumed run keeps the snapshot's run id, transcript, step and
+output-retry counts, usage and elapsed time, so `stepCount`, `tokens`,
+`duration` and `outputRetries` count on from there.
 `policy.approvalTimeoutMs` turns an unanswered ask into a denial
-(an observation, not a run failure).
+(an observation, not a run failure). The denial's `reason` is
+`approval timeout`.
 
 ---
 
@@ -268,6 +299,12 @@ The child's envelope maps to the tool result (`data` if present, else
 `response`; override with `select`), and its events nest in the
 parent stream.
 
+A tool that runs an agent itself gets the same nesting from the
+context `execute` is handed: `agent.run(input, { onEvent:
+ctx.forward, agentPath: ctx.agentPath })`. `forward` puts the child's
+events on the parent's stream, and the child appends its own id to
+the path it is given.
+
 ---
 
 ## preview
@@ -279,7 +316,7 @@ const p = await agent.preview(input, { deps, llm });
 p.strategy;          // 'respond' | 'native' | 'emit' — what would actually run
 p.messages;          // the assembled prefix, including injected schema docs
 p.tools;             // real descriptors, including the respond tool's params
-p.estimatedTokens;
+p.estimatedTokens;   // rough: characters / 4, plus 4 per message and 256 per non-text part
 ```
 
 Anything you can't explain in the preview, the model can't either.
