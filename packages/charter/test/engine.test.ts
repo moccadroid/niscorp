@@ -2,13 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { resolveRole, resolvePrincipal, verifyCharter, CharterError, matchGlob } from '../src/index';
 import type { Charter } from '../src/index';
 
-// The grammar corpus — the algebra from CHARTER.md, exercised on synthetic
-// charters over synthetic universes. The engine is universe-blind: these
-// strings mean nothing, which is the point.
-
 const gids = ['a.one', 'a.two', 'b.one'];
 const G: Charter = {
-  base: ['a.*'], // bare array → actions sugar
+  base: ['a.*'],
   denyWins: { actions: { allow: ['a.*'], deny: ['a.two'] } },
   child: { extends: ['denyWins'], actions: ['a.two'] },
   muzzle: ['a.one'],
@@ -65,7 +61,6 @@ describe('resolution', () => {
     };
     const variants = ['a.one.basic', 'a.two.compact'];
     expect(sorted(resolveRole(L, variants, 'viewer', 'layouts'))).toEqual(['a.one.basic']);
-    // extends composes every section — a child sheds an inherited variant by denying it
     expect(sorted(resolveRole(L, variants, 'sales', 'layouts'))).toEqual([]);
     expect(sorted(resolveRole(L, variants, 'bare', 'layouts'))).toEqual([]);
   });
@@ -116,10 +111,8 @@ describe('verifier', () => {
 
   it('the layouts universe is verified only when handed in', () => {
     const charter: Charter = { r: { actions: ['a.*'], layouts: ['a.one.basic'] }, all: ['*'] };
-    // No layouts universe → the section is inert: no dead-allow for it.
     const without = verifyCharter(charter, universes(gids));
     expect(without.warnings.some((w) => w.detail.includes('layouts'))).toBe(false);
-    // Handed in → dead denies are errors, orphans are warnings, per-role sets carry it.
     const withU = verifyCharter(
       { r: { actions: ['a.*'], layouts: { allow: ['a.one.basic'], deny: ['zz.*'] } }, all: ['*'] },
       { ...universes(gids), layouts: ['a.one.basic', 'a.two.compact'] },

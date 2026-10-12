@@ -2,50 +2,22 @@ import type { Charter, Section } from './types';
 import { matchAll } from './glob';
 import { CharterError, normalizeRole, resolveRole } from './resolve';
 
-// ═══════════════════════════════════════════════════════════
-// The verifier — the other half of the charter (DESIGN.md § The verifier
-// is the other half). The grammar
-// stays small; the opinions live here. Boot/CI runs it and refuses an
-// incoherent charter: "if it boots, it's coherent."
-//
-// Every check runs PER SECTION against that section's universe. Like the
-// resolver, the verifier is universe-blind: every universe is HANDED IN
-// (the atoms are each governed target's own dialect — nova action ids, vex
-// verb leaves), and the per-role closure audit is an injected hook (nova
-// exports one), so this module imports nothing. Severities are asymmetric
-// on purpose: a dead DENY is an error (a typo'd deny fails silent, and
-// silent means unprotected); a dead allow is a warning.
-// ═══════════════════════════════════════════════════════════
-
 export type VerifyIssue = { level: 'error' | 'warning'; rule: string; detail: string };
 
 export type RoleClosure = { role: string; actions: string[]; data: string[]; layouts: string[]; issues: string[] };
 
 export type VerifyReport = { errors: VerifyIssue[]; warnings: VerifyIssue[]; perRole: RoleClosure[] };
 
-// The per-role closure audit: given a role's granted action ids (and, when
-// the app governs layouts, its granted layout-variant ids), report the
-// cross-action wiring problems inside that closure (targets that aren't in
-// it, channels nobody serves). The consumer that OWNS actions provides it —
-// moss builds one from nova's audit, substituting granted variants so the
-// closure sees each role's EFFECTIVE definitions.
 export type ClosureAuditor = (grantedIds: readonly string[], layoutIds?: readonly string[]) => string[];
 
 export const verifyCharter = (
   charter: Charter,
   universes: { actions: readonly string[]; data: readonly string[]; layouts?: readonly string[] },
-  // THE ROLE COMBINATIONS A PRINCIPAL MAY WEAR — one entry per combination, not
-  // one per person. The only rule below that reads it (`subtractive-assigned`)
-  // wants the set of roles somebody actually holds, and a population is a very
-  // expensive way to spell a set. A composer that still holds an assignment map
-  // passes `Object.values(map)`; one that declares its combinations passes them.
+  // One entry per combination of roles a principal may hold, not one per principal.
   wearable: readonly (readonly string[])[] = [],
   closure?: ClosureAuditor,
 ): VerifyReport => {
   const actionUniverse = universes.actions;
-  // The layouts section is verified only when the composer governs layouts
-  // (hands a universe in) — absent, a charter's `layouts` keys are inert
-  // here exactly as they are in resolution against an empty universe.
   const sections: Section[] = universes.layouts === undefined ? ['actions', 'data'] : ['actions', 'data', 'layouts'];
   const universeOf: Record<Section, readonly string[]> = {
     actions: universes.actions,
@@ -57,8 +29,6 @@ export const verifyCharter = (
   const warnings: VerifyIssue[] = [];
   const perRole: RoleClosure[] = [];
 
-  // Resolve every role in every section up front (also surfaces cycles /
-  // unknown references, per section).
   const resolved: Record<Section, Map<string, ReadonlySet<string>>> = { actions: new Map(), data: new Map(), layouts: new Map() };
   for (const section of sections) {
     const memo = new Map<string, ReadonlySet<string>>();
@@ -71,8 +41,6 @@ export const verifyCharter = (
     }
   }
 
-  // ── ids are leaves; namespaces are never actions. Same rule inside the
-  //    layouts universe — a variant id is never a namespace of another ──
   const leavesOnly = (universe: readonly string[], kind: string): void => {
     for (const a of universe) {
       for (const b of universe) {
@@ -86,9 +54,6 @@ export const verifyCharter = (
   leavesOnly(actionUniverse, 'actions');
   if (universes.layouts !== undefined) leavesOnly(universes.layouts, 'variants');
 
-  // ── one selection per section: top-level allow/deny (the actions sugar)
-  //    AND an `actions` key on the same role means resolution silently drops
-  //    the sugar — silent means wrong, so boot refuses ──
   for (const [role, def] of Object.entries(charter)) {
     if (Array.isArray(def)) continue;
     if (def.actions !== undefined && (def.allow !== undefined || def.deny !== undefined)) {
@@ -96,7 +61,6 @@ export const verifyCharter = (
     }
   }
 
-  // ── dead deny = error, dead allow = warning; per glob, per role, per section ──
   for (const section of sections) {
     for (const [role, def] of Object.entries(charter)) {
       const { allow, deny } = normalizeRole(def, section);
@@ -113,9 +77,7 @@ export const verifyCharter = (
     }
   }
 
-  // ── orphans: matched by no role at all. Actions and layout variants share
-  //    the rule — both are deployed-but-unreachable artifacts. An ungranted
-  //    data phase is simply denied, not a mistake ──
+  // Not run for `data`: a data id no role grants is denied, which is not a mistake.
   const orphans = (section: Section, kind: string): void => {
     const reachable = new Set<string>();
     for (const set of resolved[section].values()) for (const id of set) reachable.add(id);
@@ -126,7 +88,6 @@ export const verifyCharter = (
   orphans('actions', 'action');
   if (universes.layouts !== undefined) orphans('layouts', 'layout variant');
 
-  // ── re-allow of an ancestor's deny (F1), per section ──
   const ancestorDenied = (role: string, section: Section, seen: Set<string> = new Set()): Set<string> => {
     const out = new Set<string>();
     const def = charter[role];
@@ -150,7 +111,6 @@ export const verifyCharter = (
     }
   }
 
-  // ── a role referenced in `without` that principals also wear (F2) ──
   const subtractive = new Set<string>();
   for (const def of Object.values(charter)) {
     if (Array.isArray(def)) continue;
@@ -163,8 +123,6 @@ export const verifyCharter = (
     }
   }
 
-  // ── per-role closure: the action-catalog audit (cross-action wiring),
-  //    fed the role's granted variants so it audits EFFECTIVE definitions ──
   for (const role of Object.keys(charter)) {
     const actions = [...(resolved.actions.get(role) ?? [])].sort();
     const data = [...(resolved.data.get(role) ?? [])].sort();
