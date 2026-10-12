@@ -333,13 +333,13 @@ driver (about 470 lines of code), which are in the tide package now.
 | | Base `9e88009` | Now |
 |---|---|---|
 | `packages/moss/src` files | 43, of them 28 at the top of `src/` | 89 in 15 directories, `index.ts` at the top |
-| lines of code | 5,829 | 7,420 |
-| comment lines | 4,056 | 368 |
+| lines of code | 5,829 | 7,432 |
+| comment lines | 4,056 | 373 |
 | longest function as written | 1,345 lines (`createServer`) | 95 lines (`createRunningManifest`) |
 | largest file, lines of code | 862 (`server.ts`) | 284 (`integrations/operator.ts`) |
 | type assertions | about 110 | 0 |
 | files that import zod | 1 | 15 |
 | names on the main entry; on all entries | 135; 185 over 14 | 30; 90 over 18 |
 | statements the SQL gate counts with no reason | 28 | 0 |
-| moss tests (vitest's count) | 616 in 43 files | 1,083 in 75 files |
-| lines of moss tests | 9,159 | 16,541 |
+| moss tests (vitest's count) | 616 in 43 files | 1,086 in 75 files |
+| lines of moss tests | 9,159 | 16,577 |
