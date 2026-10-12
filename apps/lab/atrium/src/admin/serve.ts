@@ -1,4 +1,3 @@
-// .env first — OPERATOR_KEY lives there, on both sides of the seam.
 try {
   process.loadEnvFile();
 } catch {
@@ -8,10 +7,6 @@ try {
 import { startAdminService } from './service';
 import { atriumBase, operatorKey } from './port';
 import { adminToken } from './token';
-
-// `pnpm --filter atrium admin`. Its own process, so it restarts on its own
-// clock and the app it administers never notices — the same posture the
-// integrations service has, and the reason both live outside src/app.
 
 const main = async (): Promise<void> => {
   if (operatorKey() === '') {

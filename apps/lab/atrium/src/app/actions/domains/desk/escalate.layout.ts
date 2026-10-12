@@ -1,14 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Handing something to a named human.
-//
-// It writes a task, and using a task rather than inventing a channel is the
-// whole design: a task already means "somebody must do this", already carries an
-// assignee and a status, and is already read by the surfaces that show work. The
-// only thing it was missing was room for a sentence, which is one column.
-//
-// The receiving end is the stall list — an escalation nobody can see is a
-// message thrown over a wall.
 export const escalateLayout: LayoutNode = {
   if: '$.done',
   then: {

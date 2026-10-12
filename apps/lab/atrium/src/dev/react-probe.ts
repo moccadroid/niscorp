@@ -1,7 +1,3 @@
-// The browser path, headless: jsdom + the REAL react registry + the REAL wire
-// against the running dev server. Whatever throws in a component throws HERE,
-// with a stack — the dev checks assert server trees and never execute React,
-// which is exactly how a render crash slips past a green suite.
 import { JSDOM } from 'jsdom';
 
 const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { url: 'http://localhost:5175/' });

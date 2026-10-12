@@ -4,15 +4,6 @@ import { keyLayout } from './key.layout';
 import { stayDetailPrism, issueKeyPrism } from './stay.prism';
 import { previewable, previewTriggers } from '@atrium/app/actions/preview';
 
-// The payoff of a shipped integration. This action exists in the charter for
-// every guest at every property; it is only ever PLACED where the connector's
-// live version implements `key.issue` and the property turned it on.
-//
-// Cutting a credential is a two-step on purpose: the connector service is a
-// separate process on its own deployment clock, so `cut` goes over the wire to
-// it and only a success persists to our own row. If that service is down the
-// guest gets a plain sentence, and nothing in our database claims a key exists
-// that does not.
 export const stayKeyAction: ActionDefinition = {
   id: 'stay.key',
   title: 'Room key',

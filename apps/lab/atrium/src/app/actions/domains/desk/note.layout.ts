@@ -1,12 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// What the desk knows about a guest, and how it gets written down.
-//
-// The oldest artefact in hotel-keeping and the one thing every front office
-// actually runs on. It is staff-only by charter rather than by a flag, so there
-// is no "visible to guest" switch anywhere on this card and there never will be:
-// a note reading "difficult, watch the bill" cannot resolve onto the shell of
-// the person it is about because their role does not name the table.
 export const noteLayout: LayoutNode = {
   if: '$.stayId',
   then: {

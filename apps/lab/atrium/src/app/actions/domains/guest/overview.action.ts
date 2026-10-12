@@ -3,8 +3,6 @@ import type { ActionDefinition } from '@niscorp/nova';
 import { overviewLayout } from './overview.layout';
 import { stayDetailPrism, stayIssuesPrism } from './stay.prism';
 
-// The stay in full, plus anything the guest has already raised. Two independent
-// sections, two endpoints, two slots — the detail pattern.
 export const stayOverviewAction: ActionDefinition = {
   id: 'stay.overview',
   title: 'Your stay',

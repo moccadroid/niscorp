@@ -7,11 +7,6 @@ export const connectorsLayout: LayoutNode = {
     component: 'Stack',
     props: { gap: 24, maxWidth: 1100 },
     children: [
-      // ── the pull, on its own ─────────────────────────────
-      // Discovery is a first-class operation, not a side effect of flipping a
-      // switch: this asks every connector's service for its bundle and runs
-      // it through intake. It is also the way back when the app booted with a
-      // service down — there are no switches to stage until a pull lands one.
       {
         component: 'Row',
         props: { justify: 'between', align: 'center', gap: 12, wrap: true },
@@ -21,8 +16,6 @@ export const connectorsLayout: LayoutNode = {
             props: { size: 'sm', color: 'mute' },
             children: 'Everything below arrived over the wire. The app ships with no knowledge of any of these vendors.',
           },
-          // Labelled by what it will actually do: with a connector open the
-          // pull is scoped to it, otherwise it walks the estate.
           {
             component: 'Button',
             ref: 'sync',
@@ -36,9 +29,6 @@ export const connectorsLayout: LayoutNode = {
         ],
       },
 
-      // What the last pull said, per connector — landed, or the reasons
-      // intake refused it. A refusal changes nothing on disk, so this list is
-      // the only place it is visible, and it names the reason.
       {
         if: '$.sync.length',
         then: {
@@ -110,7 +100,6 @@ export const connectorsLayout: LayoutNode = {
         },
       },
 
-      // ── the offer, when a connector is open ───────────────
       {
         if: '$.selected.connector_id',
         then: {

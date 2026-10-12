@@ -5,7 +5,6 @@ export const timelineLayout: LayoutNode = panel(
   'Timeline',
   'Every endpoint the living shells called — names and timings, never payloads',
   split(
-    // ── left: whose calls, and how they went ──
     {
       component: 'Stack',
       props: { gap: 14 },
@@ -42,7 +41,6 @@ export const timelineLayout: LayoutNode = panel(
       ],
     },
 
-    // ── right: the feed ──
     {
       component: 'Stack',
       props: { gap: 12 },

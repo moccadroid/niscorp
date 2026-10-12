@@ -1,10 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The desk's view of one guest's bill, with the correction Opera allows.
-//
-// Two steps and both are the clerk's: pick the line, say why. The reason is
-// required because a reversal without one is how folios rot — and the vendor
-// refuses it anyway, which is where the requirement actually lives.
 export const folioLayout: LayoutNode = {
   component: 'Box',
   props: { py: 18, px: 18 },

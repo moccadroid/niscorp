@@ -1,12 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Sending a guest's ask to the floor.
-//
-// The shape is the issue board's dispatch controls, deliberately: a clerk who
-// has sent one fault to maintenance already knows this form. What differs is
-// that the job has to be WRITTEN here — a fault arrives with a summary somebody
-// typed, an ask arrives as a sentence in a conversation, and the person who
-// picks it up on the floor only ever sees what goes in this box.
 export const requestLayout: LayoutNode = {
   if: '$.loading',
   then: { component: 'Skeleton', props: { h: 64, count: 3 } },

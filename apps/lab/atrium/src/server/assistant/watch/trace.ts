@@ -1,33 +1,19 @@
 import type { Message } from '@niscorp/signal';
 
-// ═══════════════════════════════════════════════════════════
-// THE TRACE — what the model was actually shown, kept.
-//
-// The context is producers over live shell state, so the only honest answer to
-// "what does it see" is the assembled messages. Every wake keeps them, taken from
-// cortex's own `agent.preview()` — the same pure assembly the run performs, so
-// this is the request that went out rather than a reconstruction that can drift.
-// Preview needs no key, which is what lets the keyless check assert on it.
-//
-// In-memory and per session. The durable record is `assistant_runs`.
-// ═══════════════════════════════════════════════════════════
-
 const RING = 20;
 
 export type Outcome =
-  | 'acted' // the agent changed the screen
-  | 'quiet' // it looked and chose to add nothing
-  | 'no-key' // no provider key configured: assembled, never sent
-  | 'cancelled' // they navigated mid-run: the premise was gone, so nothing landed
+  | 'acted'
+  | 'quiet'
+  | 'no-key'
+  | 'cancelled'
   | 'failed';
 
 export type Wake = {
   principal: string;
   at: number;
-  // Why it woke: the aim diff, the world's rises, or both.
   reasons: readonly string[];
   outcome: Outcome;
-  // Every message the run sent, in order — the literal prompt.
   context: readonly Message[];
   estimatedTokens: number;
   reply: string;

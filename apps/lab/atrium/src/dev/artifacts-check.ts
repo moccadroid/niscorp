@@ -1,18 +1,3 @@
-// Artifacts check — the invariant that makes `src/app/` a picture of the
-// artifact library: everything the manifest carries as DATA is PURE JSON and
-// parses through its own schema. Enforced instead of hoped: a function, a
-// Date, an undefined, a class instance anywhere in an artifact fails here, so
-// a code file cannot masquerade as an artifact and the tree stays row-ready.
-//
-// The manifest's CODE fields — `functions`, `inputs` and `scope` (the
-// per-principal derivation hooks) — are deliberately NOT artifacts; they are
-// validated by running, not by this check.
-//
-// It also enforces rule 14: an action's `input` schema declares what an opener
-// may seed, and every declared field must be a key of the action's `data` — a
-// contract over keys that do not exist is a lie in a schema.
-//
-// Run: pnpm --filter atrium exec tsx src/dev/artifacts-check.ts
 import { ActionDefinitionSchema, ActionFragmentSchema, LayoutNodeSchema } from '@niscorp/nova';
 import { QuerySchema, MutationDefinitionSchema } from '@niscorp/vex';
 import { CHARTER, ASSIGNMENTS } from '@atrium/app/charter';
@@ -31,9 +16,6 @@ import { CAPABILITIES, SLOTS } from '@atrium/db/seed';
 
 const checks: [string, boolean][] = [];
 
-// A pure-JSON tree: every node a plain object or array, every leaf a
-// string / number / boolean / null. Returns the first offending path, or ''
-// if the value is pure.
 const impurity = (value: unknown, path: string): string => {
   if (value === null) return '';
   const t = typeof value;
@@ -46,9 +28,8 @@ const impurity = (value: unknown, path: string): string => {
     }
     return '';
   }
-  // Narrowed on `value`, not on `t`: the typeof result was copied into a
-  // variable above, which severs it from the value for control-flow purposes,
-  // so everything past here was still `unknown` as far as the compiler knew.
+  // Narrowed on `value`, not on `t`: the compiler does not narrow `value`
+  // through a typeof result copied into a variable.
   if (typeof value !== 'object' || value === null) return `${path} is ${t}`;
   if (Object.getPrototypeOf(value) !== Object.prototype) return `${path} is a non-plain object`;
   for (const [k, v] of Object.entries(value)) {
@@ -63,7 +44,6 @@ const pure = (label: string, value: unknown): void => {
   checks.push([found === '' ? `${label} is pure JSON` : `${label} — IMPURE: ${found}`, found === '']);
 };
 
-// ── every artifact field of the manifest is pure JSON ──
 pure('actions', CATALOG_DEFINITIONS);
 pure('charter', CHARTER);
 pure('assignments', ASSIGNMENTS);
@@ -74,7 +54,6 @@ pure('resources', RESOURCES);
 pure('shell frame', frameLayout);
 pure('fragments', [sheetFragment, detailFragment]);
 
-// ── and parses through its own schema ──
 const parses = (label: string, fn: () => void): void => {
   try {
     fn();
@@ -101,19 +80,7 @@ parses('mutation-entry definitions', () => {
   for (const m of MUTATION_ENTRIES) MutationDefinitionSchema.parse(m.mutation);
 });
 
-// ── a DETAIL read must survive finding nothing ──────────────
-// A non-array `shape` tells vex to map the FIRST row, so it hands `$.result` as
-// that row or as NULL when nothing matched. Prism's `$get` throws `E_TYPE` on
-// null unless the node carries a `fallback`, which makes an empty detail read a
-// 500 rather than an empty answer — and finding no row is ordinary: a guest
-// between stays, an id that no longer exists, a row another tenant owns and the
-// engine filtered out.
-//
-// Checkable straight off the artifact, which is why it is a lint and not a
-// convention: `stay/current` and `stay/byId` were the two that shipped without
-// fallbacks, and nothing would have caught the third.
 {
-  // Every `$get` in a mapping that states no absent value.
   const bareGets = (mapping: unknown): string[] => {
     const bare: string[] = [];
     const walk = (node: unknown): void => {
@@ -133,10 +100,8 @@ parses('mutation-entry definitions', () => {
     return bare;
   };
 
-  // An UNGROUPED AGGREGATE always returns exactly one row — `SUM` over nothing
-  // is one row holding NULL, not zero rows — so `$.result` is never null there
-  // and a fallback would be cargo. Add a `groupBy` and the exemption correctly
-  // lapses, because then it can match nothing.
+  // An ungrouped aggregate always returns exactly one row (`SUM` over nothing
+  // is one row holding NULL), so `$.result` is never null there.
   const canBeEmpty = (entry: (typeof ENTRIES)[number]): boolean => {
     if (entry.shape === undefined || Array.isArray(entry.shape)) return false;
     const dsl = entry.dsl as { aggregate?: unknown; groupBy?: unknown[] } | undefined;
@@ -154,8 +119,6 @@ parses('mutation-entry definitions', () => {
     unguarded.length === 0,
   ]);
 
-  // And it BITES. Strip one fallback and the lint must catch it, or it is
-  // decoration — the same posture as the intake refusals below.
   const stripped = JSON.parse(JSON.stringify(ENTRIES.find((e) => e.fingerprint === 'stay/byId')?.mapping ?? {})) as Record<string, unknown>;
   const firstField = ((stripped['$with'] as { value?: Record<string, Record<string, Record<string, unknown>>> })?.value ?? {})['stay_id'];
   if (firstField?.['$get'] !== undefined) delete firstField['$get']['fallback'];
@@ -167,10 +130,6 @@ parses('mutation-entry definitions', () => {
   ]);
 }
 
-// ── rule 14: every declared input field is a key of the action's data ──
-// The `input` JSON Schema is the action's public contract for openers; a field
-// with no matching data key can never land anywhere. Core only here — the
-// bundles are held to the same rule by intake, below.
 for (const [id, def] of Object.entries(CATALOG_DEFINITIONS)) {
   const input = def.input;
   if (input === undefined) continue;
@@ -183,13 +142,6 @@ for (const [id, def] of Object.entries(CATALOG_DEFINITIONS)) {
   ]);
 }
 
-// ── the BUNDLES: pure, then through the REAL gate ──
-// Purity is the authoring bar (a function or a Date anywhere refuses). Then
-// the publish gate proper: the EXACT payload the service serves per vendor,
-// through the app's own intake, with a context composed from the other
-// vendors plus the core catalogs — so passing this check IS passing sync.
-// Namespace, rule 14, endpoint convention, table footprint, both halves:
-// all of it lives in intake now, checked once, enforced everywhere.
 for (const bundle of BUNDLES) {
   pure(`bundle ${bundle.connector} actions`, bundle.actions);
   pure(`bundle ${bundle.connector} entries`, [...bundle.entries, ...bundle.mutations]);
@@ -223,11 +175,6 @@ for (const bundle of BUNDLES) {
     checks.push([errors.length === 0 ? `${connector}: the served payload passes intake` : `${connector}: intake refuses —\n    ${errors.join('\n    ')}`, errors.length === 0]);
   }
 
-  // ── and the gate BITES ──
-  // A gate nobody has seen refuse is a gate nobody has tested. Each case
-  // takes the real Opera payload, breaks one thing the way a careless bundle
-  // would, and asserts the reason comes back — the mistakes intake exists to
-  // catch, proven caught.
   const broken = (mutate: (p: WirePayload & Record<string, unknown>) => void): string[] => {
     const copy = JSON.parse(JSON.stringify(payloads.get('con_opera'))) as WirePayload & Record<string, unknown>;
     mutate(copy);
@@ -283,7 +230,6 @@ for (const bundle of BUNDLES) {
   );
 }
 
-// ── report ──
 let failed = 0;
 for (const [label, ok] of checks) {
   if (!ok) failed += 1;

@@ -1,13 +1,6 @@
 import { z } from 'zod';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 
-// A block of literal text, monospaced, scrolling in place.
-//
-// Domain-blind like the rest of the kit: it shows a string exactly as given and
-// knows nothing about what is in it. What makes it worth a primitive rather
-// than a `Text` is the two things `Text` deliberately does not do — preserve
-// the whitespace it was handed, and cap its own height instead of pushing the
-// page down.
 const CodeProps = z
   .object({
     text: z.string().optional(),

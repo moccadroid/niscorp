@@ -1,26 +1,9 @@
-// The integrations service is a separate process, and the app degrades
-// structurally when it is not there.
-//
-// This is the half of "functions as cloud" that only shows up when something
-// breaks: an integration deploys on its own clock, so it can be mid-deploy,
-// rate-limited or simply down while the main app is perfectly healthy. What must
-// never happen is our database claiming a door credential exists because a
-// process did not answer.
-//
-// The world's boot pulls the bundles from a live service (world starts it),
-// so the failure phase is made, not found: the check STOPS the world's
-// service, proves the app degrades in sentences and writes nothing, then
-// starts a fresh one and runs the success path against it.
-//
-// Run: pnpm --filter atrium exec tsx src/dev/integrations-check.ts
 import { startIntegrationsService, integrationsBase } from '@atrium/integrations/service';
 import { integrations, login, settle, topData, mounted, tap, tapCard, cardData, composed, menuIds, sql, check, report } from './world';
 
 type Row = Record<string, unknown>;
 const rows = (data: Record<string, unknown>, key: string): Row[] => (Array.isArray(data[key]) ? (data[key] as Row[]) : []);
 
-// Enable the key on Opera's offer and go live — the capability has to exist
-// before its failure mode can be tested.
 const enableOperaKeys = async (): Promise<void> => {
   const vendor = await login('atrium');
   await settle();
@@ -48,9 +31,6 @@ const openKeyAction = async (): Promise<ReturnType<typeof login>> => {
 const main = async (): Promise<void> => {
   await enableOperaKeys();
 
-  // ── the service goes DOWN ──
-  // The go-live above already pulled while it was up; closing it now leaves
-  // the last-synced rows serving, which is exactly the degradation claim.
   await integrations.close();
   const amara = await openKeyAction();
   tap(amara, 'sheet', 'cut');
@@ -65,21 +45,12 @@ const main = async (): Promise<void> => {
   const stay = await sql(`SELECT key_issued FROM stays WHERE id = 'stay_amara'`);
   check('the database does NOT claim a key exists', stay[0]?.['key_issued'] === false);
 
-  // The rest of the application is untouched by a dead connector.
   const rosa = await login('rosa');
   await settle();
-  // Her whole surface still composes with the service down — those cards are
-  // ROWS, synced earlier; only live calls into the connector fail.
   check('the front desk is unaffected', composed(rosa).length > 0);
-  // Bundle surfaces arrive in the MENU now — the working column is a stack she
-  // opens onto rather than a pile composed for her. Same resolved rows either way.
   check('...including the surfaces that integration shipped', menuIds(rosa).some((id) => id.startsWith('ext.desk.')));
   check("the guest's own surface is unaffected", rows(topData(amara, 'main'), 'slots').length > 0);
 
-  // ── now start the real service and try again ──
-  // The hermetic port no-llm set — the seeded service_url rows already point
-  // at it, and its being free until THIS line is what made the failure phase
-  // honest, dev connector or no dev connector.
   const connector = await startIntegrationsService();
 
   tap(amara, 'sheet', 'cut');
@@ -92,8 +63,6 @@ const main = async (): Promise<void> => {
   const issued = await sql(`SELECT key_issued FROM stays WHERE id = 'stay_amara'`);
   check('...and only NOW does the database record a key', issued[0]?.['key_issued'] === true);
 
-  // The connector refuses what its own version does not implement — belt and
-  // braces against the app ever offering something it should not have.
   const refused = await fetch(`${integrationsBase()}/mews/key`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

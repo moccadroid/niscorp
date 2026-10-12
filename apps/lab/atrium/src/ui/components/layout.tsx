@@ -4,10 +4,6 @@ import { useNovaDispatch, type NovaComponent } from '@niscorp/nova/adapters/reac
 import { cx } from '../lib/cx';
 import { ALIGN, BG, JUSTIFY, LINE, border, dim } from '../lib/tokens';
 
-// Layout primitives. Thin styled divs that turn JSON props into inline styles.
-// Domain-blind by construction: none of them knows what a stay or a capability
-// is, and none imports the shell, an action or a data module.
-
 const BoxProps = z
   .object({
     pad: z.number().optional(),
@@ -47,8 +43,8 @@ export const Box: NovaComponent<z.infer<typeof BoxProps>> = ({ pad, px, py, bg, 
     ...(shrink === true ? { minWidth: 0, minHeight: 0 } : {}),
   };
   const cls = cx(scroll === true && 'at-scroll');
-  // A thread pins itself to the newest line. `key` on the inner spacer is not
-  // enough — the browser needs the scroll set after layout, every paint.
+  // The browser needs the scroll set after layout on every paint for a thread
+  // to stay pinned to its newest line.
   return (
     <div className={cls} style={style} ref={stickBottom === true ? (el) => { if (el !== null) el.scrollTop = el.scrollHeight; } : undefined}>
       {children}
@@ -156,10 +152,6 @@ export const Grid: NovaComponent<z.infer<typeof GridProps>> = ({ min, columns, w
 };
 Grid.meta = { description: 'CSS grid. `min` auto-fits columns (phone → desk with no breakpoint); `weights` sets proportions; with a `ref` it is clickable and emits its `value`.', propsSchema: GridProps };
 
-// A named region of the frame, for the stylesheet to address. The frame is
-// static data with nothing to bind, so any styling that depends on session
-// state (the assistant's territory) selects on a document-root attribute and
-// lands on these names. Draws nothing of its own.
 const RegionProps = z.object({ name: z.string() }).strict();
 
 export const Region: NovaComponent<z.infer<typeof RegionProps>> = ({ name, children }: z.infer<typeof RegionProps> & { children?: ReactNode }) => (
@@ -167,9 +159,6 @@ export const Region: NovaComponent<z.infer<typeof RegionProps>> = ({ name, child
 );
 Region.meta = { description: 'A named frame region the stylesheet can address. Frames only.', propsSchema: RegionProps };
 
-// Wraps content that just arrived: plays one arrival sheen on mount, inert
-// after. Composed by the `landed` fragment onto what the assistant places —
-// mounting is what makes the timing honest, so this carries no state.
 const LandedProps = z.object({}).strict();
 
 export const Landed: NovaComponent<z.infer<typeof LandedProps>> = ({ children }: z.infer<typeof LandedProps> & { children?: ReactNode }) => (

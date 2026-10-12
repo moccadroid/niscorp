@@ -1,19 +1,9 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The assistant's window: a pill in thumb reach, expanding into the
-// conversation. Mobile-first — the panel takes the width on a phone; a wide
-// screen anchors it bottom-right (the Dock's CSS, not a second layout).
-//
-// The dock renders the CONVERSATION alone. What the watcher does — cards
-// placed, cards closed — happens on the shell itself and is recorded in the
-// admin timeline, never here.
 export const assistantLayout: LayoutNode = {
   component: 'Dock',
   props: { open: '$.open' },
   children: [
-    // The territory frame's one input (see ui/components/assist.tsx). It rides
-    // this layout because the dock is the always-mounted surface that already
-    // holds both facts: the profile it loads, the thinking the runs write.
     { component: 'AssistState', props: { scope: '$.profile.scope', thinking: '$.thinking' } },
     {
       if: '$.open',
@@ -58,9 +48,6 @@ export const assistantLayout: LayoutNode = {
                     for: '$.turns',
                     as: 't',
                     key: 'turn_id',
-                    // Two kinds of line, and no third: what the user said and
-                    // what the agent answered. `assistant/turns` is chat rows
-                    // alone — the watcher's record never renders here.
                     do: {
                       component: 'Bubble',
                       props: {
@@ -126,12 +113,6 @@ export const assistantLayout: LayoutNode = {
           },
         ],
       },
-      // COLLAPSED IS THE NORMAL STATE, so this is where the working indicator has
-      // to live. It used to be only inside the open panel, which meant an ambient
-      // run — the one nobody asked for and therefore the one that most needs
-      // announcing — showed nothing at all: a card simply appeared on the screen
-      // a while later. The pill says it is thinking and for how long, so a person
-      // can tell the difference between "considering your screen" and "hung".
       else: {
         if: '$.thinking',
         then: {
@@ -147,9 +128,6 @@ export const assistantLayout: LayoutNode = {
             },
           ],
         },
-        // Two ways in, side by side. `Ask` opens the panel to type a question
-        // at the CHAT agent. `Help with this` wakes the WATCHER against the
-        // screen as it stands, and is hidden when nobody watches this person.
         else: {
           component: 'Row',
           props: { gap: 8, align: 'center' },

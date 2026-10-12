@@ -4,15 +4,6 @@ import { escalateLayout } from './escalate.layout';
 import { previewable, previewTriggers, crewCard } from '@atrium/app/actions/preview';
 import { staffPrism, escalatePrism } from './desk.prism';
 
-// "This is above my pay grade" — the gesture every front desk makes several
-// times a shift and no software ever has a button for.
-//
-// Pushed rather than composed: it belongs to a specific thing that has gone
-// wrong, so it arrives carrying that thing's ids. The assistant's contribution
-// is `detail`, and it is the contribution that matters — a duty manager who has
-// to come back and ask what happened has not been handed anything, and writing
-// the whole story from a thread, an issue and a stay is precisely the work a
-// model can do in the second it takes a clerk to reach for the phone.
 export const deskEscalateAction: ActionDefinition = {
   id: 'desk.escalate',
   title: 'Escalate',

@@ -1,16 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Who is coming and who is going, with the state of their room beside them.
-//
-// It replaces two surfaces that read the same query. `desk.arrivals` listed
-// movements; `desk.keys` listed movements again with a search box, because
-// cutting a key needed a guest and the only way to find one was to type their
-// name. Two lists of the same rows, one of which existed to work around not
-// being able to aim a verb at a row.
-//
-// The room state is the column that makes it worth opening. "Arriving at half
-// four" and "that room is still dirty" were two facts in two places, and
-// together they are the only real decision on a front desk at four o'clock.
 export const movementsLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 16, maxWidth: 980 },

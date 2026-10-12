@@ -4,15 +4,6 @@ import { roomsLayout } from './rooms.layout';
 import { previewable, previewTriggers, crewCard } from '@atrium/app/actions/preview';
 import { roomsPrism, setRoomPrism } from './ops.prism';
 
-// Room inventory — the ops manager's one write. Taking a room out of service
-// sets `rooms.status` to `out_of_order`, which is exactly what the "rooms out of
-// order" figure on the house pane counts, so the number there moves for real.
-// `rooms-changed` tells the house pane (same shell) to re-read.
-//
-// It stops at the SERVICE question deliberately. Whether a room is clean, turned
-// or signed off is the floor's business minute to minute and belongs on the
-// desk's own board (`desk.rooms`); a manager taking a room out of the estate for
-// a fortnight is a different decision, made once, and it is this one.
 export const opsRoomsAction: ActionDefinition = {
   id: 'ops.rooms',
   title: 'Rooms',
@@ -29,9 +20,8 @@ export const opsRoomsAction: ActionDefinition = {
       ref: 'toggle',
       do: [
         { set: 'toggleRoomId', value: '@event.payload.room_id' },
-        // Out of service, or back to the floor as something housekeeping still
-        // has to turn — a room that has been shut for a fortnight is never
-        // ready to sell the moment it reopens.
+        // A reopened room comes back 'dirty': housekeeping still has to turn it
+        // before it can be sold.
         { set: 'toggleStatus', value: { $if: '@event.payload.out_of_order', $then: 'dirty', $else: 'out_of_order' } },
         { call: 'setStatus', onSuccess: [{ call: 'load' }, { emit: { channel: 'rooms-changed' } }] },
       ],

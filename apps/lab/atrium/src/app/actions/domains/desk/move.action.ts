@@ -4,23 +4,6 @@ import { moveLayout } from './move.layout';
 import { previewable, previewTriggers, crewCard } from '@atrium/app/actions/preview';
 import { deskStayPrism, freeRoomsPrism, moveStayPrism, soilOldRoomPrism, claimNewRoomPrism, moveTellPrism } from './desk.prism';
 
-// Moving a guest — the biggest thing the app could not do.
-//
-// `stays.room_id` has existed since the first schema and nothing could write it,
-// which meant the single most ordinary front-desk gesture there is — a fault in
-// a room with somebody in it — had no answer anywhere in the product. A clerk
-// could read the complaint, raise the issue, dispatch the engineer and comp the
-// dinner, and still not move the person out of the room.
-//
-// One press does four things, and all four are consequences rather than
-// choices: the stay changes room, the room they left goes down for turning, the
-// room they walk into stops being sellable, and the guest is told. Splitting
-// those into four buttons would be honest about the mechanism and useless at a
-// counter.
-//
-// The CANDIDATES are the interesting part: one read that already knows which
-// rooms are spoken for, which is why this is two taps rather than a
-// conversation with housekeeping.
 export const deskMoveAction: ActionDefinition = {
   id: 'desk.move',
   title: 'Move rooms',
@@ -40,15 +23,10 @@ export const deskMoveAction: ActionDefinition = {
   lifecycle: {
     mount: [
       { call: 'load' },
-      // One read. Which rooms are spoken for is a NOT EXISTS inside it, so
-      // there is no window between "what is taken" and "what is free" for a
-      // colleague to check somebody in through.
       { call: 'loadRooms', onSuccess: [{ set: 'loading', value: false }] },
     ],
   },
   triggers: [
-    // Same class or better is the default a hotel would choose; "anything free"
-    // is the four-in-the-morning answer and it is one press away.
     { event: 'ui:click', ref: 'same-class', do: [{ set: 'kindFilter', value: '$.stay.room_kind' }, { set: 'chosen', value: {} }, { call: 'loadRooms' }] },
     { event: 'ui:click', ref: 'any-class', do: [{ set: 'kindFilter', value: '%' }, { set: 'chosen', value: {} }, { call: 'loadRooms' }] },
     { event: 'ui:click', ref: 'pick-room', do: [{ set: 'chosen', value: { $if: { $eq: ['@event.payload.room_id', '$.chosen.room_id'] }, $then: {}, $else: '@event.payload' } }] },
@@ -60,8 +38,6 @@ export const deskMoveAction: ActionDefinition = {
       do: [
         { set: 'working', value: true },
         {
-          // `soil` before `move`, because it reads the OLD room off the stay and
-          // the stay is about to stop pointing at it.
           call: 'soil',
           onSuccess: [
             {

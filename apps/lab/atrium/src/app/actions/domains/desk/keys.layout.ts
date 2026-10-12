@@ -1,12 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Cutting a credential FOR the guest in hand.
-//
-// It used to be a list of every stay in the house with a search box, because a
-// key needed a guest and there was no way to aim a verb at a row — so the tool
-// grew its own copy of the movements list to find one. Making it stay-scoped
-// deleted the list, the search and the second read: the guest is context here,
-// exactly as they are on every other surface in the workspace.
 export const keysLayout: LayoutNode = {
   if: '$.stayId',
   then: {

@@ -10,27 +10,14 @@ import { createSeam } from './seam';
 import type { Seam } from './seam';
 import { adminPort } from './port';
 
-// The administration service as a process — a SEPARATE ONE, on its own port and
-// its own deploy clock, exactly like the integrations service beside it and for
-// a related reason. Integrations do not belong in the app because they are
-// somebody else's system; this does not belong in the app because it is not
-// part of the product. A hotel buys atrium. Nobody buys this.
-//
-// Two exports, split where the checks need the seam: `buildAdminServer` composes
-// the app over a moss server and stops there, so a check can drive its shells in
-// process; `startAdminService` adds the listener.
-
-// The tool has no database. moss stands its data layer up from a runtime, so it
-// gets an empty one: an unseeded PGlite whose introspection finds no tables,
-// which compiles a policy over an empty grant universe. That is not a stub
-// standing in for something missing — it is the accurate shape of an app whose
-// every fact lives in another process.
+// The tool has no database, and moss builds its data layer from a runtime, so
+// it gets an unseeded PGlite with no tables.
 const adminRuntime = async (): Promise<NiscRuntime> => {
   const db = new PGlite();
   const pool = createPglitePool(db);
   const cache = createPostgresCache({ pool });
   await cache.init();
-  // An operator floor: every token is trusted, and moss says so at boot.
+  // Every token is trusted, and moss says so at boot.
   return { db, pool, cache, session: 'dev-open' };
 };
 

@@ -1,12 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The crew half of wake-up calls: the desk books the morning ring FOR a guest.
-//
-// There is no guest picker. This surface is stay-scoped — it arrives in a
-// guest's workspace already carrying them — so a chooser would be asking the
-// clerk to re-select the person they are already looking at, and at a real
-// hotel it would be a grid of four hundred names. The guest is CONTEXT here,
-// stated once at the top; the only decision on this card is the time.
 export const setCallLayout: LayoutNode = {
   if: '$.done',
   then: {
@@ -47,7 +40,6 @@ export const setCallLayout: LayoutNode = {
         },
       ],
     },
-    // Opened with nobody in hand — say so rather than offering the house.
     else: { component: 'Empty', props: { icon: 'moon', title: 'No guest in hand', hint: 'Open a guest and this books their morning ring.' } },
   },
 };

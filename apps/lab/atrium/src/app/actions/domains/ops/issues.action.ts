@@ -4,9 +4,6 @@ import { opsIssuesLayout } from './issues.layout';
 import { previewable, previewTriggers, crewCard } from '@atrium/app/actions/preview';
 import { byKindPrism, byRoomPrism } from './ops.prism';
 
-// "What keeps breaking, and where." Two grouped counts, both plain reads. This
-// is the shape of the analytics this app permits: a question the query grammar
-// answers, not a computation a model performs.
 export const opsIssuesAction: ActionDefinition = {
   id: 'ops.issues',
   title: 'By type',

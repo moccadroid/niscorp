@@ -4,16 +4,6 @@ import { noteLayout } from './note.layout';
 import { previewable, previewTriggers, crewCard } from '@atrium/app/actions/preview';
 import { notesByStayPrism, noteAddPrism } from './desk.prism';
 
-// A note on a stay that outlives the shift.
-//
-// The value compounds: what gets written here today is what the brief reads out
-// on their next visit, which is how a hotel comes to feel like it remembers
-// people. It is also the natural home for the thing a guest says in passing —
-// "we are here for our tenth anniversary" arrives in a message thread and is
-// lost the moment the thread scrolls, unless somebody puts it somewhere.
-//
-// Which is exactly what an assistant reading that thread should offer to do, and
-// why `body` is declared input.
 export const deskNoteAction: ActionDefinition = {
   id: 'desk.note',
   title: 'Notes',

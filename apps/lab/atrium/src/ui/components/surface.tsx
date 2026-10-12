@@ -5,20 +5,6 @@ import { cx } from '../lib/cx';
 import { SIZE, TONE } from '../lib/tokens';
 import { Icon } from './display';
 
-// Surfaces — the shapes content sits in. Still domain-blind: `Tile` renders a
-// title, a blurb, a glyph and a live flag. That those happen to be resolved
-// capability slots is the caller's business, and the component cannot tell.
-
-// A card is a panel with ONE padding, decided here. There used to be a `pad`
-// prop, and across twenty-six uses it took nine different values — 0, 13, 15, 16,
-// 18, 22, 24, 26 — none of them for a reason anybody could name, because a layout
-// author reaching for a number has no way to know what the other twenty-five
-// chose. Every surface then looked slightly wrong next to every other one.
-//
-// Padding is not information about the content, so a layout has no business
-// carrying it. The only variant left is `sunk`, which is a KIND of surface (a
-// quote, an inset panel) rather than a measurement, and it gets its own tighter
-// padding for the same reason: one decision, in one place.
 const PAD = 18;
 const PAD_SUNK = 14;
 
@@ -61,9 +47,6 @@ export const Hero: NovaComponent<z.infer<typeof HeroProps>> = ({ eyebrow, title,
 );
 Hero.meta = { description: 'The opening block of a surface: eyebrow, display title, subtitle.', propsSchema: HeroProps };
 
-// A placed slot. `live: false` renders the reason instead of a target — which is
-// only ever used by the ops and vendor views, because a guest's shell is built
-// from LIVE rows and a dark slot never reaches it at all.
 const TileProps = z
   .object({
     title: z.string(),
@@ -71,8 +54,6 @@ const TileProps = z
     icon: z.string().optional(),
     live: z.boolean().optional(),
     reason: z.string().optional().describe('Shown in place of the target when live is false.'),
-    // The current CHOICE, visible: a picker's selected tile wears the accent.
-    // The layout decides equality; the tile only wears the state.
     active: z.boolean().optional(),
     value: z.unknown().optional(),
   })
@@ -123,9 +104,6 @@ const SheetProps = z.object({ title: z.string().optional(), closeRef: z.string()
 
 type SheetP = z.infer<typeof SheetProps> & { novaRef?: string; children?: ReactNode };
 
-// The overlay an action lands on when it is pushed onto the sheet canvas. On a
-// phone it rises from the bottom; on a desk it centres. One component, because
-// the difference is CSS, not a second implementation.
 export const Sheet: NovaComponent<z.infer<typeof SheetProps>> = ({ title, closeRef, children }: SheetP) => {
   const dispatch = useNovaDispatch();
   return (

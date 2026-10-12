@@ -1,9 +1,3 @@
-// The models a person may choose between — what the settings picker shows and
-// what `staff.assistant_model` may hold. Data, so it lives with the artifacts:
-// the picker reads it here, and the server (server/assistant/profiles.ts) reads
-// the same table to learn what a chosen key means. One list, so a key the
-// server cannot spend can never appear on screen.
-
 export type ModelChoice = { provider: string; model: string; title: string; blurb: string };
 
 export const MODELS: Record<string, ModelChoice> = {

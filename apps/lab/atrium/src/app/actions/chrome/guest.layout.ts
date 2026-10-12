@@ -4,7 +4,6 @@ export const guestChromeLayout: LayoutNode = {
   component: 'Box',
   props: { bg: 'surface', border: 'bottom', px: 20, py: 13 },
   children: [
-    // Applies the property's palette to the document and renders nothing.
     { component: 'Accent', props: { name: '$.accent' } },
     {
       component: 'Row',

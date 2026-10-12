@@ -1,11 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The crew half of minibar.post: a guest mentions the two waters at checkout
-// and the desk puts them on the folio.
-//
-// No guest picker (the surface arrives with a stay) and no charge on tap —
-// choose the item, then post it. The desk half obeys the same rule as the
-// guest's own honesty bar, because a mis-tap costs the same either side.
 export const postMinibarLayout: LayoutNode = {
   if: '$.stayId',
   then: {

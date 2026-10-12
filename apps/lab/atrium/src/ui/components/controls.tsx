@@ -4,9 +4,6 @@ import { cx } from '../lib/cx';
 import { COLOR } from '../lib/tokens';
 import { Icon } from './display';
 
-// Controls. Every one dispatches `ui:click` with its ref and, where it carries
-// one, a payload. No callbacks in props, ever — interaction is ref + trigger.
-
 const ButtonProps = z
   .object({
     variant: z.string().optional().describe('solid quiet plain danger'),

@@ -13,18 +13,6 @@ import { reportLayout } from './report.layout';
 import { folioLayout } from './folio.layout';
 import { transferLayout, bookTransferLayout, transferSheetLayout, goodwillLayout } from './transfer.layout';
 
-// ═══════════════════════════════════════════════════════════
-// The Mews bundle — what the Mews integration SHIPS beyond its API.
-//
-// Reporting `spa.book` and `minibar.post` commits this connector to the
-// surfaces that make them work: the guest books and pays, the desk runs the
-// diary, ops reads utilization. All of it lands as rows at seed time and is
-// loaded from the database at boot — see ../types.ts for the model.
-//
-// Input contracts are uniform per audience (rule 14): guest actions take the
-// concierge quad, staff actions take { propertyId, staffId } from the chrome.
-// ═══════════════════════════════════════════════════════════
-
 const guestInput = z.toJSONSchema(
   z.object({
     stayId: z.string().optional(),
@@ -34,9 +22,6 @@ const guestInput = z.toJSONSchema(
   }),
 );
 
-// Every staff surface is preview-capable: the crew screen is COMPOSED from
-// resolved slots, so an action that cannot render itself small cannot appear
-// on it. `expanded` is the declared marker, exactly as on the guest side.
 const staffInput = z.toJSONSchema(
   z.object({
     propertyId: z.string().optional(),
@@ -45,10 +30,8 @@ const staffInput = z.toJSONSchema(
   }),
 );
 
-// ─── guest: book the spa ─────────────────────────────────────
-// Treatments from catalogue rows; SLOTS live from the connector (it owns
-// availability); the book call goes to the connector, and only its confirmed
-// answer becomes our mirror row plus the folio charge.
+// The book call goes to the connector, which owns availability; only its
+// confirmed answer becomes the mirror row and the folio charge.
 const spaBook: ActionDefinition = {
   id: 'ext.guest.mews.spa',
   title: 'The spa',
@@ -92,8 +75,6 @@ const spaBook: ActionDefinition = {
       request: { fingerprint: 'catalog/requestOptions', context: { propertyId: { $ref: '$.propertyId' }, capabilityId: 'spa.book' } },
       target: 'treatments',
     },
-    // Live availability — the connector's, not ours. If the service is down the
-    // guest reads "fully booked" and nothing is claimed.
     loadSlots: {
       url: '/connectors/con_mews/spa/slots',
       method: 'POST',
@@ -158,7 +139,6 @@ const spaBook: ActionDefinition = {
   ],
 };
 
-// ─── guest: your treatments ──────────────────────────────────
 const spaVisits: ActionDefinition = {
   id: 'ext.guest.mews.spa-visits',
   title: 'Your treatments',
@@ -176,7 +156,6 @@ const spaVisits: ActionDefinition = {
   ],
 };
 
-// ─── guest: the minibar ──────────────────────────────────────
 const minibar: ActionDefinition = {
   id: 'ext.guest.mews.minibar',
   title: 'Minibar',
@@ -217,10 +196,8 @@ const minibar: ActionDefinition = {
   },
   lifecycle: { mount: [{ call: 'loadItems', onSuccess: [{ set: 'loading', value: false }] }] },
   triggers: [
-    // Tapping an item STAGES it. It used to post the charge on the spot, so a
-    // mis-tap was money on the bill with no undo — the exact complaint that
-    // made folio.adjust necessary in the first place. Now: tap to choose, tap
-    // the same one again to unchoose, and a separate press commits.
+    // A tap stages the item and a separate press posts it: a charge on the tap
+    // makes a mis-tap money on the bill with no undo.
     {
       event: 'ui:click',
       ref: 'take',
@@ -241,7 +218,6 @@ const minibar: ActionDefinition = {
   ],
 };
 
-// ─── desk: the diary ─────────────────────────────────────────
 const diary: ActionDefinition = {
   id: 'ext.desk.mews.spa-diary',
   title: 'Spa diary',
@@ -267,10 +243,6 @@ const diary: ActionDefinition = {
   ],
 };
 
-// ─── desk: book the spa FOR a guest ──────────────────────────
-// The crew half of spa.book — a guest asks at the desk (or their assistant
-// hands it off) and the clerk books it: same connector slots, same mirror
-// row, same folio charge as the guest's own booking.
 const deskSpaBook: ActionDefinition = {
   id: 'ext.desk.mews.spa-book',
   title: 'Book the spa',
@@ -341,7 +313,6 @@ const deskSpaBook: ActionDefinition = {
   ],
 };
 
-// ─── desk: post minibar FOR a guest ──────────────────────────
 const postMinibar: ActionDefinition = {
   id: 'ext.desk.mews.post-minibar',
   title: 'Post minibar',
@@ -374,8 +345,6 @@ const postMinibar: ActionDefinition = {
   },
   lifecycle: { mount: [{ call: 'loadItems' }] },
   triggers: [
-    // Choose, then post — the desk half obeys the same rule as the guest's
-    // honesty bar: a tap must never be a charge.
     {
       event: 'ui:click',
       ref: 'pick-item',
@@ -396,7 +365,6 @@ const postMinibar: ActionDefinition = {
   ],
 };
 
-// ─── ops: utilization ────────────────────────────────────────
 const report: ActionDefinition = {
   id: 'ext.ops.mews.spa-report',
   title: 'Spa utilization',
@@ -413,10 +381,6 @@ const report: ActionDefinition = {
   triggers: [{ message: 'spa-changed', do: [{ call: 'loadReport' }] }, ...previewTriggers],
 };
 
-// ─── desk: void a bill item ──────────────────────────────────
-// Mews' half of folio.adjust. Stay-scoped, so it arrives in a guest's
-// WORKSPACE rather than on the house screen — which is where a clerk reading
-// "I accidentally added a local beer to my bill" actually needs it.
 const folio: ActionDefinition = {
   id: 'ext.desk.mews.folio',
   title: 'The bill',
@@ -491,7 +455,6 @@ const folio: ActionDefinition = {
   ],
 };
 
-// ─── guest: a car to the airport ─────────────────────────────
 const transfer: ActionDefinition = {
   id: 'ext.guest.mews.transfer',
   title: 'Airport transfer',
@@ -582,7 +545,6 @@ const transfer: ActionDefinition = {
   ],
 };
 
-// ─── desk: book a car FOR a guest ────────────────────────────
 const bookTransfer: ActionDefinition = {
   id: 'ext.desk.mews.book-transfer',
   title: 'Book a car',
@@ -663,7 +625,6 @@ const bookTransfer: ActionDefinition = {
   ],
 };
 
-// ─── desk: the day's cars ────────────────────────────────────
 const transferSheet: ActionDefinition = {
   id: 'ext.desk.mews.transfers',
   title: 'Cars',
@@ -684,7 +645,6 @@ const transferSheet: ActionDefinition = {
   ],
 };
 
-// ─── desk: goodwill ──────────────────────────────────────────
 const goodwill: ActionDefinition = {
   id: 'ext.desk.mews.goodwill',
   title: 'Goodwill',
@@ -775,19 +735,13 @@ export const MEWS_BUNDLE: IntegrationBundle = {
   },
   entries: [spaForStay, spaDiary, spaByTreatment],
   mutations: [spaRecord, spaSetStatus, folioVoid, transferRecord],
-  // The footprint of the mutations this bundle SHIPS. Charges and credits go
-  // through the core folio/post fingerprint — calling core is the endpoint
-  // gate's business, not a table this bundle writes itself. `folio_lines` IS
-  // here: voiding a bill item writes the mirror, after Mews accepted the void.
   tables: ['spa_bookings', 'folio_lines', 'transfers'],
   slots: [
-    // audience, id, action, title, blurb, icon, capability, stay_state, keywords, canvas, position
     ['guest', 'gs_spa', 'ext.guest.mews.spa', 'The spa', 'Book a treatment from the times actually free today. Use when the guest wants the spa; what is offered comes from the property, not from a fixed menu. Confirms the slot and posts the price.', 'leaf', 'spa.book', 'any', 'spa massage treatment sauna wellness facial book', 'home', 50],
     ['guest', 'gs_spa_visits', 'ext.guest.mews.spa-visits', 'Your treatments', 'Read treatments booked and already taken, and cancel one that is still to come. Cancelling frees the slot.', 'sparkle', 'spa.book', 'any', 'spa booked upcoming cancel treatment appointment', 'home', 52],
     ['guest', 'gs_minibar', 'ext.guest.mews.minibar', 'Minibar', 'Put items taken from the minibar onto the bill. Only while in house. Charges the folio straight away.', 'receipt', 'minibar.post', 'in_house', 'minibar drink snack water beer chocolate bill honesty', 'home', 58],
     ['desk', 'ds_spa_diary', 'ext.desk.mews.spa-diary', 'Spa diary', 'Read who is booked onto the table today and at what time. A list only — booking a guest in is its own action.', 'leaf', 'spa.book', 'any', 'spa diary bookings treatments today no-show', 'work', 50],
     ['ops', 'op_spa_report', 'ext.ops.mews.spa-report', 'Spa utilization', 'Read how many treatments were booked, by kind, and how they ended. Counts only — nothing here can be acted on.', 'chart', 'spa.book', 'any', 'spa utilization report bookings revenue', 'work', 50],
-    // Stay-scoped: these belong to a guest, so they arrive in the workspace.
     ['desk', 'ds_spa_book', 'ext.desk.mews.spa-book', 'Book the spa', 'Reserve a treatment for a guest in house, from the times actually free. Use when a guest asks for the spa. Confirms the slot and posts the price.', 'leaf', 'spa.book', 'any', 'spa book guest treatment massage reserve for', 'aside', 48],
     ['desk', 'ds_post_minibar', 'ext.desk.mews.post-minibar', 'Post minibar', 'Put items a guest has taken from the minibar onto their folio. Use whenever the desk learns something was taken — restocking finds it gone, the guest says so, or it comes up at checkout. Charges the folio.', 'receipt', 'minibar.post', 'any', 'minibar post charge folio guest items water beer', 'aside', 52],
     ['desk', 'ds_mews_folio', 'ext.desk.mews.folio', 'The bill', 'Read a stay’s posted charges and reverse one that should not be there. Use when a charge is wrong or disputed. Credits the folio; the money is off the bill immediately.', 'receipt', 'folio.adjust', 'any', 'bill folio charge remove take off void refund wrong mistake dispute beer minibar', 'aside', 20],
@@ -797,32 +751,23 @@ export const MEWS_BUNDLE: IntegrationBundle = {
     ['desk', 'ds_mews_goodwill', 'ext.desk.mews.goodwill', 'Goodwill', 'Give a guest something from the hotel’s published list and write the line that goes with it. Use whenever a gesture is warranted — to put right a fault the hotel caused, or unprompted for an anniversary, a regular, or a stay worth marking. Only what the list offers can be given. Credits the folio and sends the words, once the user presses it.', 'sparkle', 'goodwill.grant', 'any', 'goodwill comp compensate apology sorry gesture credit make it right upset complaint unhappy free', 'aside', 15],
   ],
   options: [
-    // capability, label, detail, icon, kind, amount, position
-    // The spa card — priced; what the guest's booking charges to the room.
     ['spa.book', '60-minute massage', 'Deep tissue or relaxation', 'leaf', 'spa', 890, 10],
     ['spa.book', 'Facial', 'Signature or hydrating', 'sparkle', 'spa', 750, 20],
     ['spa.book', 'Hammam ritual', 'Steam, scrub and rest', 'leaf', 'spa', 1100, 30],
     ['spa.book', 'Treatment for two', 'Side-by-side, 90 minutes', 'leaf', 'spa', 1900, 40],
-    // Housekeeping — free, and still the connector's list, not ours.
     ['housekeeping.request', 'Fresh towels', '', 'sparkle', 'housekeeping', 0, 10],
     ['housekeeping.request', 'Turndown this evening', '', 'moon', 'housekeeping', 0, 20],
     ['housekeeping.request', 'Skip my room today', '', 'close', 'housekeeping', 0, 30],
     ['housekeeping.request', 'Extra pillows', '', 'bed', 'housekeeping', 0, 40],
-    // The minibar card.
     ['minibar.post', 'Still water', 'Half-litre, chilled', 'dot', 'minibar', 6, 10],
     ['minibar.post', 'Sparkling water', 'Half-litre, chilled', 'dot', 'minibar', 6, 20],
     ['minibar.post', 'Local beer', 'Island lager, 330ml', 'dot', 'minibar', 9, 30],
     ['minibar.post', 'Rioja, half bottle', 'Crianza, 375ml', 'dot', 'minibar', 24, 40],
     ['minibar.post', 'Almonds & olives', 'Marcona, manzanilla', 'dot', 'minibar', 12, 50],
     ['minibar.post', 'Dark chocolate', 'Mallorcan sea salt', 'dot', 'minibar', 8, 60],
-    // Mews' own fleet and its own prices. The routes differ from Opera's because
-    // the hotels are in different countries — which is the point of the menu
-    // being a connector row rather than a constant in a layout.
     ['transfer.book', 'Palma Airport (PMI)', 'Saloon, up to three bags', 'door', 'transfer', 45, 10],
     ['transfer.book', 'Palma Airport (PMI) — estate', 'Estate car, up to five bags', 'door', 'transfer', 65, 20],
     ['transfer.book', 'Palma old town', 'Saloon, twenty minutes', 'door', 'transfer', 25, 30],
-    // And its own idea of what putting something right looks like — a spa
-    // treatment is a gesture here and is not one in Copenhagen.
     ['goodwill.grant', 'Breakfast for two', 'Comped tomorrow morning', 'sparkle', 'goodwill', 36, 10],
     ['goodwill.grant', 'A bottle of cava to the casita', 'With the compliments of the house', 'sparkle', 'goodwill', 28, 20],
     ['goodwill.grant', 'A treatment at the spa', 'Any sixty-minute treatment, on the house', 'leaf', 'goodwill', 89, 30],

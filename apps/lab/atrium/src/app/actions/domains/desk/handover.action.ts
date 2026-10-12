@@ -4,16 +4,6 @@ import { handoverLayout } from './handover.layout';
 import { previewable, previewTriggers, crewCard } from '@atrium/app/actions/preview';
 import { handoversPrism, handoverWritePrism } from './desk.prism';
 
-// The end of the shift.
-//
-// This is the one place in the app where a SUMMARY is the right output, and
-// saying that plainly matters because it is also the thing an assistant will
-// reach for everywhere if you let it. A card that summarises a screen the person
-// is already looking at is noise. A note addressed to somebody who was not here
-// is the opposite: they have no other way to find out.
-//
-// So `body` is declared input and this is the surface the model should want.
-// Everything it needs to write one is a query it can already run.
 export const deskHandoverAction: ActionDefinition = {
   id: 'desk.handover',
   title: 'Handover',

@@ -21,8 +21,8 @@ export const messageLayout: LayoutNode = {
               key: 'message_id',
               do: {
                 component: 'Bubble',
-                // The assistant is a third voice: it speaks FOR the guest, so it
-                // sits on the guest's side, captioned — never impersonating.
+                // The assistant speaks for the guest, so it sits on the guest's
+                // side, captioned.
                 props: {
                   mine: { $if: { $eq: ['$m.sender', 'desk'] }, $then: false, $else: true },
                   label: { $if: { $eq: ['$m.sender', 'assistant'] }, $then: 'Your assistant', $else: '' },

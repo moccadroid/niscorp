@@ -4,13 +4,6 @@ import { rolloutLayout } from './rollout.layout';
 import { previewable, previewTriggers, crewCard } from '@atrium/app/actions/preview';
 import { propertiesPrism, guestMatrixPrism } from './deploy.prism';
 
-// Rollout: every property, the connector behind it, and — for whichever one is
-// selected — exactly what a guest there holds right now.
-//
-// Two hotels side by side on one deployment is the second shot of the demo. The
-// list this renders is the same `surface/guestMatrix` read for both; only the
-// property id differs, and the answers are genuinely different because the
-// integrations are.
 export const deployRolloutAction: ActionDefinition = {
   id: 'deploy.rollout',
   title: 'Rollout',

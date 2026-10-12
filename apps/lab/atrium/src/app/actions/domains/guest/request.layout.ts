@@ -1,9 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The request form. The menu is `$.options`, loaded from the integration — there
-// is no hardcoded list here. Each option carries its own label, icon and issue
-// kind; choosing one fills the request, a note refines it, sending raises the
-// ticket the desk sees.
 export const requestLayout: LayoutNode = {
   if: '$.done',
   then: {
@@ -39,8 +35,6 @@ export const requestLayout: LayoutNode = {
       },
       { if: '$.summary', then: { component: 'Notice', props: { tone: 'accent', icon: 'check' }, children: 'Asking for: {{$.summary}}' }, else: '' },
       { component: 'Textarea', ref: 'detail', model: '$.detail', props: { placeholder: 'Anything else we should know?', rows: 3 } },
-      // Dead until an option is chosen: the menu came from the integration and
-      // IS the contract — free text alone has no category to land under.
       { component: 'Button', ref: 'send', props: { big: true, icon: 'send', disabled: { $if: '$.summary', $then: '$.working', $else: true } }, children: { if: '$.summary', then: 'Send to the desk', else: 'Choose something first' } },
     ],
   },

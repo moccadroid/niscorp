@@ -2,20 +2,6 @@ import { mintDevToken } from '@niscorp/moss';
 import type { NiscRuntime } from '@niscorp/moss';
 import { ASSIGNMENTS } from '@atrium/app/charter/assignments';
 
-// The demo identity directory, split along the only honest line:
-//
-//   CAST      — authored content: how a principal signs in (username) and how
-//               the login page describes them (blurb). Nothing factual.
-//   directory — the FACTS: name, property, accent, current stay, job. Loaded
-//               from the database at boot, because every one of them is already
-//               a row (guests, stays, staff, properties) and a second copy in
-//               code was the same sin as a hardcoded menu.
-//
-// The vendor is the one authored principal: we are the integrator, and our own
-// identity is not hotel data.
-//
-// Roles are NOT here — they live in the charter's assignments. The audience IS
-// the principal's role, read from there.
 export type CastEntry = { id: string; username: string; blurb: string; hidden?: boolean };
 
 export const CAST: readonly CastEntry[] = [
@@ -26,14 +12,11 @@ export const CAST: readonly CastEntry[] = [
   { id: 'stf_pilar', username: 'pilar', blurb: 'Front office at Casa Marisol. The same desk over a different hotel — a spa diary instead of a call sheet.' },
   { id: 'stf_kwame', username: 'kwame', blurb: 'Maintenance at The Lumen. Three big targets on a phone, nothing else.' },
   { id: 'stf_henrik', username: 'henrik', blurb: 'Operations for both houses. One person, one principal per property — the chrome switches, the boundary holds.' },
-  // Henrik's Marisol principal. Hidden from the login page — one HUMAN signs in
-  // once; the chrome's switcher re-grants between his two single-tenant selves.
   { id: 'stf_henrik_m', username: 'henrik.marisol', blurb: 'Henrik at Casa Marisol.', hidden: true },
   { id: 'usr_vendor', username: 'atrium', blurb: 'Us. Connectors, capabilities, and the checklist that ships a feature to every property at once.' },
 ];
 
-// One human, two single-tenant principals. The chrome reads the sibling to
-// offer the switch; auth.switchProperty re-grants across it.
+// One human, two single-tenant principals.
 export const SIBLINGS: Record<string, string> = {
   stf_henrik: 'stf_henrik_m',
   stf_henrik_m: 'stf_henrik',
@@ -51,29 +34,23 @@ export type Directory = {
   stayId?: string;
   staffId?: string;
   job?: string;
-  // How much of this person's screen the assistant may place — a row on `staff`,
-  // so one clerk moves to full assistant control without a deploy.
   layoutControl?: string;
 };
 
 const directory = new Map<string, Directory>();
 
-// The audience is the principal's charter role — the roles ARE the audiences.
 const audienceOf = (id: string): Directory['audience'] => {
   const role = ASSIGNMENTS[id]?.[0];
   if (role === 'guest' || role === 'desk' || role === 'service' || role === 'ops' || role === 'vendor') return role;
   throw new Error(`directory: principal "${id}" wears no audience role in the charter's assignments`);
 };
 
-// Load the facts from the database. Runs once at boot, before any session is
-// built — the sync `inputs`/`scope` hooks then read this snapshot. The seed is
-// the single source; this is a projection of it, not a second authoring.
+// Runs at boot before any session is built: the synchronous `inputs` and `scope` hooks read it.
 export const loadDirectory = async (pool: NiscRuntime['pool']): Promise<void> => {
   directory.clear();
   const cast = new Map(CAST.map((c) => [c.id, c]));
 
-  // Guests, with their property and CURRENT stay (latest arrival — the same
-  // rule the stay/current read uses).
+  // The current stay is the latest arrival, the same rule the `stay/current` read uses.
   const guests = await pool.query(
     `SELECT g.id, g.name, g.property_id, p.name AS property_name, p.accent, s.id AS stay_id
      FROM guests g
@@ -83,7 +60,7 @@ export const loadDirectory = async (pool: NiscRuntime['pool']): Promise<void> =>
   );
   for (const row of guests.rows) {
     const c = cast.get(String(row['id']));
-    if (c === undefined) continue; // a guest with no login is just a guest
+    if (c === undefined) continue;
     directory.set(c.id, {
       id: c.id,
       username: c.username,
@@ -121,7 +98,6 @@ export const loadDirectory = async (pool: NiscRuntime['pool']): Promise<void> =>
     });
   }
 
-  // The vendor — authored, because our own identity is not hotel data.
   const vendor = cast.get('usr_vendor');
   if (vendor !== undefined) {
     directory.set(vendor.id, {
@@ -145,17 +121,13 @@ export const userByUsername = (username: string): Directory | undefined => {
   return undefined;
 };
 
-// The login page's people — cast content plus the loaded name and audience.
-// Hidden entries (a sibling principal) are real logins but not login-page rows.
 export const people = (): { id: string; username: string; name: string; blurb: string; audience: string }[] =>
   CAST.filter((c) => c.hidden !== true).map((c) => {
     const d = directory.get(c.id);
     return { id: c.id, username: c.username, name: d?.name ?? c.username, blurb: c.blurb, audience: d?.audience ?? 'guest' };
   });
 
-// The dev mint — needs only the CAST (username → principal id), so the token
-// script works without booting a database. Real auth replaces the mint, not
-// this seam.
+// Needs only CAST, so the token script works without booting a database.
 export const mintToken = (username: string): string | null => {
   const wanted = username.trim().toLowerCase();
   const entry = CAST.find((c) => c.username === wanted);

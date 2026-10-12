@@ -1,22 +1,4 @@
-// Atrium's Postgres schema, run once against PGlite at boot.
-//
-// Read it as three layers, because that is the whole architecture:
-//
-//   MIRRORED  — guests, stays, rooms, folio_lines. A PMS owns the truth; we keep
-//               a projection so a shell renders without calling Opera, and so one
-//               layout serves every backend. Each carries external_id + synced_at.
-//
-//   OURS      — properties, connectors, capabilities, surface_slots, issues,
-//               tasks, messages, staff. None of this exists in a PMS.
-//
-//   RESOLVED  — live_capabilities and property_slots. Neither is authored and
-//               neither is edited by hand: the connector sync recomputes both
-//               from (connector live_version × property enablement). They are the
-//               rows a shell actually reads, which is why shipping is a write.
-//
-// Vex introspects this DDL to compile the authored queries, so the foreign keys
-// are load-bearing, not decoration.
-
+// Vex introspects this DDL to compile the authored queries, so it needs the foreign keys.
 export const DDL = /* sql */ `
   -- ─── ours: the integrator's own vocabulary ──────────────────
 
@@ -593,8 +575,6 @@ export const DDL = /* sql */ `
   CREATE INDEX idx_tasks_stay         ON tasks(stay_id);
 `;
 
-// The tables the schema defines — the `data` universe is TABLES × verbs, which
-// is what the charter's `data` section resolves against.
 export const TABLES = [
   'capabilities',
   'connectors',

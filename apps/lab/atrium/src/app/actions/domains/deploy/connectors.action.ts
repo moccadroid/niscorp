@@ -4,23 +4,6 @@ import { connectorsLayout } from './connectors.layout';
 import { previewable, previewTriggers, crewCard } from '@atrium/app/actions/preview';
 import { connectorsPrism, offerPrism, reachPrism, stageOnPrism, stageOffPrism } from './deploy.prism';
 
-// The integrator's console, and the whole argument of the app in one screen.
-//
-// A connector's offer is a CHECKLIST: every capability the integration
-// implements, each with a switch. Shipping is three gestures and none of them
-// is a deploy:
-//
-//   1. stage   — flip switches. Each one is a row update in
-//                connector_capabilities; the resolved layer has not moved yet.
-//   2. go live — `connector.resync` recomputes the resolved layer from the
-//                staged offer, then `refresh()` reloads bundle actions from
-//                rows, re-verifies the charter, and walks every living shell
-//                so it adopts the new definitions in place.
-//   3. read    — every other shell picks the change up on its next
-//                mount/resume, because the database is the bus.
-//
-// Versions still exist — as provenance on each row ("arrived in v2"), the way
-// an audit line should. Nothing resolves against them anymore.
 export const deployConnectorsAction: ActionDefinition = {
   id: 'deploy.connectors',
   title: 'Connectors',
@@ -34,9 +17,6 @@ export const deployConnectorsAction: ActionDefinition = {
     shipped: false,
     working: false,
     loading: true,
-    // What the last go-live's PULL said, per connector — landed, or the
-    // reasons intake refused it. The console is where a bad bundle becomes
-    // visible, and it is the only place it needs to be.
     sync: [],
     expanded: true,
   },
@@ -49,9 +29,8 @@ export const deployConnectorsAction: ActionDefinition = {
     stageOff: { url: '/api/deploy/vex', method: 'POST', request: stageOffPrism },
     resync: { fn: 'connector.resync', target: 'sync' },
   },
-  // loadOffer/loadReach also run at mount: with no `selected` seeded they read
-  // against an empty connector id and return nothing, harmlessly; seeded (an
-  // opener or Vega's agent aiming the console), the checklist arrives open.
+  // loadOffer and loadReach run at mount for an opener that seeds `selected`;
+  // unseeded they read an empty connector id and return nothing.
   lifecycle: { mount: [{ call: 'load', onSuccess: [{ set: 'loading', value: false }] }, { call: 'loadOffer' }, { call: 'loadReach' }] },
   triggers: [
     {
@@ -59,8 +38,6 @@ export const deployConnectorsAction: ActionDefinition = {
       ref: 'pick',
       do: [{ set: 'selected', value: '@event.payload' }, { set: 'shipped', value: false }, { set: 'dirty', value: false }, { call: 'loadOffer' }, { call: 'loadReach' }],
     },
-    // Staging: the row updates, the checklist re-reads, and the console owns up
-    // to being ahead of the world until "Go live" runs the resync.
     {
       event: 'ui:click',
       ref: 'stage-on',
@@ -83,9 +60,6 @@ export const deployConnectorsAction: ActionDefinition = {
         },
       ],
     },
-    // The pull on its own — no staged switches required. Same fn as go live
-    // (a pull IS the deployment step; going live just adds staged rows in
-    // front of it), and the report lands in the same place.
     {
       event: 'ui:click',
       ref: 'sync',

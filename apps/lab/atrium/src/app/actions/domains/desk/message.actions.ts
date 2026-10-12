@@ -3,13 +3,6 @@ import type { ActionDefinition } from '@niscorp/nova';
 import { messageTileLayout, messageListLayout, threadDetailLayout } from './message.layouts';
 import { inboxPrism, threadByStayPrism, replyByStayPrism } from './desk.prism';
 
-// The message family: the tile, the inbox, and one conversation.
-//
-// Every part takes its subject as declared input, which is what makes a
-// conversation reachable by a push, a link or the assistant rather than only by
-// a finger.
-
-// ── tile: what is waiting ───────────────────────────────────
 export const messageTileAction: ActionDefinition = {
   id: 'desk.message.tile',
   title: 'Messages',
@@ -29,7 +22,6 @@ export const messageTileInputSchema = z.toJSONSchema(
   z.object({ propertyId: z.string().optional().describe('Seeded by the chrome from the session; never client-authored.') }),
 );
 
-// ── list: the inbox, and nothing else ───────────────────────
 export const messageListAction: ActionDefinition = {
   id: 'desk.message.list',
   title: 'Messages',
@@ -37,7 +29,6 @@ export const messageListAction: ActionDefinition = {
   layout: messageListLayout,
   endpoints: {
     load: { url: '/api/stay/vex', method: 'POST', request: inboxPrism, target: 'feed' },
-    // Looking is the write: opening the inbox marks everything seen.
     mark: { url: '/api/vex', method: 'POST', request: { fingerprint: 'seen/mark', context: { topic: 'messages' } } },
   },
   lifecycle: {
@@ -47,9 +38,6 @@ export const messageListAction: ActionDefinition = {
     ],
   },
   triggers: [
-    // A row opens the CONVERSATION in the record column, beside the inbox — the
-    // feed stays where it was. `resetTo`, so picking another guest replaces the
-    // conversation instead of stacking two of them.
     { event: 'ui:click', ref: 'open-thread', do: [{ resetTo: { action: 'desk.thread.detail', canvas: 'detail', input: { stayId: '@event.payload.stay_id', guestName: '@event.payload.guest_name' }, with: ['detail'] } }] },
     { message: 'messages-changed', do: [{ call: 'load' }] },
   ],
@@ -59,7 +47,6 @@ export const messageListInputSchema = z.toJSONSchema(
   z.object({ propertyId: z.string().optional().describe('Seeded by the chrome from the session; never client-authored.') }),
 );
 
-// ── detail: ONE conversation, read and answered in place ────
 export const threadDetailAction: ActionDefinition = {
   id: 'desk.thread.detail',
   title: 'The conversation',
@@ -69,16 +56,9 @@ export const threadDetailAction: ActionDefinition = {
     load: { url: '/api/stay/vex', method: 'POST', request: threadByStayPrism, target: 'thread' },
     send: { url: '/api/stay/vex', method: 'POST', request: replyByStayPrism },
   },
-  // `load` writes only `thread`, so words handed in as `draft` survive the mount
-  // and sit in the box. Nothing here asks anybody for a suggestion: the
-  // assistant writes one when it judges one is wanted, through the same answer
-  // it uses for everything else.
   lifecycle: { mount: [{ call: 'load', onSuccess: [{ set: 'loading', value: false }] }] },
   triggers: [
-    // CLOSE, not back — see the issue record. The inbox stays on `work`.
     { event: 'ui:click', ref: 'close', do: [{ pop: true }] },
-    // Their own words from here on: the "drafted for you" note goes the moment
-    // they touch the box, because after that it is not drafted, it is theirs.
     { event: 'ui:model', ref: 'draft', do: [{ set: 'draft', value: '@event.payload' }, { set: 'drafted', value: '' }] },
     {
       event: 'ui:click',
@@ -89,12 +69,8 @@ export const threadDetailAction: ActionDefinition = {
           call: 'send',
           onSuccess: [
             { set: 'working', value: false },
-            // Emptied, not CLEARED: `clear` removes the key, and a textarea whose
-            // model went undefined stops being controlled.
             { set: 'draft', value: '' },
             { set: 'drafted', value: '' },
-            // The thread is right here, so the sent reply lands in it rather
-            // than the clerk being sent back somewhere to look at it.
             { call: 'load' },
             { emit: { channel: 'messages-changed' } },
           ],

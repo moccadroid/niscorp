@@ -4,13 +4,6 @@ import { arrivalLayout } from './arrival.layout';
 import { stayDetailPrism, checkInPrism } from './stay.prism';
 import { previewable, previewTriggers } from '@atrium/app/actions/preview';
 
-// Online check-in. Placed only where the connector implements `checkin.online`
-// AND the property enabled it — which is why Casa Marisol's guests never see it
-// even though Mews supports it perfectly well. A boutique that wants you to meet
-// a human first is one row, not a fork.
-//
-// The write moves the stay to `in_house`, which changes the stay state, which
-// re-resolves the surface: the moment this succeeds, the in-house slots appear.
 export const stayCheckinAction: ActionDefinition = {
   id: 'stay.checkin',
   title: 'Check in',

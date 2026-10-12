@@ -1,15 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Airport transfers, three ways: the guest books their own, the desk books one
-// for whoever is in hand, and the night porter reads tomorrow's cars in leaving
-// order.
-//
-// The ROUTES are Opera's catalogue rows — destination, vehicle and price all
-// shipped by the connector — and the TIME is typed. That split is the whole
-// design of the card: a price is a fact somebody set, and what time a car should
-// come is a judgement about a flight nobody has told the database about. So the
-// menu can never be wrong and the time can always be suggested.
-
 const routes: LayoutNode = {
   if: '$.loading',
   then: { component: 'Skeleton', props: { h: 56, count: 3 } },
@@ -92,7 +82,6 @@ const booked: LayoutNode = {
   else: '',
 };
 
-// ─── the guest's own ─────────────────────────────────────────
 export const transferLayout: LayoutNode = {
   if: '$.done',
   then: {
@@ -124,7 +113,6 @@ export const transferLayout: LayoutNode = {
   },
 };
 
-// ─── the desk, for the guest in hand ─────────────────────────
 export const bookTransferLayout: LayoutNode = {
   if: '$.done',
   then: {
@@ -155,12 +143,10 @@ export const bookTransferLayout: LayoutNode = {
         },
       ],
     },
-    // Opened with nobody in hand — say so rather than offering the house.
     else: { component: 'Empty', props: { icon: 'door', title: 'No guest in hand', hint: 'Open a guest and this books their car.' } },
   },
 };
 
-// ─── the morning's cars ──────────────────────────────────────
 export const transferSheetLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 16, maxWidth: 900 },

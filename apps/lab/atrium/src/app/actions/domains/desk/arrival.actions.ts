@@ -4,15 +4,6 @@ import { arrivalLayout, groupLayout } from './arrival.layouts';
 import { previewable, previewTriggers, crewCard } from '@atrium/app/actions/preview';
 import { deskStayPrism, deskCheckinPrism, notesByStayPrism, requestsByStayPrism, roomByStayPrism, groupPrism, groupStaysPrism, groupReadyPrism, groupCheckInPrism } from './desk.prism';
 
-// ═══════════════════════════════════════════════════════════
-// THE TWO SURFACES ABOUT PEOPLE WHO HAVE NOT WALKED IN YET.
-//
-// Both are pushed rather than composed: they are about a specific arrival or a
-// specific block, so they arrive carrying it and never sit on the house screen
-// waiting to be aimed.
-// ═══════════════════════════════════════════════════════════
-
-// ── one arrival, prepared ───────────────────────────────────
 export const deskArrivalAction: ActionDefinition = {
   id: 'desk.arrival',
   title: 'Arrival prep',
@@ -57,7 +48,6 @@ export const deskArrivalInputSchema = z.toJSONSchema(
   }),
 );
 
-// ── a block, checked in together ────────────────────────────
 export const deskGroupAction: ActionDefinition = {
   id: 'desk.group',
   title: 'The group',
@@ -66,8 +56,6 @@ export const deskGroupAction: ActionDefinition = {
   endpoints: {
     load: { url: '/api/stay/vex', method: 'POST', request: groupPrism, target: 'group' },
     loadStays: { url: '/api/stay/vex', method: 'POST', request: groupStaysPrism, target: 'stays' },
-    // Who CAN be checked in, decided in SQL. The button below never has to know
-    // the rule, and cannot get it wrong.
     loadReady: { url: '/api/stay/vex', method: 'POST', request: groupReadyPrism, target: 'ready' },
     checkin: { url: '/api/stay/vex', method: 'POST', request: groupCheckInPrism },
   },

@@ -1,11 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The crew half of spa.book: the desk reserves a treatment FOR a guest —
-// same catalogue rows, same live slots from the connector, same mirror row
-// and folio charge the guest's own booking makes.
-//
-// No guest picker: the surface arrives with a stay, so the guest is context
-// and the decisions are treatment and time.
 export const deskSpaLayout: LayoutNode = {
   if: '$.done',
   then: {

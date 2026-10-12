@@ -1,81 +1,27 @@
 import { MODELS } from '@atrium/app/actions/domains/staff/models';
 import type { ModelChoice } from '@atrium/app/actions/domains/staff/models';
 
-// How much of a person's screen the WATCHER arranges unasked. One row per mode
-// of the `staff.layout_control` column, and the dial binds the watcher alone —
-// the dock is dial-blind (`chatPlacesFor` below): a person who asks is answered
-// with the whole screen they work in.
-//
-//   places   the canvases the watcher may build. Its answer REBUILDS each of
-//            them, so a canvas listed here is one it also closes things on.
-//   watches  whether the ambient watcher attaches at all.
-//
-// Filling is not a mode: writing a declared field into an already-open card
-// re-renders nothing, so it is available throughout and bounded in contract.ts.
-
 export type Profile = {
   places: readonly string[];
   watches: boolean;
 };
 
-// ─── what is true about a model ──────────────────────────────
-//
-// TWO TABLES, ONE RELATIONSHIP. `MODELS` is what a person may CHOOSE; `TUNING`
-// is what is TRUE about a model whoever chose it. Keyed differently on purpose —
-// a choice is a settings value, a truth belongs to the model id — and the second
-// must be reachable from a persona row that never went through the picker.
-//
-// Budget and reasoning are facts about how ATRIUM runs a model, so they live
-// here. What a model CAN DO — its transport capabilities — is not atrium's to
-// say: it is signal's model registry row, measured by signal's probe.
-
 export type ModelTuning = {
-  // What the ambient watcher may spend. A model that answers in one step and a
-  // model that reads first are not the same budget.
   steps: number;
   seconds: number;
-  // Whether to let the provider emit a chain of thought. Off sends
-  // `reasoning: { enabled: false }`.
-  //
-  // Off wherever signal cannot read the channel back: its openai-compatible
-  // adapter takes `delta.content` and `delta.tool_calls` only, so reasoning
-  // tokens are billed and counted but never reach a transcript. A fact about our
-  // plumbing rather than about the model.
   reasoning: boolean;
 };
 
 const DEFAULT_TUNING: ModelTuning = { steps: 6, seconds: 45, reasoning: true };
 
-// Keyed by MODEL ID, not by choice key: persona rows name models directly and
-// never pass through the picker.
 const TUNING: Record<string, ModelTuning> = {
   'z-ai/glm-5.2': { steps: 12, seconds: 120, reasoning: false },
   'qwen/qwen3.8-27b': { steps: 6, seconds: 45, reasoning: true },
   'openai/gpt-oss-120b': { steps: 6, seconds: 45, reasoning: true },
 };
 
-// Any model, chosen or seeded. An unlisted one gets the conservative default
-// rather than an error: a persona row naming something new should run, slowly
-// and safely, not take the assistant down.
 export const tuningFor = (model: string): ModelTuning => TUNING[model] ?? DEFAULT_TUNING;
 
-// ─── which model, per person ─────────────────────────────────
-//
-// A BENCH DIAL. `staff.assistant_model` holds one of these KEYS, never a model
-// id — provider and model have to move together (`z-ai/glm-5.2` on groq is
-// nonsense), so one value names the pair, and free-text ids stay out of the
-// database and off the screen. Same shape as PROFILES above, for the same
-// reason: the row holds a choice, this file holds what the choice means.
-//
-// Empty is the house default: the persona row decides, which is the seam that
-// ships. Everything here is an override on top of it.
-//
-// The table itself is an artifact — the settings picker renders it — so it
-// lives in app/ (actions/domains/staff/models.ts) and is read from there.
-
-// An unknown key reads as the house default rather than throwing: the row can
-// name a model this build no longer ships, and a settings value nobody can spend
-// should not take the assistant down.
 export const modelOf = (key: string | undefined): ModelChoice => MODELS[key ?? ''] ?? MODELS[''] ?? { provider: '', model: '', title: '', blurb: '' };
 
 export const PROFILES: Record<string, Profile> = {
@@ -88,26 +34,13 @@ const FALLBACK: Profile = PROFILES['mixed'] ?? { places: [], watches: false };
 
 export const profileOf = (layoutControl: string | undefined): Profile => PROFILES[layoutControl ?? 'mixed'] ?? FALLBACK;
 
-// WHERE THE DOCK MAY PLACE, by audience. Not a profile and not the dial's
-// business: the dial bounds what the watcher does unasked, and an answer to a
-// person is bounded by the screen they work in. A guest holds one overlay
-// canvas — everything opened for them goes to the sheet and closes back to
-// their home; everyone else works in the three columns.
+// Not bounded by `layout_control`: that dial bounds what the watcher does
+// unasked, and an answer to a person is bounded by the screen they work in.
 export const chatPlacesFor = (audience: string): readonly string[] => (audience === 'guest' ? ['sheet'] : ['work', 'detail', 'aside']);
 
-// The territory as one word, for the terminal's region frame: 'all' when every
-// working column is the assistant's to arrange, 'aside' when only the side
-// column is, 'none' otherwise. Derived from `places` per call, never stored —
-// a guest's sheet is an overlay, not territory, and answers 'none'.
 export const scopeOf = (places: readonly string[]): 'all' | 'aside' | 'none' =>
   ['work', 'detail', 'aside'].every((canvas) => places.includes(canvas)) ? 'all' : places.includes('aside') ? 'aside' : 'none';
 
-// WHERE THESE THINGS ARE, before what they are for. The canvas ids are
-// structural and say nothing about position, so every rule about choosing
-// between them is unreadable without this. One shape per screen that exists:
-// a clerk's workspace and a guest's phone page are different rooms, and
-// describing the wrong one leaves the model reasoning about columns its user
-// does not have.
 export const STAFF_SCREEN = [
   'The user\'s screen has a menu across the top and three columns under it. The columns are called canvases.',
   '',
@@ -128,11 +61,6 @@ export const GUEST_SCREEN = [
   '`sheet` shows one card at a time. A card placed on it covers the card already there.',
 ].join('\n');
 
-// What each canvas is for. Shown to the model so it can choose between them;
-// contract.ts enforces which ones it holds.
-//
-// A canvas is a STACK, so the next step never goes on `detail`: the record it is
-// about is already there, and a card placed on top hides it.
 export const COLUMN_NOTES: Record<string, string> = {
   sheet: 'an overlay over the user\'s home screen. Everything you open for a guest goes here and closes back to it.',
   main: 'the user\'s whole screen. Change it only when the user asks to move to a different one.',

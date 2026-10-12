@@ -1,12 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The desk's half of room status: what is sellable, what is being turned, and
-// the one verb a clerk needs — releasing a room somebody is waiting for.
-//
-// Ops owns taking a room OUT of the estate for a fortnight. This owns the
-// minute-to-minute question, which is a different decision made forty times a
-// day by a different person. Two surfaces over one column, and the split is the
-// role rather than the data.
 export const deskRoomsLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 16, maxWidth: 900 },
@@ -30,8 +23,6 @@ export const deskRoomsLayout: LayoutNode = {
         columns: [
           { label: 'Room', w: 1, cell: { kind: 'primary', key: 'number_display', subKey: 'where' } },
           { label: '', w: 'auto', cell: { kind: 'chip', key: 'state', toneKey: 'state_tone' } },
-          // The only verb. A room that has been turned is CLEAN; a supervisor
-          // signing it off makes it sellable, and that press is this button.
           { label: '', w: 'auto', cell: { kind: 'action', ref: 'release', label: 'Sign it off', variant: 'quiet' } },
         ],
       },

@@ -56,7 +56,6 @@ export const opsIntegrationsLayout: LayoutNode = {
         },
       },
 
-      // ── the services of the opened integration ────────────
       {
         if: '$.selected.connector_id',
         then: {

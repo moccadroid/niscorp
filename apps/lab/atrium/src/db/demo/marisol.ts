@@ -1,23 +1,7 @@
 import { at, ago, between, chance, day, DEFAULTS, insert, pick, rng, ts, type Val } from './sql';
 
-// ═══════════════════════════════════════════════════════════
-// CASA MARISOL — Palma, 14 casitas, Mews + HotelFix.
-//
-// The second hotel is not a smaller copy of the first, and the reason it exists
-// is that the two DIFFER in what they can do rather than in how much of it there
-// is. Marisol has a spa with a diary to run and a minibar to post; it has no
-// door API at any version, so nobody here ever cuts a key. Its clerk works a
-// genuinely different afternoon with the same code.
-//
-// It carries the mirror of The Lumen's billing beat on purpose: Inés disputes a
-// charge too, and Pilar corrects it through the MEWS surface. Same gesture, same
-// two taps, a different vendor's service behind it — which is the whole claim of
-// the product, demonstrated without anybody having to say it out loud.
-// ═══════════════════════════════════════════════════════════
-
 const P = 'prop_marisol';
 
-// number, kind, rate, status
 type RoomSpec = [string, string, number, string];
 
 const ROOMS: RoomSpec[] = [
@@ -42,10 +26,7 @@ const rate = (number: string): number => ROOMS.find((r) => r[0] === number)?.[2]
 type Cast = { id: string; name: string; email: string; tier: string; language: string; room: string; from: number; to: number; state: string; adults: number; eta?: string; checkedIn?: boolean };
 
 const CAST: Cast[] = [
-  // THE BILL, the other vendor's half. She added a beer to her own bill by
-  // mistake through the honesty bar and has written to say so.
   { id: 'gst_ines', name: 'Inés Marchetti', email: 'ines.m@example.com', tier: 'silver', language: 'es', room: '3', from: -1, to: 4, state: 'in_house', adults: 2, checkedIn: true },
-  // The spa's best customer — two treatments taken, one booked.
   { id: 'gst_carmen', name: 'Carmen Vidal', email: 'c.vidal@example.es', tier: 'gold', language: 'es', room: '8', from: -3, to: 2, state: 'in_house', adults: 1, checkedIn: true },
   { id: 'gst_dieter', name: 'Dieter Falk', email: 'd.falk@example.de', tier: 'gold', language: 'de', room: '12', from: -2, to: 3, state: 'in_house', adults: 2, checkedIn: true },
   { id: 'gst_lucia', name: 'Lucía Ortega', email: 'l.ortega@example.es', tier: 'none', language: 'es', room: '5', from: -1, to: 1, state: 'in_house', adults: 2, checkedIn: true },
@@ -55,10 +36,8 @@ const CAST: Cast[] = [
   { id: 'gst_anouk', name: 'Anouk Visser', email: 'a.visser@example.nl', tier: 'none', language: 'en', room: '2', from: -2, to: 1, state: 'in_house', adults: 2, checkedIn: true },
   { id: 'gst_pablo', name: 'Pablo Serrano', email: 'p.serrano@example.es', tier: 'silver', language: 'es', room: '7', from: -3, to: 1, state: 'in_house', adults: 2, checkedIn: true },
   { id: 'gst_greta', name: 'Greta Lindholm', email: 'g.lindholm@example.se', tier: 'none', language: 'sv', room: '11', from: -1, to: 5, state: 'in_house', adults: 1, checkedIn: true },
-  // Arriving this afternoon.
   { id: 'gst_rafa', name: 'Rafael Ibáñez', email: 'r.ibanez@example.es', tier: 'none', language: 'es', room: '10', from: 0, to: 3, state: 'arriving', adults: 2, eta: '18:00' },
   { id: 'gst_maeve', name: 'Maeve Donnelly', email: 'm.donnelly@example.ie', tier: 'none', language: 'en', room: '13', from: 0, to: 4, state: 'arriving', adults: 2, eta: '15:30' },
-  // Gone this morning; casita 4 is being turned.
   { id: 'gst_bruno', name: 'Bruno Salvatore', email: 'b.salvatore@example.it', tier: 'none', language: 'it', room: '4', from: -3, to: 0, state: 'departed', adults: 2, checkedIn: true },
 ];
 
@@ -77,13 +56,10 @@ const PAST_VISITS = 3;
 
 type Generated = { stay: string; guest: string; name: string; language: string; tier: string; room: string; from: number; to: number };
 
-// Same discipline as The Lumen: resolved once, read by both the stay rows and
-// the folio rows, so nothing can be billed to a stay that does not exist.
 const HISTORY: Generated[] = (() => {
   const past = rng(0x3a1ba);
   const rows: Generated[] = [];
 
-  // Carmen and Inés have been before; the spa knows Carmen by name.
   const RETURNING: [string, number][] = [
     ['gst_carmen', -28],
     ['gst_carmen', -75],
@@ -132,7 +108,6 @@ const peopleSql = (): string => {
       person.state,
       person.adults,
       rate(person.room),
-      // No door API at any Mews version — nobody here has ever held a key.
       false,
       person.checkedIn ?? false,
       `MEWS-RES-${7700 + index}`,
@@ -160,13 +135,11 @@ const folioSql = (): string => {
     lines.push([id ?? DEFAULTS, stay, P, description, amount, posted]);
   };
 
-  // Inés — the massage she took yesterday, and the beer she says she did not.
   push('fol_mi_1', 'stay_ines', 'Room — Garden Casita', 260, at(-1, 23, 59));
   push('fol_mi_2', 'stay_ines', '60-minute massage', 89, at(-1, 17, 30));
   push('fol_mi_3', 'stay_ines', 'Restaurant — dinner', 72, at(-1, 21, 10));
-  // The charge she disputes. Deliberately NOT a beer: the functional check
-  // drives its own honesty-bar beer through this same stay, and two lines with
-  // one description makes both stories ambiguous.
+  // Not a beer: the functional check posts its own honesty-bar beer to this
+  // stay, and two lines with one description would be ambiguous.
   push('fol_mi_4', 'stay_ines', 'Rioja, half bottle', 24, ago(2, 15));
 
   push('fol_mc_1', 'stay_carmen', 'Room — Sea View Casita', 340, at(-3, 23, 59));
@@ -276,9 +249,6 @@ const notesSql = (): string =>
     ],
   );
 
-// The spa has a working day, which is what makes the diary a diary: two taken
-// this morning, one on the table now, three still to come, and a no-show from
-// yesterday that nobody has marked.
 const spaSql = (): string =>
   insert(
     'spa_bookings',
@@ -292,8 +262,7 @@ const spaSql = (): string =>
       ['spa_006', 'stay_ines', P, 'Hammam ritual', at(1, 11, 0), 'MEWS-SPA-1193', 'booked', ago(3, 30)],
       ['spa_007', 'stay_carmen', P, 'Hammam ritual', at(1, 10, 0), 'MEWS-SPA-1195', 'booked', ago(1, 20)],
       ['spa_008', 'stay_pablo', P, '60-minute massage', at(1, 16, 30), 'MEWS-SPA-1196', 'booked', ago(0, 45)],
-      // Yesterday's four o'clock, never marked. It sits in the diary looking
-      // like a booking until somebody says what happened to it.
+      // Yesterday's slot, never marked: it stays 'booked' until somebody says what happened.
       ['spa_009', 'stay_anouk', P, '60-minute massage', at(-1, 16, 0), 'MEWS-SPA-1149', 'booked', at(-2, 14, 0)],
       ['spa_010', 'stay_greta', P, 'Facial', at(2, 12, 0), 'MEWS-SPA-1199', 'booked', ago(2, 10)],
     ],

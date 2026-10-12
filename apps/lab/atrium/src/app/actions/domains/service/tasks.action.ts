@@ -4,11 +4,6 @@ import { serviceTasksLayout } from './tasks.layout';
 import { previewable, previewTriggers, crewCard } from '@atrium/app/actions/preview';
 import { myTasksPrism, setTaskStatusPrism } from './service.prism';
 
-// The maintenance and housekeeping surface. One list, three big targets, nothing
-// else — this runs on a phone held in one hand, sometimes with a glove on.
-//
-// It is the same shell, the same frame and the same kit as the manager's screen.
-// The difference is entirely which actions resolved, which is the claim.
 export const serviceTasksAction: ActionDefinition = {
   id: 'service.tasks',
   title: 'My work',

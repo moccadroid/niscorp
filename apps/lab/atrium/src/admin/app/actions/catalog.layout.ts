@@ -5,7 +5,6 @@ export const catalogLayout: LayoutNode = panel(
   'Catalog',
   'Every action the server serves — declared data, input contract, wiring, and the layout itself',
   split(
-    // ── left: the whole catalog, filterable ──
     {
       component: 'Stack',
       props: { gap: 12 },
@@ -30,7 +29,6 @@ export const catalogLayout: LayoutNode = panel(
       ],
     },
 
-    // ── right: one definition, opened up ──
     {
       if: '$.selected.id',
       then: {
@@ -58,9 +56,6 @@ export const catalogLayout: LayoutNode = panel(
             ],
           },
 
-          // The rule-14 contract: what an opener may set, versus everything the
-          // action holds. The difference is the interesting part — data an
-          // action keeps but does not accept is data nobody outside can aim.
           {
             component: 'Grid',
             props: { min: 240, gap: 14 },

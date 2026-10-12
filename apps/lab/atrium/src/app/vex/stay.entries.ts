@@ -1,34 +1,16 @@
 import type { CacheEntry, MutationEntry } from './index';
 import { dateText, money, stampText, stateText, stateTone, statusTone } from '@atrium/app/prisms/format.prism';
 
-// The stay — the mirrored record a PMS owns, joined to the property and the
-// connector behind it. One shape, whichever backend it came from: that
-// normalisation IS the integrator's product, and it is why a single guest
-// layout serves both Opera and Mews.
-
-// ─── ONE ROW, OR NONE ────────────────────────────────────────
-// A non-array `shape` tells vex to map the FIRST row, so it hands `$.result` as
-// that row — or as NULL when the query matched nothing. Prism's `$get` throws
-// `E_TYPE` on null unless the node carries a `fallback`, so a detail read that
-// finds no row answers 500 instead of "nothing".
-//
-// Finding no row is ORDINARY: a guest between stays, an id that no longer
-// exists, a row another tenant owns and the engine filtered out. So every field
-// states its own absent value and the read answers the declared EMPTY shape,
-// which every layout already renders (they branch on `$.stay.stay_id`).
-//
-// These three exist so the fallback cannot be forgotten a field at a time —
-// which is exactly how `stay/current` and `stay/byId` came to be the only two
-// entries in the app that could 500 on an empty result. `artifacts-check` now
-// refuses a single-row mapping whose `$get`s lack one.
+// A non-array `shape` tells vex to map the first row, so `$.result` is that
+// row, or null when the query matched nothing. Prism's `$get` throws `E_TYPE`
+// on null unless the node carries a `fallback`, and a read that finds no row
+// would answer 500.
 const rowText = (name: string) => ({ $get: { from: { $var: 'r' }, path: [name], fallback: { $const: '' } } });
 const rowFlag = (name: string) => ({ $get: { from: { $var: 'r' }, path: [name], fallback: { $const: false } } });
-// For a value handed to a formatter: the helpers in format.prism.ts all branch
-// on truthiness, so null takes their absent leg ('—', '€0') on its own.
+// For a value handed to a formatter: the helpers in format.prism.ts branch on
+// truthiness, so null takes their absent leg ('—', '€0').
 const rowRaw = (name: string) => ({ $get: { from: { $var: 'r' }, path: [name], fallback: { $const: null } } });
 
-// The signed-in guest's current stay. `guestId` is injected per request from the
-// session, never sent by the client.
 export const stayCurrent: CacheEntry = {
   fingerprint: 'stay/current',
   intent: "The signed-in guest's current stay with room, property and connector",
@@ -97,8 +79,7 @@ export const stayCurrent: CacheEntry = {
         departure_display: dateText(rowRaw('departure')),
         state: rowText('state'),
         state_text: stateText(rowText('state')),
-        // Guarded rather than given a fallback: `$dateDiff` takes two dates, and
-        // there is no arithmetic to do when there is no stay.
+        // Guarded rather than given a fallback: `$dateDiff` takes two dates.
         nights: { $case: { branches: [{ when: rowRaw('arrival'), then: { $dateDiff: { unit: 'day', from: rowRaw('arrival'), to: rowRaw('departure') } } }], else: 0 } },
         rate_display: money(rowRaw('rate')),
         key_issued: rowFlag('key_issued'),
@@ -109,8 +90,6 @@ export const stayCurrent: CacheEntry = {
   },
 };
 
-// The same stay, by id — what the desk opens when it works a guest. Same shape,
-// so the pane that renders it is the same pane.
 export const stayById: CacheEntry = {
   fingerprint: 'stay/byId',
   intent: 'One stay by id with room, guest and property',
@@ -155,7 +134,6 @@ export const stayById: CacheEntry = {
   },
 };
 
-// Today's movements at a property — the desk's first read of the shift.
 export const staysMovements: CacheEntry = {
   fingerprint: 'stays/movements',
   intent: 'Stays at a property arriving, in house or departing, ordered by arrival',
@@ -201,11 +179,6 @@ export const staysMovements: CacheEntry = {
   },
 };
 
-// The folio, newest first. Guest and desk read the same rows.
-//
-// A VOIDED line is gone from the bill — it stays in the table so the folio
-// remembers the correction, and every read that shows or totals a stay filters
-// it out here rather than in a layout.
 export const folioForStay: CacheEntry = {
   fingerprint: 'folio/forStay',
   intent: 'Charges posted to a stay, newest first (voided lines excluded)',
@@ -252,10 +225,6 @@ export const folioTotal: CacheEntry = {
   },
 };
 
-// The desk's inbox: recent messages across the property, newest first, with the
-// guest and room they belong to. A flat feed the clerk scans; tapping one opens
-// that stay's full thread (messagesForStay). This is the receiving end that was
-// missing — a guest message now has somewhere to land.
 export const messagesFeed: CacheEntry = {
   fingerprint: 'messages/feed',
   intent: 'Recent messages across a property with guest and room, newest first',
@@ -285,7 +254,6 @@ export const messagesFeed: CacheEntry = {
         guest_name: { $get: { from: { $var: 'r' }, path: ['guest_name'] } },
         room_number: { $get: { from: { $var: 'r' }, path: ['room_number'] } },
         sender: { $get: { from: { $var: 'r' }, path: ['sender'] } },
-        // A chip's colour is a resolved field, never a layout decision.
         sender_tone: { $case: { branches: [{ when: { $eq: [{ $get: { from: { $var: 'r' }, path: ['sender'] } }, 'guest'] }, then: 'accent' }, { when: { $eq: [{ $get: { from: { $var: 'r' }, path: ['sender'] } }, 'assistant'] }, then: 'good' }], else: 'neutral' } },
         body: { $get: { from: { $var: 'r' }, path: ['body'] } },
         sent_display: stampText({ $get: { from: { $var: 'r' }, path: ['sent_at'] } }),
@@ -294,8 +262,6 @@ export const messagesFeed: CacheEntry = {
   },
 };
 
-// The single newest message on a stay — the guest home's "Messages" preview,
-// so a desk reply surfaces the next time the home reads. Object shape.
 export const latestMessageForStay: CacheEntry = {
   fingerprint: 'messages/latest',
   intent: 'The newest message on a stay',
@@ -320,8 +286,6 @@ export const latestMessageForStay: CacheEntry = {
   },
 };
 
-// The thread between a guest and the desk. Oldest first — it reads as a
-// conversation, which is what it is.
 export const messagesForStay: CacheEntry = {
   fingerprint: 'messages/forStay',
   intent: 'The message thread on a stay, oldest first',
@@ -347,10 +311,6 @@ export const messagesForStay: CacheEntry = {
   },
 };
 
-// ─── writes ──────────────────────────────────────────────────
-
-// A message from either side of the desk. `sender` is supplied by the calling
-// surface, not the client: the guest's prism sends 'guest', the desk's 'desk'.
 export const messageSend: MutationEntry = {
   fingerprint: 'messages/send',
   intent: 'Post a message onto a stay thread',
@@ -365,9 +325,6 @@ export const messageSend: MutationEntry = {
   },
 };
 
-// Issue (or revoke) the door credential. The row is the record of intent; the
-// actual credential is cut by the connector service, which may be down — see
-// `server/functions/connector.ts` for what happens then.
 export const staySetKey: MutationEntry = {
   fingerprint: 'stays/setKey',
   intent: "Set a stay's mobile key flag",
@@ -401,10 +358,8 @@ export const staySetDeparted: MutationEntry = {
   },
 };
 
-// The stay PICKER — stays a staff surface can aim work at: in house or
-// arriving, with the person and the room. Core, not bundle-owned: every crew
-// half that acts FOR a guest (set their wake call, book their treatment, post
-// their minibar, walk them an upgrade) starts by picking the stay.
+// Core, not bundle-owned: every bundle surface that acts for a guest starts by
+// picking the stay.
 export const staysPick: CacheEntry = {
   fingerprint: 'stays/pick',
   intent: 'In-house and arriving stays with guest and current room',
@@ -431,16 +386,6 @@ export const staysPick: CacheEntry = {
   },
 };
 
-// ─── what a stay has asked for ───────────────────────────────
-// Core rather than bundle-owned, and it moved here from Opera's bundle the day
-// a core surface needed it: `desk.arrival` asks what an arriving guest has
-// already requested, at every hotel, including the ones that run no Opera at
-// all. A core action reaching into a bundle's fingerprint space works right up
-// until the bundle is not there.
-//
-// The queue is still the integration's — raising, answering and the pending
-// sheet all ship with Opera. Only this one read, of one stay's own asks, is
-// everybody's.
 export const requestsForStay: CacheEntry = {
   fingerprint: 'requests/forStay',
   intent: "One stay's requests with their answers",
@@ -484,12 +429,6 @@ export const requestsForStay: CacheEntry = {
   },
 };
 
-// ─── transfers ───────────────────────────────────────────────
-// The READS are core and the RECORD is per-vendor, which is the same split
-// folio adjustment already uses and for the same reason: two connectors
-// implement `transfer.book`, each against its own fleet, so each ships its own
-// surface and its own write — but "what cars are booked on this stay" is one
-// question with one answer whichever of them arranged the car.
 export const transfersForStay: CacheEntry = {
   fingerprint: 'transfers/forStay',
   intent: "One stay's airport transfers, soonest first",
@@ -532,9 +471,6 @@ export const transfersForStay: CacheEntry = {
   },
 };
 
-// The morning's cars, in leaving order — the other half of the sheet the night
-// porter works. It sits beside the wake calls on purpose: a 07:00 call and a
-// 07:15 car is the sort of pairing that only looks wrong when you can see both.
 export const transfersSheet: CacheEntry = {
   fingerprint: 'transfers/sheet',
   intent: 'Booked transfers at the property in pickup order, with guest and room',
@@ -589,10 +525,6 @@ export const transferCancel: MutationEntry = {
   },
 };
 
-// Post a charge to the folio. Core, not bundle-owned: every integration that
-// sells something (spa, minibar, a paid late checkout) normalizes onto this one
-// write, which is exactly what an integration layer is for. The price always
-// comes from a row the connector shipped, never from a layout.
 export const folioPost: MutationEntry = {
   fingerprint: 'folio/post',
   intent: 'Post a line to the folio of a stay',

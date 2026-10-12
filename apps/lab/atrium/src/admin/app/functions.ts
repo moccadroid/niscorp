@@ -6,23 +6,8 @@ import type { Seam } from '@atrium/admin/seam';
 import { sampleData } from './sample';
 import { unverifiedShell } from '@niscorp/moss/unverified';
 
-// Every read and write this tool makes, and all of them go through the seam.
-//
-// There is no vex here and no database: an `fn:` handler is not an escape hatch
-// in this app, it is the ONLY door, because the thing being administered lives
-// in another process. What each handler does is fetch one seam route and shape
-// it for the pane that asked — the seam serves facts, the tool decides how they
-// read, and neither knows the other's business.
-//
-// Shaping is not decoration. The seam hands over unjoined lists (slots,
-// properties, resolutions) because that is what they are in the database; a
-// pane needs one row per line with its state already decided. Doing that join
-// here rather than in a layout is the same rule the app itself follows: no
-// component works anything out.
-
 type Row = Record<string, unknown>;
 const str = (row: Row | undefined, key: string): string => String(row?.[key] ?? '');
-// Token counts get big fast; unseparated they are unreadable at a glance.
 const thousands = (value: number): string => value.toLocaleString('en-GB');
 const rows = (value: unknown, key: string): Row[] => {
   const held = (value as Record<string, unknown> | null)?.[key];
@@ -32,13 +17,8 @@ const list = (value: unknown, key: string): string[] => {
   const held = (value as Record<string, unknown> | null)?.[key];
   return Array.isArray(held) ? (held as unknown[]).map(String) : [];
 };
-// Chips are rendered by a `for` loop, so a bare string array will not do —
-// every one needs a key to render under.
 const labels = (values: readonly string[]): { label: string }[] => values.map((label) => ({ label }));
 
-// Rule 13 at this boundary too: a payload that crossed a wire is parsed, never
-// cast. Zod drops what it does not name, so each handler sees exactly the keys
-// it uses out of the whole action-data blob.
 const Probe = z.object({ probe: z.object({ id: z.string().optional() }).optional() });
 const Property = z.object({ property: z.object({ id: z.string().optional() }).optional() });
 const SlotStage = z.object({ stage: z.object({ id: z.string().optional(), enabled: z.boolean().optional() }).optional() });
@@ -52,9 +32,6 @@ const CapabilityStage = z.object({
 });
 
 export const adminFunctions = (session: FunctionSession, seam: Seam): Record<string, FunctionHandler> => ({
-  // ── the charter, compiled ─────────────────────────────────
-  // Roles beside the principals who wear them, and each principal's resolved
-  // catalog riding along on the row so opening one costs no second call.
   'admin.charter': async () => {
     const [actors, charter] = await Promise.all([seam.get('/operator/actors'), seam.get('/operator/charter')]);
     const shape = (id: string, name: string, who: string, roles: string[], ids: string[], titles: Map<string, string>, detail: string): Row => ({
@@ -73,8 +50,6 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
       })),
     });
 
-    // Titles come from the catalog route so the action list reads as surfaces
-    // rather than identifiers.
     const catalog = await seam.get('/operator/actions');
     const titles = new Map(rows(catalog, 'actions').map((a) => [str(a, 'id'), str(a, 'title')]));
 
@@ -91,9 +66,6 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
       );
     });
 
-    // Anonymous is a principal, not an absence — and what it resolves to (the
-    // login page, nothing else) is a fact worth seeing beside the others rather
-    // than one you have to infer.
     const anonymous = (actors as Record<string, unknown>)['anonymous'];
     const anonIds = list(anonymous, 'actions');
     principals.push(shape('(anonymous)', 'Anonymous', 'nobody signed in', ['public'], anonIds, titles, 'what a stranger holds'));
@@ -109,9 +81,6 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
     };
   },
 
-  // The inverse index, which nothing else in the stack can answer: given an
-  // action, who may ever hold it. Composed here from the same matrix — charter
-  // has no reverse lookup, and building one into it would only ever serve this.
   'admin.holders': async (data) => {
     const wanted = Probe.parse(data).probe?.id ?? '';
     if (wanted === '') return [];
@@ -121,7 +90,6 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
       .map((person) => ({ id: str(person, 'id'), name: str(person, 'name'), who: str(person, 'audience') }));
   },
 
-  // ── the catalog ───────────────────────────────────────────
   'admin.catalog': async (data) => {
     const filter = (Filter.parse(data).filter ?? '').trim().toLowerCase();
     const report = await seam.get('/operator/actions');
@@ -135,9 +103,6 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
       }));
   },
 
-  // One definition, opened up. Everything here is mechanically derived from the
-  // JSON — no prose about what an action "is for", because the definition is
-  // the only honest account of that and it is right here.
   'admin.definition': async (data) => {
     const id = Selected.parse(data).selected?.id ?? '';
     if (id === '') return {};
@@ -149,8 +114,6 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
     const endpoints = Object.entries((definition.endpoints ?? {}) as Record<string, Record<string, unknown>>).map(([name, endpoint]) => ({
       name,
       target: endpoint['target'] === undefined ? 'no target' : `→ ${String(endpoint['target'])}`,
-      // A `fn:` runs in the server's own process; a url crosses the wire. Which
-      // one an action uses is the most load-bearing fact about it.
       reaches: endpoint['fn'] !== undefined ? `fn: ${String(endpoint['fn'])}` : String(endpoint['url'] ?? '—'),
     }));
 
@@ -159,8 +122,6 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
       does: ((trigger['do'] ?? []) as Record<string, unknown>[]).map((step) => Object.keys(step)[0] ?? '?').join(' · '),
     }));
 
-    // The component vocabulary its layout draws from, counted. nova's own walk,
-    // so it cannot drift from what actually renders.
     const used = [...componentsOf(definition.layout ?? {})].sort();
 
     return {
@@ -173,21 +134,10 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
     };
   },
 
-  // THE PREVIEW. The layout arrives as data, so it can be rendered.
-  //
-  // Three steps, and each one is load-bearing:
-  //
-  //   1. teach this shell the component names that layout uses. moss builds a
-  //      server-side registry of name-only stubs from the app's OWN layouts, so
-  //      a foreign layout would fail validation naming components this shell
-  //      has never heard of. The browser side already has them — both terminals
-  //      were handed the same kit.
-  //   2. fill it. An action's declared data is its empty state, so rendering it
-  //      faithfully draws three skeleton bars; `sampleData` derives a shape from
-  //      the layout's own bindings instead (see sample.ts).
-  //   3. register and hand back. Endpoints, lifecycle and triggers are simply
-  //      not carried over, so nothing in a preview can call anything — that is
-  //      a property of what is registered rather than a rule being enforced.
+  // moss builds the shell's registry from this app's own layouts, so the
+  // previewed layout's component names are registered first or it fails
+  // validation. Endpoints, lifecycle and triggers are not carried over, so
+  // nothing in a preview can call anything.
   'admin.preview': async (data) => {
     const id = Selected.parse(data).selected?.id ?? '';
     if (id === '') throw new Error('No action named.');
@@ -208,11 +158,6 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
     return { id, title: definition.title ?? id };
   },
 
-  // ── the resolved surface ──────────────────────────────────
-  // Every surface we ship, at one property, with the resolver's verdict already
-  // attached. The four factors as a list: what the connector offers, what the
-  // property enabled, whether it runs the connector that shipped the slot, and
-  // — the column that is ours — whether we have withdrawn it.
   'admin.surface': async (data) => {
     const asked = Property.parse(data).property?.id ?? '';
     const report = await seam.get('/operator/surface');
@@ -241,15 +186,12 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
     };
   },
 
-  // OUR switch, estate-wide. The seam writes the row and runs the resolver;
-  // living shells adopt before this call returns.
   'admin.setSlot': async (data) => {
     const stage = SlotStage.parse(data).stage ?? {};
     if (stage.id === undefined) throw new Error('No slot named.');
     return seam.post('/operator/slot', { slotId: stage.id, enabled: stage.enabled !== true });
   },
 
-  // ── capabilities ──────────────────────────────────────────
   'admin.capabilities': async (data) => {
     const asked = Selected.parse(data).selected?.id ?? '';
     const report = await seam.get('/operator/config');
@@ -281,10 +223,6 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
     };
   },
 
-  // One handler for both switches, because they are one decision at two
-  // altitudes: a connector row withdraws a capability from every property on
-  // that integration, a property row from one. The seam resolves whichever
-  // moved.
   'admin.setCapability': async (data) => {
     const parsed = CapabilityStage.parse(data);
     const stage = parsed.stage ?? {};
@@ -296,9 +234,6 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
     return seam.post('/operator/capability', { connectorId: parsed.selected?.id ?? '', capabilityId: stage.capability_id, enabled: flipped });
   },
 
-  // Discovery on demand — the same pull boot runs. The reports come back per
-  // connector, refusals included, because a bundle a vendor broke is exactly
-  // the thing this tool exists to make visible.
   'admin.sync': async (data) => {
     const connectorId = Selected.parse(data).selected?.id ?? '';
     const report = await seam.post('/operator/sync', { connectorId });
@@ -310,12 +245,6 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
     }));
   },
 
-  // ── why can this principal not see that? ──────────────────
-  // Nothing here computes a new truth. The resolver already decided the middle
-  // of the chain and recorded WHY in `property_slots.reason`; the charter
-  // already decided the ceiling. This puts the links in order and names the one
-  // that broke — which is the whole difference between four tables and an
-  // answer.
   'admin.explain': async (data) => {
     const parsed = Explain.parse(data);
     const asked = parsed.principal?.id ?? '';
@@ -329,9 +258,6 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
     const granted = new Set(list(subject, 'actions'));
     const verdicts = new Map(rows(surface, 'resolved').filter((r) => str(r, 'property_id') === propertyId).map((r) => [str(r, 'slot_id'), r]));
 
-    // Only this principal's audience: a desk slot is not "blocked" for a guest,
-    // it is somebody else's surface, and listing it as a failure would bury the
-    // eighteen answers that matter under forty that never applied.
     const mine = rows(surface, 'slots').filter((slot) => str(slot, 'audience') === audience);
 
     const slots = mine.map((slot) => {
@@ -354,15 +280,12 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
         },
         {
           factor: 'stay',
-          // A slot that does not care about stay state says 'any'.
           ok: wants === 'any' || wants === state,
           label: `stay: ${wants}`,
           because: `This surface applies to a stay that is "${wants}"; the state asked about is "${state}".`,
         },
       ];
 
-      // The first broken link is the answer. Everything after it was never
-      // asked, so it is shown as unreached rather than as passing.
       const brokeAt = chain.findIndex((link) => !link.ok);
       const placed = brokeAt === -1;
       return {
@@ -402,7 +325,6 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
     };
   },
 
-  // ── the data API ──────────────────────────────────────────
   'admin.entries': async (data) => {
     const filter = (Filter.parse(data).filter ?? '').trim().toLowerCase();
     const report = await seam.get('/operator/entries');
@@ -416,8 +338,6 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
             intent: str(entry, 'intent'),
             kind: str(entry, 'kind'),
             source: str(entry, 'source'),
-            // The badge carries the finding, not the kind — an orphan is the
-            // thing you want to spot while scanning.
             badge: callers.length === 0 ? 'nothing calls it' : str(entry, 'kind'),
             tone: callers.length === 0 ? 'warn' : str(entry, 'kind') === 'write' ? 'accent' : 'neutral',
             context: labels(list(entry, 'context')),
@@ -439,7 +359,6 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
     };
   },
 
-  // ── the feed ──────────────────────────────────────────────
   'admin.timeline': async (data) => {
     const asked = Principal.parse(data).principal?.id ?? '';
     const [report, roster] = await Promise.all([seam.get('/operator/timeline'), seam.get('/operator/roster')]);
@@ -464,8 +383,6 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
         slowest: shown.length === 0 ? '—' : `${Math.max(...shown.map((call) => Number(call['ms'] ?? 0)))}ms`,
       },
       calls: shown.map((call, index) => ({
-        // The buffer has no ids of its own — a call is an event, not a row —
-        // so the position is the key.
         id: `${index}`,
         name: str(call, 'name'),
         from: `${str(call, 'action')} · ${str(call, 'kind')}`,
@@ -477,11 +394,6 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
     };
   },
 
-  // ── every model run ───────────────────────────────────────
-  // The row arrives carrying its whole exchange, so opening one costs no second
-  // call. What is done here is READING that exchange: the static prefix, the
-  // conversation, the tool calls and their results, each already labelled, so the
-  // pane renders a list rather than working anything out.
   'admin.runs': async () => {
     const report = await seam.get('/operator/runs');
     const figures = ((report as Record<string, unknown>)['totals'] as Row | undefined) ?? {};
@@ -523,14 +435,12 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
           label: str(row, 'label'),
           label_tone: str(row, 'label') === 'watch' ? 'warn' : 'neutral',
           model: str(row, 'model'),
-          // `~` marks a run signal counted itself because the provider's streamed
-          // usage frame never arrived. An estimate, and it says so.
+          // `~` marks an estimate: signal counted the run itself because the
+          // provider's streamed usage frame never arrived.
           tokens: `${row['reported'] === false ? '~' : ''}${thousands(count(row, 'total_tokens'))}`,
           outcome: str(row, 'outcome') === 'ok' ? `${count(row, 'steps')} steps` : 'failed',
           outcome_tone: str(row, 'outcome') === 'ok' ? 'good' : 'alert',
           took: `${count(row, 'elapsed_ms')}ms`,
-          // A run that called nothing says so, rather than rendering an empty
-          // list under a heading.
           called: called.length === 0 ? 'called nothing' : called.map((call) => call.name).join(' · '),
           prompt: promptText(turns),
           calls: toolCalls(turns),
@@ -540,7 +450,6 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
     };
   },
 
-  // ── living shells ─────────────────────────────────────────
   'admin.shells': async () => {
     const [roster, health] = await Promise.all([seam.get('/operator/roster'), seam.get('/operator/health')]);
     const figures = health as Record<string, unknown>;
@@ -556,13 +465,9 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
           name: str(live, 'name'),
           who: `${str(live, 'audience')}${str(live, 'property') === '' ? '' : ` · ${str(live, 'property')}`}`,
           mounted: `${str(live, 'mounted')} mounted`,
-          // Attached terminals is the first thing to know about a shell and the
-          // thing that separates the two cases a support call cannot: nobody is
-          // looking, versus somebody is looking at a screen that is stuck.
           attached: attached === 0 ? `idle ${since(Number(live['idleMs'] ?? 0))}` : `${attached} attached`,
           tone: attached === 0 ? 'neutral' : 'accent',
           age: `built ${since(Number(live['ageMs'] ?? 0))}`,
-          // A canvas is a STACK, so the trail is the stack: what is under what.
           stacks: rows(live, 'canvases').map((canvas) => ({ id: str(canvas, 'id'), trail: list(canvas, 'actions').join(' › ') })),
         };
       }),
@@ -577,32 +482,15 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
     };
   },
 
-  // RESTART one person's shell — the answer to "my thing is broken".
-  //
-  // The shell is server state keyed by principal, which is exactly why nothing
-  // they can do reaches it: reloading reattaches, and signing out and back in
-  // reattaches. So the move has to be made from outside their session, and
-  // this is the outside.
-  //
-  // What it costs them is worth being exact about, because it is the reason
-  // this is a button an operator presses and not something the server does on
-  // its own: their terminals stay connected and stay signed in, and they land
-  // back on the screen they would have got at login. Whatever they had
-  // navigated into is gone.
   'admin.resetShell': async (data) => {
     const principal = Selected.parse(data).selected?.id ?? '';
     if (principal === '') throw new Error('No shell chosen.');
     const answer = (await seam.post('/operator/shell/reset', { principal })) as { reset?: boolean };
-    // A principal with no living shell is a real answer, not a failure — they
-    // may simply have disconnected between the read and the press.
     if (answer.reset !== true) throw new Error('That principal holds no living shell now — nothing to restart.');
     return true;
   },
 });
 
-// The resolver's verdict in words, and a colour. Same job the app's own format
-// prism does for its panes — spelled here because this tool reads the rows raw
-// rather than through a vex mapping.
 const STATE_TEXT: Record<string, string> = {
   live: 'Live',
   connector: 'Not in the live integration',
@@ -611,12 +499,8 @@ const STATE_TEXT: Record<string, string> = {
   disabled: 'Withdrawn by us',
 };
 
-// The stay states the app's own slots are written against. Asked rather than
-// read, so the pane never touches a hotel's stay.
 const STAY_STATES = ['any', 'booked', 'arriving', 'in_house', 'departed'];
 
-// The resolver's reason turned into the sentence that answers "why not". Same
-// facts as STATE_TEXT below, said as an explanation rather than a label.
 const REASON_TEXT: Record<string, string> = {
   disabled: 'We withdrew this surface from the whole estate. Nothing a connector or a hotel does will bring it back.',
   connector: 'No connector this property runs currently offers the capability it needs.',
@@ -624,11 +508,6 @@ const REASON_TEXT: Record<string, string> = {
   source: 'It was shipped by an integration this property does not run.',
 };
 
-// ── reading one run's exchange ──────────────────────────────
-//
-// The turns are moss's own shape, stored as JSON on the row. Parsed, never cast:
-// a record written by an older build is a real possibility, and a pane that
-// throws on one loses the other 199 rows.
 const Turns = z.array(
   z.object({
     role: z.string(),
@@ -649,9 +528,6 @@ const readTurns = (json: string): Turn[] => {
   }
 };
 
-// Arguments arrive as the provider sent them: a JSON string. Pretty-printed when
-// it parses, left exactly as it came when it does not — a malformed call is the
-// most interesting thing in a transcript and must not be tidied into looking fine.
 const readArgs = (args: string): string => {
   try {
     return JSON.stringify(JSON.parse(args), null, 2);
@@ -660,24 +536,14 @@ const readArgs = (args: string): string => {
   }
 };
 
-// THE PROMPT, as one text. Every turn that carried words, in order, each under
-// the role that said it — the same thing a person would paste into a playground.
-// Nothing is folded in here that is not language: a tool call is machinery, and
-// interleaving it turns the one artifact worth reading straight through into a
-// log.
 const promptText = (turns: readonly Turn[]): string =>
   turns
     .filter((turn) => turn.content !== '')
     .map((turn) => `[${turn.role}${turn.name === undefined ? '' : `: ${turn.name}`}]\n${turn.content}`)
     .join('\n\n');
 
-// THE TOOL CALLS, separately: what was asked for and what came back. The record
-// keeps a call and its result as two turns, in the order the model saw them;
-// pairing them is this pane's business, and it pairs by position because that is
+// The record keeps a call and its result as two turns; they pair by position,
 // the order the loop ran them in.
-//
-// A call with no result is left saying so rather than dropped — a tool that never
-// answered is the most useful thing a transcript can tell you.
 const toolCalls = (turns: readonly Turn[]): Row[] => {
   const results = turns.filter((turn) => turn.role === 'tool');
   let taken = 0;
@@ -697,7 +563,6 @@ const toolCalls = (turns: readonly Turn[]): Row[] => {
   return out;
 };
 
-// How long ago, said the way a person would.
 const since = (ms: number): string => {
   const seconds = Math.round(ms / 1000);
   if (seconds < 5) return 'just now';

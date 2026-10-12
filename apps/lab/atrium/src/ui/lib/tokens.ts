@@ -1,9 +1,5 @@
 import { z } from 'zod';
 
-// Semantic prop vocabularies. A layout names a token; the component turns it
-// into CSS. Layouts never carry a colour, a class or a pixel that means
-// something — only a word from one of these lists.
-
 export const ALIGN: Record<string, string> = { start: 'flex-start', center: 'center', end: 'flex-end', stretch: 'stretch', baseline: 'baseline' };
 export const JUSTIFY: Record<string, string> = { start: 'flex-start', center: 'center', end: 'flex-end', between: 'space-between', around: 'space-around' };
 

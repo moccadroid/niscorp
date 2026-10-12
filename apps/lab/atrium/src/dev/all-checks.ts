@@ -1,10 +1,3 @@
-// Every check, each in its own process over its own fresh database.
-//
-// They are separate processes on purpose: each check ships the app a different
-// history (one of them ships a connector version, another closes an issue), and
-// a shared database would make the order of the suite part of its meaning.
-//
-// Run: pnpm --filter atrium check
 import { spawnSync } from 'node:child_process';
 
 const CHECKS = [

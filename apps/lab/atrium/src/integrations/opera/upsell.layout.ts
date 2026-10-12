@@ -1,11 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Walk a better room to the guest in hand.
-//
-// No guest picker: the surface arrives carrying a stay, so the only decisions
-// here are which room and what to say. Offering the house to choose from was
-// asking the clerk to find, in a grid, the person whose card they are already
-// reading — and it only looked survivable because the demo has two guests.
 export const upsellLayout: LayoutNode = {
   if: '$.done',
   then: {

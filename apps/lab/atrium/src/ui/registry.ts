@@ -14,11 +14,6 @@ import { Code } from './components/code';
 import { Dock } from './components/dock';
 import { Aside, Rail } from './components/aside';
 
-// Atrium's primitive vocabulary — every component a layout may name. Twenty-two
-// names, none of which contains a domain noun: there is no StayCard, no
-// IssueRow, no CapabilityToggle. Repeated structure is a spec prop on a generic
-// primitive (`Rows.columns`, `Tile`), which is what keeps a guest surface, a
-// desk board and a deployment console renderable by one kit.
 const ATRIUM_PRIMITIVES = {
   Box,
   Stack,

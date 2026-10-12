@@ -5,7 +5,6 @@ export const charterLayout: LayoutNode = panel(
   'Charter',
   'Roles as compiled, principals as resolved — ring 1, the ceiling',
   split(
-    // ── left: who wears what ──
     {
       component: 'Stack',
       props: { gap: 16 },
@@ -27,9 +26,6 @@ export const charterLayout: LayoutNode = panel(
           },
         },
 
-        // The roles themselves, with what each compiles to. `perRole` comes out
-        // of verifyCharter, which runs on every boot and every refresh and whose
-        // only consumer until now was an error check.
         {
           component: 'Stack',
           props: { gap: 6 },
@@ -51,7 +47,6 @@ export const charterLayout: LayoutNode = panel(
           ],
         },
 
-        // Warnings moss computes and never raises, because they are not errors.
         {
           if: '$.charter.warnings.length',
           then: {
@@ -79,7 +74,6 @@ export const charterLayout: LayoutNode = panel(
       ],
     },
 
-    // ── right: one principal's whole application ──
     {
       if: '$.selected.id',
       then: {

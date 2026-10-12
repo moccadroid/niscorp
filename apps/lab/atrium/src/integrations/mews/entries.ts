@@ -1,12 +1,9 @@
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { stampText, statusTone } from '@atrium/app/prisms/format.prism';
 
-// The Mews bundle's data surface — the reads and writes its actions replay.
-// Seeded into vex_cache with everything else; `property_id` on every row is
-// stamped and matched by the tenant behaviors, so none of these mention it.
+// `property_id` is stamped and matched by the tenant behaviors, so no entry
+// here mentions it.
 
-// Mirror a booking the connector confirmed. The connector owns availability;
-// this row is what the diary, the guest's visits and the agent read.
 export const spaRecord: SeedMutation = {
   fingerprint: 'spa/record',
   intent: 'Mirror a spa booking the Mews connector confirmed',
@@ -48,8 +45,6 @@ export const spaForStay: SeedEntry = {
   },
 };
 
-// The desk's diary — every booking at the property with who and where. The
-// property filter is the scope behavior's, not this query's.
 export const spaDiary: SeedEntry = {
   fingerprint: 'spa/diary',
   intent: "The property's spa diary with guest and room",
@@ -84,8 +79,6 @@ export const spaDiary: SeedEntry = {
   },
 };
 
-// One write moves a booking through its life: done, no_show, cancelled. The
-// guest uses it to cancel their own; the desk uses it for the rest.
 export const spaSetStatus: SeedMutation = {
   fingerprint: 'spa/setStatus',
   intent: "Move a spa booking's status",
@@ -97,8 +90,6 @@ export const spaSetStatus: SeedMutation = {
   },
 };
 
-// Utilization for the ops manager: bookings per treatment per status. Flat
-// group-count — the layout groups visually.
 export const spaByTreatment: SeedEntry = {
   fingerprint: 'spa/byTreatment',
   intent: 'Spa bookings counted by treatment and status',
@@ -113,18 +104,9 @@ export const spaByTreatment: SeedEntry = {
   },
 };
 
-// ─── voiding a bill item ─────────────────────────────────────
-// Mews owns the bill; our folio_lines is a projection of it. The void happens
-// THERE first (the action calls /connectors/con_mews/folio/void) and this
-// only records the answer on the mirror.
-//
 // Its own fingerprint, not Opera's: two connectors implementing one capability
-// each ship their own data surface, and intake refuses a bundle that reaches
-// for another's. That is the rule doing its job rather than being tidy — the
-// two vendors' reversals are genuinely different calls.
-// Mews' half of `transfer.book`. Same table, same shape, its own fingerprint
-// and its own service behind it — the second implementation is what proves the
-// capability is ours and the fleet is theirs.
+// each ship their own entries, and intake refuses a fingerprint another
+// connector owns.
 export const transferRecord: SeedMutation = {
   fingerprint: 'mews/transferRecord',
   intent: 'Record a transfer on the mirror after Mews confirmed the car',

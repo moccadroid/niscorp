@@ -5,10 +5,6 @@ import { cx } from '../lib/cx';
 import { SIZE, TONE } from '../lib/tokens';
 import { Icon } from './display';
 
-// The one list primitive. Repeated structure is a data-driven `columns` spec on
-// a generic component, never a new component per entity — so there is no
-// IssueRow, no TaskRow and no StayRow anywhere in this app.
-
 const Cell = z.object({
   kind: z.enum(['primary', 'text', 'chip', 'icon', 'action', 'switch']),
   key: z.string().optional(),
@@ -38,19 +34,10 @@ export const Rows: NovaComponent<z.infer<typeof RowsProps>> = ({ rows = [], colu
   const grid = columns.map((c) => (c.w === 'auto' || c.w === undefined ? 'auto' : `${c.w}fr`)).join(' ');
   const pad = dense === true ? '9px 14px' : '13px 16px';
   const gap = dense === true ? 12 : 16;
-  // The last column anchors to the table's right edge — timestamps, chips and
-  // amounts read from the margin, headers included, so columns line up.
   const last = columns.length - 1;
   const anchor = (ci: number): CSSProperties => (ci === last ? { justifySelf: 'end', textAlign: 'right' } : {});
 
-  // A LIST IS ITS OWN SURFACE. Every one of these used to be wrapped in a
-  // `Card pad: 0` by its layout — eleven places writing the same zero to undo a
-  // padding they did not want, because a table already insets its own cells and
-  // a card around it would inset them twice. The knowledge that a list is flush
-  // belongs to the list, so the card is here and the layouts say nothing.
-  //
-  // `overflow: hidden` is what makes the last row's border sit inside the
-  // rounded corner instead of cutting across it.
+  // `overflow: hidden` keeps the last row's border inside the rounded corner.
   const surface = (inner: ReactNode): JSX.Element => (
     <div className="at-card" style={{ overflow: 'hidden' }}>
       {inner}
@@ -87,9 +74,6 @@ export const Rows: NovaComponent<z.infer<typeof RowsProps>> = ({ rows = [], colu
         </div>
       ) : null}
       {rows.map((row, ri) => {
-        // Which row is open. A list that shows what a click opened, and does not
-        // then say which row it was, makes the person re-read the record beside
-        // it to find out where they are.
         const isOpen = selected !== undefined && selected !== '' && text(row, rowKey) === selected;
         return (
         <div
@@ -141,9 +125,6 @@ export const Rows: NovaComponent<z.infer<typeof RowsProps>> = ({ rows = [], colu
               );
             }
             if (cell.kind === 'switch') {
-              // Same emission as `Switch`: the NEXT value, and the row it came
-              // from. A list of things you flip is a list, not a bespoke
-              // component per entity — which is what this one existed as before.
               const on = row[cell.key ?? ''] !== true;
               return (
                 <span key={ci} style={anchor(ci)}>

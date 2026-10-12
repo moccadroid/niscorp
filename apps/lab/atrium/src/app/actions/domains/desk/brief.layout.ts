@@ -1,16 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The guest profile: who they are, before you speak to them.
-//
-// Every line is a figure that came back from a query this card ran. The
-// assistant may write ONE thing here — `reading`, the sentence at the top that
-// says what it makes of all of it — and that sentence is marked as its own, the
-// same way a drafted reply is. Everything below the line is the database's and
-// cannot be written by anybody.
-//
-// That split is the entire trustworthiness of the surface. A clerk glancing at
-// it can tell in a quarter of a second which part a machine wrote, because it is
-// the part in the box with its name on it.
 export const briefLayout: LayoutNode = {
   if: '$.stayId',
   then: {
@@ -33,8 +22,6 @@ export const briefLayout: LayoutNode = {
         ],
       },
 
-      // The assistant's read, if it left one. Attributed, and never mixed in
-      // with the figures.
       {
         if: '$.reading',
         then: {
@@ -71,9 +58,6 @@ export const briefLayout: LayoutNode = {
         ],
       },
 
-      // What the desk has written down. This is the part that makes the surface
-      // feel like a hotel rather than a database — and it is staff-only, which
-      // is why it is a table a guest's charter does not name.
       {
         if: '$.notes.length',
         then: {
@@ -106,7 +90,6 @@ export const briefLayout: LayoutNode = {
         else: '',
       },
 
-      // Everything already arranged for them, so nobody offers a second one.
       {
         if: { $or: ['$.transfers.length', '$.given.length'] },
         then: {

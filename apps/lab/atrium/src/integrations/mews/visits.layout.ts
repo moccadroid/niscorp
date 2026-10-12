@@ -1,7 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The guest's own treatments — mirror rows, freshest first. A booked one can be
-// cancelled here; everything else is history and reads that way.
 export const visitsLayout: LayoutNode = {
   component: 'Stack',
   props: { gap: 12 },

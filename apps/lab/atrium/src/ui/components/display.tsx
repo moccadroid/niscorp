@@ -3,9 +3,6 @@ import { z } from 'zod';
 import type { NovaComponent } from '@niscorp/nova/adapters/react';
 import { COLOR, SIZE, TONE } from '../lib/tokens';
 
-// Display primitives. Text, chips, stats, icons, rules — all domain-blind.
-
-// Semantic token, not a raw CSS value — the same rule as ALIGN and COLOR.
 const TEXT_ALIGN: Record<string, CSSProperties['textAlign']> = { left: 'left', center: 'center', right: 'right' };
 
 const TextProps = z
@@ -54,12 +51,8 @@ Badge.meta = { description: 'A small status chip. Tone carries the meaning; the 
 
 const StatProps = z.object({ label: z.string(), value: z.string().optional(), tone: z.string().optional(), hint: z.string().optional() }).strict();
 
-// The figure's size is a CSS variable, not an inline style, because DENSITY IS
-// A PROPERTY OF THE REGION. The same action renders in a work column, a 400px
-// workspace and an overlay; a surface that ships from a vendor cannot know
-// which. So the region sets `--stat-size` and every figure in it obeys — see
-// ui.css. Inline styles would win over that and did, which is how a €2400 came
-// to be 32px in a narrow column.
+// The figure's size is the region's `--stat-size`, not an inline style: an
+// inline style would win over what the region sets.
 export const Stat: NovaComponent<z.infer<typeof StatProps>> = ({ label, value, tone, hint }) => (
   <div className="at-stat">
     <span className="at-stat__label">{label}</span>
@@ -73,10 +66,6 @@ Stat.meta = { description: 'A labelled figure. The number is set in the display 
 
 const RuleProps = z.object({ pad: z.number().optional(), label: z.string().optional().describe('Names the section the rule opens. Sits on the line, in the small caps every other heading in the kit uses.') }).strict();
 
-// A LABELLED rule is still a rule. Layouts across the app — the wake
-// switchboard, both folio surfaces, every new desk surface — were already
-// passing `label` and the component silently dropped it, so a dozen sections
-// rendered as unexplained hairlines. The prop was not wrong; it was unbuilt.
 export const Rule: NovaComponent<z.infer<typeof RuleProps>> = ({ pad, label }) => {
   const line = <div style={{ height: 1, background: 'var(--line)', flex: 1 }} />;
   if (label === undefined || label === '') return <div style={{ height: 1, background: 'var(--line)', marginTop: pad, marginBottom: pad }} />;
@@ -105,8 +94,6 @@ export const Avatar: NovaComponent<z.infer<typeof AvatarProps>> = ({ name = '', 
 };
 Avatar.meta = { description: 'Initials in a circle.', propsSchema: AvatarProps };
 
-// A small, self-contained glyph set. No icon dependency: the vocabulary is
-// closed on purpose, so a layout can only name a mark that exists.
 const PATHS: Record<string, string> = {
   bed: 'M3 18v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6M3 18h18M3 18v2M21 18v2M7 10V7a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v3',
   key: 'M15 7a4 4 0 1 1-3.9 5H8v3H5v-3H3v-2h8.1A4 4 0 0 1 15 7z',
