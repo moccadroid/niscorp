@@ -1,28 +1,92 @@
 # The artifactory
 
-**Status: Proposed (2026-10-12). What it has to do is decided: part 2 is the
-owner's. The design is part 5. Its ten decisions (part 6) are settled, but
-for how a publish is built (D7), which waits for a yes. Nothing is built, and
-nothing of this plan is merged until the plan holds. Moss was rebuilt first so that this has one place to go
-([moss-refactor.md](moss-refactor.md)).**
+**Status: Proposed (2026-10-12), ready to build from. What it has to do
+(part 2) and its ten design decisions (part 9) are the owner's and are
+settled. Nothing is built. Part 0 is for whoever builds it, part 6 is the
+build, step by step, and part 7 is what needs the owner's word before it is
+touched.**
+
+## 0. For whoever builds this
+
+You are adding one module to `@niscorp/moss`, the app server of nisc. You have
+none of the conversation this plan came out of, and you do not need it: what
+was decided is here.
+
+**Read first, in this order.** `packages/nisc/AGENTS.md`, whole: its last
+part, "Changing a package", binds this work. `packages/nisc/STYLE_GUIDE.md`.
+`packages/moss/DESIGN.md`, "How the code is laid out". Then
+[moss-refactor.md](moss-refactor.md): how moss is built, and in its part 6 the
+owner's standing decisions. Then this file. Then the code part 4 names.
+
+**Where the repository stands.** Start from `main`. Moss is
+`packages/moss/src`: 89 files in 15 modules, about 7,400 lines of code and
+370 comment lines. `pnpm verify` passes and CI passes.
+
+**The owner's rules.** Each was learned the hard way.
+
+1. **A step is built on the owner's go, and on nothing else.** A question from
+   the owner is not a go. Build one step of part 6, report, and stop.
+2. **No other package's source is changed** without the owner's explicit
+   approval: nova, vex, charter, strata, prism, tide, the CLI. Part 7 lists
+   what this plan would need of them. Ask with the concrete change in hand. A
+   document in another package that follows a new API is fine, and so is a
+   lab app that follows one.
+3. **The code speaks.** A comment only where the reasoning, a decision or the
+   workings would be misread without it. No file headers, no history.
+4. **Names an engineer would guess.** No coined words. What a person or a model
+   produces while the app runs is "generated". A "tag" is a cache tag and
+   nothing else. If a name needs a comment, change the name.
+5. **The fewest mechanisms that solve it.** Never a mechanism to make one
+   example pass. If something asks for a new mechanism that is not in this
+   plan, it goes to the owner before any code.
+6. **Tests.** Behaviour gets a test that fails first. A moss test starts no
+   database and does not call `createServer`: it uses the doubles in
+   `packages/moss/test` (`data-double.ts`, `shell-host-double.ts`). The one
+   suite on a database is the integrations registry's.
+7. **A commit moves code or changes behaviour, never both.**
+8. **Say what you measured.** After each step: files, lines of code, comment
+   lines and tests in `packages/moss`, before and after.
+9. **No review loops.** At most one review of a step. A reviewer always finds
+   something; what it finds that asks for a new mechanism goes to the owner.
+10. **A green `pnpm verify` here is not a green CI.** A branch goes through a
+    pull request before `main`. Never push without the owner's word, and never
+    merge the "release: version packages" pull request: that one is the
+    owner's alone.
+
+**What "works" means after every step.** `pnpm verify` passes, and the lab
+apps' checks are where they are today. Run each `src/dev/*-check.ts` as its
+own process from its app's folder (`node --import tsx src/dev/<name>.ts`), one
+at a time: encore 13 of 13; lyceum 17 of 18 (`model-check` needs a model key);
+atrium 18 of 19 (`nisc-check` cannot spawn on Windows); relay 28 of 32 (two
+need a model key, one a built file, and `harness-check` fails without this
+work too); lyra 49 or 50 of 50 (`campaigns-check` fails between 23:00 and
+24:00 UTC, `scoping-check` on some dates).
+
+**To start a session on it:** "Read `docs/plans/artifactory.md` and propose
+step N of part 6 to me before building it."
 
 ## 1. What it is
 
 An app is made of artifacts: actions, layouts, fragments, vex entries. Today
 they are what the build shipped, and changing one is a deploy. The artifactory
-is the part of moss every load of an artifact goes through. It decides what an
-id resolves to for the person asking: what the build shipped, what the
-developers published since, what that person generated, or what they are
-drafting right now. It keeps every saved version, so there is a history and a
-way back.
+is the module of moss every load of an artifact goes through. It decides what
+an id resolves to for the person asking: what the build shipped, what was
+published since, what that person generated, or what they are drafting right
+now. It keeps every saved version, so there is a history and a way back.
 
-It is a mechanism of moss, not a library, and a module of its own:
-`packages/moss/src/artifactory/`. An agent, an editor, an assistant and a
-builder screen are callers of it and no part of it.
+An agent, an editor, an assistant and a builder screen are callers of it and
+no part of it.
 
 ## 2. What is decided
 
 The owner's. Not to be asked again.
+
+**What it is, and where**
+
+- A mechanism of moss, not a library, and a module of its own:
+  `packages/moss/src/artifactory/`.
+- The first use is lyceum, so that it can be shown. No other app gets a new
+  feature for it: what they do today has to work, loading through it.
 
 **What it holds**
 
@@ -34,6 +98,9 @@ The owner's. Not to be asked again.
 - An action and an entry carry their prisms with them.
 - A shipped artifact goes through the same way in as every other, and does not
   have to be a row.
+- The actions of an integration, and a set of actions an app hands over while
+  it runs, are in the artifactory's live list. They are not rows of its
+  tables.
 
 **Whose it is**
 
@@ -58,14 +125,17 @@ The owner's. Not to be asked again.
   is asked; it is not handed around.
 - It decides what a shell's layout store holds. It is where the charter is
   applied.
-- Developers publish new defaults without deploying. A published default wins.
-  The build's own copy is what is left when nothing is published, or when the
-  published one fails its check.
-- Developers shipping a new look to everyone (the same kit, most layouts, a few
-  actions) is this same system, not a second one.
-- The actions of an integration, and a set of actions an app hands over while
-  it runs, are in the artifactory's live list of actions and layouts. They are
-  not rows of its tables.
+- A published default wins. The build's own copy is what is left when nothing
+  is published, or when the published one fails its check.
+- Shipping a new look to everyone (the same kit, most layouts, a few actions)
+  is this same system, not a second one.
+
+**Publishing**
+
+- New defaults go live without a deploy.
+- Publishing happens the same way a person saves what they generated, through
+  a trusted channel for the owners. There is no command for it and no build
+  step: a publish from the app's source is a deploy by another name.
 
 **Layouts**
 
@@ -74,7 +144,7 @@ The owner's. Not to be asked again.
   the layouts.
 - The app may ship several styles, and a person chooses one.
 - My own change shows on my open screen at once. What somebody else publishes
-  while my screen is open is adopted in place (D8).
+  while my screen is open is adopted in place.
 
 **The draft**
 
@@ -88,10 +158,10 @@ The owner's. Not to be asked again.
 
 **Saving, history, reset**
 
-- Everything saved is kept as a version. There is a history.
+- Everything saved is kept as a version. History is append only: nothing a
+  person does destroys anything.
 - Reset is what a person does to one artifact they changed: back to the
-  default. The default is whatever is published now. If the developers ship an
-  upgrade, that is the default.
+  default. The default is whatever is published now.
 - An artifact is replaced whole for now. Room is left for updating or merging
   one later.
 
@@ -116,19 +186,15 @@ The owner's. Not to be asked again.
 - One check for an artifact, made of the checks prism, nova and vex already
   have.
 
-**The first use**
-
-- Lyceum, so that it can be shown. No other app gets a new feature for it:
-  what they do today has to work, loading through the artifactory.
-
 **Words**
 
 - Use the words that exist: artifact, kind, version, save, draft, default,
   publish, principal, ref (of the layout store), layout variant, style, entry,
   fingerprint, manifest. "Generated" for what a person or a model produces
   while the app runs. "Steps" only for the draft's own history.
-- Not to be used: made, slot, look, picks, an owner called "shipped", "step" as
-  a column, one blob called "documents", "from".
+- Not to be used: made, slot (for anything but nova's canvas slot), look,
+  picks, an owner called "shipped", "step" as a column, one blob called
+  "documents", "from", and "tag" for anything but a cache tag.
 
 **The bar**
 
@@ -138,7 +204,7 @@ The owner's. Not to be asked again.
 ## 3. What was run
 
 Probes on 2026-10-07 and 2026-10-08, all removed afterwards. Each is a fact the
-design may lean on.
+design leans on. Run one again before you lean on it harder than it was run.
 
 **Nova**
 
@@ -147,33 +213,35 @@ design may lean on.
 - An action whose layout is held in the layout store and named by `{ ref }`
   follows `setLayout` on the open screen, with its data kept. The same holds
   inside a fragment.
-- A shell handed a layout store whose `get` asks somebody else: an open action
-  and the frame follow a changed answer on the next render. Nova does not
-  render by itself when that answer changes, so moss has to trigger it.
 - Every action of the five lab apps (185) draws the same first screen with its
   layout held under `action/<id>` and named by ref, alone and inside each of
-  its app's fragments (335 combinations).
+  its app's fragments (335 combinations). First screen, default data, no
+  network; triggers were not run.
 - The refs apps use today (`renderer` and `xray` in lyceum, `room` in encore,
   Midas's dock) do not clash with `action/…`, `canvas/…` and `frame`.
 - Nova's `livenessOf` cannot see what is behind a `{ ref }` root. A page whose
   layouts are held by ref is misjudged (a file, or a server behind it) unless
   the definition is handed over with its layout in place.
+- A canvas slot names a canvas by `canvasId` and may sit in any layout. A slot
+  for a canvas the shell does not have draws nothing. A shell has `addCanvas`
+  and `removeCanvas`.
 
 **Vex**
 
-- Vex, unchanged, behind a cache backend that asks somebody else first: a
-  shipped entry that was never written to any table answers; a saved one
-  answers and survives an unrelated `ADD COLUMN`; a generated one that was not
-  saved stays in `vex_cache` and is deleted by the schema change.
-- A generated entry is deleted on its first replay after the schema changes. A
-  seeded one carries no schema fingerprint and is never stale.
+- Vex, unchanged, behind a cache that asks somebody else first: a shipped
+  entry that was never written to any table answers; a saved one answers and
+  survives an unrelated `ADD COLUMN`; a generated one that was not saved stays
+  in `vex_cache` and is deleted by the schema change.
+- A seeded entry carries no schema fingerprint and is never stale. A generated
+  one carries it, and is deleted on its first replay after the schema changes.
 - After a column an entry reads is dropped, a replay fails with `invalid_dsl`,
   and `engine.compile(dsl)` throws the same before anything runs.
-- A cache entry holds the query and the compiled mapping only, and prism's
-  compiled form has no migration path. What is stored has to be the entry as
-  authored.
 - Vex names a generated query itself: `fp_` and sixteen characters of a random
-  hash. A shipped entry's fingerprint is a name its author wrote.
+  hash (`mintFingerprint`). A shipped entry's fingerprint is a name its author
+  wrote.
+- A cache entry holds the query and the compiled mapping. The mapping's prism
+  config is not kept anywhere: `createShapeMapper` (`@niscorp/vex/agent`)
+  answers `{ ir, transformed }`. Prism's compiled form has no migration path.
 
 **The apps as they are**
 
@@ -181,38 +249,52 @@ design may lean on.
   again after a round trip.
 - 69 of the 185 shipped actions call a vex write directly. They name 71
   functions, and none has a description.
-- Relay builds actions and reads with a model and keeps them in a map; an edit
-  pushes a second copy over the open screen. Atrium previews a fetched layout
-  in one operator's shell. Lyceum sets two layouts from functions. Midas has a
-  dock layout a model writes that lives only in the shell.
+- `vex_cache` is named in atrium, relay, encore's boot check, fable and
+  mythos. Fable and mythos have a shell of their own and no moss.
+- `@niscorp/moss/unverified` is used by relay (a model builds an action and it
+  is registered in the user's shell), atrium (an operator previews a fetched
+  layout as an action), lyceum (two functions set a layout into a ref for one
+  session), and by lyra's check harness and relay's builder checks.
 
-## 4. What moss does for it now, and what it still has to change
+## 4. Moss as it is, and what has to change
 
-Read against the code on 2026-10-12.
+Read against the code on 2026-10-12. Paths are under `packages/moss/src/`.
 
-**Now.** While a server runs, the running manifest is the one place an action,
-a layout and a fragment are asked of: `artifactsFor(shell, roles, installed)`
-in `manifest/running.ts` answers the definitions a set of roles holds with
-their layout variant in place, the shell's canvases, frame, layout store and
-fragments, the entries by fingerprint, and the component names. A shell host
-asks it once for each build and once for each adopt. An adopt brings a living
-shell level with that answer in place. A change in one process reaches the
-others through the generation pointer.
+**Who answers what today**
 
-**Still to change**
+| File | It holds |
+|---|---|
+| `manifest/app.ts` | the types an app is written in (`NiscApp`, `ShellManifest`), `defineApp` |
+| `manifest/schema.ts` | the schema that parses a manifest and freezes it |
+| `manifest/verify.ts` | `verifyManifest` (what a boot checks), `layoutMisfits`, `endlessChains` |
+| `manifest/running.ts` | `createRunningManifest`: the actions in force (the build's, then each named set), `catalogFor`, `artifactsFor`, `onChange`, `claim` and `replace` for named sets |
+| `manifest/roles.ts` | what a set of roles holds, kept per set of roles; layout variants put in place |
+| `manifest/artifacts.ts` | `ShellArtifacts`, `entriesOf` |
+| `manifest/generation.ts` | the generation pointer: a counter every process polls, so a change in one reaches the others |
+| `data/engine.ts` | `createDataLayer`: the vex engine and the cache it is built with |
+| `data/data.ts` | `createData`: `seed`, `fingerprints`, policies, `executeAs`, the pointer's row |
+| `data/own-entries.ts` | how moss reads and writes its own rows through vex (`createOwnEntries`, `POINTER`) |
+| `data/tables.ts` | `MOSS_SEQUENCE` (`nisc.moss`): moss's tables, four migrations so far |
+| `data/routes.ts` | the vex routes; `createIntentAnswers`, a query written for an intent while the app runs |
+| `shells/build.ts` | `buildShell`: one nova shell from a `ShellComposition` |
+| `shells/host.ts` | the shell host: build, adopt (`takeLayouts`), reset |
+| `shells/sessions.ts` | the session a host hands out, and the one an app's functions are handed |
+| `shells/snapshot.ts` | a drawn screen, and `shellNeedOf` (does a page need a server behind it) |
+| `server/server.ts` | the boot, one step to a line |
+| `server/hosts.ts` | what a shell is built from for a principal (`composition`) |
+| `server/signals.ts` | what crosses processes on the fabric: a forgotten identity, a forgotten tag, a nudge |
+
+**What has to change**
 
 - **Entries have two holders.** The manifest's list is copied once, at boot,
   into vex's cache (`Data.seed`, called in `buildRunningManifest`,
   `server/server.ts`). From then on a replay resolves in the cache and asks
-  the manifest nothing. The cache also holds a query written for an intent
-  while the app runs (`createIntentAnswers`, `data/routes.ts`), and any row
-  from before this boot. There is no way to hand an entry over while a server
-  runs.
-- **`artifactsFor` is synchronous and asked by roles.** Its answer is kept for
-  each set of roles and install list, never for a person
-  (`manifest/roles.ts`). What one person generated needs the principal, and
-  rows need to be awaited: the signature, the key the answer is kept under and
-  its one caller (`server/hosts.ts`) move.
+  the manifest nothing. A row from an earlier boot stays. There is no way to
+  hand an entry over while a server runs.
+- **`artifactsFor(shell, roles, installed)` is synchronous and asked by
+  roles.** Its answer is kept for each set of roles and install list, never
+  for a person. What one person generated needs the principal, and rows need
+  to be awaited. Its one caller is `server/hosts.ts`, and
   `ShellHostConfig.composition(principal)` is already by principal and
   awaited.
 - **`catalogFor(roles, installed)` is the same**, with four callers outside
@@ -223,45 +305,48 @@ others through the generation pointer.
 - **An adopt does not take the canvases again** (`takeLayouts`,
   `shells/host.ts`). It applies the frame, each ref of the layout store and
   each fragment that is answered differently.
-- **A shell's liveness reads the entries of its composition** (`shellNeedOf`,
-  `shells/snapshot.ts`), so an entry that is only in the cache is reported as
-  not readable.
-- **`@niscorp/moss/unverified` is the second way in.** Relay, atrium and
-  lyceum change a shell through it, unverified. The draft is what can take
-  these over.
-- **Named sets of actions** (`server.replaceActions`, a feature's own set and
-  its loader) are how an action arrives while a server runs today.
-- **The integrations feature's actions**: a bundle's actions and layouts are
-  artifacts that arrive from somewhere else. Eleven of its 23 seams and the
-  rows of `integration_actions` exist for that.
-- **The module rule.** `manifest` may not import `data`. Rows it needs are read
-  and written by entries that `data` replays for it and hands over as
-  functions, as the generation pointer's are.
+- **A shell's liveness reads a definition off the mounted instance**
+  (`shells/snapshot.ts`). With layouts by ref it has to put the shell's own
+  layout for that ref in place before it asks nova.
+- **The module rule.** `manifest` may not import `data`, and `data` imports
+  `manifest`. The artifactory and `data` need each other: one for its rows,
+  the other for the entries. Neither imports the other: each is handed
+  functions by the server, as the generation pointer's are today.
 
 ## 5. The design
+
+**The module.** `artifactory/` takes over the question `manifest` answers
+while a server runs: what the app consists of right now, and what of it exists
+for somebody. `running.ts`, `roles.ts`, `artifacts.ts` and `generation.ts`
+move into it. `manifest` keeps the app as it is handed over: its types, its
+schema and its verification. The artifactory imports `manifest` and
+`identity`.
+
+**The live list.** What it answers from while a server runs: the build's
+artifacts, the published defaults, and the sets that are handed to it (an
+integration's approved actions, a set an app hands over). The handed sets are
+checked and resolved like everything else and are not written to its tables.
 
 **Where an id resolves.** For a principal, in this order, the first that
 exists and passes the check: the draft in their shell; what they generated;
 the published default; the build's copy.
 
-**Two tables.** Read and written through vex entries, like every row of
-moss's.
+**Two tables**, appended to `nisc.moss` as its next migration, and read and
+written through vex entries that `data` replays for the artifactory (the way
+`data/own-entries.ts` serves the generation pointer).
 
 - `artifacts`: a row is one version of one artifact. `kind` (action, layout,
   fragment, entry), `id`, `principal` (absent: a default), `version`, `body`
   (the artifact as authored), `grammar` (the stamp it was written at), which
   version it was copied from (the room left for merging), and the save it
   belongs to.
-- `artifact_saves`: a row is one save. Who saved and when. A save holds one or
-  several versions, and is the unit of history, restore and reset.
+- `artifact_saves`: a row is one save. Who saved and when, and for whom (the
+  principal, or everybody). A save holds one or several versions, and for
+  each artifact it touches it says which version is in force, or none.
 
-A default is a row with no principal. A version is never changed or deleted.
-
-**The live list.** What the artifactory answers from while a server runs: the
-build's artifacts, the published defaults, and the sets that are handed to it
-(an integration's approved actions, a set an app hands over). The handed sets
-are checked and resolved like everything else and are not written to the two
-tables: an integration keeps its actions in its own table, as today.
+No row is changed or deleted. The latest save that touches an artifact says
+what is in force for it. Going back to a version is a new save that holds a
+copy of it. A reset is a new save that says none of mine is in force.
 
 **Ids.** The artifactory gives a generated action its id: `generated.` and a
 random part. Nobody passes one in. Nothing shipped, published or from an
@@ -270,15 +355,16 @@ the charter's globs: it is in its owner's catalog because they own it, and in
 nobody else's.
 
 **Layouts.** Every layout sits in the shell's layout store under the name of
-what draws it: `action/<id>`, `canvas/<id>`, `frame`. An action's definition
-names its layout by `{ ref }`. Changing a layout is then `setLayout`, and an
-open screen follows with its data kept. A layout's body is `{ ref, layout,
-style?, use? }`: `style` says which of the app's styles it belongs to, and
-`use` marks the one of several that is in use. At a ref the order is: mine
-marked in use; the default of the style I chose; the layout variant of my
-roles; the plain default; the build's copy. Which style somebody chose is the
-app's to keep: it reaches the artifactory on their identity record, beside
-their roles.
+what draws it: `action/<id>`, `canvas/<id>`, `frame`. An app goes on writing
+an action's layout inline; the artifactory moves it into the store when it
+answers what a shell is made of, and the definition names it by `{ ref }`.
+Changing a layout is then `setLayout`, and an open screen follows with its
+data kept. A layout's body is `{ ref, layout, style?, use? }`: `style` says
+which of the app's styles it belongs to, and `use` marks the one of several
+that is in use. At a ref the order is: mine marked in use; the default of the
+style I chose; the layout variant of my roles; the plain default; the build's
+copy. Which style somebody chose is the app's to keep: it reaches the
+artifactory on their identity record, beside their roles.
 
 **What goes with an action.** A layout's id is the ref it fills, so it names
 the action it is for. Taking a generated action out of force takes its owner's
@@ -290,153 +376,188 @@ exists nowhere any more.
 **Canvases.** A canvas exists for a shell while a layout in force holds a
 canvas slot for it. A layout that comes into force with a slot for a canvas
 the shell does not have adds it (`addCanvas`), and one that leaves takes it
-out again. The canvases a shell manifest declares stay as they are. This is
-what an adopt does not do today (part 4).
+out again. The canvases a shell manifest declares stay as they are.
 
-**The draft.** On the session: read and list what is in it, put one or several
+**The draft.** It lives in the shell and is a capability of the session an
+app's functions are handed: read and list what is in it, put one or several
 artifacts (one numbered step), remove one, show the draft as it was at a step,
-discard it, and save it (one save of everything in it). It lives in the shell
-and passes the same check as a save.
+discard it, save it. What is put passes the check and is applied to that one
+shell at once, so its owner sees it. It is gone when the shell is.
 
-**Entries.** Moss already hands vex its cache (`data/engine.ts`). The
-artifactory becomes that cache's first answer: a shipped, published or saved
-entry is answered by it, compiled from the entry as authored; anything else
-goes to vex's own cache as today. Nothing is seeded at boot, and `Data.seed`
-goes. A generated read keeps the fingerprint vex gave it (`fp_…`). Saving one
-under a fingerprint a shipped or published entry has is refused, so a
+**Saving and publishing are one call.** A save is told who it is for: the
+session's principal, or everybody. Nothing else differs: the same check, the
+same two tables, the same history. A save for everybody is a default.
+
+**The trusted channel.** The session handed to an app's functions can already
+do what moss trusts shipped code with (`session.grant`, `session.revoke`).
+Saving is one more of those. Any function may save for the session's own
+principal. A save for everybody is reached the same way, from a function the
+app ships for its owners, and the charter says who holds that function. That
+is the whole channel: no route, no key, no command. A generated action cannot
+reach it, because that function is on no list a generated action may call.
+
+**What a publish gives an id.** A generated action has an id nobody chose and
+no charter grants. As a default it has to be granted, so whoever publishes it
+gives it its id, as a shipped action has one, and its layouts' refs follow
+that id. Publishing a new version of something that is already a default
+keeps the id. A read keeps its fingerprint.
+
+**Entries.** `data/engine.ts` builds the engine with a cache. That cache
+becomes one that asks the artifactory first: a shipped, published or saved
+entry is answered by it, compiled from the entry as authored. Anything else is
+vex's own table's, but only a generated one (it carries a schema fingerprint):
+a row an earlier boot seeded is not an entry any more. What vex writes goes to
+its own table. Listing the keys answers both. Nothing is seeded at boot, and
+`Data.seed` goes. A generated read keeps the fingerprint vex gave it. Saving
+one under a fingerprint a shipped or published entry has is refused, so a
 generated read can never answer in place of a shipped one. A replay runs under
 the policy of whoever calls it, whoever saved the entry.
 
-**The check.** At a put into the draft, at a save, at a publish and when a
-shell is built: the kind's schema (nova's, vex's), `auditAction`, the layout
-against the kit (`layoutMisfits`), the chains that never end
-(`endlessChains`), a read against the schema (`engine.compile`), the action's
-endpoints against what it may call. A version that fails when a shell is built
-is left out, and what is under it shows.
+**The check.** At a put into the draft, at a save, and when a shell is built:
+the kind's schema (nova's, vex's), `auditAction`, the layout against the kit
+(`layoutMisfits`), the chains that never end (`endlessChains`), a read against
+the schema (`engine.compile`), and a generated action's endpoints against what
+it may call: a read its owner may replay, a function on the charter's list,
+and nothing else. A save for everybody also passes what a boot verifies
+(`verifyManifest`). A version that fails when a shell is built is left out,
+and what is under it shows.
 
 **Functions and the charter.** The manifest declares its functions by name
 with a description each. The charter gains one part: which of them the
-generated actions of a role may call. A generated action that names any other
-fails the check.
-
-**Saving and publishing are one call.** The draft has one way out, a save, and
-a save is told who it is for: the session's principal, or everybody. Nothing
-else differs: the same check, the same two tables, the same history. A save
-for everybody is a default, a row with no principal.
-
-**The trusted channel.** A session handed to the app's functions can already
-do things moss trusts shipped code with (`session.grant`, `session.revoke`).
-The draft is one more of them. Anybody's function may save for the session's
-own principal. A save for everybody is reached the same way, from a function
-the app ships for its owners, and the charter says who holds that function.
-That is the whole channel: no route, no key, no command. A generated action
-cannot reach it, because the function is on no list a generated action may
-call.
-
-**What a publish gives an id.** A generated action has an id nobody chose and
-no charter grants (D3). As a default it has to be granted, so whoever
-publishes it gives it its id, as a shipped action has one, and its layouts'
-refs follow that id. Publishing a new version of something that is already a
-default keeps the id. A read keeps its fingerprint.
+generated actions of a role may call. Until both exist, a generated action
+calls no function.
 
 **After a save.** A default moves the generation pointer: every process
 follows and living shells adopt, as for every change of the app today. A
 person's own save is adopted at once by their shells in the process that
 saved; a deployment with several processes carries it to the others on its
-fabric, as it carries an identity that was forgotten. Taking a default back
-is a save too: the one before it is in force again, or the build's copy when
-there was none.
+fabric, as it carries a forgotten identity. An answer is kept for a principal
+until they save or the pointer moves, so a request does not ask the database.
 
-## 6. The decisions
+## 6. The build
 
-**Settled (2026-10-12).**
+Each step is its own go from the owner, and moss works after each (part 0).
+Before building a step, say to the owner what it adds to moss's public API and
+by what names, and wait.
 
-- **D1. A module of its own**, `packages/moss/src/artifactory/`. It takes over
-  the question `manifest` answers today while a server runs: what the app
-  consists of right now, and what of it exists for somebody. The files that
-  answer that move into it (`running.ts`, `roles.ts`, `artifacts.ts`,
-  `generation.ts`). `manifest` keeps the app as it is handed over: its types,
-  the schema that parses and freezes it, and its verification. The
-  artifactory imports `manifest` and `identity`. It is handed functions for
-  its rows, which `data` implements as vex entries on the two tables, and
-  `data` is handed the artifactory's answer for an entry: neither imports the
-  other. Its answers depend on the person and on rows, so `artifactsFor` and
-  `catalogFor` take a principal and are awaited; five callers change. An
-  answer is kept for a principal until they save or the pointer moves.
-- **D2. Two tables**, as in part 5.
-- **D4. Every layout by ref.** Liveness is handed a definition with its layout
-  in place. A change to an action's definition, not its layout, is seen by
-  instances opened afterwards.
-- **D5. The artifactory takes the entries over.** It is the first answer of
-  the cache vex is built with. The copy into `vex_cache` at boot goes, and so
-  does every direct read of that table for a shipped entry.
-- **D6. What a generated action may call.** Any read its owner may replay, the
-  functions on the charter's list, and no vex write.
-- **D7. Publishing is the same save a person makes of their own, through a
-  trusted channel for the owners.** The owner's, in those words. No command
-  and no route: a publish from the app's source is a deploy by another name.
-  How it is built is in part 5 and waits for a yes: one save, told who it is
-  for; the channel is a function the app ships and the charter grants; a
-  published action is given its id by whoever publishes it. Two things
-  follow. What can be published is what can be generated, so a new action
-  that makes a vex write still ships in a build. And a published default wins
-  over a build that is deployed later, until it is taken back.
-- **D8. Somebody else's publish while my screen is open** is adopted in place:
-  layouts at once, an action's definition on its next open.
-- **D9. Integrations' actions and an app's named sets are in the live list,
-  not in the tables.** They are resolved, checked and adopted through the
-  artifactory. Their storage stays where it is: an integration's in its own
-  table. What changes for the integrations feature is that it asks the
-  artifactory to check a bundle's artifacts, in place of the three seams it
-  assembles that check from today.
-- **D10. History is append only.** No row of `artifacts` is changed or
-  deleted, and the latest save says what is in force. Going back to a version
-  is a new save that holds a copy of it. A reset is a new save that says none
-  of mine is in force for that artifact.
+**Step 1. The module.** Moves only. `artifactory/` gets `running.ts`,
+`roles.ts`, `artifacts.ts` and `generation.ts` from `manifest/`, its own
+`index.ts`, and a line in the table of `scripts/check-modules.mts`. Nothing
+behaves differently. *Done when:* the source holds the same top-level
+statements as before, and part 0's "works" holds.
 
-- **D3. Who a generated action exists for.** Three rules:
-  1. The artifactory gives the id, `generated.<random>`, and that first
-     segment is refused everywhere else.
-  2. A generated action exists for the principal who saved it and for nobody
-     else, and is never held against a charter glob. What it can do stays the
-     charter's: its reads replay as its owner, it makes no vex write, and the
-     only code it calls is on the charter's list for their roles.
-  3. Removing a generated action takes its owner's layouts for it along, in
-     the same save. A layout for an action that does not exist for its owner
-     is not loaded, and is the first thing a pruning removes.
+**Step 2. Entries through the cache.** The engine's cache asks the artifactory
+first (part 5, "Entries"), for the build's entries only. `Data.seed` and its
+call go. `data/migrate.ts` asks the cache whether an entry was seeded
+(`isSeededAs`), to excuse one that was already broken before a migration: it
+asks the artifactory instead. Look at each place an app names `vex_cache`
+(part 3). *Tests that fail first:* a shipped entry replays with nothing in the
+table; an entry that left the app is refused though an old row holds it; a
+generated query still replays from the table; the list of fingerprints holds
+both. *Done when:* those pass and part 0's "works" holds.
 
-## 7. What is still open
+**Step 3. Every layout by ref.** The artifactory answers each action's layout
+in the layout store under `action/<id>` and the definition with `{ ref }`
+(part 5, "Layouts"). No table yet. `shells/snapshot.ts` puts the shell's
+layout in place before it asks nova whether a page is live. *Tests that fail
+first:* a shell's actions name their layouts by ref and draw what they drew;
+`setLayout` on that ref changes an open screen and keeps its data; a page
+that was a file is still judged a file. *Done when:* those pass, every lab
+app draws what it drew, and part 0's "works" holds.
 
-- How a publish is built (D7, part 5): one save, the function session as the
-  channel, and the id a published action is given.
+**Step 4. The two tables, and layouts that are saved.** The migration, the vex
+entries for the rows, and saving a layout for the session's principal or for
+everybody, from a function's session. Resolution for a principal (part 5), the
+order at a ref, styles, which one is in use, history, going back to a
+version, reset. `artifactsFor` and `catalogFor` take a principal and are
+awaited. A person's own save reaches their open screens, and the other
+processes over the fabric. *Tests that fail first:* one for each sentence of
+this step. *Done when:* a generated layout for a shipped action shows on its
+owner's open screen at once and on nobody else's; a published one shows for
+everybody and wins over the build's; taking it back shows the build's again.
+
+**Step 5. Generated actions and fragments.** The id (part 5, "Ids"), the
+catalog of a principal with what they own, the check of a generated action's
+endpoints, what goes with an action. A generated action calls reads only,
+until step 8. Publishing an action gives it its id. *Done when:* a generated
+action exists in its owner's shell and catalog and in nobody else's; one that
+names a vex write, a function, or a read its owner may not replay is refused
+with a sentence; removing it takes its layouts along and a restore brings
+both back.
+
+**Step 6. The draft.** In the shell, on the function session (part 5, "The
+draft"). Lyceum shows it. Relay's builder, atrium's preview and lyceum's two
+layouts move from `@niscorp/moss/unverified` onto it; the entry stays. *Done
+when:* those three no longer import it, and what they did still works.
+
+**Step 7. Generated reads that are saved.** Needs part 7's two items for vex
+and strata first. A saved read is the query and its mapping's prism config,
+under the fingerprint vex gave it. *Done when:* a saved read survives a
+schema change that does not touch what it reads, and one saved under a shipped
+fingerprint is refused.
+
+**Step 8. The declared functions and the charter's part.** Needs part 7's
+items for the manifest and for charter first. *Done when:* a generated action
+may call a function on its owner's roles' list and no other.
+
+**Step 9. Canvases through canvas slots.** An adopt adds a canvas a layout in
+force has a slot for, and takes out one no layout has a slot for any more
+(part 5, "Canvases"). *Done when:* a generated frame with a slot for a new
+canvas shows that canvas on its owner's open screen, and taking the frame back
+removes it.
+
+**Step 10. Integrations through the one check.** The integrations feature asks
+the artifactory to check a bundle's actions and layouts, in place of the three
+seams it assembles that check from (`refusalOf`, `layoutMisfits`,
+`endlessChains`). Its actions stay in its own table and reach the live list
+as its set does today. *Done when:* the feature's seam is shorter by those,
+and lyra's and lyceum's integrations checks pass.
+
+## 7. What needs the owner's word before it is touched
+
+Each is a change outside the artifactory, or to a type an app writes against.
+Ask with the concrete change, at the step that needs it.
+
+| What | Why | Step |
+|---|---|---|
+| **vex:** its shape mapper hands back the prism config it compiled, beside the compiled form | a saved read has to be the entry as authored, and the config is kept nowhere today | 7 |
+| **strata:** one stored kind, for a vex entry | a stored entry carries the stamp it was written at and is upgraded where it is read | 7 |
+| **moss, `NiscApp`:** functions declared by name with a description | today `functions(session)` is one map whose names are not known before a session | 8 |
+| **charter:** one part, which functions the generated actions of a role may call | the charter decides what a generated action may run | 8 |
+| **moss, `IdentityRecord`:** the style somebody chose | the app keeps the choice, and it reaches the artifactory with the roles | 4 |
+| **moss, the fabric:** one more signal, "this principal saved" | a person's own save reaches their screens in another process | 4 |
+| **moss, the function session:** the draft, and saving | the names are the owner's to hear before they are built | 4, 6 |
+
+Nova owes nothing.
+
+## 8. Open
+
 - How many versions of one artifact are kept, how large a body may be, and
-  when pruning runs. Measured before a number is proposed.
-- What lyceum shows. To be said when the first step is built.
+  when pruning runs. Measure before proposing a number.
+- What lyceum shows in step 6. The owner's to say.
+- A new action that makes a vex write still ships in a build: what can be
+  published is what can be generated. And a published default wins over a
+  build that is deployed later, until it is taken back. Both follow from what
+  is decided, and are said here so that nobody is surprised by them.
 
-## 8. What other packages would owe
+## 9. The ten decisions
 
-Each is a change to another library and needs its own approval.
+Settled on 2026-10-12. The reasoning is in parts 2 and 5.
 
-- **charter:** one part, which functions the generated actions of a role may
-  call.
-- **strata:** one stored kind, for a vex entry.
-- **moss's manifest:** functions declared by name with a description. Today
-  `functions(session)` is one map whose names are not known before a session.
-- **nova:** nothing.
-- **vex:** nothing. The cache seam and `engine.compile` are there.
-
-## 9. Build order
-
-Proposed. Each step is its own approval, and every lab app's checks pass after
-each.
-
-1. Entries through the cache seam, shipped only. No table yet. It removes the
-   seeding and proves D5.
-2. The two tables, and published defaults that win over the build's copy.
-3. Layouts by ref, styles, and which is in use. Lyceum's two uses of
-   `/unverified` move onto it.
-4. Generated artifacts: save, history, restore, reset, publish, and the check.
-5. The draft in the shell, shown in lyceum. Relay's and atrium's uses of
-   `/unverified` move onto it.
-6. The declared functions and the charter's part.
-7. Integrations' actions and named sets through the live list and its check.
+- **D1.** A module of its own, `packages/moss/src/artifactory/`.
+- **D2.** Two tables: a row per version, a row per save.
+- **D3.** The artifactory gives a generated action its id. It exists for its
+  owner and nobody else, and is never held against a charter glob. Removing
+  it takes its owner's layouts for it along.
+- **D4.** Every layout by ref. A change to an action's definition, not its
+  layout, is seen by instances opened afterwards.
+- **D5.** The artifactory takes the entries over, as the first answer of the
+  cache vex is built with.
+- **D6.** A generated action calls reads its owner may replay and functions on
+  the charter's list, and makes no vex write.
+- **D7.** Publishing is the save a person makes of their own, told it is for
+  everybody, through a function the app ships for its owners.
+- **D8.** Somebody else's publish while my screen is open is adopted in place.
+- **D9.** Integrations' actions and an app's named sets are in the live list,
+  not in the tables.
+- **D10.** History is append only.
