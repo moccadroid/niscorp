@@ -8,4 +8,4 @@ A model may send the payload alone, without `{ response, data, reasoning }` arou
 
 The payload alone is now read only when the schema can tell it from an envelope, which is when the schema refuses an object that holds one unknown key. Under any other schema an unknown key is reported to the model, as it is for an agent with no data schema.
 
-**What to change:** nothing. An agent whose data schema takes any object (a record, or an object with only optional fields) and whose model sends the payload alone now spends one correction round on it. A required field in the schema, or `z.strictObject`, keeps the payload-alone reading.
+**What to change:** nothing. An agent whose data schema takes any object (a record, or an object with only optional fields) and whose model sends the payload alone now spends one correction round on it. Prism's mapping agent is one such agent, because any JSON object is a Prism config. A required field in the schema, or `z.strictObject`, keeps the payload-alone reading.
