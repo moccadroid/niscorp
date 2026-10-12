@@ -6,12 +6,6 @@ import { createShell } from '@shell';
 import type { ShellConfig } from '@shell';
 import { getInternalRuntime } from '@shell/shell-internals';
 
-// ═══════════════════════════════════════════════════════════
-// shell.back() — the navigation journal, from the outside. What a back
-// button asks for: undo the last move, keep what survived it, and never
-// walk off the bottom of the shell.
-// ═══════════════════════════════════════════════════════════
-
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
 const A: ActionDefinition = { id: 'A', data: { tag: 'a' } };
@@ -106,10 +100,10 @@ describe('shell.back — a pop somebody performed themselves', () => {
     shell.push('main', 'A');
     shell.push('main', 'B');
     shell.push('main', 'C');
-    shell.pop('main'); // their own back button, inside the app
+    shell.pop('main');
     expect(ids(shell)).toEqual(['A', 'B']);
     expect(shell.back()).toBe(true);
-    expect(ids(shell)).toEqual(['A']); // one step, not two
+    expect(ids(shell)).toEqual(['A']);
   });
 
   it('runs out when every push has been popped by hand', () => {
@@ -133,8 +127,6 @@ describe('shell.back — undoing a replace', () => {
     expect(shell.back()).toBe(true);
     expect(ids(shell)).toEqual(['A', 'B']);
     const restored = shell.getCanvasState('main').active;
-    // A NEW instance carrying the old one's input: back re-opens a screen, it
-    // does not resurrect the instance a replace unmounted.
     expect(restored?.id).not.toBe(bId);
     expect(restored?.data['row']).toBe(7);
   });
@@ -164,7 +156,7 @@ describe('shell.back — undoing a resetTo', () => {
     await tick();
     expect(ids(shell)).toEqual(['C']);
     expect(shell.back()).toBe(true);
-    expect(ids(shell)).toEqual(['A', 'B']); // never through a blank canvas
+    expect(ids(shell)).toEqual(['A', 'B']);
   });
 });
 
@@ -188,7 +180,6 @@ describe('shell.back — across canvases', () => {
     const shell = two();
     shell.push('main', 'A');
     shell.push('main', 'B');
-    // Arrived while they were on main — a delivered notice, an agent's card.
     shell.push('aside', 'C');
     shell.back();
     expect(ids(shell, 'aside')).toEqual([]);
@@ -204,15 +195,11 @@ describe('shell.back — revocation', () => {
     shell.push('main', 'A');
     shell.push('main', 'B');
     shell.replace('main', 'C');
-    // The position back would have restored names B; B is revoked before they
-    // press. Back walks past it to the next one it can honour — never through
-    // the revoked screen.
     shell.removeAction('B');
     expect(shell.back()).toBe(true);
     expect(ids(shell)).toEqual(['A']);
     shell.back();
     expect(ids(shell)).toEqual([]);
-    // Back walked the whole journal out without B ever standing again.
     expect(shell.back()).toBe(false);
   });
 
@@ -241,7 +228,7 @@ describe('shell.back — historyDepth', () => {
     shell.push('main', 'C');
     expect(shell.back()).toBe(true);
     expect(ids(shell)).toEqual(['A', 'B']);
-    expect(shell.back()).toBe(false); // the older position fell off the end
+    expect(shell.back()).toBe(false);
   });
 });
 

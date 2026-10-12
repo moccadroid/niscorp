@@ -1,38 +1,12 @@
-// ═══════════════════════════════════════════════════════════
-// @niscorp/nova/agent — Nova layout agent
-// ═══════════════════════════════════════════════════════════
-//
-// Given an intent, a component palette, and a data example, produces a Nova
-// LayoutNode — a tree of components, conditionals, loops and bindings that
-// renders the data as a UI.
-//
-// Same pattern as @niscorp/prism/agent and @niscorp/vex/agent: one exported
-// `const`, the canonical schema as the payload (cortex validates the whole
-// recursive tree and feeds failures back in-loop), and the variable inputs
-// (intent, palette, dataShape) passed at call time. Cortex is an optional
-// peer dep — the rest of @niscorp/nova does not need it.
-//
-//   import { layoutAgent, paletteFromRegistry } from '@niscorp/nova/agent';
-//
-//   const result = await layoutAgent.run({
-//     intent: 'a table of company and value',
-//     palette: paletteFromRegistry(registry, { include: ['Table'] }),
-//     dataShape: [{ company: '', value: 0 }],
-//   }, { llm }).result;
-//   if (result.ok) render(result.output.data, rows);
-//
-// The LayoutNode schema is NOT embedded in this prompt — cortex injects
-// it (output.doc 'auto') because the recursive tree can't ride the
-// respond tool's params. Node types, binding syntax and directives all
-// live in the schema's .describe() calls; fixes go there, not here.
+// The LayoutNode schema is not written into this prompt: cortex adds it as the
+// OUTPUT SCHEMA (`output.doc`, 'auto' by default), because the recursive tree
+// cannot ride the respond tool's params.
 
 import { defineAgent, type AgentDefinition } from '@niscorp/cortex';
 
 import { LayoutNodeSchema } from '../layout/schemas';
 import type { LayoutNode } from '../layout/schemas';
 
-// The agent's payload IS the LayoutNode; the model's one-line why
-// rides the envelope's `reasoning` field.
 export type LayoutAgentOutput = LayoutNode;
 
 const INSTRUCTIONS = `You are the Nova layout agent. Given an intent, a component palette, and a data example, produce a Nova LayoutNode that renders the data as a UI.

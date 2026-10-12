@@ -1,28 +1,7 @@
 import type { NavigationEffect } from '../action';
 
-// ═══════════════════════════════════════════════════════════
-// WHERE A CANVAS IS, ANNOUNCED.
-//
-// A canvas knows what is standing on it; nothing else did. Chrome around a
-// canvas — a sidebar highlight, a tab strip, a breadcrumb — used to learn where
-// somebody went from the CLICK that sent them, which is a copy of the fact
-// rather than the fact. It agreed with the canvas right up until something
-// moved the canvas without a click: `back`, an agent opening a screen, a
-// delivered card, a deep link later. Then the sidebar lit one screen while the
-// canvas showed another.
-//
-// So the canvas says where it is. One message per canvas whenever its ACTIVE
-// screen changes, whatever caused the change, on a channel named for the
-// canvas — triggers carry no guard clause, so a listener that wants `main`
-// should not have to hear about `sheet` to ignore it. The payload names the
-// canvas anyway, so nothing has to parse a channel to know what it was told.
-// ═══════════════════════════════════════════════════════════
-
 export const navigatedChannel = (canvasId: string): string => `nova:navigated:${canvasId}`;
 
-// What lands on that channel. `action`/`instance` are absent when the canvas
-// went empty — which is a position too, and a listener that renders chrome for
-// "nothing is open" needs to hear it.
 export type NavigatedMessage = {
   canvas: string;
   action?: string;
@@ -34,14 +13,11 @@ export type ShellNavOps = {
   pop: (canvasId: string) => void;
   replace: (canvasId: string, actionId: string, input?: Record<string, unknown>, fragments?: string[]) => string;
   clear: (canvasId: string) => void;
-  // Clear and push in one movement. Its own op rather than the two calls it
-  // used to decompose into, because the journal has to see ONE navigation here:
-  // as `clear` then `push` it recorded two positions, and back walked somebody
-  // through a blank canvas on the way to the screen they wanted.
+  // Its own op, not `clear` then `push`: the journal has to record one
+  // navigation, or `back` walks through a blank canvas.
   resetTo: (canvasId: string, actionId: string, input?: Record<string, unknown>, fragments?: string[]) => void;
   popTo: (canvasId: string, instanceId: string) => void;
   removeInstance: (canvasId: string, instanceId: string) => void;
-  // Make a canvas hold exactly `desired` (shell/reconcile.ts), as one movement.
   reconcile: (
     canvasId: string,
     desired: readonly { actionId: string; input?: Record<string, unknown> }[],

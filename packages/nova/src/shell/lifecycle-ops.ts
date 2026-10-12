@@ -2,20 +2,11 @@ import type { Canvas } from './canvas';
 import type { RuntimeRegistry } from './runtime-registry';
 import type { Telemetry } from './telemetry';
 
-// ═══════════════════════════════════════════════════════════
-// Shell lifecycle ops — small helpers that the shell public API
-// composes with its own guards. Factored out to keep `shell.ts`
-// focused on assembly and navigation wiring.
-// ═══════════════════════════════════════════════════════════
-
 export type LifecycleOpsDeps = {
   registry: RuntimeRegistry;
   telemetry: Telemetry;
   onLifecycleError: (err: unknown) => void;
-  // Called as an instance is torn down, so per-instance bookkeeping the shell
-  // holds beside the registry (push origins) never outlives what it describes.
   onUnmount?: (instanceId: string) => void;
-  // Handed the hooks started here and not awaited (shell/chains.ts).
   onChain?: (chain: Promise<unknown>) => void;
 };
 
@@ -28,17 +19,13 @@ export type LifecycleOps = {
 export const createLifecycleOps = (deps: LifecycleOpsDeps): LifecycleOps => {
   const { registry, onLifecycleError, onUnmount, onChain } = deps;
 
-  // A hook runs detached, its failure routed to the shell. STARTED, THEN
-  // REPORTED — in that order and as two statements: an optional call does not
-  // evaluate its argument when there is nobody to call, so starting the hook
-  // inside it would make the hook itself optional.
+  // Two statements: an optional call does not evaluate its argument when
+  // there is nobody to call, and the failure would go unrouted.
   const detached = (hook: Promise<void>): void => {
     const chain = hook.catch(onLifecycleError);
     onChain?.(chain);
   };
 
-  // Track instances we've already unmounted so a redundant unmount is a
-  // no-op (idempotency) — never re-fires hooks, never re-disposes.
   const unmounted = new Set<string>();
 
   const unmountInstance = (instanceId: string): void => {
@@ -50,22 +37,16 @@ export const createLifecycleOps = (deps: LifecycleOpsDeps): LifecycleOps => {
     runtime.dispose();
     registry.unregister(instanceId);
     onUnmount?.(instanceId);
-    // BOUNDED, not forever. Once the registry no longer holds the instance,
-    // the `registry.get` guard above returns early on its own — the set only
-    // has to cover re-entry inside THIS call. Keeping the id would grow this
-    // set by one string per navigation for the life of a durable shell: the
-    // one genuinely unbounded structure the memory hunt found.
+    // The set only has to cover re-entry inside this call: once the registry
+    // no longer holds the instance, the `registry.get` guard returns early.
     unmounted.delete(instanceId);
   };
 
   const suspendTop = (canvas: Canvas): void => {
     const top = canvas.peek();
     if (top === undefined) return;
-    // Already suspended is already done. A push onto a fresh stack always finds
-    // an active top, so this changes nothing there; `back` restoring a position
-    // ABOVE the one on screen finds a top that was suspended when the screen it
-    // is undoing went up, and re-firing that action's suspend hook would be a
-    // lifecycle event nothing happened to cause.
+    // `back` restoring a position above the one on screen finds a top that is
+    // already suspended: its suspend hook must not fire again.
     if (top.status === 'suspended') return;
     const runtime = registry.get(top.id);
     if (runtime !== undefined) detached(runtime.suspend());
@@ -75,8 +56,6 @@ export const createLifecycleOps = (deps: LifecycleOpsDeps): LifecycleOps => {
     const top = canvas.peek();
     if (top === undefined) return;
     const runtime = registry.get(top.id);
-    // A revealed action re-runs its mount to refresh itself, already `active`:
-    // its status says nothing about that load, so the chain count has to.
     if (runtime !== undefined) detached(runtime.resume());
   };
 

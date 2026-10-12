@@ -92,10 +92,6 @@ describe('shell — navigation via runtime steps', () => {
     await tick();
     const aRuntime = getInternalRuntime(shell, aId);
     if (aRuntime === undefined) throw new Error('no a');
-    // Drive via executeSteps emit to the shared bus is unnecessary —
-    // run the trigger's steps directly. For an explicit ui:click route,
-    // we would need access to the bus; instead executeSteps proves the
-    // shell.onNavigate wiring works end-to-end through the runtime.
     await aRuntime.executeSteps([{ push: { action: 'B' } }]);
     await tick();
     expect(shell.getCanvasState('main').active?.definitionId).toBe('B');
@@ -120,8 +116,8 @@ describe('shell — navigation via runtime steps', () => {
     await tick();
     const dst = shell.getCanvasState('main').active;
     expect(dst?.definitionId).toBe('Dst');
-    expect(dst?.data['picked']).toBe('r-42'); // resolved from Src's data
-    expect(dst?.data['literal']).toBe('static'); // non-binding passes through
+    expect(dst?.data['picked']).toBe('r-42');
+    expect(dst?.data['literal']).toBe('static');
   });
 
   it('resolves push `input` from the firing event payload (@event)', async () => {

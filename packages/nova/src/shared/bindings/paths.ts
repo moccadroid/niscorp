@@ -1,11 +1,5 @@
 import { isArray, isObject } from '../common';
 
-// ═══════════════════════════════════════════════════════════
-// Path helpers — get/set/delete on nested data structures.
-// Dot paths: "a.b.0.c". Numeric segments are array indices
-// when the parent is an array.
-// ═══════════════════════════════════════════════════════════
-
 const splitPath = (path: string): string[] => {
   if (path.length === 0) return [];
   return path.split('.');

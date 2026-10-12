@@ -1,18 +1,6 @@
 import type { TtyBlock, TtyComponent } from '../index';
 import { str, bool, stack, inline, inlineText, truncate, pad, indent } from './props';
 
-// ═══════════════════════════════════════════════════════════
-// The TTY reference kit — the same domain-blind vocabulary as the DOM kit
-// (same names, same props), interpreted for a line terminal. Interpretation
-// is the target's freedom: a Row joins single-line children inline, a Table
-// aligns padded columns, an Input prints `⟨value⟩`. What a terminal can't do
-// it doesn't fake — layout weights, colors, and drag are simply absent.
-// Unmapped names fall back to their children (fallback), so any app's tree
-// still renders its content.
-// ═══════════════════════════════════════════════════════════
-
-// ── containers: the terminal's only axis is vertical, so Box and Stack
-// stack; Row and Grid join inline while their children are single lines.
 export const Box: TtyComponent = ({ children }) => stack(children);
 export const Stack: TtyComponent = ({ children }) => stack(children);
 export const Row: TtyComponent = ({ children }) => inline(children);
@@ -23,8 +11,6 @@ export const Text: TtyComponent = ({ props, children }) => {
   return bool(props, 'upper') ? { lines: block.lines.map((line) => line.toUpperCase()) } : block;
 };
 
-// A button is its label in parens — the renderer's `[n]` marker makes it
-// actionable; this just makes it legible.
 export const Button: TtyComponent = ({ props, children }) => {
   const label = inlineText(children);
   const icon = str(props, 'icon');
@@ -56,11 +42,6 @@ export const Badge: TtyComponent = ({ children }) => {
   return { lines: text === '' ? [] : [`‹${text}›`] };
 };
 
-// ── the data-driven table: padded columns, a `[n]` marker per row when
-// `rowRef` is set (the marker column keeps the grid aligned).
-
-// Dotted-path field access, same as the DOM kit. Exported for the ink kit,
-// which shares the table's data contract but renders focusable rows.
 export const at = (row: unknown, key: string): unknown => {
   let cursor: unknown = row;
   for (const segment of key.split('.')) {
@@ -97,8 +78,6 @@ export const Table: TtyComponent = ({ props, register }) => {
   const body = rows.map((row) => columns.map((column) => truncate(cellText(at(row, cellKey(column))), CELL_CAP)));
   const widths = header.map((label, i) => Math.max(truncate(label, CELL_CAP).length, ...body.map((cells) => cells[i]?.length ?? 0)));
 
-  // Register every row first so the marker column width is known before any
-  // line is laid out — markers pad to the widest ('[9] ' vs '[12] ').
   const markers = rowRef === undefined
     ? rows.map(() => '')
     : rows.map((row, i) => `[${register({ kind: 'row', ref: rowRef, label: body[i]?.[0] ?? rowRef, value: at(row, clickKey) })}] `);
@@ -116,9 +95,6 @@ export const Table: TtyComponent = ({ props, register }) => {
   };
 };
 
-// Panel — a framed block with an optional title rule; `backRef`/`closeRef`
-// register as `←`/`✕` interactives in the header, same prop-ref convention
-// as Table's rowRef.
 export const Panel: TtyComponent = ({ props, children, register }) => {
   const title = str(props, 'title');
   const lines: string[] = [];
@@ -136,8 +112,6 @@ export const Panel: TtyComponent = ({ props, children, register }) => {
   return { lines };
 };
 
-// JsonTree — the value printed as an indented tree, depth- and width-capped
-// so a devtools state dump stays readable instead of scrolling forever.
 const DEPTH_CAP = 4;
 const ENTRY_CAP = 20;
 
@@ -146,7 +120,6 @@ const jsonLines = (value: unknown, key: string | undefined, depth: number): stri
   if (value !== null && typeof value === 'object') {
     const entries = Array.isArray(value) ? value.map((item, i): [string, unknown] => [String(i), item] ) : Object.entries(value);
     const shape = Array.isArray(value) ? `[${entries.length}]` : `{${entries.length}}`;
-    // container summary is `key {N}` — colon is for leaves, same as the DOM kit
     const summary = key === undefined ? shape : `${key} ${shape}`;
     if (depth >= DEPTH_CAP) return [`${pfx}${summary} …`];
     const shown = entries.slice(0, ENTRY_CAP);
@@ -161,15 +134,8 @@ const jsonLines = (value: unknown, key: string | undefined, depth: number): stri
 
 export const JsonTree: TtyComponent = ({ props }) => ({ lines: jsonLines(props['value'], str(props, 'label'), 0) });
 
-// The per-instance boundary marker a flattened shell tree carries — the TTY
-// target has no wrapper concept, so it passes the content straight through.
 export const ActionSlot: TtyComponent = ({ children }) => stack(children);
 
-// Unmapped primitives (an app's own NavItem, KanbanBoard, …) render their
-// children — content shows, and a `ref` still gets its marker from the
-// renderer. When a prop-driven component carries NO children, surface its
-// primary text prop (label / title) plus a `count` — a legible degrade, not
-// a full port; what the terminal can't do, it doesn't fake.
 export const fallback: TtyComponent = ({ props, children }) => {
   const block = stack(children);
   if (block.lines.length > 0) return block;

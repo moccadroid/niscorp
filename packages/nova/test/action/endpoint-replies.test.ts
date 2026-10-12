@@ -4,11 +4,6 @@ import { executeSteps, type StepContext } from '@action/runtime/steps';
 import type { FetchFn, FetchResponse } from '@action/types';
 import type { EndpointConfig } from '@action/schemas';
 
-// WHAT A REPLY MUST BE, AND HOW LONG IT MAY TAKE. A call that never answers
-// fails to onError past its wait (the endpoint's own `timeoutMs`, else the
-// shell's, else 30s) and tells the transport to stop; a success whose body is
-// not JSON fails to onError; No Content is a success with nothing in it.
-
 const reply = (status: number, body: string): FetchResponse => ({
   ok: status >= 200 && status < 300,
   status,

@@ -4,12 +4,6 @@ import { createShell } from '../../src';
 import type { LayoutNode, RenderNode, RenderOptions } from '../../src/layout';
 import type { PhraseKeys, Phrasebook } from '../../src/i18n';
 
-// ═══════════════════════════════════════════════════════════
-// The language pass where it actually lives now: inside the renderer, at the
-// moment a RenderNode is minted. Every adapter is downstream of this, so these
-// are the tests that say "react, tty and moss all get the same words".
-// ═══════════════════════════════════════════════════════════
-
 const registry = createComponentRegistry();
 for (const name of ['Stack', 'Hero', 'Button', 'Rows', 'Tab', 'Field', 'Stat']) {
   registry.register(name, { component: name });
@@ -30,8 +24,6 @@ const book: Phrasebook = {
 const renderWith = (layout: LayoutNode, data: Record<string, unknown>, extra: Partial<RenderOptions> = {}): RenderNode[] =>
   render({ layout, data, store: createLayoutStore(), registry, ...extra });
 
-// Every string in the tree, in render order — the cheapest way to assert what a
-// reader would see without reproducing node shapes in every expectation.
 const words = (nodes: RenderNode[]): string[] => {
   const out: string[] = [];
   const walkValue = (value: unknown): void => {
@@ -65,7 +57,6 @@ describe('the renderer translates', () => {
     expect(said).toContain('Menschen');
     expect(said).toContain('Person hinzufügen');
     expect(said).toContain('Ein einfaches Textkind');
-    // A design token sitting at a non-prose key is untouched.
     expect(said).toContain('solid');
   });
 
@@ -84,7 +75,6 @@ describe('the renderer translates', () => {
     expect(said).toContain('Noch niemand hier.');
     expect(said).toContain('Name');
     expect(said).toContain('Status');
-    // `kind` and `key` carry machine vocabulary and stay put.
     expect(said).toContain('avatar');
     expect(said).toContain('person_name');
   });
@@ -97,9 +87,6 @@ describe('the renderer translates', () => {
   });
 
   it('LEAVES A BOUND TEXT CHILD ALONE even when it collides with the book', () => {
-    // The rule the tree pass could not write: by the time a tree exists, a
-    // person called "Person" and the column header "Person" are the same
-    // string. The renderer still knows one was authored and one arrived.
     const layout: LayoutNode = { component: 'Stack', children: ['$.member.name', 'Person'] };
     const said = words(renderWith(layout, { member: { name: 'Person' } }, { phrases: book }));
     expect(said).toEqual(['Person', 'Name']);
@@ -149,9 +136,6 @@ describe('counted phrases', () => {
   });
 
   it('FILLS IN THE SOURCE LANGUAGE TOO — keys, no book', () => {
-    // The job that used to belong to a helper in the host's component kit. A
-    // session with nothing to translate still must not put a `{ phrase, slots }`
-    // object on the glass.
     const said = words(renderWith(layout, counted, { phraseKeys: keys }));
     expect(said).toEqual(['1 of 12']);
   });
@@ -229,10 +213,6 @@ describe('a shell renders in its language', () => {
   });
 
   it('KEEPS FILLING PATTERNS after its book is withdrawn', () => {
-    // Withdrawing a book is the source language, not switching i18n off. A
-    // shell that stopped filling patterns here would hand its adapter a
-    // `{ phrase, slots }` object where a word belongs — which is a crash in
-    // React, not a missing translation.
     const counted = {
       id: 'counted',
       data: { fill: { phrase: '{n} of {total}', slots: { n: 1, total: 12 } } },
@@ -257,8 +237,6 @@ describe('a shell renders in its language', () => {
       data: { fill: { phrase: '{n} of {total}', slots: { n: 2, total: 9 } } },
       layout: { component: 'Field', props: { label: '$.fill' } },
     };
-    // No language at all at build: the pattern is left as the object it is,
-    // because this shell is not doing i18n and pays nothing for it.
     const shell = createShell({ canvases: [{ id: 'main', initial: 'counted' }], actions: { counted }, registry });
     const runtime = shell.getRuntime(shell.getCanvasState('main').active?.id ?? '');
     expect(words(runtime?.render() ?? [])).toEqual(['{n} of {total}']);

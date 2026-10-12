@@ -8,20 +8,11 @@ import type { NovaComponent, NovaDispatch, NovaPublish } from './types';
 const noopDispatch: NovaDispatch = () => {};
 const noopPublish: NovaPublish = () => {};
 
-// ═══════════════════════════════════════════════════════════
-// <NovaRenderProvider>
-//
-// The framework-agnostic renderer context. Pairs a component registry with a
-// dispatch and publish function. Works with no shell — dispatch and publish
-// default to no-ops so static layouts render without event infrastructure.
-// ═══════════════════════════════════════════════════════════
-
 export type NovaRenderProviderProps = {
   registry: ComponentRegistry;
   dispatch?: NovaDispatch;
   publish?: NovaPublish;
   slotWrapper?: SlotWrapper;
-  // renderer for unregistered component names; omit for strict error markers
   fallback?: NovaComponent;
 };
 
@@ -49,13 +40,6 @@ export const NovaRenderProvider = defineComponent(
   },
   { name: 'NovaRenderProvider', props: ['registry', 'dispatch', 'publish', 'slotWrapper', 'fallback'] },
 );
-
-// ═══════════════════════════════════════════════════════════
-// <NovaShellProvider>
-//
-// <NovaRenderProvider> plus the shell. The registry defaults to
-// `shell.registry`; dispatch and publish go to the shell.
-// ═══════════════════════════════════════════════════════════
 
 export type NovaShellProviderProps = {
   shell: Shell;

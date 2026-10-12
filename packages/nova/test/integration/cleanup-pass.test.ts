@@ -21,10 +21,6 @@ const baseShellConfig = () => ({
   layoutStore: createLayoutStore(),
 });
 
-// ═══════════════════════════════════════════════════════════
-// (a) Model binding roundtrip through the shell's shared bus
-// ═══════════════════════════════════════════════════════════
-
 describe('model binding — roundtrip through shell', () => {
   it('emitting ui:model on the shell bus updates action data and a re-render is idempotent', async () => {
     const bus = createEventBus();
@@ -50,16 +46,11 @@ describe('model binding — roundtrip through shell', () => {
     bus.emit({ type: 'ui:model', ref: 'name-input', payload: 'Ada' });
     expect(rt.getData()).toEqual({ name: 'Ada' });
 
-    // Re-render must not duplicate listeners.
     rt.render();
     bus.emit({ type: 'ui:model', ref: 'name-input', payload: 'Grace' });
     expect(rt.getData()).toEqual({ name: 'Grace' });
   });
 });
-
-// ═══════════════════════════════════════════════════════════
-// (b) Model binding inside a loop — three items, targeted update
-// ═══════════════════════════════════════════════════════════
 
 describe('model binding — inside a loop', () => {
   it('three items produce distinct refs/paths and only the targeted one updates', async () => {
@@ -104,10 +95,6 @@ describe('model binding — inside a loop', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// (d) Unmount idempotency
-// ═══════════════════════════════════════════════════════════
-
 describe('runtime — unmount idempotency', () => {
   it('calling unmount twice does not re-fire hooks or throw', async () => {
     const calls: string[] = [];
@@ -137,9 +124,8 @@ describe('runtime — unmount idempotency', () => {
     await rt.unmount();
     await rt.unmount();
     expect(rt.instance.status).toBe('unmounted');
-    // Note: runtime.unmount() itself does not guard against re-entry (that
-    // guard lives in the shell's lifecycle-ops). But the shell-level flow
-    // is what consumers use — verify via the shell too.
+    // Not `toBe(1)`: runtime.unmount() does not guard against re-entry; the
+    // shell's lifecycle ops do.
     expect(calls.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -162,10 +148,6 @@ describe('runtime — unmount idempotency', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// (e) Endpoint transform throws — lax mode routes to errorTarget
-// ═══════════════════════════════════════════════════════════
-
 describe('endpoint — transform throws', () => {
   it('transform failure in lax mode writes to errorTarget and runs onError chain', async () => {
     const fetchFn: FetchFn = () =>
@@ -176,8 +158,6 @@ describe('endpoint — transform throws', () => {
         text: () => Promise.resolve('{"raw":1}'),
       });
     const transform: TransformFn = (config) => {
-      // The injected evaluator is endpoint-only now; this throws for the
-      // endpoint's `response` config to exercise the error path.
       if (config !== null && typeof config === 'object' && 'map' in config) {
         throw new Error('kaboom');
       }
@@ -223,10 +203,6 @@ describe('endpoint — transform throws', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// (f) Suspend hook in strict mode failing — reports via onError
-// ═══════════════════════════════════════════════════════════
-
 describe('shell — strict suspend hook failure', () => {
   it('strict mode: a failing suspend hook call does not crash the shell and B becomes active', async () => {
     const errors: NovaError[] = [];
@@ -259,10 +235,6 @@ describe('shell — strict suspend hook failure', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// (g) Layout ref chain failure
-// ═══════════════════════════════════════════════════════════
-
 describe('layout ref chain — lax vs strict', () => {
   it('lax mode: inner missing ref produces an error RenderNode; outer survives', () => {
     const store = createLayoutStore();
@@ -289,10 +261,6 @@ describe('layout ref chain — lax vs strict', () => {
     expect(() => renderLayout(a, {}, { store, registry, strict: true })).toThrow();
   });
 });
-
-// ═══════════════════════════════════════════════════════════
-// (h) shell.dispose() during in-flight endpoint
-// ═══════════════════════════════════════════════════════════
 
 describe('shell — dispose during in-flight endpoint', () => {
   it('aborts the pending fetch and leaves data untouched', async () => {
@@ -338,7 +306,6 @@ describe('shell — dispose during in-flight endpoint', () => {
     const first = pending[0];
     if (first === undefined) throw new Error('expected pending');
     expect(first.aborted).toBe(true);
-    // Resolve anyway: the runtime has been disposed, no effect should land.
     first.resolve({
       ok: true,
       status: 200,
@@ -346,14 +313,9 @@ describe('shell — dispose during in-flight endpoint', () => {
       text: () => Promise.resolve('{}'),
     });
     await tick(3);
-    // Runtime registry has been cleared.
     expect(getInternalRuntime(shell, id)).toBeUndefined();
   });
 });
-
-// ═══════════════════════════════════════════════════════════
-// (extra) Runtime.executeSteps validation
-// ═══════════════════════════════════════════════════════════
 
 describe('runtime.executeSteps — zod validation', () => {
   it('strict mode: throws DefinitionValidationError on malformed steps', async () => {

@@ -23,30 +23,12 @@ import { callEndpoint } from './endpoints';
 import { withCause, type Cause } from './cause';
 import { nextTask } from './next-task';
 
-// Wall-clock for endpoint durations. `performance` is present in node, the
-// browser, and jsdom; `Date.now` is the universal fallback.
 const now = (): number =>
   typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now();
 
-// THE CALLS AN INSTANCE HAS MADE, per endpoint name — held by the runtime,
-// which outlives every step context it builds. Two jobs, one ledger:
-//
-//   · A response that lands after a NEWER call to the same endpoint already
-//     landed is stale: it must not overwrite what the newer one wrote. (Before
-//     this, the slower of two searches won — whichever answered last.)
-//   · A response that can change later (`onChange`) is followed until a newer
-//     call lands or the instance unmounts — never two at once, or an old
-//     search's updates would keep writing over the new one's rows.
-//
-// Absent in a bare step context (a test driving `executeSteps` directly):
-// every response then lands as before and none is followed.
 export type EndpointCalls = {
-  // A ticket for a call that is about to start.
   begin: (endpoint: string) => number;
-  // Record that this call's response landed. False when a newer call to the
-  // same endpoint landed first — the caller must then leave `target` alone.
   land: (endpoint: string, ticket: number) => boolean;
-  // Follow this call's later bodies, replacing whatever the endpoint followed.
   follow: (endpoint: string, ticket: number, stop: Unsubscribe) => void;
 };
 
@@ -54,52 +36,28 @@ export type StepContext = {
   dataStore: DataStore;
   endpoints: Record<string, EndpointConfig>;
   functions: Record<string, FunctionHandler>;
-  // The shell's default wait for a reply; an endpoint's `timeoutMs` wins.
   endpointTimeoutMs?: number;
   eventBus: EventBus;
   messageBus: MessageBus;
   fetch?: FetchFn;
   transform?: TransformFn;
   onNavigate?: NavigateHandler;
-  // Re-runs this instance's `mount` hook (the `reload` effect), one hop on
-  // from `cause`. Supplied by the runtime, which owns the definition and its
-  // lifecycle.
   onReload?: (cause: Cause | undefined) => Promise<void>;
-  // How far this chain has run from the gesture that started it (./cause.ts).
-  // Absent in a bare step context: the steps are then a root.
   cause?: Cause;
-  // Reports a completed `call` step upward (the runtime stamps instance/canvas
-  // and forwards to telemetry). Aborted calls are not reported.
   onEndpoint?: (event: EndpointEventInit) => void;
-  // Handed what these steps start and do not await. Absent in a bare step
-  // context: nothing is then counted.
   onChain?: (chain: Promise<unknown>) => void;
   calls?: EndpointCalls;
   extras: ExtraScopes;
-  // The action's data as it was built at spawn — what `reset` restores a path
-  // to. Absent in a bare step context: there is then nothing to restore from.
   initial?: Record<string, unknown>;
   strict: boolean;
   onError: OnErrorHandler;
   signal: AbortSignal;
-  // True when the owning action is suspended (backgrounded under a stack). Event
-  // triggers no-op while suspended — only the active action reacts.
   suspended?: boolean;
-  // When set, this step execution is running inside a lifecycle hook.
-  // In strict mode, hard failures (unknown endpoint, fetch error without
-  // a handler) propagate as LifecycleError instead of being swallowed.
   lifecycleHook?: LifecycleHook;
 };
 
-export const noopOnError: OnErrorHandler = (_error: NovaError): void => {
-  // default no-op; users install their own via config
-};
+export const noopOnError: OnErrorHandler = (_error: NovaError): void => {};
 
-// Template surfaces that get pre-resolved so the mutation subsystem stays
-// scope-unaware (ops receive already-literal values): `set`/`push` carry a
-// user value (e.g. `{{@error.message}}`); `removeAt`/`move` carry indices
-// that can reference the firing event (e.g. `{{@event.payload}}`). A string
-// index is resolved and coerced to a number; everything else passes through.
 const resolveMutationValues = (
   list: Mutation[],
   chain: ScopeChain,
@@ -139,10 +97,6 @@ const writeTarget = (
   });
 };
 
-// Shared fallback for "target name not resolvable" cases (unknown endpoint,
-// unknown function). Runs `onError` with a synthetic @error, else throws a
-// LifecycleError inside a lifecycle hook, else throws the caller-supplied
-// strict error, else silently returns.
 const raiseUnknown = async (
   message: string,
   onError: Step[] | undefined,
@@ -174,10 +128,6 @@ const runCall = async (
     await raiseUnknown(`unknown endpoint: ${callName}`, onError, ctx);
     return;
   }
-  // Resolve a function endpoint's `fn` through the data scope before dispatch, so
-  // `fn: '{{$.saveFn}}'` lets one action pick its handler from data — the same way
-  // push/replace already resolve their `action` target (see resolveNavTarget).
-  // Literal fn names (no template) pass through resolve() unchanged.
   let endpoint = raw;
   if ('fn' in raw) {
     const chain = createScopeChain(ctx.dataStore.get());
@@ -201,9 +151,6 @@ const runCall = async (
   });
   if (ctx.signal.aborted) return;
   if (!result.ok && result.error.aborted === true) return;
-  // Telemetry: the call completed (ok or error, not aborted) — report it. The
-  // endpoint's kind is structural: `fn` in the config means an in-process
-  // function endpoint, otherwise an HTTP one.
   ctx.onEndpoint?.({
     name: callName,
     kind: 'fn' in endpoint ? 'fn' : 'http',
@@ -237,18 +184,12 @@ const runCall = async (
   }
 };
 
-// The mount a navigation starts is one hop further down this chain: the shell
-// spawns and mounts synchronously, and the mount reads the cause from here.
 const navigate = (effect: NavigationEffect, ctx: StepContext): void => {
   const { onNavigate } = ctx;
   if (onNavigate === undefined) return;
   withCause(ctx.cause, () => onNavigate(effect));
 };
 
-// Resolve a push/replace effect's `input` against the firing scope (current
-// data + `@event`), so a trigger can pass dynamic data to the action it opens
-// — e.g. `input: { record: '@event.payload' }`. Mirrors how `emit.payload` is
-// resolved; without it, input values reach the new action as raw templates.
 const resolveInputMap = (
   input: Record<string, unknown>,
   ctx: StepContext,
@@ -259,9 +200,6 @@ const resolveInputMap = (
   );
 };
 
-// Resolve a push/replace target: its `action` (so a trigger can open the action
-// a binding names — e.g. `action: '{{@event.payload}}'` to launch the clicked
-// result; literal ids pass through unchanged) and its `input` map.
 const resolveNavTarget = <T extends { action: string; input?: Record<string, unknown> }>(
   nav: T,
   ctx: StepContext,
@@ -287,10 +225,6 @@ const resolveNavInput = (effect: NavigationEffect, ctx: StepContext): Navigation
   return effect;
 };
 
-// Resolve a `reconcile` step: read its list and turn each row into the action it
-// names (and that action's input, when the step names a field for it). A value
-// that is not a list is an empty one — the canvas empties, which is what an
-// empty list means.
 const resolveReconcile = (step: ReconcileEffect, ctx: StepContext): NavigationEffect => {
   const { to, action, input, ...rest } = step.reconcile;
   const rows = resolve(to, createScopeChain(ctx.dataStore.get()), ctx.extras);
@@ -311,9 +245,8 @@ export const executeSteps = async (steps: Step[], ctx: StepContext): Promise<voi
     if (buffer.length === 0) return;
     const list = buffer;
     buffer = [];
-    // Resolve templates against the state at flush entry, matching
-    // how `emit` captures data before publishing. The `@error` (and
-    // any other) scope lives in ctx.extras.
+    // Every template in a run of mutations resolves against the data as it
+    // stood before the run.
     const chain = createScopeChain(ctx.dataStore.get());
     const resolved = resolveMutationValues(list, chain, ctx.extras);
     ctx.dataStore.update((curr) =>
@@ -347,25 +280,10 @@ export const executeSteps = async (steps: Step[], ctx: StepContext): Promise<voi
         step.emit.payload === undefined
           ? undefined
           : resolve(step.emit.payload, chain, ctx.extras);
-      // PUBLISHED AFTER THE TURN SETTLES, not inside it. The confirm pattern
-      // emits then pops: the listener is the action UNDERNEATH, suspended
-      // while the confirm sits over it, and a suspended action reacts to
-      // nothing. Publishing synchronously delivers to it before the pop
-      // reveals it — the message is lost. Deferring lets the same turn's pop
-      // resume the listener (its status flips active synchronously) so the
-      // message lands on a live subscriber. Resolved values are captured
-      // above, so a later data change cannot alter what was announced.
-      //
-      // A TASK, NOT A MICROTASK. A listener that emits again queues another
-      // delivery, and a chain of microtasks never lets the event loop turn:
-      // under a server hosting many shells, one action whose trigger re-emits
-      // its own channel froze every other principal's shell, the socket and
-      // HTTP with it. A task (./next-task.ts) yields between hops, so a chain costs its own
-      // shell time and nobody else's; ./cause.ts is what ends it.
-      //
-      // The message is ON ITS WAY from here until its listeners have been
-      // told, and nobody awaits that: it is reported as a chain of its own, so
-      // the gap between this turn and the next task does not read as "done".
+      // Published on the next task, not in this turn: when steps emit and then
+      // pop, the listener is the action underneath, suspended until the pop.
+      // A task and not a microtask: a listener that emits again would chain
+      // microtasks, and the event loop would never turn.
       const { messageBus, cause } = ctx;
       const delivered = new Promise<void>((resolve) => {
         nextTask(() => {
@@ -408,15 +326,10 @@ export const executeSteps = async (steps: Step[], ctx: StepContext): Promise<voi
       continue;
     }
     if ('removeSelf' in step) {
-      // The runtime desugars this to removeInstance with its own id — the step
-      // carries no id to resolve.
       navigate(step, ctx);
       continue;
     }
     if ('reload' in step) {
-      // Re-read in place. The runtime supplies the handler (it owns the
-      // definition and the lifecycle); an action with no mount hook reloads to
-      // nothing, which is correct rather than an error.
       await ctx.onReload?.(ctx.cause);
       if (ctx.signal.aborted) return;
       continue;

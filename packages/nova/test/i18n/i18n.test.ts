@@ -7,7 +7,6 @@ const layout: LayoutNode = {
   children: [
     { component: 'Hero', props: { title: 'People', lead: 'Everyone the studio deals with.' } },
     { component: 'Button', props: { label: 'Add a person', variant: 'solid' }, ref: 'add' },
-    // A spec prop: the repeated structure of a table, as data.
     {
       component: 'Rows',
       props: {
@@ -28,8 +27,6 @@ const layout: LayoutNode = {
 const definition: ActionDefinition = {
   id: 'people.list',
   title: 'People',
-  // `views` is a tab strip authored as DATA and bound into the layout — words
-  // on a screen that no walk over layouts can see.
   data: {
     rows: [],
     error: '',
@@ -53,8 +50,6 @@ describe('harvest', () => {
     expect(phrases).toContain('Everyone the studio deals with.');
     expect(phrases).toContain('Add a person');
     expect(phrases).toContain('Nobody here yet.');
-    // Nested inside a `columns` spec — the case a top-level-props-only
-    // harvester silently misses most of a table on.
     expect(phrases).toContain('Standing');
   });
 
@@ -70,37 +65,26 @@ describe('harvest', () => {
   });
 
   it('leaves bindings, design tokens and data keys out', () => {
-    // A binding resolves to data at render — putting a path in a dictionary is
-    // how a language file fills up with `$.member.person_name`.
     expect(phrases).not.toContain('$.tab.label');
     expect(phrases).not.toContain('$.rows');
-    // `variant`/`kind`/`key` carry design and data vocabulary, not prose.
     expect(phrases).not.toContain('solid');
     expect(phrases).not.toContain('avatar');
     expect(phrases).not.toContain('person_name');
   });
 
   it('reaches labels nested in data, and takes the label rather than the value', () => {
-    // The failure this rule exists for is not a missing translation — it is a
-    // missing translation the count does not know about. A screen whose tabs
-    // live in `data` renders English while the harvest reports a full book.
     expect(phrases).toContain('Running');
     expect(phrases).toContain('Recipes');
-    // The value BESIDE each label is machine vocabulary, and nested strings are
-    // taken by the matcher — so `recipes`, which exists only inside the array,
-    // is left where it is.
     expect(phrases).not.toContain('recipes');
-    // Whereas `running` IS taken: it is also a top-level data string, and those
-    // come whole because only the layout knows where one lands. The two rules
-    // are visible here in one fixture, which is the point of pinning them
-    // together — a host filters the enum out of its report by name.
+    // `running` is taken because it is also the top-level data string `view`:
+    // those are taken whole, nested ones only at a prose key.
     expect(phrases).toContain('running');
     expect(found.find((entry) => entry.phrase === 'running')?.where).toEqual(['people.list.data.view']);
   });
 
   it('records every author site for a phrase used twice', () => {
     const people = harvestDefinition(definition).find((entry) => entry.phrase === 'People');
-    expect(people?.where).toHaveLength(2); // the title and the Hero
+    expect(people?.where).toHaveLength(2);
   });
 
   it('merges across a catalog and reports what a language is missing', () => {
@@ -111,8 +95,6 @@ describe('harvest', () => {
   });
 });
 
-// ─── the pass ────────────────────────────────────────────────
-
 const tree: RenderNode[] = [
   {
     type: 'component',
@@ -120,9 +102,7 @@ const tree: RenderNode[] = [
     props: {
       empty: 'Nobody here yet.',
       columns: [{ label: 'Standing' }],
-      // Row DATA, arriving from a query. `person_name` is a member's name and
-      // must survive untouched; `status_display` is a closed-set word the app
-      // has declared translatable by suffix.
+      // `Pass` is a member's name that is also a key of the book.
       rows: [
         { person_name: 'Pass', status_display: 'Active' },
         { person_name: 'Anna Berger', status_display: 'On trial' },
@@ -159,10 +139,6 @@ describe('translateRenderTree', () => {
   });
 
   it('LEAVES USER DATA ALONE even when it collides with a dictionary key', () => {
-    // The named risk of keying on source strings. A member called "Pass" sits
-    // at `person_name`, which no rule marks as prose — so the entry that would
-    // rename them is never consulted. This is the guard rail: proseness is
-    // decided by the KEY, never by the value matching something in the book.
     const rows = props['rows'];
     expect(rows).toMatchObject([{ person_name: 'Pass' }, { person_name: 'Anna Berger' }]);
   });
@@ -179,8 +155,6 @@ describe('translateRenderTree', () => {
   });
 
   it('returns the very same tree when the book is empty', () => {
-    // The source language must not pay for the pass: an identical reference
-    // means the frame serializes to the same bytes it always did.
     expect(translateRenderTree(tree, { phrases: {} })).toBe(tree);
   });
 

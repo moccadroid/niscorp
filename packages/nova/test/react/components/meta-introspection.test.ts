@@ -26,7 +26,6 @@ describe('component meta introspection', () => {
       if (propsSchema === undefined) continue;
       expect(propsSchema instanceof z.ZodType).toBe(true);
 
-      // The schema must be callable end-to-end.
       const result = propsSchema.safeParse({});
       expect(result).toBeDefined();
       expect(typeof result.success).toBe('boolean');

@@ -2,9 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type { ActionDefinition } from '@action';
 import { livenessOf } from '../../src/reflect';
 
-// What an action can still do once drawn — the facts a host decides
-// "does this screen need a shell" from.
-
 describe('livenessOf', () => {
   it('authored data and a layout: nothing left to do', () => {
     const slide: ActionDefinition = { id: 'slide', data: { title: 'Nova' }, layout: { component: 'Headline', children: '$.title' } };

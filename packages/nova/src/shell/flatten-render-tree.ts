@@ -2,23 +2,6 @@ import type { RenderNode } from '../layout';
 import type { Shell } from './types';
 import { ACTION_SLOT_NAME, CANVAS_SLOT_NAME } from './slot-names';
 
-// ═══════════════════════════════════════════════════════════
-// flattenRenderTree — expand slot markers into their resolved
-// content. A shell render tree contains CanvasSlot / ActionSlot
-// component nodes that only recurse at React render time; tests
-// and framework-agnostic consumers need a fully materialised tree.
-//
-// CanvasSlot → inline getCanvasRenderTree(canvasId), flattened.
-// ActionSlot → the marker SURVIVES, carrying identity (instanceId /
-//   canvasId / definitionId) with runtime.render() as its children —
-//   the per-instance boundary is part of the tree, so a remote
-//   renderer can key reconciliation by instance and an app-supplied
-//   slotWrapper can wrap each instance (animation, gating, chips).
-//   A target with no wrapper renders the children straight through.
-// Unknown / missing ids resolve to an empty fragment (an empty slot
-// is NOT a marker — an empty canvas must stay visibly empty).
-// ═══════════════════════════════════════════════════════════
-
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value.length > 0 ? value : undefined;
 
@@ -49,11 +32,8 @@ const flattenNode = (node: RenderNode, shell: Shell): RenderNode => {
     return {
       type: 'component',
       name: ACTION_SLOT_NAME,
-      // identity only — never the definition itself (wire weight)
       props: { instanceId, canvasId: runtime.instance.canvasId, definitionId: runtime.instance.definitionId },
       children: runtime.render(),
-      // keyed by instance so a renderer remounts when the instance changes
-      // (no stale DOM state across instance swaps, enter animations fire)
       key: instanceId,
     };
   }

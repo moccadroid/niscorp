@@ -12,11 +12,6 @@ import {
   type NovaComponent,
 } from '../../src/adapters/vue';
 
-// ═══════════════════════════════════════════════════════════
-// The Vue walker (ADAPTER.md §1–§2): node kinds, prop injection, children as
-// the default slot, and the render context reaching components.
-// ═══════════════════════════════════════════════════════════
-
 const mountTree = (nodes: RenderNode[], registry = createComponentRegistry<NovaComponent>(), extra: Record<string, unknown> = {}) =>
   mount(NovaRenderProvider, {
     props: { registry, ...extra },

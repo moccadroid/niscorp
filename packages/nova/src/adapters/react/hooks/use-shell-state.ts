@@ -28,8 +28,7 @@ export const useShellState = (): StateSnapshot => {
     return cached.snapshot;
   }, [shell]);
 
-  // The third argument is what a SERVER reads. The shell exists there too, with
-  // a real state, so it is the same read — and without it React refuses to draw
-  // this to markup at all ("Missing getServerSnapshot").
+  // The third argument is what a server reads: without it React refuses to draw
+  // this to markup ("Missing getServerSnapshot").
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 };

@@ -5,18 +5,6 @@ import { RenderTree, useRenderTree, useShell, useSlotWrapper } from '@react';
 import type { NovaComponent, NovaComponentProps, NovaRenderContextValue } from '@react';
 import { NovaRenderContext } from '@react/context';
 
-// ═══════════════════════════════════════════════════════════
-// ActionSlot — structural component that renders a single action
-// instance inside a canvas's actionLayout. Resolves to nothing
-// when instanceId is missing (e.g. the canvas has no active).
-//
-// This is the one seam where an instance's content mounts/unmounts,
-// so it's where an app-supplied `slotWrapper` (if any) wraps the
-// content — for animation, gating, logging, etc. Nova owns none of
-// that; it just hands the wrapper identity and the rendered tree.
-// ═══════════════════════════════════════════════════════════
-
-// The authoring contract (instanceId only, strict) lives in ../../primitive-props.
 export { ActionSlotPropsSchema, type ActionSlotProps };
 
 export const ActionSlot: NovaComponent<ActionSlotProps> = ({
@@ -27,16 +15,12 @@ export const ActionSlot: NovaComponent<ActionSlotProps> = ({
   const shell = useShell();
   const hasInstance = instanceId !== undefined && instanceId !== '';
 
-  // Scope dispatch to THIS instance so the runtime delivers UI events from
-  // its rendered subtree to this instance's own triggers only. The stamping
-  // rule itself is core semantics — see scopeDispatch.
   const ctx = useContext(NovaRenderContext);
   const scoped = useMemo<NovaRenderContextValue | undefined>(() => {
     if (ctx === undefined || instanceId === undefined || instanceId === '') return ctx;
     return { ...ctx, dispatch: scopeDispatch(ctx.dispatch, instanceId) };
   }, [ctx, instanceId]);
 
-  // No app-supplied wrapper → original behavior, plus the scoped dispatch.
   if (slotWrapper === undefined) {
     if (!hasInstance) return null;
     return (
@@ -46,10 +30,8 @@ export const ActionSlot: NovaComponent<ActionSlotProps> = ({
     );
   }
 
-  // With a wrapper, render it PERSISTENTLY (content or null) so a
-  // presence-managing wrapper can animate an instance leaving. Identity
-  // (canvasId / the ActionDefinition) resolves from the live runtime when one
-  // is present; it is undefined while the slot is empty or exiting.
+  // The wrapper is rendered even with no content, so one that manages presence
+  // can animate an instance leaving.
   const runtime = hasInstance ? shell.getRuntime(instanceId) : undefined;
   const Wrapper = slotWrapper;
   return (

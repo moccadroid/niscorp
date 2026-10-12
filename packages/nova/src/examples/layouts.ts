@@ -1,7 +1,5 @@
 import type { NovaExample } from './example.types';
 
-// The layout grammar, a part at a time. Each is an action with no triggers:
-// its layout is resolved against its data, and that is the whole example.
 export const LAYOUT_EXAMPLES: readonly NovaExample[] = [
   {
     id: 'path',

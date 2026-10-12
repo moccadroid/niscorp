@@ -5,11 +5,8 @@ import type { LayoutNode, RenderNode } from '@layout';
 import { createShell, headOf, shellSettled, shellView } from '@shell';
 import type { Shell } from '@shell';
 
-// The head a screen has: `nova:head` in a layout, holding the elements a
-// document's <head> holds, read off the render tree.
-
-// A registry that holds the app's own names and NOT the head's: nothing draws
-// a head or what it holds, so nothing has to be registered for them.
+// Without the head's names: nothing draws a head or what it holds, so nothing
+// is registered for them.
 const names = (): ReturnType<typeof createComponentRegistry> => {
   const registry = createComponentRegistry();
   for (const name of ['CanvasSlot', 'ActionSlot', 'Stack', 'Text']) registry.register(name, {});
@@ -31,7 +28,6 @@ const article: ActionDefinition = {
       head([
         title('{{$.page.title}} · the site'),
         meta({ name: 'description', content: '$.page.lead' }),
-        // nova keeps no list of these: any name, any property, any rel
         meta({ property: 'og:image:alt', content: '$.page.title' }),
         meta({ name: 'made-up-tomorrow', content: 'yes' }),
         link({ rel: 'alternate', hreflang: 'de', href: '$.page.german' }),
@@ -98,7 +94,6 @@ describe('headOf — the head a screen has', () => {
     shell.push('over', 'contact');
     await shellSettled(shell);
     const found = headOf(shellView(shell).api);
-    // the dialog's title, the page's description still beside it, and the dialog's robots
     expect(found?.elements.filter((element) => element.tag === 'title')).toEqual([{ tag: 'title', attributes: {}, text: 'Contact' }]);
     expect(found?.elements).toContainEqual({ tag: 'meta', attributes: { name: 'description', content: 'What a type can and cannot promise.' } });
     expect(found?.elements).toContainEqual({ tag: 'meta', attributes: { name: 'robots', content: 'noindex' } });
@@ -115,7 +110,6 @@ describe('headOf — the head a screen has', () => {
       });
     const [home, page] = [withSite('plain'), withSite('article')];
     await Promise.all([shellSettled(home), shellSettled(page)]);
-    // only the shell's chrome said anything: no action is named
     expect(headOf(shellView(home).api)).toEqual({
       elements: [{ tag: 'title', attributes: {}, text: 'The site' }, { tag: 'meta', attributes: { property: 'og:site_name', content: 'The site' } }],
       actions: [],
@@ -152,7 +146,6 @@ describe('headOf — the head a screen has', () => {
       ],
       { page: { title: '', lead: '' } },
     );
-    // still a head — it says less for now
     expect(found).toEqual({
       elements: [
         { tag: 'meta', attributes: { name: 'robots', content: 'noindex' } },

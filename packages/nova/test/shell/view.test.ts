@@ -4,8 +4,6 @@ import { createComponentRegistry } from '@layout';
 import { createShell, shellIdle, shellSettled, shellView } from '@shell';
 import type { Shell } from '@shell';
 
-// A shell as something an adapter draws, and the moment its first screen is whole.
-
 const tick = (ms = 0): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 const counter: ActionDefinition = {
@@ -30,7 +28,6 @@ describe('shellView — a shell, as a RenderApi', () => {
     const { api } = shellView(shell);
     expect(api.frame()).toEqual(shell.getShellRenderTree());
     expect(api.canvasTree('main')).toEqual(shell.flattenRenderTree(shell.getCanvasRenderTree('main')));
-    // nothing mounted is nothing to see — an empty tree, as it is over the wire
     expect(api.canvasTree('side')).toEqual([]);
   });
 
@@ -47,7 +44,6 @@ describe('shellView — a shell, as a RenderApi', () => {
     const shell = shellOf();
     shell.push('side', 'counter');
     const [main, side] = [shell.getState().canvases['main']?.active?.id ?? '', shell.getState().canvases['side']?.active?.id ?? ''];
-    // dispatched "from" main, but stamped for the instance on side
     shellView(shell).api.dispatch('main', { type: 'ui:click', ref: 'bump', origin: side });
     await tick();
     expect(shell.getRuntime(main)?.getData()['n']).toBe(0);
@@ -113,9 +109,6 @@ describe('shellSettled — the first screen is whole', () => {
 });
 
 describe('shellIdle — nothing the shell started is still running', () => {
-  // One page: a mount that loads, a press that calls, a press that announces
-  // (and a listener that calls on hearing it), a press that follows a read, and
-  // a press that opens a cover whose own press closes it again.
   const page: ActionDefinition = {
     id: 'page',
     data: { answer: 'not yet', rows: 'not yet', heard: 'not yet', live: 'not yet' },
@@ -154,14 +147,12 @@ describe('shellIdle — nothing the shell started is still running', () => {
   const held = (shell: Shell, instance: string, key: string): unknown => shell.getRuntime(instance)?.getData()[key];
 
   it('waits for the call a press made — which shellSettled, asked about mounts, does not', async () => {
-    // answered by hand, so nothing here depends on how long a timer takes
     let answer: (value: string) => void = () => undefined;
     const shell = pageShell({ ask: () => new Promise<string>((resolve) => (answer = resolve)), load: async () => 'loaded' });
     await shellSettled(shell);
     const id = top(shell);
 
     press(shell, 'ask');
-    // the first screen is as whole as it was: a page read now must not wait on the call
     expect(await shellSettled(shell, { waitMs: 5000 })).toBe(true);
     expect(held(shell, id, 'answer')).toBe('not yet');
 
@@ -228,9 +219,6 @@ describe('shellIdle — nothing the shell started is still running', () => {
   });
 
   it('a read the shell is following does not hold it, and its next body is not waited for', async () => {
-    // What a reactive read is to a shell: an answer now, and a subscription
-    // that stays open. The next body is somebody else's write, not this
-    // shell's work.
     let tell: (body: unknown) => void = () => undefined;
     const shell = pageShell(
       { ask: async () => 'answered', load: async () => 'loaded' },
@@ -254,7 +242,6 @@ describe('shellIdle — nothing the shell started is still running', () => {
     expect(await shellIdle(shell, { waitMs: 5000 })).toBe(true);
     expect(held(shell, id, 'live')).toBe('first');
 
-    // what does say so is the shell's own data telemetry
     let changes = 0;
     const stop = shell.onDataChange(() => (changes += 1));
     tell('second');

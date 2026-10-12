@@ -2,15 +2,6 @@ import { auditAction, collectChannels } from '@action';
 import type { ActionDefinition } from '@action';
 import { loopVarsOf, refsOf } from './walk';
 
-// ═══════════════════════════════════════════════════════════
-// Audit classification — the static auditAction (action/audit.ts) has three
-// known blind spots; each is decidable from the definition itself. This turns
-// a raw issue string into `address` (a real break a human should see) or
-// `info` (runtime-explained). It's nova reasoning about its OWN audit
-// semantics — generic, not app opinion — so it lives here, not in an app's
-// devtools. Uses the walk collectors (loopVarsOf/refsOf).
-// ═══════════════════════════════════════════════════════════
-
 export type IssueClass = { kind: 'address' } | { kind: 'info'; tag: string; reason: string };
 
 export const classifyAudit = (issue: string, definition: ActionDefinition): IssueClass => {
@@ -42,11 +33,6 @@ export const classifyAudit = (issue: string, definition: ActionDefinition): Issu
 export type ClassifiedIssue = { issue: string } & IssueClass;
 export type CatalogAuditRow = { id: string; address: number; issues: ClassifiedIssue[] };
 
-// Audit a whole set of definitions and classify every finding: each definition
-// is checked against a catalog + channel vocabulary derived from the set, so
-// cross-action wiring (a push to a missing action, a channel nobody serves) is
-// visible. Rows carry unresolved (`address`) findings first and sort by how
-// many they have. The self-audit devtools render this verbatim.
 export const auditCatalog = (
   definitions: Record<string, ActionDefinition> | readonly ActionDefinition[],
 ): CatalogAuditRow[] => {

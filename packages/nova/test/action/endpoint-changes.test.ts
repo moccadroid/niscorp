@@ -6,14 +6,8 @@ import type { ActionDefinition } from '@action/schemas';
 import type { FetchFn, FetchResponse } from '@action/types';
 import { createPermissiveRegistry } from '../helpers';
 
-// ═══════════════════════════════════════════════════════════
-// A response whose body can change later (`FetchResponse.onChange`), and the
-// per-endpoint ledger that keeps an older call from writing over a newer one.
-// ═══════════════════════════════════════════════════════════
-
 type Live = { push: (body: unknown) => void; listeners: () => number };
 
-// A response that can be pushed to after it resolved.
 const liveResponse = (body: unknown): { response: FetchResponse; live: Live } => {
   const handlers = new Set<(body: unknown) => void>();
   const response: FetchResponse = {
@@ -39,7 +33,6 @@ const liveResponse = (body: unknown): { response: FetchResponse; live: Live } =>
   };
 };
 
-// Every call parks until the test releases it, in any order.
 const parkedFetch = (): { fetchFn: FetchFn; release: (index: number, response: FetchResponse) => void; bodies: (string | undefined)[] } => {
   const waiting: ((response: FetchResponse) => void)[] = [];
   const bodies: (string | undefined)[] = [];
@@ -92,7 +85,6 @@ describe('endpoint — later bodies', () => {
 
     live.push(['a', 'b']);
     expect(runtime.getData()['rows']).toEqual(['a', 'b']);
-    // onSuccess did not run again: a later body is data, not a call.
     expect(runtime.getData()['loads']).toBe(1);
   });
 
@@ -165,7 +157,6 @@ describe('endpoint — out-of-order responses', () => {
     release(0, plain(['first']));
     await tick();
     expect(runtime.getData()['rows']).toEqual(['second']);
-    // Both calls still completed as calls.
     expect(runtime.getData()['loads']).toBe(2);
   });
 

@@ -7,10 +7,6 @@ export const buildInitialData = (
   input: Record<string, unknown> | undefined,
 ): Record<string, unknown> => {
   const defaults = definition.data ?? {};
-  // Deep-clone so the runtime owns an isolated data tree: neither
-  // `definition.data` nor the caller's `input` can be mutated by later in-place
-  // mutations. Initial data is NOT transformed — the injected `transform` is
-  // endpoint-only (request/response), never applied to the data on mount.
   return structuredClone({ ...defaults, ...(input ?? {}) });
 };
 

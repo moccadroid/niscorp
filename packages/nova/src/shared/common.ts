@@ -1,8 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// Shared primitives — common types + generic guards used to
-// narrow `unknown` across the package.
-// ═══════════════════════════════════════════════════════════
-
 export type Unsubscribe = () => void;
 
 export const isObject = (value: unknown): value is Record<string, unknown> =>

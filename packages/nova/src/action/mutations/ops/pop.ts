@@ -16,7 +16,7 @@ export type PopMutation = z.infer<typeof PopSchema>;
 export const popOp: MutationOp<PopMutation> = {
   key: 'pop',
   schema: PopSchema,
-  // Guard against the PopEffect whose `pop` is the literal `true`.
+  // The navigation effect shares the key: its `pop` is `true`, not a path.
   match: (mutation) => typeof mutation.pop === 'string',
   apply: (data, mutation, ctx) => {
     const current = getPath(data, mutation.pop);

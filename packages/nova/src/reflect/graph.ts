@@ -2,18 +2,6 @@ import { collectChannels } from '@action';
 import type { ActionDefinition } from '@action';
 import { walkNodes, isRecord } from './walk';
 
-// ═══════════════════════════════════════════════════════════
-// The action graph — each action's outgoing edges: the actions it can push to
-// (navigation) and the channels it emits/listens on. This is the adjacency the
-// audit closure walks per role, and the neighbourhood the server ladder's
-// working-set / level-streaming serves by radius. Built on the walk (nav
-// targets) + the semantic channel walker. Reachability (radius-N) layers on
-// top when working-set streaming lands.
-// ═══════════════════════════════════════════════════════════
-
-// Every action a definition navigates to — push/replace/resetTo targets in its
-// triggers and lifecycle. A template target ({{…}}) is runtime-resolved, kept
-// as-is so a caller can see it's dynamic.
 const navTargetsOf = (definition: ActionDefinition): string[] => {
   const out = new Set<string>();
   const scan = (value: unknown): void =>
@@ -37,7 +25,6 @@ export type ActionNode = {
 
 export type ActionGraph = {
   nodes: ActionNode[];
-  // ids referenced as push targets that aren't defined here (a dangling edge)
   dangling: string[];
 };
 

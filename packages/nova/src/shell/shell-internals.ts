@@ -25,16 +25,11 @@ import type { FetchFn, TransformFn } from '../action';
 import type { Canvas } from './canvas';
 import type { CanvasState } from './types';
 
-// ═══════════════════════════════════════════════════════════
-// Internal helpers for shell.ts — kept here to keep that file's
-// public-facing assembly short and scannable.
-// ═══════════════════════════════════════════════════════════
-
 export const validateActions = (actions: Record<string, ActionDefinition>): void => {
   const failures: DefinitionValidationFailure[] = [];
   for (const [actionId, def] of Object.entries(actions)) {
     // Asked before the schema reads it: a recursive schema overflows the
-    // stack on a deep enough document instead of refusing it (strata depth.ts).
+    // stack on a deep enough document instead of refusing it.
     if (exceedsDepth(def)) {
       failures.push({ id: actionId, issues: [{ code: 'custom', path: [], message: depthRefusal(), input: undefined }] });
       continue;
@@ -92,7 +87,6 @@ export type RuntimeFactoryDeps = {
   onNavigate: (canvasId: string, effect: NavigationEffect) => void;
   onEndpoint?: EndpointHandler;
   onChain?: (chain: Promise<unknown>) => void;
-  // The shell's language cell, read per render. See ActionRuntimeConfig.i18n.
   i18n?: () => LanguageOptions | undefined;
 };
 
@@ -121,12 +115,6 @@ export const createRuntimeFactory = (deps: RuntimeFactoryDeps) => (
     ...(deps.i18n === undefined ? {} : { i18n: deps.i18n }),
     instanceIdFn: deps.instanceIdFn,
   });
-
-// ═══════════════════════════════════════════════════════════
-// Internal escape hatch for tests that need the full ActionRuntime
-// (executeSteps, applyMutations, etc.) — NOT re-exported from the
-// package root. Tests reach this via `@shell/shell-internals`.
-// ═══════════════════════════════════════════════════════════
 
 const shellRegistries = new WeakMap<Shell, RuntimeRegistry>();
 

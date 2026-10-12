@@ -3,26 +3,6 @@ import { hasKey, isArray, isObject } from '../common';
 import { getPath } from './paths';
 import type { ScopeChain } from './types';
 
-// ═══════════════════════════════════════════════════════════
-// Unified value resolver.
-//
-// One function — `resolve` — handles every binding site uniformly.
-//
-// String semantics:
-//   1. "{{ expr }}" (sole expression)  → raw value of expr (type preserved)
-//   2. "...{{expr}}..."                → interpolated string
-//   3. "$.x" or "$ident..."            → raw value of path (type preserved)
-//   4. anything else                   → literal string
-//
-// Array  → mapped recursively.
-// Object → walked recursively, OR treated as an `$if` directive.
-// Primitives → returned as-is.
-//
-// Path expressions resolve via `resolvePath`, which uses the ScopeChain
-// (innermost first). An optional `extras` map injects keyed scopes for
-// templates (e.g. `{ '@error': errObj }`); longest-prefix match wins.
-// ═══════════════════════════════════════════════════════════
-
 const TEMPLATE_REGEX = /\{\{\s*([^}]+?)\s*\}\}/g;
 const SOLE_TEMPLATE_REGEX = /^\{\{\s*([^}]+?)\s*\}\}$/;
 const BARE_PATH_REGEX = /^\$(\.|[A-Za-z_]|$)/;
@@ -114,10 +94,6 @@ const isTruthy = (value: unknown): boolean => {
   return true;
 };
 
-// Directives — evaluated objects keyed by an operator (`$if`, `$eq`, …). Each
-// resolves its operands and returns a value. Add an operator here and it works
-// everywhere bindings are resolved; later operators (`$gte`, `$and`, …) slot in
-// the same way.
 type Directive = (node: Record<string, unknown>, chain: ScopeChain, extras: ExtraScopes) => unknown;
 
 const DIRECTIVES: Record<string, Directive> = {
@@ -130,13 +106,7 @@ const DIRECTIVES: Record<string, Directive> = {
     const args = isArray(node.$eq) ? node.$eq : [];
     return resolve(args[0], chain, extras) === resolve(args[1], chain, extras);
   },
-  // True when the operand path resolves to a present value. The structural
-  // counterpart to `$eq`: discriminate a union by which key a branch carries
-  // (`{ $exists: "$.shape.component" }`) rather than a shared tag's value.
   $exists: (node, chain, extras) => resolve(node.$exists, chain, extras) !== undefined,
-  // Read an array element by a (dynamic) index: `{ $at: ["$.results", "$.i"] }`.
-  // An optional third arg pulls one field off the element: `["$.results", "$.i",
-  // "id"]`. Returns undefined when the array/index doesn't resolve.
   $at: (node, chain, extras) => {
     const args = isArray(node.$at) ? node.$at : [];
     const arr = resolve(args[0], chain, extras);
@@ -146,17 +116,6 @@ const DIRECTIVES: Record<string, Directive> = {
     const field = args[2];
     return field !== undefined && isObject(element) ? element[String(field)] : element;
   },
-  // THE WHOLE TRANSFORM GRAMMAR, BEHIND ONE EXPLICIT DOOR. The directives
-  // above stay the small binding set; a value that needs a real transformation
-  // — a join, a projection, a group — says so out loud: `{ $prism: <node> }`
-  // evaluates the node with prism against the action's ROOT data. One grammar,
-  // one evaluator, nothing ambient — a prism-shaped object OUTSIDE this
-  // wrapper stays what it always was, a plain object walked for strings.
-  //
-  // The quiet failure this replaces was worse than a crash: an unrecognised
-  // op-shaped value passed through `resolve` as structure, landed in data, and
-  // rendered as garbage three screens later. Inside the wrapper, a bad node
-  // resolves to undefined — absent, not wrong.
   $prism: (node, chain) => {
     const result = evaluateSafe(node.$prism, chain[0] ?? {});
     return result.ok ? result.data : undefined;

@@ -45,20 +45,16 @@ describe('shell — integration', () => {
     const home = getInternalRuntime(shell, homeId);
     if (home === undefined) throw new Error('no home');
 
-    // Drive an "inc" trigger via executeSteps to mimic a UI click. We
-    // exercise the trigger steps path through the runtime.
     await home.executeSteps([{ increment: 'count' }]);
     expect(home.getData()).toMatchObject({ count: 1 });
     expect(shell.getCanvasState('main').active?.data).toMatchObject({ count: 1 });
 
-    // Push to detail with input
     await home.executeSteps([{ push: { action: 'Detail', input: { from: 'home' } } }]);
     await tick();
     const top = shell.getCanvasState('main').active;
     expect(top?.definitionId).toBe('Detail');
     expect(top?.data).toMatchObject({ from: 'home' });
 
-    // Pop back
     if (top === undefined) throw new Error('no top');
     const detail = getInternalRuntime(shell, top.id);
     if (detail === undefined) throw new Error('no detail');

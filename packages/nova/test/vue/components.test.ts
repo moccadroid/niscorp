@@ -14,11 +14,6 @@ import {
 } from '../../src/adapters/vue/components';
 import { InputPropsSchema as ReactInputPropsSchema } from '../../src/adapters/react/components';
 
-// ═══════════════════════════════════════════════════════════
-// The Vue primitive kit: meta, the click / model conventions, and the remote
-// round-trip obligations of ADAPTER.md §6 (draft while focused, debounce).
-// ═══════════════════════════════════════════════════════════
-
 const inProvider = (component: Component, props: Record<string, unknown>, dispatch = vi.fn()) => {
   const current = shallowRef(props);
   const wrapper = mount(NovaRenderProvider, {
@@ -46,7 +41,6 @@ describe('vue kit — registration and meta', () => {
     expect(registry.list().sort()).toEqual(['ActionSlot', 'Box', 'Button', 'CanvasSlot', 'Input', 'JsonTree', 'Panel', 'Stack', 'Text']);
     expect(registry.get('Stack')?.meta.propsSchema).toBe(StackPropsSchema);
     expect(registry.get('ActionSlot')?.meta.propsSchema).toBe(ActionSlotPropsSchema);
-    // one schema, both kits
     expect(InputPropsSchema).toBe(ReactInputPropsSchema);
   });
 
@@ -137,7 +131,6 @@ describe('vue kit — Input', () => {
     const input = wrapper.find('input');
     await input.trigger('focus');
     await input.setValue('help');
-    // a stale echo of an earlier keystroke arrives mid-type — must not clobber
     await setProps({ value: 'h', novaModel: binding });
     expect(inputOf(wrapper).value).toBe('help');
     await input.trigger('blur');

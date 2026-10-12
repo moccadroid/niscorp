@@ -8,13 +8,6 @@ import { createShell } from '@shell';
 import type { NovaComponent } from '@react';
 import { NovaShellProvider, useCanvas, useRenderTree } from '@react';
 
-// ═══════════════════════════════════════════════════════════
-// These tests verify the snapshot caching contract of
-// `useRenderTree` and `useCanvas`. The integration test passes
-// transitively — broken caching loops forever — but this file
-// verifies the contract directly.
-// ═══════════════════════════════════════════════════════════
-
 type Rig = {
   shell: ReturnType<typeof createShell>;
   registry: ReturnType<typeof createComponentRegistry<NovaComponent>>;
@@ -73,7 +66,6 @@ describe('useRenderTree snapshot stability', () => {
     const second = result.current;
     expect(second).toBe(first);
 
-    // Trigger a real data change via a dispatch that fires a trigger.
     await act(async () => {
       rig.shell.dispatch({ type: 'ui:model', ref: 'name', payload: 'ada' });
       await Promise.resolve();
@@ -181,9 +173,6 @@ describe('React StrictMode compatibility', () => {
       await Promise.resolve();
     });
 
-    // Still one node; content just changed. The important bit is
-    // that React did not throw a "snapshot returned different
-    // values" warning (error spy with that specific message).
     expect(screen.getByTestId('tree-len').textContent).toBe('1');
     for (const call of error.mock.calls) {
       const first = call[0];

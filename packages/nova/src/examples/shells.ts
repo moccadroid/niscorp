@@ -1,6 +1,5 @@
 import type { NovaExample } from './example.types';
 
-// Shells: canvases, what stands on them, and how actions move between them.
 export const SHELL_EXAMPLES: readonly NovaExample[] = [
   {
     id: 'push-pop',

@@ -1,10 +1,6 @@
 import { z } from 'zod';
 import { ResolvableSchema } from '../shared/bindings/schemas';
 
-// ═══════════════════════════════════════════════════════════
-// Layout node schemas
-// ═══════════════════════════════════════════════════════════
-
 export const LayoutPrimitiveSchema = z
   .union([z.string(), z.number(), z.boolean(), z.null()])
   .describe('A primitive layout value rendered as text.');

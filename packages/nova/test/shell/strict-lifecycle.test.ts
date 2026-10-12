@@ -97,7 +97,6 @@ describe('strict-mode lifecycle propagation', () => {
     const shell = makeShell(true);
     shell.push('main', 'S');
     await tick();
-    // pushing OK on top will suspend S
     shell.push('main', 'OK');
     await tick();
     expect(() => shell.getCanvasState('main')).toThrowError(LifecycleError);
@@ -109,7 +108,6 @@ describe('strict-mode lifecycle propagation', () => {
     await tick();
     shell.push('main', 'OK');
     await tick();
-    // popping OK should resume R, which fails
     shell.pop('main');
     await tick();
     expect(() => shell.getCanvasState('main')).toThrowError(LifecycleError);
@@ -120,7 +118,6 @@ describe('strict-mode lifecycle propagation', () => {
     shell.push('main', 'M');
     await tick();
     expect(() => shell.getCanvasState('main')).toThrow();
-    // second call no longer throws (pending was consumed)
     expect(() => shell.getCanvasState('main')).not.toThrow();
   });
 

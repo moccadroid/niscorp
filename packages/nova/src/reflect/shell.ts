@@ -4,14 +4,6 @@ import type { LayoutNode } from '@layout';
 import { classifyAudit, type ClassifiedIssue } from './audit';
 import { auditAction } from '@action';
 
-// ═══════════════════════════════════════════════════════════
-// Shell reflection — nova reading its own running state. The canvas/instance
-// tree (snapshotShell) and a full model for one instance (describeInstance).
-// Both were re-derived in relay's devtools fns; they're pure reads over the
-// Shell's own introspection API, so they belong here. Consumers: devtools, and
-// (server-ladder) the working-set / level-streaming that walks the same tree.
-// ═══════════════════════════════════════════════════════════
-
 export type InstanceRef = {
   definitionId: string;
   instanceId: string;
@@ -29,13 +21,9 @@ export type CanvasRef = {
 export type ShellSnapshot = {
   canvases: CanvasRef[];
   layouts: string[];
-  // every component name the shell's registry can render
   components: string[];
 };
 
-// The whole shell as a tree of canvases → instances, plus the shell-level
-// model (layout store ids, registered component names). `exclude` drops
-// canvases the caller owns (a devtools canvas shouldn't inspect itself).
 export const snapshotShell = (shell: Shell, exclude: readonly string[] = []): ShellSnapshot => {
   const state = shell.getState();
   const canvases = Object.values(state.canvases)
@@ -53,26 +41,11 @@ export const snapshotShell = (shell: Shell, exclude: readonly string[] = []): Sh
   return { canvases, layouts: shell.layoutStore.list(), components: shell.registry.list() };
 };
 
-// ─── the shell as text ─────────────────────────────────────
-// What a model is shown when it has to reason about a screen. Same tree as
-// snapshotShell, rendered flat with each card's live data.
-//
-// Long arrays collapse to a head and a count: an agent looking at the same
-// screen many times a shift cannot pay for forty rows each time, and a person
-// reading a board of forty does not hold forty either.
-
 export type DescribeShellOptions = {
-  // Canvases to render. Default: all of them.
   only?: readonly string[];
-  // Marks an instance in the output. An agent whose answer is the complete state
-  // of its own canvases has to tell its cards from the person's.
   mark?: (instanceId: string) => string | undefined;
-  // Array length past which values collapse. 0 disables collapsing.
   collapseOver?: number;
   head?: number;
-  // Last pass over each card's data before it is written. A caller that knows
-  // which fields are for rendering rather than reading — tones, formatted
-  // stamps — drops them here instead of paying for them.
   clean?: (data: Record<string, unknown>) => Record<string, unknown>;
 };
 
@@ -122,8 +95,6 @@ export type InstanceModel = {
   issues: ClassifiedIssue[];
 };
 
-// The full model for one live instance — its definition wiring, its current
-// data, and its classified audit. `undefined` when the id isn't mounted.
 export const describeInstance = (shell: Shell, instanceId: string): InstanceModel | undefined => {
   const runtime = shell.getRuntime(instanceId);
   if (runtime === undefined) return undefined;

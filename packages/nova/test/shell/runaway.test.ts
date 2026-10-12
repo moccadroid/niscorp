@@ -6,13 +6,6 @@ import { createShell } from '@shell';
 import type { NovaError } from '@shared/errors';
 import { CAUSE_DEPTH_LIMIT } from '../../src/action/runtime/cause';
 
-// A CHAIN THAT NEVER ENDS, STOPPED. Every definition here is valid data, and
-// each one used to run forever: a trigger that re-emits its own channel, two
-// that answer each other, a mount that reloads itself, a trigger that reloads
-// and re-emits (doubling every turn), a mount that pushes another copy of
-// itself. Each now stops at its budget and reports RUNAWAY_CHAIN, and a timer
-// set beside it still fires while it runs — the event loop keeps turning.
-
 const settle = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 const run = async (actions: Record<string, ActionDefinition>, start: string, ms = 400): Promise<{ errors: NovaError[]; ticks: number; data: () => Record<string, unknown> }> => {
@@ -47,7 +40,6 @@ describe('runaway chains', () => {
     };
     const { errors, ticks, data } = await run({ loop }, 'loop');
     expect(runaway(errors)).toHaveLength(1);
-    // The mount's emit is the root; the listener runs at depths 1…64.
     expect(data()['n']).toBe(CAUSE_DEPTH_LIMIT);
     expect(ticks).toBeGreaterThan(0);
   });

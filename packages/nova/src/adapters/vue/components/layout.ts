@@ -8,16 +8,9 @@ import {
   type TextProps,
 } from '../../primitive-props';
 
-// ═══════════════════════════════════════════════════════════
-// The layout primitives — Stack, Box, Text. Headless reference looks (inline
-// styles, as the React kit's); an app's kit is where its real look lives.
-// ═══════════════════════════════════════════════════════════
-
 export { StackPropsSchema, type StackProps, BoxPropsSchema, type BoxProps, TextPropsSchema, type TextProps };
 
 const px = (value: number | undefined): string => `${value ?? 0}px`;
-
-// ─── Stack ─────────────────────────────────────────────────
 
 const ALIGN_MAP = {
   start: 'flex-start',
@@ -58,8 +51,6 @@ export const Stack = Object.assign(
   { meta: { description: 'Flex container that arranges children in a row or column.', propsSchema: StackPropsSchema } },
 );
 
-// ─── Box ───────────────────────────────────────────────────
-
 export const Box = Object.assign(
   defineComponent(
     (props: BoxProps, { slots }) =>
@@ -85,8 +76,6 @@ export const Box = Object.assign(
     },
   },
 );
-
-// ─── Text ──────────────────────────────────────────────────
 
 const SIZE_MAP = {
   sm: '12px',

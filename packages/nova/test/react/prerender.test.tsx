@@ -11,15 +11,6 @@ import type { NovaComponent } from '@react';
 import { NovaShell, NovaShellProvider, RenderTree, useCanvas, useRenderTree } from '@react';
 import { registerNovaReactComponents } from '../../src/adapters/react/components';
 
-// ═══════════════════════════════════════════════════════════
-// A shell drawn ahead of time, and picked up.
-//
-// The app's own boot is run twice: once where there is no browser (a build),
-// drawn to markup through the shell-backed components and hooks; once in the
-// page, where a second shell adopts that markup and is alive. No server holds
-// either shell.
-// ═══════════════════════════════════════════════════════════
-
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true);
 
 const counter: ActionDefinition = {
@@ -29,7 +20,6 @@ const counter: ActionDefinition = {
   triggers: [{ event: 'ui:click', ref: 'bump', do: [{ increment: 'n' }] }],
 };
 
-// One boot, as a browser-shell app writes it — called at build and in the page.
 const boot = (): Shell => {
   const registry = createComponentRegistry<NovaComponent>();
   registerNovaReactComponents(registry);
@@ -83,7 +73,6 @@ describe('a shell drawn to markup', () => {
   });
 
   it('an app’s own frame over the hooks draws and adopts the same way', async () => {
-    // What a hand-written entry looks like (mythos's main.tsx): useCanvas + useRenderTree.
     const Active = ({ canvasId }: { canvasId: string }): React.JSX.Element => {
       const canvas = useCanvas(canvasId);
       const tree = useRenderTree(canvas.active?.id ?? '');

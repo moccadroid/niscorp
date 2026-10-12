@@ -1,8 +1,5 @@
-// ═══════════════════════════════════════════════════════════
-// ID factory — closure-scoped, never module-mutable counters.
-// Uses crypto.randomUUID when available, falls back to a
-// Math.random-based token. Not security-sensitive.
-// ═══════════════════════════════════════════════════════════
+// These ids are not secrets: where `crypto.randomUUID` is missing, a
+// Math.random token stands in.
 
 export type IdFactory = () => string;
 

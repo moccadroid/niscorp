@@ -4,8 +4,6 @@ export default defineConfig([
   {
     entry: {
       index: 'src/index.ts',
-      // adapters live under src/adapters/ AND publish under /adapters/ — source
-      // path and public path match: @niscorp/nova/adapters/react, /adapters/dom.
       'adapters/react/index': 'src/adapters/react/index.ts',
       'adapters/react/components/index': 'src/adapters/react/components/index.ts',
       'adapters/vue/index': 'src/adapters/vue/index.ts',
@@ -27,16 +25,15 @@ export default defineConfig([
     splitting: true, // cjs too: entries share chunks, so a class exists once, not once per entry
     dts: true,
     sourcemap: true,
-    // Array configs build in PARALLEL — a `clean: true` here races the other
-    // config's output and deletes it. The build script cleans dist up front.
+    // Array configs build in parallel: `clean: true` here would delete the
+    // other config's output. The build script cleans dist first.
     clean: false,
     treeshake: true,
     target: 'es2022',
     external: ['react', 'vue', '@niscorp/cortex', '@niscorp/prism'],
   },
   {
-    // ink is ESM-only, so this entry ships esm only (no require condition in
-    // the exports map either).
+    // ink is ESM-only, so this entry is too.
     entry: { 'adapters/ink/index': 'src/adapters/ink/index.ts' },
     format: ['esm'],
     dts: true,
@@ -44,10 +41,9 @@ export default defineConfig([
     clean: false,
     treeshake: true,
     target: 'es2022',
-    // The kit imports the react adapter by its public self-name (not the
-    // internal `@react` alias): bundling the react adapter here would give
-    // the ink entry a PRIVATE copy of NovaRenderContext, and context
-    // identity breaks across dist modules. External keeps one instance.
+    // The react adapter stays external: bundled, the ink entry would hold its
+    // own copy of NovaRenderContext, and a provider from the react entry
+    // would not reach it.
     external: ['react', 'ink', 'ink-text-input', '@niscorp/cortex', '@niscorp/prism', '@niscorp/nova/adapters/react'],
   },
 ]);

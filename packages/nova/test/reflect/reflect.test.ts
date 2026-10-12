@@ -13,7 +13,6 @@ import {
 import { createShell, createComponentRegistry } from '../../src';
 import type { ActionDefinition } from '../../src';
 
-// A layout exercising the collectors: a component with a prop-ref, a loop.
 const layout = {
   component: 'Box',
   children: [
@@ -33,7 +32,7 @@ describe('reflect — the walk + collectors', () => {
   });
 
   it('refsOf finds refs inside props; loopVarsOf finds loop `as` names', () => {
-    expect([...refsOf(layout)]).toEqual(['open-row']); // rowRef, a prop — not the node-level `ref`
+    expect([...refsOf(layout)]).toEqual(['open-row']);
     expect([...loopVarsOf(layout)]).toEqual(['r']);
   });
 });
@@ -50,7 +49,7 @@ describe('reflect — the action graph', () => {
     expect(home?.pushes).toEqual(['deals']);
     expect(home?.emits).toEqual(['nav']);
     expect(graph.nodes.find((n) => n.id === 'deals')?.listens).toEqual(['nav']);
-    expect(graph.dangling).toEqual(['ghost']); // deals pushes an id nothing defines
+    expect(graph.dangling).toEqual(['ghost']);
   });
 });
 
@@ -68,7 +67,6 @@ describe('reflect — audit classification', () => {
 
   it('auditCatalog classifies and sorts address-first', () => {
     const rows = auditCatalog(defs);
-    // `deals` pushes `ghost` (not in catalog) — a real address-level finding
     const deals = rows.find((r) => r.id === 'deals');
     expect(deals?.issues.some((i) => i.kind === 'address' && i.issue.includes('ghost'))).toBe(true);
   });

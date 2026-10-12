@@ -4,15 +4,6 @@ import { NovaRenderProvider, RenderTree } from '../../src/adapters/react';
 import { defaultRegistry, fallback, TextWrap, ErrorMarker, CanvasMarkersContext } from '../../src/adapters/ink';
 import type { RenderComponentNode, RenderNode } from '../../src/layout/types';
 
-// ═══════════════════════════════════════════════════════════
-// The Ink kit — rendered through the React adapter's walker (the same
-// provider the browser uses) into ink-testing-library's fake TTY: frames
-// asserted as text, focus driven with Tab, activation with Enter.
-// ═══════════════════════════════════════════════════════════
-
-// RenderComponentNode, not the RenderNode union: `ref` and `model` live on the
-// component member alone, so a helper typed as the union produces values that
-// cannot carry either one once spread.
 const component = (name: string, props: Record<string, unknown> = {}, children: RenderNode[] = []): RenderComponentNode => ({
   type: 'component',
   name,
@@ -22,15 +13,14 @@ const component = (name: string, props: Record<string, unknown> = {}, children: 
 const text = (value: string): RenderNode => ({ type: 'text', value });
 
 const tick = (ms = 60): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-// Focus commits are async React state under parallel-suite load — give the
-// '\t' a generous beat, and poll for outcomes instead of guessing latencies.
+// A focus commit is async React state, and slow when suites run in parallel.
 const focusTick = (): Promise<void> => tick(600);
 const until = async (pred: () => boolean, ms = 2500): Promise<void> => {
   const t0 = Date.now();
   while (!pred() && Date.now() - t0 < ms) await tick(20);
 };
-// Activate whatever Tab focused: an Enter before focus commits reaches no
-// handler (harmless), so retry until the dispatch lands — load-proof.
+// An Enter before focus commits reaches no handler, so it is sent again until
+// the dispatch lands.
 const enterUntil = async (view: { stdin: { write: (s: string) => void } }, fired: () => boolean): Promise<void> => {
   for (let i = 0; i < 40 && !fired(); i += 1) {
     view.stdin.write('\r');
@@ -62,7 +52,7 @@ describe('ink kit — rendering', () => {
     const frame = view.lastFrame() ?? '';
     expect(frame).toContain('Sign in to Relay');
     expect(frame).toContain('⟨');
-    expect(frame).toContain('alex, jordan or sam'); // placeholder shows
+    expect(frame).toContain('alex, jordan or sam');
     expect(frame).toContain('( Send magic link )');
     expect(frame).toContain(' live'); // ink trims the line-end space of the badge
     view.unmount();
@@ -70,7 +60,7 @@ describe('ink kit — rendering', () => {
 
   it('unknown component names degrade through the fallback; served text and error nodes render ink-safe', async () => {
     const view = mount([
-      component('KanbanBoard', {}, [text('card A')]), // bare text under a Box — needs the textWrapper
+      component('KanbanBoard', {}, [text('card A')]),
       component('NavItem', { label: 'Deals', count: 4 }),
       { type: 'error', code: 'E_BOOM', message: 'it broke' },
     ]);
@@ -95,7 +85,6 @@ describe('ink kit — rendering', () => {
     await tick();
     const lines = (view.lastFrame() ?? '').split('\n').filter((line) => line.includes('☑') || line.includes('☐'));
     expect(lines).toHaveLength(2);
-    // the control column starts at the same cell on every row
     expect(lines[0]?.indexOf('☑')).toBe(lines[1]?.indexOf('☐'));
     view.unmount();
   });
@@ -134,13 +123,13 @@ describe('ink kit — focus and activation', () => {
   it('typing into a focused Input dispatches ui:model per keystroke; Enter adds ui:key', async () => {
     const view = mount([{ ...component('Input', {}), model: { path: 'form.user', ref: 'username' } }]);
     await until(() => (view.lastFrame() ?? '').includes('⟨'));
-    view.stdin.write('\t'); // focus the input
+    view.stdin.write('\t');
     await focusTick();
     view.stdin.write('a');
     await until(() => view.dispatch.mock.calls.length >= 1);
     view.stdin.write('b');
     await until(() => view.dispatch.mock.calls.length >= 2);
-    view.stdin.write('\r'); // submit
+    view.stdin.write('\r');
     await until(() => view.dispatch.mock.calls.length >= 3);
     const events = view.dispatch.mock.calls.map(([event]) => event as Record<string, unknown>);
     expect(events).toContainEqual({ type: 'ui:model', ref: 'username', payload: 'a' });

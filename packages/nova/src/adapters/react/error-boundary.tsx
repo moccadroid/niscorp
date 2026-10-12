@@ -1,12 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 
-// ═══════════════════════════════════════════════════════════
-// React error boundaries REQUIRE a class component as of React 19.
-// There is no functional alternative today. This is the ONLY class
-// in the package outside `shared/errors.ts`. Justified strictly by
-// the framework requirement — every other abstraction in nova uses
-// factory + closure.
-// ═══════════════════════════════════════════════════════════
+// A class because React has no function-component error boundary.
 
 export type NovaErrorBoundaryProps = {
   children?: ReactNode;

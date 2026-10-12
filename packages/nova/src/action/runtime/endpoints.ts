@@ -27,9 +27,6 @@ const resolveHeaders = (
 };
 
 export type EndpointResult =
-  // `onChange` — the transport's later bodies, already shaped by the endpoint's
-  // `response` (see FetchResponse.onChange). Absent for function endpoints and
-  // for any transport that answers once.
   | { ok: true; data: unknown; status: number; onChange?: (handler: (data: unknown) => void) => Unsubscribe }
   | { ok: false; error: { status: number; message: string; data: unknown; aborted?: boolean; timedOut?: boolean } };
 
@@ -59,18 +56,11 @@ export type CallEndpointOptions = {
   transform?: TransformFn;
   signal?: AbortSignal;
   functions?: Record<string, FunctionHandler>;
-  // The shell's default wait for the reply; the endpoint's own `timeoutMs` wins.
   timeoutMs?: number;
 };
 
 export const DEFAULT_ENDPOINT_TIMEOUT_MS = 30_000;
 
-// A CALL THAT NEVER ANSWERS FAILS. A route that hangs used to leave the action
-// loading for as long as it lived — nothing failed, so nothing said so. Past
-// its wait the call fails to `onError` (not as an abort: an abort is the
-// action going away, and is silent), and the transport is told to stop through
-// the signal it was handed. It bounds the FIRST answer only: a reply that
-// keeps answering (a reactive read under moss) follows on after it.
 export const callEndpoint = async (
   options: CallEndpointOptions,
 ): Promise<EndpointResult> => {
@@ -102,8 +92,6 @@ const callHttpEndpoint = async (
   const url = typeof resolvedUrl === 'string' ? resolvedUrl : String(resolvedUrl ?? '');
   const headers = resolveHeaders(endpoint.headers, chain);
 
-  // `request` builds the body from the action data via the injected evaluator.
-  // Declared without one is a hard error (never a silent empty body).
   let body: string | undefined;
   if (endpoint.request !== undefined) {
     if (transform === undefined) {
@@ -132,13 +120,6 @@ const callHttpEndpoint = async (
     return { ok: false, error: { status: 0, message, data: undefined } };
   }
 
-  // A REPLY IS JSON. An endpoint's reply lands in `target`, runs through
-  // `response`, and is read by a layout — all of it JSON. A success whose body
-  // is not JSON (an HTML page, a proxy's text) used to land as whatever the
-  // fallback read, and under a transport that cannot read a body twice that
-  // was `undefined`: an empty screen that said it had succeeded. It is an
-  // error now, and `onError` hears it. No Content is the one success with no
-  // body. A FAILED reply stays tolerant — its text is still worth a message.
   if (!response.ok) {
     const failed = await tryParseJson(response);
     const message =
@@ -157,10 +138,6 @@ const callHttpEndpoint = async (
     return { ok: false, error: { status: response.status, message: `the reply is not JSON (HTTP ${response.status})`, data: undefined } };
   }
 
-  // `response` shapes the reply via the injected evaluator — over the reply
-  // exactly as received (`$` is the reply: object, array, or scalar; no wrapping).
-  // Declared without an evaluator is a hard error (never silently serve the
-  // unshaped reply).
   let result: unknown = payload;
   if (endpoint.response !== undefined) {
     if (transform === undefined) {
@@ -178,9 +155,7 @@ const callHttpEndpoint = async (
   return { ok: true, data: result, status: response.status, ...(onChange === undefined ? {} : { onChange }) };
 };
 
-// The transport's later bodies, shaped by the same `response` config as the
-// first. A body the transform rejects is dropped — the screen keeps the last
-// good value rather than showing a half-applied one.
+// A later body the transform rejects is dropped: the screen keeps the last good value.
 const laterBodiesOf = (
   response: FetchResponse,
   config: unknown,
@@ -209,8 +184,6 @@ const callFunctionEndpoint = async (
   endpoint: FunctionEndpointConfig,
   { data, signal, functions }: CallEndpointOptions,
 ): Promise<EndpointResult> => {
-  // Callers dispatching to a function endpoint must provide both a signal and
-  // a registered handler. `runCall` guarantees both before reaching here.
   if (signal === undefined) {
     throw new Error('callEndpoint: function variant requires an AbortSignal');
   }

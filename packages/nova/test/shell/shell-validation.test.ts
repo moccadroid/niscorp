@@ -13,7 +13,6 @@ const makeDeps = () => ({
 
 describe('createShell — definition validation', () => {
   it('throws DefinitionValidationError for a malformed action definition', () => {
-    // Missing required `id` — should fail schema validation.
     const bad = { data: { n: 1 } } as unknown as ActionDefinition;
     expect(() =>
       createShell({

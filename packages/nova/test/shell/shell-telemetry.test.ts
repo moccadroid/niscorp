@@ -85,7 +85,6 @@ describe('shell — telemetry', () => {
       id: 'Caller',
       data: { out: null, err: null },
       endpoints: { load: { fn: 'load', target: 'out', errorTarget: 'err' } },
-      // onError steps handle the failure cleanly (no lifecycle throw).
       lifecycle: { mount: [{ call: 'load', onError: [{ set: 'err', value: 'failed' }] }] },
     };
     const shell = createShell({

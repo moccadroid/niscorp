@@ -29,16 +29,7 @@ import type {
   RenderOnError,
 } from './types';
 
-// ═══════════════════════════════════════════════════════════
-// Renderer — converts a LayoutNode tree into a framework-agnostic
-// RenderNode[] tree. Renders children in try/catch boundaries so a
-// single broken subtree does not poison siblings, unless strict mode
-// is enabled. All errors flow through the ctx.onError telemetry hook.
-// ═══════════════════════════════════════════════════════════
-
-const noopOnError: RenderOnError = (_error: NovaError): void => {
-  // default — errors silently dropped if no handler provided
-};
+const noopOnError: RenderOnError = (_error: NovaError): void => {};
 
 type InternalRenderContext = {
   store: RenderContext['store'];
@@ -46,12 +37,7 @@ type InternalRenderContext = {
   strict: boolean;
   onError: RenderOnError;
   scopePaths: string[];
-  // Undefined when the host named no book and no keys — the whole language
-  // apparatus is then absent rather than idling, and a `{ phrase, slots }`
-  // object passes through as the object it is.
   pass: Pass | undefined;
-  // Where a miss was found, coarse: the chain of component names above it.
-  // Only maintained while a pass is active, since nothing else reads it.
   where: string;
 };
 
@@ -75,8 +61,6 @@ const toRenderError = (err: unknown): NovaError => {
   return new RenderError(message, {}, { cause: err });
 };
 
-// Resolve a `$.x.y` or `$loopVar.y` binding to an absolute data path
-// (used to construct stable model binding descriptors inside loops).
 const resolveDataPath = (
   binding: string,
   scopePaths: string[],
@@ -115,11 +99,8 @@ const renderNode = (
     const resolved = resolve(node, chain);
     if (resolved === undefined || resolved === null) return [textNode('')];
     const value = String(resolved);
-    // A LITERAL text child is prose; a BOUND one is data wearing a text
-    // position, and offering it to the book is how a member called "Pass" gets
-    // renamed. Nothing but the renderer can tell those apart — by the time a
-    // tree exists both are the same plain string — which is why this rule
-    // could not be written in `translateRenderTree` and can be written here.
+    // A literal text child is prose. A bound one is data in a text position,
+    // and is not offered to the book.
     if (ctx.pass === undefined || !ctx.pass.text || isBinding(node)) return [textNode(value)];
     return [textNode(swap(value, `${ctx.where}#text`, ctx.pass))];
   }
@@ -138,8 +119,8 @@ const renderNode = (
     return renderNode(target, chain, ctx);
   }
   if (isSlotNode(node)) {
-    // A slot is filled at fragment-merge time (fillSlots). One that survives to
-    // render was never filled — render nothing.
+    // Slots are filled when fragments merge (`fillSlots`): one that reaches a
+    // render was never filled.
     return [];
   }
   if (isConditionalNode(node)) {
@@ -163,24 +144,12 @@ const renderNode = (
       : undefined;
     const out: RenderNode[] = [];
     items.forEach((item, index) => {
-      // Each iteration binds three reserved loop vars: the element (`$<as>`),
-      // its position (`$index`), and the array itself (`$items`). `$items`
-      // lets a control inside the loop edit the whole list — remove or reorder
-      // an element — not just its own value. Both `index` and `items` are
-      // reserved names; an `as` of `'index'` or `'items'` would shadow them.
       const innerChain = pushScope(chain, { [node.as]: item, index, items });
-      // `$items` resolves to a *writable* path (so `model: "$items"` works) only
-      // when the loop's source is itself a resolvable path; a literal-array loop
-      // exposes the value but stays read-only, exactly as `$<as>` does.
       const nextScopePaths =
         loopBasePath === undefined
           ? ctx.scopePaths
           : [...ctx.scopePaths, `${node.as}=${loopBasePath}.${index}`, `items=${loopBasePath}`];
       const innerCtx: InternalRenderContext = { ...ctx, scopePaths: nextScopePaths };
-      // Stamp a stable React-identity key on each item's output: the value at
-      // `node.key` (e.g. the row id), or the index when no key path is given.
-      // This is what lets looped rows share a `ref` (the trigger target) without
-      // colliding as React keys. `withKey` (in render-tree) prefers it over ref.
       const idKey = node.key !== undefined ? getPath(item, node.key) : index;
       const rendered = safeRenderSingle(node.do, innerChain, innerCtx, undefined);
       rendered.forEach((rn, sub) => {
@@ -200,23 +169,14 @@ const renderComponent = (
   chain: ScopeChain,
   ctx: InternalRenderContext,
 ): RenderNode => {
-  // A head and what it holds are drawn by nobody, so no kit has anything to
-  // register for them.
   if (!HEAD_NAMES.includes(node.component) && !ctx.registry.has(node.component)) {
     throw new ComponentNotFoundError(
       `Component not found in registry: ${node.component}`,
       { name: node.component },
     );
   }
-  // THE ONE PLACE A PROP BECOMES A WORD ON A SCREEN. The swap belongs here
-  // rather than in a later walk over the finished tree: the value is already
-  // in hand, so translating it costs one lookup instead of a second traversal
-  // of everything that was just built.
-  //
-  // Unlike a text child, a BOUND prop is translated — that is the whole
-  // `_display` mechanism, where a query manufactures a closed-set word and a
-  // read puts it on the screen. What protects data here is the KEY: `label` is
-  // prose, `name` is not, and no value ever votes on the question.
+  // Unlike a text child, a bound prop is translated. The key decides what is
+  // prose (`label` is, `name` is not), never the value.
   const pass = ctx.pass;
   const at = pass === undefined ? '' : `${ctx.where}/${node.component}`;
   const props: Record<string, unknown> = Object.fromEntries(
@@ -234,11 +194,6 @@ const renderComponent = (
     if (resolvedPath !== undefined) {
       const ref = node.ref ?? makeAutoRef(node.component, resolvedPath);
       model = { path: resolvedPath, ref };
-      // Two-way binding: if the component doesn't already have an explicit
-      // `value` prop, auto-derive it from the model expression so the
-      // displayed value tracks the data store. Without this, controlled
-      // inputs always show their initial value because nothing updates the
-      // `value` prop on re-render.
       if (!('value' in props)) {
         props['value'] = resolve(node.model, chain);
       }
@@ -298,8 +253,6 @@ const toInternal = (ctx: RenderContext): InternalRenderContext => ({
   strict: ctx.strict ?? false,
   onError: ctx.onError ?? noopOnError,
   scopePaths: [],
-  // Built once per render call. The matcher compiles a Set and a suffix list,
-  // and doing that per node would make the cheapest branch the expensive one.
   pass: passFor({
     ...(ctx.phrases === undefined ? {} : { phrases: ctx.phrases }),
     ...(ctx.phraseKeys === undefined ? {} : { keys: ctx.phraseKeys }),
@@ -317,10 +270,6 @@ export const renderLayout = (
   return safeRenderSingle(node, createScopeChain(data), internal, undefined);
 };
 
-// Object-form alias for renderLayout. Same semantics, named parameters —
-// so the caller doesn't have to remember the positional order of
-// (layout, data, ctx) and so `data` can be omitted when the layout has
-// no resolvables.
 export type RenderOptions = {
   layout: LayoutNode;
   data?: Record<string, unknown>;
@@ -344,8 +293,6 @@ export const render = (options: RenderOptions): RenderNode[] =>
     ...(options.onPhraseMiss === undefined ? {} : { onPhraseMiss: options.onPhraseMiss }),
   });
 
-// Render a layout reading its root data from a DataStore view. Used by the
-// action runtime so layout and action share a single data store instance.
 export const renderLayoutFromStore = (
   node: LayoutNode,
   store: DataStoreView,

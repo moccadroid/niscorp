@@ -29,11 +29,9 @@ describe('slotWrapper — pluggable ActionSlot seam', () => {
 
     render(<Nova.Shell shell={shell} slotWrapper={Wrapper} />);
 
-    // Content renders, inside the wrapper.
     expect(screen.getByText('HELLO')).toBeDefined();
     expect(screen.getByTestId('wrap')).toBeDefined();
 
-    // The wrapper was handed canvasId + the ActionDefinition + a real instanceId.
     const call = calls.find((c) => c.instanceId !== undefined);
     expect(call).toMatchObject({ canvasId: 'main', actionId: 'a' });
     expect(typeof call?.instanceId).toBe('string');
@@ -63,9 +61,6 @@ describe('slotWrapper — pluggable ActionSlot seam', () => {
       return <div data-testid="wrap">{children}</div>;
     };
 
-    // A canvas with no active instance: ActionSlot resolves to no instance, but
-    // the wrapper must still mount (content = null) so a presence-managing
-    // wrapper has somewhere to play an exit.
     const shell = createShell({ canvases: [{ id: 'main' }], actions: {} });
     await settle();
 

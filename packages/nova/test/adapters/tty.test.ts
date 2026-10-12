@@ -4,15 +4,6 @@ import type { TtyRenderApi } from '../../src/adapters/tty';
 import { defaultRegistry, fallback } from '../../src/adapters/tty/components';
 import type { RenderComponentNode, RenderNode } from '../../src/layout/types';
 
-// ═══════════════════════════════════════════════════════════
-// The TTY adapter — pure render: served trees in, { text, interactives }
-// out. Driven exactly the way moss's terminal/tty target drives it, with a
-// stub RenderApi; no I/O anywhere.
-// ═══════════════════════════════════════════════════════════
-
-// RenderComponentNode, not the RenderNode union: `ref` and `model` live on the
-// component member alone, so a helper typed as the union produces values that
-// cannot carry either one once spread.
 const component = (name: string, props: Record<string, unknown> = {}, children: RenderNode[] = []): RenderComponentNode => ({
   type: 'component',
   name,
@@ -36,7 +27,7 @@ describe('tty view — frame and canvases', () => {
     const frame = [
       component('Stack', {}, [
         component('CanvasSlot', { canvasId: 'main' }),
-        component('CanvasSlot', { canvasId: 'aside' }), // empty — collapses
+        component('CanvasSlot', { canvasId: 'aside' }),
       ]),
     ];
     const { text: out } = view(frame, { main: [text('hello')] });
@@ -52,8 +43,8 @@ describe('tty view — frame and canvases', () => {
       component('NavItem', { label: 'Deals', count: 4 }),
     ]);
     expect(out).toContain('!! E_BOOM: it broke');
-    expect(out).toContain('card A'); // children render through the fallback
-    expect(out).toContain('Deals (4)'); // childless fallback surfaces label + count
+    expect(out).toContain('card A');
+    expect(out).toContain('Deals (4)');
   });
 
   it('without a fallback an unknown name is a visible error, never a throw', () => {
@@ -139,7 +130,6 @@ describe('tty view — the table', () => {
     const first = lines.find((line) => line.includes('Acme renewal'));
     expect(header).toBeDefined();
     expect(first).toContain('[1] Acme renewal');
-    // the marker column keeps the grid aligned: 'title' starts where row text starts
     expect(header?.indexOf('title')).toBe(first?.indexOf('Acme'));
     expect(interactives).toHaveLength(2);
     expect(interactives[0]).toMatchObject({ kind: 'row', ref: 'open-deal', value: 'd1' });

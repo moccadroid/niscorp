@@ -6,15 +6,7 @@ import { useShellSource } from '../composables/context';
 import { useCanvasRenderTree, useRenderTree } from '../composables/shell';
 import { RenderTree } from '../render-tree';
 
-// ═══════════════════════════════════════════════════════════
-// The shell-backed structural slots (ADAPTER.md §4). They pull from the shell
-// injection, so they render only inside <NovaShellProvider>. A remote host (a
-// moss terminal) registers its own wire-backed pair under the same names.
-// ═══════════════════════════════════════════════════════════
-
 export { CanvasSlotPropsSchema, type CanvasSlotProps, ActionSlotPropsSchema, type ActionSlotProps };
-
-// ─── CanvasSlot ────────────────────────────────────────────
 
 export const CanvasSlot = Object.assign(
   defineComponent(
@@ -32,13 +24,6 @@ export const CanvasSlot = Object.assign(
   },
 );
 
-// ─── ActionSlot ────────────────────────────────────────────
-
-// Re-provides the render context with dispatch scoped to one instance, so the
-// runtime delivers UI events from its subtree to that instance's own triggers
-// only. The stamping rule is core's scopeDispatch — not reimplemented here. It
-// sits INSIDE the slot wrapper, as in the React adapter: the wrapper itself is
-// outside the instance.
 const InstanceScope = defineComponent(
   (props: { instanceId: string }, { slots }) => {
     const parent = inject(NovaRenderKey, undefined);
@@ -82,9 +67,8 @@ export const ActionSlot = Object.assign(
             : null;
         const Wrapper = ctx?.slotWrapper;
         if (Wrapper === undefined) return content;
-        // With a wrapper, render it PERSISTENTLY (content or null) so a
-        // presence-managing wrapper can animate an instance leaving. Identity
-        // resolves from the live runtime; undefined while empty or exiting.
+        // The wrapper is rendered even with no content, so one that manages
+        // presence can animate an instance leaving.
         const runtime = hasInstance ? source.shell.getRuntime(instanceId) : undefined;
         return h(
           Wrapper,

@@ -17,7 +17,6 @@ export const RenderNodeView: FC<RenderNodeViewProps> = ({ node }) => {
   }
 
   if (node.type === 'text') {
-    // a non-DOM host (ink) must wrap every string — bare text crashes it
     const TextWrap = ctx.textWrapper;
     return TextWrap === undefined ? <Fragment>{node.value}</Fragment> : <TextWrap>{node.value}</TextWrap>;
   }
@@ -29,8 +28,6 @@ export const RenderNodeView: FC<RenderNodeViewProps> = ({ node }) => {
     return <Marker code={node.code} message={node.message} />;
   }
 
-  // node.type === 'component'
-  // a head is the document's, not the screen's: nothing is drawn for it or for what it holds
   if (isHeadNode(node)) return <HeadMark />;
   const entry = ctx.registry.get(node.name);
   const Component = entry !== undefined ? entry.component : ctx.fallback;
@@ -44,16 +41,15 @@ export const RenderNodeView: FC<RenderNodeViewProps> = ({ node }) => {
   if (node.ref !== undefined) {
     props[NOVA_REF_PROP] = node.ref;
   }
-  // Children go in as a keyed ARRAY of per-child elements (not one RenderTree
-  // wrapper) so a component can address them individually with React.Children —
-  // a Grid wraps each in a weighted flex cell. React flattens the array the
-  // same way it would the fragment; keys follow core's renderNodeKey.
+  // A keyed array of per-child elements, not one RenderTree: a component can
+  // then address its children one by one with React.Children (a Grid gives each
+  // its own cell).
   const viewOf = (child: RenderNode, i: number): ReactElement => <RenderNodeView key={renderNodeKey(child, i)} node={child} />;
   if (!node.children.some(isHeadNode)) {
     return createElement(Component, props, node.children.length === 0 ? undefined : node.children.map(viewOf));
   }
-  // A head among them is not handed to the component — a kit that gives every
-  // child a cell would give it an empty one. It stands beside the component.
+  // A head among them is not handed to the component: a kit that gives every
+  // child a cell would give it an empty one.
   const views = node.children.map((child, i) => ({ head: isHeadNode(child), view: viewOf(child, i) }));
   const shown = views.filter((child) => !child.head).map((child) => child.view);
   return (

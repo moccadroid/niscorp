@@ -37,7 +37,6 @@ export const moveOp: MutationOp<MoveMutation> = {
       }
       return data;
     }
-    // from/to may be literal numbers or resolved templates; coerce and guard.
     const from = Number(mutation.from);
     const to = Number(mutation.to);
     if (!Number.isInteger(from) || !Number.isInteger(to)) return data;

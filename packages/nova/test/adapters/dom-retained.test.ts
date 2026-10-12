@@ -11,17 +11,6 @@ import { defaultRegistry, fallback } from '../../src/adapters/dom/components';
 import type { NovaEvent } from '../../src/shared/event-bus/schemas';
 import type { RenderComponentNode, RenderNode } from '../../src/layout/types';
 
-// ═══════════════════════════════════════════════════════════
-// The DOM adapter keeps what did not change. After a render, an element whose
-// part of the tree is the same as before is the SAME DOM node, and was never
-// taken off the page — so it keeps what the tree does not hold: focus, scroll,
-// an open <details>, a running animation, a timer its component started.
-//
-// "The same node" is asserted with `toBe`; "never taken off the page" with a
-// MutationObserver over the root, because an element that is removed and put
-// straight back is the same node and has still lost all of the above.
-// ═══════════════════════════════════════════════════════════
-
 const component = (name: string, props: Record<string, unknown> = {}, children: RenderNode[] = [], ref?: string): RenderComponentNode => ({
   type: 'component',
   name,
@@ -37,7 +26,6 @@ const bound = (name: string, props: Record<string, unknown>, ref?: string): Rend
   ...component(name, props, [], ref),
   model: { ref: ref ?? 'auto:name', path: 'name' },
 });
-// the per-instance boundary, as a served tree carries it
 const card = (instanceId: string, children: RenderNode[]): RenderNode => keyedAs(instanceId, component('ActionSlot', { instanceId, canvasId: 'tray', definitionId: 'card' }, children));
 
 const Box: DomComponent = ({ props, children }) => {
@@ -57,7 +45,6 @@ const Field: DomComponent = ({ props }) => {
   if (typeof props['placeholder'] === 'string') el.placeholder = props['placeholder'];
   return el;
 };
-// puts each child in a cell of its own: its children do not share one parent
 const Cells: DomComponent = ({ children }) => {
   const el = document.createElement('div');
   for (const child of children) {
@@ -68,7 +55,6 @@ const Cells: DomComponent = ({ children }) => {
   }
   return el;
 };
-// reads its children and does not put them on the page
 const Reads: DomComponent = ({ children }) => {
   const el = document.createElement('p');
   el.textContent = children.map((child) => child.textContent ?? '').join('|');
@@ -79,12 +65,9 @@ type Stage = {
   root: HTMLElement;
   view: DomView;
   dispatched: { canvasId: string; event: NovaEvent }[];
-  // every component asked for an element, in order
   built: string[];
 };
 
-// A view over trees the test holds and changes — driven the way moss's terminal
-// drives it: change what the api returns, call `render`.
 const stage = (frame: () => RenderNode[], trees: () => Record<string, RenderNode[]> = () => ({}), extra: Record<string, DomComponent> = {}): Stage => {
   const dispatched: Stage['dispatched'] = [];
   const built: string[] = [];
@@ -108,7 +91,7 @@ const stage = (frame: () => RenderNode[], trees: () => Record<string, RenderNode
   return { root, view, dispatched, built };
 };
 
-// Every node taken out of the root's subtree while `during` runs — moved ones included.
+// A moved node is in the set too: a move is a removal and an insertion.
 const removedDuring = (root: HTMLElement, during: () => void): Set<Node> => {
   const removed = new Set<Node>();
   const observer = new MutationObserver(() => undefined);
@@ -316,7 +299,7 @@ describe('dom adapter — only what must be built is built', () => {
   });
 
   it('a different instance in the same place is all new, and its presses are its own', () => {
-    // un-keyed on purpose: nothing but the slot's own identity says the instance changed
+    // Un-keyed on purpose: only the slot's `instanceId` says the instance changed.
     let instanceId = 'i-1';
     const { root, view, dispatched } = stage(
       () => [slot('deck')],
@@ -385,8 +368,6 @@ describe('dom adapter — only what must be built is built', () => {
   });
 
   it('a component that wraps each child, with ONE child: a second is a second cell, not a second node in the first', () => {
-    // with a single child, a kit that wraps each child and one that wraps them
-    // all look the same — so neither is patched in place
     let second = false;
     const { root, view } = stage(
       () => [slot('main')],
@@ -434,8 +415,6 @@ describe('dom adapter — only what must be built is built', () => {
   });
 
   it('a component that marks its children says so: it is asked again when they change, and every one of them carries the right mark', () => {
-    // holds exactly its children — so, unsaid, it would look like a component
-    // that only holds them, and a child put in beside the others would go unmarked
     const Marks: DomComponent = ({ children, dependsOnChildren }) => {
       dependsOnChildren();
       const el = document.createElement('div');
@@ -456,7 +435,7 @@ describe('dom adapter — only what must be built is built', () => {
     const a = one(root, '[data-ref="a"]');
     expect(marksOf()).toEqual(['a@0', 'b@1']);
 
-    word = 'y'; // a change inside a child is not a change of children
+    word = 'y';
     view.render();
     expect(built).toEqual([]);
     expect(a.textContent).toBe('ay');
@@ -523,7 +502,7 @@ describe('dom adapter — events on elements that stay', () => {
     const field = one<HTMLInputElement>(root, 'input');
     field.focus();
     type(field, 'a');
-    view.render(); // an update lands inside the debounce window
+    view.render();
     expect(one(root, 'input')).toBe(field);
     type(field, 'ab');
     vi.advanceTimersByTime(100);
@@ -573,19 +552,19 @@ describe('dom adapter — focus and bound fields', () => {
     field.focus();
     type(field, 'hel');
     field.setSelectionRange(1, 1);
-    value = 'hel'; // the echo
+    value = 'hel';
     view.render();
     expect(one(root, 'input')).toBe(field);
     expect(field.selectionStart).toBe(1);
 
-    value = 'HEL'; // the tree says something else while the field is focused
+    value = 'HEL';
     view.render();
     expect(one(root, 'input')).toBe(field);
     expect(field.value).toBe('hel');
     expect(document.activeElement).toBe(field);
     expect(built).toEqual([]);
 
-    field.blur(); // released: the next render shows the tree's value
+    field.blur();
     view.render();
     expect(one<HTMLInputElement>(root, 'input').value).toBe('HEL');
 
@@ -621,10 +600,10 @@ describe('dom adapter — focus and bound fields', () => {
     const { root, view, dispatched } = stage(() => [slot('main')], () => ({ main: [bound('Tick', { value: false }, 'agree')] }), { Tick });
     const box = one<HTMLInputElement>(root, 'input');
     box.focus();
-    box.checked = true; // pressed…
+    box.checked = true;
     box.dispatchEvent(new Event('input', { bubbles: true }));
     expect(dispatched.map(({ event }) => (event.type === 'ui:model' ? event.payload : undefined))).toEqual([true]);
-    view.render(); // …and the tree still says no (the press was refused)
+    view.render();
     expect(one<HTMLInputElement>(root, 'input').checked).toBe(false);
     expect(document.activeElement).toBe(one(root, 'input'));
   });
@@ -638,7 +617,6 @@ describe('dom adapter — focus and bound fields', () => {
     const markup = drawn.root.innerHTML;
     drawn.view.destroy();
 
-    // the page arrives with that markup, and is typed in before its script runs
     const root = document.createElement('div');
     document.body.appendChild(root);
     root.innerHTML = markup;
@@ -805,7 +783,7 @@ describe('dom adapter — onRemove: the other end of what a component starts', (
     shown = ['b'];
     view.render();
     expect(stopped).toEqual(['a']);
-    tone = 'ink'; // its own props: the element is replaced, and the new one starts again
+    tone = 'ink';
     view.render();
     expect(stopped).toEqual(['a', 'b']);
     view.destroy();

@@ -3,15 +3,7 @@ import { ButtonPropsSchema, InputPropsSchema, type ButtonProps, type InputProps 
 import { useNovaDispatch } from '../composables/context';
 import type { NovaComponentProps } from '../types';
 
-// ═══════════════════════════════════════════════════════════
-// The interactive primitives — Button, Input. Interaction is ref + event:
-// a click fires `ui:click` carrying the node's ref (injected as `novaRef`); a
-// model-bound input fires `ui:model` carrying the binding's ref.
-// ═══════════════════════════════════════════════════════════
-
 export { ButtonPropsSchema, type ButtonProps, InputPropsSchema, type InputProps };
-
-// ─── Button ────────────────────────────────────────────────
 
 type Variant = 'primary' | 'secondary' | 'ghost';
 
@@ -91,18 +83,6 @@ export const Button = Object.assign(
   { meta: { description: "Clickable button. Click events fire as `ui:click` with the layout node's ref.", propsSchema: ButtonPropsSchema } },
 );
 
-// ─── Input ─────────────────────────────────────────────────
-//
-// Number inputs still dispatch a string payload; mutation ops parse on the
-// action side.
-//
-// Two remote round-trip obligations (ADAPTER.md §6), because the shell may be
-// authoritative over a socket:
-//  - it holds a local draft while focused, so an async tree echo can't clobber
-//    the value the user is mid-typing;
-//  - it honours the layout's `debounce` prop, coalescing keystrokes before
-//    they hit the wire, and flushes the pending value on blur.
-
 const inputStyle = (isDisabled: boolean, isFocused: boolean, isHovered: boolean): CSSProperties => ({
   padding: '8px 12px',
   border: `1px solid ${isDisabled ? '#d1d5db' : isFocused ? '#2563eb' : isHovered ? '#9ca3af' : '#d1d5db'}`,
@@ -122,12 +102,11 @@ export const Input = Object.assign(
     (props: NovaComponentProps & InputProps) => {
       const dispatch = useNovaDispatch();
       const isHovered = shallowRef(false);
-      // `draft` is the local editing value; `null` means "not editing — the
-      // server value is authoritative". While focused the draft wins.
+      // `null` means not editing: the tree's value shows. While focused the draft
+      // wins, so a tree echo that arrives mid-typing does not reset what was typed.
       const draft = shallowRef<string | null>(null);
-      // A single pending debounced dispatch — replaced by the next keystroke,
-      // flushed on blur, dropped on unmount (a keystroke against a screen
-      // that has gone is worse than a lost one).
+      // A pending dispatch is dropped on unmount, not flushed: a keystroke against
+      // a screen that has gone is worse than a lost one.
       let timer: ReturnType<typeof setTimeout> | undefined;
       const clearPending = (): void => {
         if (timer !== undefined) {
@@ -163,7 +142,6 @@ export const Input = Object.assign(
         draft.value = props.value ?? '';
       };
       const onBlur = (): void => {
-        // flush any pending keystroke now, then hand authority back
         const pending = draft.value;
         if (timer !== undefined && pending !== null) {
           clearPending();

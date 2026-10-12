@@ -4,12 +4,6 @@ import { NOVA_EXAMPLES, NOVA_EXAMPLE_GROUPS } from '../../src/examples';
 import type { NovaExample } from '../../src/examples';
 import { runExample } from './run';
 
-// The examples are what a documentation site shows and what an agent reads, so
-// each one is run here as it says and held to what it says must come out. A
-// change to what nova does changes its examples in the same commit
-// (STYLE_GUIDE.md, "Examples").
-
-// the names an example may ask a kit for: the plain ones every kit has, and nova's own two slots
 const PLAIN = ['Stack', 'Text', 'Button', 'Input', 'CanvasSlot', 'ActionSlot'];
 const componentsOf = (node: unknown): string[] => {
   if (Array.isArray(node)) return node.flatMap(componentsOf);
@@ -43,8 +37,7 @@ describe('the examples', () => {
     for (const example of NOVA_EXAMPLES) expect((example.action === undefined) !== (example.shell === undefined), example.id).toBe(true);
   });
 
-  // A host holds all the examples in one shell, so nothing an example names may
-  // be named by another: its ids begin with its own.
+  // A host holds all the examples in one shell, so no two may bring the same id.
   it('every id an example brings is its own', () => {
     for (const example of NOVA_EXAMPLES) {
       const own = (id: string): boolean => id === example.id || id.startsWith(`${example.id}.`);

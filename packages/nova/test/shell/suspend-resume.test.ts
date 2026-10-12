@@ -7,11 +7,6 @@ import { createShell } from '@shell';
 
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
-// ═══════════════════════════════════════════════════════════
-// E2E verification that suspend/resume lifecycle hooks fire
-// when actions are pushed/popped on top of each other.
-// ═══════════════════════════════════════════════════════════
-
 describe('shell — suspend/resume lifecycle hooks', () => {
   const setup = (actions: Record<string, ActionDefinition>) =>
     createShell({
@@ -105,8 +100,6 @@ describe('shell — suspend/resume lifecycle hooks', () => {
     expect(() => shell.push('main', 'B')).not.toThrow();
     await tick();
 
-    // Suspend ran, the call to a missing endpoint did not crash navigation.
-    // The new action B is now active.
     const top = shell.getCanvasState('main').active;
     expect(top).toBeDefined();
     expect(top?.definitionId).toBe('B');
@@ -127,7 +120,6 @@ describe('shell — suspend/resume lifecycle hooks', () => {
 
     const aRuntime = shell.getRuntime(aId);
     if (aRuntime === undefined) throw new Error('A unmounted');
-    // Data unchanged — no hooks defined, no mutations.
     expect(aRuntime.getData()['value']).toBe(1);
   });
 
@@ -145,23 +137,21 @@ describe('shell — suspend/resume lifecycle hooks', () => {
     await tick();
     shell.dispatch({ type: 'ui:click', ref: 'ping' });
     await tick();
-    expect(pings(aId)).toBe(1); // active → fires
+    expect(pings(aId)).toBe(1);
 
-    shell.push('main', 'B'); // A suspended
+    shell.push('main', 'B');
     await tick();
     shell.dispatch({ type: 'ui:click', ref: 'ping' });
     await tick();
-    expect(pings(aId)).toBe(1); // suspended → ignored
+    expect(pings(aId)).toBe(1);
 
-    shell.pop('main'); // A resumes
+    shell.pop('main');
     await tick();
     shell.dispatch({ type: 'ui:click', ref: 'ping' });
     await tick();
-    expect(pings(aId)).toBe(2); // active again → fires
+    expect(pings(aId)).toBe(2);
   });
 
-  // suspend() can land while mount() is still inside its hook; mount's last
-  // act must not undo it.
   it('an instance covered while its mount hook is still running stays suspended', async () => {
     const A: ActionDefinition = { id: 'A', data: { n: 0 }, lifecycle: { mount: [{ increment: 'n' }] } };
     const shell = setup({ A });

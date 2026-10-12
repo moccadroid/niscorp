@@ -12,8 +12,6 @@ export const useCanvas = (canvasId: string): CanvasState => {
   const shell = useShell();
   const cacheRef = useRef<Cache | undefined>(undefined);
 
-  // The shell owns canvas-change equality — onCanvasChange only fires on
-  // meaningful change, so no comparator lives here.
   const subscribe = useCallback(
     (cb: () => void) =>
       shell.onCanvasChange(canvasId, (next) => {
@@ -33,8 +31,7 @@ export const useCanvas = (canvasId: string): CanvasState => {
     return state;
   }, [shell, canvasId]);
 
-  // The third argument is what a SERVER reads. The shell exists there too, with
-  // a real state, so it is the same read — and without it React refuses to draw
-  // this to markup at all ("Missing getServerSnapshot").
+  // The third argument is what a server reads: without it React refuses to draw
+  // this to markup ("Missing getServerSnapshot").
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 };

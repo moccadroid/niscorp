@@ -4,27 +4,9 @@ import type { RenderNode } from '../layout';
 import type { RenderApi } from './types';
 import { ACTION_SLOT_NAME, CANVAS_SLOT_NAME } from './slot-names';
 
-// ═══════════════════════════════════════════════════════════
-// The head a screen has, read off its render tree.
-//
-// The frame is walked in the order it is drawn, into each canvas where its
-// slot stands and into each instance on it, and every `nova:head` it meets
-// gives its elements in turn. A screen can hold more than one head — the
-// shell's chrome says what holds on every screen, an action says its own, a
-// dialog opens over a page. An element that says the same thing as an earlier
-// one (the title, a <meta> of that name) takes its place; anything else stands
-// beside what came before.
-//
-// What a head may not hold is refused here, once, for every writer: the
-// element is left out and the reason is given. See ../layout/head.
-// ═══════════════════════════════════════════════════════════
-
 export type ScreenHead = {
-  // what the document's head is to hold, in the order the screen said it
   elements: HeadElement[];
-  // the actions whose instances said any of it (none: only the shell's chrome did)
   actions: string[];
-  // what a head held that it may not — left out, each with why
   refused: string[];
 };
 
@@ -32,17 +14,15 @@ type ComponentNode = Extract<RenderNode, { type: 'component' }>;
 type Read = { element: HeadElement } | { refused: string } | undefined;
 
 const ATTRIBUTE_NAME = /^[A-Za-z][A-Za-z0-9:._-]*$/;
-// a data block: a type no browser runs
+// A JSON type is a data block: no browser runs it.
 const DATA_TYPE = /^application\/([a-z0-9.-]+\+)?json$/i;
 
-// A prop, as the attribute it is written as — or nothing, when it says nothing.
 const written = (value: unknown): string | undefined => {
   if (typeof value === 'string') return value.trim() === '' ? undefined : value;
   if (typeof value === 'number') return String(value);
   return value === true ? '' : undefined;
 };
 
-// An element's attributes, from its props — or why it may not be written.
 const attributesOf = (what: string, props: Record<string, unknown>, skip: readonly string[] = []): { attributes: Record<string, string> } | { refused: string } => {
   const attributes: Record<string, string> = {};
   for (const [name, value] of Object.entries(props)) {
@@ -70,7 +50,6 @@ const metaOf = (node: ComponentNode): Read => {
   const read = attributesOf(HEAD_META_NAME, node.props);
   if ('refused' in read) return read;
   if (has(read.attributes, 'http-equiv')) return { refused: `${HEAD_META_NAME}: \`http-equiv\` instructs the browser, and a layout does not` };
-  // nothing to say yet: its value is not answered
   return has(read.attributes, 'content') ? { element: { tag: 'meta', attributes: read.attributes } } : undefined;
 };
 
@@ -105,7 +84,7 @@ export const headOf = (api: Pick<RenderApi, 'frame' | 'canvasTree'>): ScreenHead
   let heads = 0;
   const said: { element: HeadElement; action: string | undefined }[] = [];
   const refused: string[] = [];
-  // a canvas whose own tree names it again would never end
+  // A canvas whose own tree names it again would never end.
   const open = new Set<string>();
 
   const hold = (nodes: readonly RenderNode[], action: string | undefined): void => {
@@ -118,7 +97,6 @@ export const headOf = (api: Pick<RenderApi, 'frame' | 'canvasTree'>): ScreenHead
         refused.push(`${HEAD_NAME}: ${node.message}`);
         continue;
       }
-      // text between a head's elements is nothing
       if (node.type !== 'component') continue;
       const read = READERS[node.name];
       if (read === undefined) {

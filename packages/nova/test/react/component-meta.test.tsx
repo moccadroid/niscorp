@@ -6,8 +6,6 @@ import { createComponentRegistry } from '@layout';
 import type { NovaComponent } from '@react';
 import { NovaRenderProvider, RenderTree, useNovaRegistry } from '@react';
 
-// A nova component with a static `.meta` — the registry picks it
-// up when registering via `registerAll`.
 const ButtonPropsSchema = z.object({ label: z.string() });
 const Button: NovaComponent = (props) => {
   const label = typeof props['label'] === 'string' ? props['label'] : '';

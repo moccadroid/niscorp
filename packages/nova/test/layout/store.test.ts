@@ -18,8 +18,6 @@ describe('layout store', () => {
     store.set('greeting', { component: 'Text', props: { value: 'hi' } });
     const layout: LayoutNode = { component: 'Stack', children: [{ ref: 'greeting' }] };
     const resolved = store.resolveReferences(layout);
-    // `LayoutNode` includes primitives and null, and `in` needs an object —
-    // so the narrowing has to start by establishing there is one.
     if (typeof resolved !== 'object' || resolved === null || Array.isArray(resolved) || !('component' in resolved)) throw new Error('expected component');
     const children = resolved.children;
     if (!Array.isArray(children)) throw new Error('expected array');

@@ -22,9 +22,7 @@ const safeCall = <T>(fn: ((arg: T) => void) | undefined, arg: T): void => {
   if (fn === undefined) return;
   try {
     fn(arg);
-  } catch {
-    // telemetry handlers must not crash the shell
-  }
+  } catch {}
 };
 
 export const createTelemetry = (config: ShellTelemetry | undefined): Telemetry => {

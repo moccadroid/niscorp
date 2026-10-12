@@ -154,7 +154,6 @@ describe('resolve — $eq directive', () => {
 describe('resolve — $exists directive', () => {
   it('is true when the path resolves to a present value, false when absent', () => {
     expect(resolve({ $exists: '$.component' }, createScopeChain({ component: 'Box' }))).toBe(true);
-    // present but falsy still exists — the discriminating key, not its truthiness
     expect(resolve({ $exists: '$.component' }, createScopeChain({ component: '' }))).toBe(true);
     expect(resolve({ $exists: '$.component' }, createScopeChain({ for: '$.items' }))).toBe(false);
   });

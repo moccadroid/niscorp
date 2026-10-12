@@ -2,13 +2,6 @@ import { PanelPropsSchema, type PanelProps } from '../../primitive-props';
 import { useNovaDispatch } from '@react';
 import type { NovaComponent, NovaComponentProps } from '@react';
 
-// ═══════════════════════════════════════════════════════════
-// Panel — a framed, elevated surface with an optional title header. The
-// generic version of a dashboard/devtools panel; used by nova/devtools.
-// `closeRef` grows a header ✕ firing ui:click with that ref (the same
-// prop-ref convention as Table's rowRef).
-// ═══════════════════════════════════════════════════════════
-
 export { PanelPropsSchema, type PanelProps };
 
 export const Panel: NovaComponent<PanelProps> = ({ title, backRef, closeRef, children }: NovaComponentProps & PanelProps) => {

@@ -12,7 +12,6 @@ import {
   useRenderTree,
 } from '@react';
 
-// A minimal Input component that emits ui:model on change.
 const Input: NovaComponent = (props) => {
   const dispatch = useNovaDispatch();
   const model = props['novaModel'];
@@ -64,7 +63,6 @@ describe('React integration — model binding round-trip', () => {
     });
 
     const instanceId = shell.push('main', 'Form');
-    // Let mount resolve
     await act(async () => {
       await Promise.resolve();
     });
@@ -83,7 +81,6 @@ describe('React integration — model binding round-trip', () => {
     const runtime = shell.getRuntime(instanceId);
     expect(runtime?.getData()['name']).toBe('ada');
 
-    // Re-render should reflect the new value.
     await act(async () => {
       await Promise.resolve();
     });

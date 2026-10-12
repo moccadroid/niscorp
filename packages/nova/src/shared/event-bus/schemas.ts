@@ -1,19 +1,5 @@
 import { z } from 'zod';
 
-// ═══════════════════════════════════════════════════════════
-// NovaEvent — the built-in discriminated union of UI events.
-// Consumers may supply their own union to createEventBus<T>.
-//
-// Every UI event shares the same envelope: a `type` discriminator, an optional
-// target `ref`, an optional `payload`, and an optional `origin` — the id of the
-// action instance that dispatched it. `origin` is stamped automatically when an
-// event is dispatched from inside an instance's rendered layout (see ActionSlot),
-// and lets the runtime deliver a UI event to that instance's OWN triggers only,
-// so two instances of the same action (e.g. a list on `main` and on `aside`)
-// don't both react to one click. Events dispatched programmatically
-// (`shell.dispatch`) carry no `origin` and stay global.
-// ═══════════════════════════════════════════════════════════
-
 const uiEvent = <T extends string, E extends z.ZodRawShape = Record<never, never>>(
   type: T,
   extra: E = {} as E,

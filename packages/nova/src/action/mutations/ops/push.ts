@@ -17,11 +17,10 @@ export type PushMutation = z.infer<typeof PushSchema>;
 export const pushOp: MutationOp<PushMutation> = {
   key: 'push',
   schema: PushSchema,
-  // Guard against the PushEffect navigation effect whose `push` is an object.
+  // The navigation effect shares the key: its `push` is an object, not a path.
   match: (mutation) => typeof mutation.push === 'string',
   apply: (data, mutation, ctx) => {
     const current = getPath(data, mutation.push);
-    // push tolerates missing paths by creating a new array (lax mode only).
     if (current !== undefined && !isArray(current)) {
       if (ctx.strict) {
         throw new MutationError(

@@ -7,17 +7,8 @@ import { createShell } from '@shell';
 
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
-// ═══════════════════════════════════════════════════════════
-// `reconcile` — the declarative verb as a step. An action names a list in its
-// own data and a canvas; the canvas ends up holding exactly the actions the
-// rows name. Every other navigation step moves ONE action, so a surface whose
-// actions come from rows (a slide's tools) needs this one.
-// ═══════════════════════════════════════════════════════════
-
 const card = (id: string): ActionDefinition => ({ id, data: { label: '' } });
 
-// The action that owns the tray: its `rows` say what should be on it, and a
-// `sync` message makes it so.
 const deck = (own?: 'pushed' | 'canvas'): ActionDefinition => ({
   id: 'deck',
   data: { rows: [] },

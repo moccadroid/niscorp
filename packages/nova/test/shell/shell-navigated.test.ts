@@ -6,20 +6,12 @@ import { createShell, navigatedChannel } from '@shell';
 import type { NavigatedMessage, ShellConfig } from '@shell';
 import { createMessageBus } from '@shared/message-bus';
 
-// ═══════════════════════════════════════════════════════════
-// A canvas says where it is. What chrome around a canvas — a sidebar
-// highlight, a tab strip — listens to instead of remembering the click that
-// sent somebody somewhere.
-// ═══════════════════════════════════════════════════════════
-
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
 const A: ActionDefinition = { id: 'A', data: {} };
 const B: ActionDefinition = { id: 'B', data: {} };
 const C: ActionDefinition = { id: 'C', data: {} };
 
-// Every shell here shares one bus so a test can listen without holding the
-// shell — which is what a chrome ACTION does, one canvas over.
 const setup = (config: Partial<ShellConfig> = {}) => {
   const messageBus = createMessageBus();
   const heard: NavigatedMessage[] = [];
@@ -92,7 +84,6 @@ describe('a canvas announces where it ENDED, once', () => {
     shell.push('main', 'C');
     await tick();
 
-    // Three pushes, one message: the message is state, not history.
     expect(heard).toHaveLength(1);
     expect(heard[0]?.action).toBe('C');
   });
@@ -106,7 +97,6 @@ describe('a canvas announces where it ENDED, once', () => {
     shell.push('main', 'B');
     await tick();
 
-    // Never "the canvas is empty" on the way to somewhere.
     expect(heard).toEqual([{ canvas: 'main', action: 'B', instance: shell.getCanvasState('main').active?.id }]);
   });
 
@@ -115,7 +105,6 @@ describe('a canvas announces where it ENDED, once', () => {
     await tick();
     heard.length = 0;
 
-    // A card opening on another canvas moves nothing on main.
     shell.push('sheet', 'B');
     await tick();
 
@@ -133,7 +122,6 @@ describe('a canvas announces every cause, not just a click', () => {
     shell.back();
     await tick();
 
-    // The whole point: nothing clicked, and the chrome still hears it.
     expect(heard).toHaveLength(1);
     expect(heard[0]?.action).toBe('A');
   });

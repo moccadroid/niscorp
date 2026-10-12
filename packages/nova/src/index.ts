@@ -1,19 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// @niscorp/nova — Declarative UI Framework
-//
-// Public API. Authoring surface only: write an action, register
-// it on a shell, push it onto a canvas, it runs. Adapters consume
-// RenderNode. Telemetry consumers observe via shell handlers.
-//
-// Internals (resolvers, mutation appliers, runtime factory, step
-// executor, endpoint caller, data store, buses, path helpers, type
-// guards) are NOT re-exported. They live under area-specific paths
-// for the framework's own use and for tests that exercise internals.
-// ═══════════════════════════════════════════════════════════
-
-// ═══════════════════════════════════════════════════════════
-// Shared — errors + event/message bus types + IDs
-// ═══════════════════════════════════════════════════════════
 export {
   NovaEventSchema,
   MessageEnvelopeSchema,
@@ -55,9 +39,6 @@ export type {
   IdFactory,
 } from './shared';
 
-// ═══════════════════════════════════════════════════════════
-// Layout — authoring schemas, render output, registry/store
-// ═══════════════════════════════════════════════════════════
 export {
   LayoutNodeSchema,
   LayoutPrimitiveSchema,
@@ -108,17 +89,9 @@ export type {
   ModelBindingDescriptor,
 } from './layout';
 
-// The layout-agent palette, and the per-entry converter under it. Exported
-// because moss's integration contract builds the same author-facing view of a
-// component (name, description, props schema) from the same source — one
-// converter, so the palette and the contract cannot drift.
 export { paletteFromRegistry, paletteEntryOf } from './agent/palette';
 export type { LayoutPaletteEntry, PaletteFromRegistryOptions } from './agent/palette';
 
-// ═══════════════════════════════════════════════════════════
-// Action — authoring schemas + the narrow runtime type returned
-// by `shell.getRuntime`. Internal runtime helpers stay internal.
-// ═══════════════════════════════════════════════════════════
 export {
   MutationSchema,
   StepSchema,
@@ -162,24 +135,13 @@ export type {
   StatusChangeHandler,
 } from './action';
 
-// ═══════════════════════════════════════════════════════════
-// Bindings — read a value out of a data tree by dot path. The one
-// path helper exposed: editors and custom widgets read sibling
-// document state by path (set/delete stay internal — writes go
-// through the runtime's `ui:model` pipeline, not direct mutation).
-// ═══════════════════════════════════════════════════════════
+// `getPath` alone: writes go through the runtime's `ui:model` pipeline, so
+// `setPath` and `deletePath` stay internal.
 export { getPath } from './shared';
 
-// ═══════════════════════════════════════════════════════════
-// Shell — top-level entry point for users
-// ═══════════════════════════════════════════════════════════
 export { createShell, shellView, shellSettled, shellIdle, canvasTreeOf, hasVisibleContent, DEFAULT_SETTLE_WAIT_MS, CANVAS_SLOT_NAME, ACTION_SLOT_NAME, reconcileCanvas, DEFAULT_HISTORY_DEPTH, navigatedChannel } from './shell';
 export type { ShellView } from './shell';
 
-// The head: the document's <head> as a node in a layout (`nova:head`), the
-// elements it holds (`nova:title`, `nova:meta`, `nova:link`, `nova:script`),
-// and the reader that finds them in a render tree — a live shell's or a served
-// one's. Writing them into an HTML document is @niscorp/nova/document.
 export { HEAD_NAME, HEAD_TITLE_NAME, HEAD_META_NAME, HEAD_LINK_NAME, HEAD_SCRIPT_NAME, HEAD_NAMES, headKeyOf, HEAD_META, HeadPropsSchema, HeadTitlePropsSchema, HeadMetaPropsSchema, HeadLinkPropsSchema, HeadScriptPropsSchema } from './layout';
 export type { HeadElement, HeadMetaProps, HeadLinkProps, HeadScriptProps } from './layout';
 export { headOf, isHeadNode } from './shell';

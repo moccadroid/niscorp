@@ -1,24 +1,10 @@
-// ═══════════════════════════════════════════════════════════
-// Affordance collection — the deterministic half of the action/layout seam.
-//
-// A layout's interactive surface is fully present in its tree: `ref` (event
-// sources), `*Ref` props (component-specific event sources, e.g. a Table's
-// sortRef), `model` (two-way input bindings), and every `$.key` binding it
-// reads. A director agent that wires triggers against a layout it never sees
-// needs that surface as data — so it is DERIVED here by walking the tree,
-// never self-reported by the layout model. A receipt computed from the
-// artifact cannot lie about the artifact.
-// ═══════════════════════════════════════════════════════════
-
 export type InteractiveRef = {
   ref: string;
   component: string;
-  // How the ref is attached: the node's own `ref` field, or a `*Ref` prop name.
   via: string;
 };
 
 export type InteractiveModel = {
-  // The bound data path, e.g. '$.search'.
   path: string;
   component: string;
 };
@@ -26,13 +12,7 @@ export type InteractiveModel = {
 export type InteractiveSurface = {
   refs: InteractiveRef[];
   models: InteractiveModel[];
-  // Distinct top-level data keys the layout reads anywhere ('$.rows' → 'rows').
   boundKeys: string[];
-  // Malformed-looking bindings: `$ident.…` where `ident` is neither the data
-  // root (`$.`) nor a loop variable declared by an enclosing `for`/`as` —
-  // e.g. `{{$kpi.count}}` (missing dot) renders literally and passes every
-  // other check. Collected scope-aware so `{{$row.title}}` inside its loop
-  // stays legal.
   suspectBindings: string[];
   componentCount: number;
 };
@@ -67,7 +47,6 @@ export const collectInteractive = (layout: unknown): InteractiveSurface => {
     if (node === null || typeof node !== 'object') return;
     const record = node as Record<string, unknown>;
 
-    // A `for` directive declares its loop variable for everything beneath.
     const loopVar = record['for'] !== undefined && typeof record['as'] === 'string' ? record['as'] : undefined;
     const childScope = loopVar !== undefined ? new Set([...scope, loopVar]) : scope;
 
@@ -89,9 +68,6 @@ export const collectInteractive = (layout: unknown): InteractiveSurface => {
         }
       }
     }
-    // Generic descent: directives (`if`/`for`), props, children, column cell
-    // specs — every nested node and binding is reached without schema-specific
-    // cases. Strings are scanned for `$.key` bindings on the way.
     for (const value of Object.values(record)) walk(value, childScope);
   };
 

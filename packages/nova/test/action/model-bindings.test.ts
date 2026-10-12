@@ -14,9 +14,6 @@ const baseDeps = () => ({
   registry: createPermissiveRegistry(),
 });
 
-// A trigger's steps run async (fireTrigger fire-and-forgets executeSteps); the
-// model WRITE is synchronous within the emit. A tick lets any trigger steps
-// settle so the assertion sees the final data.
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
 describe('collectModelBindings', () => {
@@ -143,7 +140,6 @@ describe('runtime — ui:model wiring', () => {
     const deps = baseDeps();
     const runtime = createActionRuntime({ definition, ...deps });
     await runtime.mount();
-    // First render installs the listener.
     runtime.render();
 
     deps.eventBus.emit({ type: 'ui:model', ref: 'name-input', payload: 'Grace' });
@@ -210,7 +206,6 @@ describe('runtime — a ui:model trigger observes the value the event wrote', ()
 
     deps.eventBus.emit({ type: 'ui:model', ref: 'name-input', payload: 'Ada' });
     await tick();
-    // The write landed first; the trigger's `from: 'name'` copied 'Ada', not ''.
     expect(runtime.getData()).toEqual({ name: 'Ada', copy: 'Ada' });
   });
 
@@ -247,9 +242,7 @@ describe('runtime — a ui:model trigger observes the value the event wrote', ()
     const deps = baseDeps();
     const runtime = createActionRuntime({ definition, ...deps });
     await runtime.mount();
-    runtime.render(); // no bindings yet — the loop is empty
-    // The row (and its binding) appears only after a re-render: reconcile adds it
-    // to the map, never to the bus, so the write is still first.
+    runtime.render();
     runtime.updateData({ rows: [{ value: 'x' }] });
     const out = runtime.render();
     const [frag] = out;
@@ -314,7 +307,7 @@ describe('runtime — a ui:model trigger observes the value the event wrote', ()
   });
 
   it('an unstamped global ui:model reaches every instance holding the ref', async () => {
-    const deps = baseDeps(); // one shared event bus
+    const deps = baseDeps();
     const mk = (id: string) =>
       createActionRuntime({
         definition: { id, data: { name: 'x' }, layout: { component: 'Input', ref: 'shared', model: '$.name' } },

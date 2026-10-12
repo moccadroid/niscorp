@@ -1,8 +1,6 @@
 import { DEFAULT_PHRASE_KEYS } from '../i18n';
 import type { NovaExample } from './example.types';
 
-// Words in the reader's language. The layouts are written in English, and the
-// book is keyed on that English.
 export const I18N_EXAMPLES: readonly NovaExample[] = [
   {
     id: 'i18n-switch',

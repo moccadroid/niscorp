@@ -2,10 +2,6 @@ import type { CSSProperties } from 'react';
 import { StackPropsSchema, type StackProps } from '../../primitive-props';
 import type { NovaComponent, NovaComponentProps } from '@react';
 
-// ═══════════════════════════════════════════════════════════
-// Stack — flex container
-// ═══════════════════════════════════════════════════════════
-
 export { StackPropsSchema, type StackProps };
 
 const ALIGN_MAP = {

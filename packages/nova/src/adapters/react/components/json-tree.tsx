@@ -2,12 +2,6 @@ import type { FC } from 'react';
 import { JsonTreePropsSchema, type JsonTreeProps } from '../../primitive-props';
 import type { NovaComponent, NovaComponentProps } from '@react';
 
-// ═══════════════════════════════════════════════════════════
-// JsonTree — a collapsible view of any JSON value, via native <details> (no
-// state). The value arrives already resolved in props. Used by nova/devtools
-// to show data / endpoint configs / audit detail; useful anywhere.
-// ═══════════════════════════════════════════════════════════
-
 const entriesOf = (value: object): Array<[string, unknown]> =>
   Array.isArray(value) ? value.map((item, index): [string, unknown] => [String(index), item]) : Object.entries(value);
 

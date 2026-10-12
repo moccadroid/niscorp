@@ -2,9 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type { ActionDefinition } from '@action';
 import { chainCycles } from '../../src/reflect';
 
-// The chains test/shell/runaway.test.ts stops at runtime, found in the
-// definitions — and the ordinary patterns that must not be reported.
-
 const paths = (definitions: ActionDefinition[]): string[] => chainCycles(definitions).map((cycle) => cycle.path);
 
 describe('chainCycles', () => {
