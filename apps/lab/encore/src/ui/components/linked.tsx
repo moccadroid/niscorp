@@ -4,29 +4,9 @@ import { useNovaDispatch } from '@niscorp/nova/adapters/react';
 import { classes, num, rowsOf, text } from './props';
 import type { Props } from './props';
 
-// THREE PRIMITIVES ABOUT ATTENTION, and none of them has heard of an agent.
-//
-//   Spans      a run of text in segments, some of which carry a KEY. A keyed
-//              span says when it has the reader's attention, and draws itself
-//              lit when the key it is told is active is its own.
-//   Spotlight  a wrapper with a key of its own, which does the same two things
-//              for whatever is inside it.
-//   Rail       a column of one-line entries, one of which may be open.
-//
-// What a key MEANS — "this sentence stands on that card" — is wired in actions:
-// a span and a box that carry the same key light each other over the message
-// bus, and that is the whole of the citation mechanism. The kit only knows that
-// a key can be pointed at.
-//
-// ATTENTION IS ONE EVENT, not two: nova has `ui:focus` and `ui:blur` and no
-// hover event, so pointing at something with a mouse and tabbing to it both say
-// `ui:focus`, and leaving says `ui:blur`. Which is also the right semantics — a
-// keyboard user arrowing through an answer lights the same cards.
-//
-// A pointer crossing a paragraph enters and leaves a dozen spans in a second,
-// and every event here is a round trip to the shell. So attention is reported
-// when it SETTLES: a change of key is sent after a short quiet, and a key that
-// is left and re-entered inside that window sends nothing at all.
+// nova has `ui:focus` and `ui:blur` and no hover event, so pointing with a mouse and
+// tabbing both say `ui:focus`. Every event is a round trip to the shell, so attention is
+// reported when it settles: a key left and re-entered inside this window sends nothing.
 const ATTENTION_SETTLE_MS = 120;
 
 type Attention = { point: (key: string) => void; leave: () => void };
@@ -59,11 +39,6 @@ const useAttention = (novaRef: string | undefined): Attention => {
   };
 };
 
-// ─── Spans ───────────────────────────────────────────────────
-// `segments`: rows of { [textKey], [linkKey] }. A segment with a link is a
-// citation: underlined, focusable, lit when `active` names its link. With
-// `markUnlinked` true, a segment WITHOUT one is drawn muted — words with nothing
-// to stand on should look like it.
 export const Spans: NovaComponent<Props> = ({ segments, textKey, linkKey, active, markUnlinked, novaRef }) => {
   const attention = useAttention(novaRef);
   const lit = text(active);
@@ -91,9 +66,6 @@ export const Spans: NovaComponent<Props> = ({ segments, textKey, linkKey, active
   );
 };
 
-// ─── Spotlight ───────────────────────────────────────────────
-// Wraps anything. `value` is its key; `active` is the key currently pointed at,
-// wherever that came from.
 export const Spotlight: NovaComponent<Props> = ({ children, value, active, novaRef }) => {
   const attention = useAttention(novaRef);
   const key = text(value);
@@ -105,11 +77,6 @@ export const Spotlight: NovaComponent<Props> = ({ children, value, active, novaR
   );
 };
 
-// ─── Rail ────────────────────────────────────────────────────
-// One line per entry, however long the entry: the rail must never push what is
-// under it down by more than a line each. The open entry — at most one — shows
-// its `detailKey` in full. Clicking an entry says which.
-// What a click on "show all" carries, instead of an entry's key.
 export const SHOW_ALL = '__all__';
 
 export const Rail: NovaComponent<Props> = ({ rows, rowKey, tagKey, toneKey, primaryKey, secondaryKey, detailKey, open, max, empty, novaRef }) => {
@@ -117,7 +84,6 @@ export const Rail: NovaComponent<Props> = ({ rows, rowKey, tagKey, toneKey, prim
   const all = rowsOf(rows);
   const shown = all.slice(0, num(max, all.length));
   const opened = text(open);
-  // No `tagKey`, no tag column: a rail of plain lines.
   const isTagged = text(tagKey) !== '';
   if (all.length === 0) return text(empty) === '' ? null : <span className="en-text en-text--tag en-tone--mute">{text(empty)}</span>;
   return (

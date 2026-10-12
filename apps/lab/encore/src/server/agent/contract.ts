@@ -1,31 +1,8 @@
 import { z } from 'zod';
 import { QUESTION_CANVASES } from '@encore/app/canvas-placement';
 
-// ═══════════════════════════════════════════════════════════
-// WHAT THE AGENT RETURNS — the `data` half of cortex's envelope.
-//
-// The envelope is used as designed (DESIGN.md § What it returns): `response`
-// IS the answer, required, and is never spelled a second time in here. `data`
-// holds what is the ROOM's — the screen — and nothing else.
-//
-// AGENTS rule 15: this schema is the contract. cortex injects its JSON Schema
-// into the prompt; every constraint the model has to honour is a `.describe()`
-// below, and the prompt has no section explaining "how to fill in the answer".
-//
-// This is the STATIC shape, because the agent is defined once, at module scope,
-// and a module cannot know which six actions Jev will rank highest for a
-// sentence nobody has typed. What a run may actually name is narrower — those
-// six, their own input contracts, the candidate rows of that pass — and that
-// is enforced when the answer lands, by the one admission rule the chips and
-// the plan steps go through too (intent/admission.ts). Rejected whole.
-//
 // Optional fields are `.nullish()`: models say null for "absent".
-// ═══════════════════════════════════════════════════════════
 
-// The Card shape appears once per canvas and once per step in the generated
-// JSON Schema, so ITS descriptions are kept to a line and the rules about a
-// card's input are stated ONCE, on `canvases` — a description repeated six
-// times is a prompt paying six times for one sentence.
 const Input = z.record(z.string(), z.unknown()).describe('What to open it with — see the INPUT RULE.');
 
 const Card = z.strictObject({
@@ -39,14 +16,6 @@ const CANVASES =
 export const FOLLOW_UP_MAX_CHARS = 60;
 export const FOLLOW_UPS_MAX = 2;
 
-// THE ANSWER IS TWO SENTENCES. The operator is looking at the cards; an answer
-// that lists what a card lists is a wall of text beside the thing it describes.
-// The bounds live HERE, with the rest of the contract the model reads, and are
-// ENFORCED by admission (intent/admission.ts) — by refusing the answer with the
-// reason, never by cutting it: half a sentence is worse than a long one.
-// (`response` is cortex's envelope field, not a key of this schema, so its bound
-// cannot be a `.max()` on it: it is said in the schema's own description and in
-// the instructions, both from these constants.)
 export const ANSWER_MAX_SENTENCES = 2;
 export const ANSWER_MAX_CHARS = 320;
 

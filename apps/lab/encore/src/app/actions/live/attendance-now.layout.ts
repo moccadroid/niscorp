@@ -1,7 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// `fill_display` arrives already worded ("90%") — the entry's mapping did that,
-// upstream (rule 9). The list names keys; it formats nothing.
 export const attendanceNowLayout: LayoutNode = {
   component: 'Card',
   props: { title: 'On site', subtitle: '{{$.day}} · {{$.hour}}:00' },

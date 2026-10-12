@@ -1,67 +1,15 @@
 import type { Question } from '@niscorp/signal';
 
-// ═══════════════════════════════════════════════════════════
-// THE FAKE'S BRAIN — a lexical scorer, and nothing smarter.
-//
-// It exists so every check is deterministic and offline, and so the pacing can
-// be felt without a key. It is NOT a model and must never be tuned until it
-// looks like one: the claim this app makes is about what a real decision model
-// does with derived questions, and a fake that quietly grew domain knowledge
-// would be proving itself instead.
-//
-// So it knows about WORDS, and only words:
-//
-//   overlap   a state token counts toward an option when it equals one of the
-//             option's tokens, or is a prefix of one — "headl" is most of the
-//             way to "headliner", and the score says so, which is what makes a
-//             card go chip → mounted as a word completes.
-//   rarity    a token that matches every option tells them apart from nothing;
-//             its weight is split across what it matched.
-//   direction "to the tent" and "from the tent" are different sentences. A
-//             match right after `to`/`from` counts fully for a question whose
-//             own wording carries that word, barely for one carrying the
-//             opposite, and at half weight for one carrying neither.
-//   none      every choice is scored against a standing prior for `none`, so
-//             an empty line — or a line about something else — answers `none`.
-//             A choice with no `none` gives that prior to its FIRST option: the
-//             asker lists the fallback first.
-//   (changed  REMOVED 2026-09-21. This scorer used to down-weight a match that a
-//   mind)     correction word took back — and that cue was the only reason "to
-//             the tent no the grove" worked: the real model left To = The Tent.
-//             A correction is now READ by a lane (intent/supersede.ts) and the
-//             row taken back never reaches any decider as an option. The fake
-//             has no opinion about "no" any more, so the checks prove the lane.
-//   middling  a real decision model almost never says zero. With `noulFloor`
-//             set, every yes/no answer is lifted onto [floor, 1], so an
-//             unrelated card is a 0.4 guess instead of nothing — and a rule
-//             that quietly relied on zeros fails HERE, in a check, instead of
-//             in front of somebody on the calibrated model.
-//   families  a question's name is `<family>/<rest>`, and rarity is counted
-//             within a family: a word that lights one card is discounted for
-//             lighting other CARDS, not for also naming a context to fetch.
-//
-// It has never heard of a festival. Every word it matches arrived in the
-// request.
-// ═══════════════════════════════════════════════════════════
-
-// Function words. Dropped from BOTH sides: "the" matching "The Tent" is not
-// evidence of anything.
 const STOPWORDS: ReadonlySet<string> = new Set([
   'a', 'an', 'the', 'and', 'or', 'of', 'at', 'in', 'on', 'for', 'with', 'by', 'is', 'it', 'its', 'this', 'that', 'be', 'as', 'are', 'was',
   'every', 'each', 'all', 'any', 'some', 'one', 'when', 'open', 'such', 'whether', 'will', 'them', 'their', 'they', 'who', 'what', 'which', 'how', 'not', 'no', 'none', 'these', 'about',
 ]);
 
-// Direction words are neither content nor noise: they are read as a cue on the
-// content token that follows them.
 const DIRECTIONS: ReadonlySet<string> = new Set(['to', 'from', 'into', 'onto']);
 const DIRECTION_FAMILY: Record<string, string> = { to: 'to', into: 'to', onto: 'to', from: 'from' };
 
-// How far back a direction word may sit from the token it governs: "to the
-// main tent" is two skips.
 const DIRECTION_REACH = 3;
 
-// Words that mean it is serious. The `score` lane's whole vocabulary: weights
-// add, and the sum bends the distribution toward the top level.
 const INTENSITY: Record<string, number> = {
   now: 1, asap: 2, urgent: 2, urgently: 2, immediately: 2, quickly: 1, hurry: 1,
   storm: 2, lightning: 2, flood: 2, flooding: 2, wind: 1, gale: 2,
@@ -79,23 +27,16 @@ export type StateToken = { text: string; direction: string | undefined };
 
 const wordsOf = (text: string): string[] => text.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 0);
 
-// Content tokens of a question's own wording. Pure digits are dropped: a level
-// called "2" must not match the "2" in "20 minutes".
 const contentTokensOf = (text: string): string[] => wordsOf(text).filter((word) => !STOPWORDS.has(word) && !DIRECTIONS.has(word) && !/^\d+$/.test(word));
 
 const directionsOf = (text: string): ReadonlySet<string> => new Set(wordsOf(text).flatMap((word) => (DIRECTION_FAMILY[word] === undefined ? [] : [DIRECTION_FAMILY[word]])));
 
-// Every string leaf of the state, in order. The wire allows a string, an object
-// or an array; whatever the caller sent, the words are what is scored.
 const NOTES: ReadonlySet<string> = new Set(['superseded']);
 
 const stateText = (state: unknown): string => {
   if (typeof state === 'string') return state;
   if (Array.isArray(state)) return state.map(stateText).join(' ');
-  // A NOTE ABOUT THE SENTENCE IS NOT THE SENTENCE. `superseded` is prose the
-  // loop wrote for a model that reads; to a scorer that counts words it would be
-  // the operator saying "taken", "back" and "place". (It also names the row that
-  // was taken back — and this scorer must get no help with that: supersede.ts.)
+  // `superseded` is prose for a model that reads: a word counter would take it for the operator's.
   if (state !== null && typeof state === 'object') return Object.entries(state).filter(([key]) => !NOTES.has(key)).map(([, value]) => stateText(value)).join(' ');
   return '';
 };
@@ -106,8 +47,6 @@ export const stateTokensOf = (state: unknown): StateToken[] => {
   words.forEach((word, index) => {
     if (STOPWORDS.has(word) || DIRECTIONS.has(word) || /^\d+$/.test(word)) return;
     const before = words.slice(Math.max(0, index - DIRECTION_REACH), index).reverse();
-    // The nearest direction word wins, and only across function words: in "to
-    // the tent" `to` governs tent; in "to move tent" it governs `move`.
     const reach = before.findIndex((prior) => !STOPWORDS.has(prior) && !DIRECTIONS.has(prior));
     const governing = (reach < 0 ? before : before.slice(0, reach)).find((prior) => DIRECTIONS.has(prior));
     const own = governing === undefined ? undefined : DIRECTION_FAMILY[governing];
@@ -116,11 +55,9 @@ export const stateTokensOf = (state: unknown): StateToken[] => {
   return tokens;
 };
 
-// 0–1: how much of `word` the typed `token` accounts for.
 const matchStrength = (token: string, word: string): number => {
   if (token === word) return 1;
   if (token.length >= PREFIX_MIN && word.startsWith(token)) return 0.9 * (token.length / word.length);
-  // The typed word runs PAST the option's: "headliners" for "headliner".
   if (word.length >= PREFIX_MIN + 1 && token.startsWith(word)) return 0.8;
   return 0;
 };
@@ -140,14 +77,11 @@ const softmax = (logits: readonly number[]): number[] => {
   return weights.map((weight) => weight / total);
 };
 
-// ─── choice ──────────────────────────────────────────────────
-
 export type ChoiceAnswer = { type: 'choice'; choice: string; probabilities: Record<string, number>; confidence: number };
 
 const scoreChoice = (tokens: readonly StateToken[], question: Extract<Question, { type: 'choice' }>): ChoiceAnswer => {
   const options = Object.entries(question.criteria);
-  // Where the standing prior goes: `none` when it is offered, else the first
-  // option — the asker's stated fallback.
+  // Without a `none`, the first option is the fallback: the asker lists it first.
   const fallback = options.some(([key]) => key === 'none') ? 'none' : (options[0]?.[0] ?? '');
   const directions = directionsOf(question.instructions);
   const optionWords = options.map(([key, meaning]) => contentTokensOf(`${key.replace(/_/g, ' ')} ${meaning}`));
@@ -158,7 +92,6 @@ const scoreChoice = (tokens: readonly StateToken[], question: Extract<Question, 
     const strengths = strengthsOf(token);
     const matched = strengths.filter((strength) => strength > 0).length;
     if (matched === 0) continue;
-    // Rarity: a token shared by every option separates none of them.
     strengths.forEach((strength, index) => {
       evidence[index] = (evidence[index] ?? 0) + (strength * directionFactor(token, directions)) / matched;
     });
@@ -175,13 +108,8 @@ const scoreChoice = (tokens: readonly StateToken[], question: Extract<Question, 
   };
 };
 
-// ─── noul ────────────────────────────────────────────────────
-
 export type NoulAnswer = { type: 'noul'; noul: number };
 
-// What a noul question is ABOUT: its `true` criterion when it has one (the
-// instructions are then a template shared by every sibling question, and a
-// word matching all of them separates nothing), otherwise its instructions.
 const noulSubject = (question: Extract<Question, { type: 'noul' }>): string => question.criteria?.true ?? question.instructions;
 
 const noulEvidence = (tokens: readonly StateToken[], subjectWords: readonly string[], rarity: ReadonlyMap<string, number>): number =>
@@ -190,14 +118,10 @@ const noulEvidence = (tokens: readonly StateToken[], subjectWords: readonly stri
     return strength === 0 ? sum : sum + strength / Math.sqrt(rarity.get(token.text) ?? 1);
   }, 0);
 
-// ─── score ───────────────────────────────────────────────────
-
 export type ScoreAnswer = { type: 'score'; score: number; legend: Record<string, string>; probabilities: Record<string, number>; confidence: number };
 
 const scoreLevels = (tokens: readonly StateToken[], question: Extract<Question, { type: 'score' }>): ScoreAnswer => {
   const top = question.criteria.length - 1;
-  // A level NAMED in the sentence wins outright; failing that, intensity words
-  // bend the centre toward the top, saturating rather than overshooting.
   const named = question.criteria.map((label) => tokens.reduce((sum, token) => sum + bestMatch(token.text, contentTokensOf(label)), 0));
   const namedLevel = named.reduce((best, value, level) => (value > (named[best] ?? 0) ? level : best), 0);
   const intensity = tokens.reduce((sum, token) => sum + (INTENSITY[token.text] ?? 0), 0);
@@ -213,16 +137,11 @@ const scoreLevels = (tokens: readonly StateToken[], question: Extract<Question, 
   };
 };
 
-// ─── the request ─────────────────────────────────────────────
-
 export type Answer = ChoiceAnswer | NoulAnswer | ScoreAnswer;
 
-// Questions compete with their own KIND: `action/…` against `action/…`.
 const familyOf = (name: string): string => name.split('/')[0] ?? '';
 
 export type ScorerOptions = {
-  // Lift every yes/no onto [floor, 1]. 0 (the default) is the plain lexical
-  // scorer; ~0.4 is a model with a middling opinion about everything.
   noulFloor?: number;
 };
 
@@ -231,8 +150,6 @@ export const answerQuestions = (state: unknown, questions: Record<string, Questi
   const lifted = (p: number): number => floor + (1 - floor) * p;
   const tokens = stateTokensOf(state);
 
-  // Rarity within a family of noul questions: how many of them a token matches
-  // at all. One shared word must not light every card at once.
   const subjects = new Map<string, string[]>();
   for (const [name, question] of Object.entries(questions)) if (question.type === 'noul') subjects.set(name, contentTokensOf(noulSubject(question)));
   const rarities = new Map<string, Map<string, number>>();

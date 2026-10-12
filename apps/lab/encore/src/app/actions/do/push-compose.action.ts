@@ -3,22 +3,6 @@ import type { ActionDefinition } from '@niscorp/nova';
 import { pushComposeLayout } from './push-compose.layout';
 import { pushesRecentPrism, pushSendPrism } from './do.prism';
 
-// DRAFT A PUSH — the card where the two speeds meet.
-//
-// The FAST model picks who it goes to and how loud it is; it does not write it,
-// because a decision model returns no strings. So the draft it opens with is
-// the operator's own sentence (`parse: 'line'`) — the one thing on this form
-// that cannot be wrong about what is happening, and on screen in milliseconds.
-//
-// `body` also carries `write: true`, which is the whole of this card's part in
-// the slow path: a text model MAY replace that draft with words meant for
-// attendees, seconds later — unless a person has typed in the field first, in
-// which case neither speed touches it again.
-//
-// `urgency` is a bounded integer WITHOUT `parse`, so it becomes a three-level
-// `score`, and `levels` gives the steps their words. Compare `set.delay`'s
-// minutes, which is the same JSON Schema type and a completely different kind
-// of value.
 export const pushComposeAction: ActionDefinition = {
   id: 'push.compose',
   title: 'Push to attendees',

@@ -23,14 +23,6 @@ import { slotSwapAction, slotSwapInputSchema } from './actions/do/slot-swap.acti
 import { setDelayAction, setDelayInputSchema } from './actions/do/set-delay.action';
 import { pushComposeAction, pushComposeInputSchema } from './actions/do/push-compose.action';
 
-// Ring 1's universe: every action the app ships, by id.
-//
-// An action's `input` is its public contract — the data keys an opener may
-// seed. Here the opener is a decision model, and this file is where that stops
-// being a figure of speech: the intent loop reads `description` and `input` off
-// exactly these definitions to derive its questions, so attaching a schema
-// below is what makes a card openable by a sentence. The four frame actions
-// carry none — nothing opens them by sentence; the manifest or the loop mounts them.
 const withInput = (definition: ActionDefinition, input: Record<string, unknown>): ActionDefinition => ({ ...definition, input });
 
 const DEFINITIONS: readonly ActionDefinition[] = [
@@ -57,7 +49,4 @@ const DEFINITIONS: readonly ActionDefinition[] = [
   withInput(salesChartAction, salesChartInputSchema),
 ];
 
-// Every card re-reads when a table it shows is written (reload-on-write.ts): the
-// trigger is composed HERE, onto all of them, from what each one's own endpoints
-// replay — so no card carries one and none can be forgotten.
 export const CATALOG_DEFINITIONS: Record<string, ActionDefinition> = Object.fromEntries(DEFINITIONS.map((definition) => [definition.id, withReload(definition, ENTRIES)]));

@@ -1,10 +1,5 @@
 import type { SeedEntry } from '@niscorp/vex';
 
-// The site plan and the crowd on it.
-
-// Every zone with its geometry and how full it is at one hour. `heat` is
-// computed HERE, in the query: the map primitive is handed a number between 0
-// and 1 and never learns that it means people.
 export const zonesHeat: SeedEntry = {
   fingerprint: 'zones/heat',
   intent: 'Every zone with its map rectangle and its fill (headcount over capacity) at one day and hour',
@@ -42,11 +37,6 @@ export const zoneCount: SeedEntry = {
   },
 };
 
-// ─── the whole site ──────────────────────────────────────────
-
-// Everybody on site at one hour against everything the site can hold: two sums
-// over the same join, one row. No `groupBy` on purpose — the question is about
-// the site, not about its zones.
 export const attendanceTotal: SeedEntry = {
   fingerprint: 'attendance/total',
   intent: 'Total headcount across every zone against total capacity, at one day and hour',
@@ -66,10 +56,6 @@ export const attendanceTotal: SeedEntry = {
 const zoneField = (key: string): Record<string, unknown> => ({ $get: { from: { $var: 'zone' }, path: [key] } });
 const zoneFill = { $div: [zoneField('headcount'), zoneField('capacity')] };
 
-// Each zone's share, fullest first. The MAPPING words the fill ("90%") — that is
-// formatting, and formatting lives here, upstream of every layout (rule 9), so
-// the card's list names a key and the kit's List never learns what a
-// percentage is.
 export const attendanceByZone: SeedEntry = {
   fingerprint: 'attendance/byZone',
   intent: 'Headcount, capacity and fill for every zone at one day and hour, busiest first',

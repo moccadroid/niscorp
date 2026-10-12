@@ -1,20 +1,3 @@
-// THE SCENES — SCENARIOS.md scenes 1–3, end to end, and the answer surface they
-// stand on. Driven through a real shell on the fake providers; the agent is
-// never stubbed (every run went through `encoreAgent.run()`), and for the turns
-// where the default script is too dull to be the scene, a scene script plays the
-// model — and is held to the same admission rule a model would be.
-//
-//   0. citations, as a pure rule: linked · dropped for an off-screen card ·
-//      dropped for words that are not in the answer · a row that is not the
-//      card's loses the row — and none of it rejects the answer
-//   1. the impact card's verdicts, from seeded data: fits · tight · does not fit
-//   2. scene 3 — a correction mid-sentence flips the to-stage IN PLACE
-//   3. scene 2 — two intents, two forms; the message is written FROM the form
-//      beside it, follows it, and never writes over the operator
-//   4. the rail — a Jev-only turn in the operator's terms, persisting
-//   5. scene 1 — the storm: exposure, an answer that cites its cards, attention
-//      both ways, a follow-up that is TYPED, a plan, a button, "1 of 3"
-//   6. the same room under a model with a middling opinion about everything
 import { z } from 'zod';
 import { LIAISON_PRINCIPAL, OPERATOR_PRINCIPAL } from '@encore/app/charter/assignments';
 import { CATALOG_DEFINITIONS } from '@encore/app/action-catalog';
@@ -28,8 +11,6 @@ import { cardData, createReporter, createWorld, mounted, settle } from './world-
 const { check, report } = createReporter();
 
 const STORM = 'storm at 9';
-// (With its question mark: the fake judges a finished thought by SHAPE, and four
-// short words are not one. A calibrated model needs no such help.)
 const OPTIONS = 'what are our options?';
 const TWO_INTENTS = 'move the headliner to the tent at 9 and tell everyone';
 const TO_THE_TENT = 'move headliner to the tent';
@@ -43,12 +24,10 @@ const Steps = z.array(z.object({ index: z.number(), label: z.string(), opened: z
 const Slots = z.array(z.object({ act_name: z.string(), exposed: z.boolean(), exposure_tone: z.string(), stage_kind: z.string() }).loose());
 
 const main = async (): Promise<void> => {
-  // ═══ 0. citations — the rule, pure ═══════════════════════
   const definitions = CATALOG_DEFINITIONS;
   const candidates = { acts: [{ id: 'act_a', label: 'Act A — headliner' }], stages: [{ id: 'stage_x', label: 'Stage X — open-air' }] };
-  // (Restated 2026-09-21, the redesign: an answer is AT MOST TWO SENTENCES now, and a
-  // third is refused — so the fixture says its three things in two. The claims below
-  // are still exact substrings of it.)
+  // An answer is at most two sentences, and a third is refused, so the fixture
+  // says its three things in two. The claims below are exact substrings of it.
   const RESPONSE = 'Three sets are exposed; Act A is the one that matters. The Tent is covered.';
   const context = {
     allowed: new Set(['lineup.timeline', 'weather.radar', 'slot.swap']),
@@ -72,7 +51,6 @@ const main = async (): Promise<void> => {
     },
     RESPONSE,
   );
-  // ...and what the thread has already asked is not offered again.
   const notAgain = admitAnswer(
     { ...context, asked: ['What are our options?'] },
     {
@@ -85,7 +63,6 @@ const main = async (): Promise<void> => {
   check('a claim whose text is NOT a substring of the answer is dropped, with a note', cited.ok && !cited.claims.some((claim) => claim.text === 'Nobody said this.') && cited.notes.some((note) => note.includes('is not in the answer')));
   check('a row that is not one of the card’s rows is dropped — the words still stand on the card', cited.ok && cited.claims.some((claim) => claim.text === 'Three sets' && claim.row === '') && cited.notes.some((note) => note.includes('slot_999')));
   check(`NONE of that rejects the answer: ${cited.ok ? cited.claims.length : 0} claims stand, ${cited.ok ? cited.notes.length : 0} notes`, cited.ok && cited.claims.length === 3);
-  // (Restated 2026-09-21: at most TWO, and never one this thread already asked.)
   check(`follow-ups: at most two, trimmed, no repeats, none over 60 characters (${cited.ok ? cited.followUps.join(' · ') : ''})`, cited.ok && cited.followUps.join('|') === 'what are our options|who needs to know' && cited.notes.some((note) => note.includes('follow-up')));
   check(`...and never one the thread has already asked (${notAgain.ok ? notAgain.followUps.join(' · ') : ''})`, notAgain.ok && notAgain.followUps.join('|') === 'who needs to know|how full is the arena' && notAgain.notes.some((note) => note.includes('already asked')));
   const placedAndCited = admitAnswer({ ...context, onScreen: new Set<string>() }, { canvases: { when: [{ actionId: 'weather.radar', input: { day: 'sat', hour: 21 } }] }, claims: [{ text: 'The Tent is covered.', card: 'weather.radar' }] }, RESPONSE);
@@ -97,9 +74,7 @@ const main = async (): Promise<void> => {
   check(`the answer is cut into spans: cited ones carry their card, the rest carry none (${spans.map((span) => (span.card === '' ? '·' : span.card)).join(' ')})`, spans.map((span) => span.text).join('') === RESPONSE && spans.filter((span) => span.card !== '').length === 2 && spans.at(-1)?.card === '' && spans.at(-1)?.text.includes('The Tent is covered.') === true);
   check('...two claims over the same words cannot both be underlined: the first one wins', spans.filter((span) => span.text.includes('Three sets')).length === 1);
 
-  // ═══ the world ═══════════════════════════════════════════
   const controls: FakeAgentControls = { latencyMs: 0, chunkMs: 0, seen: [] };
-  // What Jev was actually ASKED, pass by pass: the options are the proof.
   const asked: Record<string, unknown>[] = [];
   const world = await createWorld({ agent: { kind: 'fake', fake: controls }, onDecided: (principal, pass) => { if (principal === OPERATOR_PRINCIPAL) asked.push(pass.questions); } });
   const OP = OPERATOR_PRINCIPAL;
@@ -113,7 +88,6 @@ const main = async (): Promise<void> => {
   const lastRun = (): ReturnType<typeof world.runsOf>[number] | undefined => world.runsOf(OP).at(-1);
   const ask = async (fingerprint: string, context: Record<string, unknown>): Promise<unknown> => (await world.asPrincipal(OP, '/api/vex', { fingerprint, context })).json;
 
-  // ═══ 1. the impact card's verdicts ═══════════════════════
   const capacity = async (stageId: string, draw: number): Promise<z.infer<typeof Verdict>['result']> => Verdict.parse(await ask('impact/capacity', { stageId, draw })).result;
   const tent = await capacity('stage_tent', 22000);
   const main22 = await capacity('stage_main', 22000);
@@ -129,7 +103,6 @@ const main = async (): Promise<void> => {
   const cover = async (hour: number, kind: string): Promise<string> => Verdict.parse(await ask('impact/cover', { day: 'sat', hour, kind })).result.verdict;
   check('weather: under a roof always fits; open-air in the storm does not; open-air under a rain warning is tight', (await cover(21, 'covered')) === 'fits' && (await cover(21, 'open-air')) === 'does not fit' && (await cover(20, 'open-air')) === 'tight' && (await cover(15, 'open-air')) === 'fits');
 
-  // ═══ 2. scene 3 — change your mind mid-sentence ══════════
   const runsBeforeScene3 = world.runsOf(OP).length;
   await world.typeLine(OP, TO_THE_TENT);
   const formBefore = instanceOn('doing', 'slot.swap');
@@ -140,19 +113,15 @@ const main = async (): Promise<void> => {
   await world.typeLine(OP, NO_THE_GROVE);
   check('"…no the grove" flips the to-stage to The Grove', swap()['toStageId'] === 'stage_grove');
   check('...IN PLACE: the very same form instance, nothing else on it touched', instanceOn('doing', 'slot.swap') === formBefore && formBefore !== '' && swap()['actId'] === 'act_nova_kestrel' && swap()['fromStageId'] === 'stage_main');
-  check('...the pass says it wrote one key, and re-opened nothing on `doing`', world.passesOf(OP).at(-1)?.notes.some((note) => note.startsWith('doing: set toStageId') && note.endsWith('on slot.swap')) === true && // (2026-09-21, the surface: the card's "why?" line quotes the sentence, so it is rewritten beside the stage — in place, like it)
+  check('...the pass says it wrote one key, and re-opened nothing on `doing`', world.passesOf(OP).at(-1)?.notes.some((note) => note.startsWith('doing: set toStageId') && note.endsWith('on slot.swap')) === true &&
      world.passesOf(OP).at(-1)?.notes.some((note) => note.startsWith('doing: re-opened') || note.startsWith('doing: placed')) === false);
   const groveFit = Verdict.shape.result.safeParse(impact()['fit']);
   check(`the impact card re-aimed with it, and is RED: "${groveFit.success ? groveFit.data.line : ''}"`, impact()['toStageId'] === 'stage_grove' && groveFit.success && groveFit.data.verdict === 'does not fit' && groveFit.data.line.includes('The Grove holds 4,000') && servedOf('move.impact').includes('"tone":"alert"'));
-  // (2026-09-21: the correction is READ now — intent/supersede.ts — and the fake
-  // scorer's negation cue is gone, so what the assertions above prove is the lane.)
   const flipPass = world.passesOf(OP).at(-1);
   check(`...BECAUSE THE TENT WAS NOT AN OPTION: the lane took it back before Jev was asked (${flipPass?.superseded.map((entry) => `${entry.label.split(' — ')[0]} → ${entry.by.label.split(' — ')[0]}`).join(', ')})`, flipPass?.superseded.some((entry) => entry.id === 'stage_tent' && entry.by.id === 'stage_grove') === true && JSON.stringify(asked.at(-1) ?? {}).includes('The Grove') && !JSON.stringify(asked.at(-1) ?? {}).includes('The Tent —'));
   check(`...and the line under the sentence shows the survivor: ${JSON.stringify(cardData(shell, 'line', 'intent.line')['heard'])}`, JSON.stringify(cardData(shell, 'line', 'intent.line')['heard']).includes('The Grove') && !JSON.stringify(cardData(shell, 'line', 'intent.line')['heard']).includes('The Tent'));
   await world.settled(OP);
 
-  // A VALUE THE SENTENCE NO LONGER SAYS GOES BACK (seen live: a form kept 21:00
-  // from an earlier sentence that the new one never said).
   await world.typeLine(OP, 'move headliner to the tent at 9');
   const timedForm = instanceOn('doing', 'slot.swap');
   check('"…at 9" fills the new start', swap()['time'] === '21:00');
@@ -165,7 +134,6 @@ const main = async (): Promise<void> => {
   await world.typeLine(OP, '');
   await world.settled(OP);
 
-  // ═══ 3. scene 2 — say it once ════════════════════════════
   await world.typeLine(OP, TWO_INTENTS);
   const twoPass = world.passesOf(OP).at(-1);
   const body = (): string => String(cardData(shell, 'doing', 'push.compose')['body']);
@@ -191,9 +159,8 @@ const main = async (): Promise<void> => {
   await world.settled(OP);
   check(`UNLESS the operator has touched the message — then it never does: "${body()}" (the run wrote ${lastRun()?.fieldsWritten.length} fields)`, body() === 'MY OWN WORDS' && lastRun()?.fieldsWritten.length === 0 && swap()['time'] === '22:30');
 
-  // ═══ 4. the rail ═════════════════════════════════════════
-  // (The line is cleared first: a form that outlives a sentence keeps what a
-  // person typed into it, and this turn should be about THIS sentence.)
+  // The line is cleared first: a form that outlives a sentence keeps what a
+  // person typed into it, and this turn is about this sentence.
   await world.typeLine(OP, '');
   await world.settled(OP);
   await world.typeLine(OP, TO_THE_TENT);
@@ -202,14 +169,11 @@ const main = async (): Promise<void> => {
   await world.settled(OP);
   const movedEntry = rail().find((entry) => entry.line === TO_THE_TENT);
   check(`a turn Jev handled alone is on the rail IN THE OPERATOR’S TERMS: "${movedEntry?.said}"`, movedEntry?.by === 'cards' && movedEntry.said === 'moved Nova Kestrel → The Tent · not submitted');
-  // (2026-09-22: the last run on that line — after the operator took the message over — had
-  // nothing to add, so its entry says what the cards amounted to, the draft included.)
   check(`...newest nearest the line (${rail().map((entry) => entry.line).slice(0, 3).join(' | ')})`, rail()[0]?.line === TO_THE_TENT && rail().some((entry) => entry.line === TWO_INTENTS && entry.said.includes('drafted a push')));
   await world.typeLine(OP, '');
   await world.typeLine(OP, 'who is on the main stage');
   check('THE RAIL PERSISTS: another sentence, another room — the same entries, and one more', rail().some((entry) => entry.line === TO_THE_TENT) && rail()[0]?.line === 'bar sales today' && mounted(shell, 'rail').join() === 'assist.rail');
-  // (2026-09-21, the redesign: the history is one line — "Earlier · n" — until it is
-  // pressed; an entry can only be clicked once it is open.)
+  // An entry can only be clicked once the history is open.
   world.dispatchOn(OP, 'rail', { type: 'ui:click', ref: 'earlierOpen' }, 'assist.rail');
   await settle(2);
   world.dispatchOn(OP, 'rail', { type: 'ui:click', ref: 'entry', payload: movedEntry?.key ?? '' });
@@ -219,7 +183,6 @@ const main = async (): Promise<void> => {
   await world.settled(OP);
   await loop?.newThread();
 
-  // ═══ 5. scene 1 — the storm ══════════════════════════════
   controls.seen.length = 0;
   controls.chunkMs = 45;
   await world.typeLine(OP, STORM);
@@ -243,7 +206,6 @@ const main = async (): Promise<void> => {
   check(`every write the run made to the card kept the ${ANSWER_WRITE_MS} ms budget — spans included (${stormRun?.answerWrites.length} writes, gaps ${gaps.map((gap) => Math.round(gap)).join(', ')} ms)`, (stormRun?.answerWrites.length ?? 0) >= 2 && gaps.every((gap) => gap >= ANSWER_WRITE_MS));
   controls.chunkMs = 0;
 
-  // Attention, both ways, over one channel.
   const radar = (): Record<string, unknown> => cardData(shell, 'when', 'weather.radar');
   const timeline = (): Record<string, unknown> => cardData(shell, 'when', 'lineup.timeline');
   world.dispatchOn(OP, 'assist', { type: 'ui:focus', ref: 'answer', payload: 'weather.radar' });
@@ -259,9 +221,8 @@ const main = async (): Promise<void> => {
   await settle(2);
   check('...and neither side knows the other: no authored card mentions citations, and the kit has never heard of an agent', !JSON.stringify(CATALOG_DEFINITIONS['weather.radar']).includes('cite') && answerCard()['lit'] === '');
 
-  // A follow-up is TYPED.
   const followUps = z.array(z.object({ text: z.string() })).parse(answerCard()['followUps']);
-  check(`the answer proposes what to say next: ${followUps.map((next) => next.text).join(' · ')}`, followUps.length === 2 && followUps.some((next) => next.text === OPTIONS)); // (2026-09-21: at most two)
+  check(`the answer proposes what to say next: ${followUps.map((next) => next.text).join(' · ')}`, followUps.length === 2 && followUps.some((next) => next.text === OPTIONS));
   const runsBeforeChip = world.runsOf(OP).length;
   const stepsBeforeChip = controls.seen.length;
   const passesBeforeChip = world.passesOf(OP).length;
@@ -274,13 +235,11 @@ const main = async (): Promise<void> => {
   check('...and did NOT start a run: a pressed link is typing, and the line decides as it does for any text', world.runsOf(OP).length === runsBeforeChip && controls.seen.length === stepsBeforeChip);
   check('a new sentence is a new room: Jev opens nothing for it, and the old exchange is gone', ['doing', 'about', 'where', 'when', 'nearby'].every((canvas) => mounted(shell, canvas).length === 0));
 
-  // The plan. The scene's model: it read the thread, and proposes three forms.
   const scenePlan: AgentScript = (turn) =>
     turn.predecisions.sentence !== OPTIONS
       ? defaultScript(turn)
       : {
           answer: {
-            // (2026-09-21: two sentences — the steps say the rest.)
             response: 'Three things, in order: hold her, do not move her to The Grove, tell everyone. Nothing is sent until you press it.',
             data: {
               steps: [
@@ -307,7 +266,6 @@ const main = async (): Promise<void> => {
   check(`...with the impact card beside it, aimed by the form, and RED where the step does not fit: "${groveImpact.success ? groveImpact.data.line : ''}"`, impact()['toStageId'] === 'stage_grove' && impact()['actId'] === 'act_nova_kestrel' && groveImpact.success && groveImpact.data.verdict === 'does not fit' && groveImpact.data.line === '22,000 expected · The Grove holds 4,000' && servedOf('move.impact').includes('"tone":"alert"'));
   check('...opened, not done: the plan has not ticked', Steps.parse(answerCard()['steps'])[1]?.opened === true && Steps.parse(answerCard()['steps']).every((step) => !step.done) && answerCard()['progress'] === '');
 
-  // The operator presses THE BUTTON.
   const stageOf = async (): Promise<unknown> => (await world.sql(`SELECT stage_id FROM slots WHERE act_id = 'act_nova_kestrel'`))[0]?.['stage_id'];
   const turnsBeforePress = (await world.sql('SELECT count(*)::int AS n FROM agent_turns WHERE principal = $1', [OP]))[0]?.['n'];
   check('nothing has been submitted for them', (await stageOf()) === 'stage_main');
@@ -325,9 +283,8 @@ const main = async (): Promise<void> => {
   await world.typeLine(OP, '');
   await world.settled(OP);
 
-  // ═══ 6. a model with a middling opinion about everything ═
-  // The lexical fake answers an unrelated question with zero; a calibrated model
-  // almost never does. Turn the floor up and run the rules that have to survive.
+  // A calibrated model almost never answers zero as the lexical fake does: the floor
+  // is turned up for the rules that have to survive that.
   const middling = world.booted.decider.fakeMiddling;
   if (middling === undefined) throw new Error('scenes-check: the decider has no middling knob');
   middling.floor = 0.4;
@@ -347,11 +304,9 @@ const main = async (): Promise<void> => {
   await world.typeLine(OP, '');
   await world.settled(OP);
 
-  // Exposure is the DATABASE's fact: put a set under a roof and it clears.
   await world.sql(`UPDATE slots SET stage_id = 'stage_tent', starts_at = '17:00' WHERE act_id = 'act_tidal_bloom'`);
   check('exposure is kept by the database: a set moved under a roof is no longer exposed, in the same write', (await world.sql(`SELECT exposure FROM slots WHERE act_id = 'act_tidal_bloom'`))[0]?.['exposure'] === 0 && Number((await world.sql(`SELECT count(*)::int AS n FROM slots WHERE day = 'sat' AND exposure > 0`))[0]?.['n']) === 2);
 
-  // The liaison: no swap, so no companion either.
   const liaison = await world.login(LIAISON_PRINCIPAL);
   await settle();
   await world.typeLine(LIAISON_PRINCIPAL, 'move the headliner to the tent at 9');

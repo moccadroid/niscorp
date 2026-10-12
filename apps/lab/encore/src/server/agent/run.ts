@@ -8,28 +8,8 @@ import type { Predecisions } from './predecisions';
 import { runFacts } from './run-facts';
 import { writeRunTrace } from './trace-file';
 
-// ═══════════════════════════════════════════════════════════
-// ONE RUN OF THE AGENT: a thread, this turn's pre-decisions and the operator's
-// line in; an answer out — or a reason there is not one.
-//
-// THIS FILE HAS NO SHELL. It is handed callbacks and calls them; what they do
-// to a screen is the caller's business (intent/assist.ts), and nothing under
-// src/server/agent/ can reach one. `law-check` reads these files and fails the
-// build if that ever stops being true.
-//
-// THE INPUT IS THE PROMPT'S TAIL, in the order that keeps a provider's prefix
-// cache alive (DESIGN.md § The thread):
-//
-//     …static blocks (cortex)…  →  the thread  →  pre-decisions  →  the line
-//
-// The thread only ever grows at its end, so everything up to the last turn is
-// byte-identical to the previous run's prompt; the pre-decisions — the one
-// block that is different every time — sit after it, and the line is last,
-// where a chat model expects the thing it is answering.
-//
-// ABORTED IS AN OUTCOME, NOT AN ERROR. A new sentence tears the run down
-// mid-request; that is the room working, and it is reported as such.
-// ═══════════════════════════════════════════════════════════
+// The run's input is ordered to keep a provider's prefix cache alive: the thread only grows
+// at its end, and the pre-decisions, which differ every run, come after it.
 
 export type AgentRunRequest = {
   llm: SignalClient;
@@ -38,15 +18,9 @@ export type AgentRunRequest = {
   line: string;
   tools: readonly ToolDefinition[];
   abort: AbortSignal;
-  // The admission rule, bound to this run (run-facts.ts). Empty = admitted.
   refusals: (data: AnswerData, response: string) => string[];
-  // `response`, as far as it has streamed. Called per parsed partial — it is
-  // the CALLER that throttles what reaches a screen.
   onAnswer: (soFar: string) => void;
-  // The attempt streaming so far was rejected and will be tried again: whatever
-  // `onAnswer` delivered is void.
   onRetry: (why: string) => void;
-  // A tool call, as one line: what was looked up — never the rows.
   onLookup: (lookup: { state: 'looking' | 'looked'; line: string }) => void;
   trace?: { dir: string; principal: string | null; model: string };
 };
@@ -63,7 +37,6 @@ export type AgentRunOutcome = {
   inputTokens: number;
   outputTokens: number;
   usageReported: boolean;
-  // The first request's messages, and the transcript as the run left it.
   prompt: readonly Message[];
   transcript: readonly Message[];
   lookups: string[];
@@ -71,8 +44,7 @@ export type AgentRunOutcome = {
 
 const PartialSchema = z.object({ response: z.string().optional() }).loose();
 
-// `context` is an object — or, from a model that stringifies nested args, the
-// same object in a string, as the call arrived before cortex decoded it.
+// A model that stringifies nested args sends `context` as a string, read here before cortex decodes it.
 const ArgsSchema = z.object({ fingerprint: z.string().optional(), context: z.union([z.record(z.string(), z.unknown()), z.string()]).nullish() }).loose();
 const ResultSchema = z.object({ refused: z.string().optional(), failed: z.string().optional(), rows: z.array(z.unknown()).optional(), queries: z.array(z.unknown()).optional() }).loose();
 
@@ -84,12 +56,10 @@ const callLine = (toolId: string, args: unknown): string => {
   const fingerprint = parsed.success ? parsed.data.fingerprint : undefined;
   const held = parsed.success ? parsed.data.context : undefined;
   const bound = typeof held === 'string' ? held : held !== undefined && held !== null && Object.keys(held).length > 0 ? JSON.stringify(held) : '';
-  // One line on a card, not a payload: a long context is cut, and says so.
   const context = bound === '' ? '' : ` ${bound.length > CONTEXT_SHOWN ? `${bound.slice(0, CONTEXT_SHOWN)}…` : bound}`;
   return fingerprint === undefined ? name : `${name} ${fingerprint}${context}`;
 };
 
-// What came back, in three words. The rows themselves never leave the run.
 const outcomeWords = (result: unknown): string => {
   const parsed = ResultSchema.safeParse(result);
   if (!parsed.success) return 'done';
@@ -100,8 +70,6 @@ const outcomeWords = (result: unknown): string => {
   return 'done';
 };
 
-// The run's input, exposed so a check can hand the SAME messages to
-// `agent.preview()` and read the prompt a run would send.
 export const runInput = (request: Pick<AgentRunRequest, 'thread' | 'predecisions' | 'line'>): Message[] => [...request.thread, { role: 'system', content: predecisionsBlock(request.predecisions) }, { role: 'user', content: request.line }];
 
 export const runAgent = async (request: AgentRunRequest): Promise<AgentRunOutcome> => {
@@ -117,8 +85,6 @@ export const runAgent = async (request: AgentRunRequest): Promise<AgentRunOutcom
     if (request.trace !== undefined) events.push(event);
     if (event.type === 'step-start') {
       rawReply.push('');
-      // The first step's messages ARE the assembled prompt; later steps only
-      // append to them.
       if (event.step === 1) prompt = handle?.snapshot().messages ?? [];
       return;
     }
@@ -127,8 +93,6 @@ export const runAgent = async (request: AgentRunRequest): Promise<AgentRunOutcom
       return;
     }
     if (event.type === 'output-partial') {
-      // solid's progressive parse of the envelope, via cortex. Best effort by
-      // contract: a partial that does not parse is skipped, never an error.
       const partial = PartialSchema.safeParse(event.output);
       if (partial.success && partial.data.response !== undefined) request.onAnswer(partial.data.response);
       return;
@@ -151,8 +115,6 @@ export const runAgent = async (request: AgentRunRequest): Promise<AgentRunOutcom
     }
   };
 
-  // Started INSIDE the run's own scope, so the agent's validator — module-level
-  // and handed nothing — can find this run's admission rule (run-facts.ts).
   handle = runFacts.run({ refusals: request.refusals }, () =>
     encoreAgent.run(runInput(request), { llm: request.llm, tools: request.tools, deps: {}, signal: request.abort, onEvent }),
   );

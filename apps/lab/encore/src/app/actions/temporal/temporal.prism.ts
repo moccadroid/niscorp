@@ -1,11 +1,7 @@
 import { lineupForDay, actById, delaysForAct } from '@encore/app/vex/lineup.entries';
 
-// The temporal cards' request seams.
-
-// `stageId` is an OPTIONAL condition in the entry, and a prism assembles a
-// fixed object — it cannot leave a key out. So an empty pick goes over as
-// `null`, which vex reads as absent and prunes; '' would be a real value and
-// match no stage at all.
+// A prism cannot leave a key out, so an empty pick goes over as `null`, which vex reads
+// as absent and prunes; '' would be a real value and match no stage at all.
 export const lineupForDayPrism = {
   fingerprint: lineupForDay.fingerprint,
   context: {

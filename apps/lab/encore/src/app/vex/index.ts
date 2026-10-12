@@ -10,9 +10,6 @@ import { delaysRecent, incidentsOpen, lineupAround, weatherWarnings } from './si
 import { threadAppend, threadTurns } from './thread.entries';
 import { WATCH_ENTRIES } from './watch.entries';
 
-// The whole API surface, as data: every read and write the app serves. moss
-// seeds these protected and serves them locked, so a fingerprint that is not in
-// this list is a 500, never a generated query.
 export const ENTRIES: readonly (SeedEntry | SeedMutation)[] = [
   candidateActs,
   candidateStages,

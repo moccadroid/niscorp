@@ -1,8 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// A row of controls, small on purpose: it is the projectionist's booth, not the
-// film.
-// DEMO TOOLING: it lives in x-ray's panel, under "Demo", and nowhere in the app.
 const deck: LayoutNode = {
   component: 'Row',
   props: { gap: 10, align: 'center', wrap: true },
@@ -21,6 +18,4 @@ const deck: LayoutNode = {
   ],
 };
 
-// Drawn inside x-ray's panel, under "Demo" (frame/intent-trace.layout.ts): the
-// app has no demo controls of its own.
 export const directorDeckLayout: LayoutNode = { if: '$.shown', then: deck, else: '' };

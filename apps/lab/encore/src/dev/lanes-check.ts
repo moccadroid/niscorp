@@ -1,8 +1,3 @@
-// THE LANES, ONE AT A TIME — parse, derive and resolve are pure functions, so
-// they are asserted as such: no server, no database, no provider. The storm
-// check proves the loop end to end; this proves the rules inside it, including
-// the ones one sentence never reaches (hysteresis needs a probability that
-// FALLS, and the fake never lowers its mind about a word already typed).
 import { z } from 'zod';
 import { CATALOG_DEFINITIONS } from '@encore/app/action-catalog';
 import { CANVAS_PLACEMENT } from '@encore/app/canvas-placement';
@@ -24,7 +19,6 @@ const check = (label: string, pass: boolean): void => {
   console.log(`${pass ? '[pass]' : '[fail]'} ${label}`);
 };
 
-// ═══ 1. parse ════════════════════════════════════════════════
 const parse = (line: string): ReturnType<typeof parseLine> => parseLine(line, PINNED_CLOCK);
 
 check('"at 9" is 21:00 — a bare hour is an evening hour', parse('storm at 9').time === '21:00' && parse('storm at 9').hour === 21);
@@ -39,7 +33,6 @@ check('a number too big to be an hour is an amount', parse('comp 40 tickets').am
 check('nothing said, nothing heard', Object.keys(parse('move headliner')).join() === 'tokens');
 check('function words and two-letter stubs never reach retrieval', parse('move it to the tent at st').tokens.join() === 'move,tent');
 
-// ═══ 1b. is it still the same sentence? ══════════════════════
 const A = 'storm at 9 what should we do with the headliner';
 const typed = (lines: readonly string[]): { anchor: string; broke: string[] } =>
   lines.reduce<{ anchor: string; broke: string[] }>((state, line) => ({ anchor: anchorAfter(state.anchor, line), broke: continues(state.anchor, line) ? state.broke : [...state.broke, line] }), { anchor: '', broke: [] });
@@ -55,9 +48,7 @@ check('after an edit the sentence continues from the EDITED line', typed(['storm
 check('a capital, a trailing space and a doubled space are not edits', continues(A, `  ${A.toUpperCase()}  `) && continues('storm at 9', 'storm  at 9 move'));
 check('nothing said yet cannot be broken', continues('', 'anything') && anchorAfter('', ' Storm ') === 'storm');
 
-// ═══ 1c. the pacer, on a clock that only moves when told ═════
-// No sleeping: `advance` runs whatever timers fall due, in order, and `tick`
-// lets the promise chain behind a landed pass run.
+// Lets the promise chain behind a landed pass run.
 const tick = async (): Promise<void> => {
   for (let i = 0; i < 4; i += 1) await Promise.resolve();
 };
@@ -168,7 +159,6 @@ const bench = (): { pacer: ReturnType<typeof createPacer>; sent: { text: string;
   check('NOW: a pass nobody typed (a chip, a landed run) skips the quiet timer', sent.length === 1 && sent[0]?.text === 'chip' && generation === 3);
 }
 
-// ═══ 1d. what was heard ══════════════════════════════════════
 {
   const spoken = parse('storm at 9 move headliner to the tent');
   const rows: CandidateSets = {
@@ -187,7 +177,6 @@ const bench = (): { pacer: ReturnType<typeof createPacer>; sent: { text: string;
   check('nothing heard, no tags', heardTags(parse('qqq'), { acts: [], stages: rows['stages'] ?? [] }).length === 0);
 }
 
-// ═══ 1e. a correction is read, not judged ════════════════════
 {
   const rows: CandidateSets = {
     acts: [{ id: 'act_a', label: 'Nova Kestrel — headliner, electronic' }, { id: 'act_b', label: 'Velvet Arcade — indie' }],
@@ -212,8 +201,6 @@ const bench = (): { pacer: ReturnType<typeof createPacer>; sent: { text: string;
   check('"NOT" IN AN ORDINARY PHRASE supersedes nothing: "do not delay nova kestrel", "not now, move her to the tent"', gone('do not delay nova kestrel') === '' && gone('not now move her to the tent') === '');
   check('A WORD THAT NAMES EVERY ROW NAMES NONE: "to the tent stage no the grove" still takes back The Tent, not "stage"', gone('to the tent stage no the grove') === 'stages:stage_tent>stage_grove');
   check('the same row said twice is not a correction: "the grove no the grove"', gone('to the grove no the grove') === '');
-  // (A deliberate departure from "not" = "no" — see supersede.ts: what follows
-  // "not" / "instead of" / "rather than" is the thing NOT meant.)
   check('"NOT" REJECTS WHAT FOLLOWS IT: "to the grove, not the tent" keeps The Grove — and so do "instead of" and "rather than"', ['to the grove, not the tent', 'to the grove instead of the tent', 'to the grove rather than the tent', 'not the tent, the grove'].every((line) => gone(line) === 'stages:stage_tent>stage_grove'));
   const told = supersededNotes(supersede('move the headliner to the tent no the grove', rows).superseded);
   check(`Jev is told, beside the line as typed: ${told.join(' · ')}`, told.length === 1 && told[0]?.includes('"The Tent" was taken back') === true && told[0].includes('"The Grove" is meant'));
@@ -221,7 +208,6 @@ const bench = (): { pacer: ReturnType<typeof createPacer>; sent: { text: string;
   check(`WHAT WAS HEARD IS THE SURVIVOR (${heardAfter.map((tag) => tag.label).join(' · ')})`, heardAfter.some((tag) => tag.label.startsWith('The Grove')) && !heardAfter.some((tag) => tag.label.startsWith('The Tent')));
 }
 
-// ═══ 2. derive ═══════════════════════════════════════════════
 const held = Object.keys(CANVAS_PLACEMENT).flatMap((id) => (CATALOG_DEFINITIONS[id] === undefined ? [] : [CATALOG_DEFINITIONS[id]]));
 const candidates: CandidateSets = {
   acts: [{ id: 'act_a', label: 'Act A — headliner, electronic' }],
@@ -245,15 +231,12 @@ check('"from" and "to" are different questions over the same rows', question('in
 check('the shared act field is asked once, by whichever card came first', names.filter((name) => name.endsWith('/actId')).length === 1);
 check('...and the three cards that want it all read that one answer', ['slot.swap', 'set.delay', 'act.card'].every((id) => derived.plans.find((plan) => plan.actionId === id)?.fields.some((field) => field.kind === 'choice' && field.field === 'actId' && field.question === names.find((name) => name.endsWith('/actId')))));
 check('days, hours, times, minutes and free text never become questions', !names.some((name) => /\/(day|hour|time|minutes|body)$/.test(name)));
-// A synthetic card, to reach the one rule no shipped action exercises: a wide
-// integer with NO parse mark must be left alone, not turned into a 121-level
-// distribution.
+// A synthetic card: no shipped action has a wide integer with no parse mark.
 const wide = deriveQuestions([{ id: 'probe.wide', description: 'A probe.', data: { n: 0, small: 0 }, input: z.toJSONSchema(z.object({ n: z.number().int().min(0).max(120).optional().describe('Wide.'), small: z.number().int().min(1).max(3).optional().describe('Small.') })) }], {});
 check('a bounded integer past ten steps is not a score, mark or no mark', wide.questions['input/probe.wide/n'] === undefined);
 check('...and a small one without authored words gets its own numbers as levels, from its minimum', ((): boolean => { const asked = wide.questions['input/probe.wide/small']; return asked?.type === 'score' && asked.criteria.join() === '1,2,3'; })());
 check('the frame asks its one question', question(TONE_QUESTION)?.type === 'score');
 
-// The slow path's questions ride the same derivation (Slice 1b).
 const PACKS: ContextPack[] = [
   { id: 'alpha', noun: 'alpha', description: 'Facts about alpha.', tables: ['acts'], reads: [{ name: 'rows', fingerprint: 'x/alpha', context: {} }] },
   { id: 'beta', noun: 'beta', description: 'Facts about beta.', tables: ['zones'], reads: [{ name: 'rows', fingerprint: 'x/beta', context: {} }] },
@@ -264,7 +247,6 @@ check('no packs declared, no context questions — and NOTHING is asked about ro
 check('no candidates, no question: an act field with no rows to offer is left alone', !Object.keys(deriveQuestions(held, { ...candidates, acts: [] }).questions).some((name) => name.endsWith('/actId')));
 check('`required` is read off the schema', derived.plans.find((plan) => plan.actionId === 'act.card')?.required.join() === 'actId' && derived.plans.find((plan) => plan.actionId === 'slot.swap')?.required.length === 0);
 
-// ═══ 3. resolve ══════════════════════════════════════════════
 const actQuestion = names.find((name) => name.endsWith('/actId')) ?? '';
 const screen = (answers: Record<string, Answer>, mounted: string[] = [], pinned: string[] = []): ReturnType<typeof resolveScreen> =>
   resolveScreen({ line: 'a line', derived, answers, parsed: parse('at 9'), clock: PINNED_CLOCK, mounted: new Set(mounted), pinned: new Set(pinned), titles: {} });
@@ -273,30 +255,19 @@ const noul = (p: number): Answer => ({ kind: 'noul', p });
 
 check(`at the mount line (${YES_AT}) a card mounts; just under, it is a chip`, onScreen(screen({ 'action/weather.radar': noul(YES_AT) })).includes('weather.radar') && screen({ 'action/weather.radar': noul(YES_AT - 0.01) }).chips.some((chip) => chip.id === 'weather.radar'));
 check(`under the chip line (${CHIP_AT}) it is nothing at all`, ((): boolean => { const resolved = screen({ 'action/weather.radar': noul(CHIP_AT - 0.01) }); return onScreen(resolved).length === 0 && resolved.chips.length === 0; })());
-// (Restated 2026-09-21: the mount line moved from 0.80 to 0.50 — a calibrated "probably" — and the unmount line from 0.55 to 0.35. The
-// claim is the band's, so it is stated in the band's terms: a value between the two.)
 const BETWEEN = (YES_AT + UNMOUNT_AT) / 2;
 check(`HYSTERESIS: ${BETWEEN.toFixed(3)} does not mount a card — but keeps one that is already up`, !onScreen(screen({ 'action/weather.radar': noul(BETWEEN) })).includes('weather.radar') && onScreen(screen({ 'action/weather.radar': noul(BETWEEN) }, ['weather.radar'])).includes('weather.radar'));
 check(`...until it falls to ${UNMOUNT_AT}, where it comes down`, !onScreen(screen({ 'action/weather.radar': noul(UNMOUNT_AT) }, ['weather.radar'])).includes('weather.radar'));
 check('a wanted card whose REQUIRED input is unsure is offered, not mounted', ((): boolean => { const resolved = screen({ 'action/act.card': noul(0.95), [actQuestion]: { kind: 'choice', choice: 'act_a', p: YES_AT - 0.01, confidence: YES_AT - 0.01 } }); return !onScreen(resolved).includes('act.card') && resolved.chips.some((chip) => chip.id === 'act.card'); })());
 check(`...and mounts, aimed, once the pick clears ${YES_AT}`, screen({ 'action/act.card': noul(0.95), [actQuestion]: { kind: 'choice', choice: 'act_a', p: YES_AT, confidence: YES_AT } }).desired['about']?.[0]?.input?.['actId'] === 'act_a');
 check('`none` fills nothing, however confident', screen({ 'action/slot.swap': noul(0.95), [actQuestion]: { kind: 'choice', choice: NONE, p: 0.99, confidence: 0.99 } }).desired['doing']?.[0]?.input?.['actId'] === undefined);
-// (Restated 2026-09-21: "left alone" was the bug — a form kept 21:00 from an earlier
-// sentence that the new one never said. A parsed field the sentence does not name
-// now goes back to the card's own blank; a touched field is still the person's,
-// which is the reconciler's business and asserted in scenes-check.)
 check('parsed values fill their fields; a `fallback: now` field takes the clock; one the sentence does not name goes back to BLANK', ((): boolean => { const swap = screen({ 'action/slot.swap': noul(0.9) }).desired['doing']?.[0]?.input ?? {}; const bare = resolveScreen({ line: 'x', derived, answers: { 'action/slot.swap': noul(0.9) }, parsed: parse('move'), clock: PINNED_CLOCK, mounted: new Set(), pinned: new Set(), titles: {} }).desired['doing']?.[0]?.input ?? {}; return swap['time'] === '21:00' && swap['day'] === 'sat' && bare['time'] === '' && bare['day'] === 'sat'; })());
 check('a score fills a bounded integer with minimum + level', screen({ 'action/push.compose': noul(0.9), 'input/push.compose/urgency': { kind: 'score', level: 2, confidence: 0.8 } }).desired['doing']?.[0]?.input?.['urgency'] === 2);
 check('a pin outranks the model: a promoted card stays at probability 0', onScreen(screen({ 'action/site.map': noul(0) }, [], ['site.map'])).includes('site.map'));
 check('every question canvas is named in the answer, empty or not — so reconcile clears what is stale', Object.keys(screen({}).desired).sort().join() === 'about,doing,nearby,when,where');
-// What the assistant is handed, resolved off the same answers. (2026-09-22: the
-// route question, the computed fallback, the question-mark rule, the demotion line
-// and the signature are GONE — and so are their assertions. Whether the assistant
-// runs is not decided here.)
 const handedWith = (extra: Record<string, Answer> = {}): ReturnType<typeof resolveScreen>['handoff'] =>
   resolveScreen({ line: 'x', derived: withPacks, answers: extra, parsed: parse('x'), clock: PINNED_CLOCK, mounted: new Set(), pinned: new Set(), titles: {}, candidates }).handoff;
 
-// COMPANIONS (slice 2a): `move.impact` stands beside `slot.swap`.
 const toStageQuestion = names.find((name) => name.endsWith('/toStageId')) ?? '';
 const pickedAct: Answer = { kind: 'choice', choice: 'act_a', p: 0.9, confidence: 0.9 };
 const pickedStage: Answer = { kind: 'choice', choice: 'stage_y', p: 0.9, confidence: 0.9 };
@@ -304,7 +275,7 @@ const beside = (answers: Record<string, Answer>): ReturnType<typeof resolveScree
   resolveScreen({ line: 'x', derived: withPacks, answers, parsed: parse('at 9'), clock: PINNED_CLOCK, mounted: new Set(), pinned: new Set(), titles: { 'slot.swap': 'Move a set' }, candidates });
 check('the swap form and the impact card ask ONE question about the to-stage: same field, same words', names.filter((name) => name.endsWith('/toStageId')).length === 1 && derived.plans.find((plan) => plan.actionId === 'move.impact')?.fields.some((field) => field.kind === 'choice' && field.question === toStageQuestion) === true);
 check('a COMPANION mounts when its lead does — at a probability that alone would only have made it a chip', ((): boolean => { const resolved = beside({ 'action/slot.swap': noul(0.9), 'action/move.impact': noul(0.45), [actQuestion]: pickedAct, [toStageQuestion]: pickedStage }); const card = resolved.desired['nearby']?.find((entry) => entry.actionId === 'move.impact'); return card?.input?.['toStageId'] === 'stage_y' && card.input['actId'] === 'act_a' && card.input['placedBy'] === 'with Move a set' && !resolved.chips.some((chip) => chip.id === 'move.impact'); })());
-check('...and not without it: no form, no consequences card, however middling the model', !onScreen(beside({ 'action/slot.swap': noul(YES_AT - 0.05), 'action/move.impact': noul(YES_AT - 0.05), [actQuestion]: pickedAct, [toStageQuestion]: pickedStage })).includes('move.impact')); // (2026-09-21: "middling" is now just under 0.50)
+check('...and not without it: no form, no consequences card, however middling the model', !onScreen(beside({ 'action/slot.swap': noul(YES_AT - 0.05), 'action/move.impact': noul(YES_AT - 0.05), [actQuestion]: pickedAct, [toStageQuestion]: pickedStage })).includes('move.impact'));
 check('a companion that cannot be AIMED is offered, not mounted', ((): boolean => { const resolved = beside({ 'action/slot.swap': noul(0.9), 'action/move.impact': noul(0.95), [actQuestion]: pickedAct }); return onScreen(resolved).includes('slot.swap') && !onScreen(resolved).includes('move.impact') && resolved.chips.some((chip) => chip.id === 'move.impact'); })());
 check('every card is opened with the key an answer cites it by', beside({ 'action/weather.radar': noul(0.9) }).desired['when']?.[0]?.input?.['citeKey'] === 'weather.radar');
 
@@ -313,7 +284,6 @@ check(`a pack goes out only if Jev said yes to it — ${YES_AT} is yes, like eve
 check('a pick over candidate rows is an ENTITY, reported with its label', handedWith({ [actQuestion]: { kind: 'choice', choice: 'act_a', p: 0.9, confidence: 0.9 } }).entities.some((entity) => entity.table === 'acts' && entity.id === 'act_a' && entity.label.startsWith('Act A')));
 check('what the slow path opened a card with counts toward it being aimed', onScreen(resolveScreen({ line: 'x', derived, answers: {}, parsed: parse('x'), clock: PINNED_CLOCK, mounted: new Set(), pinned: new Set(['act.card']), titles: {}, given: { 'act.card': { actId: 'act_a' } } })).includes('act.card'));
 
-// ═══ 4. admission — one rule, three doors ════════════════════
 const definitions = Object.fromEntries(held.map((definition) => [definition.id, definition]));
 const admission = { allowed: new Set(['slot.swap', 'act.card', 'weather.radar', 'push.compose']), definitions, candidates };
 const refused = (actionId: string, input: Record<string, unknown>, options?: Parameters<typeof admit>[3]): string => { const verdict = admit(admission, actionId, input, options); return verdict.ok ? '' : verdict.reason; };

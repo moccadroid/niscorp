@@ -4,11 +4,6 @@ import { actCardLayout } from './act-card.layout';
 import { actByIdPrism, delaysForActPrism } from './temporal.prism';
 import { actRef } from '@encore/app/actions/shared/input-fields';
 
-// Who this is about. One act, its billing, where and when it plays, and every
-// hold that has been called on it.
-//
-// `actId` is REQUIRED: the card is a record, and a record of nobody is nothing.
-// The loop offers it as a chip until the model has picked an act it is sure of.
 export const actCardAction: ActionDefinition = {
   id: 'act.card',
   title: 'Act',

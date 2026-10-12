@@ -1,28 +1,9 @@
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 
-// THE FEEDS — what the room watches, and the door a feed comes in by.
-//
-// TWO HALVES, AND THEY BELONG TO DIFFERENT PEOPLE.
-//
-// The READS are a watcher's: "rows of this table changed since my cursor". A
-// moss reaction says only THAT a table was written — no rows, by design — so
-// each live session re-reads, over its own wire, under its own policy. That is
-// the whole of how the liaison is never shown a security incident: their policy
-// cannot read `incidents`, so their re-read comes back refused and their watcher
-// has no event to ask Jev about. Nothing here, or anywhere, says "liaison".
-//
-// The WRITES are a feed's. Today the feed is a director playing Saturday
-// evening; it holds the `director` role and nothing else does, and it enters by
-// the same vex door a real scanner or a real incident desk would — so nothing
-// downstream of the write can tell a rehearsal from the night.
-//
-// `rev` is one counter across every feed (db/schema.ts): an insert or an update
-// stamps the next value, so a closed incident comes back round like a new one.
-//
-// NEWEST FIRST, with a limit: a watcher that fell a thousand rows behind wants
-// the newest thousand, and its very first read — cursor 0 — is how it learns
-// where "now" is without replaying the whole festival as news. It reverses them.
-
+// `rev` is one counter across every feed: an insert or an update stamps the next
+// value. The feed reads are newest first, with a limit: a watcher's first read,
+// cursor 0, is how it learns where "now" is without replaying the whole festival.
+// It reverses them.
 const AFTER = { $context: 'after' };
 
 export const feedZoneCounts: SeedEntry = {
@@ -84,8 +65,6 @@ export const clockNow: SeedEntry = {
   dsl: { from: ['festival_clock'], fields: ['festival_clock.day', 'festival_clock.minute'], limit: 1 },
 };
 
-// The caller's own clicks on raised cards, after a cursor (vex/behaviors.ts
-// fences them to who clicked).
 export const labelsSince: SeedEntry = {
   fingerprint: 'attention/labelsSince',
   intent: 'The caller\'s own keep and dismiss clicks on raised cards, after a cursor',
@@ -99,9 +78,6 @@ export const labelsSince: SeedEntry = {
   },
 };
 
-// A LABEL: what a person did about a card the room raised by itself, with the
-// probabilities of the pass that raised it. The only write anywhere near the
-// event path, and it is a click: the raised card's own endpoint calls this.
 export const labelAdd: SeedMutation = {
   fingerprint: 'attention/label',
   intent: 'Record that the caller kept or dismissed a card the room raised, with the probabilities it was raised on',
@@ -111,8 +87,6 @@ export const labelAdd: SeedMutation = {
     values: { verdict: { $context: 'verdict' }, action_id: { $context: 'actionId' }, cause: { $context: 'cause' }, probabilities: { $context: 'probabilities' } },
   },
 };
-
-// ─── the feed's own door ─────────────────────────────────────
 
 export const feedSetCount: SeedMutation = {
   fingerprint: 'feed/setCount',

@@ -9,26 +9,11 @@ import type { AgentLlmConfig } from '@encore/server/agent/llm';
 import type { DeciderConfig } from '@encore/server/decider/decider';
 import type { DecidedPass } from '@encore/server/intent/loop';
 
-// A WORLD, MADE TO ORDER: one moss over one fresh database, with the decision
-// provider PINNED to the fake on a free port — whatever a developer's .env
-// says. A suite that needed a key, a network or a particular port would be a
-// suite about the environment.
-//
-// A factory rather than a module-level boot because the two-speeds check needs
-// more than one world in a process: one with the scripted agent model, one with
-// the agent switched off. `world.ts` is the default one the other checks share.
-//
-// `login()` hands back the SERVER'S OWN living shell for a principal — the same
-// durable nova Shell the socket streams — so a check drives the real thing
-// rather than a replica. `runtime.db` is SQL ground truth: the same database
-// the server reads.
-
 export type WorldOptions = {
   agent: Partial<AgentLlmConfig>;
   traceDir?: string;
   eventPassesPerSecond?: number;
   now?: () => number;
-  // A probe points the same world at a real provider; a check never sets this.
   decider?: Partial<DeciderConfig>;
   onDecided?: (principal: string | null, decided: DecidedPass) => void;
 };
@@ -42,21 +27,12 @@ export type World = {
   servedTo: (principal: string) => readonly string[];
   keystroke: (principal: string, text: string) => void;
   typeLine: (principal: string, text: string) => Promise<void>;
-  // Dispatch the way the socket does: on a canvas, stamped with its active
-  // instance — or with a named card's instance, for a list canvas.
   dispatchOn: (principal: string, canvas: string, event: Record<string, unknown>, actionId?: string) => void;
-  // Both speeds at rest: no pass, no armed handoff, no run.
   settled: (principal: string) => Promise<void>;
   passesOf: (principal: string) => PassRecord[];
-  // The LATEST state of every run, by run number: a run is reported when it
-  // starts and again when it ends.
   runsOf: (principal: string) => RunRecord[];
-  // Flip the room between the app and its instruments, as the operator's key
-  // would. A check that reads META off the rendering turns it on first.
   xray: (principal: string) => Promise<boolean>;
   sql: (text: string, values?: unknown[]) => Promise<Record<string, unknown>[]>;
-  // Rows per table of the app's own schema — what a check compares before and
-  // after a run, to prove the only table an agent's turn grows is its thread.
   tableCounts: () => Promise<Record<string, number>>;
   asPrincipal: (principal: string, path: string, body: unknown) => Promise<{ status: number; json: unknown }>;
   close: () => Promise<void>;
@@ -93,13 +69,9 @@ export const createWorld = async (options: WorldOptions): Promise<World> => {
 
   const tokenFor = (principal: string): string => mintDevToken(principal);
 
-  // A TERMINAL IS ATTACHED, because a person typing is looking at a screen. It
-  // is not decoration: nova installs an input's `ui:model` listener when the
-  // node that carries it is RENDERED, and a durable shell nobody has attached
-  // to has rendered nothing — the first keystroke would reach the trigger with
-  // the model write missing. So the check does what the socket does: attach, be
-  // served every canvas, then type. The terminal keeps what it is sent, so a
-  // check can also read the wire.
+  // A terminal is attached at login: nova installs an input's `ui:model` listener when
+  // its node is rendered, and on a shell nobody has attached to the first keystroke
+  // would reach the trigger with the model write missing.
   const sessions = new Map<string, Session>();
   const served = new Map<string, string[]>();
 
@@ -110,8 +82,6 @@ export const createWorld = async (options: WorldOptions): Promise<World> => {
   };
 
   const keystroke = (principal: string, text: string): void => {
-    // `session.dispatch` is the socket's own path: it stamps the canvas's
-    // active instance as the event's origin, exactly as it does for a browser.
     sessionOf(principal).dispatch('line', { type: 'ui:model', ref: 'line', payload: text });
   };
 
@@ -129,10 +99,9 @@ export const createWorld = async (options: WorldOptions): Promise<World> => {
     },
     servedTo: (principal) => served.get(principal) ?? [],
     keystroke,
-    // TYPE INTO THE LINE, the way a terminal does, then wait for the FAST path
-    // to stop moving — the endpoint returns at once, so "done" is the pacer
-    // going idle, plus the mount chains of whatever it placed. The slow path
-    // is deliberately NOT awaited here: a check that wants it asks `settled`.
+    // The endpoint returns at once, so "done" is the pacer going idle, plus the
+    // mount chains of whatever it placed. The slow path is deliberately not
+    // awaited here: a check that wants it asks `settled`.
     typeLine: async (principal, text) => {
       keystroke(principal, text);
       await settle(2);
@@ -155,7 +124,6 @@ export const createWorld = async (options: WorldOptions): Promise<World> => {
       for (const entry of runs) if (entry.principal === principal) latest.set(entry.record.run, entry.record);
       return [...latest.values()];
     },
-    // X-RAY IS ITS PANEL BEING OPEN — pressed the way a person presses it.
     xray: async (principal) => {
       const shell = sessionOf(principal).shell;
       const panel = shell.getState().canvases['trace']?.stack.find((item) => item.definitionId === 'intent.trace');
@@ -176,8 +144,6 @@ export const createWorld = async (options: WorldOptions): Promise<World> => {
       }
       return counts;
     },
-    // A request to the real vex surface as a given principal — Bearer token
-    // and all, the path a browser or a curl takes.
     asPrincipal: async (principal, path, body) => {
       const response = await server.request(path, {
         method: 'POST',
@@ -190,10 +156,6 @@ export const createWorld = async (options: WorldOptions): Promise<World> => {
   };
 };
 
-// ─── a plan, scripted ────────────────────────────────────────
-// The default scripted assistant never proposes steps: nothing in the STATE says a
-// plan is wanted, and only a model that reads the sentence can tell. A check that
-// needs a plan on the card says which.
 export type ScriptedStep = { say: string; actionId: string; input: Record<string, unknown> };
 
 export const planOf =
@@ -206,8 +168,6 @@ export const STORM_PLAN_STEPS: readonly ScriptedStep[] = [
   { say: 'Delay a set — Nova Kestrel', actionId: 'set.delay', input: { actId: 'act_nova_kestrel' } },
   { say: 'Push to attendees', actionId: 'push.compose', input: {} },
 ];
-
-// ─── the reporter ────────────────────────────────────────────
 
 export type Reporter = { check: (label: string, pass: boolean) => void; report: (title: string, worlds: readonly World[]) => Promise<never> };
 

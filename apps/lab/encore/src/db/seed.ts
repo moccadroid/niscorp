@@ -1,10 +1,8 @@
 import { DAYS } from '@encore/lib/festival-clock';
 import type { Day } from '@encore/lib/festival-clock';
 
-// Encore Fields, three days in late summer. All of it is fiction and all of it
-// is DETERMINISTIC: no clock, no random — the readings are closed-form curves
-// over (day, hour), so two boots hold the same rows and a check can assert a
-// number. The one hand-placed reading is the storm.
+// Deterministic: no clock, no random. The readings are closed-form curves over
+// (day, hour), so two boots hold the same rows and a check can assert a number.
 
 type Value = string | number | boolean;
 
@@ -12,8 +10,6 @@ const quote = (value: Value): string => (typeof value === 'string' ? `'${value.r
 
 const insert = (table: string, columns: readonly string[], rows: readonly (readonly Value[])[]): string =>
   `INSERT INTO ${table} (${columns.join(', ')}) VALUES\n${rows.map((row) => `  (${row.map(quote).join(', ')})`).join(',\n')};\n`;
-
-// ─── the site ────────────────────────────────────────────────
 
 const ZONES: readonly (readonly Value[])[] = [
   ['zone_arena', 'Main Arena', 'open field', 25000, 4, 4, 46, 30],
@@ -49,8 +45,6 @@ const CREW: readonly (readonly Value[])[] = [
   ['crew_pellegrini', 'Gio Pellegrini', 'rigger', 'zone_tent', false],
 ];
 
-// ─── the bill ────────────────────────────────────────────────
-
 const STAGES: readonly (readonly Value[])[] = [
   ['stage_main', 'Main Stage', 'open-air', 25000, 'zone_arena'],
   ['stage_tent', 'The Tent', 'covered', 6000, 'zone_tent'],
@@ -58,8 +52,7 @@ const STAGES: readonly (readonly Value[])[] = [
   ['stage_dock', 'Dockside', 'open-air', 2500, 'zone_dock'],
 ];
 
-// Exactly ONE headliner. "move headliner" has to mean somebody, and a bill
-// with three of them would make the sentence a question instead of an order.
+// Exactly one headliner: "move headliner" has to mean somebody.
 const ACTS: readonly (readonly Value[])[] = [
   ['act_nova_kestrel', 'Nova Kestrel', 'headliner', 'electronic', 22000],
   ['act_lantern_club', 'The Lantern Club', 'main support', 'indie rock', 15000],
@@ -79,15 +72,12 @@ const ACTS: readonly (readonly Value[])[] = [
   ['act_copper_wire', 'Copper Wire', 'support', 'blues rock', 5000],
   ['act_minor_planets', 'Minor Planets', 'opener', 'post rock', 1600],
   ['act_amber_run_club', 'Amber Run Club', 'support', 'dance', 7500],
-  // Saturday evening on the two small open-air stages: what makes the storm a
-  // problem for THREE sets and a decision about one.
   ['act_night_heron', 'Night Heron', 'support', 'psych rock', 3800],
   ['act_tidal_bloom', 'Tidal Bloom', 'support', 'electro soul', 2400],
 ];
 
-// One set per act. The Saturday evening is the interesting part: the headliner
-// on the open-air main stage at 21:30, and the covered tent busy at 21:00 —
-// the swap the storm sentence asks for is a real collision, not a free slot.
+// Saturday evening has the headliner on the open-air main stage at 21:30 and the
+// covered tent busy at 21:00: the swap the storm sentence asks for is a real collision.
 const SLOTS: readonly (readonly [string, string, Day, string, number])[] = [
   ['act_saltwater_choir', 'stage_grove', 'fri', '14:00', 45],
   ['act_paper_tigers', 'stage_dock', 'fri', '15:00', 45],
@@ -111,12 +101,8 @@ const SLOTS: readonly (readonly [string, string, Day, string, number])[] = [
   ['act_marisol_vega', 'stage_main', 'sun', '20:00', 90],
 ];
 
-// ─── the readings ────────────────────────────────────────────
-
 const HOURS: readonly number[] = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23];
 
-// An evening bell curve, 0–1, peaking at `peak`. Every reading below is this
-// shape scaled — crowds, bars and gates all follow the programme.
 const bell = (hour: number, peak: number, width: number): number => Math.exp(-((hour - peak) ** 2) / (2 * width ** 2));
 
 const DAY_WEIGHT: Record<Day, number> = { fri: 0.7, sat: 1, sun: 0.85 };
@@ -124,7 +110,6 @@ const DAY_WEIGHT: Record<Day, number> = { fri: 0.7, sat: 1, sun: 0.85 };
 const weatherRows = (): (readonly Value[])[] =>
   DAYS.flatMap((day) =>
     HOURS.map((hour): readonly Value[] => {
-      // The cell: builds from 20:00, breaks at 21:00, trails off by 23:00.
       if (day === 'sat' && hour === 20) return [`wx_${day}_${hour}`, day, hour, 'rain', 3.5, 38, 1];
       if (day === 'sat' && hour === 21) return [`wx_${day}_${hour}`, day, hour, 'storm', 16, 74, 3];
       if (day === 'sat' && hour === 22) return [`wx_${day}_${hour}`, day, hour, 'rain', 7, 52, 2];
@@ -133,8 +118,6 @@ const weatherRows = (): (readonly Value[])[] =>
     }),
   );
 
-// Where the crowd is follows where the music is: each zone peaks when its own
-// stage does, and the food court peaks at dinner.
 const ZONE_PEAK: Record<string, readonly [number, number]> = {
   zone_arena: [21.5, 2.2],
   zone_tent: [20.5, 2.4],
@@ -146,8 +129,6 @@ const ZONE_PEAK: Record<string, readonly [number, number]> = {
 
 const ZONE_CAPACITY: Record<string, number> = Object.fromEntries(ZONES.map((zone) => [String(zone[0]), Number(zone[3])]));
 
-// The head count a zone STARTS an hour with. Exported because a feed that
-// replays an evening has to be able to put the site back where it found it.
 export const seededHeadcount = (zoneId: string, day: Day, hour: number): number => {
   const [peak, width] = ZONE_PEAK[zoneId] ?? [0, 1];
   return Math.round((ZONE_CAPACITY[zoneId] ?? 0) * 0.92 * DAY_WEIGHT[day] * bell(hour, peak, width));
@@ -159,8 +140,6 @@ const zoneCountRows = (): (readonly Value[])[] =>
 const salesRows = (): (readonly Value[])[] =>
   DAYS.flatMap((day) =>
     HOURS.flatMap((hour): (readonly Value[])[] => {
-      // Tickets sell at the gate in the early afternoon; the bars sell all
-      // night and hardest around the main support.
       const tickets = Math.round(420 * DAY_WEIGHT[day] * bell(hour, 13, 2.5));
       const drinks = Math.round(2600 * DAY_WEIGHT[day] * bell(hour, 20, 3));
       return [
@@ -176,8 +155,6 @@ const INCIDENTS: readonly (readonly Value[])[] = [
   ['inc_003', 'sat', '16:50', 'zone_tent', 'technical', 2, 'Tent stage left PA amp tripping on the generator feed.', 'open'],
   ['inc_004', 'sat', '17:30', 'zone_arena', 'security', 1, 'Lost child reunited at the welfare point.', 'closed'],
   ['inc_005', 'sat', '17:55', 'zone_camp', 'weather', 2, 'Met office amber warning: storm cell tracking in for 21:00.', 'open'],
-  // Enough open ones, of different kinds, that "what's going on?" has
-  // something to say and the feed has an order to be in.
   ['inc_006', 'sat', '17:20', 'zone_food', 'crowd', 2, 'Food Court at 90% and still filling; West Gate queue past the barrier line.', 'open'],
   ['inc_007', 'sat', '17:40', 'zone_arena', 'security', 1, 'Barrier section B3 at the main stage pit reported loose by stewards.', 'open'],
   ['inc_008', 'sat', '15:05', 'zone_grove', 'medical', 1, 'Bee sting, allergic reaction, treated by medics and monitored.', 'closed'],
@@ -185,16 +162,14 @@ const INCIDENTS: readonly (readonly Value[])[] = [
 
 export const buildSeedSql = (): string =>
   [
-    // Saturday, 18:00 — the moment every sentence check is typed at. The clock is
-    // a row now; nothing advances it unless a director is played.
     insert('festival_clock', ['id', 'day', 'minute'], [['now', 'sat', 18 * 60]]),
     insert('zones', ['id', 'name', 'kind', 'capacity', 'x', 'y', 'w', 'h'], ZONES),
     insert('gates', ['id', 'name', 'zone_id', 'capacity_per_hour', 'is_open'], GATES),
     insert('crew', ['id', 'name', 'role', 'zone_id', 'on_shift'], CREW),
     insert('stages', ['id', 'name', 'kind', 'capacity', 'zone_id'], STAGES),
     insert('acts', ['id', 'name', 'billing', 'genre', 'draw'], ACTS),
-    // THE WEATHER FIRST: a slot's `exposure` is computed by a trigger as the row
-    // goes in, from the hours it overlaps — which therefore have to be there.
+    // The weather first: a slot's `exposure` is computed by a trigger as the row
+    // goes in, from the hours it overlaps, which therefore have to be there.
     insert('weather_hours', ['id', 'day', 'hour', 'condition', 'rain_mm', 'wind_kph', 'severity'], weatherRows()),
     insert(
       'slots',

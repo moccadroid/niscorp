@@ -1,24 +1,5 @@
 import type { SeedEntry } from '@niscorp/vex';
 
-// WHAT WOULD MOVING THIS SET DO? — the reads behind `move.impact`.
-//
-// Four lines on one card, each with a verdict — fits · tight · does not fit —
-// and THE VERDICTS ARE COMPUTED HERE, in the mapping, never in a component
-// (rule 9): the card's layout binds `verdict`, `tone` and `line` and has no
-// idea what a capacity is. It also means the agent, replaying these same
-// fingerprints, reads the same verdicts the operator is looking at.
-//
-// A mapping sees `$.result` and, beside it, the request's `$.context` — which
-// is how a verdict can be about TWO tables that have no relation to join on:
-// the act's expected draw rides the context of the read over the target stage,
-// and the stage's cover rides the context of the read over the weather.
-//
-// Thresholds are the festival's, stated once:
-//   capacity    draw ≤ 85% of the stage fits · up to 100% is tight · over is not
-//   changeover  30 min clear either side fits · 15 is tight · under is not
-//   weather     under a roof always fits · open-air under a warning is tight ·
-//               open-air under severity 2+ does not
-
 const FITS = 'fits';
 const TIGHT = 'tight';
 const DOES_NOT_FIT = 'does not fit';
@@ -33,8 +14,6 @@ const toneOf = (verdict: unknown): Record<string, unknown> => ({
   $case: { branches: [{ when: { $eq: [verdict, FITS] }, then: TONE[FITS] }, { when: { $eq: [verdict, TIGHT] }, then: TONE[TIGHT] }], else: TONE[DOES_NOT_FIT] },
 });
 
-// ─── the act being moved ─────────────────────────────────────
-// Its draw and how long it plays: what the other three reads are asked with.
 export const impactAct: SeedEntry = {
   fingerprint: 'impact/act',
   intent: 'One act with its expected draw and the length, stage and start of its billed set',
@@ -47,7 +26,6 @@ export const impactAct: SeedEntry = {
   },
 };
 
-// ─── capacity against draw ───────────────────────────────────
 const capacityVerdict = {
   $with: {
     let: { share: { $div: [context('draw'), result('capacity')] } },
@@ -82,13 +60,8 @@ export const impactCapacity: SeedEntry = {
   },
 };
 
-// ─── what is already on the target stage ─────────────────────
-// Every OTHER set on that stage that day, and how each sits against the window
-// the moved set would occupy. One read, two lines: what overlaps is a clash;
-// of what does not, the nearest edge is the changeover.
 const set = (key: string): Record<string, unknown> => ({ $get: { from: { $var: 'set' }, path: [key] } });
 const overlaps = { $and: [{ $gt: [set('end_min'), context('fromMin')] }, { $lt: [set('start_min'), context('toMin')] }] };
-// Minutes of clear stage between the two sets: before ours, or after it.
 const gap = { $case: { branches: [{ when: { $lte: [set('end_min'), context('fromMin')] }, then: { $sub: [context('fromMin'), set('end_min')] } }], else: { $sub: [set('start_min'), context('toMin')] } } };
 
 const clashes = { $filter: { over: { $ref: '$.result' }, as: 'set', when: overlaps } };
@@ -108,10 +81,8 @@ const changeoverVerdict = verdictOf(
 export const impactStageDay: SeedEntry = {
   fingerprint: 'impact/stageDay',
   intent: 'The other sets on one stage on one day against a window of minutes: which clash with it, and the changeover gap to the nearest one, each with a verdict',
-  // An ARRAY shape on purpose: vex hands a mapping the rows as `$.result` only
-  // when the shape is a list (a single shape gets the first row), and these two
-  // lines are computed over all of them. So the read returns its two lines as
-  // two rows, which is also exactly what the card loops.
+  // An array shape on purpose: vex hands a mapping every row as `$.result` only when
+  // the shape is a list (a single shape gets the first row).
   shape: [{ key: '', label: '', verdict: '', tone: '', line: '' }],
   dsl: {
     from: ['slots', 'acts'],
@@ -149,7 +120,6 @@ export const impactStageDay: SeedEntry = {
   ],
 };
 
-// ─── the sky over it ─────────────────────────────────────────
 const open = { $neq: [context('kind'), 'covered'] };
 const coverVerdict = verdictOf(
   [

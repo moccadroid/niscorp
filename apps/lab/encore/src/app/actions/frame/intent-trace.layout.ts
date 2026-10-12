@@ -1,23 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// X-RAY IS ONE PANEL, DOCKED AT THE BOTTOM, AND NOTHING ELSE.
-//
-// The first x-ray turned the whole room into an instrument — probability tags on
-// every card, a legend row, a banner, a status line under the answer — and the
-// one interesting thing, two models talking to each other, was five collapsed
-// key/value grids in lowercase mono. The rule now: X-RAY CHANGES NOTHING IN THE
-// APP. Every app canvas is byte-identical with it on and off; all of it is here.
-//
-// Shut, this is one quiet word. Open, it is a panel with a fixed ceiling and its
-// own scroll, sitting IN the page's flow at its end and stuck to the bottom of
-// the window — so the page is exactly one panel longer, and the last card can
-// always be scrolled clear of it. "On" is the panel being open; nothing else says so.
-//
-// THE STORY FIRST (server/intent/story.ts): a short sequence in the reading
-// face — what was typed, what Jev decided, what the assistant was handed, what it
-// said and what was refused, what changed on screen. NUMBERS SECOND: one table,
-// real labels, each once. The demo's controls third. Mono is for ids and numbers.
-
 export const XRAY_CHORD = 'mod+., mod+`';
 
 const heading = (value: string): LayoutNode => ({ component: 'Text', props: { value, variant: 'title' } });
@@ -25,8 +7,7 @@ const heading = (value: string): LayoutNode => ({ component: 'Text', props: { va
 const lines = (path: string): LayoutNode => ({
   component: 'Stack',
   props: { gap: 4 },
-  // No `key`: two story lines can be the same words (a run refused twice for
-  // the same reason), and keying by text made React drop one of them.
+  // No `key`: two story lines can be the same words, and keying by text makes React drop one.
   children: [{ for: path, as: 'line', do: { component: 'Text', props: { value: '$.line.text', tone: '$.line.tone', variant: 'story' } } }],
 });
 
@@ -36,7 +17,6 @@ const meters = (path: string): LayoutNode => ({
   children: [{ for: path, as: 'card', key: 'id', do: { component: 'Meter', props: { label: '$.card.label', value: '$.card.p', note: '$.card.note', compact: true } } }],
 });
 
-// 1 — what was typed, and what was heard in it.
 const typed: LayoutNode = {
   component: 'Stack',
   props: { gap: 6 },
@@ -47,7 +27,6 @@ const typed: LayoutNode = {
   ],
 };
 
-// 2 — Jev: the cards it wanted (a bar and a number), then the decision in words.
 const jev: LayoutNode = {
   component: 'Stack',
   props: { gap: 6 },
@@ -64,21 +43,18 @@ const jev: LayoutNode = {
   ],
 };
 
-// 3 — what the assistant was handed.
 const handed: LayoutNode = {
   if: '$.story.handedHeading',
   then: { component: 'Stack', props: { gap: 6 }, children: [heading('$.story.handedHeading'), { component: 'KeyValue', props: { items: '$.story.handed' } }] },
   else: '',
 };
 
-// 4 — the assistant: what it said, placed, looked up — and what was refused, with why.
 const assistant: LayoutNode = {
   if: '$.story.assistantHeading',
   then: { component: 'Stack', props: { gap: 6 }, children: [heading('$.story.assistantHeading'), lines('$.story.assistant')] },
   else: '',
 };
 
-// 5 — what changed on screen as a result.
 const screen: LayoutNode = { component: 'Stack', props: { gap: 6 }, children: [heading('On screen, as a result'), lines('$.story.screen')] };
 
 const story: LayoutNode = {
@@ -87,7 +63,6 @@ const story: LayoutNode = {
   else: { component: 'Text', props: { value: 'Nothing has been typed yet. The story of a sentence appears here as soon as there is one.', tone: 'mute', variant: 'story' } },
 };
 
-// NUMBERS SECOND: one table of where the time went, one of what it cost.
 const numbers: LayoutNode = {
   if: '$.story.key',
   then: {
@@ -101,8 +76,6 @@ const numbers: LayoutNode = {
   else: { component: 'Text', props: { value: 'No pass yet — nothing has been measured.', tone: 'mute', variant: 'story' } },
 };
 
-// The demo: the director's own deck, which is its own action on its own canvas
-// (a principal who does not hold it gets an empty slot, and the line under it).
 const demo: LayoutNode = {
   component: 'Stack',
   props: { gap: 8 },
@@ -120,7 +93,6 @@ const tab = (key: string, label: string): LayoutNode => ({
 
 export const TRACE_TABS = ['story', 'numbers', 'demo'] as const;
 
-// Which pass this is, and the way to the ones before it.
 const stepper: LayoutNode = {
   if: '$.storyPosition',
   then: {
@@ -173,10 +145,6 @@ export const intentTraceLayout: LayoutNode = {
   component: 'Row',
   props: { gap: 8, align: 'end', justify: 'end' },
   children: [
-    // Ctrl+. (or Ctrl+`) is the same switch, either way round — a CHORD, because the
-    // line always has focus and a bare backtick is a character in the sentence (kit
-    // `Hotkey`, chords.ts). And a freshly loaded page that finds the panel open shuts
-    // it (kit `OnLoad`: once per page load).
     { if: '$.open', then: { component: 'Hotkey', ref: 'shutKey', props: { value: XRAY_CHORD } }, else: { component: 'Hotkey', ref: 'openKey', props: { value: XRAY_CHORD } } },
     { component: 'OnLoad', ref: 'fresh', props: { when: '$.open' } },
     { if: '$.open', then: panel, else: { component: 'Button', ref: 'open', props: { label: 'x-ray', variant: 'quiet' } } },

@@ -3,66 +3,30 @@ import { z } from 'zod';
 import { predecisionsIn } from './predecisions';
 import type { Predecisions } from './predecisions';
 
-// ═══════════════════════════════════════════════════════════
-// THE FAKE AGENT MODEL — a scripted chat client, injected under signal's
-// genuine openai-compatible adapter.
-//
-// The same bargain as the fake decider: everything above the client is the real
-// thing. cortex assembles the prompt, runs the loop, executes the tools, feeds
-// solid, validates the envelope and corrects a bad one; signal builds the
-// request, reads streamed chunks, routes the turn and tears the stream down on
-// abort. What is faked is only the text a model would have produced — and that
-// is scripted from the pre-decisions in the request, so the fake can only ever
-// say things Jev already decided or a tool just returned. It is not trying to be
-// clever, and a check that needs it to MISBEHAVE swaps the script.
-//
-// A script is asked for ONE MOVE per model step: call a tool, or answer. It is
-// handed what a model would have in front of it at that step — the conversation
-// so far, this turn's pre-decisions, the operator's line, what its lookups
-// returned, what it was told to correct — so a scripted run is a real
-// multi-step run, not a canned reply.
-//
-// The chunk shape is the OpenAI streaming one: content deltas (or one tool-call
-// delta), a finish, then a usage frame.
-// ═══════════════════════════════════════════════════════════
-
 export const FAKE_AGENT_MODEL = 'encore-scripted-2';
 
 export type ScriptedTurn = {
   predecisions: Predecisions;
   line: string;
-  // The conversation before this turn, oldest first, as the model received it.
   thread: { role: string; content: string }[];
-  // What this run's tool calls have returned so far, oldest first.
   lookups: string[];
-  // What cortex told the model to fix, oldest first. Empty on a first attempt.
   corrections: string[];
 };
 
-// An answer is sent as the model's final message verbatim — deliberately
-// `unknown`, so a check can script a reply that breaks the contract.
 export type ScriptedMove = { call: { name: string; args: Record<string, unknown> } } | { answer: unknown };
 
 export type AgentScript = (turn: ScriptedTurn) => ScriptedMove;
 
 export type SeenRequest = {
-  // Every message of the request, in order, contents flattened to text.
   messages: { role: string; content: string }[];
   tools: string[];
-  // The request as signal sent it — temperature, reasoning_effort, the lot.
   params: Record<string, unknown>;
 };
 
-// Mutable on purpose: one booted world, several behaviours. The checks hold
-// this object and change it between sentences.
 export type FakeAgentControls = {
-  // Before the first byte of a step.
   latencyMs: number;
-  // Between the content chunks of an answer — what makes a stream a stream,
-  // and what a throttle is measured against.
   chunkMs: number;
   script?: AgentScript;
-  // Every request the fake was sent, oldest first — one per MODEL STEP.
   seen: SeenRequest[];
 };
 
@@ -77,8 +41,6 @@ const OptionsSchema = z.object({ signal: z.instanceof(AbortSignal).optional() })
 
 const textOf = (content: unknown): string => (typeof content === 'string' ? content : content === null || content === undefined ? '' : JSON.stringify(content));
 
-// ─── reading the request the way a model would ──────────────
-
 const CORRECTION = /^(Your output was invalid|You did not finish)/;
 
 const turnIn = (messages: readonly { role: string; content: string }[]): ScriptedTurn => {
@@ -90,14 +52,11 @@ const turnIn = (messages: readonly { role: string; content: string }[]): Scripte
   return {
     predecisions,
     line: messages[lineAt]?.content ?? '',
-    // Everything conversational AHEAD of the pre-decisions: the thread.
     thread: messages.slice(0, blockAt).filter((message) => message.role === 'user' || message.role === 'assistant'),
     lookups: after.filter((message) => message.role === 'tool').map((message) => message.content),
     corrections: after.filter((message) => message.role === 'system' && CORRECTION.test(message.content)).map((message) => message.content),
   };
 };
-
-// ─── the default script ─────────────────────────────────────
 
 const capitalise = (text: string): string => (text === '' ? text : `${text[0]?.toUpperCase() ?? ''}${text.slice(1)}`);
 
@@ -119,19 +78,12 @@ const readActionLine = (line: string): ActionLine | undefined => {
 
 const countOf = (value: unknown): number => (Array.isArray(value) ? value.length : 0);
 
-// What the facts amount to — counted, never interpreted. One PART per read, so
-// each is a span of the answer that can be cited on its own.
 const factParts = (facts: Predecisions['facts']): string[] =>
   Object.entries(facts).flatMap(([pack, reads]) => {
     const parsed = z.record(z.string(), z.unknown()).safeParse(reads);
     return parsed.success ? Object.entries(parsed.data).map(([name, rows]) => `${countOf(rows)} ${pack}.${name}`) : [];
   });
 
-// WANTED, FINISHED. A card the fast model wanted and could not aim ("act.card —
-// wanted 0.70 — needs: an act") is aimed when the facts hold a row of the table
-// its required input refers to: the FIRST such row, which for "who is on stage" is
-// the act on stage. A script's idea of "the facts settle it" — but it takes the
-// id from FACTS and from nowhere else, which is the part the room depends on.
 const ROW_ID: Record<string, string> = { acts: 'act_id', stages: 'stage_id', zones: 'zone_id' };
 const firstRowWith = (facts: Predecisions['facts'], key: string): string | undefined => {
   for (const reads of Object.values(facts)) {
@@ -142,8 +94,6 @@ const firstRowWith = (facts: Predecisions['facts'], key: string): string | undef
   }
   return undefined;
 };
-// (The first wanted card only, and only one that lacks a single row: a script
-// should not look cleverer than it is.)
 const aimWanted = (predecisions: Predecisions): { canvas: string; actionId: string; input: Record<string, unknown> }[] =>
   predecisions.wanted.slice(0, 1).flatMap((line) => {
     const action = predecisions.actions.flatMap((entry) => readActionLine(entry) ?? []).find((entry) => line.startsWith(`${entry.id} — `));
@@ -155,22 +105,15 @@ const aimWanted = (predecisions: Predecisions): { canvas: string; actionId: stri
 
 const factsLine = (parts: readonly string[]): string => (parts.length === 0 ? 'I was handed no facts for this' : `From what was read a moment ago: ${parts.join(', ')}`);
 
-// What a scripted operator would want next. A script, not a judgement — but it
-// keeps the contract's promise: nothing this thread already asked or was offered
-// (ASKED), and at most two.
 const FOLLOW_UPS = ['what are our options?', 'who needs to know?', 'how full is the arena?', 'which sets are exposed?', 'what did I miss?'];
 const sameWords = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const followUpsFor = (asked: readonly string[]): string[] => FOLLOW_UPS.filter((next) => !asked.some((before) => sameWords(before) === sameWords(next))).slice(0, FOLLOW_UPS_MAX);
 
-// A row's name, out of the ROWS lines ("id = Name — what it is").
 const nameIn = (rows: Predecisions['rows'], id: unknown): string => {
   const line = Object.values(rows).flat().find((entry) => entry.startsWith(`${String(id)} = `));
   return line === undefined ? String(id) : (line.slice(`${String(id)} = `.length).split(' — ')[0] ?? String(id));
 };
 
-// WORDS WRITTEN FROM THE FORM BESIDE THEM. If a form on screen is a move — an
-// act and a stage to take it to — the message is about THAT move, as the form
-// holds it now, hand edits included. Otherwise there is only the sentence.
 const fromSibling = (predecisions: Predecisions): string | undefined => {
   const move = predecisions.screen.find((card) => card.aimedAt['actId'] !== undefined && card.aimedAt['toStageId'] !== undefined);
   if (move === undefined) return undefined;
@@ -185,13 +128,6 @@ const canvasesOf = (cards: readonly { canvas: string; actionId: string; input: R
   return { canvases };
 };
 
-// ONE BEHAVIOUR, READ OFF THE STATE — like the agent it stands in for, which has
-// one prompt. An event (FACTS.standing) gets its one line. Otherwise: words for
-// every field nobody has typed in; the card Jev wanted and could not aim; evidence
-// when the screen is empty; what the facts amount to, cited — and NOTHING AT ALL
-// when it was handed no facts and found nothing to write, which is what most
-// sentences get. It never proposes steps or looks anything up: a check that wants
-// either scripts it.
 export const defaultScript: AgentScript = (turn) => {
   const { predecisions } = turn;
   const about = predecisions.resolved.map((row) => row.label.split(' — ')[0] ?? row.label);
@@ -199,8 +135,6 @@ export const defaultScript: AgentScript = (turn) => {
   const standing = z.array(z.object({ place: z.string(), kind: z.string() })).safeParse(predecisions.facts['standing']);
   if (standing.success) {
     const places = standing.data.length > 0 ? standing.data.map((cause) => `${cause.place} (${cause.kind})`) : [predecisions.sentence];
-    // Every standing place, joined as things happening AT ONCE — which is the
-    // only thing a script can say about how they compound.
     return { answer: { response: places.length === 1 ? `${places[0] ?? ''} stands alone.` : `${places.slice(0, -1).join(', ')} while ${places.at(-1) ?? ''}: each makes the other harder to clear.`, data: {} } };
   }
 
@@ -209,9 +143,6 @@ export const defaultScript: AgentScript = (turn) => {
   const fields = predecisions.writable.map((target) => ({ card: target.card, field: target.field, text: authored }));
 
   const parts = factParts(predecisions.facts);
-  // EVERY SENTENCE STANDS ON A CARD. What is on screen is cited, part by part;
-  // with nothing on screen the first view that needs no row to open is PLACED,
-  // and cited.
   const views = predecisions.actions.flatMap((line) => readActionLine(line) ?? []).filter((action) => action.canvas !== 'doing' && !action.keys.some((key) => key.required));
   const placing = predecisions.screen.length === 0 && parts.length > 0 ? views[0] : undefined;
   const cited = placing === undefined ? predecisions.screen.map((card) => card.card) : [placing.id];
@@ -221,30 +152,22 @@ export const defaultScript: AgentScript = (turn) => {
   if (fields.length > 0) return { answer: { response: `Drafted ${fields.length} field(s) from your sentence, for the people who receive them.`, data: { fields, ...cards } } };
   if (parts.length === 0) return { answer: { response: '', data: cards } };
 
-  // TWO SENTENCES, like the contract says: what was read, then what the thread
-  // holds. The quoted turn is clipped and stripped of full stops — a script must
-  // not be refused for quoting somebody else's punctuation.
   const lastSaid = (turn.thread.at(-1)?.content ?? '').replace(/[.!?"]/g, '').slice(0, 60);
   const earlier = turn.thread.length === 0 ? '' : ` Earlier in this conversation: ${turn.thread.length} message(s), the last being "${lastSaid}".`;
   return { answer: { response: `${factsLine(parts)}.${earlier}`, data: { claims, followUps: followUpsFor(predecisions.asked), ...cards } } };
 };
 
-// ─── the wire ───────────────────────────────────────────────
-
 const delay = (ms: number, signal: AbortSignal | undefined): Promise<void> =>
   new Promise<void>((resolve, reject) => {
     if (signal?.aborted === true) return reject(new Error('aborted'));
     const timer = setTimeout(resolve, ms);
-    // An aborted run must stop WAITING too — that is the point of the knobs.
     signal?.addEventListener('abort', () => {
       clearTimeout(timer);
       reject(new Error('aborted'));
     });
   });
 
-// An async iterable over fixed frames, written out by hand: arrow functions
-// cannot be generators, and this app declares no `function`. `pauseMs` is
-// waited BEFORE every frame after the first.
+// By hand: arrow functions cannot be generators, and this app declares no `function`.
 const framesOf = (frames: readonly unknown[], pauseMs: number, signal: AbortSignal | undefined): AsyncIterable<unknown> => ({
   [Symbol.asyncIterator]: () => {
     let index = 0;
@@ -267,8 +190,6 @@ const chunksOf = (content: string): string[] => {
   return Array.from({ length: Math.ceil(content.length / size) }, (_, index) => content.slice(index * size, (index + 1) * size));
 };
 
-// The object signal's adapter calls `chat.completions.create(params, options)`
-// on. Typed by what it IS rather than by the SDK, which signal never asks for.
 export type ScriptedClient = { chat: { completions: { create: (params: unknown, options?: unknown) => Promise<AsyncIterable<unknown>> } } };
 
 export const createScriptedClient = (controls: FakeAgentControls): ScriptedClient => {

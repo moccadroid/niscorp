@@ -1,8 +1,5 @@
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 
-// Pushes to attendees' phones. The ledger is the feature: a festival that sent
-// "move to shelter" wants to know afterwards who sent it and to whom.
-
 export const pushesRecent: SeedEntry = {
   fingerprint: 'pushes/recent',
   intent: 'The most recent pushes sent to attendees',

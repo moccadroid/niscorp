@@ -1,27 +1,3 @@
-// THE SURFACE — three layers that never mix (PLAN.md § The surface).
-//
-//   layer 1  THE APP     the line, the answer, cards, attention, a quiet history
-//   layer 2  WHY         one plain line per card, on demand, confidence in WORDS
-//   layer 3  X-RAY       one switch: probabilities, models, timings, the trace, the deck
-//
-// What is asserted here is the TREE THE TERMINAL WAS SENT — every message, not
-// the last one — because "hidden" is not the claim. With x-ray off the meta is
-// not in the room: not collapsed, not styled away, not sent.
-//
-// Driven on the fake providers with the fake's `noulFloor` at 0.4 throughout: the
-// confidence word is a threshold, and a threshold is only proven against a model
-// that always has a middling opinion.
-//
-//   a. x-ray off: no meta reaches the terminal — a storm, a question, a plan, an evening
-//   b. x-ray on shows the drawer and the probability tags; off removes them; no card remounts
-//   c. the drawer's sections open and shut, and what is open survives a new sentence
-//   d. a card's "why?" is one plain line with a confidence WORD, and no number
-//   e. the status line is there while something happens, and gone once the answer is
-//   f. (2026-09-21, the redesign) ONE packed flow holding every question canvas, no
-//      card in a column; ONE scrollbar; one row of next steps — 3 chips, 2 links;
-//      an open "why?" survives a re-aim, a reload-on-write and the switch; the
-//      answer is two sentences; a follow-up is never a repeat;
-//      x-ray says it is on, and never survives a page load
 import { OPERATOR_PRINCIPAL } from '@encore/app/charter/assignments';
 import { FAKE_AGENT_MODEL } from '@encore/server/agent/fake-llm';
 import type { FakeAgentControls } from '@encore/server/agent/fake-llm';
@@ -44,13 +20,11 @@ const STORM_MOVE = 'storm at 9 move headliner to the tent';
 const STORM = 'storm at 9';
 const OPTIONS = 'what are our options?';
 const STORM_ASK = 'what is going on with the storm at 9?';
-// A region's question, as the x-ray arrangement heads it (shell/calm.layout.ts).
 const HEADING = 'what are you doing?';
 const ROOM_CANVASES = ['line', 'assist', 'rail', 'maybe', 'watch', 'attention', 'doing', 'about', 'where', 'when', 'nearby', 'deck', 'trace'] as const;
 
-// WHAT MAY NOT REACH AN OPERATOR. Names of models and of the fast decider — the
-// real ones, and this world's own, so the claim is not vacuous on the fake —
-// the instrument's units, and the room's internal state words as a label.
+// The names of models and of the fast decider are the real ones and this
+// world's own, so the claim is not vacuous on the fake.
 const NAMES = ['jev', 'qwen', '27b', '120b', 'gpt-oss', 'scripted', FAKE_AGENT_MODEL, FAKE_MODEL, 'lexical', 'tokens', 'bytes', 'calibrated', 'canvases named', 'questions'];
 const STATE_WORDS = /^(landed|pending|running|aborted|failed|maybe|heard|narrowed|computed|idle|matched|confirmed|watching|director|looked up)$/i;
 const PROBABILITY = /\b[01]\.\d\d\b/;
@@ -59,7 +33,6 @@ const INSTANCE_ID = /act-[0-9a-f-]{36}/g;
 
 type Leaf = { canvas: string; key: string; value: string | number };
 
-// Every string and number in a served message, with the prop it arrived under.
 const leavesOf = (message: string): Leaf[] => {
   const parsed: unknown = JSON.parse(message);
   const canvas = typeof parsed === 'object' && parsed !== null && 'canvas' in parsed && typeof parsed.canvas === 'string' ? parsed.canvas : 'frame';
@@ -73,9 +46,6 @@ const leavesOf = (message: string): Leaf[] => {
   return leaves;
 };
 
-// STRUCTURE IS NOT CONTENT: a component's name, a canvas id, a definition id, a
-// trigger ref, an option's id are how the tree is wired, and an operator never
-// reads them. Everything else is something a component may draw.
 const WIRING = new Set(['type', 'name', 'canvas', 'canvasId', 'definitionId', 'instanceId', 'ref', 'path', 'id', 'key', 'rowKey', 'valueKey', 'labelKey', 'toneKey', 'primaryKey', 'secondaryKey', 'detailKey', 'tagKey', 'textKey', 'linkKey', 'noteKey', 'variant', 'tone', 'align', 'justify', 'card', 'active', 'open']);
 
 const metaIn = (messages: readonly string[]): string[] => {
@@ -99,7 +69,6 @@ const metaIn = (messages: readonly string[]): string[] => {
   return [...found];
 };
 
-// X-ray's story, as the panel holds it (server/intent/story.ts).
 const Line = z.object({ text: z.string(), tone: z.enum(['plain', 'mute', 'warn']) });
 const Fact = z.object({ label: z.string(), value: z.string() });
 const CardLine = z.object({ id: z.string(), label: z.string(), p: z.number(), shown: z.string(), note: z.string() });
@@ -133,10 +102,8 @@ const main = async (): Promise<void> => {
   const served = (actionId: string): string => world.servedTo(OP).filter((message) => message.includes(`"definitionId":"${actionId}"`)).at(-1) ?? '';
   const servedOn = (canvas: string): string => world.servedTo(OP).filter((message) => message.includes(`"canvas":"${canvas}"`)).at(-1) ?? '';
   const room = (): string => ROOM_CANVASES.map((canvas) => (shell.getState().canvases[canvas]?.stack ?? []).map((item) => `${item.definitionId}#${item.id}`).join('+')).join(' | ');
-  // X-RAY IS ITS PANEL BEING OPEN, and nothing else (frame/intent-trace.action.ts).
   const panel = (): Record<string, unknown> => cardData(shell, 'trace', 'intent.trace');
   const isOn = (): unknown => panel()['open'];
-  // THE SWITCH IS PRESSED, not called: the click the panel's own word dispatches.
   const pressXray = async (): Promise<void> => {
     world.dispatchOn(OP, 'trace', { type: 'ui:click', ref: isOn() === true ? 'shut' : 'open' }, 'intent.trace');
     await settle(6);
@@ -146,7 +113,6 @@ const main = async (): Promise<void> => {
     await world.settled(OP);
   };
 
-  // ═══ f. the arrangement ══════════════════════════════════
   const frame = world.servedTo(OP).find((message) => message.includes('"type":"frame"')) ?? '';
   const pack = /"name":"Pack".*$/.exec(frame)?.[0] ?? '';
   check('ONE PACKED FLOW: a single Pack holds what the room raised and EVERY question canvas, in reading order', frame.split('"name":"Pack"').length === 2 && ['attention', ...FLOW_ORDER].every((canvas, index, all) => pack.includes(`"canvasId":"${canvas}"`) && (index === 0 || pack.indexOf(`"canvasId":"${canvas}"`) > pack.indexOf(`"canvasId":"${all[index - 1]}"`))));
@@ -154,14 +120,11 @@ const main = async (): Promise<void> => {
   const stylesheet = readFileSync(new URL('../ui/css/theme.css', import.meta.url), 'utf8');
   check('ONE SCROLLBAR, the page’s: the frame is no scroll container, and the stylesheet declares none', !frame.includes('"scroll":true') && !/overflow(-[xy])?:\s*(auto|scroll)/.test(stylesheet));
 
-  // ═══ a. x-ray off: the app, and nothing else ═════════════
   check('x-ray is OFF by default: its panel is shut, and shut it is one quiet word', isOn() === false && mounted(shell, 'trace').join() === 'intent.trace' && served('intent.trace').includes('"label":"x-ray"'));
   check('an idle room says so in plain words — and does not offer a deck the app does not show', served('intent.options').includes('Nothing needs attention right now. Say what is happening.') && !served('intent.options').includes('press play'));
   check('the instrument is ABSENT, not collapsed: nothing of the panel is in the tree', !served('intent.trace').includes('"name":"Box"') && !served('intent.trace').includes('What happened'));
-  // (2026-09-22: the demo's controls live in x-ray's panel; the app has none.)
   check('the director’s deck is not in the app, and not sent', !servedOn('deck').includes('"label"') && !frame.includes('"canvasId":"deck"'));
 
-  // a storm sentence
   await world.typeLine(OP, STORM_MOVE);
   await world.settled(OP);
   const stormRoom = room();
@@ -171,9 +134,6 @@ const main = async (): Promise<void> => {
   check('...whose own title is on them, and no region heading or eyebrow above it', served('slot.swap').includes('"title":"Move a set"') && !served('slot.swap').includes('eyebrow') && !world.servedTo(OP).some((message) => message.includes(HEADING)));
   check(`...and what was heard sits under the line with no label: ${JSON.stringify(cardData(shell, 'line', 'intent.line')['heard']).slice(0, 80)}…`, served('intent.line').includes('"name":"Tags"') && !served('intent.line').includes('"prefix"') && !served('intent.line').includes('"state"'));
 
-  // THE SUGGESTIONS ARE FEW. Under a 0.4 floor every card in the catalog is a
-  // "maybe" — which is what a calibrated model is like — and the app offers the
-  // best few within a margin of the best, not the whole middle band.
   const Chips = z.array(z.object({ id: z.string(), p: z.number() }));
   const band = Chips.parse(cardData(shell, 'maybe', 'intent.options')['chips'] ?? []);
   const offered = Chips.parse(cardData(shell, 'maybe', 'intent.options')['suggested'] ?? []);
@@ -181,16 +141,13 @@ const main = async (): Promise<void> => {
   check(`THE MIDDLE BAND IS WIDE under a ${FLOOR} floor (${band.length} chips: ${band.map((chip) => `${chip.id} ${chip.p}`).join(', ')})`, band.length > CHIPS_SHOWN);
   check(`...and the app offers at most ${CHIPS_SHOWN}, best first (${offered.map((chip) => `${chip.id} ${chip.p}`).join(', ')})`, offered.length >= 1 && offered.length <= CHIPS_SHOWN && offered.every((chip, index) => chip.id === band[index]?.id) && chipsServed() === offered.length);
 
-  // ═══ d. why? ═════════════════════════════════════════════
   const whyLine = (actionId: string): string => /"value":"((?:Opened|Here|Added|You)[^"]*)"/.exec(served(actionId))?.[1] ?? '';
   check('A CARD CARRIES A SMALL "why?" — and the line behind it is not in the tree until it is asked for', served('slot.swap').includes('"label":"why?"') && whyLine('slot.swap') === '');
   world.dispatchOn(OP, 'doing', { type: 'ui:click', ref: 'why' }, 'slot.swap');
   await settle(4);
   const jevWhy = whyLine('slot.swap');
   check(`...pressed, it is ONE plain line: "${jevWhy}"`, jevWhy.includes(`because you said “${STORM_MOVE}”`) && served('slot.swap').includes('"label":"hide"'));
-  // (2026-09-22: the confidence WORD — sure / fairly sure / a guess — was two more thresholds; deleted.)
   check('...and no number in it', !/\d\.\d/.test(jevWhy) && !/%/.test(jevWhy));
-  // "when I click why it always resets": a re-aimed card is a NEW instance.
   world.dispatchOn(OP, 'nearby', { type: 'ui:click', ref: 'why' }, 'move.impact');
   await settle(4);
   const impactBefore = shell.getState().canvases['nearby']?.stack.find((item) => item.definitionId === 'move.impact')?.id;
@@ -207,10 +164,9 @@ const main = async (): Promise<void> => {
   const companion = mounted(shell, 'nearby').includes('move.impact');
   check(`a card that came WITH another says that: "${String(cardData(shell, 'nearby', 'move.impact')['why'])}"`, companion && String(cardData(shell, 'nearby', 'move.impact')['why']).length > 0 && !/\d\.\d/.test(String(cardData(shell, 'nearby', 'move.impact')['why'])));
 
-  // ═══ e. a question, its status, its answer ═══════════════
   await clear();
-  // (The assistant runs on every finished sentence now, and every run above offered the
-  // fake's few follow-ups: a fresh thread, so this answer has some left to offer.)
+  // Every run above offered the fake's few follow-ups: a fresh thread, so this
+  // answer has some left to offer.
   await world.booted.intent.of(OP)?.newThread();
   controls.latencyMs = 120;
   controls.chunkMs = 25;
@@ -233,8 +189,6 @@ const main = async (): Promise<void> => {
   check(`THE ANSWER IS SHORT: ${sentencesOf(String(answerCard()['answer'])).length} sentence(s), in the body face`, sentencesOf(String(answerCard()['answer'])).length <= ANSWER_MAX_SENTENCES);
   check(`ONE ROW OF NEXT STEPS, under the answer: ${count(served('intent.options'), 'chip')} chip(s) and ${count(served('intent.options'), 'link')} link(s) — ${firstOffered.join(' · ')}`, count(served('assist.answer'), 'followUp') === 0 && count(served('intent.options'), 'chip') <= CHIPS_SHOWN && count(served('intent.options'), 'link') === firstOffered.length && firstOffered.length >= 1 && firstOffered.length <= FOLLOW_UPS_MAX && served('intent.options').includes('"variant":"link"'));
 
-  // an open "why?" and a write from outside: a card that reads what was written
-  // re-loads in place, and what a person opened on it stays open.
   await clear();
   await world.typeLine(OP, 'how many guests are there right now');
   await world.settled(OP);
@@ -250,7 +204,6 @@ const main = async (): Promise<void> => {
   await world.typeLine(OP, STORM);
   await world.settled(OP);
 
-  // a plan (scripted: the default assistant proposes none)
   controls.script = planOf(STORM_PLAN_STEPS);
   await world.typeLine(OP, OPTIONS);
   await world.settled(OP);
@@ -263,7 +216,6 @@ const main = async (): Promise<void> => {
   const planOffered = Links.parse(answerCard()['followUps'] ?? []).map((link) => link.text);
   check('a plan’s steps ARE the next steps: no card suggestions beside them — one row of pills, never two', count(served('assist.answer'), 'step') >= 1 && count(served('intent.options'), 'chip') === 0);
   check(`A FOLLOW-UP IS NEVER A REPEAT: "${OPTIONS}" was asked, and offered before — it is not offered again (${planOffered.join(' · ') || 'none'})`, !planOffered.includes(OPTIONS) && planOffered.every((next) => !firstOffered.includes(next)));
-  // (Restated 2026-09-21, the redesign: the history is ONE LINE until it is wanted.)
   check('the history is one quiet line — "Earlier · n" — and no list', /"label":"Earlier · \d+"/.test(served('assist.rail')) && !served('assist.rail').includes('"name":"Rail"'));
   world.dispatchOn(OP, 'rail', { type: 'ui:click', ref: 'earlierOpen' }, 'assist.rail');
   await settle(4);
@@ -271,7 +223,6 @@ const main = async (): Promise<void> => {
   world.dispatchOn(OP, 'rail', { type: 'ui:click', ref: 'earlierShut' }, 'assist.rail');
   await settle(4);
 
-  // a card the assistant put up
   await clear();
   controls.script = () => ({ answer: { response: 'The storm is the thing to tell people about. I opened the push form.', data: { canvases: { doing: [{ actionId: 'push.compose', input: { audience: 'everyone' } }] } } } });
   await world.typeLine(OP, STORM_ASK);
@@ -281,14 +232,9 @@ const main = async (): Promise<void> => {
   await settle(4);
   check(`a card the ASSISTANT put up says so, in its own "why?": "${whyLine('push.compose')}"`, whyLine('push.compose') === 'Added by the assistant as evidence for its answer.' && String(cardData(shell, 'doing', 'push.compose')['placedBy']) === 'scripted');
 
-  // THE CONTRACT REFUSES A THIRD SENTENCE — with a correction, so the model gets
-  // to say it properly. The script breaks the bound first, then behaves. (A
-  // second gate, "a recital", was deleted on 2026-09-22: it refused the honest
-  // answer to "how will the storm affect the lineup?" three times on the real
-  // model and failed the run.)
   await clear();
-  // (One correction per run — agent.ts `outputRetries(2)` — so each refusal is its
-  // own sentence: the script breaks the contract once, is told, and then keeps it.)
+  // One correction per run (agent.ts `outputRetries(2)`), so each refusal is its
+  // own sentence: the script breaks the contract once, is told, and then keeps it.
   const corrections: string[] = [];
   const breaksOnce = (broken: string, kept: string): void => {
     controls.script = (turn) => {
@@ -298,7 +244,6 @@ const main = async (): Promise<void> => {
   };
   breaksOnce('One thing matters. Then another. And a third.', 'One thing matters, and it is the second.');
   await world.typeLine(OP, 'what matters most on the running order?');
-  // Enter: whatever Jev made of the sentence, the operator wants words about it.
   world.booted.intent.of(OP)?.runNow();
   await world.settled(OP);
   controls.script = undefined;
@@ -307,7 +252,6 @@ const main = async (): Promise<void> => {
   const repeated = admitAnswer({ ...empty, asked: ['What are our options?', 'who needs to know'] }, { followUps: ['what are our options', 'Who needs to know?', 'is gate B open?', 'how long will it last?', 'a third one'] }, 'Short.');
   check(`the rule itself: asked-before is dropped, and at most ${FOLLOW_UPS_MAX} remain (${repeated.ok ? repeated.followUps.join(' · ') : ''})`, repeated.ok && repeated.followUps.join('|') === 'is gate B open?|how long will it last?');
 
-  // a failure, said once and plainly
   await clear();
   controls.script = () => ({ answer: { response: 'An action nobody offered.', data: { canvases: { doing: [{ actionId: 'gate.toggle', input: {} }] } } } });
   await world.typeLine(OP, 'is the tent free at 9?');
@@ -315,7 +259,6 @@ const main = async (): Promise<void> => {
   controls.script = undefined;
   check(`A FAILURE is one plain sentence — "${String(answerCard()['plain'])}" — and the reason ("${String(answerCard()['say']).slice(0, 50)}…") stays with the instruments`, answerCard()['status'] === 'failed' && served('assist.answer').includes('That did not work, and nothing was changed.') && !served('assist.answer').includes('gate.toggle'));
 
-  // the director's evening
   await clear();
   const director = world.booted.director;
   const cues = director.cues();
@@ -343,9 +286,6 @@ const main = async (): Promise<void> => {
   check(`WITH X-RAY OFF NO META REACHED THE TERMINAL — ${offMessages.length} messages, across the storm sentence, a question, a plan, a failure and the evening${leaked.length === 0 ? '' : `:\n         ${leaked.slice(0, 12).join('\n         ')}`}`, leaked.length === 0);
   check('...and x-ray was never on, so that is every message this terminal has been sent', isOn() === false && room() !== stormRoom);
 
-  // THE MOUNT LINE IS "PROBABLY" (0.50), and the unmount line 0.35 — which sits UNDER
-  // this model's 0.4 opinion of everything. Hysteresis is for ONE sentence being typed:
-  // typed over with another, the old room must not sit it out.
   await world.typeLine(OP, STORM_MOVE);
   await world.settled(OP);
   await world.typeLine(OP, 'how many guests are there right now');
@@ -353,12 +293,6 @@ const main = async (): Promise<void> => {
   check(`A NEW SENTENCE RE-EARNS THE ROOM, even for a middling model: the move form reads ${swapNow} — over the ${UNMOUNT_AT} that would keep a card up, under the ${YES_AT} that puts one up — and it is gone (${mounted(shell, 'doing').join(', ') || 'nothing in doing'} · ${mounted(shell, 'nearby').join(', ')})`, swapNow > UNMOUNT_AT && swapNow < YES_AT && !mounted(shell, 'doing').includes('slot.swap') && mounted(shell, 'nearby').includes('attendance.now'));
   await clear();
 
-  // ═══ b. x-ray: one panel, and nothing else ═══════════════
-  // (Rewritten 2026-09-22. The first x-ray wrote itself over the whole room — tags on
-  // every card, a legend, a banner, a status line — and what this section asserted was
-  // that all of that appeared. The rule is the opposite now: X-RAY CHANGES NOTHING IN
-  // THE APP. It is one panel docked at the bottom; every assertion below is about that
-  // panel, or about the app not having moved.)
   const APP_CANVASES = ROOM_CANVASES.filter((canvas) => canvas !== 'trace' && canvas !== 'deck');
   const isPanel = (message: string): boolean => message.includes('"canvas":"trace"') || message.includes('"canvas":"deck"');
   const story = (): Story => StorySchema.parse(panel()['story']);
@@ -378,7 +312,6 @@ const main = async (): Promise<void> => {
   check('IT IS ONE PANEL, DOCKED: the last thing in the page’s flow, stuck to the window’s bottom edge — so the page is one panel longer and nothing ends underneath it', /\{"type":"component","name":"Box","props":\{"stick":"bottom"\},"children":\[[^\]]*"canvasId":"trace"/.test(frame) && frame.lastIndexOf('"stick":"bottom"') > frame.lastIndexOf('"canvasId":"rail"') && /\.en-box--stick-bottom \{[^}]*position: sticky/.test(stylesheet) && !/position:\s*(fixed|absolute)[^}]*\}/.test(stylesheet.split('.en-box--dock')[1]?.split('}')[0] ?? ''));
   check('...with a fixed ceiling and its own scroll — the one thing in the room that has one', /"scroll":true,"maxH":"\d+vh"/.test(servedOn('trace')) && APP_CANVASES.every((canvas) => !servedOn(canvas).includes('"scroll":true')));
 
-  // THE STORY FIRST.
   const stormPass = world.passesOf(OP).at(-1);
   const told = story();
   check(`THE STORY STARTS WITH WHAT WAS TYPED: "${told.typed}" — heard ${told.heard.map((tag) => tag.label).join(' · ')}`, told.typed === `You typed: “${STORM_MOVE}”` && told.heard.some((tag) => tag.label.startsWith('21:00')) && servedOn('trace').includes(told.typed));
@@ -388,17 +321,13 @@ const main = async (): Promise<void> => {
   world.dispatchOn(OP, 'trace', { type: 'ui:click', ref: 'allCards' }, 'intent.trace');
   await settle(4);
   check('...pressed, every card Jev was asked about is listed', told.cards.every((card) => servedOn('trace').includes(`"label":"${card.label}","value":${card.p}`)) && servedOn('trace').includes('show fewer'));
-  // (2026-09-22: no routing sentence — there is no routing. Two lines: what it picked, the mood.)
   check(`...what it picked and how it read the mood: ${told.decided.map((line) => `"${line.text}"`).join(' ')}`, told.decided.length === 2 && told.decided[0]?.text.includes('Nova Kestrel') === true && told.decided.every((line) => servedOn('trace').includes(line.text)));
   check(`...and what changed on screen as a result: ${told.screen.map((line) => line.text).join(' ')}`, told.screen.length > 0 && told.screen.every((line) => servedOn('trace').includes(line.text)));
   check(`EVERY finished sentence has the assistant in its story — why it ran, and what it was handed: "${told.handedHeading}"`, told.handedHeading === 'Assistant ran (finished sentence) — what it was handed' && told.handed.length === 3 && servedOn('trace').includes(told.handedHeading));
   const panelText = leavesOf(servedOn('trace')).filter((leaf) => typeof leaf.value === 'string' && leaf.key === 'value').map((leaf) => String(leaf.value));
   check('TYPOGRAPHY: sentence case and real words — no all-lowercase mono key/value run, no label in capitals', !servedOn('trace').includes('"inline":true') && !servedOn('trace').includes('"variant":"mono"') && panelText.every((value) => value === '' || value !== value.toUpperCase() || !/[A-Z]{4,}/.test(value)));
 
-  // A question: the assistant joins the story, with what it was handed and what was refused.
   await clear();
-  // (The scripted first answer breaks the two-sentence bound; it used to be a
-  // "recital", a gate deleted on 2026-09-22.)
   controls.script = (turn) => ({
     answer:
       turn.corrections.length === 0
@@ -418,7 +347,6 @@ const main = async (): Promise<void> => {
   check(`...AND WHAT WAS DROPPED, in plain words: "${dropped?.text}"`, dropped?.text === 'Dropped one citation: it pointed at a card that is not on screen (stage.view).' && servedOn('trace').includes(dropped.text));
   check('...and what it finally said', asked.assistant.some((line) => line.text === 'Said: “Nothing on the running order is out of place.”'));
 
-  // The stepper: a run that landed is not overwritten by the next keystroke's pass.
   const landedKey = asked.key;
   await world.typeLine(OP, 'is anything out of place on the running order? and');
   check('A NEW PASS IS A NEW STORY, and the panel follows it', story().key !== landedKey && panel()['following'] === true && panel()['hasEarlier'] === true);
@@ -431,7 +359,6 @@ const main = async (): Promise<void> => {
   await settle(6);
   check(`...until "back to the latest" (${STORIES_KEPT} are kept, ${world.booted.intent.of(OP)?.stories().length} are held)`, story().key !== landedKey && panel()['following'] === true && (world.booted.intent.of(OP)?.stories().length ?? 99) <= STORIES_KEPT);
 
-  // Numbers second, the demo third.
   world.dispatchOn(OP, 'trace', { type: 'ui:click', ref: 'tab-numbers' }, 'intent.trace');
   await settle(4);
   const labels = leavesOf(servedOn('trace')).filter((leaf) => leaf.key === 'label').map((leaf) => String(leaf.value));
@@ -442,7 +369,6 @@ const main = async (): Promise<void> => {
   world.dispatchOn(OP, 'trace', { type: 'ui:click', ref: 'tab-story' }, 'intent.trace');
   await settle(4);
 
-  // An event tells the same story from the event.
   const eventStories = (world.booted.intent.of(OP)?.stories() ?? []).filter((held) => held.kind === 'event');
   await clear();
   await world.booted.director.send({ what: 'Food Court fills', fingerprint: feedSetCount.fingerprint, context: { zoneId: 'zone_food', day: 'sat', hour: Math.floor(Number((await world.sql('SELECT minute FROM festival_clock'))[0]?.['minute'] ?? 18 * 60) / 60), headcount: 5820 } });
@@ -451,14 +377,12 @@ const main = async (): Promise<void> => {
   const lastEvent = (world.booted.intent.of(OP)?.stories() ?? []).filter((held) => held.kind === 'event').at(-1);
   check(`AN EVENT TELLS THE SAME STORY FROM THE EVENT (${eventStories.length} during the evening): "${lastEvent?.typed}" → ${lastEvent?.decided.map((line) => line.text).join(' ')} → ${lastEvent?.screen.map((line) => line.text).join(' ')}`, eventStories.length > 0 && lastEvent !== undefined && lastEvent.typed.startsWith('Something happened on site:') && lastEvent.decided[0]?.text.startsWith('Worth interrupting somebody for?') === true && lastEvent.screen.length === 1);
 
-  // THE POINT: with x-ray ON, the app is still clean — and the panel is where the instruments are.
   const sinceOn = world.servedTo(OP).slice(beforeOn);
   const appLeaks = metaIn(sinceOn.filter((message) => !isPanel(message)));
   const inPanel = metaIn(sinceOn.filter(isPanel));
   check(`WITH X-RAY ON NO META REACHED AN APP CANVAS EITHER — ${sinceOn.filter((message) => !isPanel(message)).length} app messages since the switch, through a question, a refusal and an event${appLeaks.length === 0 ? '' : `:\n         ${appLeaks.slice(0, 10).join('\n         ')}`}`, appLeaks.length === 0);
   check(`...and THE SCANNER IS NOT BLIND: the same scan finds the instruments in the panel (${inPanel.length} hits)`, inPanel.some((hit) => hit.includes('"jev"')) && inPanel.some((hit) => hit.includes('timing')) && inPanel.some((hit) => hit.includes('probability')));
 
-  // Shut again; and never sticky.
   const appOpen = APP_CANVASES.map((canvas) => servedOn(canvas));
   world.dispatchOn(OP, 'trace', { type: 'ui:click', ref: 'shutKey' }, 'intent.trace');
   await settle(6);

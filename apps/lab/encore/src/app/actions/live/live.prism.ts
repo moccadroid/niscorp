@@ -2,8 +2,6 @@ import { weatherForDay, weatherAtHour } from '@encore/app/vex/weather.entries';
 import { zoneCount, attendanceTotal, attendanceByZone } from '@encore/app/vex/site.entries';
 import { delaysRecent, incidentsOpen, lineupAround, weatherWarnings } from '@encore/app/vex/situation.entries';
 
-// The live cards' request seams.
-
 export const weatherForDayPrism = {
   fingerprint: weatherForDay.fingerprint,
   context: { day: { $ref: '$.day' } },
@@ -29,10 +27,6 @@ export const attendanceByZonePrism = {
   context: { day: { $ref: '$.day' }, hour: { $ref: '$.hour' } },
 };
 
-// ─── right now ───────────────────────────────────────────────
-// "Now" is an hour on the card and minutes of the day in `slots`; the window is
-// the three hours from it. Derived here, in the request, from the card's own
-// data — the same arithmetic the `situation` context pack declares.
 const HOURS_AHEAD = 3;
 const hourAhead = { $add: [{ $ref: '$.hour' }, HOURS_AHEAD] };
 

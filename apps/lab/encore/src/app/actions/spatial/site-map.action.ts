@@ -4,8 +4,6 @@ import { siteMapLayout } from './site-map.layout';
 import { zonesHeatPrism } from './spatial.prism';
 import { zoneRef, dayField, hourField } from '@encore/app/actions/shared/input-fields';
 
-// The site plan, aimed. It answers "where is it?" — so it takes a zone to
-// outline and an hour to colour by, and nothing about why anybody is asking.
 export const siteMapAction: ActionDefinition = {
   id: 'site.map',
   title: 'Site map',

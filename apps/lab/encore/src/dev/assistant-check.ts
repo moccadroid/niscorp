@@ -1,32 +1,3 @@
-// THE ASSISTANT — the slow speed, end to end.
-//
-// Jev answers yes/no per card, per field, per pack. THE ASSISTANT RUNS ON EVERY
-// FINISHED SENTENCE — a quiet line, or Enter — and on nothing else; it is handed
-// the same state each time under one prompt and one contract, in which everything
-// is optional, an empty answer included. (This file replaces handoff-check, most
-// of which proved rules that no longer exist: routes, the computed fallback, the
-// question-mark rule, the demotion line, signatures, per-mode behaviour. Their
-// assertions were deleted with them, not reshaped.)
-//
-// Driven through a real shell with the SCRIPTED model: cortex's loop, prompt
-// assembly, tools, partials, envelope validation and correction, signal's real
-// openai-compatible adapter, streaming and abort are all live — only the words a
-// model would have produced are scripted.
-//
-//   a. WHEN: never mid-typing; once per finished sentence; again on Enter
-//   b. an empty answer shows nothing, and the cards are the turn
-//   c. words stream at most every 120 ms; what it is handed
-//   d. the thread; the prompt is static → thread → this turn → the line
-//   e. the two read tools — allowed, refused BEFORE the wire, capped
-//   f. it adds and aims; it closes nothing
-//   g. words for a form — and a field a person touched is never overwritten
-//   h. steps wait behind their chips
-//   i. a changed line aborts the run
-//   j. admission rejects WHOLE; a rejected attempt is corrected inside the run
-//   k. the operator ends a thread; nothing else does
-//   l. the narrower principal
-//   m. every run is recorded and traced; no run writes a row but the thread
-//   n. with no assistant, nothing runs and the cards are still turns
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -66,7 +37,6 @@ const waitFor = async (what: () => boolean, withinMs: number): Promise<boolean> 
   return what();
 };
 
-// The pre-decisions a request carried, read back out of it.
 const handedIn = (request: SeenRequest | undefined): Predecisions | undefined => (request?.messages ?? []).flatMap((message) => predecisionsIn(message.content) ?? []).at(-1);
 
 const RowsSchema = z.object({ rows: z.array(z.unknown()), note: z.string().optional() });
@@ -81,7 +51,6 @@ const toolNamed = (tools: readonly ToolDefinition[], name: string): ToolDefiniti
   return tool;
 };
 
-// The blocks of an assembled prompt, by what they are.
 const blocksOf = (messages: readonly { role: string; content: string }[]): { block: string; chars: number; tokens: number }[] => {
   const blockAt = messages.findIndex((message) => message.content.startsWith(PREDECISIONS_HEADING));
   // With no thread yet, the first non-system message is the line itself.
@@ -128,7 +97,6 @@ const main = async (): Promise<void> => {
   const instancesOn = (canvas: string): string => (shell.getState().canvases[canvas]?.stack ?? []).map((item) => `${item.definitionId}#${item.id}`).join();
   const headliner = String((await world.sql(`SELECT id FROM acts WHERE billing = 'headliner'`))[0]?.['id'] ?? '');
 
-  // ═══ a. when it runs ═════════════════════════════════════
   controls.script = NOTHING;
   for (let length = 1; length <= MOVE.length; length += 1) {
     world.keystroke(OP, MOVE.slice(0, length));
@@ -143,7 +111,6 @@ const main = async (): Promise<void> => {
   await world.settled(OP);
   check('ONCE PER FINISHED SENTENCE: the line stays quiet, passes still land, and it is not run again', world.runsOf(OP).length === 1);
 
-  // ═══ b. nothing to say ═══════════════════════════════════
   check('AN EMPTY ANSWER SHOWS NOTHING: the run landed with no words, and there is no answer card', moveRun?.answer === '' && mounted(shell, 'assist').length === 0 && cardData(shell, 'maybe', 'intent.options')['links']?.toString() === '');
   const pressed = Date.now();
   world.dispatchOn(OP, 'line', { type: 'ui:key', key: 'Enter', ref: 'line' });
@@ -152,7 +119,6 @@ const main = async (): Promise<void> => {
   await world.settled(OP);
   controls.script = undefined;
 
-  // ═══ c. words, streamed; and what it was handed ══════════
   const runningWrites: number[] = [];
   let lastWritten = '';
   shell.onDataChange(({ instanceId, data }) => {
@@ -192,7 +158,6 @@ const main = async (): Promise<void> => {
   await world.settled(OP);
   await loop?.newThread();
 
-  // ═══ d. the thread ═══════════════════════════════════════
   controls.script = NOTHING;
   await world.typeLine(OP, MOVE);
   await world.settled(OP);
@@ -235,7 +200,6 @@ const main = async (): Promise<void> => {
   await world.typeLine(OP, '');
   await world.settled(OP);
 
-  // ═══ e. the two read tools ═══════════════════════════════
   let wireCalls = 0;
   const countingWire: FetchFn = (url, init) => {
     wireCalls += 1;
@@ -252,10 +216,6 @@ const main = async (): Promise<void> => {
   check(`a MUTATION is refused before the wire: "${swapRefusal.success ? swapRefusal.data.refused.slice(0, 60) : ''}…"`, swapRefusal.success && swapRefusal.data.refused.includes('changes data') && wireCalls === 1);
   const madeUp = RefusedSchema.safeParse(await toolNamed(opTools, 'query').config.execute({ fingerprint: 'acts/everything', context: null }, toolContext()));
   check('a fingerprint that does not exist is refused before the wire, and told where to look', madeUp.success && madeUp.data.refused.includes('list_queries') && wireCalls === 1);
-  // `context` is an OBJECT in the tool's own schema: cortex validates the call
-  // against it before `execute` runs — a failure goes back to the model as the
-  // tool's answer, and never reaches the wire. A model that stringifies nested
-  // args is rescued by the decode cortex applies first (loop.ts), not here.
   const queryInput = toolNamed(opTools, 'query').config.input;
   check('a context that is not a JSON object fails the tool’s own schema — it never reaches execute, so never the wire', !queryInput.safeParse({ fingerprint: 'lineup/forDay', context: 'day=sat' }).success && wireCalls === 1);
   check('...while the SAME object stringified (as gpt-oss sends nested args) validates once cortex has decoded it', queryInput.safeParse(deepDecodeJsonish({ fingerprint: 'lineup/forDay', context: '{"day":"sat"}' })).success);
@@ -263,7 +223,6 @@ const main = async (): Promise<void> => {
   const cappedRows = RowsSchema.parse(await toolNamed(createReadTools({ wire: manyRows, policy: world.booted.server.policyForRoles(session.roles), entries: ENTRIES }), 'query').config.execute({ fingerprint: 'lineup/forDay', context: { day: 'sat' } }, toolContext()));
   check(`the answer is CAPPED (${cappedRows.rows.length} of 300 rows), and says what it left out`, cappedRows.rows.length === QUERY_MAX_ROWS && String(cappedRows.note).includes('260'));
 
-  // ═══ f. it adds and aims; it closes nothing ══════════════
   controls.script = () => ({ answer: { response: 'The storm is the thing to tell people about.', data: { canvases: { when: [], doing: [{ actionId: 'push.compose', input: { audience: 'everyone' } }] } } } });
   const STORM_ASK = 'what is going on with the storm at 9?';
   await world.typeLine(OP, STORM_ASK);
@@ -283,7 +242,6 @@ const main = async (): Promise<void> => {
   await world.settled(OP);
   controls.script = undefined;
 
-  // ═══ g. words for a form ═════════════════════════════════
   controls.seen.length = 0;
   await world.typeLine(OP, WARN);
   check(`the pass mounts the push form at once (${mounted(shell, 'doing').join(', ')}), its body the operator’s own sentence — Jev writes no strings — and no assistant has been called`, mounted(shell, 'doing').includes('push.compose') && body() === WARN && controls.seen.length === 0);
@@ -296,7 +254,6 @@ const main = async (): Promise<void> => {
   check('it was handed the sentence, what the parser heard, and which written fields exist on screen, what each is for, and what it held', handed?.sentence === WARN && handed.heard['time'] === '21:00' && handed.writable.length === 1 && handed.writable[0]?.card === 'push.compose' && handed.writable[0]?.field === 'body' && handed.writable[0]?.holds === WARN);
   await world.typeLine(OP, '');
 
-  // Edited before the run starts: the field is not even offered.
   controls.latencyMs = 400;
   controls.seen.length = 0;
   const runsBeforeEdit = world.runsOf(OP).length;
@@ -309,7 +266,6 @@ const main = async (): Promise<void> => {
   check('...because a touched field is not offered to the assistant at all', handedIn(controls.seen.at(-1))?.writable.length === 0);
   await world.typeLine(OP, '');
 
-  // Edited MID-RUN: offered, written for — and the write is dropped at the door.
   controls.seen.length = 0;
   await world.typeLine(OP, WARN);
   const midRun = await waitFor(() => lastRun()?.status === 'running' && controls.seen.length > 0, HANDOFF_IDLE_MS + 1500);
@@ -319,7 +275,6 @@ const main = async (): Promise<void> => {
   await world.typeLine(OP, '');
   check('clearing the line takes the answer card with it', mounted(shell, 'assist').length === 0);
 
-  // ═══ h. steps ════════════════════════════════════════════
   controls.latencyMs = 0;
   controls.script = planOf(STORM_PLAN_STEPS);
   await world.typeLine(OP, PLAN_ABOUT);
@@ -339,7 +294,6 @@ const main = async (): Promise<void> => {
   await world.typeLine(OP, '');
   await world.settled(OP);
 
-  // ═══ i. a changed line aborts it ═════════════════════════
   controls.latencyMs = 1500;
   await world.typeLine(OP, WARN);
   const running = await waitFor(() => lastRun()?.status === 'running', HANDOFF_IDLE_MS + 1500);
@@ -360,7 +314,6 @@ const main = async (): Promise<void> => {
   await world.typeLine(OP, '');
   await world.settled(OP);
 
-  // ═══ j. admission rejects whole ══════════════════════════
   controls.latencyMs = 0;
   controls.script = () => ({ answer: { response: 'One good field, one invented row.', data: { fields: [{ card: 'push.compose', field: 'body', text: 'SHOULD NEVER LAND' }], canvases: { doing: [{ actionId: 'slot.swap', input: { actId: 'act_made_up' } }] } } } });
   await world.typeLine(OP, WARN);
@@ -386,7 +339,6 @@ const main = async (): Promise<void> => {
   await world.typeLine(OP, '');
   await world.settled(OP);
 
-  // ═══ k. a new thread ═════════════════════════════════════
   await world.typeLine(OP, GOING_ON);
   await world.settled(OP);
   const breaksBefore = (await threadRows()).filter((row) => row['role'] === 'break').length;
@@ -402,7 +354,6 @@ const main = async (): Promise<void> => {
   await world.typeLine(OP, '');
   await world.settled(OP);
 
-  // ═══ l. the narrower principal ═══════════════════════════
   const liaison = await world.login(LIAISON_PRINCIPAL);
   await settle();
   controls.seen.length = 0;
@@ -432,7 +383,6 @@ const main = async (): Promise<void> => {
   const liaisonSales = RowsSchema.safeParse(await toolNamed(liaisonTools, 'query').config.execute({ fingerprint: 'sales/dayTotals', context: { day: 'sat' } }, toolContext()));
   check('...and what they may read, they read', liaisonSales.success && liaisonSales.data.rows.length > 0 && liaisonWire === 1);
 
-  // ═══ m. every run was recorded; every run left a trace ═══
   const allRuns = [...world.runsOf(OP), ...world.runsOf(LIAISON_PRINCIPAL)];
   const spent = world.booted.spent();
   check(`EVERY run reached the manifest’s \`runs\` sink, on every branch (${spent.length} of ${allRuns.length}: ${[...new Set(spent.map((run) => run.label))].join(', ')})`, spent.length === allRuns.length && ['sentence:landed', 'sentence:aborted', 'sentence:failed'].every((label) => spent.some((run) => run.label === label)));
@@ -446,7 +396,6 @@ const main = async (): Promise<void> => {
   check(`no run in this suite wrote a row anywhere but the thread (${allRuns.length} runs; tables that changed: ${grew.join(', ')})`, grew.join() === 'agent_turns');
   console.log(`\n       model steps per run, this suite: ${allRuns.map((run) => run.modelSteps).join(' ')}  (${allRuns.length} runs, ${allRuns.reduce((sum, run) => sum + run.modelSteps, 0)} steps)`);
 
-  // ═══ n. no assistant ═════════════════════════════════════
   const off = await createWorld({ agent: { kind: 'off' } });
   const offShell = await off.login(OP);
   await settle();

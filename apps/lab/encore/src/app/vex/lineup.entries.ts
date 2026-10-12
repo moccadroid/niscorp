@@ -1,16 +1,7 @@
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 
-// The bill: stages, acts and the slots that put one on the other.
-//
-// Most reads here alias straight to the shape their card renders. The running
-// order is the exception, and for one reason: EXPOSURE has to arrive as words
-// and a tone, and words are a mapping's business (rule 9), not a timeline's.
-
 const slot = (key: string): Record<string, unknown> => ({ $get: { from: { $var: 'slot' }, path: [key] } });
 
-// `slots.exposure` is the worst weather severity over a set on a stage with no
-// roof (db/schema.ts keeps it, by trigger). Here it becomes what a card draws:
-// a tone the timeline lights the bar in, and the word for why.
 const exposureTone = { $case: { branches: [{ when: { $gte: [slot('exposure'), 2] }, then: 'alert' }, { when: { $gte: [slot('exposure'), 1] }, then: 'warn' }], else: '' } };
 const exposureWord = { $case: { branches: [{ when: { $gte: [slot('exposure'), 2] }, then: 'exposed to the storm' }, { when: { $gte: [slot('exposure'), 1] }, then: 'exposed to rain and wind' }], else: '' } };
 
@@ -42,9 +33,6 @@ const SLOT_FIELDS = [
   'slots.exposure',
 ];
 
-// The running order for one day. `stageId` is OPTIONAL: absent, every stage;
-// supplied, the one — so the timeline and the stage view replay the same plan
-// instead of being two entries that drift.
 export const lineupForDay: SeedEntry = {
   fingerprint: 'lineup/forDay',
   intent: 'Every set on one festival day, optionally for a single stage, in stage then time order',
@@ -67,9 +55,6 @@ export const lineupForDay: SeedEntry = {
   mapping: withExposure,
 };
 
-// ONLY the exposed sets of a day, worst first — what the `exposure` context pack
-// hands the agent. The same column and the same words the timeline lights its
-// bars from, so "three sets are exposed" and three lit bars cannot disagree.
 export const lineupExposed: SeedEntry = {
   fingerprint: 'lineup/exposed',
   intent: 'The sets of one festival day on an open-air stage under a weather warning, worst and biggest first, with each act\'s expected draw',
@@ -87,9 +72,6 @@ export const lineupExposed: SeedEntry = {
   mapping: withExposure,
 };
 
-// One act WITH the set it is billed for. The swap form reads this too: where an
-// act is playing right now is a fact in `slots`, so the form's from-stage comes
-// from the row, not from whatever the sentence happened to mention.
 export const actById: SeedEntry = {
   fingerprint: 'acts/byId',
   intent: 'One act by id with its billed set: stage, day and start time',
@@ -126,8 +108,6 @@ export const stageById: SeedEntry = {
   },
 };
 
-// Every stage and what it holds — the facts "will they fit under canvas" turns
-// on. Four rows; the text model is handed all of them or none.
 export const stageCapacities: SeedEntry = {
   fingerprint: 'stages/capacities',
   intent: 'Every stage with its kind (covered or open-air) and capacity',
@@ -153,12 +133,8 @@ export const delaysForAct: SeedEntry = {
   },
 };
 
-// ─── writes ──────────────────────────────────────────────────
-
-// Move a set. The WHERE carries the from-stage on purpose: the form was filled
-// against a running order that may have moved since, and a swap that lands only
-// if the act is still where the operator believed it was is the cheap half of
-// an optimistic lock. Zero rows back means "look again", not "done".
+// The WHERE carries the from-stage as an optimistic lock: the swap lands only if the
+// act is still where the operator believed it was.
 export const slotSwap: SeedMutation = {
   fingerprint: 'slots/swap',
   intent: 'Move the set of one act on one day to another stage and start time',
@@ -176,9 +152,8 @@ export const slotSwap: SeedMutation = {
   },
 };
 
-// A delay is a ledger row, not an edit to the slot: the mutation grammar has no
-// arithmetic (deliberately), and "who called a twenty-minute hold, and when" is
-// worth more after the weekend than a start time that silently moved.
+// A delay is a ledger row, not an edit to the slot: the mutation grammar has no arithmetic,
+// and who called a hold, and when, is worth more than a start time that silently moved.
 export const delayAdd: SeedMutation = {
   fingerprint: 'delays/add',
   intent: 'Record a delay called on the set of one act',

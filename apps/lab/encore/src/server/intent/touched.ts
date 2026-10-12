@@ -1,38 +1,15 @@
 import type { ActionDefinition, Shell } from '@niscorp/nova';
 import { inputContractOf } from './input-contract';
 
-// WHAT A PERSON HAS TOUCHED, NEITHER SPEED OVERWRITES.
-//
-// Slice 1's debt: every pass wrote its inputs over whatever was on the form, so
-// an operator who corrected the to-stage by hand watched the next keystroke put
-// it back. With a second, slower writer in the room the debt would have
-// doubled. It is paid here, once, for both.
-//
-// nova has no notion of who wrote a value, and this does not ask it for one.
-// The tracker simply remembers what THE LOOP last wrote into each input key of
-// each instance, and listens to `shell.onDataChange`: a key whose value is no
-// longer what the loop wrote was changed by somebody else. That somebody is a
-// person at a field — or the card's own mount load correcting a guess with a
-// row (the swap form's from-stage), which deserves exactly the same deference.
-// Either way the key is left alone until the line is cleared.
-//
-// ORDER IS THE WHOLE TRICK. A write is recorded BEFORE it is made, so the
-// change event the write itself causes finds the value it expected and marks
-// nothing. Only input keys are watched: `loading`, loaded rows and the rest of
-// a card's data change constantly and belong to nobody.
+// A key that no longer holds what the loop last wrote was changed by a person or by the card's
+// own mount load. A write is recorded before it is made, so its own change event marks nothing.
 
 export type TouchTracker = {
-  // Call before the loop writes `input` into an instance.
   willWrite: (instanceId: string, input: Record<string, unknown>) => void;
-  // Call once a new instance exists: everything it was seeded with, and the
-  // definition's defaults for the rest, is what "untouched" means for it.
   adopt: (instanceId: string, definition: ActionDefinition, seeded: Record<string, unknown>) => void;
-  // `input` without the keys a person has touched.
   untouched: (instanceId: string, input: Record<string, unknown>) => Record<string, unknown>;
   isTouched: (instanceId: string, key: string) => boolean;
-  // The slow path authored this key. The FAST path then leaves it alone too —
-  // a later pass must not put the raw sentence back over a written message —
-  // but the slow path may write it again.
+  // The fast path leaves an authored key alone, or a later pass would put the raw sentence back.
   markAuthored: (instanceId: string, keys: readonly string[]) => void;
   withoutAuthored: (instanceId: string, input: Record<string, unknown>) => Record<string, unknown>;
   reset: () => void;
@@ -50,8 +27,6 @@ export const createTouchTracker = (): TouchTracker & { watch: (shell: Shell) => 
     keys === undefined || keys.size === 0 ? input : Object.fromEntries(Object.entries(input).filter(([key]) => !keys.has(key)));
 
   return {
-    // The shell does not exist when the loop is constructed, and a reset
-    // replaces it — so the subscription is taken lazily, per shell.
     watch: (shell) => {
       if (watching === shell) return;
       watching = shell;
@@ -70,10 +45,7 @@ export const createTouchTracker = (): TouchTracker & { watch: (shell: Shell) => 
     adopt: (instanceId, definition, seeded) => {
       const defaults = definition.data ?? {};
       const baseline = Object.fromEntries(inputContractOf(definition).fields.map((field) => [field.name, field.name in seeded ? seeded[field.name] : defaults[field.name]]));
-      // UNDER what is already recorded, never over it. A card that outlives a
-      // sentence (the tracker is reset, the card is still wanted) has to get a
-      // baseline for the keys the loop never wrote — or a hand edit to one of
-      // them would go unnoticed — without forgetting what the loop did write.
+      // Under what is recorded, never over it: only the keys the loop never wrote get a baseline.
       wrote.set(instanceId, { ...baseline, ...(wrote.get(instanceId) ?? {}) });
     },
     untouched: (instanceId, input) => omit(input, touched.get(instanceId)),

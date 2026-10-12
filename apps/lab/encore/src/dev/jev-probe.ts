@@ -1,10 +1,3 @@
-// WHAT THE REAL MODEL ACTUALLY SAID. Not a check: it needs a key and a network,
-// and it asserts nothing. It types one sentence into a real shell with the
-// decider pointed at TypeSafe and prints every question beside its answer —
-// which is the only honest way to tune a description, a candidate label or a
-// threshold. The fake provider answers the words; this answers the meaning.
-//
-//   pnpm --filter encore probe "storm at 9 move headliner to the tent"
 import { OPERATOR_PRINCIPAL } from '@encore/app/charter/assignments';
 import { createWorld } from './world-factory';
 import type { DecidedPass } from '@encore/server/intent/loop';
@@ -44,12 +37,8 @@ for (const [name, question] of Object.entries(last.questions)) {
 const record = world.passesOf(OPERATOR_PRINCIPAL).at(-1);
 if (record !== undefined) console.log(`\ndecide ${record.lanes.decide.toFixed(0)} ms · total ${record.totalMs.toFixed(0)} ms · ${record.requestBytes} bytes`);
 
-// IS THE CONNECTION STAYING WARM? The same sentence again, twice, six seconds
-// apart — longer than Node's default fetch holds an idle socket. With
-// keep-warm.ts installed (boot does it) every `decide` lane below should be a
-// round trip plus server time (~300 ms from here) and say `reused`; if they say
-// `new` and cost 750 ms or more, the dispatcher is not the one fetch is using.
-// The first pass above rode the socket boot's pre-warm opened — or paid for it.
+// Longer than Node's default fetch holds an idle socket: if a `decide` lane
+// below says `new`, the warm dispatcher is not the one fetch is using.
 const GAP_MS = 6_000;
 const REPEATS = 2;
 const lane = (label: string): void => {
@@ -60,8 +49,7 @@ console.log('');
 lane('pass 1');
 for (let repeat = 0; repeat < REPEATS; repeat += 1) {
   await new Promise((resolve) => setTimeout(resolve, GAP_MS));
-  // The same sentence, give or take a trailing space — so each repeat is one
-  // pass, sent the moment it is typed.
+  // The same sentence, give or take a trailing space, so each repeat is one pass.
   await world.typeLine(OPERATOR_PRINCIPAL, repeat % 2 === 0 ? `${line} ` : line);
   lane(`after ${GAP_MS / 1000} s idle`);
 }

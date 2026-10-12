@@ -4,14 +4,6 @@ import { weatherRadarLayout } from './weather-radar.layout';
 import { weatherForDayPrism, weatherAtHourPrism } from './live.prism';
 import { dayField, hourField } from '@encore/app/actions/shared/input-fields';
 
-// The weather, AIMED at an hour. "storm at 9" is a question about 21:00, not
-// about the weather in general — so the hour is an input, the parser fills it
-// from the sentence, and the card opens already pointing at the cell.
-//
-// Two reads: the day's shape (the bars) and the one hour being asked about
-// (the figures). Both are keyed on inputs, so a new hour re-mounts the card —
-// which is right: a radar still showing 18:00 under a 21:00 heading is the
-// stale-record bug reconcile's re-aim rule exists to prevent.
 export const weatherRadarAction: ActionDefinition = {
   id: 'weather.radar',
   title: 'Weather',

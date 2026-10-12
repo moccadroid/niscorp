@@ -1,9 +1,7 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// `debounce: 0` is the thesis, not a default left alone: the loop is paced on
-// the SERVER (pacer.ts — a quiet timer with a ceiling, then single-flight), so
-// holding keystrokes back in the browser would only hide them from the pacer
-// and from the instant `heard` lane with it.
+// `debounce: 0` on purpose: the loop is paced on the server (pacer.ts), and holding
+// keystrokes back in the browser would hide them from the pacer and the `heard` lane.
 export const intentLineLayout: LayoutNode = {
   component: 'Box',
   props: { tone: '$.tone', pad: 14 },
@@ -25,12 +23,6 @@ export const intentLineLayout: LayoutNode = {
             },
           ],
         },
-        // What was HEARD, the moment it was heard. "heard", not "decided": a tag
-        // is a match the parser or retrieval made; the pass confirms it (it
-        // lights) or drops it.
-        // Whether a tag was read, matched or confirmed is said by its TONE — muted
-        // until the pass confirms it — and in words only in x-ray's panel. The state
-        // itself is not sent.
         { if: '$.heard.length', then: { component: 'Tags', props: { items: { $prism: { $map: { over: { $ref: '$.heard' }, as: 'tag', body: { $omit: { from: { $var: 'tag' }, keys: ['state'] } } } } } } }, else: '' },
       ],
     },

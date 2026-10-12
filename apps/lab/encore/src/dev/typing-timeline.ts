@@ -1,11 +1,3 @@
-// WHAT TYPING FEELS LIKE, AS A TABLE. Not a check — it asserts nothing. It types
-// one sentence into a real shell a keystroke at a time, at a human pace, against
-// the fake decider slowed to a realistic round trip, and prints when each pass
-// was sent, when it landed, how long its text had waited, and what the screen
-// showed after it — plus what the instant lane had already put on the line.
-//
-//   pnpm --filter encore timeline                       # storm sentence, 150 ms/key, 300 ms provider
-//   pnpm --filter encore timeline "sentence" 120 450    # ms per keystroke, provider latency
 import { OPERATOR_PRINCIPAL } from '@encore/app/charter/assignments';
 import { QUESTION_CANVASES } from '@encore/app/canvas-placement';
 import { cardData, createWorld, mounted } from './world-factory';

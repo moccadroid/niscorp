@@ -1,7 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Five lists under one heading. `max` keeps each to what fits a glance — the
-// full feed and the full running order are their own cards.
 export const situationNowLayout: LayoutNode = {
   component: 'Card',
   props: { title: 'Right now', subtitle: '{{$.day}} · {{$.hour}}:00' },
