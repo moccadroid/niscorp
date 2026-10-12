@@ -8,13 +8,6 @@ import { terminalFrame } from './frame';
 import { registerWireSlots } from './slots';
 import type { TerminalSlotWrapper } from './slots';
 
-// ═══════════════════════════════════════════════════════════
-// @niscorp/moss/terminal/vue/server — the Vue target, drawing to a string. The
-// twin of terminal/react/server: the same registry, the same wire slots, the
-// same frame component as the browser's target, so the browser adopts what
-// this wrote. Vue's own server renderer is asynchronous, so this is too.
-// ═══════════════════════════════════════════════════════════
-
 export type RenderSnapshotConfig = {
   snapshot: DrawnSnapshot;
   registry: ComponentRegistry<NovaComponent>;

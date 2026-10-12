@@ -10,51 +10,25 @@ import { hashIntegrationKey } from './credentials';
 import { PAGE } from './entries';
 import { reachOf } from './reach';
 
-// ═══════════════════════════════════════════════════════════════
-// THE REGISTRY — everything asked of `integrations` and `integration_actions`,
-// each behind a function named for what it does.
-//
-// None of it is SQL. Each function replays one of the feature's own entries
-// (./entries.ts) through vex, by the `replay` the server hands the feature
-// when it starts (../feature, the `ownEntries` seam): reads are vex and writes
-// are vex here, as they are in an app. What a replay answers is whatever the
-// driver handed back, so every row is read by a schema before it is used.
-// ═══════════════════════════════════════════════════════════════
-
-// ── what a replay answers ────────────────────────────────────
-//
-// A read answers its rows: a list, whatever is in it.
 const rowsOf = (answered: unknown): unknown[] => z.array(z.unknown()).parse(answered);
 
-// EVERY ROW OF A LIST. A list entry answers one page, in the order of its key,
-// starting after the key it is handed (./entries.ts). `page` replays the page
-// after a row, or the first; a page that comes back short is the last.
 const everyRow = async <Row>(row: z.ZodType<Row>, page: (after: Row | undefined) => Promise<unknown>, after?: Row): Promise<Row[]> => {
   const rows = rowsOf(await page(after)).map((answered) => row.parse(answered));
   const last = rows.at(-1);
   return rows.length < PAGE || last === undefined ? rows : [...rows, ...(await everyRow(row, page, last))];
 };
 
-// A ROW, READ WHERE IT LEAVES THE DATABASE. A list of names that is not one
-// reads as empty.
 const strings = z.array(z.string()).catch([]);
 
-// What the proxy may forward, as the row holds it. A row whose column holds
-// another shape admits nothing, which is what an empty one says.
 const ReachSchema = z.record(z.string(), z.array(z.string())).catch({});
 
 const FoundRowSchema = z.object({ url: z.string(), status: z.string(), reach: ReachSchema });
 const RegistrationRowSchema = z.object({ status: z.string(), key_hash: z.string().nullish() });
-// What a landing that came with a key wrote: the rows of two tables, of which
-// only an integration's carries `key_hash`. One row alone is answered as
-// itself, and a write that answers nothing as nothing.
 const WrittenRowSchema = z.looseObject({ key_hash: z.string().nullish() });
 const WrittenSchema = z.union([z.array(WrittenRowSchema), WrittenRowSchema.transform((row) => [row]), z.undefined().transform(() => [])]);
 const RequestedRowSchema = z.object({ requested_data: strings });
 const KeyHolderRowSchema = z.object({ id: z.string() });
 
-// An action's key: its integration, then its own id. The order every list of
-// actions is paged in.
 const actionKey = { integration_id: z.string(), action_id: z.string() };
 const afterAction = (last: { integration_id: string; action_id: string } | undefined): Record<string, string> => ({
   after_integration: last?.integration_id ?? '',
@@ -63,8 +37,7 @@ const afterAction = (last: { integration_id: string; action_id: string } | undef
 
 const StoredActionRowSchema = z.object({ ...actionKey, definition: z.unknown(), grammar: z.unknown() });
 
-// A count is a bigint, which one driver hands back as a number and another as
-// text.
+// A count is a bigint, which one driver hands back as a number and another as text.
 const ActionCountRowSchema = z.object({ integration_id: z.string(), action_count: z.union([z.number(), z.string(), z.bigint()]).transform((count) => Number(count)) });
 
 const ListedRowSchema = z
@@ -76,9 +49,7 @@ const ListedRowSchema = z
     requested_data: strings,
     approved_data: strings,
     extension: z.unknown(),
-    // A TIMESTAMP IS NOT ALWAYS A DATE. Drivers hand back a Date, an ISO
-    // string or a number for the same column (PGlite returns a string), so
-    // each is read as the instant it names.
+    // Drivers hand back a Date, an ISO string or a number for the same column.
     last_import_at: z.unknown().transform((at) => (at instanceof Date ? at.getTime() : typeof at === 'string' || typeof at === 'number' ? new Date(at).getTime() : null)),
     last_error: z.string().nullish(),
   })
@@ -94,33 +65,17 @@ const ListedRowSchema = z
     lastError: row.last_error ?? null,
   }));
 
-// One integration as the operator's list shows it. `status` is what the row
-// says ('pending', 'approved'); `extension` is what the row keeps of the host
-// app's own vocabulary, as it was stored (null: none).
 export type IntegrationRow = z.infer<typeof ListedRowSchema> & { actionCount: number };
 
-// ── one integration: found, taken in, approved, removed ──────
-
-// An integration as it is found by its id: where its service is, whether it
-// has been approved ('approved', or it is served nothing), and what the proxy
-// may let through for it.
 export type FoundIntegration = z.infer<typeof FoundRowSchema>;
 
-// Written once. Every door that forwards to an integration starts here, and so
-// does the operator's probe.
 export const findIntegration = async (replay: Replay, id: string): Promise<FoundIntegration | undefined> =>
   FoundRowSchema.optional().parse(rowsOf(await replay('integrations/find', { id }))[0]);
 
-// AN IMPORT THAT DID NOT LAND, kept on the row so the operator's list says
-// why. The address is kept as given: the next import is fetched from it.
-// Whatever the last good import wrote stays, and keeps serving.
 export const recordFailedImport = async (replay: Replay, id: string, url: string, error: string): Promise<void> => {
   await replay('integrations/record-failed-import', { id, url, last_error: error });
 };
 
-// How an integration stands when a bundle for it arrives again: whether it
-// was approved, so its actions are being served; and whether it was already
-// issued a key, so none is minted. One that was never registered is neither.
 export const registrationOf = async (replay: Replay, id: string): Promise<{ approved: boolean; holdsKey: boolean }> => {
   const row = RegistrationRowSchema.optional().parse(rowsOf(await replay('integrations/registration', { id }))[0]);
   return { approved: row?.status === 'approved', holdsKey: typeof row?.key_hash === 'string' && row.key_hash !== '' };
@@ -129,71 +84,38 @@ export const registrationOf = async (replay: Replay, id: string): Promise<{ appr
 export type BundleImport = {
   id: string;
   url: string;
-  // the bundle intake let in
   bundle: Bundle;
-  // What the row keeps of the host app's own vocabulary: the bundle's
-  // `extension` as the app's schema read it and its `prepare` answered it.
-  // `undefined`: none, and the row holds null.
   extension: unknown;
-  // The grammars the definitions are written in: this code's, since intake
-  // upgraded every one of them.
   stamp: Upgrader['stamp'];
-  // The hash of the key the integration is issued with this import: all the
-  // row keeps of it (./credentials.ts). Absent: no key is issued, and what the
-  // row holds of one stays.
   keyHash?: string;
 };
 
-// The row a bundle is kept as: each column under its own name, as the entry
-// reads them.
 const importedRow = ({ id, url, bundle, extension }: BundleImport): Record<string, unknown> => ({
   id,
   url,
   requested_actions: bundle.grants.actions,
   requested_data: bundle.grants.data,
-  // Derived again on every import, so a screen an integration dropped takes
-  // its endpoint's reach with it: the list never only grows.
   reach: reachOf(bundle, id),
-  // Its own words, in the languages it speaks: beside its actions, so the
-  // app's language pass reaches them.
   phrasebook: bundle.phrasebook,
-  // Handed over as JSON text, which the column reads as the value it spells:
-  // a text handed over as itself would be read as JSON, and refused.
+  // As JSON text: an extension that is itself a string would be read as JSON, and refused.
   extension: extension === undefined ? null : JSON.stringify(extension),
-  // This process's clock: an entry takes its instant from whoever replays it.
   last_import_at: new Date().toISOString(),
 });
 
-// LAND A BUNDLE: the integration's row as the bundle says it is now, its
-// actions in place of whatever it shipped before, and the hash of its key when
-// one is issued with the import. ONE BATCH, so one transaction (./entries.ts):
-// it lands whole, or what the import before it wrote is still there, whole.
-//
-// ANSWERS WHETHER THE KEY THIS IMPORT CAME WITH IS THE ONE THE ROW HOLDS. The
-// key is kept where the row held none (./entries.ts): `false` when the import
-// came with no key, and when another registration of the same integration, in
-// the same moment, had its key kept first. The bundle landed either way.
 export const writeBundle = async (replay: Replay, imported: BundleImport): Promise<{ keptKey: boolean }> => {
   const { bundle } = imported;
-  // Stamped current: intake upgraded every definition to this code's grammars.
   const actions = Object.entries(bundle.actions).map(([actionId, definition]) => ({ action_id: actionId, definition, grammar: imported.stamp }));
   const said = { ...importedRow(imported), actions };
   if (imported.keyHash === undefined) {
     await replay('integrations/write-bundle', said);
     return { keptKey: false };
   }
-  // A batch answers every row its statements wrote, and one row alone as that
-  // row. The statement that keeps the key answers the integration's row with
-  // the hash on it, and writes no row where a key was held already: so the key
-  // was kept exactly when a row that carries its hash came back.
+  // A batch answers the rows its statements wrote, one alone as itself. The statement that keeps
+  // the key writes no row where one was held, so the key was kept exactly when its hash came back.
   const written = WrittenSchema.parse(await replay('integrations/write-bundle-and-keep-key', { ...said, key_hash: imported.keyHash }));
   return { keptKey: written.some((row) => row.key_hash === imported.keyHash) };
 };
 
-// APPROVE: what it asked to read and write becomes what it is granted, and it
-// is served from here on. Answers what was granted. `undefined`: there is no
-// such integration, and nothing was written. Whoever calls has asked first
-// whether the app could be served with it (`storedActionsOf`).
 export const approveIntegration = async (replay: Replay, id: string): Promise<readonly string[] | undefined> => {
   const asked = RequestedRowSchema.optional().parse(rowsOf(await replay('integrations/requested', { id }))[0]);
   if (asked === undefined) return undefined;
@@ -201,34 +123,18 @@ export const approveIntegration = async (replay: Replay, id: string): Promise<re
   return asked.requested_data;
 };
 
-// AN APPROVAL, TAKEN BACK: the integration is pending again, and the row
-// keeps why (the operator's list shows it as `lastError`). For the approval
-// that was asked about, written, and then not taken by the app all the same.
 export const setBackToPending = async (replay: Replay, id: string, why: string): Promise<void> => {
   await replay('integrations/set-back-to-pending', { id, last_error: why });
 };
 
-// The row goes, and its actions with it (the table's own cascade), and with
-// the row the key that was hashed on it.
 export const removeIntegration = async (replay: Replay, id: string): Promise<void> => {
   await replay('integrations/remove', { id });
 };
 
-// A presented key, resolved to the integration it names — or nothing.
-//
-// Approved only: a pending integration holds a key (minted at registration so
-// the operator ceremony is one step) but the key opens nothing until somebody
-// has said yes, and a revoked or deleted row stops answering here, which is
-// what makes removal kill the credential in the same act.
-//
-// Asked before anybody is signed in. The policy the entries run under names no
-// role and reads no scope value, so this goes through vex with the rest.
 export const integrationByKey = async (replay: Replay, key: string): Promise<string | undefined> =>
   KeyHolderRowSchema.optional().parse(rowsOf(await replay('integrations/by-key', { key_hash: hashIntegrationKey(key) }))[0])?.id;
 
-// Every integration, in the order of the ids, each with how many actions it
-// ships. Two reads: vex has no way to put a count of another table's rows
-// beside each row and keep the rows that have none.
+// Two reads: vex cannot put a count of another table's rows beside each row and keep the rows with none.
 export const listIntegrations = async (replay: Replay): Promise<IntegrationRow[]> => {
   const listed = await everyRow(ListedRowSchema, (after) => replay('integrations/list', { after: after?.id ?? '' }));
   const counted = await everyRow(ActionCountRowSchema, (after) => replay('integrations/action-counts', { after: after?.integration_id ?? '' }));
@@ -236,19 +142,10 @@ export const listIntegrations = async (replay: Replay): Promise<IntegrationRow[]
   return listed.map((row) => ({ ...row, actionCount: counts.get(row.id) ?? 0 }));
 };
 
-// ── the registered integrations, read back for the host app ──
-
 const RegisteredRowSchema = z.object({ id: z.string(), url: z.string(), status: z.string(), extension: z.unknown() });
 
-// One registered integration as the app reads it back: which it is, how it
-// stands ('pending', 'approved'), where its service lives, and what its row
-// holds of the app's own vocabulary.
 export type RegisteredIntegration<Extension> = { id: string; status: string; url: string; extension: Extension | undefined };
 
-// What a row holds of the app's vocabulary, read by the app's schema: the row
-// is outside this process, and the schema may have changed since it was
-// written. One the schema does not read is answered as none, with a line that
-// names the integration: importing it again writes it anew.
 const storedExtension = <Extension>(id: string, stored: unknown, schema: z.ZodType<Extension> | undefined): Extension | undefined => {
   if (schema === undefined || stored === null || stored === undefined) return undefined;
   const read = schema.safeParse(stored);
@@ -258,19 +155,11 @@ const storedExtension = <Extension>(id: string, stored: unknown, schema: z.ZodTy
   return undefined;
 };
 
-// Every registered integration, in the order of the ids.
 export const registeredIntegrations = async <Extension>(replay: Replay, schema: z.ZodType<Extension> | undefined): Promise<RegisteredIntegration<Extension>[]> => {
   const rows = await everyRow(RegisteredRowSchema, (after) => replay('integrations/list', { after: after?.id ?? '' }));
   return rows.map((row) => ({ id: row.id, status: row.status, url: row.url, extension: storedExtension(row.id, row.extension, schema) }));
 };
 
-// Every approved integration's actions, as the manifest wants them.
-// With an upgrader, each definition is read in the host's grammar: the feature
-// brings the table current when it starts (upgradeStore), but a row another process wrote since — one
-// running older code — is upgraded here. A row written by NEWER code is not
-// served: the action is left out with a sentence, never rendered half-read.
-// And what is served is an action: a stored definition is read by nova's
-// schema, and one it refuses is left out the same way.
 const storedAction = (id: string, definition: unknown): ActionDefinition | undefined => {
   if (exceedsDepth(definition)) {
     console.error(`[moss] integration action "${id}" is not served: ${depthRefusal()}`);
@@ -312,29 +201,9 @@ const actionsIn = (rows: readonly z.infer<typeof StoredActionRowSchema>[], upgra
 export const loadIntegrationActions = async (replay: Replay, upgrader?: Upgrader): Promise<Record<string, ActionDefinition>> =>
   actionsIn(await everyRow(StoredActionRowSchema, (after) => replay('integrations/stored-actions', afterAction(after))), upgrader);
 
-// What ONE integration shipped, approved or not, read the same way: the
-// actions that would join the manifest if it were approved now. This is what
-// is verified before an approval is written.
 export const storedActionsOf = async (replay: Replay, id: string, upgrader?: Upgrader): Promise<Record<string, ActionDefinition>> =>
   actionsIn(await everyRow(StoredActionRowSchema, (after) => replay('integrations/actions-of', { id, ...afterAction(after) })), upgrader);
 
-// ═══════════════════════════════════════════════════════════════
-// THE TABLES THE FEATURE KEEPS: `integrations` and `integration_actions`.
-//
-// The core's sequence makes them (`nisc.moss`, ../data): every deployment's
-// ledger has them there, and a migration that has run is never moved or
-// edited, so their DDL stays where it is. In code they are this feature's: it
-// names both as its own (./entries.ts, `REGISTRY_TABLES`), and nothing in the
-// core reads or writes a row of them.
-// ═══════════════════════════════════════════════════════════════
-
-// THE ROWS THAT HOLD DOCUMENTS: every stored action's definition is a nova
-// action, stamped with the grammars it was written in (`{}`, a row with no
-// stamp, reads as the start of every grammar). The feature has them brought
-// current when it starts (./feature.ts, the `upgradeStore` seam): rows carry
-// the stamp they were written at, what they have not seen runs once, and they
-// are written back current. A row written by newer code refuses the start,
-// as a ledger written by newer code refuses the boot.
 export const STORED_ACTIONS: DocumentStore = {
   table: 'integration_actions',
   column: 'definition',
@@ -343,19 +212,10 @@ export const STORED_ACTIONS: DocumentStore = {
   key: ['integration_id', 'action_id'],
 };
 
-// ── which integration an action belongs to ───────────────────
-//
-// `ext.<audience>.<integration>.<name>` → the integration. Derived, never
-// stored twice.
+// An action's id is ext.<audience>.<integration>.<name>.
 export const integrationOfAction = (id: string): string | undefined =>
   id.startsWith('ext.') ? id.split('.')[2] : undefined;
 
-// INSTALLATION IS PER TENANT, and this is where that lands.
-//
-// The charter grants `ext.desk.*` once, to every desk in the deployment — so
-// without this, one studio installing an integration puts it on every studio's front
-// desk. Moss cannot filter that itself: it does not know what a studio is, on
-// purpose. The app answers, and the answer is a list of ids.
 export const filterInstalled = (ids: readonly string[], installed: ReadonlySet<string> | undefined): readonly string[] => {
   if (installed === undefined) return ids;
   return ids.filter((id) => {

@@ -8,32 +8,12 @@ import { runLine } from './commands';
 import { createFocus } from './focus';
 import { createLinkReport } from './link';
 
-// ═══════════════════════════════════════════════════════════
-// @niscorp/moss/terminal/tty — the line-terminal render target: a REPL over
-// the wire. nova's TTY adapter says what the screen IS ({ text, interactives });
-// this target owns the stdio half — print each served frame, read lines, map
-// them onto the adapter's numbered interactives with the same event
-// vocabulary every other target dispatches (`ui:click`, `ui:model`, `ui:key`).
-//
-// What a typed line does is ./commands.ts ("numbers act, words fill"), the
-// focused input is ./focus.ts, what is said of the connection is ./link.ts.
-// All of it is target policy: the wire, the server, and the apps never see
-// anything but ordinary events.
-//
-// Runs on anything with a Readable/Writable pair: a real TTY, a test's
-// PassThrough, a pipe. Node-shaped code lives here, never in the adapter.
-// ═══════════════════════════════════════════════════════════
-
 export type TtyTargetConfig = {
   input: NodeJS.ReadableStream;
   output: NodeJS.WritableStream;
-  // the app's TTY kit; omit for nova's default (floor kit + fallback)
   registry?: ComponentRegistry<TtyComponent>;
   fallback?: TtyComponent;
-  // called on `quit` / EOF — the host owns the wire and the process, so the
-  // target only reports the intent
   onQuit?: () => void;
-  // coalesce a burst of wire updates into one repaint; 0 paints immediately
   debounceMs?: number;
   prompt?: string;
 };
@@ -50,9 +30,6 @@ export const ttyTarget = (config: TtyTargetConfig): Target => (api) => {
   const rl = createInterface({ input, output, prompt: basePrompt });
   const say = (text: string): void => void output.write(`${text}\n`);
   const focus = createFocus(rl, basePrompt);
-  // The REPL says '… connecting' / '✓ connected' / '× connection lost',
-  // because a silent screen on a dead socket is indistinguishable from a
-  // working terminal rendering an empty app.
   const reportLink = createLinkReport(say, () => rl.prompt(true));
   const checkStatus = (): void => reportLink(api.status());
 
@@ -67,7 +44,6 @@ export const ttyTarget = (config: TtyTargetConfig): Target => (api) => {
   };
 
   const update = (): void => {
-    // Status transitions print immediately — never debounced with the trees.
     checkStatus();
     if (debounceMs === 0) {
       paint();
@@ -81,7 +57,6 @@ export const ttyTarget = (config: TtyTargetConfig): Target => (api) => {
   rl.on('line', (raw: string) => {
     if (runLine(repl, raw)) rl.prompt();
   });
-  // EOF (Ctrl+D / a closed pipe) means the same as `quit`.
   rl.on('close', () => config.onQuit?.());
 
   say('[moss/tty] terminal attached — type what you see: a number taps [n], words fill the input. "help" for more.');

@@ -4,22 +4,12 @@ import type { TerminalApi } from '../index';
 import { sendFrom, tapEventOf } from '../numbered';
 import type { Focus } from './focus';
 
-// What a typed line does. The input scheme is "numbers act, words fill": a
-// bare number taps [n] — click a button or row, flip a toggle, FOCUS an input
-// (the next line typed is its value, verbatim; an empty line cancels) — and
-// bare words go straight into the only input on screen. Command words (refs,
-// help, quit, …) are the escape hatch, not the default.
-
-// What a line is run against: the REPL as a command sees it.
 export type Repl = {
   api: TerminalApi;
   say: (text: string) => void;
-  // everything actionable on the screen as it was last painted
   interactives: () => readonly TtyInteractive[];
   focus: Focus;
-  // reprint the current screen
   show: () => void;
-  // the host's quit handler, when it gave one
   quit: (() => void) | undefined;
 };
 
@@ -42,14 +32,12 @@ const act = (repl: Repl, interactive: TtyInteractive, event: NovaEvent): void =>
 
 const fill = (repl: Repl, interactive: TtyInteractive, value: string): void => act(repl, interactive, { type: 'ui:model', ref: interactive.ref, payload: value });
 
-// A bare number: act by kind — the tap of this terminal.
 const tap = (repl: Repl, interactive: TtyInteractive): void => {
   const event = tapEventOf(interactive);
   if (event === undefined) repl.focus.enter(interactive);
   else act(repl, interactive, event);
 };
 
-// The interactive a typed number names, handed on — or a line that says there is none.
 const named = (repl: Repl, token: string | undefined, then: (target: TtyInteractive) => void): void => {
   const index = Number(token);
   const target = Number.isInteger(index) ? repl.interactives().find((item) => item.index === index) : undefined;
@@ -57,7 +45,6 @@ const named = (repl: Repl, token: string | undefined, then: (target: TtyInteract
   else then(target);
 };
 
-// What follows the command word: the first token, and the rest of the line.
 type Words = { second: string | undefined; rest: string };
 type Command = (repl: Repl, words: Words) => void;
 
@@ -84,7 +71,6 @@ const publish: Command = (repl, { second, rest }) => {
 const set: Command = (repl, { second, rest }) =>
   named(repl, second, (target) => {
     if (target.kind === 'model') {
-      // `set 1 alex` fills; a bare `set 1` focuses instead of sending ''
       if (rest === '') repl.focus.enter(target);
       else fill(repl, target, rest);
     } else if (target.kind === 'toggle') {
@@ -117,7 +103,6 @@ const COMMANDS = new Map<string, Command>([
   ['click', (repl, { second }) => named(repl, second, (target) => tap(repl, target))],
 ]);
 
-// Not a command and not a number: words fill the only input on screen.
 const fillOnlyInput = (repl: Repl, head: string, line: string): void => {
   const inputs = repl.interactives().filter((item) => item.kind === 'model');
   if (inputs.length === 1 && inputs[0] !== undefined) fill(repl, inputs[0], line);
@@ -125,11 +110,7 @@ const fillOnlyInput = (repl: Repl, head: string, line: string): void => {
   else repl.say(`several inputs on screen — pick one: ${inputs.map((item) => `[${item.index}]`).join(' ')}`);
 };
 
-// Run one typed line. Answers whether the prompt is shown again: after `quit`
-// it is not.
 export const runLine = (repl: Repl, raw: string): boolean => {
-  // Focused input: the whole line is the value, verbatim — even words that
-  // look like commands. An empty line cancels.
   if (repl.focus.held()) {
     const target = repl.focus.among(repl.interactives());
     if (raw !== '' && target !== undefined) fill(repl, target, raw);

@@ -11,42 +11,15 @@ import { STATUS_WORDS } from '../status';
 import { createMarks, markerProviders } from './marks';
 import { navOf } from './nav';
 
-// ═══════════════════════════════════════════════════════════
-// @niscorp/moss/terminal/ink — the full-screen terminal render target: nova's
-// Ink kit on the React adapter's walker, mounted with ink's renderer.
-//
-// Interaction is the TTY REPL's numbered addressing plus live focus: every
-// interactive shows a `[n]` marker, and TYPED DIGITS act on it — a button or
-// row clicks, a toggle flips, an input takes focus (then typing types; a
-// focused input claims digits as text, so number navigation stands down).
-// The numbering comes from the TTY adapter's walker run over the SAME served
-// trees (./marks.ts), and what a number sends is the REPL's (../numbered.ts).
-// Tab/Shift+Tab and ↑/↓ walk the focus ring (./nav.ts); Enter
-// activates; Ctrl+C leaves. ESM only, like ink. Node-shaped and react-shaped
-// code lives here, never in moss core.
-// ═══════════════════════════════════════════════════════════
-
 export type InkTargetConfig = {
-  // the app's Ink kit; omit for nova's default (floor kit + fallback)
   registry?: ComponentRegistry<NovaComponent>;
   slotWrapper?: TerminalSlotWrapper;
   stdin?: NodeJS.ReadStream;
   stdout?: NodeJS.WriteStream;
-  // Called when the terminal ends: the person left (Ctrl+C), or a component
-  // threw and ink ended the app. The host owns the wire and the process. Not
-  // called for a `destroy`, which is the host's own doing.
   onQuit?: () => void;
-  // Route the process's console output above the frame (ink's patchConsole).
-  // Default on — right for one terminal owning its process. A host rendering
-  // SEVERAL ink targets in one process (an SSH server, one per connection)
-  // turns it off: the console is the process's, and patching it would hand
-  // the server's own logs to whoever is connected.
   patchConsole?: boolean;
 };
 
-// The connection's status, as a line for as long as it is not open: a blank
-// full-screen app on a dead socket is indistinguishable from a working empty
-// one.
 const statusLineOf = (status: TerminalApi['status']): FC => () => {
   const now = status();
   if (now === 'open') return null;
@@ -65,15 +38,11 @@ export const inkTarget = (config: InkTargetConfig = {}): Target => (api) => {
     ...markerProviders(marks),
   });
 
-  // A focused input claims typed digits as text — the kit's Input reports
-  // its focus through FrameControls and Nav stands down.
   const typingRef = { current: false };
   const frameControls = { setTyping: (typing: boolean): void => void (typingRef.current = typing) };
   const Nav = navOf({ api, marks, typing: () => typingRef.current });
   const StatusLine = statusLineOf(api.status);
 
-  // Nav and the status line read nothing of nova's: they sit beside the frame,
-  // which is the one every react-shaped target draws (../react/frame).
   const Frame: FC = () => {
     marks.reindex();
     return createElement(
@@ -91,13 +60,6 @@ export const inkTarget = (config: InkTargetConfig = {}): Target => (api) => {
     exitOnCtrlC: true,
     patchConsole: config.patchConsole ?? true,
   });
-  // HOW THE INK APP ENDED is the host's to hear: it owns the wire and the
-  // process. A quit (Ctrl+C) is the person leaving. A component that threw is
-  // this terminal's end too: ink ends the app and says so by rejecting, and a
-  // rejection nobody handles ends the PROCESS, with every other terminal in it
-  // — so it is logged, and told to the host like a quit. A destroy is the
-  // host's own doing (a swap, a connection it is closing), and it is not told
-  // of what it did itself.
   let destroyed = false;
   const ended = (): void => {
     if (!destroyed) config.onQuit?.();
@@ -107,8 +69,6 @@ export const inkTarget = (config: InkTargetConfig = {}): Target => (api) => {
     ended();
   });
 
-  // The conductor drives re-render: each `update` re-reads api.frame() and
-  // the canvas trees, and React reconciles (focus survives by node key).
   return {
     update: () => instance.rerender(createElement(Frame)),
     destroy: () => {

@@ -1,8 +1,6 @@
 import type { WireStatus } from '../../client';
 import { STATUS_WORDS } from '../status';
 
-// What the REPL says of the connection. Real transitions only: up once, down
-// once — never the closed↔connecting flap of every backoff retry.
 export const createLinkReport = (say: (text: string) => void, prompt: () => void): ((now: WireStatus) => void) => {
   let link: 'unknown' | 'up' | 'down' | 'incompatible' = 'unknown';
   return (now) => {

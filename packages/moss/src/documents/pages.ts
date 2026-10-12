@@ -1,15 +1,3 @@
-// ═══════════════════════════════════════════════════════════════
-// Which page a path leads to. A page's `path` is literal segments and `:name`
-// parameters ("/docs/:slug"); a path matches a page when they have the same
-// number of segments and every literal one is equal. Nothing else — no
-// wildcards, no optional segments, no order to remember: two pages that could
-// both answer one path are refused when the router is made, so which page a
-// path leads to never depends on the order they were written in.
-// ═══════════════════════════════════════════════════════════════
-
-// WHAT THE ROUTER READS OF A PAGE: where it is drawn, which of its canvases
-// the parameters of its path go to, and the canvases it has. A `PageManifest`
-// (../manifest) is one of these.
 export type PagePath = { path: string; params?: string; canvases: readonly { id: string }[] };
 
 export type PageMatch = { name: string; params: Record<string, string> };
@@ -28,9 +16,6 @@ const compile = (name: string, page: PagePath): Compiled => {
       throw new Error(`moss: page "${name}" names the parameter ":${segment.param}" in "${page.path}" — a parameter is a plain name.`);
     }
   }
-  // The parameters are handed over by name: one named twice has two segments
-  // and one place to put them, so the later one would be kept and the first
-  // matched and then lost.
   const named = segments.flatMap((segment) => ('param' in segment ? [segment.param] : []));
   const twice = named.find((param, index) => named.indexOf(param) !== index);
   if (twice !== undefined) {
@@ -42,8 +27,6 @@ const compile = (name: string, page: PagePath): Compiled => {
   return { name, segments };
 };
 
-// Two patterns collide when some path satisfies both: same length, and no
-// position where both are literal and differ.
 const collide = (a: Compiled, b: Compiled): boolean =>
   a.segments.length === b.segments.length &&
   a.segments.every((segment, index) => {

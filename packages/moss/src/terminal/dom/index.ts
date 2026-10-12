@@ -5,19 +5,6 @@ import type { ComponentRegistry } from '@niscorp/nova';
 import type { Target } from '../index';
 import { hideStatus, showStatus } from '../status';
 
-// ═══════════════════════════════════════════════════════════
-// @niscorp/moss/terminal/dom — the plain-DOM render target: the conductor's
-// wire, nova's DOM adapter, and nova's default reference kit. Zero framework
-// — the lightest terminal, and the proof that the terminal is trivial and
-// the intelligence is server-side. Bring a `root`; omit `registry` for the
-// batteries — nova's reference kit AND its stylesheet, with its class on the
-// root. Pass your own `registry` and the look is yours too: nothing is injected
-// and the root gets no class, so the reference stylesheet never restyles an
-// app's own kit.
-// ═══════════════════════════════════════════════════════════
-
-// One stylesheet per document (a page may host more than one root, and a swap
-// re-mounts) — a WeakSet, not a module boolean, so it's per-document truth.
 const styled = new WeakSet<Document>();
 const injectCss = (doc: Document): void => {
   if (styled.has(doc)) return;
@@ -30,15 +17,12 @@ const injectCss = (doc: Document): void => {
 
 export const domTarget = (config: { root: HTMLElement; registry?: ComponentRegistry<DomComponent> }): Target => (api) => {
   const { root } = config;
-  // the reference kit's look belongs to the reference kit
   const reference = config.registry === undefined;
   if (reference) {
     injectCss(root.ownerDocument);
     root.classList.add(ROOT_CLASS);
   }
   const registry = config.registry ?? defaultRegistry();
-  // A TerminalApi is nova's DomRenderApi (frame / canvasTree / dispatch /
-  // publish) with the status beside it — hand it straight through.
   const view = createDomView(root, registry, api, { fallback });
   const render = (): void => {
     showStatus(root, api.status());

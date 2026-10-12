@@ -7,10 +7,6 @@ import { TerminalApiKey } from './slots';
 
 const noDispatch = (): void => undefined;
 
-// The frame, as a component: the api provided, the registry bound, the frame's
-// tree drawn. One definition for the browser's target (./index) and the one
-// that draws to a string (./server), so what a server writes is what the
-// browser then adopts. The twin of ../react/frame.ts.
 export const terminalFrame = (api: TerminalApi, registry: ComponentRegistry<NovaComponent>): Component =>
   defineComponent(
     () => {
@@ -18,7 +14,7 @@ export const terminalFrame = (api: TerminalApi, registry: ComponentRegistry<Nova
       return () =>
         h(
           NovaRenderProvider,
-          // the frame is chrome — app events flow only from inside a canvas
+          // The frame is chrome: events come only from inside a canvas.
           { registry, dispatch: noDispatch, publish: api.publish },
           { default: () => h(RenderTree, { nodes: api.frame() }) },
         );

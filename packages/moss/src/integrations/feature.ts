@@ -9,107 +9,32 @@ import { contractRoutes, operatorRoutes } from './operator';
 import { STORED_ACTIONS, filterInstalled, findIntegration, integrationByKey, integrationOfAction, loadIntegrationActions, registeredIntegrations } from './registry';
 import type { RegisteredIntegration } from './registry';
 
-// ═══════════════════════════════════════════════════════════════
-// THE FEATURE — integrations as one object an app creates, configures and
-// puts in its manifest's `features`.
-//
-// `createIntegrations(config)` is what the app says about itself: who an
-// integration is when it acts alone, and what a bundle may say in the app's
-// own vocabulary. The server starts the feature with the seams (../feature), and
-// everything it adds to the app it adds through them: its routes, its
-// credential, the actions of the integrations that were approved, the rule
-// for what is installed where, the sentence under a failing call.
-//
-// The same object carries the calls an app makes afterwards. They work once
-// a server has started the feature, and say so in a sentence before that.
-// ═══════════════════════════════════════════════════════════════
-
 export type IntegrationsConfig<Extension = undefined> = {
-  // THE APP'S OWN VOCABULARY: what a bundle may say under `extension`, beyond
-  // the fields that are nisc's own (./intake.ts, `ExtensionConfig`). The app
-  // supplies the schema that reads it, and may check it, prepare it for the
-  // row and tell vendors about it. Absent: a bundle that carries an
-  // `extension` is refused.
   extension?: ExtensionConfig<Extension>;
-  // WHO AN INTEGRATION IS when it acts and nobody is driving (./credentials.ts). The
-  // app answers with a principal, and from there NOTHING is special: that
-  // principal's charter rung compiles its policy, its scope values pin its
-  // rows, and the engine stamps its writes.
-  //
-  // Returning null refuses: an integration the tenant has not installed, a
-  // tenant that does not exist, an app that has no actor for unattended work.
-  // Absent = integration keys resolve to nobody and every keyed call is 403.
-  // May be async: an app answering this from rows reads the row.
   integrationActor?: IntegrationActor;
-  // A FIXED SEED FOR THE KEYPAIR ASSERTIONS ARE SIGNED WITH (./credentials.ts).
-  // 32 bytes, as base64. Without one the keypair is made when the feature
-  // starts and kept nowhere, so every boot has a new one: right where a
-  // restart costing one retry is fine, and wrong where an integration's
-  // service holds the public half in its environment and every restart, or
-  // every other process of the deployment, would be signing with a key it
-  // does not know. With one, the public half stays put.
-  //
-  // The feature's own setting, and nobody else's: the private half of that key
-  // is made from it, so it is said here, to the one thing that signs, and is
-  // on no object another feature is handed. One that decodes to fewer than 32
-  // bytes refuses the boot, with a sentence that says its length.
+  // 32 bytes, as base64.
   signingSeed?: string;
-  // HOW LONG A CALL OUT TO AN INTEGRATION'S SERVICE MAY TAKE, in ms, its
-  // answer and its body together. Every call: a screen's through the proxy, a
-  // vendor's webhook, `callIntegration`, the bundle fetched at registration,
-  // the operator's probe.
-  // Past it the call is given up on, and reads as a service that is
-  // unreachable. Default 30000, nova's default wait for an endpoint's reply.
-  // The shorter of the two ends a call: an integration whose endpoint is slow
-  // by nature, and says so with a longer `timeoutMs` on its action, needs this
-  // raised as well.
   outboundTimeoutMs?: number;
 };
 
 const DEFAULT_OUTBOUND_TIMEOUT_MS = 30_000;
 
 export type Integrations<Extension = undefined> = Feature & {
-  // THE INTEGRATIONS THAT ARE REGISTERED, in the order of their ids: each with
-  // how it stands ('pending', 'approved'), where its service lives, and the
-  // `extension` its row holds, read by the app's schema. What an app shows of
-  // an integration, and where, it builds from this.
   listIntegrations: () => Promise<RegisteredIntegration<Extension>[]>;
-  // CALL AN INSTALLED INTEGRATION WHEN NOBODY IS DRIVING — the outbound half
-  // of `executeAs`. Refuses (throws) unless it is approved and installed for
-  // this principal's tenant, mints the assertion, and returns what the
-  // integration answered, whatever it answered. Deliberately not gated by
-  // reach: a lifecycle verb is not an action and has no screen (./forward.ts).
   callIntegration: CallIntegration;
-  // The approved integration a presented key belongs to, or undefined.
   integrationByKey: (key: string) => Promise<string | undefined>;
-  // `ext.<audience>.<integration>.<name>` → the integration. Reads nothing,
-  // and answers before any server is there.
   integrationOfAction: (actionId: string) => string | undefined;
 };
 
-// What the calls an app makes are made of, once a server has started the
-// feature.
 type Started = { replay: Replay; call: CallIntegration };
 
 const start = async <Extension>(config: IntegrationsConfig<Extension>, seams: FeatureSeams): Promise<Started> => {
-  // THE REGISTRY'S READS AND WRITES, handed over as entries of the feature's
-  // own: seeded where no route serves them, and replayed from here on by
-  // `replay` (./registry.ts, ./entries.ts).
   const replay = await seams.ownEntries(REGISTRY_ENTRIES);
-  // THE STORED ACTIONS, BROUGHT TO THIS CODE'S GRAMMARS before one is read
-  // (./registry.ts). The rows are this feature's, so the asking is: the core
-  // upgrades no row of its own accord.
   await seams.upgradeStore(STORED_ACTIONS);
   const find = (id: string): ReturnType<typeof findIntegration> => findIntegration(replay, id);
-  // THE DEPLOYMENT'S SIGNING IDENTITY — how an integration knows a call is
-  // ours. The public half is served; verifying is all anybody can do with it
-  // (./credentials.ts).
   const signer = createAssertionSigner(config.signingSeed);
   const timeoutMs = config.outboundTimeoutMs ?? DEFAULT_OUTBOUND_TIMEOUT_MS;
   const forward = createForwarder({ find, resolveIdentity: seams.resolveIdentity, scopeOf: seams.scopeOf, mint: signer.mint, timeoutMs });
-  // Approved integrations' actions, read from rows. Handed to the running
-  // manifest after an import, an approval and a removal: the set is verified
-  // with everything else, and only then is it served.
   const stored = (): ReturnType<typeof loadIntegrationActions> => loadIntegrationActions(replay, seams.grammars);
   const reload = async (): Promise<void> => seams.replaceActions(await stored());
 
@@ -141,9 +66,6 @@ const start = async <Extension>(config: IntegrationsConfig<Extension>, seams: Fe
   );
   seams.mountRoutes(proxyRoutes({ grantedActionIds: seams.grantedActionIds, forward }));
 
-  // WHATEVER WAS APPROVED BEFORE THIS PROCESS STARTED is part of the
-  // application, so it is folded in before anything is served — not on first
-  // request and not on a timer.
   const approved = await stored();
   if (Object.keys(approved).length > 0) seams.replaceActions(approved);
 
@@ -151,9 +73,6 @@ const start = async <Extension>(config: IntegrationsConfig<Extension>, seams: Fe
 };
 
 export const createIntegrations = <Extension = undefined>(config: IntegrationsConfig<Extension> = {}): Integrations<Extension> => {
-  // What the last server to start this feature gave it. A manifest is handed
-  // to one server; a process that builds a second from the same manifest (a
-  // dev floor rebuilding) has the calls follow the one built last.
   let started: Started | undefined;
   const running = (call: string): Started => {
     if (started === undefined) {
@@ -165,7 +84,6 @@ export const createIntegrations = <Extension = undefined>(config: IntegrationsCo
   };
   return {
     name: 'integrations',
-    // The two tables that are its own (./registry.ts says where they are made).
     tables: { names: REGISTRY_TABLES },
     start: async (seams) => {
       started = await start(config, seams);

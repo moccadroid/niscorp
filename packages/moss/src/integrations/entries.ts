@@ -1,39 +1,14 @@
 import type { Filter, Mutation, SeedEntry, SeedMutation } from '@niscorp/vex';
 
-// ═══════════════════════════════════════════════════════════════
-// THE REGISTRY'S ENTRIES — every read and write on `integrations` and
-// `integration_actions`, authored as vex entries, the way an app authors its
-// own.
-//
-// They are the feature's own (../feature, the `ownEntries` seam): seeded where
-// no route serves them and replayed in process by ./registry.ts, under a
-// policy that admits the feature's tables and no other. So what guards an act
-// is what its route asks (an approval is behind the operator key), and a data
-// grant on these tables opens none of them.
-//
-// An instant is handed in by the caller: `last_import_at` is a value in the
-// context, not the database's `now()`.
-// ═══════════════════════════════════════════════════════════════
-
-// THE TABLES THAT ARE THE FEATURE'S OWN: what it names on itself
-// (`Feature.tables.names`, ./feature.ts), so all the policy its entries run
-// under admits. ./registry.ts says which sequence makes them.
 export const REGISTRY_TABLES: readonly string[] = ['integrations', 'integration_actions'];
 
-// EVERY LIST IS READ A PAGE AT A TIME, in the order of its key, each page
-// starting after the last row of the one before (vex has no offset: a page is
-// a `gt` on the key). So no list has a number it silently stops at, and this
-// one is how many rows a single read carries, nothing more.
 export const PAGE = 500;
 
-// Each column set from the context key of its own name.
 const fromContext = (columns: readonly string[]): Record<string, { $context: string }> => Object.fromEntries(columns.map((column) => [column, { $context: column }]));
 
 const byId: Filter = { eq: ['integrations.id', { $context: 'id' }] };
 const approved: Filter = { eq: ['integrations.status', 'approved'] };
 
-// After the row a page ended on, in the order of an action's key: its
-// integration, then its own id. The first page starts after ('', '').
 const afterAction: Filter = {
   or: [
     { gt: ['integration_actions.integration_id', { $context: 'after_integration' }] },
@@ -44,8 +19,6 @@ const byActionKey: SeedEntry['dsl']['sort'] = [
   { field: 'integration_actions.integration_id', dir: 'asc' },
   { field: 'integration_actions.action_id', dir: 'asc' },
 ];
-
-// ── one integration, read ────────────────────────────────────
 
 const find: SeedEntry = {
   fingerprint: 'integrations/find',
@@ -71,8 +44,6 @@ const byKey: SeedEntry = {
   dsl: { from: ['integrations'], fields: ['integrations.id'], filter: { and: [{ eq: ['integrations.key_hash', { $context: 'key_hash' }] }, approved] }, limit: 1 },
 };
 
-// ── one integration, written ─────────────────────────────────
-
 const recordFailedImport: SeedMutation = {
   fingerprint: 'integrations/record-failed-import',
   intent: 'Keep why an import did not land on the row, and the address it was fetched from',
@@ -84,19 +55,12 @@ const recordFailedImport: SeedMutation = {
   },
 };
 
-// What a bundle says of its integration. The row is written whole on every
-// import: on a row that is there, each of these replaces what it held.
 const importedColumns = {
   ...fromContext(['url', 'requested_actions', 'requested_data', 'reach', 'phrasebook', 'extension', 'last_import_at']),
   last_error: null,
 };
 
-// LANDING A BUNDLE IS ONE BATCH, and a batch is one transaction: the row as
-// the bundle says it is now, the actions it shipped before taken out, and one
-// row for each action it ships (`actions`, a list in the context: its id, its
-// definition, the grammars it is written in).
-// A statement that fails takes the ones before it back, so a bundle lands
-// whole or the import before it stays whole.
+// A batch is one transaction: a statement that fails takes the ones before it back.
 const writeBundleStatements: Mutation[] = [
   { op: 'insert', table: 'integrations', values: { ...fromContext(['id']), ...importedColumns }, onConflict: { target: ['id'], set: importedColumns } },
   { op: 'delete', table: 'integration_actions', where: { eq: ['integration_actions.integration_id', { $context: 'id' }] } },
@@ -119,19 +83,9 @@ const writeBundle: SeedMutation = {
   mutation: writeBundleStatements,
 };
 
-// The same, for the import a key is issued with: the hash of the key is on the
-// row in the transaction that lands the bundle, or neither is.
-//
-// THE KEY IS KEPT WHERE NONE IS HELD, AND ONLY THERE. Whoever registers asks
-// first how the integration stands, and mints a key when it holds none; two
-// registrations of one new integration in the same moment are both told that,
-// and both come here with a key. So the hash is a statement of its own, the
-// last of the batch, and it writes where the row still holds no key: the later
-// transaction waits for the earlier one's row, finds a key on it, and writes
-// none. Written with the row, the later hash would replace the earlier, and
-// one of the two keys answered would open nothing. The row that statement
-// answers carries the hash, so whoever landed reads off the reply whether its
-// key is the one kept (./registry.ts).
+// The key's hash is a statement of its own, written only where the row holds none. Of two
+// registrations of one new integration in the same moment, the later waits for the earlier
+// one's row and writes nothing; set with the row, it would replace the first key's hash.
 const writeBundleAndKeepKey: SeedMutation = {
   fingerprint: 'integrations/write-bundle-and-keep-key',
   intent: 'Land a bundle, and keep the hash of the key its integration is issued with it, where it holds none',
@@ -144,8 +98,6 @@ const approve: SeedMutation = {
   mutation: { op: 'update', table: 'integrations', set: { status: 'approved', ...fromContext(['approved_data']) }, where: byId },
 };
 
-// An approval, taken back: the integration is pending, and the row says why.
-// What it was granted stays written beside a status that serves none of it.
 const setBackToPending: SeedMutation = {
   fingerprint: 'integrations/set-back-to-pending',
   intent: 'Take an approval back, and keep why on the row',
@@ -157,8 +109,6 @@ const remove: SeedMutation = {
   intent: 'Remove an integration; its actions go with the row',
   mutation: { op: 'delete', table: 'integrations', where: byId },
 };
-
-// ── the lists ────────────────────────────────────────────────
 
 const list: SeedEntry = {
   fingerprint: 'integrations/list',
@@ -182,9 +132,6 @@ const list: SeedEntry = {
   },
 };
 
-// How many actions each integration ships. Beside the list and not in it: an
-// integration that ships none has no row here, and vex joins a list to its
-// counts only where both have a row.
 const actionCounts: SeedEntry = {
   fingerprint: 'integrations/action-counts',
   intent: 'How many actions each integration ships, a page at a time',
@@ -211,8 +158,6 @@ const storedActions: SeedEntry = {
   },
 };
 
-// What one integration shipped, approved or not: read before it is approved,
-// to ask whether the app could be served with it.
 const actionsOf: SeedEntry = {
   fingerprint: 'integrations/actions-of',
   intent: 'The stored actions of one integration, whether or not it is approved, a page at a time',

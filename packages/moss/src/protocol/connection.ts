@@ -1,33 +1,14 @@
-// How a connection is opened and how it ends: the protocol number a terminal
-// names on the upgrade, what it offers there to say who it is, and the close
-// codes it is answered with.
-
-// The wire protocol this server speaks, and the oldest a terminal may speak to
-// it. A terminal says which it speaks on the upgrade (`?protocol=N` — known
-// before the first frame is sent); one that says nothing speaks 1. Outside the
-// range the connection is refused with a sentence and CLOSE_PROTOCOL_MISMATCH,
-// never served frames it would misread. Bump PROTOCOL when a message changes
-// shape; raise PROTOCOL_MIN only when the server stops speaking an old one.
-//
-// The token never rides the address, because an address is what every proxy on
-// the way writes into its log. A terminal at 1 put it in `?token=`; a server
-// that still read it there would keep that open for as long as anything used
-// it, so 1 is not spoken (PROTOCOL_MIN is 2) and a terminal built before is
-// told to reload.
+// PROTOCOL moves when a message changes shape; PROTOCOL_MIN when the server stops speaking an old one.
 export const PROTOCOL = 2;
 export const PROTOCOL_MIN = 2;
 
-// WHO A TERMINAL IS rides the upgrade request, in the one header every host
-// lets a terminal set, a browser included: the subprotocols it offers. It
-// offers `nisc`, and beside it its token when it holds one — base64url,
-// because a subprotocol is an HTTP token and a session token need not be. The
-// server answers `nisc`, never the other. Decided on the request, so no
-// connection is ever open and waiting to be told who it is.
+// A terminal says who it is in the subprotocols it offers, the one header a browser lets it set
+// on an upgrade, and never in the address, which every proxy on the way logs. The token is
+// base64url because a subprotocol is an HTTP token and a session token need not be.
 export const SUBPROTOCOL = 'nisc';
 const TOKEN_OFFER = 'nisc.token.';
 const SEALED_OFFER = 'nisc.sealed.';
 
-// `sealed`: a sign-in the terminal was handed sealed, offered back as it is.
 export const offerToken = (token: string | null, sealed: string | null = null): string[] => {
   const offer = sealed === null ? [SUBPROTOCOL] : [SUBPROTOCOL, `${SEALED_OFFER}${sealed}`];
   if (token === null) return offer;
@@ -46,30 +27,10 @@ export const offeredToken = (offered: readonly string[] = []): string | null => 
   }
 };
 
-// The sealed sign-in a terminal offered back, still sealed: only the seal its
-// browser holds opens it.
 export const offeredSealed = (offered: readonly string[] = []): string | null => offered.find((entry) => entry.startsWith(SEALED_OFFER))?.slice(SEALED_OFFER.length) ?? null;
 
-// Application close code: the token did not resolve to a principal.
 export const CLOSE_INVALID_TOKEN = 4401;
-// Application close code: the session ended (sign-out, from any of the
-// principal's terminals) — the terminal clears its token instead of
-// reconnecting.
 export const CLOSE_SIGNED_OUT = 4403;
-// Application close code: the server could not open a session for THIS
-// connection — commonest cause: a definition failing validation reached the
-// live catalog (a dev edit mid-reload). The refusal is this terminal's alone;
-// the process and every other session stay up, and reconnecting later is
-// reasonable — the next build is attempted fresh.
 export const CLOSE_SHELL_FAILED = 4500;
-// Application close code: the server is serving as many terminals with nobody
-// signed in as it is set to, and built no shell for this one. Nothing is
-// wrong with the terminal or its token: reconnecting later is right, and a
-// terminal does, as after any close that is not one of the two recoveries
-// above. The preceding `error` (`at_capacity`) says it in a sentence.
 export const CLOSE_AT_CAPACITY = 4503;
-// Application close code: terminal and server speak protocols the other cannot
-// (see PROTOCOL). Not a retry: reconnecting speaks the same protocol again. A
-// browser terminal needs a reload to fetch the current build; the preceding
-// `error` says which side is behind (`client_too_old` / `server_too_old`).
 export const CLOSE_PROTOCOL_MISMATCH = 4426;

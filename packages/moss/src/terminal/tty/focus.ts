@@ -1,20 +1,11 @@
 import type { Interface } from 'node:readline';
 import type { TtyInteractive } from '@niscorp/nova/adapters/tty';
 
-// The focused input of the REPL: while one is held, the next line typed is its
-// value. Tracked by identity (canvas + ref), never by index — a repaint
-// renumbers, identity survives the server echo.
-
 export type Focus = {
   held: () => boolean;
-  // focus this input: the prompt shows the field and what it holds
   enter: (item: TtyInteractive) => void;
   exit: () => void;
-  // the focused input among what is on screen, if it is still there
   among: (interactives: readonly TtyInteractive[]) => TtyInteractive | undefined;
-  // After a repaint: the prompt follows what the input holds now. If the input
-  // left the screen (navigation, sign-out), focus drops with a note instead of
-  // swallowing the next line silently.
   follow: (interactives: readonly TtyInteractive[], say: (text: string) => void) => void;
 };
 

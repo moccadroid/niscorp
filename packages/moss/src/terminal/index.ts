@@ -5,54 +5,12 @@ import { onHotkey } from './hotkey';
 import { trapBack } from './history';
 import { followHead } from './head';
 
-// ═══════════════════════════════════════════════════════════════
-// @niscorp/moss/terminal — the terminal, owned by the protocol that defines
-// it. A terminal is the wire (../client) plus a RENDER TARGET (react, dom,
-// console, …) painting the wire's snapshot and sending events back. This
-// module is framework-blind: the conductor drives one target against the
-// wire; the switcher cycles targets on a hotkey, sharing one wire so the
-// session survives the swap. Targets live in the subpaths (./react, ./vue,
-// ./dom, ./tty, ./ink); the framework-shaped code stays there, never here.
-//
-// What more than one target does is said once, beside this file:
-//
-//   ./slots.ts     what the two wire-backed slots are (react, ink, vue)
-//   ./drawn.ts     a screen drawn ahead of its terminal: handed to a target
-//                  that draws to a string, adopted by one in a browser
-//   ./status.ts    the connection's status, as a target shows it
-//   ./numbered.ts  what the interactive a typed number names is sent (tty, ink)
-//
-// and the terminal's own relationship to the surface it is painted on:
-// ./head.ts (the page's <head>), ./history.ts (the back gesture), ./hotkey.ts.
-// ═══════════════════════════════════════════════════════════════
-
-// What a target renders against — nova core's `RenderApi`: the wire's snapshot
-// as pull functions (frame + per-canvas trees) plus the event sinks (dispatch
-// tagged by canvas, publish). Not redeclared — the dom adapter, the react
-// adapter, and this conductor share ONE contract, so a target written for
-// nova's dom view drops straight onto the wire. A target never touches the
-// wire directly.
-//
-// And one thing a shell in the same process never needs: the connection's
-// `status`, pulled like the frame and the trees. A screen left up by a dead
-// socket looks exactly like a working one, so every target is told which it
-// is, the same way, and a change of status is an `update` like any other.
-// What a target draws for it is the target's, or the app's.
 export type TerminalApi = RenderApi & { status: () => WireStatus };
 
-// A mounted target: re-render on demand, tear down on swap.
 export type TerminalMount = { update: () => void; destroy: () => void };
 
-// A render target: paint the api onto the target's own surface, return the
-// mount handle. The surface — a DOM root, a stdio pair — is construction
-// config on the concrete target (`reactTarget({ root, … })`, `domTarget({
-// root })`), never part of this contract: the conductor stays surface-blind
-// and runs anywhere the wire does. A target renders once on mount; the
-// conductor calls `update` on every wire change: a frame, a tree, the status.
 export type Target = (api: TerminalApi) => TerminalMount;
 
-// The conductor: one target, one wire. Subscribes the target's `update` to
-// the wire and routes events back. Nothing framework-shaped.
 export const createTerminal = (config: { target: Target; wire: Wire }): { destroy: () => void } => {
   const { target, wire } = config;
   const api: TerminalApi = {
@@ -75,43 +33,15 @@ export const createTerminal = (config: { target: Target; wire: Wire }): { destro
 };
 
 export type MountTerminalConfig = {
-  // render targets by name; the hotkey cycles them in insertion order
   targets: Record<string, Target>;
-  // e.g. "ctrl+shift+t" — the live render-target swap. Omit for no swapping.
   swapKey?: string;
-  // e.g. "ctrl+shift+r" — ask the server for a fresh shell. Omit for no key.
-  //
-  // The one control that must work when nothing else does. It sits on a
-  // keystroke for the same reason the swap does — it acts on the terminal's
-  // relationship to the server, not on anything the app models — but the
-  // reason it exists at all is stronger: a shell lives on the SERVER, keyed by
-  // principal, so a broken one survives every gesture a client can make alone.
-  // Reloading reattaches to it. Clearing the token and signing back in
-  // reattaches to it. Without a key that says "throw it away", somebody
-  // watching a dead screen has no move left.
   resetKey?: string;
-  // Catch the host's BACK gesture — the browser's back button — and send it up
-  // the wire instead of letting it unload the page. Default: on, wherever a
-  // history exists to catch (see ./history); nothing at all in a TTY or a TUI.
-  //
-  // Terminal chrome for the same reason the swap and reset keys are: back is
-  // the terminal's relationship to the surface it is painted on, and the app
-  // authors nothing to receive it. What back MEANS is decided a layer up, by
-  // the shell that owns the navigation.
   trapBack?: boolean;
-  // which target to mount first (default: the first key)
   initial?: string;
-  // inject an existing wire (shared across swaps), or let the terminal make
-  // one — `url` seeds a self-made wire (default: /socket on the host).
   wire?: Wire;
   url?: string;
 };
 
-// The switcher: mount a terminal that can hot-swap its render target on a
-// keystroke, over ONE wire (created here unless injected) so the socket,
-// session, and current trees survive the swap. The hotkey is the one legit
-// piece of imperative client chrome — a render target is not app state, so
-// it is not a nova action; it lives here, in the terminal.
 export const mountTerminal = (config: MountTerminalConfig): { swap: () => void; reset: () => void; back: () => void; destroy: () => void } => {
   const keys = Object.keys(config.targets);
   if (keys.length === 0) throw new Error('mountTerminal: at least one target is required');
@@ -143,8 +73,6 @@ export const mountTerminal = (config: MountTerminalConfig): { swap: () => void; 
   const disposeResetKey = config.resetKey === undefined ? undefined : onHotkey(config.resetKey, reset);
   const disposeBackTrap = config.trapBack === false ? undefined : trapBack(back);
 
-  // All three are returned so a host can bind its own control (a button, a
-  // console call) — the keys and the trap are a convenience, not the only way in.
   return {
     swap,
     reset,
