@@ -9,6 +9,8 @@
 import { serverOn } from '../server/boot';
 import { devRuntime } from '../server/runtime';
 import { mintToken } from '../server/users';
+import { rayEngine } from '../server/functions/ray/engine';
+import { systemPolicy } from './engine';
 
 const checks: [string, boolean][] = [];
 
@@ -84,6 +86,16 @@ const main = async (): Promise<void> => {
   const samDisc = await request('/api/deals/vex', { as: 'sam' });
   const samMutations = fps(samDisc.body).filter((f) => f.kind === 'mutation') as { fingerprint?: string }[];
   checks.push(["admin's discovery does advertise deals/delete", samMutations.some((f) => f.fingerprint === 'deals/delete')]);
+
+  // ── the assistant's engine is relay's own, and carries relay's entries itself ──
+  // The server keeps the entries it serves to itself, so an engine beside it
+  // finds only what it was given.
+  const ray = await rayEngine(dev, systemPolicy);
+  const replayed = await ray.engine.execute({ fingerprint: 'deals/list', context: { q: ' ' } }, { scope: { userId: 'usr_001' } }).then(
+    (answer) => Array.isArray(answer.result),
+    () => false,
+  );
+  checks.push(["the assistant's own engine replays an entry the app ships", replayed]);
 
   // ── report ──
   let failed = 0;

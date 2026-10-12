@@ -1,5 +1,4 @@
-import { createScopePolicy, scopeGrants, seedCache } from '@niscorp/vex';
-import { ENTRIES, MUTATION_ENTRIES } from '@relay/app/vex';
+import { createScopePolicy, scopeGrants } from '@niscorp/vex';
 import { resolvePrincipal } from '@niscorp/charter';
 import { CHARTER } from '@relay/app/charter';
 import { scopeBehaviors } from '@relay/app/vex/behaviors';
@@ -20,18 +19,7 @@ export const systemPolicy = createScopePolicy(
 
 let booted: Promise<RayEngine> | undefined;
 export const getVexRuntime = (): Promise<RayEngine> => {
-  booted ??= (async () => {
-    const dev = await devRuntime();
-    // The API surface, from the ONE declaration (the manifest's entries) —
-    // moss's data layer does the same over the same database.
-    //
-    // The cache is optional on the runtime and REQUIRED here: seeding into
-    // nothing would leave every fingerprint a cache_miss, so a suite would fail
-    // one refusal at a time rather than saying the one true thing.
-    if (dev.cache === undefined) throw new Error('relay/dev: the runtime came up without a cache — there is nowhere to seed the entries');
-    await seedCache(dev.cache, [...ENTRIES, ...MUTATION_ENTRIES]);
-    return rayEngine(dev, systemPolicy);
-  })();
+  booted ??= (async () => rayEngine(await devRuntime(), systemPolicy))();
   return booted;
 };
 

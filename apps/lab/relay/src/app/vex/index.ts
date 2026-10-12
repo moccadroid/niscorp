@@ -8,15 +8,14 @@ import { actionsSearch } from './actions.entries';
 import { sidebarCounts } from './counts.entries';
 
 // ═══════════════════════════════════════════════════════════
-// The data API = the description of Vex's PREWARMED CACHE.
+// The data API = the entries the app ships, each under a NAMED fingerprint.
 //
 // Vex is dynamic (a read is { intent, shape, context } → generate → cache →
 // serve under a fingerprint). Relay never hits the LLM because these entries
-// are seeded into the `vex_cache` table at boot under NAMED fingerprints, and
+// are handed to the server in the manifest, which holds and compiles them, and
 // every hand-authored endpoint replays its entry by fingerprint alone
-// (`{ fingerprint, context }` on the wire — no shape, no intent). This file is
-// the human-readable source of that seed (and, later, migrations); vex's `seedCache`
-// turns it into protected `vex_cache` rows at boot (dev-db + the server).
+// (`{ fingerprint, context }` on the wire — no shape, no intent). The
+// assistant's own engine is given the same list when it boots (ray/engine.ts).
 //
 // A CacheEntry IS Vex's own cache row (OkCacheEntry); the authored deltas are
 // `fingerprint` (the entry's name — the single source of truth every prism

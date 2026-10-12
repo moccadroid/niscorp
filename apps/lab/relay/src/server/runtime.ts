@@ -11,10 +11,10 @@ import { createPglitePool, RAW_DATE_PARSERS } from '@niscorp/vex/pglite';
 
 // ═══════════════════════════════════════════════════════════
 // The dev ENVIRONMENT — a NiscRuntime over PGlite: schema + demo rows,
-// nothing else. The API surface (vex_cache) is declared once, in the
-// manifest's `entries`, and seeded by whoever stands up an engine over
-// this runtime (moss's data layer; the dev checks' engine). The concrete
-// PGlite rides along for the checks' raw-SQL ground truth.
+// nothing else. The API surface is declared once, in the manifest's
+// `entries`: the server holds them, and the assistant's own engine over
+// this runtime is given them when it boots. The concrete PGlite rides along
+// for the checks' raw-SQL ground truth.
 // ═══════════════════════════════════════════════════════════
 
 export type DevRuntime = NiscRuntime & { db: PGlite };

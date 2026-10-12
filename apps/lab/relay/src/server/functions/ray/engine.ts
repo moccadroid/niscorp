@@ -1,9 +1,10 @@
-import { createPostgresAdapter, createPostgresCache, createQueryEngine } from '@niscorp/vex';
+import { createPostgresAdapter, createPostgresCache, createQueryEngine, seedCache } from '@niscorp/vex';
 import type { QueryEngine, ScopePolicy } from '@niscorp/vex';
 import { createQueryDsl, createShapeMapper } from '@niscorp/vex/agent';
 import type { SignalClient } from '@niscorp/cortex';
 import type { Shell } from '@niscorp/nova';
 import type { NiscRuntime } from '@niscorp/moss';
+import { ENTRIES, MUTATION_ENTRIES } from '@relay/app/vex';
 import { llmFor, type AgentRole } from '@relay/server/llm';
 
 // ═══════════════════════════════════════════════════════════
@@ -11,7 +12,8 @@ import { llmFor, type AgentRole } from '@relay/server/llm';
 // server's runtime in the app, devDatabase in checks), under an explicit
 // scope policy. This is the generative path: a novel shape invokes the
 // reference agents (query DSL + shape mapper); a warm shape replays from
-// the same cache the app surface seeds. The locked /api mounts refuse
+// this engine's cache, which is given the app's entries when it boots: the
+// server keeps the ones it serves to itself. The locked /api mounts refuse
 // novel shapes by design — agents come HERE instead.
 //
 // One engine per (environment, policy): an agent runs under its CALLER's
@@ -54,6 +56,7 @@ const boot = async (runtime: NiscRuntime, policy: ScopePolicy): Promise<RayEngin
   const adapter = createPostgresAdapter({ pool: runtime.pool });
   const cache = runtime.cache ?? createPostgresCache({ pool: runtime.pool });
   await cache.init?.();
+  await seedCache(cache, [...ENTRIES, ...MUTATION_ENTRIES]);
   // The DSL JSON Schema is static; a throwaway probe yields it without
   // touching the DB. The generateDsl hook needs it up front.
   const dslJsonSchema = createQueryEngine({ adapter }).getDslSchema();

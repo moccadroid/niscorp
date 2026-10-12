@@ -24,8 +24,8 @@ import { modelFunctions } from '@relay/server/functions/models';
 // Relay, the application, as data. Every field is an authored ARTIFACT —
 // the policy document, who wears what, the action definitions, the row
 // behaviors, the resource subgraphs, the shell's canvases and fragments.
-// The server derives everything else from these plus a database (whose
-// seeded vex_cache IS the API surface). The one derivation relay owns is
+// The server derives everything else from these plus a database (the
+// entries here ARE the API surface). The one derivation relay owns is
 // `shell.inputs`: per-principal boot input for the chrome.
 //
 // A function of `ray`, the one thing the manifest's code needs that is not an
