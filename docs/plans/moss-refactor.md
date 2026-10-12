@@ -1,7 +1,7 @@
 # Moss: how it is built, and what is open
 
 **Status: Built (2026-10-12) on branch `worktree-moss-refactor` (base `9e88009`,
-moss 0.4.0). Not pushed, not merged, and CI has not run on the branch. What is
+moss 0.4.0), and on main since 2026-10-12, where CI passes. What is
 open is in part 7. Midas and the two websites are other repositories and follow
 at their next bump (part 9). Next is the artifactory (part 10), which is its
 own plan and is not started.**
@@ -182,7 +182,12 @@ Nothing below is being worked on.
 - **`packages/cli/test/dev.test.ts` failed once** inside a full verify (a fetch
   was reset). It passes alone, and passed in the last full verify and the last
   uncached run of every package's tests. The cause is not found.
-- **CI has not run on this branch.**
+- **Two names in the public API, the owner's to settle before 0.5.0 is
+  released.** `server.invalidateTenant(tag)` forgets every identity record
+  that carries one cache tag (`IdentityRecord.tag`): the method names one use
+  of it, a tenant, and the field names the mechanism. And
+  `@niscorp/moss/unverified` with `unverifiedShell`, which hands over a
+  session's whole nova shell.
 
 The lab apps' checks pass except where the reason is outside moss: `model-check`
 (lyceum) and two of relay's need a model key; `nisc-check` (atrium) fails to
