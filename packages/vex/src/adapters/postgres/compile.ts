@@ -38,17 +38,7 @@ export const compileQuery = (resolved: ResolvedQuery): CompiledQuery => {
     return `${expr} AS ${quoteIdent(a.name)}`;
   });
 
-  const semanticColumns: string[] = [];
-  if (resolved.semantic !== undefined) {
-    const col = `${resolved.semantic.field.alias}.${resolved.semantic.field.column}`;
-
-    const semanticParamIndex = findSemanticParamIndex(paramSlots);
-    if (semanticParamIndex !== undefined) {
-      semanticColumns.push(`1 - (${col} <=> $${semanticParamIndex}) AS "$score"`);
-    }
-  }
-
-  const allColumns = [...fieldColumns, ...computeColumns, ...aggregateColumns, ...semanticColumns];
+  const allColumns = [...fieldColumns, ...computeColumns, ...aggregateColumns];
   if (selectParts.length > 0) {
     sqlParts.push(`SELECT ${selectParts.join(' ')} ${allColumns.join(', ')}`);
   } else {
