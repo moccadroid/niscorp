@@ -1,24 +1,5 @@
 import type { ActionDefinition } from '@niscorp/nova';
 
-// THE QA COMPANY'S BUNDLE — what a third party ships to lyceum: data, nothing else.
-//
-// Three actions under the QA Company's own namespace (`ext.<audience>.<integration>.*`,
-// the only one intake lets it use), one per audience lyceum fences off for
-// integrations — members, the speaker, the stage — written in lyceum's
-// published component vocabulary and drawn by lyceum's kit like everything
-// else. They send and read through lyceum's own queries by fingerprint, so
-// The QA Company needs no server: a question lands in lyceum's Q&A as the person who
-// asked, and every read runs under the reader's own policy.
-//
-//   ext.member.qa.ask         the phone: ask, and see what you asked
-//   ext.speaker.qa.questions  the controller: every question, and what the
-//                               moderator made of it — fit, not fit, not yet
-//   ext.stage.qa.questions    the last slide: the questions fit to show
-//
-// Where each goes is declared here (`extension.attachments`, lyceum's own
-// vocabulary) and checked at install against the seats lyceum offers; until the integration is installed and
-// approved there is nothing by these names to place.
-
 const send = [
   { set: 'error', value: '' },
   { call: 'send', onSuccess: [{ set: 'draft', value: '' }, { set: 'sent', value: true }] },
@@ -54,8 +35,7 @@ export const ask: ActionDefinition = {
   },
   endpoints: {
     send: { url: '/api/vex', method: 'POST', request: { fingerprint: 'questions/send', context: { text: { $ref: '$.draft' } } }, errorTarget: 'error' },
-    // The person's own questions, newest first — lyceum's read, reactive: one
-    // asked is on the list on its own.
+    // Reactive on lyceum's side: a question asked is on the list on its own.
     mine: { url: '/api/vex', method: 'POST', request: { fingerprint: 'questions/mine', context: {} }, target: 'mine' },
   },
   lifecycle: { mount: [{ call: 'mine' }] },
@@ -65,12 +45,6 @@ export const ask: ActionDefinition = {
   ],
 };
 
-// ── the speaker's: every question ──
-//
-// Two of lyceum's reads, side by side: every question with who sent it, and
-// every verdict the moderator wrote. Joined where they are drawn: a check for
-// fit to show, an x for not, and a question with no verdict yet still there,
-// marked as waiting.
 const questionsWithVerdicts = {
   $with: {
     let: {
@@ -137,8 +111,8 @@ export const everyQuestion: ActionDefinition = {
       },
     ],
   },
-  // Both reactive on lyceum's side: a question sent, or a verdict written,
-  // answers again on its own.
+  // Both reactive on lyceum's side: a question sent or a verdict written
+  // arrives on its own.
   endpoints: {
     questions: { url: '/api/vex', method: 'POST', request: { fingerprint: 'questions/every', context: {} }, target: 'questions' },
     verdicts: { url: '/api/vex', method: 'POST', request: { fingerprint: 'questions/verdicts', context: {} }, target: 'verdicts' },
@@ -147,10 +121,6 @@ export const everyQuestion: ActionDefinition = {
   triggers: [],
 };
 
-// ── the stage's: what may be shown ──
-//
-// lyceum's `questions/shown` — only what its moderator found fit, and no names:
-// lyceum's engine gives the projector nothing else to read.
 export const fitQuestions: ActionDefinition = {
   id: 'ext.stage.qa.questions',
   title: 'QA Company · Questions',
@@ -174,19 +144,13 @@ export const fitQuestions: ActionDefinition = {
 
 export const QA_BUNDLE = {
   integration: 'qa',
-  // The grammars these documents are written in; the host upgrades from here.
-  // lyceum.kit 9: the check and the x.
   grammar: { 'nisc.nova': 2, 'nisc.prism': 1, 'lyceum.kit': 9 },
   actions: { [ask.id]: ask, [everyQuestion.id]: everyQuestion, [fitQuestions.id]: fitQuestions },
-  // What lyceum's own vocabulary adds: which of its seats each screen rides.
   extension: {
     attachments: { [ask.id]: 'member.phone', [everyQuestion.id]: 'speaker.console', [fitQuestions.id]: 'slide.end' },
   },
 };
 
-// THE SAME BUNDLE, BROKEN: a trigger that re-emits its own channel. Valid
-// data — every field parses — and a loop that never ends. Intake refuses it,
-// with the path round the loop.
 export const QA_BROKEN_BUNDLE = {
   ...QA_BUNDLE,
   actions: {
