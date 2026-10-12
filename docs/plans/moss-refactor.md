@@ -172,25 +172,13 @@ again.
 
 ## 7. Open
 
-Nothing below is being worked on. Each needs its own go.
+Nothing below is being worked on.
 
-- **`outboundTimeoutMs` is not checked** when `createIntegrations` is called.
-  It is handed to `AbortSignal.timeout`, which throws for anything but a whole
-  number of milliseconds below 2^32, so `Infinity` or `1.5` fails every call
-  out to an integration.
 - **Two fixes are held by no automated test**, because PGlite has one
   connection: tide's serial claim (an advisory lock taken inside a
   transaction), and two first registrations of one integration at once. Both
   were run on PostgreSQL 18.4 on 2026-10-11 with scripts that are not in the
   repository.
-- **`nisc dev` passes neither `signInFromNetwork` nor `watch`** to `mossDev`.
-  A flag on the command is the owner's to name.
-- **Lyceum signs in for development through a plugin of its own**, which does
-  not hold the this-machine-only rule that `mossDev` holds.
-- **Two words of one product are still in `integrations/forward.ts`**: the
-  sentence shown when an integration does not answer says "add-on" and
-  "studio", and the span attribute is `addon`. People and telemetry backends
-  see both, so renaming them is a visible change.
 - **`packages/cli/test/dev.test.ts` failed once** inside a full verify (a fetch
   was reset). It passes alone, and passed in the last full verify and the last
   uncached run of every package's tests. The cause is not found.

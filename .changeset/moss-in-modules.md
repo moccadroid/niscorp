@@ -300,7 +300,9 @@ Everything below left moss. The last commit that still has all of it is `41fc894
 
 **No call out to an integration waits for ever.**
 
-- New on `createIntegrations`: `outboundTimeoutMs`, default `30000` (nova's default wait for an endpoint's reply).
+- New on `createIntegrations`: `outboundTimeoutMs`, default `30000` (nova's default wait for an endpoint's reply). It is a whole number of milliseconds from 1 to 2^31 − 1; anything else (`Infinity`, `0`, a fraction) throws where `createIntegrations` is called.
+- **The sentence put under a call that failed with none names no product.** It was `The <id> add-on is not answering right now. The rest of the studio is unaffected.` It is `The <id> integration is not answering right now. The rest of the app is unaffected.` A check that reads the old sentence off a screen reads the new one.
+- **The `integration.call` span says which integration under `integration`.** The attribute was `addon`. A sink or a dashboard that reads `attributes.addon` reads `attributes.integration`.
 - Every call out is given up on when it has taken `outboundTimeoutMs`, its answer and its body together: a screen's call through the proxy, a vendor's webhook, `callIntegration`, the bundle fetched at registration, and the operator's probe. It reads as a service that is unreachable: `502` from the proxy, the webhook and a registration whose bundle did not arrive; `callIntegration` rejects; the probe answers `status: 0`. None had a timeout, and a service that never answered held the call for as long as the process lived.
 - **An integration that takes longer than thirty seconds to answer, or whose answer streams for longer, is cut.** Set `outboundTimeoutMs` to what the slowest one needs. A longer `timeoutMs` on the integration's own action is not enough by itself: the shorter of the two ends the call.
 
@@ -477,7 +479,8 @@ Everything below left moss. The last commit that still has all of it is `41fc894
 - `/dev/as/<who>` (the dev plugin's `signIn`, `dev.signIn` in `nisc.config.ts`) puts a session for whoever the address names in the browser that asks. It asked nothing about where the request came from: with vite listening on a network (`vite --host`), every device on that network could sign in as anybody.
 - It answers a request whose socket ends on this machine: `127.0.0.0/8`, `::1`, or either written as an IPv4-mapped IPv6 address. Any other is answered `403` with a sentence that says why, and the app's `signIn` is not called. What a header says of where a request came from (`X-Forwarded-For`) is not read.
 - New on `mossDev`: `signInFromNetwork: true` answers it to every device that can reach the dev server, for trying a signed-in screen on a phone on a network you trust.
-- **A developer who opened `/dev/as/<who>` from a second device** sets `signInFromNetwork: true` where the app adds `mossDev` itself. `nisc dev` adds the plugin for the app and does not turn it on: under `nisc dev` the sign-in is this machine's.
+- **A developer who opened `/dev/as/<who>` from a second device** sets `signInFromNetwork: true` where the app adds `mossDev` itself, or `dev.signInFromNetwork: true` in `nisc.config.ts` under `nisc dev`.
+- **New in `nisc.config.ts`, for `nisc dev`: `dev.signInFromNetwork`, `dev.watch`, `dev.owned`.** The command made the dev plugin with none of its options, so an app under `nisc dev` could not say which changed files re-boot it, or that a route of its own outside moss's prefixes goes to the app server and not to vite. All three are handed to the plugin as they are, and read when the command starts.
 - A dev server behind a proxy on the same machine sees every request as the proxy's, which is this machine: the check cannot tell those apart, and a proxy that listens on a network is its owner's to close.
 
 **(8) THE TERMINAL**

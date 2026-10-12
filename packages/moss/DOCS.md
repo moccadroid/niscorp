@@ -1949,7 +1949,9 @@ vocabulary, and the app that has it defines it.
   to fewer than 32 bytes refuses the boot.
 - `outboundTimeoutMs: number` — how long a call out to an integration's
   service may take, its answer and its body together. Default `30000`, nova's
-  default wait for an endpoint's reply. It bounds every call: a screen's
+  default wait for an endpoint's reply. A whole number of milliseconds from 1
+  to 2^31 − 1: anything else, `Infinity` included, throws where
+  `createIntegrations` is called. It bounds every call: a screen's
   through the proxy, a vendor's webhook, `callIntegration`, the bundle fetched
   at registration, and the operator's probe. A call that is given up on reads
   as a service that is unreachable: `502` from the proxy, the webhook and a
