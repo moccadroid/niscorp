@@ -1,8 +1,3 @@
-// The artifacts check — what makes `src/app/` a tree of DATA: everything in it
-// is pure JSON (no function, no Date, no undefined, no class instance) and
-// parses through its own schema, so a code file cannot pass for an artifact
-// (AGENTS.md, review item 6a). It also holds rule 14: an action's `input`
-// declares only keys its `data` has.
 import { ActionDefinitionSchema, LayoutNodeSchema } from '@niscorp/nova';
 import { actions } from '../app/action-catalog';
 import { assignments } from '../app/charter/assignments';
@@ -15,7 +10,6 @@ const check = (name: string, passed: boolean, detail = ''): void => {
   if (!passed) failures += 1;
 };
 
-// The first thing in a value that is not JSON, as a path — or '' when all of it is.
 const impurity = (value: unknown, path: string): string => {
   if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return '';
   if (Array.isArray(value)) return value.map((item, at) => impurity(item, `${path}[${at}]`)).find((found) => found !== '') ?? '';
@@ -46,7 +40,6 @@ if (shell.layout !== undefined) parses('the shell’s frame', () => LayoutNodeSc
 for (const [id, definition] of Object.entries(actions)) {
   check(`action "${id}" is catalogued under its own id`, definition.id === id, `its id is "${definition.id}"`);
   parses(`action "${id}"`, () => ActionDefinitionSchema.parse(definition));
-  // rule 14: what an opener may seed is a subset of the action's data
   const properties = isRecord(definition.input) && isRecord(definition.input['properties']) ? Object.keys(definition.input['properties']) : [];
   const unknown = properties.filter((key) => !(key in (definition.data ?? {})));
   check(`action "${id}" declares only inputs its data has`, unknown.length === 0, unknown.join(', '));

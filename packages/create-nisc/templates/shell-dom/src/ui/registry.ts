@@ -4,9 +4,8 @@ import type { DomComponent } from '@niscorp/nova/adapters/dom';
 import { fallback } from '@niscorp/nova/adapters/dom/components';
 import { Button, Heading, Page, Row, Text } from './kit';
 
-// The one registry, assembled once (rule 2): the kit, and nova's two slot
-// markers (the adapter resolves a canvas slot itself; an action slot is a plain
-// wrapper). Every component a layout may name is here, and nothing else is.
+// The adapter resolves a canvas slot itself, and an action slot is a plain
+// wrapper: `fallback` does for both.
 export const buildRegistry = (): ComponentRegistry<DomComponent> => {
   const registry = createComponentRegistry<DomComponent>();
   registry.register(CANVAS_SLOT_NAME, fallback);

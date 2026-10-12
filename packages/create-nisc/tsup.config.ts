@@ -2,9 +2,6 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { defineConfig } from 'tsup';
 
-// The nisc release this build pins new apps to: every @niscorp package in the
-// workspace, at the version it is at now — the set the templates beside this
-// file are checked against (src/set.ts).
 const packages = join(import.meta.dirname, '..');
 const set: Record<string, string> = {};
 for (const entry of readdirSync(packages, { withFileTypes: true })) {
@@ -16,8 +13,8 @@ for (const entry of readdirSync(packages, { withFileTypes: true })) {
   if (typeof name === 'string' && name.startsWith('@niscorp/') && typeof version === 'string') set[name] = version;
 }
 
-// ESM only: it runs as `npm create nisc`, nothing requires it. Both entries sit
-// in dist/, beside each other, so `../templates` means the same folder to both.
+// Both entries sit in dist/, beside each other, so `../templates` means the
+// same folder to both.
 export default defineConfig({
   entry: { index: 'src/index.ts', cli: 'src/cli.ts' },
   format: ['esm'],

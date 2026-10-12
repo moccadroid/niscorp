@@ -5,11 +5,6 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { generate } from '../src';
 import type { Created, Posture, Ui } from '../src';
 
-// What a new app is: one of the templates (themselves checked by CI as real
-// apps), named, its versions pinned to a release set, and the two documents a
-// new app has — nothing left over that only made sense in the repository, and
-// nothing of anybody's overwritten.
-
 const scratch = mkdtempSync(join(tmpdir(), 'create-nisc-'));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
@@ -48,21 +43,17 @@ describe('generate — every template', () => {
     expect(text).toContain('"@niscorp/nova":"^0.4.4"');
     expect(text).toContain('"@niscorp/cli":"^0.4.2"');
     expect(text).toContain('"private":true');
-    // the rulebook its AGENTS.md points at is something it installs
     expect(text).toContain('"@niscorp/nisc":"^0.4.0"');
     expect(read(dir, 'AGENTS.md')).toContain('node_modules/@niscorp/nisc/AGENTS.md');
-    // the name everywhere it shows, and the template's name nowhere
     expect(read(dir, 'index.html')).toContain(`<title>app-${posture}-${ui}</title>`);
     expect(read(dir, 'README.md')).toContain(`# app-${posture}-${ui}`);
     expect(read(dir, 'src/app/actions/surfaces/welcome.action.ts')).toContain(`name: 'app-${posture}-${ui}'`);
     for (const file of made.files) expect(read(dir, file), file).not.toContain('nisc-template-');
-    // what the rulebook asks of every app
     expect(made.files).toEqual(
       expect.arrayContaining(['AGENTS.md', 'PLAN.md', '.gitignore', 'nisc.config.ts', 'strata.lock.json', 'src/dev/strata.ts', 'src/dev/artifacts-check.ts', 'src/dev/all-checks.ts']),
     );
     expect(read(dir, 'PLAN.md')).toContain('on nisc 0.4.0');
     expect(read(dir, '.gitignore')).toContain('node_modules/');
-    // what never comes along
     expect(made.files.some((file) => file.startsWith('node_modules') || file.startsWith('dist/') || file.startsWith('out/'))).toBe(false);
     expect(made.kept).toEqual([]);
     expect(made.extended).toEqual([]);

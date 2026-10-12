@@ -3,7 +3,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// The bundle IS the app: the shell, its actions and its kit all run in the page.
 export default defineConfig({
   plugins: [react()],
 });
