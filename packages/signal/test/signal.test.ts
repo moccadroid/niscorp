@@ -113,8 +113,6 @@ describe('complete() error cases', () => {
 });
 
 describe('stepStream carries the client options to the wire', () => {
-  // A client whose streaming create captures the params it was handed, so we can
-  // assert what actually reached the wire on the streaming path.
   const capture = () => {
     const captured: { params?: Record<string, unknown> } = {};
     const client = {
@@ -156,9 +154,6 @@ describe('stepStream carries the client options to the wire', () => {
   });
 
   it('end-to-end: a streamed Groq call with reasoningEffort now asks for the effort AND opts into the trace', async () => {
-    // The bd583fd opt-in keys reasoning_format on request.options.reasoningEffort;
-    // before the stepStream merge, config.options never reached the adapter on a
-    // stream, so this fired on no assistant turn. Now both land.
     const { captured, client } = capture();
     const signal = createSignal('groq', { apiKey: 'k', client }).options({ reasoningEffort: 'high' });
     await drain(signal.stepStream({ messages: [{ role: 'user', content: 'hi' }] }));

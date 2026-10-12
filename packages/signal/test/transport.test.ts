@@ -3,9 +3,6 @@ import { z } from 'zod';
 import type { Capabilities } from '../src/types';
 import { resolveTransport, type TransportSpec } from '../src/transport/resolve';
 
-// Transport resolution is a PURE function of (spec, capabilities) —
-// ported from cortex when transport became signal's business.
-
 const LIMITED: Capabilities = {
   nativeTools: true,
   nativeJsonSchema: false,
@@ -16,9 +13,7 @@ const LIMITED: Capabilities = {
   multimodal: false,
   supportsEmbedding: false,
 };
-// Groq's endpoint validates tool args itself, whichever model it serves.
 const GROQ: Capabilities = { ...LIMITED, validatesToolArgs: true };
-// A model that mangles nested tool args, on an endpoint that does NOT validate.
 const MANGLER: Capabilities = { ...LIMITED, manglesNestedToolArgs: true };
 const OPENAI: Capabilities = {
   ...LIMITED,
@@ -67,8 +62,6 @@ describe('resolveTransport — auto', () => {
     expect(resolved.responseFormat?.type).toBe('json_schema');
   });
 
-  // Loose params would enforce nothing, so respond has no business here: the
-  // contract rides the prompt either way, and emit carries it without a tool.
   it('recursive contracts resolve to emit, with schema docs and no $ref anywhere', () => {
     const resolved = resolveTransport(spec(z.object({ tree: Recursive })), OPENAI);
     expect(resolved.transport).toBe('emit');
@@ -76,9 +69,6 @@ describe('resolveTransport — auto', () => {
     expect(resolved.respondDescriptor).toBeUndefined();
   });
 
-  // THE CASE THE RULE EXISTS FOR: a model that carries nested args cleanly, on
-  // an endpoint that validates them itself. respond's params would be sent
-  // permissive — enforcing nothing — so it resolves to emit anyway.
   it('hard-validating endpoints resolve to emit even for a model that does not mangle', () => {
     const withData = resolveTransport(spec(Small), GROQ);
     expect(withData.transport).toBe('emit');
@@ -151,8 +141,6 @@ describe('resolveTransport — protocol text and guards', () => {
     expect(() => resolveTransport(spec(Small, { forceTool: true, choice: 'emit' }), GROQ)).toThrow(/forceTool/);
   });
 
-  // forceTool means "respond is the only exit"; under auto it IS a choice of
-  // respond, even where respond would not otherwise be picked.
   it('forceTool under auto resolves to respond on a hard-validating endpoint', () => {
     const resolved = resolveTransport(spec(Small, { forceTool: true }), GROQ);
     expect(resolved.transport).toBe('respond');

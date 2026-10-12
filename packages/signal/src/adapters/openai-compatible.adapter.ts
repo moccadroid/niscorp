@@ -2,10 +2,6 @@ import type { ChatAdapter, ProviderRequest, ProviderResponse, ProviderStreamDelt
 import { SignalError, ErrorCode } from '../errors';
 import { loadSdk } from '../utils/sdk-loader';
 
-// ═══════════════════════════════════════════════════════════
-// Types for the OpenAI SDK shape
-// ═══════════════════════════════════════════════════════════
-
 type OpenAIMessage = {
   role: string;
   content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> | null;
@@ -33,11 +29,6 @@ type OpenAICompletion = {
   };
 };
 
-// Overloaded to mirror the SDK: a request with `stream: true` returns a
-// streaming async-iterable; otherwise a single completion. This lets the
-// streaming call site resolve to `OpenAIStream` with no cast.
-// The SDK's `create` takes request options as a second argument (RequestOptions);
-// `signal` is the one we use — it reaches the underlying fetch.
 type RequestOptions = { signal?: AbortSignal };
 
 type ChatCreateFn = {
@@ -49,10 +40,8 @@ type OpenAIStreamChunk = {
   choices?: Array<{
     delta?: {
       content?: string | null;
-      // Reasoning tokens. Two spellings across providers, both non-standard and
-      // absent from the SDK's own delta type — declared here so the parse can
-      // read them: OpenRouter and Groq's gpt-oss use `reasoning`, GLM and
-      // DeepSeek use `reasoning_content`.
+      // Neither is in the SDK's delta type. OpenRouter and Groq's gpt-oss send `reasoning`;
+      // GLM and DeepSeek send `reasoning_content`.
       reasoning?: string | null;
       reasoning_content?: string | null;
       tool_calls?: Array<{
@@ -79,10 +68,6 @@ type OpenAIEmbeddingResponse = {
 
 type EmbedCreateFn = (params: Record<string, unknown>) => Promise<OpenAIEmbeddingResponse>;
 
-// ═══════════════════════════════════════════════════════════
-// Message Translation
-// ═══════════════════════════════════════════════════════════
-
 const translateContentParts = (parts: ContentPart[]): Array<{ type: string; text?: string; image_url?: { url: string } }> =>
   parts.map((part) => {
     if (part.type === 'text') return { type: 'text', text: part.text };
@@ -107,13 +92,6 @@ const translateMessage = (msg: Message): OpenAIMessage => {
           : translateContentParts(msg.content),
       };
     case 'assistant': {
-      // Assistant messages may carry tool calls. When they do, the
-      // OpenAI API expects them in the `tool_calls` field of the
-      // message and `content` MAY be empty (some models return both).
-      // Each subsequent `tool` message references one of these calls
-      // by `tool_call_id`. This is the standard OpenAI tool-calling
-      // contract — Cortex's tool loop relies on it for multi-step
-      // tool use to actually work without hallucination.
       const out: OpenAIMessage = { role: 'assistant', content: msg.content };
       if (msg.toolCalls && msg.toolCalls.length > 0) {
         out.tool_calls = msg.toolCalls.map((tc) => ({
@@ -131,13 +109,6 @@ const translateMessage = (msg: Message): OpenAIMessage => {
   }
 };
 
-// ═══════════════════════════════════════════════════════════
-// SDK Loading
-// ═══════════════════════════════════════════════════════════
-
-// Pluck a bound method off an SDK-shaped object — the injected client
-// (browsers can't resolve the dynamic import; relay/showroom inject)
-// or a freshly constructed SDK instance.
 const bindAt = <T>(obj: unknown, path: readonly string[]): T | undefined => {
   let parent: unknown;
   let current = obj;
@@ -161,8 +132,6 @@ const createSdkInstance = async (config: OpenAICompatibleConfig): Promise<unknow
   });
 };
 
-// strictClient: chat REQUIRES an injected client to be well-shaped;
-// embed quietly falls through to the SDK (clients often omit it).
 const loadSdkFn = async <T>(
   config: OpenAICompatibleConfig,
   path: readonly string[],
@@ -192,16 +161,10 @@ const loadEmbedCreateFn = (config: OpenAICompatibleConfig): Promise<EmbedCreateF
     false,
   );
 
-// ═══════════════════════════════════════════════════════════
-// Adapter Factory
-// ═══════════════════════════════════════════════════════════
-
 export type OpenAICompatibleConfig = {
   apiKey: string;
   baseUrl: string;
   client?: unknown;
-  // Params that ask this provider to stream its reasoning, applied only on a
-  // streaming call the caller set `reasoningEffort` on (registry.ts).
   reasoningRequest?: Record<string, unknown>;
 };
 
@@ -243,8 +206,6 @@ export const createOpenAICompatibleAdapter = async (
     try {
       completion = await chatCreate(params);
     } catch (error) {
-      // Adapters are dumb: wrap and throw, ORIGINAL error under raw.
-      // Recovery (Groq failed_generation etc.) is signal's wire layer.
       throw new SignalError(
         `Provider error: ${error instanceof Error ? error.message : String(error)}`,
         ErrorCode.PROVIDER_ERROR,
@@ -273,9 +234,8 @@ export const createOpenAICompatibleAdapter = async (
   async function* chatStream(request: ProviderRequest, options?: RequestOptions): AsyncIterable<ProviderStreamDelta> {
     const streamParams = {
       ...buildParams(request),
-      // Ask for the reasoning trace only when the caller wants reasoning — the
-      // opt-in that keeps `reasoning_format` off a plain Groq call. Stream-only:
-      // the non-stream `chat` path never sees these, so its content is unmoved.
+      // Only when the caller set reasoningEffort: Groq answers `reasoning_format` with a 400
+      // on its non-reasoning models.
       ...(request.options?.reasoningEffort !== undefined && config.reasoningRequest !== undefined ? config.reasoningRequest : {}),
       stream: true as const,
       stream_options: { include_usage: true },
@@ -283,8 +243,6 @@ export const createOpenAICompatibleAdapter = async (
 
     let sseStream: OpenAIStream;
     try {
-      // The signal reaches the SDK's fetch here: an abort tears the HTTP request
-      // down at once, rather than waiting for the next delta to notice it.
       sseStream = await chatCreate(streamParams, options);
     } catch (error) {
       throw new SignalError(
@@ -300,7 +258,6 @@ export const createOpenAICompatibleAdapter = async (
         if (choice?.delta?.content) {
           yield { type: 'text', text: choice.delta.content };
         }
-        // Whichever spelling the provider sent — never both on one delta.
         const reasoning = choice?.delta?.reasoning ?? choice?.delta?.reasoning_content;
         if (reasoning) {
           yield { type: 'reasoning', text: reasoning };
@@ -329,8 +286,6 @@ export const createOpenAICompatibleAdapter = async (
         }
       }
     } catch (error) {
-      // Errors can land DURING iteration too (the 400 surfaces on the
-      // first chunk read, not only at stream creation) — same wrap.
       if (error instanceof SignalError) throw error;
       throw new SignalError(
         `Provider stream error: ${error instanceof Error ? error.message : String(error)}`,

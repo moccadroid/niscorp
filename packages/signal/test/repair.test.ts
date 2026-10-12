@@ -8,21 +8,12 @@ import {
   isTruncatedJson,
 } from '../src/wire/repair';
 
-// Fixtures are real pathologies: Groq gpt-oss failed_generation bodies
-// (truncated mid-structure), stringified nested arrays inside tool
-// args, fenced/prose-wrapped output, GLM escape damage, 4o JSONL-ish
-// noise. The mechanisms are rescue-only: callers validate candidates;
-// these tests pin the MECHANICS.
-
-// A truncated Groq failed_generation, shaped like the 2026-07-12 trace:
-// the model's complete-ish action cut mid-string inside nested arrays.
 const TRUNCATED_ACTION =
   '{"id":"view.tasks-command-center","name":"Overdue Tasks Command Center",' +
   '"title":"{{$.overdueCount}} overdue open tasks",' +
   '"layout":{"component":"Stack","props":{"gap":2},"children":[' +
   '{"component":"Stack","props":{"gap":1,"align":"cen';
 
-// The raw recovery shape: the WHOLE tool-call object, truncated.
 const TRUNCATED_CALL =
   '{"name": "json", "arguments": {\n  "id": "task-center",\n  "name": "Task Command Center",\n  "data": {\n    "overdueCount": 0,\n    "openTasks": [],\n    "loadingO';
 
@@ -113,8 +104,6 @@ describe('closeTruncated', () => {
       layout: { children: Array<{ props: Record<string, unknown> }> };
     };
     expect(value.id).toBe('view.tasks-command-center');
-    // The complete parts survive; the torn `"align": "cen` is DROPPED,
-    // not patched into a clipped string.
     expect(value.layout.children[0]?.props).toEqual({ gap: 1 });
     expect(JSON.stringify(value)).not.toContain('align');
   });
@@ -125,7 +114,6 @@ describe('closeTruncated', () => {
     const value = JSON.parse(closed as string) as { name: string; arguments: { data: Record<string, unknown> } };
     expect(value.name).toBe('json');
     expect(value.arguments.data['overdueCount']).toBe(0);
-    // The torn "loadingO key is gone.
     expect('loadingO' in value.arguments.data).toBe(false);
   });
 
@@ -146,7 +134,6 @@ describe('closeTruncated', () => {
   it('returns undefined for complete JSON, non-JSON, and hopeless cuts', () => {
     expect(closeTruncated('{"a": 1}')).toBeUndefined();
     expect(closeTruncated('plain prose')).toBeUndefined();
-    // No complete value anywhere — nothing honest to close to.
     expect(closeTruncated('{"a": {"b": {"c":')).toBeUndefined();
   });
 });
@@ -160,7 +147,7 @@ describe('isTruncatedJson', () => {
   it('is false for complete JSON and for prose', () => {
     expect(isTruncatedJson('{"a": 1}')).toBe(false);
     expect(isTruncatedJson('just words')).toBe(false);
-    // Invalid but BALANCED json is not "truncated".
+    // Invalid but balanced.
     expect(isTruncatedJson('{"a" 1}')).toBe(false);
   });
 });

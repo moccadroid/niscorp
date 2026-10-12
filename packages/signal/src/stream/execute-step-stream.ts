@@ -4,14 +4,6 @@ import type {
 } from '../types';
 import { estimateUsage } from '../utils/estimate-usage';
 
-// ═══════════════════════════════════════════════════════════
-// executeStepStream — step-level streaming (one adapter call)
-// ═══════════════════════════════════════════════════════════
-//
-// Mirrors step() but streams. No schema validation, no retries,
-// no auto tool execution. The caller (typically @niscorp/cortex)
-// owns the tool loop and re-invokes for each iteration.
-
 export type ExecuteStepStreamConfig = {
   adapter: ChatAdapter;
   model: string;
@@ -69,9 +61,8 @@ export async function* executeStepStream(
   let contentBuffer = '';
   let finishReason = 'unknown';
   const assembledToolCalls = new Map<number, AssembledToolCall>();
-  // REPLACED, not accumulated. Each usage frame is the running total for this
-  // call, not an increment — Groq sends the same frame twice on some calls, and
-  // adding them reports double what was spent.
+  // Replaced, not summed: a usage frame is the running total for the call, and Groq sends
+  // the same frame twice on some calls.
   let totalUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, reported: false };
 
   try {
@@ -83,15 +74,11 @@ export async function* executeStepStream(
         contentBuffer += delta.text;
         yield { type: 'text', text: delta.text };
         break;
-      // Reasoning is passed straight through and deliberately NOT added to
-      // contentBuffer: it is the model thinking, not its answer.
       case 'reasoning':
         yield { type: 'reasoning', text: delta.text };
         break;
       case 'tool_call':
         assembleToolCall(assembledToolCalls, delta);
-        // Surface the fragment so callers can parse function-call
-        // payloads progressively (cortex feeds these into solid).
         yield {
           type: 'tool_call_delta',
           index: delta.index,
@@ -114,11 +101,8 @@ export async function* executeStepStream(
     }
   }
   } catch (error) {
-    // An aborted fetch rejects the iterator. Discriminate on the SIGNAL's state,
-    // not the error type: the adapter re-wraps every iteration error as a
-    // SignalError, so there is no AbortError to match on here. A caller who
-    // asked to stop gets the same clean early return as a between-delta abort —
-    // never a provider error surfaced up to cortex.
+    // By the signal's state, not the error's type: the adapter wraps every iteration error
+    // in a SignalError, so no AbortError arrives here.
     if (abortSignal?.aborted) return;
     throw error;
   }

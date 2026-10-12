@@ -4,19 +4,11 @@ import { executeStepStream } from '../src/stream/execute-step-stream';
 import { createOpenAICompatibleAdapter } from '../src/adapters/openai-compatible.adapter';
 import { chatProviderEntry } from '../src/registry';
 
-// `noUncheckedIndexedAccess` is on, so an index read is `T | undefined`. Every
-// assertion below is about the LAST event of a stream, and a stream that
-// produced none is a failure worth its own sentence rather than a `.type` read
-// through nothing.
 const lastOf = <T>(items: readonly T[]): T => {
   const item = items[items.length - 1];
   if (item === undefined) throw new Error('expected the stream to emit at least one event, and it emitted none');
   return item;
 };
-
-// ═══════════════════════════════════════════════════════════
-// Mock adapter — returns canned stream deltas
-// ═══════════════════════════════════════════════════════════
 
 const createMockAdapter = (deltas: ProviderStreamDelta[]): ChatAdapter => ({
   kind: 'chat',
@@ -37,10 +29,6 @@ const collect = async (iter: AsyncIterable<StepStreamEvent>): Promise<StepStream
   for await (const ev of iter) events.push(ev);
   return events;
 };
-
-// ═══════════════════════════════════════════════════════════
-// Simple text streaming
-// ═══════════════════════════════════════════════════════════
 
 describe('stepStream — simple text', () => {
   it('yields text deltas followed by a done event with aggregated result', async () => {
@@ -85,10 +73,6 @@ describe('stepStream — simple text', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// Tool calls — assembled and delivered in `done.result.toolCalls`
-// ═══════════════════════════════════════════════════════════
-
 describe('stepStream — tool calls', () => {
   it('assembles tool call fragments and delivers parsed args on done', async () => {
     const adapter = createMockAdapter([
@@ -118,8 +102,6 @@ describe('stepStream — tool calls', () => {
   });
 
   it('does not auto-execute tools — caller owns the loop', async () => {
-    // Same scenario as above; verify the stream terminates after one
-    // adapter pass with finish:tool_calls — no follow-up chatStream call.
     let chatStreamCalls = 0;
     const adapter: ChatAdapter = {
       kind: 'chat',
@@ -161,10 +143,6 @@ describe('stepStream — tool calls', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// Tool-call deltas — argument fragments surface incrementally
-// ═══════════════════════════════════════════════════════════
-
 describe('stepStream — tool_call_delta events', () => {
   it('yields one tool_call_delta per adapter fragment, in order', async () => {
     const adapter = createMockAdapter([
@@ -187,7 +165,6 @@ describe('stepStream — tool_call_delta events', () => {
       { type: 'tool_call_delta', index: 0, argsText: '{"answer":42}}' },
     ]);
 
-    // Concatenated fragments equal the assembled args on done.
     const joined = deltas
       .map((d) => (d.type === 'tool_call_delta' ? d.argsText : ''))
       .join('');
@@ -230,10 +207,6 @@ describe('stepStream — tool_call_delta events', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// Abort — stream terminates without a done event
-// ═══════════════════════════════════════════════════════════
-
 describe('stepStream — abort', () => {
   it('terminates iteration when the abort signal fires', async () => {
     const controller = new AbortController();
@@ -261,17 +234,10 @@ describe('stepStream — abort', () => {
     }));
 
     expect(events[0]).toEqual({ type: 'text', text: 'first' });
-    // No done event after abort.
     expect(events.find((e) => e.type === 'done')).toBeUndefined();
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// Reasoning — the model's thinking, streamed apart from its answer
-// ═══════════════════════════════════════════════════════════
-
-// The openai-compatible adapter fed a canned SSE stream through an injected
-// client, so the real parse runs. Providers differ on the field name.
 const streamingAdapter = (chunks: unknown[]): Promise<ChatAdapter> =>
   createOpenAICompatibleAdapter({
     apiKey: 'k',
@@ -301,7 +267,6 @@ describe('reasoning', () => {
     expect(deltas).toContainEqual({ type: 'reasoning', text: 'thinking too' });
   });
 
-  // Point 2 — asking the providers that need it, opt-in on reasoningEffort.
   const captureParams = async (reasoningRequest?: Record<string, unknown>) => {
     const captured: { params?: Record<string, unknown> } = {};
     const adapter = await createOpenAICompatibleAdapter({
@@ -348,16 +313,9 @@ describe('reasoning', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// Abort — the fetch is torn down, not just the delta loop
-// ═══════════════════════════════════════════════════════════
-
 describe('abort while the provider is silent', () => {
   it('returns promptly, keyed on the signal — not on the error type the adapter re-wraps', async () => {
     const ac = new AbortController();
-    // Silent until aborted, then throws a NON-abort error on purpose: the real
-    // adapter re-wraps an aborted fetch as a SignalError, so executeStepStream
-    // must discriminate on `signal.aborted`, never on the error being AbortError.
     const silent: ChatAdapter = {
       kind: 'chat',
       id: 'silent',
@@ -379,8 +337,6 @@ describe('abort while the provider is silent', () => {
       })) events.push(e);
     })();
     setTimeout(() => ac.abort(), 10);
-    // Resolves (returns) rather than hanging until a delta or rejecting. Before
-    // the fix the silent provider never yields, so this would time out.
     await drained;
     expect(events.find((e) => e.type === 'done')).toBeUndefined();
   });

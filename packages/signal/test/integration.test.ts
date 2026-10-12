@@ -4,7 +4,6 @@ import { createSignal, defineTool } from '../src';
 import * as dotenv from 'dotenv';
 import { resolve } from 'path';
 
-// Load .env from signal package root
 dotenv.config({ path: resolve(__dirname, '..', '.env') });
 
 const hasGroqKey = !!process.env['GROQ_API_KEY'];
@@ -32,7 +31,6 @@ describe.skipIf(!hasGroqKey)('Groq integration', () => {
       .schema(schema)
       .complete('Extract: Alice is 30 years old and lives in Berlin.');
 
-    // Lenient: assert the validated shape, not the model's exact values.
     expect(typeof response.name).toBe('string');
     expect(typeof response.age).toBe('number');
     expect(typeof response.city).toBe('string');
@@ -52,7 +50,6 @@ describe.skipIf(!hasGroqKey)('Groq integration', () => {
       .schema(schema)
       .complete('Extract users: Alice is an admin, Bob is a member.');
 
-    // Lenient: shape only — a live model may return a different count.
     expect(Array.isArray(response.users)).toBe(true);
     expect(typeof response.count).toBe('number');
   }, 15000);
@@ -64,7 +61,6 @@ describe.skipIf(!hasGroqKey)('Groq integration', () => {
 
     expect(typeof response).toBe('string');
     expect(response.length).toBeGreaterThan(0);
-    // Can't assert exact content but it should be pirate-y
   }, 15000);
 
   it('uses tools via unified schema strategy', async () => {
@@ -86,10 +82,7 @@ describe.skipIf(!hasGroqKey)('Groq integration', () => {
       .systemPrompt('You MUST use the lookup_employee tool to answer questions about employees. Never guess. When you have the answer, respond with an "answer" field containing your response.')
       .complete('What department does employee EMP-42 work in?');
 
-    // Lenient live smoke: the call completes and returns a shaped
-    // answer. Whether the model actually calls the tool is its choice —
-    // deterministic tool-loop behaviour is unit-tested in strategy.test
-    // / define-tool.test, so we don't assert it against a live model.
+    // A live model may not call the tool, so the call is not asserted.
     expect(typeof response.answer).toBe('string');
     expect(meta.usage.totalTokens).toBeGreaterThan(0);
   }, 30000);
@@ -106,8 +99,6 @@ describe.skipIf(!hasGroqKey)('Groq integration', () => {
     const r1 = await signal.complete('My name is Alice. Remember that.');
     const r2 = await signal.history(r1.history).complete('What is my name?');
 
-    // Lenient: the turn completes with a string; we don't assert the
-    // model actually recalled the name.
     expect(typeof r2.response).toBe('string');
   }, 30000);
 

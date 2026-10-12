@@ -3,82 +3,35 @@ import type { Capabilities, ResponseFormat, StepToolDescriptor } from '../types'
 import { SignalError, ErrorCode } from '../errors';
 import { RESPOND_DESCRIPTION, corrections, finishProtocol, type ProtocolSpec } from './protocol';
 
-// ═══════════════════════════════════════════════════════════
-// Transport resolution — which channel carries the caller's output
-// ═══════════════════════════════════════════════════════════
-//
-// Signal's contract is "what comes out conforms to the schema that
-// went in"; the transport is HOW signal keeps that promise on this
-// provider. Callers (cortex) describe their output contract once and
-// stay provider-blind — they never learn which transport ran except
-// as reporting.
-//
-//   respond — a synthetic exit tool; the output rides its arguments.
-//   native  — provider grammar (response_format: json_schema).
-//   emit    — the content channel; the completion IS the output.
-//             The floor: every model can do it, so `auto` lands here
-//             whenever neither of the others ENFORCES anything.
-//
-// Resolution is a PURE function of the spec and the capabilities:
-// no client, no network — previews resolve exactly like runs.
-
 export type OutputTransport = 'respond' | 'native' | 'emit';
 
 export type ResponseMode = 'required' | 'optional';
 
 export type TransportSpec = {
-  // The full wire schema of the output contract (what the model must
-  // produce). Used for grammar / tool params when viable; NEVER sent
-  // to hard-validating providers.
   wire: ZodType;
-  // Loose variant (payload fields untyped) for large or recursive
-  // contracts whose real schema rides prompt documentation.
   looseWire: ZodType;
   responseMode: ResponseMode;
-  // Does the contract carry a typed payload (a `data` field)?
   hasData: boolean;
   hasTools: boolean;
-  // Explicit transport override; 'auto' resolves from capabilities.
   choice?: 'auto' | OutputTransport;
-  // Force every turn to be a tool call ('respond' transport only).
   forceTool?: boolean;
 };
 
 export type ResolvedTransport = {
   transport: OutputTransport;
   responseMode: ResponseMode;
-  // respond: how much of the contract went into the tool params.
-  // 'permissive' = the provider validates tool args server-side; the
-  // wire params constrain nothing and the contract rides prompt docs.
   respondDetail?: 'full' | 'loose' | 'permissive';
-  // respond: the synthetic exit tool to append to the request. NOT a
-  // domain tool — the router treats its calls as output attempts.
   respondDescriptor?: StepToolDescriptor;
-  // The exit tool's name when one exists (delta attribution: callers
-  // stream its argument fragments as output partials).
   outputToolName?: string;
-  // native: sent on every request.
   responseFormat?: ResponseFormat;
-  // 'required' when forceTool hardening is on.
   toolChoice?: 'required';
-  // Should the caller inject its own schema documentation as prompt
-  // context? (True whenever the wire contract is not fully carried by
-  // the transport itself.)
   injectSchemaDoc: boolean;
-  // ONE transport-owned system chunk stating how the run ends. Callers
-  // inject it verbatim as the last prompt chunk — they never author
-  // finish instructions (they cannot know which transport resolved).
   finishProtocol: string;
-  // Correction texts, phrased for this transport. {issues} is replaced
-  // by the caller with the concrete evidence.
   corrections: { termination: string; invalidOutput: string };
 };
 
 export const RESPOND_TOOL_NAME = 'respond';
 
-// Serialized-schema analysis for the full-vs-loose decision. `full`
-// requires: serializes cleanly, no $ref (recursion / shared defs),
-// and small enough not to bloat every request.
 const FULL_PARAMS_MAX_CHARS = 8_192;
 
 type SchemaAnalysis = { serialized: Record<string, unknown> | null; hasRef: boolean; size: number };
@@ -93,10 +46,8 @@ const analyzeWireSchema = (schema: ZodType): SchemaAnalysis => {
   }
 };
 
-// Converted by the schema's OWN zod (Standard JSON Schema), never by ours: the
-// caller's schema may come from another zod copy, and converting it here would
-// read that copy's metadata through our registry. `output` matches the
-// z.toJSONSchema default.
+// Converted by the schema's own zod, not by ours: the caller's schema may come from another
+// zod copy, whose metadata is not in our registry.
 const toJsonSchemaRecord = (schema: ZodType): Record<string, unknown> => {
   const convert = schema['~standard'].jsonSchema.output;
   try {
@@ -106,16 +57,9 @@ const toJsonSchemaRecord = (schema: ZodType): Record<string, unknown> => {
   }
 };
 
-// ───────────────────────────────────────────────────────────
-// resolveTransport
-// ───────────────────────────────────────────────────────────
-
-// The exit tool's params by provider temperament. Hard-validating
-// providers (validatesToolArgs) 400 the WHOLE request when args miss
-// the declared schema — killing exactly the attempts the wire layer's
-// repair ladder saves. There the params name the envelope fields but
-// constrain nothing (never advertising a field the contract doesn't
-// accept); the contract rides prompt docs, validation is client-side.
+// A provider that validates tool arguments answers a mismatch with a 400 for the whole
+// request, which loses an attempt the repair ladder would have saved. So its params name
+// the envelope fields and constrain nothing.
 const respondParams = (
   spec: TransportSpec,
   caps: Capabilities,
@@ -161,20 +105,8 @@ export const resolveTransport = (spec: TransportSpec, caps: Capabilities): Resol
     );
   }
 
-  // `respond` EARNS ITS PLACE ONLY WHEN ITS TOOL PARAMS ENFORCE THE CONTRACT.
-  // That takes three things: the provider does not validate tool args itself
-  // (if it does, the params are sent permissive and enforce nothing), the full
-  // schema fits in the params (loose params enforce nothing either), and the
-  // model carries nested payloads on the tool channel intact. Anywhere else
-  // `respond` would add a synthetic tool and a tool-call ending for no
-  // enforcement at all — the contract would ride the prompt exactly as it does
-  // under `emit`, which every model can do.
-  //
-  //   auto: native (grammar)  →  respond (enforcing params)  →  emit
-  //
-  // Explicit respond/native choices are still honored, and `forceTool` —
-  // "every turn is a tool call, `respond` is the only exit" — is a choice of
-  // `respond` in all but name.
+  // `respond` is picked only where its tool params enforce the contract. Anywhere else it
+  // adds a synthetic tool and the contract rides the prompt, as it does under `emit`.
   const respondEnforces = !caps.validatesToolArgs && !caps.manglesNestedToolArgs && (!spec.hasData || fullIsViable);
 
   let transport: OutputTransport;
@@ -198,8 +130,7 @@ export const resolveTransport = (spec: TransportSpec, caps: Capabilities): Resol
       responseMode: spec.responseMode,
       responseFormat: {
         type: 'json_schema',
-        // strict:false — strict mode rejects open records and several
-        // keywords; non-strict still constrains and never hard-fails.
+        // Strict mode rejects open records and several keywords; non-strict still constrains.
         jsonSchema: { name: 'envelope', strict: false, schema: serialized },
       },
       injectSchemaDoc,

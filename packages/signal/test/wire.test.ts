@@ -4,12 +4,6 @@ import { createSignal } from '../src/signal';
 import { routeResponse, routeRejection } from '../src/wire/router';
 import { failedGeneration, jsonlLines, recoverRejection, resolveWireStrategies } from '../src/wire/strategies';
 
-// The wire contract: what comes out conforms to the schema that went
-// in — or is a typed failure with evidence. Repairs are rescue-only
-// and gated by the acceptance schema; provider rejections that carry
-// the attempt are recovered by registry-selected strategies and routed
-// exactly like accepted responses.
-
 const Envelope = z
   .object({
     response: z.string().optional(),
@@ -168,7 +162,6 @@ describe('routeRejection — the 400 carried the payload', () => {
 });
 
 describe('end to end through step() — the 400 never existed', () => {
-  // A fake OpenAI SDK client whose create() throws a Groq-shaped 400.
   const throwingClient = (failed_generation: string) => ({
     chat: {
       completions: {
@@ -188,7 +181,6 @@ describe('end to end through step() — the 400 never existed', () => {
   it('a mangled run_action 400 arrives as a NORMAL tool call', async () => {
     const attempt = JSON.stringify({
       name: 'run_action',
-      // The observed corruption: nested array stringified inside args.
       arguments: { action: { id: 'view.x', layout: { children: '[{"component":"Text"}]' } } },
     });
     const llm = createSignal('groq', { apiKey: 'k', client: throwingClient(attempt) });

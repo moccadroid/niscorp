@@ -24,8 +24,6 @@ describe.skipIf(!hasTypeSafeKey)('TypeSafe decision integration', () => {
       },
     });
 
-    // The gate already held every answer to its question; what is left to see
-    // is that a real provider reports what a caller meters on.
     expect(result.calibrated).toBe(true);
     expect(['refund', 'bug', 'other']).toContain(result.decisions.intent.choice);
     expect(result.decisions.urgency.level).toBeGreaterThanOrEqual(0);

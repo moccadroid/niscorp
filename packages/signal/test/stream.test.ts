@@ -4,10 +4,6 @@ import { runStream, runComplete, type RunDeps } from '../src/run';
 import type { Capabilities, Message, StepResult, StepStreamEvent, StreamEvent, Tool } from '../src/types';
 import { routeResponse } from '../src/wire/router';
 
-// The high-level loop's behavioral spec — text deltas, tool execution,
-// schema retries, done/error events — driven through a scripted step
-// core that routes exactly like production (same router).
-
 const CAPS: Capabilities = {
   nativeTools: true,
   nativeJsonSchema: false,
@@ -35,9 +31,6 @@ const scripted = (turns: Turn[]): RunDeps => {
         const base: StepResult = {
           content: (turn.text ?? []).join(''),
           toolCalls: (turn.toolCalls ?? []).map((call) => ({ ...call })),
-          // `reported: true` — this mock IS stating a cost. Leaving it off made
-          // the double say "the provider told us nothing", which is the exact
-          // confusion the flag was added to end.
           usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, reported: true },
           finishReason: (turn.toolCalls?.length ?? 0) > 0 ? 'tool_calls' : 'stop',
           raw: null,
@@ -103,7 +96,6 @@ describe('runStream', () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
     const done = events.at(-1);
     expect(done?.type === 'done' && done.response).toEqual({ answer: 7 });
-    // The correction rode the transcript, not a re-run.
     if (done?.type === 'done') {
       expect(
         done.history.some(
