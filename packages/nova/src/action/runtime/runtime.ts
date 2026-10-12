@@ -49,7 +49,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
   const statusSubscribers: StatusChangeHandler[] = [];
   let triggerHandle: TriggerHandle | undefined;
   let modelWriteOff: Unsubscribe | undefined;
-  const modelListeners = new Map<string, string>();
+  const modelPaths = new Map<string, string>();
 
   dataStore.subscribe((next) => {
     instance.data = next;
@@ -177,7 +177,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
         if (event.type !== 'ui:model' || instance.status === 'suspended') return;
         if (event.origin !== undefined && event.origin !== instance.id) return;
         if (event.ref === undefined) return;
-        const path = modelListeners.get(event.ref);
+        const path = modelPaths.get(event.ref);
         if (path === undefined) return;
         dataStore.update((curr) =>
           applyMutations(curr, [{ set: path, value: event.payload }], { initial: initialSnapshot, strict }),
@@ -255,7 +255,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
     abortController.abort();
     stopFollowing();
     detach();
-    teardownModelListeners();
+    modelPaths.clear();
     const unmountController = new AbortController();
     await runLifecycleHook('unmount', definition, () =>
       buildContext(unmountController.signal),
@@ -277,12 +277,8 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
   };
 
   const reconcileModelBindings = (nodes: RenderNode[]): void => {
-    modelListeners.clear();
-    for (const b of collectModelBindings(nodes)) modelListeners.set(b.ref, b.path);
-  };
-
-  const teardownModelListeners = (): void => {
-    modelListeners.clear();
+    modelPaths.clear();
+    for (const b of collectModelBindings(nodes)) modelPaths.set(b.ref, b.path);
   };
 
   const render = (): RenderNode[] => {
@@ -313,7 +309,7 @@ export const createActionRuntime = (config: ActionRuntimeConfig): ActionRuntime 
   const dispose = (): void => {
     stopFollowing();
     detach();
-    teardownModelListeners();
+    modelPaths.clear();
     statusSubscribers.length = 0;
   };
 
