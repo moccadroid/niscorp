@@ -3,55 +3,14 @@ import { z } from 'zod';
 import type { Sequence } from '@niscorp/strata';
 import type { PgPool } from '@niscorp/vex';
 
-// ═══════════════════════════════════════════════════════════════
-// SESSIONS — the human credential, at the standard the machine one set.
-//
-// A person's credential is the same one an integration's key is (a 256-bit
-// key stored hashed, ../integrations, registry.ts), one table over:
-//
-//   MINTED ONCE, SHOWN ONCE. 256 bits of CSPRNG behind an `st_` prefix; the
-//   row keeps only the hash, so a stolen database does not hold a live
-//   session. Presenting the token is the only way to produce the hash again.
-//
-//   EXPIRING. `expires_at` is written at mint and enforced on every read.
-//   The socket re-asks the verifier on a timer (sessionRevalidateMs) so an
-//   expiry means something on a held-open connection.
-//
-//   REVOKED BY DELETING THE ROW: every token a principal holds (sign out
-//   everywhere, a role change, an offboarding). No second mechanism to
-//   forget. Nothing deletes one token and leaves the principal's others: a
-//   sign-out closes every terminal of the principal, so it ends every session.
-//
-// The app mints at its own door (after ITS identity check — a password, an
-// SSO callback, a magic link) and hands the token to the terminal. Moss
-// never learns how the app decided; the app never touches token mechanics.
-//
-// THEY ARE WHAT `session: 'sessions'` VERIFIES WITH, AND NOTHING ELSE READS
-// THEM. That deployment's database has the table (the server's one ledgered
-// run makes it there, ../data, migrate.ts) and its verifier is the lookup
-// below. A deployment whose `session` is a verifier of its own keeps its own
-// credential: it has no table of these, no call here reads one for it, and a
-// token minted here would be one nobody verifies.
-// ═══════════════════════════════════════════════════════════════
-
 const hashSessionToken = (token: string): string => createHash('sha256').update(token).digest('hex');
 
-// What every token minted here starts with.
 const SESSION_TOKEN_PREFIX = 'st_';
 
-// What the two lookups read off a row. The database is outside this process,
-// so a row is parsed like anything else that arrives: one that is not there,
-// or does not hold what was selected, is nobody.
 const PrincipalRowSchema = z.object({ principal: z.string() });
-// `extract(epoch from …) * 1000` is numeric, which a driver hands over as a
-// number or as the text of one.
 const RemainingRowSchema = z.object({ remaining: z.coerce.number() });
 
-// The sessions table, as a strata sequence. Its own sequence rather than part of
-// `nisc.moss` because it exists only for a deployment that chose moss's own
-// credential (`runtime.session: 'sessions'`). An applied migration is never
-// edited, its SQL text is checksummed: change the table by appending one (see
-// test/baselines.test.ts).
+// A migration that has run is never edited (its text is checksummed): append one instead.
 export const SESSIONS_SEQUENCE: Sequence = {
   id: 'nisc.moss.sessions',
   migrations: [
@@ -60,7 +19,6 @@ export const SESSIONS_SEQUENCE: Sequence = {
       steps: [
         {
           kind: 'sql',
-          // THE HASH, NEVER THE TOKEN (see the header, and ../integrations, credentials.ts for the rule).
           sql: `CREATE TABLE IF NOT EXISTS sessions (
       token_hash text PRIMARY KEY,
       principal  text NOT NULL,
@@ -73,10 +31,8 @@ export const SESSIONS_SEQUENCE: Sequence = {
   ],
 };
 
-// The broom rides the mint: every new session sweeps the expired ones, so
-// the table is self-maintaining at exactly the rate it grows and no
-// deployment needs a timer for it.
 export const mintSession = async (pool: PgPool, principal: string, ttlMs: number): Promise<string> => {
+  // Each mint sweeps the expired rows, so the table needs no timer.
   await pool.query('DELETE FROM sessions WHERE expires_at < now()');
   const token = `${SESSION_TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
   await pool.query('INSERT INTO sessions (token_hash, principal, expires_at) VALUES ($1, $2, $3)', [hashSessionToken(token), principal, new Date(Date.now() + ttlMs)]);
@@ -89,8 +45,6 @@ export const sessionOf = async (pool: PgPool, token: string): Promise<string | n
   return row.success ? row.data.principal : null;
 };
 
-// How much longer a session resolves — how long a browser is told to keep the
-// cookie that carries it.
 export const sessionRemainingMs = async (pool: PgPool, token: string): Promise<number | null> => {
   const res = await pool.query('SELECT extract(epoch from expires_at - now()) * 1000 AS remaining FROM sessions WHERE token_hash = $1 AND expires_at > now()', [hashSessionToken(token)]);
   const row = RemainingRowSchema.safeParse(res.rows[0]);

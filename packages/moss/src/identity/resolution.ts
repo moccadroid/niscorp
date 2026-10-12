@@ -2,96 +2,45 @@ import { z } from 'zod';
 import { createIdentityCache, memoKey } from './cache';
 import type { IdentityCache, IdentityRecord } from './cache';
 
-// ═══════════════════════════════════════════════════════════════
-// A PRINCIPAL IS A RECORD — the second half of "who is calling", as one object
-// the server builds once and asks from every surface.
-//
-// It is handed exactly what the answer is made of: the app's three seams (its
-// identity seam, its assignments, its scope hook), a way to run a seeded entry
-// as a charter role, and the cache's limits. It knows no manifest and no
-// runtime, and runs no entry itself.
-// ═══════════════════════════════════════════════════════════════
-
-// WHO THIS REQUEST IS, resolved ONCE at the door.
-//
-// `principal` alone is not enough: turning it into roles, scope values and an
-// install list takes three more questions of the application. Resolving it
-// here and carrying it means the seams are asked once per SESSION, which is
-// the whole point of the cache behind them. `key` is the memo key, derived once
-// with the record rather than recomputed by every lookup.
 export type ResolvedIdentity = {
   roles: readonly string[];
   scope: Record<string, unknown>;
   installed: readonly string[] | undefined;
   key: string;
-  // The record itself, handed back to the app's `scope` hook so a per-request
-  // value can be COMPUTED from a per-session fact without a second lookup.
-  // Absent when no `identity` seam is declared.
   record?: IdentityRecord;
 };
 
-// The app's identity seam (`NiscApp.identity`; ../manifest/app.ts says what it is for).
-// `as` is the charter role the lent `read` executes as.
 export type IdentitySeam = {
   as?: string;
   resolve: (principal: string, read: (fingerprint: string, scope: Record<string, unknown>) => Promise<unknown>) => Promise<IdentityRecord>;
 };
 
 export type IdentityConfig = {
-  // The app's identity seam, when it declares one: asked once per session, and
-  // its answer held.
   seam?: IdentitySeam;
-  // The app's authored assignments (`NiscApp.assignments`): who somebody is
-  // when there is no seam to ask.
   assignments?: Readonly<Record<string, readonly string[]>>;
-  // The app's scope hook (`NiscApp.scope`): the values that follow the clock,
-  // asked per request and never held.
   scope?: (principal: string | null, identity?: IdentityRecord) => Record<string, unknown>;
-  // Run a seeded entry as a charter role, under these scope values: how the
-  // seam's `read` reaches rows. The caller's, because running an entry under a
-  // policy is not something this module does.
   readAs: (role: string, fingerprint: string, scope: Record<string, unknown>) => Promise<unknown>;
-  // The cache's limits (./cache.ts): how many records, how long one may sit
-  // unread, how old one may get before it is resolved again.
   max?: number;
   idleMs?: number;
   revalidateMs?: number;
 };
 
 export type Identity = {
-  // One principal in, who they are out. `null` is nobody signed in.
   resolve: (principal: string | null) => Promise<ResolvedIdentity>;
-  // THE SCOPE VALUES A PRINCIPAL CARRIES, from a resolution already in hand.
   composeScope: (principal: string | null, resolved: ResolvedIdentity) => Record<string, unknown>;
-  // The same, for a caller that has a principal and no resolution in hand.
   scopeValuesFor: (principal: string | null) => Promise<Record<string, unknown>>;
-  // Forget one principal, everybody wearing a tag, or everybody (./cache.ts).
-  // With no identity seam nothing is held, and each answers as for nobody.
   invalidate: (principal: string) => boolean;
   invalidateTag: (tag: string) => readonly string[];
   invalidateAll: () => void;
-  // Who is held right now and what holding them costs: structural facts for an
-  // operator. Absent when the app declares no identity seam.
   roster?: Pick<IdentityCache, 'list' | 'meter'>;
-  // Stop the cache's sweep.
   stop: () => void;
 };
 
-// Who somebody is by the app's authored assignments. Nobody signed in, and
-// anybody the assignments do not name, is `public`.
 export const assignedRoles = (assignments: Readonly<Record<string, readonly string[]>> | undefined, principal: string | null): readonly string[] =>
   principal === null ? ['public'] : (assignments?.[principal] ?? ['public']);
 
-// WHAT THE SEAM ANSWERED, read where it arrives. The record is the app's own
-// code speaking, and everything after it stands on its shape: the roles go to
-// the charter, the installs filter a catalog, the scope pins rows. So the four
-// fields moss names are held to their types here, once, and a record that does
-// not fit is refused, by throwing, rather than carried further. Nobody is
-// served as `public` in its place.
-//
-// Loose on purpose. What is INSIDE `scope` is the app's and is never looked at,
-// and a field moss does not name is left on the record: the app's own scope
-// hook is handed the record back and may read it there.
+// Loose on purpose: the record goes back to the app's own scope hook, which
+// may read fields of its own on it.
 const IdentityRecordSchema = z.looseObject({
   roles: z.array(z.string()),
   scope: z.record(z.string(), z.unknown()),
@@ -99,20 +48,14 @@ const IdentityRecordSchema = z.looseObject({
   tag: z.string().optional(),
 });
 
-// Which field and what was expected there: never what the record held, which
-// is somebody's roles and tenant.
+// Names the field and what was expected there, never what the record held:
+// that is somebody's roles and tenant.
 const recordRefusal = (issues: readonly z.core.$ZodIssue[]): Error =>
   new Error(
     `moss: \`identity.resolve\` did not answer an identity record (${issues.map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`).join('; ')}). ` +
       'A record is { roles: string[], scope: {…}, installed?: string[], tag?: string }.',
   );
 
-// ONE RESOLUTION, TWO HALVES. The app's `resolve` answers what cannot be read
-// under any policy (roles, the tag, an actor's pre-auth scope). For the rest
-// it is lent `read`: a seeded entry, run by the caller's engine as the charter
-// role `as` names, locked to replay, with exactly the scope values the app
-// passes. Every value the engine pins by was resolved engine-side; no request
-// authored any of it.
 const resolveThrough =
   (seam: IdentitySeam, readAs: IdentityConfig['readAs']) =>
   async (principal: string): Promise<IdentityRecord> => {
@@ -129,17 +72,11 @@ const resolveThrough =
 export const createIdentity = (config: IdentityConfig): Identity => {
   const seam = config.seam;
 
-  // IDENTITY, held by moss when the application declares the seam. Bounded,
-  // evicted, revalidated on the same clock a live socket credential runs on,
-  // and enumerable only by an operator. Absent, the assignments answer.
   const cache =
     seam === undefined
       ? undefined
       : createIdentityCache({ resolve: resolveThrough(seam, config.readAs), max: config.max, idleMs: config.idleMs, revalidateMs: config.revalidateMs });
 
-  // The memo key derived ONCE per record rather than per lookup. A WeakMap
-  // because the cache hands back the same object for the life of a session, and
-  // because a key held here must not be the reason a record cannot be collected.
   const keys = new WeakMap<object, string>();
   const keyOf = (record: IdentityRecord): string => {
     const hit = keys.get(record);
@@ -149,14 +86,9 @@ export const createIdentity = (config: IdentityConfig): Identity => {
     return key;
   };
 
-  // The answer for an application that has not declared `identity`, and for
-  // nobody signed in.
   const fromAssignments = (principal: string | null): ResolvedIdentity => {
     const roles = assignedRoles(config.assignments, principal);
-    // `scope` is EMPTY here rather than the scope hook's answer, because the
-    // hook is applied in `composeScope` in both cases — once, per request, over
-    // whatever the record carried. Calling it here as well would ask a
-    // synchronous seam twice for one answer.
+    // The scope is empty on purpose: `composeScope` applies the scope hook.
     return { roles, scope: {}, installed: undefined, key: memoKey(roles, undefined) };
   };
 
@@ -168,10 +100,8 @@ export const createIdentity = (config: IdentityConfig): Identity => {
     return fromAssignments(principal);
   };
 
-  // One spelling, used everywhere. The session's stable half from the identity
-  // record, then the clock's from the `scope` hook, applied last and per
-  // request. A second spelling would let a value reach one route and not
-  // another.
+  // The scope hook is applied last and for each request, never held with the
+  // record: its values may follow the clock.
   const composeScope = (principal: string | null, resolved: ResolvedIdentity): Record<string, unknown> => ({
     userId: principal ?? 'anonymous',
     ...resolved.scope,

@@ -3,18 +3,6 @@ import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
 import { assignedRoles, memoKey } from '../identity';
 import type { LayoutVariant, NiscApp } from './app';
 
-// ═══════════════════════════════════════════════════════════════
-// WHAT A SET OF ROLES HOLDS — the charter applied to the manifest: the
-// action ids a set of roles is granted (with the resolved set's version
-// token) and the layout variant it holds of each. Pure, every one; who
-// somebody is belongs to ../identity, and what they may read and write to
-// the policy functions (../data).
-// ═══════════════════════════════════════════════════════════════
-
-// The role combinations this application can produce — declared if the app says
-// so, derived from the assignment map if it does not. Deduplicated, because the
-// derived form yields one entry per PERSON and every consumer wants one entry
-// per COMBINATION.
 export const wearableOf = (app: Pick<NiscApp, 'wearable' | 'assignments'>): readonly (readonly string[])[] => {
   const declared = app.wearable;
   const source = declared ?? Object.values(app.assignments ?? {});
@@ -28,28 +16,15 @@ export const wearableOf = (app: Pick<NiscApp, 'wearable' | 'assignments'>): read
 
 export type Catalog = { ids: readonly string[]; hash: string };
 
-// Of a list of granted action ids, the ones that are there for an install
-// list: an action an integration ships exists only where that integration is
-// installed. `undefined` is "every one is live". Handed in, because what an
-// integration is, and which action belongs to which, is not known here: the
-// integrations feature says it through the seam (./running.ts, addCatalogFilter).
 export type InstalledOnly = (ids: readonly string[], installed: ReadonlySet<string> | undefined) => readonly string[];
 
-// A FILTER NARROWS, AND IS HELD TO IT: what it answers, of the ids it was
-// handed, in the order they were handed. An id it names that it was not
-// handed is not in the answer, so a filter cannot give an action nobody
-// granted to whoever asks. A feature anybody writes adds a filter; only the
-// charter grants.
+// A filter may only narrow: an id it answers that it was not handed is dropped,
+// so a filter cannot grant an action.
 export const narrowedBy = (filter: InstalledOnly, ids: readonly string[], installed: ReadonlySet<string> | undefined): readonly string[] => {
   const answered = new Set(filter(ids, installed));
   return ids.filter((id) => answered.has(id));
 };
 
-// The application, resolved for a set of roles — granted action ids plus
-// the version token (equal hash, equal application; pushed over the
-// socket as the catalog-change signal).
-// GIVEN ROLES rather than a principal — for callers that have already resolved
-// who somebody is.
 export const catalogFor = (
   app: Pick<NiscApp, 'charter' | 'actions'>,
   roles: readonly string[],
@@ -61,8 +36,6 @@ export const catalogFor = (
   return { ids, hash: versionToken(ids) };
 };
 
-// THE LAYOUT EACH ACTION IS GIVEN BY A LIST OF VARIANT IDS: action id → that
-// variant's layout. An id that names no variant gives nothing.
 export const variantLayouts = (variants: Readonly<Record<string, LayoutVariant>>, held: Iterable<string>): ReadonlyMap<string, LayoutNode> => {
   const layouts = new Map<string, LayoutNode>();
   for (const id of held) {
@@ -72,21 +45,11 @@ export const variantLayouts = (variants: Readonly<Record<string, LayoutVariant>>
   return layouts;
 };
 
-// The layout bindings of a set of roles — action id → the granted variant's
-// layout (ring 2). Grants come from the charter's `layouts` section over
-// the variant-id universe. Two granted variants of one action is
-// incoherence the boot check refuses (./verify.ts), so resolution never picks.
 export const resolveVariantsForRoles = (app: Pick<NiscApp, 'charter' | 'layouts'>, roles: readonly string[]): ReadonlyMap<string, LayoutNode> => {
   const variants = app.layouts ?? {};
   return variantLayouts(variants, resolvePrincipal(app.charter, Object.keys(variants), roles, 'layouts'));
 };
 
-// THE VARIANT IN ITS PLACE, written once: the definitions a list of ids names,
-// in the list's order, each as the manifest has it or with the layout
-// `layouts` gives its action. The base is never edited: a variant is a copy
-// that differs in its layout. An id that names no action gives nothing. Who
-// builds a shell (`definitionsFor`, below) and who audits what a role's
-// actions reach (./verify.ts) both read the definitions through this.
 export const withVariants = (
   actions: Readonly<Record<string, ActionDefinition>>,
   ids: readonly string[],
@@ -99,33 +62,20 @@ export const withVariants = (
     return [[id, layout === undefined ? definition : { ...definition, layout }]];
   });
 
-// The action definitions a set of roles holds, by id, in the catalog's order,
-// each with the layout variant those roles hold of it in its place. A shell is
-// built from the answer and adopts it.
 export const definitionsFor = (
   actions: Readonly<Record<string, ActionDefinition>>,
   ids: readonly string[],
   variants: ReadonlyMap<string, LayoutNode>,
 ): Readonly<Record<string, ActionDefinition>> => Object.freeze(Object.fromEntries(withVariants(actions, ids, variants)));
 
-// WHAT EACH SET OF ROLES HOLDS, REMEMBERED.
-//
-// Every answer is a function of the manifest and of (roles + install list),
-// and of nothing about the person asking. So they are kept by that key — one
-// entry per combination, not one per person — until the manifest changes.
-// Whoever changes the manifest drops them (./running.ts); nobody else has to
-// remember to.
 export type RoleMemo = {
   catalogFor: (roles: readonly string[], installed: readonly string[] | undefined) => Catalog;
   variantsFor: (roles: readonly string[]) => ReadonlyMap<string, LayoutNode>;
-  // The definitions themselves, granted and with the variant in place.
   definitionsFor: (roles: readonly string[], installed: readonly string[] | undefined) => Readonly<Record<string, ActionDefinition>>;
   drop: () => void;
 };
 
 export const createRoleMemo = (config: {
-  // The charter, the actions and the layout variants as they are now: read at
-  // each miss, never held, because they are what changes.
   manifest: () => Pick<NiscApp, 'charter' | 'actions' | 'layouts'>;
   installedOnly: InstalledOnly;
 }): RoleMemo => {
@@ -141,7 +91,6 @@ export const createRoleMemo = (config: {
   };
   const roleMemo: RoleMemo = {
     catalogFor: (roles, installed) => kept(catalogs, memoKey(roles, installed), () => catalogFor(config.manifest(), roles, installed, config.installedOnly)),
-    // Which variant is held does not depend on what is installed.
     variantsFor: (roles) => kept(variants, memoKey(roles, undefined), () => resolveVariantsForRoles(config.manifest(), roles)),
     definitionsFor: (roles, installed) =>
       kept(definitions, memoKey(roles, installed), () => definitionsFor(config.manifest().actions, roleMemo.catalogFor(roles, installed).ids, roleMemo.variantsFor(roles))),
@@ -154,8 +103,6 @@ export const createRoleMemo = (config: {
   return roleMemo;
 };
 
-// A content hash of the resolved id set — identity, not cryptography
-// (FNV-1a, hex).
 const versionToken = (ids: readonly string[]): string => {
   const s = ids.join('\n');
   let h = 0x811c9dc5;

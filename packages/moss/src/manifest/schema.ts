@@ -5,56 +5,23 @@ import { SequenceSchema, depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { MutationDefinitionSchema, QuerySchema, REFRESH_MODES } from '@niscorp/vex';
 import type { NiscApp } from './app';
 
-// ═══════════════════════════════════════════════════════════════
-// WHAT AN APP HANDS OVER, READ WHERE IT ARRIVES.
-//
-// `NiscApp` is a type, and a type is a promise the compiler checks only where
-// the manifest is written. What reaches `createServer` may have come out of
-// `JSON.parse`, through a cast, or from a file with no types at all. So the
-// manifest is read by a schema once, before anything is derived from it (a
-// definition nova refuses would otherwise be found when a shell that holds it
-// is built, for whoever connected first), and a boot that cannot read it
-// refuses with every place that does not fit.
-//
-// Each grammar is read by the schema of the package that owns it: an action, a
-// fragment and a layout by nova's, a query and a mutation by vex's, a mapping
-// by Prism's, a grammar sequence by strata's. What is written here is only the
-// shapes nobody else owns: a layout variant, a canvas, the envelope of an
-// entry, the lists and records.
-//
-// Two documents have no schema where they are owned, and none is written for
-// them here: the charter (verified by ./verify.ts, with the charter engine)
-// and the behaviors (compiled by vex with every policy). They are held to
-// being records, so what reads them next is handed an object.
-// ═══════════════════════════════════════════════════════════════
-
-// A SEAM IS CODE. All a schema can hold it to is that it is a function; what it
-// takes and answers is the compiler's to check, where the app is written.
 const seam = z.custom<(...args: never[]) => unknown>((value) => typeof value === 'function', 'expected a function');
 
-// A DOCUMENT IN A RECURSIVE GRAMMAR (a layout's children, a query's `and`, a
-// Prism `$if`) is asked how deep it nests before its schema reads it: a
-// recursive schema recurses on the call stack, so a document a few thousand
-// levels deep does not come back refused, it throws RangeError out of the
-// parser (strata, depth.ts). `abort` is what stops the schema being asked.
+// Depth is checked before a recursive schema reads the value: one nested a few
+// thousand levels deep would throw RangeError out of the parser instead of
+// coming back refused. `abort` keeps the schema from being asked.
 const document = <Schema extends z.ZodType>(schema: Schema): z.ZodPipe<z.ZodUnknown, Schema> =>
   z
     .unknown()
     .refine((value) => !exceedsDepth(value), { message: depthRefusal(), abort: true })
     .pipe(schema);
 
-// The lists are `readonly` as `NiscApp` has them, so the type an app is
-// written against is one this schema takes (`receiveManifest`, below, holds it
-// to that).
 const strings = z.array(z.string()).readonly();
 const record = z.record(z.string(), z.unknown());
 const layout = document(LayoutNodeSchema);
 
-// Ring 2: one action's layout, reshaped for whoever is granted the variant.
 const LayoutVariantSchema = z.object({ action: z.string(), layout }).strict();
 
-// What a canvas starts with: an action id, or an action with its input and the
-// fragments it is composed with.
 const CanvasSeedSchema = z.union([z.string(), z.object({ action: z.string(), input: record.optional(), with: strings.optional() }).strict()]);
 
 const CanvasSchema = z
@@ -66,10 +33,6 @@ const CanvasSchema = z
   })
   .strict();
 
-// A component's contract is the kit's own record (nova's `ComponentMeta`, with
-// whatever else the kit keeps beside it), so it is read loosely: `description`
-// is held to being text, `propsSchema` is whatever the kit hands over (a zod
-// schema, a JSON Schema), and the rest is left on it.
 const ComponentContractSchema = z.looseObject({ meta: z.looseObject({ description: z.string().optional() }).optional() });
 
 const shell = {
@@ -84,8 +47,6 @@ const shell = {
 const ShellManifestSchema = z.object(shell).strict();
 const PageManifestSchema = z.object({ ...shell, path: z.string(), params: z.string().optional() }).strict();
 
-// An entry is vex's cache row before it is seeded: a read carries a query, a
-// write a mutation, and the two share what names them.
 const entry = { fingerprint: z.string(), intent: z.string().optional(), reach: z.string().optional() };
 const ReadEntrySchema = z
   .object({
@@ -98,10 +59,6 @@ const ReadEntrySchema = z
   .strict();
 const WriteEntrySchema = z.object({ ...entry, mutation: document(MutationDefinitionSchema) }).strict();
 
-// A feature is the app's code: a name, the tables it keeps (their names, and
-// the strata sequences that make them, read by strata's schema), and the
-// function the server starts it with. What else it carries is its own (the
-// calls an app makes on it), so it is read loosely and never looked inside.
 const FeatureSchema = z.looseObject({
   name: z.string(),
   tables: z.object({ names: strings, sequences: z.array(SequenceSchema).readonly().optional() }).strict().optional(),
@@ -110,9 +67,6 @@ const FeatureSchema = z.looseObject({
 
 const ReactionSchema = z.object({ table: z.string(), op: z.enum(['insert', 'update', 'delete']).optional(), run: seam }).strict();
 
-// EVERY FIELD OF `NiscApp`, AND NO OTHER: `satisfies` fails the build when the
-// type gains a field this does not read, or loses one it still names. Without
-// it a new field would be refused at every boot as a key nobody recognises.
 const fields = {
   charter: record,
   assignments: z.record(z.string(), strings).optional(),
@@ -126,7 +80,6 @@ const fields = {
   phraseKeys: z.object({ props: strings.optional(), suffixes: strings.optional(), text: z.boolean().optional() }).strict().optional(),
   features: z.array(FeatureSchema).readonly().optional(),
   entries: z.array(z.union([ReadEntrySchema, WriteEntrySchema])).readonly().optional(),
-  // A resource is a list of entities, or the app's own record carrying one.
   resources: z.record(z.string(), z.union([strings, z.looseObject({ entities: strings })])).optional(),
   shell: ShellManifestSchema.optional(),
   pages: z.record(z.string(), PageManifestSchema).optional(),
@@ -142,11 +95,8 @@ const ManifestSchema = z.object(fields).strict();
 type Issue = z.core.$ZodIssue;
 type Place = { path: readonly PropertyKey[]; message: string };
 
-// WHICH OF A UNION'S REASONS TO SAY. A layout node is one of several things and
-// an entry one of two, so what does not fit comes back as one issue where the
-// union stands, carrying every branch's reasons. The branch somebody meant is
-// the one that got furthest into the value before it failed; on a tie, the
-// one with the fewest complaints.
+// Of a union's branches, the one reported is the one that got furthest into the
+// value before it failed; on a tie, the one with the fewest complaints.
 const placesOf = (issue: Issue, under: readonly PropertyKey[]): Place[] => {
   const path = [...under, ...issue.path];
   if (issue.code !== 'invalid_union') return [{ path, message: issue.message }];
@@ -157,41 +107,20 @@ const placesOf = (issue: Issue, under: readonly PropertyKey[]): Place[] => {
   return first === undefined ? [{ path, message: issue.message }] : others.reduce(closer, first);
 };
 
-// Each place in the manifest that does not parse, as `where: what was
-// expected there`. Empty: the manifest is read.
 export const manifestMisfits = (app: unknown): string[] => {
   const read = ManifestSchema.safeParse(app);
   if (read.success) return [];
   return read.error.issues.flatMap((issue) => placesOf(issue, [])).map((place) => `${place.path.map(String).join('.') || '(the manifest)'}: ${place.message}`);
 };
 
-// THE HAND-OVER — the moment a manifest stops being the app's to write and
-// becomes what the server stands on.
-//
-// It is read by its schema (above) before anything is derived from it,
-// and a manifest that cannot be read refuses the boot, naming every place that
-// does not fit.
-//
-// THEN IT IS FROZEN, deep and in place. An edit after the hand-over would
-// reach whatever read the record next and nothing already derived from it, and
-// no check would have seen it. So the edit throws where it is written (a
-// module is strict code), and there is one way an app changes while it runs: a
-// call that verifies first, `replaceActions` (./running.ts).
-
-// What is data: an array, or an object nobody constructed. A function is a
-// seam, and an instance of a class is somebody's machinery (a kit hands a
-// component's props over as a zod schema, which fills itself in as it is
-// used): neither is frozen, and neither is looked inside.
+// A class instance is not data and stays unfrozen: a kit hands a component's
+// props over as a zod schema, which fills itself in as it is used.
 const isData = (value: object): boolean => {
   if (Array.isArray(value)) return true;
   const made: unknown = Object.getPrototypeOf(value);
   return made === Object.prototype || made === null;
 };
 
-// FROZEN, EVERY LEVEL OF IT, WHERE IT STANDS: no copy is made, so the object
-// the caller still holds is the one that can no longer be written. A loop and
-// not a recursion, for the reason the schema asks how deep a document nests;
-// `seen`, because nothing says an app's data holds no object twice.
 export const freezeDeep = (data: unknown): void => {
   const seen = new Set<object>();
   const pending: unknown[] = [data];
@@ -205,10 +134,8 @@ export const freezeDeep = (data: unknown): void => {
 };
 
 export const receiveManifest = (app: NiscApp): void => {
-  // `satisfies` is the type and the schema held to each other: a manifest the
-  // compiler accepts is one the schema takes. A field whose type the schema
-  // reads more narrowly than `NiscApp` declares it fails the build here,
-  // where otherwise it would refuse a boot.
+  // The `satisfies` fails the build where the schema reads a field more
+  // narrowly than `NiscApp` declares it, which would otherwise refuse a boot.
   const misfits = manifestMisfits(app satisfies z.input<typeof ManifestSchema>);
   if (misfits.length > 0) throw new Error(['The manifest does not parse — refusing to serve:', ...misfits.map((misfit) => `  ${misfit}`)].join('\n'));
   freezeDeep(app);
