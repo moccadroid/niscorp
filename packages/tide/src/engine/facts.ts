@@ -1,32 +1,7 @@
 import type { Fact, NewFact, TideEvent, TideStore } from '../types';
 
-// ═══════════════════════════════════════════════════════════════
-// The ONE door into the fact table
-//
-// Facts arrive three ways — the host ingests one, a handler emits
-// one, a settled run reports its stats as one — and they used to
-// be three bare `appendIfAbsent('fact', …)` calls, each of which
-// had to remember to announce what it wrote. One forgot: a chain
-// continued by `ctx.emit` landed in the ledger and never appeared
-// in the event stream, so a watcher saw a run start on a fact
-// nobody announced. And none of them announced a REFUSAL, so an
-// emitted fact that landed and one that collided on its dedupeKey
-// looked identical — silence either way.
-//
-// So admitting and announcing are split, and both live here.
-// `admitFact` writes and says what happened; `announceFact` turns
-// that into the event. They are two functions rather than one
-// because a write inside a transaction must not be announced until
-// the transaction commits — an event describes a row that exists,
-// never one a rollback is about to take back.
-// ═══════════════════════════════════════════════════════════════
-
 export type Admission = { stored: Fact } | { refused: NewFact };
 
-// THE CHAIN'S ROOT, from what caused this fact: a task or a run, back to the
-// fact that started the run, and from there to that fact's own root. None —
-// a host's fact, or the first facts of a run nothing caused (a clock) — makes
-// this fact a root itself.
 const rootOf = async (store: TideStore, cause: string | undefined): Promise<string | undefined> => {
   if (cause === undefined) return undefined;
   let runId: string | undefined;
@@ -44,10 +19,6 @@ const rootOf = async (store: TideStore, cause: string | undefined): Promise<stri
   return parent === undefined ? undefined : (parent.root ?? parent.id);
 };
 
-// Every fact minted beneath a root is counted ON the root, atomically, and
-// one past `maxChainFacts` is stored PARKED — breadth's ceiling, as depth's is
-// in the matcher. A root swept from the ledger can no longer be counted; its
-// chain is long past the point this exists for.
 export const admitFact = async (store: TideStore, fact: NewFact, maxChainFacts: number): Promise<Admission> => {
   const root = await rootOf(store, fact.cause);
   let parked: string | undefined;

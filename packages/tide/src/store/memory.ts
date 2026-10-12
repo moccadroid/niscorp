@@ -17,25 +17,7 @@ import type {
   Where,
 } from '../types';
 
-// ═══════════════════════════════════════════════════════════════
-// The memory store
-//
-// The reference implementation of TideStore, and the definition of
-// the contract: four tables, six operations, and no knowledge of
-// what a reflex, a retry or an occurrence is. It went from 414
-// lines to this by losing the twenty-seven nouns — `claimTasks`,
-// `drainSettled` and `claimClosedWindows` were three hand-written
-// implementations of one operation, and they diverged three ways.
-//
-// Its exactly-once promises are free in a single-threaded runtime,
-// which is exactly why every store must be held to the SAME contract
-// tests. A store that lies passes checks that then fail in
-// production — see `test/store.contract.ts`.
-// ═══════════════════════════════════════════════════════════════
-
 export type MemoryStore = TideStore & {
-  // Test/inspection affordance. Never part of TideStore — the engine must
-  // not be able to reach around the contract.
   snapshot: () => { facts: readonly Fact[]; runs: readonly Run[]; tasks: readonly Task[]; state: readonly ReflexState[] };
 };
 
@@ -84,8 +66,6 @@ const sorted = <R extends Row>(rows: readonly R[], order: Order<Row> | undefined
   });
 };
 
-// The one arithmetic escape. `attempt` has to rise at claim time, and a
-// caller that read it first would race its own increment.
 const applied = <R extends Row>(row: R, set: Mutation<R>): R => {
   const next: Row = { ...row };
   for (const [column, value] of Object.entries(set)) {
@@ -93,8 +73,6 @@ const applied = <R extends Row>(row: R, set: Mutation<R>): R => {
       next[column] = Number(row[column] ?? 0) + Number((value as { inc: number }).inc);
       continue;
     }
-    // `undefined` CLEARS. A settled task has no token and no lease, and
-    // "leave it as it was" is never what the engine means by writing one.
     if (value === undefined) delete next[column];
     else next[column] = value;
   }
@@ -114,8 +92,6 @@ export const createMemoryStore = (): MemoryStore => {
   const rowsOf = <T extends TableName>(table: T): TideTables[T][] => [...tables[table].values()];
   const keyOf = <T extends TableName>(table: T, row: TideTables[T]): string => String(row[PRIMARY_KEY[table]]);
 
-  // ── the six ────────────────────────────────────────────────────
-
   const query = async <T extends TableName>(spec: QuerySpec<T>): Promise<readonly TideTables[T][]> => {
     const found = sorted(
       rowsOf(spec.table).filter((row) => matches(row as Row, spec.where as Where<Row> | undefined)),
@@ -131,9 +107,6 @@ export const createMemoryStore = (): MemoryStore => {
     const unique = UNIQUE_BY[table];
     const candidate = input as unknown as Row;
 
-    // A row that does not carry the guard column is not claiming to be
-    // unique — a fact with no `dedupeKey` is a distinct occurrence of
-    // something, not a repeat of it.
     const guarded = unique.when === undefined || candidate[unique.when] !== undefined;
     if (guarded) {
       const collides = rowsOf(table).some((existing) =>
@@ -143,16 +116,10 @@ export const createMemoryStore = (): MemoryStore => {
     }
 
     sequence += 1;
-    // A value that was never given is not a key on the row — what `undefined`
-    // already means in a `cas` (see `applied`), and what a row read back from
-    // a database is. A fact stored with `as: undefined` used to keep the key
-    // here and lose it there, so a transform that looks at which keys a fact
-    // has saw two different facts, and one that takes plain JSON refused this
-    // one.
+    // An `undefined` value is not kept as a key, as on a row read back from a
+    // database: a transform that looks at which keys a fact has sees the same
+    // fact from either store.
     const given: Row = Object.fromEntries(Object.entries(candidate).filter(([, value]) => value !== undefined));
-    // An id is minted only where the primary key IS `id`. `state` is keyed by
-    // the reflex it belongs to, and giving it a second identity would invent
-    // a way for one reflex to have two states.
     const row = (PRIMARY_KEY[table] === 'id' ? { ...given, id: given.id ?? `${ID_PREFIX[table]}_${sequence}` } : given) as TideTables[T];
     tables[table].set(keyOf(table, row), row);
     return row;
@@ -164,9 +131,6 @@ export const createMemoryStore = (): MemoryStore => {
       spec.order as unknown as Order<Row> | undefined,
     ) as TideTables[T][];
 
-    // Values whose one slot is already held. Counted HERE, inside the claim,
-    // rather than by the caller beforehand — a caller that looks first and
-    // claims second loses the race to its own second instance.
     const taken = new Set<string>();
     const restricted = new Set(spec.onePer?.only ?? []);
     if (spec.onePer !== undefined)
@@ -206,19 +170,12 @@ export const createMemoryStore = (): MemoryStore => {
     const doomed = rowsOf(spec.table).filter((row) => matches(row as Row, spec.where as Where<Row> | undefined));
     for (const row of doomed) {
       tables[spec.table].delete(keyOf(spec.table, row));
-      // A run and its tasks are one fact about the world. Deleting the run
-      // and keeping the tasks destroys the UNIQUE(runId, unit) entry that IS
-      // the "this unit already ran" record — and a restore then re-charges
-      // the invoice.
       if (spec.table === 'run')
         for (const task of rowsOf('task')) if (task.runId === (row as unknown as Run).id) tables.task.delete(task.id);
     }
     return doomed.length;
   };
 
-  // Copy-on-enter, restore-on-throw. Trivial here and not a formality: the
-  // contract test asserts a throwing transaction leaves nothing behind, and
-  // a store that cannot promise that breaks fan-out's whole argument.
   const transact = async <T>(fn: (tx: TideStore) => Promise<T>): Promise<T> => {
     const saved = { fact: new Map(tables.fact), run: new Map(tables.run), task: new Map(tables.task), state: new Map(tables.state) };
     try {

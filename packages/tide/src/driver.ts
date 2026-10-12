@@ -12,7 +12,6 @@ export type TideDriverConfig = {
   tide: Tide;
   now?: () => number;
   janitorMs?: number;
-  // Absent on purpose: how long history matters is the host's call, so nothing is swept.
   retention?: Retention;
 };
 
@@ -20,8 +19,7 @@ const DEFAULT_JANITOR_MS = 300_000;
 const MAX_STEPS_PER_DRAIN = 10_000;
 
 // Node does not refuse a delay over 2^31 - 1 ms (24.8 days): it warns and waits 1 ms, which
-// would turn a far-off wake into a loop. Every wait is cut to this; waking early costs one
-// advance that finds nothing, and the timer set after it waits out the rest.
+// would turn a far-off wake into a loop. Waking early costs one advance that finds nothing.
 const LONGEST_TIMER_MS = 2 ** 31 - 1;
 const waitable = (ms: number): number => Math.min(ms, LONGEST_TIMER_MS);
 
@@ -78,14 +76,12 @@ export const createTideDriver = (config: TideDriverConfig): TideDriver => {
     if (timer !== undefined) clearTimeout(timer);
     if (due === undefined) return;
     const delay = due - now();
-    // Quiescent yet still due now means advance cannot progress it (facts waiting for reflexes
+    // Still due after a drain means advance cannot progress it (facts waiting for reflexes
     // to load, say): retry on the janitor's beat, not in a hot loop.
     timer = setTimeout(() => void wake(), delay > 0 ? waitable(delay) : janitorMs);
     letProcessEnd(timer);
   };
 
-  // A wake during a drain queues one more pass inside the same cycle, and every waker gets the
-  // same cycle promise: awaiting it means quiescence including whatever landed while draining.
   const wake = (): Promise<void> => {
     if (stopped) return Promise.resolve();
     queued = true;

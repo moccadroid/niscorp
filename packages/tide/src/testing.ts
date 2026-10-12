@@ -1,28 +1,5 @@
 import type { Run, Task, TideStore } from './types';
 
-// ═══════════════════════════════════════════════════════════════
-// THE STORE CONTRACT, AS EXECUTABLE CHECKS
-//
-// Shipped from the package rather than left in `test/`, because the
-// contract is not tide's private business: anyone implementing a
-// store — moss over vex, a host over its own pool — has to be able
-// to run the same checks tide holds its own reference store to.
-//
-// This exists because the last Postgres store claimed in its header
-// to be "held to the same tests" and had none. It diverged from the
-// memory store in eleven ways: LIMIT applied before the serial
-// filter, `listFacts` answering the opposite end of the list, a
-// dedupe index that outlived its rows, `total` counted from the
-// input array rather than the rows written. Every one of those was
-// invisible because there was nothing to run.
-//
-// No test framework. Each check is a function that throws, so any
-// runner can drive it:
-//
-//   for (const check of STORE_CONTRACT)
-//     it(check.name, () => check.run(makeStore()));
-// ═══════════════════════════════════════════════════════════════
-
 export type StoreCheck = { name: string; run: (store: TideStore) => Promise<void> };
 
 class ContractError extends Error {
@@ -39,8 +16,6 @@ const assert = (condition: boolean, message: string): void => {
 const equal = (actual: unknown, expected: unknown, what: string): void =>
   assert(actual === expected, `${what}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
 
-// A minimal task, so a check reads as the thing it is checking rather than as
-// a wall of required fields.
 const task = (over: Partial<Task> = {}): Omit<Task, 'id'> & { id?: string } => ({
   runId: 'run_1',
   reflexId: 'r',
@@ -70,16 +45,13 @@ const run = (over: Partial<Run> = {}): Omit<Run, 'id'> & { id?: string } => ({
   ...over,
 });
 
-// A task belongs to a run, and a store is entitled to enforce that — the SQL
-// one does, with a foreign key, which is what makes `remove` cascade. So
-// every check that wants work opens the run that owns it first.
+// A store may enforce that a task's run exists (the SQL one does, with a
+// foreign key), so a check that wants a task opens its run first.
 const withRuns = async (store: TideStore, ...ids: readonly string[]): Promise<void> => {
   for (const id of ids) await store.appendIfAbsent('run', run({ id, cause: `occurrence:${id}` }));
 };
 
 export const STORE_CONTRACT: readonly StoreCheck[] = [
-  // ── appendIfAbsent ───────────────────────────────────────────
-
   {
     name: 'appendIfAbsent mints an id and returns the stored row',
     run: async (store) => {
@@ -131,14 +103,9 @@ export const STORE_CONTRACT: readonly StoreCheck[] = [
       const paid = { kind: 'write' as const, entity: 'payments', at: 1, depth: 0, dedupeKey: 'evt_1' };
       assert((await store.appendIfAbsent('fact', paid)) !== undefined, 'first');
       equal(await store.appendIfAbsent('fact', paid), undefined, 'a replayed provider event drops silently');
-      // The old index was (kind, name, dedupe_key) and ignored `entity`, so
-      // two producers over different tables that agreed on a key value ate
-      // each other's rows.
       assert((await store.appendIfAbsent('fact', { ...paid, entity: 'refunds' })) !== undefined, 'another entity is another fact');
     },
   },
-
-  // ── claim ────────────────────────────────────────────────────
 
   {
     name: 'claim takes a row exactly once',
@@ -204,7 +171,6 @@ export const STORE_CONTRACT: readonly StoreCheck[] = [
   {
     name: 'onePer holds one row per group, counting what is already held',
     run: async (store) => {
-      // Two serial reflexes with two units each, and one of them already busy.
       await withRuns(store, 'a', 'b', 'c');
       await store.appendIfAbsent('task', task({ runId: 'a', unit: 'a1', reflexId: 'serial.a' }));
       await store.appendIfAbsent('task', task({ runId: 'a', unit: 'a2', reflexId: 'serial.a' }));
@@ -228,8 +194,6 @@ export const STORE_CONTRACT: readonly StoreCheck[] = [
       equal(byReflex('parallel'), 2, 'a reflex outside `only` claims freely');
     },
   },
-
-  // ── cas ──────────────────────────────────────────────────────
 
   {
     name: 'cas moves a row only from the state it expected — this is the fence',
@@ -259,8 +223,6 @@ export const STORE_CONTRACT: readonly StoreCheck[] = [
       equal(after?.token, undefined, 'a settled task holds no token');
     },
   },
-
-  // ── query ────────────────────────────────────────────────────
 
   {
     name: 'query filters, compares, orders and limits',
@@ -302,8 +264,6 @@ export const STORE_CONTRACT: readonly StoreCheck[] = [
     },
   },
 
-  // ── remove ───────────────────────────────────────────────────
-
   {
     name: 'remove deletes what matches and counts it',
     run: async (store) => {
@@ -319,14 +279,9 @@ export const STORE_CONTRACT: readonly StoreCheck[] = [
       const stored = await store.appendIfAbsent('run', run({ state: 'settled', settledAt: 1 }));
       await store.appendIfAbsent('task', task({ runId: stored?.id ?? '' }));
       await store.remove({ table: 'run', where: { settledAt: { lt: 50 } } });
-      // Keeping the tasks would destroy the UNIQUE(runId, unit) row that IS
-      // the "this unit already ran" record — and a restore then re-charges
-      // the invoice.
       equal((await store.query({ table: 'task' })).length, 0, 'orphans are not left behind');
     },
   },
-
-  // ── transact ─────────────────────────────────────────────────
 
   {
     name: 'a throwing transaction leaves nothing behind',
@@ -343,10 +298,8 @@ export const STORE_CONTRACT: readonly StoreCheck[] = [
       } catch (error) {
         raised = error;
       }
-      // THE CALLER'S error, not merely SOME error. A store whose transaction
-      // is broken outright also throws and also writes nothing, which is how
-      // a check for "it threw" passes against an implementation that never
-      // opened a transaction at all.
+      // The caller's own error, not just any: a store whose transaction is
+      // broken outright also throws and also writes nothing.
       equal((raised as Error | undefined)?.message, 'the selection died half way through', 'the caller’s error propagates unchanged');
       equal((await store.query({ table: 'task' })).length, before, 'and nothing was written — fan-out depends on this');
     },

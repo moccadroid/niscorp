@@ -3,10 +3,6 @@ import { z } from 'zod';
 import { answerSchemaOf, createReflexAgent, effectProblem, isDraft, ReflexAnswerSchema, reflexConversation } from '../src/agent';
 import { ReflexDraftSchema } from '../src';
 
-// The reflex agent's own gate: a draft names one of the HOST's effects, with
-// an input that effect's schema accepts. Tide's schema cannot know either —
-// the effects are the host's vocabulary.
-
 const EFFECTS = [{ name: 'digest.send', description: 'Send a digest to a team.', input: z.object({ team: z.enum(['sales', 'support']) }).strict() }];
 const draft = (effect: { name: string; input?: unknown }) =>
   ReflexDraftSchema.parse({ id: 'digest', intent: 'Send the digest.', on: { clock: { every: 'week', on: 'mon', at: '09:00', tz: 'Europe/Vienna' } }, effect });

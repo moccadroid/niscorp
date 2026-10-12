@@ -48,8 +48,8 @@ export const toColumn = (column: string, value: unknown): unknown => {
 const fromColumn = (column: string, value: unknown): unknown => {
   if (value === null) return undefined;
   if (JSON_COLUMNS.has(column)) return typeof value === 'string' ? JSON.parse(value) : value;
-  // `bigint` comes back as a string on some drivers and a number on others.
-  // Tide compares these with `<`, so the difference is not cosmetic.
+  // `bigint` comes back as a string from some drivers and a number from
+  // others, and the engine compares these with `<`.
   if (BIGINT_COLUMNS.has(column)) return Number(value);
   return value;
 };

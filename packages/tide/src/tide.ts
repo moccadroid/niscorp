@@ -27,43 +27,13 @@ import { reopenTask } from './engine/execute';
 import { stateOf } from './engine/materialize';
 import { admitFact, announceFact } from './engine/facts';
 
-// ═══════════════════════════════════════════════════════════════
-// createTide — the whole public surface
-//
-// Two edges (ingest in, advance to run — the driver's verb, paired
-// with `nextDue` so the driver knows when to wake), three human
-// verbs (fire, retry, preview), and a ledger anyone can read.
-// Everything else is a seam the host filled.
-//
-// THERE IS NO arm/disarm, and its absence is the design. Tide had
-// a pair, and they mutated an in-memory map: a second copy of a
-// fact the host already owned as a column, lost on restart, and
-// disagreeing with the host's own screen in between. Enablement is
-// a property of the reflex the host hands over. To pause one, write
-// your own row and load again — which is one source of truth, it
-// survives a restart, and it is auditable where a method call is not.
-// ═══════════════════════════════════════════════════════════════
-
 export type Tide = {
   load: (reflexes: readonly ReflexInput[], options?: { at?: number }) => Promise<LoadReport>;
   reflexes: () => readonly Reflex[];
   graph: () => GraphReport;
 
-  // `as` names the identity this fact belongs to, and it is how a host with
-  // more than one tenant keeps them apart: a fact is only ever offered to
-  // reflexes running under the SAME identity. Omit it and the fact reaches
-  // only reflexes that name no identity either — which is every reflex in a
-  // single-tenant host, and none in a multi-tenant one. `cause`/`depth` are
-  // the bridge's chain thread — see the implementation's doctrine.
   ingest: (fact: FactInput, options?: { as?: string; cause?: string; depth?: number }) => Promise<Fact | undefined>;
-  // One committed increment, given `now` — the DRIVER'S verb. A chain
-  // advances one hop per call, so a driver drains to quiescence; a check
-  // hands it a fake `now` and time-travels. Nothing outside a driver or a
-  // check should be calling this.
   advance: (options: AdvanceOptions) => Promise<AdvanceReport>;
-  // When the next instant worth waking for is — undefined means "nothing
-  // scheduled: sleep until an ingest". The timer this feeds belongs to the
-  // driver; tide still reads no clocks.
   nextDue: (now: number) => Promise<number | undefined>;
 
   fire: (reflexId: string, options: { now: number; input?: unknown; by?: string }) => Promise<Fact | undefined>;
@@ -77,8 +47,6 @@ export type Tide = {
     task: (id: string) => Promise<Task | undefined>;
     facts: (filter?: { reflexId?: string; limit?: number }) => Promise<readonly Fact[]>;
     fact: (id: string) => Promise<Fact | undefined>;
-    // Walks `cause` upward: "why did this member get this email" is a walk
-    // up rows, not an archaeology project.
     causeChain: (factId: string) => Promise<readonly Fact[]>;
     releaseParked: (factId: string) => Promise<boolean>;
   };
@@ -121,8 +89,6 @@ export const createTide = (config: TideConfig): Tide => {
     },
   };
 
-  // ── load ─────────────────────────────────────────────────────
-
   const load = async (input: readonly ReflexInput[], options?: { at?: number }): Promise<LoadReport> => {
     const parsed: Reflex[] = [];
     const seen = new Set<string>();
@@ -138,37 +104,25 @@ export const createTide = (config: TideConfig): Tide => {
       parsed.push(result.data);
     }
 
-    // Every opinion the load gate holds, in one pass: unregistered effects,
-    // unguarded cycles, unknown run subscriptions. If it loads, it's
-    // coherent — the moss tradition, one layer down.
     const graph = buildGraph(parsed, mergedEffects(parsed));
-    // Every refusal is listed; the code is the first one's, so a caller
-    // matching on it is told what the load actually tripped over.
     const refused = graph.refusals[0];
     if (refused !== undefined)
       throw new TideError(refused.code, `tide refused to load:\n  ${graph.errors.join('\n  ')}`, { errors: graph.errors, refusals: graph.refusals });
 
     const previously = new Set(loaded.keys());
 
-    // Built ASIDE and swapped in one synchronous step. Clearing first and
-    // filling across awaits left a window where a concurrent reader — a
-    // screen re-reading right after the write that triggered the reload —
-    // saw an empty or half-loaded engine and reported every reflex missing.
+    // Built aside and swapped in one synchronous step: a concurrent reader
+    // never sees a half-loaded set.
     const next = new Map<string, LoadedReflex>();
     for (const reflex of parsed) {
       const stored = await stateOf(deps, reflex.id);
-      // Arming persists, so a restart does not re-open the past — and a host
-      // that passes no `at` gets 0, which matches whatever is already stored.
+      // The stored arming time wins over `at`: a restart does not arm the
+      // reflex again.
       const armedAt = stored?.armedAt ?? options?.at ?? 0;
       if (stored === undefined) await config.store.appendIfAbsent('state', { reflexId: reflex.id, armedAt });
 
-      // A REFLEX ENTERING THE SET RE-BASELINES ITS CLOCK.
-      //
-      // Without this, a reflex absent for eight days — deleted and restored,
-      // or disabled by the host and left out of the load — comes back with an
-      // eight-day-old watermark and materializes every occurrence it missed.
-      // Coming back is not the same as never having left, and the difference
-      // is eight days of real effects.
+      // A reflex entering the set has its watermark moved up to `at`: left out
+      // of the load for a while, it would otherwise materialize all it missed.
       if (!previously.has(reflex.id) && stored?.materializedThrough !== undefined && options?.at !== undefined)
         await config.store.cas('state', reflex.id, {}, { materializedThrough: Math.max(stored.materializedThrough, options.at) });
 
@@ -182,26 +136,13 @@ export const createTide = (config: TideConfig): Tide => {
 
   const mergedEffects = (parsed: readonly Reflex[]): EffectRegistry => {
     if (typeof config.effects !== 'function') return config.effects ?? {};
-    // A per-actor registry still has to be checkable at load, so the graph
-    // sees the union of what every declared identity can reach.
     const union: EffectRegistry = {};
     for (const reflex of parsed) Object.assign(union, config.effects(reflex.as));
     return union;
   };
 
-  // ── edges ────────────────────────────────────────────────────
-
-  // IS THERE ANYBODY WHO COULD EVER WANT THIS? Only asked when a host has said
-  // its ledger is not its audit log (`storeUnwatchedWrites: false`), and only
-  // of write facts — a signal or a manual fact is somebody talking to tide on
-  // purpose, and a run fact is tide talking to itself.
-  //
-  // Three deliberate weaknesses, each of them a bug this would otherwise have:
-  // it never drops while nothing is loaded (a fact minted in that window still
-  // waits, which is the rule matchFacts was fixed to keep); it ignores
-  // `enabled`, so arming an automation does not depend on what was thrown away
-  // while it was paused; and it ignores `as` and `armedAt`, which are delivery
-  // rules rather than facts about whether anyone is listening at all.
+  // Looser than the matcher on purpose: nothing is dropped while no reflex is
+  // loaded, and `enabled`, `as` and `armedAt` are not consulted.
   const watchable = (fact: FactInput): boolean => {
     if (config.storeUnwatchedWrites !== false) return true;
     if (fact.kind !== 'write') return true;
@@ -220,18 +161,9 @@ export const createTide = (config: TideConfig): Tide => {
       throw new TideError('invalid_fact', `fact did not parse: ${result.error.issues.map((i) => i.message).join('; ')}`, {
         issues: result.error.issues,
       });
-    // WHOSE FACT THIS IS — and where it CAME FROM — declared by the host at
-    // the door rather than inferred later. SECOND-ARGUMENT fields and not
-    // fields on the fact, because the fact shape is what a webhook body
-    // parses into: anything on it can be sent by whoever is talking to the
-    // host, and an identity — or a provenance, or a chain depth — a caller
-    // can choose is not one. These are the host's own word; a `cause` that
-    // arrived inside the fact is discarded for the same reason.
-    //
-    // `cause`/`depth` exist for one producer: a bridge that mints a
-    // handler's own writes back in as facts, and must carry the chain the
-    // write belongs to or the depth ceiling resets at every trip through
-    // the host's database.
+    // Identity, cause and depth come from the second argument, never from the
+    // fact: the fact is what a webhook body parses into, so whoever talks to
+    // the host could choose them. A `cause` inside the fact is discarded.
     if (!watchable(result.data)) return undefined;
     const admission = await admitFact(config.store, { ...result.data, cause: options?.cause, depth: options?.depth ?? 0, as: options?.as }, deps.maxChainFacts);
     announceFact(deps.emit, admission);
@@ -240,28 +172,15 @@ export const createTide = (config: TideConfig): Tide => {
 
   const advance = (options: AdvanceOptions): Promise<AdvanceReport> => runAdvance(deps, options);
 
-  // ── human verbs ──────────────────────────────────────────────
-
   const fire = async (reflexId: string, options: { now: number; input?: unknown; by?: string }): Promise<Fact | undefined> => {
     if (!loaded.has(reflexId)) throw new TideError('unknown_reflex', `no reflex "${reflexId}" is loaded`);
-    // Sugar over ingest: even the human verb enters through the one intake,
-    // with `at` supplied by the caller like every fact. Tide reads no clock.
     return ingest(
       { kind: 'manual', target: reflexId, payload: options.input, by: options.by ?? 'operator', at: options.now },
-      // Carried so the ledger reads consistently. Matching a manual fact does
-      // not depend on it — `target` names one reflex, which is narrower.
       { as: loaded.get(reflexId)?.reflex.as },
     );
   };
 
   const preview = (reflexId: string, options: PreviewOptions): Promise<PreviewReport> => previewReflex(deps, reflexId, options);
-
-  // ── ledger ───────────────────────────────────────────────────
-  //
-  // Ordinary queries, and that is the point. These used to be nine methods
-  // on the store port that the ENGINE never called — a reporting surface
-  // wedged into an execution contract. Under moss they are vex entries over
-  // the same two tables; standalone they are these.
 
   const one = async <T extends 'run' | 'task' | 'fact'>(table: T, id: string) =>
     (await config.store.query({ table, where: { id } as never, limit: 1 }))[0];
@@ -285,9 +204,6 @@ export const createTide = (config: TideConfig): Tide => {
     return chain;
   };
 
-  // Newest first, so a `limit` means "the most recent N" everywhere. The two
-  // stores used to answer opposite ends of the same list under the same
-  // filter, which is the kind of divergence a contract test exists to catch.
   return {
     load,
     reflexes: () => [...loaded.values()].map((entry) => entry.reflex),
@@ -333,9 +249,8 @@ export const createTide = (config: TideConfig): Tide => {
       },
       fact: (id) => one('fact', id),
       causeChain,
-      // Clears the park AND records that a human overrode the ceiling —
-      // clearing the park alone is a ping-pong, because the depth that
-      // parked it has not changed and never will.
+      // `released` as well: with `parked` alone cleared, the depth check would
+      // park the fact again on the next advance.
       releaseParked: async (factId) => {
         const fact = await one('fact', factId);
         if (fact?.parked === undefined) return false;
@@ -343,10 +258,6 @@ export const createTide = (config: TideConfig): Tide => {
       },
     },
 
-    // RETENTION, and the one place the ledger shrinks. Runs cascade to their
-    // tasks in the store: a run and its members are one fact about the world,
-    // and keeping half destroys the UNIQUE(runId, unit) row that IS the "this
-    // unit already ran" record.
     sweep: async (now, retention) => {
       let removed = 0;
       if (retention.facts !== undefined)

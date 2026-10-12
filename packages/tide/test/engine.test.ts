@@ -3,9 +3,6 @@ import { createMemoryStore, createTide } from '../src/index';
 import type { EffectRegistry, ReflexInput, Row, Tide, TideConfig, TransformFn } from '../src/index';
 import { testTransform, utc } from './support';
 
-// The execution semantics, exercised. Every test drives the clock by hand:
-// tide reads no wall clock, so there is nothing here to wait for.
-
 const vienna = 'Europe/Vienna';
 const T0 = utc('2026-03-01T00:00:00Z');
 
@@ -35,9 +32,6 @@ const harness = async (
     ]),
   );
   const tide = createTide({ store, transform: testTransform, effects: traced, ...extra });
-  // Armed at T0 — the host's boot time, in real deployments. Without one a
-  // clock reflex would establish its baseline on the first tick and mint
-  // nothing, which is the safe default but makes for a dull test.
   await tide.load(reflexes, { at: extra?.armedAt ?? T0 });
   return { tide, store, calls };
 };
@@ -91,9 +85,7 @@ describe('catch-up', () => {
     policy: { catchUp, overlap: 'allow' },
   });
 
-  // Four days of downtime, then one tick 30 minutes after the day's 03:00
-  // local run. Each answer below is right for a different automation, which
-  // is why the library refuses to guess.
+  // Four days of downtime, then one tick 30 minutes after the day's 03:00 local run.
   const downtime = utc('2026-03-05T02:30:00Z');
 
   it('`run` fires every missed occurrence', async () => {
@@ -103,11 +95,6 @@ describe('catch-up', () => {
     expect(calls).toHaveLength(5);
   });
 
-  // Every test here says `overlap: 'allow'`, and this is why. `overlap`
-  // defaults to 'skip', and occurrences missed together are repeats of one
-  // another: the oldest opens, and each later one finds it unsettled. The
-  // skips are run rows with a note and `run.skipped` events; the report's
-  // `skippedOccurrences` counts catch-up decisions and does not count them.
   it('`run` under the default `overlap: skip` fires the oldest and records the rest as overlap skips', async () => {
     const skips: string[] = [];
     const { tide, calls } = await harness([{ ...after('run'), policy: { catchUp: 'run' } }], { work: noop }, {
@@ -142,8 +129,7 @@ describe('catch-up', () => {
   it('`skip` drops what is late and keeps what is on time', async () => {
     const { tide, calls } = await harness([after('skip')], { work: noop });
     const report = await tide.advance({ now: downtime, limit: 50 });
-    // Only 2026-03-05 03:00 local (02:00Z) is inside the default one-hour
-    // lateness window; the four older runs are recorded as skipped.
+    // Only 2026-03-05 03:00 local (02:00Z) is inside the default one-hour lateness window.
     expect(report.materialized).toBe(1);
     expect(report.skippedOccurrences).toBe(4);
     expect(calls).toHaveLength(1);
@@ -262,7 +248,6 @@ describe('retry is a calling convention', () => {
     const first = await tide.advance({ now: T0 });
     expect(first.retrying).toBe(1);
 
-    // Too early — the backoff has not elapsed.
     expect((await tide.advance({ now: T0 + 500 })).executed).toBe(0);
 
     const second = await tide.advance({ now: T0 + 1_500 });
@@ -278,15 +263,10 @@ describe('retry is a calling convention', () => {
     const failed = await tide.ledger.tasks({ state: 'failed' });
     expect(failed).toHaveLength(1);
     expect(failed[0]?.error).toBe('transient');
-    // The count and the last error, on the row that failed. There is no
-    // attempt table: nothing ever read one, and per-attempt history is the
-    // host's log rather than a third table the engine has to sweep.
     expect(failed[0]?.attempt).toBe(3);
   });
 
   it('a RETURN is done, however unhappy the outcome', async () => {
-    // A card decline is a domain outcome, not an error: the handler returns
-    // it, the task is done, and the chain branches on the row it wrote.
     const { tide } = await harness([reflex], { work: { run: () => ({ status: 'declined' }) } });
     await tide.fire('retryable', { now: T0 });
     const report = await tide.advance({ now: T0 });
@@ -324,7 +304,6 @@ describe('overlap and order', () => {
     await tide.fire('long.run', { now: T0 });
     await tide.advance({ now: T0 });
 
-    // The first firing is still unsettled (its task is retrying).
     await tide.fire('long.run', { now: T0 + 1_000 });
     await tide.advance({ now: T0 + 1_000 });
 
@@ -350,9 +329,6 @@ describe('facts', () => {
     expect(calls[0]?.input).toEqual({ invoice: 'inv_1' });
   });
 
-  // What a template is handed is plain data. A fact the host ingested carries
-  // no `as` and no `cause`, and neither is a key holding `undefined`: a
-  // transform that takes plain JSON refuses a source where one is.
   it('a fact reaches the transform with no key holding undefined', async () => {
     const sources: Row[] = [];
     const watched: TransformFn = (config, source) => {
@@ -369,19 +345,12 @@ describe('facts', () => {
     expect(sources.some(holdsUndefined)).toBe(false);
   });
 
-  // A HOST WHOSE LEDGER IS NOT ITS AUDIT LOG. Minting one fact per committed
-  // row puts an awaited INSERT on the hot path of every write, most of them
-  // for entities nothing watches. Off by default, because `ledger.facts()`
-  // meaning "every write" is the more useful default and the one causeChain
-  // was written for.
   describe('storeUnwatchedWrites: false', () => {
     it('keeps a write something watches, and drops one nothing does', async () => {
       const { tide } = await harness([onWrite], { mail: noop }, { storeUnwatchedWrites: false });
 
       expect(await tide.ingest({ kind: 'write', entity: 'payments', op: 'insert', row: { invoice_id: 'inv_1' }, at: T0 })).toBeDefined();
       expect(await tide.ingest({ kind: 'write', entity: 'notes', op: 'insert', row: {}, at: T0 })).toBeUndefined();
-      // Watched entity, unwatched op — the matcher treats those as distinct
-      // stimuli, so this asks the same question the matcher would.
       expect(await tide.ingest({ kind: 'write', entity: 'payments', op: 'update', row: {}, at: T0 })).toBeUndefined();
 
       expect(await tide.ledger.facts()).toHaveLength(1);
@@ -394,10 +363,6 @@ describe('facts', () => {
       expect(await tide.ingest({ kind: 'signal', name: 'nobody-listens', at: T0 })).toBeDefined();
     });
 
-    // THE RACE THIS MUST NOT REINTRODUCE. `matchFacts` was fixed to let facts
-    // WAIT while nothing is loaded rather than marking a backlog delivered; a
-    // filter that consulted an empty reflex set would throw that backlog away
-    // instead, which is the same bug with a better excuse.
     it('drops nothing while no reflexes are loaded', async () => {
       const { tide } = await harness([], { mail: noop }, { storeUnwatchedWrites: false });
       expect(await tide.ingest({ kind: 'write', entity: 'notes', op: 'insert', row: {}, at: T0 })).toBeDefined();
@@ -501,8 +466,6 @@ describe('chains', () => {
     await tide.advance({ now: T0 });
     expect(calls.map((call) => call.name)).toEqual(['charge']);
 
-    // The nudge gives latency, the tick gives the guarantee: the chain
-    // advances one hop per tick.
     await tide.advance({ now: T0 + 1_000 });
     expect(calls.map((call) => call.name)).toEqual(['charge', 'mark']);
 
@@ -567,10 +530,8 @@ describe('fan-in', () => {
 
     await tide.fire('billing.run', { now: T0 });
     await tide.advance({ now: T0 });
-    // 'b' throws with the default retry policy, so the run is not settled yet.
     expect(calls.filter((call) => call.name === 'mail')).toHaveLength(0);
 
-    // Let the retries exhaust.
     for (let step = 1; step <= 5; step += 1) await tide.advance({ now: T0 + step * 600_000 });
 
     const mails = calls.filter((call) => call.name === 'mail');
@@ -600,18 +561,7 @@ describe('fan-in', () => {
   });
 });
 
-// THERE IS NO COALESCING TEST because there is no coalescing. It cost two
-// port methods, a table, an exactly-once promise and a `DELETE … RETURNING`
-// on every tick, and this test was its only driver — no application ever set
-// `policy.coalesce`. A digest that genuinely needs batching is a delayed run
-// on a `coalesce:<key>:<window>` cause, which uses only mechanisms that
-// already exist and adds no table.
-
 describe('a write fact carries its row', () => {
-  // There is no poll trigger: the host's DAL is the write choke point, and
-  // every write arrives as a fact WITH the row it committed. A reflex with
-  // no selection fans out over that carried row — re-selecting would ask
-  // the database a question the fact already answers.
   const reflex: ReflexInput = {
     id: 'orders.watch',
     intent: 'Watch a table the host writes.',
@@ -641,9 +591,7 @@ describe('a write fact carries its row', () => {
 
 describe('the chain ceiling', () => {
   it('parks a fact whose cause chain runs away', async () => {
-    // Guarded (a `when` is present), so load allows it — static analysis
-    // cannot tell a convergent guard from this one, which always says yes.
-    // That is precisely the case the runtime ceiling exists for.
+    // Guarded (a `when` is present), so load allows it; this guard always says yes.
     const loop: ReflexInput = {
       id: 'loop',
       intent: 'Re-emits itself forever — the divergent case.',
@@ -677,9 +625,6 @@ describe('the chain ceiling', () => {
 });
 
 describe('the breadth ceiling', () => {
-  // Depth caps how long a chain runs, not how wide: a reflex that writes two
-  // facts per fact it sees doubles each hop, and under the depth ceiling alone
-  // this one ran 8,191 effects before anything parked (maxChainDepth 12).
   const split: ReflexInput = { id: 'split', intent: 'Each ping writes two more.', on: { fact: { entity: 'ping' } }, when: { $not: false }, effect: { name: 'split' } };
   const splitting: EffectRegistry = {
     split: {
@@ -700,8 +645,6 @@ describe('the breadth ceiling', () => {
     const root = facts.find((fact) => fact.root === undefined);
     expect(root?.descendants).toBeGreaterThan(50);
     expect(facts.filter((fact) => fact.parked?.includes('maxChainFacts')).length).toBeGreaterThan(0);
-    // Every fact past the budget parked instead of running: the effects that
-    // ran are the ones admitted under it, not 2^12.
     expect(calls.length).toBeLessThanOrEqual(51);
   });
 
@@ -734,21 +677,12 @@ describe('arming', () => {
     await tide.advance({ now: T0 });
     expect(calls).toHaveLength(1);
 
-    // ARMING IS THE HOST'S COLUMN, not a method on the engine. There was an
-    // `arm()` pair; it mutated an in-memory map, so it was a second copy of
-    // a fact the host already owned, lost on restart and disagreeing with
-    // the host's own screen in between. Re-loading is the whole mechanism.
     await tide.load([{ ...nightly, enabled: true }], { at: T0 });
     await tide.advance({ now: utc('2026-03-03T05:00:00Z') });
     expect(calls.length).toBeGreaterThan(1);
   });
 
   it('re-arming after a pause does not replay the pause', async () => {
-    // THE FLOOD. A disarmed reflex used to freeze its watermark where the
-    // pause began, so eight days off meant eight occurrences — and eight real
-    // effects — the moment it came back. The clock keeps moving while a
-    // reflex is paused, which is what "paused" means to everybody who is not
-    // a computer.
     const { tide, calls } = await harness([nightly], { work: noop });
     for (let day = 2; day <= 9; day += 1) await tide.advance({ now: utc(`2026-03-0${day}T05:00:00Z`) });
     expect(calls).toHaveLength(0);

@@ -3,9 +3,6 @@ import { ReflexSchema, createMemoryStore, createTide, isTideError, versionOf } f
 import type { EffectRegistry, ReflexInput } from '../src/index';
 import { testTransform } from './support';
 
-// The load gate: every opinion tide holds about a set of reflexes, enforced
-// once, before anything can run. If it loads, it's coherent.
-
 const build = (reflexes: readonly ReflexInput[], effects: EffectRegistry = { work: { run: () => null } }) =>
   createTide({ store: createMemoryStore(), transform: testTransform, effects }).load(reflexes, { at: 0 });
 

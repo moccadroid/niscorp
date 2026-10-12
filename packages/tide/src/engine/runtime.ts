@@ -4,10 +4,6 @@ import type { EffectRegistry, Row, SelectFn, TideEvent, TideStore, TransformFn }
 export type LoadedReflex = {
   reflex: Reflex;
   version: string;
-  // Matching starts here. A reflex never retro-fires: the fact history from
-  // before it existed is reachable only by deliberate backfill, never by
-  // accident — a new "notify on signup" reflex must not greet every member
-  // since launch.
   armedAt: number;
 };
 
@@ -20,21 +16,12 @@ export type EngineDeps = {
   maxChainDepth: number;
   maxChainFacts: number;
   maxFanOut: number;
-  // How long a claim is good for. Expiry is the reclaim; there is no reaper.
   leaseMs: number;
   emit: (event: TideEvent) => void;
   reflexes: () => readonly LoadedReflex[];
   find: (id: string) => LoadedReflex | undefined;
-  // This engine's claim tokens (execute.ts). Unique within the engine only;
-  // the fence pairs the token with the task's attempt, which is what tells
-  // two engines' claims apart.
   nextToken: () => string;
 };
-
-// ── the environment templates evaluate against ──────────────────
-//
-// Small and closed on purpose: what a template can see is enumerable,
-// so what a reflex can depend on is auditable.
 
 export type EnvParts = {
   params?: Row;
@@ -58,9 +45,6 @@ export const buildEnv = (parts: EnvParts): Row => {
 
 export const withNow = (env: Row, now: number): Row => ({ ...env, now });
 
-// A template that throws is the author's problem, not the engine's: it is
-// reported where it happened (a delivery note, a task error, a preview
-// line) and never crashes a tick.
 export const evaluateTemplate = (transform: TransformFn, config: unknown, env: Row): unknown =>
   config === undefined ? undefined : transform(config, env);
 
@@ -70,12 +54,6 @@ export const isTruthy = (value: unknown): boolean => {
   if (Array.isArray(value)) return value.length > 0;
   return true;
 };
-
-// ── version — a content hash of the definition ──────────────────
-//
-// `enabled` is a switch on the row, not part of the definition: flipping
-// it is not an edit. `params` ARE part of it — changing graceDays from 3
-// to 7 is a behavioural change the ledger must be able to explain.
 
 const canonical = (value: unknown): string => {
   if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
@@ -89,8 +67,6 @@ const canonical = (value: unknown): string => {
 export const versionOf = (reflex: Reflex): string => {
   const { enabled: _enabled, ...definition } = reflex;
   const text = canonical(definition);
-  // FNV-1a, two lanes. An identity token for the ledger, not a security
-  // hash — but wide enough that an edit is never mistaken for its ancestor.
   let hashA = 0x811c9dc5;
   let hashB = 0x01000193;
   for (let index = 0; index < text.length; index += 1) {

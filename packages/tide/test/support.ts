@@ -5,10 +5,6 @@ import { initialisedDirectory } from './initialised-database';
 import { TIDE_TABLES, createTideStore } from '../src/store/postgres';
 import type { TidePool } from '../src/store/postgres';
 
-// A five-op stand-in for the `transform` seam. Tide doesn't know Prism —
-// that is the whole point of the seam — so the tests don't import it either.
-// Under moss this is `evaluate` from @niscorp/prism; here it is enough of an
-// evaluator to prove templates are handed over and handed back.
 export const testTransform: TransformFn = (config: unknown, source: Row): unknown => {
   const walk = (node: unknown): unknown => {
     if (Array.isArray(node)) return node.map(walk);
@@ -42,8 +38,6 @@ export const testTransform: TransformFn = (config: unknown, source: Row): unknow
 
 export const rowsOf = (rows: readonly Row[]) => () => rows;
 
-// A clock a test drives by hand. Tide reads no wall clock, so "advance
-// time" is arithmetic, not a sleep.
 export const clockFrom = (start: number) => {
   let current = start;
   return {
@@ -57,26 +51,12 @@ export const clockFrom = (start: number) => {
 
 export const utc = (iso: string): number => Date.parse(iso);
 
-// A PGlite as the pool the Postgres store runs on: a statement, and a
-// transaction. Both are called ON the database, never taken off it — they are
-// methods that reach for `this`.
+// Both are called on the database, never taken off it: they are methods that reach for `this`.
 export const pglitePool = (db: PGlite): TidePool => ({
   query: (text, values) => db.query(text, values),
   transaction: (fn) => db.transaction((tx) => fn({ query: (text, values) => tx.query(text, values) })),
 });
 
-// ONE DATABASE FOR A FILE, AND ITS TABLES EMPTIED FOR EACH TEST.
-//
-// Starting a PGlite is what these tests cost. What a test needs is tide's
-// tables with no row in them, and that is a TRUNCATE on a database that is
-// already up.
-//
-// Call it once at the top of a test file. The database starts in a
-// `beforeAll`, from the directory the run initialised before any test
-// (./initialised-database.ts), so the hook does not pay for `initdb`; the
-// store's own migration makes the tables there, once. Each test asks
-// `emptied()` first, so no test reads what another wrote and the order they
-// run in is not part of what they mean.
 export const oneDatabase = (): { emptied: () => Promise<{ db: PGlite; pool: TidePool }> } => {
   const held: { db?: PGlite } = {};
   beforeAll(async () => {

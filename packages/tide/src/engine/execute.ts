@@ -6,25 +6,6 @@ import { admitFact, announceFact } from './facts';
 import type { Admission } from './facts';
 import type { EngineDeps } from './runtime';
 
-// ═══════════════════════════════════════════════════════════════
-// Execute — the ONE door out of tide
-//
-// Everything that leaves — a write, an email, an agent — passes
-// through this function. That single choke point is what makes
-// preview a verb (stub one function and nothing can leak), the
-// timeout uniform, the task key uniformly available, and the
-// ledger complete. A second path outward would quietly break all
-// four.
-//
-// Retry classification is a CALLING CONVENTION, not metadata:
-// a handler that RETURNS is done (a card decline is a domain
-// outcome, recorded as data and branched on by other reflexes);
-// a handler that THROWS is transient and retried on bounded
-// backoff to a terminal, human-visible state. The decision sits
-// where the knowledge is — only the payment handler can tell a
-// decline from a gateway 500 — and nobody can forget to declare it.
-// ═══════════════════════════════════════════════════════════════
-
 export type ExecuteReport = { executed: number; succeeded: number; failed: number; retrying: number; reclaimed: number };
 
 const TIMEOUT = Symbol('tide.timeout');
@@ -44,23 +25,6 @@ const raceTimeout = async (work: Promise<unknown>, timeoutMs: number): Promise<u
 const backoffFor = (attempt: number, base: number, kind: 'fixed' | 'exponential'): number =>
   kind === 'fixed' ? base : base * Math.pow(2, Math.max(0, attempt - 1));
 
-// ONE TOKEN PER CLAIM, not per task. The fence's job is to tell THIS claim
-// apart from an earlier one, and every task appears in at most one claim, so
-// a batch-wide token separates exactly the pairs that need separating.
-//
-// A counter rather than a clock or a random: tide reads no clock, and a
-// headless check that replays the same tick twice has to get the same
-// answers. The counter is the engine's (`deps.nextToken`), so two engines —
-// two processes — can mint the same token; the fence pairs it with the task's
-// attempt, which the store bumps on every claim (record, below).
-
-// CLAIMING IS ONE STEP, and it takes back lapsed leases in the same breath.
-//
-// A task still `claimed` past its lease is claimable again — that is the
-// whole recovery story for a process that died between the effect and the
-// record, and it needs no reaper, no heartbeat and no liveness table. The
-// fencing token is what makes it safe: the dead process's attempt, should it
-// somehow finish, finds its token superseded.
 const claimTasks = async (deps: EngineDeps, now: number, limit: number, token: string): Promise<readonly Task[]> => {
   const serialReflexIds = deps
     .reflexes()
@@ -72,22 +36,13 @@ const claimTasks = async (deps: EngineDeps, now: number, limit: number, token: s
     where: {
       state: { in: ['pending', 'retrying', 'claimed'] },
       notBefore: { lte: now },
-      // Either it was never claimed, or the claim has lapsed. Expressed as
-      // one predicate because a second query would be a second decision.
       claimedUntil: { lte: now },
     },
-    // `unit` is the tiebreaker, and it is not cosmetic. Every task of one
-    // fan-out shares a `notBefore` and a `createdAt`, so with two keys the
-    // order was whatever the storage engine felt like — insertion order in a
-    // Map, heap order in Postgres. Two stores answering differently is the
-    // thing the contract exists to prevent, and a headless check asserting on
-    // the order effects ran in deserves the same answer everywhere.
+    // `unit` breaks ties: one fan-out's tasks share `notBefore` and `createdAt`,
+    // and two stores must order them the same way.
     order: [{ by: 'notBefore' }, { by: 'createdAt' }, { by: 'unit' }],
     limit,
     set: { state: 'claimed', token, claimedUntil: now + deps.leaseMs, attempt: { inc: 1 } },
-    // `order: 'serial'` — at most one live claim per reflex, counting what
-    // another claim already holds. Inside the claim, because a caller that
-    // looks first and claims second loses the race to its own second tick.
     onePer:
       serialReflexIds.length === 0
         ? undefined
@@ -98,9 +53,8 @@ const claimTasks = async (deps: EngineDeps, now: number, limit: number, token: s
 export const executeTasks = async (deps: EngineDeps, now: number, limit: number): Promise<ExecuteReport> => {
   const report: ExecuteReport = { executed: 0, succeeded: 0, failed: 0, retrying: 0, reclaimed: 0 };
 
-  // Counted before the claim takes them back, because a claim returns the
-  // row it wrote and the interesting fact is what the row USED to be. A
-  // metric, so a race here costs a number rather than a guarantee.
+  // Read before the claim, which returns each row as it wrote it. Only a
+  // metric, so a race between the two costs a count, not a guarantee.
   const lapsed = new Set(
     (
       await deps.store.query({
@@ -138,21 +92,8 @@ export const executeTasks = async (deps: EngineDeps, now: number, limit: number)
       depth: task.depth,
       now,
       actor: deps.actorFor(reflex.as),
-      // VALIDATED, and narrowed to two kinds.
-      //
-      // `emit` used to accept anything: a handler could emit `kind: 'manual'`
-      // and fire a DISARMED reflex, because manual facts are checked before
-      // enablement on purpose — arming gates triggers, not people. A handler
-      // is not a person. `run` is tide's own bookkeeping and is minted by the
-      // settler, so it is refused for the same reason.
-      //
-      // A malformed emit THROWS, inside the handler, so the attempt fails
-      // visibly. The alternative is a fact that stores, matches nothing and
-      // vanishes — a chain that silently stops one hop in.
-      //
-      // Depth is stamped from the task below — the handler never sets it,
-      // because a handler that could choose its own depth could escape the
-      // chain ceiling.
+      // `write` and `signal` only: a `manual` fact fires a disabled reflex, and
+      // `run` facts are minted by the settler alone.
       emit: (fact: Omit<FactInput, 'cause'>) => {
         if (fact.kind !== 'write' && fact.kind !== 'signal')
           throw new TideError('invalid_fact', `${reflex.id}: an effect may emit \`write\` or \`signal\` facts, not \`${fact.kind}\``);
@@ -185,13 +126,8 @@ export const executeTasks = async (deps: EngineDeps, now: number, limit: number)
       error = thrown instanceof Error ? thrown.message : String(thrown);
     }
 
-    // From the TASK, not read back from the run. A run swept out from under a
-    // long-running chain used to answer `undefined`, resetting the ceiling to
-    // 0 — defeating the backstop in exactly the swept, long-running case it
-    // exists for.
-    // Depth AND identity are stamped here, by the engine, from the task and
-    // the reflex — never by the handler. A handler that could choose either
-    // could escape the chain ceiling or the tenant boundary.
+    // Depth and identity are stamped by the engine: a handler that chose
+    // either could escape the chain ceiling or the tenant boundary.
     const emits = buffered.map((fact) => ({ ...fact, depth: task.depth + 1, as: reflex.as }));
 
     const retry = reflex.policy.retry;
@@ -211,18 +147,13 @@ export const executeTasks = async (deps: EngineDeps, now: number, limit: number)
       notBefore: next.state === 'retrying' ? next.notBefore : task.notBefore,
       output,
       error,
-      // A throwing attempt discards its buffer: otherwise every retry of an
-      // emit-then-throw handler would double-mint facts and fire the chain twice.
+      // A failed attempt's emits are dropped: its retry would mint them again.
       emits: outcome === 'ok' ? emits : [],
       at: now,
     });
 
-    // Rejected means the fence held — a timed-out attempt finishing late
-    // found its token superseded. Its external side effect is exactly what
-    // the task key handed to the provider defends against.
     if (recorded === undefined) continue;
-    // Announced only now, after the transaction committed: an event is a
-    // report of a row that exists, and a rollback would have taken these back.
+    // Announced after the commit: a rollback would have taken these rows back.
     for (const admission of recorded) announceFact(deps.emit, admission);
 
     report.executed += 1;
@@ -252,22 +183,13 @@ type Settlement = {
   at: number;
 };
 
-// The task's landing, the facts it emitted and its run's counters, in ONE
-// transaction. The store used to own this and therefore owned retry
-// semantics with it; it is engine policy, and it now reads as engine policy.
-//
-// Answers what became of each emitted fact, for the caller to announce once
-// the transaction has committed — or `undefined` when the fence refused the
-// attempt and nothing was written at all.
 const record = async (deps: EngineDeps, task: Task, token: string, settlement: Settlement): Promise<readonly Admission[] | undefined> =>
   deps.store.transact(async (tx: TideStore) => {
     const settles = settlement.state === 'done' || settlement.state === 'failed';
 
-    // THE FENCE. `expect` is the token AND the attempt this claim made, so an
-    // attempt that timed out and finished late finds itself superseded and is
-    // discarded rather than overwriting the live one. The attempt is what
-    // makes it hold across engines: every claim bumps it in the store, so no
-    // two claims of one task share it, while two engines' tokens can collide.
+    // The fence: `expect` is this claim's token and attempt, so an attempt
+    // that finishes late is discarded. Two engines' tokens can collide; the
+    // attempt, which the store bumps on every claim, cannot.
     const accepted = await tx.cas(
       'task',
       task.id,
@@ -284,19 +206,13 @@ const record = async (deps: EngineDeps, task: Task, token: string, settlement: S
     );
     if (!accepted) return undefined;
 
-    // Emits ride the SUCCESSFUL attempt's transaction. A throwing handler
-    // discards its buffer, so a retry cannot double-mint a chain.
     const admissions: Admission[] = [];
     for (const emit of settlement.emits) admissions.push(await admitFact(tx, emit, deps.maxChainFacts));
 
     if (settles) {
-      // COUNTED FIRST, READ SECOND. Reading the run and then writing the count
-      // let two landings each read it before the other's count was in: both
-      // found it short of its total, neither settled it, and the run stayed
-      // `fanned` with every task done — no run fact, and an `overlap: 'skip'`
-      // reflex that never started again. The increment is the store's own
-      // arithmetic, so the read after it sees every count that has landed; in
-      // SQL it also holds the row until this transaction ends.
+      // Counted first, read second: the increment is the store's own
+      // arithmetic, so the read sees every count that has landed. Read first,
+      // two landings each find the run short of its total and neither settles it.
       await tx.cas(
         'run',
         task.runId,
@@ -304,31 +220,15 @@ const record = async (deps: EngineDeps, task: Task, token: string, settlement: S
         { done: { inc: settlement.state === 'done' ? 1 : 0 }, failed: { inc: settlement.state === 'failed' ? 1 : 0 } },
       );
       const [run] = await tx.query({ table: 'run', where: { id: task.runId }, limit: 1 });
-      // Settled from `fanned` only, so two landings that both find the run
-      // complete settle it once.
       if (run !== undefined && run.done + run.failed >= run.total && run.settledAt === undefined)
         await tx.cas('run', run.id, { state: 'fanned' }, { state: 'settled', settledAt: settlement.at });
     }
     return admissions;
   });
 
-// THE HUMAN RECOVERY VERB, and it must rewind the run.
-//
-// A failed task settled its run, and a claim only reaches tasks that are
-// pending, retrying or lapsed. Reopening the task alone left it claimable in
-// principle and unclaimed in practice — so `retry()`, the only documented
-// exit from `failed`, did nothing at all.
-//
-// The old objection was real: a digest already went out saying twelve failed,
-// and re-settling must not send it again. That is what `drained` answers. The
-// run rewinds; the announcement does not repeat.
-//
-// THE COUNT COMES DOWN WHATEVER STATE THE RUN IS IN. It used to come down only
-// as part of the rewind, which expects a `settled` run — so the second of two
-// retries (the first had already rewound it), or a retry pressed while the
-// run was still going, reopened its task and left `failed` one too high. A
-// run counting a failure it no longer had then reached its total one task
-// early: it settled, and announced itself, with work still out.
+// Two writes to the run. The count comes down whatever state the run is in: a
+// second retry finds it already rewound. The rewind applies to a `settled`
+// run only and leaves `drained` set, so the run fact is not emitted again.
 export const reopenTask = async (deps: EngineDeps, taskId: string, now: number): Promise<boolean> =>
   deps.store.transact(async (tx) => {
     const [task] = await tx.query({ table: 'task', where: { id: taskId }, limit: 1 });
@@ -347,14 +247,6 @@ export const reopenTask = async (deps: EngineDeps, taskId: string, now: number):
     return true;
   });
 
-// A run settles when its last task does — and tide, being the bookkeeper of
-// its own fan-out, is the only thing that knows. Emitting that knowledge as
-// an ordinary fact is the entire fan-in mechanism: no barrier primitive, no
-// "am I last?" logic in a handler.
-//
-// Exactly-once through `drained`, a FLAG ON THE ROW rather than an in-memory
-// queue. A queue cannot survive a restart and cannot be rewound, which is
-// what made the recovery verb and fan-in mutually exclusive.
 export const settleRuns = async (deps: EngineDeps, now: number): Promise<number> => {
   const settled = await deps.store.claim({
     table: 'run',
@@ -375,8 +267,6 @@ export const settleRuns = async (deps: EngineDeps, now: number): Promise<number>
       at: now,
       depth: run.depth + 1,
       cause: `run:${run.id}`,
-      // A settlement is news about THIS reflex's work — counts of rows it
-      // selected. Another tenant's digest has no business waking on it.
       as: run.as,
     }, deps.maxChainFacts);
     announceFact(deps.emit, admission);

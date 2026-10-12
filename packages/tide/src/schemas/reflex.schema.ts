@@ -2,21 +2,6 @@ import { z } from 'zod';
 import { ClockTriggerSchema, ManualTriggerSchema, RunTriggerSchema, SignalTriggerSchema, TriggerSchema, WriteTriggerSchema } from './trigger.schema';
 import { DEFAULT_POLICY, PolicySchema } from './policy.schema';
 
-// ═══════════════════════════════════════════════════════════════
-// Reflex — the artifact.
-//
-// A trigger, an optional selection, exactly one effect, a policy.
-// A straight arc from stimulus to response with no deliberation
-// between: there is no step language here, and a multi-step flow
-// is a CHAIN of reflexes joined by committed rows.
-//
-// `select.query` and every template are `unknown` ON PURPOSE. The
-// moment tide validates a query it owns a query language; the
-// moment it evaluates an expression it owns an evaluator. Both
-// exist in the stack already, behind seams. Tide stores, diffs and
-// hashes these blobs, and hands them over verbatim.
-// ═══════════════════════════════════════════════════════════════
-
 export const SelectionSchema = z
   .object({
     query: z.unknown().describe('Handed to the `select` seam verbatim. Under moss: a vex { fingerprint, context } replay.'),
@@ -57,25 +42,6 @@ const reflexRules = (reflex: { on: object; when?: unknown; select?: { mode: stri
 
 export const ReflexSchema = z.object(reflexFields).strict().superRefine(reflexRules);
 
-// ═══════════════════════════════════════════════════════════════
-// Draft — a reflex as it is WRITTEN, before it is saved.
-//
-// What a model writes: a name, an intent, a trigger and an effect — and
-// nothing that is the host's (who it runs as, its policy, whether it is
-// enabled). Which triggers, and whether the extra fields a data-driven
-// automation needs, are the CALLER'S choice (`draftSchemaOf`): a draft may
-// only use what its host can run, the way it may only name the effects its
-// host offers. That schema is what the model is shown, and what it is held
-// to; what is stored is still the full ReflexSchema, completed when the
-// draft is saved (`anchorDraft`).
-//
-// One trigger exists only here: the TIMER — "this long from now". A timer
-// is sugar, never stored. `now` is only known when somebody saves the
-// draft, so the host anchors it then, and what is stored and run is an
-// ordinary one-shot clock — which survives a restart, because it names an
-// instant rather than a distance from one.
-// ═══════════════════════════════════════════════════════════════
-
 export const TimerSchema = z
   .object({
     hours: z.number().int().min(0).optional(),
@@ -89,7 +55,6 @@ export const TimerTriggerSchema = z
   .object({ timer: TimerSchema.describe('A length of time from now, as hours, minutes and seconds (each optional, together more than zero). Fires once, that long after the reflex is saved — not after it is written. A clock is for a time of day or a date.') })
   .strict();
 
-// The trigger kinds a draft can be offered, by name.
 export const DRAFT_TRIGGERS = {
   clock: ClockTriggerSchema,
   timer: TimerTriggerSchema,
@@ -101,12 +66,8 @@ export const DRAFT_TRIGGERS = {
 export type DraftTrigger = keyof typeof DRAFT_TRIGGERS;
 const ALL_DRAFT_TRIGGERS: readonly DraftTrigger[] = ['clock', 'timer', 'write', 'signal', 'run', 'manual'];
 
-// The fields beyond name, intent, trigger and effect a draft can be offered —
-// for automations that select rows or test a fact before they act.
 export type DraftField = 'params' | 'select' | 'when';
 
-// What the caller offers a draft: its trigger kinds (every kind, if it names
-// none) and its extra fields (none, if it names none).
 export type DraftChoice = { triggers?: readonly DraftTrigger[]; fields?: readonly DraftField[] };
 
 const draftCore = {
@@ -115,16 +76,11 @@ const draftCore = {
   effect: EffectRefSchema,
 };
 
-// The widest draft: every trigger, every extra field — the TYPE every
-// narrower draft is, and what `anchorDraft` completes.
 const WidestDraftSchema = z
   .object({ ...draftCore, on: z.union([TriggerSchema, TimerTriggerSchema]), params: reflexFields.params, select: reflexFields.select, when: reflexFields.when })
   .strict();
 export type ReflexDraft = z.infer<typeof WidestDraftSchema>;
 
-// The draft schema for what the caller offers — tide's own pieces, each with
-// the description it already has: the widest draft, cut to the chosen fields,
-// its trigger narrowed to the chosen kinds. Nothing is restated here.
 export const draftSchemaOf = (choice: DraftChoice = {}): z.ZodType<ReflexDraft> => {
   const [first, ...rest] = (choice.triggers ?? ALL_DRAFT_TRIGGERS).map((kind): z.ZodType<ReflexDraft['on']> => DRAFT_TRIGGERS[kind]);
   if (first === undefined) throw new Error('tide: a draft needs at least one trigger kind');
@@ -142,7 +98,6 @@ export const draftSchemaOf = (choice: DraftChoice = {}): z.ZodType<ReflexDraft> 
   return WidestDraftSchema.pick(keep).extend({ on }).strict().superRefine(reflexRules);
 };
 
-// The default draft: every trigger kind, no extra fields.
 export const ReflexDraftSchema = draftSchemaOf();
 
 export type Selection = z.infer<typeof SelectionSchema>;
