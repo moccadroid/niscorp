@@ -229,6 +229,12 @@ Compilation is adapter-internal — there is no shared compiler in `engine/`; ea
 adapter owns its full SQL dialect (the Postgres adapter has its own
 filter/compute/aggregate SQL generation under `adapters/postgres/`).
 
+An adapter may also implement `limitReads(ms)`. The engine calls it at
+`introspect()` with `config.statementTimeoutMs` (0 leaves reads unbounded), and
+it answers where the limit is held: `'connection'` (the connection's own
+setting already covers it), `'statement'` (set per read) or `'unenforced'`, on
+which the engine warns. An adapter without it runs reads unbounded.
+
 A `CompiledQuery` is `{ sql, paramSlots, contextContract }`. The ordered
 `paramSlots` array drives positional binding (`$1`, `$2`, …); each slot knows
 its `kind` (context/scope/semantic), `type`, and (for semantic) `dimensions`.
@@ -267,7 +273,8 @@ Identity is the **fingerprint** (see Cache v2 below). The supporting hashes:
   backend implements the same `CacheBackend` contract; `init`/`entries` are
   optional capabilities used for warm-up and the discovery overview.
 - **Validation** (`validateEntry`) guards every write and every promotion into
-  memory, so a corrupt or schema-drifted row can never poison the cache.
+  memory, so a corrupt or schema-drifted row can never poison the cache. It
+  returns `null` for a valid entry and the reason, as a string, for any other.
 - **GC** (`sweepCache`) evicts entries idle past `maxIdleMs`
   (`lastUsedAt ?? createdAt`), skipping protected ones. Hygiene, not necessity.
 
