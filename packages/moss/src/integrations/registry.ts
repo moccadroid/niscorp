@@ -148,9 +148,9 @@ export type RegisteredIntegration<Extension> = { id: string; status: string; url
 
 const storedExtension = <Extension>(id: string, stored: unknown, schema: z.ZodType<Extension> | undefined): Extension | undefined => {
   if (schema === undefined || stored === null || stored === undefined) return undefined;
-  const read = schema.safeParse(stored);
-  if (read.success) return read.data;
-  const first = read.error.issues[0];
+  const parsed = schema.safeParse(stored);
+  if (parsed.success) return parsed.data;
+  const first = parsed.error.issues[0];
   console.error(`[moss] the stored extension of integration "${id}" is not read: ${first === undefined ? 'no reason given' : `${first.path.join('.') || '(root)'}: ${first.message}`}`);
   return undefined;
 };
@@ -165,9 +165,9 @@ const storedAction = (id: string, definition: unknown): ActionDefinition | undef
     console.error(`[moss] integration action "${id}" is not served: ${depthRefusal()}`);
     return undefined;
   }
-  const read = ActionDefinitionSchema.safeParse(definition);
-  if (read.success) return read.data;
-  const first = read.error.issues[0];
+  const parsed = ActionDefinitionSchema.safeParse(definition);
+  if (parsed.success) return parsed.data;
+  const first = parsed.error.issues[0];
   console.error(
     `[moss] integration action "${id}" is not served: it is not an action nova reads ` +
       `(${first === undefined ? 'no reason given' : `${first.path.join('.') || '(root)'}: ${first.message}`})`,

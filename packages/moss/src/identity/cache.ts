@@ -82,7 +82,7 @@ const createHeldRecords = (max: number) => {
 
   return {
     of: (principal: string): Held | undefined => held.get(principal),
-    seen: (principal: string, entry: Held, at: number): void => {
+    touch: (principal: string, entry: Held, at: number): void => {
       held.delete(principal);
       entry.lastSeen = at;
       held.set(principal, entry);
@@ -134,7 +134,7 @@ export const createIdentityCache = (ctx: IdentityCacheContext): IdentityCache =>
     if (hit !== undefined) {
       const stale = revalidateMs > 0 && at - hit.since >= revalidateMs;
       if (!stale) {
-        held.seen(principal, hit, at);
+        held.touch(principal, hit, at);
         return hit.record;
       }
       expired += 1;

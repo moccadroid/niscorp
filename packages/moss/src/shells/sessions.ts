@@ -128,8 +128,8 @@ export const sessionOn = (host: HostState, cell: Cell, ephemeral: boolean, reset
     const claimed = event['origin'];
     if (claimed !== undefined && (typeof claimed !== 'string' || !state.stack.some((item) => item.id === claimed))) return;
     const active = state.active;
-    const read = NovaEventSchema.safeParse(claimed !== undefined || active === undefined ? event : { ...event, origin: active.id });
-    if (read.success) shell.dispatch(read.data);
+    const parsed = NovaEventSchema.safeParse(claimed !== undefined || active === undefined ? event : { ...event, origin: active.id });
+    if (parsed.success) shell.dispatch(parsed.data);
   },
   publish: (channel, payload) => cell.live.shell.publish(channel, payload),
   back: () => cell.live.shell.back(),

@@ -1,6 +1,6 @@
 export type BackTrapDisposer = () => void;
 
-const SENTINEL = { nisc: 'terminal-back' } as const;
+const BACK_ENTRY_STATE = { nisc: 'terminal-back' } as const;
 
 export const trapBack = (handler: () => void): BackTrapDisposer => {
   if (typeof window === 'undefined') return () => undefined;
@@ -10,7 +10,7 @@ export const trapBack = (handler: () => void): BackTrapDisposer => {
 
   const spare = (): void => {
     try {
-      history.pushState(SENTINEL, '');
+      history.pushState(BACK_ENTRY_STATE, '');
     } catch {
       // A sandboxed document can refuse: back then keeps the browser's default.
     }

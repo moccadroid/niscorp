@@ -25,7 +25,7 @@ describe('who a principal is', () => {
     expect(first.roles).toEqual(['member']);
     expect(first.scope).toEqual({ studioId: 'st_p_ava' });
     expect(first.installed).toEqual(['mail']);
-    expect(second.key).toBe(first.key);
+    expect(second.memoKey).toBe(first.memoKey);
     identity.stop();
   });
 
@@ -94,9 +94,9 @@ describe('who a principal is', () => {
     };
     const identity = createIdentity({ seam: { resolve: async (principal) => records[principal] ?? { roles: ['public'], scope: {} } }, readAs: noRows, idleMs: 0 });
     const [a, b, c, d] = await Promise.all(['a', 'b', 'c', 'd'].map((principal) => identity.resolve(principal)));
-    expect(a?.key).toBe(b?.key);
-    expect(c?.key).not.toBe(a?.key);
-    expect(d?.key).not.toBe(c?.key);
+    expect(a?.memoKey).toBe(b?.memoKey);
+    expect(c?.memoKey).not.toBe(a?.memoKey);
+    expect(d?.memoKey).not.toBe(c?.memoKey);
     identity.stop();
   });
 });

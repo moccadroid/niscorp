@@ -186,8 +186,8 @@ const ComponentMetaSchema = z.object({
 });
 
 const componentMetaOf = (meta: unknown): ComponentMeta => {
-  const read = ComponentMetaSchema.safeParse(meta ?? {});
-  return read.success ? read.data : {};
+  const parsed = ComponentMetaSchema.safeParse(meta ?? {});
+  return parsed.success ? parsed.data : {};
 };
 
 export type ContractHost = {

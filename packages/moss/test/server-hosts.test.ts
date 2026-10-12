@@ -46,7 +46,7 @@ const depsWith = (running: ShellHostsDeps['running']): ShellHostsDeps => ({
   app,
   runtime: {},
   identity: {
-    resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, key: 'public' }),
+    resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, memoKey: 'public' }),
     composeScope: () => ({}),
   },
   running,

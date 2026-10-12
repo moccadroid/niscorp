@@ -51,7 +51,7 @@ export const authenticateUpgrade = async (
   url: string,
   upgrade: Connection['upgrade'],
   config: Pick<SocketConfig, 'session' | 'origins' | 'sessionLastsMs'>,
-  notOwn: WarnedOnce,
+  foreignPageWarning: WarnedOnce,
 ): Promise<Admission | 'invalid_token'> => {
   const parameters = parametersOf(url);
   const key = parameters.key ?? DEFAULT_TOKEN_KEY;
@@ -65,8 +65,8 @@ export const authenticateUpgrade = async (
   // reads) by the answer to its first upgrade; the page offers the sealed
   // sign-in back here, and only that seal opens it.
   const sealing = page !== undefined && parameters.sealed === '1';
-  if (page === undefined && parameters.sealed === '1' && typeof upgrade?.origin === 'string' && !notOwn.warned) {
-    notOwn.warned = true;
+  if (page === undefined && parameters.sealed === '1' && typeof upgrade?.origin === 'string' && !foreignPageWarning.warned) {
+    foreignPageWarning.warned = true;
     console.warn(
       `[moss] a terminal on ${upgrade.origin} holds its own session token: this server was addressed as ${upgrade.host ?? 'nothing'}, so that is not the app’s own page. ` +
         'If the app is served there, behind a proxy that rewrites Host, list it in runtime.origins.',

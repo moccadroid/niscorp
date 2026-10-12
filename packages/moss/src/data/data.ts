@@ -36,7 +36,7 @@ export type DataConfig = {
   telemetry?: Telemetry;
 };
 
-type Caller = Pick<ResolvedIdentity, 'key' | 'roles'>;
+type Caller = Pick<ResolvedIdentity, 'memoKey' | 'roles'>;
 
 export type DataRoutesConfig<E extends Env> = {
   resources?: Readonly<Record<string, readonly string[] | { entities: readonly string[] }>>;
@@ -62,7 +62,7 @@ export type Data = {
   dropOnChange: (changed: RunningManifest['onChange']) => void;
 };
 
-const machinery = (roles: readonly string[]): Caller => ({ key: memoKey(roles, undefined), roles });
+const callerOfRoles = (roles: readonly string[]): Caller => ({ memoKey: memoKey(roles, undefined), roles });
 
 export type PreparedEngine = Pick<Data, 'grants' | 'grammars'> & { engine: QueryEngine; adapter: DatabaseAdapter; upgradeStore: (store: DocumentStore) => Promise<void> };
 
@@ -162,8 +162,8 @@ export const createDataWith = (prepared: PreparedEngine, config: Pick<DataConfig
     executeAs: createExecuteAs({
       engine,
       db: config.db,
-      policyFor: (roles) => policies.of(machinery(roles)),
-      policyAtReach: (roles, reach) => policies.atReach(machinery(roles), reach),
+      policyFor: (roles) => policies.of(callerOfRoles(roles)),
+      policyAtReach: (roles, reach) => policies.atReach(callerOfRoles(roles), reach),
       ...(onExecute !== undefined ? { onExecute } : {}),
     }),
     answerIntent: async (writers, asked, who, scope) => answering()(writers, asked, { policy: policies.of(who), scope }),

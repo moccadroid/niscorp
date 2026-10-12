@@ -172,15 +172,15 @@ export const buildShell = async (host: HostState, asked: BuildRequest): Promise<
   const live: Live = {
     shell,
     sessionShell,
-    held: granted,
+    actionIds: granted,
     entries: made.entries,
     layouts: layoutsOf(made),
     connections: new Set(),
-    sent: new Map(),
+    sentByCanvas: new Map(),
     deltaReady: new Set(),
     flushing: false,
     ended: false,
-    since: Date.now(),
+    builtAt: Date.now(),
     idleSince: Date.now(),
     seeded: Promise.resolve(),
   };

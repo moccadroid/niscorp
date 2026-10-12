@@ -4,9 +4,9 @@ import { resolvePrincipal, resolveScoping } from '@niscorp/charter';
 import type { ResolvedIdentity } from '../identity';
 import type { NiscApp } from '../manifest';
 
-type Governed = Pick<NiscApp, 'charter' | 'behaviors'>;
+type PolicySource = Pick<NiscApp, 'charter' | 'behaviors'>;
 
-export const resolvePolicyForRoles = (app: Governed, grants: readonly string[], roles: readonly string[]): ScopePolicy => {
+export const resolvePolicyForRoles = (app: PolicySource, grants: readonly string[], roles: readonly string[]): ScopePolicy => {
   const behaviors = app.behaviors ?? {};
   // One policy per role, then merged: each role's rows are scoped by that
   // role's own reach, and the union is what somebody holding several may do.
@@ -18,15 +18,15 @@ export const resolvePolicyForRoles = (app: Governed, grants: readonly string[], 
 };
 
 export const resolvePolicyAtReachForRoles = (
-  app: Governed,
+  app: PolicySource,
   grants: readonly string[],
   roles: readonly string[],
   reach: string,
 ): ScopePolicy => createScopePolicy(resolvePrincipal(app.charter, grants, roles, 'data'), app.behaviors ?? {}, reach);
 
 export type Policies = {
-  of: (who: Pick<ResolvedIdentity, 'key' | 'roles'>) => ScopePolicy;
-  atReach: (who: Pick<ResolvedIdentity, 'key' | 'roles'>, reach: string) => ScopePolicy;
+  of: (who: Pick<ResolvedIdentity, 'memoKey' | 'roles'>) => ScopePolicy;
+  atReach: (who: Pick<ResolvedIdentity, 'memoKey' | 'roles'>, reach: string) => ScopePolicy;
   drop: () => void;
 };
 
@@ -36,21 +36,21 @@ export const createPolicies = (config: {
   grants: readonly string[];
 }): Policies => {
   const { grants } = config;
-  const governed: Governed = { charter: config.charter, behaviors: config.behaviors };
+  const governed: PolicySource = { charter: config.charter, behaviors: config.behaviors };
 
   const policies = new Map<string, ScopePolicy>();
   const reachPolicies = new Map<string, ScopePolicy>();
 
   return {
     of: (who) => {
-      const hit = policies.get(who.key);
+      const hit = policies.get(who.memoKey);
       if (hit !== undefined) return hit;
       const compiled = resolvePolicyForRoles(governed, grants, who.roles);
-      policies.set(who.key, compiled);
+      policies.set(who.memoKey, compiled);
       return compiled;
     },
     atReach: (who, reach) => {
-      const key = `${who.key}\u0000${reach}`;
+      const key = `${who.memoKey}\u0000${reach}`;
       const hit = reachPolicies.get(key);
       if (hit !== undefined) return hit;
       const compiled = resolvePolicyAtReachForRoles(governed, grants, who.roles, reach);

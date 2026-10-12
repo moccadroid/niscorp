@@ -149,7 +149,7 @@ describe('the ws transport — a server’s socket says how it is to be attached
     const socket = buildSocket({
       runtime: { pool: { query: async () => ({ rows: [] }) }, session: 'dev-open', sessionRevalidateMs: 0, ...settings },
       session: () => null,
-      identity: { resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, key: 'public' }) },
+      identity: { resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, memoKey: 'public' }) },
       running: { catalogFor: () => ({ ids: [], hash: 'h' }) },
       hosts: { shells: undefined, pageAt: () => undefined },
     });

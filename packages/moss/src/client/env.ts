@@ -68,8 +68,8 @@ export const readDocumentSnapshot = (doc: Pick<Document, 'getElementById'> = doc
   try {
     const text = doc.getElementById(SNAPSHOT_ELEMENT_ID)?.textContent;
     if (text === undefined || text === null || text === '') return undefined;
-    const read = DocumentSnapshotSchema.safeParse(JSON.parse(text));
-    return read.success ? read.data : undefined;
+    const parsed = DocumentSnapshotSchema.safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data : undefined;
   } catch {
     return undefined;
   }

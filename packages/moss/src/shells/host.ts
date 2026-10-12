@@ -42,7 +42,7 @@ const rosterOf = (durable: ReadonlyMap<string, Cell>): ShellReport[] => {
       const canvases = snapshotShell(live.shell)
         .canvases.filter((canvas) => canvas.items.length > 0)
         .map((canvas) => ({ id: canvas.id, actions: canvas.items.map((item) => item.definitionId) }));
-      reports.push({ principal, connections: live.connections.size, since: live.since, idleSince: live.idleSince, canvases });
+      reports.push({ principal, connections: live.connections.size, since: live.builtAt, idleSince: live.idleSince, canvases });
     } catch (error) {
       console.error(`[moss/shells] the shell of ${principal} could not be read for the roster, and is left off it:`, error);
     }
@@ -83,9 +83,9 @@ const adopt = (host: HostState, cell: Cell): void => {
     for (const [name, contract] of Object.entries(made.components)) {
       if (!live.shell.registry.has(name)) live.shell.registry.register(name, contract);
     }
-    for (const id of live.held) if (!Object.hasOwn(made.actions, id)) live.shell.removeAction(id);
+    for (const id of live.actionIds) if (!Object.hasOwn(made.actions, id)) live.shell.removeAction(id);
     for (const definition of Object.values(made.actions)) live.shell.registerAction(definition);
-    live.held = new Set(Object.keys(made.actions));
+    live.actionIds = new Set(Object.keys(made.actions));
     live.entries = made.entries;
     takeLayouts(live, made);
   };
@@ -95,7 +95,7 @@ const adopt = (host: HostState, cell: Cell): void => {
 };
 
 // A shell whose build is under way is not walked: it lands reflecting fewer
-// changes than there have been, and adopts then (`settleIn`).
+// changes than there have been, and adopts then (`registerLiving`).
 const adoptAll = (host: HostState): void => {
   host.changes += 1;
   for (const cell of [...host.living.values()]) adopt(host, cell);
@@ -123,24 +123,24 @@ const build = (host: HostState, asked: Omit<BuildRequest, 'wanted'>, wanted: () 
   });
 };
 
-const whole = (built: Built | undefined): Built => {
+const builtOrThrow = (built: Built | undefined): Built => {
   if (built === undefined) throw new Error('moss: a build stopped without a shell, and without having run out of time.');
   return built;
 };
 
 // A shell that ended while it was built (app code signed out) is not added:
 // nothing would take it out of `living` again.
-const settleIn = (host: HostState, cell: Cell): void => {
+const registerLiving = (host: HostState, cell: Cell): void => {
   if (cell.live.ended) return;
   host.living.set(cell.live, cell);
   if (cell.changes < host.changes) adopt(host, cell);
 };
 
 const open = async (host: HostState, asked: Omit<BuildRequest, 'reset' | 'wanted'>, keep: boolean): Promise<Cell> => {
-  const { live, changes } = whole(await build(host, { ...asked, reset: false }));
+  const { live, changes } = builtOrThrow(await build(host, { ...asked, reset: false }));
   const cell: Cell = { live, token: asked.token, principal: asked.principal, ...(asked.opening !== undefined ? { opening: asked.opening } : {}), changes };
   if (keep && asked.principal !== null) host.durable.set(asked.principal, cell);
-  settleIn(host, cell);
+  registerLiving(host, cell);
   return cell;
 };
 
@@ -181,7 +181,7 @@ const replaceShell = async (host: HostState, cell: Cell): Promise<void> => {
   old.shell.dispose();
   cell.live = built.live;
   cell.changes = built.changes;
-  settleIn(host, cell);
+  registerLiving(host, cell);
   for (const { connection, wants } of carried) attach(built.live, connection, host.delta && wants);
 };
 
@@ -223,7 +223,7 @@ const snapshotOf =
     }
     const seed = randomBytes(9).toString('hex');
     const opening = { seed, ...(options?.inputs !== undefined ? { inputs: options.inputs } : {}) };
-    const { live } = whole(await build(host, { token, principal, opening, reset: false }));
+    const { live } = builtOrThrow(await build(host, { token, principal, opening, reset: false }));
     try {
       const settled = await settle(live, waitMs);
       return { ...read(live), seed, settled, ...needOf(live, principal, kept) };

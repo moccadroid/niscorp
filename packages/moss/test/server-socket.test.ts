@@ -29,7 +29,7 @@ const socketOf = (runtime: Partial<NiscRuntime>, tokens: Map<string, string> = n
   return buildSocket({
     runtime: { pool: { query: async () => ({ rows: [] }) }, session: 'dev-open', ...runtime },
     session: (token) => tokens.get(token) ?? null,
-    identity: { resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, key: 'public' }) },
+    identity: { resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, memoKey: 'public' }) },
     running: { catalogFor: () => ({ ids: ['home'], hash: 'h' }) },
     hosts: {
       shells: { session: async () => ({ ...session, shell: Object.create(null) }), snapshot: () => Promise.reject(new Error('not asked here')), deliver: () => false, list: () => [], reset: () => false },

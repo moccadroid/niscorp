@@ -6,7 +6,7 @@ export type ResolvedIdentity = {
   roles: readonly string[];
   scope: Record<string, unknown>;
   installed: readonly string[] | undefined;
-  key: string;
+  memoKey: string;
   record?: IdentityRecord;
 };
 
@@ -89,13 +89,13 @@ export const createIdentity = (config: IdentityConfig): Identity => {
   const fromAssignments = (principal: string | null): ResolvedIdentity => {
     const roles = assignedRoles(config.assignments, principal);
     // The scope is empty on purpose: `composeScope` applies the scope hook.
-    return { roles, scope: {}, installed: undefined, key: memoKey(roles, undefined) };
+    return { roles, scope: {}, installed: undefined, memoKey: memoKey(roles, undefined) };
   };
 
   const resolve = async (principal: string | null): Promise<ResolvedIdentity> => {
     if (cache !== undefined && principal !== null) {
       const record = await cache.get(principal);
-      return { roles: record.roles, scope: record.scope, installed: record.installed, key: keyOf(record), record };
+      return { roles: record.roles, scope: record.scope, installed: record.installed, memoKey: keyOf(record), record };
     }
     return fromAssignments(principal);
   };

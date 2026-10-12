@@ -23,7 +23,7 @@ const behaviors: ScopeBehaviors = {
 
 const grants = scopeGrants(['bookings', 'deals']);
 
-const who = (...roles: string[]) => ({ key: memoKey(roles, undefined), roles });
+const who = (...roles: string[]) => ({ memoKey: memoKey(roles, undefined), roles });
 
 const rulesOn = (policy: ScopePolicy, table: string, phase: 'read' | 'insert'): readonly unknown[] | undefined => {
   const entity = policy.entities[table];

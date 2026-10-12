@@ -5,8 +5,8 @@ import type { Connection } from './socket';
 
 const messageOf = (text: string): ClientMessage | undefined => {
   try {
-    const read = ClientMessageSchema.safeParse(JSON.parse(text));
-    return read.success ? read.data : undefined;
+    const parsed = ClientMessageSchema.safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data : undefined;
   } catch {
     return undefined;
   }

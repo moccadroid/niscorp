@@ -10,9 +10,9 @@ type Credential = {
   signedIn: () => boolean;
   params: () => string[];
   offered: () => string[];
-  answered: () => void;
+  upgradeAnswered: () => void;
   become: (token: string | null, sealed: string | null) => void;
-  leave: (leaving: boolean) => void;
+  setLeaving: (leaving: boolean) => void;
   sealNotKept: () => void;
 };
 
@@ -20,18 +20,18 @@ const createCredential = (tokens: WireTokenStore): Credential => {
   let token = tokens.load();
   let leaving = false;
   let sealed: string | null = null;
-  let unsealed = false;
+  let sealUnavailable = false;
   return {
     signedIn: () => token !== null || tokens.held?.() === true,
     params: () => [
       ...(tokens.key !== undefined ? [`key=${encodeURIComponent(tokens.key)}`] : []),
       ...(leaving ? ['leave=1'] : []),
-      ...(tokens.held !== undefined && !unsealed ? ['sealed=1'] : []),
+      ...(tokens.held !== undefined && !sealUnavailable ? ['sealed=1'] : []),
     ],
     offered: () => offerToken(token, sealed),
     // A browser that keeps the session itself holds it once the upgrade is answered, and the token
     // is let go of. One that does not (another origin, cookies refused) has it stored.
-    answered: () => {
+    upgradeAnswered: () => {
       leaving = false;
       sealed = null;
       if (token === null || tokens.held === undefined) return;
@@ -48,11 +48,11 @@ const createCredential = (tokens: WireTokenStore): Credential => {
       else if (tokens.held === undefined) tokens.save(next);
       token = next;
     },
-    leave: (next) => {
+    setLeaving: (next) => {
       leaving = next;
     },
     sealNotKept: () => {
-      unsealed = true;
+      sealUnavailable = true;
     },
   };
 };
@@ -87,8 +87,8 @@ const messageOf = (text: string): ServerMessage | undefined => {
     console.warn('[moss/wire] unreadable server message: not JSON');
     return undefined;
   }
-  const read = ServerMessageSchema.safeParse(value);
-  if (read.success) return read.data;
+  const parsed = ServerMessageSchema.safeParse(value);
+  if (parsed.success) return parsed.data;
   const named = typeof value === 'object' && value !== null && 'type' in value && typeof value.type === 'string' ? value.type : 'of no type';
   // Only the type is named: the text may carry a session token.
   console.warn(`[moss/wire] unreadable server message: ${named}`);
@@ -134,7 +134,7 @@ const hear = (to: Hearing, text: string): void => {
         to.refuse();
         return;
       }
-      to.credential.answered();
+      to.credential.upgradeAnswered();
       return;
     case 'catalog':
       return;
@@ -242,7 +242,7 @@ const createConnection = ({ config, env, credential, screen, delta, initial, not
     }
     setStatus('closed');
     if (code === CLOSE_SIGNED_OUT || code === CLOSE_INVALID_TOKEN) {
-      credential.leave(code === CLOSE_SIGNED_OUT);
+      credential.setLeaving(code === CLOSE_SIGNED_OUT);
       become(null);
       return;
     }

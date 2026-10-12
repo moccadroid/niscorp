@@ -56,7 +56,7 @@ export type SocketAccept = ((url: string, connection: Connection) => Promise<voi
 // an undo registered after it runs at once.
 type ConnectionClose = {
   ended: () => boolean;
-  then: (undo: () => void) => void;
+  whenClosed: (undo: () => void) => void;
 };
 
 const closeOf = (connection: Connection): ConnectionClose => {
@@ -68,7 +68,7 @@ const closeOf = (connection: Connection): ConnectionClose => {
   });
   return {
     ended: () => ended,
-    then: (undo) => {
+    whenClosed: (undo) => {
       if (ended) undo();
       else undoing.push(undo);
     },
@@ -100,8 +100,8 @@ const createAnonymousShellLimit = (max: number): AnonymousShellLimit => {
 
 const FailuresSchema = z.object({ failures: z.array(z.object({ id: z.string() })) });
 const failedDefinitions = (error: DefinitionValidationError): string[] => {
-  const read = FailuresSchema.safeParse(error.context);
-  return read.success ? read.data.failures.map((failure) => failure.id) : [];
+  const parsed = FailuresSchema.safeParse(error.context);
+  return parsed.success ? parsed.data.failures.map((failure) => failure.id) : [];
 };
 
 // The error's text is not sent: it can name a host, a table or a user, and
@@ -151,14 +151,14 @@ const served = async (
   // One that closed while its shell was built is not attached, and is detached
   // all the same: that disposes a shell built for this connection alone.
   if (!close.ended()) session.attach(connection, { delta: opening.delta });
-  close.then(() => session.detach(connection));
+  close.whenClosed(() => session.detach(connection));
   return session;
 };
 
-type Held = { config: SocketConfig; notOwn: WarnedOnce; revalidation: Revalidation; anonymousShells: AnonymousShellLimit };
+type Held = { config: SocketConfig; foreignPageWarning: WarnedOnce; revalidation: Revalidation; anonymousShells: AnonymousShellLimit };
 
 const open = async (held: Held, url: string, connection: Connection, send: (message: ServerMessage) => void, span: Span | undefined, found: { principal: boolean }): Promise<void> => {
-  const { config, notOwn, revalidation, anonymousShells } = held;
+  const { config, foreignPageWarning, revalidation, anonymousShells } = held;
   const params = parametersOf(url);
   const mismatch = protocolRefusal(params);
   if (mismatch !== undefined) {
@@ -166,7 +166,7 @@ const open = async (held: Held, url: string, connection: Connection, send: (mess
     connection.close(CLOSE_PROTOCOL_MISMATCH, 'protocol mismatch');
     return;
   }
-  const asking = await authenticateUpgrade(url, connection.upgrade, config, notOwn);
+  const asking = await authenticateUpgrade(url, connection.upgrade, config, foreignPageWarning);
   if (asking === 'invalid_token') {
     span?.('socket.upgrade', 'refused', false);
     send({ type: 'error', code: 'invalid_token', message: 'The session token did not resolve to a principal.' });
@@ -194,9 +194,9 @@ const open = async (held: Held, url: string, connection: Connection, send: (mess
   revalidation.hold(connection, token !== null && token !== '' && principal !== null ? { token, principal } : null);
   // Before anything below awaits (`closeOf`).
   const close = closeOf(connection);
-  close.then(() => revalidation.release(connection));
-  close.then(() => anonymousShells.release(connection));
-  if (span !== undefined) close.then(() => span('socket.close', 'ok', principal !== null));
+  close.whenClosed(() => revalidation.release(connection));
+  close.whenClosed(() => anonymousShells.release(connection));
+  if (span !== undefined) close.whenClosed(() => span('socket.close', 'ok', principal !== null));
 
   const attached = await served(config, connection, send, close, { session, delta: params.delta === '1' }, { token, principal });
 
@@ -209,7 +209,7 @@ export const createSocket = (config: SocketConfig): SocketAccept => {
   const emit = emitterOf(config.telemetry);
   const revalidation = createRevalidation(config);
   const anonymousShells = createAnonymousShellLimit(config.anonymousShellMax ?? DEFAULT_ANONYMOUS_SHELL_MAX);
-  const held: Held = { config, notOwn: { warned: false }, revalidation, anonymousShells };
+  const held: Held = { config, foreignPageWarning: { warned: false }, revalidation, anonymousShells };
 
   // `accept` never rejects: a transport calls it without awaiting, and an
   // unhandled rejection ends the process for every session on it.

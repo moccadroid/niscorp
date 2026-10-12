@@ -19,20 +19,20 @@ export const createGeneration = (pointer: Pointer, ctx: { onMoved: () => void | 
   let seen = -1;
   let checking = false;
 
-  const read = async (): Promise<void> => {
+  const poll = async (): Promise<void> => {
     if (checking) return;
     checking = true;
     try {
-      const n = await reading();
+      const n = await readPointer();
       if (n === undefined || n === seen) return;
-      if (seen !== -1 && !(await followed(n))) return;
+      if (seen !== -1 && !(await follow(n))) return;
       seen = n;
     } finally {
       checking = false;
     }
   };
 
-  const reading = async (): Promise<number | undefined> => {
+  const readPointer = async (): Promise<number | undefined> => {
     try {
       return await pointer.read();
     } catch (err) {
@@ -43,7 +43,7 @@ export const createGeneration = (pointer: Pointer, ctx: { onMoved: () => void | 
 
   let unfollowed: { said: string; tries: number } | undefined;
 
-  const followed = async (n: number): Promise<boolean> => {
+  const follow = async (n: number): Promise<boolean> => {
     try {
       await ctx.onMoved();
     } catch (err) {
@@ -78,8 +78,8 @@ export const createGeneration = (pointer: Pointer, ctx: { onMoved: () => void | 
     throw new Error(`the pointer moved under this process ${MOVE_ATTEMPTS} times in a row`);
   };
 
-  void read();
-  const timer = everyMs > 0 ? setInterval(() => void read(), everyMs) : undefined;
+  void poll();
+  const timer = everyMs > 0 ? setInterval(() => void poll(), everyMs) : undefined;
   timer?.unref?.();
 
   return {

@@ -18,16 +18,16 @@ export const layoutsOf = (made: Pick<ShellComposition, 'frame' | 'layoutStore' |
 export type Live = {
   shell: Shell;
   sessionShell: Shell;
-  held: ReadonlySet<string>;
+  actionIds: ReadonlySet<string>;
   entries: ReadonlyMap<string, SeedEntry | SeedMutation> | undefined;
   layouts: ShellLayouts;
   connections: Set<ShellConnection>;
-  sent: Map<string, string>;
+  sentByCanvas: Map<string, string>;
   sentFrame?: string;
   deltaReady: Set<ShellConnection>;
   flushing: boolean;
   ended: boolean;
-  since: number;
+  builtAt: number;
   idleSince: number | null;
   seeded: Promise<void>;
 };

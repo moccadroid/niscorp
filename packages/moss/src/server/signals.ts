@@ -80,15 +80,15 @@ export const wireFabric = (
   let refusalSaid = false;
 
   fabric.subscribe((handed) => {
-    const read = FabricMessageSchema.safeParse(handed);
-    if (!read.success) {
+    const parsed = FabricMessageSchema.safeParse(handed);
+    if (!parsed.success) {
       if (refusalSaid) return;
       refusalSaid = true;
-      const wrong = read.error.issues.map((issue) => `${issue.path.join('.') || '(the message)'}: ${issue.message}`).join('; ');
+      const wrong = parsed.error.issues.map((issue) => `${issue.path.join('.') || '(the message)'}: ${issue.message}`).join('; ');
       console.error(`[moss:fabric] the transport handed over what is not a message, and it was dropped (${wrong}). Said once: what follows it and does not parse is dropped without a line.`);
       return;
     }
-    const message = read.data;
+    const message = parsed.data;
     if (message.origin === origin) return;
     try {
       switch (message.kind) {

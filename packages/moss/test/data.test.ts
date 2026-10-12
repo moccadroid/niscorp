@@ -23,7 +23,7 @@ const charter: Charter = {
 
 type Env = { Variables: { roles: readonly string[] } };
 
-const who = (...roles: string[]) => ({ key: memoKey(roles, undefined), roles });
+const who = (...roles: string[]) => ({ memoKey: memoKey(roles, undefined), roles });
 
 const world = async (telemetry?: { emit: (span: TelemetrySpan) => void }, governing: Charter = charter) => {
   const double = await engineDouble();

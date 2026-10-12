@@ -1,6 +1,6 @@
 import type { Bundle } from './intake';
 
-const normalizeReach = (path: string): string => (path.split('?')[0] ?? '').replace(/\/+$/, '');
+const normalizePath = (path: string): string => (path.split('?')[0] ?? '').replace(/\/+$/, '');
 
 // A declared endpoint's path, to the ids of the actions that declare it.
 export type Reach = Record<string, string[]>;
@@ -10,7 +10,7 @@ export const reachOf = (bundle: Bundle, integrationId: string): Reach => {
   const reach: Reach = {};
   const admit = (url: string, actionId: string): void => {
     if (!url.startsWith(own)) return;
-    const key = normalizeReach(url);
+    const key = normalizePath(url);
     const held = (reach[key] ??= []);
     if (!held.includes(actionId)) held.push(actionId);
   };
@@ -23,6 +23,6 @@ export const reachOf = (bundle: Bundle, integrationId: string): Reach => {
 };
 
 export const reachAdmits = (reach: Reach, path: string, held: ReadonlySet<string>): boolean =>
-  (reach[normalizeReach(path)] ?? []).some((actionId) => held.has(actionId));
+  (reach[normalizePath(path)] ?? []).some((actionId) => held.has(actionId));
 
-export const reachDeclares = (reach: Reach, path: string): boolean => reach[normalizeReach(path)] !== undefined;
+export const reachDeclares = (reach: Reach, path: string): boolean => reach[normalizePath(path)] !== undefined;

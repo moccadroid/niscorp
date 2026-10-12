@@ -72,7 +72,7 @@ export const createOwnEntries =
 const TABLE = 'moss_generation';
 const THE_ROW: Filter = { eq: [`${TABLE}.id`, 1] };
 
-const read: SeedEntry = {
+const readPointerEntry: SeedEntry = {
   fingerprint: 'moss/generation',
   intent: 'Where the generation pointer is',
   dsl: { from: [TABLE], fields: [`${TABLE}.n`], filter: THE_ROW, limit: 1 },
@@ -80,7 +80,7 @@ const read: SeedEntry = {
 
 // A compare-and-set, because vex's write grammar cannot say `n = n + 1`: of
 // two processes moving at once, one writes no row and reads again.
-const move: SeedMutation = {
+const movePointerEntry: SeedMutation = {
   fingerprint: 'moss/generation-move',
   intent: 'Move the generation pointer to the next number, if it is still where it was read',
   mutation: {
@@ -91,17 +91,17 @@ const move: SeedMutation = {
   },
 };
 
-export const POINTER: OwnEntries = { owner: 'the generation pointer', entries: [read, move], tables: [TABLE] };
+export const POINTER: OwnEntries = { owner: 'the generation pointer', entries: [readPointerEntry, movePointerEntry], tables: [TABLE] };
 
 const RowSchema = z.object({ n: z.coerce.number() });
 const RowsSchema = z.array(z.unknown());
 
 export const createPointer = (replay: () => Promise<Replay>): Pointer => ({
   read: async () => {
-    const rows = RowsSchema.parse(await (await replay())(read.fingerprint, {}));
+    const rows = RowsSchema.parse(await (await replay())(readPointerEntry.fingerprint, {}));
     return RowSchema.parse(rows[0] ?? { n: 0 }).n;
   },
   // A write that changed one row answers that row; one that changed none
   // answers no row, which does not parse: the counter moved since it was read.
-  move: async (from) => RowSchema.safeParse(await (await replay())(move.fingerprint, { seen: from, next: from + 1 })).success,
+  move: async (from) => RowSchema.safeParse(await (await replay())(movePointerEntry.fingerprint, { seen: from, next: from + 1 })).success,
 });

@@ -53,7 +53,7 @@ const processOn = (fabric: Fabric | undefined): Process => {
   const hosts = buildShellHosts({
     app,
     runtime: {},
-    identity: { resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, key: 'public' }), composeScope: () => ({}) },
+    identity: { resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, memoKey: 'public' }), composeScope: () => ({}) },
     running,
     data: { answerIntent: async () => Promise.reject(new Error('no intent is asked here')) },
     wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),

@@ -8,14 +8,14 @@ import type { ShellConnection } from './types';
 
 export const treeOf = (live: Live, canvasId: string): RenderNode[] => canvasTreeOf(live.shell, canvasId);
 
-const frame = (live: Live, canvasId: string): string => {
+const canvasMessage = (live: Live, canvasId: string): string => {
   const message: ServerMessage = { type: 'render', canvas: canvasId, tree: treeOf(live, canvasId) };
   return JSON.stringify(message);
 };
 
-export const frameOf = (live: Live, canvasId: string): string | null => {
+export const canvasMessageOf = (live: Live, canvasId: string): string | null => {
   try {
-    return frame(live, canvasId);
+    return canvasMessage(live, canvasId);
   } catch (error) {
     console.error(`[moss/shells] canvas "${canvasId}" failed to render — holding its last tree:`, error);
     return null;
@@ -46,16 +46,16 @@ const shorterAsDelta = (previous: string, next: string, canvasId: string): strin
 const pass = (live: Live, delta: boolean): void => {
   if (live.ended) return;
   const canvases = canvasesOf(live);
-  for (const gone of [...live.sent.keys()].filter((canvasId) => !canvases.includes(canvasId))) {
-    live.sent.delete(gone);
+  for (const gone of [...live.sentByCanvas.keys()].filter((canvasId) => !canvases.includes(canvasId))) {
+    live.sentByCanvas.delete(gone);
     const empty = JSON.stringify({ type: 'render', canvas: gone, tree: [] } satisfies ServerMessage);
     for (const connection of live.connections) connection.send(empty);
   }
   for (const canvasId of canvases) {
-    const next = frameOf(live, canvasId);
-    const previous = live.sent.get(canvasId);
+    const next = canvasMessageOf(live, canvasId);
+    const previous = live.sentByCanvas.get(canvasId);
     if (next === null || previous === next) continue;
-    live.sent.set(canvasId, next);
+    live.sentByCanvas.set(canvasId, next);
     const short = delta && previous !== undefined && live.deltaReady.size > 0 ? shorterAsDelta(previous, next, canvasId) : null;
     for (const connection of live.connections) {
       connection.send(short !== null && live.deltaReady.has(connection) ? short : next);
@@ -115,17 +115,17 @@ export const attach = (live: Live, connection: ShellConnection, wantsDelta: bool
     live.sentFrame = frameMessage;
   }
   for (const canvasId of canvasesOf(live)) {
-    const next = frameOf(live, canvasId);
+    const next = canvasMessageOf(live, canvasId);
     if (next === null) continue;
-    if (live.sent.get(canvasId) !== next) {
+    if (live.sentByCanvas.get(canvasId) !== next) {
       for (const other of live.connections) if (other !== connection) other.send(next);
     }
-    live.sent.set(canvasId, next);
+    live.sentByCanvas.set(canvasId, next);
     connection.send(next);
   }
 };
 
-// What `sent` holds, not a fresh render: the connection ends level with the
+// What `sentByCanvas` holds, not a fresh render: the connection ends level with the
 // baseline the others share, and stays delta-capable.
 export const resync = (live: Live, connection: ShellConnection): void => {
   if (!live.connections.has(connection)) return;
@@ -137,7 +137,7 @@ export const resync = (live: Live, connection: ShellConnection): void => {
   }
   connection.send(JSON.stringify({ type: 'frame', tree: frameTree } satisfies ServerMessage));
   for (const canvasId of canvasesOf(live)) {
-    const current = live.sent.get(canvasId) ?? frameOf(live, canvasId);
+    const current = live.sentByCanvas.get(canvasId) ?? canvasMessageOf(live, canvasId);
     if (current === null || current === undefined) continue;
     connection.send(current);
   }

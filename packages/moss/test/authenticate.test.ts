@@ -5,7 +5,7 @@ import type { AuthenticationDeps } from '../src/server/routes';
 import type { Env } from '../src/server/moss-server';
 import type { ResolvedIdentity } from '../src/identity';
 
-const resolved = (roles: readonly string[]): ResolvedIdentity => ({ roles, scope: {}, installed: undefined, key: roles.join(',') });
+const resolved = (roles: readonly string[]): ResolvedIdentity => ({ roles, scope: {}, installed: undefined, memoKey: roles.join(',') });
 
 const serverWith = (over: Partial<AuthenticationDeps> = {}): Hono<Env> => {
   const server = new Hono<Env>();

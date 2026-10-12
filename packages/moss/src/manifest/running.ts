@@ -7,7 +7,7 @@ import { createGeneration } from './generation';
 import type { Generation, Pointer } from './generation';
 import { freezeDeep } from './schema';
 import { createRoleMemo, narrowedBy } from './roles';
-import type { Catalog, InstalledOnly } from './roles';
+import type { Catalog, CatalogFilter } from './roles';
 import { candidateOf, refusalOf, verifyManifest } from './verify';
 import type { ManifestCandidate, ManifestReport, ShippedManifest } from './verify';
 
@@ -18,7 +18,7 @@ export type ActionLoader = () => Promise<Record<string, ActionDefinition>>;
 export type RunningManifestConfig = {
   shipped: ShippedManifest;
   grants: readonly string[];
-  installedOnly?: InstalledOnly;
+  installedOnly?: CatalogFilter;
   pointer?: Pointer & { everyMs?: number };
 };
 
@@ -37,7 +37,7 @@ export type RunningManifest = {
   refresh: () => void;
   watch: () => void;
   onChange: (listener: () => void) => () => void;
-  addCatalogFilter: (filter: InstalledOnly) => void;
+  addCatalogFilter: (filter: CatalogFilter) => void;
   catalogFor: (roles: readonly string[], installed: readonly string[] | undefined) => Catalog;
   artifactsFor: (shell: ShellManifest, roles: readonly string[], installed: readonly string[] | undefined) => ShellArtifacts;
   generation: () => number;
@@ -57,26 +57,26 @@ const tell = (listener: () => void): void => {
 
 type SetOwners = {
   claim: (source: string, owner: string, handedOver: boolean) => void;
-  notTheApps: (source: string) => string | undefined;
-  appSource: (source: string) => string;
+  ownerRefusalOf: (source: string) => string | undefined;
+  assertAppOwned: (source: string) => string;
 };
 
 const createSetOwners = (): SetOwners => {
   const owners = new Map<string, string>();
-  const notTheApps = (source: string): string | undefined => {
+  const ownerRefusalOf = (source: string): string | undefined => {
     const owner = owners.get(source);
     return owner === undefined ? undefined : `the set of actions "${source}" is ${owner}'s, and only its owner replaces it. An app hands a set over under a name of its own.`;
   };
   return {
-    notTheApps,
+    ownerRefusalOf,
     claim: (source, owner, handedOver) => {
       const held = owners.get(source);
       if (held !== undefined) throw new Error(`moss: the set of actions "${source}" is ${held}'s, and ${owner} claims it too. A set of actions has one writer.`);
       if (handedOver) throw new Error(`moss: the set of actions "${source}" was handed over by the app, and ${owner} claims it. A set of actions has one writer.`);
       owners.set(source, owner);
     },
-    appSource: (source) => {
-      const refusal = notTheApps(source);
+    assertAppOwned: (source) => {
+      const refusal = ownerRefusalOf(source);
       if (refusal !== undefined) throw new Error(`moss: ${refusal}`);
       return source;
     },
@@ -121,7 +121,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
 
   let report = verifiedAtBoot(candidate(inForce));
 
-  const catalogFilters: InstalledOnly[] = config.installedOnly === undefined ? [] : [config.installedOnly];
+  const catalogFilters: CatalogFilter[] = config.installedOnly === undefined ? [] : [config.installedOnly];
   const roleMemo = createRoleMemo({
     manifest: () => ({ charter: shipped.charter, actions: inForce, layouts: shipped.layouts }),
     installedOnly: (ids, installed) => catalogFilters.reduce((kept, narrow) => narrowedBy(narrow, kept, installed), ids),
@@ -131,7 +131,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   const listeners = new Set<() => void>();
   let pointer: Generation | undefined;
 
-  const take = (arrived: ReadonlyMap<string, Actions>, move: boolean): void => {
+  const applySets = (arrived: ReadonlyMap<string, Actions>, announce: boolean): void => {
     const next = new Map([...sets, ...arrived]);
     const actions = mergedActions(own, next);
     const verified = verifyManifest(candidate(actions));
@@ -144,7 +144,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     roleMemo.drop();
     components.drop();
     for (const listener of [...listeners]) tell(listener);
-    if (move) pointer?.bump();
+    if (announce) pointer?.bump();
   };
 
   // Switches without moving the pointer: answering another process's move with
@@ -152,7 +152,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   const reload = async (): Promise<void> => {
     const read: [string, Actions][] = [];
     for (const [source, load] of loaders) read.push([source, await load()]);
-    take(new Map(read), false);
+    applySets(new Map(read), false);
   };
 
   return {
@@ -160,11 +160,11 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     entries: () => entries,
     verify: (actions) => verifyManifest(candidate(actions)),
     report: () => report,
-    replace: (source, actions) => take(new Map([[owners.appSource(source), actions]]), true),
+    replace: (source, actions) => applySets(new Map([[owners.assertAppOwned(source), actions]]), true),
     claim: (source, owner) => {
       owners.claim(source, owner, sets.has(source));
       return {
-        replace: (actions) => take(new Map([[source, actions]]), true),
+        replace: (actions) => applySets(new Map([[source, actions]]), true),
         setLoader: (load) => {
           loaders.set(source, load);
           // The set takes its place now, empty, so the order the sets are
@@ -173,7 +173,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
         },
       };
     },
-    refresh: () => take(new Map(), true),
+    refresh: () => applySets(new Map(), true),
     watch: () => {
       const where = config.pointer;
       if (pointer !== undefined || where === undefined) return;

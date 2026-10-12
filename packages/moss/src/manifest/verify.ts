@@ -45,9 +45,9 @@ export type ManifestReport = {
 const unreadActions = (actions: ManifestCandidate['actions']): { id: string; why: string }[] =>
   Object.entries(actions).flatMap(([id, definition]) => {
     if (exceedsDepth(definition)) return [{ id, why: depthRefusal() }];
-    const read = ActionDefinitionSchema.safeParse(definition);
-    if (read.success) return [];
-    const first = read.error.issues[0];
+    const parsed = ActionDefinitionSchema.safeParse(definition);
+    if (parsed.success) return [];
+    const first = parsed.error.issues[0];
     return [{ id, why: first === undefined ? 'no reason given' : `${first.path.join('.') || '(root)'}: ${first.message}` }];
   });
 

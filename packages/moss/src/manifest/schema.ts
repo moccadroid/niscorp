@@ -10,7 +10,7 @@ const seam = z.custom<(...args: never[]) => unknown>((value) => typeof value ===
 // Depth is checked before a recursive schema reads the value: one nested a few
 // thousand levels deep would throw RangeError out of the parser instead of
 // coming back refused. `abort` keeps the schema from being asked.
-const document = <Schema extends z.ZodType>(schema: Schema): z.ZodPipe<z.ZodUnknown, Schema> =>
+const depthChecked = <Schema extends z.ZodType>(schema: Schema): z.ZodPipe<z.ZodUnknown, Schema> =>
   z
     .unknown()
     .refine((value) => !exceedsDepth(value), { message: depthRefusal(), abort: true })
@@ -18,7 +18,7 @@ const document = <Schema extends z.ZodType>(schema: Schema): z.ZodPipe<z.ZodUnkn
 
 const strings = z.array(z.string()).readonly();
 const record = z.record(z.string(), z.unknown());
-const layout = document(LayoutNodeSchema);
+const layout = depthChecked(LayoutNodeSchema);
 
 const LayoutVariantSchema = z.object({ action: z.string(), layout }).strict();
 
@@ -39,7 +39,7 @@ const shell = {
   canvases: z.array(CanvasSchema),
   layout: layout.optional(),
   layoutStore: z.record(z.string(), layout).optional(),
-  fragments: z.record(z.string(), document(ActionFragmentSchema)).optional(),
+  fragments: z.record(z.string(), depthChecked(ActionFragmentSchema)).optional(),
   seeds: seam.optional(),
   components: z.record(z.string(), ComponentContractSchema).optional(),
   inputs: seam.optional(),
@@ -52,12 +52,12 @@ const ReadEntrySchema = z
   .object({
     ...entry,
     shape: z.unknown().optional(),
-    dsl: document(QuerySchema),
-    mapping: document(ConfigSchema).optional(),
+    dsl: depthChecked(QuerySchema),
+    mapping: depthChecked(ConfigSchema).optional(),
     refresh: z.enum(REFRESH_MODES).optional(),
   })
   .strict();
-const WriteEntrySchema = z.object({ ...entry, mutation: document(MutationDefinitionSchema) }).strict();
+const WriteEntrySchema = z.object({ ...entry, mutation: depthChecked(MutationDefinitionSchema) }).strict();
 
 const FeatureSchema = z.looseObject({
   name: z.string(),
@@ -71,7 +71,7 @@ const fields = {
   charter: record,
   assignments: z.record(z.string(), strings).optional(),
   wearable: z.array(strings).readonly().optional(),
-  actions: z.record(z.string(), document(ActionDefinitionSchema)),
+  actions: z.record(z.string(), depthChecked(ActionDefinitionSchema)),
   layouts: z.record(z.string(), LayoutVariantSchema).optional(),
   behaviors: z.record(z.string(), record).optional(),
   scope: seam.optional(),
@@ -108,9 +108,9 @@ const placesOf = (issue: Issue, under: readonly PropertyKey[]): Place[] => {
 };
 
 export const manifestMisfits = (app: unknown): string[] => {
-  const read = ManifestSchema.safeParse(app);
-  if (read.success) return [];
-  return read.error.issues.flatMap((issue) => placesOf(issue, [])).map((place) => `${place.path.map(String).join('.') || '(the manifest)'}: ${place.message}`);
+  const parsed = ManifestSchema.safeParse(app);
+  if (parsed.success) return [];
+  return parsed.error.issues.flatMap((issue) => placesOf(issue, [])).map((place) => `${place.path.map(String).join('.') || '(the manifest)'}: ${place.message}`);
 };
 
 // A class instance is not data and stays unfrozen: a kit hands a component's

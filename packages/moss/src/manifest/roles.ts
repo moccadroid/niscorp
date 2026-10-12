@@ -16,11 +16,11 @@ export const wearableOf = (app: Pick<NiscApp, 'wearable' | 'assignments'>): read
 
 export type Catalog = { ids: readonly string[]; hash: string };
 
-export type InstalledOnly = (ids: readonly string[], installed: ReadonlySet<string> | undefined) => readonly string[];
+export type CatalogFilter = (ids: readonly string[], installed: ReadonlySet<string> | undefined) => readonly string[];
 
 // A filter may only narrow: an id it answers that it was not handed is dropped,
 // so a filter cannot grant an action.
-export const narrowedBy = (filter: InstalledOnly, ids: readonly string[], installed: ReadonlySet<string> | undefined): readonly string[] => {
+export const narrowedBy = (filter: CatalogFilter, ids: readonly string[], installed: ReadonlySet<string> | undefined): readonly string[] => {
   const answered = new Set(filter(ids, installed));
   return ids.filter((id) => answered.has(id));
 };
@@ -29,7 +29,7 @@ export const catalogFor = (
   app: Pick<NiscApp, 'charter' | 'actions'>,
   roles: readonly string[],
   installed: readonly string[] | undefined,
-  installedOnly: InstalledOnly,
+  installedOnly: CatalogFilter,
 ): Catalog => {
   const granted = [...resolvePrincipal(app.charter, Object.keys(app.actions), roles, 'actions')].sort();
   const ids = [...installedOnly(granted, installed === undefined ? undefined : new Set(installed))];
@@ -77,7 +77,7 @@ export type RoleMemo = {
 
 export const createRoleMemo = (config: {
   manifest: () => Pick<NiscApp, 'charter' | 'actions' | 'layouts'>;
-  installedOnly: InstalledOnly;
+  installedOnly: CatalogFilter;
 }): RoleMemo => {
   const catalogs = new Map<string, Catalog>();
   const variants = new Map<string, ReadonlyMap<string, LayoutNode>>();

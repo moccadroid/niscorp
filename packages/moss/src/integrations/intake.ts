@@ -52,7 +52,7 @@ export type IntakeContext<Extension = undefined> = {
   hostActions?: Readonly<Record<string, ActionDefinition>>;
 };
 
-type Checked = Omit<IntakeContext, 'extension'>;
+type CheckContext = Omit<IntakeContext, 'extension'>;
 
 const AUDIENCE = /^[a-z][a-z0-9-]*$/;
 
@@ -79,7 +79,7 @@ const upgradeBundle = (payload: unknown, upgrader: Upgrader | undefined): { ok: 
   }
 };
 
-const endpointReasons = (id: string, action: ActionDefinition, ctx: Checked): string[] => {
+const endpointReasons = (id: string, action: ActionDefinition, ctx: CheckContext): string[] => {
   const reasons: string[] = [];
   for (const [name, endpoint] of Object.entries(action.endpoints ?? {})) {
     if ('fn' in endpoint) {
@@ -108,7 +108,7 @@ const endpointReasons = (id: string, action: ActionDefinition, ctx: Checked): st
   return reasons;
 };
 
-const actionReasons = (bundle: Bundle, ctx: Checked): string[] => {
+const actionReasons = (bundle: Bundle, ctx: CheckContext): string[] => {
   const reasons: string[] = [];
   for (const [id, action] of Object.entries(bundle.actions)) {
     const parts = id.split('.');
@@ -126,7 +126,7 @@ const actionReasons = (bundle: Bundle, ctx: Checked): string[] => {
   return reasons;
 };
 
-const chainReasons = (bundle: Bundle, ctx: Checked): string[] =>
+const chainReasons = (bundle: Bundle, ctx: CheckContext): string[] =>
   ctx
     .endlessChains({ ...(ctx.hostActions ?? {}), ...bundle.actions })
     .filter((chain) => chain.through.some((actionId) => bundle.actions[actionId] !== undefined))
@@ -143,9 +143,9 @@ export const extensionContextOf = (bundle: Bundle, ctx: Pick<IntakeContext, 'int
 const extensionOf = <Extension>(bundle: Bundle, ctx: IntakeContext<Extension>): { reasons: string[]; extension?: Extension } => {
   const config = ctx.extension;
   if (config === undefined) return { reasons: bundle.extension === undefined ? [] : ['extension: this app takes no extension, and the bundle carries one.'] };
-  const read = config.schema.safeParse(bundle.extension);
-  if (!read.success) return { reasons: read.error.issues.map((issue) => `${['extension', ...issue.path].join('.')}: ${issue.message}`) };
-  return { reasons: config.check?.(read.data, extensionContextOf(bundle, ctx)) ?? [], extension: read.data };
+  const parsed = config.schema.safeParse(bundle.extension);
+  if (!parsed.success) return { reasons: parsed.error.issues.map((issue) => `${['extension', ...issue.path].join('.')}: ${issue.message}`) };
+  return { reasons: config.check?.(parsed.data, extensionContextOf(bundle, ctx)) ?? [], extension: parsed.data };
 };
 
 const schemaReasons = (error: z.ZodError): string[] =>
