@@ -2,9 +2,6 @@ import { getApp } from '../boot';
 import { readEntries } from '../api/reads';
 import { activeData, activeDefinition, check, componentNames, fail, finish, isRecord, records, waitFor } from './harness';
 
-// Boot: schema+seed, engine+prewarm, one warm read end-to-end, the shell's
-// initial canvases, and the kitchen-sink surface rendering every primitive.
-
 const KIT = ['Surface', 'Stack', 'Text', 'Card', 'Button', 'Checkbox', 'Chip', 'Meter', 'Input', 'TextArea', 'Doodle', 'Confetti'];
 
 const run = async (): Promise<never> => {
@@ -31,7 +28,6 @@ const run = async (): Promise<never> => {
     first !== undefined && typeof first['due_display'] === 'string' && first['due_display'] !== '',
   );
 
-  // An unknown fingerprint must throw loudly (warm-only discipline).
   let novelThrew = false;
   try {
     await app.engine.execute({ fingerprint: 'todos/nonsense', context: {} }, { locked: true, scope: {} });
@@ -49,7 +45,6 @@ const run = async (): Promise<never> => {
   const stats = list['stats'];
   check('todo-list stats slot filled, mood is blush (3 overdue)', isRecord(stats) && stats['mood'] === 'blush');
 
-  // Kit surface: every registered primitive actually renders.
   const sinkId = app.shell.push('main', 'kitchen-sink');
   const sink = app.shell.getRuntime(sinkId);
   const names = componentNames(sink?.render() ?? []);

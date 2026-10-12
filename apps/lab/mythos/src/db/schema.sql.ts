@@ -1,6 +1,3 @@
-// The one entity. `bloom` (a doodle kind) is stamped by the create
-// handler; `done_on` by the done handler — writes own derivation so the
-// streak/combo reads stay plain SQL over plain columns.
 export const SCHEMA_SQL = `
 create table todos (
   id uuid primary key default gen_random_uuid(),

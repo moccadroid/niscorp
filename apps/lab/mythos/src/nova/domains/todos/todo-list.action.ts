@@ -3,9 +3,6 @@ import { readEntries } from '../../../api/reads';
 import { DEFAULT_STATS, readEndpoint } from '../../shared/endpoints';
 import { todoListLayout } from './todo-list.layout';
 
-// "The Patch": open todos. Checking a row completes it (and announces);
-// ✎ opens the form seeded from the clicked row; ✕ opens the confirm
-// overlay. Re-reads on every todos-changed, its own included.
 export const todoList: ActionDefinition = {
   id: 'todo-list',
   name: 'The Patch',

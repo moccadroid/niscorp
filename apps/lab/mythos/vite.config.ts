@@ -15,24 +15,21 @@ export default defineConfig({
   },
   define: {
     // A production build rewrites `globalThis.process.env` to `{}` (vite's
-    // define plugin, build only). PGlite reads exactly that as "am I in Node?"
-    // and, told yes, writes `process.exitCode` — a ReferenceError in a browser,
-    // so the bundle never booted (dev serves PGlite unrewritten, which is why it
-    // only ever failed built). Nothing else in the bundle reads it; in a page
-    // the true answer is that there is no process.
+    // define plugin, build only). PGlite reads that as running in Node and
+    // writes `process.exitCode`, a ReferenceError in a browser. Nothing else
+    // in the bundle reads it.
     'globalThis.process.env': 'undefined',
   },
   server: {
     port: 5176,
     open: true,
     fs: {
-      // Allow Vite to read the workspace-linked package source.
       allow: [workspaceRoot],
     },
   },
   optimizeDeps: {
-    // PGlite ships its Postgres WASM assets and resolves them via
-    // import.meta.url at runtime; pre-bundling breaks that, so exclude it.
+    // PGlite resolves its WASM assets via import.meta.url at runtime, which
+    // pre-bundling breaks.
     exclude: ['@electric-sql/pglite'],
   },
 });

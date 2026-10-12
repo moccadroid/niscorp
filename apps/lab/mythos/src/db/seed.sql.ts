@@ -1,10 +1,5 @@
-// Fixture todos pinned to CURRENT_DATE at seed time — the same value the
-// boot reads back and injects as ambient "today", so every date-relative
-// view (overdue, combo, streak) stays coherent no matter when the app runs.
-//
-// The spread is deliberate: 4 done (one today, two yesterday, one the day
-// before — a 3-day streak and a 1-todo combo), 5 open with future or no
-// dues, 3 overdue (mood starts at "blush" and calms as you garden).
+// The spread is deliberate: done on three consecutive days, one of them today
+// (a 3-day streak, a 1-todo combo), and 3 overdue (the mood starts at "blush").
 export const SEED_SQL = `
 insert into todos (title, notes, due_date, bloom, done, done_at, done_on, created_at) values
   ('Repot the monstera', 'It has outgrown the terracotta pot.', current_date, 'daisy', true, now() - interval '2 hours', current_date, now() - interval '6 days'),

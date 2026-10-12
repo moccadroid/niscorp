@@ -16,7 +16,7 @@ export const todoFormLayout: LayoutNode = {
     {
       component: 'Text',
       props: { size: 'lg', weight: 'bold' },
-      // children is a node position: the conditional NODE form, not the
+      // children is a node position: the conditional node form, not the
       // {$if} value directive.
       children: { if: '$.todo_id', then: 'Tend this todo', else: 'Plant a todo' },
     },

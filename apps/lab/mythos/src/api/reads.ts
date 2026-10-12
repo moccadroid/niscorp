@@ -1,18 +1,6 @@
 import type { Filter, OkCacheEntry } from '@niscorp/vex';
 import { row } from '../lib/prism';
 
-// ───────────────────────────────────────────────────────────
-// Every read the app depends on, authored as a Vex cache entry
-// (prewarmed at boot by src/vex/prewarm.ts — see AGENTS.md
-// "Using Vex"). The FINGERPRINT is the cache key — the name the
-// endpoints replay; id fields follow `<entity>_id`, and the
-// mapping owns the result envelope (it runs over `{ result: rows }`
-// for array shapes, `{ result: firstRow }` for object shapes).
-//
-// `$context.today` is the app's pinned reference date — stamped
-// server-side by the /api/query handler, never the wall clock.
-// ───────────────────────────────────────────────────────────
-
 export type ReadEntry = Pick<OkCacheEntry, 'shape' | 'dsl'> & {
   fingerprint: string;
   intent: string;
@@ -32,8 +20,8 @@ const OVERDUE_CONDS: Filter[] = [
 ];
 const OVERDUE: Filter = { and: OVERDUE_CONDS };
 
-// SUM(CASE WHEN <cond> THEN 1 ELSE 0 END) — flat aggregates on one source,
-// never parameterized subqueries (their param numbering collides).
+// Flat aggregates on one source, not parameterized subqueries: their
+// parameter numbering collides.
 const countWhere = (condition: Filter) => ({
   sum: { case: { when: [{ condition, then: 1 }], else: 0 } },
 });
@@ -117,7 +105,6 @@ const gardenTodos: ReadEntry = {
         title: row('title'),
         bloom: row('bloom'),
         stage: row('stage'),
-        // Layout bindings have no string equality; the boolean is derived here.
         is_bloom: { $eq: [row('stage'), { $const: 'bloom' }] },
         when_display: {
           $case: {
@@ -140,8 +127,6 @@ const gardenTodos: ReadEntry = {
   },
 };
 
-// Mood thresholds: 3 overdue = blush (overloaded), 7 open = peach (buzzing),
-// 3 open = butter (cozy), else mint (calm). Derived here — never in components.
 const MOOD_BRANCHES = (value: (token: string) => unknown) => ({
   $case: {
     branches: [
@@ -192,8 +177,6 @@ const todoStats: ReadEntry = {
   },
 };
 
-// No mapping: the identity IR returns the rows verbatim. The streak number is
-// derived from these rows in the topbar endpoint's response transform.
 const doneDays: ReadEntry = {
   fingerprint: 'todos/doneDays',
   intent: 'Distinct days on which a todo was completed, newest first',

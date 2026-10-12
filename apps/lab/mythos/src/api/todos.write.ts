@@ -1,12 +1,6 @@
 import { z } from 'zod';
 import type { PGlite } from '@electric-sql/pglite';
 
-// ───────────────────────────────────────────────────────────
-// The write path (D4): thin handlers, parameterized SQL, Zod at
-// the boundary. Identity-shaped derivation is stamped HERE, never
-// client-supplied: `bloom` on create, `done_at`/`done_on` on done.
-// ───────────────────────────────────────────────────────────
-
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export const TodoPayloadSchema = z

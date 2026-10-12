@@ -3,9 +3,6 @@ import type { DatabaseSchema, PostgresCache, QueryEngine, ScopePolicy } from '@n
 import type { PGlite } from '@electric-sql/pglite';
 import { createPglitePool, RAW_DATE_PARSERS } from './pool';
 
-// Single-user app, one entity. The policy still defaults to deny so anything
-// else that ever shows up in the schema stays closed until explicitly opened;
-// `config.entities` keeps introspection away from vex's own cache table.
 const SCOPE: ScopePolicy = {
   default: 'deny',
   entities: { todos: { public: true } },

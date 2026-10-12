@@ -1,8 +1,5 @@
 import type { ActionDefinition } from '@niscorp/nova';
 
-// Kit workbench (order-of-work step 3): every primitive on one surface.
-// Not reachable from the app chrome; pushed by the boot dev check (and by
-// hand in a console) to lock the look before features.
 export const kitchenSink: ActionDefinition = {
   id: 'kitchen-sink',
   name: 'Kitchen sink',

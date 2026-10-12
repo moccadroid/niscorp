@@ -1,10 +1,6 @@
 import { getApp } from '../boot';
 import { activeData, activeDefinition, check, fail, finish, isRecord, records, renderActive, waitFor } from './harness';
 
-// The write round-trips, driven through the real shell: create → announce →
-// re-read; edit seeded from a row; complete; delete with confirm. Every
-// mutation flows through a trigger → endpoint → todos-changed.
-
 const run = async (): Promise<never> => {
   const app = await getApp();
   const shell = app.shell;
@@ -13,7 +9,6 @@ const run = async (): Promise<never> => {
   await waitFor(() => activeData(shell, 'main')['loading'] === false);
   check('list starts with the 8 seeded open todos', listTodos().length === 8);
 
-  // ── Create ────────────────────────────────────────────────
   shell.dispatch({ type: 'ui:click', ref: 'new-todo' });
   check('+ Plant opens the form on the overlay', activeDefinition(shell, 'overlay') === 'todo-form');
 
@@ -33,7 +28,6 @@ const run = async (): Promise<never> => {
 
   if (!isRecord(created)) return finish('todos');
 
-  // ── Edit, seeded from the row ─────────────────────────────
   shell.dispatch({ type: 'ui:click', ref: 'row-edit', payload: created });
   renderActive(shell, 'overlay');
   const form = activeData(shell, 'overlay');
@@ -45,7 +39,6 @@ const run = async (): Promise<never> => {
   await waitFor(() => listTodos().some((t) => t['title'] === 'Feed the sourdough starter twice'));
   check('edit round-trips through PUT and the re-read', listTodos().some((t) => t['title'] === 'Feed the sourdough starter twice'));
 
-  // ── Complete ──────────────────────────────────────────────
   const before = listTodos().length;
   shell.dispatch({ type: 'ui:click', ref: 'row-complete', payload: created['todo_id'] });
   await waitFor(() => listTodos().length === before - 1);
@@ -57,7 +50,6 @@ const run = async (): Promise<never> => {
   const stats = activeData(shell, 'main')['stats'];
   check('done-today combo ticked up to 2', isRecord(stats) && stats['done_today'] === 2);
 
-  // ── Delete, with confirm ──────────────────────────────────
   const victim = listTodos().find((t) => t['title'] === 'Descale the kettle');
   check('a seeded row is available to delete', victim !== undefined);
   if (isRecord(victim)) {

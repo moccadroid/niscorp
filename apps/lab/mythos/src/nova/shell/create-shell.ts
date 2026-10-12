@@ -21,11 +21,6 @@ export type AppShell = { shell: Shell; registry: ComponentRegistry };
 export const createAppShell = ({ fetch, today }: AppShellDeps): AppShell => {
   const registry = createAppRegistry();
 
-  // The Nova↔Prism socket (AGENTS rule 6). Nova never interprets transform
-  // configs; Prism does, here. Ambient app context — the pinned reference
-  // date — folds into the source at this seam: record sources (action data,
-  // object replies) get `today` spread in; array/scalar replies are wrapped
-  // as `{ reply, today }` so response transforms can reach both.
   const transform: TransformFn = (config, source) => {
     const parsed = validate(config);
     if (!parsed.ok) {

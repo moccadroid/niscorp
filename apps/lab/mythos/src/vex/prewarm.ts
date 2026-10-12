@@ -3,15 +3,8 @@ import { computeSchemaFingerprint } from '@niscorp/vex';
 import type { CacheBackend, DatabaseSchema } from '@niscorp/vex';
 import { readEntries } from '../api/reads';
 
-// ───────────────────────────────────────────────────────────
-// Prewarm: turn every authored read entry (src/api/reads.ts)
-// into a live vex_cache row under the entry's NAMED fingerprint,
-// marked protected. The Prism IR is compiled here — mapping-less
-// entries get the identity IR explicitly, because a NULL prism_ir
-// would fall through to the (unwired) LLM mapper. After this runs,
-// every app read replays its fingerprint and never touches a model.
-// ───────────────────────────────────────────────────────────
-
+// An entry without a mapping gets the identity IR: a NULL prism_ir would
+// fall through to the LLM mapper, which is not wired.
 const IDENTITY_MAPPING = { $ref: '$.result' };
 
 export const prewarmCache = async (cache: CacheBackend, schema: DatabaseSchema): Promise<void> => {

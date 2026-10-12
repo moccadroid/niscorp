@@ -1,6 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// One plot. Blooms replant on click; sprouts (and wilters) bloom on click.
 const plot: LayoutNode = {
   component: 'Card',
   props: { tone: 'ghost', pad: 10 },

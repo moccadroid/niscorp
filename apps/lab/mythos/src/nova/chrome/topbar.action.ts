@@ -4,9 +4,6 @@ import { DEFAULT_STATS, readEndpoint } from '../shared/endpoints';
 import { streakFromDoneDays } from './topbar.prism';
 import { topbarLayout } from './topbar.layout';
 
-// The chrome: brand, Patch/Garden tabs (each replaces the main canvas),
-// the mood chip, the daily combo meter, the streak chip, and the planting
-// button. Listens on todos-changed like every other viewer.
 export const topbar: ActionDefinition = {
   id: 'topbar',
   name: 'Topbar',
