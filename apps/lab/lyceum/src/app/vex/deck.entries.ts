@@ -1,18 +1,11 @@
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 
-// ── the deck: which slide is on screen, and moving it ──
-
-// The talk's deck — the one row of `deck`, by its key. Named once, here: the
-// reads below filter on it, the seed creates it, and a timer writes to it.
 export const TALK_DECK = 'talk';
 
-// Reactive: the controller follows the deck without being told. The stage
-// follows it too, but a new slide is a new ACTION on its canvas, which no
-// data update can mount — so the stage also hears `deck-moved` (reactions).
-//
-// It answers with the slide on screen AND its neighbours, so Back and Next can
-// say where they go. Every slide row carries the deck's position (a cross-
-// joined subquery), and the mapping picks the three out: here, before, after.
+// Reactive, but a new slide is a new action on the stage's canvas, which no
+// data update can mount: the stage also hears `deck-moved`.
+// Every slide row carries the deck's position (a cross-joined subquery), and
+// the mapping picks three out: here, before, after.
 const field = (from: string, name: string, fallback: unknown): unknown => ({
   $get: { from: { $var: from }, path: [name], fallback: { $const: fallback } },
 });
@@ -58,9 +51,7 @@ export const deckCurrent: SeedEntry = {
             slide_id: field('here', 'slide_id', ''),
             title: field('here', 'title', ''),
             position: { $var: 'at' },
-            // Counted from one, for people.
             number: { $add: [{ $var: 'at' }, 1] },
-            // A slide with no controls of its own still names a tool: the empty one.
             count: { $length: { $var: 'rows' } },
             prev_number: { $var: 'at' },
             prev_title: field('before', 'title', ''),
@@ -73,8 +64,6 @@ export const deckCurrent: SeedEntry = {
   },
 };
 
-// The whole deck, for the controller's picker: every slide, its place and its
-// title, counted from one.
 export const slidesAll: SeedEntry = {
   fingerprint: 'slides/all',
   intent: 'Every slide in the deck, in order',
@@ -98,8 +87,6 @@ export const slidesAll: SeedEntry = {
   },
 };
 
-// The speaker's notes for the slide on screen, in order. Reactive: the deck
-// row moving is a write to a table this reads, so the notes follow the deck.
 export const slideNotes: SeedEntry = {
   fingerprint: 'slides/notes',
   refresh: 'reactive',
@@ -113,9 +100,6 @@ export const slideNotes: SeedEntry = {
   },
 };
 
-// The tools the slide on screen puts on the controller, in order. A snapshot:
-// the speaker's deck reads it when the deck moves and makes the tool region
-// hold exactly these (a `reconcile` step).
 export const slideTools: SeedEntry = {
   fingerprint: 'slides/tools',
   intent: 'The tools the slide on screen puts on the controller, in order',
@@ -128,10 +112,6 @@ export const slideTools: SeedEntry = {
   },
 };
 
-// Put the slide at `position` on screen. The controller computes the position
-// (one on, one back, clamped to the deck); the slide is looked up by it, so a
-// request names a place in the deck, never an action. The deck is named too —
-// there is one, but a write says which row it bounds.
 export const deckGo: SeedMutation = {
   fingerprint: 'deck/go',
   intent: 'Put the slide at a position in the deck on screen',
@@ -140,15 +120,12 @@ export const deckGo: SeedMutation = {
     table: 'deck',
     set: {
       slide_id: { $lookup: { from: 'slides', field: 'slide_id', where: { eq: ['slides.position', { $context: 'position' }] } } },
-      // A new slide starts unrevealed.
       step: 0,
     },
     where: { eq: ['deck.deck_id', { $context: 'deck' }] },
   },
 };
 
-// The deck as the assistant knows it: every slide's id, its number and its
-// title. Ids included, because an automation names the slide it shows.
 export const slidesDeck: SeedEntry = {
   fingerprint: 'slides/deck',
   intent: 'Every slide in the deck with its id, number and title, in order',
@@ -172,10 +149,8 @@ export const slidesDeck: SeedEntry = {
   },
 };
 
-// Put a named slide on screen — what a timer does when it fires (as the
-// `clock` principal, whose only grant is this write). By id rather than by
-// position: an automation names what it means, and the foreign key refuses a
-// slide that is not in the deck.
+// By id rather than by position: an automation names what it means, and the
+// foreign key refuses a slide that is not in the deck.
 export const deckShow: SeedMutation = {
   fingerprint: 'deck/show',
   intent: 'Put a named slide on screen',
@@ -187,10 +162,6 @@ export const deckShow: SeedMutation = {
   },
 };
 
-// HOW FAR THE SLIDE ON SCREEN HAS BEEN REVEALED. Where a traditional deck has
-// three slides that each add a line, this one has one slide and a number: the
-// controller's step tool writes it, the slide reads it and shows more.
-// Reactive, so the stage follows a press on its own.
 export const deckStep: SeedEntry = {
   fingerprint: 'deck/step',
   refresh: 'reactive',

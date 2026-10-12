@@ -1,10 +1,6 @@
 import { z } from 'zod';
 import type { ActionDefinition } from '@niscorp/nova';
 
-// ONE ACTION ON THE SCREEN, AS THE DOCUMENT IT IS — opened over the screen when
-// somebody with the X-ray on taps an action's id (member/phone.action.ts). Its
-// definition as the shell runs it for them, with its data as it stands now
-// (server/functions/xray.functions.ts). Only for a person given the X-ray.
 export const xrayDocumentAction: ActionDefinition = {
   id: 'xray.document',
   description: 'One action on the person\'s screen, as the JSON document it is: its data, endpoints, triggers and layout.',
@@ -21,7 +17,7 @@ export const xrayDocumentAction: ActionDefinition = {
     children: [
       {
         component: 'Cell',
-        // No scroll of its own: the sheet's body scrolls (shell/fragments).
+        // No scroll of its own: the sheet's body scrolls.
         props: { area: 'json' },
         children: [{ if: '$.error', then: { component: 'Text', children: '{{$.error.message}}' }, else: { component: 'Code', props: { text: '$.document.json' } } }],
       },

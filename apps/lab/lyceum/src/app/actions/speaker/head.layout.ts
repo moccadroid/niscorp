@@ -1,7 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The room, the slide on screen, and the time left on the newest timer — and,
-// in the corner, the controller's menu: what is not for any one slide.
 export const headLayout: LayoutNode = {
   component: 'Sheet',
   props: { areas: ['room menu', 'slide timer'], cols: [3, 1] },

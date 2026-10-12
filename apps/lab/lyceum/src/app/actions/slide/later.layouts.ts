@@ -1,9 +1,6 @@
 import type { LayoutNode } from '@niscorp/nova';
 import { deckNextPrism } from '@lyceum/app/actions/speaker/console.prism';
 
-// THE LATER SECTIONS' LAYOUTS — Moss and Charter, Vex, the assistant, Tide,
-// Strata, the close. Each designed for its one claim and its one picture.
-
 const cell = (area: string, children: LayoutNode[], props: Record<string, unknown> = {}): LayoutNode => ({
   component: 'Cell',
   props: { area, ...props },
@@ -15,8 +12,6 @@ const text = (words: string): LayoutNode => ({ component: 'Text', children: word
 const headline = (level: 'display' | 'title' | 'name', words: string): LayoutNode => ({ component: 'Headline', props: { level }, children: words });
 const code = (textAt: string, markedAt?: string): LayoutNode => ({ component: 'Code', props: { text: textAt, ...(markedAt !== undefined ? { marked: markedAt } : {}) } });
 
-// Moss: the claim, and under it, across the whole slide, what moves between
-// your shell on the server and your phone — the dots never stop.
 export const mossLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['kick', 'head', 'flow'], rows: ['auto', 1, 'auto'] },
@@ -31,8 +26,6 @@ export const mossLayout: LayoutNode = {
   ],
 };
 
-// A document under its claim: the claim across the top, the package's name in
-// blue, and the real source beside it on ink, the lines that matter marked.
 export const documentLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head head', 'name code'], cols: [1, 1.6], rows: ['auto', 1] },
@@ -43,8 +36,6 @@ export const documentLayout: LayoutNode = {
   ],
 };
 
-// Enforced in two places: the shell (which actions exist) and the engine
-// (which rows a query reaches), each with what it looks like.
 export const twiceLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head head', 'shell query'], cols: [1, 1.2], rows: ['auto', 1] },
@@ -55,9 +46,6 @@ export const twiceLayout: LayoutNode = {
   ],
 };
 
-// Prism: a function as JSON — the controller's Next button — and beside it the
-// same JSON (imported, not retyped) run on this slide, live: where the deck is, how long it is, and
-// what Next would send.
 export const prismLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head head head', 'code at count', 'code sends sends'], cols: [1.9, 0.7, 0.7], rows: ['auto', 1, 1] },
@@ -70,8 +58,6 @@ export const prismLayout: LayoutNode = {
   ],
 };
 
-// Vex: what is stored, big, and what a screen sends to use it, small — the
-// difference in size is the point.
 export const vexLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head head', 'stored sent'], cols: [1.5, 1], rows: ['auto', 1] },
@@ -82,7 +68,6 @@ export const vexLayout: LayoutNode = {
   ],
 };
 
-// Asked in words: the question, and the three things that can come of it.
 export const wordsLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head head head', 'again new cannot'], rows: [1, 1] },
@@ -101,7 +86,6 @@ export const wordsLayout: LayoutNode = {
   ],
 };
 
-// A number that happened, and where.
 export const incidentLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['kick', 'head'], rows: ['auto', 1] },
@@ -111,7 +95,6 @@ export const incidentLayout: LayoutNode = {
   ],
 };
 
-// It prepares, you press: what the model may do, and the one thing it may not.
 export const pressLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head head', 'can cannot'], cols: [1.3, 1], rows: ['auto', 1] },
@@ -122,8 +105,6 @@ export const pressLayout: LayoutNode = {
   ],
 };
 
-// Tide: the timer saved at the start of the talk, as it is stored, and how
-// long until it fires.
 export const tideLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['kick doc', 'head doc', 'left doc'], cols: [1, 1.15], rows: ['auto', 1, 'auto'] },
@@ -142,8 +123,6 @@ export const tideLayout: LayoutNode = {
   ],
 };
 
-// Two ways to automate, one above the other: the agent's on paper, the
-// reflex's in green.
 export const onceLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head head', 'agent reflex'], cols: [1, 1.2], rows: ['auto', 1] },
@@ -154,8 +133,6 @@ export const onceLayout: LayoutNode = {
   ],
 };
 
-// Strata: the claim, and this app's own grammar history — every migration of
-// its components' props, in order, the one that rewrote documents marked.
 export const strataLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head read', 'list list'], cols: [1.7, 1], rows: ['auto', 1] },
@@ -166,10 +143,6 @@ export const strataLayout: LayoutNode = {
   ],
 };
 
-// The end: where it all is — the public repository, as a code to scan and in
-// words, and the folder this app is in — and where the questions go. Under
-// that, whatever an integration attached to this slide (`attached`, the
-// stage's): The QA Company's list of the questions found fit to show, once installed.
 export const endLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head where', 'head ask'], cols: [1.4, 1], rows: [1, 1] },

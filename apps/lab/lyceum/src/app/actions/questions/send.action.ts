@@ -3,11 +3,9 @@ import { z } from 'zod';
 import { questionSend } from '@lyceum/app/vex/question.entries';
 import { sendLayout } from './send.layout';
 
-// A QUESTION FOR THE SPEAKER — the form alone: a line and Send. A write as the
-// sender, and that is all. Nobody is granted it: the room's questions come
-// through the QA Company. It is the action slide 8 shows as code, and its layout is that
-// slide's preview — so it is written to be read: one trigger, one endpoint, no
-// name used twice.
+// Nobody is granted it: the room's questions come through the QA Company. A
+// slide shows it as code, with its layout as the preview, so it is written to
+// be read: one trigger, one endpoint, no name used twice.
 export const questionSendAction: ActionDefinition = {
   id: 'questions.send',
   description: 'A form to send the speaker a question; it is sent only when they press Send.',

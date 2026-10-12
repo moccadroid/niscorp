@@ -1,11 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { signinLayout } from './signin.layout';
 
-// THE SPEAKER'S SIGN-IN DESK — the whole application of a device that opened
-// /speaker (server/login.ts gives it a principal of its own, granted only
-// this). Asking is a server function: it mails a one-time link if the address
-// is the speaker's, and answers the same either way. The link, opened, signs
-// that device in as the speaker.
 export const signinAction: ActionDefinition = {
   id: 'lectern.signin',
   title: 'Speaker sign-in',

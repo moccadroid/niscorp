@@ -1,6 +1,3 @@
-// THE HEADLESS TERMINAL every check drives — a real websocket against the real
-// boot, reading trees as a terminal would. Shared so each check says only
-// what it asserts.
 import { z } from 'zod';
 import { mintSession } from '@niscorp/moss';
 import { offerToken, PROTOCOL } from '@niscorp/moss/protocol';
@@ -9,9 +6,6 @@ import type { PgPool } from '@niscorp/vex';
 import { assistantGive, EVERYBODY } from '@lyceum/app/vex/grant.entries';
 import { memberRegister } from '@lyceum/app/vex/member.entries';
 
-// GIVE EVERYBODY WHO HAS JOINED THE ASSISTANT, the way the controller's tool
-// does: the speaker reads who joined and writes a grant row each. A phone
-// starts without one; a check about the assistant gives it first.
 export const giveAssistant = async (server: MossServer, pool: PgPool): Promise<void> => {
   const token = await mintSession(pool, 'speaker', 60_000);
   const replay = async (fingerprint: string, context: Record<string, unknown>): Promise<unknown> => {
@@ -33,26 +27,18 @@ const MessageSchema = z.looseObject({ type: z.string() });
 const HelloSchema = z.object({ type: z.literal('hello'), principal: z.string().nullable(), catalog: z.object({ actions: z.array(z.string()) }) });
 const SessionSchema = z.object({ type: z.literal('session'), token: z.string() });
 const RenderSchema = z.object({ type: z.literal('render'), canvas: z.string(), tree: z.unknown() });
-// The frame arrives as its own message; it is kept under the name `frame`.
 const FrameSchema = z.object({ type: z.literal('frame'), tree: z.unknown() });
 
 export type Terminal = {
   hello: () => Promise<z.infer<typeof HelloSchema>>;
-  // Resolves when the newest tree on `canvas` contains `text`.
   shows: (canvas: string, text: string) => Promise<boolean>;
   showsNow: (canvas: string, text: string) => boolean;
   textOf: (canvas: string) => string;
   session: () => Promise<string>;
   click: (canvas: string, ref: string, payload?: unknown) => void;
-  // A channel message from the terminal, as the browser sends one (a tapped
-  // X-ray tag, src/ui/target.ts).
   publish: (channel: string, payload?: unknown) => void;
-  // A click on `ref` inside the one instance on `canvas` that shows `text` —
-  // for a list canvas whose instances share a ref (the phone's tabs).
   clickIn: (canvas: string, ref: string, text: string) => void;
-  // What a `model`'d field sends as somebody types (nova's dom adapter).
   type: (canvas: string, ref: string, text: string) => void;
-  // A key pressed in a `model`'d field (nova's dom adapter sends `ui:key`).
   key: (canvas: string, ref: string, key: string) => void;
   sessionsSeen: () => number;
   isOpen: () => boolean;
@@ -70,10 +56,6 @@ export const waitUntil = async (condition: () => boolean): Promise<boolean> => {
   return condition();
 };
 
-// WHICH INSTANCE A CLICK BELONGS TO — decided where a terminal decides it: the
-// served tree's ActionSlot around the pressed node. On a list canvas several
-// instances are live at once, and a click on any but the last must say which
-// (nova's dom adapter and moss's react terminal both stamp it the same way).
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const instanceAround = (nodes: unknown, ref: string, inside?: string): string | undefined => {
   if (!Array.isArray(nodes)) return undefined;
@@ -88,7 +70,6 @@ const instanceAround = (nodes: unknown, ref: string, inside?: string): string | 
   return undefined;
 };
 
-// The `value` prop of the first node carrying `ref` — a click's payload.
 const valueOf = (nodes: unknown, ref: string): unknown => {
   if (!Array.isArray(nodes)) return undefined;
   for (const node of nodes) {
@@ -100,8 +81,6 @@ const valueOf = (nodes: unknown, ref: string): unknown => {
   return undefined;
 };
 
-// The ActionSlot on a canvas whose subtree shows `text` — which instance a
-// click on a shared ref means.
 const instanceShowing = (nodes: unknown, text: string): string | undefined => {
   if (!Array.isArray(nodes)) return undefined;
   for (const node of nodes) {
@@ -157,8 +136,6 @@ export const connect = (base: string, token?: string): Promise<Terminal> =>
         click: (canvas, ref, payload) => {
           const tree: unknown = JSON.parse(trees.get(canvas) ?? '[]');
           const origin = instanceAround(tree, ref);
-          // What a real click sends: the pressed node's own `value`, unless the
-          // check says otherwise (nova's dom adapter).
           const sent = payload === undefined ? valueOf(tree, ref) : payload;
           const event = { type: 'ui:click', ref, ...(sent === undefined ? {} : { payload: sent }), ...(origin === undefined ? {} : { origin }) };
           socket.send(JSON.stringify({ type: 'event', canvas, event }));
@@ -184,7 +161,6 @@ export const connect = (base: string, token?: string): Promise<Terminal> =>
     });
   });
 
-// One line per check, and the exit code the suite reads.
 export const finish = (): never => {
   const failed = results.filter((result) => !result.ok).length;
   console.log(failed === 0 ? `OK — ${results.length} assertions` : `FAIL — ${failed} of ${results.length} assertions`);

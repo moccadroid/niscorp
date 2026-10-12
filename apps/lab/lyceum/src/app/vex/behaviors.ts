@@ -1,16 +1,5 @@
 import type { ScopeBehaviors } from '@niscorp/vex';
 
-// Row-level rules the charter cannot say (AGENTS.md, rule 10).
-//
-// `default` — what every role's reads and writes do on `members`: a member row
-// is inserted by the person it belongs to, and the engine stamps its id from
-// their session's `userId`. A request cannot name somebody else's id.
-//
-// `personal` — the reach of the Forms role (charter.ts, `scoping`): an update
-// only ever reaches the caller's own row. Forms can change their record; the
-// grant says they may update members, this says which member — for every
-// entry they replay, not only the one written for them. `members/rename` also
-// asks for it, so a rename stays personal whoever holds the verb.
 export const BEHAVIORS: ScopeBehaviors = {
   members: {
     default: { insert: [{ set: 'member_id', to: 'userId' }] },
@@ -19,14 +8,10 @@ export const BEHAVIORS: ScopeBehaviors = {
       update: [{ match: 'member_id', to: 'userId' }],
     },
   },
-  // A query is recorded as the person who ran it: the engine stamps
-  // `member_id`, and a request cannot record one in anybody else's name.
   queries: {
     default: { insert: [{ set: 'member_id', to: 'userId' }] },
   },
-  // A question for the speaker is its sender's: sent as them, and read by them
-  // alone. Nobody edits or deletes one (charter.ts grants neither). The
-  // speaker's reach is `room` (charter.ts): every question, to read.
+  // `room` is the speaker's reach: every question, to read.
   questions: {
     default: {
       insert: [{ set: 'member_id', to: 'userId' }],
@@ -34,27 +19,19 @@ export const BEHAVIORS: ScopeBehaviors = {
     },
     room: {},
   },
-  // A verdict is the moderator's, read by the moderator and the speaker whole.
-  // The stage's reach (`stage`, the stage's — charter.ts) reads only the
-  // verdicts that say fit to show: `fitToShow` is a constant every principal's
-  // scope carries (server/identity.ts), so the engine adds `appropriate = true`
-  // to every read the stage makes, whatever an action asks for. The stage reads
-  // no other table of questions — what it shows is the text the verdict judged.
+  // `fitToShow` is a constant every principal's scope carries, so the engine
+  // adds `appropriate = true` to every read the stage makes, whatever an
+  // action asks for.
   question_verdicts: {
     default: {},
     stage: { read: [{ match: 'appropriate', to: 'fitToShow' }] },
   },
-  // A press is its presser's: the engine stamps who, and a request cannot press
-  // in anybody else's name.
   presses: {
     default: { insert: [{ set: 'member_id', to: 'userId' }] },
   },
-  // A timer is saved by whoever saved it (the speaker): stamped, not sent.
   timers: {
     default: { insert: [{ set: 'saved_by', to: 'userId' }] },
   },
-  // A conversation is its person's alone: written as them, read and resolved
-  // only by them — the speaker's included.
   assistant_turns: {
     default: {
       read: [{ match: 'member_id', to: 'userId' }],

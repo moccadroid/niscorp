@@ -1,16 +1,9 @@
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 
-// ── which renderer draws each surface: the phones, the projector, the controller ──
-
-// The surfaces and the renderers, in one place: the entries, the marker
-// actions, the controller's switch. The table holds the same closed sets.
+// The `renderers` table holds the same closed sets.
 export const SURFACES = ['phones', 'stage', 'controller'] as const;
 export const RENDERERS = ['dom', 'react', 'vue'] as const;
 
-// One surface's renderer — what its marker names (app/actions/look/). Reactive:
-// the speaker writes the row, and every screen of that surface is drawn again
-// by the other renderer; nothing announces it. A single-row shape: `result` is
-// the row itself, or null.
 export const surfaceRenderer: SeedEntry = {
   fingerprint: 'renderers/surface',
   refresh: 'reactive',
@@ -24,9 +17,6 @@ export const surfaceRenderer: SeedEntry = {
   mapping: { renderer: { $get: { from: { $ref: '$.result' }, path: ['renderer'], fallback: { $const: 'dom' } } } },
 };
 
-// Every surface and its renderer, for the controller's switch: one row per
-// surface, in order, with a choice per renderer and whether it is the one in
-// use — so the layout marks it without comparing anything itself.
 const choice = (renderer: string, label: string): unknown => ({
   label: { $const: label },
   on: { $eq: [{ $get: { from: { $var: 'row' }, path: ['renderer'] } }, { $const: renderer }] },
@@ -67,8 +57,6 @@ export const allRenderers: SeedEntry = {
   },
 };
 
-// Change one surface's renderer. Any other surface or renderer is refused by
-// the table.
 export const setRenderer: SeedMutation = {
   fingerprint: 'renderers/set',
   intent: 'Change the renderer that draws one surface',

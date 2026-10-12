@@ -1,12 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { buttonGive, buttonGiven, buttonHolders, buttonTake } from '@lyceum/app/vex/grant.entries';
 
-// The controller's button tool: give the button to three people, or take it
-// back. Which three is chance, and chance is not data — the server picks
-// (`button.pick`, server/functions/button.functions.ts) and this writes a
-// grant row for each (vex/grant.entries.ts); their shells are rebuilt and the
-// button is on their phones. Taking it back deletes the rows. How many have it
-// is a reactive read, so the tool follows.
 export const buttonTool: ActionDefinition = {
   id: 'tools.button',
   title: 'The button',

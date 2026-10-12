@@ -1,14 +1,3 @@
-// RESET CHECK — the talk, put back to how it starts.
-//
-//   1. a talk leaves things behind: two people joined, were given the
-//      assistant, one sent a question; the deck moved; the phones are drawn by
-//      React;
-//   2. the controller's menu has Reset; it asks first, and No changes nothing;
-//   3. Yes: nobody has joined, nothing they wrote is left, nothing is given,
-//      the renderers are DOM, the deck is on its first slide — and the stage
-//      shows it;
-//   4. the phones are at the join screen again, as nobody;
-//   5. the staff are who they were: the speaker still has the controller.
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { mintSession } from '@niscorp/moss';
@@ -42,7 +31,6 @@ const main = async (): Promise<void> => {
     return { phone, token };
   };
 
-  // ── 1 ──
   const ada = await join();
   const ben = await join();
   const speakerToken = await mintSession(runtime.pool, 'speaker', 600_000);
@@ -68,7 +56,6 @@ const main = async (): Promise<void> => {
       speaker.showsNow('head', 'slide 3 of'),
   );
 
-  // ── 2 ──
   check('the controller’s menu has Reset', speaker.showsNow('head', '"name":"Menu"') && speaker.showsNow('head', '"ref":"reset"'));
   speaker.click('head', 'reset');
   check('...which asks first', await speaker.shows('overlay', 'Yes, reset'));
@@ -76,7 +63,6 @@ const main = async (): Promise<void> => {
   await waitUntil(() => !speaker.showsNow('overlay', 'Yes, reset'));
   check('No changes nothing', (await count('SELECT 1 FROM members')) === 2 && (await count('SELECT 1 FROM questions')) === 1 && speaker.showsNow('head', 'slide 3 of'));
 
-  // ── 3 ──
   speaker.click('head', 'reset');
   await speaker.shows('overlay', 'Yes, reset');
   speaker.click('overlay', 'yes');
@@ -95,12 +81,10 @@ const main = async (): Promise<void> => {
   check('...and on the stage', await stage.shows('main', SLIDES[0]?.title ?? '\u0000'));
   check('...and the controller counts nobody', await speaker.shows('head', 'Controller · 0 joined'));
 
-  // ── 4 ──
   check('the first phone is at the join screen again', await ada.phone.shows('main', '"ref":"pick"'));
   check('...and the second', await ben.phone.shows('main', '"ref":"pick"'));
   check('...as nobody: what they could write, they cannot', (await replay(ada.token, questionSend.fingerprint, { text: 'after the reset' })) >= 400);
 
-  // ── 5 ──
   check('the speaker still has the controller', speaker.showsNow('controls', '"ref":"next"'));
 
   ada.phone.close();

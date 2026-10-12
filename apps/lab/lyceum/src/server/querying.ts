@@ -8,28 +8,6 @@ import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
 import { createDecider } from './decider';
 import type { QueryShape } from '@lyceum/app/vex/query.shapes';
 
-// WHO TURNS A REQUEST IN WORDS INTO A VEX QUERY — the two model seams.
-//
-//   ROUTING   — a CHOICE, never writing: has an earlier request already asked
-//               for the same thing (then its query is replayed), and which of
-//               the authored shapes (../app/vex/query.shapes.ts) does the
-//               answer take. Jev (TypeSafe, `decide()`) with TYPESAFE_API_KEY;
-//               without it, gpt-oss-120b answers the same choices by
-//               emulation (uncalibrated picks).
-//   GENERATION — a new request's query, written by vex's query agent and
-//               mapped by prism's mapping agent, on gpt-oss-120b at `low`
-//               (PLAN.md, "Measured"). It runs under the ASKER's policy: the
-//               model is handed only the tables they may read, and whatever it
-//               writes is compiled under the same policy.
-//
-//   LYCEUM_QUERY=live   the above; needs GROQ_API_KEY
-//   LYCEUM_QUERY=fake   deterministic stand-ins for both — what the checks use,
-//                     and a talk with no network. The fake generator writes
-//                     real DSL, so the engine, the cache, the policy and the
-//                     replay path are the real ones.
-//
-// Unset, it is `live` when there is a Groq key and `fake` when there is not.
-
 export type Known = { request: string; fingerprint: string; shape: string };
 export type Route = { replay: Known } | { generate: QueryShape };
 
@@ -43,29 +21,24 @@ export type Querier = {
 const DEFAULT_SHAPE: QueryShape = QUERY_SHAPES[0] ?? { kind: 'list', description: '', shape: [] };
 const shapeOf = (kind: string): QueryShape => QUERY_SHAPES.find((shape) => shape.kind === kind) ?? DEFAULT_SHAPE;
 
-// The router is handed at most this many earlier requests — a choice has at
-// most 255 options, and the newest are the likeliest to be run again.
+// A choice has at most 255 options, and the newest requests are the likeliest
+// to be run again.
 const KNOWN_LIMIT = 200;
-
-// ── live ──
 
 const liveQuerier = (env: Record<string, string | undefined>): Querier => {
   const llm = createSignal('groq', { options: { reasoningEffort: 'low' } }).model('openai/gpt-oss-120b');
-  // The one decider (./decider.ts): the router is one of its questions.
   const decider = createDecider(env);
   const dslSchema = createQueryEngine({ adapter: createPostgresAdapter({ pool: { query: () => Promise.reject(new Error('unused')) } }) }).getDslSchema();
 
   return {
     kind: 'live',
-    // Jev's words below say "question": they are the measured contract (48/48,
-    // MEASURED.md) — renaming them is a re-measurement, not a tidy-up.
+    // Jev's words below say "question": they are the measured contract, and
+    // renaming them is a re-measurement.
     route: async (question, known) => {
       const candidates = known.slice(0, KNOWN_LIMIT);
       const byKey = new Map(candidates.map((entry, index) => [`q${index}`, entry]));
-      // The earlier questions are FACTS, so they go in the state; the options
-      // only name them. Written into the options' own text instead, Jev read
-      // them poorly — 0.94 "new" for the identical question with one
-      // candidate — and in the state it is certain (measured 2026-09-27).
+      // The earlier questions go in the state and the options only name them:
+      // written into the options' own text, Jev reads them poorly.
       const same: ChoiceQuestion = {
         type: 'choice',
         instructions: 'Does one of the earlier questions ask for exactly the same information as this question — the same rows, the same numbers? Different wording is fine; a different subject, filter or grouping is not.',
@@ -83,10 +56,8 @@ const liveQuerier = (env: Record<string, string | undefined>): Querier => {
         const decision = decisions[name];
         return typeof decision === 'object' && decision !== null && 'choice' in decision && typeof decision.choice === 'string' ? decision.choice : '';
       };
-      // A replay answers in the EARLIER question's shape, so it is the answer
-      // only if this question wants that shape too. "How many people are in
-      // Archive?" matched "…in each department?" at 0.73 — the counts contain
-      // Archive's — but it wants one number, not a count per group.
+      // A replay answers in the earlier question's shape, so it is the answer
+      // only if this question wants that shape too.
       const match = byKey.get(pick('same'));
       const wanted = shapeOf(pick('shape'));
       return match !== undefined && match.shape === wanted.kind ? { replay: match } : { generate: wanted };
@@ -95,8 +66,6 @@ const liveQuerier = (env: Record<string, string | undefined>): Querier => {
     mapToShape: createShapeMapper(llm),
   };
 };
-
-// ── fake ──
 
 const normalise = (text: string): string => text.trim().toLowerCase().replace(/[?.!]+$/, '');
 
@@ -108,9 +77,6 @@ const fakeKind = (request: string): string => {
   return 'list';
 };
 
-// A query per shape, aliased to the shape's keys so the rows already fit — and
-// one that reaches for a table no member may read, to be refused the way a
-// real generation would be: by the engine, under the caller's policy.
 const FAKE_DSL: Record<string, Query> = {
   number: { from: ['members'], aggregate: { value: { count: '*' } } },
   counts: { from: ['members'], fields: [{ field: 'members.name', as: 'group' }], aggregate: { count: { count: '*' } }, groupBy: ['members.name'], sort: [{ field: 'members.name', dir: 'asc' }] },
@@ -135,9 +101,6 @@ const fakeQuerier = (): Querier => ({
     if (/login|sign in|password/i.test(intent)) return FAKE_DSL['forbidden'] ?? FAKE_DSL['list'] ?? { from: ['members'] };
     return FAKE_DSL[fakeKind(intent)] ?? { from: ['members'] };
   },
-  // Vex's own mapper, with a model that is never there: rows that fit their
-  // shape get the identity, anything else fails — which the fake's queries,
-  // aliased to their shapes, never do.
   mapToShape: createShapeMapper(NO_MODEL),
 });
 
@@ -148,11 +111,3 @@ export const createQuerier = (env: Record<string, string | undefined>): Querier 
   if (!hasKey) throw new Error('lyceum: LYCEUM_QUERY=live needs GROQ_API_KEY in apps/lab/lyceum/.env.');
   return liveQuerier(env);
 };
-
-// WHERE THE GENERATION RUNS: in moss's own engine, asked through the session
-// (`session.answerIntent(querier, …)`, ./assistant/vex-query.ts). It is handed
-// `generateDsl` and `mapToShape` off the querier, writes under the caller's
-// policy, and keeps what it wrote in the cache `/api/vex` replays from. Who
-// "me" is comes from the behaviors the app ships (app/vex/behaviors.ts): the
-// columns bound to the caller's userId, so "what's my name?" is a filter on
-// the caller's own value and one stored query answers it for everybody.

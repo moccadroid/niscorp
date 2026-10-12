@@ -1,16 +1,4 @@
-// THE DECK — data, and nothing else: the slides in order, each with the tools
-// the controller shows beside it and the speaker's notes. db/seed.ts writes it
-// to the database on every boot; the census counts this file as data
-// (server/census.ts).
-//
-// In order. Each slide id is an action the stage is granted, each
-// tool id one the speaker is granted — `deck-check` asserts both. The tools are
-// what the controller shows while that slide is up, stacked in this order. The words are
-// provisional: the talk's text is written with the story.
-// `parts`: a slide shown in steps says how many (the controller's step tool
-// stops at the last); left out, it is one.
 export const SLIDES: readonly { slideId: string; title: string; tools: readonly string[]; notes: readonly string[]; parts?: number }[] = [
-  // ── the opening: where it started, the problem, our answer, and Nova ──
   { slideId: 'slide.title', title: 'nisc', tools: [], notes: ['[join: scan the code or type the address]', 'this talk is an app, running now, on one server', 'stage + my controller + your phones = one app', 'laptops: open the address, devtools open', 'terminal: the SSH command works too', 'join: pick a name or type one'] },
   { slideId: 'stage.register', title: 'Everyone who has joined', tools: [], notes: ['each name = a row in the database', 'names you typed: a model checked them first', '[wait until most people are in]'] },
   { slideId: 'slide.timer', title: 'First, a timer.', tools: ['assistant.thread'], notes: ['[ask the assistant here on the controller — the room watches it on the stage]', '[type: "Show the last slide in 30 minutes"]', 'the answer is a document: when it fires, what it does', '[read it out, press Save]', 'back to this at the end'] },
@@ -26,12 +14,10 @@ export const SLIDES: readonly { slideId: string; title: string; tools: readonly 
   { slideId: 'slide.parts', title: 'json-render ≈ Nova ∈ nisc', tools: [], notes: ['json-render: the screen as JSON — about what Nova does', 'more renderers than us; shadcn kit as an option', 'past the screen: Next.js and your code', 'nisc: the rest — server, authorization, queries, migrations, LLM — each its own package', 'bottom three: plumbing for model calls and streaming — there for completeness', 'A2UI: a protocol for an agent to send UI — a different job', 'next: how much of this app that is'] },
   { slideId: 'slide.census', title: 'Is JSON enough for a real app?', tools: [], notes: ['objection: JSON is fine for demos, not real apps', 'this app: slides, stage, controller, phones, SSH, assistant, timers', 'green: JSON data · blue: the code an app ships', 'components + their CSS, endpoints, setup', 'Nova does the rendering — the components are what it draws with', 'hatched: not the app — 4 extra kits for the demos, and tests', 'counted live from the source, comments excluded'] },
 
-  // ── what a closed grammar buys: checks, at runtime and at build time ──
   { slideId: 'slide.checked', title: 'A closed grammar can be checked.', parts: 3, tools: ['tools.step'], notes: ['closed grammar → a program can check it, two ways', 'left: a value that isn’t allowed · right: listens for x, sends x → a loop', '[next part] what each check says — run on this server, just now', 'a linter guesses about code; this is exact', '[next part] so a model can write these while the app runs: writes → checked → errors go back', 'you saw it: the timer · coming: your queries', 'checked = safe to run — is it the right thing? next'] },
   { slideId: 'slide.review', title: 'Review the result, not the code.', tools: [], notes: ['slide 5: models write code faster than anyone can review it', 'agent writes code → nobody reads all of it → slop', 'agent writes nisc → validation, then mechanical checks', 'what’s left: test the result → QA', 'QA: a person, or a model with vision', 'Lowdefy: same problem — config small enough for a person to read'] },
   { slideId: 'slide.install', title: 'Installing someone else’s Q&A', tools: ['tools.integrations'], notes: ['what this lets us do, safely: load somebody else’s UI and behaviour', 'the Q&A for this talk: a JSON file on GitHub, from somebody else (the QA Company) — not part of this app', '[Install the broken one] → ✕ loop: it sends what it listens for', '[Install the Q&A] → four ✓', '[Approve] → on your phones + my controller', 'nobody read their file'] },
 
-  // ── the rest of nisc, and the end ──
   { slideId: 'slide.moss', title: 'Your screen runs on the server.', tools: [], notes: ['how did I change your screens? X-ray, React, the Q&A', 'Moss: the app server — your screen runs on it', '[type half a question into the Q&A, don’t send, reload]', 'still there: your screen isn’t in your browser', 'laptops: second tab, same address → same screen'] },
   { slideId: 'slide.wire', title: 'Your phone only draws.', tools: [], notes: ['down: what to draw · up: what you pressed', 'that’s all that crosses', 'so any renderer works — you saw four', 'laptops: the websocket frames'] },
   { slideId: 'slide.manifest', title: 'This is what Moss is given.', tools: [], notes: ['why Moss: nisc was all data, with no server to run it', 'this is all the app hands the server: its JSON, and a few small pieces of code', 'charter, actions, queries, row rules', 'no routes, no controllers', 'json-render stops at the screen: then Next.js + your code'] },

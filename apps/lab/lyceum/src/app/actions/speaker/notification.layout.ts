@@ -1,6 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// A notification: its words, over the controller, in the sheet's chrome.
 export const notificationLayout: LayoutNode = {
   component: 'Sheet',
   props: { areas: ['text'] },

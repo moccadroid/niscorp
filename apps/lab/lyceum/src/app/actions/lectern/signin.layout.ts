@@ -1,7 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The speaker's sign-in desk: an address, one button, and the same answer
-// whatever was typed — the page says nothing about which address is the one.
 export const signinLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['kick', 'head', 'field', 'send', 'out'], rows: ['auto', 1, 'auto', 'auto', 'auto'] },

@@ -1,7 +1,3 @@
-// THE WORDS A NAME IS MADE OF — data, and nothing else: fifty adjectives and
-// fifty animals. server/names.ts pairs them; the census counts this file as
-// data (server/census.ts).
-
 export const ADJECTIVES: readonly string[] = [
   'Quiet', 'Brave', 'Lucky', 'Swift', 'Gentle', 'Clever', 'Curious', 'Patient', 'Bright', 'Calm',
   'Bold', 'Merry', 'Nimble', 'Steady', 'Sunny', 'Witty', 'Honest', 'Humble', 'Jolly', 'Keen',

@@ -4,28 +4,11 @@ import { areaOf, SIGIL_SHAPES, flowDelays, instantOf, narrowOf, qrOf, remaining,
 
 export { text } from './kit.shape';
 
-// ═══════════════════════════════════════════════════════════════
-// LYCEUM'S KIT — the only renderer code in the app (AGENTS.md, layout of an
-// app). Domain-blind: no component knows a house, a slide or a member.
-//
-// CONFIGURED, NEVER STYLED. A layout says what a thing is — which grid area it
-// fills, which ink, which mark — from closed sets of names; there is no `style`,
-// no `className`, no colour and no size a layout can pass. An unknown value is
-// dropped to the default rather than passed through: a model that writes
-// `ink: 'purple'` gets paper, not purple. The look is ./tokens.ts, entirely.
-//
-// Geometry is the one thing a component turns into CSS itself — a sheet's
-// named areas and column weights, a bar's proportions — because it is data
-// (names and numbers), not style.
-// ═══════════════════════════════════════════════════════════════
-
 export const INKS = ['paper', 'ink', 'signal', 'alert', 'live', 'highlight'] as const;
 export const MARKS = ['stripes', 'dots', 'bars', 'checks', 'hatch'] as const;
 export const SIGILS = ['triangle', 'circle', 'square', 'cross', 'check', 'x'] as const;
 export const ALIGNS = ['start', 'end', 'center', 'between', 'middle'] as const;
 export const LEVELS = ['display', 'title', 'name'] as const;
-// The renderers a screen can be drawn by (./target.ts): nova's DOM adapter with
-// this kit, React with ./react.kit.ts, Vue with ./vue.kit.ts. One look.
 export const LOOKS = ['dom', 'react', 'vue'] as const;
 
 export const oneOf = <T extends string>(value: unknown, options: readonly T[]): T | undefined =>
@@ -50,19 +33,8 @@ const placeIn = (node: HTMLElement, area: unknown): void => {
   if (name !== undefined) node.style.gridArea = name;
 };
 
-// ── Page — the frame: canvases stacked, the last one filling the screen ──
 export const Page: DomComponent = ({ children }) => el('div', 'page', children);
 
-// ── Sheet — the ruled grid ──────────────────────────────────────
-// areas: rows of area names, e.g. ['kick kick count', 'head head count'] — the
-//        screen, drawn in words. `.` leaves a place empty (it shows as rule).
-// cols:  one weight per column (default: equal). rows: one per row, a weight
-//        or 'auto' (default: 'auto' for all but the last, which takes the rest
-//        when the sheet fills).
-// size:  'fill' takes the height it is given (a slide, a phone); 'auto' is as
-//        tall as its content (a strip).
-// narrow: { areas, rows?, cols? } — the arrangement on a phone-width screen,
-//        in the same words. A cell whose area it leaves out is not shown there.
 export const Sheet: DomComponent = ({ props, children, dependsOnChildren }) => {
   const node = el('div', 'sheet', children);
   const size = oneOf(props['size'], ['fill', 'auto'] as const) ?? 'auto';
@@ -72,12 +44,9 @@ export const Sheet: DomComponent = ({ props, children, dependsOnChildren }) => {
     if (key.startsWith('--')) node.style.setProperty(key, value);
     else Reflect.set(node.style, key, value);
   }
-  // A sheet with a narrow arrangement MARKS its cells: the ones that
-  // arrangement leaves out. So it is not a component that only holds its
-  // children, and says so — it is asked again when its cells change, and handed
-  // the cells that stayed as it left them. The mark is therefore put on AND
-  // taken off: a cell marked for one arrangement must not stay marked under the
-  // next, or under none.
+  // A sheet with a narrow arrangement marks the cells that arrangement leaves
+  // out, so it is asked again when its cells change, and is handed the cells
+  // that stayed as it left them: the mark is taken off as well as put on.
   if (narrow !== undefined) {
     node.setAttribute('data-narrow', '');
     dependsOnChildren();
@@ -90,11 +59,6 @@ export const Sheet: DomComponent = ({ props, children, dependsOnChildren }) => {
   return node;
 };
 
-// ── Cell — a place in the grid ──────────────────────────────────
-// area, ink (paper | ink | signal | alert | live | highlight), mark (stripes | dots | bars |
-// checks | hatch), align (start | end | center | between), pad ('none'), scroll ('y' — a
-// cell whose content may outgrow it scrolls inside it, and the sheet keeps its shape;
-// 'end' — the same, held at its end: a conversation shows its newest turn).
 export const Cell: DomComponent = ({ props, children }) => {
   const node = el('div', 'cell', children);
   placeIn(node, props['area']);
@@ -106,11 +70,8 @@ export const Cell: DomComponent = ({ props, children }) => {
   return node;
 };
 
-// ── Label — the small spaced capitals ───────────────────────────
 export const Label: DomComponent = ({ children }) => el('span', 'label', children);
 
-// ── Headline — what is read from the back row ───────────────────
-// level: display (the one thing on a slide) | title | name.
 export const Headline: DomComponent = ({ props, children }) => {
   const level = oneOf(props['level'], LEVELS) ?? 'title';
   const node = el(level === 'display' ? 'h1' : 'h2', 'headline', children);
@@ -118,14 +79,12 @@ export const Headline: DomComponent = ({ props, children }) => {
   return node;
 };
 
-// ── Text — sentences ────────────────────────────────────────────
 export const Text: DomComponent = ({ props, children }) => {
   const node = el('p', 'text', children);
   setData(node, 'tone', oneOf(props['tone'], ['muted'] as const));
   return node;
 };
 
-// ── Figure — a number, and what it counts ───────────────────────
 export const Figure: DomComponent = ({ props }) => {
   const label = el('span', 'label');
   label.textContent = text(props['label']) ?? '';
@@ -134,13 +93,8 @@ export const Figure: DomComponent = ({ props }) => {
   return el('div', 'figure', [label, value]);
 };
 
-// ── Countdown — time left until an instant, ticking where it is shown ──
-// to: the instant (ISO, or Postgres's own "YYYY-MM-DD HH:MM:SS+ZZ"); label:
-// what it counts down to. The one thing here on the viewer's clock rather than
-// the server's: a tree re-sent every second would be a render a second for
-// nothing, so the kit ticks it. Nothing to count to: a dash. At zero it stays
-// at zero, marked done.
-// Ticks `value` down to `to` inside `node`.
+// On the viewer's clock rather than the server's: a tree re-sent every second
+// would be a render a second for nothing.
 const tickDown = (node: HTMLElement, value: HTMLElement, toProp: unknown): void => {
   const to = instantOf(text(toProp));
   const paint = (): boolean => {
@@ -168,8 +122,6 @@ export const Countdown: DomComponent = ({ props }) => {
   return node;
 };
 
-// ── Code — mono, with the lines that matter marked ──────────────
-// text: the source; marked: 1-based line numbers to mark.
 export const Code: DomComponent = ({ props }) => {
   const marked = new Set(Array.isArray(props['marked']) ? props['marked'].filter((n): n is number => typeof n === 'number') : []);
   const lines = (text(props['text']) ?? '').split('\n').map((line, i) => {
@@ -181,8 +133,6 @@ export const Code: DomComponent = ({ props }) => {
   return el('div', 'code', lines);
 };
 
-// ── Sigil — a shape ─────────────────────────────────────────────
-// shape: triangle | circle | square | cross | check | x. size: 'large' or text size.
 const SVG = 'http://www.w3.org/2000/svg';
 const sigil = (shape: unknown, large: boolean): HTMLElement => {
   const svg = document.createElementNS(SVG, 'svg');
@@ -208,10 +158,6 @@ const withHead = (node: HTMLElement, head: boolean): HTMLElement => {
   return node;
 };
 
-// ── Qr — a value as a QR code ───────────────────────────────────
-// value: what the code says (an address). Drawn as one SVG path of square
-// modules with the standard quiet zone, ink on paper, as large as its place;
-// the look decides the size. An empty value draws nothing.
 export const Qr: DomComponent = ({ props }) => {
   const value = text(props['value']) ?? '';
   const holder = el('span', 'qr');
@@ -233,16 +179,8 @@ export const Qr: DomComponent = ({ props }) => {
   return holder;
 };
 
-// ── Rows — a ruled table ────────────────────────────────────────
-// rows: the records; rowKey: the id field; empty: what an empty table says.
-// columns: [{ label, key, w?, kind?: 'text' | 'mono' | 'sigil', missing? }] —
-// `missing` is what a cell says when its value is absent. Columns with no
-// labels at all make a table with no header row (a list of lines).
 export const Rows: DomComponent = ({ props, dispatch }) => {
   const columns = records(props['columns']);
-  // A row you can press: `rowRef` names the click, `clickKey` the field its
-  // payload is (default rowKey) — nova's own Table convention. `selected` marks
-  // the row whose `clickKey` equals it.
   const rowRef = text(props['rowRef']);
   const clickKey = text(props['clickKey']) ?? text(props['rowKey']) ?? '';
   const selected = props['selected'];
@@ -265,7 +203,6 @@ export const Rows: DomComponent = ({ props, dispatch }) => {
       const kind = oneOf(column['kind'], ['text', 'mono', 'sigil'] as const) ?? 'text';
       const value = record[text(column['key']) ?? ''];
       if (kind === 'sigil') {
-        // No shape: the column's `missing` words, as for any other kind.
         if (value !== null && value !== undefined) cell.appendChild(sigil(value, false));
         else {
           cell.setAttribute('data-kind', 'missing');
@@ -296,8 +233,6 @@ export const Rows: DomComponent = ({ props, dispatch }) => {
   return withHead(el('div', 'rows', [...head, ...body]), labelled);
 };
 
-// ── Bar — proportions as cells ──────────────────────────────────
-// segments: [{ value, ink?, mark? }].
 export const Bar: DomComponent = ({ props }) => {
   const segments = records(props['segments']).filter((segment) => typeof segment['value'] === 'number' && segment['value'] > 0);
   const parts = segments.map((segment) => {
@@ -311,15 +246,8 @@ export const Bar: DomComponent = ({ props }) => {
   return node;
 };
 
-// ── Flow — two ends, and what passes between them ─────────────────
-// from, to: what each end is. lanes: [{ label, toward: 'to' | 'from', ink? }] —
-// one lane per kind of message, its dots running toward the end it names. The
-// dots never stop. Each lane starts where the wall clock says it is, not at its
-// beginning, so a flow that is built again (its own props changed, or the sheet
-// around it was asked again and moved it) does not make the dots jump back.
-// (nova's DOM adapter used to draw the whole page again on every update, which
-// is what this was first written for; it keeps what did not change now, and
-// this covers the times a flow still is built or moved.)
+// Each lane starts where the wall clock says it is, not at its beginning, so a
+// flow that is built again does not make the dots jump back.
 const TOWARDS = ['to', 'from'] as const;
 
 export const Flow: DomComponent = ({ props }) => {
@@ -345,9 +273,6 @@ export const Flow: DomComponent = ({ props }) => {
   return el('div', 'flow', [end(props['from']), el('div', 'flow-lanes', lanes), end(props['to'])]);
 };
 
-// ── Columns — numbers as bars, side by side ─────────────────────
-// bars: [{ label, value, ink?, mark? }]. Heights are proportional to the
-// largest; each bar carries its value on top of it and its label under it.
 export const Columns: DomComponent = ({ props }) => {
   const bars = records(props['bars']);
   const values = bars.map((bar) => (typeof bar['value'] === 'number' && bar['value'] > 0 ? bar['value'] : 0));
@@ -366,12 +291,6 @@ export const Columns: DomComponent = ({ props }) => {
   return el('div', 'columns', columns);
 };
 
-// ── Action — a whole cell you press ─────────────────────────────
-// area, ink, label, lines ('two' — the label always takes exactly two lines,
-// clamped: a row of actions whose labels change keeps its height), size
-// ('large' — the one thing a screen is for, like the door's Step in). Pressed, it
-// is a `ui:click` on its `ref` (nova's convention — the renderer wires it, the
-// component knows nothing of events).
 export const Action: DomComponent = ({ props }) => {
   const label = el('span', '');
   label.textContent = text(props['label']) ?? '';
@@ -381,15 +300,10 @@ export const Action: DomComponent = ({ props }) => {
   setData(node, 'ink', oneOf(props['ink'], INKS));
   setData(node, 'lines', oneOf(props['lines'], ['two'] as const));
   setData(node, 'size', oneOf(props['size'], ['large'] as const));
-  // A sound it plays where it is pressed — the page plays it (./target.ts).
   setData(node, 'sound', oneOf(props['sound'], ['chime'] as const));
   return node;
 };
 
-// ── Field — a line of text somebody types ───────────────────────
-// area, placeholder, value, enter ('clears'). Bound with the layout's `model`
-// (nova wires the typing by that convention); `value` is what the field shows
-// when it renders.
 export const Field: DomComponent = ({ props }) => {
   const node = document.createElement('input');
   node.type = 'text';
@@ -405,11 +319,9 @@ export const Field: DomComponent = ({ props }) => {
   return node;
 };
 
-// A field whose Enter SENDS it (`enter: 'clears'`) empties when Enter is
-// pressed. The browser keeps a focused field's typing over whatever the server
-// sends — so a server that empties the field is not seen while the person is
-// still in it; the field has to say so itself. The text already went up with
-// every keystroke; Enter only says "send".
+// The browser keeps a focused field's typing over whatever the server sends,
+// so a server that empties the field is not seen while the person is still in
+// it: the field empties itself.
 export const clearsOnEnter = (node: HTMLInputElement, enter: unknown): void => {
   if (oneOf(enter, ['clears'] as const) === undefined) return;
   node.addEventListener('keydown', (event) => {
@@ -417,20 +329,11 @@ export const clearsOnEnter = (node: HTMLInputElement, enter: unknown): void => {
   });
 };
 
-// ── Look — which kit paints the screen ──────────────────────────
-// look: dom | react | vue. Shows nothing: the terminal reads it off the tree
-// (./target.ts). Every kit has it, so whichever is painting finds it.
+// Shows nothing: the render target reads `look` off the tree.
 export const Look: DomComponent = () => el('span', 'look');
 
-// ── Menu — an icon that opens a list of things to press ─────────
-// area, label (what a screen reader calls it). Its children are the entries —
-// Actions, mostly. The browser's own <details> opens and closes it, so no
-// renderer keeps the state.
-//
-// An entry that is pressed closes the menu. That used to happen by itself: the
-// adapter drew the whole page again on every update, and a <details> drawn
-// again is a closed one. The element stays now, so the menu says it. Caught on
-// the way down, because an entry's own press does not let the click travel up.
+// An entry that is pressed closes the menu. Caught on the way down, because an
+// entry's own press does not let the click travel up.
 export const Menu: DomComponent = ({ props, children }) => {
   const icon = el('summary', 'menu-icon');
   icon.setAttribute('aria-label', text(props['label']) ?? 'Menu');
@@ -447,10 +350,7 @@ export const Menu: DomComponent = ({ props, children }) => {
   return node;
 };
 
-// ── Xray — whether the screen shows the actions it is made of ───
-// on: boolean. Shows nothing, like Look: the terminal reads it off the frame.
+// Shows nothing, like Look: the render target reads it off the frame.
 export const Xray: DomComponent = () => el('span', 'look');
 
-// THIS KIT, whole — typed against the grammar, so a component the grammar
-// names and the kit lacks does not compile.
 export const POSTER_KIT: Kit = { Page, Sheet, Cell, Label, Headline, Text, Figure, Countdown, Code, Sigil, Qr, Rows, Bar, Flow, Columns, Action, Field, Look, Xray, Menu };

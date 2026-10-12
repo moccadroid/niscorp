@@ -1,10 +1,5 @@
-// The SSH door alone, against a running lyceum — for `pnpm dev`, whose server
-// lives inside vite: `pnpm ssh`, then `ssh -p 2222 localhost`. The deployed
-// server opens the same door in its own process (LYCEUM_SSH_PORT, serve.ts).
-//
-//   LYCEUM_SOCKET   the room's socket (default: the dev server's — by name:
-//                   vite may listen on ::1 alone)
-//   LYCEUM_SSH_PORT where the door listens (default 2222)
+// The default LYCEUM_SOCKET is the dev server's, by name: vite may listen on
+// ::1 alone.
 process.env['FORCE_COLOR'] ??= '3';
 const { openSshDoor } = await import('./ssh-door');
 

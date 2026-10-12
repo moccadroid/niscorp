@@ -14,16 +14,6 @@ import {
   wordsLayout,
 } from './later.layouts';
 
-// AFTER MOSS AND CHARTER (./moss.actions.ts) — the rest of nisc, each part the
-// same move in one more place: Vex (a query is
-// a stored document, replayed by name; asked in words, a small model chooses),
-// the assistant (it prepares, you press), Tide (the timer from the start of the
-// talk, as the row it is), Strata (a grammar change is a migration), and the
-// end — the slide the timer puts up.
-//
-// Every code block is the real source, re-wrapped to fit where a line is long;
-// `…` marks what was left out. The timer is read live (room.timer).
-
 const code = (...lines: string[]): string => lines.join('\n');
 
 const still = (id: string, title: string, layout: ActionDefinition['layout'], data: Record<string, unknown>): ActionDefinition => ({
@@ -34,12 +24,6 @@ const still = (id: string, title: string, layout: ActionDefinition['layout'], da
   triggers: [],
 });
 
-// Most of what a server does is map data: reshape it on the way to the
-// database and on the way back. That part is JSON here (Prism) — not every
-// function: anything complicated is a real function behind an endpoint. The
-// example is the controller's Next button (speaker/console.prism.ts, as
-// written): what it sends, worked out from where the deck is, before the write. Beside it, the same config, run by
-// the layout on this slide over the deck as it is now.
 export const prismSlide: ActionDefinition = {
   id: 'slide.prism',
   title: 'Data mapping is JSON too.',
@@ -69,7 +53,6 @@ export const prismSlide: ActionDefinition = {
   triggers: [],
 };
 
-// members/counts from app/vex/member.entries.ts — the strip's joined count.
 export const vexSlide: ActionDefinition = {
   id: 'slide.vex',
   title: 'Queries are JSON too.',
@@ -116,8 +99,6 @@ export const pressSlide = still('slide.press', 'It can’t press Send.', pressLa
   can: [{ text: 'Reads your screen' }, { text: 'Fills in forms' }],
 });
 
-// The timer saved at the start of the talk, read as the stage: the row's
-// reflex document, printed, and when it fires.
 export const tideSlide: ActionDefinition = {
   id: 'slide.tide',
   title: 'The timer is a row.',
@@ -130,15 +111,11 @@ export const tideSlide: ActionDefinition = {
 
 export const onceSlide = still('slide.once', 'No agent loop.', onceLayout, {});
 
-// The migrations of this app's own grammar — its components' props
-// (app/grammars.ts) — as they are written there: every change to what a layout
-// may say, in order. One of them rewrites stored layouts; the rest only add.
 export const strataSlide = still('slide.strata', 'Grammars get migrations.', strataLayout, {
   kicker: 'Strata',
   file: 'grammars.ts — every change to this app’s components, in order',
   migrations: LYCEUM_KIT.migrations.map((migration, index) => ({ n: index + 1, what: migration.description })),
   code: LYCEUM_KIT.migrations.map((migration, index) => `${String(index + 1).padStart(2, ' ')}  ${migration.description}`).join('\n'),
-  // The ones that rewrite stored layouts, not only add to what one may say.
   marked: LYCEUM_KIT.migrations.flatMap((migration, index) => (migration.steps.length > 0 ? [index + 1] : [])),
 });
 

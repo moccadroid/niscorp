@@ -1,9 +1,3 @@
-// DECK CHECK — the talk's state is one row, and the projector follows it.
-//
-// The speaker's controller moves the deck; the stage — a different principal
-// on a different device — shows the slide the row names, told by nothing but
-// the write. The deck cannot be walked off either end. A live slide counts the
-// room as it changes. Real websocket, real boot; the database underneath.
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { mintSession } from '@niscorp/moss';
@@ -30,7 +24,6 @@ const main = async (): Promise<void> => {
   const speakerHello = await speaker.hello();
   const stageHello = await stage.hello();
 
-  // ── the deck's rows and the charter agree ──
   const unheld = SLIDES.filter((slide) => !stageHello.catalog.actions.includes(slide.slideId));
   check(`every slide in the deck is an action the stage is granted${unheld.length === 0 ? '' : ` (missing: ${unheld.map((s) => s.slideId).join(', ')})`}`, unheld.length === 0);
   check('the speaker is granted no slide — the controller moves the deck, it does not show it', !SLIDES.some((slide) => speakerHello.catalog.actions.includes(slide.slideId)));
@@ -42,9 +35,6 @@ const main = async (): Promise<void> => {
   const onSlide = async (index: number): Promise<boolean> =>
     (await speaker.shows('head', `slide ${index + 1} of ${total}`)) && (await speaker.shows('head', titleOf(index))) && (await stage.shows('main', titleOf(index)));
 
-  // What each tool says, so the tool region can be read: exactly a slide's
-  // tools, in the slide's order — or, with none, that there are none.
-  // A cue says its own title.
   const SAYS: Record<string, string> = {
     'assistant.thread': 'Can: ',
     'tools.look': 'Which renderer draws',
@@ -63,27 +53,21 @@ const main = async (): Promise<void> => {
       return expected.length === 0 ? none && shown.length === 0 : !none && JSON.stringify(order) === JSON.stringify(expected);
     });
 
-  // ── the controller: four regions, on the speaker's screen only ──
   const regions = ['head', 'tools', 'notes', 'controls'];
   check('the controller places its four regions itself', await waitUntil(() => regions.every((region) => speaker.showsNow('main', `"canvasId":"${region}"`))));
   check('none of them exists for the stage', !['speaker.console', 'speaker.head', 'speaker.notes', 'speaker.controls'].some((id) => stageHello.catalog.actions.includes(id)));
-  // (A slide without a tool says so rather than leave a hole — asserted per
-  // slide in the walk below, where `toolsAre([])` wants the hatch.)
   check('the first slide has its tools on the controller', await toolsAre(SLIDES[0]?.tools ?? []));
 
-  // ── the way in: the first slide's code and address, the strip's address ──
   check('the first slide carries the code to scan, saying the room\'s address', await stage.shows('main', '"name":"Qr"') && stage.showsNow('main', '"value":"http://localhost:8796"'));
   check('...and the address in words, for typing', stage.showsNow('main', 'localhost:8796'));
   check('the strip shows the address on every slide, for whoever arrives late', await stage.shows('strip', 'localhost:8796'));
 
-  // ── the first slide, and no way back from it ──
   check('the stage and the controller open on the first slide', await onSlide(0));
   check('Next says which slide it goes to', await speaker.shows('controls', `2 · ${titleOf(1)} →`));
   check('Back on the first slide says so', await speaker.shows('controls', 'Start of the deck'));
   speaker.click('controls', 'back');
   check('back on the first slide stays there', await onSlide(0));
 
-  // ── forward through the deck, and no way past its end ──
   for (let index = 1; index < total; index += 1) {
     speaker.click('controls', 'next');
     check(`next shows slide ${index + 1} on the stage (${titleOf(index)})`, await onSlide(index));
@@ -103,7 +87,6 @@ const main = async (): Promise<void> => {
   const row = await runtime.db.query<{ slide_id: string }>('SELECT slide_id FROM deck');
   check('the row is what the stage shows', row.rows[0]?.slide_id === SLIDES[total - 1]?.slideId);
 
-  // ── all slides, over the controller: any slide, straight away ──
   const pick = async (position: number): Promise<void> => {
     speaker.click('controls', 'all');
     await speaker.shows('overlay', 'All slides');
@@ -121,7 +104,6 @@ const main = async (): Promise<void> => {
   speaker.click('overlay', 'close');
   check('Close shuts the list and changes nothing', (await waitUntil(() => !speaker.showsNow('overlay', 'All slides'))) && (await onSlide(total - 1)));
 
-  // ── a live slide follows the room ──
   speaker.click('controls', 'back');
   check('back shows the slide before it', await onSlide(total - 2));
   const live = SLIDES.findIndex((slide) => slide.slideId === 'stage.register');
@@ -135,9 +117,6 @@ const main = async (): Promise<void> => {
   await stranger.session();
   check('somebody joining reaches the slide on the stage, unannounced', await stage.shows('main', '"label":"Joined","value":1'));
 
-  // ── the seed converges the deck on a live database, and leaves the talk ──
-  // A database from an older version of SLIDES: a renamed slide, two swapped,
-  // one that is no longer in the deck — and on screen.
   const dataAt = SLIDES.findIndex((slide) => slide.slideId === 'slide.data');
   const xrayAt = SLIDES.findIndex((slide) => slide.slideId === 'slide.xray');
   await runtime.db.exec(`
@@ -161,9 +140,6 @@ const main = async (): Promise<void> => {
   const membersAfter = await runtime.db.query<{ n: number }>('SELECT count(*)::int AS n FROM members');
   check('the room is left alone', membersBefore.rows[0]?.n === 1 && membersAfter.rows[0]?.n === 1);
 
-  // The Strata slide lists this app's own grammar migrations, read from the
-  // sequence itself — so it cannot go stale: as many as the lock says the
-  // source is written at.
   const lock = z.object({ grammar: z.record(z.string(), z.number()) }).parse(JSON.parse(readFileSync(new URL('../../strata.lock.json', import.meta.url), 'utf8')));
   const listed = z.array(z.object({ n: z.number(), what: z.string() })).parse(strataSlide.data?.['migrations'] ?? []);
   check(`the Strata slide lists every migration of the kit's grammar (${listed.length})`, listed.length > 0 && listed.length === lock.grammar['lyceum.kit']);

@@ -9,21 +9,6 @@ import { inkTarget } from '@niscorp/moss/terminal/ink';
 import { lyceumInkRegistry } from '@lyceum/ui/ink.kit';
 import { sshTty } from './ssh-tty.shim';
 
-// THE SSH DOOR — `ssh lyceum.moccadroid.com`. Anybody, any user name, no
-// password: each connection is a stranger at the door, exactly as a phone that
-// opens the address is. It is a TERMINAL HOST, not a second server: every
-// connection opens its own moss wire to the room's socket (a client, like a
-// browser tab), and moss's ink target draws the trees it is sent with the
-// terminal kit (src/ui/ink.kit.ts). Stepping in grants that wire a session,
-// held for as long as the connection is — nothing is written to disk.
-//
-//   LYCEUM_SSH_PORT      where it listens (unset: no door)
-//   LYCEUM_SSH_HOST_KEY  the host key's file; made on first start and kept, so
-//                        a returning visitor's ssh does not cry impostor
-//
-// Nothing here knows lyceum: the trees are the phone's, the policy moss's.
-
-// A room's worth, and then some — a door is not a denial of service.
 const MOST_AT_ONCE = 300;
 
 const hostKeyAt = (file: string): string => {
@@ -34,8 +19,6 @@ const hostKeyAt = (file: string): string => {
   return key;
 };
 
-// The session lives in memory, one per connection: stepping in grants it,
-// leaving drops it.
 const connectionEnv = (url: string): WireEnv => {
   let token: string | null = null;
   return {
@@ -69,7 +52,7 @@ export const openSshDoor = async (config: { port: number; socketUrl: string; hos
       leave();
     });
     client.on('error', () => leave());
-    // Whoever you say you are, however you say it: you are a stranger at the door.
+    // Any user name, any method: every connection is a stranger at the door.
     client.on('authentication', (context) => context.accept());
     client.on('ready', () => {
       client.on('session', (acceptSession) => {

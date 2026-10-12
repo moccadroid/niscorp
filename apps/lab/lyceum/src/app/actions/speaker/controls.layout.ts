@@ -1,6 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// Every slide one press away, and Back and Next — each saying where it goes.
 export const controlsLayout: LayoutNode = {
   component: 'Sheet',
   props: { areas: ['all all', 'back next'] },

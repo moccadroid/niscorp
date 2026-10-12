@@ -1,15 +1,3 @@
-// ASSISTANT CHECK — one assistant on every device, built for each person by
-// what the charter grants them. Real websockets against the real boot, with
-// the deterministic stand-in turn (server/assistant/orchestrator.ts,
-// LYCEUM_ASSISTANT=fake) calling the SAME tools the live one would; this
-// checks the assembly, the tools and the proposals, not a model.
-//
-//   1. built from the declarations a person's grants select — shown to them;
-//   2. what it can do follows: only the controller can automate;
-//   3. a tool is bounded by what the person has — a member gets the question
-//      form opened, pre-filled, over the screen; the speaker, asking the same,
-//      does not;
-//   4. the open trigger carries exactly the keys the catalog declares openable.
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { mintSession } from '@niscorp/moss';
@@ -29,8 +17,6 @@ const main = async (): Promise<void> => {
   if (address === null || typeof address === 'string') throw new Error('no port');
   const base = `ws://127.0.0.1:${address.port}`;
 
-  // Somebody joins — and, unless told not to, is given the assistant, as the
-  // speaker gives it during the talk: a phone starts without one.
   const stepIn = async (given = true): Promise<{ phone: Terminal; memberId: string; token: string }> => {
     const door = await connect(base);
     await door.shows('main', '"ref":"pick"');
@@ -47,7 +33,6 @@ const main = async (): Promise<void> => {
     await phone.shows('main', '"label":"Assistant"');
     return phone.shows('body', 'Can: ');
   };
-  // Written, then sent — by the button, or by Enter in the field.
   const say = async (phone: Terminal, canvas: string, message: string, by: 'button' | 'enter' = 'button'): Promise<void> => {
     phone.type(canvas, 'draft', message);
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -57,7 +42,6 @@ const main = async (): Promise<void> => {
     await waitUntil(() => !phone.showsNow(canvas, 'Thinking'));
   };
 
-  // ── 1 + 2. somebody waiting: the room's assistant, no automation ──
   const waiting = await stepIn(false);
   check('a phone starts without the assistant: nothing on its list yet', (await waiting.phone.shows('body', 'Nothing here yet.')) && !waiting.phone.showsNow('body', 'Can: '));
   await giveAssistant(server, runtime.pool);
@@ -91,20 +75,14 @@ const main = async (): Promise<void> => {
     return tree.includes('Who is number 4?') && tree.includes('How many people are in the room?') && !tree.includes('End the talk in 30 minutes');
   }));
 
-  // ── 3. bounded by what the person has ──
   const asker = await stepIn();
   await openAssistant(asker.phone);
   await say(asker.phone, 'body', 'Send the speaker a question: Will the slides be online?');
-  // The question form is not a member's until Q&A is installed (The QA Company, an
-  // integration the speaker installs on stage): until then the assistant has
-  // no form to open, and says so rather than inventing one.
   check('a member asking to send a question before Q&A is installed gets no form: there is none to open', (await waitUntil(() => /cannot open anything|not one of your actions/.test(asker.phone.textOf('body')))) && !asker.phone.showsNow('overlay', 'Your question'));
   check('a history is its person\'s alone: theirs has their own turns, none of anybody else\'s', asker.phone.showsNow('body', 'Will the slides be online?') && !asker.phone.showsNow('body', 'How many people are in the room?'));
 
-  // ── the controller's ──
   const speaker = await connect(base, await mintSession(runtime.pool, 'speaker', 60_000));
   await speaker.hello();
-  // To the timer slide, which brings the speaker's assistant to the controller.
   for (let step = 0; step < SLIDES.findIndex((slide) => slide.slideId === 'slide.timer'); step += 1) {
     speaker.click('controls', 'next');
     await speaker.shows('head', `slide ${step + 2} of`);
@@ -113,7 +91,6 @@ const main = async (): Promise<void> => {
   await say(speaker, 'tools', 'Send the speaker a question: Will the slides be online?');
   check('the speaker, asking the same, gets no form — the question form is not theirs', !speaker.showsNow('overlay', 'Your question') && !speaker.showsNow('tools', 'Your question:') && /cannot open anything|not one of your actions/.test(speaker.textOf('tools')));
 
-  // ── what it sees: the person's own screen, read off the live shell ──
   await say(speaker, 'tools', 'What is on my screen?');
   check('the speaker\'s assistant sees the slide on screen, from the controller\'s own canvases', await speaker.shows('tools', 'the room watches it on the stage'));
   check('…and not its own bookkeeping', !speaker.showsNow('tools', 'THE CONVERSATION'));
@@ -122,9 +99,6 @@ const main = async (): Promise<void> => {
   const cardName = (await runtime.db.query<{ name: string }>('SELECT name FROM members WHERE member_id = $1', [asker.memberId])).rows[0]?.name ?? '\u0000';
   check(`…with their name on it (${cardName})`, asker.phone.textOf('body').includes(`On your screen:`) && asker.phone.textOf('body').split('On your screen:')[1]?.includes(cardName) === true);
 
-  // ── what each assistant is grounded on, it may read ──
-  // A declaration applies to everyone who has its action; its grounding reads run
-  // as that person, and nothing swallows a refusal — so each must succeed.
   const speakerToken = await mintSession(runtime.pool, 'speaker', 60_000);
   const people = [
     { who: 'somebody waiting', token: waiting.token, actions: (await waiting.phone.hello()).catalog.actions },
@@ -146,7 +120,6 @@ const main = async (): Promise<void> => {
     }
   }
 
-  // ── what `open` may offer: the charter's actions, and only what a person asks for ──
   const granted = ['assistant.thread', 'query.result', 'xray.switch', 'questions.send'];
   check('`open` offers what the charter gave them — not the assistant itself, not a result only a tool opens', JSON.stringify(offerableActions(granted)) === JSON.stringify(['xray.switch', 'questions.send']));
   const undescribed = offerableActions(Object.keys(ACTIONS)).filter((id) => (ACTIONS[id]?.description ?? '') === '');
@@ -154,7 +127,6 @@ const main = async (): Promise<void> => {
   check('…and an action whose contract is empty, declared: openable with nothing to pre-fill', offerableActions(['xray.switch']).includes('xray.switch') && prefillOf('xray.switch').length === 0);
   check('…pre-filled only with what its contract declares: a question takes its draft, nothing else', JSON.stringify(prefillOf('questions.send').map((entry) => entry.key)) === JSON.stringify(['draft']));
 
-  // ── 4. reopening from the conversation carries every key an opened action takes ──
   const trigger = ACTIONS['assistant.thread']?.triggers?.find((candidate) => 'ref' in candidate && candidate.ref === 'reopen');
   const pushed = trigger?.do[0];
   const target = pushed !== undefined && 'push' in pushed && typeof pushed.push === 'object' ? pushed.push : undefined;

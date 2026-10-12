@@ -3,12 +3,6 @@ import { z } from 'zod';
 import { resultPrism } from './query.prism';
 import { queryResultLayout } from './result.layout';
 
-// ONE VEX QUERY, opened over the screen — by the assistant when it queries the
-// records (server/assistant/tools.ts), and again from the conversation, where
-// every query a turn ran stays pressable. It arrives already routed: the
-// intent, the shape, the fingerprint, how it was reached. Mounting replays the
-// fingerprint through vex, as the person — so the result is theirs, under
-// their policy, and current whenever it is opened.
 export const queryResultAction: ActionDefinition = {
   id: 'query.result',
   description: 'One vex query, opened: its intent, its shape, its fingerprint, and its result, replayed as the person.',

@@ -1,8 +1,3 @@
-// SERVE CHECK — the deployed shape, minus Postgres: one process serving moss,
-// the sign-ins (a one-time link, the speaker's mailed link, the stage) and the
-// built terminal. The same `mountLogin` and
-// `mountSite` `serve.ts` composes, over the dev runtime, against a stand-in
-// dist/ so the check does not need a vite build.
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -26,7 +21,6 @@ const main = async (): Promise<void> => {
   await writeFile(join(dist, 'index.html'), '<!doctype html><div id="root"></div><!-- the one page -->');
   await writeFile(join(dist, 'assets', 'app.js'), 'console.log("terminal")');
 
-  // The mail that would have gone out, caught instead of sent.
   const outbox: Mail[] = [];
   const { server, runtime, close } = await boot(undefined, {
     publicUrl: 'https://lyceum.test',
@@ -45,15 +39,12 @@ const main = async (): Promise<void> => {
     const res = await fetch(`${http}${path}`, { redirect: 'manual' });
     return { status: res.status, text: await res.text(), location: res.headers.get('location'), cookies: res.headers.getSetCookie() };
   };
-  // The session a sign-in answer put in a seat: in that seat's cookie, which no
-  // script can read, on the way to the seat — and nowhere in what the page was sent.
   const seated = (answer: Answer, seat: string): string | undefined => {
     const cookie = answer.cookies.find((line) => line.startsWith(`nisc.token.${seat}.${new URL(http).port}=`));
     if (cookie === undefined || !cookie.includes('; HttpOnly') || answer.location !== `/?seat=${seat}` || answer.text.includes('st_')) return undefined;
     return decodeURIComponent(cookie.slice(cookie.indexOf('=') + 1, cookie.indexOf(';')));
   };
 
-  // ── the terminal: files, and the one page for everything else ──
   check('/ is the one page', (await get('/')).text.includes('the one page'));
   check('a built asset is served as a file', (await get('/assets/app.js')).text.includes('terminal'));
   check('any other path is the one page — there is no client routing', (await get('/?seat=ada')).text.includes('the one page'));
@@ -61,7 +52,6 @@ const main = async (): Promise<void> => {
   check('moss still answers its own surfaces (/catalog)', catalog.status === 200 && !catalog.text.includes('the one page'));
   check('an unknown /api path is not answered with the page', !(await get('/api/nothing-here')).text.includes('the one page'));
 
-  // ── a one-time link: minted, redeemed once, into a real session ──
   const mint = async (principal: string, expiresInMs: number): Promise<string> => {
     const token = randomBytes(32).toString('base64url');
     await runtime.db.query('INSERT INTO login_links (token_hash, principal, expires_at) VALUES ($1, $2, $3)', [
@@ -88,7 +78,6 @@ const main = async (): Promise<void> => {
   const hello = await speaker.hello();
   check('the session it minted is the speaker, with the controller', hello.principal === 'speaker' && hello.catalog.actions.includes('speaker.console'));
 
-  // ── the speaker asks by email, at a desk only /speaker opens ──
   const deskPage = await get('/speaker');
   const deskSession = seated(deskPage, 'lectern');
   check('/speaker hands the device a session of its own, in the desk\'s seat', deskSession !== undefined);
@@ -122,7 +111,6 @@ const main = async (): Promise<void> => {
   check('the mailed link signs the device in as the speaker', seated(redeemedMail, 'speaker') !== undefined);
   check('the mailed link works once', (await get(`/login?token=${mailedToken ?? ''}`)).text.includes('used or has expired'));
 
-  // ── the stage: no secret, and nothing it could do with one ──
   const stagePage = await get('/stage');
   const stageSession = seated(stagePage, 'stage');
   check('/stage signs the device in as the stage, into its own seat', stageSession !== undefined);
@@ -131,21 +119,17 @@ const main = async (): Promise<void> => {
   check('the stage session is the stage, without the controller', stageHello.principal === 'stage' && !stageHello.catalog.actions.some((id) => id.startsWith('speaker.')));
   stage.close();
 
-  // ── the door: a person writes their own row, and only their own ──
   const replay = async (token: string, fingerprint: string, context: Record<string, unknown>): Promise<number> =>
     (await fetch(`${http}/api/vex`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify({ fingerprint, context }) })).status;
   const newcomer = await mintSession(runtime.pool, 'm_newcomer', 60_000);
-  // A request that tries to name the row after somebody else: the id is not
-  // the request's to set.
   const joined = await replay(newcomer, memberJoin.fingerprint, { name: 'Somebody', member_id: 'speaker', memberId: 'speaker' });
   const rows = await runtime.db.query<{ member_id: string }>("SELECT member_id FROM members WHERE name = 'Somebody'");
   check('stepping in writes a row stamped with the person\'s own id, whatever the request says', joined === 200 && rows.rows.length === 1 && rows.rows[0]?.member_id === 'm_newcomer');
   server.invalidateIdentity('m_newcomer');
   check('a member cannot step in twice', (await replay(newcomer, memberJoin.fingerprint, { name: 'Again' })) !== 200);
 
-  // The stage is open to anyone because it can change nothing.
-  // Control first: the same write as the speaker lands, so the refusal
-  // below is the stage's policy, not a malformed request.
+  // Control first: the same write as the speaker lands, so the refusal below is
+  // the stage's policy, not a malformed request.
   check('the speaker can move the deck', (await replay(session ?? '', deckGo.fingerprint, { deck: DECK_ID, position: 2 })) === 200);
   const stageWrites = [
     await replay(stageSession ?? '', deckGo.fingerprint, { deck: DECK_ID, position: 1 }),

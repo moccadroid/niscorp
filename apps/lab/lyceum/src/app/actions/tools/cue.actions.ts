@@ -1,10 +1,5 @@
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
 
-// CUES: controller tools for the demos a slide leans on. Each says what the
-// speaker does while its slide is up; one whose `pending` is not empty is a
-// demo that is not built yet, drawn hatched — the deck can be walked, and
-// every missing beat is on the controller as well as the wall.
-
 const cueLayout: LayoutNode = {
   component: 'Sheet',
   props: { areas: ['kick', 'body', 'todo'] },

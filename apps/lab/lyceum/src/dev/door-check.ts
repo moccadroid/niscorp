@@ -1,11 +1,3 @@
-// DOOR CHECK — choosing a name. Real websockets against the real boot, with
-// the checks' moderator (server/moderation.ts: a few words are not fit).
-//
-//   1. the door offers twelve names nobody has, and more on request;
-//   2. one pressed, the person is in, by that name — nobody else can take it;
-//   3. a name typed and fit to show is used as typed;
-//   4. a name typed and not fit is not used: it is kept, for reference, and
-//      the door says so and offers a name instead — pressed, they are in by it.
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { boot } from '@lyceum/server/boot';
@@ -24,7 +16,6 @@ const main = async (): Promise<void> => {
   const base = `ws://127.0.0.1:${address.port}`;
   const names = async (): Promise<string[]> => (await runtime.db.query<{ name: string }>('SELECT name FROM members ORDER BY joined_at')).rows.map((row) => row.name);
 
-  // ── 1 ──
   const ada = await connect(base);
   check('the door asks for a name', await ada.shows('main', 'Choose your name'));
   await waitUntil(() => offeredOn(ada).length === 12);
@@ -33,11 +24,9 @@ const main = async (): Promise<void> => {
   ada.click('main', 'more');
   check('...and others on request', await waitUntil(() => offeredOn(ada).length === 12 && offeredOn(ada).join() !== first.join()));
 
-  // ── 2 ──
   const picked = offeredOn(ada)[0] ?? '';
   ada.click('main', 'pick', picked);
   await ada.session();
-  // The door writes the member row before it grants the session.
   check(`one pressed, they are in, by that name (${picked})`, (await names()).includes(picked));
   const ben = await connect(base);
   await waitUntil(() => offeredOn(ben).length === 12);
@@ -47,14 +36,12 @@ const main = async (): Promise<void> => {
   ben.click('main', 'own');
   check('...nor can type it', await ben.shows('main', `Somebody is already ${picked}`));
 
-  // ── 3 ──
   ben.type('main', 'draft', 'Grace Turing');
   await new Promise((resolve) => setTimeout(resolve, 100));
   ben.click('main', 'own');
   await ben.session();
   check('a name typed and fit to show is used as typed', (await names()).includes('Grace Turing'));
 
-  // ── 4 ──
   const cam = await connect(base);
   await waitUntil(() => offeredOn(cam).length === 12);
   cam.type('main', 'draft', 'Stupid Speaker');

@@ -3,9 +3,6 @@ import { deckCurrent } from '@lyceum/app/vex/deck.entries';
 import { deckBackPrism, deckNextPrism } from './console.prism';
 import { controlsLayout } from './controls.layout';
 
-// The bottom of the controller: every slide one press away, and Back and Next,
-// each saying which slide it goes to. "All slides" opens over the controller
-// (speaker/slides.action.ts), so a deck of fifty moves nothing.
 export const controlsAction: ActionDefinition = {
   id: 'speaker.controls',
   title: 'Back and next',

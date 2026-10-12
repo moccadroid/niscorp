@@ -1,9 +1,6 @@
 import type { LayoutNode } from '@niscorp/nova';
 import { sendLayout } from '@lyceum/app/actions/questions/send.layout';
 
-// THE OPENING'S LAYOUTS. A slide is an anchor: the name of the thing, one
-// claim, one picture. What is argued is said — it is in the notes, not here.
-
 const cell = (area: string, children: LayoutNode[], props: Record<string, unknown> = {}): LayoutNode => ({
   component: 'Cell',
   props: { area, ...props },
@@ -14,8 +11,6 @@ const label = (words: string): LayoutNode => ({ component: 'Label', children: wo
 const text = (words: string, muted = false): LayoutNode => ({ component: 'Text', ...(muted ? { props: { tone: 'muted' } } : {}), children: words });
 const headline = (level: 'display' | 'title' | 'name', words: string): LayoutNode => ({ component: 'Headline', props: { level }, children: words });
 
-// 1 · The name, one line, and how to join: the code, the address, the SSH
-// command where the deployment has one.
 export const openingTitleLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head join'], cols: [1.4, 1] },
@@ -30,18 +25,12 @@ export const openingTitleLayout: LayoutNode = {
   ],
 };
 
-// One headline, alone on the slide.
 export const aloneLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head'] },
   children: [cell('head', [headline('display', '{{$.title}}')], { align: 'center' })],
 };
 
-// 3 · The speaker's assistant, mirrored (server/mirroring.ts): the same data the
-// controller's assistant has, drawn for a room. Left: what was asked — as it is
-// typed, then as it was sent — and where it stands: thinking, to be read, saved.
-// Right, the whole height: the document that came back. No field and no
-// buttons: the stage only shows.
 const last = (key: string): unknown => ({ $get: { from: { $ref: '$.history' }, path: [{ $sub: [{ $length: { $ref: '$.history' } }, 1] }, key], fallback: { $const: '' } } });
 const drafted = (key: string): unknown => ({ $prism: { $get: { from: { $ref: '$.reply.proposals' }, path: [0, 'timer', key], fallback: { $const: '' } } } });
 const typing = { $prism: { $not: { $eq: [{ $ref: '$.draft' }, { $const: '' }] } } };
@@ -68,8 +57,6 @@ export const mirrorLayout: LayoutNode = {
       'doc',
       [
         label('What came back'),
-        // The draft while it waits to be saved; once saved, the document that
-        // was saved (the assistant keeps it as `chosen`) stays up.
         {
           if: proposed,
           then: { component: 'Code', props: { text: drafted('json') } },
@@ -81,7 +68,6 @@ export const mirrorLayout: LayoutNode = {
   ],
 };
 
-// 4 · Where it started: what did not work, and what did.
 export const originLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['kick', 'not', 'did'], rows: ['auto', 1, 1] },
@@ -92,7 +78,6 @@ export const originLayout: LayoutNode = {
   ],
 };
 
-// 6 · Our answer — the whole slide.
 export const answerLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['kick', 'head', 'line'], rows: ['auto', 1, 'auto'] },
@@ -103,10 +88,6 @@ export const answerLayout: LayoutNode = {
   ],
 };
 
-// 7 · Nova: the name, the claim, and how it works in three steps.
-// One real node of the Q&A form goes through all three: its JSON, checked,
-// and drawn — the drawn one is that same node, rendered here (no ref: on the
-// projector it is not pressable).
 export const novaLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['name json', 'name check', 'name drawn'], cols: [1, 1.1], rows: ['auto', 'auto', 1] },
@@ -121,8 +102,6 @@ export const novaLayout: LayoutNode = {
   ],
 };
 
-// 8 · An action: the name bottom-left, its source in the middle, its layout
-// rendered on the right from the same JSON a phone renders.
 export const actionLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['kick code form', 'head code form'], cols: [0.85, 1.5, 0.9], rows: ['auto', 1] },
@@ -134,8 +113,6 @@ export const actionLayout: LayoutNode = {
   ],
 };
 
-// 9 · Your screen is data: the claim, and beside it the button they are about
-// to get.
 export const xrayLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head xray'], cols: [1.25, 1] },
@@ -145,11 +122,7 @@ export const xrayLayout: LayoutNode = {
   ],
 };
 
-// 11 · One screen, three renderers. Each renderer, blue while it draws a
-// screen, and which screens it draws — read off the same rows the controller's
-// switch writes (each row's choices are DOM, React, Vue, in that order). The
-// names sit in one row and the screens in the row under them, so a name never
-// moves with its list.
+// Each row's choices are DOM, React, Vue, in that order.
 const renderersInUse = {
   $prism: {
     $map: {
@@ -193,7 +166,6 @@ export const looksLayout: LayoutNode = {
   ],
 };
 
-// 12 · SSH into it: the command, big, to type now.
 export const terminalLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head', 'ssh'], rows: ['auto', 1] },
@@ -203,7 +175,6 @@ export const terminalLayout: LayoutNode = {
   ],
 };
 
-// 12 · The question, and the two projects it is about.
 export const questionLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head head', 'one two'], rows: [1, 1] },
@@ -214,10 +185,6 @@ export const questionLayout: LayoutNode = {
   ],
 };
 
-// 13 · json-render ≈ Nova ∈ nisc. Two sides, each under its name: Vercel on
-// the left, nisc on the right. json-render and Nova in one row, both blue;
-// under json-render, Next.js and your code; beside and under Nova, nisc's
-// other packages, each named by what it is.
 const part = (area: string, name: string, what: string): LayoutNode => cell(area, [label(what), headline('name', name)], { ink: 'ink', align: 'middle' });
 export const partsLayout: LayoutNode = {
   component: 'Sheet',

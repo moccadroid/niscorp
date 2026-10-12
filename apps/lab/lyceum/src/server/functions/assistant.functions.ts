@@ -18,25 +18,9 @@ import { slidesDeck } from '@lyceum/app/vex/deck.entries';
 import { timerDelete, timerSave } from '@lyceum/app/vex/timer.entries';
 import { vexOver } from '../vex-over';
 
-// THE ASSISTANT'S FUNCTIONS — for what is not data (PLAN.md, "Vex is never
-// hidden behind a function"): assembling this person's assistant from what the
-// charter granted them, and a model's turn; and saving an automation it
-// proposed, which needs the one thing that cannot be data — the clock at the
-// press — and is otherwise the person's own vex write (`timers/save`), as them.
-//
-//   assistant.intro  who this assistant is for this person: the declarations
-//                    their grants select, and the tools those name
-//   assistant.turn   one message in; a reply, the proposals it left, and the
-//                    vex queries it opened
-//   timers.save      the chosen draft anchored at the press, written as the
-//                    person, and the saved timers loaded into tide
-
 const DraftSchema = z.object({ draft: z.string() });
-// The proposal the person pressed Save on (`chosen`, set by the press).
 const ChosenSchema = z.object({ chosen: z.object({ timerId: z.string().min(1), draft: z.unknown() }) });
 
-// The conversation so far — this person's last turns, oldest first, read as
-// them (`turns/mine`, the same rows their screen shows).
 const TurnsSchema = z.array(
   z.object({
     message: z.string(),
@@ -48,12 +32,6 @@ const TurnsSchema = z.array(
   }),
 );
 
-// THIS AUTOMATION SO FAR: the newest turns in which the automation writer
-// answered — a question, a refusal, or a draft the person has not saved —
-// oldest first, each with the person's words, the answer and its reasoning.
-// A turn it did not answer in ends it, and so does a saved draft: that one is
-// done. An unanswered question or an unsaved draft is just a past turn —
-// nothing is waiting on it; it is only there if the next words take it up.
 const AnswerHereSchema = answerSchemaOf(DRAFT_HERE);
 const earlierOf = (turns: z.infer<typeof TurnsSchema>): TimerRequest['earlier'] => {
   const newestFirst = [...turns].reverse().map((turn) => ({ turn, answer: AnswerHereSchema.safeParse(turn.writer_answer).data }));
@@ -64,14 +42,8 @@ const earlierOf = (turns: z.infer<typeof TurnsSchema>): TimerRequest['earlier'] 
     .flatMap(({ turn, answer }) => (answer === undefined ? [] : [{ request: turn.message, answer, reasoning: turn.writer_reasoning ?? undefined }]));
 };
 
-// The assistant's own conversation — left out of the screen it is shown,
-// having it separately.
 const isConversation = (_instanceId: string, definitionId: string): boolean => definitionId === 'assistant.thread';
 
-// What the model is handed about the person — assembled, never authored per
-// person: what their grants say about them, what was read AS them, their
-// screen as it is now, the actions the charter gave them, and the conversation.
-// The one prompt that says how to behave is the orchestrator's.
 const knowledgeOf = async (session: FunctionSession, assembled: Assembled, tz: string): Promise<{ knowledge: string; facts: string; earlier: TimerRequest['earlier'] }> => {
   const vex = vexOver(session.wire);
   const earlier = TurnsSchema.parse(await vex(turnsMine.fingerprint));
@@ -89,8 +61,6 @@ const knowledgeOf = async (session: FunctionSession, assembled: Assembled, tz: s
     assembled.from.flatMap((declaration) =>
       declaration.grounding
         .filter((ground) => ground.upfront)
-        // A declaration applies only to whoever holds its action, so its reads
-        // are theirs to make: one that fails is a bug, and it says so.
         .map(async (ground) => `${ground.as}: ${JSON.stringify(await vex(ground.fingerprint, ground.context))}`),
     ),
   );
@@ -135,8 +105,6 @@ export const assistantFunctions = (
     const wrote: Written[] = [];
     const tools = hostTools({ session, querier: deps.querier, writer: deps.writer, tz: deps.tz, facts, proposals, opened, earlier, wrote }, assembled.tools);
     const reply = await deps.orchestrator.answer({ message, knowledge, tools });
-    // The turn is a row, written as the person — their conversation, and the
-    // next turn's conversation so far.
     const turnId = `turn_${randomBytes(8).toString('hex')}`;
     await vexOver(session.wire)(turnRecord.fingerprint, { turnId, message, reply, proposals, opened, writerAnswer: wrote.at(-1)?.answer ?? null, writerReasoning: wrote.at(-1)?.reasoning ?? null });
     return { turnId, text: reply, proposals, opened };
@@ -155,9 +123,6 @@ export const assistantFunctions = (
     await deps.timing().reload();
     return { dueLocal: due === undefined ? '' : localNow(due, deps.tz, true).slice(11) };
   },
-  // Deleting a saved timer: the row goes, as this person, and tide unloads it
-  // (the reload reads the rows again). The press is theirs — the assistant
-  // only ever opens the list (app/actions/speaker/timers.action.ts).
   'timers.delete': async (data) => {
     const { picked } = z.looseObject({ picked: z.looseObject({ timer_id: z.string().min(1) }) }).parse(data);
     await vexOver(session.wire)(timerDelete.fingerprint, { timerId: picked.timer_id });

@@ -1,12 +1,5 @@
-// THE SHAPES AN ANSWER CAN TAKE. Nobody types a shape: the router (Jev) picks
-// one of these for a question, by each one's `description`, and vex answers in it —
-// the shape a generated query is written to, and the one a replay must agree
-// with. How each is SHOWN is the layouts' business
-// (actions/shared/answer.layouts.ts), by its `kind`.
-//
-// Flat, every one: a flat shape whose keys are single columns comes back from
-// the query already in shape, and vex skips the mapping model for it.
-
+// Every shape is flat: a flat shape whose keys are single columns comes back
+// from the query already in shape, and vex skips the mapping model for it.
 export type QueryShape = {
   kind: string;
   description: string;

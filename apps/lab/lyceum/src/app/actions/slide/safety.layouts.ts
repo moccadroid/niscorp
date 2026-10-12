@@ -1,9 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// THE CHECKS SECTION'S LAYOUTS: what a closed grammar lets a program check,
-// the checks run on somebody else's JSON, what that makes safe at runtime, and
-// what it changes at build time.
-
 const cell = (area: string, children: LayoutNode[], props: Record<string, unknown> = {}): LayoutNode => ({
   component: 'Cell',
   props: { area, ...props },
@@ -13,12 +9,8 @@ const cell = (area: string, children: LayoutNode[], props: Record<string, unknow
 const label = (words: string): LayoutNode => ({ component: 'Label', children: words });
 const headline = (level: 'display' | 'title' | 'name', words: string): LayoutNode => ({ component: 'Headline', props: { level }, children: words });
 
-// How far the slide has been revealed (the deck's `step`).
 const shown = (step: number): unknown => ({ $prism: { $gte: [{ $ref: '$.step.step' }, step] } });
 
-// Two checks a program runs, each on one document: a value the schema does not
-// allow, and a trigger that sends what it listens for. In steps: the documents;
-// what each check said, in its own words; and what that makes possible.
 const checkedOne = (area: string, name: string, at: string): LayoutNode =>
   cell(
     area,
@@ -48,10 +40,6 @@ export const checkedLayout: LayoutNode = {
   ],
 };
 
-// Somebody else's JSON, installed: on the left what the install check tests,
-// each marked by how the last install fared; on the right where the file is,
-// the result in one word, and — when it was refused for a loop — the trigger
-// the loop runs through, as it is in the file.
 export const installLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head head', 'checks answer'], cols: [1, 1.2], rows: ['auto', 1] },
@@ -94,8 +82,6 @@ export const installLayout: LayoutNode = {
   ],
 };
 
-// Build time: an agent writing code against an agent writing nisc — what each
-// needs before it ships.
 export const reviewLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['head head', 'code nisc'], rows: [1, 1] },

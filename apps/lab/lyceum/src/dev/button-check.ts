@@ -1,13 +1,3 @@
-// BUTTON CHECK — an action only some people have.
-//
-//   1. before it is given, nobody's phone has the button;
-//   2. the speaker's tool is on the button's slide; Give picks three of the
-//      five who joined and writes a grant each — the button is on exactly
-//      three phones' lists, and the other two were never sent it;
-//   3. somebody who has it presses: the stage shows their name;
-//   4. somebody who does not have it cannot press by replaying the write —
-//      the engine refuses, whatever their screen was sent;
-//   5. Take it back: it is gone from every phone.
 import { serve } from '@hono/node-server';
 import { attachSocket } from '@niscorp/moss/node';
 import { mintSession } from '@niscorp/moss';
@@ -45,10 +35,8 @@ const main = async (): Promise<void> => {
   const press = async (token: string): Promise<number> =>
     (await server.request('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify({ fingerprint: pressSend.fingerprint, context: {} }) })).status;
 
-  // ── 1 ──
   check('before it is given, nobody’s phone has the button', people.every((person) => !has(person)));
 
-  // ── 2 ──
   const at = SLIDES.findIndex((slide) => slide.tools.includes('tools.button'));
   check(`the button tool is on a slide (${SLIDES[at]?.title ?? 'none'})`, at >= 0);
   for (let step = 0; step < at; step += 1) {
@@ -65,7 +53,6 @@ const main = async (): Promise<void> => {
   const others = people.filter((person) => !has(person));
   check('...and the other two were never sent it', others.length === 2 && others.every((person) => !person.phone.textOf('body').includes('button') && !person.phone.textOf('main').includes('button.press')));
 
-  // ── 3 ──
   const presser = holders[0];
   if (presser === undefined) throw new Error('nobody has the button');
   presser.phone.click('body', 'press');
@@ -79,13 +66,11 @@ const main = async (): Promise<void> => {
   check(`somebody who has it presses: one press is recorded, in their name (${presserName})`, names.length === 1 && presserName !== '');
   check('...and the stage shows who pressed', await stage.shows('main', presserName));
 
-  // ── 4 ──
   const outsider = others[0];
   if (outsider === undefined) throw new Error('everybody has the button');
   const refused = await press(outsider.token);
   check(`somebody who does not have it cannot press by replaying the write (${refused})`, refused >= 400 && (await runtime.db.query('SELECT 1 FROM presses')).rows.length === 1);
 
-  // ── 5 ──
   speaker.click('tools', 'take');
   check('Take it back: gone from every phone', await waitUntil(() => people.every((person) => !has(person))));
   check('...and the tool counts none', await speaker.shows('tools', '"label":"People who have it","value":0'));

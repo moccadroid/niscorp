@@ -4,12 +4,6 @@ import type { AssistantDeclaration } from '@lyceum/app/assistant/assistants';
 import { ACTIONS } from '@lyceum/app/action-catalog';
 import { ENTRIES } from '@lyceum/app/vex';
 
-// WHO GETS WHICH ASSISTANT — read off what the charter granted, never written
-// down twice. A declaration (app/assistant/assistants.ts) applies to whoever
-// holds its action, so a person's assistant is the declarations their grants
-// select: what they say about the person, their grounding reads, the union of
-// their tools.
-
 export const TOOL_NAMES = ['open', 'query', 'automate'] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
@@ -24,9 +18,6 @@ const DeclarationSchema = z
   })
   .strict();
 
-// Parsed once, at boot: a declaration naming an action or a read the app does
-// not have, or a tool the host does not offer, refuses to start — the same
-// stance moss takes on an incoherent charter.
 const DECLARATIONS: readonly AssistantDeclaration[] = (() => {
   const parsed = z.array(DeclarationSchema).parse(ASSISTANTS);
   const reads = new Set(ENTRIES.map((entry) => entry.fingerprint));
@@ -38,8 +29,6 @@ const DECLARATIONS: readonly AssistantDeclaration[] = (() => {
 })();
 
 export type Assembled = {
-  // The declarations this person's grants select — also shown to them, so the
-  // assembly is visible: "your assistant is built from room".
   from: readonly AssistantDeclaration[];
   tools: ReadonlySet<ToolName>;
 };

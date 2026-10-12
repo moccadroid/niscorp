@@ -1,8 +1,5 @@
 import { deckGo } from '@lyceum/app/vex/deck.entries';
 
-// Where the deck goes, as a position: one on, one back — clamped to the deck,
-// so the first slide has no "back" to fall off and the last no "next" — or
-// straight to the slide picked from the list.
 const position = { $ref: '$.current.position' };
 const last = { $sub: [{ $ref: '$.current.count' }, 1] };
 

@@ -1,9 +1,5 @@
 import type { LayoutNode } from '@niscorp/nova';
 
-// The door, on a phone: choose a name. Twelve nobody has, as buttons — one
-// press and you are in — more if none of them is you, or a name of your own.
-// A name of your own is checked first; one that cannot be shown is not used,
-// and the door says so and offers one instead.
 export const doorLayout: LayoutNode = {
   component: 'Sheet',
   props: { size: 'fill', areas: ['kick', 'head', 'names', 'more', 'own', 'use', 'out'], rows: ['auto', 'auto', 'auto', 'auto', 'auto', 'auto', 1] },

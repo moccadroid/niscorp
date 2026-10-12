@@ -8,22 +8,6 @@ import { timerDocument } from '@lyceum/app/vex/timer.entries';
 import type { Census } from '../census';
 import { vexOver } from '../vex-over';
 
-// WHERE THE ROOM IS. The address people open to step in — what the projector's
-// QR code says, and the words beside it for anyone typing it. It is the
-// deployment's (PUBLIC_URL), not the app's, so the server hands it out; every
-// principal may ask, because it is on the wall anyway.
-//
-// And how big the app running the room is — counted from its source, for the
-// slide that answers "is JSON enough?" (../census.ts). Also on the wall anyway.
-//
-// And the newest saved timer as the document it is stored as, printed, for the
-// slide that comes back to it — read as the caller, over their own wire. The
-// lines that say what it does and who it runs as are marked.
-//
-// And the two checks the checks slide shows, RUN: the kit's props schema on a
-// button in a colour the kit does not have, nova's loop finder on an action
-// that sends what it listens for. What comes back is what each said, in its
-// own words — a long line folded where it has a break, so it fits the slide.
 const fold = (line: string, width: number): string =>
   line
     .split(/(?<=[:|] ?)/)

@@ -1,15 +1,3 @@
-// ARTIFACTS CHECK — `src/app/` is artifacts only (AGENTS.md, review 6a): every
-// field the manifest carries as DATA is pure JSON and parses its own schema. A
-// function, a Date, an undefined or a class instance anywhere in one fails
-// here, so a code file cannot pass for an artifact. Authoring helpers that
-// BUILD JSON (a `countOf`, an `answerLayout`) are fine — what they return is
-// what is held to this.
-//
-// The manifest's code seams — identity, functions, reactions — are not
-// artifacts; they are validated by running.
-//
-// And rule 14: an action's `input` declares what an opener may seed, and every
-// declared field is a key of its `data`.
 import { z } from 'zod';
 import { ActionDefinitionSchema, ActionFragmentSchema, LayoutNodeSchema } from '@niscorp/nova';
 import { MutationDefinitionSchema, QuerySchema } from '@niscorp/vex';
@@ -25,7 +13,6 @@ import { QUERY_SHAPES } from '@lyceum/app/vex/query.shapes';
 import { BEHAVIORS } from '@lyceum/app/vex/behaviors';
 import { check, finish } from './harness';
 
-// The first path at which `value` stops being plain JSON, or '' if it never does.
 const impurity = (value: unknown, path: string): string => {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return '';
   if (typeof value === 'number') return Number.isFinite(value) ? '' : `${path} is ${value}`;
@@ -59,7 +46,6 @@ const parses = (label: string, parse: () => void): void => {
   }
 };
 
-// ── every artifact field of the manifest is pure JSON ──
 pure('actions', ACTIONS);
 pure('charter', CHARTER);
 pure('wearable role sets', WEARABLE);
@@ -72,10 +58,8 @@ pure('assistant declarations', ASSISTANTS);
 pure('the kit grammar', LYCEUM_KIT);
 pure('answer shapes', QUERY_SHAPES);
 
-// …and the check bites: a function slipped into a copy is caught.
 check('the purity check bites: a function in an action is caught', impurity({ ...ACTIONS, sneaky: { data: { format: (): string => '' } } }, '') !== '');
 
-// ── and parses through its own schema ──
 parses('actions', () => {
   for (const action of Object.values(ACTIONS)) ActionDefinitionSchema.parse(action);
 });
@@ -90,7 +74,6 @@ parses('mutation entries', () => {
   for (const entry of ENTRIES) if ('mutation' in entry) MutationDefinitionSchema.parse(entry.mutation);
 });
 
-// ── rule 14: every declared input field is a key of the action's data ──
 const InputSchema = z.object({ properties: z.record(z.string(), z.unknown()) });
 for (const action of Object.values(ACTIONS)) {
   if (action.input === undefined) continue;

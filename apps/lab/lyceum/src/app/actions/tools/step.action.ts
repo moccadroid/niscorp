@@ -1,11 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import { deckStep, deckStepSet, TALK_DECK } from '@lyceum/app/vex/deck.entries';
 
-// The controller's step tool, on the slides that are shown in steps: one press
-// shows the next part of the slide on the stage, another starts it over. The
-// step is the deck row's (vex/deck.entries.ts) — a reactive read, so the tool
-// and the stage both follow; moving the deck puts it back to 0. A slide says
-// how many parts it has (db/deck.ts); the next part stops at the last.
 export const stepTool: ActionDefinition = {
   id: 'tools.step',
   title: 'This slide, in steps',

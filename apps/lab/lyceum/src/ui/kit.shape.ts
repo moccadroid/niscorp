@@ -1,13 +1,5 @@
 import { encode } from 'uqr';
 
-// ═══════════════════════════════════════════════════════════════
-// WHAT EVERY BROWSER KIT WORKS OUT THE SAME WAY — the geometry a component
-// turns into CSS itself, the countdown's arithmetic, the shapes, the QR code.
-// Pure: strings and numbers in, strings and numbers out. The DOM kit (./kit.ts),
-// the React kit (./react.kit.ts) and the Vue kit (./vue.kit.ts) build their
-// elements from these, so the three draw the same thing from the same tree.
-// ═══════════════════════════════════════════════════════════════
-
 export const AREA = /^[a-z][a-z0-9-]*$/;
 
 export const text = (value: unknown): string | undefined =>
@@ -21,7 +13,6 @@ export const areaOf = (value: unknown): string | undefined => {
   return name !== undefined && AREA.test(name) ? name : undefined;
 };
 
-// ── a Sheet's grid, from its areas, rows and columns ──
 export type Template = { areas: string; rows: string; cols: string; names: Set<string> };
 
 export const templateOf = (
@@ -53,7 +44,6 @@ export const templateOf = (
   };
 };
 
-// The narrow arrangement a Sheet declares, if it declares one.
 export const narrowOf = (narrowProp: unknown, size: 'fill' | 'auto'): Template | undefined =>
   typeof narrowProp === 'object' && narrowProp !== null && !Array.isArray(narrowProp)
     ? templateOf(
@@ -64,8 +54,6 @@ export const narrowOf = (narrowProp: unknown, size: 'fill' | 'auto'): Template |
       )
     : undefined;
 
-// A Sheet's own CSS: the wide grid, and the narrow one as custom properties the
-// stylesheet switches to on a phone-width screen.
 export const sheetStyle = (
   wide: Template | undefined,
   narrow: Template | undefined,
@@ -87,15 +75,12 @@ export const sheetStyle = (
       }),
 });
 
-// ── the countdown ──
-// The instant, from ISO or Postgres's own "YYYY-MM-DD HH:MM:SS+ZZ".
+// From ISO or Postgres's own "YYYY-MM-DD HH:MM:SS+ZZ".
 export const instantOf = (value: string | undefined): number =>
   value === undefined
     ? Number.NaN
     : Date.parse(value.replace(' ', 'T').replace(/([+-]\d\d)$/, '$1:00'));
 
-// What a countdown shows now: the time left as m:ss, whether it is done, and
-// whether it is still running (a dash for no instant at all).
 export const remaining = (
   to: number,
   now: number,
@@ -109,7 +94,6 @@ export const remaining = (
   };
 };
 
-// ── the shapes ──
 export const SIGIL_SHAPES: Record<
   'triangle' | 'circle' | 'square' | 'cross' | 'check' | 'x',
   { tag: string; attrs: Record<string, string> }[]
@@ -121,12 +105,10 @@ export const SIGIL_SHAPES: Record<
     { tag: 'rect', attrs: { x: '36', y: '4', width: '28', height: '92' } },
     { tag: 'rect', attrs: { x: '4', y: '36', width: '92', height: '28' } },
   ],
-  // yes, and no
   check: [{ tag: 'polygon', attrs: { points: '4,54 22,36 40,54 78,12 96,30 40,90' } }],
   x: [{ tag: 'polygon', attrs: { points: '18,4 50,36 82,4 96,18 64,50 96,82 82,96 50,64 18,96 4,82 36,50 4,18' } }],
 };
 
-// ── the QR code: one path of square modules, with the standard quiet zone ──
 export const qrOf = (value: string): { viewBox: string; d: string } => {
   const { data, size } = encode(value);
   const quiet = 4;
@@ -136,7 +118,6 @@ export const qrOf = (value: string): { viewBox: string; d: string } => {
   return { viewBox: `0 0 ${size + quiet * 2} ${size + quiet * 2}`, d: modules.join('') };
 };
 
-// ── Flow: where on the wall clock a lane's dots are ──
 export const FLOW_PERIOD_MS = 2400;
 export const flowDelays = (now: number): string[] => {
   const phase = -(now % FLOW_PERIOD_MS);
