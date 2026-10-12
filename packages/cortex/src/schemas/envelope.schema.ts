@@ -70,12 +70,17 @@ const KNOWN_KEYS = new Set(['response', 'data', 'reasoning']);
 
 const decodeData = decodeJsonish;
 
+// A schema that takes an object of one unknown key cannot tell a bare payload
+// from an envelope with a misspelt key.
+const takesAnyObject = (schema: ZodType): boolean => schema.safeParse({ 'cortex:no-such-field': true }).success;
+
 // Models often send the bare payload, without the envelope around it.
-const tryUnwrap = <TData>(record: Record<string, unknown>, spec: EnvelopeSpec<TData>): Envelope<TData> | undefined => {
+const asBarePayload = <TData>(record: Record<string, unknown>, spec: EnvelopeSpec<TData>): Envelope<TData> | undefined => {
   if (!spec.schema || spec.responseMode === 'required') return undefined;
   const keys = Object.keys(record);
   const looksWrapped = keys.length > 0 && keys.every((key) => KNOWN_KEYS.has(key));
   if (looksWrapped) return undefined;
+  if (takesAnyObject(spec.schema)) return undefined;
   const parsed = spec.schema.safeParse(record);
   if (!parsed.success) return undefined;
   return { data: parsed.data };
@@ -92,8 +97,8 @@ export const validateEnvelope = <TData>(raw: unknown, spec: EnvelopeSpec<TData>)
     if (!KNOWN_KEYS.has(key)) issues.push(`unknown key "${key}" — only response, data, reasoning are allowed`);
   }
   if (issues.length > 0) {
-    const unwrapped = tryUnwrap(record, spec);
-    if (unwrapped !== undefined) return { ok: true, envelope: unwrapped };
+    const bare = asBarePayload(record, spec);
+    if (bare !== undefined) return { ok: true, envelope: bare };
   }
 
   const response = record['response'] ?? undefined;

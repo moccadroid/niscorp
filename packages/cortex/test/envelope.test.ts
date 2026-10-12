@@ -103,6 +103,28 @@ describe('validateEnvelope — with a data schema', () => {
   });
 });
 
+describe('validateEnvelope — a bare payload', () => {
+  const misspelt = { respnse: 'Done.', data: { id: 7 } };
+
+  it('is read as the data when the schema has a required field', () => {
+    const verdict = validateEnvelope({ answer: 5 }, { schema: DataSchema, responseMode: 'optional' });
+    expect(verdict.ok).toBe(true);
+    if (verdict.ok) expect(verdict.envelope.data.answer).toBe(5);
+  });
+
+  it('is not read from a misspelt envelope when the schema takes any record', () => {
+    const verdict = validateEnvelope(misspelt, { schema: z.record(z.string(), z.unknown()), responseMode: 'optional' });
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.issues).toContain('unknown key "respnse"');
+  });
+
+  it('is not read from a misspelt envelope when every field of the schema is optional', () => {
+    const verdict = validateEnvelope(misspelt, { schema: z.object({ id: z.number().optional() }), responseMode: 'optional' });
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.issues).toContain('unknown key "respnse"');
+  });
+});
+
 describe('validateEnvelope — chat agents (no schema)', () => {
   it('requires response when responseMode is required', () => {
     const missing = validateEnvelope({ reasoning: 'hm' }, { responseMode: 'required' });
