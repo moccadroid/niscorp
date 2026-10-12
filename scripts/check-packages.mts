@@ -1,27 +1,3 @@
-// Can the packages be consumed from OUTSIDE this workspace?
-//
-// Inside the monorepo every import resolves: pnpm links the workspace, hoists
-// dev dependencies, and a package that forgets to declare what it imports
-// still finds it next door. A consumer gets none of that — only the tarball
-// and what its manifest declares. vex's `/hono` subpath imported `hono` while
-// declaring it only as a devDependency, and solid pointed CJS types at a file
-// the build never emits; both were green here and broken for anyone else.
-//
-// Four passes, against what is built and packed rather than the source tree:
-//   1. publint — the manifest is well-formed (files exist, conditions ordered)
-//   2. attw    — every export resolves to matching types under node16 ESM + CJS
-//   2b. loads  — what each built entry imports at load time, followed through
-//                its chunks: nothing undeclared, and nothing the package calls
-//                an OPTIONAL peer from its main entry. prism and nova imported
-//                strata from their cores while calling it optional; the smoke
-//                pass installs every tarball together, so strata was always
-//                there, and an app with nova alone crashed on import.
-//   3. smoke   — the tarballs install into a scratch project outside the
-//                workspace, and every export is imported (ESM) and required
-//                (CJS, where the export map offers it)
-//
-// Run after `pnpm build`: `pnpm check:packages`. Exits non-zero on any failure.
-
 import { execFileSync, execSync } from 'node:child_process';
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -31,10 +7,8 @@ import ts from 'typescript';
 
 const root = resolve(import.meta.dirname, '..');
 
-// Everything is spawned so it runs on Windows too, where execFileSync cannot
-// spawn a .cmd: node is this node, a tool is its JS entry run by this node
-// (not the .bin shim), and pnpm — pnpm.cmd there — goes through the shell as
-// one command string. Everywhere else, no shell.
+// execFileSync cannot spawn a .cmd on Windows: a tool is its JS entry run by
+// this node, and pnpm goes through the shell there as one command string.
 type Spawn = (cwd: string) => string;
 const nodeRun = (args: readonly string[]): Spawn => (cwd) => execFileSync(process.execPath, args, { cwd, stdio: 'pipe', encoding: 'utf8' });
 const tool = (pkg: string, name: string, args: readonly string[]): Spawn => {
@@ -49,16 +23,14 @@ const pnpm = (args: readonly string[]): Spawn => (cwd) =>
     ? execSync(['pnpm', ...args.map((arg) => `"${arg}"`)].join(' '), { cwd, stdio: 'pipe', encoding: 'utf8' })
     : execFileSync('pnpm', args, { cwd, stdio: 'pipe', encoding: 'utf8' });
 
-// Subpaths that are ESM-only on purpose: ink is ESM-only with top-level await,
-// so these cannot offer a `require` condition. attw skips them; the smoke pass
-// still imports them.
+// ink is ESM-only with top-level await, so these subpaths cannot offer a
+// `require` condition.
 const ESM_ONLY: Readonly<Record<string, readonly string[]>> = {
   '@niscorp/nova': ['./adapters/ink'],
   '@niscorp/moss': ['./terminal/ink'],
 };
 
-// Whole packages that are ESM-only: create-nisc runs as `npm create nisc` and
-// nothing requires it. attw judges them by its esm-only profile.
+// create-nisc runs as `npm create nisc`: nothing requires it.
 const ESM_ONLY_PACKAGES: ReadonlySet<string> = new Set(['create-nisc']);
 
 type Manifest = {
@@ -75,8 +47,6 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const readManifest = (dir: string): Manifest => {
   const raw: unknown = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
   if (!isRecord(raw) || typeof raw['name'] !== 'string') throw new Error(`${dir}: package.json has no name`);
-  // A package with no `exports` ships no code (the @niscorp/nisc meta package):
-  // it is linted and installed, but has no entrypoints to resolve or import.
   const exports: Manifest['exports'] = {};
   for (const [key, entry] of Object.entries(isRecord(raw['exports']) ? raw['exports'] : {})) {
     exports[key] = isRecord(entry) ? { import: entry['import'], require: entry['require'] } : {};
@@ -90,12 +60,9 @@ const readManifest = (dir: string): Manifest => {
   return { name: raw['name'], exports, peerDependencies, optionalPeers, dependencies };
 };
 
-// zod is a peer of every package that touches it: schemas cross from the app
-// into nisc, so the app owns the one copy. The floor is not arbitrary —
-// 4.1.13 moved `.describe()`/`.meta()` into a registry shared across copies
-// (before it, a schema from one copy converted by another silently lost every
-// description), and 4.2.0 added the Standard JSON Schema hook nisc converts
-// caller schemas through. Below 4.2.0 the second guarantee is gone.
+// The oldest zod with both things nisc relies on across copies: descriptions
+// in a registry every copy shares (4.1.13) and the Standard JSON Schema hook
+// caller schemas are converted through (4.2.0).
 const ZOD_FLOOR = '4.2.0';
 
 const results: { label: string; ok: boolean; detail?: string }[] = [];
@@ -126,19 +93,16 @@ const packages = readdirSync(packagesDir).map((name) => {
   return { dir, manifest: readManifest(dir) };
 });
 
-// nisc packages meet each other as PEERS: an app holds one copy of each, so
-// one grammar (one Prism, one nova) runs every artifact, and a value one
-// package hands another is the same type on both sides. A plain dependency
-// is allowed only for something used purely inside — never in the published
-// types, never authored by the app — and says why here.
+// nisc packages are each other's peers, so an app holds one copy of each. A
+// plain dependency is allowed only for something used purely inside (never in
+// the published types, never authored by the app) and says why here.
 const INTERNAL_DEPENDENCIES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   '@niscorp/cortex': { '@niscorp/solid': 'streams partial model output inside the loop; never in the API' },
 };
 
-// ── 1 + 2: publint and attw, per package ────────────────────────────
 for (const { dir, manifest } of packages) {
-  // The meta package is the one exception by construction: it is what PROVIDES
-  // the single copies — its exact dependencies are the set, installed once.
+  // The meta package is the exception: its exact dependencies are what provides
+  // the single copies.
   const isMetaPackage = manifest.name === '@niscorp/nisc';
   for (const dependency of manifest.dependencies.filter((name) => name.startsWith('@niscorp/') && !isMetaPackage)) {
     const reason = INTERNAL_DEPENDENCIES[manifest.name]?.[dependency];
@@ -165,19 +129,11 @@ for (const { dir, manifest } of packages) {
   );
 }
 
-// ── 2b: what each entry loads ───────────────────────────────────────
-//
-// Static imports only: an `import()` of an optional peer is how a feature that
-// needs it loads it, on demand. Relative imports are followed into the chunks
-// they name; a bare one is a package, and the package must be declared — a
-// dependency, a peer, or the package itself — and, from the main entry, not
-// an optional peer.
+// Static imports only: an `import()` is how a feature loads an optional peer
+// on demand.
 const BUILTIN = new Set(builtinModules.flatMap((name) => [name, `node:${name}`]));
-// Read by a parser, not by a pattern over the text. The pattern took a sentence
-// for a statement: moss's built entry holds the string "Keep why an import did
-// not land on the row, and the address it was fetched from", and the words
-// from `import` to `from` with the quote that closes the string read as an
-// import of whatever came before the next quote.
+// Parsed, not matched by a pattern: a string that holds the words `import` and
+// `from` would read as a statement.
 const staticImportsOf = (source: string): string[] =>
   ts
     .createSourceFile('built.js', source, ts.ScriptTarget.Latest, false, ts.ScriptKind.JS)
@@ -225,7 +181,6 @@ for (const { dir, manifest } of packages) {
   }
 }
 
-// ── 3: install the tarballs outside the workspace and load every export ──
 const scratch = mkdtempSync(join(tmpdir(), 'nisc-pack-'));
 try {
   const tarballs: Record<string, string> = {};
@@ -236,16 +191,14 @@ try {
     tarballs[manifest.name] = `file:${file}`;
   }
 
-  // Every peer any package declares, at the range it declares — the consumer
-  // supplies these. Workspace peers resolve to their tarballs.
   const peers: Record<string, string> = {};
   for (const { manifest } of packages) {
     for (const [name, range] of Object.entries(manifest.peerDependencies)) {
       if (!(name in tarballs)) peers[name] = range;
     }
   }
-  // A SECOND zod, at the oldest version the packages accept, beside the app's
-  // own copy — the duplicate every consumer can end up with (see ZOD_FLOOR).
+  // A second zod beside the app's own, at the oldest version the packages
+  // accept: the duplicate a consumer can end up with.
   peers['zod-other'] = `npm:zod@${ZOD_FLOOR}`;
 
   writeFileSync(
@@ -255,15 +208,12 @@ try {
       private: true,
       type: 'module',
       dependencies: { ...tarballs, ...peers },
-      // Nothing is on the registry yet: packages that depend on each other must
-      // resolve to the tarballs, not to npm.
+      // Packages that depend on each other resolve to the tarballs, not to npm.
       pnpm: { overrides: tarballs },
     }),
   );
-  // Strict isolation is the point. npm (and pnpm's default hoisting) would put
-  // moss's `hono` where vex could reach it too, and hide exactly the undeclared
-  // import this check exists to catch. With hoisting off, a package sees only
-  // what its own manifest declares.
+  // With hoisting, one package's dependency is reachable from another, which
+  // hides the undeclared import this check exists to catch.
   writeFileSync(join(scratch, '.npmrc'), 'hoist=false\n');
   run('install tarballs', pnpm(['install', '--ignore-workspace', '--reporter=silent']), scratch);
 
@@ -280,10 +230,6 @@ try {
       }
     }
 
-    // ── 3b: an app can ask a package which version it is ──────────────
-    // Every package exports its package.json. Whatever shows a package at work
-    // (a documentation site, a bug report, an agent) says the version that is
-    // installed by reading it here, not by guessing from a range.
     for (const { manifest } of packages) {
       const specifier = `${manifest.name}/package.json`;
       run(
@@ -296,11 +242,6 @@ try {
       );
     }
 
-    // ── 4: a schema from ANOTHER zod copy keeps its descriptions ──────
-    // Every place nisc turns a caller's schema into JSON Schema (signal's
-    // wire, cortex's prompt docs, nova's layout palette) must convert it
-    // through the schema's own copy. Converted by nisc's copy instead, a
-    // pre-4.1.13 schema loses every `.describe()` without an error.
     const probe = (label: string, body: string): void =>
       run(label, nodeRun(['--input-type=module', '-e', `
         import { z as other } from 'zod-other';

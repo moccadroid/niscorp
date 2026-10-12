@@ -1,23 +1,3 @@
-// The grammar gate (strata S4). Two questions, for nisc's own grammars:
-//
-//   1. Did a kind's schema change without its grammar gaining a migration?
-//      strata/snapshots/<grammar>/<version>.json records each kind's JSON Schema
-//      at each version. Same version, different schema → fail: append a
-//      migration (an empty marker is enough for an addition), then record the
-//      new version with `pnpm strata:snapshot`.
-//   2. Does every captured document (strata/corpus) still upgrade to the current
-//      grammars and parse with the current strict schemas?
-//
-// A snapshot is the grammar's fingerprint, not the grammar: what the validator
-// wrote for it. When the RECORDER changes and the grammar does not — a
-// validator upgrade that describes the same schema differently, strata reading
-// it differently — the current version is re-recorded, never edited by hand:
-// `pnpm strata:snapshot --rebaseline`, in a commit that changes nothing else in
-// the grammar. It refuses unless the corpus passes. What is history is the
-// grammar version — its migrations, and the documents captured at its stamp.
-//
-// Run after `pnpm build`: pnpm check:grammars   (--write records a missing snapshot)
-
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { NOVA_SEQUENCE, NOVA_SCHEMAS } from '../packages/nova/dist/migrations/index.js';
@@ -49,7 +29,6 @@ const readSnapshot = (file: string): Snapshot | undefined => {
   return { sequence: raw['sequence'], version: raw['version'], kinds: raw['kinds'] };
 };
 
-// ── 1. the corpus — first: a rebaseline stands on it ───────
 const corpusDir = join(root, 'strata', 'corpus');
 const documents: CorpusDocument[] = [];
 for (const app of existsSync(corpusDir) ? readdirSync(corpusDir) : []) {
@@ -71,7 +50,6 @@ line(
   documents.length === 0 ? ['The corpus is empty — capture it: pnpm strata:corpus'] : report.failures.slice(0, 20).map((f) => `${f.id} (${f.kind}): ${f.reason}`),
 );
 
-// ── 2. snapshots ────────────────────────────────────────────────
 for (const { sequence, schemas } of GRAMMARS) {
   const current = snapshotOf(sequence, schemas);
   const dir = join(root, 'strata', 'snapshots', sequence.id);

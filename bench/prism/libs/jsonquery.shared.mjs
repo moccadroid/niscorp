@@ -1,7 +1,3 @@
-// The tasks as JSON Query queries, each written twice: in the text format and in the JSON format. The two say the
-// same thing: parse(TEXT[id]) is JSON[id], value for value. Built-in functions only.
-
-// What the language has no way to say. The same for both formats.
 export const NOT_EXPRESSIBLE = {
   strings: 'No built-in function changes the case of a string, so the upper-cased city cannot be written (the interpolated string and the joined list can).',
   dates: 'No date functions: a timestamp cannot be parsed or subtracted, so the whole days until `now` cannot be written (the day itself is a substring).',
@@ -75,7 +71,6 @@ export const TEXT = {
 const get = (...path) => ['get', ...path];
 const eq = (a, b) => ['eq', a, b];
 
-// (.items | map(.qty * .unitCents) | sum()) + .shippingCents, in the order it is piped into.
 const totalCents = ['add', ['pipe', get('items'), ['map', ['multiply', get('qty'), get('unitCents')]], ['sum']], get('shippingCents')];
 
 export const JSON_QUERIES = {
@@ -170,7 +165,6 @@ export const JSON_QUERIES = {
   ],
 };
 
-// One row's tasks: its sources, and the same two gaps.
 export const tasksOf = (sources) => ({
   ...Object.fromEntries(Object.entries(sources).map(([id, source]) => [id, { source }])),
   ...Object.fromEntries(Object.entries(NOT_EXPRESSIBLE).map(([id, why]) => [id, { notExpressible: why }])),

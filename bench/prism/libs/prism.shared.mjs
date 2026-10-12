@@ -1,10 +1,6 @@
-// The eleven tasks as Prism configs. Shared by the Prism rows (this build and the published one), which differ
-// only in which build runs them and through which entry point.
-
 const ref = (path) => ({ $ref: path });
 const of = (name, ...path) => ({ $get: { from: { $var: name }, path } });
 
-// qty × unitCents over an order's lines, plus its shipping. `order` is a node that answers the order.
 const totalOf = (order) => ({
   $add: [
     { $sum: { over: { $map: { over: { $get: { from: order, path: ['items'] } }, as: 'item', body: { $mul: [of('item', 'qty'), of('item', 'unitCents')] } } } } },
@@ -133,12 +129,9 @@ export const CONFIGS = {
   },
 };
 
-// The rows of one Prism build: `lib` is that build's main entry.
 export const rowsOf = (lib) => ({
-  // compile once, execute after: the form a host keeps.
   compiled: { prepare: (config) => lib.compile(config), run: (ir, input) => lib.execute(ir, input), oneShot: (config, input) => lib.evaluate(config, input) },
-  // evaluate, as a host calls it: the same config object again (run), and a new object each call (oneShot). The
-  // published 0.2.2 had this as prismTransform.
+  // The published 0.2.2 has this as prismTransform.
   transform: { prepareTimed: false, prepare: (config) => config, run: (config, input) => (lib.prismTransform ?? lib.evaluate)(config, input), oneShot: (config, input) => (lib.prismTransform ?? lib.evaluate)(config, input) },
 });
 

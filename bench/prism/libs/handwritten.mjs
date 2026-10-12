@@ -1,6 +1,3 @@
-// The ceiling: each task as a plain function, written by hand. It is the task's own reference (tasks.mjs), so it
-// is right by definition; no library should be expected to beat it.
-
 import { TASKS } from '../tasks.mjs';
 
 export default {

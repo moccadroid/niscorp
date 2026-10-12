@@ -1,6 +1,5 @@
 import { compile, search, TreeInterpreter } from '@jmespath-community/jmespath';
 
-// qty × unitCents over the lines of the order in context, plus its shipping.
 const TOTAL = 'sum(map(&(qty * unitCents), items)) + shippingCents';
 
 export default {

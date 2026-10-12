@@ -1,6 +1,3 @@
-// The data every task runs over: orders of a small shop. Made from a seed, so every library and every run sees
-// the same bytes. Nothing here is random at run time.
-
 const mulberry = (seed) => {
   let state = seed >>> 0;
   return () => {
@@ -30,7 +27,6 @@ const NOTES = ['Leave at the door', 'Gift wrap, please', 'Ring twice'];
 
 const pad = (n, width) => String(n).padStart(width, '0');
 
-// One order. `index` is its place in the list; ids and times are unique and follow from it.
 export const makeOrder = (index, seed = 1) => {
   const random = mulberry(seed * 100003 + index);
   const pick = (list) => list[Math.floor(random() * list.length)];
@@ -44,8 +40,7 @@ export const makeOrder = (index, seed = 1) => {
     const [sku, title, unitCents] = PRODUCTS[(start + line) % PRODUCTS.length];
     items.push({ sku, title, qty: 1 + Math.floor(random() * 4), unitCents });
   }
-  // One every 37 minutes, backwards from 2026-09-30T23:59:00Z: unique, never later than the tasks' "now", and
-  // 10,000 of them reach back 257 days.
+  // Unique, and never later than the tasks' "now".
   const placedAt = new Date(Date.UTC(2026, 8, 30, 23, 59, 0) - index * 37 * 60_000 - Math.floor(random() * 50) * 1000).toISOString().replace('.000Z', 'Z');
   const order = {
     id: `o-${pad(index + 1, 6)}`,
@@ -56,12 +51,10 @@ export const makeOrder = (index, seed = 1) => {
     shippingCents: pick(SHIPPING),
     couponCode: pick(COUPONS),
   };
-  // A third of the orders carry a note; the rest have no `notes` key at all.
   if (random() < 0.34) order.notes = pick(NOTES);
   return order;
 };
 
 export const makeOrders = (count, seed = 1) => Array.from({ length: count }, (_, index) => makeOrder(index, seed));
 
-// The fixed "now" of the date task.
 export const NOW = '2026-10-01T00:00:00Z';

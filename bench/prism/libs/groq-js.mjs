@@ -1,9 +1,7 @@
 import { evaluate, parse } from 'groq-js';
 
-// The input is the root of the query (`@`): its attributes are read by name. No dataset (`*`) is given.
 const run = async (tree, input) => (await evaluate(tree, { root: input })).get();
 
-// qty × unitCents over an order's lines, plus its shipping. GROQ maps to a computed value with a projection.
 const TOTAL = 'math::sum(items[]{"cents": qty * unitCents}.cents) + shippingCents';
 
 export default {

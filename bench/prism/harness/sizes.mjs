@@ -1,6 +1,3 @@
-// What each library adds to a bundle: one entry that imports what its adapter uses, bundled and minified by
-// esbuild for the browser with everything it depends on, then gzipped. Writes results/sizes.json.
-
 import { build } from 'esbuild';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';

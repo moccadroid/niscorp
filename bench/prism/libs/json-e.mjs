@@ -2,16 +2,14 @@ import jsone from 'json-e';
 
 const ev = (expression) => ({ $eval: expression });
 
-// The orders in scope that `when` holds for: $map drops what an $if without an else leaves out.
+// $map drops what an $if without an else leaves out.
 const where = (when) => ({ $map: ev('orders'), 'each(order)': { $if: when, then: ev('order') } });
 
-// The first `count` of `orders`, newest first. $sort is ascending only, so it is reversed.
 const newest = (orders, count, row) => ({
   $let: { sorted: { $reverse: { $sort: orders, 'by(order)': 'order.placedAt' } } },
   in: { $map: ev(`sorted[0:${count}]`), 'each(order)': row },
 });
 
-// qty × unitCents over the lines of `order`.
 const linesCents = { $reduce: ev('order.items'), initial: 0, 'each(sum, item)': ev('sum + item.qty * item.unitCents') };
 
 export default {

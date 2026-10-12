@@ -1,27 +1,3 @@
-// The first release, from this machine — once.
-//
-// npm lets a package trust a CI workflow only after the package exists, so
-// version 0.1.0 of every @niscorp package is published from a terminal, and
-// everything after it by the Release workflow (docs/releasing.md). This is that
-// one terminal step, with every precondition checked before anything leaves
-// the machine:
-//
-//   1. on main, nothing uncommitted — what is published is what is committed
-//   2. npm new enough for `npm trust`, logged in, and allowed to publish under
-//      @niscorp (a member of the niscorp organization)
-//   3. which packages are not on npm yet
-//   4. build them, and run the same package checks CI runs
-//   5. publish (`pnpm release`) — npm asks for a two-factor code
-//   6. make each package trust the Release workflow (`pnpm npm:trust`)
-//
-// It stops at the first thing that is not right and says what to do. Run it
-// again after a stop: what is already published is skipped, and so is a
-// package that already trusts the workflow.
-//
-// `pnpm release:first`             — the release
-// `pnpm release:first --dry-run`   — every check, the build, and npm's own dry
-//                                     run; nothing is published or changed
-
 import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -33,8 +9,6 @@ const dry = process.argv.includes('--dry-run');
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-// A command, from the repository root. `show` hands it the terminal — for what
-// asks the person something (a two-factor code) or prints its own progress.
 const run = (command: string, args: readonly string[], show = false): { ok: boolean; out: string } => {
   const result = spawnSync(command, args, { cwd: root, encoding: 'utf8', stdio: show ? 'inherit' : 'pipe' });
   return { ok: result.status === 0, out: `${result.stdout ?? ''}${result.stderr ?? ''}`.trim() };
@@ -42,8 +16,6 @@ const run = (command: string, args: readonly string[], show = false): { ok: bool
 
 let problems = 0;
 const pass = (line: string): void => console.log(`[pass] ${line}`);
-// In a dry run a failed precondition is reported and the rest still runs; for
-// real, it stops here.
 const fail = (line: string, fix: string): void => {
   console.log(`[fail] ${line}\n       → ${fix}`);
   problems += 1;
@@ -52,21 +24,17 @@ const fail = (line: string, fix: string): void => {
 
 console.log(dry ? '— the first release, rehearsed: nothing is published —\n' : '— the first release —\n');
 
-// 1. What is published is what is committed.
 const branch = run('git', ['rev-parse', '--abbrev-ref', 'HEAD']).out;
 if (branch === 'main') pass('on main');
 else fail(`on "${branch}", not main`, 'git switch main');
-// A change to a committed file anywhere can reach a package (its source, the
-// build config, the lockfile), and so can a new file inside one. A new file
-// elsewhere — a local editor or agent setting — cannot: a package publishes
-// its own folder.
+// A new file outside packages/ cannot reach a package: a package publishes its
+// own folder. A change to a committed file anywhere can.
 const dirty = run('git', ['status', '--porcelain'])
   .out.split('\n')
   .filter((line) => line.trim() !== '' && (!line.startsWith('??') || line.slice(3).startsWith('packages/')));
 if (dirty.length === 0) pass('nothing uncommitted that could be published');
 else fail(`uncommitted changes would be published without being committed:\n         ${dirty.join('\n         ')}`, 'commit them, or set them aside, first');
 
-// 2. npm, and who it is logged in as.
 const npmVersion = run('npm', ['--version']).out;
 const [major = 0, minor = 0] = npmVersion.split('.').map(Number);
 if (major > 11 || (major === 11 && minor >= 15)) pass(`npm ${npmVersion}`);
@@ -92,7 +60,6 @@ if (user !== '') {
   else fail(`${user} is not a member of the ${ORG} npm organization (npm said: ${membership.out.split('\n')[0] ?? 'nothing'})`, `log in as an owner of ${ORG}, or add ${user} on npmjs.com → ${ORG} → Members`);
 }
 
-// 3. Which packages npm does not have yet.
 const packages = readdirSync(join(root, 'packages'), { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .flatMap((entry): { name: string; version: string }[] => {
@@ -106,7 +73,6 @@ const missing = packages.filter((pkg) => !run('npm', ['view', `${pkg.name}@${pkg
 if (missing.length === 0) pass(`all ${packages.length} packages are already on npm — nothing to publish`);
 else console.log(`[note] to publish: ${missing.map((pkg) => `${pkg.name}@${pkg.version}`).join(', ')}`);
 
-// 4. Built, and checked the way CI checks them.
 console.log('\n— building the packages —');
 if (run('pnpm', ['turbo', 'build', '--filter=./packages/*'], true).ok) pass('packages built');
 else fail('the build failed', 'the output above says where');
@@ -114,7 +80,6 @@ console.log('\n— checking them as a consumer gets them —');
 if (run('pnpm', ['check:packages'], true).ok) pass('check:packages');
 else fail('check:packages failed', 'the output above says which package');
 
-// 5. Publish.
 if (dry) {
   console.log('\n— npm’s own dry run —');
   if (run('pnpm', ['-r', '--filter', './packages/*', 'publish', '--dry-run', '--no-git-checks', '--access', 'public'], true).ok) pass('npm would publish them');
@@ -129,9 +94,8 @@ if (missing.length > 0) {
   else fail('publishing stopped part way', 'run `pnpm release:first` again — what is already on npm is skipped');
 }
 
-// 6. From now on, the Release workflow publishes. Only what this run published
-// is asked about — or, when it published nothing (a re-run after a stop),
-// everything, with what is already set skipped.
+// When this run published nothing (a re-run after a stop) no name is passed,
+// which asks about every package.
 console.log('\n— trusting the Release workflow —');
 if (run('node', ['scripts/trust-publishers.mts', ...missing.map((pkg) => pkg.name)], true).ok) pass('what was published trusts the Release workflow');
 else fail('some packages do not trust the workflow yet', 'run `pnpm npm:trust` — what is set is skipped');

@@ -1,17 +1,3 @@
-// Capture the lab apps' artifacts into the grammar corpus.
-//
-// Every action and fragment each lab app ships, exactly as it ships them, written
-// to strata/corpus/<app>/<stamp>.json with the grammar stamp they were written
-// at. `pnpm check:grammars` then upgrades every one of them to the current
-// grammars and parses it with the current strict schemas — so a grammar change
-// that would strand real documents fails CI, whatever the snapshot says.
-//
-// An era's capture (one stamp) may be refreshed while its grammars have not
-// moved. Once a grammar gains a migration the stamp changes, the next capture
-// lands in a new file, and the old one is frozen history: never edit it.
-//
-// Run: pnpm strata:corpus [app …]   (after `pnpm build`; no apps named = all)
-
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -20,7 +6,6 @@ import { PRISM_SEQUENCE } from '../packages/prism/dist/migrations/index.js';
 
 const root = resolve(import.meta.dirname, '..');
 const ALL_APPS = ['atrium', 'encore', 'lyceum', 'lyra', 'relay'] as const;
-// `pnpm strata:corpus lyceum` captures just the named apps; no names, all of them.
 const named = process.argv.slice(2).filter((a) => !a.startsWith('-'));
 const APPS = named.length === 0 ? ALL_APPS : ALL_APPS.filter((app) => named.includes(app));
 if (named.length > 0 && APPS.length !== named.length) throw new Error(`unknown app(s): ${named.filter((n) => !ALL_APPS.some((a) => a === n)).join(', ')}`);
@@ -54,9 +39,6 @@ for (const app of APPS) {
   try {
     out = execFileSync('pnpm', ['exec', 'tsx', '.strata-dump.mts'], { cwd: dir, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
   } catch (error) {
-    // An app that cannot be read right now (mid-edit, a missing file) is skipped
-    // with the reason — its existing corpus file stays as it was — and the others
-    // are still captured.
     const stderr = typeof error === 'object' && error !== null && 'stderr' in error ? String(error.stderr) : String(error);
     const reason = stderr.split('\n').find((l) => /Error/.test(l)) ?? 'the dump failed';
     console.log(`[skip]   ${app}: ${reason.trim()}`);

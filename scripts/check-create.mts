@@ -1,28 +1,3 @@
-// Does `npm create nisc` make an app that WORKS — outside this workspace?
-//
-// The templates are workspace members, so CI typechecks, builds and checks them
-// — linked to the packages next door. A new app gets none of that: it is the
-// template copied somewhere else, depending on published packages, installed by
-// a package manager that knows only its manifest. Two things were broken there
-// and green here: the app's AGENTS.md pointed at a rulebook the app did not
-// install, and nova crashed on import without a peer it called optional.
-//
-// So this makes each kind of app with the BUILT create-nisc, in a scratch
-// folder outside the workspace, installs it from the packed tarballs with pnpm
-// (strict: an import the manifest does not declare does not resolve), and holds
-// it to what a new app promises:
-//
-//   the rulebook its AGENTS.md names is installed
-//   it typechecks
-//   its checks pass (`nisc check`)
-//   it builds (`nisc build`) — the page it built holds its stylesheet — and,
-//   with its own shell, exports its first screen as a file with the app's name
-//   in it
-//   `nisc start` serves what it built: the drawn page and its script
-//   compressed, the script kept, a file that is not there a 404
-//
-// Run after `pnpm build`: `pnpm check:create`. Exits non-zero on any failure.
-
 import { execFileSync, execSync, spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -43,7 +18,6 @@ const pnpm = (args: readonly string[], cwd: string): string =>
     : execFileSync('pnpm', args, { cwd, stdio: 'pipe', encoding: 'utf8' });
 
 const results: { label: string; ok: boolean; detail?: string }[] = [];
-// What went wrong, in the failing command's own words when it had any.
 const said = (error: unknown): string => {
   const output = isRecord(error) ? `${String(error['stdout'] ?? '')}${String(error['stderr'] ?? '')}`.trim() : '';
   const text = output !== '' ? output : error instanceof Error ? error.message : String(error);
@@ -83,8 +57,6 @@ const freePort = (): Promise<number> =>
     });
   });
 
-// `nisc start` on the app as made — its own installed command, listening for
-// real on a port of its own, asked the way a browser asks, and stopped.
 const whileServed = async (dir: string, ask: (base: string) => Promise<void>): Promise<void> => {
   const port = await freePort();
   const base = `http://127.0.0.1:${port}`;
@@ -97,9 +69,7 @@ const whileServed = async (dir: string, ask: (base: string) => Promise<void>): P
     for (;;) {
       try {
         if ((await fetch(`${base}/`)).ok) break;
-      } catch {
-        // not up yet
-      }
+      } catch {}
       if (Date.now() > deadline) throw new Error(`nisc start did not come up:\n${log}`);
       await pause(200);
     }
@@ -118,8 +88,7 @@ const KINDS = [
 
 const scratch = mkdtempSync(join(tmpdir(), 'nisc-create-'));
 try {
-  // Every published package, packed — `pnpm pack` is what turns `workspace:^`
-  // into a real range. A new app is pointed at these instead of the registry.
+  // `pnpm pack` is what turns `workspace:^` into a real range.
   const tarballs: Record<string, string> = {};
   for (const entry of readdirSync(packagesDir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
@@ -130,8 +99,6 @@ try {
     tarballs[manifest['name']] = `file:${out.trim().split('\n').at(-1) ?? ''}`;
   }
 
-  // What create-nisc itself ships: the templates as source, and nothing a
-  // machine left in them — installed packages, build output, a runner's logs.
   step('create-nisc: its package holds the templates and nothing built or local', () => {
     const out = pnpm(['pack', '--pack-destination', scratch], join(packagesDir, 'create-nisc'));
     const tarball = out.trim().split('\n').at(-1) ?? '';
@@ -152,7 +119,6 @@ try {
     });
     if (!made) continue;
 
-    // Exactly the app as made, except where its @niscorp packages come from.
     const manifestPath = join(dir, 'package.json');
     const manifest: unknown = JSON.parse(readFileSync(manifestPath, 'utf8'));
     if (!isRecord(manifest)) throw new Error(`${kind.name}: package.json is not an object`);
