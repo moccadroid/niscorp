@@ -44,7 +44,7 @@ If `$.user.nickname` doesn't exist, the result is `{ "name": "Alice" }` — no e
 
 ### `$ref` — Read from source
 
-Resolves a path against the source data. A path is keys and indexes: `.key` and `[index]`. The rest of JSONPath — a wildcard `[*]`, a filter `[?(…)]`, a slice, a quoted key, `..` — is refused when the config is checked (`E_SCHEMA`, "Not a path Prism reads"); for every item of a list use `$map` or `$pluck`.
+Resolves a path against the source data. A path is keys and indexes: `.key` and `[index]`. The rest of JSONPath — a wildcard `[*]`, a filter `[?(…)]`, a slice, a negative index, a quoted key, `..` — is refused when the config is checked (`E_SCHEMA`, "Not a path Prism reads"); for every item of a list use `$map` or `$pluck`. The JSON Schema from `getConfigJsonSchema`, `getNodeJsonSchema` and `getProfileJsonSchema` does not carry this rule: its pattern for `$ref` is `^\$(\..*)?$`, so a path can pass the JSON Schema and still be refused by `validate`.
 
 ```json
 { "$ref": "$.user.name" }
@@ -812,7 +812,9 @@ third argument: a `Partial<Limits>`, merged over `DEFAULT_LIMITS`:
 | `maxStringLength` | `1_000_000` | Characters in any one string a node produces |
 | `maxValues` | `1_000_000` | Values (scalars, array items, object fields) in a `$reduce` accumulator, a `$with` binding, or the result |
 
-Past any of them the evaluation throws `E_BUDGET`.
+Past any of them the evaluation throws `E_BUDGET`. `maxValues` counts a value
+each time it appears, as it would be serialized: a `$reduce` whose body is
+`[{ "$var": "acc" }, { "$var": "acc" }]` doubles its count with every item.
 
 ## Error Codes
 

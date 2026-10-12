@@ -107,6 +107,9 @@ form that does not need the config object to be the same one.
 `@niscorp/prism/examples` is the reference as data: one example for each
 operator, named by the operator — a config, the source it is given, and what
 comes out — then a few configs of several operators working together.
+Each `id` is unique across the set and in kebab-case (`sort-by` for `$sortBy`),
+so an address can be built on it. An example of several operators working
+together has no `op`.
 
 ```typescript
 import { evaluate } from '@niscorp/prism';
@@ -130,9 +133,14 @@ own. So whatever shows them — a documentation page, an agent reading
 `getProfileJsonSchema(ops, target?)` is the config JSON Schema documenting only
 the ops you name — derived from the full schema, never restated. `MAPPING_OPS`
 is the set a mapping uses (rows into a shape), about 28% less prompt than the
-whole grammar; the mapping agent is documented with it. A profile narrows what
-a prompt teaches, never what Prism accepts: validation is always the full
+whole grammar; the mapping agent is documented with it. That agent's `data` is
+the Prism config itself, and its `reasoning` is one sentence on the mapping. A
+profile narrows what a prompt teaches, never what Prism accepts: validation is always the full
 `ConfigSchema`, and a config using an op outside the profile is still valid.
+`MAPPING_OPS` leaves out the transform ops (`$has`, `$renameKeys`, `$update`,
+`$assert`, `$walk`) and `$fill`, `$replace`, `$keyBy`, `$entriesOf`,
+`$fromEntries`, `$keys`, `$values`, `$type`, `$flatten`, `$flatMap`, `$match`,
+`$drop`, `$dateAdd`, `$startsWith` and `$endsWith`.
 
 ## Transform ops and the grammar
 
