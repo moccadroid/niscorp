@@ -686,7 +686,7 @@ and does not throw.
 
 `Hono<Env> & { socket; shells?: ShellHost; principalOf; page; pages;
 refresh; replaceActions; actions; catalogOf;
-policyForRoles; charterReport; invalidateIdentity; invalidateTenant; identity;
+policyForRoles; charterReport; invalidateIdentity; invalidateTag; identity;
 executeAs; nudge; close; identities? }`.
 It's a Hono app — mount it, extend it, or hand it to a listener.
 
@@ -771,7 +771,7 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   record and reset every living shell of theirs (a role change): the one the
   app keeps for them, and the one a page built for each connection of theirs.
   `false` = no record was held.
-- `invalidateTenant(tag): number` — forget every identity record wearing the
+- `invalidateTag(tag): number` — forget every identity record wearing the
   tag the app put on it (`IdentityRecord.tag`); answers how many. Forgets, does
   not reset shells.
 - `identity(principal): Promise<IdentityRecord>` — who one principal is,
@@ -1174,8 +1174,8 @@ tables changed, so a reactive read over one of them answers again.
   message is one of the three signals below with `origin`, the process that
   sent it, which moss stamps and checks. It carries
   three signals to the other processes: `invalidate-identity`,
-  `invalidate-tenant` and `nudge` — what `server.invalidateIdentity`,
-  `invalidateTenant` and `nudge` publish after applying locally. Best-effort:
+  `invalidate-tag` and `nudge` — what `server.invalidateIdentity`,
+  `invalidateTag` and `nudge` publish after applying locally. Best-effort:
   each targets state that heals on its own clock. Unset, every path behaves as
   in one process. The wiring is `src/server/signals.ts`; it is the server's
   own and is not exported.
@@ -1226,7 +1226,7 @@ tables changed, so a reactive read over one of them answers again.
   (default 30 minutes). At `identityMax` the least recently read record is
   dropped to make room, and whoever it was is resolved again on their next
   request. A record is forgotten with `server.invalidateIdentity`,
-  `invalidateTenant` and `refresh`, and what is held is read through
+  `invalidateTag` and `refresh`, and what is held is read through
   `server.identities`.
 
 ### Telemetry

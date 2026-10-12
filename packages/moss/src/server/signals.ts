@@ -5,7 +5,7 @@ import type { Fabric, FabricSignal } from '../runtime';
 
 export type Signals = {
   invalidateIdentity: (principal: string) => boolean;
-  invalidateTenant: (tag: string) => number;
+  invalidateTag: (tag: string) => number;
   nudge: (principal: string, channel: string) => void;
   deliver: (principal: string, channel: string, payload?: unknown) => boolean;
 };
@@ -24,13 +24,13 @@ export const buildSignals = ({ fabric, identity, reset, deliver }: SignalDeps): 
     reset(principal);
     return held;
   };
-  const applyInvalidateTenant = (tag: string): number => identity.invalidateTag(tag).length;
+  const applyInvalidateTag = (tag: string): number => identity.invalidateTag(tag).length;
   const applyNudge = (principal: string, channel: string): void => {
     deliver(principal, channel);
   };
   const publish = wireFabric(fabric, origin, {
     invalidateIdentity: applyInvalidateIdentity,
-    invalidateTenant: applyInvalidateTenant,
+    invalidateTag: applyInvalidateTag,
     nudge: applyNudge,
   });
 
@@ -40,12 +40,12 @@ export const buildSignals = ({ fabric, identity, reset, deliver }: SignalDeps): 
       publish({ kind: 'invalidate-identity', principal });
       return held;
     },
-    invalidateTenant: (tag) => {
+    invalidateTag: (tag) => {
       // Forgets and does not reset, unlike `invalidateIdentity`: what a tenant's
       // people may reach changed, not who they are, and living shells adopt that
       // in place. A reset would discard what they were in the middle of.
-      const forgotten = applyInvalidateTenant(tag);
-      publish({ kind: 'invalidate-tenant', tag });
+      const forgotten = applyInvalidateTag(tag);
+      publish({ kind: 'invalidate-tag', tag });
       return forgotten;
     },
     nudge: (principal, channel) => {
@@ -66,7 +66,7 @@ export const buildSignals = ({ fabric, identity, reset, deliver }: SignalDeps): 
 // applied would circle between processes without end.
 export type FabricApply = {
   invalidateIdentity: (principal: string) => void;
-  invalidateTenant: (tag: string) => void;
+  invalidateTag: (tag: string) => void;
   nudge: (principal: string, channel: string) => void;
 };
 
@@ -95,8 +95,8 @@ export const wireFabric = (
         case 'invalidate-identity':
           apply.invalidateIdentity(message.principal);
           break;
-        case 'invalidate-tenant':
-          apply.invalidateTenant(message.tag);
+        case 'invalidate-tag':
+          apply.invalidateTag(message.tag);
           break;
         case 'nudge':
           apply.nudge(message.principal, message.channel);

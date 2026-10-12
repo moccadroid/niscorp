@@ -77,7 +77,7 @@ const stamp = { origin: z.string() };
 
 export const FabricMessageSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('invalidate-identity'), principal: z.string(), ...stamp }),
-  z.strictObject({ kind: z.literal('invalidate-tenant'), tag: z.string(), ...stamp }),
+  z.strictObject({ kind: z.literal('invalidate-tag'), tag: z.string(), ...stamp }),
   z.strictObject({ kind: z.literal('nudge'), principal: z.string(), channel: z.string(), ...stamp }),
 ]);
 

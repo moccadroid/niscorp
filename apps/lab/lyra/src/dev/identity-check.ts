@@ -87,14 +87,14 @@ await revenue(CAST.northrock.owner);
 const bothHeld = server.identities?.list().length ?? 0;
 ok('two studios are resident', bothHeld >= 2, `${bothHeld} identities`);
 
-const droppedLumen = server.invalidateTenant('st_lumen');
+const droppedLumen = server.invalidateTag('st_lumen');
 ok('forgetting one studio forgets its people', droppedLumen > 0, `${droppedLumen} dropped`);
 ok(
   '...and leaves the other studio held — an integration landing at Lumen is not North Rock’s business',
   (server.identities?.list() ?? []).length === bothHeld - droppedLumen,
   `${(server.identities?.list() ?? []).length} still resident`,
 );
-ok('an unknown tenant is an answer, not an error', server.invalidateTenant('st_nobody') === 0);
+ok('an unknown tenant is an answer, not an error', server.invalidateTag('st_nobody') === 0);
 
 // ── THE LOGIN SCREEN IS NOT A DIRECTORY ──────────────────────
 //

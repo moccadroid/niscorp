@@ -395,7 +395,7 @@ export const buildLyra = (deps: ServerDeps): NiscApp => {
           // no other way to hear. Coarse across processes, precise within one;
           // Move 4 is where that last asymmetry goes.
           const studioId = String(scope['studioId'] ?? '');
-          if (studioId !== '') deps.server().invalidateTenant(studioId);
+          if (studioId !== '') deps.server().invalidateTag(studioId);
           // The integration's ACTIONS are deployment-wide artifacts, so registering
           // them is not a tenant's business and still needs the full refresh.
           deps.server().refresh();

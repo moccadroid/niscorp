@@ -88,7 +88,7 @@ export const identityRoles: CacheEntry = {
             else: ['member'],
           },
         },
-        // What this record shares a fate with — the key `invalidateTenant`
+        // What this record shares a fate with — the key `invalidateTag`
         // forgets by. Opaque to moss; here it is the studio.
         tag: { $var: 'studioId' },
         scope: {

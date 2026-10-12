@@ -124,7 +124,7 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerD
       const resolved = await identity.resolve(principal);
       return { roles: resolved.roles, scope: resolved.scope, ...(resolved.installed !== undefined ? { installed: resolved.installed } : {}) };
     },
-    invalidateTenant: signals.invalidateTenant,
+    invalidateTag: signals.invalidateTag,
     invalidateIdentity: signals.invalidateIdentity,
     nudge: signals.nudge,
     ...(identity.roster !== undefined ? { identities: identity.roster } : {}),

@@ -119,7 +119,7 @@ try {
   await runtime.db.query("UPDATE studios SET locale = 'de' WHERE id = $1", ['st_northrock']);
   // The raw UPDATE rides no write path, and the member's identity — locale
   // included — is resolved and held; drop it the way the language switch does.
-  server.invalidateTenant('st_northrock');
+  server.invalidateTag('st_northrock');
   const germanShell = await login(CAST.northrock.member);
   await settle(12);
   germanShell.dispatch({ type: 'ui:click', ref: 'navLeaf', payload: { value: 'ext.member.belts.mine', label: 'My belt' } });
@@ -128,7 +128,7 @@ try {
   ok("an integration's screen renders German", germanMember.includes('Mein Gürtel'), 'My belt → Mein Gürtel, from the bundle’s own book');
   ok('...through the same pass as the host’s words', germanMember.includes('Heute'), 'host and integration words in ONE German shell');
   await runtime.db.query("UPDATE studios SET locale = 'en' WHERE id = $1", ['st_northrock']);
-  server.invalidateTenant('st_northrock');
+  server.invalidateTag('st_northrock');
 
   // ── every word an integration ships, counted ─────────────────
   //

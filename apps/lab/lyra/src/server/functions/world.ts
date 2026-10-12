@@ -122,7 +122,7 @@ export const worldFunctions = (
     // language says nothing about anybody else's. The loop below then
     // repopulates each record as it asks whose studio a shell belongs to, so
     // the reset that follows is reading rows written a moment ago.
-    deps.server().invalidateTenant(studioId);
+    deps.server().invalidateTag(studioId);
 
     // Only a LIVE shell can be wearing the old words, so the roster moss
     // already keeps is the honest set to walk. WHOSE studio each live shell

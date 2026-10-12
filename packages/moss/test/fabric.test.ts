@@ -25,7 +25,7 @@ describe('wireFabric', () => {
     const calls: string[][] = [];
     const apply: FabricApply = {
       invalidateIdentity: (p) => calls.push(['identity', p]),
-      invalidateTenant: (t) => calls.push(['tenant', t]),
+      invalidateTag: (t) => calls.push(['tenant', t]),
       nudge: (p, c) => calls.push(['nudge', p, c]),
     };
     return { calls, apply };
@@ -49,7 +49,7 @@ describe('wireFabric', () => {
     const { calls, apply } = spy();
     wireFabric(fabric, 'me', apply);
     feed({ kind: 'nudge', principal: 'p1', channel: 'roster', origin: 'other' });
-    feed({ kind: 'invalidate-tenant', tag: 't9', origin: 'other' });
+    feed({ kind: 'invalidate-tag', tag: 't9', origin: 'other' });
     expect(calls).toEqual([['nudge', 'p1', 'roster'], ['tenant', 't9']]);
   });
 
@@ -63,14 +63,14 @@ describe('wireFabric', () => {
 
   it('a throwing applier is contained', () => {
     const { fabric, feed } = collector();
-    wireFabric(fabric, 'me', { invalidateIdentity: () => { throw new Error('boom'); }, invalidateTenant: () => {}, nudge: () => {} });
+    wireFabric(fabric, 'me', { invalidateIdentity: () => { throw new Error('boom'); }, invalidateTag: () => {}, nudge: () => {} });
     expect(() => feed({ kind: 'invalidate-identity', principal: 'p1', origin: 'other' })).not.toThrow();
   });
 
   it('a throwing transport publish is contained — the local mutation already happened', () => {
     const fabric: Fabric = { publish: () => { throw new Error('transport down'); }, subscribe: () => {} };
     const publish = wireFabric(fabric, 'me', spy().apply);
-    expect(() => publish({ kind: 'invalidate-tenant', tag: 't' })).not.toThrow();
+    expect(() => publish({ kind: 'invalidate-tag', tag: 't' })).not.toThrow();
   });
 
   it('no fabric: publish is a no-op and nothing subscribes', () => {
@@ -81,7 +81,7 @@ describe('wireFabric', () => {
   describe('what a transport hands over is read by a schema', () => {
     const notMessages: readonly [string, unknown][] = [
       ['a field of the wrong type', { kind: 'nudge', principal: 7, channel: 'roster', origin: 'other' }],
-      ['a field that is missing', { kind: 'invalidate-tenant', origin: 'other' }],
+      ['a field that is missing', { kind: 'invalidate-tag', origin: 'other' }],
       ['no origin', { kind: 'invalidate-identity', principal: 'p1' }],
       ['a kind this process does not know', { kind: 'reboot', origin: 'other' }],
       ['a field no message has', { kind: 'invalidate-identity', principal: 'p1', origin: 'other', also: 'this' }],
@@ -156,7 +156,7 @@ const makeNode = (fabric: Fabric | undefined, origin: string, shells: ShellHost)
   const applied = { identity: 0, tenant: 0, nudge: 0 };
   const apply: FabricApply = {
     invalidateIdentity: (p) => { applied.identity += 1; identities.invalidate(p); shells.reset(p); },
-    invalidateTenant: (t) => { applied.tenant += 1; identities.invalidateTag(t); },
+    invalidateTag: (t) => { applied.tenant += 1; identities.invalidateTag(t); },
     nudge: (p, c) => { applied.nudge += 1; shells.deliver(p, c); },
   };
   const publish = wireFabric(fabric, origin, apply);
@@ -222,7 +222,7 @@ describe('two processes over one fabric', () => {
   it('a throwing subscriber on B does not harm the transport or A', () => {
     const bus = createBus();
     const a = makeNode(bus.endpoint(), 'A', standHost(hostConfig(shellCtx())));
-    wireFabric(bus.endpoint(), 'B', { invalidateIdentity: () => { throw new Error('B is angry'); }, invalidateTenant: () => {}, nudge: () => {} });
+    wireFabric(bus.endpoint(), 'B', { invalidateIdentity: () => { throw new Error('B is angry'); }, invalidateTag: () => {}, nudge: () => {} });
     expect(() => a.invalidateIdentity('usr_1')).not.toThrow();
     expect(a.applied.identity).toBe(1);
   });

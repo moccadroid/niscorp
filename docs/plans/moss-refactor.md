@@ -182,12 +182,9 @@ Nothing below is being worked on.
 - **`packages/cli/test/dev.test.ts` failed once** inside a full verify (a fetch
   was reset). It passes alone, and passed in the last full verify and the last
   uncached run of every package's tests. The cause is not found.
-- **Two names in the public API, the owner's to settle before 0.5.0 is
-  released.** `server.invalidateTenant(tag)` forgets every identity record
-  that carries one cache tag (`IdentityRecord.tag`): the method names one use
-  of it, a tenant, and the field names the mechanism. And
-  `@niscorp/moss/unverified` with `unverifiedShell`, which hands over a
-  session's whole nova shell.
+- **The name `@niscorp/moss/unverified`.** The owner is not in love with it.
+  The entry stays. What is open is its name, and moving the lab apps' uses of
+  it onto something moss verifies.
 
 The lab apps' checks pass except where the reason is outside moss: `model-check`
 (lyceum) and two of relay's need a model key; `nisc-check` (atrium) fails to

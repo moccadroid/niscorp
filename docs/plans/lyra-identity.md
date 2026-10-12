@@ -64,7 +64,7 @@ to find somebody is a way to scan everybody. An index that supports exactly one
 operation, FORGET, returns nothing and finds nobody.
 
 So `IdentityRecord` carries an opaque `tag`, moss keeps a write-only `tag → principals`
-map beside the cache, and `server.invalidateTenant(tag)` drops that group and answers
+map beside the cache, and `server.invalidateTag(tag)` drops that group and answers
 how many it held. Moss never interprets the string; Lyra sets it to the studio id.
 The `studio_integrations` reaction now forgets one studio instead of every principal
 in the deployment. Asserted in `identity.test.ts` (four cases, including that the map

@@ -25,7 +25,7 @@ export type MossServer = Hono<Env> & {
   invalidateIdentity: (principal: string) => boolean;
   identity: (principal: string | null) => Promise<IdentityRecord>;
   executeAs: ExecuteAs;
-  invalidateTenant: (tag: string) => number;
+  invalidateTag: (tag: string) => number;
   nudge: (principal: string, channel: string) => void;
   close: () => void;
   identities?: { list: () => IdentityReport[]; meter: () => { size: number; max: number; resolved: number; evicted: number; expired: number } };

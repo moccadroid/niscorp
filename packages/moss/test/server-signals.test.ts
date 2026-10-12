@@ -161,7 +161,7 @@ describe('the signals of a server — who somebody is changed', () => {
     });
   });
 
-  it('`invalidateTenant` forgets every record of the tenant in every process, and rebuilds nobody’s shell', async () => {
+  it('`invalidateTag` forgets every record that carries the tag in every process, and rebuilds nobody’s shell', async () => {
     const bus = createBus();
     const [a, b] = [processOn(bus.endpoint()), processOn(bus.endpoint())];
     await stopping([a, b], async () => {
@@ -170,13 +170,13 @@ describe('the signals of a server — who somebody is changed', () => {
       const onB = await b.hosts.shells?.session('t', 'acme_ada');
       const before = onB?.shell;
 
-      expect(a.signals.invalidateTenant('acme')).toBe(1);
+      expect(a.signals.invalidateTag('acme')).toBe(1);
 
       b.resolved.length = 0;
       for (const principal of ['acme_ada', 'acme_ben', 'other_cy']) await b.identityOf(principal);
       expect(b.resolved).toEqual(['acme_ada', 'acme_ben']);
       expect(onB?.shell).toBe(before);
-      expect(bus.carried).toEqual([{ kind: 'invalidate-tenant', tag: 'acme', origin: expect.any(String) }]);
+      expect(bus.carried).toEqual([{ kind: 'invalidate-tag', tag: 'acme', origin: expect.any(String) }]);
     });
   });
 });
