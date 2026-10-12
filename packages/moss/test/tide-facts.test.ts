@@ -8,14 +8,9 @@ import type { FactIntake } from '../src/tide/feature';
 import { mintFromWrites } from '../src/tide/feature';
 import { turn } from './turn';
 
-// THE WRITE-FACT BRIDGE, AS A FEATURE: handed the one seam it uses, a write
-// reported to it by hand, and an intake that keeps what it is given. No
-// database, no server and no tide.
-
 type Listener = Parameters<FeatureSeams['onWrite']>[0];
 type Minted = { fact: Parameters<FactIntake['ingest']>[0]; options: Parameters<FactIntake['ingest']>[1] };
 
-// The seam: it keeps who subscribed, and `report` tells them of a write.
 const writes = () => {
   const listeners = new Set<Listener>();
   const onWrite: FeatureSeams['onWrite'] = (listener) => {
@@ -24,14 +19,12 @@ const writes = () => {
       listeners.delete(listener);
     };
   };
-  // `headers`: what the request that wrote said, as the core hands it on.
   const report = (event: WriteEvent, headers: Record<string, string> = {}): void => {
     for (const listener of listeners) listener(event, { header: (name) => headers[name] });
   };
   return { onWrite, report, listening: () => listeners.size };
 };
 
-// An intake that keeps every fact it is handed, with what it was handed beside it.
 const intake = () => {
   const minted: Minted[] = [];
   const tide: FactIntake = {
@@ -43,7 +36,6 @@ const intake = () => {
   return { tide, minted };
 };
 
-// Minting is not awaited by the lane: let what was started finish.
 const settled = async (): Promise<void> => {
   await turn();
 };
@@ -52,7 +44,6 @@ const twoStatements: WriteEvent = {
   fingerprint: 'bookings/move',
   writes: [
     { table: 'bookings', op: 'update', rows: [{ id: 1 }, { id: 2 }] },
-    // A statement the scope narrowed to nothing: it changed nothing.
     { table: 'waitlist', op: 'delete', rows: [] },
     { table: 'audit', op: 'insert', rows: [{ id: 9 }] },
   ],
@@ -74,7 +65,6 @@ describe('a write, minted into tide as facts', () => {
       { kind: 'write', entity: 'audit', op: 'insert', row: { id: 9 } },
     ]);
     expect(minted.map(({ options }) => options)).toEqual([{ as: 'automation@north' }, { as: 'automation@north' }, { as: 'automation@north' }]);
-    // One write is one moment: every fact of it carries the same stamp.
     expect(new Set(minted.map(({ fact }) => fact.at)).size).toBe(1);
   });
 
@@ -109,9 +99,6 @@ describe('a write, minted into tide as facts', () => {
   });
 });
 
-// THE FEATURE READS ITS OWN HEADERS. A tide effect that writes back through
-// vex names its place in two headers, and they are this feature's: the core
-// hands on what the request said, and the reading is here.
 describe('the place in a chain a request named', () => {
   const named = { cause: 'task:t_1', depth: 2 };
   const headers = { 'x-tide-cause': 'task:t_1', 'x-tide-depth': '2' };
@@ -155,7 +142,6 @@ describe('the place in a chain a request named', () => {
     expect(chain).not.toHaveBeenCalled();
   });
 
-  // What the gate is asked about, for what a request said in the two headers.
   const askedAbout = async (said: Record<string, string>): Promise<unknown> => {
     const lane = writes();
     const { tide } = intake();
@@ -175,10 +161,6 @@ describe('the place in a chain a request named', () => {
     expect(await askedAbout({ 'x-tide-cause': 'f_1', 'x-tide-depth': 'deep' })).toBeUndefined();
   });
 
-  // `Number()` reads more than a number: an empty header is 0, and so is one of
-  // spaces. A request that names a cause and an empty depth must not be heard
-  // at depth 0, the start of a chain: a chain whose depth was lost on the way
-  // is not counted from the beginning.
   it.each([
     ['empty', ''],
     ['spaces', '  '],
@@ -214,7 +196,6 @@ describe('an intake that fails', () => {
 });
 
 describe('createTideFacts — the feature', () => {
-  // Every seam but the one it is for answers by throwing its own name.
   const seamsThatOnlyHear = async (onWrite: FeatureSeams['onWrite']): Promise<FeatureSeams> => {
     const notAsked = (seam: string) => (): never => {
       throw new Error(`the feature asked for ${seam}`);
@@ -251,7 +232,6 @@ describe('createTideFacts — the feature', () => {
     const { tide, minted } = intake();
     const feature = createTideFacts({ tide: () => tide, identity: studioOf });
     expect(feature.name).toBe('tide-facts');
-    // It keeps no tables: tide's are tide's, migrated by whoever keeps them.
     expect(feature.tables).toBeUndefined();
     await feature.start(await seamsThatOnlyHear(lane.onWrite));
     expect(lane.listening()).toBe(1);

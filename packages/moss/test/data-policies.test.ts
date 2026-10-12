@@ -5,9 +5,6 @@ import type { Charter } from '@niscorp/charter';
 import { memoKey } from '../src/identity';
 import { createPolicies } from '../src/data/policy';
 
-// WHAT A SET OF ROLES MAY READ AND WRITE, kept. No engine and no database: a
-// charter, the row behaviors, and the tables there are to grant.
-
 const charter: Charter = {
   public: [],
   viewer: { data: ['*.read'] },
@@ -28,8 +25,6 @@ const grants = scopeGrants(['bookings', 'deals']);
 
 const who = (...roles: string[]) => ({ key: memoKey(roles, undefined), roles });
 
-// The rules a policy puts on one phase of a table: `undefined` where the phase
-// is not granted.
 const rulesOn = (policy: ScopePolicy, table: string, phase: 'read' | 'insert'): readonly unknown[] | undefined => {
   const entity = policy.entities[table];
   return entity === undefined || 'public' in entity || 'deny' in entity ? undefined : entity[phase];
@@ -62,8 +57,6 @@ describe('createPolicies — the policy for a set of roles, kept', () => {
     expect(policies.atReach(both, 'personal')).toBe(personal);
     const desk = policies.atReach(both, 'desk');
     expect(desk).not.toBe(personal);
-    // Same verbs, narrower rows: at the personal reach bookings are pinned by
-    // the person as well as by the studio, and deals are read either way.
     expect(rulesOn(personal, 'bookings', 'read')).toHaveLength(2);
     expect(rulesOn(desk, 'bookings', 'read')).toEqual([tenant]);
     expect(rulesOn(personal, 'deals', 'read')).toEqual([tenant]);

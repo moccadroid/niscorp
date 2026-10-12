@@ -4,10 +4,6 @@ import { createWriteNotifier } from '../src/data/writes';
 import type { WriteRequest } from '../src/data/writes';
 import { turn } from './turn';
 
-// THE WRITE LANE: what vex reports of a write, handed to whoever subscribed,
-// with what the request that wrote said in its headers. The lane knows no
-// header by name: whoever hears a write asks for the ones that are its own.
-
 const saying = (headers: Record<string, string>): WriteRequest => ({ header: (name) => headers[name] });
 
 const event = (fingerprint: string): WriteEvent => ({
@@ -49,7 +45,6 @@ describe('the write lane', () => {
     const said: (string | undefined)[] = [];
     lane.subscribe((_write, request) => said.push(request.header('x-said')));
     await lane.within(saying({ 'x-said': 'this' }), async () => {
-      // What a request awaits may be a timer: what it said has to cross one.
       await turn();
       lane.report(event('notes/add'));
     });
@@ -63,8 +58,8 @@ describe('the write lane', () => {
     lane.subscribe((write, request) => {
       said[write.fingerprint] = request.header('x-said');
     });
-    // Both are inside their request before either writes, and the one that
-    // began first writes last: it waits for the other, not for 10 ms.
+    // Both are inside their request before either writes, and the one that began first
+    // writes last: it waits for the other, not for a timer.
     const request = (name: string, first: Promise<unknown>) =>
       lane.within(saying({ 'x-said': name }), async () => {
         await turn();
@@ -90,9 +85,6 @@ describe('the write lane', () => {
     expect(heard).toEqual(['notes/add']);
   });
 
-  // Each subscriber's failure is its own: it is logged here, the others are
-  // told, and nothing reaches the reporter. A throw in the fact lane (an app's
-  // `facts.identity`) must not keep a reaction from hearing of that write.
   it('a subscriber that throws is logged, and the others are still told of that write', () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const lane = createWriteNotifier();
@@ -106,7 +98,6 @@ describe('the write lane', () => {
     expect(heard).toEqual(['before:notes/add', 'after:notes/add']);
     expect(logged).toHaveBeenCalledTimes(1);
     expect(logged.mock.calls[0]?.some((part) => part instanceof Error && part.message === 'the fact lane failed')).toBe(true);
-    // and the next write is told to all three again
     lane.report(event('notes/edit'));
     expect(heard).toEqual(['before:notes/add', 'after:notes/add', 'before:notes/edit', 'after:notes/edit']);
     logged.mockRestore();

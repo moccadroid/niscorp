@@ -6,18 +6,12 @@ import type { Pointer, RunningManifest, ShellManifest } from '../src/manifest';
 import type { RunningManifestConfig } from '../src/manifest/running';
 import type { ShippedManifest } from '../src/manifest/verify';
 
-// THE RUNNING MANIFEST: what the app consists of right now, changed in one
-// place and only to something that may be served. Driven directly, with small
-// hand-made definitions: no database and no server.
-
 const home: ActionDefinition = { id: 'home' };
 const panel: ActionDefinition = { id: 'panel' };
 const desk: ActionDefinition = { id: 'ext.belts.desk' };
 const grades: ActionDefinition = { id: 'ext.belts.grades' };
 const pay: ActionDefinition = { id: 'ext.pay.checkout' };
 
-// What an app shipped, as a server hands it over: the seven fields a
-// verification reads. A fresh record each time, so no case reads another's.
 const shippedApp = (): ShippedManifest => ({
   charter: { public: ['home'], member: { actions: ['home', 'panel', 'ext.*'] } },
   assignments: { usr_1: ['member'] },
@@ -25,24 +19,16 @@ const shippedApp = (): ShippedManifest => ({
   entries: [{ fingerprint: 'deals/open', dsl: { from: ['deals'], fields: ['deals.id'] } }],
 });
 
-// The shape of the integrations' filter: an `ext.<owner>.<name>` action is
-// there only where its owner is installed.
 const installedOnly: RunningManifestConfig['installedOnly'] = (ids, installed) =>
   installed === undefined ? ids : ids.filter((id) => !id.startsWith('ext.') || installed.has(id.split('.')[1] ?? ''));
 
 const running = (shipped: ShippedManifest, more: Partial<RunningManifestConfig> = {}): ReturnType<typeof createRunningManifest> =>
   createRunningManifest({ shipped, grants: scopeGrants(['deals']), installedOnly, ...more });
 
-// A shell that declares nothing, for the cases that are about what a set of
-// roles holds: the definitions are asked for as a shell asks for them, through
-// `artifactsFor`, which is the one way they are answered.
 const SHELL: ShellManifest = { canvases: [] };
 const definitionsOf = (manifest: RunningManifest, roles: readonly string[], installed?: readonly string[]): Readonly<Record<string, ActionDefinition>> =>
   manifest.artifactsFor(SHELL, roles, installed).actions;
 
-// An id that is a namespace of another is something the charter engine
-// refuses, so a set that ships `home.sub` beside the app's `home` is a set the
-// app could not be served with.
 const unservable: Record<string, ActionDefinition> = { 'home.sub': { id: 'home.sub' } };
 
 describe('createRunningManifest — creating it is the boot check', () => {
@@ -57,7 +43,6 @@ describe('createRunningManifest — creating it is the boot check', () => {
       const loop: ActionDefinition = { id: 'panel', triggers: [{ message: 'x', do: [{ emit: { channel: 'x' } }] }] };
       const manifest = running({ ...shippedApp(), actions: { home, panel: loop } });
       expect(said.mock.calls).toEqual([['[moss] a chain of steps that never ends: x —emit (panel)→ x — nova stops it at its budget when it runs (RUNAWAY_CHAIN)']]);
-      // A later switch still reports it, and does not print it again.
       manifest.replace('bundles', { [desk.id]: desk });
       expect(manifest.report().said).toHaveLength(1);
       expect(said).toHaveBeenCalledTimes(1);
@@ -85,8 +70,6 @@ describe('replace — a named set of actions that arrived while the app runs', (
     manifest.replace('payments', { [pay.id]: pay });
     expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id, grades.id, pay.id]);
 
-    // The same name again puts the new set in place of the old: an action it
-    // no longer names leaves, and the other set is not touched.
     manifest.replace('bundles', { [grades.id]: grades });
     expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', grades.id, pay.id]);
   });
@@ -98,7 +81,6 @@ describe('replace — a named set of actions that arrived while the app runs', (
     const before = manifest.catalogFor(['member'], undefined);
     const definitionsBefore = definitionsOf(manifest, ['member']);
     const verifiedBy = manifest.report();
-    // Held: the same question is answered with the same object.
     expect(manifest.catalogFor(['member'], undefined)).toBe(before);
     expect(definitionsOf(manifest, ['member'])).toBe(definitionsBefore);
     expect(before.ids).toEqual(['home', 'panel']);
@@ -113,7 +95,6 @@ describe('replace — a named set of actions that arrived while the app runs', (
     expect(definitionsOf(manifest, ['member'])).not.toBe(definitionsBefore);
     expect(manifest.report()).not.toBe(verifiedBy);
 
-    // ...and somebody who stopped listening is not told again.
     stop();
     manifest.replace('bundles', {});
     expect(told).toHaveBeenCalledTimes(1);
@@ -141,8 +122,6 @@ describe('replace — a named set of actions that arrived while the app runs', (
     expect(told).not.toHaveBeenCalled();
     expect(shipped.actions).toBe(appsRecord);
 
-    // The set it tried to replace is still the one in force, so the next
-    // change is laid over what is served, not over what was refused.
     manifest.replace('payments', { [pay.id]: pay });
     expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id, pay.id]);
   });
@@ -182,26 +161,21 @@ describe('replace — a named set of actions that arrived while the app runs', (
 describe('replace — a set that is refused, and what a set is tried against', () => {
   it('a set holding a definition nova does not read is refused with a sentence, and nothing is switched', () => {
     const manifest = running(shippedApp());
-    // As it arrives from rows: the compiler is told it is an action.
     const typo: Record<string, ActionDefinition> = { [desk.id]: JSON.parse('{"id":"ext.belts.desk","tittle":"A typo"}') };
     const inForce = manifest.actions();
 
     expect(() => manifest.replace('bundles', typo)).toThrow(/^Refresh refused — actions nova does not read:\n {2}"ext\.belts\.desk" is not an action nova reads: \(root\): Unrecognized key: "tittle"$/);
     expect(manifest.actions()).toBe(inForce);
-    // Not frozen either: it was not taken.
     expect(Object.isFrozen(typo)).toBe(false);
   });
 
   it('tries the set IN PLACE of the one of that name: what the old set held is not part of the candidate', () => {
-    // `panel` pushes an action only the set in force ships, so the set that
-    // would replace it leaves a role pushing what it no longer holds.
     const opens: ActionDefinition = { id: 'panel', triggers: [{ event: 'ui:click', ref: 'open', do: [{ push: { action: desk.id } }] }] };
     const manifest = running({ ...shippedApp(), actions: { home, panel: opens } });
     manifest.replace('bundles', { [desk.id]: desk });
     const issuesOf = (report: ReturnType<typeof manifest.report>): string[] => report.charter.perRole.find((entry) => entry.role === 'member')?.issues ?? [];
     expect(issuesOf(manifest.report())).toEqual([]);
 
-    // Another name is another set: the one in force stays in the candidate.
     manifest.replace('payments', { [pay.id]: pay });
     expect(issuesOf(manifest.report())).toEqual([]);
     manifest.replace('bundles', { [grades.id]: grades });
@@ -218,7 +192,6 @@ describe('what a set of roles holds', () => {
     expect(manifest.catalogFor(['member'], ['belts']).ids).toEqual([desk.id, 'home', 'panel']);
     expect(manifest.catalogFor(['member'], []).ids).toEqual(['home', 'panel']);
     expect(manifest.catalogFor(['public'], ['belts']).ids).toEqual(['home']);
-    // One answer per combination, whoever asks and in whatever order they name it.
     expect(manifest.catalogFor(['member'], ['belts'])).toBe(manifest.catalogFor(['member'], ['belts']));
     expect(manifest.catalogFor(['member', 'public'], undefined)).toBe(manifest.catalogFor(['public', 'member'], undefined));
   });
@@ -231,28 +204,20 @@ describe('what a set of roles holds', () => {
 
     manifest.addCatalogFilter(installedOnly);
 
-    // What was remembered was made without the filter, so it is not kept.
     expect(manifest.catalogFor(['member'], ['belts'])).not.toBe(everything);
     expect(manifest.catalogFor(['member'], ['belts']).ids).toEqual([desk.id, 'home', 'panel']);
     expect(manifest.catalogFor(['member'], undefined).ids).toEqual([desk.id, pay.id, 'home', 'panel']);
-    // A second rule is applied to what the first kept.
     manifest.addCatalogFilter((ids) => ids.filter((id) => id !== 'panel'));
     expect(manifest.catalogFor(['member'], ['belts']).ids).toEqual([desk.id, 'home']);
   });
 
-  // A FILTER NARROWS. What one answers is not the catalog: a filter that names
-  // an id it was not handed must not give that id to whoever asks, whatever the
-  // charter grants them, nor the definition a shell is built from. A feature
-  // anybody writes adds one (`FeatureSeams.addCatalogFilter`).
   it('a filter that answers an id it was not handed grants nothing: neither the id nor its definition', () => {
     const manifest = createRunningManifest({ shipped: shippedApp(), grants: scopeGrants(['deals']) });
     manifest.replace('bundles', { [desk.id]: desk });
-    // `public` is granted `home`. The filter adds `panel` and an integration's action.
     manifest.addCatalogFilter((ids) => [...ids, 'panel', desk.id]);
 
     expect(manifest.catalogFor(['public'], undefined).ids).toEqual(['home']);
     expect(Object.keys(definitionsOf(manifest, ['public']))).toEqual(['home']);
-    // What the charter does grant is still there.
     expect(manifest.catalogFor(['member'], undefined).ids).toEqual([desk.id, 'home', 'panel']);
   });
 
@@ -261,7 +226,6 @@ describe('what a set of roles holds', () => {
     manifest.replace('bundles', { [desk.id]: desk, [pay.id]: pay });
     manifest.addCatalogFilter((ids) => [...ids, pay.id]);
 
-    // `pay` is not installed: the first filter took it out for this list.
     expect(manifest.catalogFor(['member'], ['belts']).ids).toEqual([desk.id, 'home', 'panel']);
   });
 
@@ -270,8 +234,6 @@ describe('what a set of roles holds', () => {
     expect(manifest.catalogFor(['public'], undefined).ids).toEqual(['home']);
   });
 
-  // What a shell is built from: the definitions themselves, with the grant and
-  // the layout variant already applied. This is the one place either is.
   it('the definitions held are the granted ones, each with the layout variant those roles hold in its place', () => {
     const base: ActionDefinition = { id: 'panel', layout: { component: 'Text', children: 'base' } };
     const shipped: ShippedManifest = {
@@ -285,27 +247,22 @@ describe('what a set of roles holds', () => {
 
     const member = definitionsOf(manifest, ['member'], ['belts']);
     expect(Object.keys(member)).toEqual(manifest.catalogFor(['member'], ['belts']).ids);
-    // Held as the manifest has them: the same objects, no copy.
     expect(member['panel']).toBe(base);
     expect(member[desk.id]).toBe(desk);
     expect(member[pay.id]).toBeUndefined();
     expect(Object.keys(definitionsOf(manifest, ['public']))).toEqual(['home']);
 
-    // The variant is a copy that differs in its layout: the base is not edited.
     const lead = definitionsOf(manifest, ['lead'], ['belts']);
     expect(lead['panel']).toEqual({ id: 'panel', layout: { component: 'Text', children: 'wide' } });
     expect(base.layout).toEqual({ component: 'Text', children: 'base' });
     expect(lead['home']).toBe(home);
 
-    // Kept like the catalog, and dropped with it at a switch.
     expect(definitionsOf(manifest, ['lead'], ['belts'])).toBe(lead);
     manifest.replace('bundles', { [desk.id]: desk });
     expect(definitionsOf(manifest, ['lead'], ['belts'])).not.toBe(lead);
     expect(Object.keys(definitionsOf(manifest, ['member']))).toEqual([desk.id, 'home', 'panel']);
   });
 
-  // The one answer a shell is built from and adopts: every kind of artifact it
-  // loads, for the shell manifest it is asked for and a set of roles.
   it('what a shell is made of is one answer: the definitions held, the shell as its manifest says it, and the entries', () => {
     const wide = { component: 'Text', children: 'wide' };
     const shipped: ShippedManifest = {
@@ -333,8 +290,6 @@ describe('what a set of roles holds', () => {
     expect([...made.entries.keys()]).toEqual(['deals/open']);
     expect(Object.keys(made.components).sort()).toEqual(['ActionSlot', 'CanvasSlot', 'Frame', 'Sheet', 'Text']);
 
-    // Another shell manifest is another shell: what it does not declare is not
-    // answered, and the roles still decide the definitions.
     const forPage = manifest.artifactsFor(page, ['public'], undefined);
     expect(forPage.canvases).toBe(page.canvases);
     expect('frame' in forPage || 'layoutStore' in forPage || 'fragments' in forPage).toBe(false);
@@ -352,14 +307,11 @@ describe('what a set of roles holds', () => {
     };
     const componentsOf = (): Readonly<Record<string, unknown>> => manifest.artifactsFor(shell, ['public'], undefined).components;
     const read = componentsOf();
-    // nova's two slot markers, what the layouts mention, and the declared contract.
     expect(Object.keys(read).sort()).toEqual(['ActionSlot', 'CanvasSlot', 'Chart', 'Frame', 'Heading', 'Sheet']);
     expect(read['Chart']).toEqual({ meta: { description: 'a chart' } });
     expect(read['Heading']).toEqual({});
     expect(componentsOf()).toBe(read);
 
-    // A set that arrives mentions a component nothing shipped did: it is there
-    // for the next shell that is built.
     manifest.replace('bundles', { [desk.id]: { id: desk.id, layout: { component: 'Ledger' } } });
     expect(Object.keys(componentsOf())).toContain('Ledger');
   });
@@ -374,8 +326,6 @@ describe('what the app shipped, and a set that was taken', () => {
     manifest.replace('bundles', { [desk.id]: desk });
     manifest.refresh();
 
-    // What arrived is in force, and is not in the app's record: nothing writes
-    // the actions in force back into it.
     expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id]);
     expect(shipped.actions).toBe(handedOver);
     expect(Object.keys(shipped.actions)).toEqual(['home', 'panel']);
@@ -407,7 +357,6 @@ describe('what the app shipped, and a set that was taken', () => {
 
     manifest.replace('bundles', set);
 
-    // Every way of editing what was handed over throws, where it is written.
     expect(() => {
       set[grades.id] = grades;
     }).toThrow(TypeError);
@@ -422,7 +371,6 @@ describe('what the app shipped, and a set that was taken', () => {
     }).toThrow(TypeError);
     expect(manifest.actions()[desk.id]).toEqual({ id: desk.id, title: 'Desk', data: { open: false } });
 
-    // The one way: hand over another.
     manifest.replace('bundles', { [desk.id]: { ...editable, title: 'Front desk' } });
     expect(manifest.actions()[desk.id]?.title).toBe('Front desk');
   });
@@ -438,8 +386,6 @@ describe('what the app shipped, and a set that was taken', () => {
 });
 
 describe('watch — the pointer the other processes poll', () => {
-  // The pointer's row, as the manifest is handed it: one counter, moved by a
-  // `move` here or by `poke`, which is what another process did.
   const pointerRow = (): { pointer: Pointer; poke: () => void; moves: () => number } => {
     const state = { n: 0, moves: 0 };
     return {
@@ -456,9 +402,8 @@ describe('watch — the pointer the other processes poll', () => {
       moves: () => state.moves,
     };
   };
-  // THE CLOCK IS THE TEST'S. The pointer is polled on a timer. A moment here is
-  // one look: the poll is a second, and the clock is moved on by one, with
-  // everything that look started run to its end.
+  // The pointer is polled on a timer, and the clock is the test's: a moment moves it on by
+  // one poll interval, with everything that look started run to its end.
   const EVERY_MS = 1_000;
   const aMoment = (): Promise<unknown> => vi.advanceTimersByTimeAsync(EVERY_MS);
   beforeEach(() => {
@@ -485,7 +430,6 @@ describe('watch — the pointer the other processes poll', () => {
       expect(moves()).toBe(1);
       expect(manifest.generation()).toBe(1);
 
-      // A change that is refused is not a change: nobody else is told either.
       expect(() => manifest.replace('bundles', unservable)).toThrow(/^Refresh refused/);
       await aMoment();
       expect(moves()).toBe(1);
@@ -509,19 +453,15 @@ describe('watch — the pointer the other processes poll', () => {
       const told = vi.fn();
       manifest.onChange(told);
 
-      // Another process approved one more and moved the pointer.
       rows.now = { [desk.id]: desk, [grades.id]: grades };
       poke();
       await aMoment();
 
-      // The set with a loader was read again; the one without is as it was.
-      // Its place is its own from the start, whichever change came first.
       expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id, grades.id, pay.id]);
       expect(Object.keys(shipped.actions)).toEqual(['home', 'panel']);
       expect(told).toHaveBeenCalledTimes(1);
       expect(moves()).toBe(0);
 
-      // ...and a quiet interval is not a move.
       await aMoment();
       expect(told).toHaveBeenCalledTimes(1);
     } finally {
@@ -538,7 +478,6 @@ describe('watch — the pointer the other processes poll', () => {
       manifest.onChange(told);
       const integrations = manifest.claim('integrations', 'the feature "integrations"');
       integrations.setLoader(async () => rows.now);
-      // Naming it switched nothing: it is empty until it is replaced.
       expect(Object.keys(manifest.actions())).toEqual(['home', 'panel']);
       expect(told).not.toHaveBeenCalled();
 
@@ -551,7 +490,6 @@ describe('watch — the pointer the other processes poll', () => {
       poke();
       await aMoment();
 
-      // Before `bundles`, which was replaced first and named second.
       expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id, grades.id, pay.id]);
       expect(told).toHaveBeenCalledTimes(3);
       expect(moves()).toBe(0);
@@ -560,11 +498,6 @@ describe('watch — the pointer the other processes poll', () => {
     }
   });
 
-  // TWO PROCESSES OVER ONE POINTER, each a running manifest of its own. What
-  // the second follows is the pointer: it reads again the sets it has a loader
-  // for, drops what it derived and tells whoever listens. A set is not carried
-  // by the pointer. One handed to a process is in that process's memory, and
-  // the other serves the set of that name it was handed itself.
   it('a set handed to one process is that process’s: another follows the pointer, and does not have the set', async () => {
     const { pointer } = pointerRow();
     const here = running(shippedApp(), { pointer: { ...pointer, everyMs: EVERY_MS } });
@@ -581,12 +514,9 @@ describe('watch — the pointer the other processes poll', () => {
       here.replace('bundles', { [pay.id]: pay });
       await aMoment();
 
-      // The other process followed: it is at the generation the move landed
-      // on, it was told once, and what it had derived was dropped.
       expect(there.generation()).toBe(here.generation());
       expect(told).toHaveBeenCalledTimes(1);
       expect(there.catalogFor(['member'], undefined)).not.toBe(heldThere);
-      // And it serves the set it was handed itself, not the one handed here.
       expect(Object.keys(here.actions())).toEqual(['home', 'panel', pay.id]);
       expect(Object.keys(there.actions())).toEqual(['home', 'panel', desk.id]);
     } finally {
@@ -597,14 +527,11 @@ describe('watch — the pointer the other processes poll', () => {
 
   it('a set both processes name a loader for is read again by the other when one replaces it', async () => {
     const { pointer } = pointerRow();
-    // The rows both read: what an app keeps a set in.
     const rows: { now: Record<string, ActionDefinition> } = { now: { [desk.id]: desk } };
     const load = async (): Promise<Record<string, ActionDefinition>> => rows.now;
     const here = running(shippedApp(), { pointer: { ...pointer, everyMs: EVERY_MS } });
     const there = running(shippedApp(), { pointer: { ...pointer, everyMs: EVERY_MS } });
     try {
-      // As a feature does when it starts, in each process: how the set is
-      // read, and what the rows hold now.
       const owned = [here, there].map((manifest) => manifest.claim('bundles', 'the feature "bundles"'));
       for (const set of owned) {
         set.setLoader(load);
@@ -614,7 +541,6 @@ describe('watch — the pointer the other processes poll', () => {
       there.watch();
       await aMoment();
 
-      // One process changes the rows and hands over what they hold.
       rows.now = { [desk.id]: desk, [pay.id]: pay };
       owned[0]?.replace(await load());
       await aMoment();
@@ -627,9 +553,6 @@ describe('watch — the pointer the other processes poll', () => {
     }
   });
 
-  // ONE WRITER FOR A SET OF ACTIONS. Whoever claims a set is handed the two
-  // ways it is written, and nobody else has either: two writers of one set
-  // would race, and the later one would win until the next reload.
   it('a set that was claimed is replaced by whoever claimed it, and by nobody else', () => {
     const manifest = running(shippedApp());
     const integrations = manifest.claim('integrations', 'the feature "integrations"');
@@ -641,7 +564,6 @@ describe('watch — the pointer the other processes poll', () => {
     expect(() => manifest.replace('integrations', { [pay.id]: pay })).toThrow(sentence);
     expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id]);
 
-    // A set of the app's own is the app's, as it was.
     manifest.replace('bundles', { [pay.id]: pay });
     expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id, pay.id]);
   });

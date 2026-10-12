@@ -17,16 +17,6 @@ import { renderSnapshot as drawReact } from '../src/terminal/react/server';
 import { TerminalApiKey, vueTarget } from '../src/terminal/vue';
 import { renderSnapshot as drawVue } from '../src/terminal/vue/server';
 
-// ═══════════════════════════════════════════════════════════
-// The connection's status reaches every target, the same way: it is on what a
-// target renders against, beside the frame and the trees, and a change of it
-// is an update like a change of them. A screen left up by a dead socket looks
-// like a working one, so a target has to be able to say which it is.
-//
-// What a target DRAWS for a status is its own, or the app's. A target that
-// draws into an element says the status on that element and draws nothing.
-// ═══════════════════════════════════════════════════════════
-
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true);
 
 const component = (name: string, props: Record<string, unknown> = {}, children: RenderNode[] = []): RenderComponentNode => ({ type: 'component', name, props, children });
@@ -35,7 +25,6 @@ const text = (value: string): RenderNode => ({ type: 'text', value });
 const FRAME: RenderNode[] = [component('Text', {}, [text('frame')]), component('CanvasSlot', { canvasId: 'main' })];
 const TREES: Record<string, RenderNode[]> = { main: [component('Text', {}, [text('rooms')])] };
 
-// A wire as far as a terminal reads it, whose status a test moves by hand.
 const wireOf = (start: WireStatus): { wire: Wire; becomes: (status: WireStatus) => void } => {
   let status = start;
   const listeners = new Set<() => void>();
@@ -62,8 +51,6 @@ const wireOf = (start: WireStatus): { wire: Wire; becomes: (status: WireStatus) 
   };
 };
 
-// What a target renders against, with a status a test moves by hand: a target
-// driven directly, as the conductor would drive it.
 const apiOf = (start: WireStatus): { api: TerminalApi; becomes: (status: WireStatus) => void } => {
   let status = start;
   return {
@@ -103,7 +90,6 @@ const vueKit = (extra: Record<string, VueComponent> = {}): ReturnType<typeof cre
 };
 
 describe('the conductor tells its target the status', () => {
-  // A target that writes down what it is told, each time it is told.
   const listening = (): { target: Target; told: WireStatus[] } => {
     const told: WireStatus[] = [];
     const target: Target = (api) => {
@@ -136,8 +122,6 @@ describe('the conductor tells its target the status', () => {
   });
 });
 
-// The three targets that draw into an element say the status on it. What it
-// looks like is the kit's stylesheet's.
 describe.each([
   ['react', (root: HTMLElement): Target => reactTarget({ root, registry: reactKit() })],
   ['vue', (root: HTMLElement): Target => vueTarget({ root, registry: vueKit() })],
@@ -162,8 +146,6 @@ describe.each([
   });
 });
 
-// A kit's own component reads the status off what the target provides, and is
-// drawn again when it changes.
 describe('a kit component that draws the status', () => {
   const frameWith = (name: string): RenderNode[] => [component(name), ...FRAME];
 
@@ -198,10 +180,6 @@ describe('a kit component that draws the status', () => {
   });
 });
 
-// A page drawn on the server is drawn with the status its terminal starts in:
-// connecting, or static when nothing on the page can still happen and no
-// socket will be opened. So a kit that draws the status draws the same thing
-// on both sides, and the page is adopted.
 describe('a screen drawn to a string', () => {
   const Status: ReactComponent = () => createElement('output', null, useContext(TerminalApiContext)?.status());
   const snapshot = { frame: [component('Status'), ...FRAME], trees: TREES };

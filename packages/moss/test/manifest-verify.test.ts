@@ -4,14 +4,6 @@ import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
 import { refusalOf, verifyApp, verifyManifest } from '../src/manifest/verify';
 import type { ManifestCandidate, ShippedManifest } from '../src/manifest/verify';
 
-// ONE VERIFICATION, for boot, for a change and for a bundle that wants in. It
-// reads a candidate as values, so every case here is a small object and
-// nothing boots: no database, no server.
-//
-// It answers four things, and each has a case below: three that refuse (the
-// charter, an entry's reach, the layout variants) and one that is only said
-// (a chain of steps that never ends).
-
 const home: ActionDefinition = {
   id: 'home',
   triggers: [{ event: 'ui:click', ref: 'open', do: [{ push: { action: 'admin.panel' } }] }],
@@ -45,7 +37,6 @@ describe('verifyManifest — may this be served', () => {
     const report = verifyManifest({ ...coherent, actions: { ...coherent.actions, stray: { id: 'stray' } } });
     expect(report.errors).toEqual([]);
     expect(report.charter.warnings.map((warning) => warning.rule)).toEqual(['orphan']);
-    // `public` holds `home`, which pushes an action `public` is not granted.
     expect(report.charter.perRole.find((entry) => entry.role === 'public')?.issues.join(' ')).toContain('admin.panel');
   });
 
@@ -61,7 +52,6 @@ describe('verifyManifest — may this be served', () => {
       { check: 'reach', detail: 'deals/mine declares reach "own"' },
       { check: 'reach', detail: 'known profiles: studio' },
     ]);
-    // ...and an entry that names no reach is served at the caller's own.
     expect(verifyManifest({ ...coherent, entries: [{ fingerprint: 'deals/all', dsl: { from: ['deals'], fields: ['deals.id'] } }], profiles: new Set() }).errors).toEqual([]);
   });
 
@@ -76,7 +66,6 @@ describe('verifyManifest — may this be served', () => {
     });
     expect(two.errors.map((error) => error.check)).toEqual(['variants', 'variants']);
     expect(two.errors[0]?.detail).toContain('role "admin" holds 2 variants of "home"');
-    // The combination a principal may hold is named beside the role alone.
     expect(two.errors[1]?.detail).toContain('the combination [admin]');
   });
 
@@ -87,8 +76,6 @@ describe('verifyManifest — may this be served', () => {
     expect(report.said).toEqual(['a chain of steps that never ends: x —emit (loop)→ x — nova stops it at its budget when it runs (RUNAWAY_CHAIN)']);
   });
 
-  // What a set of actions holds when it comes from rows or over a wire and no
-  // schema has read it: the compiler is told it is an action, and it is not.
   const unread = (text: string): ActionDefinition => JSON.parse(text);
 
   it('refuses a definition nova does not read, naming the action and what is wrong with it', () => {
@@ -99,7 +86,6 @@ describe('verifyManifest — may this be served', () => {
       { check: 'actions', detail: expect.stringMatching(/^"home" is not an action nova reads: triggers: /) },
       { check: 'actions', detail: '"admin.panel" is not an action nova reads: (root): Unrecognized key: "tittle"' },
     ]);
-    // Found before the charter is asked about them, and said first.
     expect(report.errors[0]?.check).toBe('actions');
     expect(refusalOf(report, 'boot')).toMatch(/^Actions are not ones nova reads — refusing to serve:\n {2}"home" is not an action nova reads: triggers: /);
     expect(refusalOf(report, 'refresh')).toMatch(/^Refresh refused — actions nova does not read:\n {2}"home" is not an action nova reads/);
@@ -113,9 +99,6 @@ describe('verifyManifest — may this be served', () => {
 });
 
 describe('verifyApp — the check boot runs, for an app that is not booted', () => {
-  // What an app hands over, as the app writes it: the role combinations are
-  // in its assignments and the profiles in its behaviors, and the candidate is
-  // built from them.
   const app: ShippedManifest = {
     charter: { public: ['home'], admin: { actions: ['home', 'admin.panel'], data: ['deals.read'], layouts: ['home.*'] }, auditor: { actions: ['home'], layouts: ['home.wide'] } },
     assignments: { usr_1: ['admin'], usr_2: ['auditor'] },
@@ -134,17 +117,13 @@ describe('verifyApp — the check boot runs, for an app that is not booted', () 
   });
 
   it('refuses what a boot refuses, each under the check that found it', () => {
-    // A reach no behavior declares.
     expect(verifyApp({ ...app, behaviors: {} }, grants).errors).toEqual([
       { check: 'reach', detail: 'deals/mine declares reach "own"' },
       { check: 'reach', detail: 'known profiles: (none)' },
     ]);
-    // A deny over a table the database does not carry protects nothing.
     const denies = { ...app, charter: { ...app.charter, auditor: { actions: ['home'], layouts: ['home.wide'], data: { allow: ['*.read'], deny: ['deals.read'] } } } };
     expect(verifyApp(denies, grants).errors).toEqual([]);
     expect(verifyApp(denies, scopeGrants(['leads'])).errors.map((error) => `${error.check} ${error.detail.split(':')[0]}`)).toEqual(['charter dead-deny']);
-    // Two variants of one action on somebody the assignments name: one role
-    // alone holds one each, the two together hold both.
     const both = verifyApp({ ...app, layouts: { ...app.layouts, 'home.wide': { action: 'home', layout: plain } }, assignments: { usr_1: ['admin', 'auditor'] } }, grants);
     expect(both.errors.map((error) => error.check)).toContain('variants');
     expect(both.errors.find((error) => error.detail.includes('the combination [admin, auditor]'))?.detail).toContain('holds 2 variants of "home"');

@@ -10,15 +10,9 @@ import type { OperatorDeps } from '../src/integrations/operator';
 import { proxyRoutes } from '../src/integrations/forward';
 import { reachOf } from '../src/integrations/reach';
 
-// THE DOORS OF THE INTEGRATIONS FEATURE, each asked what it refuses: the
-// operator's routes and the proxy, mounted over a registry that is a map and a
-// service that is a function. No database, and nothing leaves the
-// process.
-
 type Row = Record<string, unknown>;
 const json = { 'content-type': 'application/json' };
 
-// A service that answers what a test says, and keeps what it was asked.
 const serviceAnswering = (answer: (url: string) => Response = () => new Response('<html>the page</html>', { status: 200, headers: { 'content-type': 'text/html' } })) => {
   const asked: { url: string; method: string }[] = [];
   const fetchIt = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
@@ -28,10 +22,6 @@ const serviceAnswering = (answer: (url: string) => Response = () => new Response
   return { asked, fetch: fetchIt };
 };
 
-// ═══════════════════════════════════════════════════════════════
-// THE OPERATOR'S ROUTES
-// ═══════════════════════════════════════════════════════════════
-
 describe('the operator’s routes', () => {
   const roster = { id: 'ext.desk.belts.roster' };
   const bundle = { integration: 'belts', actions: { [roster.id]: roster } };
@@ -40,8 +30,6 @@ describe('the operator’s routes', () => {
     globalThis.fetch = real;
   });
 
-  // The routes over a registry that keeps how `belts` stands and every entry
-  // that was replayed; the service answers what the test says.
   const routes = async (over: Partial<OperatorDeps> & { registration?: Row; found?: Row; service?: (url: string) => Response } = {}) => {
     const replayed: { fingerprint: string; context: Record<string, unknown> }[] = [];
     const reloads = { count: 0 };
@@ -71,8 +59,6 @@ describe('the operator’s routes', () => {
     return { operator, register, replayed, written, reloads, asked: service.asked };
   };
 
-  // A bundle that parses is one the service meant to send. An error page that
-  // happens to be JSON is not: the status is read before the body.
   it('a service that answers its bundle’s address with an error has not answered with a bundle, whatever the body says', async () => {
     const { register, written } = await routes({ service: () => new Response(JSON.stringify(bundle), { status: 500, headers: json }) });
     const answered = await register();
@@ -89,9 +75,6 @@ describe('the operator’s routes', () => {
     ]);
   });
 
-  // An integration that is already approved is being served. Its next import
-  // lands in rows the app serves from at once, so it is verified first, as an
-  // approval is: one the app would not serve is refused and nothing lands.
   it('a new import of an approved integration that the app would not serve is refused before anything is written', async () => {
     const REFUSAL = 'Refresh refused — charter incoherent over the new artifacts:\n  no role grants "ext.desk.belts.roster"';
     const { register, written, reloads } = await routes({ registration: { status: 'approved', key_hash: 'held' }, refusalOf: (actions) => (roster.id in actions ? REFUSAL : undefined) });
@@ -123,8 +106,6 @@ describe('the operator’s routes', () => {
     const probe = (operator: Hono<FeatureEnv>, path?: string): Promise<Response> =>
       Promise.resolve(operator.request('/integrations/belts/probe', { method: 'POST', headers: json, body: JSON.stringify(path === undefined ? {} : { path }) }));
 
-    // The operator's key is not a way to have this server fetch anything the
-    // service serves: the bundle, and the paths the integration declared.
     it('fetches the bundle, or a path the integration declared, and no other path of its service', async () => {
       const { operator, asked } = await routes({ found, service: () => new Response('ok', { status: 200 }) });
       expect(await (await probe(operator)).json()).toMatchObject({ status: 200, body: 'ok' });
@@ -143,13 +124,7 @@ describe('the operator’s routes', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// THE PROXY, AND WHAT IT MAY REACH
-// ═══════════════════════════════════════════════════════════════
-
 describe('the proxy — a declared path is for whoever holds the action that declared it', () => {
-  // Two screens of one integration, each declaring its own endpoint. The
-  // union of what a bundle declares is not what one caller may reach.
   const found = { url: 'https://belts.example', status: 'approved', reach: { '/integrations/belts/roster': ['ext.member.belts.card'], '/integrations/belts/payouts': ['ext.desk.belts.payouts'] } };
   const door = (held: readonly string[]) => {
     const service = serviceAnswering(() => new Response('{"rows":[]}', { status: 200, headers: json }));
@@ -183,9 +158,6 @@ describe('the proxy — a declared path is for whoever holds the action that dec
 });
 
 describe('reachOf — what a bundle declares is what its own prefix holds', () => {
-  // Intake refuses a bundle whose endpoint leaves its prefix. What is kept as
-  // reach is read off the bundle again, and holds none of them either: a
-  // path of the app's own, or of another integration, admitted nobody.
   it('an endpoint outside the integration’s own prefix is no reach of its', () => {
     const declared = BundleSchema.parse({
       integration: 'belts',

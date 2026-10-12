@@ -14,19 +14,8 @@ import type { SocketAccept } from '../src/socket';
 import { createWire } from '../src/client';
 import { nodeEnv } from '../src/client/node';
 
-// ═══════════════════════════════════════════════════════════════
-// The `ws` half of the transport seam, over a REAL websocket. Everything above
-// the seam is driven through a fake connection elsewhere; what only a real one
-// can show is what the transport itself does with a client it refuses.
-// ═══════════════════════════════════════════════════════════════
-
 const servers: Server[] = [];
 
-// A server that answers every message with how long it was — enough to prove a
-// connection is being served, and that a message arrived whole.
-//
-// `transport` is what the accept itself says of how it is to be attached, as
-// the socket a server hands out does; `options` is the host saying otherwise.
 const listening = async (options?: Parameters<typeof attachSocket>[3], transport?: SocketAccept['transport']): Promise<string> => {
   const accept: SocketAccept = Object.assign(
     async (_url: string, connection: Parameters<SocketAccept>[1]): Promise<void> => {
@@ -50,14 +39,12 @@ const opened = (url: string): Promise<WebSocket> =>
     client.once('error', reject);
   });
 
-// What the server said back to one message.
 const answered = (client: WebSocket, text: string): Promise<string> => {
   const answer = new Promise<string>((resolve) => client.once('message', (data) => resolve(String(data))));
   client.send(text);
   return answer;
 };
 
-// The limit a connection is held to when the host says nothing.
 const LIMIT = 256 * 1024;
 
 afterAll(() => {
@@ -65,9 +52,7 @@ afterAll(() => {
 });
 
 describe('the ws transport', () => {
-  // `ws` reports a frame it refuses as an 'error' on that connection, and an
-  // 'error' nobody listens for is thrown by Node out of the socket's data
-  // handler: unlistened, this one frame would end the process.
+  // `ws` reports a refused frame as an 'error' on the connection, and Node throws an error nobody listens for.
   it('a frame the transport refuses closes that connection, and nothing else', async () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const escaped: unknown[] = [];
@@ -78,19 +63,15 @@ describe('the ws transport', () => {
       const bystander = await opened(url);
       const client = await opened(url);
 
-      // A TEXT frame whose bytes are not UTF-8: refused by the receiver (1007).
       const closed = new Promise<number>((resolve) => client.once('close', (code) => resolve(code)));
       client.send(Buffer.from([0xff, 0xfe, 0xfd]), { binary: false });
       expect(await closed).toBe(1007);
 
-      // The connection beside it is still being served, and so is a new one.
       for (const other of [bystander, await opened(url)]) {
         expect(await answered(other, 'still here')).toBe('10');
         other.close();
       }
-      // Nothing was thrown out of the server's data handler. Asked here, after
-      // the server has answered two more messages: a throw from the frame it
-      // refused would have come before either of them.
+      // Asked after two more answers: a throw from the refused frame would have come before them.
       expect(escaped).toEqual([]);
       expect(warned).toHaveBeenCalledTimes(1);
     } finally {
@@ -99,9 +80,6 @@ describe('the ws transport', () => {
     }
   });
 
-  // What a message carries the server keeps and sends back in every later
-  // frame, so a connection is held to 256 KB a message unless the host says
-  // otherwise. Told nothing, `ws` takes 100 MiB.
   it('a message of 256 KB arrives; one byte more closes that connection with 1009, and nothing else', async () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
@@ -121,8 +99,6 @@ describe('the ws transport', () => {
     }
   });
 
-  // The limit is on the message, not on what crossed the wire: 8 MB of one
-  // letter is a few KB compressed, and is refused all the same.
   it('a message that is small on the wire and large once inflated is refused', async () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
@@ -145,11 +121,6 @@ describe('the ws transport', () => {
     client.close();
   });
 
-  // The two settings of the transport are the deployment's
-  // (`runtime.socketMaxMessageBytes`, `runtime.socketCompression`), and the
-  // socket a server hands out carries them, so a host that attaches it and says
-  // nothing (`nisc start`, the dev plugin) gets the runtime's settings, not the
-  // defaults.
   it('an accept that says how it is to be attached is attached that way by a host that says nothing', async () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
@@ -173,8 +144,6 @@ describe('the ws transport', () => {
   });
 });
 
-// The socket as the server stands it up (../src/server/server.ts), behind the
-// real transport, attached the way `nisc start` attaches it: with no options.
 describe('the ws transport — a server’s socket says how it is to be attached', () => {
   const serving = async (settings: { socketMaxMessageBytes?: number; socketCompression?: boolean }): Promise<string> => {
     const socket = buildSocket({
@@ -193,7 +162,6 @@ describe('the ws transport — a server’s socket says how it is to be attached
     return `ws://127.0.0.1:${address.port}/socket?protocol=${PROTOCOL}`;
   };
 
-  // A client that has been said hello to: the connection is being served.
   const greeted = (url: string): Promise<WebSocket> =>
     new Promise((resolve, reject) => {
       const client = new WebSocket(url);
@@ -230,14 +198,7 @@ describe('the ws transport — a server’s socket says how it is to be attached
   });
 });
 
-// Who a terminal is rides the upgrade request — a header of it, not its
-// address. Only a real handshake shows what the two ends put on the wire.
 describe('the ws transport — the upgrade says who is asking', () => {
-  // the real protocol layer behind the real transport; what it was asked, and
-  // every request line it was reached by (what an access log would hold)
-  // `deciding`: who a token is, is not answered until this resolves. Absent:
-  // at once. `gone` resolves when a peer's raw socket has closed under the
-  // server, which is how a test knows the server has seen it go.
   const serving = async (deciding: Promise<void> = Promise.resolve()): Promise<{ url: string; requestLines: string[]; asked: string[]; served: (string | null)[]; gone: Promise<void> }> => {
     const requestLines: string[] = [];
     const asked: string[] = [];
@@ -286,7 +247,6 @@ describe('the ws transport — the upgrade says who is asking', () => {
     });
     expect(client.protocol).toBe('nisc');
     client.close();
-    // a client that offers its token and not `nisc` is answered with nothing to agree on
     const alone = new Promise<string>((resolve) => {
       const socket = new WebSocket(`${url}?protocol=${PROTOCOL}`, offer.slice(1));
       socket.once('open', () => resolve(`opened as ${socket.protocol}`));
@@ -295,8 +255,6 @@ describe('the ws transport — the upgrade says who is asking', () => {
     expect(await alone).toMatch(/no subprotocol/i);
   });
 
-  // The answer to the upgrade is the one moment a browser's cookie can be
-  // written; what a real handshake carries back is the only proof it was.
   it('a token offered from the app’s own page comes back as a cookie on the 101, and that cookie alone signs the next upgrade in', async () => {
     const { url, served } = await serving();
     const origin = url.replace('ws://', 'http://').replace('/socket', '');
@@ -310,7 +268,6 @@ describe('the ws transport — the upgrade says who is asking', () => {
       });
     const written = await answeredWith({ origin }, offerToken('tok/with+symbols='));
     expect(written).toEqual([`nisc.token.${port}=tok%2Fwith%2Bsymbols%3D; HttpOnly; Path=/; SameSite=Lax`, `nisc.token.${port}.held=1; Path=/; SameSite=Lax`]);
-    // what a browser would send back: the pairs, and nothing offered
     const nothingNew = await answeredWith({ origin, cookie: written.map((cookie) => cookie.split(';')[0]).join('; ') }, offerToken(null));
     await vi.waitFor(() => expect(served).toEqual(['usr_1', 'usr_1']));
     expect(nothingNew).toEqual([]);
@@ -332,9 +289,6 @@ describe('the ws transport — the upgrade says who is asking', () => {
     expect(await answeredWith({ origin, cookie: first[0]?.split(';')[0] ?? '' })).toEqual([]);
   });
 
-  // Until moss has decided, the request is not answered and the raw socket is
-  // nobody's to listen to: a peer that resets it then must be that request's
-  // alone, not an 'error' thrown out of Node.
   it('a peer that is gone before it is answered takes nothing down, and leaves nothing attached', async () => {
     const verifier = { decide: (): void => {} };
     const deciding = new Promise<void>((resolve) => void (verifier.decide = resolve));
@@ -342,14 +296,12 @@ describe('the ws transport — the upgrade says who is asking', () => {
     const { hostname, port } = new URL(url);
     const peer = connectTcp(Number(port), hostname);
     await new Promise<void>((connected) => peer.once('connect', () => connected()));
-    // it offers a token, so who it is waits on the verifier — and it is gone before the verifier says
     peer.write(`GET /socket?protocol=${PROTOCOL} HTTP/1.1\r\nHost: ${hostname}:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Protocol: ${offerToken('tok/with+symbols=').join(', ')}\r\n\r\n`);
     await vi.waitFor(() => expect(asked).toHaveLength(1));
     peer.resetAndDestroy();
-    // The server has seen it go; only then does the verifier answer.
     await gone;
     verifier.decide();
-    await vi.waitFor(() => expect(served).toEqual(['usr_1'])); // decided after it had gone, and said to nobody
+    await vi.waitFor(() => expect(served).toEqual(['usr_1']));
     const next = await opened(`${url}?protocol=${PROTOCOL}`);
     await vi.waitFor(() => expect(served).toEqual(['usr_1', null]));
     next.close();
@@ -373,9 +325,7 @@ describe('the ws transport — the upgrade says who is asking', () => {
   });
 });
 
-// TWO THINGS THE TRANSPORT DOES WITH AN UPGRADE THAT IS NOT A SESSION.
 describe('the ws transport — an upgrade that is not a session', () => {
-  // An accept that says what it was asked to serve, on a listener of its own.
   const attached = async (accept: (url: string) => Promise<void>): Promise<{ httpServer: Server; origin: string }> => {
     const httpServer = createHttp((_req, res) => res.end('ok'));
     attachSocket(httpServer, Object.assign((url: string) => accept(url), { stop: (): void => {} }), '/socket');
@@ -386,9 +336,6 @@ describe('the ws transport — an upgrade that is not a session', () => {
     return { httpServer, origin: `ws://127.0.0.1:${address.port}` };
   };
 
-  // THE LISTENER IS NOT MOSS'S ALONE. A dev server hears its own socket on it,
-  // and an app may hear one of its own. An upgrade to another path is theirs:
-  // taken by moss as well, one request would be upgraded twice.
   it('an upgrade to another path is left to whoever else hears the listener', async () => {
     const accepted: string[] = [];
     const { httpServer, origin } = await attached(async (url) => void accepted.push(url));
@@ -407,19 +354,14 @@ describe('the ws transport — an upgrade that is not a session', () => {
       client.once('error', reject);
     });
     expect(heard).toBe('served by the other one');
-    // The transport is told of an upgrade before they are: it was not asked to serve this one.
     expect(accepted).toEqual([]);
   });
 
-  // An accept is the app's server, and one that rejects has decided nothing:
-  // the request it was handed is still unanswered. It is answered and closed,
-  // or the peer waits on it for as long as it cares to.
   it('an accept that fails closes that connection, and what it failed with is in the log', async () => {
     const said = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       const { origin } = await attached(() => Promise.reject(new Error('the accept failed')));
       const closed = await new Promise<number>((resolve, reject) => {
-        // Not answered at all, the handshake is given up on here, and that is the failure.
         const client = new WebSocket(`${origin}/socket`, { handshakeTimeout: 2_000 });
         client.once('close', (code) => resolve(code));
         client.once('error', reject);

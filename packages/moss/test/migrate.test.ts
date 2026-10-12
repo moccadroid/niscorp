@@ -10,12 +10,7 @@ import { migrateTables } from '../src/data/migrate';
 import type { NiscRuntime } from '../src/runtime';
 import { pristineDatabases } from './pristine-database';
 
-// A database of its own for each test that wants one, started from one that
-// was initialised once for this file (./pristine-database.ts says why).
 const freshDatabase = pristineDatabases();
-
-// THE STEP, AND WHAT IT REFUSES. An app with one table, in the shapes a few
-// releases would give it, on one database that outlives them.
 
 const sql = (text: string) => ({ kind: 'sql' as const, sql: text });
 
@@ -28,8 +23,8 @@ const tables = (...migrations: Sequence['migrations']): Sequence[] => [{ id: 'wa
 
 const read = (fingerprint: string, ...columns: string[]): SeedEntry => ({
   fingerprint,
-  // `fields` before `from`: jsonb stores them the other way round, so a seeded row is
-  // only "as the code has it" by value, never by text
+  // `fields` before `from`: jsonb stores them the other way round, so a seeded row
+  // matches the code by value, not by text.
   dsl: { fields: columns.map((column) => `notes.${column}`), from: ['notes'] },
 });
 const add = (...columns: string[]): SeedMutation => ({
@@ -56,7 +51,6 @@ const database = () => {
   return { runtimeOf, columns, ledger, pool };
 };
 
-// PGlite announces that it cannot bound reads; that line is not these tests.
 const quietly = async <T>(run: () => Promise<T>): Promise<T> => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   try {
@@ -78,7 +72,6 @@ describe('migrateTables — the step', () => {
     const report = await migrateTables(runtimeOf(tables(NOTES)), app);
     const applied = report.applied.map((migration) => migration.ref);
     expect(applied).toEqual(expect.arrayContaining(['nisc.moss/1', 'nisc.moss.sessions/1', 'nisc.vex.cache/1']));
-    // the app's own after the engine's
     expect(applied.at(-1)).toBe('walk.app/1');
 
     const server = await quietly(() => createServer(app, runtimeOf(tables(NOTES), 'verify')));
@@ -110,7 +103,6 @@ describe('migrateTables — the step', () => {
     const app = appOf(read('notes/all', 'id', 'body'), add('body'));
     await migrateTables(runtimeOf(tables(NOTES)), app);
 
-    // the migration renames the column; the entries still say `body`
     const error = await migrateTables(runtimeOf(tables(NOTES, RENAME)), app).catch((e: unknown) => e);
     expect(error).toMatchObject({ code: 'DOES_NOT_FIT' });
     expect(String(error)).toContain('notes/all: Field "body" not found on entity "notes"');
@@ -135,9 +127,8 @@ describe('migrateTables — the step', () => {
     const { runtimeOf, ledger } = database();
     const before = appOf(read('notes/all', 'id', 'body'), add('body'));
     await migrateTables(runtimeOf(tables(NOTES)), before);
-    (await quietly(() => createServer(before, runtimeOf(tables(NOTES))))).close(); // its entries are seeded
+    (await quietly(() => createServer(before, runtimeOf(tables(NOTES))))).close(); // Its entries are seeded
 
-    // the code now reads `author`; the release migrates nothing
     const error = await migrateTables(runtimeOf(tables(NOTES)), appOf(read('notes/all', 'id', 'body', 'author'), add('body'))).catch((e: unknown) => e);
     expect(error).toMatchObject({ code: 'DOES_NOT_FIT' });
     expect(String(error)).toContain('notes/all: Field "author" not found');
@@ -149,9 +140,9 @@ describe('migrateTables — the step', () => {
     const deadWrite: SeedMutation = { fingerprint: 'notes/dead-write', mutation: { op: 'insert', table: 'notes', values: { gone: { $context: 'gone' } } } };
     const app = appOf(read('notes/all', 'id', 'body'), read('notes/dead', 'id', 'gone'), add('body'), deadWrite);
     await migrateTables(runtimeOf(tables(NOTES)), appOf(read('notes/all', 'id', 'body'), add('body')));
-    (await quietly(() => createServer(app, runtimeOf(tables(NOTES))))).close(); // ships the dead entries: boot does not check them
+    (await quietly(() => createServer(app, runtimeOf(tables(NOTES))))).close(); // Ships the dead entries: boot does not check them
 
-    // asked through a cache with memory in front that nobody warmed: a deployment's cache, in the step's own process
+    // Asked through a cache with memory in front that nobody warmed, as a deployment's is in the step's own process.
     const cold = createTieredCache({ l1: createMemoryCache(), l2: createPostgresCache({ pool }) });
     const report = await migrateTables({ ...runtimeOf(tables(NOTES, TAGS)), cache: cold }, app);
     expect(report.applied.map((migration) => migration.ref)).toEqual(['walk.app/2']);
@@ -193,7 +184,7 @@ describe('migrateTables — the step', () => {
     const app = appOf(read('notes/all', 'id', 'body'), add('body'));
     await migrateTables(runtimeOf(tables(NOTES)), app);
 
-    // one release, stepped twice at once: the other run gets the lock first
+    // One release, stepped twice at once: the other run gets the lock first.
     const dropped = { description: 'stars go', steps: [sql('ALTER TABLE notes DROP COLUMN stars')] };
     const runtime = runtimeOf(tables(NOTES, dropped));
     const waited: NiscRuntime = {

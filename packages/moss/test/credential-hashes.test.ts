@@ -6,23 +6,10 @@ import { integrationByKey } from '../src/integrations/registry';
 import { registryOver } from './registry-db';
 import { pristineDatabases } from './pristine-database';
 
-// A database of its own for each test that wants one, started from one that
-// was initialised once for this file (./pristine-database.ts says why).
 const freshDatabase = pristineDatabases();
 
-// GOLDEN: credentials already in somebody's database.
-//
-// A session token and an integration key are stored ONLY as a hash, and the
-// hash is the lookup key. Change how either is hashed — a different digest, a
-// salt, an encoding — and every row already written stops resolving: every
-// person is signed out, every add-on's key stops working, and nothing errors.
-// These rows are written the way an existing deployment holds them, with the
-// hash PINNED as a literal, and must go on resolving through the real lookup.
-//
-// If one of these goes red, the hashing changed. Do not re-pin the literal:
-// that is exactly the change that orphans the rows. Ship a migration that
-// re-keys the stored credentials (or keeps verifying the old scheme), then add
-// a row for the new scheme beside this one.
+// The hashes are pinned as literals. When one goes red the hashing changed, and every credential already stored
+// would stop resolving: do not re-pin, ship a migration that re-keys the stored credentials.
 
 describe('golden — credentials stored by earlier versions still resolve', () => {
   it('a session row keyed by sha256(token), hex', async () => {

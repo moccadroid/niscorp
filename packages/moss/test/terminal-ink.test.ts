@@ -8,27 +8,14 @@ import { inkTarget } from '../src/terminal/ink';
 import type { InkTargetConfig } from '../src/terminal/ink';
 import type { TerminalApi, TerminalMount } from '../src/terminal';
 
-// ═══════════════════════════════════════════════════════════
-// The ink target — driven the way the tty tests drive theirs: a stub
-// TerminalApi over mutable trees, keys written to a stand-in for the keyboard,
-// dispatches captured, `update` called as the conductor would on a wire
-// change. ink draws for real, into a stream that says it is a terminal.
-// ═══════════════════════════════════════════════════════════
-
-// ink writes a frame as it changes only where it believes somebody is
-// watching, and a CI runner says nobody is: there it writes one frame, when it
-// unmounts. Said before ink is loaded, which is when it asks.
-//
-// The kit draws what has the focus in inverse, and with colour off there is no
-// inverse: the screen would not say where the focus is. A runner's output is
-// not a terminal, so colour is asked for by name.
+// ink writes a frame as it changes only where it believes somebody is watching, and a CI
+// runner says nobody is. It asks when it is loaded, so this runs first. Colour is forced
+// because the kit draws focus in inverse, which colour off does not have.
 vi.hoisted(() => {
   process.env['CI'] = 'false';
   process.env['FORCE_COLOR'] = '1';
 });
 
-// RenderComponentNode, not the RenderNode union: `ref` and `model` live on the
-// component member alone.
 const component = (name: string, props: Record<string, unknown> = {}, children: RenderNode[] = []): RenderComponentNode => ({
   type: 'component',
   name,
@@ -43,8 +30,6 @@ const button = (ref: string, label: string, value?: unknown): RenderNode => ({
 const input = (path: string, ref: string, value = ''): RenderNode => ({ ...component('Input', { value }), model: { path, ref } });
 const checkbox = (path: string, ref: string, value: boolean): RenderNode => ({ ...component('Checkbox', { value }), model: { path, ref } });
 
-// A served ActionSlot marker as flattenRenderTree stamps it: identity in
-// props, keyed by instance, the instance's tree as children.
 const instance = (instanceId: string, canvasId: string, children: RenderNode[]): RenderNode => ({
   ...component('ActionSlot', { instanceId, canvasId, definitionId: 'counter' }, children),
   key: instanceId,
@@ -52,8 +37,6 @@ const instance = (instanceId: string, canvasId: string, children: RenderNode[]):
 
 const FRAME: RenderNode[] = [component('CanvasSlot', { canvasId: 'main' }), component('CanvasSlot', { canvasId: 'aside' })];
 
-// A wait on the thing itself (what ink has written to the screen): it is asked
-// again until it holds. `ms` is how long a failure takes to say so.
 const until = (pred: () => boolean, why: string, ms = 5_000): Promise<void> =>
   new Promise((resolve, reject) => {
     const started = Date.now();
@@ -65,17 +48,11 @@ const until = (pred: () => boolean, why: string, ms = 5_000): Promise<void> =>
     tick();
   });
 
-// A keyboard and a screen that say they are a terminal: ink asks `isTTY`
-// before it reads keys one at a time, and reads them with 'readable' + read().
-// ink's own types ask for Node's tty streams, which nothing but a real
-// terminal can make; these two casts are the whole of the pretending.
 const keyboard = (): { stream: NodeJS.ReadStream; press: (keys: string) => void; unread: () => boolean } => {
   const stream = new PassThrough();
   const tty = Object.assign(stream, { isTTY: true, setRawMode: () => tty, ref: () => tty, unref: () => tty });
   return { stream: tty as unknown as NodeJS.ReadStream, press: (keys) => void stream.write(keys), unread: () => stream.readableLength > 0 };
 };
-// `shown` is the words on the screen; `written` is those words with the colour
-// and inverse they were written in, which is where the focus can be read.
 const STYLE = /\u001b\[[0-9;]*m/g;
 const INVERSE = '\u001b[7m';
 const display = (): { stream: NodeJS.WriteStream; shown: () => string; written: () => string; wipe: () => void } => {
@@ -109,18 +86,15 @@ const harness = (trees: Record<string, RenderNode[]>, options: { frame?: RenderN
   const mount = inkTarget({ stdin: keys.stream, stdout: screen.stream, onQuit: quit, patchConsole: false, ...config })(api);
   mounts.push(mount);
   const shows = (words: string): Promise<void> => until(() => screen.shown().includes(words), `the screen shows "${words}"`);
-  // A key is pressed once ink has read it. One written before ink reads keys
-  // waits in the stream until it does; one written before the last was read
-  // would arrive with it, as one read of two keys.
+  // Waits until ink has read the key: one written before the last was read would
+  // arrive with it, as one read.
   const press = async (key: string): Promise<void> => {
     keys.press(key);
     await until(() => !keys.unread(), 'ink read the key');
   };
   const sent = (count: number): Promise<void> => until(() => dispatched.length >= count, `${count} event${count === 1 ? '' : 's'} dispatched`);
-  // ink moves the focus on Tab in a turn of its own, after the key is read,
-  // and what is focused takes its keys one turn after it is drawn so. So a key
-  // meant for what Tab reaches waits for the screen to show the focus there,
-  // and then for the turn ink had already asked for when it drew it.
+  // ink moves the focus on Tab in a turn of its own, and what is focused takes its keys one turn
+  // after it is drawn: wait for the screen to show the focus, then for that turn.
   const focusOn = async (words: string): Promise<void> => {
     await until(() => screen.written().includes(`${INVERSE}${words}`), `the focus is on "${words}"`);
     await new Promise((resolve) => setImmediate(resolve));
@@ -216,7 +190,6 @@ describe('the ink target — typed numbers', () => {
     await t.press('a1');
     await t.sent(1);
     expect(t.dispatched).toEqual([{ canvas: 'main', event: { type: 'ui:model', ref: 'in-user', payload: 'a1' } }]);
-    // Enter in the field is the field's key, sent up as every other target sends it
     await t.press('\r');
     await t.sent(2);
     expect(t.dispatched.at(-1)).toEqual({ canvas: 'main', event: { type: 'ui:key', ref: 'in-user', key: 'Enter' } });
@@ -225,7 +198,7 @@ describe('the ink target — typed numbers', () => {
   it('a number that names frame chrome dispatches nothing', async () => {
     const t = harness({ main: [button('save', 'Save')] }, { frame: [button('menu', 'Menu'), ...FRAME] });
     await t.shows('( Save )');
-    await t.press('1'); // the frame's own button
+    await t.press('1');
     await t.press('2');
     await t.sent(1);
     expect(t.dispatched).toEqual([{ canvas: 'main', event: { type: 'ui:click', ref: 'save' } }]);
@@ -239,8 +212,6 @@ describe('the ink target — typed numbers', () => {
     await t.press('2');
     await t.sent(1);
     expect(t.dispatched).toEqual([{ canvas: 'main', event: { type: 'ui:click', ref: 'b12' } }]);
-    // [1] could be the start of [10], [11] or [12]: it acts when no second
-    // digit came, which is a beat of 400 ms later and not at once
     const pressed = Date.now();
     await t.press('1');
     await t.sent(2);
@@ -248,8 +219,6 @@ describe('the ink target — typed numbers', () => {
     expect(t.dispatched.at(-1)).toEqual({ canvas: 'main', event: { type: 'ui:click', ref: 'b1' } });
   });
 
-  // Two keys pressed in turn can arrive as one read: over a slow link, an ssh
-  // door, a paste. ink hands them over together, as it hands over a paste.
   it('digits that arrive together are the number they spell', async () => {
     const twelve = Array.from({ length: 12 }, (_, i) => button(`b${i + 1}`, `B${i + 1}`));
     const t = harness({ main: twelve });
@@ -287,26 +256,17 @@ describe('the ink target — the focus ring and leaving', () => {
     await until(() => t.quit.mock.calls.length === 1, 'the host is told');
   });
 
-  // A quit is the person at the keyboard leaving. A destroy is the host's own
-  // doing (a swap to another target, a connection it is ending): told of it as
-  // a quit, a host whose quit handler ends the process ends it on a swap.
   it('destroy is not reported to the host as a quit', async () => {
     const t = harness({ main: [button('save', 'Save')] });
     await t.shows('[1]');
     t.mount.destroy();
     mounts.splice(0);
-    // TIME IS WHAT IS WAITED FOR: ink tells its app it has ended on its own
-    // schedule, after the unmount, and nothing says when it has finished
-    // saying so. 150 ms is several of its frames; the wait is for nothing to
-    // have happened in them.
+    // Waits on the clock: ink tells its app it has ended on its own schedule after the unmount,
+    // and nothing says when it is done. 150 ms is several of its frames.
     await new Promise((resolve) => setTimeout(resolve, 150));
     expect(t.quit).not.toHaveBeenCalled();
   });
 
-  // ink ends its app when a component throws, and says so by rejecting. A
-  // terminal is one of many in a process that serves people over ssh: one
-  // person's broken screen is that terminal's end, told to the host like any
-  // other, and nobody else's.
   it('a kit component that throws ends this terminal and tells the host, and rejects nothing into the process', async () => {
     const unhandled = vi.fn();
     process.on('unhandledRejection', unhandled);
@@ -316,12 +276,10 @@ describe('the ink target — the focus ring and leaving', () => {
       throw new Error('the kit broke');
     });
     const t = harness({ main: [component('Broken')] }, { registry });
-    await t.shows('the kit broke'); // ink's own account of it, on the screen it is leaving
+    await t.shows('the kit broke');
     await until(() => t.quit.mock.calls.length + unhandled.mock.calls.length > 0, 'the terminal ended, one way or the other');
-    // TIME IS WHAT IS WAITED FOR: the terminal has ended one way, and the
-    // question is whether it then also ends the other. ink's rejection and
-    // the host's quit are not the same turn; 50 ms is for the second to
-    // arrive if it is going to.
+    // Waits on the clock: ink's rejection and the host's quit are not the same turn,
+    // and 50 ms is for the second to arrive if it is going to.
     await new Promise((resolve) => setTimeout(resolve, 50));
     process.off('unhandledRejection', unhandled);
     expect(unhandled).not.toHaveBeenCalled();
@@ -338,9 +296,8 @@ describe('the ink target — the focus ring and leaving', () => {
     t.wipe();
     t.state.trees = { main: [component('Text', {}, [text('two')])] };
     t.mount.update();
-    // TIME IS WHAT IS WAITED FOR: ink paints on a timer of its own (it holds a
-    // frame back for about 30 ms), so an update that was going to paint has
-    // painted well within 100.
+    // Waits on the clock: ink holds a frame back for about 30 ms, so an update that
+    // was going to paint has painted well within 100.
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(t.shown()).not.toContain('two');
   });

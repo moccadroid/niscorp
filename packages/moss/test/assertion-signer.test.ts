@@ -2,8 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { randomBytes } from 'node:crypto';
 import { createAssertionSigner, verifyAssertion } from '../src/integrations/credentials';
 
-// The keypair a deployment signs assertions with, and the seed that makes it
-// the same in every process (../src/integrations/credentials.ts).
 const claims = { integration: 'belts', principal: 'i_mara', scope: {} };
 
 describe('createAssertionSigner — the seed', () => {
@@ -17,14 +15,9 @@ describe('createAssertionSigner — the seed', () => {
 
   it('no seed is a key made here and kept nowhere: two signers, two keys', () => {
     expect(createAssertionSigner().verifyKey).not.toBe(createAssertionSigner().verifyKey);
-    // An empty string is no seed: what an environment variable that is not set
-    // reads as, once an app has written `?? ''` after it.
     expect(createAssertionSigner('').verifyKey).not.toBe(createAssertionSigner('').verifyKey);
   });
 
-  // A seed that decodes to fewer than 32 bytes is refused, not replaced by a
-  // random key: two processes given the same seed would sign with different
-  // keys, and each would refuse what the other signed.
   it.each([
     ['a word', 'consent-check-seed', 13],
     ['sixteen bytes', randomBytes(16).toString('base64'), 16],
@@ -39,10 +32,8 @@ describe('createAssertionSigner — the seed', () => {
         return error instanceof Error ? error.message : String(error);
       }
     })();
-    // what was given, by its length, and what is needed
     expect(made).toContain(`decodes to ${bytes} byte`);
     expect(made).toContain('32');
-    // never the seed
     expect(made).not.toContain(seed);
   });
 
@@ -52,11 +43,6 @@ describe('createAssertionSigner — the seed', () => {
   });
 });
 
-// WHAT THE OTHER END DOES WITH AN ASSERTION. `verifyAssertion` is no part of
-// what moss exports: an integration's service verifies for itself. It stands
-// in for that service in the tests which ask "can the other end verify what
-// this deployment signed"; an oracle that passed a forged or an expired
-// assertion would make every one of them pass on anything.
 describe('verifyAssertion — what an integration’s service accepts as identity', () => {
   const b64url = (text: string): string => Buffer.from(text).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
@@ -70,12 +56,10 @@ describe('verifyAssertion — what an integration’s service accepts as identit
     const signer = createAssertionSigner();
     const [body, signature] = signer.mint(claims).split('.');
     const now = Date.now();
-    // The same signature under a body that names somebody else.
     const altered = `${b64url(JSON.stringify({ ...claims, principal: 'i_owner', iat: now, exp: now + 30_000 }))}.${signature}`;
     expect(verifyAssertion(altered, signer.verifyKey)).toBeUndefined();
     expect(verifyAssertion(`${body}.${signature}`, createAssertionSigner().verifyKey)).toBeUndefined();
     expect(verifyAssertion(createAssertionSigner().mint(claims), signer.verifyKey)).toBeUndefined();
-    // With no signature, or none that is one.
     expect(verifyAssertion(String(body), signer.verifyKey)).toBeUndefined();
     expect(verifyAssertion(`${body}.`, signer.verifyKey)).toBeUndefined();
   });

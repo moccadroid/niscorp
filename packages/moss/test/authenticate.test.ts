@@ -5,12 +5,6 @@ import type { AuthenticationDeps } from '../src/server/routes';
 import type { Env } from '../src/server/moss-server';
 import type { ResolvedIdentity } from '../src/identity';
 
-// ═══════════════════════════════════════════════════════════════
-// The authentication every route gets, held against a route that says who it
-// was told is calling. No server and no database: the middleware is handed
-// who a token is and who a principal is, as createServer hands them.
-// ═══════════════════════════════════════════════════════════════
-
 const resolved = (roles: readonly string[]): ResolvedIdentity => ({ roles, scope: {}, installed: undefined, key: roles.join(',') });
 
 const serverWith = (over: Partial<AuthenticationDeps> = {}): Hono<Env> => {
@@ -62,10 +56,6 @@ describe('authentication — who is calling', () => {
   });
 });
 
-// An unknown principal is a failed sign-in. A failure to FIND OUT who somebody
-// is, is not: the database is down, the app's record does not parse, the
-// verifier cannot be reached. Answered 401, it would tell a client to throw its
-// session away over a fault of the server's.
 describe('authentication — who is calling could not be found out', () => {
   const INTERNAL = 'connect ECONNREFUSED 10.1.2.3:5432';
   const failing = async (): Promise<never> => {

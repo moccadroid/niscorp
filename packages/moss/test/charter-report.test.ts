@@ -7,20 +7,7 @@ import { defineApp } from '../src/manifest';
 import { createServer } from '../src/server';
 import { pristineDatabases } from './pristine-database';
 
-// A database of its own for each test that wants one, started from one that
-// was initialised once for this file (./pristine-database.ts says why).
 const freshDatabase = pristineDatabases();
-
-// THE REPORT BOOT VERIFIED, HANDED BACK. `createServer` refuses on the report's
-// errors; `charterReport()` hands the host the whole report the server itself
-// verified, with the warnings (an action no role grants, an allow that matches
-// nothing) and each role's closure issues.
-//
-// And it answers for WHAT IS IN FORCE. What the app consists of changes through
-// one door, `replaceActions`, which verifies before it switches: a set the app
-// could not be served with is refused, and the report, the actions and what
-// each principal holds stay as they were. `verifyActions` is that door's dry
-// run.
 
 const home: ActionDefinition = {
   id: 'home',
@@ -30,8 +17,6 @@ const panel: ActionDefinition = { id: 'admin.panel' };
 const stray: ActionDefinition = { id: 'stray' };
 const daily: ActionDefinition = { id: 'reports.daily' };
 
-// `reports.*` matches nothing (a dead allow); `stray` is granted by nobody
-// (an orphan); `public` holds `home` but not the action it pushes.
 const charter = { public: ['home', 'reports.*'], admin: ['home', 'admin.panel'] };
 
 const manifest = () =>
@@ -41,7 +26,6 @@ const manifest = () =>
     actions: { home, 'admin.panel': panel, stray },
   });
 
-// 'dev-open' and PGlite each announce themselves at boot; neither line is this test.
 const quietly = async <T>(run: () => Promise<T>): Promise<T> => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -58,9 +42,6 @@ const boot = async (app: ReturnType<typeof manifest>) => {
   return quietly(() => createServer(app, { pool, db: pool, session: 'dev-open' }));
 };
 
-// An id that is a namespace of another is something the charter engine
-// refuses: a set that ships `home.sub` beside the app's `home` is a set the
-// app could not be served with.
 const unservable: Record<string, ActionDefinition> = { 'home.sub': { id: 'home.sub' } };
 
 describe('charterReport — the report the server booted on', () => {
@@ -82,7 +63,6 @@ describe('charterReport — the report the server booted on', () => {
     expect(booted.warnings.some((warning) => warning.rule === 'dead-allow')).toBe(true);
     expect((await server.catalogOf(null)).ids).toEqual(['home']);
 
-    // The set gives `reports.*` something to match: the allow is no longer dead.
     server.replaceActions('reports', { [daily.id]: daily });
 
     expect(server.charterReport()).not.toBe(booted);
@@ -90,7 +70,6 @@ describe('charterReport — the report the server booted on', () => {
     expect(Object.keys(server.actions())).toEqual(['home', 'admin.panel', 'stray', 'reports.daily']);
     expect((await server.catalogOf(null)).ids).toEqual(['home', 'reports.daily']);
     expect((await server.catalogOf('usr_admin')).ids).toEqual(['admin.panel', 'home']);
-    // Somebody who holds two roles holds what either grants.
     expect((await server.catalogOf('usr_both')).ids).toEqual(['admin.panel', 'home', 'reports.daily']);
     server.close();
   });
@@ -102,11 +81,8 @@ describe('charterReport — the report the server booted on', () => {
     const inForce = server.actions();
     const held = await server.catalogOf(null);
 
-    // The door refuses with the same finding.
     expect(() => server.replaceActions('reports', unservable)).toThrow(/^Refresh refused — charter incoherent over the new artifacts:\n {2}leaves-only: id "home" is a namespace of "home.sub"/);
 
-    // Neither changed anything: the report is the one the server is still
-    // serving on, and the set it tried to replace is still in force.
     expect(server.charterReport()).toBe(served);
     expect(server.actions()).toBe(inForce);
     expect(Object.keys(server.actions())).toEqual(['home', 'admin.panel', 'stray', 'reports.daily']);

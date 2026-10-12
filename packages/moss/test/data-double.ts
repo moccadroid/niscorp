@@ -1,11 +1,6 @@
 import { createMemoryCache, createQueryEngine, seedCache } from '@niscorp/vex';
 import type { DatabaseAdapter, DatabaseSchema, MutationClient, QueryEngine, SeedEntry, SeedMutation } from '@niscorp/vex';
 
-// A VEX ENGINE WITH NO DATABASE BEHIND IT, for the tests of ../src/data that
-// are about what moss hands vex and what it hears back: the schema is written
-// here, a read answers the rows it is given, and a write is recorded and
-// answered with one row.
-
 export const NOTES_SCHEMA: DatabaseSchema = {
   entities: [
     {
@@ -30,26 +25,18 @@ export const NOTES_SCHEMA: DatabaseSchema = {
 };
 
 export const READ_NOTES: SeedEntry = { fingerprint: 'notes/all', dsl: { from: ['notes'], fields: ['notes.id', 'notes.body'] } };
-// The same read, as an entry that demands a reach of whoever replays it.
 export const READ_OWN_NOTES: SeedEntry = { ...READ_NOTES, fingerprint: 'notes/mine', reach: 'personal' };
 export const ADD_NOTE: SeedMutation = { fingerprint: 'notes/add', mutation: { op: 'insert', table: 'notes', values: { body: { $context: 'body' } } } };
 
 export type EngineDouble = {
   engine: QueryEngine;
-  // What the engine reads through.
   adapter: DatabaseAdapter;
-  // The client writes are replayed on: it runs nothing, and remembers the SQL
-  // and the parameters of each statement it was handed.
   db: MutationClient;
   written: { sql: string; params: readonly unknown[] }[];
-  // What the adapter was asked to run for a read: the bound parameters.
   read: (readonly unknown[])[];
-  // Every table a read named, in the order the reads were compiled: whoever
-  // made the read, an app's entry or a feature's own.
   tablesRead: string[];
 };
 
-// One more table for the schema of a double: a key, and nothing else.
 export const tableNamed = (name: string): DatabaseSchema['entities'][number] => ({
   name,
   table: name,
@@ -58,9 +45,6 @@ export const tableNamed = (name: string): DatabaseSchema['entities'][number] => 
   indexes: [{ name: `${name}_pkey`, fields: ['id'], unique: true, type: 'btree' }],
 });
 
-// `entities`: the list of tables the app gave vex (`vexConfig.entities`). The
-// engine then asks the adapter for those alone, and the adapter answers them
-// alone, as vex's Postgres adapter does.
 export const engineDouble = async (rows: Record<string, unknown>[] = [{ id: 1, body: 'first' }], schema: DatabaseSchema = NOTES_SCHEMA, entities?: string[]): Promise<EngineDouble> => {
   const read: (readonly unknown[])[] = [];
   const tablesRead: string[] = [];

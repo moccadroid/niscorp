@@ -9,17 +9,6 @@ import type { ShellHostsDeps } from '../src/server/hosts';
 import { buildSignals } from '../src/server/signals';
 import { turn } from './turn';
 
-// THE SHELL HOSTS AS THE SERVER STANDS THEM UP (../src/server/hosts.ts), with
-// no server and no database: the wiring is handed an app, a running manifest
-// and stand-ins for the rest.
-//
-// WHAT A SHELL IS MADE OF IS ASKED OF THE RUNNING MANIFEST, AND OF NOTHING
-// ELSE: the actions, the frame, the layout store and the fragments alike. Here
-// the running manifest answers others than what the app shipped, and the shell
-// shows them.
-
-// A frame around one canvas. `dock` puts a `{ ref }` beside it, which the
-// layout store answers.
 const frameNamed = (name: string, dock = false): LayoutNode => ({
   component: 'Frame',
   props: { name },
@@ -28,8 +17,6 @@ const frameNamed = (name: string, dock = false): LayoutNode => ({
 const dockSaying = (text: string): LayoutNode => ({ component: 'Text', children: text });
 const sheetNamed = (title: string): ActionFragment => ({ kind: 'fragment', id: 'sheet', layout: { component: 'Sheet', props: { title }, children: [{ slot: 'body' }] } });
 
-// One read, made when the action opens: whether its screen can still change
-// depends on the entry behind the fingerprint.
 const words: ActionDefinition = {
   id: 'words',
   data: { title: 'Hello', rows: [] },
@@ -55,8 +42,6 @@ const app: NiscApp = {
 
 const shipped = createRunningManifest({ shipped: app, grants: scopeGrants(['words']) });
 
-// Everything a host is handed but the running manifest, the same for every
-// case: who somebody is, the wire, and no code of the app's.
 const depsWith = (running: ShellHostsDeps['running']): ShellHostsDeps => ({
   app,
   runtime: {},
@@ -79,8 +64,6 @@ describe('the shell hosts — what a shell is made of is asked of the running ma
       expect(JSON.stringify(snapshot?.frame)).toContain('"name":"as shipped"');
       expect(JSON.stringify(snapshot?.frame)).toContain('the dock, as shipped');
       expect(JSON.stringify(snapshot?.trees['main'])).toContain('"title":"as shipped"');
-      // The read is a snapshot entry: its answer is in the tree, and nothing
-      // on the screen can still happen.
       expect(snapshot?.live).toBe(false);
       expect(snapshot?.drawnWith).toEqual(['words/all']);
     } finally {
@@ -107,18 +90,13 @@ describe('the shell hosts — what a shell is made of is asked of the running ma
     try {
       const snapshot = await hosts.shells?.snapshot(null, null);
 
-      // The frame, and what a `{ ref }` in it resolves to before anything
-      // sets it.
       expect(JSON.stringify(snapshot?.frame)).toContain('"name":"as published"');
       expect(JSON.stringify(snapshot?.frame)).toContain('the dock, as published');
       expect(JSON.stringify(snapshot?.frame)).not.toContain('as shipped');
-      // The fragment the canvas's first action is composed with.
       expect(JSON.stringify(snapshot?.trees['main'])).toContain('"title":"as published"');
       expect(JSON.stringify(snapshot?.trees['main'])).not.toContain('as shipped');
-      // The entry behind the read: it keeps answering, so the screen is live.
       expect(snapshot?.live).toBe(true);
       expect(snapshot?.why).toEqual(['words: its read "load" keeps answering (words/all is reactive)']);
-      // Asked for the app's own shell, as the app handed it over.
       expect(asked).toEqual([app.shell]);
     } finally {
       hosts.stop();
@@ -145,13 +123,7 @@ describe('the shell hosts — what a shell is made of is asked of the running ma
   });
 });
 
-// EVERY HOST IS ASKED. When what the app consists of changes, every host
-// adopts, the app's and each page's. A principal's reset (`invalidateIdentity`)
-// reaches the shell the app's host keeps for them and every shell a page has
-// built for them.
 describe('the shell hosts — a change reaches the living shells of every host', () => {
-  // Six turns of the event loop (./turn.ts): an adopt and a reset are not
-  // waited for by whoever asked, and each is a handful of hops.
   const settle = async (): Promise<void> => {
     for (let i = 0; i < 6; i += 1) await turn();
   };
@@ -181,10 +153,6 @@ describe('the shell hosts — a change reaches the living shells of every host',
     }
   });
 
-  // THE ANSWER A SHELL IS BUILT FROM IS THE ANSWER IT ADOPTS, ALL OF IT: the
-  // actions, the component names and the entries, and also the frame, the
-  // layout store and the fragments. Here the running manifest is a stand-in
-  // that answers others once something was published.
   it('a living shell whose frame, layout store and fragments the running manifest answers differently after a change shows the change', async () => {
     const answering = { published: false };
     const hosts = buildShellHosts(
@@ -210,15 +178,11 @@ describe('the shell hosts — a change reaches the living shells of every host',
       hosts.adopt();
       await settle();
 
-      // The terminal that is attached is sent the frame, with what its
-      // `{ ref }` resolves to now.
       expect(frames().length).toBeGreaterThan(before);
       expect(frames().at(-1)).toContain('"name":"as published"');
       expect(frames().at(-1)).toContain('the dock, as published');
       expect(frames().at(-1)).not.toContain('as shipped');
-      // A fragment is laid around an action when it is pushed: what is on
-      // screen keeps the one it was pushed with, and the next push wears the
-      // one in force.
+      // A fragment is laid around an action when it is pushed: what is on screen keeps the old one.
       session?.shell.push('main', 'words', undefined, ['sheet']);
       await settle();
       expect(sent.filter((text) => text.startsWith('{"type":"render"')).at(-1)).toContain('"title":"as published"');
@@ -239,7 +203,6 @@ describe('the shell hosts — a change reaches the living shells of every host',
       await settle();
 
       expect(sessions.map((session, index) => session?.shell === before[index])).toEqual([false, false, true]);
-      // Somebody who holds no shell anywhere is answered for, and nothing is built.
       expect(hosts.reset('usr_nobody')).toBe(false);
     } finally {
       hosts.stop();
@@ -247,9 +210,6 @@ describe('the shell hosts — a change reaches the living shells of every host',
   });
 });
 
-// WHAT THE WIRING TELLS EACH HOST (../src/server/hosts.ts): whether a page's
-// host keeps a shell, whether a page's sweep is stopped, and whether three
-// things the runtime says reach a host at all.
 describe('the shell hosts — what each host is told', () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -262,7 +222,6 @@ describe('the shell hosts — what each host is told', () => {
       const page = hosts.pageAt('/docs')?.host;
       expect((await hosts.shells?.session('t', 'usr_1'))?.shell).toBe((await hosts.shells?.session('t', 'usr_1'))?.shell);
       expect((await page?.session('t', 'usr_1'))?.shell).not.toBe((await page?.session('t', 'usr_1'))?.shell);
-      // Kept by nothing: an operator's roster of the page's host names nobody.
       expect(page?.list()).toEqual([]);
       expect(hosts.shells?.list().map((shell) => shell.principal)).toEqual(['usr_1']);
     } finally {
@@ -270,11 +229,6 @@ describe('the shell hosts — what each host is told', () => {
     }
   });
 
-  // ONE WAY TO EACH. A host that is handed out (`server.shells`, a page's
-  // `host`) carries neither `adopt` nor `stop`: adopting on one host would
-  // leave the others on the old application, and stopping one is not what
-  // `server.close` does for all of them. Both are the wiring's alone
-  // (`hosts.adopt`, `hosts.stop`).
   it('a host that is handed out has no way to adopt and none to stop: those are asked of all of them at once', () => {
     const hosts = buildShellHosts(depsWith(shipped));
     try {
@@ -291,7 +245,6 @@ describe('the shell hosts — what each host is told', () => {
     const clear = vi.spyOn(globalThis, 'clearInterval');
     const hosts = buildShellHosts(depsWith(shipped));
     const made = set.mock.results.map((result) => result.value);
-    // One for the app's own host and one for the page `docs`.
     expect(made).toHaveLength(2);
     hosts.stop();
     expect(new Set(clear.mock.calls.map(([handle]) => handle))).toEqual(new Set(made));
@@ -304,7 +257,6 @@ describe('the shell hosts — what each host is told', () => {
       await hosts.shells?.session('t', 'usr_1');
       await vi.advanceTimersByTimeAsync(4_000);
       expect(hosts.shells?.list()).toHaveLength(1);
-      // Idle for as long as the deployment said: the next sweep collects it.
       await vi.advanceTimersByTimeAsync(6_000);
       expect(hosts.shells?.list()).toEqual([]);
     } finally {
@@ -315,8 +267,6 @@ describe('the shell hosts — what each host is told', () => {
   it('`runtime.endpointTimeoutMs` is how long a screen’s call waits for its reply', async () => {
     vi.useFakeTimers();
     const signals: (AbortSignal | undefined)[] = [];
-    // The app's own surfaces, never answering: the call is ended by the
-    // signal it was made with, and by nothing else.
     const unanswered: ShellHostsDeps['wire'] = () => (_url, init) =>
       new Promise((_resolve, reject) => {
         signals.push(init?.signal);
@@ -324,7 +274,6 @@ describe('the shell hosts — what each host is told', () => {
       });
     const hosts = buildShellHosts({ ...depsWith(shipped), runtime: { endpointTimeoutMs: 2_000 }, wire: unanswered });
     try {
-      // The action reads when it opens.
       await hosts.shells?.session('t', 'usr_1');
       await vi.advanceTimersByTimeAsync(1_900);
       expect(signals.map((signal) => signal?.aborted)).toEqual([false]);

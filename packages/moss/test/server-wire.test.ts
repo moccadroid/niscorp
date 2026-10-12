@@ -4,13 +4,6 @@ import { VEX_LIVE_ENV } from '@niscorp/vex/hono';
 import type { Env } from '../src/server/moss-server';
 import { createInternalWire } from '../src/server/hosts';
 
-// THE WIRE A SERVER SHELL'S ENDPOINT CALLS RIDE (../src/server/hosts.ts): the
-// server's own surfaces, asked in process as the session whose token it was
-// made for. The server here is three routes that say what they were asked;
-// nothing of moss stands behind them.
-
-// What a route was handed beside the request: the follower a vex read may
-// keep answering through, when the wire made one.
 const liveOf = (env: unknown): { signal: AbortSignal } | undefined => {
   if (env === null || typeof env !== 'object' || !(VEX_LIVE_ENV in env)) return undefined;
   const live: unknown = Reflect.get(env, VEX_LIVE_ENV);
@@ -40,11 +33,6 @@ describe('the server’s own wire — who a call is made as', () => {
     expect(await (await wire(null)('/who')).json()).toMatchObject({ authorization: null });
   });
 
-  // AN ENDPOINT MAY DECLARE HEADERS, and an action is data somebody else may
-  // have written (an integration's bundle). Whatever it says of
-  // `Authorization`, the call is made as the session whose screen it is: the
-  // session's token goes over the endpoint's own headers, or a screen would
-  // read and write as whoever its author named.
   it('an endpoint that declares its own `Authorization` is still made as the session', async () => {
     const { wire } = serverSaying();
     const answered = await wire('the-sessions-token')('/who', { method: 'POST', headers: { Authorization: 'Bearer somebody-elses', 'content-type': 'application/json' }, body: '{"n":1}' });
@@ -67,7 +55,6 @@ describe('the server’s own wire — a vex read', () => {
     const reactive = await wire('t')('/api/vex', { method: 'POST', body: '{}', signal: call.signal });
     expect(typeof reactive.onChange).toBe('function');
     expect(followed[0]?.signal.aborted).toBe(false);
-    // The caller is done: the follow ends with it.
     reactive.onChange?.(() => undefined);
     call.abort();
     expect(followed[0]?.signal.aborted).toBe(true);
@@ -77,8 +64,6 @@ describe('the server’s own wire — a vex read', () => {
     expect(followed[1]).toBeUndefined();
   });
 
-  // A READ THAT WAS REFUSED IS NOT FOLLOWED. It is handed back as it was
-  // answered, and what would have kept it answering is ended at once.
   it('that was refused is handed back as it was answered, and nothing follows it', async () => {
     const { wire, followed } = serverSaying();
     const refused = await wire('t')('/api/refused/vex', { method: 'POST', body: '{}', signal: new AbortController().signal });

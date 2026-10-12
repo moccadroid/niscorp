@@ -7,19 +7,8 @@ import type { NiscRuntime } from '../src/runtime';
 import type { MossServer } from '../src/server';
 import type { SocketAccept } from '../src/socket';
 
-// ═══════════════════════════════════════════════════════════════
-// `serve`, the batteries-included listener: what it starts, and what stops it.
-//
-// No database and no boot: `createServer` is stood in for by a server that
-// answers every message with how long it was. What is held here is `serve`'s
-// own part: the listener, the websocket transport, and what it hands each.
-// ═══════════════════════════════════════════════════════════════
-
 const mossClosed = vi.fn();
 
-// How the stood-in server's socket says it is to be attached: what the real
-// one fills from the runtime (../src/server/server.ts; held in
-// node-socket.test.ts). Set by a test before it serves.
 const said: { transport?: SocketAccept['transport'] } = {};
 
 vi.mock('../src/server/server', () => ({
@@ -36,7 +25,6 @@ vi.mock('../src/server/server', () => ({
 
 const { serve } = await import('../src/server/node');
 
-// A port nothing is listening on right now.
 const freePort = (): Promise<number> =>
   new Promise((resolve, reject) => {
     const probe = createTcp();
@@ -54,7 +42,6 @@ const opened = (url: string): Promise<WebSocket> =>
     client.once('error', reject);
   });
 
-// Whether anything accepts a connection on the port.
 const accepts = (port: number): Promise<boolean> =>
   new Promise((resolve) => {
     const probe = connectTcp(port, '127.0.0.1');
@@ -65,8 +52,6 @@ const accepts = (port: number): Promise<boolean> =>
     probe.once('error', () => resolve(false));
   });
 
-// A wait on the thing itself, with a limit that turns a hang into an answer
-// (`'never'`): `ms` is how long a failure takes to say so.
 const within = <T>(ms: number, work: Promise<T>): Promise<T | 'never'> => Promise.race([work, new Promise<'never'>((resolve) => setTimeout(() => resolve('never'), ms))]);
 
 const served: MossServer[] = [];
@@ -87,8 +72,6 @@ afterEach(() => {
 });
 
 describe('serve', () => {
-  // `serve` makes an HTTP listener and a websocket transport and returns only
-  // the server, so `server.close()` is a host's only way to stop them.
   it('what it started, the server it returns stops: its own timers, every connection, and the listener', async () => {
     const { server, port } = await serving();
     const client = await opened(`ws://127.0.0.1:${port}/socket`);
@@ -101,9 +84,6 @@ describe('serve', () => {
     await vi.waitFor(async () => expect(await accepts(port)).toBe(false));
   });
 
-  // The largest message a connection may send is said by the server's socket
-  // (from the runtime: node-socket.test.ts), and `serve` attaches the socket as
-  // it says, like every host.
   it('the largest message a connection may send is what the server’s socket says', async () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     said.transport = { maxMessageBytes: 1024 };

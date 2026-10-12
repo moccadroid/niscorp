@@ -11,11 +11,8 @@ import { unverifiedShell } from '../src/server/unverified';
 import type { Connection } from '../src/socket';
 import { turn } from './turn';
 
-// A turn of the event loop (./turn.ts says why that is not a wait on a clock).
 const tick = turn;
 
-// A connection that records what it was sent. The four-function seam, faked —
-// the same shape the ws transport in ../src/server/node.ts provides.
 const fakeConnection = (): Connection & { sent: Record<string, unknown>[]; closes: number[] } => {
   const sent: Record<string, unknown>[] = [];
   const closes: number[] = [];
@@ -29,8 +26,6 @@ const fakeConnection = (): Connection & { sent: Record<string, unknown>[]; close
   };
 };
 
-// A minimal app with a server shell: one canvas, one action whose click
-// increments its own counter. No endpoints (so no wire/transform needed).
 const counter = {
   id: 'counter',
   data: { n: 0 },
@@ -58,7 +53,6 @@ describe('shells — the shell host', () => {
     expect(a.shell).toBe(b.shell);
   });
 
-  // What a principal's shell is made of is asked ONCE for a build.
   it('who somebody is and what they hold is asked once for each shell that is built', async () => {
     const asked: (string | null)[] = [];
     const host = standHost(hostConfig({ ...ctx, resolve: async (principal) => (asked.push(principal), ctx.resolve(principal)) }));
@@ -66,7 +60,6 @@ describe('shells — the shell host', () => {
     await host.session(null, null);
     await host.snapshot(null, null);
     expect(asked).toEqual(['usr_1', null, null]);
-    // A principal whose shell stands is not asked about again to be handed it.
     await host.session('t', 'usr_1');
     await host.snapshot('t', 'usr_1');
     expect(asked).toHaveLength(3);
@@ -88,7 +81,6 @@ describe('shells — the shell host', () => {
     await tick();
     const active = session.shell.getState().canvases['main']?.active;
     expect(active).toBeDefined();
-    // A canvas-tagged click, no client-side origin — the host stamps it.
     session.dispatch('main', { type: 'ui:click', ref: 'bump' });
     await tick();
     expect(session.shell.getRuntime(active!.id)?.getData()['n']).toBe(1);
@@ -101,8 +93,6 @@ describe('shells — the shell host', () => {
   });
 
   it('a held variant replaces the definition layout; behavior is untouched (ring 2)', async () => {
-    // The base renders "base"; the variant renders "variant". Same action id,
-    // same triggers — the substitution happens on the definition at build.
     const withLayouts = {
       ...app,
       actions: { counter: { ...counter, layout: { component: 'Text', children: 'base' } } },
@@ -126,7 +116,6 @@ describe('shells — the shell host', () => {
     expect(await rendered('usr_held', true)).toContain('variant');
     expect(await rendered('usr_held', true)).not.toContain('"base"');
 
-    // Behavior survives the swap: the variant principal's click still bumps.
     const host = standHost(hostConfig({
       ...ctx,
       app: withLayouts,
@@ -140,14 +129,6 @@ describe('shells — the shell host', () => {
     expect(session.shell.getRuntime(active!.id)?.getData()['n']).toBe(1);
   });
 });
-
-// ═══════════════════════════════════════════════════════════════
-// ONE BUILD FOR A PRINCIPAL AT A TIME. Finding no shell, building one and
-// keeping it are a look, two awaits and a write: two arrivals in the same
-// moment (a page's read and its socket, two tabs) must not each find none and
-// each build one, or the one that lost its place in the map would stand for
-// ever with its functions and its session code running.
-// ═══════════════════════════════════════════════════════════════
 
 describe('shells — two first arrivals for one principal', () => {
   const counted = (): { setup: HostSetup; built: () => number } => {
@@ -170,7 +151,6 @@ describe('shells — two first arrivals for one principal', () => {
     expect(built()).toBe(1);
     expect(host.list()).toHaveLength(1);
     expect(read.trees['main']).toBeDefined();
-    // Whoever arrives next is handed the same one, with nothing built.
     expect((await host.session('t', 'usr_1')).shell).toBe(first.shell);
     expect(built()).toBe(1);
   });
@@ -202,11 +182,6 @@ describe('shells — two first arrivals for one principal', () => {
     expect(host.list()).toHaveLength(1);
   });
 });
-
-// ═══════════════════════════════════════════════════════════════
-// WHAT APP CODE IS HANDED — the session `functions` and `onSession` close
-// over. It says who is calling and lends capabilities; it holds no key.
-// ═══════════════════════════════════════════════════════════════
 
 describe('shells — the session app code is handed', () => {
   const sessionOf = async (extra: Partial<HostSetup>, principal: string | null): Promise<FunctionSession> => {
@@ -244,16 +219,6 @@ describe('shells — the session app code is handed', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// RESET — the recovery a client cannot perform for itself. The shell is
-// server state keyed by principal, so dropping a token and reconnecting
-// reattaches to the same wreck; only the server can throw it away.
-// ═══════════════════════════════════════════════════════════════
-
-// WHAT A PRINCIPAL HOLDS, ANSWERED WHEN THE TEST SAYS. A build asks once. The
-// first asking is answered at once; each one after it waits until the test
-// answers it, with what was held when it asked. The test is told when a build
-// has asked, so it waits on the build and not on a clock.
 const answeredByHand = (first: readonly string[]) => {
   const held = { ids: first, asked: 0 };
   const unanswered: (() => void)[] = [];
@@ -273,14 +238,10 @@ const answeredByHand = (first: readonly string[]) => {
     hold: (ids: readonly string[]): void => void (held.ids = ids),
     asked: (): number => held.asked,
     askedBy: (count: number): Promise<void> => (held.asked >= count ? Promise.resolve() : new Promise<void>((tell) => told.push({ count, tell }))),
-    // The build that has waited longest is answered.
     answer: (): void => unanswered.shift()?.(),
   };
 };
 
-// A terminal that tells when it has been served: a shell sends its frame to a
-// terminal when it is attached, so a terminal is served once when it joins
-// and once for each shell a reset carries it to.
 const servedTerminal = () => {
   const connection = fakeConnection();
   const count = { served: 0 };
@@ -314,14 +275,11 @@ describe('shells — reset', () => {
     session.reset();
     await tick();
 
-    // A session held from before the reset must reach the NEW shell — the one
-    // thing a snapshot-taking `shell` field would have got wrong.
     expect(session.shell).not.toBe(before);
     const fresh = session.shell.getState().canvases['main']?.active;
     expect(fresh).toBeDefined();
     expect(session.shell.getRuntime(fresh!.id)?.getData()['n']).toBe(0);
 
-    // And the replacement is live, not just present.
     session.dispatch('main', { type: 'ui:click', ref: 'bump' });
     await tick();
     expect(session.shell.getRuntime(fresh!.id)?.getData()['n']).toBe(1);
@@ -341,8 +299,6 @@ describe('shells — reset', () => {
     session.reset();
     await tick();
 
-    // The same two messages a reconnect brings, on both terminals, with
-    // nothing closed underneath them.
     for (const connection of [a, b]) {
       expect(connection.sent[0]?.['type']).toBe('frame');
       expect(connection.sent.some((m) => m['type'] === 'render' && m['canvas'] === 'main')).toBe(true);
@@ -359,11 +315,6 @@ describe('shells — reset', () => {
     expect((await host.session('t', 'usr_1')).shell).toBe(first.shell);
   });
 
-  // ONE RESET OF A SHELL AT A TIME. A reset builds, then swaps. Two that
-  // overlapped would each build from the shell that stood when they began: the
-  // first to land would carry the terminals to its shell, and the second would
-  // find none left to carry and take the cell, leaving the terminals on a shell
-  // nothing addresses.
   it('resets that overlap leave every terminal on the shell that is kept', async () => {
     const host = standHost(hostConfig({ ...ctx, app: wide }));
     const session = await host.session('t', 'usr_1');
@@ -378,24 +329,12 @@ describe('shells — reset', () => {
 
     expect(host.list()).toHaveLength(1);
     expect(host.list()[0]?.connections).toBe(1);
-    // The shell the session addresses is the one the terminal is served from.
     connection.sent.length = 0;
     session.dispatch('main', { type: 'ui:click', ref: 'bump' });
     await tick();
     expect(connection.sent.some((m) => m['type'] === 'render' && m['canvas'] === 'main')).toBe(true);
   });
 
-  // THE THREE THINGS A RESET CHECKS, EACH BY THE CASE ONLY IT COVERS. The test
-  // above passes with the turn taken away, because a reset whose shell was
-  // replaced under it finds that out when it lands; so each check below has a
-  // case of its own. What a principal holds is answered by hand here
-  // (`answeredByHand`), so a build stands still where the test needs it to.
-
-  // EACH RESET IN TURN. The second reset is asked for a reason: something
-  // changed after the first had read what it builds from. So the second reads
-  // only once the first has landed, and its shell is the one that stands.
-  // Begun together, whichever build was answered last would stand, whatever it
-  // had read.
   it('two resets happen in turn: the second reads what it builds from once the first has landed, and its shell stands', async () => {
     const extra = { id: 'extra', data: {} };
     const who = answeredByHand(['counter']);
@@ -407,56 +346,39 @@ describe('shells — reset', () => {
 
     session.reset();
     await who.askedBy(2);
-    // What they hold changes after the first reset read it, and a second reset
-    // is asked because of that.
     who.hold(['counter', 'extra']);
     session.reset();
 
     who.answer();
     await terminal.servedBy(2);
-    // The first has landed and the terminal is on its shell. Only the first
-    // session and the first reset have asked: the second has not begun.
     expect(who.asked()).toBe(2);
     expect(() => session.shell.push('main', 'extra')).toThrow();
 
     await who.askedBy(3);
     who.answer();
     await terminal.servedBy(3);
-    // What stands was built from what was so when the second's turn came.
     expect(session.shell.push('main', 'extra')).toEqual(expect.any(String));
     expect(host.list()).toEqual([expect.objectContaining({ principal: 'usr_1', connections: 1 })]);
     expect(terminal.closes).toEqual([]);
   });
 
-  // A BUILD AWAITS, AND THE SHELL IT REPLACES CAN END MEANWHILE: its last
-  // terminal leaves, its principal signs out, the sweep takes it. The
-  // replacement is then nobody's. Put in the cell, it would be a living shell
-  // that nothing is attached to and nothing would end.
   it('a shell that ended while its replacement was being built is not replaced', async () => {
     const who = answeredByHand(['counter']);
-    // Nobody in particular: the shell goes when its last terminal does.
     const session = await standHost(hostConfig({ ...ctx, resolve: who.resolve })).session(null, null);
     const connection = fakeConnection();
     session.attach(connection);
     const stood = session.shell;
 
     session.reset();
-    // The replacement is being built: it has asked, and waits for its answer.
     await who.askedBy(2);
     session.detach(connection);
     who.answer();
-    // A turn of the event loop: the build has its answer and runs to its end.
     await tick();
 
-    // No shell was stood up for nobody: what the session addresses is the one
-    // that ended, and it is disposed.
     expect(session.shell).toBe(stood);
     expect(() => session.shell.push('main', 'counter')).toThrow();
   });
 
-  // A BUILD RUNS THE APP'S CODE (`inputs`, `functions`, `onSession`) and asks
-  // who somebody is. For a shell that has already ended there is nobody to run
-  // it for, so nothing is built to be thrown away.
   it('a reset asked of a shell that has already ended builds nothing', async () => {
     const who = answeredByHand(['counter']);
     const session = await standHost(hostConfig({ ...ctx, resolve: who.resolve })).session(null, null);
@@ -466,17 +388,12 @@ describe('shells — reset', () => {
     session.detach(connection);
 
     session.reset();
-    // A turn of the event loop: a reset that was going to build has asked.
     await tick();
 
     expect(who.asked()).toBe(1);
     expect(session.shell).toBe(stood);
   });
 
-  // What a shell was opened with is part of what it is rebuilt from: a reset
-  // that rebuilt from the principal alone would bring a page's shell back
-  // without the parameters of its path, on other instance ids than the page
-  // was drawn with.
   it('a shell that is reset is rebuilt with what it was opened with: its inputs and its id seed', async () => {
     const words = { id: 'words', data: { slug: '' }, layout: { component: 'Text', children: '$.slug' } };
     const paged = { ...app, actions: { words } } as unknown as NiscApp;
@@ -507,10 +424,6 @@ describe('shells — reset', () => {
     expect(host.reset('usr_1')).toBe(true);
   });
 
-  // A HOST THAT KEEPS NO SHELL (a page's) builds one for each connection, so
-  // somebody signed in may have several living at once. A reset by principal
-  // reaches them too: it does not look only where kept shells are and answer
-  // `false` for somebody with two tabs open.
   it('reaches every living shell of the principal on a host that keeps none, and nobody else’s', async () => {
     const host = standHost(hostConfig({ ...ctx, kept: false }));
     const mine = [await host.session('t', 'usr_1'), await host.session('t', 'usr_1')];
@@ -531,8 +444,6 @@ describe('shells — reset', () => {
     expect(mine.map((session) => session.shell === before[mine.indexOf(session)])).toEqual([false, false]);
     expect(theirs.shell).toBe(before[2]);
     expect(nobodys.shell).toBe(before[3]);
-    // Each terminal was carried across to its own shell's replacement, and
-    // served what a reconnect brings.
     for (const connection of connections) {
       expect(connection.sent[0]?.['type']).toBe('frame');
       expect(connection.sent.some((m) => m['type'] === 'render' && m['canvas'] === 'main')).toBe(true);
@@ -546,14 +457,11 @@ describe('shells — reset', () => {
     const connection = fakeConnection();
     session.attach(connection);
     expect(host.reset('usr_nobody')).toBe(false);
-    // Its last terminal left: a shell that is not kept ends there.
     session.detach(connection);
     expect(host.reset('usr_1')).toBe(false);
   });
 
   it('a reset that cannot build leaves the old shell standing — never nothing at all', async () => {
-    // `inputs` is app code and may throw. A reset that tore the old shell down
-    // first would answer a wedged session with an empty one.
     let broken = false;
     const withInputs = {
       ...app,
@@ -574,10 +482,8 @@ describe('shells — reset', () => {
     session.attach(connection);
 
     broken = true;
-    // The rebuild is asynchronous — `reset` answers "did they hold a shell"
-    // immediately and the replacement lands a tick later. So the failure
-    // surfaces on the console rather than to this caller. The guarantee
-    // underneath: a reset that cannot build leaves the old shell standing.
+    // The rebuild is asynchronous: reset answers at once and the replacement lands a tick later,
+    // so the failure surfaces on the console.
     const errors: unknown[] = [];
     const original = console.error;
     console.error = (...args: unknown[]) => errors.push(args[0]);
@@ -586,7 +492,6 @@ describe('shells — reset', () => {
     console.error = original;
     expect(errors.length).toBeGreaterThan(0);
 
-    // Untouched: same shell, still attached, still rendering.
     expect(session.shell).toBe(before);
     expect(host.list()[0]?.connections).toBe(1);
     connection.sent.length = 0;
@@ -596,15 +501,6 @@ describe('shells — reset', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// A BUILD IS BOUNDED. A build runs the app's code (who somebody is, `inputs`,
-// the words a shell wears), and that code can hang for one call. That costs
-// the one call: a build that has not landed when the endpoint timeout runs
-// out fails for whoever waited on it, and nothing of the host waits on it
-// afterwards. The clock is the test's.
-// ═══════════════════════════════════════════════════════════════
-
-// What became of a call, read without waiting for it.
 const outcomeOf = (call: Promise<unknown>): { state: 'waiting' | 'served' | 'refused' } => {
   const outcome: { state: 'waiting' | 'served' | 'refused' } = { state: 'waiting' };
   call.then(
@@ -614,9 +510,6 @@ const outcomeOf = (call: Promise<unknown>): { state: 'waiting' | 'served' | 'ref
   return outcome;
 };
 
-// WHO SOMEBODY IS, ANSWERED FOR EVERYBODY BUT THE ONES THE TEST NAMES: an
-// asking about one of those is never answered. One that is asked after the
-// name was taken out is answered like anybody's.
 const neverAnsweredFor =
   (stuck: ReadonlySet<string>): HostSetup['resolve'] =>
   async (principal) => {
@@ -626,7 +519,6 @@ const neverAnsweredFor =
 
 describe('shells — a build is bounded by the endpoint timeout', () => {
   const TIMEOUT = 2_000;
-  // The test's clock. `pass(0)` runs what is ready, and no time goes by.
   const clocked = async (run: (pass: (ms: number) => Promise<void>) => Promise<void>): Promise<void> => {
     vi.useFakeTimers();
     try {
@@ -640,7 +532,6 @@ describe('shells — a build is bounded by the endpoint timeout', () => {
     clocked(async (pass) => {
       const stuck = new Set(['usr_1']);
       const host = standHost(hostConfig({ ...ctx, endpointTimeoutMs: TIMEOUT, resolve: neverAnsweredFor(stuck) }));
-      // Two arrivals and a document's read, all for the one build.
       const waited = [host.session('t', 'usr_1'), host.session('t', 'usr_1'), host.snapshot('t', 'usr_1')].map(outcomeOf);
       const theirs = outcomeOf(host.session('t', 'usr_2'));
 
@@ -651,8 +542,6 @@ describe('shells — a build is bounded by the endpoint timeout', () => {
       expect(waited.map((call) => call.state)).toEqual(['refused', 'refused', 'refused']);
       expect(host.list().map((shell) => shell.principal)).toEqual(['usr_2']);
 
-      // Whoever is asked about them answers again: the next arrival builds
-      // afresh, and nothing of the build that failed is in its way.
       stuck.clear();
       const session = await host.session('t', 'usr_1');
       expect(session.shell.getState().canvases['main']?.active).toBeDefined();
@@ -676,30 +565,24 @@ describe('shells — a build is bounded by the endpoint timeout', () => {
         await pass(0);
         const stood = { mine: session.shell, theirs: theirs.shell };
 
-        // This reset's build asks who usr_1 is, and is never answered.
         stuck.add('usr_1');
         session.reset();
         await pass(0);
         stuck.clear();
 
-        // Somebody else's reset waits on nothing.
         expect(host.reset('usr_2')).toBe(true);
         await pass(0);
         expect(theirs.shell).not.toBe(stood.theirs);
-        // Their own later resets, by principal and from a terminal, are served
-        // by the time the timeout has run out.
         expect(host.reset('usr_1')).toBe(true);
         session.reset();
         await pass(TIMEOUT);
         expect(session.shell).not.toBe(stood.mine);
         expect(host.list().find((shell) => shell.principal === 'usr_1')?.connections).toBe(1);
-        // The terminal is on the shell that stands.
         connection.sent.length = 0;
         session.dispatch('main', { type: 'ui:click', ref: 'bump' });
         await pass(0);
         expect(connection.sent.some((m) => m['type'] === 'render' && m['canvas'] === 'main')).toBe(true);
         expect(connection.closes).toEqual([]);
-        // The reset that never landed failed, and that is said.
         expect(errors.mock.calls.some((call) => String(call[0]).includes('a reset failed to rebuild'))).toBe(true);
         host.stop();
       } finally {
@@ -707,9 +590,6 @@ describe('shells — a build is bounded by the endpoint timeout', () => {
       }
     }));
 
-  // A BUILD THAT IS ANSWERED AFTER ITS TIME RAN OUT STOPS THERE. Whoever waited
-  // on it was refused, so the rest of it would be the app's code run for
-  // nobody (`functions`, `onSession`, `seeds`) and a shell nothing would end.
   it.each([
     ['who its principal is', 'composition'],
     ['their `inputs`', 'inputs'],
@@ -742,7 +622,6 @@ describe('shells — a build is bounded by the endpoint timeout', () => {
       expect(ran).toEqual(ranInTime);
       expect(host.list()).toEqual([]);
 
-      // The next arrival builds its own, whole.
       answering.byHand = false;
       await host.session('t', 'usr_1');
       expect(ran.slice(ranInTime.length)).toEqual(['inputs', 'functions', 'onSession', 'seeds']);
@@ -751,17 +630,6 @@ describe('shells — a build is bounded by the endpoint timeout', () => {
     }));
 });
 
-// ═══════════════════════════════════════════════════════════════
-// LIST — moss's own enumeration of its own map. The roster an operator
-// needs to find the shell to reset, and the reason an app need not keep a
-// second, drifting note beside it.
-// ═══════════════════════════════════════════════════════════════
-
-// BACK — the gesture the socket routes here. moss owns none of the meaning:
-// nova's journal decides what the last navigation was, and the shell's own
-// state change flushes whatever moved.
-// Two screens that render differently, so "what the terminal was served"
-// is a question with an answer.
 const twoScreens = {
   ...app,
   charter: { public: ['counter', 'detail'] },
@@ -796,8 +664,6 @@ describe('shells — back', () => {
     await tick();
 
     expect(session.shell.getCanvasState('main').stack).toHaveLength(1);
-    // Answered by a canvas frame, like every other change — no envelope of its
-    // own — and it is the screen underneath, not the one they left.
     const served = conn.sent.filter((m) => m['type'] === 'render' && m['canvas'] === 'main').at(-1);
     expect(JSON.stringify(served)).toContain('the register');
     expect(JSON.stringify(served)).not.toContain('one person');
@@ -829,7 +695,7 @@ describe('shells — list', () => {
   it('reports durable shells with their attachments and what is mounted', async () => {
     const host = standHost(hostConfig(ctx));
     const session = await host.session('t', 'usr_1');
-    await host.session(null, null); // an anonymous shell is not durable, so not listed
+    await host.session(null, null);
     await tick();
 
     expect(host.list().map((s) => s.principal)).toEqual(['usr_1']);
@@ -840,7 +706,6 @@ describe('shells — list', () => {
     const connection = fakeConnection();
     session.attach(connection);
     expect(host.list()[0]?.connections).toBe(1);
-    // Attached is not idle — the distinction the whole sweep turns on.
     expect(host.list()[0]?.idleSince).toBeNull();
 
     session.detach(connection);
@@ -854,15 +719,9 @@ describe('shells — list', () => {
     await tick();
     expect(host.list()).toHaveLength(1);
     host.reset('usr_1');
-    expect(host.list()).toHaveLength(1); // reset replaces, it does not remove
+    expect(host.list()).toHaveLength(1);
   });
 });
-
-// ═══════════════════════════════════════════════════════════════
-// THE IDLE SWEEP — a shell nobody is attached to is a warm cache with no
-// reader. Safe for the reason a process restart is safe: the projection is
-// the durable thing, and the next connection rebuilds.
-// ═══════════════════════════════════════════════════════════════
 
 describe('shells — the idle sweep', () => {
   it('disposes a shell nothing has been attached to for idleMs; the next connect rebuilds', async () => {
@@ -875,7 +734,6 @@ describe('shells — the idle sweep', () => {
 
       const connection = fakeConnection();
       session.attach(connection);
-      // Attached, and long past the idle window: never collected.
       await vi.advanceTimersByTimeAsync(60_000);
       expect(host.list()).toHaveLength(1);
 
@@ -883,7 +741,6 @@ describe('shells — the idle sweep', () => {
       await vi.advanceTimersByTimeAsync(60_000);
       expect(host.list()).toHaveLength(0);
 
-      // Rebuilt on the next connection — the shell is a cache, not the truth.
       const after = await host.session('t', 'usr_1');
       expect(after.shell).not.toBe(before);
       expect(host.list()).toHaveLength(1);
@@ -907,30 +764,14 @@ describe('shells — the idle sweep', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// THE RENDER GUARD — one canvas that throws must not take the session
-// with it. Unguarded, it would be a shell wedged for the life of the process:
-// the pass would die mid-loop, every canvas after it would go unrendered, and
-// the throw would escape a microtask with nobody to catch it.
-// ═══════════════════════════════════════════════════════════════
-
-// Two canvases, and a layout that actually renders `n` — the host only sends a
-// canvas whose tree CHANGED, so a bump nothing draws is correctly silent.
+// The layout renders `n`: the host sends only a canvas whose tree changed.
 const twoCanvas = {
   ...app,
   actions: { counter: { ...counter, layout: { component: 'Text', children: '$.n' } } },
   shell: { canvases: [{ id: 'left', initial: 'counter' }, { id: 'right', initial: 'counter' }] },
 } as unknown as NiscApp;
 
-// ═══════════════════════════════════════════════════════════════
-// FRAME DELTAS — the same frame, described against the last one. The
-// invariant under test is not "smaller": it is that a terminal applying a
-// delta lands on EXACTLY the bytes a terminal receiving whole frames got.
-// ═══════════════════════════════════════════════════════════════
-
-// A tree big enough that one changed number is a small part of it — the
-// shape the delta layer exists for. Anything smaller is dominated by the
-// ops' own JSON and is correctly sent whole.
+// Big enough that one changed number is a small part of it: smaller frames are sent whole.
 const wide = {
   ...app,
   actions: {
@@ -944,8 +785,6 @@ const wide = {
   },
 } as unknown as NiscApp;
 
-// Records the TEXT, not the parsed object — a delta is against bytes, so a
-// test that only sees parsed objects cannot check the thing that matters.
 const textConnection = (): Connection & { texts: string[] } => {
   const texts: string[] = [];
   return { texts, send: (text) => void texts.push(text), close: () => {}, onMessage: () => {}, onClose: () => {} };
@@ -964,7 +803,6 @@ describe('shells — frame deltas', () => {
     session.attach(silent);
     await tick();
 
-    // The baseline both ends agree on: the last whole render each was served.
     const base = asked.texts.filter((t) => (JSON.parse(t) as { type: string }).type === 'render').at(-1);
     expect(base).toBeDefined();
     asked.texts.length = 0;
@@ -975,7 +813,6 @@ describe('shells — frame deltas', () => {
 
     const delta = lastOfType(asked.texts, 'render-delta');
     expect(delta).toBeDefined();
-    // The connection that never asked is untouched by any of this.
     const whole = silent.texts.filter((t) => (JSON.parse(t) as { type: string }).type === 'render').at(-1);
     expect(whole).toBeDefined();
     expect(lastOfType(silent.texts, 'render-delta')).toBeUndefined();
@@ -984,7 +821,6 @@ describe('shells — frame deltas', () => {
     expect(rebuilt).toBe(whole);
     expect(delta!['hash']).toBe(frameHash(whole!));
     expect(delta!['canvas']).toBe('main');
-    // And it is worth sending — the whole reason the encode runs.
     expect(JSON.stringify(delta).length).toBeLessThan(whole!.length * 0.6);
   });
 
@@ -1037,11 +873,8 @@ describe('shells — frame deltas', () => {
     expect(lastOfType(asked.texts, 'frame')).toBeDefined();
     expect(lastOfType(asked.texts, 'render')).toBeDefined();
     expect(lastOfType(asked.texts, 'render-delta')).toBeUndefined();
-    // Not a reset: same shell, same state, nothing rebuilt.
     expect(session.shell).toBe(shell);
 
-    // And it is level again — the next change is a delta against what resync
-    // just handed over.
     const base = asked.texts.filter((t) => (JSON.parse(t) as { type: string }).type === 'render').at(-1)!;
     asked.texts.length = 0;
     session.dispatch('main', { type: 'ui:click', ref: 'bump' });
@@ -1070,9 +903,6 @@ describe('shells — frame deltas', () => {
     expect(frameHash(applyDelta(base, delta!['ops'] as DeltaOp[]))).toBe(delta!['hash']);
   });
 
-  // The encode's cost follows the size of the frames, not of the change, and it
-  // is paid on the thread every session shares. So past 64 KB — on either side
-  // of the change — a frame goes out whole without being compared.
   it('a frame over 64 KB is sent whole, whichever side of the change it is on', async () => {
     const padded = {
       ...app,
@@ -1097,8 +927,6 @@ describe('shells — frame deltas', () => {
     session.attach(silent);
     await tick();
 
-    // What the delta terminal was sent for one change, and that the terminal
-    // which never asked was sent the frame it adds up to.
     const sentFor = async (event: Record<string, unknown>): Promise<{ type: string; length: number }> => {
       asked.texts.length = 0;
       silent.texts.length = 0;
@@ -1112,17 +940,13 @@ describe('shells — frame deltas', () => {
       return { type, length: whole.length };
     };
 
-    // under → over: the frame replacing the held one is past the bound
     const grown = await sentFor({ type: 'ui:click', ref: 'pad', payload: 'x'.repeat(70 * 1024) });
     expect(grown.length).toBeGreaterThan(64 * 1024);
     expect(grown.type).toBe('render');
-    // over → over: one number changed in a frame past the bound
     expect((await sentFor({ type: 'ui:click', ref: 'bump' })).type).toBe('render');
-    // over → under: the frame the connections HOLD is past the bound
     const shrunk = await sentFor({ type: 'ui:click', ref: 'pad', payload: '' });
     expect(shrunk.length).toBeLessThan(64 * 1024);
     expect(shrunk.type).toBe('render');
-    // under → under: level again, and deltas resume against the whole frame
     expect((await sentFor({ type: 'ui:click', ref: 'bump' })).type).toBe('render-delta');
   });
 
@@ -1149,7 +973,6 @@ describe('shells — a canvas that fails to render', () => {
       const session = await host.session('t', 'usr_1');
       await tick();
 
-      // The narrowest possible break: this one canvas throws while rendering.
       const shell = unverifiedShell(session) as unknown as { getCanvasRenderTree: (id: string) => unknown };
       const original = shell.getCanvasRenderTree.bind(shell);
       shell.getCanvasRenderTree = (id: string) => {
@@ -1159,20 +982,17 @@ describe('shells — a canvas that fails to render', () => {
 
       const connection = fakeConnection();
       session.attach(connection);
-      // Attach still serves: the frame, and every canvas that can render.
       expect(connection.sent[0]?.['type']).toBe('frame');
       const canvases = connection.sent.filter((m) => m['type'] === 'render').map((m) => m['canvas']);
       expect(canvases).toEqual(['right']);
 
-      // And the session goes on working — a later change reaches the healthy
-      // canvas rather than dying on the broken one.
       connection.sent.length = 0;
       const active = session.shell.getState().canvases['right']?.active;
       session.dispatch('right', { type: 'ui:click', ref: 'bump' });
       await tick();
       expect(session.shell.getRuntime(active!.id)?.getData()['n']).toBe(1);
       expect(connection.sent.some((m) => m['canvas'] === 'right')).toBe(true);
-      expect(errors).toHaveBeenCalled(); // and it is never swallowed silently
+      expect(errors).toHaveBeenCalled();
     } finally {
       errors.mockRestore();
     }
@@ -1197,8 +1017,6 @@ describe('shells — a canvas that fails to render', () => {
       session.reset();
       await tick();
 
-      // The patch went with the shell that carried it — which is the point:
-      // a reset does not repair the shell, it replaces it.
       const canvases = connection.sent.filter((m) => m['type'] === 'render').map((m) => m['canvas']);
       expect(canvases).toEqual(['left', 'right']);
     } finally {
@@ -1206,12 +1024,6 @@ describe('shells — a canvas that fails to render', () => {
     }
   });
 });
-
-// ═══════════════════════════════════════════════════════════════
-// THE CANVASES A SHELL HAS are asked of the shell, not read from the
-// manifest's list: a canvas the shell gains while it runs is sent like the
-// ones it was built with.
-// ═══════════════════════════════════════════════════════════════
 
 describe('shells — the canvases a shell has', () => {
   const canvasesSent = (conn: ReturnType<typeof fakeConnection>): unknown[] => conn.sent.filter((m) => m['type'] === 'render').map((m) => m['canvas']);
@@ -1228,8 +1040,6 @@ describe('shells — the canvases a shell has', () => {
     await tick();
     await tick();
 
-    // The terminal already attached is sent it; a newcomer is handed it with
-    // the rest; and a document reads it.
     expect(canvasesSent(first)).toContain('late');
     const second = fakeConnection();
     session.attach(second);
@@ -1261,9 +1071,6 @@ describe('shells — the canvases a shell has', () => {
 });
 
 describe('shells — the frame layout store and re-send', () => {
-  // A frame that is nothing but a ref: `{ ref: 'r' }` resolves against the
-  // seeded store. Without the seed this throws LayoutRefNotFoundError and the
-  // frame comes back empty; with it, the node is in the frame at first render.
   const refApp = {
     charter: { public: ['counter'] },
     assignments: {},
@@ -1300,8 +1107,6 @@ describe('shells — the frame layout store and re-send', () => {
     expect(afterSwap.length).toBeGreaterThan(afterAttach);
     expect(JSON.stringify(afterSwap.at(-1))).toContain('swapped-dock');
 
-    // Re-setting the same layout changes nothing — the frame is diffed, so no
-    // second frame message goes out.
     const settled = afterSwap.length;
     unverifiedShell(session).setLayout('r', { component: 'Text', children: 'swapped-dock' });
     await tick();
@@ -1309,10 +1114,6 @@ describe('shells — the frame layout store and re-send', () => {
     expect(frames(conn).length).toBe(settled);
   });
 
-  // Attaching renders the frame, and that can pick up a change the flush has
-  // not sent yet. The frame last sent must not move to one only the newcomer
-  // holds: the flush would then find nothing changed and send it to nobody
-  // else.
   it('a terminal that attaches while the frame has changed does not leave the others on the old one', async () => {
     const host = standHost(hostConfig(refCtx));
     const session = await host.session('t', 'usr_1');
@@ -1322,7 +1123,6 @@ describe('shells — the frame layout store and re-send', () => {
     await tick();
 
     unverifiedShell(session).setLayout('r', { component: 'Text', children: 'swapped-dock' });
-    // Before the flush runs: somebody else attaches.
     const second = fakeConnection();
     session.attach(second);
     await tick();
@@ -1330,7 +1130,6 @@ describe('shells — the frame layout store and re-send', () => {
 
     expect(JSON.stringify(frames(second).at(-1))).toContain('swapped-dock');
     expect(JSON.stringify(frames(first).at(-1))).toContain('swapped-dock');
-    // Once: the flush that follows finds everybody level.
     expect(frames(first).filter((frame) => JSON.stringify(frame).includes('swapped-dock'))).toHaveLength(1);
   });
 
@@ -1350,11 +1149,9 @@ describe('shells — the frame layout store and re-send', () => {
       };
       const second = fakeConnection();
       session.attach(second);
-      // The newcomer is served an empty arrangement; the others keep theirs.
       expect(frames(second).at(-1)).toEqual({ type: 'frame', tree: [] });
       expect(frames(first)).toHaveLength(held);
 
-      // It renders again: the newcomer is sent the frame it never had.
       unverifiedShell(session).getShellRenderTree = render;
       session.dispatch('main', { type: 'ui:click', ref: 'bump' });
       await tick();
@@ -1366,7 +1163,7 @@ describe('shells — the frame layout store and re-send', () => {
   });
 
   it('a canvas-only change on a frame with no ref sends no frame message', async () => {
-    const host = standHost(hostConfig(ctx)); // the plain app: default frame, no ref
+    const host = standHost(hostConfig(ctx));
     const conn = fakeConnection();
     const session = await host.session('t', 'usr_1');
     session.attach(conn);
@@ -1381,10 +1178,6 @@ describe('shells — the frame layout store and re-send', () => {
 });
 
 describe('shells — a canvas placed by an action, not the frame', () => {
-  // An action whose layout ARRANGES canvases (a controller whose regions are
-  // canvases of their own). The inner canvas must reach the terminal as itself
-  // — a marker in the outer canvas's tree, its own tree beside it — and a click
-  // the terminal tags with the inner canvas must land on the inner action.
   const arrangement = {
     id: 'arrangement',
     data: {},
@@ -1437,22 +1230,12 @@ describe('shells — a canvas placed by an action, not the frame', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// ADOPT — what the app consists of changed while shells stand. Afterwards a
-// living shell holds exactly what its principal holds: an action that was
-// removed, or is no longer granted, is neither mounted nor pushable in any
-// shell.
-// ═══════════════════════════════════════════════════════════════
-
 describe('shells — adopt', () => {
   const home = { id: 'home', data: {}, layout: { component: 'Text', children: 'home' } };
   const extra = { id: 'extra', data: {}, layout: { component: 'Text', children: 'an extra screen' } };
   const ledger = { id: 'ledger', data: {}, layout: { component: 'Ledger', children: 'a ledger' } };
   const base = { ...app, actions: { home }, shell: { canvases: [{ id: 'main', initial: 'home' }] } } as unknown as NiscApp;
 
-  // A world whose actions in force, and what each principal holds of them, are
-  // the test's to change. `setup`: what the host is beside that (whether it
-  // keeps a principal's shell).
   const world = (setup: Partial<HostSetup> = {}): { host: ReturnType<typeof standHost>; force: (actions: Record<string, unknown>) => void; hold: (principal: string, ids: string[] | Error) => void } => {
     let inForce: Record<string, unknown> = { home, extra };
     const held = new Map<string, string[] | Error>();
@@ -1491,7 +1274,6 @@ describe('shells — adopt', () => {
 
     expect(mounted(session)).toEqual(['home']);
     expect(() => session.shell.push('main', 'extra')).toThrow();
-    // And the terminal is served the canvas without it.
     const served = JSON.stringify(connection.sent.filter((m) => m['type'] === 'render' && m['canvas'] === 'main').at(-1));
     expect(served).toContain('home');
     expect(served).not.toContain('an extra screen');
@@ -1543,7 +1325,6 @@ describe('shells — adopt', () => {
       host.adopt();
       await settle();
 
-      // The one that failed keeps what it held; the one after it adopted.
       expect(() => first.shell.push('main', 'ledger')).toThrow();
       second.shell.push('main', 'ledger');
       expect(mounted(second)).toEqual(['home', 'ledger']);
@@ -1554,8 +1335,6 @@ describe('shells — adopt', () => {
   });
 
   it('two changes are adopted in the order they happened, however long each answer takes', async () => {
-    // What usr_1 holds is answered by hand: the first adopt's answer is held
-    // back until the second adopt's has been given.
     const answers: ((ids: string[]) => void)[] = [];
     let byHand = false;
     const host = standHost(
@@ -1572,10 +1351,9 @@ describe('shells — adopt', () => {
     const session = await host.session('t', 'usr_1');
     byHand = true;
 
-    host.adopt(); // the earlier change: still holds both
-    host.adopt(); // the later one: `extra` was taken away
+    host.adopt();
+    host.adopt();
     await settle();
-    // Answered out of order, if both were asked at once.
     answers[1]?.(['home']);
     await settle();
     answers[0]?.(['home', 'extra']);
@@ -1598,10 +1376,6 @@ describe('shells — adopt', () => {
     expect(mounted(session)).toEqual(['home', 'ledger']);
   });
 
-  // A BUILD UNDER WAY HOLDS NOBODY ELSE UP. A build that never lands (somebody
-  // whose `inputs` never answers) must not end the chain of adopts: every other
-  // shell of the host adopts each change, so an action that was taken away
-  // does not stay pushable.
   const stuck = (): NiscApp => ({
     ...base,
     shell: { canvases: [{ id: 'main', initial: 'home' }], inputs: ({ principal }) => (principal === 'usr_stuck' ? new Promise<never>(() => undefined) : {}) },
@@ -1620,7 +1394,6 @@ describe('shells — adopt', () => {
     session.shell.push('main', 'ledger');
     expect(mounted(session)).toEqual(['home', 'ledger']);
 
-    // The change after that one: both leave.
     force({ home });
     host.adopt();
     await settle();
@@ -1649,11 +1422,6 @@ describe('shells — adopt', () => {
     expect(() => session.shell.push('main', 'extra')).toThrow();
   });
 
-  // ONE SHELL THAT IS NEVER ANSWERED HOLDS UP NOBODY. Within one change the
-  // living shells are not asked one after another: somebody whose composition
-  // is never answered (an app's `identity` that hangs for them) must not hold
-  // every shell after theirs, which would keep an action that had been taken
-  // away.
   const neverAnswered = (who: string, setup: Partial<HostSetup> = {}): { host: ReturnType<typeof standHost>; change: (actions: Record<string, unknown>) => void } => {
     let inForce: Record<string, unknown> = { home, extra };
     let changed = false;
@@ -1664,7 +1432,6 @@ describe('shells — adopt', () => {
         app: base,
         actions: () => inForce as ReturnType<NonNullable<HostSetup['actions']>>,
         resolve: async (principal) => {
-          // Answered while their shell is built, and never again after the change.
           if (changed && principal === who) await new Promise<never>(() => undefined);
           return { roles: ['member'], scope: {}, catalog: { ids: Object.keys(inForce) }, variants: new Map() };
         },
@@ -1718,9 +1485,6 @@ describe('shells — adopt', () => {
     }
   });
 
-  // THE OTHER HALF: a build under way was made from what its principal held
-  // when it began, so it ends up level with what is in force WHEN IT LANDS,
-  // however many changes happened on the way.
   it('a build that was under way through two changes holds what is in force when it lands', async () => {
     let release = (): void => undefined;
     const waiting = new Promise<void>((resolve) => void (release = resolve));
@@ -1744,11 +1508,6 @@ describe('shells — adopt', () => {
     expect(mounted(session)).toEqual(['home', 'ledger']);
   });
 
-  // EVERY LIVING SHELL ADOPTS, WHOEVER IT IS FOR AND WHETHER IT IS KEPT. The
-  // walk covers more than the shells a host keeps (one for each signed-in
-  // principal of the app's own host): a shell built for one connection would
-  // keep what it was built with for as long as it lived, a visitor's on the
-  // app's host and everybody's on a host that keeps none (a page's).
   const everyKind = [
     ['nobody signed in, on a host that keeps its principals’ shells', {}, null],
     ['somebody signed in, on a host that keeps none (a page’s)', { kept: false }, 'usr_1'],
@@ -1784,15 +1543,10 @@ describe('shells — adopt', () => {
     expect(mounted(session)).toEqual(['home', 'ledger']);
   });
 
-  // A REPLACEMENT IS A BUILD UNDER WAY TOO. A reset builds the shell that will
-  // stand, from what its principal held when the reset began. A change that
-  // happens while it is built is adopted by the shell that still stands, and
-  // the replacement would then take its place holding what was held before.
   it.each([
     ['a kept shell', {}],
     ['a shell that is not kept', { kept: false }],
   ] as const)('%s that was being replaced when the app changed adopts when its replacement lands', async (_which, setup) => {
-    // The build waits here, after it has asked what its principal holds.
     let waiting: Promise<void> | undefined;
     const slow = { ...base, shell: { canvases: [{ id: 'main', initial: 'home' }], inputs: async () => (await waiting, {}) } } as unknown as NiscApp;
     let inForce: Record<string, unknown> = { home, extra };
@@ -1822,9 +1576,6 @@ describe('shells — adopt', () => {
     expect(() => session.shell.push('main', 'extra')).toThrow();
   });
 
-  // THE SHELL THAT STANDS ADOPTS, WHATEVER IS BEING BUILT TO REPLACE IT. A
-  // replacement may never land (an `inputs` that hangs for the reset), and
-  // until one does the shell that stands is the one its terminals are on.
   it('a shell whose replacement never lands adopts a change all the same', async () => {
     const hanging = { inputs: false };
     const slow: NiscApp = { ...base, shell: { canvases: [{ id: 'main', initial: 'home' }], inputs: () => (hanging.inputs ? new Promise<never>(() => undefined) : {}) } };
@@ -1847,18 +1598,10 @@ describe('shells — adopt', () => {
     expect(mounted(session)).toEqual(['home', 'ledger']);
   });
 
-  // AN ADOPT TAKES WHAT A BUILD TAKES, OF THE SAME ANSWER: the frame, what
-  // each `{ ref }` in it resolves to, and the fragments, beside the actions.
-  // And of those it takes what the answer says differently from what the shell
-  // holds, and nothing else: a ref the shell's own code has set (somebody's own
-  // arrangement, `shell.setLayout`) is not set back by a change that did not
-  // touch it.
   describe('the shell’s own layouts', () => {
     const text = (children: string): LayoutNode => ({ component: 'Text', children });
     const framed = (name: string): LayoutNode => ({ component: 'Frame', props: { name }, children: [{ component: 'CanvasSlot', props: { canvasId: 'main' } }, { ref: 'dock' }, { ref: 'rail' }] });
     const sheet = (title: string): ActionFragment => ({ kind: 'fragment', id: 'sheet', layout: { component: 'Sheet', props: { title }, children: [{ slot: 'body' }] } });
-    // What the composition answers of the three, by hand: a copy at each
-    // asking, as an owner that reads rows would answer.
     const layoutsWorld = () => {
       const answer = { frame: framed('first'), layoutStore: { dock: text('the dock, first'), rail: text('the rail, first') }, fragments: { sheet: sheet('first') } };
       const config = hostConfig({ ...ctx, app: base, resolve: async () => ({ roles: ['member'], scope: {}, catalog: { ids: ['home'] }, variants: new Map() }) });
@@ -1953,7 +1696,6 @@ describe('shells — adopt', () => {
     const leaving = await host.session('t', 'usr_1');
     leaving.attach(connection);
     await host.session('t', 'usr_2');
-    // Its last terminal left: a shell that is not kept ends there.
     leaving.detach(connection);
     asked.length = 0;
 
@@ -1964,23 +1706,12 @@ describe('shells — adopt', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// A SHELL THAT ENDED IS LET GO. To bring every living shell level, a host has
-// to know every living shell: it holds each one it built until that shell
-// ends. Held any longer, an ended shell is memory nothing can reach for, and
-// a host builds a shell for every visitor's connection. So this is asked of
-// the collector itself: once a shell has ended and whoever held its session
-// has dropped it, nothing of the host keeps it, while the host goes on.
-// ═══════════════════════════════════════════════════════════════
-
 describe('shells — a shell that ended is let go', () => {
-  // The collector, asked to run. Node keeps `gc` out of reach unless it is
-  // started with a flag, and the flag can be set while it runs.
+  // Node keeps `gc` out of reach unless it is started with a flag, which can be set while it runs.
   setFlagsFromString('--expose-gc');
   const collect: () => void = runInNewContext('gc');
-  // Whether what a reference pointed at is gone. A reference that was read
-  // keeps its target until the turn that read it ends, so each look waits a
-  // turn before the collector is asked.
+  // A WeakRef that was read keeps its target until the turn that read it ends,
+  // so each look waits a turn first.
   const collected = async (ref: WeakRef<object>): Promise<boolean> => {
     for (let look = 0; look < 20 && ref.deref() !== undefined; look += 1) {
       await tick();
@@ -2007,17 +1738,12 @@ describe('shells — a shell that ended is let go', () => {
     })();
 
     expect(await collected(ended)).toBe(true);
-    // The host stands, and a change still finds the shells that live.
     const living = await host.session(principal === null ? null : 't', principal);
     host.adopt();
     await settle();
     expect(living.shell.getCanvasState('main').stack).toHaveLength(1);
   });
 
-  // What holding every living shell costs, said as it is: a shell that is not
-  // kept and has not ended is the host's, whether or not anybody still holds
-  // its session. Code that opens one in process and attaches nothing ends it
-  // by detaching, as the socket does for a connection that closed early.
   it('a shell that is not kept and has not ended is held, and one that attached nothing is ended by a detach', async () => {
     const host = standHost(hostConfig(ctx));
     const dropped = await (async (): Promise<WeakRef<object>> => new WeakRef((await host.session(null, null)).shell))();
@@ -2045,7 +1771,6 @@ describe('shells — a shell that ended is let go', () => {
     })();
 
     expect(await collected(replaced)).toBe(true);
-    // The replacement is the one the host knows.
     const standing = session.shell;
     expect(host.reset('usr_1')).toBe(true);
     await settle();
@@ -2061,7 +1786,6 @@ describe('shells — a shell that ended is let go', () => {
       await settle();
       await seen.fn?.revoke();
       await settle();
-      // The session app code was handed holds its shell: it is dropped with it.
       delete seen.fn;
       return new WeakRef(session.shell);
     })();
@@ -2070,13 +1794,6 @@ describe('shells — a shell that ended is let go', () => {
     expect(await collected(ended)).toBe(true);
   });
 });
-
-// ═══════════════════════════════════════════════════════════════
-// WHAT FAILS IS SAID. Where an error is caught and the host goes on, which is
-// right, a line says why: otherwise a screen missing a card, a delivery that
-// never arrived or a shell missing from the roster would have no line anywhere
-// to say why.
-// ═══════════════════════════════════════════════════════════════
 
 describe('shells — what fails is said', () => {
   const logged = async (run: () => Promise<void>): Promise<string[]> => {
@@ -2145,9 +1862,6 @@ describe('shells — what fails is said', () => {
   });
 });
 
-// A terminal names the canvas an event came from, and the shell holds it to
-// that. A canvas the shell does not have is nowhere an event can have come
-// from: it is dropped, not dispatched with no origin to every instance at once.
 describe('shells — an event from a canvas the shell does not have', () => {
   it('is dropped, where one from a canvas it has still lands', async () => {
     const host = standHost(hostConfig({ ...ctx, app: twoCanvas }));
@@ -2166,9 +1880,6 @@ describe('shells — an event from a canvas the shell does not have', () => {
 });
 
 describe('shells — the instance a click names', () => {
-  // A list canvas: two live counters at once, the second one "active". A
-  // terminal names the card a press came from; moss holds that name to the
-  // canvas the event is tagged with.
   const tallyA = { ...counter, id: 'a' };
   const tallyB = { ...counter, id: 'b' };
   const other = { ...counter, id: 'other' };
@@ -2223,9 +1934,6 @@ describe('shells — the instance a click names', () => {
     expect([n(a), n(b), n(side)]).toEqual([0, 0, 0]);
   });
 
-  // What an event is belongs to nova, and its shell takes one of nova's events
-  // and nothing else. What a terminal sent is read by nova's schema where it
-  // enters the shell.
   it('what is not one of nova’s events is not dispatched', async () => {
     const { session, a, b, n } = await setup();
     session.dispatch('tray', { type: 'ui:click', ref: 'bump', origin: a, more: 'than an event has' });
@@ -2234,7 +1942,6 @@ describe('shells — the instance a click names', () => {
     session.dispatch('tray', { ref: 'bump' });
     await tick();
     expect([n(a), n(b)]).toEqual([0, 0]);
-    // And one that is, still lands.
     session.dispatch('tray', { type: 'ui:click', ref: 'bump', origin: a, payload: { any: 'thing' } });
     await tick();
     expect([n(a), n(b)]).toEqual([1, 0]);
@@ -2252,13 +1959,6 @@ describe('shells — the instance a click names', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// A MESSAGE PUT TO SOMEBODY'S SHELLS (`deliver`): whatever of theirs is
-// listening on the channel hears it, with what it carries. A host that keeps
-// one shell for a principal has one to put it to. A host that keeps none (a
-// page's) builds one for each of their connections, and looks for theirs among
-// those too: a page somebody has open in two tabs hears it.
-// ═══════════════════════════════════════════════════════════════
 describe('shells — a message delivered to a principal', () => {
   const inbox = { id: 'inbox', data: { heard: 0, said: '' }, triggers: [{ message: 'news', do: [{ increment: 'heard' }, { set: 'said', value: '@event.payload.text' }] }] };
   const listening = { ...app, actions: { inbox }, shell: { canvases: [{ id: 'main', initial: 'inbox' }] } } as unknown as NiscApp;
@@ -2277,7 +1977,6 @@ describe('shells — a message delivered to a principal', () => {
     expect(host.deliver('usr_1', 'news', { text: 'the deck moved' })).toBe(true);
     expect(heard(mine)).toEqual({ heard: 1, said: 'the deck moved' });
     expect(heard(theirs)).toEqual({ heard: 0, said: '' });
-    // Somebody with no living shell: an answer, and no shell is built to hear it.
     expect(host.deliver('usr_nobody', 'news')).toBe(false);
     expect(host.list().map((shell) => shell.principal)).toEqual(['usr_1', 'usr_2']);
   });
@@ -2305,7 +2004,6 @@ describe('shells — a message delivered to a principal', () => {
     const session = await host.session('t', 'usr_1');
     const connection = fakeConnection();
     session.attach(connection);
-    // Its last terminal left: a shell that is not kept ends there.
     session.detach(connection);
     expect(host.deliver('usr_1', 'news')).toBe(false);
   });
@@ -2322,7 +2020,6 @@ describe('shells — what a session hands out of its shell', () => {
     expect(Object.keys(session.shell.getState().canvases)).not.toContain('late');
 
     unverifiedShell(session).addCanvas(late);
-    // Reads, on the shell a session hands out, see what the whole shell holds.
     expect(Object.keys(session.shell.getState().canvases)).toContain('late');
   });
 });

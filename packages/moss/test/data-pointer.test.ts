@@ -4,12 +4,6 @@ import type { DatabaseSchema, MutationClient, PgPool } from '@niscorp/vex';
 import { createOwnEntries } from '../src/data/own-entries';
 import { POINTER, createPointer } from '../src/data/own-entries';
 
-// THE GENERATION POINTER'S ROW, THROUGH VEX. The two entries are seeded and
-// replayed the way a feature's own are, compiled by vex's own Postgres
-// adapter, over a pool that runs nothing: it keeps each statement it is sent
-// and answers the rows it is told to. No database: what is held here is what
-// moss asks vex for, and what it makes of the answer.
-
 const SCHEMA: DatabaseSchema = {
   entities: [
     {
@@ -27,10 +21,8 @@ const SCHEMA: DatabaseSchema = {
 
 type Sent = { sql: string; params: readonly unknown[] };
 
-// `answers` is what the database would hand back for the next statement. A
-// read's rows come with the type of their column, as a driver sends them:
-// `int8` is what vex's adapter turns into a number by itself, so a driver that
-// says nothing of the type (`untyped`) leaves the text for moss to read.
+// A read's rows come with the type of their column, as a driver sends them. vex's adapter turns an `int8`
+// into a number by itself, so `untyped` leaves the text for moss to read.
 const INT8 = 20;
 const world = (answers: { read?: Record<string, unknown>[]; untyped?: boolean; written?: Record<string, unknown>[] } = {}) => {
   const read: Sent[] = [];
@@ -50,8 +42,6 @@ const world = (answers: { read?: Record<string, unknown>[]; untyped?: boolean; w
     },
   };
   const replay = createOwnEntries({
-    // What the database holds is said here: the pool answers rows and knows no
-    // catalog.
     adapter: { ...createPostgresAdapter({ pool }), introspect: async () => SCHEMA },
     db,
     engine: { invalidate: (tables) => void invalidated.push([...tables]) },
@@ -65,7 +55,6 @@ describe('the generation pointer’s row, read through vex', () => {
     expect(await pointer.read()).toBe(7);
     expect(read).toHaveLength(1);
     expect(read[0]?.sql).toMatch(/^SELECT \S+\.n\b.* FROM moss_generation\b.* WHERE \S+\.id = 1\b/);
-    // The row is named in the entry and by nobody who asks: no value is sent.
     expect(read[0]?.params).toEqual([]);
   });
 
@@ -92,12 +81,9 @@ describe('the generation pointer’s row, moved through vex', () => {
     expect(written).toHaveLength(1);
     const sent = written[0];
     expect(sent?.sql).toMatch(/^UPDATE "?moss_generation"? SET "?n"? = \$(\d)\b.* WHERE .*\bid"? = 1\b.*\bn"? = \$(\d)\b/s);
-    // The two numbers are values of the statement: the next one is what is
-    // set, and the one that was read is what the row must still hold.
     const [, set, held] = /SET "?n"? = \$(\d)\b.*\bn"? = \$(\d)\b/s.exec(sent?.sql ?? '') ?? [];
     expect(sent?.params[Number(set) - 1]).toBe(8);
     expect(sent?.params[Number(held) - 1]).toBe(7);
-    // The app's engine is told the table changed, as after any write.
     expect(invalidated).toEqual([['moss_generation']]);
   });
 

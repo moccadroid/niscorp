@@ -8,16 +8,7 @@ import { runIntake, type IntakeContext } from '../src/integrations/intake';
 import { createGrammarUpgrader } from '../src/data/engine';
 import { pristineDatabases } from './pristine-database';
 
-// A database of its own for each test that wants one, started from one that
-// was initialised once for this file (./pristine-database.ts says why).
 const freshDatabase = pristineDatabases();
-
-// ═══════════════════════════════════════════════════════════════
-// Documents in the grammar this code speaks — with a REAL migration: a Prism
-// config, evaluated by the same engine that runs endpoints. The app's kit
-// renamed Button's `label` prop to `text`; its grammar says so once, and every
-// stored or submitted nova document catches up wherever a Button sits.
-// ═══════════════════════════════════════════════════════════════
 
 const doc = { $ref: '$.document' };
 const renameLabel = {
@@ -60,8 +51,8 @@ const oldAction = {
   },
 };
 
-// "Stamped current" means: this code's grammars, whatever their versions are
-// now — nova's and Prism's move on their own. What the test controls, it pins.
+// The stamp is read off the upgrader, not written as a literal: nova's and Prism's versions move on their own.
+// Only the kit's is pinned.
 const currentStamp = async (): Promise<Record<string, number>> => {
   const stamp = { ...(await createGrammarUpgrader({ grammars: [kit] })).stamp };
   expect(stamp['acme.kit']).toBe(1);
@@ -73,8 +64,6 @@ const quietly = <T>(run: () => Promise<T>): Promise<T> => {
   return run().finally(() => warn.mockRestore());
 };
 
-// A database as a deployment had it: moss's tables, one approved integration,
-// and one stored action written before the kit's rename, at `stamp`.
 const deploymentWith = async (stamp: Record<string, number>) => {
   const pool = createPglitePool(freshDatabase());
   await quietly(() => createServer({ charter: {}, actions: {} }, { pool, db: pool, session: 'dev-open' }));
@@ -86,10 +75,6 @@ const deploymentWith = async (stamp: Record<string, number>) => {
   return pool;
 };
 
-// The rows are the integrations feature's, and it is the feature that has them
-// brought current, when a server starts it: these boots name it. (That it
-// asks, and before it reads one, is held with no database in
-// ./integrations-feature.test.ts.)
 describe('stored documents — upgraded at boot, by the feature that keeps them', () => {
   it('a row written before the rename is rewritten at every depth and stamped current', async () => {
     const pool = await deploymentWith({ 'nisc.nova': 0, 'nisc.prism': 0 });

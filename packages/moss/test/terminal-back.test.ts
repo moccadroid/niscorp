@@ -4,22 +4,11 @@ import { mountTerminal } from '../src/terminal';
 import type { Target } from '../src/terminal';
 import type { Wire } from '../src/client';
 
-// ═══════════════════════════════════════════════════════════════
-// The back gesture, end to end on the terminal's side: the browser's back
-// button is caught before it can unload the page, and arrives at the wire as
-// one message naming no canvas.
-//
-// `history.ts` is the one file in the terminal that reads a global, because
-// the thing it traps IS a global. So a fake window goes on globalThis for the
-// life of a case — the same shape a browser presents, driven by hand.
-// ═══════════════════════════════════════════════════════════════
-
 type FakeWindow = {
   history: { pushState: (state: unknown, title: string) => void; state: unknown; entries: number };
   listeners: Map<string, Set<() => void>>;
   addEventListener: (type: string, fn: () => void) => void;
   removeEventListener: (type: string, fn: () => void) => void;
-  // the gesture: spend one entry and notify, exactly as a browser does
   pressBack: () => void;
 };
 
@@ -43,8 +32,6 @@ const fakeWindow = (options: { refusePushState?: boolean } = {}): FakeWindow => 
     },
     removeEventListener: (type, fn) => void listeners.get(type)?.delete(fn),
     pressBack: () => {
-      // Nothing to pop means the press leaves the app — the failure this whole
-      // mechanism exists to prevent, so the fake refuses to pretend otherwise.
       if (win.history.entries === 0) throw new Error('the back button left the app');
       win.history.entries -= 1;
       for (const fn of [...(listeners.get('popstate') ?? [])]) fn();
@@ -80,7 +67,6 @@ describe('trapBack — the browser back button', () => {
     win.pressBack();
 
     expect(handler).toHaveBeenCalledTimes(1);
-    // Spent, then replaced: the next press has an entry waiting too.
     expect(win.history.entries).toBe(1);
   });
 
@@ -135,8 +121,6 @@ describe('trapBack — the browser back button', () => {
     expect(win.history.entries).toBe(0);
   });
 });
-
-// ── the whole terminal path ──
 
 const silentTarget: Target = () => ({ update: () => undefined, destroy: () => undefined });
 

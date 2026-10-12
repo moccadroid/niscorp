@@ -4,9 +4,6 @@ import type { ExecuteRecord, ScopePolicy } from '@niscorp/vex';
 import { createExecuteAs } from '../src/data/policy';
 import { engineDouble } from './data-double';
 
-// A SEEDED ENTRY, RUN AS A CHARTER ROLE. The engine has no database behind it
-// (./data-double.ts): these hold what executeAs hands vex and what it answers.
-
 const POLICIES: Readonly<Record<string, ScopePolicy>> = {
   reader: createScopePolicy(new Set(['notes.read'])),
   writer: createScopePolicy(new Set(['notes.read', 'notes.write.insert'])),
@@ -33,7 +30,6 @@ const world = async () => {
   return { ...double, executeAs, asked, records };
 };
 
-// A refusal is logged; these tests read the line and keep it off the output.
 const logged = async <T>(run: () => Promise<T>): Promise<{ answer: T; lines: string[] }> => {
   const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
   try {

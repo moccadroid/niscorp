@@ -12,20 +12,10 @@ import type { PgPool } from '@niscorp/vex';
 import { pristineDatabases } from './pristine-database';
 import { turn } from './turn';
 
-// A database of its own for each test that wants one, started from one that
-// was initialised once for this file (./pristine-database.ts says why).
 const freshDatabase = pristineDatabases();
-
-// THE TESTS NO APP CAN WRITE. An app's harness mints its own tokens, so every
-// check it runs passes whether the verifier is real or not — a suite that
-// mints cannot fail on a forgery. Only the library knows what a real token
-// is, so only the library can hold these: forged refused, tampered refused,
-// expired refused, revoked refused on the next call, and a boot with no
-// verifier refusing with the sentence instead of serving.
 
 const freshPool = async () => {
   const pool = createPglitePool(freshDatabase());
-  // The table as a server makes it: its sequence, through the ledger.
   await migrate(pool, [SESSIONS_SEQUENCE]);
   return pool;
 };
@@ -36,7 +26,6 @@ describe('sessions — the human credential', () => {
     const token = await mintSession(pool, 'i_mara', 60_000);
     expect(token).toMatch(/^st_[A-Za-z0-9_-]{40,}$/);
     expect(await sessionOf(pool, token)).toBe('i_mara');
-    // …and for how much longer: what a browser is told to keep its cookie for
     const remaining = (await sessionRemainingMs(pool, token)) ?? 0;
     expect(remaining).toBeGreaterThan(50_000);
     expect(remaining).toBeLessThanOrEqual(60_000);
@@ -135,16 +124,7 @@ describe('sessionVerifierOf — the three-way choice, and the refusal', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// SIGN-OUT IS A REVOCATION. `session.revoke()` closes every terminal of the
-// shell and disposes it — and under moss's own credential it must also delete
-// what those terminals held, or a copied token signs straight back in until
-// it expires. The shell is per principal and sign-out closes all of its
-// terminals, so every session the principal holds goes with it.
-// ═══════════════════════════════════════════════════════════════
-
 describe('sign-out — session.revoke() under moss sessions', () => {
-  // A turn of the event loop (./turn.ts says why that is not a wait on a clock).
   const tick = turn;
 
   const hostOver = (pool: PgPool, session: 'sessions' | 'dev-open', seen: { fn?: FunctionSession }): ShellHost => {
@@ -163,8 +143,6 @@ describe('sign-out — session.revoke() under moss sessions', () => {
       resolve: async () => ({ roles: ['member'], scope: {}, catalog, variants: new Map() }),
       wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
     };
-    // How a server finds what a sign-out forgets: asked of the identity
-    // module, for the credential the deployment chose.
     const revokeSessions = sessionRevokerOf({ pool, session });
     return standHost(hostConfig({ ...ctx, ...(revokeSessions !== undefined ? { revokeSessions } : {}) }));
   };
@@ -202,11 +180,9 @@ describe('sign-out — session.revoke() under moss sessions', () => {
 });
 
 describe('onSession — a microtask is enough to reach the shell', () => {
-  // `onSession` runs before the shell exists, so it defers. A microtask is the
-  // deferral an observer needs — anything later subscribes after the shell's
-  // mount calls have answered. An await between the seam and the shell
-  // (resolving phrases) must not make that microtask land mid-build, where the
-  // getter throws.
+  // `onSession` runs before the shell exists, so an observer defers by a microtask.
+  // An await between the seam and the shell (resolving phrases) must not make it
+  // land mid-build, where the getter throws.
   it('holds when the app resolves phrases asynchronously', async () => {
     const catalog = { ids: ['counter'], hash: 'h' };
     const reached: boolean[] = [];

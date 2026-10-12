@@ -3,15 +3,9 @@ import type { WriteEvent } from '@niscorp/vex';
 import type { NiscApp } from '../src/manifest';
 import { subscribeReactions } from '../src/server/reactions';
 
-// THE APP'S REACTIONS (../src/server/reactions.ts): which of them hears a
-// write, and what it is told. A write is put to them by hand here, as the data
-// module tells whoever subscribed; no database and no server. DOCS.md states
-// each of the rules below.
-
 type Reaction = NonNullable<NiscApp['reactions']>[number];
 type Told = Parameters<Reaction['run']>[0];
 
-// The reactions, subscribed; `write` is a write landing.
 const subscribed = (reactions: readonly Reaction[]) => {
   const listeners: ((event: WriteEvent) => void)[] = [];
   const delivered: unknown[][] = [];
@@ -63,8 +57,6 @@ describe('the app’s reactions', () => {
     expect(heard).toEqual(['on any: update', 'on insert: insert', 'on any: insert']);
   });
 
-  // An update the scope narrowed to nothing, an insert a conflict clause
-  // skipped: nothing changed, so there is no news.
   it('a statement that wrote no row fires nothing', () => {
     const heard: Told[] = [];
     const { write } = subscribed([{ table: 'notes', run: (told) => void heard.push(told) }]);
@@ -78,9 +70,6 @@ describe('the app’s reactions', () => {
     expect(delivered).toEqual([['i_mara', 'notes-changed', { count: 3 }]]);
   });
 
-  // The write has committed by the time anybody is told. A reaction that
-  // throws is the app's own code failing after the fact: it is said, the
-  // reactions after it still hear, and whoever made the write is not thrown at.
   it('one that throws is logged, and neither the write nor the next reaction is its to stop', () => {
     const said = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const heard: string[] = [];

@@ -8,14 +8,6 @@ import { registerNovaVueComponents } from '@niscorp/nova/adapters/vue/components
 import { vueTarget } from '../src/terminal/vue';
 import type { TerminalApi, TerminalMount } from '../src/terminal';
 
-// ═══════════════════════════════════════════════════════════
-// The Vue target — driven the way the tty tests drive theirs: a stub
-// TerminalApi over mutable trees, dispatches captured, `update` called as the
-// conductor would on a wire change. jsdom stands in for the browser.
-// ═══════════════════════════════════════════════════════════
-
-// RenderComponentNode, not the RenderNode union: `ref` and `model` live on the
-// component member alone.
 const component = (name: string, props: Record<string, unknown> = {}, children: RenderNode[] = []): RenderComponentNode => ({
   type: 'component',
   name,
@@ -24,8 +16,6 @@ const component = (name: string, props: Record<string, unknown> = {}, children: 
 });
 const text = (value: string): RenderNode => ({ type: 'text', value });
 
-// A served ActionSlot marker as flattenRenderTree stamps it: identity in
-// props, keyed by instance, the instance's tree as children.
 const instance = (instanceId: string, canvasId: string, children: RenderNode[]): RenderNode => ({
   ...component('ActionSlot', { instanceId, canvasId, definitionId: 'counter' }, children),
   key: instanceId,
@@ -108,7 +98,6 @@ describe('the vue target', () => {
     before.dispatchEvent(new Event('input'));
     expect(t.dispatched.at(-1)).toEqual({ canvas: 'main', event: { type: 'ui:model', ref: 'name', payload: 'ad', origin: 'i1' } });
 
-    // the server's echo lags a keystroke behind, and another field changed
     t.state.trees = { main: counterTree('count=1', 'a') };
     t.mount.update();
     await nextTick();

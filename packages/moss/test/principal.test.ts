@@ -7,8 +7,6 @@ import { catalogFor, resolveVariantsForRoles } from '../src/manifest/roles';
 import type { Catalog } from '../src/manifest/roles';
 import { verifyVariants } from '../src/manifest/verify';
 
-// A minimal app — just enough charter/assignments/actions to exercise
-// per-principal resolution. No database, no shell.
 const app = {
   charter: {
     public: ['auth.login'],
@@ -26,12 +24,8 @@ const app = {
 
 const grants = scopeGrants(['deals', 'contacts']);
 
-// What a principal holds by the assignments alone: its roles, then what those
-// roles are granted. No install list, so nothing is filtered.
 const resolveCatalog = (of: NiscApp, principal: string | null): Catalog => catalogFor(of, resolveRoles(of, principal), undefined, (ids) => ids);
 
-// WHO SOMEBODY IS BY THE ASSIGNMENTS, and what the roles that answers hold:
-// the two steps a server takes for an app with no identity seam, written out.
 const resolveRoles = (of: Pick<NiscApp, 'assignments'>, principal: string | null): readonly string[] => assignedRoles(of.assignments, principal);
 const resolvePolicy = (of: NiscApp, over: readonly string[], principal: string | null) => resolvePolicyForRoles(of, over, resolveRoles(of, principal));
 const resolveVariants = (of: NiscApp, principal: string | null) => resolveVariantsForRoles(of, resolveRoles(of, principal));
@@ -66,8 +60,6 @@ describe('principal — per-principal resolution', () => {
     expect(resolveCatalog(app, null).ids).toEqual(['auth.login']);
   });
 
-  // The role name is fixed. A charter that calls its visitor role something
-  // else still resolves nobody to `public`, and there is nothing there.
   it('a charter with no public role has nothing for anonymous to resolve to', () => {
     const without: NiscApp = { ...app, charter: { guest: ['auth.login'] } };
     expect(resolveRoles(without, null)).toEqual(['public']);
@@ -79,21 +71,16 @@ describe('principal — per-principal resolution', () => {
   it('the compiled policy carries the resolved data grants (default-deny elsewhere)', () => {
     const policy = resolvePolicy(app, grants, 'usr_1');
     expect(policy.default).toBe('deny');
-    // `ScopeEntityRule` is a union — `public` and `deny` are whole-entity
-    // verdicts with no per-op rules on them. This assertion is about the third
-    // branch, so it says which branch it expects before reading through it.
     const deals = policy.entities['deals'];
     if (deals === undefined || 'public' in deals || 'deny' in deals) {
       throw new Error(`expected rule-shaped grants on deals, got ${JSON.stringify(deals)}`);
     }
-    expect(deals.read).toBeDefined();     // viewer's *.read
-    expect(deals.insert).toBeDefined();   // sales write
-    expect(deals.delete).toBeUndefined(); // never granted
+    expect(deals.read).toBeDefined();
+    expect(deals.insert).toBeDefined();
+    expect(deals.delete).toBeUndefined();
   });
 });
 
-// The same app, plus a basic variant of crm.deals granted to viewer — and
-// denied back in sales, since `extends` composes every section.
 const basic = { component: 'Text', children: 'basic' };
 const varApp = {
   ...app,
@@ -112,9 +99,9 @@ const varApp = {
 
 describe('principal — ring-2 variant resolution', () => {
   it('a granted variant binds its action to its layout; holding none binds nothing', () => {
-    expect(resolveVariants(varApp, 'usr_2').get('crm.deals')).toBe(basic); // viewer
-    expect(resolveVariants(varApp, 'usr_1').size).toBe(0);                 // sales denied it back
-    expect(resolveVariants(varApp, null).size).toBe(0);                    // anonymous
+    expect(resolveVariants(varApp, 'usr_2').get('crm.deals')).toBe(basic);
+    expect(resolveVariants(varApp, 'usr_1').size).toBe(0);
+    expect(resolveVariants(varApp, null).size).toBe(0);
   });
 
   it('a coherent app verifies clean; no layouts at all verifies clean', () => {
@@ -152,14 +139,9 @@ describe('principal — ring-2 variant resolution', () => {
       assignments: { usr_2: ['viewer', 'dense'] },
     } as unknown as NiscApp;
     const errors = verifyVariants(twoAcrossRoles);
-    expect(errors.some((e) => e.includes('role'))).toBe(false); // each role alone is coherent
-    // Named by the COMBINATION, not by whoever happened to wear it: the defect
-    // is that [viewer, dense] resolves to two variants, and it is the same
-    // defect whether one person holds it or ten thousand do.
+    expect(errors.some((e) => e.includes('role'))).toBe(false);
     expect(errors.some((e) => e.includes('[viewer, dense]') && e.includes('crm.deals'))).toBe(true);
 
-    // ...and the combinations may be DECLARED rather than counted off the
-    // population — same finding, no assignment map at all.
     const declared = { ...twoAcrossRoles, assignments: {}, wearable: [['viewer', 'dense']] } as unknown as NiscApp;
     expect(verifyVariants(declared).some((e) => e.includes('[viewer, dense]') && e.includes('crm.deals'))).toBe(true);
   });

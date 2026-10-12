@@ -10,15 +10,9 @@ import { documentHeaders, embedSnapshot } from '../src/documents/document';
 import { tokenFromCookie } from '../src/identity/session-cookie';
 import { readDocumentSnapshot } from '../src/client';
 
-// ═══════════════════════════════════════════════════════════════
-// The document: who is asking (a cookie), which shell (a page's, or the app's),
-// drawn into the app's own index.html — and who may keep the result.
-// ═══════════════════════════════════════════════════════════════
-
 const words: ActionDefinition = { id: 'words', data: { title: 'Hello', slug: '' }, layout: { component: 'Text', children: '$.title' } };
 const counter: ActionDefinition = { id: 'counter', data: { n: 0 }, layout: { component: 'Button', ref: 'bump', children: '$.n' }, triggers: [{ event: 'ui:click', ref: 'bump', do: [{ increment: 'n' }] }] };
 const chip: ActionDefinition = { id: 'chip', data: { name: '' }, layout: { component: 'Text', children: '$.name' } };
-// a screen with a head of its own, bound to what its path named
 const post: ActionDefinition = {
   id: 'post',
   data: { slug: '', title: 'A post' },
@@ -47,8 +41,6 @@ const docs: PageManifest = {
 const posts: PageManifest = { path: '/posts/:slug', params: 'main', canvases: [{ id: 'main', initial: 'post' }] };
 const app = { charter: {}, assignments: {}, actions: { words, counter, chip, post }, shell: { canvases: [{ id: 'main', initial: 'counter' }] }, pages: { docs, posts } } as unknown as NiscApp;
 
-// The parts of a server a document asks for, stood up the way createServer
-// stands them up: one context, the app's host and each page's.
 const serverOf = (): MossServer => {
   const context: HostSetup = {
     app,
@@ -73,7 +65,6 @@ const serverOf = (): MossServer => {
 };
 
 const TEMPLATE = '<!doctype html><html lang="en"><head></head><body><div id="root"></div><script type="module" src="/main.js"></script></body></html>';
-// a terminal that draws to a string: every text node, in order
 const draw = (snapshot: ShellSnapshot): string => {
   const text = (nodes: unknown): string => (JSON.stringify(nodes).match(/"value":"([^"]*)"/g) ?? []).map((m) => m.slice(9, -1)).join(' ');
   return `<main>${text(Object.values(snapshot.trees))}</main>`;
@@ -148,8 +139,6 @@ describe('renderDocument', () => {
     expect(server.shells?.list()).toEqual([]);
   });
 
-  // The upgrade is where a browser's cookie is written and taken back; a page
-  // request only reads it.
   it('a dead cookie is nobody, and nothing is written here', async () => {
     const page = await renderDocument({ server: serverOf(), template: TEMPLATE, request: { path: '/docs/intro', cookie: 'nisc.token=stale' }, draw });
     expect(page.principal).toBeNull();
@@ -158,9 +147,6 @@ describe('renderDocument', () => {
     expect(page.headers['cache-control']).toBe('no-cache');
   });
 
-  // A page request does not say whether it arrived over https. The name only
-  // this host can have set is read first — wherever a plain one sits in the
-  // header, which a sibling subdomain can put there.
   it.each([
     ['listed first', 'nisc.token=planted; __Host-nisc.token=good'],
     ['listed after', '__Host-nisc.token=good; nisc.token=planted'],
@@ -175,13 +161,10 @@ describe('renderDocument', () => {
     expect((await renderDocument({ server: serverOf(), template: TEMPLATE, request: { ...request, host: 'localhost:8080' }, draw })).principal).toBeNull();
   });
 
-  // A proxy that rewrites `Host` to its upstream (nginx does, told nothing)
-  // hides the port the browser is on; the site's own address still says it.
   it('behind a proxy that rewrote Host, the page is found on the port its site is served at', async () => {
     const request = { path: '/docs/intro', cookie: '__Host-nisc.token=good', host: '127.0.0.1:8787' };
     expect((await renderDocument({ server: serverOf(), template: TEMPLATE, request, draw })).principal).toBeNull();
     expect((await renderDocument({ server: serverOf(), template: TEMPLATE, request, site: 'https://example.com', draw })).principal).toBe('usr_max');
-    // and in dev, where the site names production: the port the request came to still comes first
     const dev = { path: '/docs/intro', cookie: 'nisc.token.5173=good', host: 'localhost:5173' };
     expect((await renderDocument({ server: serverOf(), template: TEMPLATE, request: dev, site: 'https://example.com', draw })).principal).toBe('usr_max');
   });
@@ -223,10 +206,6 @@ describe('renderDocument', () => {
     expect(page.drawn).toBe(false);
   });
 
-  // The root may be any empty element, not only a `<div>`. Were the screen put
-  // in by looking for `></div>`, a root that is another element would have the
-  // snapshot written beside it and the screen nowhere, with the page reported
-  // as drawn.
   it('a root that is another empty element is where the screen goes', async () => {
     const root = '<main id="app" data-kit="a>b"></main>';
     const page = await renderDocument({ server: serverOf(), template: TEMPLATE.replace('<div id="root"></div>', root), root, request: { path: '/' }, draw });
@@ -264,15 +243,11 @@ describe('renderDocument — the head a screen has', () => {
       refused: [],
     });
     const head = page.html.slice(0, page.html.indexOf('</head>'));
-    // the title takes the template's place, which is kept for the page to give back
     expect(head).toContain('<title data-nova-head>A post: intro</title>');
     expect(head).toContain('<template data-nova-own><title>The site</title></template>');
     expect(head).toContain('<meta name="description" content="About &lt;intro>." data-nova-head>');
     expect(head).toContain('<meta property="og:type" content="article" data-nova-head>');
-    // nobody said where the document lives: the template's stays
     expect(head).toContain('<link rel="canonical" href="https://example.com/">');
-    // the screen is in the root, and the terminal starts from the same trees
-    // (this test's drawer prints every text in the trees, the title's included — a kit draws nothing for a head)
     expect(page.html).toContain('A post</main></div><script type="application/json" id="nisc-snapshot">');
     expect(JSON.stringify(parsed(page.html)?.trees)).toContain('nova:head');
   });
@@ -285,7 +260,6 @@ describe('renderDocument — the head a screen has', () => {
     ]);
     expect(post.html).toContain('<link rel="canonical" href="https://example.com/posts/intro">');
     expect(post.html).toContain('<meta property="og:url" content="https://example.com/posts/intro">');
-    // no head on the app's screen: the template's title, at its own address
     expect(home.head).toBeUndefined();
     expect(home.html).toContain('<title>The site</title>');
     expect(home.html).toContain('<link rel="canonical" href="https://example.com/">');

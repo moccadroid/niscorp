@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mintDevToken, devSession } from '../src/identity/verifier';
 
-// The dev token pair — the one place token mechanics live. Real auth
-// replaces both ends together; this proves the stub round-trips.
 describe('runtime — dev token pair', () => {
   it('mints a base64url token whose sub round-trips', () => {
     const token = mintDevToken('usr_001', { name: 'Alex' });

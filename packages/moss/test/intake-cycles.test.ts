@@ -4,15 +4,6 @@ import { endlessChains } from '../src/manifest';
 import { runIntake } from '../src/integrations/intake';
 import type { IntakeContext } from '../src/integrations/intake';
 
-// ═══════════════════════════════════════════════════════════════
-// A bundle whose steps can never end is refused at intake. nova stops such a
-// chain at its budget when it runs, but a bundle is a stranger's path into
-// every principal's shell, and the loop is visible in the definitions — so it
-// is refused here, with the path, rather than served. A loop can close through
-// the host's own triggers, so the host's actions are walked with the bundle's;
-// a loop the host has on its own is not the bundle's to answer.
-// ═══════════════════════════════════════════════════════════════
-
 const ctx = (hostActions: Record<string, ActionDefinition> = {}): IntakeContext => ({
   integrationId: 'acme',
   url: 'https://acme.example',

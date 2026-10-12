@@ -3,10 +3,6 @@ import { createIdentity } from '../src/identity';
 import type { IdentityRecord } from '../src/identity';
 import type { IdentityConfig } from '../src/identity/resolution';
 
-// Who a principal is, as the server asks it: through the app's identity seam
-// when it declares one, through its assignments when it does not. Nothing here
-// boots an engine: `readAs` is what the server lends, and a test lends a map.
-
 const noRows: IdentityConfig['readAs'] = async () => undefined;
 
 describe('who a principal is', () => {
@@ -84,7 +80,6 @@ describe('who a principal is', () => {
     expect((await identity.resolve('usr_1')).roles).toEqual(['sales']);
     expect((await identity.resolve('stranger')).roles).toEqual(['public']);
     expect((await identity.resolve(null)).roles).toEqual(['public']);
-    // nothing is held, so there is nothing to forget and no roster to read
     expect(identity.invalidate('usr_1')).toBe(false);
     expect(identity.invalidateTag('st_a')).toEqual([]);
     expect(identity.roster).toBeUndefined();
@@ -101,7 +96,6 @@ describe('who a principal is', () => {
     const [a, b, c, d] = await Promise.all(['a', 'b', 'c', 'd'].map((principal) => identity.resolve(principal)));
     expect(a?.key).toBe(b?.key);
     expect(c?.key).not.toBe(a?.key);
-    // "none are live" and "every one is" are different answers
     expect(d?.key).not.toBe(c?.key);
     identity.stop();
   });
@@ -166,12 +160,7 @@ describe('forgetting', () => {
   });
 });
 
-// The record is the app's own code answering, and everything after it is built
-// on its shape: the roles go to the charter, the installs filter a catalog, the
-// scope pins rows. So it is read by a schema where it arrives.
 describe('what the identity seam answers is parsed', () => {
-  // A seam written in JavaScript, or one that cast its way to the type, can
-  // answer anything: the type is only what it claimed.
   const answering = (answered: unknown): NonNullable<IdentityConfig['seam']> => ({ resolve: async () => answered as IdentityRecord });
 
   it.each([

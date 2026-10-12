@@ -8,11 +8,6 @@ import type { NiscApp } from '../src/manifest';
 import type { Connection } from '../src/socket';
 import { turn } from './turn';
 
-// A shell's reactive read: vex calls the follower back, nova gets a later
-// body through the response's `onChange`, and a terminal receives a new frame.
-// Nobody in between knows why.
-
-// A turn of the event loop (./turn.ts says why that is not a wait on a clock).
 const tick = turn;
 const answer = (result: unknown): QueryResponse => ({ result: result as QueryResponse['result'], meta: { cache: { hit: true }, context: {} } });
 
@@ -80,8 +75,6 @@ describe('a shell following a read', () => {
       shell: { canvases: [{ id: 'main', initial: 'roster' }] },
     } as unknown as NiscApp;
 
-    // The wire a moss server hands its shells, standing in for the real one:
-    // a vex read that answers, then keeps answering.
     const followers: ReturnType<typeof createWireFollower>[] = [];
     const wire = (): FetchFn => async (_url, init) => {
       const follower = createWireFollower(init?.signal ?? new AbortController().signal);
@@ -109,7 +102,6 @@ describe('a shell following a read', () => {
     await tick();
     expect(sent.at(-1)).toContain('Ben');
 
-    // Unmounting the action ends the follow.
     session.shell.clear('main');
     expect(followers[0]?.live.signal.aborted).toBe(true);
   });

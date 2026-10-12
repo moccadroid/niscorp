@@ -1,9 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { encodeDelta, applyDelta, frameHash } from '../src/protocol';
 
-// A frame is a serialized `render` message: long, repetitive, and mostly
-// unchanged between sends. These build that shape rather than testing on toy
-// strings, because the whole question is how the encoder behaves on a tree.
 const row = (id: number, name: string, status: string): string =>
   JSON.stringify({ type: 'component', name: 'Row', props: { id: `mem_${id}`, name, status } });
 
@@ -45,8 +42,6 @@ describe('delta — send what changed, not the frame', () => {
     }
   });
 
-  // The reason the layer exists. An in-place change to one row must cost a
-  // fraction of the frame, or the encode is work for nothing.
   it('an in-place change costs a small fraction of the frame', () => {
     const before = roll(Array.from({ length: 60 }, () => 'active'));
     const after = roll(Array.from({ length: 60 }, (_, i) => (i === 30 ? 'cancelled' : 'active')));
@@ -54,8 +49,7 @@ describe('delta — send what changed, not the frame', () => {
     expect(encoded.length).toBeLessThan(after.length * 0.1);
   });
 
-  // Non-ASCII is the case a naive byte-oriented encoder gets wrong: the
-  // encoder indexes UTF-16 code units, so a copy must never split a character.
+  // The encoder indexes UTF-16 code units, so a copy must never split a character.
   it('round-trips frames carrying non-ASCII and emoji', () => {
     const before = frame('main', [row(0, 'Zoë Müller', 'active'), row(1, '横浜 🏋️', 'paused')]);
     const after = frame('main', [row(0, 'Zoë Müller', 'paused'), row(1, '横浜 🏋️', 'paused')]);
@@ -64,8 +58,6 @@ describe('delta — send what changed, not the frame', () => {
     expect(JSON.parse(rebuilt)).toEqual(JSON.parse(after));
   });
 
-  // A malformed op must throw rather than return a half-built frame: a silently
-  // wrong frame is the one failure this layer cannot have.
   it('refuses a copy that runs past the base', () => {
     expect(() => applyDelta('short base', [[0, 0, 999]])).toThrow(/outside a base/);
     expect(() => applyDelta('short base', [[0, -1, 2]])).toThrow(/outside a base/);

@@ -12,12 +12,6 @@ import type { WireEnv } from '../src/client';
 import type { NiscApp, PageManifest } from '../src/manifest';
 import { turn } from './turn';
 
-// ═══════════════════════════════════════════════════════════════
-// A page's terminal, over the socket: the path it names decides which shell it
-// is served, and a page with nothing left to happen is served none at all.
-// ═══════════════════════════════════════════════════════════════
-
-// A turn of the event loop (./turn.ts says why that is not a wait on a clock).
 const tick = turn;
 
 const search: ActionDefinition = { id: 'search', data: { q: '', topic: '' }, layout: { component: 'Input', model: '$.q' } };
@@ -53,8 +47,7 @@ const connect = async (accept: ReturnType<typeof createSocket>, url: string, tok
   const sent: Record<string, unknown>[] = [];
   const connection: Connection = { send: (text) => void sent.push(JSON.parse(text) as Record<string, unknown>), close: () => {}, onMessage: () => {}, onClose: () => {}, upgrade: { offered: offerToken(token) } };
   await accept(url, connection);
-  // What a shell sends after it is attached goes out on its next two turns
-  // (a pass at once and one a turn later).
+  // A shell sends a pass at once and another on the next turn.
   await tick();
   await tick();
   return sent;
@@ -73,7 +66,6 @@ describe('the socket — a path decides which shell', () => {
     const { accept, pages } = socketOf();
     const sent = await connect(accept, '/socket?protocol=2&path=%2Ffind%2Fwine');
     expect(actionOn(sent)).toContain('"definitionId":"search"');
-    // built for this connection alone — nothing is kept, signed in or not
     const signedIn = await connect(accept, '/socket?protocol=2&path=%2Ffind%2Fwine', 'good');
     expect(actionOn(signedIn)).toContain('"definitionId":"search"');
     expect(pages.list()).toEqual([]);
@@ -95,7 +87,6 @@ describe('the socket — a path decides which shell', () => {
   });
 });
 
-// ── the wire's half ──
 let urls: string[] = [];
 let offers: string[][] = [];
 const env = (token: string | null = null): WireEnv => ({
@@ -118,7 +109,7 @@ describe('the wire — a page that needs no socket opens none', () => {
     const wire = createWire({ env: env(), initial: { frame: [], trees: {}, principal: false, live: false, path: '/about' } });
     expect(wire.status()).toBe('static');
     expect(urls).toEqual([]);
-    wire.dispatch('main', { type: 'ui:click', ref: 'x' } as never); // nothing to send it over; nothing thrown
+    wire.dispatch('main', { type: 'ui:click', ref: 'x' } as never);
   });
 
   it('…until it is asked for one: `reset` connects, naming the page’s path', () => {

@@ -7,29 +7,15 @@ import { SESSIONS_SEQUENCE } from '../src/identity';
 import { createServer } from '../src/server';
 import { pristineDatabases } from './pristine-database';
 
-// A database of its own for each test that wants one, started from one that
-// was initialised once for this file (./pristine-database.ts says why).
 const freshDatabase = pristineDatabases();
 
-// ═══════════════════════════════════════════════════════════════
-// HISTORY, PINNED. Every deployed database has run these migrations and
-// recorded their checksums. Edit one and each of those databases refuses to
-// boot (strata: EDITED) — so the edit has to be caught HERE, in CI, not there.
-//
-// Red here means an applied migration changed. Do not re-pin the checksum:
-// put the change back, and append a new migration to the sequence instead.
-// (Rewording a full-line `--` comment is fine — strata hashes without them.)
-//
-// Tide's sequence (`nisc.moss.tide`) is pinned in tide's own
-// test/baselines.test.ts.
-// ═══════════════════════════════════════════════════════════════
+// Deployed databases have recorded these checksums, and an edited migration refuses to boot there.
+// When one goes red, put the change back and append a new migration; do not re-pin.
 
 const PINNED: ReadonlyArray<[Sequence, number, string]> = [
   [MOSS_SEQUENCE, 1, '1c21031de558301ea60804cce1ed1e5c636aa8644fcdedc1ef96f5bebb558880'],
   [MOSS_SEQUENCE, 2, '92bd612e35a830e2f58de2327451a8e3346e7bc102ab0b49777c349792894b1a'],
-  // The unique index on an integration's key hash.
   [MOSS_SEQUENCE, 3, 'b05aa252f4f3b70dad03282552ac6b94c5d4e5012d964c23cb32fedbb4f8b60f'],
-  // An integration's `extension` comes, and the columns of one product's vocabulary go.
   [MOSS_SEQUENCE, 4, 'd4fdae75451da4bb3d46c6b31c8ad1797f1c0a487eb85708f30c5d4e5e37ce5b'],
   [SESSIONS_SEQUENCE, 1, '83a62e0217940bfe62136052c18f730947355d20e481d9aceb76463251b33700'],
 ];
@@ -48,7 +34,6 @@ describe('baselines — applied migrations are history', () => {
 describe('boot — every owner through one ledger', () => {
   const app = { charter: {}, actions: {} };
   const quietly = <T>(run: () => Promise<T>): Promise<T> => {
-    // 'dev-open' announces itself on every boot; that line is not this test.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     return run().finally(() => warn.mockRestore());
   };

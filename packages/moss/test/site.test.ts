@@ -12,18 +12,11 @@ import type { MossServer } from '../src/server';
 import { createPageRouter } from '../src/documents';
 import { mountSite } from '../src/server/node';
 
-// ═══════════════════════════════════════════════════════════════
-// The built terminal, served by the app's own process (`mountSite`): what is a
-// file, what is a page, what is the app — and what is none of them.
-// ═══════════════════════════════════════════════════════════════
-
 const words: ActionDefinition = { id: 'words', data: { title: 'Hello', slug: '' }, layout: { component: 'Text', children: '$.title' } };
 const counter: ActionDefinition = { id: 'counter', data: { n: 0 }, layout: { component: 'Text', children: '$.n' } };
 const docs: PageManifest = { path: '/docs/:slug', params: 'main', canvases: [{ id: 'main', initial: 'words' }] };
 const app = { charter: {}, assignments: {}, actions: { words, counter }, shell: { canvases: [{ id: 'main', initial: 'counter' }] }, pages: { docs } } as unknown as NiscApp;
 
-// A hono app carrying the parts of a moss server a site asks for, stood up the
-// way createServer stands them up (see document.test.ts).
 const serverOf = (): MossServer => {
   const context: HostSetup = {
     app,
@@ -51,7 +44,6 @@ mkdirSync(join(dist, 'assets'));
 writeFileSync(join(dist, 'index.html'), '<!doctype html><html lang="en"><head></head><body><div id="root"></div></body></html>');
 writeFileSync(join(dist, 'assets', 'index-AbC12345.js'), 'export const built = true;\n');
 writeFileSync(join(dist, 'robots.txt'), 'User-agent: *\n');
-// A file the build left under one of the app server's own prefixes.
 mkdirSync(join(dist, 'api'));
 writeFileSync(join(dist, 'api', 'built.txt'), 'a file, where the server’s routes are\n');
 afterAll(() => rmSync(dist, { recursive: true, force: true }));
@@ -103,15 +95,11 @@ describe('mountSite', () => {
     expect((await server.request('/api/nope')).status).toBe(404);
   });
 
-  // The server's own prefixes are its routes' and nobody else's: what answers
-  // under `/api` is decided by who is calling, never by what a build wrote to
-  // a folder. A file there is not served, whatever its name.
   it('a file the build left under one of the app server’s own prefixes is not served', async () => {
     const server = site();
     const asked = await server.request('/api/built.txt');
     expect(asked.status).toBe(404);
     expect(await asked.text()).not.toContain('a file, where');
-    // The prefixes are the host's to say: under another set, the same file is a file.
     const other = serverOf();
     mountSite(other, { dist, draw, owned: /^\/private(\/|$)/ });
     expect(await (await other.request('/api/built.txt')).text()).toBe('a file, where the server’s routes are\n');

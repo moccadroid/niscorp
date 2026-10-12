@@ -6,10 +6,6 @@ import { createIntentAnswers } from '../src/data/routes';
 import type { QueryWriters } from '../src/data/routes';
 import { NOTES_SCHEMA, engineDouble } from './data-double';
 
-// AN INTENT, ANSWERED BY A QUERY WRITTEN FOR IT. The engine has no database
-// behind it (./data-double.ts): these hold who the query is written and run
-// as, and where it is kept afterwards.
-
 const READER = createScopePolicy(new Set(['notes.read']));
 const NOTHING = createScopePolicy(new Set());
 
@@ -20,8 +16,6 @@ const world = async () => {
     written.push({ intent: request.intent, tables: schema.entities.map((entity) => entity.name) });
     return { from: ['notes'], fields: ['notes.id', 'notes.body'] };
   };
-  // Rows that already fit the shape: the mapping is the identity, as vex's own
-  // mapper answers for them.
   const mapToShape: MapToShape = async (rows) => {
     const ir = await compile({ $ref: '$.result' });
     return { ir, transformed: execute(ir, { result: JSON.parse(JSON.stringify(rows)) }) };
@@ -58,7 +52,6 @@ describe('an intent, answered by a query written for it', () => {
     const answered = await answer(writers, ASKED, { policy: READER, scope: {} });
     const fingerprint = answered.meta.cache.fingerprint ?? '';
     expect(fingerprint).not.toBe('');
-    // The app's own engine, locked as the routes run it, replays it.
     const replayed = await engine.execute({ fingerprint, context: {} }, { locked: true, scopePolicy: READER });
     expect(replayed.result).toEqual(answered.result);
   });
@@ -69,7 +62,7 @@ describe('an intent, answered by a query written for it', () => {
     await answer(writers, ASKED, { policy: READER, scope: {} });
     await answer(other, ASKED, { policy: READER, scope: {} });
     await answer(writers, ASKED, { policy: READER, scope: {} });
-    // The first pair wrote twice, the second once and through its own seam.
+    // The first pair wrote twice; the second wrote through its own generateDsl.
     expect(written).toHaveLength(2);
   });
 });

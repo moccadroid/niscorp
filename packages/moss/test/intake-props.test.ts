@@ -4,17 +4,6 @@ import { endlessChains, layoutMisfits } from '../src/manifest';
 import { runIntake } from '../src/integrations/intake';
 import type { IntakeContext } from '../src/integrations/intake';
 
-// ═══════════════════════════════════════════════════════════════
-// Intake checks a layout's component NAMES and, when the app carried a props
-// schema for a component, its PROPS. A bundle shipping a prop the component does
-// not have — a wrong key, a value outside a closed set — would install cleanly
-// and do nothing under a customer's finger; the kit's strict schema is exactly
-// what refuses it, and intake is the only place a bundle arriving over HTTP
-// passes through. A prop whose value is deferred to render time (a binding,
-// a directive) has its key checked and its value left alone.
-// ═══════════════════════════════════════════════════════════════
-
-// A component with a strict schema, and one the app handed moss by name alone.
 const Choice = z
   .object({
     label: z.string().optional(),
@@ -26,21 +15,18 @@ const Choice = z
 const ctx = (): IntakeContext => ({
   integrationId: 'acme',
   url: 'https://acme.example',
-  // The host's answer about a layout, over a kit of two components.
   layoutMisfits: (layout) =>
     layoutMisfits(
       layout,
       new Map<string, { propsSchema?: unknown }>([
         ['Choice', { propsSchema: Choice }],
-        ['Plain', {}], // no schema — name-only
+        ['Plain', {}],
       ]),
     ),
   endlessChains,
   fingerprints: new Set<string>(),
 });
 
-// One action carrying one layout node, namespaced so only the props check can
-// fail it.
 const withLayout = (layout: unknown): unknown => ({
   integration: 'acme',
   actions: { 'ext.staff.acme.desk': { id: 'ext.staff.acme.desk', layout } },
@@ -75,7 +61,6 @@ describe('runIntake — a component with a schema has its props checked', () => 
 
 describe('runIntake — a deferred value has its key checked, its value skipped', () => {
   it('accepts a binding on a known prop, whatever its type would be', () => {
-    // count is a number; `$.total` is a string that resolves at render time.
     expect(intake({ component: 'Choice', props: { count: '$.total' } }).ok).toBe(true);
   });
 

@@ -6,18 +6,8 @@ import type { NiscRuntime } from '../src/runtime';
 import { buildSocket } from '../src/server/server';
 import type { Connection } from '../src/socket';
 
-// THE SOCKET AS THE SERVER STANDS IT UP (../src/server/server.ts): what the
-// runtime says of it reaches it. The socket's own tests (socket.test.ts) hand
-// `createSocket` its settings themselves; these hold the wiring that reads
-// them off the runtime, so a deployment that sets a limit, its origins or its
-// revalidation clock is not served the defaults.
-//
-// No server and no database: who a token is, is a map here, and a shell is an
-// object that takes a connection.
-
 const SOCKET = `/socket?protocol=${PROTOCOL}`;
 
-// What a terminal was sent, and whether it was closed.
 const terminal = (upgrade?: Connection['upgrade']): Connection & { sent: ServerMessage[]; closed: number[] } => {
   const sent: ServerMessage[] = [];
   const closed: number[] = [];
@@ -34,7 +24,6 @@ const terminal = (upgrade?: Connection['upgrade']): Connection & { sent: ServerM
 const helloOf = (connection: { sent: ServerMessage[] }): string | null | undefined => connection.sent.flatMap((message) => (message.type === 'hello' ? [message.principal] : []))[0];
 const errorsOf = (connection: { sent: ServerMessage[] }): string[] => connection.sent.flatMap((message) => (message.type === 'error' ? [message.code] : []));
 
-// The deployment's socket: `tokens` says who each token is, now.
 const socketOf = (runtime: Partial<NiscRuntime>, tokens: Map<string, string> = new Map()) => {
   const session = { attach: () => undefined, detach: () => undefined, resync: () => undefined, dispatch: () => undefined, publish: () => undefined, reset: () => undefined, back: () => false, popTo: () => undefined };
   return buildSocket({
@@ -67,9 +56,6 @@ describe('the socket, as the server stands it up — what the runtime says reach
     }
   });
 
-  // A page served behind a proxy that rewrites `Host` is the app's own page
-  // only because the deployment listed its origin: its cookie is read, and
-  // the terminal is who the cookie says.
   it('`runtime.origins` lists the origins whose page is the app’s own', async () => {
     const tokens = new Map([['the-token', 'usr_1']]);
     const cookie = sessionCookies('https://app.example', 'the-token').map((written) => written.split(';')[0]).join('; ');
@@ -82,7 +68,6 @@ describe('the socket, as the server stands it up — what the runtime says reach
       await listed(SOCKET, own);
       await unlisted(SOCKET, foreign);
       expect(helloOf(own)).toBe('usr_1');
-      // Not listed: another site's page, whose cookie is not read.
       expect(helloOf(foreign)).toBeNull();
     } finally {
       listed.stop();
@@ -99,7 +84,6 @@ describe('the socket, as the server stands it up — what the runtime says reach
       await socket(SOCKET, connection);
       expect(helloOf(connection)).toBe('usr_1');
 
-      // The session is revoked. The connection stands until it is asked about.
       tokens.delete('the-token');
       await vi.advanceTimersByTimeAsync(1_900);
       expect(connection.closed).toEqual([]);

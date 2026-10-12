@@ -4,10 +4,6 @@ import type { ForwardDeps } from '../src/integrations/forward';
 import type { FoundIntegration } from '../src/integrations/registry';
 import { neverAnswers } from './never-answers';
 
-// THE ONE WAY OUT to an integration's service, driven by itself: the registry
-// is a map, who somebody is and what they carry are said here, and nothing is
-// sent anywhere. What each door does with the answer is the door's.
-
 const acme: FoundIntegration = { url: 'https://acme.example/', status: 'approved', reach: {} };
 
 const world = (over: Partial<ForwardDeps> & { rows?: Record<string, FoundIntegration> } = {}) => {
@@ -20,7 +16,6 @@ const world = (over: Partial<ForwardDeps> & { rows?: Record<string, FoundIntegra
     resolveIdentity: who,
     scopeOf: async () => ({ userId: 'i_mara', studioId: 's_1' }),
     mint,
-    // As long as a deployment allows a call when it says nothing else.
     timeoutMs: 30_000,
     fetch: send,
     ...over,
@@ -41,7 +36,6 @@ describe('createForwarder — what is refused, and that nothing went out', () =>
   it('one nobody approved, with what its row says', async () => {
     const { forward, send, who } = world({ rows: { acme: { ...acme, status: 'pending' } } });
     expect(await forward({ integration: 'acme', principal: 'i_mara', path: 'x', request: get })).toEqual({ kind: 'refused', why: 'unapproved', status: 'pending' });
-    // Not approved is said before anybody is asked who the caller is.
     expect(who).not.toHaveBeenCalled();
     expect(send).not.toHaveBeenCalled();
   });
@@ -62,7 +56,6 @@ describe('createForwarder — what is refused, and that nothing went out', () =>
     const { forward, send, mint } = world();
     const admits = vi.fn(() => false);
     expect(await forward({ integration: 'acme', principal: 'i_mara', path: 'x', admits, request: get })).toEqual({ kind: 'refused', why: 'inadmissible' });
-    // The gate is handed the row and who the caller is, to decide by.
     expect(admits).toHaveBeenCalledWith(acme, { roles: ['desk'], installed: ['acme'] });
     expect(mint).not.toHaveBeenCalled();
     expect(send).not.toHaveBeenCalled();
@@ -82,10 +75,8 @@ describe('createForwarder — a call that goes out', () => {
 
     expect(ended.kind).toBe('answered');
     expect(mint).toHaveBeenCalledWith({ integration: 'acme', principal: 'i_mara', scope: { userId: 'i_mara', studioId: 's_2', reason: 'gdpr' } });
-    // The path goes under the service's address, whether or not that ends in a slash.
     const [url, init] = send.mock.calls[0] ?? [];
     expect(url).toBe('https://acme.example/lifecycle/erase?hard=1');
-    // As the door built it, and with the signal that ends a call that takes too long.
     expect(init).toEqual({ method: 'POST', headers: { authorization: `Bearer ${mint.mock.results[0]?.value}` }, body: '{}', signal: expect.any(AbortSignal) });
   });
 
@@ -102,7 +93,7 @@ describe('createForwarder — a call that goes out', () => {
     expect(admits).toHaveBeenCalledWith(acme);
     const [url, init] = send.mock.calls[0] ?? [];
     expect(url).toBe('https://acme.example/hook/stripe');
-    // The very objects: the bytes a vendor signed are not copied or re-read.
+    // The same objects: the bytes a vendor signed are not copied or re-read.
     expect(init?.headers).toBe(headers);
     expect(init?.body).toBe(body);
   });

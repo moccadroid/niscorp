@@ -2,23 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
 import { guardOperator, secretsEqual } from '../src/server/routes';
 
-// ═══════════════════════════════════════════════════════════════
-// The operator prefix's two gates, tested through the seam moss uses to install
-// them (guardOperator) rather than a full server boot — the ordering IS the
-// security property, so it is what these hold:
-//
-//   1. moss's key check is CONSTANT-TIME (secretsEqual), so a short or wrong
-//      guess is not refused faster than a correct-length one.
-//   2. an app-supplied gate runs BEFORE moss's key check and AROUND moss's own
-//      routes — including /operator/integrations, the exact path an app's own
-//      after-mounted middleware could never reach.
-// ═══════════════════════════════════════════════════════════════
-
-// A prefix built the way createServer builds it: guardOperator, then a route
-// standing in for moss's own (/integrations) — the one an app cannot otherwise
-// govern. `new Hono()` is untyped here; guardOperator wants Hono<Env>, and Env
-// is server-private, so the cast is the test admitting it does not carry the
-// app's Variables (the gate reads none of them).
 const prefix = (opts: Parameters<typeof guardOperator>[1]): Hono => {
   const operator = new Hono();
   guardOperator(operator as unknown as Parameters<typeof guardOperator>[0], opts);
@@ -41,9 +24,6 @@ describe('secretsEqual — constant-time credential compare', () => {
   });
 
   it('rejects a differing-length guess WITHOUT throwing', () => {
-    // The whole reason for hashing both sides first: timingSafeEqual throws on a
-    // length mismatch, so a bare compare would refuse a short guess by crashing
-    // (and a length pre-check would leak the key's length). Neither happens.
     expect(() => secretsEqual('short', 'a-considerably-longer-guess-entirely')).not.toThrow();
     expect(secretsEqual('short', 'a-considerably-longer-guess-entirely')).toBe(false);
   });
@@ -76,13 +56,11 @@ describe('guardOperator — the app gate governs the whole prefix', () => {
     });
     const res = await call(server, 'K');
     expect(res.status).toBe(200);
-    // moss's own route is among the paths the gate sees.
     expect(seen).toContain('/operator/integrations');
   });
 
   it('a gate that returns a Response refuses BEFORE moss’s key check', async () => {
     const server = prefix({ key: 'K', gate: () => new Response('nope', { status: 401 }) });
-    // Even WITH the correct key, the app's refusal stands and moss's route never runs.
     expect((await call(server, 'K')).status).toBe(401);
   });
 
@@ -95,14 +73,12 @@ describe('guardOperator — the app gate governs the whole prefix', () => {
         outcomes.push(c.res.status);
       },
     });
-    await call(server, 'K'); // moss serves it: 200
-    await call(server, 'WRONG'); // moss refuses it: 404
-    // The gate saw both real results, not just that a request was attempted.
+    await call(server, 'K');
+    await call(server, 'WRONG');
     expect(outcomes).toEqual([200, 404]);
   });
 
   it('the seam can only harden: a passing gate still faces moss’s key check', async () => {
-    // Gate lets everything through; moss's wrong-key 404 still stands.
     const server = prefix({ key: 'K', gate: async (_c, next) => void (await next()) });
     expect((await call(server, 'K')).status).toBe(200);
     expect((await call(server, 'WRONG')).status).toBe(404);

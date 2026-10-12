@@ -8,20 +8,7 @@ import { createWire } from '../src/client';
 import type { WireEnv } from '../src/client';
 import type { NiscApp } from '../src/manifest';
 
-// ═══════════════════════════════════════════════════════════════
-// Frame deltas over a REAL websocket — `ws` on one end, the wire on the
-// other, an actual upgrade in between. shells.test and client.test drive each
-// half through its own seam; this is the one place the two meet, and the seam
-// it covers that neither can is the capability itself: `delta=1` on the
-// upgrade url, parsed by the socket, honoured by the host.
-//
-// The invariant is not "smaller". It is that a delta-capable terminal and a
-// plain one, attached to the SAME durable shell, render the identical
-// application after every change.
-// ═══════════════════════════════════════════════════════════════
-
-// A tree big enough that one changed number is a small part of it — the shape
-// deltas exist for. Anything smaller is correctly sent whole.
+// Big enough that one changed number is a small part of the tree: a smaller tree is sent whole.
 const ROWS = 40;
 const app = {
   charter: { public: ['roster'] },
@@ -40,9 +27,6 @@ const app = {
   shell: { canvases: [{ id: 'main', initial: 'roster' }] },
 } as unknown as NiscApp;
 
-// A wait on the thing itself, over a real websocket: it is asked again until
-// it holds. `ms` is how long a failure takes to say so, not a time anything
-// is given to happen in.
 const until = (pred: () => boolean, why: string, ms = 10_000): Promise<void> =>
   new Promise((resolve, reject) => {
     const started = Date.now();
@@ -56,7 +40,6 @@ const until = (pred: () => boolean, why: string, ms = 10_000): Promise<void> =>
 
 const servers: Server[] = [];
 
-// A live server on an ephemeral port, wired the way ./node wires one.
 const listening = async (delta: boolean): Promise<string> => {
   const shells = standHost(hostConfig({
     app,
@@ -79,7 +62,6 @@ const listening = async (delta: boolean): Promise<string> => {
   return `ws://127.0.0.1:${address.port}/socket`;
 };
 
-// Counts what actually crosses the socket — the only honest place to see it.
 type Tally = { render: number; delta: number; bytes: number };
 const countingEnv = (url: string, tally: Tally): WireEnv => ({
   tokens: { load: () => 'tok', save: () => {}, clear: () => {} },
@@ -120,12 +102,9 @@ describe('frame deltas over a real websocket', () => {
         await until(() => treeOf(asked) !== was && same(), `both terminals reach n=${i}`);
       }
 
-      // Both ends really exercised the path they were meant to.
       expect(askedTally.delta).toBeGreaterThan(0);
       expect(silentTally.delta).toBe(0);
-      // Chrome that does not change is not re-sent — the whole point.
       expect(askedTally.bytes).toBeLessThan(silentTally.bytes / 2);
-      // And nobody had to recover: no delta failed, so no resync was needed.
       expect(askedTally.render).toBe(silentTally.render - askedTally.delta);
     } finally {
       asked.dispose();

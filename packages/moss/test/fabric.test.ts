@@ -1,12 +1,3 @@
-// THE CLUSTER FABRIC — invalidations and nudges between processes. These pin
-// the mechanism: a signal published on A is applied on B and NOT re-applied on
-// A (echo suppression), a remote apply never re-publishes (no amplification),
-// both sides are fire-and-forget-contained, and with no fabric configured
-// everything behaves exactly as one process does.
-//
-// The integration uses two real shell hosts over one in-memory bus — the same
-// `wireFabric` and the same appliers the server wires, so this exercises the
-// real plumbing, not a mock of it.
 import { describe, it, expect, vi } from 'vitest';
 import { wireFabric } from '../src/server/signals';
 import type { FabricApply } from '../src/server/signals';
@@ -19,10 +10,7 @@ import { createIdentityCache } from '../src/identity/cache';
 import type { NiscApp } from '../src/manifest';
 import { turn } from './turn';
 
-// A turn of the event loop (./turn.ts says why that is not a wait on a clock).
 const tick = turn;
-// A wait on the thing itself: it is asked again until it holds. `ms` is how
-// long a failure takes to say so.
 const until = async (pred: () => boolean | Promise<boolean>, ms = 3000): Promise<void> => {
   const start = Date.now();
   for (;;) {
@@ -32,7 +20,6 @@ const until = async (pred: () => boolean | Promise<boolean>, ms = 3000): Promise
   }
 };
 
-// ── wireFabric — the seam in isolation ───────────────────────────────────────
 describe('wireFabric', () => {
   const spy = () => {
     const calls: string[][] = [];
@@ -43,8 +30,6 @@ describe('wireFabric', () => {
     };
     return { calls, apply };
   };
-  // `feed` is a message another moss process published; `hand` is whatever a
-  // transport read off its wire, which nothing has typed.
   const collector = () => {
     const published: FabricMessage[] = [];
     let deliver: ((m: unknown) => void) | undefined;
@@ -93,9 +78,6 @@ describe('wireFabric', () => {
     expect(() => publish({ kind: 'nudge', principal: 'p', channel: 'c' })).not.toThrow();
   });
 
-  // What a transport hands over came from another process, off a wire moss
-  // does not own. It is read by a schema, not used as the type says it is: a
-  // principal that is a number must not reach the identity cache.
   describe('what a transport hands over is read by a schema', () => {
     const notMessages: readonly [string, unknown][] = [
       ['a field of the wrong type', { kind: 'nudge', principal: 7, channel: 'roster', origin: 'other' }],
@@ -144,7 +126,6 @@ describe('wireFabric', () => {
   });
 });
 
-// ── Two processes over one fabric ────────────────────────────────────────────
 const counter = { id: 'counter', data: { n: 0 }, triggers: [] };
 const app = {
   charter: { public: ['counter'] },
@@ -159,9 +140,7 @@ const shellCtx = (): HostSetup => ({
   wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
 });
 
-// An in-memory bus that delivers each publish to EVERY endpoint's subscriber,
-// the sender included — so echo suppression is genuinely exercised, exactly as
-// `LISTEN/NOTIFY` self-delivers.
+// Delivers each publish to every endpoint's subscriber, the sender's included, as LISTEN/NOTIFY does.
 const createBus = () => {
   const subs: Array<(m: FabricMessage) => void> = [];
   return {
@@ -172,8 +151,6 @@ const createBus = () => {
   };
 };
 
-// A process: a real shell host + identity cache, wired to the fabric the way
-// createServer wires them — the methods apply locally, THEN publish.
 const makeNode = (fabric: Fabric | undefined, origin: string, shells: ShellHost) => {
   const identities = createIdentityCache({ resolve: async () => ({ roles: ['public'], scope: {} }) });
   const applied = { identity: 0, tenant: 0, nudge: 0 };
@@ -198,13 +175,13 @@ describe('two processes over one fabric', () => {
     const bShells = standHost(hostConfig(shellCtx()));
     const b = makeNode(bus.endpoint(), 'B', bShells);
 
-    const before = (await bShells.session('t', 'usr_1')).shell; // resident in B
+    const before = (await bShells.session('t', 'usr_1')).shell;
     a.invalidateIdentity('usr_1');
     await until(async () => (await bShells.session('t', 'usr_1')).shell !== before);
 
-    expect((await bShells.session('t', 'usr_1')).shell).not.toBe(before); // B rebuilt the shell
-    expect(b.applied.identity).toBe(1); // B applied the remote signal
-    expect(a.applied.identity).toBe(1); // A applied once — its own echo was dropped, not re-applied
+    expect((await bShells.session('t', 'usr_1')).shell).not.toBe(before);
+    expect(b.applied.identity).toBe(1);
+    expect(a.applied.identity).toBe(1);
   });
 
   it('a nudge on A wakes the principal’s channel on B, once', () => {
@@ -224,7 +201,7 @@ describe('two processes over one fabric', () => {
     a.nudge('usr_9', 'roster');
     expect(delivered).toEqual([{ principal: 'usr_9', channel: 'roster' }]);
     expect(b.applied.nudge).toBe(1);
-    expect(a.applied.nudge).toBe(1); // echo dropped on A
+    expect(a.applied.nudge).toBe(1);
   });
 
   it('with no fabric, a signal on A never reaches B — byte-identical to one process', async () => {
@@ -237,9 +214,9 @@ describe('two processes over one fabric', () => {
     await tick();
     await tick();
 
-    expect((await bShells.session('t', 'usr_1')).shell).toBe(before); // B untouched
+    expect((await bShells.session('t', 'usr_1')).shell).toBe(before);
     expect(b.applied.identity).toBe(0);
-    expect(a.applied.identity).toBe(1); // A still does its own local work
+    expect(a.applied.identity).toBe(1);
   });
 
   it('a throwing subscriber on B does not harm the transport or A', () => {

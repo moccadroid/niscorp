@@ -3,16 +3,6 @@ import { createWire, browserEnv, readDocumentSnapshot } from '../src/client';
 import type { WireEnv } from '../src/client';
 import { CLOSE_AT_CAPACITY, CLOSE_INVALID_TOKEN, CLOSE_PROTOCOL_MISMATCH, CLOSE_SHELL_FAILED, CLOSE_SIGNED_OUT, ClientMessageSchema, PROTOCOL, encodeDelta, frameHash, offeredToken } from '../src/protocol';
 
-// ═══════════════════════════════════════════════════════════════
-// The wire — driven headlessly, the way socket.test.ts drives the server:
-// a `WireEnv` built on a fake socket and an in-memory token store, injected
-// through the wire's own host seam (no global shims — the seam IS the
-// product surface a Node/TTY host uses). vitest's fake clock owns reconnect
-// scheduling via the global timers the wire calls.
-// ═══════════════════════════════════════════════════════════════
-
-// The transport, faked: capture what the wire sends, and let a test drive
-// the three inbound events (open, message, close) by hand.
 class FakeSocket {
   static instances: FakeSocket[] = [];
   static last(): FakeSocket {
@@ -32,8 +22,7 @@ class FakeSocket {
     this.offered = upgrade.offered;
     FakeSocket.instances.push(this);
   }
-  // Whatever the wire sends, in any test here, is something the server reads:
-  // the schema it is held to is the one the server parses with.
+  // Everything the wire sends is held to the schema the server parses with.
   send(text: string): void {
     ClientMessageSchema.parse(JSON.parse(text));
     this.sent.push(text);
@@ -41,7 +30,6 @@ class FakeSocket {
   close(): void {
     this.closed = true;
   }
-  // ── test drivers ──
   open(): void {
     this.onopen?.();
   }
@@ -67,8 +55,6 @@ const makeStorage = () => {
 
 let storage: ReturnType<typeof makeStorage>;
 
-// A test host: FakeSocket transport, in-memory token slot keyed like the
-// browser env would key localStorage.
 const env = (tokenKey = 'nisc.token'): WireEnv => ({
   tokens: {
     load: () => storage.getItem(tokenKey),
@@ -92,9 +78,6 @@ afterEach(() => {
 
 const URL = 'ws://test/socket';
 
-// What an upgrade says: where it goes (the url, less the capability params the
-// wire adds — protocol, delta) and which credential it carries (the token the
-// socket was constructed offering). The assertions below read those two.
 const upgrade = (socket: FakeSocket): { target: string; token: string | null } => {
   const parsed = new globalThis.URL(socket.url);
   return { target: `${parsed.protocol}//${parsed.host}${parsed.pathname}`, token: offeredToken(socket.offered) };
@@ -104,7 +87,7 @@ describe('the wire — connect + snapshot', () => {
   it('connects immediately, anonymous when the token slot is empty', () => {
     createWire({ url: URL, env: env() });
     expect(FakeSocket.instances).toHaveLength(1);
-    expect(upgrade(FakeSocket.last())).toEqual({ target: URL, token: null }); // no ?token
+    expect(upgrade(FakeSocket.last())).toEqual({ target: URL, token: null });
   });
 
   it('falls back to the env defaultUrl when no url is configured', () => {
@@ -118,8 +101,6 @@ describe('the wire — connect + snapshot', () => {
     expect(upgrade(FakeSocket.last()).token).toBe('tok-1');
   });
 
-  // An address is what a proxy logs. Through a first connect, a sign-in, a
-  // dropped connection and a reset, the token is in none of them.
   it('no address it ever connects to carries the token', () => {
     storage.setItem('nisc.token', 'tok-1');
     const wire = createWire({ url: URL, env: env() });
@@ -152,9 +133,7 @@ describe('the wire — connect + snapshot', () => {
     expect(ticks).toBe(2);
   });
 
-  // What this protects is the SHAPE of what goes up the socket. The socket is
-  // opened first, because a connecting WebSocket throws on `send`; the test
-  // below holds the other half: nothing goes up one that is not open.
+  // The socket is opened first: a connecting WebSocket throws on `send`.
   it('sends event and publish envelopes on the socket', () => {
     const wire = createWire({ url: URL, env: env() });
     FakeSocket.last().open();
@@ -168,8 +147,6 @@ describe('the wire — connect + snapshot', () => {
     ]);
   });
 
-  // A server-drawn page is on screen before its socket is. A press in that
-  // moment is dropped — not sent, not thrown, and not held for later.
   it('drops events and publishes while the socket is not open, and does not replay them', () => {
     const wire = createWire({ url: URL, env: env() });
     wire.dispatch('main', { type: 'ui:click', ref: 'save' } as never);
@@ -187,7 +164,6 @@ describe('the wire — connect + snapshot', () => {
     expect(wire.snapshot().frame).toEqual(drawn.frame);
     expect(wire.snapshot().trees.get('main')).toEqual(drawn.trees.main);
     expect(FakeSocket.last().url).toContain('seed=abcdef0123');
-    // a later connect is not the page's shell
     FakeSocket.last().serverClose(4403);
     expect(FakeSocket.last().url).not.toContain('seed=');
   });
@@ -200,12 +176,6 @@ describe('the wire — connect + snapshot', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// RESET — the escape from a wedged shell, and the only one that can work.
-// The shell is server state keyed by principal, so nothing done on this
-// side (drop the token, reload, sign back in) reaches it.
-// ═══════════════════════════════════════════════════════════════
-
 describe('the wire — reset', () => {
   it('asks the server on an open socket, keeping the session and the token', () => {
     storage.setItem('nisc.token', 'tok');
@@ -215,7 +185,6 @@ describe('the wire — reset', () => {
     wire.reset();
 
     expect(FakeSocket.last().envelopes()).toEqual([{ type: 'reset' }]);
-    // Not a sign-out and not a reconnect: same socket, same token.
     expect(FakeSocket.instances).toHaveLength(1);
     expect(storage.getItem('nisc.token')).toBe('tok');
   });
@@ -224,15 +193,12 @@ describe('the wire — reset', () => {
     storage.setItem('nisc.token', 'tok');
     const wire = createWire({ url: URL, env: env() });
     FakeSocket.last().open();
-    FakeSocket.last().serverClose(1006); // an ordinary drop — a retry is scheduled
+    FakeSocket.last().serverClose(1006);
     expect(wire.status()).toBe('closed');
-    expect(FakeSocket.instances).toHaveLength(1); // still waiting on the backoff
+    expect(FakeSocket.instances).toHaveLength(1);
 
     wire.reset();
 
-    // Somebody pressing reset is telling us they are waiting now. Reattaching
-    // re-sends the current trees, so jumping the queue costs nothing — and the
-    // token rides up, because this is a recovery, not a sign-out.
     expect(FakeSocket.instances).toHaveLength(2);
     expect(upgrade(FakeSocket.last()).token).toBe('tok');
     expect(wire.status()).toBe('connecting');
@@ -248,9 +214,6 @@ describe('the wire — reset', () => {
     expect(FakeSocket.instances).toHaveLength(1);
   });
 
-  // A connect still in flight is not an open socket, so a reset connects
-  // again, and lets go of the socket it was waiting on: the wire listens to one
-  // socket for one snapshot.
   describe('while a connect is in flight', () => {
     const row = (value: string): { type: 'text'; value: string }[] => [{ type: 'text', value }];
     const resetWhileConnecting = (): { wire: ReturnType<typeof createWire>; first: FakeSocket; second: FakeSocket } => {
@@ -312,9 +275,6 @@ describe('the wire — back', () => {
 
     wire.back();
 
-    // A back pressed during an outage is about a screen the person is no longer
-    // being served. Replaying it on reconnect would move them somewhere they
-    // asked to go one outage ago.
     expect(FakeSocket.last().envelopes()).toEqual([]);
   });
 
@@ -339,7 +299,6 @@ describe('the wire — session lifecycle (become)', () => {
     expect(first.closed).toBe(true);
     expect(FakeSocket.instances).toHaveLength(2);
     expect(upgrade(FakeSocket.last()).token).toBe('granted-1');
-    // a different principal is a different application — the snapshot is blanked
     expect(wire.snapshot().frame).toEqual([]);
     expect(wire.snapshot().trees.size).toBe(0);
   });
@@ -353,7 +312,7 @@ describe('the wire — session lifecycle (become)', () => {
 
     expect(storage.getItem('nisc.token')).toBeNull();
     expect(FakeSocket.instances).toHaveLength(2);
-    expect(upgrade(FakeSocket.last())).toEqual({ target: URL, token: null }); // anonymous now
+    expect(upgrade(FakeSocket.last())).toEqual({ target: URL, token: null });
   });
 
   it('INVALID_TOKEN (4401) drops the stale token and reconnects anonymous — never loops on it', () => {
@@ -362,41 +321,34 @@ describe('the wire — session lifecycle (become)', () => {
 
     FakeSocket.last().serverClose(CLOSE_INVALID_TOKEN);
 
-    // recovered to anonymous at once, not via a backoff retry with the bad token
     expect(storage.getItem('nisc.token')).toBeNull();
     expect(FakeSocket.instances).toHaveLength(2);
     expect(upgrade(FakeSocket.last())).toEqual({ target: URL, token: null });
 
-    // and no scheduled retry ever re-sends the stale token, however long we wait
     vi.advanceTimersByTime(120_000);
     const staleSockets = FakeSocket.instances.filter((s) => upgrade(s).token === 'stale');
-    expect(staleSockets).toHaveLength(1); // only the very first connect, and never again
+    expect(staleSockets).toHaveLength(1);
   });
 });
 
 describe('the wire — reconnect backoff', () => {
   it('an abnormal close backs off with growing delay, and a connection that was served a screen resets it', () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0); // delay collapses to ceiling/2, deterministic
+    vi.spyOn(Math, 'random').mockReturnValue(0); // The delay collapses to ceiling/2, which makes it deterministic
     createWire({ url: URL, env: env() });
     expect(FakeSocket.instances).toHaveLength(1);
 
-    // first failure → 1000/2 = 500ms
     FakeSocket.last().serverClose(1006);
     vi.advanceTimersByTime(499);
     expect(FakeSocket.instances).toHaveLength(1);
     vi.advanceTimersByTime(1);
     expect(FakeSocket.instances).toHaveLength(2);
 
-    // second consecutive failure backs off further → 2000/2 = 1000ms
     FakeSocket.last().serverClose(1006);
     vi.advanceTimersByTime(999);
     expect(FakeSocket.instances).toHaveLength(2);
     vi.advanceTimersByTime(1);
     expect(FakeSocket.instances).toHaveLength(3);
 
-    // a connection that is served its first frame forgets the backoff — next
-    // failure is 500ms again (one that only opened has been served nothing
-    // yet: a server opens a connection to refuse it, see below)
     FakeSocket.last().open();
     FakeSocket.last().emit({ type: 'frame', tree: [] });
     FakeSocket.last().serverClose(1006);
@@ -404,19 +356,12 @@ describe('the wire — reconnect backoff', () => {
     expect(FakeSocket.instances).toHaveLength(4);
   });
 
-  // A SERVER THAT REFUSES A CONNECTION OPENS IT FIRST: a refusal is a message
-  // and a close code, and both need an open socket. So the backoff is not
-  // forgotten when a socket opens: a terminal that is refused every time (no
-  // place left for a shell for nobody, `4503`) would otherwise come back every
-  // half second to a second, for as long as it is refused.
   const refusedWith = (code: number, said: Record<string, unknown>[]): void => {
     const socket = FakeSocket.last();
     socket.open();
     for (const message of said) socket.emit(message);
     socket.serverClose(code);
   };
-  // The delays a wire waits before each of its next connects, in order: the
-  // clock is moved to each connect, and how far it had to be moved is kept.
   const waitsBefore = (connects: number, refuse: () => void): number[] => {
     const waits: number[] = [];
     for (let i = 0; i < connects; i += 1) {
@@ -464,7 +409,6 @@ describe('the wire — reconnect backoff', () => {
     const sock = FakeSocket.last();
     wire.dispose();
     expect(sock.closed).toBe(true);
-    // a close arriving after dispose must not schedule a reconnect
     sock.serverClose(1006);
     vi.advanceTimersByTime(120_000);
     expect(FakeSocket.instances).toHaveLength(1);
@@ -495,8 +439,6 @@ describe('the wire — inbound diagnostics', () => {
   });
 });
 
-// What the server sends is read as the protocol says it, whole, before any of
-// it reaches the screen. Nothing is cast.
 describe('the wire — what the server sends is parsed', () => {
   const row = { type: 'text', value: 'row' };
   const shown = (): { wire: ReturnType<typeof createWire>; socket: FakeSocket; warn: ReturnType<typeof vi.spyOn> } => {
@@ -539,15 +481,12 @@ describe('the wire — what the server sends is parsed', () => {
     expect(wire.status()).toBe('open');
   });
 
-  // The text may carry a session token, and a console is read by more than the
-  // person sitting at it.
   it('what it says of a message it cannot read is its type, never its text', () => {
     const { socket, warn } = shown();
     socket.emit({ type: 'session', token: 'st_SECRET', principal: 'usr_1' });
     expect(warn).toHaveBeenCalledOnce();
     expect(String(warn.mock.calls[0]?.[0])).toContain('session');
     expect(JSON.stringify(warn.mock.calls)).not.toContain('st_SECRET');
-    // and it did not sign in on it
     expect(FakeSocket.instances).toHaveLength(1);
   });
 
@@ -561,8 +500,6 @@ describe('the wire — what the server sends is parsed', () => {
     expect(warn).toHaveBeenCalledOnce();
   });
 
-  // The checksum proves the text is the server's. It does not prove the text
-  // is a frame, and a rebuilt one is held to the same schema as a whole one.
   it('a delta that rebuilds, to the checksum, something that is not a render is not put on the screen: it asks for whole frames', () => {
     const { wire, socket } = shown();
     const held = wire.snapshot();
@@ -593,8 +530,6 @@ describe('the wire — what the server sends is parsed', () => {
   });
 });
 
-// The screen a drawn page carries is read by the same rule: whole, or the page
-// is one that was not drawn, and the terminal starts from nothing.
 describe('readDocumentSnapshot', () => {
   const carrying = (snapshot: unknown): Pick<Document, 'getElementById'> => ({ getElementById: () => ({ textContent: typeof snapshot === 'string' ? snapshot : JSON.stringify(snapshot) }) as HTMLElement });
   const drawn = { frame: [{ type: 'text', value: 'page' }], trees: { main: [{ type: 'component', name: 'Row', props: { gap: 8 }, children: [{ type: 'text', value: 'row' }], ref: 'r1' }] }, principal: false };
@@ -634,7 +569,6 @@ describe('the wire — connection status', () => {
     expect(wire.status()).toBe('closed');
     expect(ticks).toBe(2);
 
-    // the scheduled retry flips it back to connecting
     vi.advanceTimersByTime(1000);
     expect(wire.status()).toBe('connecting');
     expect(ticks).toBe(3);
@@ -646,13 +580,6 @@ describe('the wire — connection status', () => {
     expect(wire.status()).toBe('closed');
   });
 });
-
-// ═══════════════════════════════════════════════════════════════
-// FRAME DELTAS, terminal side. The wire either lands on exactly the frame the
-// server meant, or it asks for a whole one. There is no third outcome — a
-// terminal rendering a frame nobody authored is the failure this layer must
-// not have, and the checksum is what rules it out.
-// ═══════════════════════════════════════════════════════════════
 
 describe('the wire — frame deltas', () => {
   const render = (tree: unknown[]): string => JSON.stringify({ type: 'render', canvas: 'main', tree });
@@ -713,7 +640,7 @@ describe('the wire — frame deltas', () => {
     socket.emit({ type: 'render-delta', canvas: 'main', ops: encodeDelta(base, next), hash: frameHash(next) + 1 });
 
     expect(socket.envelopes().filter((m) => m['type'] === 'resync')).toHaveLength(1);
-    expect(wire.snapshot().trees.get('main')).toBe(held); // untouched, not half-applied
+    expect(wire.snapshot().trees.get('main')).toBe(held);
   });
 
   it('asks to resync when a delta arrives with no base to apply it to', () => {
@@ -736,12 +663,9 @@ describe('the wire — frame deltas', () => {
     socket.emit({ type: 'render-delta', canvas: 'main', ops: [[0, 0, 99999]], hash: 1 });
 
     expect(socket.envelopes().filter((m) => m['type'] === 'resync')).toHaveLength(1);
-    expect(wire.status()).toBe('open'); // it did not take the connection down with it
+    expect(wire.status()).toBe('open');
   });
 
-  // A reconnect is served whole frames from scratch. A base carried across it
-  // is a base the server never assumed, and every delta after it would be a
-  // silent lie the checksum has to catch — cheaper to never hold one.
   it('drops its bases on reconnect', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     createWire({ url: URL, env: env(), delta: true });
@@ -762,8 +686,6 @@ describe('the wire — frame deltas', () => {
   });
 });
 
-// browserEnv is browser code — tested against a faked window, the one place
-// a global shim is honest (it IS the host this env binds to).
 describe('browserEnv — the browser host', () => {
   const g = globalThis as unknown as { window?: unknown };
   afterEach(() => {
@@ -788,7 +710,7 @@ describe('browserEnv — the browser host', () => {
   });
 
   it('survives a storage-less context (private mode) without throwing', () => {
-    g.window = { location: { protocol: 'http:', host: 'x' } }; // no localStorage at all
+    g.window = { location: { protocol: 'http:', host: 'x' } };
     const e = browserEnv();
     expect(e.tokens.load()).toBeNull();
     e.tokens.save('t');
@@ -796,8 +718,6 @@ describe('browserEnv — the browser host', () => {
     expect(e.tokens.held?.()).toBe(false);
   });
 
-  // The session a browser keeps is in a cookie this page cannot read; the flag
-  // beside it is all the page sees, and it is named for the page's own port.
   describe('what the page can see of a session its browser keeps', () => {
     const d = globalThis as unknown as { document?: unknown };
     let visible = '';
@@ -841,7 +761,6 @@ describe('browserEnv — the browser host', () => {
       e.tokens.save('tok');
       e.tokens.load();
       expect(written).toEqual([]);
-      // letting go removes any cookie copy of the token, with what is stored
       e.tokens.clear();
       expect(storage.getItem('nisc.token')).toBeNull();
       expect(written).toEqual(['nisc.token=; Path=/; Max-Age=0; SameSite=Lax; Secure']);
@@ -886,8 +805,6 @@ describe('the wire — protocol', () => {
     expect(FakeSocket.instances).toHaveLength(1);
   });
 
-  // A server that was behind gets updated, and a reset is the way back to it.
-  // That the last one could not be spoken to says nothing about this one.
   it('a reset out of incompatible that reaches a server it can speak to is a connection like any other: a drop is retried', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const hello = { type: 'hello', principal: null, catalog: { actions: [], hash: 'x' } };
@@ -910,9 +827,6 @@ describe('the wire — protocol', () => {
   });
 });
 
-// A host whose browser may keep the session itself (a cookie the page cannot
-// read, written by the server's answer to the upgrade). `kept` stands for that
-// cookie here; `held` is all the wire ever asks of it.
 describe('the wire — on a host whose browser keeps the session', () => {
   let kept = false;
   const host = (key?: string): WireEnv => {
@@ -928,11 +842,10 @@ describe('the wire — on a host whose browser keeps the session', () => {
     storage.setItem('nisc.token', 'tok-1');
     createWire({ url: URL, env: host() });
     expect(upgrade(FakeSocket.last()).token).toBe('tok-1');
-    kept = true; // the answer to that upgrade wrote the cookie
+    kept = true;
     FakeSocket.last().open();
     FakeSocket.last().emit(hello);
     expect(storage.getItem('nisc.token')).toBeNull();
-    // and it is not offered again: the browser sends the cookie by itself
     FakeSocket.last().serverClose(1006);
     vi.advanceTimersByTime(60_000);
     expect(FakeSocket.instances).toHaveLength(2);
@@ -966,9 +879,6 @@ describe('the wire — on a host whose browser keeps the session', () => {
     expect(upgrade(FakeSocket.last()).token).toBe('granted-1');
   });
 
-  // The browser may hold a token that still resolves (an app's own provider's
-  // is not moss's to revoke), so a terminal that was signed out says so — on
-  // every upgrade until the server has heard it.
   it('signed out, it says it is leaving until an upgrade is answered', () => {
     kept = true;
     createWire({ url: URL, env: host() });
@@ -977,7 +887,7 @@ describe('the wire — on a host whose browser keeps the session', () => {
     expect(FakeSocket.last().url).not.toContain('leave');
     FakeSocket.last().serverClose(CLOSE_SIGNED_OUT);
     expect(FakeSocket.last().url).toContain('leave=1');
-    FakeSocket.last().serverClose(1006); // dropped before it was answered
+    FakeSocket.last().serverClose(1006);
     vi.advanceTimersByTime(60_000);
     expect(FakeSocket.last().url).toContain('leave=1');
     FakeSocket.last().open();
@@ -1010,8 +920,6 @@ describe('the wire — on a host whose browser keeps the session', () => {
     expect(createWire({ url: URL, env: host(), initial: drawn }).snapshot().frame).toEqual(drawn.frame);
   });
 
-  // Handed a sign-in sealed, the page holds nothing it can read: it offers it
-  // back on the next upgrade, where its browser's own cookie opens it.
   it('a sign-in handed to it sealed is offered back as it is — no token, nothing stored — until an upgrade is answered', () => {
     createWire({ url: URL, env: host() });
     expect(FakeSocket.last().url).toContain('sealed=1');
@@ -1021,7 +929,6 @@ describe('the wire — on a host whose browser keeps the session', () => {
     expect(FakeSocket.last().offered).toEqual(['nisc', 'nisc.sealed.c2VhbGVk']);
     expect(upgrade(FakeSocket.last()).token).toBeNull();
     expect(storage.getItem('nisc.token')).toBeNull();
-    // dropped before it was answered: offered again
     FakeSocket.last().serverClose(1006);
     vi.advanceTimersByTime(60_000);
     expect(FakeSocket.last().offered).toEqual(['nisc', 'nisc.sealed.c2VhbGVk']);
@@ -1034,9 +941,6 @@ describe('the wire — on a host whose browser keeps the session', () => {
     expect(storage.getItem('nisc.token')).toBeNull();
   });
 
-  // What a sealed sign-in opened to may be refused — a session revoked in that
-  // second, a token its provider will not have. Offered again it would be
-  // refused again, at once, for the whole minute it stays good.
   it('a sealed sign-in that is refused is not offered again', () => {
     createWire({ url: URL, env: host() });
     FakeSocket.last().open();

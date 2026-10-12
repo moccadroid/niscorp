@@ -6,24 +6,8 @@ import { createServer } from '../src/server';
 import { mintDevToken } from '../src/identity';
 import { pristineDatabases } from './pristine-database';
 
-// A database of its own for each test that wants one, started from one that
-// was initialised once for this file (./pristine-database.ts says why).
 const freshDatabase = pristineDatabases();
 
-// ═══════════════════════════════════════════════════════════════
-// A ROUTE THE APP ADDS KNOWS WHO IS ASKING. The server is a hono app, and an
-// app mounts routes of its own on it after it is built — where a file picker
-// sends a file, for one: a file never goes over the socket (AGENTS.md rule
-// 9a), so the bytes arrive at a route like these.
-//
-// Such a route reads the principal off the context exactly as moss's own
-// surfaces do, and that holds only because the identity middleware is
-// registered on `*` inside createServer, ahead of anything an app can add.
-// Registered on moss's own prefixes only, it would leave an app's route
-// reading nobody for everybody.
-// ═══════════════════════════════════════════════════════════════
-
-// 'dev-open' and PGlite each announce themselves at boot; neither line is this test.
 const quietly = async <T>(run: () => Promise<T>): Promise<T> => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -40,7 +24,6 @@ const boot = async () => {
   const app = defineApp({ charter: { public: [], staff: [] }, assignments: { usr_staff: ['staff'] }, actions: {} });
   const server = await quietly(() => createServer(app, { pool, db: pool, session: 'dev-open' }));
   const reached = { times: 0 };
-  // The app's own routes, added the way an app adds them: to the built server.
   server.get('/who', (c) => {
     reached.times += 1;
     return c.json({ principal: c.get('principal'), roles: c.get('resolved').roles });
@@ -67,8 +50,8 @@ describe('a route the app adds to the built server', () => {
     const { server } = await boot();
     const answer = await server.request('/who');
     expect(await answer.json()).toEqual({ principal: null, roles: ['public'] });
-    // A browser sends a cookie with requests another site makes it send. So no
-    // route reads the one a session is kept in: who is asking is `Authorization`.
+    // A cookie travels with requests another site causes, so no route reads
+    // the one a session is kept in: who is asking is `Authorization`.
     const held = mintDevToken('usr_staff');
     const withCookie = await server.request('/who', { headers: { origin: 'http://localhost', host: 'localhost', cookie: `nisc.token=${held}; __Host-nisc.token=${held}` } });
     expect(await withCookie.json()).toEqual({ principal: null, roles: ['public'] });

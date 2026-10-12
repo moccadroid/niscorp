@@ -11,34 +11,25 @@ import { sealSession } from '../src/identity';
 import type { NiscApp } from '../src/manifest';
 import { hostConfig, standHost } from './shell-host-double';
 
-// A fake transport — the four-function Connection seam, capturing everything
-// so the protocol can be driven headlessly (no websocket).
 class FakeConnection implements Connection {
   sent: ServerMessage[] = [];
   closed?: { code?: number; reason?: string };
   upgrade?: NonNullable<Connection['upgrade']>;
   seal?: (token: string) => Promise<string>;
-  // what the upgrade was answered with, when the transport left the answering to moss
   answered?: readonly string[];
-  // the order things happened in: 'answer', then each frame's type
   order: string[] = [];
-  // the terminal behind this connection holds a token, and offered it on the upgrade
   offering(token: string): this { this.upgrade = { ...this.upgrade, offered: offerToken(token) }; return this; }
-  // the upgrade came from a browser: where its page is, where it was addressed, the cookies it carried
   from(page: { origin: string | null; host: string; cookie?: string }): this {
     this.upgrade = { offered: offerToken(null), ...this.upgrade, origin: page.origin, host: page.host, cookie: page.cookie ?? null, answer: (cookies) => { this.answered = cookies; this.order.push('answer'); } };
     return this;
   }
   private onMsg?: (t: string) => void;
   private onCls?: () => void;
-  // Whatever the socket sends, in any test here, is something a terminal reads:
-  // the schema it is held to is the one the terminal parses with.
   send(text: string): void { const message = ServerMessageSchema.parse(JSON.parse(text)); this.sent.push(message); this.order.push(message.type); }
   close(code?: number, reason?: string): void { this.closed = { code, reason }; this.onCls?.(); }
   onMessage(fn: (t: string) => void): void { this.onMsg = fn; }
   onClose(fn: () => void): void { this.onCls = fn; }
   emit(msg: unknown): void { this.onMsg?.(JSON.stringify(msg)); }
-  // text as it came off the transport, which need not be JSON at all
   emitText(text: string): void { this.onMsg?.(text); }
   first<T extends ServerMessage['type']>(type: T): Extract<ServerMessage, { type: T }> | undefined {
     return this.sent.find((m) => m.type === type) as Extract<ServerMessage, { type: T }> | undefined;
@@ -47,10 +38,8 @@ class FakeConnection implements Connection {
 
 const CATALOG = { ids: ['home', 'crm.deals'], hash: 'abc123' };
 
-// The address of a current terminal: the protocol it speaks, and nothing about who it is.
 const SOCKET = `/socket?protocol=${PROTOCOL}`;
 
-// A recording shell session — proves the socket routes into the host.
 const recordingSession = (): ShellSession & { calls: string[] } => {
   const calls: string[] = [];
   return {
@@ -70,15 +59,12 @@ const recordingSession = (): ShellSession & { calls: string[] } => {
   };
 };
 
-// The host seam, filled out — the socket only ever calls `session`, but a
-// partial object here would drift silently as the host grows.
+// Filled out in full: a partial object here would drift silently as the host grows.
 const hostFor = (session: ShellSession): ShellHost => ({
   session: async () => session,
   snapshot: async () => ({ frame: [], trees: {}, settled: true, live: true, why: [], drawnWith: [] }),
   list: () => [],
   reset: () => false,
-  // False: nothing in these tests pushes to a principal, and a stub that
-  // claimed a successful delivery would be asserting something no one asked it.
   deliver: () => false,
 });
 
@@ -124,8 +110,6 @@ describe('socket — the authority channel', () => {
     expect(conn.first('hello')).toBeUndefined();
   });
 
-  // The address is what every proxy on the way writes into its log, so it is
-  // not where a terminal says who it is.
   it('a token in the address is not who the terminal is', async () => {
     const accept = createSocket(ctxWith());
     const conn = new FakeConnection();
@@ -141,7 +125,6 @@ describe('socket — the authority channel', () => {
     const asked: string[] = [];
     const accept = createSocket(ctxWith({ session: (token) => (asked.push(token), 'usr_1') }));
     const conn = new FakeConnection().offering(held);
-    // what is offered is a legal subprotocol, whatever the token is made of
     expect(conn.upgrade?.offered.every((entry) => /^[\w.-]+$/.test(entry))).toBe(true);
     await accept(SOCKET, conn);
     expect(asked).toEqual([held]);
@@ -167,8 +150,6 @@ describe('socket — the authority channel', () => {
     ['older than the server serves', String(PROTOCOL_MIN - 1), 'client_too_old'],
     ['newer than the server speaks', String(PROTOCOL + 1), 'server_too_old'],
     ['not a protocol at all', 'banana', 'client_too_old'],
-    // A protocol is digits. `Number()` would read each of these as the
-    // protocol this server speaks.
     ['whose protocol is written in hex', `0x${PROTOCOL.toString(16)}`, 'client_too_old'],
     ['whose protocol is written with a fraction', `${PROTOCOL}.0`, 'client_too_old'],
     ['whose protocol is written with an exponent', `${PROTOCOL}e0`, 'client_too_old'],
@@ -235,8 +216,6 @@ describe('socket — the authority channel', () => {
     expect(conn.first('error')?.code).toBe('invalid_message');
   });
 
-  // What a terminal sends is read as the protocol says it, whole, before any
-  // of it is acted on: a message with a field too many is not routed.
   it.each([
     ['text that is not JSON', '{"type":"back"'],
     ['JSON that is not an object', '"back"'],
@@ -288,7 +267,7 @@ describe('socket — the authority channel', () => {
   });
 
   it('without a shell host an event is answered no_shell', async () => {
-    const accept = createSocket(ctxWith()); // no shells
+    const accept = createSocket(ctxWith());
     const conn = new FakeConnection();
     await accept(SOCKET, conn.offering('good'));
     conn.sent.length = 0;
@@ -296,8 +275,6 @@ describe('socket — the authority channel', () => {
     expect(conn.first('error')?.code).toBe('no_shell');
   });
 
-  // RESET — the one envelope that names no canvas, because it is the recovery
-  // for a session whose canvases are the broken thing.
   it('a reset envelope routes to the session reset, carrying no canvas', async () => {
     const session = recordingSession();
     const shells = hostFor(session);
@@ -307,12 +284,11 @@ describe('socket — the authority channel', () => {
     conn.sent.length = 0;
     conn.emit({ type: 'reset' });
     expect(session.calls).toContain('reset');
-    // Answered by the frames the reset produces, not by an envelope of its own.
     expect(conn.first('error')).toBeUndefined();
   });
 
   it('a reset without a shell host is answered no_shell, not silence', async () => {
-    const accept = createSocket(ctxWith()); // no shells
+    const accept = createSocket(ctxWith());
     const conn = new FakeConnection();
     await accept(SOCKET, conn.offering('good'));
     conn.sent.length = 0;
@@ -320,7 +296,6 @@ describe('socket — the authority channel', () => {
     expect(conn.first('error')?.code).toBe('no_shell');
   });
 
-  // BACK — one gesture over the whole shell, so it names no canvas either.
   it('a back envelope routes to the session back, carrying no canvas', async () => {
     const session = recordingSession();
     const accept = createSocket(ctxWith({ shells: hostFor(session) }));
@@ -329,12 +304,11 @@ describe('socket — the authority channel', () => {
     conn.sent.length = 0;
     conn.emit({ type: 'back' });
     expect(session.calls).toContain('back');
-    // Answered by whatever canvases moved, not by an envelope of its own.
     expect(conn.first('error')).toBeUndefined();
   });
 
   it('a back without a shell host is answered no_shell, not invalid_message', async () => {
-    const accept = createSocket(ctxWith()); // no shells
+    const accept = createSocket(ctxWith());
     const conn = new FakeConnection();
     await accept(SOCKET, conn.offering('good'));
     conn.sent.length = 0;
@@ -342,7 +316,6 @@ describe('socket — the authority channel', () => {
     expect(conn.first('error')?.code).toBe('no_shell');
   });
 
-  // RESYNC — the terminal's copy of a canvas drifted; the shell is fine.
   it('a resync envelope routes to the session resync, leaving the shell alone', async () => {
     const session = recordingSession();
     const accept = createSocket(ctxWith({ shells: hostFor(session) }));
@@ -364,8 +337,6 @@ describe('socket — the authority channel', () => {
     expect(conn.first('error')?.code).toBe('no_shell');
   });
 
-  // The delta capability is negotiated on the upgrade url —
-  // a terminal that says nothing is a terminal that gets whole frames.
   it('?delta=1 attaches delta-capable; its absence does not', async () => {
     const asked = recordingSession();
     await createSocket(ctxWith({ shells: hostFor(asked) }))(`${SOCKET}&delta=1`, new FakeConnection().offering('good'));
@@ -383,15 +354,7 @@ describe('socket — the authority channel', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// REVALIDATION — identity asked twice. The HTTP surfaces re-ask on every
-// request; a socket that asked only at upgrade would be the hole every
-// long-lived credential leaks through, and an app's tokens could not expire
-// on a live connection.
-// ═══════════════════════════════════════════════════════════════
-
 describe('socket — revalidating a live connection', () => {
-  // A verifier an app could plausibly write: tokens resolve until they don't.
   const expiring = (): { verify: SocketConfig['session']; expire: () => void; asked: () => number } => {
     let alive = true;
     let asked = 0;
@@ -414,7 +377,6 @@ describe('socket — revalidating a live connection', () => {
       await accept(SOCKET, conn.offering('good'));
       expect(conn.first('hello')?.principal).toBe('usr_1');
 
-      // Still valid: many passes, no interference.
       await vi.advanceTimersByTimeAsync(5000);
       expect(conn.closed).toBeUndefined();
 
@@ -422,7 +384,6 @@ describe('socket — revalidating a live connection', () => {
       await vi.advanceTimersByTimeAsync(1000);
 
       expect(conn.closed?.code).toBe(CLOSE_INVALID_TOKEN);
-      // Diagnostics before authority, exactly as at upgrade.
       expect(conn.first('error')?.code).toBe('invalid_token');
       accept.stop();
     } finally {
@@ -464,8 +425,6 @@ describe('socket — revalidating a live connection', () => {
 
       down = true;
       await vi.advanceTimersByTimeAsync(5000);
-      // Signing everybody out on a database blip turns a transient fault into
-      // an outage. The connection rides it out and is asked again.
       expect(conn.closed).toBeUndefined();
 
       down = false;
@@ -484,12 +443,11 @@ describe('socket — revalidating a live connection', () => {
       const auth = expiring();
       const accept = createSocket(ctxWith({ session: auth.verify, revalidateMs: 1000 }));
       const conn = new FakeConnection();
-      await accept(SOCKET, conn); // no token
+      await accept(SOCKET, conn);
       const before = auth.asked();
       await vi.advanceTimersByTimeAsync(10_000);
       expect(auth.asked()).toBe(before);
       expect(conn.closed).toBeUndefined();
-      // And a pass logs nothing about them.
       expect(logged).not.toHaveBeenCalled();
       accept.stop();
     } finally {
@@ -550,9 +508,6 @@ describe('socket — revalidating a live connection', () => {
     }
   });
 
-  // A pass asks the verifier about every connection, one after another. The
-  // next pass does not start while one is running, so a verifier that slows
-  // down is not asked more the slower it gets.
   it('a pass that is still asking when the next one is due is not joined by a second', async () => {
     vi.useFakeTimers();
     try {
@@ -578,9 +533,6 @@ describe('socket — revalidating a live connection', () => {
     }
   });
 
-  // Nobody is closed on a verifier that cannot be asked. That it could not be
-  // asked is still something a deployment has to be able to read: said once
-  // for a pass, with the error, and not once for each connection.
   it('a verifier that cannot be asked is said in the log, once for a pass', async () => {
     vi.useFakeTimers();
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -611,9 +563,6 @@ describe('socket — revalidating a live connection', () => {
     }
   });
 
-  // A connection whose transport throws when it is told (it is half gone) does
-  // not stay in the map: a pass that threw on it again, at the same place,
-  // would never ask about or close the connections after it.
   it('a connection that cannot be told it expired does not keep the ones after it open', async () => {
     vi.useFakeTimers();
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -631,7 +580,6 @@ describe('socket — revalidating a live connection', () => {
       auth.expire();
       await vi.advanceTimersByTimeAsync(1000);
       expect(next.closed?.code).toBe(CLOSE_INVALID_TOKEN);
-      // the one that could not be told is closed all the same, and not asked about again
       expect(gone.closed?.code).toBe(CLOSE_INVALID_TOKEN);
       const before = auth.asked();
       await vi.advanceTimersByTimeAsync(5000);
@@ -643,8 +591,6 @@ describe('socket — revalidating a live connection', () => {
     }
   });
 
-  // A connection whose transport throws on the close as well says nothing
-  // afterwards: it is forgotten because it expired, not because it closed.
   it('a connection that can be neither told nor closed is forgotten all the same, and is not asked about again', async () => {
     vi.useFakeTimers();
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -671,8 +617,6 @@ describe('socket — revalidating a live connection', () => {
     }
   });
 
-  // Asking takes a round trip, and a terminal can leave during it. What it
-  // was asked about is then nobody's: it is not told, and not closed again.
   it('a connection that closed while it was being asked about is left alone', async () => {
     vi.useFakeTimers();
     try {
@@ -688,7 +632,6 @@ describe('socket — revalidating a live connection', () => {
       expect(answers).toHaveLength(1);
       conn.close(1000, 'the terminal left');
       conn.sent.length = 0;
-      // The verifier answers: the token is nobody's any more.
       answers[0]?.(null);
       await vi.advanceTimersByTimeAsync(0);
 
@@ -700,15 +643,6 @@ describe('socket — revalidating a live connection', () => {
     }
   });
 });
-
-// ═══════════════════════════════════════════════════════════════
-// Refusing one session must never cost the others. Every await in accept can
-// throw — a definition failing validation in the shell build, a verifier
-// dying mid-upgrade — and the transport calls accept without awaiting it, so
-// a rejection that escapes is an unhandled one and Node kills the process.
-// These hold the contract: accept RESOLVES on failure, the refused terminal
-// reads a sentence and a 4500, and the next connection is answered whole.
-// ═══════════════════════════════════════════════════════════════
 
 describe('socket — a refused session is one terminal, not the server', () => {
   it('a shell build failing validation refuses that terminal, naming the definitions', async () => {
@@ -735,7 +669,6 @@ describe('socket — a refused session is one terminal, not the server', () => {
     expect(error?.message).toContain('crm.notes');
     expect(refused.closed?.code).toBe(CLOSE_SHELL_FAILED);
 
-    // The server still answers: an anonymous terminal gets its whole session.
     const next = new FakeConnection();
     await accept(SOCKET, next);
     expect(next.first('hello')?.principal).toBeNull();
@@ -756,19 +689,12 @@ describe('socket — a refused session is one terminal, not the server', () => {
     expect(conn.first('error')?.code).toBe('session_failed');
     expect(conn.closed?.code).toBe(CLOSE_SHELL_FAILED);
 
-    // Anonymous never asks the verifier — the same server still answers it.
     const next = new FakeConnection();
     await accept(SOCKET, next);
     expect(next.first('hello')?.principal).toBeNull();
   });
 });
 
-// What a refused terminal reads is that it was refused. The error that refused
-// it is the server's: it can name a host, a table, a user, a file. Whoever is
-// on the other end of a socket has not yet been shown to be anybody, so it is
-// logged here and none of its text is sent. The one thing a refusal does say
-// is which definitions failed validation, which is the app's own artifacts by
-// id and what a developer mid-edit is looking for.
 describe('socket — a refusal does not carry the error that caused it', () => {
   const INTERNAL = 'connect ECONNREFUSED 10.1.2.3:5432 — password authentication failed for user "moss_rw"';
 
@@ -792,12 +718,6 @@ describe('socket — a refusal does not carry the error that caused it', () => {
   });
 });
 
-// The same holds once a session is open. A transport calls the message handler
-// from its own listener (on Node, ws's `message` event), and a throw there is
-// an uncaught exception: one shell failing on one message, and the process
-// every session lives in is gone. So the handler lets nothing out. What failed
-// is logged where somebody can read it, the terminal is told that its message
-// was not acted on and nothing of why, and the connection stays as it was.
 describe('socket — a message that cannot be acted on is one message, not the server', () => {
   const INTERNAL = 'relation "deals" does not exist at 10.1.2.3:5432';
   const failing = (): ShellSession & { calls: string[] } => {
@@ -845,8 +765,6 @@ describe('socket — a message that cannot be acted on is one message, not the s
     logged.mockRestore();
   });
 
-  // The terminal may be gone by the time there is something to tell it. That
-  // is one more thing that must not leave the handler.
   it('a transport that throws on the answer costs nothing either', async () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     const accept = createSocket(ctxWith({ shells: hostFor(failing()) }));
@@ -861,9 +779,6 @@ describe('socket — a message that cannot be acted on is one message, not the s
   });
 });
 
-// A terminal served by the app it talks to does not hold its session: its
-// browser does, in a cookie the page cannot read, and sends it with the
-// upgrade. The answer to the upgrade is where that cookie is written.
 describe('socket — a browser on the app’s own page', () => {
   const HERE = { origin: 'https://app.example.com', host: 'app.example.com' };
 
@@ -897,10 +812,6 @@ describe('socket — a browser on the app’s own page', () => {
     expect(conn.order[0]).toBe('answer');
   });
 
-  // Over plain http on the default port, a script-readable copy of the token
-  // has the very name of this cookie. The browser sends it, the page offers the
-  // same token from storage — and the answer replaces the copy with one script
-  // cannot read.
   it('a token the page offers is written even when the browser sent the same one', async () => {
     const conn = new FakeConnection().from({ origin: 'http://intranet.example', host: 'intranet.example', cookie: 'nisc.token=good' }).offering('good');
     await createSocket(ctxWith())(SOCKET, conn);
@@ -929,8 +840,6 @@ describe('socket — a browser on the app’s own page', () => {
     expect(conn.answered).toEqual(['__Host-nisc.token=; HttpOnly; Path=/; SameSite=Lax; Secure; Max-Age=0', 'nisc.token.held=; Path=/; SameSite=Lax; Secure; Max-Age=0']);
   });
 
-  // A sign-out under an app's own provider leaves a token that still resolves
-  // in the browser; the terminal says it was signed out, and it is taken back.
   it('a terminal that says it is leaving is nobody whatever its browser holds, and the cookie is taken back', async () => {
     const session = vi.fn(() => 'usr_1');
     const conn = new FakeConnection().from({ ...HERE, cookie: '__Host-nisc.token=good' });
@@ -960,10 +869,6 @@ describe('socket — a browser on the app’s own page', () => {
     expect(signingIn.answered?.map((cookie) => cookie.split('=')[0])).toEqual(['__Host-nisc.token.speaker', 'nisc.token.speaker.held']);
   });
 
-  // A seat is a name: letters, digits, `_`, `.` and `-`, at most 64 of them.
-  // What a terminal writes there becomes the name of a cookie this server
-  // sets, so one that is not a name was not said: the terminal is in the seat
-  // every terminal is in when it names none.
   it.each([
     ['holds what a name does not', 'not a name;'],
     ['is longer than a name', 'k'.repeat(65)],
@@ -977,8 +882,6 @@ describe('socket — a browser on the app’s own page', () => {
     expect(signingIn.answered?.map((cookie) => cookie.split('=')[0])).toEqual(['__Host-nisc.token', 'nisc.token.held']);
   });
 
-  // A browser keeps cookies by host and not by port, so a page on a port names
-  // it — or two apps on localhost would sign each other out.
   it('on a port, over plain http: the name ends with the port, and another app’s cookie is neither read nor touched', async () => {
     const local = { origin: 'http://localhost:5173', host: 'localhost:5173' };
     const signingIn = new FakeConnection().from(local).offering('good');
@@ -1017,8 +920,6 @@ describe('socket — a browser on the app’s own page', () => {
   });
 });
 
-// A sign-in made over the socket has to reach the browser's cookie through the
-// page. It goes sealed with a key in a second cookie the page cannot read.
 describe('socket — a sign-in handed over sealed', () => {
   const HERE = { origin: 'https://app.example.com', host: 'app.example.com' };
   const ASKING = `${SOCKET}&sealed=1`;
@@ -1033,7 +934,6 @@ describe('socket — a sign-in handed over sealed', () => {
     expect(conn.first('hello')?.principal).toBeNull();
     expect(conn.answered).toHaveLength(1);
     expect(conn.answered?.[0]).toMatch(/^__Http-nisc\.seal=[\w-]{43}; HttpOnly; Path=\/socket; SameSite=Lax; Secure$/);
-    // and a sign-in on this connection is sealed with it
     const seal = conn.answered?.[0]?.split(';')[0]?.split('=')[1] ?? '';
     const sealed = await conn.seal?.('good');
     const back = offeringSealed(new FakeConnection().from({ ...HERE, cookie: `__Http-nisc.seal=${seal}` }), sealed ?? '');
@@ -1041,9 +941,6 @@ describe('socket — a sign-in handed over sealed', () => {
     expect(back.first('hello')?.principal).toBe('usr_1');
   });
 
-  // A request shows a cookie's name and value and nothing of who set it. So
-  // over https the seal is read under the one name a browser lets no script
-  // set: a seal under any other name is not this browser's key, whoever put it there.
   it('a seal under a name a script could have set is not read, and the browser is given its own', async () => {
     const conn = new FakeConnection().from({ ...HERE, cookie: 'nisc.seal=PLANTED; __Secure-nisc.seal=PLANTED' });
     await createSocket(ctxWith())(ASKING, conn);
@@ -1083,22 +980,16 @@ describe('socket — a sign-in handed over sealed', () => {
     expect(conn.first('error')).toBeUndefined();
   });
 
-  // A browser that does not keep the seal could never sign in this way: it is
-  // told, so its terminal stops asking and is handed the next one as a token.
   it('offered back by a browser that sent no seal: nobody, and the terminal is told its browser does not keep one', async () => {
     const conn = offeringSealed(new FakeConnection().from(HERE), await sealSession('the-seal', 'good'));
     await createSocket(ctxWith())(ASKING, conn);
     expect(conn.first('hello')?.principal).toBeNull();
     expect(conn.first('error')?.code).toBe('seal_not_kept');
     expect(conn.closed).toBeUndefined();
-    // and it is given no other seal: a sign-in on this very connection is handed over as its token
     expect(conn.answered).toBeUndefined();
     expect(conn.seal).toBeUndefined();
   });
 
-  // Behind a proxy that rewrites `Host`, every page of the app looks like a
-  // page from somewhere else: it works, on its own token, and nothing else
-  // would say the session is not being kept by the browser.
   it('a browser terminal that is not on the app’s own page is said so, once', async () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const accept = createSocket(ctxWith());
@@ -1107,7 +998,6 @@ describe('socket — a sign-in handed over sealed', () => {
     await accept(ASKING, new FakeConnection().from(proxied));
     expect(warned).toHaveBeenCalledTimes(1);
     expect(String(warned.mock.calls[0]?.[0])).toContain('runtime.origins');
-    // a terminal that keeps its own token by design (a process) is not what this is about
     await createSocket(ctxWith())(SOCKET, new FakeConnection().from(proxied));
     expect(warned).toHaveBeenCalledTimes(1);
     warned.mockRestore();
@@ -1128,12 +1018,6 @@ describe('socket — a sign-in handed over sealed', () => {
   });
 });
 
-// A session takes time to stand up: who somebody is and what they hold are
-// asked, and their shell is built. The terminal may be gone by then. On Node
-// the transport tells a close to whoever is listening when it happens, and to
-// nobody who starts listening afterwards — so a connection attached after it
-// closed would be attached for ever: a kept shell would never idle, a
-// throwaway one would never be disposed.
 describe('socket — a connection that closed before its session was ready', () => {
   const counter = { id: 'counter', data: { n: 0 }, triggers: [{ event: 'ui:click', ref: 'bump', do: [{ increment: 'n' }] }] };
   const app = { charter: { public: ['counter'] }, assignments: {}, actions: { counter }, shell: { canvases: [{ id: 'main', initial: 'counter' }] } } as unknown as NiscApp;
@@ -1147,7 +1031,7 @@ describe('socket — a connection that closed before its session was ready', () 
       }),
     );
 
-  // A transport as `ws` is one: a close reaches the listeners there are, once.
+  // As in ws, a close reaches the listeners there are, once, and nobody who starts listening later.
   const droppable = (): { connection: Connection; drop: () => void } => {
     const listeners: (() => void)[] = [];
     let dropped = false;
@@ -1167,8 +1051,6 @@ describe('socket — a connection that closed before its session was ready', () 
     };
   };
 
-  // The host, with the moment its session is handed over held back: the test
-  // closes the connection in between.
   const heldBack = (host: ShellHost): { shells: Pick<ShellHost, 'session'>; built: () => ShellSession | undefined; release: () => void } => {
     let built: ShellSession | undefined;
     let release = (): void => {};
@@ -1219,9 +1101,6 @@ describe('socket — a connection that closed before its session was ready', () 
     host.stop();
   });
 
-  // Attached and then detached leaves nothing attached either, which is all
-  // the two cases above ask. But attaching sends: the frame and every canvas,
-  // to a connection that has gone, on a transport that throws for it.
   it('…and is never attached on the way: nothing is sent to a connection that has gone', async () => {
     const session = recordingSession();
     const building = { started: (): void => {}, finish: (): void => {} };
@@ -1249,7 +1128,6 @@ describe('socket — a connection that closed before its session was ready', () 
     const asked = vi.fn(async () => session);
     let release = (): void => {};
     const gate = new Promise<void>((resolve) => void (release = resolve));
-    // The catalog says when it has been asked, and answers when the test says.
     const catalog = { asked: (): void => {} };
     const beingAsked = new Promise<void>((resolve) => void (catalog.asked = resolve));
     const accept = createSocket(ctxWith({ shells: { session: asked }, catalog: async () => (catalog.asked(), await gate, CATALOG), revalidateMs: 0 }));
@@ -1266,12 +1144,7 @@ describe('socket — a connection that closed before its session was ready', () 
   });
 });
 
-// Somebody signed in has one shell, however many terminals they open. Nobody
-// signed in has one for each connection, and a connection costs whoever opens
-// it nothing: no account, no token. So how many of those are alive at once has
-// a limit, and a connection over it is told so and closed.
 describe('socket — shells for nobody alive at once', () => {
-  // A host that counts what it was asked for, and by whom.
   const counting = (): { shells: Pick<ShellHost, 'session'>; asked: (string | null)[] } => {
     const asked: (string | null)[] = [];
     return { shells: { session: async (_token, principal) => (asked.push(principal), recordingSession()) }, asked };
@@ -1290,7 +1163,6 @@ describe('socket — shells for nobody alive at once', () => {
     expect(over.first('error')?.message).toBe('This server is serving as many terminals with nobody signed in as it is set to. Try again in a moment.');
     expect(over.closed?.code).toBe(CLOSE_AT_CAPACITY);
     expect(host.asked).toEqual([null, null]);
-    // the ones being served are not touched
     for (const conn of served) expect(conn.closed).toBeUndefined();
   });
 
@@ -1337,10 +1209,6 @@ describe('socket — shells for nobody alive at once', () => {
     logged.mockRestore();
   });
 
-  // A TRANSPORT SAYS A CONNECTION CLOSED WHEN THE CLOSE HAS FINISHED, not when
-  // it was asked for: over a real socket that is a round trip, and with a peer
-  // that never answers it, as long as the library waits. A refused session is
-  // let go of when it is refused. The connection here never says it closed.
   const neverSaysClosed = (offered?: string): FakeConnection => {
     const connection = new FakeConnection();
     connection.close = (code, reason) => void (connection.closed = { code, reason });

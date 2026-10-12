@@ -3,11 +3,6 @@ import type { PgPool } from '@niscorp/vex';
 import * as moss from '../src/index';
 import { sessionRevokerOf, sessionVerifierOf } from '../src/identity/verifier';
 
-// WHO A TOKEN IS, AND WHAT THE BOOT SAYS ABOUT IT. A deployment's door is one
-// of three, and the two moss cannot vouch for are said out loud when the
-// server starts: the dev stub, and a function of the app's own. Nothing here
-// touches a database: a verifier that is not 'sessions' never asks one.
-
 const noDatabase: PgPool = { query: async () => ({ rows: [] }) };
 
 describe('the dev verifier is not something an app is handed', () => {
@@ -36,7 +31,6 @@ describe('a verifier passed as a function is named at boot', () => {
       const verify = sessionVerifierOf({ pool: noDatabase, session: verifyWithOurProvider });
       expect(said).toHaveBeenCalledTimes(1);
       expect(said).toHaveBeenCalledWith(expect.stringMatching(/^\[moss\] session: .*function.*verifyWithOurProvider/));
-      // and it is still the app's function that answers, untouched
       expect(await verify('the-one')).toBe('i_mara');
       expect(await verify('another')).toBeNull();
     } finally {
@@ -69,8 +63,6 @@ describe('a verifier passed as a function is named at boot', () => {
   });
 });
 
-// HOW A SIGN-OUT FORGETS A PRINCIPAL'S SESSIONS: the twin of the choice above,
-// asked by the server once and handed to the shell host.
 describe('sessionRevokerOf — who forgets every session a principal holds', () => {
   it("under moss's own credential it deletes them, on the pool, for that principal", async () => {
     const asked: { sql: string; params: readonly unknown[] }[] = [];

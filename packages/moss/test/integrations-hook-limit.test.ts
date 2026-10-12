@@ -3,15 +3,8 @@ import { createForwarder } from '../src/integrations/forward';
 import { proxyRoutes } from '../src/integrations/forward';
 import type { FoundIntegration } from '../src/integrations/registry';
 
-// THE WEBHOOK DOOR'S LIMIT (../src/integrations/forward.ts), held to what the
-// documents say it is: 240 calls a minute for each integration, counted by the
-// process that takes them.
-//
-// No database: the registry is a map, and the vendor's call goes nowhere.
-
 const approved: FoundIntegration = { url: 'https://vendor.example/', status: 'approved', reach: {} };
 
-// One process's door: the routes, over a forwarder of its own.
 const door = (): { hook: (id: string) => Promise<number>; sent: () => number } => {
   const send = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => new Response('{}', { status: 200 }));
   const routes = proxyRoutes({
@@ -67,9 +60,6 @@ describe('the webhook door’s limit', () => {
     expect(await hook('pay')).toBe(200);
   });
 
-  // The count is in the memory of the process that takes the call. Two
-  // processes behind one address each allow 240: a vendor is let through up to
-  // twice as often, however the balancer splits its calls.
   it('IT IS A LIMIT PER PROCESS: a second process counts from nothing', async () => {
     vi.useFakeTimers({ now: new Date('2026-10-11T12:00:00Z'), toFake: ['Date'] });
     const one = door();

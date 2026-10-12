@@ -2,9 +2,6 @@ import { describe, it, expect } from 'vitest';
 import type { ActionDefinition } from '@niscorp/nova';
 import { auditClosure } from '../src/manifest/verify';
 
-// The closure auditor — nova's action audit over a role's granted set,
-// keeping only the CROSS-ACTION break (a push to a target outside the
-// closure). Definition-level warts are not closure breaks.
 const home: ActionDefinition = {
   id: 'home',
   triggers: [{ event: 'ui:click', ref: 'open', do: [{ push: { action: 'crm.deals' } }] }],
@@ -29,9 +26,7 @@ describe('closure — the per-role wiring audit', () => {
   });
 
   it('the same target becomes reachable once granted alongside', () => {
-    // 'home' pushes 'crm.deals'; granting both closes the loop.
     expect(audit(['home', 'crm.deals'])).toEqual([]);
-    // granting only 'home' leaves its target dangling.
     expect(audit(['home']).join(' ')).toContain('crm.deals');
   });
 

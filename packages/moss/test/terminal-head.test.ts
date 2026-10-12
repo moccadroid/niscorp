@@ -5,11 +5,6 @@ import { createTerminal } from '../src/terminal';
 import type { Target } from '../src/terminal';
 import type { Wire } from '../src/client';
 
-// ═══════════════════════════════════════════════════════════════
-// The page's <head>, kept on the screen the wire holds: a `nova:head` in the
-// served trees is the page's head, whichever render target is painting them.
-// ═══════════════════════════════════════════════════════════════
-
 const element = (name: string, props: Record<string, unknown>, text?: string): RenderNode => ({
   type: 'component',
   name,
@@ -24,7 +19,6 @@ const head = (title: string, description: string): RenderNode => ({
 });
 const frame: RenderNode[] = [{ type: 'component', name: 'CanvasSlot', props: { canvasId: 'main' }, children: [] }];
 
-// A wire as far as a terminal reads it: a snapshot, and somebody to tell.
 const wireOf = (): { wire: Wire; show: (tree: RenderNode[]) => void } => {
   let trees = new Map<string, RenderNode[]>([['main', []]]);
   const listeners = new Set<() => void>();

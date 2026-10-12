@@ -17,20 +17,8 @@ import type { SeamDeps } from '../src/server/features';
 import type { Env } from '../src/server/moss-server';
 import { engineDouble } from './data-double';
 
-// THE FEATURES AS THE SERVER STARTS THEM (../src/server/features.ts), with no
-// server and no database: the running manifest is the real one, the data
-// module stands over an engine with nothing behind it (./data-double.ts), and
-// who somebody is is a function written here.
-//
-// What a feature is handed decides what it can do, whatever it was written
-// to do.
-
 const charter: Charter = { public: ['home'] };
 
-// The database the engine reads has two tables, `notes` and `tags`, and one
-// row to answer any read with (./data-double.ts). `features` is what the app
-// named: the data module is told which tables each one named as its own, as
-// the server tells it.
 const world = async (features: readonly Feature[] = []): Promise<{ deps: SeamDeps; server: Hono<Env>; operator: Hono<Env>; running: RunningManifest; start: () => Promise<void> }> => {
   const double = await engineDouble();
   const grants = scopeGrants(['notes', 'tags']);
@@ -55,7 +43,6 @@ const world = async (features: readonly Feature[] = []): Promise<{ deps: SeamDep
   return { server, operator, deps, running, start: () => startFeatures(features, deps) };
 };
 
-// A feature that keeps what it was started with, and does nothing else.
 const keeping = (name: string): { feature: Feature; seams: () => FeatureSeams } => {
   const kept: FeatureSeams[] = [];
   return {
@@ -82,9 +69,6 @@ describe('the features, as the server starts them', () => {
     expect(first.seams()).not.toBe(second.seams());
   });
 
-  // The seed assertions are signed with is the integrations feature's own
-  // setting (`createIntegrations({ signingSeed })`), so no feature is handed
-  // the private half of that key.
   it('none is handed a signing seed', async () => {
     const probe = keeping('probe');
     const { start } = await world([probe.feature]);
@@ -93,12 +77,7 @@ describe('the features, as the server starts them', () => {
   });
 });
 
-// WHAT A FEATURE ASKS ABOUT SOMETHING SOMEBODY ELSE WROTE, before it lets it
-// in. A feature somebody else writes has the seams and nothing else, so both
-// questions are seams.
 describe('the features — what somebody else wrote', () => {
-  // The app's kit: a component with a strict schema of its props, and one
-  // with none.
   const kit = { Badge: { meta: { propsSchema: z.object({ tone: z.enum(['calm', 'loud']) }).strict() } }, Text: {} };
   const started = async (): Promise<FeatureSeams> => {
     const probe = keeping('probe');
@@ -125,8 +104,6 @@ describe('the features — what somebody else wrote', () => {
   });
 });
 
-// The door hands a token to the first credential whose prefix the token
-// starts with, and to the session verifier when none does.
 describe('the features — a credential of a feature’s own', () => {
   const nobody = async (): Promise<{ refused: { status: 401; error: string; message: string } }> => ({ refused: { status: 401, error: 'refused', message: 'No.' } });
 
@@ -141,9 +118,6 @@ describe('the features — a credential of a feature’s own', () => {
 const TAGS: SeedEntry = { fingerprint: 'tagging/all', dsl: { from: ['tags'], fields: ['tags.id'], limit: 10 } };
 const NOTES: SeedEntry = { fingerprint: 'probe/notes', dsl: { from: ['notes'], fields: ['notes.id', 'notes.body'], limit: 10 } };
 
-// A FEATURE'S OWN ENTRIES RUN OUTSIDE THE APP'S POLICY, so the seam admits
-// only the tables the feature named as its own: a feature that hands
-// `ownEntries` a read of any other table is refused.
 describe("the features — a feature's own entries", () => {
   it('reach the tables that feature named as its own', async () => {
     const tagging = keeping('tagging');
@@ -175,9 +149,6 @@ describe("the features — a feature's own entries", () => {
 const roster: ActionDefinition = { id: 'ext.desk.belts.roster' };
 const checkout: ActionDefinition = { id: 'ext.desk.pay.checkout' };
 
-// ONE WRITER FOR A SET OF ACTIONS. A feature's set is kept under the feature's
-// name and written through that feature's seams, which name no set: a feature
-// cannot write the app's set or another feature's by naming it.
 describe("the features — a feature's set of actions", () => {
   it('is its own: the seam names no set, and what one feature hands over leaves another feature\'s set alone', async () => {
     const belts = keeping('belts');
@@ -187,7 +158,6 @@ describe("the features — a feature's set of actions", () => {
     belts.seams().replaceActions({ [roster.id]: roster });
     pay.seams().replaceActions({ [checkout.id]: checkout });
     expect(Object.keys(running.actions())).toEqual(['home', roster.id, checkout.id]);
-    // Handing over another set of its own replaces its own, and nothing else.
     pay.seams().replaceActions({});
     expect(Object.keys(running.actions())).toEqual(['home', roster.id]);
   });
@@ -207,8 +177,6 @@ describe("the features — a feature's set of actions", () => {
     await start();
     const rows: { now: Record<string, ActionDefinition> } = { now: { [roster.id]: roster } };
     belts.seams().setActionsLoader(async () => rows.now);
-    // A second feature of that name cannot be started beside it: the name is
-    // what the set is kept under.
     await expect(startFeatures([keeping('belts').feature], deps)).rejects.toThrow(/^moss: the set of actions "belts" is the feature "belts"'s, and the feature "belts" claims it too\./);
   });
 });

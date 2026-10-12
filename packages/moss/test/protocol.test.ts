@@ -5,15 +5,7 @@ import { ClientMessageSchema, PROTOCOL, ServerMessageSchema } from '../src/proto
 import type { ClientMessage, ServerMessage } from '../src/protocol';
 import { RenderNodeSchema, renderNodeShapes } from '../src/protocol/tree';
 
-// ═══════════════════════════════════════════════════════════════
-// The protocol's schemas, held to the two things they must not drift from:
-// nova's own type for a rendered node, and each other.
-// ═══════════════════════════════════════════════════════════════
-
 describe('protocol — a rendered node', () => {
-  // The grammar is nova's and the schema is moss's. This is checked by the
-  // compiler, not at run time: a node nova adds a field to, or a kind of node
-  // it adds, stops moss's typecheck here until the schema says the same.
   it('is, as a schema, exactly the type nova gives it', () => {
     expectTypeOf<z.infer<typeof renderNodeShapes>>().toEqualTypeOf<RenderNode>();
   });
@@ -68,8 +60,6 @@ describe('protocol — the messages', () => {
     for (const message of said) expect(ClientMessageSchema.parse(JSON.parse(JSON.stringify(message)))).toEqual(message);
   });
 
-  // One sign-in is one thing: a message carrying both would leave the terminal
-  // to pick, and which it picked would be nowhere in the protocol.
   it('a session is a token or a sealed sign-in, never both', () => {
     expect(ServerMessageSchema.safeParse({ type: 'session', token: 'st_1', sealed: 'c2VhbGVk' }).success).toBe(false);
   });

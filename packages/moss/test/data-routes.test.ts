@@ -7,10 +7,6 @@ import { createWriteNotifier } from '../src/data/writes';
 import type { WriteRequest } from '../src/data/writes';
 import { engineDouble } from './data-double';
 
-// THE VEX SURFACES, mounted the way the server mounts them: a sub-app at the
-// root, behind a middleware that says who the request is. The engine has no
-// database behind it (./data-double.ts).
-
 type Env = { Variables: { role: string } };
 
 const POLICIES: Readonly<Record<string, ScopePolicy>> = {
@@ -28,8 +24,6 @@ const world = async (resources: Record<string, readonly string[] | { entities: r
   const records: ExecuteRecord[] = [];
 
   const server = new Hono<Env>();
-  // The server's part: who this request is. Here a header stands in for a
-  // session, which is exactly what a real request may never do.
   server.use('*', async (c, next) => {
     c.set('role', c.req.header('x-test-role') ?? 'nobody');
     return next();
@@ -56,7 +50,6 @@ const world = async (resources: Record<string, readonly string[] | { entities: r
   return { ...double, server, post, heard, reaches, records };
 };
 
-// The code vex puts on an answer that is not the rows: `scope_denied`, `locked`.
 const errorOf = async (response: Response): Promise<unknown> => {
   const body: unknown = await response.json();
   return body !== null && typeof body === 'object' && 'error' in body ? body.error : undefined;
@@ -133,9 +126,6 @@ describe('the vex surfaces', () => {
     expect(heard).toHaveLength(0);
   });
 
-  // WHAT THE REQUEST SAID IS HANDED ON, AND NO HEADER IS READ HERE. The routes
-  // hand on what the request said in its headers, and whoever hears a write
-  // asks for the headers that are its own.
   it('a write is told with what its request said in its headers, asked by name', async () => {
     const { post, heard } = await world();
     await post('/api/vex', 'writer', { fingerprint: 'notes/add', context: { body: 'hello' } }, { 'x-of-a-feature': 'f_1', 'x-another': '' });

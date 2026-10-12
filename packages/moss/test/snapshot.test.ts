@@ -6,15 +6,7 @@ import type { NiscApp, PageManifest } from '../src/manifest';
 import type { Connection } from '../src/socket';
 import { turn } from './turn';
 
-// ═══════════════════════════════════════════════════════════════
-// The document's read (`snapshot`), and the two things built on it: an
-// ephemeral shell whose ids a later connection can reproduce (the seed), and a
-// host that keeps nothing (a page's).
-// ═══════════════════════════════════════════════════════════════
-
-// A turn of the event loop (./turn.ts says why that is not a wait on a clock).
 const tick = turn;
-// Seeds that are answered `ms` after they are asked for, on the clock a test holds.
 const after = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 const fakeConnection = (): Connection & { sent: Record<string, unknown>[] } => {
@@ -22,8 +14,6 @@ const fakeConnection = (): Connection & { sent: Record<string, unknown>[] } => {
   return { sent, send: (text) => void sent.push(JSON.parse(text) as Record<string, unknown>), close: () => {}, onMessage: () => {}, onClose: () => {} };
 };
 
-// Three actions, one of each kind: nothing left to do, something to press, and
-// one a member is granted and nobody else.
 const words: ActionDefinition = { id: 'words', data: { title: 'Hello', slug: '' }, layout: { component: 'Text', children: '$.title' } };
 const counter: ActionDefinition = { id: 'counter', data: { n: 0 }, layout: { component: 'Button', ref: 'bump', children: '$.n' }, triggers: [{ event: 'ui:click', ref: 'bump', do: [{ increment: 'n' }] }] };
 const chip: ActionDefinition = { id: 'chip', data: { name: '' }, layout: { component: 'Text', children: '$.name' } };
@@ -58,7 +48,6 @@ describe('snapshot — the screen, read without attaching', () => {
     expect(host.list().map((shell) => shell.principal)).toEqual(['usr_1']);
     const connection = fakeConnection();
     (await host.session('t', 'usr_1')).attach(connection);
-    // same shell, so the same instance ids, with no seed involved
     expect(connection.sent.find((message) => message['type'] === 'render')?.['tree']).toEqual(snapshot.trees['main']);
   });
 
@@ -72,7 +61,6 @@ describe('snapshot — the screen, read without attaching', () => {
     (await host.session(null, null, { seed: snapshot.seed })).attach(seeded);
     expect(seeded.sent.find((message) => message['type'] === 'render')?.['tree']).toEqual(snapshot.trees['main']);
 
-    // without the seed the ids are the shell's own, and unguessable
     const unseeded = fakeConnection();
     (await host.session(null, null)).attach(unseeded);
     expect(unseeded.sent.find((message) => message['type'] === 'render')?.['tree']).not.toEqual(snapshot.trees['main']);
@@ -85,9 +73,6 @@ describe('snapshot — the screen, read without attaching', () => {
     expect(a.trees['main']).not.toEqual(b.trees['main']);
   });
 
-  // HOW LONG A SNAPSHOT WAITS IS WHAT THESE TWO ARE ABOUT, so the clock is
-  // theirs: the seeds answer at an instant the test names, and the wait is
-  // over at another.
   it('waits for seeds that are read a moment later', async () => {
     vi.useFakeTimers();
     try {
@@ -97,7 +82,7 @@ describe('snapshot — the screen, read without attaching', () => {
       };
       const host = standHost(hostConfig(contextOf(appOf({ canvases: [{ id: 'main', mode: 'list' }], seeds }))));
       const taking = host.snapshot(null, null);
-      // Answered 30 ms in, of the 300 a snapshot waits when it is told nothing.
+      // The seeds answer at 30 ms; a snapshot waits 300 ms when told nothing.
       await vi.advanceTimersByTimeAsync(300);
       const snapshot = await taking;
       expect(snapshot.settled).toBe(true);
@@ -116,7 +101,6 @@ describe('snapshot — the screen, read without attaching', () => {
       };
       const host = standHost(hostConfig(contextOf(appOf({ canvases: [{ id: 'main', mode: 'list' }], seeds }))));
       const taking = host.snapshot(null, null, { waitMs: 5 });
-      // The wait is over at 5 ms; the seeds would have answered at 80.
       await vi.advanceTimersByTimeAsync(5);
       const snapshot = await taking;
       expect(snapshot.settled).toBe(false);
@@ -135,8 +119,8 @@ describe('snapshot — the screen, read without attaching', () => {
     connection.sent.length = 0;
 
     session.dispatch('main', { type: 'ui:click', ref: 'bump' });
-    await host.snapshot('t', 'usr_1'); // reads the changed tree before the flush has sent it
-    // The flush is a pass at once and one a turn later: two turns, not 5 ms.
+    await host.snapshot('t', 'usr_1');
+    // The flush is a pass at once and another a turn later.
     await tick();
     await tick();
     expect(connection.sent.filter((message) => message['type'] === 'render').length).toBeGreaterThan(0);
@@ -158,10 +142,6 @@ describe('snapshot — whether anything can still happen', () => {
     expect(snapshot.why).toEqual(['counter: a person can act on it']);
   });
 
-  // What an instance runs is its action WITH the fragments it was pushed with,
-  // and a fragment adds what can be pressed. So liveness is asked of what is
-  // mounted, where the two are composed, and not of the action as it is held:
-  // `words` by itself has nothing left to do.
   it('what a fragment lays around an action counts: a sheet that can be closed is live', async () => {
     const sheet = { kind: 'fragment' as const, id: 'sheet', layout: { component: 'Sheet', children: [{ slot: 'body' }, { component: 'Button', ref: 'close' }] }, data: { closes: 0 }, triggers: [{ event: 'ui:click', ref: 'close', do: [{ increment: 'closes' }] }] };
     const shell = { canvases: [{ id: 'main', initial: { action: 'words', with: ['sheet'] } }], fragments: { sheet } };
@@ -188,7 +168,6 @@ describe('a page’s host — the same machinery, keeping nothing', () => {
     params: 'main',
     canvases: [
       { id: 'main', initial: 'words' },
-      // a member is granted the chip; nobody else has it
       { id: 'who', initial: 'chip' },
     ],
     inputs: ({ principal }): Record<string, Record<string, unknown>> => (principal === null ? {} : { who: { name: 'Max' } }),
@@ -202,7 +181,6 @@ describe('a page’s host — the same machinery, keeping nothing', () => {
     expect(JSON.stringify(forMax.trees['who'])).toContain('Max');
     expect(forNobody.trees['who']).toEqual([]);
     expect(host.list()).toEqual([]);
-    // signed in, and still nothing left to happen: no shell, no socket
     expect(forMax.live).toBe(false);
     expect(forMax.seed).toBeDefined();
   });

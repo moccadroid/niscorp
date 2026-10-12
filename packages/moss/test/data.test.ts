@@ -14,16 +14,10 @@ import { featureTablesOf } from '../src/data/migrate';
 import { tableSequencesOf } from '../src/data/migrate';
 import { NOTES_SCHEMA, engineDouble } from './data-double';
 
-// WHAT SOMEBODY MAY READ AND WRITE, as the one object a server builds: the
-// part of it that stands over an engine, held here against an engine with no
-// database behind it (./data-double.ts). The part that brings a database up
-// is held where a server is booted.
-
 const charter: Charter = {
   public: [],
   reader: { data: ['notes.read'] },
   writer: { data: ['notes.read', 'notes.write.insert'] },
-  // Every grant the database can carry.
   owner: { data: ['notes.*', 'tags.*'] },
 };
 
@@ -33,8 +27,6 @@ const who = (...roles: string[]) => ({ key: memoKey(roles, undefined), roles });
 
 const world = async (telemetry?: { emit: (span: TelemetrySpan) => void }, governing: Charter = charter) => {
   const double = await engineDouble();
-  // The stores whose documents were asked to be brought current: what would
-  // have been handed to strata, over the pool.
   const upgraded: DocumentStore[] = [];
   const data = createDataWith(
     {
@@ -46,11 +38,9 @@ const world = async (telemetry?: { emit: (span: TelemetrySpan) => void }, govern
         upgraded.push(store);
       },
     },
-    // One feature, `tagging`, which named `tags` as its own.
     { db: double.db, charter: governing, featureTables: [{ feature: 'tagging', names: ['tags'], sequences: [] }], ...(telemetry !== undefined ? { telemetry } : {}) },
   );
   const server = new Hono<Env>();
-  // The server's part: who this request is. A header stands in for a session.
   server.use('*', async (c, next) => {
     c.set('roles', [c.req.header('x-test-role') ?? 'public']);
     return next();
@@ -88,9 +78,7 @@ describe('the data module, over an engine', () => {
     expect(asked).toEqual(data.policyOf(who('writer')));
     expect(asked.entities['notes']).toMatchObject({ read: [], insert: [] });
     expect(data.policyForRoles(['public']).entities).toEqual({});
-    // Several roles are a union: what either may do.
     expect(data.policyForRoles(['public', 'reader'])).toEqual(data.policyOf(who('reader')));
-    // Emptying the answer takes nothing from the writer the routes serve.
     asked.entities = {};
     expect(await post('writer', ADD)).toMatchObject({ result: { id: 7, body: 'written' } });
   });
@@ -123,11 +111,7 @@ describe('the data module, over an engine', () => {
     expect(heard).toEqual(['first notes/add notes f_1', 'second notes/add', 'first notes/add notes nothing said']);
   });
 
-  // A role machinery runs as is a set of roles like any other, and its policy
-  // is a function of the charter: compiled once and kept, because identity
-  // resolution runs several entries for each sign-in.
   it('a role machinery runs as has its policy compiled once, and kept until the manifest changes', async () => {
-    // How often the charter is asked for the role: every compilation reads it.
     let read = 0;
     const counted: Charter = Object.defineProperty({ ...charter }, 'reader', {
       enumerable: true,
@@ -149,7 +133,6 @@ describe('the data module, over an engine', () => {
     await data.executeAs('reader', 'notes/all', {});
     await data.executeAs('reader', 'notes/all', {});
     expect(read).toBe(once);
-    // and it is the one a request by somebody holding exactly that role is served under
     data.policyOf(who('reader'));
     expect(read).toBe(once);
 
@@ -206,21 +189,15 @@ describe('the data module, over an engine', () => {
     const asked = { intent: 'every note', shape: [{ id: 0, body: '' }] };
     const answered = await data.answerIntent(writers, asked, who('reader'), { userId: 'usr_1' });
     expect(answered.result).toEqual([{ id: 1, body: 'first' }]);
-    // The owner's writer is shown both tables, the reader's only what a reader reads.
     await data.answerIntent(writers, asked, who('owner'), { userId: 'usr_2' });
     expect(shown).toEqual([['notes'], ['notes', 'tags']]);
-    // Somebody the charter grants nothing: the writer is shown no table, and
-    // what it writes all the same is refused.
     await expect(data.answerIntent(writers, asked, who('public'), {})).rejects.toThrow();
     expect(shown[2]).toEqual([]);
   });
 });
 
-// A FEATURE'S OWN ENTRIES (../src/data/own-entries.ts): what a feature reads
-// and writes on the tables it keeps. Here the feature keeps `tags`.
 const TAGS: SeedEntry = { fingerprint: 'tags/all', dsl: { from: ['tags'], fields: ['tags.id'], limit: 10 } };
 const ADD_TAG: SeedMutation = { fingerprint: 'tags/add', mutation: { op: 'insert', table: 'tags', values: { id: { $context: 'id' } } } };
-// Authored by the feature, on a table it did not name.
 const NOTES_BY_THE_FEATURE: SeedEntry = { fingerprint: 'tags/notes', dsl: { from: ['notes'], fields: ['notes.id'], limit: 10 } };
 const ADD_NOTE_BY_THE_FEATURE: SeedMutation = { fingerprint: 'tags/add-note', mutation: { op: 'insert', table: 'notes', values: { body: { $context: 'body' } } } };
 
@@ -252,16 +229,11 @@ describe("the data module — a feature's own entries", () => {
       expect(JSON.stringify(listed)).toContain('notes/all');
       expect(JSON.stringify(listed)).not.toContain('tags/');
     }
-    // The owner does hold the grants: the app's own entries answer them.
     expect(await (await server.request('/api/vex', { method: 'POST', headers: asOwner, body: JSON.stringify(ADD) })).json()).toMatchObject({ result: { id: 7 } });
     expect(written).toHaveLength(1);
     expect(read).toHaveLength(0);
   });
 
-  // WHICH TABLES IS NOT THE ASKER'S TO SAY. The tables are the ones the feature
-  // named on itself, and an entry over any other is refused when it is handed
-  // over, a read and a write alike: a list taken from the asker would let any
-  // feature read `sessions` by naming it.
   it('reach the tables the feature named as its own and no other: an entry over another table is refused when it is handed over', async () => {
     const { data, written, read } = await world();
     await expect(data.ownEntries('tagging', [TAGS, NOTES_BY_THE_FEATURE])).rejects.toThrow(
@@ -303,11 +275,6 @@ describe("the data module — a feature's own entries", () => {
   });
 });
 
-// THE LIST OF TABLES AN APP GIVES VEX (`runtime.vexConfig.entities`) IS ABOUT
-// THE APP'S ENGINE ONLY. It cuts that engine's schema down to the list, which
-// leaves moss's tables out, so moss's own entries (the generation pointer, a
-// feature's own) run on engines that read their owner's tables off the
-// database itself.
 describe("the data module — moss's own entries, where the app gave vex a list of tables", () => {
   const generation: DatabaseSchema['entities'][number] = {
     name: 'moss_generation',
@@ -320,8 +287,6 @@ describe("the data module — moss's own entries, where the app gave vex a list 
     indexes: [{ name: 'moss_generation_pkey', fields: ['id'], unique: true, type: 'btree' }],
   };
 
-  // The database holds `notes`, `tags` and the pointer's table; the app's
-  // list names `notes` alone.
   const listed = async () => {
     const double = await engineDouble([{ n: 3 }], { entities: [...NOTES_SCHEMA.entities, generation] }, ['notes']);
     const data = createDataWith(
@@ -362,8 +327,6 @@ describe("the data module — moss's own entries, where the app gave vex a list 
   });
 });
 
-// THE DOCUMENTS A FEATURE KEEPS IN ITS ROWS are brought to this code's
-// grammars when the feature asks, and only in a table that is its own.
 describe("the data module — the documents stored in a feature's table", () => {
   const store = (table: string): DocumentStore => ({ table, column: 'definition', stamp: 'grammar', kind: 'nisc.nova/action', key: ['id'] });
 
@@ -385,19 +348,14 @@ describe("the data module — the documents stored in a feature's table", () => 
 });
 
 describe('the data module — the fingerprints somebody may be told of', () => {
-  // The engine holds a read of `notes`, the same read at a reach, and a write
-  // that inserts a note (./data-double.ts).
   it('are the entries their own policy lets them replay: a read by the tables it reads, a write by what it writes', async () => {
     const { data } = await world();
     expect(await data.fingerprintsFor(who('public'))).toEqual([]);
     expect(await data.fingerprintsFor(who('reader'))).toEqual(['notes/all', 'notes/mine']);
     expect(await data.fingerprintsFor(who('writer'))).toEqual(['notes/add', 'notes/all', 'notes/mine']);
-    // Several roles are a union, as they are when an entry is replayed.
     expect(await data.fingerprintsFor(who('public', 'writer'))).toEqual(['notes/add', 'notes/all', 'notes/mine']);
   });
 
-  // EVERY FINGERPRINT THE APP SERVES is the data module's to answer, so it
-  // hands out no engine for the cache's keys.
   it('every fingerprint the app serves is answered by the data module, which hands out no engine', async () => {
     const { data } = await world();
     expect([...(await data.fingerprints())].sort()).toEqual(['notes/add', 'notes/all', 'notes/mine']);
@@ -414,10 +372,6 @@ describe('the data module — the fingerprints somebody may be told of', () => {
 
 });
 
-// THE APP'S ENTRIES ARE SEEDED WHEN THEY ARE HANDED OVER (`seed`). What the
-// routes replay is what whoever holds the entries hands the data module (the
-// running manifest, where a server stands), and nothing the data module reads
-// off an app. The engine here starts holding three (./data-double.ts).
 describe('the data module — the entries the app serves', () => {
   const BODIES: SeedEntry = { fingerprint: 'notes/bodies', dsl: { from: ['notes'], fields: ['notes.body'] } };
   const ASK = { fingerprint: 'notes/bodies', context: {} };
@@ -445,8 +399,6 @@ describe('the data module — the entries the app serves', () => {
   });
 });
 
-// WHOSE TABLES ONE RUN COVERS (../src/data/migrate.ts). Nothing is run here:
-// the pool is never asked, and the cache keeps no table.
 describe('the data module — the tables a run covers', () => {
   const sequence = (id: string): Sequence => ({ id, migrations: [{ description: `the tables of ${id}`, steps: [{ kind: 'sql', sql: `CREATE TABLE ${id.replace(/\W/g, '_')} (id text PRIMARY KEY)` }] }] });
   const owners = { pool: { query: async () => ({ rows: [] }) }, cache: createMemoryCache(), storesSessions: false };
@@ -468,8 +420,6 @@ describe('the data module — the tables a run covers', () => {
   });
 });
 
-// WHICH TABLES ARE A FEATURE'S OWN (../src/data/migrate.ts), read off
-// the features before any of them runs.
 describe("the data module — the tables a feature names as its own", () => {
   const naming = (name: string, ...names: string[]) => ({ name, tables: { names }, start: () => undefined });
 

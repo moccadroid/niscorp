@@ -2,8 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createGeneration } from '../src/manifest/generation';
 import type { Pointer } from '../src/manifest/generation';
 
-// The row, as this module is handed it: where the counter is, and one step on
-// from where it was read. So the pointer is tested without a database.
 const fakePool = (start = 0): Pointer & { poke: () => number; value: () => number } => {
   let n = start;
   return {
@@ -13,20 +11,15 @@ const fakePool = (start = 0): Pointer & { poke: () => number; value: () => numbe
       n += 1;
       return true;
     },
-    // what another process did
     poke: () => (n += 1),
     value: () => n,
   };
 };
 
-// THE CLOCK IS THE TEST'S. The pointer is looked at once when it is made and
-// then once every `everyMs`, on a timer. A look happens when the test says:
-// the poll is a second, and `looks(n)` moves the clock on by n of them, each
-// with everything it started run to its end. So "after one look" is one look,
-// and "a quiet interval" is as many as the test names.
+// The pointer is looked at on a timer, and the clock is the test's: `looks(n)` moves it on by
+// n poll intervals, each run to its end.
 const EVERY_MS = 1_000;
 const looks = (count: number): Promise<unknown> => vi.advanceTimersByTimeAsync(count * EVERY_MS);
-// The look a pointer takes when it is made, and whatever else is already due.
 const settled = (): Promise<unknown> => vi.advanceTimersByTimeAsync(0);
 
 beforeEach(() => {
@@ -53,12 +46,10 @@ describe('generation pointer', () => {
     await settled();
     expect(moves).toBe(0);
 
-    pool.poke(); // somebody else called refresh()
+    pool.poke();
     await looks(1);
     expect(moves).toBe(1);
 
-    // ...and a quiet interval is not a move. This is the assertion that keeps
-    // the poll from becoming a periodic cache flush.
     await looks(10);
     expect(moves).toBe(1);
     gen.stop();
@@ -72,11 +63,7 @@ describe('generation pointer', () => {
 
     gen.bump();
     await looks(3);
-    // The write happened...
     expect(pool.value()).toBe(1);
-    // ...and this process adopted it directly instead of discovering it later.
-    // Without that, every refresh would cost the refreshing process a second,
-    // pointless drop of every derivation it just rebuilt.
     expect(moves).toBe(0);
     expect(gen.current()).toBe(1);
     gen.stop();
@@ -95,17 +82,10 @@ describe('generation pointer', () => {
     const gen = createGeneration(broken, { onMoved: () => undefined, everyMs: 0 });
     await settled();
     console.error = original;
-    // A counter is used instead of LISTEN/NOTIFY because its failure mode is
-    // visible: a silent failure would leave stale resolutions unnoticed.
     expect(errors.some((e) => String(e).includes('may be serving stale resolutions'))).toBe(true);
     gen.stop();
   });
 
-  // A MOVE THIS PROCESS COULD NOT FOLLOW. The pointer is read and has moved,
-  // and reading the rows again throws (a database that blinks). The move counts
-  // as seen only once it is followed, so the next look tries again, and the log
-  // says the move could not be followed rather than that the pointer could not
-  // be READ.
   it('a move it could not follow is said to be that, and is followed at the next look', async () => {
     const pool = fakePool();
     const errors: string[] = [];
@@ -127,10 +107,8 @@ describe('generation pointer', () => {
     try {
       await settled();
       pool.poke();
-      // The look that finds the move and cannot follow it...
       await looks(1);
       expect([tries, followed, gen.current()]).toEqual([1, 0, 0]);
-      // ...and the next one, which can. After that there is nothing to try.
       await looks(1);
       expect([tries, followed, gen.current()]).toEqual([2, 1, 1]);
       await looks(5);
@@ -141,16 +119,11 @@ describe('generation pointer', () => {
       console.log = originalLog;
     }
 
-    // The pointer was read each time. What failed was following it.
     expect(errors.filter((line) => line.includes('could not follow'))).toHaveLength(1);
     expect(errors.filter((line) => line.includes('could not read'))).toEqual([]);
-    // And that it was followed after all is said, once.
     expect(told).toEqual(['[moss:generation] followed the generation pointer to 1, after 1 look that failed — this process serves what the rows say again']);
   });
 
-  // A MOVE THAT CANNOT BE FOLLOWED, FOR A LONG TIME. It is tried again at every
-  // look, but the log says so once, not a line each poll for as long as a set
-  // this process refuses sits in the rows.
   it('a move that cannot be followed is said when it first fails, again when what it says changes, and once when it is followed', async () => {
     const pool = fakePool();
     const said: string[] = [];
@@ -172,20 +145,17 @@ describe('generation pointer', () => {
       await settled();
       pool.poke();
       await looks(3);
-      // tried at every look, and said once
       expect(tries).toBe(3);
       expect(notFollowed()).toHaveLength(1);
       expect(notFollowed()[0]).toContain('a set this process refuses');
       expect(gen.current()).toBe(0);
 
-      // it fails another way: that is news
       why = 'the database is out of reach';
       await looks(3);
       expect(tries).toBe(6);
       expect(notFollowed()).toHaveLength(2);
       expect(notFollowed()[1]).toContain('the database is out of reach');
 
-      // another process moves the pointer again: what could not be followed is another move
       pool.poke();
       await looks(3);
       expect(tries).toBe(9);
@@ -193,7 +163,6 @@ describe('generation pointer', () => {
       expect(notFollowed()[2]).toContain('0 → 2');
       expect(recovered()).toEqual([]);
 
-      // and then it can be followed: said once, and nothing is left to try
       why = undefined;
       await looks(1);
       expect(gen.current()).toBe(2);
@@ -230,26 +199,19 @@ describe('generation pointer', () => {
     }
   });
 
-  // SOMEBODY ELSE'S MOVE IS NOT PASSED OVER BY ITS OWN. Another process moved
-  // the pointer since this one last looked, and then this one moves it too. The
-  // number its own move lands on is past the other process's move, so it is not
-  // counted as seen: what that one changed still has to be read here.
   it('its own bump does not pass over a move another process made first', async () => {
     const pool = fakePool();
     let moves = 0;
     const gen = createGeneration(pool, { onMoved: () => void (moves += 1), everyMs: EVERY_MS });
     await settled();
 
-    pool.poke(); // another process moved it, and no look has happened since
+    pool.poke();
     gen.bump();
     await settled();
-    // Its own move landed, on top of the other's...
     expect(pool.value()).toBe(2);
-    // ...and neither is counted as seen, because the first has not been followed.
     expect(gen.current()).toBe(0);
     expect(moves).toBe(0);
 
-    // The next look follows it, once.
     await looks(1);
     expect(moves).toBe(1);
     expect(gen.current()).toBe(2);

@@ -1,15 +1,3 @@
-// TELEMETRY — every span in the system is built by moss and handed to one
-// runtime hook; these install a capturing emitter at each seam and pin what it
-// receives:
-//   - vex.execute:      vex's record → a span, principal PRESENCE only, no
-//                       scope value ever crossing into the attributes;
-//   - fn.call:          one span per in-process function invocation;
-//   - integration.call: one span per outbound call, refusal included;
-//   - shell.build:      one span per build, a rebuild marked reset;
-//   - socket.upgrade / socket.close: admitted, refused, and lifetime.
-//
-// And two rules: a throwing sink costs the request nothing, and an
-// unconfigured sink is asked for nothing.
 import { describe, it, expect, vi } from 'vitest';
 import type { ExecuteRecord } from '@niscorp/vex';
 import { vexRecordToSpan } from '../src/data/engine';
@@ -29,16 +17,12 @@ import type { NiscApp } from '../src/manifest';
 import type { TelemetrySpan } from '../src/runtime';
 import { turn } from './turn';
 
-// A turn of the event loop (./turn.ts says why that is not a wait on a clock).
 const tick = turn;
 const capture = () => {
   const spans: TelemetrySpan[] = [];
   return { spans, telemetry: { emit: (s: TelemetrySpan) => spans.push(s) } };
 };
 
-// ── vex.execute: the record → span mapping, which is where the privacy rule
-// lives. vex hands moss the scope; moss must take PRESENCE from it and nothing
-// else. ──────────────────────────────────────────────────────────────────────
 describe('vexRecordToSpan', () => {
   it('maps a read to a vex.execute span — and leaks no scope value', () => {
     const rec: ExecuteRecord = {
@@ -57,7 +41,6 @@ describe('vexRecordToSpan', () => {
     expect(span.startUnixNano).toBe(1_000);
     expect(span.endUnixNano).toBe(2_000);
     expect(span.attributes).toEqual({ op: 'query', hasPrincipal: true, fingerprint: 'deals/table', cache: 'hit', rows: 3 });
-    // The point of the whole doctrine: no tenant, no address, no principal id.
     expect(Object.values(span.attributes)).not.toContain('st_9');
     expect(Object.values(span.attributes)).not.toContain('usr_1');
     expect(Object.values(span.attributes)).not.toContain('a@b.co');
@@ -77,7 +60,6 @@ describe('vexRecordToSpan', () => {
   });
 });
 
-// ── fn.call: the in-process dispatch wrapper. ────────────────────────────────
 describe('fn.call', () => {
   it('one span per invocation, naming the fn and nothing it was given', async () => {
     const { spans, telemetry } = capture();
@@ -98,7 +80,6 @@ describe('fn.call', () => {
   });
 });
 
-// ── integration.call: the outbound seam, refusals included. ──────────────────
 describe('integration.call', () => {
   const world = async (over: { status?: string; telemetry?: SocketConfig['telemetry'] } = {}) => {
     const acme: FoundIntegration = { url: 'https://acme.example', status: over.status ?? 'approved', reach: {} };
@@ -137,7 +118,7 @@ describe('integration.call', () => {
   it('no sink configured → not one span is built', async () => {
     const { call } = await world();
     const response = await call('acme', 'lifecycle/ping', { principal: 'i_mara' });
-    expect(response.status).toBe(200); // structural: it simply works, unobserved
+    expect(response.status).toBe(200);
   });
 
   it('a throwing sink costs the call nothing — it still answers', async () => {
@@ -147,7 +128,6 @@ describe('integration.call', () => {
   });
 });
 
-// ── shell.build: a shell host stood up with a sink. ──────────────────────────
 describe('shell.build', () => {
   const counter = { id: 'counter', data: { n: 0 }, triggers: [] };
   const app = { charter: { public: ['counter'] }, assignments: {}, actions: { counter }, shell: { canvases: [{ id: 'main', initial: 'counter' }] } } as unknown as NiscApp;
@@ -183,10 +163,7 @@ describe('shell.build', () => {
   });
 });
 
-// ── socket.upgrade / socket.close: a tiny fake transport. A closure over its
-// data, like every other fake here — and it keeps EVERY onClose handler, which
-// a single-slot fake would drop (open registers three), taking the close span
-// with them.
+// Keeps every onClose handler: opening registers three, and a single slot would drop the close span.
 const fakeConnection = (): Connection & { sent: ServerMessage[] } => {
   const sent: ServerMessage[] = [];
   const onCls: Array<() => void> = [];
@@ -227,9 +204,6 @@ describe('socket telemetry', () => {
     expect(spans.some((s) => s.name === 'socket.close')).toBe(false);
   });
 
-  // A handshake that fails is refused to its terminal, logged, and leaves an
-  // error span: with the verifier down, upgrades show as errors on a dashboard
-  // and do not go uncounted.
   it.each([
     ['the verifier cannot be asked', { session: () => { throw new Error('the session store is unreachable'); } }, false],
     ['what they hold cannot be asked', { catalog: () => { throw new Error('the database is down'); } }, true],

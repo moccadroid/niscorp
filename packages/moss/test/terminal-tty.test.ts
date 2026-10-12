@@ -4,15 +4,6 @@ import type { RenderComponentNode, RenderNode } from '@niscorp/nova';
 import { ttyTarget } from '../src/terminal/tty';
 import type { TerminalApi } from '../src/terminal';
 
-// ═══════════════════════════════════════════════════════════
-// The TTY target — driven headlessly over PassThrough streams, the way the
-// wire tests drive the protocol: a stub TerminalApi, commands written to the
-// input, dispatches captured. The REPL contract in the open, no TTY needed.
-// ═══════════════════════════════════════════════════════════
-
-// RenderComponentNode, not the RenderNode union: `ref` and `model` live on the
-// component member alone, so a helper typed as the union produces values that
-// cannot carry either one once spread.
 const component = (name: string, props: Record<string, unknown> = {}, children: RenderNode[] = []): RenderComponentNode => ({
   type: 'component',
   name,
@@ -21,8 +12,7 @@ const component = (name: string, props: Record<string, unknown> = {}, children: 
 });
 const text = (value: string): RenderNode => ({ type: 'text', value });
 
-// A turn of the event loop, not a wait on a clock: the terminal reads its
-// keyboard and writes its screen on the turn after it is told to.
+// The terminal reads its keyboard and writes its screen on the turn after it is told to.
 const tick = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
 const harness = (trees: Record<string, RenderNode[]>, options: { status?: () => 'connecting' | 'open' | 'closed' } = {}) => {
@@ -60,7 +50,7 @@ describe('the tty target — painting', () => {
     expect(h.screen()).toContain('[moss/tty] terminal attached');
     expect(h.screen()).toContain('── main ');
     expect(h.screen()).toContain('[1] (Save)');
-    expect(h.screen()).not.toContain('── aside'); // empty canvas collapses
+    expect(h.screen()).not.toContain('── aside');
     h.mount.destroy();
   });
 
@@ -68,7 +58,7 @@ describe('the tty target — painting', () => {
     let status: 'connecting' | 'open' | 'closed' = 'connecting';
     const h = harness({ main: [] }, { status: () => status });
     expect(h.screen()).toContain('… connecting');
-    status = 'closed'; // backoff flap while never connected — quiet
+    status = 'closed';
     h.mount.update();
     status = 'connecting';
     h.mount.update();
@@ -85,7 +75,7 @@ describe('the tty target — painting', () => {
   it('repaints on update when the tree changed, stays quiet when it did not', () => {
     const h = harness({ main: [text('one')] });
     h.reset();
-    h.mount.update(); // same tree — no repaint
+    h.mount.update();
     expect(h.screen()).not.toContain('one');
     h.state.trees = { main: [text('two')] };
     h.mount.update();
@@ -175,8 +165,8 @@ describe('the tty target — numbers act, words fill', () => {
     const h = harness({ main: [input('form.user', 'in-user', 'old')] });
     await h.type('1');
     expect(h.screen()).toContain('form.user ⟨old⟩');
-    expect(h.dispatched).toHaveLength(0); // focusing dispatches nothing
-    await h.type('help me plenty'); // even command words are data while focused
+    expect(h.dispatched).toHaveLength(0);
+    await h.type('help me plenty');
     expect(h.dispatched).toEqual([{ canvas: 'main', event: { type: 'ui:model', ref: 'in-user', payload: 'help me plenty' } }]);
     h.mount.destroy();
   });
@@ -184,10 +174,10 @@ describe('the tty target — numbers act, words fill', () => {
   it('an empty line cancels focus without dispatching; a bare `set <n>` also focuses', async () => {
     const h = harness({ main: [input('f.q', 'q', 'x')] });
     await h.type('1');
-    await h.type(''); // cancel
-    await h.type('set 1'); // focus again, never sends ''
+    await h.type('');
+    await h.type('set 1');
     expect(h.dispatched).toHaveLength(0);
-    await h.type('42'); // focused: digits are data, not a tap
+    await h.type('42');
     expect(h.dispatched).toEqual([{ canvas: 'main', event: { type: 'ui:model', ref: 'q', payload: '42' } }]);
     h.mount.destroy();
   });
@@ -211,12 +201,12 @@ describe('the tty target — numbers act, words fill', () => {
     const h = harness({ main: [input('form.user', 'in-user', 'old')] });
     await h.type('1');
     h.state.trees = { main: [input('form.user', 'in-user', 'echoed')] };
-    h.mount.update(); // server echo: same identity, new value — focus holds
+    h.mount.update();
     expect(h.screen()).toContain('form.user ⟨echoed⟩');
     h.state.trees = { main: [button('save', 'Save')] };
-    h.mount.update(); // the input is gone — focus drops, loudly
+    h.mount.update();
     expect(h.screen()).toContain('input form.user left the screen');
-    await h.type('stranded words'); // no longer focused, no input to fill
+    await h.type('stranded words');
     expect(h.dispatched).toHaveLength(0);
     h.mount.destroy();
   });

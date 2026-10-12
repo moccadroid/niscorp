@@ -16,17 +16,8 @@ import { PAGE, REGISTRY_ENTRIES, REGISTRY_TABLES } from '../src/integrations/ent
 import { setBackToPending } from '../src/integrations/registry';
 import { neverAnswers } from './never-answers';
 
-// THE FEATURE, STARTED BY HAND: `createIntegrations` handed seams that are
-// plain functions over a map, the way a server hands it the real ones. No
-// database and no server. It holds two things: that everything the feature
-// adds to an app it adds through the seams, and that the calls an app makes on
-// the object work once it has been started and say so before.
-
 type Row = Record<string, unknown>;
 
-// What the feature's own entries answer, from maps: which rows a read answers
-// is told by its fingerprint and the context it is replayed with. A write
-// answers nothing and is not kept.
 const replayOver =
   (held: { keys?: Record<string, string>; stored?: Row[]; found?: Record<string, Row> }): Replay =>
   async (fingerprint, context) => {
@@ -41,9 +32,6 @@ const replayOver =
 
 const desk: ActionDefinition = { id: 'ext.desk.belts.roster' };
 
-// `refuses` stands in for the running manifest's verification: the sentence a
-// set of actions would be refused with, by `refusalOf` when it is asked and by
-// `replaceActions` when the set is handed over.
 const world = async (
   over: {
     replay?: Replay;
@@ -59,13 +47,9 @@ const world = async (
     wraps: [] as ((inner: FetchFn) => FetchFn)[],
     replaced: [] as Record<string, ActionDefinition>[],
     owned: [] as Parameters<FeatureSeams['ownEntries']>[0][],
-    // The stores whose documents the feature asked to have brought current,
-    // and, in order, that asking and every entry it replayed.
     upgraded: [] as DocumentStore[],
     order: [] as string[],
   };
-  // The server's side of the two mounts: every route behind a line that says
-  // who is calling, as the server's authentication would have.
   const caller: { principal: string | null } = { principal: null };
   const server = new Hono<FeatureEnv>();
   server.use('*', async (c, next) => {
@@ -142,15 +126,13 @@ describe('createIntegrations — before a server has started it', () => {
   it('is what a manifest holds in `features`: a name, the tables it keeps, and a function to start it with', () => {
     const integrations = createIntegrations();
     expect(integrations.name).toBe('integrations');
-    // The two tables that are its own, said before anything runs. Moss's own
-    // sequence makes them, so it names none.
+    // Moss's own sequence creates these tables, so the feature names no sequence.
     expect(integrations.tables?.names).toEqual(['integrations', 'integration_actions']);
     expect(integrations.tables?.sequences).toBeUndefined();
     expect(typeof integrations.start).toBe('function');
   });
 });
 
-// THE DOCUMENTS IN ITS ROWS ARE ITS OWN TO BRING CURRENT, not the core's.
 describe('createIntegrations — the stored actions', () => {
   it('are brought to this code\'s grammars by the feature when it starts, before one is read', async () => {
     const { seams, said } = await world();
@@ -177,8 +159,6 @@ describe('createIntegrations — started with the seams', () => {
     const { seams, said, server, operator } = await world();
     await createIntegrations().start(seams);
 
-    // Its reads and writes are entries it hands over once, and names no table
-    // with them: every one is named under `integrations/`, and no two alike.
     expect(said.owned).toHaveLength(1);
     const fingerprints = (said.owned[0] ?? []).map((entry) => entry.fingerprint);
     expect(fingerprints.every((fingerprint) => fingerprint.startsWith('integrations/'))).toBe(true);
@@ -186,8 +166,6 @@ describe('createIntegrations — started with the seams', () => {
     expect([...said.credentials.keys()]).toEqual(['ik_']);
     expect(said.loaders).toHaveLength(1);
     expect(said.wraps).toHaveLength(1);
-    // The rule: an integration's action is there only where it is installed,
-    // and an action that is nobody's is always there.
     const [installedOnly] = said.catalogFilters;
     expect(said.catalogFilters).toHaveLength(1);
     expect(installedOnly?.(['home', 'ext.desk.belts.roster', 'ext.desk.pay.checkout'], new Set(['belts']))).toEqual(['home', 'ext.desk.belts.roster']);
@@ -196,7 +174,7 @@ describe('createIntegrations — started with the seams', () => {
     expect(server.routes.map((route) => `${route.method} ${route.path}`).filter((route) => !route.startsWith('ALL /*'))).toEqual([
       'GET /api/integrations/contract',
       'GET /api/integrations/verify-key',
-      // The webhook before the proxy, whose pattern would take it.
+      // The webhook comes before the proxy, whose pattern would take it.
       'POST /integrations/:id/hook/*',
       'ALL /integrations/:id/*',
     ]);
@@ -209,14 +187,9 @@ describe('createIntegrations — started with the seams', () => {
     ]);
   });
 
-  // THE SEED IS THE FEATURE'S OWN SETTING: `createIntegrations({ signingSeed })`,
-  // so no other feature is handed the private half of the key assertions are
-  // signed with. The feature makes its signer when it is started: a start that
-  // throws refuses the boot.
   it('a signing seed that cannot be a key refuses the start, and so the boot', async () => {
     const { seams, said } = await world();
     await expect(createIntegrations({ signingSeed: 'consent-check-seed' }).start(seams)).rejects.toThrow(/signing seed.*decodes to 13 bytes.*`signingSeed` of `createIntegrations`/);
-    // refused before anything was added to the app
     expect(said.credentials.size).toBe(0);
     expect(said.wraps).toEqual([]);
   });
@@ -230,10 +203,8 @@ describe('createIntegrations — started with the seams', () => {
     const seed = Buffer.alloc(32, 7).toString('base64');
     const seeded = await verifyKeyOf({ signingSeed: seed });
     expect(seeded).toMatchObject({ key: expect.any(String) });
-    // The same seed is the same key, in another process as in this one.
     expect(await verifyKeyOf({ signingSeed: seed })).toEqual(seeded);
     expect(await verifyKeyOf({ signingSeed: Buffer.alloc(32, 8).toString('base64') })).not.toEqual(seeded);
-    // No seed: a key made at the start and kept nowhere, so never the same twice.
     expect(await verifyKeyOf({})).not.toEqual(await verifyKeyOf({}));
   });
 
@@ -245,7 +216,6 @@ describe('createIntegrations — started with the seams', () => {
     const approved = await world({ replay: replayOver({ stored: [{ integration_id: 'belts', action_id: desk.id, definition: desk, grammar: {} }] }) });
     await createIntegrations().start(approved.seams);
     expect(approved.said.replaced).toEqual([{ [desk.id]: desk }]);
-    // ...and the loader it named reads the same rows again.
     expect(await approved.said.loaders[0]?.()).toEqual({ [desk.id]: desk });
   });
 
@@ -262,7 +232,6 @@ describe('createIntegrations — started with the seams', () => {
     try {
       await createIntegrations().start(seams);
       expect(said.replaced).toEqual([{ [desk.id]: desk }]);
-      // With a line that names it, as one in a newer grammar gets.
       expect(logged.mock.calls.map(([line]) => String(line))).toEqual([expect.stringMatching(/^\[moss\] integration action "ext\.desk\.belts\.broken" is not served: it is not an action nova reads/)]);
     } finally {
       logged.mockRestore();
@@ -281,7 +250,6 @@ describe('createIntegrations — started with the seams', () => {
   });
 
   it('a list longer than one page is read to its end, each page asked for after the last row of the one before', async () => {
-    // One page and three rows more, in the order of the ids.
     const registered = Array.from({ length: PAGE + 3 }, (_, at) => ({ id: `vendor-${String(at).padStart(4, '0')}`, url: 'https://vendor.example', status: 'approved', extension: null }));
     const asked: Record<string, unknown>[] = [];
     const { seams } = await world({
@@ -299,13 +267,9 @@ describe('createIntegrations — started with the seams', () => {
   });
 });
 
-// AN APPROVAL, with the registry held in a map: one integration that was
-// registered and not approved, the action it shipped, and every write that is
-// made, by the fingerprint of its entry.
 describe('the operator approves an integration', () => {
   const REFUSAL = 'Refresh refused — charter incoherent over the new artifacts:\n  no role grants "ext.desk.belts.roster"';
   const registered = () => {
-    // `kept`: what each write was handed beside the integration's id.
     const held = { status: 'pending', writes: [] as string[], kept: [] as Record<string, unknown>[] };
     const shipped = { integration_id: 'belts', action_id: desk.id, definition: desk, grammar: {} };
     const replay: Replay = async (fingerprint, context) => {
@@ -333,8 +297,6 @@ describe('the operator approves an integration', () => {
     const answered = await approve(operator, 'belts');
     expect(answered.status).toBe(422);
     expect(await answered.json()).toEqual({ message: 'Refused — the app would not serve this.', reasons: [`Error: ${REFUSAL}`] });
-    // Nothing was written, so there is nothing to take back: the row is as it
-    // was, and the running manifest was handed nothing.
     expect(held.writes).toEqual([]);
     expect(held.status).toBe('pending');
     expect(said.replaced).toEqual([]);
@@ -352,14 +314,9 @@ describe('the operator approves an integration', () => {
     expect(said.replaced).toEqual([{ [desk.id]: desk }]);
   });
 
-  // THE QUESTION IS ANSWERED YES, AND THE HAND-OVER IS THEN REFUSED: something
-  // else changed between the two (another approval, a set the app handed over),
-  // or the rows could not be read again. The approval is already written, so it
-  // is taken back: left as approved, every process that read the rows next
-  // would be refused them, and so would the next boot.
   it('one whose actions the app then does not take is taken back: pending again, with why on the row and in the answer', async () => {
     const { held, replay } = registered();
-    // Asked first, and not refused; refused when the set is handed over.
+    // Not refused when asked; refused when the set is handed over.
     const handed = { count: 0 };
     const { seams, said, operator } = await world({ replay, refuses: (actions) => (desk.id in actions && (handed.count += 1) > 1 ? REFUSAL : undefined) });
     await createIntegrations().start(seams);
@@ -370,13 +327,9 @@ describe('the operator approves an integration', () => {
     expect(held.writes).toEqual(['integrations/approve', 'integrations/set-back-to-pending']);
     expect(held.kept[1]).toEqual({ last_error: `Error: ${REFUSAL}` });
     expect(held.status).toBe('pending');
-    // What is served is read again from the rows as they are now: without it.
     expect(said.replaced).toEqual([{}]);
   });
 
-  // WHAT THE TAKING BACK WRITES: the feature's entry, compiled by vex's own
-  // Postgres adapter and replayed the way a server replays it, on a client
-  // that runs nothing and keeps the statement it is sent.
   it('the taking back is one statement on that integration’s row: pending, and why', async () => {
     const column = (name: string, primaryKey = false): DatabaseSchema['entities'][number]['fields'][number] => ({ name, type: 'text', normalizedType: 'string', nullable: !primaryKey, primaryKey });
     const schema: DatabaseSchema = {
@@ -451,7 +404,6 @@ describe('the routes the feature mounts, asked through the server it mounted the
     const contract = (await (await server.request('/api/integrations/contract?id=belts')).json()) as Record<string, unknown>;
     expect(contract).toMatchObject({
       namespace: 'ext.<audience>.belts.<name>',
-      // Every audience the charter drew an `ext.` fence for.
       audiences: ['desk', 'member'],
       components: [{ name: 'Text', description: '' }],
       fingerprints: ['deals/open'],
@@ -467,8 +419,6 @@ describe('the routes the feature mounts, asked through the server it mounted the
       expect(answered.status).toBe(400);
       expect(await answered.json()).toEqual({ message: 'Give an id and a url.' });
     }
-    // The probe's body names a path or nothing: for an integration that is not
-    // there it is not read at all.
     expect((await operator.request('/integrations/belts/probe', { method: 'POST', body: 'null' })).status).toBe(404);
   });
 
@@ -489,8 +439,6 @@ describe('the routes the feature mounts, asked through the server it mounted the
       });
       await createIntegrations().start(seams);
       written.length = 0;
-      // Capitals, a path, a dot (an action's namespace is split on them), a
-      // digit first, an underscore, a hyphen first, a space.
       for (const id of ['Belts', 'belts/../pay', 'be.lts', '9belts', 'belts_two', '-belts', 'belts two']) {
         const answered = await operator.request('/integrations', { method: 'POST', body: JSON.stringify({ id, url: 'https://belts.example' }), headers: { 'content-type': 'application/json' } });
         expect([id, answered.status]).toEqual([id, 400]);
@@ -503,15 +451,6 @@ describe('the routes the feature mounts, asked through the server it mounted the
     }
   });
 
-  // TWO REGISTRATIONS OF ONE NEW INTEGRATION AT ONCE. Each asks how the
-  // integration stands before either has landed, is told it holds no key, mints
-  // one and lands with it. The row keeps one hash, so only one of the two keys
-  // can be answered.
-  //
-  // The registry here is a map that does what the database does with the
-  // feature's entries (held against a database in integrations.test.ts): a
-  // landing that comes with a key keeps it only where the row holds none, and
-  // answers the row it wrote the key on.
   it('two registrations of one new integration at once: one of them is answered a key, and it is the key that is kept', async () => {
     const kept = new Map<string, string>();
     const landed = new Set<string>();
@@ -545,7 +484,6 @@ describe('the routes the feature mounts, asked through the server it mounted the
       expect(keys).toHaveLength(1);
       expect(hashIntegrationKey(String(keys[0]))).toBe(kept.get('belts'));
 
-      // And an import after those is answered none, as any import after the first.
       expect((await register()).key).toBeUndefined();
     } finally {
       globalThis.fetch = real;
@@ -586,12 +524,9 @@ describe('the routes the feature mounts, asked through the server it mounted the
   });
 });
 
-// THE HOST APP'S OWN VOCABULARY: what a bundle carries under `extension`, read
-// by the schema the app supplied, and kept on the integration's row.
 describe('extension, through the feature', () => {
   const Listing = z.object({ title: z.string(), tagline: z.string().default(''), press: z.array(z.string()).default([]) }).strict();
   const json = { 'content-type': 'application/json' };
-  // A vendor whose service answers `bundle` with the bundle a test names.
   const vendorServing = async <Answer>(bundle: unknown, run: () => Promise<Answer>): Promise<Answer> => {
     const real = globalThis.fetch;
     globalThis.fetch = async () => new Response(JSON.stringify(bundle), { status: 200, headers: json });
@@ -601,8 +536,6 @@ describe('extension, through the feature', () => {
       globalThis.fetch = real;
     }
   };
-  // A registry that keeps, in order, what happened, and the extension each
-  // landing was handed for the row (as JSON text: the column reads it).
   const recording = () => {
     const order: string[] = [];
     const landed: unknown[] = [];
@@ -680,8 +613,6 @@ describe('extension, through the feature', () => {
     expect(landed).toEqual([]);
   });
 
-  // THE ONE READ: every registered integration, with what the row holds of the
-  // app's vocabulary, read by the app's schema.
   it('the registered integrations are read back, each with its id, its status, where it lives and its stored extension', async () => {
     const rows = [
       { id: 'belts', url: 'https://belts.example', status: 'approved', extension: { title: 'Belts' } },
@@ -697,7 +628,6 @@ describe('extension, through the feature', () => {
       { id: 'belts', url: 'https://belts.example', status: 'approved', extension: { title: 'Belts', tagline: '', press: [] } },
       { id: 'pay', url: 'https://pay.example', status: 'pending', extension: undefined },
     ]);
-    // Typed by the app's own schema: this line is held by the compiler.
     const titles: (string | undefined)[] = listed.map((integration) => integration.extension?.title);
     expect(titles).toEqual(['Belts', undefined]);
   });
@@ -729,8 +659,6 @@ describe('extension, through the feature', () => {
   });
 });
 
-// NO CALL OUT WAITS FOR EVER. The service here never answers (./never-answers.ts),
-// and the deployment allows a call 20 ms (`outboundTimeoutMs`).
 describe('a service that never answers', () => {
   const found = { url: 'https://belts.example', status: 'approved', reach: { '/integrations/belts/roster': ['ext.desk.belts.roster'] } };
   const against = async <Answer>(run: (started: Awaited<ReturnType<typeof world>>, signals: (AbortSignal | undefined)[]) => Promise<Answer>): Promise<Answer> => {

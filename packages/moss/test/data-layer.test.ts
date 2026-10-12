@@ -4,12 +4,7 @@ import { createMemoryCache } from '@niscorp/vex';
 import { createDataLayer } from '../src/data/engine';
 import { pristineDatabases } from './pristine-database';
 
-// A database of its own for each test that wants one, started from one that
-// was initialised once for this file (./pristine-database.ts says why).
 const freshDatabase = pristineDatabases();
-
-// The engine's settings reach the engine. With none given it runs on vex's
-// defaults: 100 rows for a query that states no limit, 1000 at most.
 
 const layerWith = async (vexConfig?: { defaultLimit?: number; maxLimit?: number }) => {
   const db = freshDatabase();

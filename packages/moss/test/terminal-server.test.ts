@@ -17,19 +17,11 @@ import { domTarget } from '../src/terminal/dom';
 import { renderSnapshot as drawDom } from '../src/terminal/dom/server';
 import type { TerminalApi, TerminalMount } from '../src/terminal';
 
-// ═══════════════════════════════════════════════════════════
-// The targets that draw to a STRING, each against its browser twin: what the
-// server writes into a page is what the browser's target then stands on —
-// adopted element for element (react, vue) or rebuilt to the same elements
-// (dom) — with nothing said about a mismatch.
-// ═══════════════════════════════════════════════════════════
-
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true);
 
 const component = (name: string, props: Record<string, unknown> = {}, children: RenderNode[] = []): RenderComponentNode => ({ type: 'component', name, props, children });
 const text = (value: string): RenderNode => ({ type: 'text', value });
 
-// A served screen: a frame around one canvas, one instance on it.
 const snapshot = {
   frame: [component('Text', {}, [text('frame')]), component('CanvasSlot', { canvasId: 'main' })],
   trees: {
@@ -91,7 +83,6 @@ describe('terminal/react/server', () => {
     complaints.mockRestore();
     expect(root.innerHTML).toBe(parsed);
     expect(root.querySelector('button')).toBe(firstButton);
-    // adopted, and alive: the server's button now dispatches, stamped with its instance
     await act(async () => {
       firstButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });

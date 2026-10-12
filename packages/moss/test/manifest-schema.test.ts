@@ -7,20 +7,10 @@ import type { NiscApp } from '../src/manifest';
 import { manifestMisfits } from '../src/manifest/schema';
 import { createServerWith } from '../src/server/server';
 
-// THE MANIFEST IS READ BY A SCHEMA WHEN IT IS HANDED OVER, AND THEN FROZEN.
-// Every case but the last is the schema, or the hand-over, over a small object:
-// no database and no server. The last one is the order of a boot: that a
-// manifest is read before the database is asked anything. It is held on the
-// boot itself (`createServerWith`, which is `createServer` with the step that
-// brings the data module up handed in), with a step that says it was reached
-// and a pool that says it was asked. No server is created and no database is
-// started.
-
 const plain: LayoutNode = { component: 'Text', children: 'plain' };
 const home: ActionDefinition = { id: 'home', layout: plain, triggers: [{ event: 'ui:click', ref: 'open', do: [{ push: { action: 'panel' } }] }] };
 const panel: ActionDefinition = { id: 'panel' };
 
-// Every field of a manifest, each holding what its type says.
 const whole = (): NiscApp => ({
   charter: { public: ['home'], member: { actions: ['home', 'panel'], data: ['deals.read'], layouts: ['home.*'] } },
   assignments: { usr_1: ['member'] },
@@ -74,7 +64,6 @@ describe('the manifest’s schema', () => {
     });
     expect(misfits).toEqual([
       'actions.home: Unrecognized key: "tittle"',
-      // A layout node is a union: the branch that was meant is the one named.
       'actions.panel.layout.component: Invalid input: expected string, received number',
       'layouts.home.dense.layout: Unrecognized key: "childs"',
       'shell.fragments.sheet.kind: Invalid input: expected "fragment"',
@@ -107,13 +96,9 @@ describe('the manifest’s schema', () => {
       'features.1.name: Invalid input: expected string, received undefined',
       'features.2: Invalid input: expected object, received string',
     ]);
-    // What configures the integrations is not a field of the manifest.
     expect(manifestMisfits({ ...whole(), menuSlots: ['home'] })).toEqual(['(the manifest): Unrecognized key: "menuSlots"']);
   });
 
-  // The write-fact bridge is a feature (`createTideFacts`, from
-  // `@niscorp/moss/tide`), so a manifest that names `facts` is told, at boot,
-  // and not served with the bridge silently missing.
   it('refuses `facts`, which configured what is a feature now', () => {
     expect(manifestMisfits({ ...whole(), facts: { tide: () => undefined, identity: () => undefined } })).toEqual(['(the manifest): Unrecognized key: "facts"']);
   });
@@ -178,14 +163,12 @@ describe('the hand-over freezes what it read', () => {
 
     receiveManifest(app);
 
-    // A field of the manifest itself, put in place of what was handed over.
     expect(() => {
       app.actions = {};
     }).toThrow(TypeError);
     expect(() => {
       app.charter = { public: [] };
     }).toThrow(TypeError);
-    // A record it holds: one more, one fewer.
     expect(() => {
       app.actions['lobby'] = { id: 'lobby' };
     }).toThrow(TypeError);
@@ -195,9 +178,7 @@ describe('the hand-over freezes what it read', () => {
     expect(() => {
       app.charter['member'] = ['board'];
     }).toThrow(TypeError);
-    // A list it holds, through the reference the app kept.
     expect(() => entries.push({ fingerprint: 'deals/all', dsl: { from: ['deals'], fields: ['deals.id'] } })).toThrow(TypeError);
-    // And all the way down: a definition, its data, a node of its layout.
     expect(() => {
       board.title = 'Board';
     }).toThrow(TypeError);
@@ -215,8 +196,7 @@ describe('the hand-over freezes what it read', () => {
   });
 
   it('a seam and a kit’s own object are not frozen: they are code, with state of their own', () => {
-    // A kit hands a component's props over as a zod schema, and a zod schema
-    // writes onto itself as it is used: frozen, its first parse throws.
+    // A zod schema writes onto itself as it is used: frozen, its first parse throws.
     const propsSchema = z.object({ gap: z.number().optional() }).strict();
     const inputs = (): Record<string, Record<string, unknown>> => ({});
     const meta = { description: 'a stack', propsSchema };
@@ -236,7 +216,6 @@ describe('the hand-over freezes what it read', () => {
     expect(Object.isFrozen(refused)).toBe(false);
     expect(Object.isFrozen(refused.actions)).toBe(false);
 
-    // Two servers over one manifest, or two manifests sharing a definition.
     const app = whole();
     receiveManifest(app);
     expect(() => receiveManifest(app)).not.toThrow();
@@ -253,7 +232,6 @@ describe('a boot — a manifest that does not parse', () => {
         throw new Error('the database was asked before the manifest was read');
       },
     };
-    // Typed as a manifest and not one: what `JSON.parse` hands over.
     const handed: NiscApp = JSON.parse(
       JSON.stringify({
         charter: { public: ['home'] },
