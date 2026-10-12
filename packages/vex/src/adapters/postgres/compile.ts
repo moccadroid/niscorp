@@ -6,8 +6,19 @@ import type { CompilationContext } from './operators.js';
 
 export const compileQuery = (resolved: ResolvedQuery): CompiledQuery => {
   const paramSlots: ParamSlot[] = [];
-  const paramCounter = { value: 0 };
+  const sql = compileLevel(resolved, paramSlots, { value: 0 });
 
+  const contextContract: ContextContract = {};
+  for (const slot of paramSlots) {
+    contextContract[slot.key] = { type: slot.type, kind: slot.kind };
+  }
+
+  return { sql, paramSlots, contextContract };
+};
+
+// A subquery compiles into its parent's slots and counter, so each `$N` of the
+// statement is numbered once.
+const compileLevel = (resolved: ResolvedQuery, paramSlots: ParamSlot[], paramCounter: { value: number }): string => {
   const ctx: CompilationContext = {
     resolvedPaths: resolved.filter?.resolvedPaths ?? new Map(),
     aliasMap: resolved.aliasMap,
@@ -48,9 +59,7 @@ export const compileQuery = (resolved: ResolvedQuery): CompiledQuery => {
   const firstSource = resolved.sources[0];
   if (firstSource !== undefined) {
     if (firstSource.subquery !== undefined) {
-      const subSql = compileQuery(firstSource.subquery);
-      mergeSubqueryParams(subSql, paramSlots, paramCounter);
-      sqlParts.push(`FROM (${subSql.sql}) AS ${firstSource.alias}`);
+      sqlParts.push(`FROM (${compileLevel(firstSource.subquery, paramSlots, paramCounter)}) AS ${firstSource.alias}`);
     } else if (firstSource.table !== undefined) {
       sqlParts.push(`FROM ${firstSource.table} AS ${firstSource.alias}`);
     }
@@ -66,9 +75,7 @@ export const compileQuery = (resolved: ResolvedQuery): CompiledQuery => {
       ];
       const on = conditions.join(' AND ');
       if (joinSource.subquery !== undefined) {
-        const subSql = compileQuery(joinSource.subquery);
-        mergeSubqueryParams(subSql, paramSlots, paramCounter);
-        sqlParts.push(`${keyword} (${subSql.sql}) AS ${join.toAlias} ON ${on}`);
+        sqlParts.push(`${keyword} (${compileLevel(joinSource.subquery, paramSlots, paramCounter)}) AS ${join.toAlias} ON ${on}`);
       } else {
         sqlParts.push(`${keyword} ${join.toTable} AS ${join.toAlias} ON ${on}`);
       }
@@ -81,9 +88,7 @@ export const compileQuery = (resolved: ResolvedQuery): CompiledQuery => {
   for (const source of resolved.sources) {
     if (source.alias === firstSource?.alias || joinedAliases.has(source.alias)) continue;
     if (source.subquery !== undefined) {
-      const subSql = compileQuery(source.subquery);
-      mergeSubqueryParams(subSql, paramSlots, paramCounter);
-      sqlParts.push(`CROSS JOIN (${subSql.sql}) AS ${source.alias}`);
+      sqlParts.push(`CROSS JOIN (${compileLevel(source.subquery, paramSlots, paramCounter)}) AS ${source.alias}`);
     } else if (source.table !== undefined) {
       sqlParts.push(`CROSS JOIN ${source.table} AS ${source.alias}`);
     }
@@ -108,11 +113,9 @@ export const compileQuery = (resolved: ResolvedQuery): CompiledQuery => {
     });
     sqlParts.push(`ORDER BY ${orderByParts.join(', ')}`);
   } else if (resolved.semantic !== undefined) {
-    const semanticIdx = findSemanticParamIndex(paramSlots);
-    if (semanticIdx !== undefined) {
-      const col = `${resolved.semantic.field.alias}.${resolved.semantic.field.column}`;
-      sqlParts.push(`ORDER BY ${col} <=> $${semanticIdx} ASC`);
-    }
+    const { field, contextPath } = resolved.semantic;
+    const position = paramSlots.findIndex((slot) => slot.kind === 'semantic' && slot.key === contextPath) + 1;
+    if (position > 0) sqlParts.push(`ORDER BY ${field.alias}.${field.column} <=> $${position} ASC`);
   }
 
   if (resolved.limit !== undefined) {
@@ -124,37 +127,5 @@ export const compileQuery = (resolved: ResolvedQuery): CompiledQuery => {
     sqlParts.push(`LIMIT ${resolved.limit}`);
   }
 
-  const contextContract: ContextContract = {};
-  for (const slot of paramSlots) {
-    contextContract[slot.key] = { type: slot.type, kind: slot.kind };
-  }
-
-  return {
-    sql: sqlParts.join(' '),
-    paramSlots,
-    contextContract,
-  };
-};
-
-const findSemanticParamIndex = (slots: ParamSlot[]): number | undefined => {
-  for (let i = 0; i < slots.length; i++) {
-    const slot = slots[i];
-    if (slot !== undefined && slot.kind === 'semantic') {
-      return i + 1;
-    }
-  }
-  return undefined;
-};
-
-const mergeSubqueryParams = (
-  subCompiled: CompiledQuery,
-  parentSlots: ParamSlot[],
-  parentCounter: { value: number },
-): void => {
-  // The subquery's SQL keeps its own `$N`, counted from $1: they are not
-  // rewritten, so they match these slots only while no slot precedes them.
-  for (const slot of subCompiled.paramSlots) {
-    parentCounter.value += 1;
-    parentSlots.push(slot);
-  }
+  return sqlParts.join(' ');
 };
