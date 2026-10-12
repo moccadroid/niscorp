@@ -111,6 +111,7 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerD
     ...(hosts.shells !== undefined ? { shells: hosts.shells } : {}),
     refresh: running.refresh,
     replaceActions: running.replace,
+    replaceEntries: running.replaceEntries,
     actions: running.actions,
     catalogOf: async (principal: string | null) => {
       const resolved = await identity.resolve(principal);
@@ -136,7 +137,7 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerD
 export const buildRunningManifest = async (
   app: NiscApp,
   runtime: Pick<NiscRuntime, 'sessionRevalidateMs'>,
-  data: Pick<Data, 'grants' | 'dropOnChange' | 'pointer' | 'seed'>,
+  data: Pick<Data, 'grants' | 'dropOnChange' | 'pointer' | 'entriesHeldBy'>,
 ): Promise<RunningManifest> => {
   const running = createRunningManifest({
     shipped: app,
@@ -145,9 +146,9 @@ export const buildRunningManifest = async (
     pointer: { read: data.pointer.read, move: data.pointer.move, ...(runtime.sessionRevalidateMs !== undefined ? { everyMs: runtime.sessionRevalidateMs } : {}) },
   });
   data.dropOnChange(running.onChange);
-  // Seeded only after `createRunningManifest` has verified the manifest: one
-  // that is refused has written no row.
-  await data.seed(running.entries());
+  data.entriesHeldBy({ get: running.cacheEntry, entries: running.cacheEntries });
+  // Asked here, which compiles them: a boot refuses an entry vex cannot run.
+  await running.cacheEntries();
   return running;
 };
 

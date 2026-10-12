@@ -23,7 +23,7 @@ const world = async (features: readonly Feature[] = []): Promise<{ deps: SeamDep
   const double = await engineDouble();
   const grants = scopeGrants(['notes', 'tags']);
   const data = createDataWith(
-    { engine: double.engine, adapter: double.adapter, grants, grammars: await createGrammarUpgrader({}), upgradeStore: async () => undefined },
+    { engine: double.engine, adapter: double.adapter, grants, grammars: await createGrammarUpgrader({}), upgradeStore: async () => undefined, askFirst: double.askFirst },
     { db: double.db, charter, featureTables: featureTablesOf({ features }) },
   );
   const running = createRunningManifest({ shipped: { charter, actions: { home: { id: 'home' } } }, grants });
@@ -167,7 +167,7 @@ describe("the features — a feature's set of actions", () => {
     const { start, running } = await world([belts.feature]);
     await start();
     belts.seams().replaceActions({ [roster.id]: roster });
-    expect(() => running.replace('belts', {})).toThrow(/^moss: the set of actions "belts" is the feature "belts"'s, and only its owner replaces it\./);
+    expect(() => running.replace('belts', {})).toThrow(/^moss: the set "belts" is the feature "belts"'s, and only its owner replaces it\./);
     expect(Object.keys(running.actions())).toEqual(['home', roster.id]);
   });
 
@@ -177,6 +177,6 @@ describe("the features — a feature's set of actions", () => {
     await start();
     const rows: { now: Record<string, ActionDefinition> } = { now: { [roster.id]: roster } };
     belts.seams().setActionsLoader(async () => rows.now);
-    await expect(startFeatures([keeping('belts').feature], deps)).rejects.toThrow(/^moss: the set of actions "belts" is the feature "belts"'s, and the feature "belts" claims it too\./);
+    await expect(startFeatures([keeping('belts').feature], deps)).rejects.toThrow(/^moss: the set "belts" is the feature "belts"'s, and the feature "belts" claims it too\./);
   });
 });

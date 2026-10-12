@@ -9,10 +9,10 @@ import type { DocumentStore } from '@niscorp/strata/postgres';
 import { memoKey } from '../src/identity';
 import type { TelemetrySpan } from '../src/runtime';
 import { createDataWith } from '../src/data/data';
-import { createGrammarUpgrader } from '../src/data/engine';
+import { createEntryCache, createGrammarUpgrader } from '../src/data/engine';
 import { featureTablesOf } from '../src/data/migrate';
 import { tableSequencesOf } from '../src/data/migrate';
-import { NOTES_SCHEMA, engineDouble } from './data-double';
+import { NOTES_SCHEMA, READ_NOTES, engineDouble, heldDouble } from './data-double';
 
 const charter: Charter = {
   public: [],
@@ -37,6 +37,7 @@ const world = async (telemetry?: { emit: (span: TelemetrySpan) => void }, govern
       upgradeStore: async (store) => {
         upgraded.push(store);
       },
+      askFirst: double.askFirst,
     },
     { db: double.db, charter: governing, featureTables: [{ feature: 'tagging', names: ['tags'], sequences: [] }], ...(telemetry !== undefined ? { telemetry } : {}) },
   );
@@ -290,7 +291,7 @@ describe("the data module — moss's own entries, where the app gave vex a list 
   const listed = async () => {
     const double = await engineDouble([{ n: 3 }], { entities: [...NOTES_SCHEMA.entities, generation] }, ['notes']);
     const data = createDataWith(
-      { engine: double.engine, adapter: double.adapter, grants: scopeGrants(['notes']), grammars: await createGrammarUpgrader({}), upgradeStore: async () => undefined },
+      { engine: double.engine, adapter: double.adapter, grants: scopeGrants(['notes']), grammars: await createGrammarUpgrader({}), upgradeStore: async () => undefined, askFirst: double.askFirst },
       { db: double.db, charter, featureTables: [{ feature: 'tagging', names: ['tags'], sequences: [] }] },
     );
     return { ...double, data };
@@ -375,27 +376,74 @@ describe('the data module — the fingerprints somebody may be told of', () => {
 describe('the data module — the entries the app serves', () => {
   const BODIES: SeedEntry = { fingerprint: 'notes/bodies', dsl: { from: ['notes'], fields: ['notes.body'] } };
   const ASK = { fingerprint: 'notes/bodies', context: {} };
+  const WRITTEN = 'fp_0123456789abcdef';
 
-  it('replays an entry once it has been handed over, and not before', async () => {
+  it('replays an entry the artifactory holds, with nothing in the table', async () => {
+    const { post, table } = await world();
+    expect(await table.keys()).toEqual([]);
+    expect(await post('reader', READ)).toMatchObject({ result: [{ id: 1, body: 'first' }] });
+  });
+
+  it('replays an entry once the artifactory holds it, and not before', async () => {
     const { data, post } = await world();
     expect(await post('reader', ASK)).toMatchObject({ error: 'cache_miss' });
-    await data.seed([BODIES]);
+    data.entriesHeldBy(await heldDouble([READ_NOTES, BODIES]));
     expect(await post('reader', ASK)).toMatchObject({ result: [{ id: 1, body: 'first' }] });
   });
 
-  it('lands each as a protected row, and leaves one that is already there as authored untouched', async () => {
-    const { data, engine } = await world();
-    await data.seed([BODIES]);
-    const landed = await engine.cache.get('notes/bodies');
-    expect(landed).toMatchObject({ kind: 'ok', protected: true, dsl: BODIES.dsl });
-    await data.seed([BODIES]);
-    expect(await engine.cache.get('notes/bodies')).toBe(landed);
+  it('refuses an entry that left the app, though the table still holds the copy an earlier version put there', async () => {
+    const { post, table } = await world();
+    await table.set(BODIES.fingerprint, { kind: 'ok', dsl: BODIES.dsl, prismIr: await compile({ $ref: '$.result' }), protected: true, createdAt: 1 });
+    expect(await post('reader', ASK)).toMatchObject({ error: 'cache_miss' });
   });
 
-  it('refuses a write that fails the authoring lint, naming it', async () => {
-    const { data } = await world();
-    const unbounded: SeedMutation = { fingerprint: 'notes/clear', mutation: { op: 'delete', table: 'notes', where: {} } } as unknown as SeedMutation;
-    await expect(data.seed([unbounded])).rejects.toThrow(/Mutation seed "notes\/clear" fails the authoring lint/);
+  it('replays from the table nothing a request did not write: not a row somebody put there by hand, protected or not', async () => {
+    const { post, table } = await world();
+    const prismIr = await compile({ $ref: '$.result' });
+    await table.set(BODIES.fingerprint, { kind: 'ok', dsl: BODIES.dsl, prismIr, createdAt: 1 });
+    await table.set('notes/put', { kind: 'mutation', mutation: { op: 'insert', table: 'notes', values: { body: 'put' } }, createdAt: 1 });
+    expect(await post('reader', ASK)).toMatchObject({ error: 'cache_miss' });
+    expect(await post('writer', { fingerprint: 'notes/put', context: {} })).toMatchObject({ error: 'cache_miss' });
+  });
+
+  it('answers an entry the artifactory holds in place of a row the table holds under its fingerprint', async () => {
+    const { post, table, tablesRead } = await world();
+    await table.set('notes/all', { kind: 'ok', dsl: { from: ['tags'], fields: ['tags.id'] }, prismIr: await compile({ $ref: '$.result' }), requestHash: 'asked', createdAt: 1 });
+    await post('owner', READ);
+    expect(tablesRead).toEqual(['notes']);
+  });
+
+  it('replays from the table a query that was written while the app runs', async () => {
+    const { post, table } = await world();
+    await table.set(WRITTEN, { kind: 'ok', dsl: BODIES.dsl, prismIr: await compile({ $ref: '$.result' }), requestHash: 'asked', createdAt: 1 });
+    expect(await post('reader', { fingerprint: WRITTEN, context: {} })).toMatchObject({ result: [{ id: 1, body: 'first' }] });
+  });
+
+  it('lists the fingerprints the artifactory holds and those written while the app runs, and no old copy', async () => {
+    const { data, table } = await world();
+    const prismIr = await compile({ $ref: '$.result' });
+    await table.set(WRITTEN, { kind: 'ok', dsl: BODIES.dsl, prismIr, requestHash: 'asked', createdAt: 1 });
+    await table.set(BODIES.fingerprint, { kind: 'ok', dsl: BODIES.dsl, prismIr, protected: true, createdAt: 1 });
+    expect([...(await data.fingerprints())].sort()).toEqual([WRITTEN, 'notes/add', 'notes/all', 'notes/mine']);
+    expect(await data.fingerprintsFor(who('reader'))).toEqual([WRITTEN, 'notes/all', 'notes/mine']);
+  });
+
+  it('lists them through a cache that cannot list its rows, as one with memory in front of a table cannot', async () => {
+    const table = createMemoryCache();
+    await table.set(WRITTEN, { kind: 'ok', dsl: BODIES.dsl, requestHash: 'asked', createdAt: 1 });
+    await table.set(BODIES.fingerprint, { kind: 'ok', dsl: BODIES.dsl, protected: true, createdAt: 1 });
+    const { cache, askFirst } = createEntryCache({ get: table.get, set: table.set, delete: table.delete, clear: table.clear, keys: table.keys });
+    askFirst(await heldDouble([READ_NOTES]));
+    expect((await cache.keys()).sort()).toEqual([WRITTEN, 'notes/all']);
+    expect(((await cache.entries?.()) ?? []).map((row) => row.key).sort()).toEqual([WRITTEN, 'notes/all']);
+  });
+
+  it('writes nothing to the table when an entry the artifactory holds is replayed', async () => {
+    const { post, table } = await world();
+    await post('reader', READ);
+    await post('writer', ADD);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(await table.keys()).toEqual([]);
   });
 });
 

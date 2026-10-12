@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
 import type { VerifyReport } from '@niscorp/charter';
 import type { ActionDefinition } from '@niscorp/nova';
-import type { ScopePolicy } from '@niscorp/vex';
+import type { ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { ExecuteAs } from '../data';
 import type { IdentityRecord, IdentityReport, ResolvedIdentity } from '../identity';
 import type { Catalog } from '../artifactory';
@@ -18,6 +18,7 @@ export type MossServer = Hono<Env> & {
   pages: readonly { name: string; path: string }[];
   refresh: () => void;
   replaceActions: (source: string, actions: Record<string, ActionDefinition>) => void;
+  replaceEntries: (source: string, entries: readonly (SeedEntry | SeedMutation)[]) => Promise<void>;
   actions: () => Readonly<Record<string, ActionDefinition>>;
   catalogOf: (principal: string | null) => Promise<Catalog>;
   policyForRoles: (roles: readonly string[]) => ScopePolicy;

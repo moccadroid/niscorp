@@ -1,5 +1,7 @@
 import { createMemoryCache, createQueryEngine, seedCache } from '@niscorp/vex';
-import type { DatabaseAdapter, DatabaseSchema, MutationClient, QueryEngine, SeedEntry, SeedMutation } from '@niscorp/vex';
+import type { CacheBackend, DatabaseAdapter, DatabaseSchema, MutationClient, QueryEngine, SeedEntry, SeedMutation } from '@niscorp/vex';
+import { createEntryCache } from '../src/data/engine';
+import type { HeldEntries } from '../src/data/engine';
 
 export const NOTES_SCHEMA: DatabaseSchema = {
   entities: [
@@ -35,6 +37,14 @@ export type EngineDouble = {
   written: { sql: string; params: readonly unknown[] }[];
   read: (readonly unknown[])[];
   tablesRead: string[];
+  table: CacheBackend;
+  askFirst: (held: HeldEntries) => void;
+};
+
+export const heldDouble = async (entries: readonly (SeedEntry | SeedMutation)[]): Promise<HeldEntries> => {
+  const compiled = createMemoryCache();
+  await seedCache(compiled, entries);
+  return { get: compiled.get, entries: async () => (await compiled.entries?.()) ?? [] };
 };
 
 export const tableNamed = (name: string): DatabaseSchema['entities'][number] => ({
@@ -74,8 +84,9 @@ export const engineDouble = async (rows: Record<string, unknown>[] = [{ id: 1, b
       statementTimeout: false,
     },
   };
-  const cache = createMemoryCache();
-  await seedCache(cache, [READ_NOTES, READ_OWN_NOTES, ADD_NOTE]);
+  const table = createMemoryCache();
+  const { cache, askFirst } = createEntryCache(table);
+  askFirst(await heldDouble([READ_NOTES, READ_OWN_NOTES, ADD_NOTE]));
   const engine = createQueryEngine({ adapter, cache, ...(entities !== undefined ? { config: { entities } } : {}) });
   await engine.introspect();
   const db: MutationClient = {
@@ -84,5 +95,5 @@ export const engineDouble = async (rows: Record<string, unknown>[] = [{ id: 1, b
       return { rows: [{ id: 7, body: 'written' }] };
     },
   };
-  return { engine, adapter, db, written, read, tablesRead };
+  return { engine, adapter, db, written, read, tablesRead, table, askFirst };
 };

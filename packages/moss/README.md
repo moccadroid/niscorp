@@ -37,7 +37,7 @@ const app = defineApp({
   layouts,        // ring 2: layout variants by minted id — { action, layout },
                   // substituted per principal at shell build. The base is the
                   // floor; variants enrich upward as grants, never reduce
-  entries,        // the prewarmed vex cache — the API surface, as data
+  entries,        // the reads and writes the app serves — the API surface, as data
   behaviors,      // row-level scope semantics; each role's `scoping` picks among them,
                   // one policy per role, merged — a person may hold several
   resources,      // entity subgraphs → /api/<name>/vex

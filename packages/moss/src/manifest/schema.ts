@@ -58,6 +58,7 @@ const ReadEntrySchema = z
   })
   .strict();
 const WriteEntrySchema = z.object({ ...entry, mutation: depthChecked(MutationDefinitionSchema) }).strict();
+const EntriesSchema = z.array(z.union([ReadEntrySchema, WriteEntrySchema]));
 
 const FeatureSchema = z.looseObject({
   name: z.string(),
@@ -79,7 +80,7 @@ const fields = {
   phrases: seam.optional(),
   phraseKeys: z.object({ props: strings.optional(), suffixes: strings.optional(), text: z.boolean().optional() }).strict().optional(),
   features: z.array(FeatureSchema).readonly().optional(),
-  entries: z.array(z.union([ReadEntrySchema, WriteEntrySchema])).readonly().optional(),
+  entries: EntriesSchema.readonly().optional(),
   resources: z.record(z.string(), z.union([strings, z.looseObject({ entities: strings })])).optional(),
   shell: ShellManifestSchema.optional(),
   pages: z.record(z.string(), PageManifestSchema).optional(),
@@ -107,10 +108,17 @@ const placesOf = (issue: Issue, under: readonly PropertyKey[]): Place[] => {
   return first === undefined ? [{ path, message: issue.message }] : others.reduce(closer, first);
 };
 
+const misfitsOf = (error: z.ZodError, under: readonly PropertyKey[], whole: string): string[] =>
+  error.issues.flatMap((issue) => placesOf(issue, under)).map((place) => `${place.path.map(String).join('.') || whole}: ${place.message}`);
+
 export const manifestMisfits = (app: unknown): string[] => {
   const parsed = ManifestSchema.safeParse(app);
-  if (parsed.success) return [];
-  return parsed.error.issues.flatMap((issue) => placesOf(issue, [])).map((place) => `${place.path.map(String).join('.') || '(the manifest)'}: ${place.message}`);
+  return parsed.success ? [] : misfitsOf(parsed.error, [], '(the manifest)');
+};
+
+export const entryMisfits = (entries: unknown): string[] => {
+  const parsed = EntriesSchema.safeParse(entries);
+  return parsed.success ? [] : misfitsOf(parsed.error, ['entries'], 'entries');
 };
 
 // A class instance is not data and stays unfrozen: a kit hands a component's

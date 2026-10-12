@@ -8,7 +8,7 @@ import type { Feature, FeatureEnv } from '../src/feature';
 import type { NiscApp } from '../src/manifest';
 import type { NiscRuntime } from '../src/runtime';
 import { assembleServer } from '../src/server/server';
-import { engineDouble } from './data-double';
+import { ADD_NOTE, READ_NOTES, engineDouble } from './data-double';
 
 const appWith = (more: Partial<NiscApp>): NiscApp => ({
   charter: { public: ['home'] },
@@ -21,7 +21,7 @@ const appWith = (more: Partial<NiscApp>): NiscApp => ({
 const assemble = async (app: NiscApp, more: Partial<NiscRuntime> = {}) => {
   const double = await engineDouble();
   const data = createDataWith(
-    { engine: double.engine, adapter: double.adapter, grants: scopeGrants(['notes', 'tags']), grammars: await createGrammarUpgrader({}), upgradeStore: async () => undefined },
+    { engine: double.engine, adapter: double.adapter, grants: scopeGrants(['notes', 'tags']), grammars: await createGrammarUpgrader({}), upgradeStore: async () => undefined, askFirst: double.askFirst },
     { db: double.db, charter: app.charter, featureTables: featureTablesOf(app) },
   );
   return assembleServer({ app, runtime: { pool: { query: async () => ({ rows: [] }) }, db: double.db, session: 'dev-open', ...more }, session: whoseToken, revokeSessions: undefined, data });
@@ -151,6 +151,24 @@ describe('the server, assembled — what holds only because of where a line stan
       server.close();
     }
   });
+
+  it('a set of entries handed over is replayed by the next request, and refused again once the set no longer holds it', async () => {
+    quiet();
+    const server = await assemble(appWith({ charter: { public: { actions: ['home'], data: ['notes.read'] } } }));
+    const asked = async (): Promise<unknown> => {
+      const answered = await server.request('/api/vex', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint: 'ext/notes', context: {} }) });
+      return answered.json();
+    };
+    try {
+      expect(await asked()).toMatchObject({ error: 'cache_miss' });
+      await server.replaceEntries('extras', [{ ...READ_NOTES, fingerprint: 'ext/notes' }]);
+      expect(await asked()).toMatchObject({ result: [{ id: 1, body: 'first' }] });
+      await server.replaceEntries('extras', []);
+      expect(await asked()).toMatchObject({ error: 'cache_miss' });
+    } finally {
+      server.close();
+    }
+  });
 });
 
 describe('the server, assembled — who a call is made as', () => {
@@ -166,7 +184,7 @@ describe('the server, assembled — who a call is made as', () => {
   it('a write is scoped by who made it: their id, their record’s values, and what the app’s `scope` adds', async () => {
     quiet();
     const heard: unknown[] = [];
-    const server = await assemble(appWith({ ...member, reactions: [{ table: 'notes', op: 'insert', run: (said) => void heard.push(said) }] }));
+    const server = await assemble(appWith({ ...member, entries: [ADD_NOTE], reactions: [{ table: 'notes', op: 'insert', run: (said) => void heard.push(said) }] }));
     try {
       const answered = await server.request('/api/vex', {
         method: 'POST',

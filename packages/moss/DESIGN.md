@@ -39,8 +39,8 @@ app.
 ### 2. Deployment is a data operation
 
 Every field of the manifest is an authored artifact — the charter, the action
-definitions, the layout variants, the prewarmed API surface, the shell's
-canvases. Publishing a change is a write to that data; moss derives the rest.
+definitions, the layout variants, the entries that are its API surface, the
+shell's canvases. Publishing a change is a write to that data; moss derives the rest.
 Consequences:
 
 - **No version skew.** The shell and the definitions it runs live server-side;
@@ -52,9 +52,10 @@ Consequences:
   *"crm.quotes → gained by: sales, intern, ray."* A human approves that.
 
 Today the manifest is what the app handed `createServer`: read by a schema,
-then frozen, so an edit to it throws. One part of it changes while a server
-runs, through one door: a set of actions is handed over
-(`server.replaceActions`) and verified before it is taken. The artifact library
+then frozen, so an edit to it throws. Two parts of it change while a server
+runs, each through one door: a set of actions is handed over
+(`server.replaceActions`), a set of entries (`server.replaceEntries`), and
+each is verified before it is taken. The artifact library
 that makes publish a runtime write for every artifact is specified and unbuilt
 (see below). The mechanism is already the function it needs to be: what a set
 of roles holds, and the policy it reads and writes under, are derived from what
@@ -62,8 +63,8 @@ is in force and dropped when that changes, so there is no invalidation
 protocol; a pointer in the database tells every other process that it did.
 The pointer tells them *that*, not *what*: another process reads again the
 sets of actions it has a loader for (the ones a feature keeps in rows), and a
-set handed to one process with `replaceActions` and no loader is that
-process's alone. A library every process reads is the part that is unbuilt.
+set handed to one process with `replaceActions` or `replaceEntries` and no
+loader is that process's alone. A library every process reads is the part that is unbuilt.
 
 And there is one place it will be asked. Everything a shell loads that
 somebody authored (its actions, its frame and layout store, its fragments, the
@@ -73,9 +74,9 @@ from that answer and adopts it: an adopt puts in place the actions that are
 held now, and the frame, each `{ ref }` of the layout store and each fragment
 that the answer says differently from the last time. (The canvases are what a
 shell starts with: an adopt does not take them again, a reset does.) The
-entries vex replays are seeded from what
-the running manifest holds; nothing else in moss reads one of the four off
-what the app handed over.
+entries vex replays it asks the running manifest for as well, before its own
+cache table; nothing else in moss reads one of the four off what the app
+handed over.
 
 ### 3. One gate, every kind of principal
 
@@ -117,9 +118,9 @@ against the wire alone (`src/terminal/targets.ts`).
 The organizing principle: an app hands over **artifacts** and an
 **environment**, and everything mechanical is *derived* — never configured.
 
-- The **data layer** stands up from what's present: the database's seeded
-  `vex_cache` is the API surface (nothing is generated), and the grantable set
-  is the introspected schema × vex's verb leaves. No table list is authored.
+- The **data layer** stands up from what's present: the app's entries are the
+  API surface (nothing is generated), and the grantable set is the
+  introspected schema × vex's verb leaves. No table list is authored.
 - **Per-principal resolution** is the charter applied at login: roles from the
   app's `identity` seam or its assignment rows, granted action ids (with a
   content-hash version token), the compiled vex scope policy, and the granted
@@ -184,21 +185,21 @@ entry.
    now, with one writer, and what a set of roles holds of it. Every artifact a
    shell is handed is asked of it: the actions, the frame and the layout
    store, the fragments and the entries, in one answer for a shell and a set
-   of roles, and read off the app by nothing else. Of the entries it is the
-   source and not the only holder: see `data`, next. It stands on `manifest`,
+   of roles, and read off the app by nothing else. It is the one holder of the
+   entries too: the ones the app shipped and each set handed over, compiled as
+   vex replays them. It stands on `manifest`,
    the app as it was handed over: the types an app is written in, the schema
    it is read by and frozen under, and the one verification of whether what
    is in force may be served.
 3. **What may they read and write?** `data`: the vex engine, the policy a set
-   of roles reads and writes under, the routes, a seeded entry run as a
-   charter role, and the tables with their migration. The engine's cache is
-   the second place the app's entries are held. The running manifest's list
-   is copied into it once, at boot; from then on a replay, and the list of
-   fingerprints, resolve in the cache and the manifest is not asked; and the
-   cache holds what the list does not, a query written for an intent while
-   the app runs and any row it held before this boot. So what a fingerprint
-   resolves to is decided in `data` today, and what an action, a layout or a
-   fragment resolves to in `artifactory`.
+   of roles reads and writes under, the routes, an entry run as a charter
+   role, and the tables with their migration. The engine's cache asks the
+   artifactory for a fingerprint first, through two functions the server
+   hands it, and its own table (`vex_cache`) for what the artifactory does not
+   hold: a query written for an intent while the app runs. Nothing is copied
+   into that table, and a copy an earlier release left in it is not replayed.
+   So what a fingerprint resolves to is decided in `artifactory`, as what an
+   action, a layout or a fragment resolves to is.
 4. **What are they looking at?** `shells`: the shell host, one shell's build,
    the stream of frames, and the screen read without attaching.
 5. **How does it reach them?** `socket` for the live wire, `documents` for a

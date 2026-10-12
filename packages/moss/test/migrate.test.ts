@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { PGlite } from '@electric-sql/pglite';
 import { createPglitePool } from '@niscorp/vex/pglite';
-import { createMemoryCache, createPostgresCache, createTieredCache } from '@niscorp/vex';
+import { createMemoryCache, createPostgresCache, createTieredCache, seedCache } from '@niscorp/vex';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Sequence } from '@niscorp/strata';
 import { defineApp } from '../src/manifest';
@@ -140,7 +140,8 @@ describe('migrateTables — the step', () => {
     const deadWrite: SeedMutation = { fingerprint: 'notes/dead-write', mutation: { op: 'insert', table: 'notes', values: { gone: { $context: 'gone' } } } };
     const app = appOf(read('notes/all', 'id', 'body'), read('notes/dead', 'id', 'gone'), add('body'), deadWrite);
     await migrateTables(runtimeOf(tables(NOTES)), appOf(read('notes/all', 'id', 'body'), add('body')));
-    (await quietly(() => createServer(app, runtimeOf(tables(NOTES))))).close(); // Ships the dead entries: boot does not check them
+    // The copies a version that kept an app's entries in the cache table left there.
+    await seedCache(createPostgresCache({ pool }), app.entries ?? []);
 
     // Asked through a cache with memory in front that nobody warmed, as a deployment's is in the step's own process.
     const cold = createTieredCache({ l1: createMemoryCache(), l2: createPostgresCache({ pool }) });

@@ -54,7 +54,7 @@ type NiscApp = {
   actions: Record<string, ActionDefinition>;          // the app's actions
   layouts?: Record<string, LayoutVariant>;            // ring 2: variant id → { action, layout }
   behaviors?: ScopeBehaviors;                          // row-level scope semantics, per table or per profile
-  entries?: readonly (SeedEntry | SeedMutation)[];     // the prewarmed API surface
+  entries?: readonly (SeedEntry | SeedMutation)[];     // the API surface: the reads and writes the app serves
   resources?: Record<string, readonly string[] | { entities: readonly string[] }>;
   shell?: ShellManifest;                              // the server shell, as data — THE APP
   pages?: Record<string, PageManifest>;               // what is drawn at a path and kept by nothing
@@ -94,7 +94,7 @@ Every field is an artifact (authored data) except the code seams — `scope`,
   session and cached by moss (bounded by `runtime.identityMax` /
   `identityIdleMs`, re-resolved every `sessionRevalidateMs`). Returns an
   `IdentityRecord`: `{ roles, scope, installed?, tag? }`. `read(fingerprint,
-  scope)` executes a seeded entry through moss's engine, replay-only, under
+  scope)` executes an entry the app serves through moss's engine, replay-only, under
   the policy of the charter role `identity.as` names (it throws when `as` is
   unset). Moss never reads inside the record's `scope`. Absent, `assignments`
   and `scope` answer, and every registered integration is live for everybody.
@@ -531,8 +531,12 @@ reason as `fingerprint: why` — and nothing was applied. It asks on every run,
 so a release that changes an entry and no table is checked too.
 
 One kind of entry is said and not refused: one that already did not fit before
-the run and that the database already holds seeded exactly as it is. That is an
-old fault, not this run's. A new or changed entry gets no such pass.
+the run and that the cache table already holds a copy of, exactly as it is. That
+is an old fault, not this run's. A new or changed entry gets no such pass. A
+copy is there where a release before 0.6.0 wrote it, or where the app writes
+one itself for an engine of its own (`seedCache`). Moss writes none since
+0.6.0: it keeps an app's entries in memory, so in a database only moss writes
+to, an entry first shipped since then has no copy and gets no pass either.
 
 What it answers is strata's `{ applied, plan }` plus `removed` (tables and
 columns the run takes away), `retyped` (columns whose type it changes, as
@@ -594,27 +598,41 @@ does nothing. Returns a Hono app extended with the `MossServer` members below.
 order: the manifest is read and frozen; who a token is is resolved
 (`runtime.session`; unset, the boot is refused here, before a table exists);
 the tables are migrated and the data module stands; the running manifest is
-created, which is the boot check, and the entries it holds are seeded where
-vex replays from; identity; the server's own routes (the
+created, which is the boot check, and the data module is told to ask it for an
+entry (it compiles the ones it holds, and one vex cannot run refuses the boot);
+identity; the server's own routes (the
 authentication, `/catalog`, vex); the shell hosts, the app's and each page's;
 what crosses processes; the features, each started with seams made for it; the
 operator prefix; the app's reactions hear a write; the generation pointer is
 watched; the socket.
 A step that refuses is the boot's refusal.
 
-**Where the app's entries are held.** In two places while a server runs. The
-running manifest holds the list the app shipped and is their source: the boot
-check reads it, and a shell is told of the reads on its screens from it. That
-list is copied once, at boot, into the cache vex replays from (`vex_cache`,
-or the cache `runtime.cache` hands over). The cache is what runs them: a
-request's fingerprint, and the list of fingerprints a feature or the operator
-is told of, resolve there, and the manifest is not asked. The cache also
-holds what the list does not: a query `session.answerIntent` wrote while the
-app runs, and any row it held before this boot (seeding writes each entry of
-the list and takes none out, so in a database that outlives the process an
-entry the app no longer ships is still there, protected). As in 0.4.0. Which
-of the two decides what a fingerprint resolves to is what the next piece of
-work changes, and nothing here has moved it.
+**Where the app's entries are held.** In the running manifest
+(`src/artifactory/`), in memory, and nowhere else. It holds the entries the
+app shipped and each set handed over with `server.replaceEntries`, compiled as
+vex replays them, and it is what the engine asks first: a request's
+fingerprint, and the list of fingerprints a feature or the operator is told
+of, resolve there. So what a fingerprint resolves to is what this process's
+app ships, read from the build at every boot.
+
+What the running manifest does not hold is asked of the cache table
+(`vex_cache`, or the cache `runtime.cache` hands over). That table keeps what
+vex wrote itself while the app runs: a query `session.answerIntent` wrote.
+**Nothing is copied into it at boot, and a row in it that no request wrote is
+not replayed.** Vex gives a query it writes the hash of the request it was
+written for, and that is what moss asks of a row before it answers from it. A
+release before 0.6.0 copied every entry of the app there at each boot, and a
+database that ran one still holds those rows, which carry no such hash. Moss
+answers from none of them and deletes none: an entry the app no longer ships
+is refused (`cache_miss`). Two things an app may have leaned on are gone with
+the copy:
+
+- **An engine of the app's own over the same table** finds no entry of the app
+  there. It is given the entries it replays by the app
+  (`seedCache(cache, entries)`, as the server used to do for it).
+- **A row the app writes into the table itself**, to serve an entry that is
+  not in its manifest, is not replayed. `server.replaceEntries` is the way an
+  entry reaches a running server.
 
 **The manifest is read first.** Before a table is created or a row is read,
 `createServer` parses the manifest with a schema, and a manifest that does not
@@ -645,11 +663,12 @@ zod schema handed over as a component's `propsSchema`), is not frozen and not
 looked inside. An object the app shares between its manifest and its own code
 is frozen for both.
 
-What an app consists of changes in one way while a server runs: a set of
-actions is handed over with `server.replaceActions(source, actions)`, which
-verifies before it switches. A charter, a layout variant, an entry, a behavior
-and the shell do not change under a running server; they change in the manifest
-the next server is created with.
+What an app consists of changes in two ways while a server runs: a set of
+actions is handed over with `server.replaceActions(source, actions)`, and a set
+of entries with `server.replaceEntries(source, entries)`. Each verifies before
+it switches. A charter, a layout variant, a behavior and the shell do not
+change under a running server; they change in the manifest the next server is
+created with.
 
 What the server answers over HTTP:
 
@@ -685,7 +704,7 @@ and does not throw.
 #### `MossServer`
 
 `Hono<Env> & { socket; shells?: ShellHost; principalOf; page; pages;
-refresh; replaceActions; actions; catalogOf;
+refresh; replaceActions; replaceEntries; actions; catalogOf;
 policyForRoles; charterReport; invalidateIdentity; invalidateTag; identity;
 executeAs; nudge; close; identities? }`.
 It's a Hono app — mount it, extend it, or hand it to a listener.
@@ -737,8 +756,27 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   keeps a set of its own under its own name (`'integrations'` is the
   integrations feature's, read from its tables) and is the only one that
   replaces it: handing a set over under a feature's name throws (`moss: the
-  set of actions "integrations" is the feature "integrations"'s, and only its
-  owner replaces it. …`).
+  set "integrations" is the feature "integrations"'s, and only its owner
+  replaces it. …`).
+- `replaceEntries(source, entries): Promise<void>` — hand over a set of
+  entries that arrived while the app runs (an app that loads its reads and
+  writes from its own tables), as `replaceActions` hands over actions and
+  under the same names: `source` names the set, handing the same name over
+  again puts the new set in place of the old, so an entry it no longer names
+  is refused from then on, and a name a feature keeps is not the app's. The
+  entries in force are what the app shipped, then each set: an entry of a set
+  is replayed in place of one the app shipped under the same fingerprint, for
+  as long as the set holds it. Every entry is read by the schema the
+  manifest's entries are read by, compiled, and checked before the set is
+  taken: a write by vex's authoring lint, and the reach an entry declares by
+  the check boot runs. Refused, the promise rejects with what was found
+  (`Refresh refused — entries that do not parse:`, with the place and what
+  was expected there) and nothing changed. Sets handed over at the same
+  moment are taken in the order they were handed over. Accepted, the next request replays
+  it, the set is frozen, living shells adopt and the pointer moves, as for a
+  set of actions. Like one, **the set is handed to this process, and no other
+  process is handed it** ([Many processes](#many-processes)). An app that
+  hands over actions and the entries they replay hands the entries first.
 - `actions(): Readonly<Record<string, ActionDefinition>>` — the actions in
   force now, by id: what the app shipped, then each set handed over. To read;
   a set changes through `replaceActions`.
@@ -788,7 +826,7 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   `expired` the ones found older than `sessionRevalidateMs` and resolved
   again.
 - `executeAs(role, fingerprint, context, scope?): Promise<unknown>` — execute a
-  seeded entry as a declared charter role, for surfaces with no principal by
+  entry the app serves as a declared charter role, for surfaces with no principal by
   nature. In-process only, replay-only, policy compiled from that role, scope
   values supplied by server code. Its type is exported as `ExecuteAs`, for
   code that is handed the function and no server. It answers the entry's
@@ -877,12 +915,11 @@ A read made while the action opened is **finished**: its answer is in the tree
 (and listed in `drawnWith`). The app's own shell is always live for a signed-in
 principal — it is the thing that is kept. nova supplies the facts
 (`livenessOf`, `@niscorp/nova/reflect`); moss composes the verdict, because
-the running manifest holds the entries the app shipped, by fingerprint
+the running manifest holds the entries in force, by fingerprint
 (`src/shells/snapshot.ts`; the function is not exported, its answer is
 `live`, `why` and `drawnWith` on the snapshot). It reads that list and not
-the cache a replay resolves in, which can hold more: a fingerprint the
-manifest does not carry (a query written by `answerIntent`, a row an earlier
-boot seeded) is the last line of the table.
+the cache table, which can hold more: a fingerprint the running manifest does
+not hold (a query written by `answerIntent`) is the last line of the table.
 
 When `live` is false the trees are the whole of the screen, and the terminal
 opens no socket.
@@ -991,7 +1028,7 @@ A page that is `live` is still written, and says why — its file is a true firs
 screen and its terminal will look for a socket. Whether that is acceptable (a
 server stands beside the files) or a mistake (there is none) is the build's to
 decide, from the report. Writing the files, and listing a parameterised page's
-paths (`server.executeAs` runs a seeded read as a charter role), are the
+paths (`server.executeAs` runs a read the app serves as a charter role), are the
 caller's.
 
 `renderDocument` is the one way a page is drawn, and its parts are not
@@ -1193,8 +1230,9 @@ tables changed, so a reactive read over one of them answers again.
   logged with what was wrong with it and nothing it carried
   (`[moss:fabric] the transport handed over what is not a message…`); the ones
   after it are dropped without a line.
-- The generation pointer — the persistent counter `server.refresh()` and
-  `server.replaceActions()` move (`moss_generation`, one row, part of
+- The generation pointer — the persistent counter `server.refresh()`,
+  `server.replaceActions()` and `server.replaceEntries()` move
+  (`moss_generation`, one row, part of
   `MOSS_SEQUENCE`). Each process polls it (on `sessionRevalidateMs`; 60s when
   that is unset), and when it has moved it reads again every set of actions
   it has a loader for, runs the check boot runs over what it would then
@@ -1203,11 +1241,11 @@ tables changed, so a reactive read over one of them answers again.
   **The pointer carries no set.** It says that something changed, and a
   process learns what by reading rows. The only set that has a loader is the
   integrations feature's (`'integrations'`). A set handed to
-  `server.replaceActions` in one process is in that process's memory: every
-  other process reaches the same generation and goes on serving the set of
-  that name it was last handed itself, or none. So an app that runs several
-  processes hands the set to each of them with `server.replaceActions`, on a
-  signal of its own. Each call moves the pointer once more, and the others drop
+  `server.replaceActions` or `server.replaceEntries` in one process is in that
+  process's memory: every other process reaches the same generation and goes
+  on serving the set of that name it was last handed itself, or none. So an
+  app that runs several processes hands the set to each of them, on a signal
+  of its own. Each call moves the pointer once more, and the others drop
   what they derived and adopt again.
   The row is read and moved through vex, by two
   entries of moss's own that no route serves (`src/data/own-entries.ts`);
@@ -1337,8 +1375,8 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
   (`artifactsFor`, `src/artifactory/running.ts`): an action, a layout, a fragment and an entry
   reach a shell through that one answer, and the server's wiring reads none
   of them off the app. For an entry that is what a shell is told of the reads
-  on its screens. What a read replays is not in the answer: the entries have
-  two holders (see "Where the app's entries are held", under `createServer`).
+  on its screens. What a read replays the engine asks the running manifest
+  for too (see "Where the app's entries are held", under `createServer`).
   A kept shell may sit unattached for
   `runtime.shellIdleMs` (default 30 minutes; `0` disables the sweep). A shell
   that is not kept (nobody signed in; any shell of a page's host) ends when
@@ -1364,7 +1402,7 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
   - A host has no `adopt` and no `stop`. Each was a second way, for one
     host, to something a server does for all of them at once.
     **A change is the server's.** When what the app consists of changes
-    (`server.refresh()`, `server.replaceActions()`, an integration approved
+    (`server.refresh()`, `server.replaceActions()`, `server.replaceEntries()`, an integration approved
     or removed, a change another process made), every living shell of every
     host adopts: it is brought level with what its principal holds now, in
     place. Every living shell: the ones a host keeps, and the ones it built

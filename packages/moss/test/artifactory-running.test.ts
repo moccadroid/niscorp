@@ -561,7 +561,7 @@ describe('watch — the pointer the other processes poll', () => {
     integrations.replace({ [desk.id]: desk });
     expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id]);
 
-    const sentence = /^moss: the set of actions "integrations" is the feature "integrations"'s, and only its owner replaces it\. An app hands a set over under a name of its own\.$/;
+    const sentence = /^moss: the set "integrations" is the feature "integrations"'s, and only its owner replaces it\. An app hands a set over under a name of its own\.$/;
     expect(() => manifest.replace('integrations', {})).toThrow(sentence);
     expect(() => manifest.replace('integrations', { [pay.id]: pay })).toThrow(sentence);
     expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id]);
@@ -573,13 +573,13 @@ describe('watch — the pointer the other processes poll', () => {
   it('a set is claimed once: a second claim is refused, and both claimants are said', () => {
     const manifest = running(shippedApp());
     manifest.claim('bundles', 'the feature "bundles"');
-    expect(() => manifest.claim('bundles', 'the feature "imports"')).toThrow(/^moss: the set of actions "bundles" is the feature "bundles"'s, and the feature "imports" claims it too\. A set of actions has one writer\.$/);
+    expect(() => manifest.claim('bundles', 'the feature "imports"')).toThrow(/^moss: the set "bundles" is the feature "bundles"'s, and the feature "imports" claims it too\. A set has one writer\.$/);
   });
 
   it('a name the app already handed a set over under cannot be claimed afterwards', () => {
     const manifest = running(shippedApp());
     manifest.replace('bundles', { [pay.id]: pay });
-    expect(() => manifest.claim('bundles', 'the feature "bundles"')).toThrow(/^moss: the set of actions "bundles" was handed over by the app, and the feature "bundles" claims it\. A set of actions has one writer\.$/);
+    expect(() => manifest.claim('bundles', 'the feature "bundles"')).toThrow(/^moss: the set "bundles" was handed over by the app, and the feature "bundles" claims it\. A set has one writer\.$/);
   });
 
   it('stopping ends the watching', async () => {

@@ -1,9 +1,10 @@
 import type { ActionDefinition } from '@niscorp/nova';
-import type { SeedEntry, SeedMutation } from '@niscorp/vex';
-import { candidateOf, entriesOf, freezeDeep, refusalOf, verifyManifest } from '../manifest';
+import type { CacheEntry, SeedEntry, SeedMutation } from '@niscorp/vex';
+import { candidateOf, entriesOf, entryMisfits, freezeDeep, refusalOf, verifyManifest } from '../manifest';
 import type { ManifestCandidate, ManifestReport, ShellManifest, ShippedManifest } from '../manifest';
 import type { ShellArtifacts } from './artifacts';
 import { shellComponents } from './artifacts';
+import { compileEntries, createEntriesInForce } from './entries';
 import { createGeneration } from './generation';
 import type { Generation, Pointer } from './generation';
 import { createRoleMemo, narrowedBy } from './roles';
@@ -31,6 +32,9 @@ export type RunningManifest = {
   verify: (actions: Actions) => ManifestReport;
   report: () => ManifestReport;
   replace: (source: string, actions: Record<string, ActionDefinition>) => void;
+  replaceEntries: (source: string, entries: readonly (SeedEntry | SeedMutation)[]) => Promise<void>;
+  cacheEntry: (fingerprint: string) => Promise<CacheEntry | undefined>;
+  cacheEntries: () => Promise<{ key: string; entry: CacheEntry }[]>;
   claim: (source: string, owner: string) => OwnedActions;
   refresh: () => void;
   watch: () => void;
@@ -63,14 +67,14 @@ const createSetOwners = (): SetOwners => {
   const owners = new Map<string, string>();
   const ownerRefusalOf = (source: string): string | undefined => {
     const owner = owners.get(source);
-    return owner === undefined ? undefined : `the set of actions "${source}" is ${owner}'s, and only its owner replaces it. An app hands a set over under a name of its own.`;
+    return owner === undefined ? undefined : `the set "${source}" is ${owner}'s, and only its owner replaces it. An app hands a set over under a name of its own.`;
   };
   return {
     ownerRefusalOf,
     claim: (source, owner, handedOver) => {
       const held = owners.get(source);
-      if (held !== undefined) throw new Error(`moss: the set of actions "${source}" is ${held}'s, and ${owner} claims it too. A set of actions has one writer.`);
-      if (handedOver) throw new Error(`moss: the set of actions "${source}" was handed over by the app, and ${owner} claims it. A set of actions has one writer.`);
+      if (held !== undefined) throw new Error(`moss: the set "${source}" is ${held}'s, and ${owner} claims it too. A set has one writer.`);
+      if (handedOver) throw new Error(`moss: the set "${source}" was handed over by the app, and ${owner} claims it. A set has one writer.`);
       owners.set(source, owner);
     },
     assertAppOwned: (source) => {
@@ -108,8 +112,8 @@ const createComponentNames = (read: (shell: ShellManifest) => ComponentNames): {
 
 export const createRunningManifest = (config: RunningManifestConfig): RunningManifest => {
   const { shipped } = config;
-  const entries = entriesOf(shipped);
-  const candidate = (actions: Actions): ManifestCandidate => candidateOf(shipped, { actions, entries }, config.grants);
+  const entries = createEntriesInForce(entriesOf(shipped));
+  const candidate = (actions: Actions, held = entries.list()): ManifestCandidate => candidateOf(shipped, { actions, entries: held }, config.grants);
 
   const own: Actions = shipped.actions;
   const loaders = new Map<string, ActionLoader>();
@@ -125,7 +129,6 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     installedOnly: (ids, installed) => catalogFilters.reduce((kept, narrow) => narrowedBy(narrow, kept, installed), ids),
   });
   const components = createComponentNames((shell) => shellComponents({ actions: inForce, layouts: shipped.layouts }, shell));
-  const byFingerprint: ShellArtifacts['entries'] = new Map(entries.map((entry) => [entry.fingerprint, entry]));
   const listeners = new Set<() => void>();
   let pointer: Generation | undefined;
 
@@ -153,14 +156,39 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     applySets(new Map(read), false);
   };
 
+  const takeEntries = async (source: string, handed: readonly (SeedEntry | SeedMutation)[]): Promise<void> => {
+    owners.assertAppOwned(source);
+    const misfits = entryMisfits(handed);
+    if (misfits.length > 0) throw new Error(['Refresh refused — entries that do not parse:', ...misfits.map((misfit) => `  ${misfit}`)].join('\n'));
+    const compiled = await compileEntries(handed);
+    const verified = verifyManifest(candidate(inForce, entries.withSet(source, handed)));
+    const refusal = refusalOf(verified, 'refresh');
+    if (refusal !== undefined) throw new Error(refusal);
+    freezeDeep(handed);
+    entries.takeSet(source, handed, compiled);
+    report = verified;
+    for (const listener of [...listeners]) tell(listener);
+    pointer?.bump();
+  };
+  let entriesTaken: Promise<void> = Promise.resolve();
+
   return {
     actions: () => inForce,
-    entries: () => entries,
+    entries: entries.list,
     verify: (actions) => verifyManifest(candidate(actions)),
     report: () => report,
     replace: (source, actions) => applySets(new Map([[owners.assertAppOwned(source), actions]]), true),
+    // In turn: a set is compiled before it is taken, and of two handed over
+    // the later has to be the one in force.
+    replaceEntries: (source, handed) => {
+      const taken = entriesTaken.then(() => takeEntries(source, handed));
+      entriesTaken = taken.catch(() => undefined);
+      return taken;
+    },
+    cacheEntry: async (fingerprint) => (await entries.compiled()).get(fingerprint),
+    cacheEntries: async () => [...(await entries.compiled())].map(([key, entry]) => ({ key, entry })),
     claim: (source, owner) => {
-      owners.claim(source, owner, sets.has(source));
+      owners.claim(source, owner, sets.has(source) || entries.holdsSet(source));
       return {
         replace: (actions) => applySets(new Map([[source, actions]]), true),
         setLoader: (load) => {
@@ -194,7 +222,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       ...(shell.layout !== undefined ? { frame: shell.layout } : {}),
       ...(shell.layoutStore !== undefined ? { layoutStore: shell.layoutStore } : {}),
       ...(shell.fragments !== undefined ? { fragments: shell.fragments } : {}),
-      entries: byFingerprint,
+      entries: entries.byFingerprint(),
       components: components.of(shell),
     }),
     generation: () => pointer?.current() ?? -1,

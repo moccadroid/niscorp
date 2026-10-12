@@ -1,15 +1,16 @@
 import type { Context, Env, Hono } from 'hono';
 import { migrate, upgradeStore } from '@niscorp/strata/postgres';
-import { handleDiscovery, seedCache } from '@niscorp/vex';
+import { handleDiscovery } from '@niscorp/vex';
 import type { Sequence, Upgrader } from '@niscorp/strata';
 import type { DocumentStore } from '@niscorp/strata/postgres';
-import type { CacheBackend, DatabaseAdapter, ExecuteRecord, MutationClient, PgPool, QueryEngine, QueryEngineConfig, QueryResponse, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
+import type { CacheBackend, DatabaseAdapter, ExecuteRecord, MutationClient, PgPool, QueryEngine, QueryEngineConfig, QueryResponse, ScopePolicy } from '@niscorp/vex';
 import { memoKey } from '../identity';
 import type { ResolvedIdentity } from '../identity';
 import type { NiscApp } from '../manifest';
 import { emitterOf } from '../runtime';
 import type { Telemetry } from '../runtime';
 import { createDataLayer, createGrammarUpgrader, vexRecordToSpan } from './engine';
+import type { EntryCache } from './engine';
 import { tableSequencesOf } from './migrate';
 import type { FeatureTables } from './migrate';
 import { POINTER, createOwnEntries, createPointer } from './own-entries';
@@ -47,7 +48,7 @@ export type DataRoutesConfig<E extends Env> = {
 export type Data = {
   grants: readonly string[];
   grammars: Upgrader;
-  seed: (entries: readonly (SeedEntry | SeedMutation)[]) => Promise<void>;
+  entriesHeldBy: EntryCache['askFirst'];
   policyOf: (who: Caller) => ScopePolicy;
   policyForRoles: (roles: readonly string[]) => ScopePolicy;
   fingerprints: () => Promise<readonly string[]>;
@@ -64,7 +65,12 @@ export type Data = {
 
 const callerOfRoles = (roles: readonly string[]): Caller => ({ memoKey: memoKey(roles, undefined), roles });
 
-export type PreparedEngine = Pick<Data, 'grants' | 'grammars'> & { engine: QueryEngine; adapter: DatabaseAdapter; upgradeStore: (store: DocumentStore) => Promise<void> };
+export type PreparedEngine = Pick<Data, 'grants' | 'grammars'> & {
+  engine: QueryEngine;
+  adapter: DatabaseAdapter;
+  askFirst: EntryCache['askFirst'];
+  upgradeStore: (store: DocumentStore) => Promise<void>;
+};
 
 const prepareEngine = async (config: DataConfig): Promise<PreparedEngine> => {
   // The tables exist before the engine introspects: a table created after
@@ -77,6 +83,7 @@ const prepareEngine = async (config: DataConfig): Promise<PreparedEngine> => {
     engine: layer.engine,
     grants: layer.grants,
     adapter: layer.adapter,
+    askFirst: layer.askFirst,
     upgradeStore: async (store) => {
       await upgradeStore(config.pool, store, grammars);
     },
@@ -152,7 +159,7 @@ export const createDataWith = (prepared: PreparedEngine, config: Pick<DataConfig
   return {
     grants,
     grammars,
-    seed: (entries) => seedCache(engine.cache, entries),
+    entriesHeldBy: prepared.askFirst,
     fingerprints: async () => (await engine.cache.keys?.()) ?? [],
     policyOf: policies.of,
     // Compiled afresh and not taken from the kept ones: the caller owns its

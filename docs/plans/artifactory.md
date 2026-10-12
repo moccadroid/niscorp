@@ -2,7 +2,7 @@
 
 **Status: Proposed (2026-10-12), ready to build from. What it has to do
 (part 2) and its ten design decisions (part 9) are the owner's and are
-settled. Step 1 of part 6 is built (2026-10-12), on the branch
+settled. Steps 1 and 2 of part 6 are built (2026-10-12), on the branch
 `worktree-artifactory`; nothing else is. Part 0 is for whoever builds it, part 6 is the
 build, step by step, and part 7 is what needs the owner's word before it is
 touched.**
@@ -21,7 +21,7 @@ owner's standing decisions. Then this file. Then the code part 4 names.
 
 **Where the repository stands.** Start from the branch `worktree-artifactory`,
 or from `main` once that branch is in it. Moss is
-`packages/moss/src`: 90 files in 16 modules, about 7,400 lines of code and
+`packages/moss/src`: 91 files in 16 modules, about 7,600 lines of code and
 370 comment lines. `pnpm verify` passes on the branch. CI has passed on
 `main`, and has not run on the branch until it is pushed.
 
@@ -89,7 +89,14 @@ The owner's. Not to be asked again.
 - A mechanism of moss, not a library, and a module of its own:
   `packages/moss/src/artifactory/`.
 - The first use is lyceum, so that it can be shown. No other app gets a new
-  feature for it: what they do today has to work, loading through it.
+  feature for it.
+- No lab app is protected as it is, and none is left broken. Where one reaches
+  around moss for what the artifactory now holds, it is moved onto the
+  artifactory in the same step. What it generated before is dropped: none of
+  their databases is live.
+- An app talks to the artifactory's API and to nothing behind it. Where a
+  thing is kept is internal, so that a change of storage is a migration and
+  never a change of API.
 
 **What it holds**
 
@@ -183,6 +190,12 @@ The owner's. Not to be asked again.
 - The artifactory holds the whole entry and is asked before vex's cache.
 - There is one path for all entries. A saved entry is not a second form beside
   a seeded one.
+- The entries an app ships are in the live list, read from the build at every
+  boot, as its actions are. They are copied into no table.
+- An entry reaches a running server through the server
+  (`server.replaceEntries`), never by a row written into vex's cache table.
+- `vex_cache` stays as it is until the artifactory holds everything and every
+  app is moved onto it. Then it is deleted.
 
 **The check**
 
@@ -254,6 +267,12 @@ design leans on. Run one again before you lean on it harder than it was run.
   functions, and none has a description.
 - `vex_cache` is named in atrium, relay, encore's boot check, fable and
   mythos. Fable and mythos have a shell of their own and no moss.
+- Three things read the copies of an app's entries that moss wrote into
+  `vex_cache` until step 2 (read on 2026-10-12): relay's assistant, which runs
+  an engine of its own over that table and replays shipped entries from it;
+  atrium, which wrote a connector's entries there itself after a sync; and
+  moss's own `migrateTables`, which takes a copy as the record that an earlier
+  deploy shipped an entry as it is. Midas does none of the three.
 - `@niscorp/moss/unverified` is used by relay (a model builds an action and it
   is registered in the user's shell), atrium (an operator previews a fetched
   layout as an action), lyceum (two functions set a layout into a ref for one
@@ -274,8 +293,9 @@ Read against the code on 2026-10-12. Paths are under `packages/moss/src/`.
 | `artifactory/roles.ts` | what a set of roles holds, kept per set of roles |
 | `artifactory/artifacts.ts` | `ShellArtifacts`, `shellComponents` |
 | `artifactory/generation.ts` | the generation pointer: a counter every process polls, so a change in one reaches the others |
-| `data/engine.ts` | `createDataLayer`: the vex engine and the cache it is built with |
-| `data/data.ts` | `createData`: `seed`, `fingerprints`, policies, `executeAs`, the pointer's row |
+| `artifactory/entries.ts` | the entries in force (the build's, then each set handed over), compiled as vex replays them |
+| `data/engine.ts` | `createDataLayer`: the vex engine, and the cache it is built with, which asks the artifactory first (`createEntryCache`) |
+| `data/data.ts` | `createData`: `entriesHeldBy`, `fingerprints`, policies, `executeAs`, the pointer's row |
 | `data/own-entries.ts` | how moss reads and writes its own rows through vex (`createOwnEntries`, `POINTER`) |
 | `data/tables.ts` | `MOSS_SEQUENCE` (`nisc.moss`): moss's tables, four migrations so far |
 | `data/routes.ts` | the vex routes; `createIntentAnswers`, a query written for an intent while the app runs |
@@ -289,11 +309,12 @@ Read against the code on 2026-10-12. Paths are under `packages/moss/src/`.
 
 **What has to change**
 
-- **Entries have two holders.** The manifest's list is copied once, at boot,
-  into vex's cache (`Data.seed`, called in `buildRunningManifest`,
-  `server/server.ts`). From then on a replay resolves in the cache and asks
-  the manifest nothing. A row from an earlier boot stays. There is no way to
-  hand an entry over while a server runs.
+- **Entries had two holders, and have one since step 2.** The manifest's list
+  was copied at every boot into vex's cache, a replay resolved there and asked
+  the manifest nothing, a row from an earlier boot stayed, and there was no
+  way to hand an entry over while a server ran. Now the artifactory holds
+  them, the engine's cache asks it first, and `server.replaceEntries` hands a
+  set over.
 - **`artifactsFor(shell, roles, installed)` is synchronous and asked by
   roles.** Its answer is kept for each set of roles and install list, never
   for a person. What one person generated needs the principal, and rows need
@@ -406,16 +427,25 @@ gives it its id, as a shipped action has one, and its layouts' refs follow
 that id. Publishing a new version of something that is already a default
 keeps the id. A read keeps its fingerprint.
 
-**Entries.** `data/engine.ts` builds the engine with a cache. That cache
-becomes one that asks the artifactory first: a shipped, published or saved
-entry is answered by it, compiled from the entry as authored. Anything else is
-vex's own table's, but only a generated one (it carries a schema fingerprint):
-a row an earlier boot seeded is not an entry any more. What vex writes goes to
-its own table. Listing the keys answers both. Nothing is seeded at boot, and
-`Data.seed` goes. A generated read keeps the fingerprint vex gave it. Saving
-one under a fingerprint a shipped or published entry has is refused, so a
-generated read can never answer in place of a shipped one. A replay runs under
-the policy of whoever calls it, whoever saved the entry.
+**Entries.** `data/engine.ts` builds the engine with a cache that asks the
+artifactory first (built in step 2): a shipped or handed-over entry, and later
+a published or saved one, is answered by it, compiled from the entry as
+authored. Anything else is vex's own table's, but only a row vex wrote for a
+request: it carries that request's hash (`requestHash`), or is a negative
+result. A copy of an app's entry that an earlier release left there carries no
+such hash and is not an entry any more, and neither is a row an app put there
+by hand. The schema fingerprint is not the mark: an app's cache may strip it
+(relay's does). What vex writes goes to its own table. Listing the keys
+answers both. Nothing is copied at boot. A generated read keeps the
+fingerprint vex gave it. Saving one under a fingerprint a shipped or published
+entry has is refused, so a generated read can never answer in place of a
+shipped one. A replay runs under the policy of whoever calls it, whoever saved
+the entry.
+
+When everything is held by the artifactory and every app is moved, `vex_cache`
+is deleted. Until then it keeps the queries a model wrote; for it to go, a
+query that was written and not saved needs a place in the artifactory, which
+the draft is.
 
 **The check.** At a put into the draft, at a save, and when a shell is built:
 the kind's schema (nova's, vex's), `auditAction`, the layout against the kit
@@ -457,15 +487,23 @@ differently. *Done when:* the source holds the same top-level statements as
 before, but for two types in `data` (`Pointer` is written out there, and one
 member of `Data` names the listener's shape), and part 0's "works" holds.
 
-**Step 2. Entries through the cache.** The engine's cache asks the artifactory
-first (part 5, "Entries"), for the build's entries only. `Data.seed` and its
-call go. `data/migrate.ts` asks the cache whether an entry was seeded
-(`isSeededAs`), to excuse one that was already broken before a migration: it
-asks the artifactory instead. Look at each place an app names `vex_cache`
-(part 3). *Tests that fail first:* a shipped entry replays with nothing in the
-table; an entry that left the app is refused though an old row holds it; a
-generated query still replays from the table; the list of fingerprints holds
-both. *Done when:* those pass and part 0's "works" holds.
+**Step 2. Entries through the cache. Built (2026-10-12).** The engine's cache
+asks the artifactory first (part 5, "Entries"): for the build's entries, and
+for a set an app hands over while the server runs, which is one new call,
+`server.replaceEntries(source, entries)`, the twin of `replaceActions`.
+`Data.seed` and its call are gone, and nothing is copied into `vex_cache`.
+Two lab apps moved with it: atrium hands its connectors' entries over as a set
+where it wrote them into the table, and relay's assistant, which runs an
+engine of its own, is given relay's entries by relay where it found moss's
+copies. `data/migrate.ts` is as it was: it still takes a copy in the table as
+the record that an earlier deploy shipped an entry as it is. Moss writes no
+copy any more, so that pass is given for what a release before this one
+copied, and for what an app copies itself for an engine of its own (relay). *Tests that failed first:* a
+shipped entry replays with nothing in the table; an entry that left the app is
+refused though an old row holds it; a generated query still replays from the
+table; the list of fingerprints holds both; a set of entries handed over is
+replayed, replaced whole, and refused whole when one of it fails. *Done when:*
+those pass and part 0's "works" holds.
 
 **Step 3. Every layout by ref.** The artifactory answers each action's layout
 in the layout store under `action/<id>` and the definition with `{ ref }`
@@ -546,6 +584,17 @@ Nova owes nothing.
 - How many versions of one artifact are kept, how large a body may be, and
   when pruning runs. Measure before proposing a number.
 - What lyceum shows in step 6. The owner's to say.
+- Relay's assistant still runs an engine of its own over `vex_cache`, for the
+  queries its model writes. It moves onto the draft (step 6) and onto saved
+  reads (step 7), which is where a query a model wrote gets a place in the
+  artifactory.
+- `nisc migrate` gives its pass, for an entry that was already broken before a
+  run, to an entry that has a copy in `vex_cache`: one an earlier release
+  wrote, or one an app writes itself for an engine of its own. The pass goes
+  when the table does.
+- An app that hands over a set of entries and a set of actions makes two
+  calls, and living shells adopt twice. One call for a whole set would be a
+  third way to hand something over; it is not built.
 - A new action that makes a vex write still ships in a build: what can be
   published is what can be generated. And a published default wins over a
   build that is deployed later, until it is taken back. Both follow from what

@@ -8,7 +8,7 @@ import type { Feature } from '../src/feature';
 import type { NiscApp } from '../src/manifest';
 import { PROTOCOL } from '../src/protocol';
 import { assembleServer } from '../src/server/server';
-import { NOTES_SCHEMA, engineDouble, tableNamed } from './data-double';
+import { ADD_NOTE, NOTES_SCHEMA, READ_NOTES, engineDouble, tableNamed } from './data-double';
 
 const THEIRS = ['integrations', 'integration_actions'];
 const schema: DatabaseSchema = { entities: [...NOTES_SCHEMA.entities, ...THEIRS.map(tableNamed)] };
@@ -21,6 +21,7 @@ const standing = async (features: readonly Feature[]) => {
   const app: NiscApp = {
     charter: { public: ['home'], member: { actions: ['home'], data: ['notes.read', 'notes.write.insert'] } },
     actions: { home: { id: 'home' } },
+    entries: [READ_NOTES, ADD_NOTE],
     shell: { canvases: [{ id: 'main', initial: 'home' }] },
     identity: { resolve: async () => ({ roles: ['member'], scope: {} }) },
     features: [...features],
@@ -32,6 +33,7 @@ const standing = async (features: readonly Feature[]) => {
       grants: scopeGrants(schema.entities.map((entity) => entity.name)),
       grammars: await createGrammarUpgrader({}),
       upgradeStore: async (store) => void upgraded.push(store.table),
+      askFirst: double.askFirst,
     },
     { db: double.db, charter: app.charter, featureTables: featureTablesOf(app) },
   );

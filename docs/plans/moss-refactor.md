@@ -250,14 +250,16 @@ None of them is edited from here.
 Its own plan: [artifactory.md](artifactory.md). It holds what is decided, what
 was run, the last design proposed, and what moss still has to change for it.
 Its step 1 is built: the module, which took the running manifest, what a set
-of roles holds and the generation pointer's clock from `manifest`.
+of roles holds and the generation pointer's clock from `manifest`. So is its
+step 2: the artifactory holds the app's entries, and the engine's cache asks
+it first.
 
 What this refactor did for it: while a server runs, one place answers what a
 shell is made of (part 5); a living shell is brought level in place when that
 changes; and a change in one process reaches the others. What it left, by
-decision: the entries have two holders, the feature seam carries the half of
-integrations that handles a bundle's actions, and `@niscorp/moss/unverified`
-is a second way into a shell.
+decision: the entries had two holders (one, since the artifactory's step 2),
+the feature seam carries the half of integrations that handles a bundle's
+actions, and `@niscorp/moss/unverified` is a second way into a shell.
 
 ## 11. In numbers
 
