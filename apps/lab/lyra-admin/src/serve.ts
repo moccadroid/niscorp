@@ -1,4 +1,3 @@
-// .env first — OPERATOR_KEY lives there, on both sides of the seam.
 try {
   process.loadEnvFile();
 } catch {
@@ -8,9 +7,6 @@ try {
 import { startAdminService } from './service';
 import { adminPort, lyraBase, operatorKey } from './port';
 import { adminToken } from './token';
-
-// `pnpm --filter lyra-admin admin`. Its own process, so it restarts on its own
-// clock and the app it administers never notices.
 
 const main = async (): Promise<void> => {
   if (operatorKey() === '') {
