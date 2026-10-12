@@ -8,6 +8,7 @@ import type { Connection } from '@niscorp/moss/protocol';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
+import { BlockList, isIPv4, isIPv6 } from 'node:net';
 import { z } from 'zod';
 import type { PGlite } from '@electric-sql/pglite';
 import type { Booted } from './src/server/boot';
@@ -39,12 +40,21 @@ const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const here = dirname(fileURLToPath(import.meta.url));
 if (existsSync(resolve(here, '.env'))) process.loadEnvFile(resolve(here, '.env'));
 
-// What the projector's QR code says in dev. localhost unless told otherwise:
-// vite listens on this machine only, and it should — /dev/as would otherwise
-// sign anybody on the wifi in as the speaker. To try it with a real phone, run
-// `pnpm dev --host` with PUBLIC_URL set to this machine's address, knowing that.
+// What the projector's QR code says in dev: localhost unless told otherwise.
+// To try it with a real phone, run `pnpm dev --host` with PUBLIC_URL set to
+// this machine's address. The phone signs in the way the room does: /dev/as
+// stays this machine's (`fromThisMachine`, below).
 const PORT = 5197;
 const PUBLIC_URL = process.env['PUBLIC_URL'] ?? `http://localhost:${PORT}`;
+
+// /dev/as answers this machine only, also under `--host`: by the socket's
+// address, never by a header. An IPv4-mapped address (`::ffff:127.0.0.1`) is
+// held to the IPv4 rule.
+const thisMachine = new BlockList();
+thisMachine.addSubnet('127.0.0.0', 8, 'ipv4');
+thisMachine.addAddress('::1', 'ipv6');
+const fromThisMachine = (address: string | undefined): boolean =>
+  address !== undefined && (isIPv4(address) ? thisMachine.check(address, 'ipv4') : isIPv6(address) && thisMachine.check(address, 'ipv6'));
 
 const appServer = (): Plugin => ({
   name: 'lyceum-app-server',
@@ -144,6 +154,11 @@ const appServer = (): Plugin => ({
       const who = /^\/dev\/as\/([\w-]+)/.exec(req.url ?? '')?.[1];
       if (who === undefined) {
         next();
+        return;
+      }
+      if (!fromThisMachine(req.socket.remoteAddress)) {
+        res.statusCode = 403;
+        res.end('/dev/as signs a browser in as whoever the address names, so it answers this machine only.');
         return;
       }
       void current
