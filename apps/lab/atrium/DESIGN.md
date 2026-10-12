@@ -273,8 +273,9 @@ vendor arrives from that vendor's `GET /:connector/bundle`:
 (below), and writes rows in one transaction per connector: `bundle_actions`,
 `bundle_entries`, `surface_slots` stamped `source = <connector>`,
 `request_options`, `connector_capabilities`. Then it re-reads the rows into
-`bundleState`, re-seeds the pulled fingerprints into `vex_cache`, and calls
-moss's `refresh()`, so living shells adopt what just arrived.
+`bundleState` and hands them to the server as the `bundles` set (its entries
+with `replaceEntries`, then its actions with `replaceActions`), so living
+shells adopt what just arrived.
 
 Three consequences, and the checks name each:
 
@@ -1008,13 +1009,10 @@ listing: entries nothing calls (`surface/matrix` sat like that for weeks) and
 calls with no entry (a 500 waiting for its first click, invisible to a boot
 check because nothing evaluates an endpoint until it runs).
 
-Building it surfaced a real hole. `app.entries` is fixed at build, and boot's
-refresh re-reads bundle *actions* into the running manifest but not bundle
-*entries* — it never needed to, because a sync seeds them straight into
-`vex_cache` and the engine reads from there. Harmless for the app, wrong for
-anything trying to describe the API: on a fresh database the manifest array
-holds core entries only. The seam unions the manifest with the live
-`bundleState` registry.
+`app.entries` is fixed at build and holds the core entries only: the bundles'
+entries come from rows, and boot's refresh hands them to the running server as
+a set, as it hands their actions. So the seam unions the manifest with the
+live `bundleState` registry.
 
 ### The timeline
 

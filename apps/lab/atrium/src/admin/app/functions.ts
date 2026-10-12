@@ -569,7 +569,7 @@ export const adminFunctions = (session: FunctionSession, seam: Seam): Record<str
       health: {
         uptime: `${Math.round(Number(figures['uptimeMs'] ?? 0) / 1000)}s`,
         actions: `${String(actions['core'] ?? 0)} core · ${String(actions['ext'] ?? 0)} shipped`,
-        entries: `${String(entries['cached'] ?? 0)} cached · ${String(entries['bundled'] ?? 0)} from bundles`,
+        entries: `${String(entries['core'] ?? 0)} core · ${String(entries['bundled'] ?? 0)} from bundles`,
         shells: `${String(figures['shells'] ?? 0)}`,
         idle: `${String(figures['idle'] ?? 0)} unattended`,
         sync: sync['at'] === 0 ? 'no pull yet' : `${reports.filter((r) => r['ok'] === true).length}/${reports.length} landed`,

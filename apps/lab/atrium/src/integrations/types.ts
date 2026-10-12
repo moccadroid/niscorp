@@ -14,8 +14,8 @@ import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 //   actions  → bundle_actions rows, merged into the running manifest's action
 //              set — shipping one more is a service deploy plus a sync, never
 //              a deploy of the app.
-//   entries  → bundle_entries rows, then vex_cache (reads and writes the
-//              actions replay).
+//   entries  → bundle_entries rows, handed to the running server as a set
+//              (reads and writes the actions replay).
 //   slots    → surface_slots rows stamped `source = <connector>` (where the
 //              actions surface, per audience, gated by the capability that
 //              brought them). The stamp is what lets a re-sync replace one

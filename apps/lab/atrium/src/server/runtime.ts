@@ -8,9 +8,9 @@ import { buildSeedSql } from '@atrium/db/seed';
 // The dev ENVIRONMENT (D2) — a NiscRuntime over PGlite: schema, demo rows, and
 // one resolve pass so a fresh database boots coherent. Nothing else.
 //
-// The API surface is declared once in the manifest's `entries` and seeded into
-// vex_cache by whoever stands up an engine over this runtime. The concrete
-// PGlite rides along so the checks can use raw SQL as ground truth.
+// The API surface is declared once in the manifest's `entries`, and the server
+// that stands over this runtime holds them. The concrete PGlite rides along so
+// the checks can use raw SQL as ground truth.
 export type DevRuntime = NiscRuntime & { db: PGlite };
 
 export const devRuntime = async (): Promise<DevRuntime> => {

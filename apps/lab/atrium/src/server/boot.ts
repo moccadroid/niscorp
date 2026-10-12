@@ -65,23 +65,30 @@ export const boot = async (): Promise<{
   const runtime = await devRuntime();
   await loadDirectory(runtime.pool);
 
-  const bundles = await loadBundles(runtime);
+  const { entries, actions } = await loadBundles(runtime);
 
-  const app = buildAtrium(bundles.entries, runtime);
+  const app = buildAtrium(runtime);
   const server = await createServer(app, runtime);
-  // The bundles' actions come from rows, so they are not part of what the app
-  // ships: they are handed to the server as a set of their own, here and after
-  // every sync. moss verifies the whole (charter over core + bundle ids) before
-  // it serves any of it, and throws — which ends this boot — if it could not.
-  server.replaceActions('bundles', bundles.actions);
+  // The bundles' actions and entries come from rows, so they are not part of
+  // what the app ships: they are handed to the server as a set of their own,
+  // here and after every sync. The entries go first, so no action is served
+  // before the reads it replays. moss verifies the whole (charter over core +
+  // bundle ids) before it serves any of it, and throws — which ends this boot —
+  // if it could not.
+  await server.replaceEntries('bundles', entries);
+  server.replaceActions('bundles', actions);
 
   registerRefresh(runtime, async () => {
-    // Re-read the rows and hand the set over again: an action the rows no
-    // longer hold leaves, a new one arrives. moss verifies the whole, then
-    // drops its memos and walks the living shells — or throws, and what was
-    // being served keeps being served.
-    const fresh = await loadBundles(runtime);
-    server.replaceActions('bundles', fresh.actions);
+    // Re-read the rows and hand the set over again: an action or an entry the
+    // rows no longer hold leaves, a new one arrives, a changed one replaces the
+    // one before it. moss verifies the whole, then drops its memos and walks
+    // the living shells — or throws, and what was being served keeps being
+    // served.
+    // Both taken from one load: `loadBundles` answers the registry itself,
+    // which the next load refills while this one waits on the entries.
+    const { entries: freshEntries, actions: freshActions } = await loadBundles(runtime);
+    await server.replaceEntries('bundles', freshEntries);
+    server.replaceActions('bundles', freshActions);
   });
 
   // The operator seam — key-gated, and 404 to the whole world when no key is

@@ -294,12 +294,9 @@ const entriesReport = async (app: NiscApp, server: MossServer, runtime: DevRunti
 
   // The manifest's entries plus the live bundle registry, deduped.
   //
-  // Worth knowing why both: `app.entries` is fixed at build, and boot's refresh
-  // hands bundle ACTIONS to the running server but not bundle entries —
-  // it does not need to, because a sync seeds them straight into vex_cache and
-  // the engine reads from there. Harmless for the app, and a hole for anything
-  // trying to describe the API: on a fresh database the manifest array holds
-  // core entries only.
+  // Worth knowing why both: `app.entries` is fixed at build and holds the core
+  // entries only. The bundles' entries come from rows, and boot's refresh hands
+  // them to the running server as a set, as it hands their actions.
   const known = new Map<string, unknown>();
   for (const entry of [...(app.entries ?? []), ...bundleState.entries]) {
     known.set(String((entry as unknown as Record<string, unknown>)['fingerprint'] ?? ''), entry);
@@ -444,15 +441,14 @@ const roster = (shells: ShellHost | undefined): unknown => {
 
 const startedAt = Date.now();
 
-const health = async (server: MossServer, runtime: DevRuntime, shells: ShellHost | undefined): Promise<unknown> => {
+const health = (server: MossServer, app: NiscApp, shells: ShellHost | undefined): unknown => {
   const ids = Object.keys(server.actions());
-  const entries = await runtime.pool.query('SELECT count(*)::int AS n FROM vex_cache', []);
   const living = shells?.list() ?? [];
   return {
     startedAt,
     uptimeMs: Date.now() - startedAt,
     actions: { core: ids.filter((id) => !id.startsWith('ext.')).length, ext: ids.filter((id) => id.startsWith('ext.')).length },
-    entries: { cached: Number(entries.rows[0]?.['n'] ?? 0), bundled: bundleState.entries.length },
+    entries: { core: (app.entries ?? []).length, bundled: bundleState.entries.length },
     shells: living.length,
     // Held but unattended — the shells the idle sweep is there for. Worth its
     // own figure: a count of shells says nothing about whether the process is
@@ -508,7 +504,7 @@ export const mountOperator = (server: MossServer, runtime: DevRuntime, app: Nisc
   server.get('/operator/timeline', (c) => c.json(timelineReport() as Record<string, unknown>));
   server.get('/operator/runs', async (c) => c.json((await runsReport(runtime)) as Record<string, unknown>));
   server.get('/operator/roster', (c) => c.json(roster(server.shells) as Record<string, unknown>));
-  server.get('/operator/health', async (c) => c.json((await health(server, runtime, server.shells)) as Record<string, unknown>));
+  server.get('/operator/health', (c) => c.json(health(server, app, server.shells) as Record<string, unknown>));
 
   // ─── the one write that touches a person's session ───────────
   //

@@ -2,7 +2,7 @@ import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { stampText, statusTone } from '@atrium/app/prisms/format.prism';
 
 // The Mews bundle's data surface — the reads and writes its actions replay.
-// Seeded into vex_cache with everything else; `property_id` on every row is
+// Handed to the server with the bundle's actions; `property_id` on every row is
 // stamped and matched by the tenant behaviors, so none of these mention it.
 
 // Mirror a booking the connector confirmed. The connector owns availability;

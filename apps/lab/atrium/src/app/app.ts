@@ -1,6 +1,5 @@
 import { defineApp } from '@niscorp/moss';
 import type { NiscApp, NiscRuntime } from '@niscorp/moss';
-import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { CHARTER, ASSIGNMENTS } from './charter';
 import { CATALOG_DEFINITIONS } from '@atrium/app/action-catalog';
 import { ENTRIES, MUTATION_ENTRIES } from '@atrium/app/vex';
@@ -24,8 +23,8 @@ import { PAGES } from './pages';
 //
 // Everything here is an authored artifact — the policy document, who wears
 // what, the action definitions, the resource subgraphs, the shell's canvases.
-// The server derives the rest from these plus a database, whose seeded
-// vex_cache IS the API surface.
+// The server derives the rest from these plus a database; the entries here are
+// the API surface.
 //
 // The one thing this file derives is `shell.inputs`: turning a principal into a
 // property, a stay and an audience. That derivation is why the browser never
@@ -46,26 +45,23 @@ const ICONS: Record<string, string> = {
   vendor: 'plug',
 };
 
-// The manifest is a FUNCTION of the bundles' entries because those come from
-// ROWS: boot reads bundle_entries back from the database (the discovery sync
-// put them there) and hands them in. The app itself carries no integration —
-// everything ext.* arrived over the wire.
+// The app itself carries no integration — everything ext.* arrived over the
+// wire. The bundles' ACTIONS and ENTRIES are not shipped here: they come from
+// rows, and they change while the app runs, so boot hands them to the server
+// as a set of their own (`server.replaceEntries('bundles', …)` and
+// `server.replaceActions('bundles', …)`): at start, and again after every sync.
+// Shipping them here as well would put each one in the manifest twice, and the
+// copy shipped here would never leave.
 //
-// The bundles' ACTIONS are not shipped here. They come from rows too, and they
-// change while the app runs, so boot hands them to the server as a set of their
-// own (`server.replaceActions('bundles', …)`): at start, and again after every
-// sync. Shipping them here as well would put each one in the manifest twice,
-// and the copy shipped here would never leave.
-//
-// And of the RUNTIME boot created, for the connector functions alone: they run
-// the app's own sync and resolve on the app's own database, which a session
-// does not carry.
-export const buildAtrium = (bundleEntries: readonly (SeedEntry | SeedMutation)[], runtime: NiscRuntime): NiscApp => {
+// The manifest is a function of the RUNTIME boot created, for the connector
+// functions alone: they run the app's own sync and resolve on the app's own
+// database, which a session does not carry.
+export const buildAtrium = (runtime: NiscRuntime): NiscApp => {
   return defineApp({
     charter: CHARTER,
     assignments: ASSIGNMENTS,
     actions: { ...CATALOG_DEFINITIONS },
-    entries: [...ENTRIES, ...MUTATION_ENTRIES, ...bundleEntries],
+    entries: [...ENTRIES, ...MUTATION_ENTRIES],
     behaviors: scopeBehaviors,
     resources: RESOURCES,
 

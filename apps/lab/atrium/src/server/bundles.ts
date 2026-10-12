@@ -1,6 +1,5 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import type { NiscRuntime } from '@niscorp/moss';
-import { seedCache } from '@niscorp/vex';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { ENTRIES, MUTATION_ENTRIES } from '@atrium/app/vex';
 import { TABLES } from '@atrium/db/schema';
@@ -186,10 +185,6 @@ export const syncIntegrations = async (runtime: NiscRuntime, connectorId?: strin
       continue;
     }
 
-    // The fingerprints this connector owned BEFORE the pull: cleared from the
-    // cache after the rows land, so a changed query re-seeds instead of being
-    // skipped as already-present, and a dropped one stops serving.
-    const before = await column(runtime, 'SELECT fingerprint FROM bundle_entries WHERE connector_id = $1', [id]);
     try {
       await land(runtime, id, bundle);
     } catch (error) {
@@ -201,14 +196,6 @@ export const syncIntegrations = async (runtime: NiscRuntime, connectorId?: strin
       });
       continue;
     }
-    // A runtime without a cache serves no fingerprints at all, so there is
-    // nothing to re-seed — the rows still landed.
-    const cache = runtime.cache;
-    if (cache !== undefined) {
-      for (const fingerprint of before) await cache.delete(fingerprint);
-      await seedCache(cache, [...bundle.queries, ...bundle.mutations]);
-    }
-
     reports.push({ connector: id, ok: true, kind: 'ok', reasons: [] });
     landed = true;
   }
@@ -226,7 +213,8 @@ export const syncIntegrations = async (runtime: NiscRuntime, connectorId?: strin
 
 // ─── the refresh seam ────────────────────────────────────────
 // boot() registers the whole reload: re-read the bundle rows, then hand their
-// actions to moss as the 'bundles' set (verify → drop memos → shells adopt).
+// entries and actions to moss as the 'bundles' set (verify → drop memos →
+// shells adopt).
 // Keyed by the RUNTIME it refreshes, not held in one module-level slot: a
 // process can boot more than one server (the checks do), and a refresh belongs
 // to the server standing over that database. Weakly held, so a runtime that is

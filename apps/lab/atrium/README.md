@@ -268,7 +268,7 @@ src/
   app/          artifacts only — pure JSON authored in TS
     pages.ts    what is drawn at a path and kept by nothing (/about)
     charter/    who may ever hold what
-    vex/        every read and write, as prewarmed cache entries
+    vex/        every read and write, as entries the server holds
     actions/    the trios: chrome/, domains/<audience>/, surfaces/
     shell/      the frame and the sheet fragment
   db/           schema, seed, and the connector sync (resolve.ts)

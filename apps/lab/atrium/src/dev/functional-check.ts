@@ -82,6 +82,10 @@ const main = async (): Promise<void> => {
   check('the reply persisted as the desk', reply[0]?.['sender'] === 'desk');
   const thread = await asPrincipal('amara', '/api/stay/vex', { fingerprint: 'messages/forStay', context: { stayId: 'stay_amara' } });
   check("...and the guest's thread carries the desk's reply", Array.isArray(thread) && (thread as Row[]).some((m) => String(m['body']).includes('by the window')));
+  // A connector's read is replayed like the app's own: it arrived as a row,
+  // and the server was handed it as an entry of the 'bundles' set.
+  const visits = await asPrincipal('ines', '/api/vex', { fingerprint: 'spa/forStay', context: { stayId: 'stay_ines' } });
+  check("a connector's read replays through the server, like any other", Array.isArray(visits));
   check('opening the inbox cleared the badge', Number((chromeOf(rosa)['unread'] as Row)?.['count'] ?? -1) === 0);
 
   amara.publish('messages-changed');

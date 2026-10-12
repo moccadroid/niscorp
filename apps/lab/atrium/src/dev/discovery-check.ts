@@ -71,19 +71,17 @@ const main = async (): Promise<void> => {
   check('HotelFix contributed categories without shipping one action', (await count(`SELECT count(*) AS n FROM request_options WHERE connector_id = 'con_ticketing'`)) === 5);
   check('...and no actions', (await count(`SELECT count(*) AS n FROM bundle_actions WHERE connector_id = 'con_ticketing'`)) === 0);
 
-  // The pulled queries are REPLAYABLE — they seeded the cache, protected, the
-  // same as the app's own. A bundle's data surface is not a special case.
-  //
-  // The cache is optional on the runtime, and the two assertions below are ONLY
-  // about what is in it — read through an absent one and they both compare
-  // undefined against a kind and fail as "not protected", which is a true-looking
-  // answer to a question that was never asked.
-  const cache = runtime.cache;
-  if (cache === undefined) throw new Error('discovery-check: the runtime came up without a cache — there is nothing to have seeded');
-  const spa = await cache.get('spa/diary');
-  check('a pulled query is a protected cache row, replayable like any other', spa?.kind === 'ok' && spa.protected === true);
-  const record = await cache.get('spa/record');
-  check('...and a pulled write landed as a mutation entry', record?.kind === 'mutation');
+  // The pulled queries are ENTRIES, the same as the app's own: a read is a row
+  // holding a query, a write a row holding a mutation, and the server is handed
+  // both as they are. A bundle's data surface is not a special case. That the
+  // server replays them is functional-check's to show: no server stands here.
+  const definitionOf = async (fingerprint: string): Promise<Record<string, unknown>> => {
+    const row = (await runtime.pool.query('SELECT definition FROM bundle_entries WHERE fingerprint = $1', [fingerprint])).rows[0];
+    const definition: unknown = typeof row?.['definition'] === 'string' ? JSON.parse(row['definition']) : row?.['definition'];
+    return definition !== null && typeof definition === 'object' ? (definition as Record<string, unknown>) : {};
+  };
+  check('a pulled query landed as a read entry, like any other', 'dsl' in (await definitionOf('spa/diary')));
+  check('...and a pulled write landed as a mutation entry', 'mutation' in (await definitionOf('spa/record')));
 
   // ── 3. the console owns the switches ──
   await runtime.pool.query(`UPDATE connector_capabilities SET enabled = true WHERE connector_id = 'con_opera' AND capability_id = 'key.issue'`, []);

@@ -182,9 +182,8 @@ export const DDL = /* sql */ `
   );
 
   -- The bundles' QUERIES, same posture: pulled from the integrations service
-  -- at sync, validated at intake, loaded at boot (into the manifest's entries,
-  -- so vex_cache seeding covers them) and re-seeded live after a sync. The
-  -- definition is the full SeedEntry/SeedMutation.
+  -- at sync, validated at intake, and handed to the server as a set at boot
+  -- and again after a sync. The definition is the full SeedEntry/SeedMutation.
   CREATE TABLE bundle_entries (
     fingerprint   TEXT PRIMARY KEY,
     connector_id  TEXT NOT NULL REFERENCES connectors(id) ON DELETE CASCADE,
