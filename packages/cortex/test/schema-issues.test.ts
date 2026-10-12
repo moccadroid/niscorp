@@ -2,10 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import { flattenSchemaIssues, type SchemaIssue } from '../src/utils/schema-issues';
 
-// Fixtures from live runs: nova-style verb-keyed step unions and
-// node-or-string layout unions. Zod says "Invalid input" at the union
-// node; the flattener must name the branch the value MEANT.
-
 const format = (schema: z.ZodType, value: unknown): string => {
   const parsed = schema.safeParse(value);
   if (parsed.success) throw new Error('fixture unexpectedly valid');
@@ -27,8 +23,6 @@ describe('flattenSchemaIssues', () => {
   });
 
   it('node-or-string unions never report "expected string" for an object node', () => {
-    // The 2026-07-13 run: a layout union with a primitive branch made
-    // the evidence say "layout: expected string, received object".
     const Node = z.union([z.string(), z.strictObject({ component: z.string(), gap: z.number().optional() })]);
     const evidence = format(z.object({ layout: Node }), { layout: { component: 42 } });
     expect(evidence).toContain('layout.component');

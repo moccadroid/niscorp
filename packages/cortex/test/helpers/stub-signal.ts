@@ -1,14 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// Scripted SignalClient stub — the loop's test double
-// ═══════════════════════════════════════════════════════════
-//
-// Each call to stepStream consumes the next scripted turn and
-// replays it as stream events: text chunks, tool-call deltas
-// (name first, then the JSON args split into fragments), then a
-// done event whose StepResult matches what signal would return.
-// Captured requests let tests assert on the exact transcript the
-// model saw.
-
 import { routeResponse, routeRejection } from '@niscorp/signal';
 import type {
   Capabilities,
@@ -23,19 +12,10 @@ import type { SignalClient } from '../../src/types';
 export type ScriptedCall = { id: string; name: string; args: unknown };
 
 export type ScriptedTurn = {
-  // Reasoning streamed before the text — the model's thinking, which signal
-  // surfaces as `reasoning` stream events and never folds into the content.
   reasoning?: string[];
-  // Text streamed before the done event (joined = StepResult.content).
   text?: string[];
   toolCalls?: ScriptedCall[];
-  // A provider rejection (Groq 400) as signal's wire layer recovers it —
-  // the stub routes it exactly like production and sets finishReason
-  // 'error_recovered'.
   rejection?: Rejection;
-  // `reported` says whether the provider stated a cost at all — zero and
-  // silence are different facts (see signal's StepResult). A stub that omits it
-  // describes a turn no real provider produces.
   usage?: { inputTokens: number; outputTokens: number; totalTokens: number; reported: boolean };
   finishReason?: string;
 };
@@ -63,9 +43,6 @@ const splitFragments = (text: string, size: number): string[] => {
   return fragments.length > 0 ? fragments : [''];
 };
 
-// Routes the scripted turn exactly like production signal: same
-// router, same acceptance gate — the stub is a scripted PROVIDER,
-// not a scripted wire layer.
 const turnResult = (turn: ScriptedTurn, request: StepRequest): StepResult => {
   const declared = new Set((request.tools ?? []).map((tool) => tool.name));
   const routeCommon = {
@@ -131,7 +108,6 @@ export const stubSignal = (
     model: options?.model ?? 'stub-model',
     kind: 'chat',
     capabilities,
-    // A scripted client is not a registry model: its capabilities are declared.
     modelKnown: false,
   });
 

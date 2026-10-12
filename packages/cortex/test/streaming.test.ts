@@ -24,13 +24,11 @@ describe('streaming — respond strategy', () => {
     const result = await agent.run('go', { llm, onEvent: (event) => events.push(event) }).result;
     expect(result.ok).toBe(true);
 
-    // output-delta fragments reassemble into the respond args JSON.
     const deltas = events.filter((event) => event.type === 'output-delta');
     expect(deltas.length).toBeGreaterThan(1);
     const joined = deltas.map((event) => (event.type === 'output-delta' ? event.text : '')).join('');
     expect(JSON.parse(joined)).toEqual({ response: 'the answer is 42', data: { answer: 42 } });
 
-    // solid produced progressively parsed envelopes.
     const partials = events.filter((event) => event.type === 'output-partial');
     expect(partials.length).toBeGreaterThan(0);
     const last = partials[partials.length - 1];
@@ -66,7 +64,6 @@ describe('streaming — respond strategy', () => {
       .filter((event) => event.type === 'output-delta')
       .map((event) => (event.type === 'output-delta' ? event.text : ''))
       .join('');
-    // Only the respond call streamed as output.
     expect(deltas).not.toContain('"n"');
     expect(deltas).toContain('"answer"');
   });
@@ -95,7 +92,6 @@ describe('streaming — text strategy', () => {
       .join('');
     expect(deltas).toBe(payload);
 
-    // text strategy injects the schema docs as a system chunk.
     const firstRequest = llm.requests[0];
     const systemContents = (firstRequest?.messages ?? [])
       .filter((message) => message.role === 'system')
@@ -120,8 +116,6 @@ describe('streaming — text strategy', () => {
 
     const retries = events.filter((event) => event.type === 'retry');
     expect(retries).toHaveLength(1);
-    // Prose is a transport failure (could not deliver) — kind
-    // 'termination', uncounted against the revision budget.
     expect(retries[0]?.type === 'retry' && retries[0].kind).toBe('termination');
   });
 });

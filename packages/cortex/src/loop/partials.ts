@@ -1,15 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// Partial-output tracker — solid-powered progressive envelopes
-// ═══════════════════════════════════════════════════════════
-//
-// Feeds envelope JSON fragments (respond args, or raw text under
-// native/text) into a solid stream and emits `output-partial`
-// events with the progressively parsed value. Strictly
-// best-effort: if solid can't track the schema (exotic unions,
-// prose around JSON in text strategy), partials silently stop —
-// the final Zod validation is authoritative either way. `reset()`
-// on retry, per the retry-event contract.
-
 import { createStream, type Stream } from '@niscorp/solid';
 import type { ZodType } from 'zod';
 
@@ -35,9 +23,8 @@ export const createPartialTracker = (config: PartialTrackerConfig): PartialTrack
       created.onError(() => {
         dead = true;
       });
-      // destroy() rejects the stream's final() promise; cortex never
-      // awaits it, so mark it handled or a reset becomes an unhandled
-      // rejection.
+      // destroy() rejects the stream's final() promise, which nothing awaits:
+      // without this catch a reset is an unhandled rejection.
       created.final().catch(() => {});
       stream = created;
     } catch {

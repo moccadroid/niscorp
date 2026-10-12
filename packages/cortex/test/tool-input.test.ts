@@ -5,14 +5,6 @@ import { defineAgent, defineTool } from '../src';
 import type { ToolObservation } from '../src';
 import { stubSignal } from './helpers/stub-signal';
 
-// WHAT A TOOL'S `input` SCHEMA MAY BE — the README's rule, held to what the
-// loop does. Two facts make the rule: the model is sent the schema's
-// OUTPUT-side JSON Schema, and a call's arguments are parsed with the schema
-// twice (the loop, then defineTool's wrapper in front of `execute`). So an
-// input schema validates; it does not convert. Each case below is one way of
-// converting, and what it costs. They pin what happens today: a change to any
-// of them changes the README's "Errors" section with it.
-
 const callOnce = async (input: ZodType, args: unknown) => {
   const received: unknown[] = [];
   const observations: ToolObservation[] = [];
@@ -63,14 +55,13 @@ describe('a tool input schema that converts', () => {
   it('a schema whose output is another kind than its input is described by its output, and never runs', async () => {
     const Flag = z.object({ confirmed: z.stringbool() });
 
-    // What the schema takes: the first parse turns it into a boolean, and the
-    // second parse refuses the boolean.
+    // The string the schema takes: the loop's parse turns it into a boolean, and
+    // the parse in front of `execute` refuses the boolean.
     const asString = await callOnce(Flag, { confirmed: 'true' });
     expect(propertiesOf(asString.described)).toEqual({ confirmed: { type: 'boolean' } });
     expect(asString.received).toEqual([]);
     expect(asString.observation?.kind).toBe('error');
 
-    // What the model is told to send: refused by the first parse.
     const asBoolean = await callOnce(Flag, { confirmed: true });
     expect(asBoolean.received).toEqual([]);
     expect(asBoolean.observation?.kind).toBe('error');
@@ -82,7 +73,6 @@ describe('a tool input schema that converts', () => {
 
     const { received, observation } = await callOnce(Tag, { label: 'jazz' });
     expect(received).toEqual([{ label: '##jazz' }]);
-    // The observation records the arguments as parsed once.
     expect(observation?.kind === 'result' ? observation.args : undefined).toEqual({ label: '#jazz' });
   });
 

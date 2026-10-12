@@ -1,12 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// Gates and hooks — all steering is plain typed functions
-// ═══════════════════════════════════════════════════════════
-//
-// Per DESIGN.md §6. Gates run BEFORE tool execution; a deny reaches
-// the model as a tool error and the run continues; an ask suspends
-// the run for human approval. Declarative policy is sugar that
-// compiles into one of these functions — never a parallel engine.
-
 import type { Message, StepRequest } from '@niscorp/signal';
 import type { SignalClient, StopReason, ToolObservation, Usage } from '../types';
 import type { ToolRiskLevel } from '../schemas/tool-config.schema';
@@ -38,16 +29,11 @@ export type ToolGate<TDeps = unknown> = (
   ctx: RunCtx<TDeps>,
 ) => GateDecision | Promise<GateDecision>;
 
-// Post-execution hook: replace / redact / truncate a tool result
-// before it reaches the transcript and the observation stream.
 export type ToolResultHook<TDeps = unknown> = (
   observation: ToolObservation,
   ctx: RunCtx<TDeps>,
 ) => { result?: unknown } | void | Promise<{ result?: unknown } | void>;
 
-// The one dynamic-steering hook: runs before each step. Everything it
-// returns is optional; omissions keep the defaults. `inject` messages
-// are APPENDED to the transcript — the prefix is never re-templated.
 export type PrepareStepInfo<TDeps> = {
   step: number;
   messages: ReadonlyArray<Message>;
@@ -57,9 +43,7 @@ export type PrepareStepInfo<TDeps> = {
 };
 
 export type PrepareStepResult = {
-  // Mask by tool NAME (the model-visible identifier — what descriptors
-  // carry and what `tools` in PrepareStepInfo lists). The respond tool
-  // is the exit and is never maskable.
+  // Tool names, not ids. The respond tool is never masked.
   activeTools?: ReadonlyArray<string>;
   toolChoice?: StepRequest['toolChoice'];
   inject?: Message[];
@@ -70,22 +54,13 @@ export type PrepareStep<TDeps = unknown> = (
   info: PrepareStepInfo<TDeps>,
 ) => PrepareStepResult | void | Promise<PrepareStepResult | void>;
 
-// ───────────────────────────────────────────────────────────
-// Stop conditions
-// ───────────────────────────────────────────────────────────
-//
-// Checked before every step. First non-null verdict ends the run
-// with a 'stopped' error carrying the verdict's reason.
-
 export type RunProgress = {
   steps: number;
   usage: Usage;
   elapsedMs: number;
   outputRetries: number;
-  // How many tool calls in a row got back exactly what the one before them
-  // did — the same tool, the same arguments, the same answer. 0 after any
-  // call that differs. A model that keeps sending the call an error just
-  // refused is not making progress; `repeatedCalls` stops it.
+  // Consecutive tool calls that got the same answer to the same tool and
+  // arguments as the call before them; 0 after one that differs.
   repeatedCalls: number;
 };
 

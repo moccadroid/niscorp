@@ -1,16 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// The loop — model → tools → model, bounded, gated, observed
-// ═══════════════════════════════════════════════════════════
-//
-// Per DESIGN.md §4. Rules this file lives by:
-//   - Append-only transcript. The prefix is built once (run.ts);
-//     corrections, injections and nudges are APPENDED messages.
-//   - Tool calls execute sequentially, in model order.
-//   - Tool failures are observations the model sees, never run
-//     failures. The run fails only on structural conditions.
-//   - Streaming is not a mode: the loop always consumes
-//     signal.stepStream; `await run.result` is the opt-out.
-
 import type { ZodType } from 'zod';
 import type { Message, StepRequest, StepResult, StepToolDescriptor, ResolvedTransport, StepOutcome } from '@niscorp/signal';
 import { deepDecodeJsonish } from '@niscorp/signal';
@@ -44,10 +31,6 @@ import type { ToolContext, ToolDefinition } from '../tool/define-tool';
 import { withTimeout, DEFAULT_TOOL_TIMEOUT_MS } from '../utils/timeout';
 import { newApprovalId } from '../utils/id';
 
-// ───────────────────────────────────────────────────────────
-// Shared mutable run state — read by snapshot(), written here
-// ───────────────────────────────────────────────────────────
-
 export type NormalizedCall = { id: string; toolId: string; args: unknown };
 
 export type PendingApproval = {
@@ -63,7 +46,6 @@ export type LoopState = {
   usage: Usage;
   outputRetries: number;
   startedAt: number;
-  // Elapsed ms carried over from a snapshot; 0 for fresh runs.
   elapsedBase: number;
   pending?: PendingApproval;
 };
@@ -79,9 +61,7 @@ export type LoopConfig<TData, TDeps> = {
   llm: SignalClient;
   transport: 'stream' | 'step';
   tools: ReadonlyArray<ToolDefinition>;
-  // The transport signal resolved for this provider (run.ts).
   resolved: ResolvedTransport;
-  // The acceptance schema signal's router gates arrivals on.
   accept: ZodType;
   outputSchema?: ZodType<TData>;
   outputValidate?: OutputValidator<TData>;
@@ -92,23 +72,14 @@ export type LoopConfig<TData, TDeps> = {
   approvalTimeoutMs?: number;
   deps: TDeps;
   emit: (body: CortexEventBody) => void;
-  // Re-push a child run's events (asTool delegation) — see channel.forward.
   forwardEvent: (event: CortexEvent) => void;
   approvals: ApprovalBridge;
   abort: AbortSignal;
   partials: PartialTracker;
   state: LoopState;
-  // Set when resuming a snapshot that was suspended on an approval:
-  // the pending call (and the rest of its batch) run before the loop.
   resumePending?: PendingApproval;
 };
 
-// ───────────────────────────────────────────────────────────
-// Helpers
-// ───────────────────────────────────────────────────────────
-
-// `{}` where a tool has required parameters: the model called it with
-// nothing, and needs telling so rather than a list of missing keys.
 const isEmptyObject = (value: unknown): boolean =>
   typeof value === 'object' && value !== null && !Array.isArray(value) && Object.keys(value).length === 0;
 
@@ -122,25 +93,12 @@ const stringify = (value: unknown): string => {
   }
 };
 
-// Exported for preview: the preview must show EXACTLY the descriptors
-// the run sends, from the same builder.
 export const buildToolDescriptor = (tool: ToolDefinition): StepToolDescriptor => ({
-  // The model sees the tool's NAME — the field designed for it (prompts
-  // say "call `query`"). The id stays the gate/policy/observation
-  // identity; the loop resolves calls by either.
   name: tool.config.name,
   description: tool.config.description,
-  // The tool's schema converts itself (Standard JSON Schema) — it may come from
-  // the caller's zod copy, not ours.
+  // Converted by the schema's own zod, not by cortex's: it may come from another copy of zod.
   parameters: tool.config.input['~standard'].jsonSchema.output({ target: 'draft-07' }),
 });
-
-// JSON forensics live in SIGNAL's wire layer now — the loop consumes
-// routed outcomes and never parses strings out of model turns.
-
-// ───────────────────────────────────────────────────────────
-// runLoop
-// ───────────────────────────────────────────────────────────
 
 export const runLoop = async <TData, TDeps>(
   cfg: LoopConfig<TData, TDeps>,
@@ -152,10 +110,8 @@ export const runLoop = async <TData, TDeps>(
   };
 
   const elapsedMs = (): number => s.elapsedBase + (Date.now() - s.startedAt);
-  // The last tool call and what it got back, and how many calls in a row
-  // have matched it exactly. Run-local: a resumed run starts counting afresh,
-  // which can only let a stuck model take a few more steps, never stop a
-  // healthy one.
+  // Not part of the snapshot: a resumed run counts afresh, which can only give a
+  // stuck model a few more steps.
   const lastCall = { key: '', repeats: 0 };
   const progress = (): RunProgress => ({
     steps: s.steps,
@@ -176,8 +132,6 @@ export const runLoop = async <TData, TDeps>(
   const failStopped = (verdict: { stop: StopReason; message: string }): RunResult<TData> =>
     fail(makeError('stopped', verdict.message, { ...errorContext, stop: verdict.stop }));
 
-  // Resolvable by NAME (what the model calls) and by ID (what prompts
-  // may echo and what policies key on).
   const toolMap = new Map<string, ToolDefinition>();
   for (const tool of cfg.tools) {
     toolMap.set(tool.config.id, tool);
@@ -186,8 +140,6 @@ export const runLoop = async <TData, TDeps>(
   const callableNames = cfg.tools.map((tool) => tool.config.name);
 
   const domainDescriptors = cfg.tools.map(buildToolDescriptor);
-  // The exit tool (respond transport) is SIGNAL's — appended to the
-  // wire request, routed back as output, never visible as a tool here.
   const exitDescriptor: StepToolDescriptor | undefined = cfg.resolved.respondDescriptor;
 
   const runCtx = (): RunCtx<TDeps> => ({
@@ -220,8 +172,6 @@ export const runLoop = async <TData, TDeps>(
     lastCall.key = key;
   };
 
-  // ─── one gated, observed tool call ────────────────────────
-  // Returns a RunResult only on structural failure (abort).
   const executeCall = async (
     call: NormalizedCall,
     remaining: NormalizedCall[],
@@ -231,8 +181,6 @@ export const runLoop = async <TData, TDeps>(
 
     const tool = toolMap.get(call.toolId);
     if (!tool) {
-      // Name the alternatives — an unnamed rejection teaches nothing and
-      // the model just retries the same wrong name.
       record(
         call,
         { kind: 'unknown-tool', callId: call.id, toolId: call.toolId, args: call.args },
@@ -240,12 +188,8 @@ export const runLoop = async <TData, TDeps>(
       );
       return undefined;
     }
-    // Canonical identity for gates, policy and observations — regardless
-    // of whether the model called the name or the id.
     const toolId = tool.config.id;
 
-    // Gate chain — first deny/timeout wins; allow may rewrite args;
-    // an approved ask keeps running the remaining gates.
     let args = call.args;
     let denial: string | undefined;
     for (const gate of cfg.gates) {
@@ -265,17 +209,13 @@ export const runLoop = async <TData, TDeps>(
       if ('ask' in decision) {
         const approvalId = newApprovalId();
         s.pending = { approvalId, call: { ...call, args }, remaining, reason: decision.ask.reason };
-        // Register the resolver BEFORE emitting — an event listener may
-        // approve synchronously during the emit.
+        // The resolver is registered before the emit: a listener may approve
+        // synchronously during it.
         const askPromise = cfg.approvals.ask(approvalId, cfg.approvalTimeoutMs);
         cfg.emit({
           type: 'approval-required',
           approval: { id: approvalId, toolId, callId: call.id, args, reason: decision.ask.reason },
         });
-        // Abort-aware wait: an aborted run must not hang on a pending
-        // approval — it settles as a denial and the abort check below
-        // turns it into the structural aborted result. The snapshot
-        // kept `pending`, so a resume re-asks.
         const outcome = await new Promise<Awaited<ReturnType<ApprovalBridge['ask']>>>((resolve) => {
           const onAbort = (): void => resolve({ approved: false, reason: 'aborted' });
           if (cfg.abort.aborted) {
@@ -288,8 +228,8 @@ export const runLoop = async <TData, TDeps>(
             resolve(askDecision);
           });
         });
-        // Keep `pending` on abort so a snapshot taken afterwards still
-        // resumes into the approval.
+        // The abort check comes before `pending` is cleared: a snapshot taken after
+        // an abort still resumes into the approval.
         if (cfg.abort.aborted) return fail(makeError('aborted', 'run aborted', errorContext));
         s.pending = undefined;
         if (!outcome.approved) {
@@ -313,17 +253,12 @@ export const runLoop = async <TData, TDeps>(
 
     let parsedArgs = tool.config.input.safeParse(args);
     if (!parsedArgs.success) {
-      // Deep rescue, gated by THIS tool's schema (the owner of the
-      // contract): some models stringify nested values inside args.
-      // Accepted only when the repaired args validate; otherwise the
-      // ORIGINAL error surfaces.
+      // Some models stringify nested values inside the arguments.
       const repaired = tool.config.input.safeParse(deepDecodeJsonish(args));
       if (repaired.success) parsedArgs = repaired;
     }
     if (!parsedArgs.success) {
       const issues = parsedArgs.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
-      // A correction the model can act on: string-at-root is almost
-      // always mis-encoded arguments, not a wrong value.
       const hint =
         typeof args === 'string'
           ? ' (your arguments arrived as ONE STRING — call again with a plain JSON object, e.g. {"key": "value"})'
@@ -397,7 +332,6 @@ export const runLoop = async <TData, TDeps>(
     return undefined;
   };
 
-  // ─── envelope validation (respond args or parsed text) ────
   const validateOutput = async (
     raw: unknown,
   ): Promise<{ ok: true; envelope: Envelope<TData> } | { ok: false; issues: string }> => {
@@ -410,10 +344,8 @@ export const runLoop = async <TData, TDeps>(
     return verdict;
   };
 
-  // ─── one streamed model call ──────────────────────────────
   const streamEmittedOutput = cfg.resolved.transport !== 'respond';
   const streamOneStep = async (llm: SignalClient, request: StepRequest): Promise<Result<StepResult>> => {
-    // Non-streaming transport: one call, no deltas (no output-partial).
     if (cfg.transport === 'step') {
       try {
         return ok(await llm.step(request));
@@ -435,9 +367,6 @@ export const runLoop = async <TData, TDeps>(
           }
           continue;
         }
-        // The reasoning channel — shown in flight, never part of the output. It
-        // is not fed to `partials`: a caller reading the answer must not see the
-        // thinking bleed into it.
         if (event.type === 'reasoning') {
           cfg.emit({ type: 'model-delta', text: event.text, channel: 'reasoning' });
           continue;
@@ -461,9 +390,6 @@ export const runLoop = async <TData, TDeps>(
     return err(makeError('model_call_failed', 'stream ended without a done event', errorContext));
   };
 
-  // lastAttempt: the raw routed value of the most recent semantically-
-  // invalid output. Rides the stopped error so callers can CONTINUE
-  // from a failed run's best candidate instead of rebuilding.
   let lastAttempt: unknown;
   const retryOutput = (kind: 'output' | 'termination', issues: string, attempt?: unknown): RunResult<TData> | undefined => {
     if (attempt !== undefined) lastAttempt = attempt;
@@ -483,15 +409,13 @@ export const runLoop = async <TData, TDeps>(
     return undefined;
   };
 
-  // ─── resume: finish the batch that was suspended ──────────
-  // Gates re-run for the pending call, so the policy re-asks and a
-  // fresh approval-required event fires — resume re-asks by design.
+  // The pending call goes through its gates again, so a resumed run asks for
+  // the approval again, under a new id.
   if (cfg.resumePending) {
     const structural = await processBatch([cfg.resumePending.call, ...cfg.resumePending.remaining]);
     if (structural) return structural;
   }
 
-  // ─── the loop ─────────────────────────────────────────────
   let providerRetries = 0;
   let transportRetries = 0;
   while (true) {
@@ -499,8 +423,6 @@ export const runLoop = async <TData, TDeps>(
     const stopVerdict = checkStop(cfg.stopWhen, progress());
     if (stopVerdict) return failStopped(stopVerdict);
 
-    // prepareStep — the dynamic-steering hook (domain tools only; the
-    // transport's exit tool is not cortex's to mask).
     let domain = domainDescriptors;
     let llm = cfg.llm;
     let toolChoice: StepRequest['toolChoice'] | undefined = cfg.resolved.toolChoice;
@@ -527,9 +449,6 @@ export const runLoop = async <TData, TDeps>(
     s.steps += 1;
     cfg.emit({ type: 'step-start', step: s.steps });
 
-    // The request shape is IMMUTABLE for the life of the run: same
-    // tools, same choice, same format every step. Adaptation happens
-    // on the response side (signal's wire layer), never here.
     const request: StepRequest = {
       messages: [...s.messages],
       ...(descriptors.length > 0 && { tools: descriptors }),
@@ -545,20 +464,11 @@ export const runLoop = async <TData, TDeps>(
     const result = stepOutcome.data;
     s.usage = addUsage(s.usage, result.usage);
 
-    // ── the routed view ──
-    // Signal normalized and routed the turn (wire repairs, provider
-    // rejection recovery — all validation-gated, all provider-blind
-    // from here). The loop only decides what each outcome MEANS.
     const outcome: StepOutcome = result.outcome ?? {
       kind: 'failed',
       evidence: 'model call produced no routed outcome',
     };
 
-    // A provider rejection whose attempt ROUTED (tool call or output)
-    // is not a retry — the run moves on as if the 400 never happened,
-    // and the trace shows the outcome itself. Only a rejection with
-    // nothing salvageable emits the provider-retry event (a correction
-    // follows). Never counted against outputRetries either way.
     const wasRejected = result.finishReason === 'error_recovered';
     if (wasRejected) {
       cfg.partials.reset();
@@ -573,7 +483,6 @@ export const runLoop = async <TData, TDeps>(
       }
     }
 
-    // ── tool calls ──
     if (outcome.kind === 'tool_calls') {
       s.messages.push({
         role: 'assistant',
@@ -590,10 +499,6 @@ export const runLoop = async <TData, TDeps>(
       continue;
     }
 
-    // ── output ──
-    // A JSON container arrived (the gate is only that); the SEMANTICS
-    // are judged HERE: envelope validation + the agent's own validate
-    // (harness). Corrections quote this evidence — the one judge.
     if (outcome.kind === 'output') {
       const validated = await validateOutput(outcome.value);
       if (validated.ok) return { ok: true, output: validated.envelope, meta: meta() };
@@ -602,8 +507,6 @@ export const runLoop = async <TData, TDeps>(
         content: result.content.length > 0 ? result.content : stringify(outcome.value),
       });
       if (wasRejected) {
-        // A provider-rejected attempt is never the run's fault — the
-        // correction teaches, the budget stays intact.
         providerRetries += 1;
         cfg.emit({
           type: 'retry',
@@ -612,7 +515,6 @@ export const runLoop = async <TData, TDeps>(
           issues: `provider rejected the attempt — recovered but invalid: ${validated.issues}`,
         });
       } else {
-        // Semantic failure — the model must REVISE. Counted.
         const stopped = retryOutput('output', validated.issues, outcome.value);
         if (stopped) return stopped;
       }
@@ -623,10 +525,8 @@ export const runLoop = async <TData, TDeps>(
       continue;
     }
 
-    // ── failed ──
-    // Transport failure: nothing deliverable arrived (prose turn,
-    // garbage, truncated rejection). Uncounted — the revision budget is
-    // for semantic failures; stepCount and duration still bound the run.
+    // Not counted against outputRetries: that budget is for an output that
+    // arrived and failed validation. A run of these ends on another stop condition.
     if (result.content.length > 0) {
       s.messages.push({ role: 'assistant', content: result.content });
     }

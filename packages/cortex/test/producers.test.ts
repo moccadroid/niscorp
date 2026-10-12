@@ -3,11 +3,6 @@ import { z } from 'zod';
 import { defineAgent, defineTool } from '../src';
 import { stubSignal } from './helpers/stub-signal';
 
-// The producer principle: context is owned by whoever owns the knowledge.
-// Agents compose producers by spreading; RunOptions.producers attaches app
-// knowledge to any agent without editing it; tools carry their own guides,
-// assembled into one TOOL GUIDES section only when the tool is on the run.
-
 const guidedTool = defineTool({
   id: 'lookup',
   name: 'lookup',
@@ -51,7 +46,6 @@ describe('producers', () => {
     expect(guides).toBeDefined();
     expect(guides).toContain('── lookup ──');
     expect(guides).toContain('pass the exact id');
-    // A guideless tool contributes nothing.
     expect(guides).not.toContain('plain');
   });
 
@@ -99,7 +93,6 @@ describe('producers', () => {
     const texts = systemTexts(preview.messages);
     expect(texts).toContain('FACT ONE');
     expect(texts).toContain('FACT TWO');
-    // Empty strings in a group are skipped; order is preserved.
     expect(texts.indexOf('FACT TWO')).toBe(texts.indexOf('FACT ONE') + 1);
     expect(texts.indexOf('TAIL')).toBe(texts.indexOf('FACT TWO') + 1);
   });

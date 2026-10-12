@@ -1,7 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// Timeout utility — wraps a promise with a deadline
-// ═══════════════════════════════════════════════════════════
-
 export const DEFAULT_TOOL_TIMEOUT_MS = 30_000;
 
 export const withTimeout = <T>(

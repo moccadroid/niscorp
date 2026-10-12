@@ -138,11 +138,8 @@ describe('approvals', () => {
     expect(snapshot?.pending).toBeDefined();
     if (!snapshot) return;
 
-    // Round-trip through JSON — the snapshot must be serializable.
     const revived: RunSnapshot = JSON.parse(JSON.stringify(snapshot));
 
-    // Resume: the pending echo re-asks; approve it; then the model
-    // (fresh stub) emits the final respond.
     const llm2 = stubSignal([
       { toolCalls: [{ id: 'c2', name: 'respond', args: { data: { done: true } } }] },
     ]);
@@ -158,14 +155,10 @@ describe('approvals', () => {
     expect(result.ok).toBe(true);
     expect(resumed.runId).toBe(snapshot.runId);
 
-    // The resumed model call saw the echo result in its transcript.
     const toolMessage = llm2.requests[0]?.messages.find((message) => message.role === 'tool');
     expect(toolMessage?.content).toBe('secret');
   });
 
-  // Resume re-asks: the gates run again and the ask is a new one. What the
-  // resumed run answers to is the id of its own event — the snapshot's
-  // `pending.approvalId` is the first run's ask (README, DESIGN §6).
   it('a resumed run asks again under a new id, which is the one it answers to', async () => {
     let snapshot: RunSnapshot | undefined;
     let first: RunHandle<{ done: boolean }> | undefined;
@@ -203,12 +196,7 @@ describe('approvals', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// run.abort(reason) — the reason reaches the result
-// ═══════════════════════════════════════════════════════════
-
 describe('run.abort(reason)', () => {
-  // A run waiting for a person is a run that can be stopped at a known moment.
   const stopWhileWaiting = async (stop: (run: RunHandle<{ done: boolean }>, controller: AbortController) => void) => {
     const controller = new AbortController();
     const events: CortexEvent[] = [];
@@ -254,8 +242,6 @@ describe('run.abort(reason)', () => {
     expect(error.cause).toBe('first');
   });
 
-  // The caller's own signal is the caller's: what it was aborted with is not
-  // read, so a run stopped that way gains nothing it did not have.
   it('carries nothing when the run was stopped through options.signal', async () => {
     const { error } = await stopWhileWaiting((_run, controller) => controller.abort(new Error('closed')));
     expect(error.code).toBe('aborted');
@@ -270,8 +256,6 @@ describe('run.abort(reason)', () => {
     expect('cause' in error).toBe(false);
   });
 
-  // The reason is kept beside the run's signal, never put ON it: a tool, or the
-  // fetch it started, tells an abort by its AbortError.
   it("a tool's signal still aborts with an AbortError", async () => {
     const seen: { reason?: unknown } = {};
     let markStarted: () => void = () => undefined;

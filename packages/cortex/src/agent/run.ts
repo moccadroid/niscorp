@@ -1,12 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// createRun / resumeRun — wire one run together
-// ═══════════════════════════════════════════════════════════
-//
-// A run is: strategy resolution (sync — misconfiguration throws to
-// the caller), prefix assembly (once), the loop, and a handle that
-// exposes the event stream, the result promise, approvals, a
-// serializable snapshot, and abort.
-
 import type { Message } from '@niscorp/signal';
 import {
   EMPTY_USAGE,
@@ -42,29 +33,15 @@ import { newRunId } from '../utils/id';
 import { trustErased } from '../utils/trust';
 import type { AgentDefinition } from './define-agent';
 
-// ───────────────────────────────────────────────────────────
-// Public types
-// ───────────────────────────────────────────────────────────
-
 export type RunOptions<TDeps> = {
   llm?: SignalClient;
-  // Per-run tools, appended to the agent's static tools. For tools
-  // whose execute closes over per-invocation dependencies (vex builds
-  // its query tools around the caller's adapter + schema).
   tools?: ReadonlyArray<ToolDefinition>;
-  // Per-run entries/producers, appended AFTER the agent's own context
-  // array — how an app attaches shared knowledge ("today is …", a house
-  // guide) to any agent without editing its definition.
   producers?: ReadonlyArray<ContextEntry | Producer<TDeps>>;
-  // Run-level gates (e.g. a UI approval gate from the manifold).
-  // Chain order: policy sugar → agent gates → run gates.
   gates?: ReadonlyArray<ToolGate<TDeps>>;
-  // Run-level result hooks, appended after the agent's own.
   onToolResult?: ReadonlyArray<ToolResultHook<TDeps>>;
   signal?: AbortSignal;
-  // Convenience: subscribed before the first event fires.
+  // Subscribed before run-start is emitted; a listener added on the handle misses it.
   onEvent?: (event: CortexEvent) => void;
-  // asTool extends the parent's path so nested events are attributable.
   agentPath?: ReadonlyArray<string>;
 } & (undefined extends TDeps ? { deps?: TDeps } : { deps: TDeps });
 
@@ -93,16 +70,11 @@ export type RunHandle<TData> = {
   abort: (reason?: string) => void;
 };
 
-// ───────────────────────────────────────────────────────────
-// Internal wiring shared by createRun and resumeRun
-// ───────────────────────────────────────────────────────────
-
 type Wiring<TData, TDeps> = {
   definition: AgentDefinition<TData, TDeps>;
   input: RunInput;
   options: RunOptions<TDeps> | undefined;
   runId: string;
-  // Snapshot-seeded state; undefined for fresh runs.
   seeded?: { messages: Message[]; steps: number; usage: Usage; outputRetries: number; elapsedMs: number; pending?: PendingApproval };
 };
 
@@ -113,8 +85,7 @@ const wireRun = <TData, TDeps>(wiring: Wiring<TData, TDeps>): RunHandle<TData> =
   const llm = options?.llm ?? config.llm;
   if (!llm) throwConfig(`agent "${config.id}" has no llm — set config.llm or pass options.llm`);
 
-  // The loop resolves calls by NAME (model-visible) or ID (policy
-  // identity), so both must be collision-free across the merged set.
+  // Ids and names share one namespace: the loop's lookup holds each tool under both.
   const tools = [...(config.tools ?? []), ...(options?.tools ?? [])];
   const taken = new Set<string>();
   for (const tool of tools) {
@@ -126,9 +97,6 @@ const wireRun = <TData, TDeps>(wiring: Wiring<TData, TDeps>): RunHandle<TData> =
     }
   }
 
-  // Sync transport resolution — SIGNAL's business (provider knowledge);
-  // misconfiguration throws to the caller. Cortex only supplies its
-  // output contract (the envelope wire schemas).
   const outputSchema = config.output?.schema;
   const responseMode = config.output?.response ?? (outputSchema ? 'optional' : 'required');
   const resolved = resolveTransport(
@@ -146,8 +114,6 @@ const wireRun = <TData, TDeps>(wiring: Wiring<TData, TDeps>): RunHandle<TData> =
   if (resolved.respondDescriptor && taken.has(RESPOND_TOOL_NAME)) {
     throwConfig(`agent "${config.id}": a tool named "respond" collides with the transport's exit tool`);
   }
-  // The acceptance schema — what signal's router gates arrivals on:
-  // the strict envelope, or (when legal) the bare payload.
   const accept = envelopeAcceptSchema({ ...(outputSchema && { schema: outputSchema }), responseMode });
 
   const agentPath = options?.agentPath ? [...options.agentPath, config.id] : [config.id];
@@ -156,10 +122,9 @@ const wireRun = <TData, TDeps>(wiring: Wiring<TData, TDeps>): RunHandle<TData> =
   const approvals = createApprovalBridge();
 
   const controller = new AbortController();
-  // What run.abort(reason) was given, for the aborted result's `cause`. Kept
-  // beside the controller, never handed to it: controller.abort(reason) would
-  // make the reason what a tool's ctx.signal aborts WITH, and a tool — or the
-  // fetch it started — telling an abort by its AbortError would stop seeing one.
+  // Never handed to controller.abort(): the reason would become what a tool's
+  // ctx.signal aborts with, and a tool, or the fetch it started, that tells an
+  // abort by its AbortError would no longer see one.
   let abortReason: string | undefined;
   const externalSignal = options?.signal;
   const onExternalAbort = (): void => controller.abort();
@@ -168,8 +133,7 @@ const wireRun = <TData, TDeps>(wiring: Wiring<TData, TDeps>): RunHandle<TData> =
     else externalSignal.addEventListener('abort', onExternalAbort);
   }
 
-  // The single documented erasure: when TDeps is a concrete type the
-  // rest-tuple signature already forced the caller to provide deps.
+  // RunArgs makes options, and deps with them, required unless TDeps admits undefined.
   const deps = trustErased<TDeps>(options?.deps);
 
   const state: LoopState = {
@@ -207,14 +171,9 @@ const wireRun = <TData, TDeps>(wiring: Wiring<TData, TDeps>): RunHandle<TData> =
           input,
           agent: { id: config.id, ...(config.description !== undefined && { description: config.description }) },
         };
-        // Prefix order: instructions → tool guides (each tool's own usage
-        // knowledge) → schema doc → finish protocol → the agent's context
-        // (array order IS placement) → per-run producers → the input.
-        //
-        // The three middle blocks are FIXED for the life of an agent, so they
-        // sit ahead of the producers, which are not. A provider's prefix cache
-        // stops at the first byte that changed: with them behind a producer that
-        // renders live state, they were re-read on every single run.
+        // Tool guides, schema doc and finish protocol are fixed for the life of an
+        // agent, so they go ahead of the context and producers, which are not: a
+        // provider's prefix cache stops at the first byte that changed.
         const items: ReadonlyArray<ContextEntry | Producer<TDeps>> = [
           config.instructions,
           ...(config.context ?? []),
@@ -226,12 +185,9 @@ const wireRun = <TData, TDeps>(wiring: Wiring<TData, TDeps>): RunHandle<TData> =
           resolved.injectSchemaDoc && doc !== 'off' && outputSchema
             ? [{ role: 'system', content: typeof doc === 'string' && doc !== 'auto' ? doc : schemaDoc(outputSchema) }]
             : [];
-        // The finish protocol is the TRANSPORT's chunk — signal authored
-        // it for whatever resolution picked; cortex injects it verbatim.
         const finishMessage: Message = { role: 'system', content: resolved.finishProtocol };
-        // `instructions` is the first context message and stays first — it is
-        // the agent's identity, and a provider that special-cases a leading
-        // system turn should still see it there.
+        // `instructions` stays first: a provider that special-cases a leading
+        // system turn sees the agent's identity there.
         const [identity, ...rest] = contextMessages;
         state.messages = [
           ...(identity ? [identity] : []),
@@ -315,18 +271,11 @@ const wireRun = <TData, TDeps>(wiring: Wiring<TData, TDeps>): RunHandle<TData> =
       ...(state.pending && { pending: state.pending }),
     }),
     abort: (reason?: string): void => {
-      // The abort that stopped the run is the one whose reason is kept: a run
-      // already stopped — by an earlier call, or through options.signal — was
-      // not stopped for this one.
       if (!controller.signal.aborted) abortReason = reason;
       controller.abort();
     },
   };
 };
-
-// ───────────────────────────────────────────────────────────
-// Entry points
-// ───────────────────────────────────────────────────────────
 
 export const createRun = <TData, TDeps>(
   definition: AgentDefinition<TData, TDeps>,
@@ -334,10 +283,6 @@ export const createRun = <TData, TDeps>(
   options: RunOptions<TDeps> | undefined,
 ): RunHandle<TData> => wireRun({ definition, input, options, runId: newRunId() });
 
-// Restore a suspended (or merely interrupted) run from a snapshot.
-// The transcript, counters and elapsed time carry over; a pending
-// approval is re-asked (gates re-run for the pending call, so the
-// approval-required event fires again — resume re-asks by design).
 export const resumeRun = <TData, TDeps>(
   definition: AgentDefinition<TData, TDeps>,
   snapshot: RunSnapshot,
