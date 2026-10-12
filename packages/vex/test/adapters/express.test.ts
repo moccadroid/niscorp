@@ -184,7 +184,6 @@ describe('express adapter', () => {
       };
 
       await handler(req, res);
-      // Just verifying it compiles and runs without error
     });
   });
 });

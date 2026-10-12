@@ -14,11 +14,6 @@ import type { MutationClient } from '../../src/mutations/engine.js';
 import type { MutationDefinition } from '../../src/mutations/schema.js';
 import type { ScopePolicy } from '../../src/scope/scope.types.js';
 
-// `{ $returned: 'table.column' }` — a later statement of a batch reading the
-// row an earlier one wrote. Against a real database, because what is being
-// held is what LANDS: the value in the column, the rows a refused batch leaves
-// behind (none), and whose tenant a row ends up in.
-
 const DDL = `
   CREATE TABLE lists (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -90,7 +85,6 @@ const refusal = async (attempt: Promise<unknown>): Promise<VexError> => {
   return outcome;
 };
 
-// A parent whose id the database generates, and the rows that point at it.
 const listWithItems: MutationDefinition = [
   { op: 'insert', table: 'lists', values: { title: { $context: 'title' } } },
   { op: 'insertEach', table: 'items', items: { $context: 'items' }, values: { list_id: { $returned: 'lists.id' }, label: { $item: 'label' } } },
@@ -105,7 +99,6 @@ describe('$returned — a later statement reads the row an earlier one wrote', (
     expect(typeof id).toBe('string');
     expect(items?.rows.map((row) => row['list_id'])).toEqual([id, id]);
     expect(notes?.rows[0]?.['list_id']).toBe(id);
-    // Each row is in the caller's tenant because the ENGINE put it there.
     expect([...(items?.rows ?? []), ...(notes?.rows ?? [])].map((row) => row['tenant_id'])).toEqual(['tenant-a', 'tenant-a', 'tenant-a']);
   });
 
@@ -138,7 +131,6 @@ describe('$returned — a later statement reads the row an earlier one wrote', (
     const failing: MutationDefinition = [
       { op: 'insert', table: 'lists', values: { title: 'Orphan' } },
       { op: 'insert', table: 'items', values: { list_id: { $returned: 'lists.id' }, label: 'kept?' } },
-      // No such item: the foreign key refuses the third statement.
       { op: 'insert', table: 'notes', values: { list_id: { $returned: 'lists.id' }, item_id: '00000000-0000-4000-8000-000000000000', body: 'x' } },
     ];
     await expect(run(failing, {})).rejects.toThrow(/foreign key/);
@@ -148,7 +140,6 @@ describe('$returned — a later statement reads the row an earlier one wrote', (
 
   it('the value comes from the row, never from the request', async () => {
     const { run } = await world();
-    // A context key spelled exactly like the reference is not the reference.
     const writes = await run(listWithItems, { title: 'T', items: [{ label: 'x' }], note: 'n', 'lists.id': '11111111-1111-4111-8111-111111111111' });
     expect(writes[1]?.rows[0]?.['list_id']).toBe(writes[0]?.rows[0]?.['id']);
     expect(writes[1]?.rows[0]?.['list_id']).not.toBe('11111111-1111-4111-8111-111111111111');
@@ -180,15 +171,12 @@ describe('$returned — exactly one row, or nothing is written', () => {
     expect((await db.query<{ title: string }>('SELECT title FROM lists WHERE id = $1', [listId])).rows[0]?.title).toBe('Ours');
     expect(await count('notes')).toBe(1);
 
-    // The same batch from the tenant that owns the row.
     const writes = await run(retitleAndNote, { listId, title: 'Still ours', note: 'second' });
     expect(writes.map((write) => `${write.op} ${write.table}:${write.rows.length}`)).toEqual(['update lists:1', 'insert notes:1']);
   });
 
   it('a client that hands rows back under other keys: refused, never NULL', async () => {
     const { pool, schema, count } = await world();
-    // Every column name upper-cased on the way out — what a row-renaming
-    // driver option does to the engine's view of a row.
     const renamed = (rows: Record<string, unknown>[]): Record<string, unknown>[] => rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key.toUpperCase(), value])));
     const renaming: MutationClient = {
       query: async (sql, params = []) => ({ rows: renamed((await pool.query(sql, params)).rows) }),
@@ -240,7 +228,6 @@ describe('$returned — scope', () => {
     const writes = await run(
       [
         { op: 'insert', table: 'lists', values: { title: 'tenant-b' } },
-        // The author tries to take the tenant from the earlier row's title.
         { op: 'insert', table: 'notes', values: { list_id: { $returned: 'lists.id' }, tenant_id: { $returned: 'lists.title' }, body: 'n' } },
       ],
       {},
@@ -267,7 +254,6 @@ describe('$returned — refused before any request', () => {
   it('a reference with nothing earlier to read — in a batch, or in a statement on its own', () => {
     expect(issuesOf([{ op: 'insert', table: 'notes', values: { list_id: { $returned: 'lists.id' }, body: 'n' } }])).toContain('no earlier statement writes "lists"');
     expect(issuesOf({ op: 'insert', table: 'notes', values: { list_id: { $returned: 'lists.id' }, body: 'n' } })).toContain('no earlier statement writes "lists"');
-    // Pointing forwards is the same thing.
     expect(
       issuesOf([
         { op: 'insert', table: 'notes', values: { list_id: { $returned: 'lists.id' }, body: 'n' } },
@@ -307,9 +293,6 @@ describe('$returned — refused before any request', () => {
     ).toContain('does nothing on conflict');
   });
 
-  // An insert sets a column in two places — `values`, and `onConflict.set`.
-  // Each is checked on its own: a reference in one is not excused by the same
-  // column appearing in the other.
   const behindTheSameColumn: MutationDefinition = [
     { op: 'insert', table: 'lists', values: { title: 'x' } },
     {
@@ -376,8 +359,6 @@ describe('$returned — refused before any request', () => {
       { op: 'insertEach', table: 'notes', items: value, values: { body: 'b' } },
     ];
     const parses = (value: unknown): boolean[] => places(value).map((statement) => MutationDefinitionSchema.safeParse([list, statement]).success);
-    // The same four statements with a caller's value there are fine: it is the
-    // reference each one refuses.
     expect(parses({ $context: 'listId' })).toEqual([true, true, true, true]);
     expect(parses({ $returned: 'lists.id' })).toEqual([false, false, false, false]);
   });
@@ -388,7 +369,6 @@ describe('$returned — everywhere a statement sets a column', () => {
     const { run } = await world();
     const [list, item] = await run(
       [
-        // No `id` in context, so the upsert inserts — and is read like any insert.
         { op: 'upsert', table: 'lists', key: 'id', columns: { title: { $context: 'title' } } },
         { op: 'upsert', table: 'items', key: 'itemId', columns: { label: { $context: 'label' } }, insert: { list_id: { $returned: 'lists.id' } } },
       ],
@@ -430,8 +410,6 @@ describe('$returned — everywhere a statement sets a column', () => {
   it('an insert\'s onConflict set takes one as well', async () => {
     const { run, db } = await world();
     const [first] = await run({ op: 'insert', table: 'people', values: { email: { $context: 'email' }, name: 'Before' } }, { email: 'p@example.test' });
-    // The second statement conflicts with the row that is already there, and
-    // its `set` takes the name from the row the first statement wrote.
     await run(
       [
         { op: 'insert', table: 'lists', values: { title: 'After' } },
@@ -463,10 +441,8 @@ describe('$returned — everywhere a statement sets a column', () => {
       ],
       { context: { tags: ['a', 'b'] }, scope: A, policy, schema },
     );
-    // The second statement's `tags` parameter: text, not a driver's ARRAY literal.
     expect(sent[1]).toContain('["a","b"]');
 
-    // The same for a reference that is an insertEach's constant value.
     sent.length = 0;
     await executeWrites(
       recording,

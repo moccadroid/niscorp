@@ -7,24 +7,13 @@ import type { Row } from '../adapters/adapter.types.js';
 import type { DatabaseSchema, EntitySchema, FieldSchema } from '../schemas/database.schema.js';
 import type { GenerationCaller } from '../types.js';
 
-// ═══════════════════════════════════════════════════════════════
-// Dependencies
-//
-// The tools hold no adapter and no policy. Everything they learn about the
-// data they learn through `read` — the engine's own pipeline, run as the
-// caller the generation is for — so a sample row, a distinct value and a
-// null count are all things that person could have read, and nothing else.
-// There is no SQL in this file.
-// ═══════════════════════════════════════════════════════════════
-
+// No adapter and no policy: the tools read data only through `read`, the
+// engine's pipeline run as the caller, so the model sees nothing that caller
+// could not have read.
 export type QueryToolDeps = {
   getSchema: () => DatabaseSchema | undefined;
   read: GenerationCaller['read'];
 };
-
-// ═══════════════════════════════════════════════════════════════
-// Tool input schemas + types
-// ═══════════════════════════════════════════════════════════════
 
 const GetSchemaInputSchema = z.object({
   entities: z.array(z.string()).optional().describe('Filter to specific entity names'),
@@ -50,21 +39,11 @@ const DescribeFieldInputSchema = z.object({
 });
 export type DescribeFieldInput = z.infer<typeof DescribeFieldInputSchema>;
 
-// The draft query ITSELF at the root — no `dsl` wrapper. Models
-// naturally pass the query object directly, and a wrapper mismatch is
-// fatal on providers (Groq) that validate tool args SERVER-SIDE.
-//
-// SHALLOW: every top-level key of the query, and nothing below it. A model
-// takes a tool's parameter schema as the whole contract for its arguments —
-// qwen 3.8 27b does, and does not look the argument's shape up in the prompt
-// (measured 2026-09-27: given an empty object it sent `{}` until its step
-// limit; given `from` and `fields` it wrote only `from` and `fields`, never an
-// aggregate; given these nine keys it wrote correct aggregate + groupBy
-// queries at once). So the schema names every key a query can have. What
-// goes INSIDE each is the DSL spec's, in the prompt: the full recursive
-// schema cannot be the parameters — Groq refuses it (400, measured) — and the
-// real validation is this tool's QuerySchema safeParse, whose errors the model
-// reads and fixes. `test/agent/tools.test.ts` holds these keys to QuerySchema's.
+// The query itself at the root, no wrapper: models pass the query object
+// directly, and Groq validates tool arguments server-side.
+// Every top-level key and nothing below: a model takes the parameter schema as
+// the whole contract and writes only the keys it names, and Groq refuses the
+// full recursive schema (400). QuerySchema's safeParse is the real validation.
 const inSpec = (what: string): string => `${what} — written as the DSL spec (OUTPUT SCHEMA) says.`;
 const TestQueryInputSchema = z
   .object({
@@ -87,10 +66,6 @@ const CannotSatisfyInputSchema = z.object({
 });
 export type CannotSatisfyInput = z.infer<typeof CannotSatisfyInputSchema>;
 
-// ═══════════════════════════════════════════════════════════════
-// Result types
-// ═══════════════════════════════════════════════════════════════
-
 type FieldStats = {
   type: string;
   nullable: boolean;
@@ -105,25 +80,15 @@ type TestQueryResult = {
   sql: string;
   warnings: string[];
   errors: string[];
-  // On success only: what the model does now. A passing test is the moment
-  // the run can end, and a model that is not told so tests the same query
-  // again (measured: qwen 3.8 27b, until its stop).
   next?: string;
 };
 
 const NEXT_AFTER_PASS =
   'This query runs. If its rows answer the request, you are done: do not test it again — finish now with the envelope, its `data` being exactly this query. If not, change the query and test again.';
 
-// ═══════════════════════════════════════════════════════════════
-// Helpers
-// ═══════════════════════════════════════════════════════════════
-
 type Located = { entity: EntitySchema } | { error: string };
 type LocatedField = { entity: EntitySchema; field: FieldSchema } | { error: string };
 
-// The schema the tools are handed is already the caller's — tables their
-// policy cannot read are not in it — so "not found" and "not yours" are the
-// same answer, which is the point.
 const locate = (deps: QueryToolDeps, entityName: string): Located => {
   const schema = deps.getSchema();
   if (schema === undefined) return { error: 'Schema not available' };
@@ -142,8 +107,6 @@ const locateField = (deps: QueryToolDeps, entityName: string, fieldName: string)
 
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
-// A read that fails (a refused table, a column the grammar cannot name) is an
-// answer the model can use, not a crash of the run.
 const attempt = async <T>(run: () => Promise<T>): Promise<T | { error: string }> => {
   try {
     return await run();
@@ -153,10 +116,6 @@ const attempt = async <T>(run: () => Promise<T>): Promise<T | { error: string }>
 };
 
 const firstRow = (rows: Row[]): Row => rows[0] ?? {};
-
-// ═══════════════════════════════════════════════════════════════
-// Factory
-// ═══════════════════════════════════════════════════════════════
 
 export const createQueryTools = (deps: QueryToolDeps): ReturnType<typeof defineTool>[] => {
   const getSchemaTool = defineTool({
@@ -189,8 +148,6 @@ export const createQueryTools = (deps: QueryToolDeps): ReturnType<typeof defineT
       const located = locate(deps, input.entity);
       if ('error' in located) return located;
       const { entity } = located;
-      // Vector columns are left out: hundreds of floats per row teach the
-      // model nothing and cost the context window everything.
       const fields = entity.fields.filter((f) => f.normalizedType !== 'vector').map((f) => `${entity.name}.${f.name}`);
       const query: Query = { from: [entity.name], fields, limit: input.limit ?? 5 };
       return attempt(async () => (await deps.read(query)).rows);
@@ -273,9 +230,7 @@ export const createQueryTools = (deps: QueryToolDeps): ReturnType<typeof defineT
     },
   });
 
-  // The caller (createQueryDsl) watches for this tool's observation on
-  // the run's event stream and aborts the run with the reason — the
-  // v2 replacement for the v1 bus-emit + abort-rule pair.
+  // createQueryDsl watches the run's event stream for this tool's id and aborts the run.
   const cannotSatisfyTool = defineTool({
     id: 'cannotSatisfy',
     name: 'cannotSatisfy',

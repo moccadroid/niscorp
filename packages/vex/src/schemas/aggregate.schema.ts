@@ -4,9 +4,6 @@ import { FieldPathSchema } from './identifier.schema.js';
 
 const fieldPath = FieldPathSchema.describe('Field path in entity.field format');
 
-// SUM/AVG/MIN/MAX take either a field path or a compute expression — so the
-// argument can be a derived value (e.g. SUM(value * win_probability / 100)),
-// not just a column. A bare string stays valid (non-breaking).
 const fieldOrExpr = z.union([fieldPath, ComputeExpressionSchema]).describe('A field path or a compute expression');
 
 export const AggregateExpressionSchema = z

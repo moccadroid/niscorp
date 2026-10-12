@@ -8,13 +8,6 @@ import type { MutationDefinition } from '../../src/mutations/schema.js';
 import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
 import type { ScopePolicy } from '../../src/scope/scope.types.js';
 
-// ONE COLUMN, SET FROM TWO KEYS. An insert's `values` and its `onConflict.set`
-// are two positions even where they name the same column: one binds when the
-// row is new, the other when it is already there, and the statement carries a
-// parameter for each. Against a real database, because what is held here is
-// what LANDS — a key read as not needed binds nothing, and its column is
-// written NULL.
-
 const DDL = `
   CREATE TABLE people (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -57,10 +50,6 @@ describe('an insert whose onConflict.set sets a column its values set too', () =
   });
 });
 
-// The same two-positions rule for an upsert: `columns` binds when it updates,
-// `insert` when it creates. What it REQUIRES was always right — that is
-// computed per branch — but the signature it is listed with read the two
-// merged, and the key the update needs was missing from it.
 describe('an upsert whose insert sets a column its columns set too', () => {
   it('lists the key each half binds, and only the insert half as insert only', () => {
     const sig = collectMutationContext(

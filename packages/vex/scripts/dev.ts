@@ -25,8 +25,6 @@ const CACHE_BACKEND = process.env['VEX_CACHE'] ?? 'memory';
 const CACHE_SCHEMA = process.env['VEX_CACHE_SCHEMA'] ?? 'public';
 const CACHE_TABLE = process.env['VEX_CACHE_TABLE'] ?? 'vex_cache';
 
-// ─── Postgres ────────────────────────────────────────────────
-
 const pool = new pg.Pool({ connectionString: DATABASE_URL });
 
 const ensureSeeded = async (): Promise<void> => {
@@ -47,8 +45,6 @@ const ensureSeeded = async (): Promise<void> => {
   await seed();
   console.log('Seed complete.');
 };
-
-// ─── Logging ────────────────────────────────────────────────
 
 const LOG_DIR = path.resolve(import.meta.dirname ?? '.', '..', 'logs');
 const LOG_FILE = path.join(LOG_DIR, 'vex-debug.log');
@@ -132,8 +128,6 @@ const createEventHandler = (): VexEventHandler => {
   };
 };
 
-// ─── LLM wrapper ────────────────────────────────────────────
-
 const wrapLlm = (llm: SignalClient, label: string, onEvent: VexEventHandler): SignalClient => {
   let callCount = 0;
   const origStep = llm.step.bind(llm);
@@ -149,7 +143,6 @@ const wrapLlm = (llm: SignalClient, label: string, onEvent: VexEventHandler): Si
         tools: (request.tools ?? []).map(t => t.name),
       });
 
-      // Write full request to file log
       const ts = new Date().toISOString();
       const requestDump = request.messages.map(msg => {
         const raw = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
@@ -181,14 +174,12 @@ const wrapLlm = (llm: SignalClient, label: string, onEvent: VexEventHandler): Si
   };
 };
 
-// ─── Cache ──────────────────────────────────────────────────
-
 const buildCache = async (): Promise<CacheBackend> => {
   if (CACHE_BACKEND === 'postgres') {
     const onError = (err: unknown) => console.error('[vex:cache]', err);
     const l2 = createPostgresCache({ pool, schema: CACHE_SCHEMA, table: CACHE_TABLE, onError });
     const cache = createTieredCache({ l1: createMemoryCache(), l2, onError });
-    await cache.init(); // creates schema/table if needed, loads L2 → L1 (warm-up)
+    await cache.init();
     const warm = (await cache.keys()).length;
     console.log(`Cache: postgres (tiered, ${CACHE_SCHEMA}.${CACHE_TABLE}, ${warm} warm entries)`);
     return cache;
@@ -196,8 +187,6 @@ const buildCache = async (): Promise<CacheBackend> => {
   console.log('Cache: memory');
   return createMemoryCache();
 };
-
-// ─── Server ─────────────────────────────────────────────────
 
 const main = async () => {
   await ensureSeeded();

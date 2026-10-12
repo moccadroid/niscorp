@@ -12,11 +12,6 @@ import type { Query } from '../../src/schemas/query.schema.js';
 import type { QueryEngineConfig, QueryEngine } from '../../src/types.js';
 import type { QueryResponse } from '../../src/schemas/request.schema.js';
 
-// The limit a query runs with, and whose number it is. Against a real
-// database, with small numbers standing in for the engine's 100 and 1000: what
-// is held is how many rows COME BACK, and what the reply says when the number
-// that ended the list was not the author's.
-
 const PEOPLE = 12;
 const shape = [{ id: 0 }];
 const all: Query = { from: ['people'], fields: ['people.id'], sort: [{ field: 'people.id', dir: 'asc' }] };
@@ -32,7 +27,6 @@ const world = async (config: QueryEngineConfig['config'] = { defaultLimit: 5, ma
   await db.exec(`CREATE TABLE people (id serial PRIMARY KEY, name text NOT NULL); INSERT INTO people (name) SELECT 'P' || g FROM generate_series(1, ${PEOPLE}) AS g;`);
   const cache = durable ? await durableCache(db) : createMemoryCache();
   const quiet = vi.spyOn(console, 'warn').mockImplementation(() => {});
-  // `generateDsl` stands in for the query agent.
   const engine = createQueryEngine({ adapter: createPostgresAdapter({ pool: createPglitePool(db) }), cache, config, generateDsl: async () => generated });
   await engine.introspect();
   quiet.mockRestore();

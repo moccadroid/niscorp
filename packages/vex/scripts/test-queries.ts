@@ -249,7 +249,6 @@ const run = async (filter?: string) => {
   const cachedResults: Result[] = [];
 
   for (const scenario of selected) {
-    // First run
     const t0 = Date.now();
     try {
       const response = await request(scenario.endpoint, scenario.method, scenario.body);
@@ -265,7 +264,6 @@ const run = async (filter?: string) => {
       results.push({ name: scenario.name, status: 'FAIL', ms, error: e instanceof Error ? e.message : String(e) });
     }
 
-    // Cache run (same scenario, immediately after)
     if (!scenario.cacheable) continue;
 
     const cachedBody = scenario.name === 'customer-by-id'

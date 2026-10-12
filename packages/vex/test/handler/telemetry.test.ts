@@ -1,14 +1,3 @@
-// THE EXECUTION OBSERVER — vex's whole telemetry surface, the read/write twin
-// of `mutations.onWrite`. These pin the contract a host maps to a span:
-//   - one record per execution, with the outcome's status;
-//   - a refusal still names the fingerprint it refused (the operator's question
-//     is "which query got denied", so the answer cannot be blank);
-//   - cache hit/miss and row count for a read, kind for a write;
-//   - unobserved endpoints do no work — the record is not built;
-//   - a throwing observer is contained, never the request's.
-//
-// Vex reports facts in its own vocabulary; it holds no notion of a span. The
-// mapping to a span (hasPrincipal, no scope values) is the host's, tested there.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { handleQuery } from '../../src/handler.js';
 import type { ExecuteRecord } from '../../src/handler.js';
@@ -99,7 +88,6 @@ describe('handleQuery.onExecute', () => {
     expect(span.rows).toBe(2);
     expect(span.reach).toBeUndefined();
     expect(span.endUnixNano).toBeGreaterThanOrEqual(span.startUnixNano);
-    // The unforgeable scope rides the record for the host to read presence from.
     expect(span.scope).toEqual(SCOPE);
   });
 
@@ -127,8 +115,6 @@ describe('handleQuery.onExecute', () => {
   });
 
   it('unobserved: no observer, and the request answers exactly the same', async () => {
-    // Structural — with no hook there is no record to inspect; the proof is the
-    // request behaves identically and nothing is asked of a sink that is absent.
     const res = await handleQuery({ engine, scopePolicy: WIDE }, { fingerprint: 'plain', context: {} }, SCOPE);
     expect(res.status).toBe(200);
   });

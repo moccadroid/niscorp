@@ -3,22 +3,6 @@ import { ContextRefSchema, ScopeRefSchema, FieldOrValueSchema } from './value.sc
 import { FieldPathSchema } from './identifier.schema.js';
 import type { ContextRef, ScopeRef, FieldOrValue } from './value.schema.js';
 
-// EXISTS — "is there a row over there that points back at this one".
-//
-// It is the same `{ from, filter }` a query already is, and deliberately no
-// more than that: no fields, no sort, no limit, nothing to select. EXISTS asks
-// whether a row is there, so anything that shapes output would be noise the
-// planner discards, and refusing it is what keeps this an operator rather than
-// an invitation to nest arbitrary SQL.
-//
-// The CORRELATION needs no new vocabulary. A dotted string on either side of a
-// comparison is already a field path, so pointing the inner table at the outer
-// one is an ordinary `eq` between two columns:
-//
-//   { exists: { from: ['tasks'], filter: { eq: ['tasks.issue_id', 'issues.id'] } } }
-//
-// and `not` composes for NOT EXISTS. Whoever writes SQL writes this on the
-// first try, which is the entire design goal.
 export type ExistsQuery = {
   from: string[];
   filter?: Filter;
@@ -104,12 +88,9 @@ export const FilterSchema: z.ZodType<Filter> = z.lazy(() =>
       optional: z.object({
         key: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)])
           .describe('The context key this condition depends on, or EVERY key it depends on. A condition referencing two keys must name both — gating on one leaves the other conditionally required, which surfaces as an empty result rather than as a condition that did not apply.'),
-        // BARE, never `.describe()`d. That call CLONES the schema, and zod
-        // detects a recursive reference by instance identity — a clone is a
-        // different instance, so `to-json-schema` stops seeing the cycle and
-        // expands the filter union into itself until the stack goes. Every
-        // other recursive slot here (`not`, `and`, `or`) uses it bare for the
-        // same reason; the description belongs on the wrapper below.
+        // Bare, never `.describe()`d: that call clones the schema, and zod's
+        // to-json-schema detects recursion by instance identity, so a clone
+        // expands the filter union into itself until the stack overflows.
         then: FilterSchema,
       }).strict(),
     }).strict().describe(

@@ -5,10 +5,6 @@ import { createMemoryCache } from '../../src/cache/memory.js';
 import { sweepCache } from '../../src/cache/util.js';
 import type { CacheEntry, OkCacheEntry } from '../../src/cache/cache.types.js';
 
-// ───────────────────────────────────────────────────────────────
-// normalizeShape
-// ───────────────────────────────────────────────────────────────
-
 describe('normalizeShape', () => {
   it('normalizes strings to "string"', () => {
     expect(normalizeShape('hello')).toBe('string');
@@ -66,11 +62,6 @@ describe('normalizeShape', () => {
   });
 });
 
-// ───────────────────────────────────────────────────────────────
-// mintFingerprint — shape hashes are no longer keys; identity is a
-// minted pin or a caller-chosen name.
-// ───────────────────────────────────────────────────────────────
-
 describe('mintFingerprint', () => {
   it('mints fp_-prefixed identifiers', () => {
     expect(mintFingerprint()).toMatch(/^fp_[a-f0-9]{16}$/);
@@ -81,10 +72,6 @@ describe('mintFingerprint', () => {
     expect(minted.size).toBe(100);
   });
 });
-
-// ───────────────────────────────────────────────────────────────
-// computeSchemaFingerprint
-// ───────────────────────────────────────────────────────────────
 
 describe('computeSchemaFingerprint', () => {
   const field = (name: string, over: Record<string, unknown> = {}) => ({
@@ -132,10 +119,6 @@ describe('computeSchemaFingerprint', () => {
   });
 });
 
-// ───────────────────────────────────────────────────────────────
-// computeRequestHash
-// ───────────────────────────────────────────────────────────────
-
 describe('computeRequestHash', () => {
   it('is identical for the same intent + shape (ignoring values)', () => {
     const a = computeRequestHash({ intent: 'top customers', shape: [{ id: '', n: 0 }] });
@@ -164,14 +147,7 @@ describe('computeRequestHash', () => {
   });
 });
 
-// ───────────────────────────────────────────────────────────────
-// createMemoryCache
-// ───────────────────────────────────────────────────────────────
-
 describe('createMemoryCache', () => {
-  // `cache.get` answers the UNION — an entry may be ok, unsatisfiable or a
-  // mutation, and only the first has a `dsl`. A consumer has to establish which
-  // it got before reading through it, so the tests do too.
   const okOf = (entry: CacheEntry | undefined): OkCacheEntry => {
     if (entry?.kind !== 'ok') throw new Error(`expected an ok entry, got ${entry?.kind ?? 'nothing'}`);
     return entry;
@@ -244,12 +220,7 @@ describe('createMemoryCache', () => {
   });
 });
 
-// ───────────────────────────────────────────────────────────────
-// sweepCache — lifetime is usage, and protection is absolute.
-// ───────────────────────────────────────────────────────────────
-
 describe('sweepCache', () => {
-  // createdAt far past any cutoff: idle unless something says otherwise.
   const idle = { createdAt: 0 };
 
   it('sweeps idle unprotected entries of every kind', async () => {

@@ -4,14 +4,6 @@ import { executeMutation } from '../../src/mutations/engine.js';
 import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
 import type { ScopePolicy } from '../../src/scope/scope.types.js';
 
-// The shim had no test, and the gap was not cosmetic: it returned `{ query }`
-// only, so `MutationClient.transaction` was undefined on every PGlite-backed
-// app and every BATCH mutation threw "Batch mutations require a transactional
-// client" — a message about a client nothing in the repo could construct.
-//
-// Structurally typed, like the shim itself, so this file takes no dependency
-// on @electric-sql/pglite.
-
 type Call = { text: string; values?: unknown[]; options?: unknown };
 
 const fakeDb = () => {
@@ -36,9 +28,6 @@ describe('the PGlite pool shim', () => {
   });
 
   it('omits it when the db cannot transact, rather than faking one', () => {
-    // A hand-rolled BEGIN/COMMIT over a single `query` would be wrong on a
-    // real pool — the statements could land on different connections — so a
-    // db with no transaction yields a pool that says so.
     const { db } = fakeDb();
     expect(createPglitePool({ query: db.query }).transaction).toBeUndefined();
   });

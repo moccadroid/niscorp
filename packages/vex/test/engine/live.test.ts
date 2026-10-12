@@ -3,9 +3,6 @@ import { createLiveRows } from '../../src/engine/live.js';
 import type { LiveRowsEvent, RowsSource } from '../../src/engine/live.js';
 import type { Row } from '../../src/adapters/adapter.types.js';
 
-// The rows behind `refresh: 'reactive'`: shared by key, invalidated by table
-// version, refetched once per burst, bounded by age and size.
-
 const deferred = <T>(): { promise: Promise<T>; resolve: (value: T) => void } => {
   let resolve: (value: T) => void = () => {};
   const promise = new Promise<T>((r) => {
@@ -14,7 +11,6 @@ const deferred = <T>(): { promise: Promise<T>; resolve: (value: T) => void } => 
   return { promise, resolve };
 };
 
-// A source whose answer the test controls, counting how often it is asked.
 const sourceOf = (tables: string[], answer: () => Row[]): RowsSource & { calls: () => number } => {
   let calls = 0;
   return {
@@ -83,13 +79,11 @@ describe('live rows — reading', () => {
       },
     };
     const first = live.read('k', source);
-    live.invalidate(['t']); // the write commits while the first read is out
-    // A read now must not join the fetch that started before the write…
+    live.invalidate(['t']);
     const second = live.read('k', source);
     before.resolve([{ v: 'before' }]);
     expect(await first).toEqual([{ v: 'before' }]);
     expect(await second).toEqual([{ v: 'after' }]);
-    // …and whatever landed last, the cache holds what is current.
     expect(await live.read('k', source)).toEqual([{ v: 'after' }]);
   });
 
@@ -116,8 +110,8 @@ describe('live rows — bounds', () => {
     const c = sourceOf(['t'], () => [{ id: 'c' }]);
     await live.read('a', a);
     await live.read('b', b);
-    await live.read('a', a); // a is now the most recent
-    await live.read('c', c); // b goes
+    await live.read('a', a);
+    await live.read('c', c);
     expect(live.stats()).toMatchObject({ entries: 2, evictions: 1 });
     expect(events).toEqual([expect.objectContaining({ type: 'rows.evict', reason: 'capacity' })]);
     await live.read('a', a);
@@ -156,7 +150,6 @@ describe('live rows — following', () => {
     expect(source.calls()).toBe(2);
     expect(delivered).toEqual([[{ id: 1 }, { id: 2 }]]);
 
-    // A write that did not change these rows: refetched, nobody told.
     live.invalidate(['members']);
     await flush();
     expect(source.calls()).toBe(3);
@@ -209,7 +202,7 @@ describe('live rows — following', () => {
     const first = await live.read('k', source);
     const delivered: Row[][] = [];
     live.follow('k', source, first, { deliver: (next) => delivered.push(next) }, new AbortController().signal);
-    rows = [{ n: 2 }]; // written behind vex's back
+    rows = [{ n: 2 }];
     await vi.advanceTimersByTimeAsync(1_001);
     expect(delivered).toEqual([[{ n: 2 }]]);
     live.stop();

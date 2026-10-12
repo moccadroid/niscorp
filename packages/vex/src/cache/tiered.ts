@@ -2,42 +2,15 @@ import type { CacheBackend, CacheEntry } from './cache.types.js';
 import { validateEntry } from './validate.js';
 import { fireAndForget } from './util.js';
 
-// ═══════════════════════════════════════════════════════════════
-// Tiered cache (L1 in-memory + L2 durable)
-//
-// Read-through / write-through:
-//   - get:   L1 → on miss, L2 → validate → promote into L1.
-//   - set:   L1 synchronously + L2 fire-and-forget (off the hot path).
-//   - init:  warm-up, per the configured mode (see WarmupMode).
-//
-// The hot read never validates and never touches L2: every entry in L1
-// was validated on the way in (at promotion or at write). Validation
-// cost lands only at startup and the occasional L1 miss. An L2 entry
-// that fails validation (corrupt / schema-drifted) is evicted from L2,
-// not just skipped, so it can't keep failing.
-//
-// Single-instance only. Multiple processes sharing one L2 would each
-// keep their own L1; an entry written by process A is invisible to
-// process B's L1 until B restarts (a TTL-based L1 refresh would fix
-// this — deliberately deferred).
-// ═══════════════════════════════════════════════════════════════
-
 export type WarmupMode =
-  /** Load all of L2 into L1 on init (default). Start fully hot. */
   | 'full'
-  /** Don't preload; L1 fills on demand via get→promote. Bounded memory. */
   | 'lazy'
-  /** Preload only these fingerprints; lazy-fill the rest. */
   | { mode: 'partial'; fingerprints: string[] };
 
 export type TieredCacheConfig = {
-  /** Fast, volatile tier (e.g. createMemoryCache()). */
   l1: CacheBackend;
-  /** Durable source of truth (e.g. createPostgresCache(...)). */
   l2: CacheBackend;
-  /** Warm-up strategy run by init(). Default: 'full'. */
   warmup?: WarmupMode;
-  /** Called on background failures (async L2 writes) and dropped invalid entries. */
   onError?: (err: unknown) => void;
 };
 
@@ -49,9 +22,6 @@ export const createTieredCache = (config: TieredCacheConfig): TieredCache => {
   const { l1, l2, onError } = config;
   const warmup: WarmupMode = config.warmup ?? 'full';
 
-  // Validate, then lift an entry into L1. Returns false if the L2 entry
-  // is corrupt or schema-drifted — and evicts it from L2 so it can't
-  // keep failing future reads.
   const promote = async (key: string, entry: CacheEntry): Promise<boolean> => {
     const error = validateEntry(entry);
     if (error !== null) {
@@ -79,8 +49,6 @@ export const createTieredCache = (config: TieredCacheConfig): TieredCache => {
       return;
     }
 
-    // 'full' — load everything. Prefer a bulk read (no N+1) when L2
-    // supports it; otherwise fall back to key-by-key.
     if (l2.entries) {
       const all = await l2.entries();
       for (const { key, entry } of all) await promote(key, entry);
@@ -119,8 +87,6 @@ export const createTieredCache = (config: TieredCacheConfig): TieredCache => {
     fireAndForget(l2.clear(), onError);
   };
 
-  // L1 holds the full set after warm-up and receives every write, so it
-  // is the authoritative key list for the running process.
   const keys = async (): Promise<string[]> => l1.keys();
 
   return { init, get, set, delete: del, clear, keys, ...(l2.sequence !== undefined ? { sequence: l2.sequence } : {}) };

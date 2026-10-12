@@ -1,21 +1,6 @@
-// ═══════════════════════════════════════════════════════════════
-// SHA-256 of a text's UTF-8 bytes, as lowercase hex — the hash behind every
-// identity vex computes: request hashes, schema fingerprints, policy keys,
-// and the row and answer hashes a reactive read compares.
-//
-// Written out (FIPS 180-4) rather than taken from `node:crypto`, because vex
-// also runs in a page — PGlite in the browser, the client-degrade posture —
-// where that module does not exist and a bundler refuses the import.
-//
-// SYNCHRONOUS, which is why it is not WebCrypto's `subtle.digest` (prism and
-// strata hash there, where they already await): three exported functions
-// answer with a hash directly, and a follower's `deliver` compares two inside
-// a callback.
-//
-// The digests are node's, byte for byte, so nothing already stored under one
-// moves — a request hash, a schema fingerprint, a negative-cache key.
-// test/utils/sha256.test.ts holds the two to each other.
-// ═══════════════════════════════════════════════════════════════
+// Written out rather than taken from `node:crypto`: vex also runs in a page,
+// where that module does not exist. Not WebCrypto's `subtle.digest` either,
+// which is async: callers need the hash synchronously.
 
 const ROUND_CONSTANTS = new Uint32Array([
   0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -37,8 +22,6 @@ const wordHex = (word: number): string => (word >>> 0).toString(16).padStart(8, 
 export const sha256Hex = (text: string): string => {
   const bytes = new TextEncoder().encode(text);
 
-  // Whole blocks: the text, one 0x80 byte, zeros, then the text's length in
-  // bits as a 64-bit big-endian number.
   const padded = new Uint8Array(Math.ceil((bytes.length + 9) / BLOCK_BYTES) * BLOCK_BYTES);
   padded.set(bytes);
   padded[bytes.length] = 0x80;
@@ -56,8 +39,6 @@ export const sha256Hex = (text: string): string => {
   let h6 = 0x1f83d9ab;
   let h7 = 0x5be0cd19;
 
-  // A typed array keeps every word to 32 bits on write; reading one back is
-  // `?? 0` only because an index is never proven in range to the compiler.
   const schedule = new Uint32Array(64);
 
   for (let offset = 0; offset < padded.length; offset += BLOCK_BYTES) {

@@ -4,10 +4,6 @@ import { createPostgresAdapter } from '../../src/adapters/postgres/postgres.adap
 import type { PgPool } from '../../src/adapters/postgres/introspect.js';
 import type { CompiledQuery } from '../../src/adapters/adapter.types.js';
 
-// Where a read's time limit is enforced: on the connection when it already
-// is (free), per statement when it is not (SET LOCAL in a transaction), and
-// said to be unenforced when the database cannot (PGlite).
-
 const poolShowing = (shown: string, log: string[] = []): PgPool => ({
   query: async (text) => {
     log.push(text);
@@ -68,8 +64,6 @@ describe('the postgres adapter', () => {
     expect(log.at(-1)).toBe('SELECT 1');
   });
 
-  // A driver's own object (a PGlite) has `transaction` as a method that
-  // reaches for `this`. It is called on the pool, never taken off it.
   it('wraps a read on a pool whose `transaction` needs its receiver', async () => {
     const log: string[] = [];
     const pool: PgPool & { log: string[] } = {

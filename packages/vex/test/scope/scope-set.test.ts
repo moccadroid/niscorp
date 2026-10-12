@@ -11,22 +11,6 @@ import type { Query } from '../../src/schemas/query.schema.js';
 import type { ScopePolicy } from '../../src/scope/scope.types.js';
 import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
 
-// ═══════════════════════════════════════════════════════════════
-// A REACH THAT COVERS SEVERAL ROWS — `{ match, in }`.
-//
-// The scalar match says "this row is yours". The set says "this row is yours,
-// or belongs to somebody you are answerable for" — a parent and their
-// children being the case it was built for.
-//
-// The asymmetry between reads and writes is the whole point of this file, and
-// it is deliberate rather than unfinished: a set may WIDEN what is read and
-// may NARROW what is updated, and it may never pin an insert. A `match` on an
-// INSERT does not filter, it WRITES the column — which is what makes "insert
-// outside your boundary" unsayable instead of merely refused — and a set has
-// no single value to write. The last test in this file is that refusal, and
-// it is the one that keeps the rest safe.
-// ═══════════════════════════════════════════════════════════════
-
 const text = (name: string, nullable = false, primaryKey = false) => ({
   name,
   type: 'text',
@@ -41,7 +25,6 @@ const schema: DatabaseSchema = {
       name: 'bookings',
       table: 'bookings',
       fields: [text('id', false, true), text('studio_id'), text('person_id'), text('session_id', true), text('status')],
-      // Nullable FK, so the join below is LEFT — see the placement test.
       relations: [{ type: 'belongsTo', entity: 'sessions', localFields: ['session_id'], foreignFields: ['id'] }],
       indexes: [],
     },
@@ -55,7 +38,6 @@ const schema: DatabaseSchema = {
   ],
 };
 
-// The reach a guardian reads at: the tenant, plus "one of my household".
 const household: ScopePolicy = {
   default: 'deny',
   entities: {
@@ -79,7 +61,6 @@ describe('a set-valued read match', () => {
   it('compiles to = ANY() rather than =', () => {
     const { sql } = compiled({ from: ['bookings'], fields: ['bookings.id'] }, household);
     expect(sql).toMatch(/person_id = ANY\(\$\d+\)/);
-    // The scalar rule beside it is untouched — this widens nothing else.
     expect(sql).toMatch(/studio_id = \$\d+/);
   });
 
@@ -91,13 +72,7 @@ describe('a set-valued read match', () => {
     expect(slot?.type).toBe('string[]');
   });
 
-  // ── the two fail-closed paths ──────────────────────────────
-  //
-  // Both are INHERITED from SQL rather than written, which is exactly why
-  // they are worth a test each: nobody wrote a guard, so nobody would notice
-  // if the shape changed underneath them. `col = ANY(NULL)` is NULL — not
-  // true — so the row drops; `col = ANY('{}')` is false.
-
+  // `col = ANY(NULL)` is NULL, not true, so the row drops; `col = ANY('{}')` is false.
   it('binds NULL when the scope value is absent, so nothing matches', async () => {
     const { paramSlots } = compiled({ from: ['bookings'], fields: ['bookings.id'] }, household);
     const params = await resolveParams(paramSlots, {}, { studioId: 'st_1' });
@@ -110,11 +85,6 @@ describe('a set-valued read match', () => {
     expect(params[paramSlots.findIndex((s) => s.key === 'householdIds')]).toEqual([]);
   });
 
-  // THE REGRESSION THIS FILE EXISTS BESIDE. A row rule on a LEFT-joined table
-  // belongs in the join's ON, never in WHERE — in WHERE it turns the LEFT
-  // join INNER and silently shortens the answer. A new filter SHAPE is
-  // exactly the kind of change that could reintroduce that, so the set is
-  // asserted through the same placement.
   it('lands in a LEFT join ON clause, not in WHERE', () => {
     const onSessions: ScopePolicy = {
       default: 'deny',
@@ -129,12 +99,9 @@ describe('a set-valued read match', () => {
     );
     const [beforeWhere] = sql.split(' WHERE ');
     expect(beforeWhere).toMatch(/LEFT JOIN sessions/);
-    // The ANY lands in the ON, on the same side of WHERE as the join itself.
     expect(beforeWhere).toMatch(/= ANY\(\$\d+\)/);
   });
 });
-
-// ─── writes ────────────────────────────────────────────────────
 
 const writeSchema: DatabaseSchema = {
   entities: [
@@ -180,8 +147,6 @@ describe('a set-valued match on a write', () => {
     },
   };
 
-  // NARROWING is safe: the rows already exist, and this only decides which of
-  // them may be touched. A parent cancelling their child's booking is this.
   it('narrows an UPDATE by = ANY()', async () => {
     const db = await run(
       { op: 'update', table: 'bookings', set: { status: 'cancelled' }, where: { eq: ['bookings.id', 'b_1'] } },
@@ -201,12 +166,6 @@ describe('a set-valued match on a write', () => {
     expect(db.seen[0]?.sql).toMatch(/person_id = ANY\(\$\d+\)/);
   });
 
-  // ── THE REFUSAL ─────────────────────────────────────────────
-  //
-  // The one that makes the split enforceable rather than merely intended. If
-  // this ever stops throwing, a reach that was granted for READING several
-  // people's rows silently becomes a reach that lets a caller CHOOSE which of
-  // them to write as — and nothing else in the pipeline would notice.
   it('REFUSES to pin an INSERT, because a write has one subject', async () => {
     const insertPolicy: ScopePolicy = {
       default: 'deny',
@@ -231,8 +190,6 @@ describe('a set-valued match on a write', () => {
     ).rejects.toThrow(/set-valued.*person_id.*householdIds.*single value/s);
   });
 
-  // The scalar insert pin is untouched by any of the above — the property the
-  // whole member surface rests on.
   it('leaves the scalar INSERT pin exactly as it was', async () => {
     const scalar: ScopePolicy = {
       default: 'deny',

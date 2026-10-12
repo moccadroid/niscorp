@@ -1,9 +1,6 @@
 import { z } from 'zod';
 import type { JsonValue } from '@niscorp/prism';
 
-// Context keys the engine consumes directly (for ORDER BY) instead of binding as
-// SQL parameters. A `{ $context: 'sortBy' }` ref is rejected at compile so these
-// can never reach the param path.
 export const RESERVED_CONTEXT_KEYS = new Set<string>(['sortBy', 'sortDir']);
 
 export const ContextSchema = z
@@ -17,11 +14,6 @@ export const ContextSchema = z
   );
 
 export const QueryRequestSchema = z.object({
-  // The ONE cache identity. Server-minted (`fp_…`) when absent — returned in
-  // meta.cache.fingerprint, an immutable pin. Caller-chosen strings are
-  // mutable named slots: the name is yours, its content follows your request.
-  // Alone → replay-or-error. With intent/shape → hit when the stored request
-  // matches, regenerate-and-replace when it differs (409 when protected).
   fingerprint: z.string().min(1).optional(),
   intent: z.string().optional(),
   shape: z.unknown().optional(),
@@ -32,13 +24,8 @@ export type QueryRequest = z.infer<typeof QueryRequestSchema>;
 
 export type CacheMeta = {
   hit: boolean;
-  // The entry's identity — minted (`fp_…`) or the caller's own name.
   fingerprint?: string;
-  // True when this execution regenerated and REPLACED a named slot whose
-  // stored request no longer matched.
   replaced?: boolean;
-  // The intent stored with the cached query (on a hit) or the request's own intent
-  // (on a miss) — descriptive only, so a caller can see what the query is for.
   intent?: string;
 };
 
@@ -50,29 +37,15 @@ export type TimingMeta = {
 };
 
 export type ContextMeta = {
-  // Mirrors ParamSlot['type'] (adapters/adapter.types.ts) — the contract a
-  // caller reads is built from the slots the compiler bound, one for one.
-  // Absent on a key that is optional and was not supplied: nothing bound it
-  // this run, so there is no slot to read a type off.
+  // Mirrors ParamSlot['type'] (adapters/adapter.types.ts). Absent on an optional
+  // key that was not supplied: no slot bound it.
   type?: 'string' | 'number' | 'boolean' | 'string[]' | 'number[]' | 'json';
   kind: 'context' | 'scope' | 'semantic';
-  // True when the key controls an `optional` condition — supply it and the
-  // condition applies, omit it and the condition is not in the query. DERIVED
-  // from the stored DSL rather than declared beside it, for the same reason
-  // mutation signatures are (see "Derived context signatures" in DOCS.md): a
-  // contract somebody maintains by hand is a contract that eventually lies.
   optional?: true;
-  // True when this run did not supply the key, so its condition was pruned.
-  // The key is still published — that is the point of listing it — so a caller
-  // can discover what a fingerprint accepts without failing a request first.
   absent?: true;
 };
 
 export type QueryResponse = {
-  // Whatever the Prism mapping produced over the full row set: an array (the
-  // common case — a `$map` or identity over `$.result`), a single object (a
-  // detail picking `$.result[0]`), or a scalar (an aggregate). Vex no longer
-  // forces an array — the mapping owns the output shape.
   result: JsonValue;
   meta: {
     cache: CacheMeta;

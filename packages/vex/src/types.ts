@@ -10,95 +10,48 @@ import type { CompiledIr, JsonValue } from '@niscorp/prism';
 import type { LiveRowsConfig, LiveRowsStats } from './engine/live.js';
 import type { ScopeBehaviors } from './scope/grants.js';
 
-/**
- * Who a generation is for, as a capability rather than an identity. `read` runs
- * a DSL through the engine's own pipeline under the caller's policy and scope
- * values — `$context` slots bind NULL, because a probe asks whether a query
- * runs, not what it answers. It is the only door a generator has to the
- * database: it sees what the person asking would see, and nothing else.
- */
 export type GenerationCaller = {
   read: (dsl: Query) => Promise<{ rows: Row[]; sql: string; warnings: string[] }>;
-  /**
-   * WHO "ME" IS, as columns: every column the host's behaviors bind to a scope
-   * key this caller actually carries, on a table they may read — the keys and
-   * the columns, never the values. A generator uses them to say "the caller"
-   * or "theirs": filter the column with `{ $scope: key }`, and the engine binds
-   * the caller's own value. Empty when nothing identifies the caller (no
-   * behaviors given, or a caller carrying none of the keys they bind).
-   */
   bindings: ScopeBinding[];
 };
 
-/** One column a scope key is bound to by the host's behaviors. */
 export type ScopeBinding = { entity: string; field: string; key: string };
 
-/**
- * DSL generation from intent + shape. Wire to a Cortex agent (see agent/).
- * `schema` holds only the tables the caller's policy lets them read.
- */
 export type GenerateDsl = (request: QueryRequest, schema: DatabaseSchema, caller: GenerationCaller) => Promise<Query>;
 
-/**
- * Result mapping from the raw row set to the requested shape. The mapping runs
- * ONCE over `{ result }` — the rows for an array shape, the single (first) row
- * for an object shape — so `transformed` is whatever it produced: an array, a
- * single object, or a scalar. Wire to Prism's mapping agent.
- */
+/** The IR is replayed against an envelope whose `result` is the rows for an array shape, the first row for any other. */
 export type MapToShape = (rows: Row[], shape: unknown) => Promise<{ ir: CompiledIr; transformed: JsonValue }>;
 
 export type QueryEngineConfig = {
   adapter: DatabaseAdapter;
-  /**
-   * Turns text into a vector at parameter-binding time, for `semantic`
-   * filters. An injected provider (wire it to Signal), not a database
-   * concern — the adapter only generates the vector-distance SQL.
-   * Required only if the schema has vector columns you search over.
-   */
   embed?: (text: string, dimensions?: number) => Promise<number[]>;
   scope?: ScopePolicy;
   cache?: CacheBackend;
   onEvent?: VexEventHandler;
-  /** Optional LLM-backed query generation (cache misses fail without it). */
   generateDsl?: GenerateDsl;
   /**
-   * The host's behaviors — the same document its policies are compiled from
-   * (`createScopePolicy`). Read here for one thing: which columns a scope key
-   * is bound to, so a generation can be told who its caller is in the
-   * schema's own terms (GenerationCaller.bindings). A compiled policy cannot
-   * say it — it keeps only the phases a caller is granted, and the rule that
-   * stamps a member's id lives on a write a reader does not hold. Checked at
-   * `introspect`: every rule names a table and a column that exist.
+   * Read for one thing: which columns a scope key is bound to, so a generation
+   * can be told who its caller is (GenerationCaller.bindings). A compiled
+   * policy cannot say it: it keeps only the phases a caller is granted.
    */
   behaviors?: ScopeBehaviors;
-  /** Optional LLM-backed result mapping (raw rows used as-is without it). */
   mapToShape?: MapToShape;
-  /**
-   * The rows cache behind `refresh: 'reactive'` entries — its age, size and
-   * burst window. Held in this process's memory; nothing else is cached.
-   */
   rows?: LiveRowsConfig;
   config?: {
     maxNestingDepth?: number;
     defaultLimit?: number;
     maxLimit?: number;
-    // `maxLimit` is a guard on a query nobody reviewed — one generated for a
-    // request. An entry the host stored itself (seeded) states its own limit,
-    // and that limit is honoured past `maxLimit`. `true` clamps those entries
-    // as well.
+    // A seeded entry's own limit is honoured past `maxLimit`; `true` clamps
+    // those entries as well.
     capAuthored?: boolean;
     rejectCartesianProducts?: boolean;
     warnUnindexedFilters?: boolean;
     rejectUnindexedFilters?: boolean;
     entities?: string[];
-    unsatisfiableTtlMs?: number;          // negative-cache TTL, default 300_000 (5 min)
-    // How long one read may run on the database before it is cancelled
-    // (default 10_000; 0: unbounded). Enforced by the database, at the
-    // cheapest place it can be — see adapters/postgres/statement-timeout.ts.
+    unsatisfiableTtlMs?: number;
+    // 0: unbounded.
     statementTimeoutMs?: number;
-    // How many distinct optional-key combinations one entry may compile before
-    // it warns. Not a limit on what runs — a note that an entry has stopped
-    // being a question. Default 32.
+    // A warning threshold, not a limit on what runs.
     maxPresenceVariants?: number;
   };
 };
@@ -111,35 +64,16 @@ export type QueryEngine = {
   getDslSchema: () => object;
   getSchema: () => DatabaseSchema | undefined;
   cache: CacheBackend;
-  /**
-   * These tables were written. Every reactive read over any of them is
-   * refetched (once per burst) and its followers told if their answer changed.
-   * The vex handler calls this after every committed mutation; a host calls
-   * it for writes vex did not make.
-   */
   invalidate: (tables: readonly string[]) => void;
-  /** The reactive rows cache: what it holds and how it is doing. */
   rows: { stats: () => LiveRowsStats; stop: () => void };
 };
 
 export type ExecuteOptions = {
   scope?: ScopeValues;
   entities?: string[];
-  // Replay-only posture (production): any request that would need
-  // generation fails with 'locked' instead of running the agent.
   locked?: boolean;
-  // Per-request scope policy — overrides the engine's default for THIS
-  // execution. The read-side symmetry of a per-call mutation policy: a
-  // host that resolves a policy per principal (e.g. compiled from an ACL
-  // layer) passes it here so reads enforce that principal's phases, not a
-  // single static engine policy. Omitted → the engine's configured policy.
   scopePolicy?: ScopePolicy;
-  /**
-   * FOLLOW THE ANSWER. For an entry with `refresh: 'reactive'`, every later
-   * answer that differs from the last one is handed to `onChange` — after
-   * writes to the tables the query reads — until `signal` aborts. Both or
-   * neither; ignored for a snapshot read.
-   */
+  /** `signal` and `onChange` go together; both are ignored for a snapshot read. */
   signal?: AbortSignal;
   onChange?: (response: QueryResponse) => void;
 };

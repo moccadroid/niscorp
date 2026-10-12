@@ -23,7 +23,6 @@ export const createMemoryCache = (): CacheBackend => {
     return [...store.keys()];
   };
 
-  // Read-only snapshot — does not increment hit counts.
   const entries = async (): Promise<Array<{ key: string; entry: CacheEntry }>> => {
     return [...store.entries()].map(([key, entry]) => ({ key, entry }));
   };

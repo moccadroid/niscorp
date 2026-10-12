@@ -8,12 +8,6 @@ import type { Query } from '../../src/schemas/query.schema.js';
 import type { ScopePolicy } from '../../src/scope/scope.types.js';
 import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
 
-// EXISTS — "is there a row over there that points back at this one".
-//
-// The questions it answers were previously two round trips: one read returning
-// a flat array of ids, a second filtering with `notIn` against it. That works
-// at three dozen rows and is wrong at three thousand.
-
 const text = (name: string, nullable = false) => ({ name, type: 'text', normalizedType: 'string' as const, nullable, primaryKey: false });
 
 const schema: DatabaseSchema = {
@@ -90,9 +84,6 @@ describe('exists — compilation', () => {
   });
 
   it('gives the inner table an alias that cannot collide with the outer one', () => {
-    // Both tables start with the same letter, which is exactly when a shared
-    // counter matters: a self-collision would silently correlate a table with
-    // itself and match every row.
     const sql = sqlFor({
       from: ['issues'],
       fields: ['issues.id'],
@@ -150,9 +141,6 @@ describe('exists — parameters', () => {
   });
 
   it('two parameterised subqueries do not collide on $1', () => {
-    // The failure this guards against: subqueries compiled independently and
-    // renumbered afterwards both start at $1, so the second one silently reads
-    // the first one's value.
     const compiled = compileQuery(
       resolve(
         {
@@ -190,8 +178,6 @@ describe('exists — scope', () => {
       fields: ['issues.id'],
       filter: { exists: { from: ['staff'], filter: { eq: ['staff.property_id', 'issues.property_id'] } } },
     };
-    // `staff` is unlisted under a default-deny policy — reaching it inside a
-    // subquery must not launder it.
     expect(() => checkScope(discoverEntities(hidden), tenant)).toThrow();
   });
 
@@ -206,10 +192,6 @@ describe('exists — scope', () => {
   });
 
   it('THE TABLE INSIDE THE EXISTS IS ROW-FILTERED TOO', () => {
-    // Access-checking the inner table is not enough. An EXISTS returns a
-    // boolean, but a boolean about somebody else's rows is still an answer
-    // about somebody else's rows — an uncorrelated exists over a scoped table
-    // would report whether ANY tenant has one.
     const resolved = resolve(dispatched, schema);
     scopeResolved(resolved, tenant);
     const sql = compileQuery(resolved).sql;

@@ -8,10 +8,6 @@ import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
 import type { Query } from '../../src/schemas/query.schema.js';
 import type { AnalysisConfig } from '../../src/engine/engine.types.js';
 
-// ═══════════════════════════════════════════════════════════════
-// Test schema fixture
-// ═══════════════════════════════════════════════════════════════
-
 const createTestSchema = (): DatabaseSchema => ({
   entities: [
     {
@@ -77,10 +73,6 @@ const defaultAnalysisConfig: AnalysisConfig = {
   rejectUnindexedFilters: false,
 };
 
-// ═══════════════════════════════════════════════════════════════
-// Resolver
-// ═══════════════════════════════════════════════════════════════
-
 describe('Resolver', () => {
   const schema = createTestSchema();
 
@@ -114,7 +106,6 @@ describe('Resolver', () => {
 
       expect(result.fields).toHaveLength(3);
       expect(result.fields.map((f) => f.column)).toEqual(['id', 'name', 'email']);
-      // All fields share the same alias
       const aliases = new Set(result.fields.map((f) => f.alias));
       expect(aliases.size).toBe(1);
     });
@@ -134,7 +125,6 @@ describe('Resolver', () => {
 
       const join = result.joins[0];
       expect(join).toBeDefined();
-      // orders.customer_id -> customers.id (orders belongsTo customers)
       expect(join?.fromColumns).toEqual(['customer_id']);
       expect(join?.toColumns).toEqual(['id']);
       expect(join?.toTable).toBe('customers');
@@ -211,7 +201,6 @@ describe('Resolver', () => {
 
       expect(result.filter).toBeDefined();
       expect(result.filter?.original).toEqual(dsl.filter);
-      // The field path orders.status should be resolved in resolvedPaths
       expect(result.filter?.resolvedPaths.has('orders.status')).toBe(true);
       const resolved = result.filter?.resolvedPaths.get('orders.status');
       expect(resolved?.alias).toBe('o1');
@@ -263,7 +252,6 @@ describe('Resolver', () => {
 
       expect(result.computes).toHaveLength(1);
       expect(result.computes[0]?.name).toBe('line_total');
-      // The paths used in compute should be added to aliasMap
       expect(result.aliasMap.has('order_items.quantity')).toBe(true);
       expect(result.aliasMap.has('order_items.unit_price')).toBe(true);
     });
@@ -288,7 +276,6 @@ describe('Resolver', () => {
       expect(result.aggregates[1]?.name).toBe('total_amount');
       expect(result.groupBy).toHaveLength(1);
       expect(result.groupBy[0]?.column).toBe('status');
-      // sum path should be in aliasMap
       expect(result.aliasMap.has('orders.total')).toBe(true);
     });
   });
@@ -338,7 +325,6 @@ describe('Resolver', () => {
 
       const result = resolve(dsl, schema);
 
-      // The derived table exposes the column under its alias, not the raw name.
       expect(result.fields[0]?.column).toBe('cust');
     });
 
@@ -355,12 +341,10 @@ describe('Resolver', () => {
       };
 
       const resolved = resolve(dsl, schema);
-      // Subquery sources are never FK-joined, so no join is discovered.
       expect(resolved.joins).toHaveLength(0);
       expect(resolved.sources).toHaveLength(2);
 
       const compiled = compileQuery(resolved);
-      // First source in FROM, the rest cross-joined (single-row × single-row = one row).
       expect(compiled.sql).toContain('FROM (');
       expect(compiled.sql).toContain('CROSS JOIN (');
       expect(compiled.sql).toContain('c.n AS "customers"');
@@ -396,16 +380,11 @@ describe('Resolver', () => {
       const result = resolve(dsl, schema);
 
       expect(result.sort).toHaveLength(1);
-      // Computed field sorts are stored as string aliases, not ResolvedField
       expect(result.sort[0]?.field).toBe('line_total');
       expect(result.sort[0]?.dir).toBe('desc');
     });
   });
 });
-
-// ═══════════════════════════════════════════════════════════════
-// Analyzer
-// ═══════════════════════════════════════════════════════════════
 
 describe('Analyzer', () => {
   const schema = createTestSchema();
@@ -423,7 +402,6 @@ describe('Analyzer', () => {
   });
 
   it('returns error when nesting depth exceeds the limit', () => {
-    // Create a deeply nested subquery: level 0 -> level 1 -> level 2
     const dsl: Query = {
       from: [
         {
@@ -457,14 +435,12 @@ describe('Analyzer', () => {
   });
 
   it('returns error for cartesian product when rejectCartesianProducts is true', () => {
-    // Manually construct a resolved query with two entity sources but no joins
     const dsl: Query = {
       from: ['customers'],
       fields: ['customers.id'],
     };
     const resolved = resolve(dsl, schema);
 
-    // Inject a second entity source without a join to simulate cartesian product
     const ordersEntity = schema.entities.find((e) => e.name === 'orders');
     resolved.sources.push({
       alias: 'o1',
@@ -526,14 +502,9 @@ describe('Analyzer', () => {
     const resolved = resolve(dsl, schema);
     const result = analyze(resolved, defaultAnalysisConfig);
 
-    // customers.name is not in any index
     expect(result.warnings.some((w) => w.toLowerCase().includes('unindexed'))).toBe(true);
   });
 });
-
-// ═══════════════════════════════════════════════════════════════
-// Compiler
-// ═══════════════════════════════════════════════════════════════
 
 describe('Compiler', () => {
   const schema = createTestSchema();
@@ -564,12 +535,10 @@ describe('Compiler', () => {
     expect(compiled.sql).toContain('JOIN customers AS c1');
     expect(compiled.sql).toContain('ON');
     expect(compiled.sql).toContain('customer_id');
-    // Non-nullable FK → inner join (a null can't occur, LEFT would be noise).
     expect(compiled.sql).not.toContain('LEFT JOIN');
   });
 
   it('compiles a LEFT JOIN when the referencing FK column is nullable', () => {
-    // A null FK must never silently drop the referencing row from a read.
     const nullableFk = createTestSchema();
     const orders = nullableFk.entities.find((e) => e.name === 'orders');
     const fk = orders?.fields.find((f) => f.name === 'customer_id');
@@ -641,7 +610,6 @@ describe('Compiler', () => {
     const compiled = compileQuery(resolved);
 
     expect(compiled.sql).toContain('AS "line_total"');
-    // The multiply expression compiles to (a * b)
     expect(compiled.sql).toContain('*');
     expect(compiled.sql).toContain('o1.quantity');
     expect(compiled.sql).toContain('o1.unit_price');
@@ -789,10 +757,6 @@ describe('Compiler', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// Full pipeline (resolve -> analyze -> compile)
-// ═══════════════════════════════════════════════════════════════
-
 describe('Full pipeline', () => {
   const schema = createTestSchema();
 
@@ -809,10 +773,8 @@ describe('Full pipeline', () => {
     const analysis = analyze(resolved, defaultAnalysisConfig);
     const compiled = compileQuery(resolved);
 
-    // Analysis should pass cleanly
     expect(analysis.errors).toHaveLength(0);
 
-    // SQL should contain all expected clauses
     expect(compiled.sql).toContain('SELECT');
     expect(compiled.sql).toContain('o1.id AS "id"');
     expect(compiled.sql).toContain('o1.total AS "total"');
@@ -825,7 +787,6 @@ describe('Full pipeline', () => {
     expect(compiled.sql).toContain('ORDER BY');
     expect(compiled.sql).toContain('LIMIT 50');
 
-    // Param slot should reference the context filter
     expect(compiled.paramSlots).toHaveLength(1);
     expect(compiled.paramSlots[0]?.key).toBe('statusFilter');
   });
@@ -869,7 +830,6 @@ describe('Full pipeline', () => {
     const compiled = compileQuery(resolved);
 
     expect(analysis.errors).toHaveLength(0);
-    // No aggregate-without-groupBy warning because groupBy is provided
     expect(analysis.warnings.filter((w) => w.includes('groupBy'))).toHaveLength(0);
 
     expect(compiled.sql).toContain('COUNT(*)');
@@ -897,7 +857,6 @@ describe('Full pipeline', () => {
 
     expect(analysis.errors).toHaveLength(0);
 
-    // Verify SQL structure order: SELECT ... FROM ... JOIN ... WHERE ... ORDER BY ... LIMIT
     const selectIdx = compiled.sql.indexOf('SELECT');
     const fromIdx = compiled.sql.indexOf('FROM');
     const joinIdx = compiled.sql.indexOf('JOIN');
@@ -913,20 +872,12 @@ describe('Full pipeline', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// Context-driven sort (reserved sortBy / sortDir keys)
-// ═══════════════════════════════════════════════════════════════
-
 describe('Context-driven sort', () => {
   const schema = createTestSchema();
 
   it('applySortContext leads with the context column and keeps the literal sort behind it', () => {
     const dsl: Query = { from: ['orders'], fields: ['orders.id'], sort: [{ field: 'orders.created_at', dir: 'asc' }] };
     const out = applySortContext(dsl, { sortBy: 'orders.total', sortDir: 'desc' });
-    // It used to REPLACE. That quietly un-totalled any query whose trailing
-    // sort key was there to break ties — a keyset page ordered by (name, id)
-    // became ordered by name alone, and two rows sharing a name could straddle
-    // a page boundary and never be reached. A trailing key is not decoration.
     expect(out.sort).toEqual([
       { field: 'orders.total', dir: 'desc' },
       { field: 'orders.created_at', dir: 'asc' },

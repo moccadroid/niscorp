@@ -4,10 +4,6 @@ import { applyScope, checkScope, VexScopeError } from '../../src/scope/apply.js'
 import type { Query } from '../../src/schemas/query.schema.js';
 import type { ScopePolicy } from '../../src/scope/scope.types.js';
 
-// ───────────────────────────────────────────────────────────────
-// discoverEntities
-// ───────────────────────────────────────────────────────────────
-
 describe('discoverEntities', () => {
   it('discovers entities from from (string sources)', () => {
     const dsl: Query = { from: ['users', 'orders'], fields: ['users.id'] };
@@ -191,9 +187,6 @@ describe('discoverEntities', () => {
     };
     const entities = discoverEntities(dsl);
     expect(entities.has('orders')).toBe(true);
-    // The alias is a derived relation, not a table — it must NOT surface as
-    // an entity (under default-deny it would be undeniable-to-list). The
-    // subquery's real table is what gets scoped.
     expect(entities.has('sub')).toBe(false);
   });
 
@@ -228,10 +221,6 @@ describe('discoverEntities', () => {
     expect(entities.size).toBeGreaterThanOrEqual(2);
   });
 });
-
-// ───────────────────────────────────────────────────────────────
-// applyScope
-// ───────────────────────────────────────────────────────────────
 
 describe('applyScope', () => {
   const baseDsl: Query = {
@@ -285,11 +274,6 @@ describe('applyScope', () => {
     expect(result.filter).toBeUndefined();
   });
 
-  // Row-rule PLACEMENT is no longer a DSL concern — it needs join kinds, which
-  // only the resolver knows. Those assertions live in scope-placement.test.ts,
-  // against the compiled SQL, which is the only place the distinction between
-  // a WHERE and an ON clause is observable at all.
-
   it('does not mutate the original DSL', () => {
     const original: Query = {
       from: ['users'],
@@ -306,14 +290,7 @@ describe('applyScope', () => {
   });
 });
 
-// ───────────────────────────────────────────────────────────────
-// Subquery aliases are derived relations, not entities
-// ───────────────────────────────────────────────────────────────
-
 describe('discoverEntities — subquery aliases', () => {
-  // The sidebar-counts shape: per-table COUNT(*) subqueries cross-joined,
-  // outer fields referencing the ALIASES (c.n / t.n). The aliases must not
-  // surface as entities; the inner real tables must.
   const counts: Query = {
     from: [
       { as: 'c', query: { from: ['contacts'], aggregate: { n: { count: '*' } } } },
@@ -338,8 +315,6 @@ describe('discoverEntities — subquery aliases', () => {
         tasks: { read: [{ match: 'assignee_id', to: 'userId' }] },
       },
     };
-    // Nothing throws on the aliases 'c'/'t' — they are not tables. The tasks
-    // rule itself is placed at resolution; see scope-placement.test.ts.
     expect(() => checkScope(discoverEntities(counts), policy)).not.toThrow();
   });
 

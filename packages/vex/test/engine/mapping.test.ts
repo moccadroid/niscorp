@@ -7,12 +7,6 @@ import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
 import type { ResolvedQuery } from '../../src/engine/engine.types.js';
 import type { Query } from '../../src/schemas/query.schema.js';
 
-// Vex runs the cached Prism IR ONCE and returns its output verbatim — the
-// mapping, not Vex, owns the output shape. The request shape picks the envelope:
-// an ARRAY shape maps over the whole row set (`$.result` is the array), a
-// non-array shape maps the single (first) row (`$.result` is that row, no
-// `[0]`). These tests pin that contract: the engine no longer forces `Row[]`.
-
 const TEST_SCHEMA: DatabaseSchema = {
   entities: [
     {
@@ -55,10 +49,6 @@ const makeAdapter = (rows: Row[]): DatabaseAdapter => ({
   },
 });
 
-// Seed the cache with the DSL + a compiled mapping IR under a NAMED
-// fingerprint (the seed pattern), so execute() takes the replay path
-// (no LLM) and replays the mapping over the whole row set. The stored
-// `shape` drives the array-vs-single envelope on replay.
 const FP = 'test/mapping';
 
 const makeEngine = async (shape: unknown, mapping: unknown): Promise<QueryEngine> => {
@@ -99,8 +89,6 @@ describe('Whole-set Prism mapping', () => {
   });
 
   it('returns a single object when the shape is an object (maps the first row)', async () => {
-    // An object shape → Vex hands Prism the single (first) row, so the mapping
-    // reads `$.result.field` — no `[0]`.
     const shape = { id: '', name: '' };
     const engine = await makeEngine(shape, {
       id: { $ref: '$.result.id' },

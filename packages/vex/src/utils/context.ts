@@ -1,9 +1,5 @@
 import type { ContextContract, ParamSlot } from '../adapters/adapter.types.js';
 
-// ───────────────────────────────────────────────────────────────
-// Validation context builder
-// ───────────────────────────────────────────────────────────────
-
 const defaultForType = (type: ParamSlot['type']): unknown => {
   if (type === 'string') return '';
   if (type === 'number') return 0;
@@ -19,16 +15,11 @@ export const buildValidationContext = (contract: ContextContract): Record<string
   for (const key of Object.keys(contract)) {
     const slot = contract[key];
     if (slot === undefined) continue;
-    // Skip semantic slots — handled separately by the test path
     if (slot.kind === 'semantic') continue;
     ctx[key] = defaultForType(slot.type);
   }
   return ctx;
 };
-
-// ───────────────────────────────────────────────────────────────
-// Parameter resolution
-// ───────────────────────────────────────────────────────────────
 
 export const resolveParams = async (
   slots: ParamSlot[],
@@ -49,7 +40,6 @@ export const resolveParams = async (
       continue;
     }
 
-    // kind === 'semantic'
     if (embed === undefined) {
       throw new Error(`Semantic parameter "${slot.key}" requires an embed function`);
     }

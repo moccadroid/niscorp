@@ -10,14 +10,11 @@ export type CompiledQuery = {
 export type ParamSlot = {
   key: string;
   kind: 'context' | 'scope' | 'semantic';
-  // `json` binds as a JSON string (insertEach items) — the mutation engine
-  // stringifies it so drivers don't turn a JS array into an ARRAY literal.
   type: 'string' | 'number' | 'boolean' | 'string[]' | 'number[]' | 'json';
   dimensions?: number;
-  // The value is written into a json/jsonb COLUMN: an array or object binds as
-  // its JSON text. Left to a driver, a JS array becomes a postgres ARRAY literal
-  // — `[]` arrives as '{}', which jsonb reads as an OBJECT — and PGlite, which
-  // does not, cannot show it.
+  // The value goes into a json/jsonb column and binds as its JSON text. Left to
+  // a driver, a JS array becomes a Postgres ARRAY literal: `[]` arrives as '{}',
+  // which jsonb reads as an object. PGlite does not do this and cannot show it.
   encode?: 'json';
 };
 
@@ -31,14 +28,7 @@ export type BoundParams = unknown[];
 export type Row = Record<string, unknown>;
 
 export type IntrospectOptions = {
-  // Only these tables. An allow-list, so a host that knows its surface can
-  // name it exactly.
   entities?: string[];
-  // Everything BUT these. The shape a host wants when it does not author a
-  // table list on principle but does own some tables that are not
-  // application data — an engine's own bookkeeping, a migration journal.
-  // Without it those tables introspect into the grantable set and become
-  // strings somebody can be granted `.read` on.
   exclude?: string[];
   schema?: string;
 };
@@ -49,9 +39,7 @@ export type DatabaseAdapter = {
   compile: (resolved: ResolvedQuery) => CompiledQuery;
   execute: (query: CompiledQuery, params: BoundParams) => Promise<Row[]>;
   capabilities: AdapterCapabilities;
-  // Bound every later read to `ms` (0: unbounded), and say how the database
-  // enforces it. Called once by the engine at introspect. An adapter without
-  // it runs reads unbounded.
+  // `ms` of 0 leaves reads unbounded.
   limitReads?: (ms: number) => Promise<'connection' | 'statement' | 'unenforced'>;
 };
 

@@ -17,17 +17,12 @@ import type {
 import { VexError } from '../errors.js';
 import { isFieldPathShape, isIdentifier } from '../schemas/identifier.schema.js';
 
-// ═══════════════════════════════════════════════════════════════
-// Levenshtein distance for "did you mean?" suggestions
-// ═══════════════════════════════════════════════════════════════
-
 const levenshtein = (a: string, b: string): number => {
   const la = a.length;
   const lb = b.length;
   if (la === 0) return lb;
   if (lb === 0) return la;
 
-  // Two-row approach to save memory
   let prev = Array.from({ length: lb + 1 }, (_, i) => i);
   let curr = new Array<number>(lb + 1);
 
@@ -56,16 +51,11 @@ const findClosest = (target: string, candidates: string[]): string | undefined =
       best = c;
     }
   }
-  // Only suggest if reasonably close
   if (bestDist <= Math.max(3, Math.ceil(target.length / 2))) {
     return best;
   }
   return undefined;
 };
-
-// ═══════════════════════════════════════════════════════════════
-// Alias generation
-// ═══════════════════════════════════════════════════════════════
 
 type AliasCounter = Map<string, number>;
 
@@ -76,10 +66,6 @@ const generateAlias = (name: string, counter: AliasCounter): string => {
   counter.set(prefix, next);
   return `${prefix}${next}`;
 };
-
-// ═══════════════════════════════════════════════════════════════
-// Entity & field lookup
-// ═══════════════════════════════════════════════════════════════
 
 const findEntity = (name: string, schema: DatabaseSchema): EntitySchema => {
   const found = schema.entities.find((e) => e.name === name);
@@ -109,13 +95,6 @@ const findField = (fieldName: string, entity: EntitySchema): FieldSchema => {
   );
 };
 
-// ═══════════════════════════════════════════════════════════════
-// Path parsing
-// ═══════════════════════════════════════════════════════════════
-
-// Both halves are names, so both are held to the name grammar — a field path
-// that resolves is a column the schema has, and one that does not is refused
-// here rather than reaching SQL as text.
 const parsePath = (path: string): { entity: string; field: string } => {
   if (!isFieldPathShape(path)) {
     throw new VexError(
@@ -130,19 +109,14 @@ const parsePath = (path: string): { entity: string; field: string } => {
   };
 };
 
-// A name the author chose — an output alias, a compute or aggregate key, a
-// subquery alias — becomes SQL text, so it must be a name and nothing else.
-// The schema says the same thing; this says it for a DSL that skipped the
-// schema (`engine.compile`, `engine.test`).
+// An authored name (an output alias, a compute or aggregate key, a subquery
+// alias) becomes SQL text. The schema holds it to the same grammar; this holds
+// a DSL that skipped the schema (`engine.compile`, `engine.test`).
 const assertName = (name: string, what: string): void => {
   if (!isIdentifier(name)) {
     throw new VexError('invalid_dsl', `Invalid ${what} "${name}": letters, digits and underscores, not starting with a digit.`);
   }
 };
-
-// ═══════════════════════════════════════════════════════════════
-// Join discovery
-// ═══════════════════════════════════════════════════════════════
 
 const findJoinBetween = (
   fromEntity: EntitySchema,
@@ -150,11 +124,9 @@ const findJoinBetween = (
   fromAlias: string,
   toAlias: string,
 ): ResolvedJoin | undefined => {
-  // Check if fromEntity has a relation pointing to toEntity. The FK columns
-  // live on the referencing side — when ANY of them is nullable, the join is
-  // LEFT so a null never silently drops the referencing row. Any, not the
-  // first: a composite key is MATCH SIMPLE by default, unenforced as a whole
-  // once one column is null, so the row exists with no counterpart to join.
+  // LEFT when any of this side's join columns is nullable, so a null never
+  // drops its row. Any of them: a composite foreign key is MATCH SIMPLE by
+  // default, unenforced once one column is null.
   for (const rel of fromEntity.relations) {
     if (rel.entity === toEntity.name) {
       const fkNullable = rel.localFields.some(
@@ -171,8 +143,6 @@ const findJoinBetween = (
     }
   }
 
-  // Check reverse: toEntity has a relation pointing to fromEntity — a
-  // one-to-many expansion (rows multiply per child), inner by design.
   for (const rel of toEntity.relations) {
     if (rel.entity === fromEntity.name) {
       return {
@@ -189,10 +159,6 @@ const findJoinBetween = (
   return undefined;
 };
 
-// ═══════════════════════════════════════════════════════════════
-// Filter path resolution
-// ═══════════════════════════════════════════════════════════════
-
 type PathResolution = { alias: string; column: string; schema: FieldSchema };
 type EntityLookup = Map<string, { entity: EntitySchema; alias: string }>;
 
@@ -205,7 +171,6 @@ const resolveFieldPath = (
   const lookup = entityLookup.get(parsed.entity);
 
   if (lookup === undefined) {
-    // Check if it's a known entity that's not in from
     const entityExists = schema.entities.some((e) => e.name === parsed.entity);
     if (entityExists) {
       throw new VexError(
@@ -237,9 +202,6 @@ const resolveFieldPath = (
   };
 };
 
-// In a VALUE position, a string is a column exactly when it is shaped like one;
-// anything else is a literal. (In a FIELD position there is no such choice —
-// see resolveFilterFieldPath.)
 const isFieldPath = isFieldPathShape;
 
 const collectFilterPaths = (
@@ -247,11 +209,6 @@ const collectFilterPaths = (
   entityLookup: EntityLookup,
   schema: DatabaseSchema,
   resolvedPaths: Map<string, PathResolution>,
-  // Both optional for a caller that structurally cannot meet an `exists`
-  // (aggregate arguments). The filter path AND the compute-case path pass
-  // them, so an exists resolves identically wherever a condition may sit —
-  // which is what lets a derived standing ask "do they hold a subscription?"
-  // from inside a computed CASE.
   existsOut?: Map<object, ResolvedExists>,
   aliasCounter?: AliasCounter,
 ): void => {
@@ -296,11 +253,8 @@ const collectFilterPaths = (
     return;
   }
 
-  // An EXISTS resolves as its own little query, and is recorded against the
-  // node so the compiler can find it again. Its sources are added to a lookup
-  // LAYERED OVER the outer one: an inner path resolves to the inner alias, and
-  // anything the inner filter mentions that the subquery does not read falls
-  // through to the outer query — which is exactly what a correlation is.
+  // The inner lookup is layered over the outer one: a path the subquery does
+  // not own resolves to the outer query, and that is the correlation.
   if ('exists' in filter) {
     if (existsOut === undefined || aliasCounter === undefined) return;
     const inner: EntityLookup = new Map(entityLookup);
@@ -311,9 +265,8 @@ const collectFilterPaths = (
 
     for (const name of filter.exists.from) {
       const entity = findEntity(name, schema);
-      // The alias counter is SHARED with the outer query, so an inner `rooms`
-      // can never take the same alias as an outer one and quietly correlate a
-      // table with itself.
+      // The alias counter is shared with the outer query, so an inner `rooms`
+      // never takes an outer one's alias and correlates a table with itself.
       const alias = generateAlias(name, aliasCounter);
       inner.set(name, { entity, alias });
       innerSources.push({ alias, entity, table: entity.table });
@@ -343,8 +296,6 @@ const collectFilterPaths = (
       collectFilterPaths(filter.exists.filter, inner, schema, innerPaths, existsOut, aliasCounter);
       innerFilter = { original: filter.exists.filter, resolvedPaths: innerPaths };
       for (const [path, res] of innerPaths) {
-        // Only paths the SUBQUERY owns go in its map; the rest are the outer
-        // query's and resolve there.
         const owner = path.slice(0, path.indexOf('.'));
         if (filter.exists.from.includes(owner)) innerAliasMap.set(path, `${res.alias}.${res.column}`);
         else resolvedPaths.set(path, res);
@@ -384,7 +335,6 @@ const collectFilterPaths = (
     return;
   }
 
-  // Resolved away before the pipeline — see engine/optional.ts.
   if ('optional' in filter) refuseOptional('field resolution');
 };
 
@@ -395,10 +345,6 @@ const resolveFilterFieldPath = (
   resolvedPaths: Map<string, PathResolution>,
 ): void => {
   if (resolvedPaths.has(path)) return;
-  // A FIELD position (`in`, `like`, `isNull`, `semantic`, …) holds a column and
-  // nothing else. It resolves or the query is refused — it used to return
-  // quietly for a string without a dot, and the compiler then pasted that
-  // string into the statement verbatim.
   const { resolved } = resolveFieldPath(path, entityLookup, schema);
   resolvedPaths.set(path, { alias: resolved.alias, column: resolved.column, schema: resolved.schema });
 };
@@ -413,10 +359,6 @@ const resolveFilterFieldOrValue = (
     resolveFilterFieldPath(fov, entityLookup, schema, resolvedPaths);
   }
 };
-
-// ═══════════════════════════════════════════════════════════════
-// Semantic filter extraction
-// ═══════════════════════════════════════════════════════════════
 
 const extractSemantic = (
   filter: Filter,
@@ -455,10 +397,6 @@ const extractSemantic = (
   return undefined;
 };
 
-// ═══════════════════════════════════════════════════════════════
-// Main resolver
-// ═══════════════════════════════════════════════════════════════
-
 export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
   const aliasCounter: AliasCounter = new Map();
   const entityLookup: EntityLookup = new Map();
@@ -466,7 +404,6 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
   const sources: ResolvedSource[] = [];
   const joins: ResolvedJoin[] = [];
 
-  // ─── Resolve sources ───────────────────────────────────────
   const entitySources: Array<{ entity: EntitySchema; alias: string }> = [];
 
   for (const source of dsl.from) {
@@ -478,16 +415,10 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
       sources.push({ alias, entity, table: entity.table });
       entitySources.push({ entity, alias });
     } else {
-      // Subquery source — after the typeof string check, source is narrowed
       assertName(source.as, 'subquery alias');
       const subResolved = resolve(source.query, schema);
       const alias = source.as;
 
-      // Expose the subquery's OUTPUT columns as a synthetic entity, so the
-      // outer query can reference them as `alias.field`. That's every selected
-      // field (under its output name — `as` if aliased), plus every compute and
-      // aggregate alias. Without the aggregate outputs, a cross-joined count
-      // subquery's `alias.n` would not resolve.
       const synthField = (name: string, normalizedType: NormalizedType): FieldSchema => ({
         name,
         type: normalizedType,
@@ -513,13 +444,11 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
     }
   }
 
-  // ─── Discover joins ────────────────────────────────────────
   for (let i = 1; i < entitySources.length; i++) {
     const prev = entitySources[i - 1];
     const curr = entitySources[i];
     if (prev === undefined || curr === undefined) continue;
 
-    // Try to find a join path from any previously seen entity to current
     let joinFound = false;
     for (let j = 0; j < i; j++) {
       const earlier = entitySources[j];
@@ -541,9 +470,6 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
     }
   }
 
-  // ─── Resolve fields ────────────────────────────────────────
-  // `fields` is optional (an aggregate-only query selects none); an entry may be
-  // a bare `entity.field` or `{ field, as }`, where `as` overrides the output key.
   const fields: ResolvedField[] = [];
   for (const ref of dsl.fields ?? []) {
     const path = typeof ref === 'string' ? ref : ref.field;
@@ -553,7 +479,6 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
     aliasMap.set(path, `${resolved.alias}.${resolved.column}`);
   }
 
-  // ─── Resolve filter ────────────────────────────────────────
   let resolvedFilter: ResolvedFilter | undefined;
   let semantic: ResolvedSemantic | undefined;
 
@@ -564,20 +489,13 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
     collectFilterPaths(dsl.filter, entityLookup, schema, resolvedPaths, existsMap, aliasCounter);
     resolvedFilter = { original: dsl.filter, resolvedPaths };
 
-    // Also populate aliasMap with filter paths
     for (const [path, res] of resolvedPaths) {
       aliasMap.set(path, `${res.alias}.${res.column}`);
     }
 
-    // Extract semantic filter if present
     semantic = extractSemantic(dsl.filter, entityLookup, schema);
   }
 
-  // ─── Resolve computes ──────────────────────────────────────
-  // The exists collector is the same map the filter fills: a computed CASE
-  // whose condition is an EXISTS (how a derived standing asks "do they hold a
-  // subscription?") resolves into the one flat map that scope placement and
-  // the compiler both walk, so an exists behaves identically wherever it sits.
   const computes: Array<{ name: string; expression: ComputeExpression }> = [];
   if (dsl.compute !== undefined) {
     for (const [name, expr] of Object.entries(dsl.compute)) {
@@ -589,7 +507,6 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
     }
   }
 
-  // ─── Resolve aggregates ────────────────────────────────────
   const aggregates: Array<{ name: string; expression: AggregateExpression }> = [];
   if (dsl.aggregate !== undefined) {
     for (const [name, expr] of Object.entries(dsl.aggregate)) {
@@ -601,7 +518,6 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
     }
   }
 
-  // ─── Resolve groupBy ───────────────────────────────────────
   const groupBy: ResolvedField[] = [];
   if (dsl.groupBy !== undefined) {
     for (const path of dsl.groupBy) {
@@ -611,7 +527,6 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
     }
   }
 
-  // ─── Resolve sort ──────────────────────────────────────────
   const sort: Array<{ field: ResolvedField | string; dir: 'asc' | 'desc' }> = [];
   if (dsl.sort !== undefined) {
     const computeNames = new Set(computes.map((c) => c.name));
@@ -621,10 +536,8 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
       const dir = entry.dir ?? 'asc';
 
       if (computeNames.has(entry.field) || aggregateNames.has(entry.field)) {
-        // Sort by computed/aggregate alias
         sort.push({ field: entry.field, dir });
       } else {
-        // Sort by entity.field
         const { resolved } = resolveFieldPath(entry.field, entityLookup, schema);
         aliasMap.set(entry.field, `${resolved.alias}.${resolved.column}`);
         sort.push({ field: resolved, dir });
@@ -648,10 +561,6 @@ export const resolve = (dsl: Query, schema: DatabaseSchema): ResolvedQuery => {
     ...(existsMap.size > 0 ? { existsMap } : {}),
   };
 };
-
-// ═══════════════════════════════════════════════════════════════
-// Compute/aggregate path resolution helpers
-// ═══════════════════════════════════════════════════════════════
 
 const resolveComputePaths = (
   expr: ComputeExpression,
@@ -692,8 +601,6 @@ const resolveComputePaths = (
 
   if ('case' in expr) {
     for (const when of expr.case.when) {
-      // Resolve field paths inside the condition filter — WITH the exists
-      // collector, so a condition may be an EXISTS like any filter may.
       const resolvedPaths = new Map<string, PathResolution>();
       collectFilterPaths(when.condition, entityLookup, schema, resolvedPaths, existsOut, aliasCounter);
       for (const [path, res] of resolvedPaths) {
@@ -718,16 +625,13 @@ const resolveAggregatePaths = (
     : ('min' in expr) ? expr.min
     : expr.max;
 
-  // COUNT(*) is special — no field path.
   if (arg === '*') return;
 
-  // sum/avg/min/max may take a compute expression — resolve the columns it refs.
   if (typeof arg !== 'string') {
     resolveComputePaths(arg, entityLookup, schema, aliasMap);
     return;
   }
 
-  // A field position: resolves or refuses, like a filter's.
   if (!aliasMap.has(arg)) {
     const { resolved } = resolveFieldPath(arg, entityLookup, schema);
     aliasMap.set(arg, `${resolved.alias}.${resolved.column}`);

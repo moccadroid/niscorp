@@ -4,11 +4,6 @@ import { createPglitePool } from '../../src/adapters/pglite/index.js';
 import { introspectPostgres } from '../../src/adapters/postgres/introspect.js';
 import { computeSchemaFingerprint } from '../../src/cache/hash.js';
 
-// A table's and a column's COMMENT is what its author says it means — the one
-// thing a query writer cannot get from a name. "members" does not say "the
-// people in the room"; a comment can. Read against a real database, and kept
-// out of the schema fingerprint: rewording a comment changes no query.
-
 const DDL = `
   CREATE TABLE members (member_id TEXT PRIMARY KEY, name TEXT NOT NULL, gone TEXT);
   ALTER TABLE members DROP COLUMN gone;
@@ -31,7 +26,7 @@ describe('introspection reads comments as descriptions', () => {
     const schema = await introspectPostgres(createPglitePool(db));
     const members = schema.entities.find((entity) => entity.name === 'members');
     expect(members?.description).toBe('The people in the room');
-    // after a dropped column, a column's position is not its attribute number
+    // `title` follows a dropped column: its position is not its attribute number.
     expect(members?.fields.find((field) => field.name === 'title')?.description).toBe('Their job title, as written on their card');
     expect(members?.fields.find((field) => field.name === 'name')?.description).toBeUndefined();
   });

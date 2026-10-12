@@ -10,19 +10,12 @@ import { handleQuery } from '../../src/handler.js';
 import type { CacheBackend, CacheEntry } from '../../src/cache/cache.types.js';
 import type { ScopePolicy } from '../../src/scope/scope.types.js';
 
-// ═══════════════════════════════════════════════════════════════
-// THE lastUsedAt STAMP, AT MOST ONCE PER TOUCH_EVERY_MS. A stamp rewrites the
-// entry; one on every replay made every read a write. What the stamp is for —
-// the sweep, discovery's "last used" — needs it to the minute, not the read.
-// ═══════════════════════════════════════════════════════════════
-
 const policy: ScopePolicy = { default: 'allow', entities: {} };
 
 const makeWorld = async () => {
   const db = new PGlite();
   await db.exec(`CREATE TABLE notes (id TEXT PRIMARY KEY, body TEXT NOT NULL); INSERT INTO notes VALUES ('n1', 'hello');`);
   const memory = createMemoryCache();
-  // Every write the cache takes after seeding, by key.
   const stamps: string[] = [];
   let counting = false;
   const cache: CacheBackend = {

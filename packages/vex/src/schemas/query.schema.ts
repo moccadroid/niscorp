@@ -19,15 +19,10 @@ export type SortEntry = z.infer<typeof SortEntrySchema>;
 
 export type Source = string | { as: string; query: Query };
 
-// A selected field: a bare `entity.field` path, or an aliased one whose output
-// key is `as` (so joined columns that would collide — three `name`s — get
-// distinct keys without a compute hack).
 export type FieldRef = string | { field: string; as: string };
 
 export type Query = {
   from: Source[];
-  // Optional: a query may select only aggregates (e.g. a bare `COUNT(*)`); the
-  // schema requires at least one of `fields` / `aggregate`.
   fields?: FieldRef[];
   filter?: Filter;
   compute?: Record<string, ComputeExpression>;

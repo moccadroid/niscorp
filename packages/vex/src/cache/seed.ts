@@ -6,51 +6,24 @@ import { lintMutation } from '../mutations/signature.js';
 import { canonicalText } from '../utils/canonical.js';
 import type { Refresh } from './cache.types.js';
 
-// ═══════════════════════════════════════════════════════════════
-// Seeding — authored entries → protected cache rows.
-//
-// The seeds ARE the API surface under the locked posture: every read and
-// write an app serves is a named, protected entry, replayed by fingerprint
-// (`{ fingerprint, context }` on the wire — definitions never travel).
-// This is the machinery every app used to hand-roll; the app authors the
-// ENTRIES (content), this compiles and stores them.
-//
-// Idempotent against a durable cache: a stored row that already matches
-// its authored definition is left untouched; anything else at that
-// fingerprint — edited, unprotected, regenerated, missing — converges to
-// the authored definition, protected. The code is the API surface; the
-// surviving rows are not. Protection keeps meaning what it means: a
-// drifted REQUEST still 409s — the seed path is the author it serves.
-// Mutations run the authoring lint every boot, edits included ("if it
-// boots, it's coherent" for writes).
-// ═══════════════════════════════════════════════════════════════
-
-// A read seed — vex's own cache row, minus what the seed derives: `mapping`
-// is uncompiled Prism (compiled to prism IR here; absent = identity, the
-// DSL already aliases columns to the shape's keys).
 export type SeedEntry = {
   fingerprint: string;
   intent?: string;
   shape?: unknown;
   dsl: Query;
   mapping?: unknown;
-  /** The reach this read requires whatever the caller holds — see `OkCacheEntry.reach`. */
   reach?: string;
-  /** When this read's answer is refreshed — see `Refresh`. Absent means 'snapshot'. */
   refresh?: Refresh;
 };
 
-// A write seed — the same idea, `kind: 'mutation'`.
 export type SeedMutation = {
   fingerprint: string;
   intent?: string;
   mutation: MutationDefinition;
-  /** The reach this write requires whatever the caller holds — see `MutationCacheEntry.reach`. */
   reach?: string;
 };
 
-// Stored definitions round-trip through jsonb, which reorders object keys —
-// equality is canonical (utils/canonical.ts).
+// jsonb reorders object keys, so stored definitions are compared in canonical form.
 const same = (a: unknown, b: unknown): boolean =>
   a === undefined || b === undefined ? a === b : canonicalText(a) === canonicalText(b);
 
@@ -81,11 +54,11 @@ export const seedCache = async (cache: CacheBackend, entries: readonly (SeedEntr
       continue;
     }
 
-    // Identity IR is seeded explicitly: a NULL mapping would make the reader
-    // fall through to the LLM mapper on every replay.
+    // The identity is seeded explicitly: an entry with no IR falls through to
+    // the LLM mapper on every replay.
     const prismIr = await compile(entry.mapping ?? { $ref: '$.result' });
-    // The IR stamps its compile time, so it is compared by meta.fingerprint —
-    // prism's hash of the compiled core — never by value.
+    // The IR stamps its compile time, so it is compared by meta.fingerprint,
+    // prism's hash of the compiled core.
     const current =
       existing?.kind === 'ok' &&
       existing.protected === true &&

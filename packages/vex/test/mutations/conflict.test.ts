@@ -9,16 +9,6 @@ import { VexScopeError } from '../../src/scope/apply.js';
 import type { DatabaseSchema } from '../../src/schemas/database.schema.js';
 import type { ScopePolicy } from '../../src/scope/scope.types.js';
 
-// ═══════════════════════════════════════════════════════════════
-// onConflict, $lookup, insertEach — the write grammar's three ways
-// past "one caller-shaped statement per row":
-//   onConflict  — the DATABASE arbitrates insert-vs-update, atomically
-//   $lookup     — a value read from another table, read-scoped
-//   insertEach  — one statement for a caller-sized list
-// ═══════════════════════════════════════════════════════════════
-
-// ─── Fixtures — the shape of the real use case (people/enrolment) ─
-
 const field = (name: string, normalizedType = 'string', primaryKey = false) => ({
   name,
   type: normalizedType,
@@ -60,8 +50,6 @@ const schema: DatabaseSchema = {
   ],
 };
 
-// Tenant boundary on memberships/slots; people globally writable; salaries
-// unreadable — the table a $lookup must never smuggle a value out of.
 const policy: ScopePolicy = {
   default: 'deny',
   entities: {
@@ -98,8 +86,6 @@ const fakeClient = (opts?: { rows?: unknown[] }) => {
 };
 
 const scope = { studioId: 'studio_1' };
-
-// ─── ON CONFLICT ────────────────────────────────────────────────
 
 describe('onConflict grammar', () => {
   it('parses DO UPDATE and DO NOTHING forms', () => {
@@ -167,7 +153,7 @@ describe('onConflict validation', () => {
     }
     expect(caught?.code).toBe('invalid_dsl');
     expect(caught?.message).toContain('(name)');
-    expect(caught?.message).toContain('(email)'); // the actual unique set is in the message
+    expect(caught?.message).toContain('(email)');
     expect(calls).toHaveLength(0);
   });
 
@@ -243,8 +229,6 @@ describe('onConflict scope', () => {
   });
 
   it('a match rule NOT in the target becomes a WHERE on the DO UPDATE half', async () => {
-    // memberships' boundary column is studio_id; conflict on the PK does not
-    // pin it, so the RLS boundary must land as ON CONFLICT ... WHERE.
     const { client, calls } = fakeClient();
     await executeMutation(
       client,
@@ -296,12 +280,7 @@ describe('onConflict signatures', () => {
   });
 });
 
-// ─── $lookup ────────────────────────────────────────────────────
-
 describe('$lookup', () => {
-  // Annotated, so the literal is CHECKED against the grammar rather than
-  // inferred into a looser shape of its own — unannotated, the `eq` pair widens
-  // to an array and the fixture stops being a mutation the engine would accept.
   const enroll: MutationDefinition = {
     op: 'insert' as const,
     table: 'memberships',
@@ -315,7 +294,6 @@ describe('$lookup', () => {
     const { client, calls } = fakeClient();
     await executeMutation(client, enroll, { context: { id: 'm1', email: 'a@b.c' }, scope, policy, schema });
     expect(calls[0]!.sql).toMatch(/\(SELECT id FROM people WHERE people\.email = \$\d+\)/);
-    // params bind in slot order: id, email, then the scope-pinned studio_id
     expect(calls[0]!.params).toEqual(['m1', 'a@b.c', 'studio_1']);
   });
 
@@ -369,8 +347,6 @@ describe('$lookup', () => {
     expect(requiredContextKeys(enroll)).toEqual(['email', 'id']);
   });
 });
-
-// ─── insertEach ─────────────────────────────────────────────────
 
 describe('insertEach', () => {
   const slots = {

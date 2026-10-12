@@ -15,17 +15,6 @@ import type { Mutation, MutationDefinition, CoreMutation, ResolvedMutation, Reso
 import { collectMutationContext, requiredContextKeys, returnedIn } from './signature.js';
 import type { ReturnedSource } from './signature.js';
 
-// ═══════════════════════════════════════════════════════════════
-// Mutation engine — the write pipeline. Validate (closed grammar, bounded
-// WHERE) → desugar → require context → scope (RLS + identity stamp) → check
-// columns → compile → execute. Every gate runs before a single statement
-// does. Reuses the read pipeline's own machinery for SQL and params
-// (compileFilter / compileFieldOrValue / resolveParams), so values bind as
-// SQL parameters exactly as they do for reads — never inlined.
-// ═══════════════════════════════════════════════════════════════
-
-// The database the writes run against — structural, so PGlite, a pg Pool
-// wrapper, or a test double all fit without vex importing any driver.
 export type MutationTx = {
   query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }>;
 };
@@ -33,7 +22,6 @@ export type MutationClient = MutationTx & {
   transaction?: <T>(fn: (tx: MutationTx) => Promise<T>) => Promise<T>;
 };
 
-// ─── Value guards ──────────────────────────────────────────────
 const isLookup = (v: unknown): v is LookupValue =>
   v !== null && typeof v === 'object' && !Array.isArray(v) && '$lookup' in v;
 const isItemRef = (v: unknown): v is ItemRef =>
@@ -54,18 +42,9 @@ const collectLookups = (m: ResolvedMutation): LookupValue['$lookup'][] => {
   return out;
 };
 
-// ─── Schema validation (anti-hallucination) ────────────────────
-// The engine already introspected for reads; reject an unknown table or a
-// written column not in it. A misauthored `contats` / `naem` fails closed,
-// before any SQL runs.
 const findEntity = (table: string, schema: DatabaseSchema) =>
   schema.entities.find((e) => e.table === table || e.name === table);
 
-// An ON CONFLICT whose target names no unique constraint never arrests
-// anything — the insert would simply throw on the real constraint, or worse,
-// never conflict at all. The schema knows the unique column sets (PK +
-// introspected unique indexes), so a mismatched target is an AUTHORING error,
-// caught before any SQL runs, with the real options in the message.
 const assertConflictTarget = (table: string, target: string[], entity: { fields: { name: string; primaryKey: boolean }[]; indexes: { fields: string[]; unique: boolean }[] }): void => {
   const uniqueSets = [
     entity.fields.filter((f) => f.primaryKey).map((f) => f.name),
@@ -82,11 +61,8 @@ const assertConflictTarget = (table: string, target: string[], entity: { fields:
   }
 };
 
-// Every column a write's filter names — field positions, and value positions
-// shaped like a column (the same rule the read compiler uses to tell a column
-// from a literal). A field position is collected whatever it looks like, so a
-// string that is not a column is refused by the check below instead of being
-// compiled.
+// A field position is collected whatever it looks like, so assertFilterColumns
+// refuses a string that is not a column instead of it being compiled.
 const filterColumns = (filter: Filter): string[] => {
   const out: string[] = [];
   const value = (v: unknown): void => {
@@ -117,17 +93,12 @@ const filterColumns = (filter: Filter): string[] => {
     if ('isNotNull' in f) return void out.push(f.isNotNull);
     if ('semantic' in f) return void out.push(f.semantic.field);
     if ('fuzzy' in f) return void out.push(f.fuzzy.field);
-    // `exists` and `optional` have no single-table meaning in a write; the
-    // compiler refuses both loudly.
+    // `exists` and `optional` are not walked: the compiler refuses both in a write.
   };
   walk(filter);
   return out;
 };
 
-// A write's filter reads ONE table — the one it writes, or the one a `$lookup`
-// reads — and every column it names must be that table's. This is what makes
-// the compiler's identity mapping below safe: nothing reaches it that the
-// schema does not have.
 const assertFilterColumns = (filter: Filter, table: string, schema: DatabaseSchema, where: string): void => {
   const entity = findEntity(table, schema);
   if (entity === undefined) throw new VexError('invalid_dsl', `Unknown table "${table}" in ${where}.`);
@@ -150,8 +121,6 @@ const assertWritableColumns = (m: ResolvedMutation, schema: DatabaseSchema): voi
   for (const c of cols) {
     if (!known.has(c)) throw new VexError('invalid_dsl', `Unknown column "${m.table}.${c}".`);
   }
-  // A lookup reads a real table and column, or fails closed like any other
-  // misauthored name.
   for (const l of collectLookups(m)) {
     const le = findEntity(l.from, schema);
     if (le === undefined) throw new VexError('invalid_dsl', `Unknown table "${l.from}" in $lookup.`);
@@ -167,9 +136,6 @@ const assertWritableColumns = (m: ResolvedMutation, schema: DatabaseSchema): voi
   }
 };
 
-// A `$returned` reads a real column of the table the earlier statement writes,
-// or fails closed before any SQL runs — the same refusal a misauthored `$lookup`
-// gets. (That table itself was already checked: it is another statement's.)
 const assertReturnedColumns = (refs: ReadonlyMap<string, ReturnedSource>, schema: DatabaseSchema): void => {
   for (const [ref, source] of refs) {
     if (findEntity(source.table, schema)?.fields.some((f) => f.name === source.column) !== true) {
@@ -178,21 +144,6 @@ const assertReturnedColumns = (refs: ReadonlyMap<string, ReturnedSource>, schema
   }
 };
 
-// ─── Scope — applied by the ENGINE, never authored in the DSL ──
-// The same `ScopePolicy` reads use, its write-phase rules applied AFTER the
-// entry is parsed — so identity/tenant binding can't be touched by a stored
-// or injected mutation. `write` is the UMBRELLA phase (grants + rules for
-// insert/update/delete); the specific phases refine it — an op is allowed
-// iff its specific phase or `write` exists, and its rules are the umbrella's
-// plus the specific's. Mechanics: a `set` writes its column from scope on
-// each column-writing op (insert values, update set) — delete writes no
-// columns, so it is structurally exempt, not special-cased. A `match` pins
-// its column on insert and ANDs a filter into update/delete WHERE (the RLS
-// boundary). No applicable phase (or unlisted table) falls to `default`:
-// deny throws, allow leaves the mutation ungoverned.
-// A `$lookup` READS its table, so the read-phase rules of THAT table apply —
-// a mutation entry is never a read-scope bypass. Match rules AND into the
-// lookup's WHERE; a table the principal cannot read refuses the whole write.
 const readMatchesFor = (table: string, policy: ScopePolicy): ScopeMatch[] => {
   const rule = policy.entities[table];
   if (rule === undefined) {
@@ -208,10 +159,6 @@ const readMatchesFor = (table: string, policy: ScopePolicy): ScopeMatch[] => {
   return rule.read;
 };
 
-// ONE SPELLING of the RLS boundary, for every place a match rule becomes a
-// WHERE — a `$lookup`'s filter, an ON CONFLICT DO UPDATE, an UPDATE and a
-// DELETE. Four copies of `{ eq: [...] }` is four places a new match shape has
-// to be remembered, and the one that was forgotten would be the hole.
 const boundaryOf = (table: string, r: ScopeMatch): Filter =>
   isSetMatch(r) ? { in: [`${table}.${r.match}`, { $scope: r.in }] } : { eq: [`${table}.${r.match}`, { $scope: r.to }] };
 
@@ -226,15 +173,11 @@ const scopeLookups = <V extends MutationValue | ItemRef>(cols: Record<string, V>
     for (const r of readMatchesFor(v.$lookup.from, policy)) {
       where = { and: [where, boundaryOf(v.$lookup.from, r)] };
     }
-    // A scoped lookup is still a lookup — the transform is type-preserving.
     out[k] = { $lookup: { ...v.$lookup, where } } as V;
   }
   return out;
 };
 
-// The gate every write passes: throws when denied, returns `undefined` when
-// the table is ungoverned (public / default allow), else the entity rule and
-// the applicable phase rules (umbrella + specific).
 type WriteGate = { rule: Extract<ScopePolicy['entities'][string], { read?: unknown }>; rules: readonly ScopeRule[] };
 
 const writeGate = (table: string, op: 'insert' | 'update' | 'delete', policy: ScopePolicy): WriteGate | undefined => {
@@ -253,13 +196,9 @@ const writeGate = (table: string, op: 'insert' | 'update' | 'delete', policy: Sc
   return { rule, rules: [...(rule.write ?? []), ...(specific ?? [])] };
 };
 
-// The shared insert-shaped half: lookups scoped, insert rules applied to the
-// values, and the ON CONFLICT half gated and governed as the UPDATE it is.
-// `set` rules stamp identity into the DO UPDATE SET; `match` rules whose
-// column the conflict target already pins are inherently satisfied (the
-// inserted, scope-pinned value must equal the existing row's for a conflict
-// to arise at all); any other `match` becomes a WHERE on the DO UPDATE half —
-// the RLS boundary again.
+// The ON CONFLICT half is governed as the UPDATE it is. A `match` on a column
+// of the conflict target gets no WHERE, on the reasoning that the insert pins
+// that column from scope and so conflicts only with a row holding the same value.
 const scopeInsertParts = <V extends MutationValue | ItemRef>(
   table: string,
   rawValues: Record<string, V>,
@@ -274,26 +213,15 @@ const scopeInsertParts = <V extends MutationValue | ItemRef>(
   if (gate === undefined) return { values, conflict };
 
   for (const r of gate.rules) {
-    // A WRITE'S SUBJECT IS ONE VALUE, AND THIS IS WHERE THAT IS ENFORCED.
-    //
-    // A `match` on an INSERT does not filter — there is no row yet — it WRITES
-    // the column, which is what makes "insert outside your boundary"
-    // unsayable rather than merely refused. A set has no single value to
-    // write, so there is no honest thing to do with one here.
-    //
-    // Throwing rather than picking, ignoring, or compiling a guard: a reach
-    // that covers several rows for READING must not silently become a reach
-    // that lets a caller CHOOSE which of them to write as. A write's subject
-    // comes from scope (one value) or through a `$lookup` whose own read
-    // rules the engine applies — never from a set the caller indexes into.
+    // A `match` on an INSERT writes the column, and a set has no single value
+    // to write. It throws rather than picks or ignores: a reach over several
+    // rows for reading must not let a caller choose which of them to write as.
     if ('match' in r && isSetMatch(r)) {
       throw new VexScopeError(
         table,
         `Scope rule for "${table}" is set-valued ("${r.match}" in "${r.in}") and cannot pin an INSERT — a write's subject must be a single value. Use a scalar match, or carry the subject in a $lookup whose own read rules bound it.`,
       );
     }
-    // A `set` writes identity; a scalar `match` pins the RLS boundary — on an
-    // INSERT both land in the values.
     values = { ...values, ['set' in r ? r.set : r.match]: { $scope: r.to } };
   }
 
@@ -329,17 +257,14 @@ const scopeMutation = (m: CoreMutation, policy: ScopePolicy): ResolvedMutation =
     const gate = writeGate(m.table, 'update', policy);
     if (gate !== undefined) {
       for (const r of gate.rules) {
-        // The column is written from scope on insert AND update alike.
         if ('set' in r) set = { ...set, [r.set]: { $scope: r.to } };
-        // RLS boundary on update — AND the scope filter into WHERE. A set is
-        // safe HERE, unlike on insert: the rows already exist and this only
-        // narrows which of them may be touched.
+        // A set-valued match is safe here, unlike on insert: it only narrows
+        // which existing rows may be touched.
         else where = { and: [where, boundaryOf(m.table, r)] };
       }
     }
     return { op: 'update', table: m.table, set, where };
   }
-  // delete — writes no columns, so `set` rules are structurally exempt.
   let where: Filter = m.where;
   const gate = writeGate(m.table, 'delete', policy);
   if (gate !== undefined) {
@@ -350,17 +275,6 @@ const scopeMutation = (m: CoreMutation, policy: ScopePolicy): ResolvedMutation =
   return { op: 'delete', table: m.table, where };
 };
 
-// ─── Compile (reuses the read pipeline's SQL + param machinery) ─
-// Only the INSERT/UPDATE/DELETE skeleton is assembled here; vex's
-// `compileFieldOrValue` / `compileFilter` fill the fragments and accumulate
-// the param slots, which `resolveParams` then binds. One catch: for a
-// comparison, vex quotes an unmapped `entity.field` as a STRING LITERAL (it
-// can't know it's a column). A single-table write has no resolver to build
-// the alias map, so we seed it ourselves — identity-mapping each `where`
-// field path to itself, which a single-table UPDATE/DELETE qualifies fine.
-//
-// `returned` records which slots are NOT the caller's to fill: slot index →
-// the `table.column` an earlier statement's row supplies (see compileValue).
 type Compiled = { sql: string; slots: ParamSlot[]; returned: ReadonlyMap<number, string> };
 type WriteContext = CompilationContext & { returned: Map<number, string> };
 
@@ -372,22 +286,15 @@ const newCtx = (): WriteContext => ({
   returned: new Map(),
 });
 
-// Every column the filter names maps to itself — a single-table statement
-// qualifies `table.column` fine. Only ever called on a filter
-// `assertFilterColumns` has already held to the table's real columns.
+// A single-table statement needs no aliases, so each path maps to itself. Only
+// for a filter assertFilterColumns has already held to the table's real columns.
 const indexFilterFields = (filter: Filter, aliasMap: Map<string, string>): void => {
   for (const path of filterColumns(filter)) aliasMap.set(path, path);
 };
 
-// A value that may be a `$lookup` compiles to a scalar subquery INLINE, into
-// the parent's own parameter counter and slot list — the same no-renumbering
-// rule EXISTS follows on the read side.
-//
-// A `$returned` compiles to an ordinary parameter — the statement text is the
-// one a `$context` value would give. What differs is who fills it: the slot is
-// recorded in `ctx.returned`, and the run loop binds it from the earlier
-// statement's row AFTER the caller's values are resolved, so nothing a request
-// sends can stand in for it. The slot's own key is never read.
+// A `$returned` slot is declared like a `$context` one, but the run loop binds
+// it from the earlier statement's row after the caller's values are resolved,
+// so nothing a request sends can stand in for it.
 const compileValue = (v: MutationValue, ctx: WriteContext): string => {
   if (isLookup(v)) {
     indexFilterFields(v.$lookup.where, ctx.aliasMap);
@@ -403,9 +310,6 @@ const compileValue = (v: MutationValue, ctx: WriteContext): string => {
   return compileFieldOrValue(v, ctx);
 };
 
-// A value written into a json/jsonb column: the slot its value binds through
-// is marked, so the array or object goes over the wire as JSON text — the
-// caller's, or one read back from an earlier statement's row.
 const compileColumnValue = (table: string, column: string, v: MutationValue, ctx: WriteContext, schema: DatabaseSchema): string => {
   const before = ctx.paramSlots.length;
   const sql = compileValue(v, ctx);
@@ -430,8 +334,6 @@ const compileConflict = (m: { table: string; onConflict?: ResolvedOnConflict }, 
   return ` ON CONFLICT (${c.target.join(', ')}) DO UPDATE SET ${sets.join(', ')}${where}`;
 };
 
-// jsonb `->>` yields text; the cast restores the column's type so the INSERT
-// binds like any other. `json` columns keep `->` (stays jsonb, no cast).
 const ITEM_CAST: Record<string, string> = {
   number: 'numeric',
   boolean: 'boolean',
@@ -461,9 +363,6 @@ const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema): Compiled 
         const raw = `(item.value->>${quoteLiteral(v.$item)})`;
         return cast === undefined ? raw : `${raw}::${cast}`;
       }
-      // A reference headed for a json column binds as JSON text here as it
-      // does in a plain insert. (A `$context` constant on this path is not
-      // marked, and never was.)
       return isReturned(v) ? compileColumnValue(m.table, col, v, ctx, schema) : compileValue(v, ctx);
     });
     ctx.paramCounter.value += 1;
@@ -486,9 +385,6 @@ const compileMutation = (m: ResolvedMutation, schema: DatabaseSchema): Compiled 
   return { sql: `DELETE FROM ${m.table} WHERE ${where} RETURNING *`, slots: ctx.paramSlots, returned: ctx.returned };
 };
 
-// ─── Desugar (sugar → core) ────────────────────────────────────
-// Rewrite each sugar op to a core insert/update/delete BEFORE context/scope/
-// validate/compile, so those stages only ever see the three primitives.
 const SUGAR: { [K in Mutation['op']]?: (m: Extract<Mutation, { op: K }>, context: Record<string, unknown>) => CoreMutation } = {
   upsert: (m, context) => {
     const keyed = context[m.key] !== undefined && context[m.key] !== '';
@@ -503,12 +399,6 @@ const desugarMutation = (m: Mutation, context: Record<string, unknown>): CoreMut
   return rewrite === undefined ? (m as CoreMutation) : rewrite(m, context);
 };
 
-// ─── Ask, without running ──────────────────────────────────────
-// Why a stored write does not fit a schema: one sentence for each refusal of
-// the two column gates above (what a statement writes, and what it reads from
-// an earlier one), none when it fits. Nothing runs. An upsert is asked as both
-// statements it can become. Scope is not applied — what a policy stamps or
-// bounds is checked where the principal is known.
 export const mutationMisfits = (def: MutationDefinition, schema: DatabaseSchema): string[] => {
   const reasons: string[] = [];
   const list = Array.isArray(def) ? def : [def];
@@ -529,19 +419,13 @@ export const mutationMisfits = (def: MutationDefinition, schema: DatabaseSchema)
   return reasons;
 };
 
-// ─── Execute ───────────────────────────────────────────────────
 export type MutationContext = {
-  context: Record<string, unknown>; // dynamic values for `$context` refs (the caller's data)
-  scope: ScopeValues; // server-injected values for `$scope` refs (identity / tenant)
+  context: Record<string, unknown>;
+  scope: ScopeValues;
   policy: ScopePolicy;
   schema: DatabaseSchema;
 };
 
-// One executed statement, named by what it did: the table, the op that
-// actually ran (post-desugar — an upsert reports the branch it took, an
-// insertEach reports 'insert' because that is what it is), and the rows the
-// database returned. This is the grain a write observer needs: a two-
-// statement mutation is two writes, each with its own rows.
 export type WriteResult = { table: string; op: 'insert' | 'update' | 'delete'; rows: Row[] };
 
 export const executeWrites = async (client: MutationClient, def: MutationDefinition, mctx: MutationContext): Promise<WriteResult[]> => {
@@ -549,8 +433,6 @@ export const executeWrites = async (client: MutationClient, def: MutationDefinit
   const entries = Array.isArray(parsed) ? parsed : [parsed];
   const cores = entries.map((entry) => desugarMutation(entry, mctx.context));
   const compiled = cores.map((core, at) => {
-    // A write never executes with holes: every `$context` the (desugared)
-    // statement binds must be present. The error teaches the WHOLE contract.
     const missing = requiredContextKeys(core).filter((k) => mctx.context[k] === undefined);
     if (missing.length > 0) {
       throw new VexError('missing_context', `Mutation is missing context: ${missing.join(', ')}.`, {
@@ -558,20 +440,15 @@ export const executeWrites = async (client: MutationClient, def: MutationDefinit
       });
     }
     // The seed lint refuses these too, but a definition can reach here without
-    // ever being seeded (`executeMutation` called directly) — so the rule runs
-    // again, against the statements as they will actually execute.
+    // being seeded.
     const returned = returnedIn(cores, at);
     if (returned.issues.length > 0) throw new VexError('invalid_dsl', `${returned.issues.join('; ')}.`);
     const m = scopeMutation(core, mctx.policy);
     assertWritableColumns(m, mctx.schema);
     assertReturnedColumns(returned.refs, mctx.schema);
     const statement = compileMutation(m, mctx.schema);
-    // A `set` rule with no value would STAMP NULL — an insert owned by nobody,
-    // written anyway. Every scope slot is filled or nothing runs.
+    // A `set` rule with no scope value would stamp NULL: a row owned by nobody.
     requireScope({ paramSlots: statement.slots }, mctx.scope);
-    // Every reference slot is bound from a row or the batch does not run. A
-    // slot left unbound would be filled from the caller's context like any
-    // other parameter — the one thing a reference must never be.
     const reads = [...statement.returned].map(([slot, ref]) => {
       const source = returned.refs.get(ref);
       if (source === undefined) throw new VexError('invalid_dsl', `"${ref}" names no earlier statement of the batch.`);
@@ -584,14 +461,6 @@ export const executeWrites = async (client: MutationClient, def: MutationDefinit
     const results: WriteResult[] = [];
     for (const c of compiled) {
       const params = await resolveParams(c.slots, mctx.context, mctx.scope);
-      // THE ROW AN EARLIER STATEMENT WROTE, bound over whatever sat in the slot.
-      // Exactly one row or nothing runs further: this throws inside the
-      // batch's transaction, so a reference to a write that did not happen —
-      // a WHERE that matched nothing, a row the scope boundary kept back, an
-      // insert a trigger skipped — undoes the statements before it too. Not
-      // NULL, which is what a `$lookup` writes for no row: a lookup reads a
-      // row that may honestly not exist, a reference reads one this batch
-      // claims to have written.
       for (const read of c.reads) {
         const rows = results[read.source.statement]?.rows ?? [];
         const row = rows[0];
@@ -602,17 +471,15 @@ export const executeWrites = async (client: MutationClient, def: MutationDefinit
             { returned: read.ref, rows: rows.length },
           );
         }
-        // The column is in the schema, so it is in the row — unless the client
-        // hands rows back under other keys. Then there is no value to read,
-        // and binding `undefined` would write NULL without a word.
+        // A client may hand rows back under other keys; binding `undefined`
+        // would then write NULL silently.
         if (!(read.source.column in row)) {
           throw new VexError('execution_error', `"${read.ref}": the row statement ${read.source.statement + 1} returned has no "${read.source.column}" key. Nothing was written.`, { returned: read.ref });
         }
         params[read.slot] = row[read.source.column];
       }
-      // A `json` slot (insertEach items) is bound as a JSON string — drivers
-      // would otherwise turn a JS array into a postgres ARRAY literal, which
-      // `::jsonb` refuses. Anything but an array fails loudly here.
+      // Bound as a JSON string: a driver would otherwise send a JS array as a
+      // postgres ARRAY literal, which `::jsonb` refuses.
       const bound = params.map((value, i) => {
         if (c.slots[i]?.encode === 'json') return value !== null && typeof value === 'object' ? JSON.stringify(value) : value;
         if (c.slots[i]?.type !== 'json') return value;
@@ -627,7 +494,6 @@ export const executeWrites = async (client: MutationClient, def: MutationDefinit
     return results;
   };
 
-  // A batch runs atomically; a single write needs no transaction.
   if (compiled.length === 1) return runAll(client);
   if (client.transaction === undefined) {
     throw new VexError('execution_error', 'Batch mutations require a transactional client.');
@@ -635,7 +501,5 @@ export const executeWrites = async (client: MutationClient, def: MutationDefinit
   return client.transaction((tx) => runAll(tx));
 };
 
-// The rows alone, statement order preserved — the shape every existing
-// caller wants when it does not care which statement returned what.
 export const executeMutation = async (client: MutationClient, def: MutationDefinition, mctx: MutationContext): Promise<Row[]> =>
   (await executeWrites(client, def, mctx)).flatMap((w) => w.rows);
