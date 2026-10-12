@@ -175,7 +175,7 @@ export const callIntegrationWith = (deps: {
         startUnixNano: clock.startUnixNano,
         endUnixNano: clock.endUnixNano(),
         status,
-        attributes: { addon: id, path, ...(httpStatus !== undefined ? { httpStatus } : {}) },
+        attributes: { integration: id, path, ...(httpStatus !== undefined ? { httpStatus } : {}) },
       });
     };
 
@@ -219,7 +219,7 @@ export const withFallbackMessage = (inner: FetchFn): FetchFn => async (url, init
   if (integration === undefined) return inner(url, init);
 
   const fallback = (status: number): Awaited<ReturnType<FetchFn>> => {
-    const body = { message: `The ${integration} add-on is not answering right now. The rest of the studio is unaffected.` };
+    const body = { message: `The ${integration} integration is not answering right now. The rest of the app is unaffected.` };
     return { ok: false, status, json: async () => body, text: async () => JSON.stringify(body) };
   };
 

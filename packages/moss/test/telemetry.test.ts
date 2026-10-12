@@ -98,12 +98,12 @@ describe('integration.call', () => {
     return { call };
   };
 
-  it('an answered call is one ok span with addon, path, and httpStatus', async () => {
+  it('an answered call is one ok span with integration, path, and httpStatus', async () => {
     const { spans, telemetry } = capture();
     const { call } = await world({ telemetry });
     await call('acme', 'lifecycle/ping', { principal: 'i_mara' });
     expect(spans).toHaveLength(1);
-    expect(spans[0]).toMatchObject({ name: 'integration.call', status: 'ok', attributes: { addon: 'acme', path: 'lifecycle/ping', httpStatus: 200 } });
+    expect(spans[0]).toMatchObject({ name: 'integration.call', status: 'ok', attributes: { integration: 'acme', path: 'lifecycle/ping', httpStatus: 200 } });
   });
 
   it('a refused call is one refused span, with no httpStatus (nobody answered)', async () => {

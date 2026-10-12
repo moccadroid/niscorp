@@ -407,7 +407,7 @@ try {
   owner.dispatch({ type: 'ui:click', ref: 'openSettings', payload: { settings_action: 'ext.desk.belts.settings' } });
   await settle(18);
   const deadTree = treeOf(owner);
-  ok('a dead integration is a sentence naming the integration', deadTree.includes('The belts add-on is not answering right now'), 'the floor the wire puts under every integration call');
+  ok('a dead integration is a sentence naming the integration', deadTree.includes('The belts integration is not answering right now'), 'the floor the wire puts under every integration call');
   ok('...never a bare status code', !/HTTP \d/.test(deadTree), 'a studio owner cannot act on a number');
   await runtime.db.query('UPDATE integrations SET url = $1 WHERE id = $2', [`http://127.0.0.1:${String(PORT)}/belts`, 'belts']);
   server.refresh();

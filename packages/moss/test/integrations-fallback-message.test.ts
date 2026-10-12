@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { FetchFn } from '@niscorp/nova';
 import { withFallbackMessage } from '../src/integrations/forward';
 
-const FLOOR = { message: 'The belts add-on is not answering right now. The rest of the studio is unaffected.' };
+const FLOOR = { message: 'The belts integration is not answering right now. The rest of the app is unaffected.' };
 
 type Reply = Awaited<ReturnType<FetchFn>>;
 const replying = (reply: Reply | Error): FetchFn => async () => {
