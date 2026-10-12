@@ -216,15 +216,18 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       roleMemo.drop();
     },
     catalogFor: roleMemo.catalogFor,
-    artifactsFor: (shell, roles, installed) => ({
-      actions: roleMemo.definitionsFor(roles, installed),
-      canvases: shell.canvases,
-      ...(shell.layout !== undefined ? { frame: shell.layout } : {}),
-      ...(shell.layoutStore !== undefined ? { layoutStore: shell.layoutStore } : {}),
-      ...(shell.fragments !== undefined ? { fragments: shell.fragments } : {}),
-      entries: entries.byFingerprint(),
-      components: components.of(shell),
-    }),
+    artifactsFor: (shell, roles, installed) => {
+      const held = roleMemo.storedLayoutsFor(roles, installed);
+      return {
+        actions: held.actions,
+        canvases: shell.canvases,
+        ...(shell.layout !== undefined ? { frame: shell.layout } : {}),
+        layoutStore: { ...shell.layoutStore, ...held.layouts },
+        ...(shell.fragments !== undefined ? { fragments: shell.fragments } : {}),
+        entries: entries.byFingerprint(),
+        components: components.of(shell),
+      };
+    },
     generation: () => pointer?.current() ?? -1,
     stop: () => pointer?.stop(),
   };

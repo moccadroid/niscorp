@@ -3,6 +3,7 @@ import { ActionDefinitionSchema, ActionFragmentSchema, LayoutNodeSchema } from '
 import { ConfigSchema } from '@niscorp/prism';
 import { SequenceSchema, depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { MutationDefinitionSchema, QuerySchema, REFRESH_MODES } from '@niscorp/vex';
+import { ACTION_LAYOUT_NAME_REFUSAL, isActionLayoutRef } from './app';
 import type { NiscApp } from './app';
 
 const seam = z.custom<(...args: never[]) => unknown>((value) => typeof value === 'function', 'expected a function');
@@ -35,10 +36,12 @@ const CanvasSchema = z
 
 const ComponentContractSchema = z.looseObject({ meta: z.looseObject({ description: z.string().optional() }).optional() });
 
+const storedLayoutName = z.string().refine((name) => !isActionLayoutRef(name), { message: ACTION_LAYOUT_NAME_REFUSAL });
+
 const shell = {
   canvases: z.array(CanvasSchema),
   layout: layout.optional(),
-  layoutStore: z.record(z.string(), layout).optional(),
+  layoutStore: z.record(storedLayoutName, layout).optional(),
   fragments: z.record(z.string(), depthChecked(ActionFragmentSchema)).optional(),
   seeds: seam.optional(),
   components: z.record(z.string(), ComponentContractSchema).optional(),
@@ -100,6 +103,7 @@ type Place = { path: readonly PropertyKey[]; message: string };
 // value before it failed; on a tie, the one with the fewest complaints.
 const placesOf = (issue: Issue, under: readonly PropertyKey[]): Place[] => {
   const path = [...under, ...issue.path];
+  if (issue.code === 'invalid_key') return [{ path, message: issue.issues[0]?.message ?? issue.message }];
   if (issue.code !== 'invalid_union') return [{ path, message: issue.message }];
   const branches = issue.errors.map((branch) => branch.flatMap((inner) => placesOf(inner, path))).filter((branch) => branch.length > 0);
   const reach = (places: readonly Place[]): number => Math.max(...places.map((place) => place.path.length));

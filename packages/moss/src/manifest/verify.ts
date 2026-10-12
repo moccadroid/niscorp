@@ -8,7 +8,7 @@ import { scopeProfiles } from '@niscorp/vex';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { z } from 'zod';
 import { isBinding } from '@niscorp/nova/i18n';
-import { entriesOf, wearableOf } from './app';
+import { ACTION_LAYOUT_NAME_REFUSAL, entriesOf, isActionLayoutRef, wearableOf } from './app';
 import type { LayoutVariant, NiscApp } from './app';
 
 export type ManifestCandidate = {
@@ -50,6 +50,23 @@ const unreadActions = (actions: ManifestCandidate['actions']): { id: string; why
     return [{ id, why: first === undefined ? 'no reason given' : `${first.path.join('.') || '(root)'}: ${first.message}` }];
   });
 
+// A layout that could name the place its own action's layout is kept would be drawn inside itself without end.
+const actionLayoutNamedIn = (layout: unknown): string | undefined => {
+  if (typeof layout === 'string') return isActionLayoutRef(layout) ? layout : undefined;
+  let named: string | undefined;
+  walkNodes(layout, (record) => {
+    const ref = record['ref'];
+    if (named === undefined && typeof ref === 'string' && record['component'] === undefined && isActionLayoutRef(ref)) named = ref;
+  });
+  return named;
+};
+
+const layoutNameErrors = (actions: ManifestCandidate['actions']): string[] =>
+  Object.entries(actions).flatMap(([id, definition]) => {
+    const named = actionLayoutNamedIn(definition.layout);
+    return named === undefined ? [] : [`"${id}" names the layout "${named}": ${ACTION_LAYOUT_NAME_REFUSAL}`];
+  });
+
 const reachErrors = (entries: ManifestCandidate['entries'], profiles: ReadonlySet<string>): string[] => {
   const unknown = entries.flatMap((entry) => (entry.reach !== undefined && !profiles.has(entry.reach) ? [`${entry.fingerprint} declares reach "${entry.reach}"`] : []));
   return unknown.length === 0 ? [] : [...unknown, `known profiles: ${[...profiles].join(', ') || '(none)'}`];
@@ -77,6 +94,7 @@ export const verifyManifest = (candidate: ManifestCandidate): ManifestReport => 
   return {
     errors: [
       ...found('actions', unread.map((action) => `"${action.id}" is not an action nova reads: ${action.why}`)),
+      ...found('actions', layoutNameErrors(read.actions)),
       ...found('charter', charter.errors.map((error) => `${error.rule}: ${error.detail}`)),
       ...found('reach', reachErrors(read.entries, read.profiles)),
       ...found('variants', verifyVariants(read)),
@@ -120,6 +138,8 @@ export const verifyVariants = (app: Pick<NiscApp, 'charter' | 'actions' | 'layou
     if (app.actions[variant.action] === undefined) {
       errors.push(`layout variant "${id}" reshapes unknown action "${variant.action}"`);
     }
+    const named = actionLayoutNamedIn(variant.layout);
+    if (named !== undefined) errors.push(`layout variant "${id}" names the layout "${named}": ${ACTION_LAYOUT_NAME_REFUSAL}`);
   }
   const wearers = new Map<string, readonly string[]>();
   for (const role of Object.keys(app.charter)) wearers.set(`role "${role}"`, [role]);

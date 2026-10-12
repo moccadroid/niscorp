@@ -2,7 +2,7 @@
 
 **Status: Proposed (2026-10-12), ready to build from. What it has to do
 (part 2) and its ten design decisions (part 9) are the owner's and are
-settled. Steps 1 and 2 of part 6 are built (2026-10-12), on the branch
+settled. Steps 1 to 3 of part 6 are built (2026-10-12), on the branch
 `worktree-artifactory`; nothing else is. Part 0 is for whoever builds it, part 6 is the
 build, step by step, and part 7 is what needs the owner's word before it is
 touched.**
@@ -21,8 +21,8 @@ owner's standing decisions. Then this file. Then the code part 4 names.
 
 **Where the repository stands.** Start from the branch `worktree-artifactory`,
 or from `main` once that branch is in it. Moss is
-`packages/moss/src`: 91 files in 16 modules, about 7,600 lines of code and
-370 comment lines. `pnpm verify` passes on the branch. CI has passed on
+`packages/moss/src`: 91 files in 16 modules, about 7,650 lines of code and
+380 comment lines. `pnpm verify` passes on the branch. CI has passed on
 `main`, and has not run on the branch until it is pushed.
 
 **The owner's rules.** Each was learned the hard way.
@@ -330,8 +330,8 @@ Read against the code on 2026-10-12. Paths are under `packages/moss/src/`.
   `shells/host.ts`). It applies the frame, each ref of the layout store and
   each fragment that is answered differently.
 - **A shell's liveness reads a definition off the mounted instance**
-  (`shells/snapshot.ts`). With layouts by ref it has to put the shell's own
-  layout for that ref in place before it asks nova.
+  (`shells/snapshot.ts`). Since step 3 it puts the layouts the shell's store
+  holds in place of the refs before it asks nova (`store.resolveReferences`).
 - **The module rule.** `manifest` may not import `data`, and `data` imports
   `manifest`. The artifactory and `data` need each other: one for its rows,
   the other for the entries. Neither imports the other: each is handed
@@ -505,10 +505,19 @@ table; the list of fingerprints holds both; a set of entries handed over is
 replayed, replaced whole, and refused whole when one of it fails. *Done when:*
 those pass and part 0's "works" holds.
 
-**Step 3. Every layout by ref.** The artifactory answers each action's layout
-in the layout store under `action/<id>` and the definition with `{ ref }`
-(part 5, "Layouts"). No table yet. `shells/snapshot.ts` puts the shell's
-layout in place before it asks nova whether a page is live. *Tests that fail
+**Step 3. Every layout by ref. Built (2026-10-12).** The artifactory answers
+each action's layout in the layout store under `action/<id>` and the
+definition with `{ ref }` (part 5, "Layouts"; `actionsByRef`,
+`artifactory/roles.ts`). No table yet. `shells/snapshot.ts` puts the shell's
+layouts in place of the refs before it asks nova whether a page is live: every
+ref, with nova's own `resolveReferences`, so a field in a stored layout an app
+names by ref counts too, where it was missed. Where a layout is kept does not
+show to an app: a definition read off a session's shell is the action as it
+was written, with its layout in place, and that shell's layout store is to
+read. `action/` is moss's: a manifest whose layout store declares a name under
+it refuses the boot, and so does an action's layout or a layout variant that
+names one, so no layout is drawn inside itself. The layout of an action that
+leaves a shell leaves its store. *Tests that fail
 first:* a shell's actions name their layouts by ref and draw what they drew;
 `setLayout` on that ref changes an open screen and keeps its data; a page
 that was a file is still judged a file. *Done when:* those pass, every lab
@@ -577,7 +586,10 @@ Ask with the concrete change, at the step that needs it.
 | **moss, the fabric:** one more signal, "this principal saved" | a person's own save reaches their screens in another process | 4 |
 | **moss, the function session:** the draft, and saving | the names are the owner's to hear before they are built | 4, 6 |
 
-Nova owes nothing.
+Nova owes nothing. Its reflection (`describeInstance`, which the devtools use)
+and its audit read a layout off the definition and do not look behind a ref:
+moss hands them a definition with the layout in place, through the session's
+shell. On the whole shell (`unverifiedShell`) they see the ref.
 
 ## 8. Open
 

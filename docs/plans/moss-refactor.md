@@ -78,7 +78,9 @@ file in the same change.
 
 **The shell a session hands out** is nova's `Shell` with nine members that
 throw: `registerAction`, `removeAction`, `registerFragment`, `addCanvas`,
-`removeCanvas`, `setCanvasLayout`, `setLayout`, `setPhrases`, `dispose`. What
+`removeCanvas`, `setCanvasLayout`, `setLayout`, `setPhrases`, `dispose`. Its
+layout store is to read, and a definition read off it is the action as it was
+written, with its layout in place. What
 they add is not verified, is in nobody's catalog and is gone when the shell is
 rebuilt. Code that does it anyway takes the whole shell from
 `unverifiedShell(session)`, so the file says so in its imports. The type stays
@@ -119,9 +121,10 @@ and fails when it has not landed by then, so whoever waits on one waits that
 long at most, and app code that hangs inside a build holds up nobody else.
 
 **What a shell is made of is one answer** (`artifactory/running.ts`,
-`artifactsFor`): the definitions a set of roles holds with their layout variant
-in place, the shell's canvases, frame, layout store and fragments, the entries
-by fingerprint, and the component names. A shell host asks it once for each
+`artifactsFor`): the definitions a set of roles holds, each naming its layout
+by ref, the shell's canvases, frame and fragments, its layout store with those
+layouts in it (their layout variant in place), the entries by fingerprint, and
+the component names. A shell host asks it once for each
 build and once for each adopt (`server/hosts.ts`). An adopt brings a living
 shell level with that answer in place; it does not take the canvases again.
 

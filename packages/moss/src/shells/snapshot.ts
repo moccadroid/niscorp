@@ -2,7 +2,7 @@ import { livenessOf } from '@niscorp/nova/reflect';
 import { shellSettled } from '@niscorp/nova';
 import type { ActionDefinition, RenderNode } from '@niscorp/nova';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
-import { canvasesOf } from './host-state';
+import { canvasesOf, withLayoutInPlace } from './host-state';
 import type { Live } from './host-state';
 import { treeOf } from './stream';
 import type { ShellSnapshot } from './types';
@@ -25,7 +25,7 @@ export const shellNeedOf = (definition: ActionDefinition, entries: ReadonlyMap<s
   const drawnWith: string[] = [];
 
   if (facts.gestures) why.push('a person can act on it');
-  if (facts.opaqueLayout) why.push('its layout is kept in the store, so what can be pressed on it is not readable');
+  if (facts.opaqueLayout) why.push('its layout is the name of a stored layout, so what can be pressed on it is not readable');
   for (const channel of facts.listens) why.push(`it waits on the channel "${channel}"`);
 
   for (const use of facts.endpoints) {
@@ -94,9 +94,11 @@ export const needOf = (live: Live, principal: string | null, kept: boolean): Pic
     for (const instance of canvas.stack) {
       // Read off the instance, not the composition: one pushed `with` fragments
       // runs the composed definition, and a fragment adds what can be pressed.
+      // With its layout in place: nova reads what can be pressed off the layout
+      // itself, and does not look behind a ref.
       const definition = live.shell.getRuntime(instance.id)?.definition;
       if (definition === undefined) continue;
-      const need = shellNeedOf(definition, entries);
+      const need = shellNeedOf(withLayoutInPlace(definition, live.shell.layoutStore), entries);
       for (const reason of need.why) why.push(`${definition.id}: ${reason}`);
       for (const read of need.drawnWith) drawnWith.push(read);
     }

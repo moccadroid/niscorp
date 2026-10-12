@@ -236,8 +236,9 @@ describe('what a set of roles holds', () => {
     expect(manifest.catalogFor(['public'], undefined).ids).toEqual(['home']);
   });
 
-  it('the definitions held are the granted ones, each with the layout variant those roles hold in its place', () => {
+  it('the definitions held are the granted ones, each naming its layout by ref, and the store holds the layout variant those roles hold in its place', () => {
     const base: ActionDefinition = { id: 'panel', layout: { component: 'Text', children: 'base' } };
+    const layoutsOf = (roles: readonly string[], installed?: readonly string[]): Readonly<Record<string, unknown>> => manifest.artifactsFor(SHELL, roles, installed).layoutStore ?? {};
     const shipped: ShippedManifest = {
       ...shippedApp(),
       charter: { public: ['home'], member: { actions: ['home', 'panel', 'ext.*'] }, lead: { extends: ['member'], layouts: ['panel.wide'] } },
@@ -249,13 +250,16 @@ describe('what a set of roles holds', () => {
 
     const member = definitionsOf(manifest, ['member'], ['belts']);
     expect(Object.keys(member)).toEqual(manifest.catalogFor(['member'], ['belts']).ids);
-    expect(member['panel']).toBe(base);
+    expect(member['panel']).toEqual({ id: 'panel', layout: { ref: 'action/panel' } });
+    expect(layoutsOf(['member'], ['belts'])).toEqual({ 'action/panel': base.layout });
+    expect(layoutsOf(['member'], ['belts'])['action/panel']).toBe(base.layout);
     expect(member[desk.id]).toBe(desk);
     expect(member[pay.id]).toBeUndefined();
     expect(Object.keys(definitionsOf(manifest, ['public']))).toEqual(['home']);
 
     const lead = definitionsOf(manifest, ['lead'], ['belts']);
-    expect(lead['panel']).toEqual({ id: 'panel', layout: { component: 'Text', children: 'wide' } });
+    expect(lead['panel']).toEqual({ id: 'panel', layout: { ref: 'action/panel' } });
+    expect(layoutsOf(['lead'], ['belts'])).toEqual({ 'action/panel': { component: 'Text', children: 'wide' } });
     expect(base.layout).toEqual({ component: 'Text', children: 'base' });
     expect(lead['home']).toBe(home);
 
@@ -284,19 +288,32 @@ describe('what a set of roles holds', () => {
 
     const made = manifest.artifactsFor(shell, ['member'], undefined);
     expect(Object.keys(made.actions)).toEqual(['home', 'panel']);
-    expect(made.actions['panel']?.layout).toBe(wide);
+    expect(made.actions['panel']?.layout).toEqual({ ref: 'action/panel' });
     expect(made.canvases).toBe(shell.canvases);
     expect(made.frame).toBe(shell.layout);
-    expect(made.layoutStore).toBe(shell.layoutStore);
+    expect(Object.keys(made.layoutStore ?? {})).toEqual(['dock', 'action/panel']);
+    expect(made.layoutStore?.['dock']).toBe(shell.layoutStore?.['dock']);
+    expect(made.layoutStore?.['action/panel']).toBe(wide);
     expect(made.fragments).toBe(shell.fragments);
     expect([...made.entries.keys()]).toEqual(['deals/open']);
     expect(Object.keys(made.components).sort()).toEqual(['ActionSlot', 'CanvasSlot', 'Frame', 'Sheet', 'Text']);
 
     const forPage = manifest.artifactsFor(page, ['public'], undefined);
     expect(forPage.canvases).toBe(page.canvases);
-    expect('frame' in forPage || 'layoutStore' in forPage || 'fragments' in forPage).toBe(false);
+    expect('frame' in forPage || 'fragments' in forPage).toBe(false);
+    expect(forPage.layoutStore).toEqual({});
     expect(Object.keys(forPage.actions)).toEqual(['home']);
     expect(forPage.entries).toBe(made.entries);
+  });
+
+  it('an action with no layout, or one that names a layout of the store by its id, is handed over as it is', () => {
+    const bare: ActionDefinition = { id: 'home' };
+    const byId: ActionDefinition = { id: 'panel', layout: 'dock' };
+    const manifest = running({ ...shippedApp(), actions: { home: bare, panel: byId } });
+    const made = manifest.artifactsFor({ canvases: [], layoutStore: { dock: { component: 'Text', children: 'dock' } } }, ['member'], undefined);
+    expect(made.actions['home']).toBe(bare);
+    expect(made.actions['panel']).toBe(byId);
+    expect(Object.keys(made.layoutStore ?? {})).toEqual(['dock']);
   });
 
   it('the component names a shell may mention are read off the actions in force and the shell, with the contracts it declares', () => {

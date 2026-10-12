@@ -1,11 +1,11 @@
 import { createComponentRegistry, createLayoutStore, createShell } from '@niscorp/nova';
-import type { CanvasConfig, Shell } from '@niscorp/nova';
+import type { CanvasConfig, PublicActionRuntime, Shell } from '@niscorp/nova';
 import { evaluate } from '@niscorp/prism';
 import type { CanvasSeed, ShellCanvas } from '../manifest';
 import { spanClock } from '../runtime';
 import { functionSessionFor, instrumentFunctions } from './sessions';
 import type { ShellRef } from './sessions';
-import { layoutsOf } from './host-state';
+import { layoutsOf, withLayoutInPlace } from './host-state';
 import type { HostState, Live } from './host-state';
 import { follow } from './stream';
 import type { ShellOpening } from './types';
@@ -22,9 +22,29 @@ const refuse =
     );
   };
 
+// Where an action's layout is kept is moss's own: app code reads a definition as it was written.
+const runtimeAsWritten = (runtime: PublicActionRuntime, store: Shell['layoutStore']): PublicActionRuntime => ({
+  get instance() {
+    return runtime.instance;
+  },
+  get definition() {
+    return withLayoutInPlace(runtime.definition, store);
+  },
+  getData: runtime.getData,
+  setData: runtime.setData,
+  render: runtime.render,
+  onDataChange: runtime.onDataChange,
+  onStatusChange: runtime.onStatusChange,
+});
+
 const sessionShellOf = (shell: Shell): Shell => {
   const guarded: Shell = {
     ...shell,
+    layoutStore: { ...shell.layoutStore, set: refuse('layoutStore.set'), delete: refuse('layoutStore.delete') },
+    getRuntime: (instanceId) => {
+      const runtime = shell.getRuntime(instanceId);
+      return runtime === undefined ? undefined : runtimeAsWritten(runtime, shell.layoutStore);
+    },
     registerAction: refuse('registerAction'),
     removeAction: refuse('removeAction'),
     registerFragment: refuse('registerFragment'),

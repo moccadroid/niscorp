@@ -129,8 +129,9 @@ Every field is an artifact (authored data) except the code seams — `scope`,
 
 A `LayoutVariant` is `{ action: string; layout: LayoutNode }` — ring 2: the
 charter's `layouts` section selects who is granted which variant id, and moss
-substitutes the granted variant's layout onto the definition at shell build. The
-base is the floor; variants enrich upward as grants. A role, or a combination
+puts the granted variant's layout where that action's layout is kept in the
+shell ("Where an action's layout is kept", under `createServer`). The base is
+the floor; variants enrich upward as grants. A role, or a combination
 of roles somebody may wear, that holds two variants of one action refuses the
 boot, and so does a variant of an action the app does not have.
 
@@ -140,7 +141,7 @@ boot, and so does a variant of an action the app does not have.
 type ShellManifest = {
   canvases: ShellCanvas[];        // a canvas's `initial` may be a CANDIDATE list
   layout?: LayoutNode;            // the frame — CanvasSlot markers, served verbatim
-  layoutStore?: Record<string, LayoutNode>;   // what a `{ ref: id }` in the frame resolves to at boot
+  layoutStore?: Record<string, LayoutNode>;   // what a `{ ref: id }` in the frame resolves to at boot; no name begins with `action/`
   fragments?: Record<string, ActionFragment>;
   inputs?: (session: { principal, actions, roles, identity, wire }) =>
     Record<string, Record<string, unknown>> | Promise<…>;
@@ -267,7 +268,10 @@ no-op when the manifest declares no `runs` sink.
 **`shell` refuses the nine members that change what a shell is made of**:
 `registerAction`, `removeAction`, `registerFragment`, `addCanvas`,
 `removeCanvas`, `setCanvasLayout`, `setLayout`, `setPhrases` and `dispose`
-throw. An action, a fragment, a canvas, a layout and the phrases reach a shell
+throw, and so do `set` and `delete` on its `layoutStore`, which is to read. A
+definition read off it (`shell.getRuntime(id).definition`) is the action as it
+was written, with the layout it is drawn with now in place: where moss keeps a
+layout does not show. An action, a fragment, a canvas, a layout and the phrases reach a shell
 through moss, which verifies them and decides who holds them; added on the
 shell directly they are not verified, are in nobody's catalog and are gone
 when the shell is rebuilt. Everything else (reads, navigation, `dispatch`,
@@ -634,6 +638,35 @@ the copy:
   not in its manifest, is not replayed. `server.replaceEntries` is the way an
   entry reaches a running server.
 
+**Where an action's layout is kept.** In the shell's layout store, under
+`action/<id>`. An app goes on writing an action's layout in its definition;
+where a shell is built, moss moves it into the store, and the definition the
+shell is handed names it by `{ ref: 'action/<id>' }`. A layout variant the
+person's roles hold is what the store holds under that name instead. An action
+with no layout, or one whose `layout` is already the name of a stored layout,
+is handed over as it is. Three things follow:
+
+- **A layout that changes reaches a screen that is already open**, with the
+  data on it kept. Until 0.6.0 an open instance kept the layout it was opened
+  with, and only one opened afterwards showed the new one. What an open
+  instance still keeps is the rest of its definition: its data's shape, its
+  endpoints and its triggers.
+- **Code that reads an action's definition off its session's shell**
+  (`session.shell.getRuntime(id).definition`) finds it as it was written, with
+  the layout in place: the one the store holds now, so a variant or a change
+  shows. `server.actions()` answers the definitions as they were written too.
+  Only the whole shell (`unverifiedShell(session)`), which is nova's own,
+  shows `{ ref }`; there the layout is `shell.layoutStore.get('action/<id>')`.
+- **`action/` belongs to moss in a layout store.** A manifest whose
+  `layoutStore`, the app's shell's or a page's, declares a name beginning with
+  it refuses the boot (`shell.layoutStore.action/home: a name beginning with
+  "action/" is where the layout of that action is kept`). So does an action's
+  layout, or a layout variant, that names one by `{ ref }` or as its layout's
+  name, at boot and when a set is handed over (`"panel" names the layout
+  "action/panel": …`): a layout cannot be drawn inside itself, and an action
+  cannot draw another's.
+- **The layout of an action that leaves a shell leaves its store.**
+
 **The manifest is read first.** Before a table is created or a row is read,
 `createServer` parses the manifest with a schema, and a manifest that does not
 parse refuses the boot:
@@ -909,7 +942,11 @@ is live when something on it can still happen:
 | it waits on a channel | a `message:` trigger |
 | a read keeps answering | an endpoint whose entry is `refresh: 'reactive'` |
 | it calls code | a `fn:` endpoint that anything calls — code is not read |
-| it cannot be read | a layout kept in the store; a fingerprint the manifest does not carry |
+| it cannot be read | a `layout` that is the name of a stored layout; a fingerprint the manifest does not carry |
+
+What can be pressed is read off the layout a screen is drawn with: a `{ ref }`
+in it, the one an action's own layout is named by included, is read through
+to the layout the shell's store holds under it.
 
 A read made while the action opened is **finished**: its answer is in the tree
 (and listed in `drawnWith`). The app's own shell is always live for a signed-in
@@ -1324,8 +1361,8 @@ app that resolves people through `identity`.
   grants recompiled at that named profile. The vex surfaces and `executeAs` do
   it themselves; it narrows rows, never widens verbs.
 - A layout variant a set of roles holds (ring 2) is put in place of its
-  action's layout where a shell is built. Nothing answers the variants by
-  themselves.
+  action's layout where a shell is built, in the shell's layout store.
+  Nothing answers the variants by themselves.
 - `verifyApp(app, grants)` — the check boot runs, for an app
   that is not booted (a check, a build step): the charter with each role's
   closure audited, every entry's reach, the layout variants. It reads `charter`,
@@ -1366,8 +1403,9 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
   is not exported). It is handed no manifest and no
   runtime, but a typed object of what it needs: one function that answers what
   a principal's shell is made of (who they are, the action definitions they
-  hold with their roles' layout variant in place, the canvases, the frame, the
-  layout store's seed, the fragments, the entries, the component names), the
+  hold, each naming its layout by ref, the canvases, the frame, the layout
+  store's seed with those layouts in it, their roles' layout variant in place,
+  the fragments, the entries, the component names), the
   app's code a shell calls (`inputs`, `seeds`, `phrases`, `functions`,
   `onSession`, `runs`), the wire for a token, and its limits. Everything in
   that answer but who somebody is comes from the running manifest, which is
@@ -1412,7 +1450,10 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
     longer granted, is removed and its instances unmounted. The shell's own
     layouts are taken from the same answer: the frame, each `{ ref }` of the
     layout store and each fragment that is answered differently from the last
-    time is put in place, and every attached terminal is sent the frame. One
+    time is put in place, and every attached terminal is sent the frame. An
+    action's own layout is one of those refs, so a screen that is open shows a
+    layout that changed, with its data kept, and a ref that is answered no
+    longer is taken out of the store. One
     that is answered as it was is left alone, so a ref the shell's own code
     set since (`shell.setLayout`) stands through a change that did not touch
     it. What a shell's canvases are, and what is mounted on them, is the

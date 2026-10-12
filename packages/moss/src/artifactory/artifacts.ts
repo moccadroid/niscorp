@@ -8,7 +8,7 @@ export type ShellArtifacts = {
   actions: Readonly<Record<string, ActionDefinition>>;
   canvases: readonly ShellCanvas[];
   frame?: LayoutNode;
-  layoutStore?: Readonly<Record<string, LayoutNode>>;
+  layoutStore: Readonly<Record<string, LayoutNode>>;
   fragments?: Readonly<Record<string, ActionFragment>>;
   entries: ReadonlyMap<string, SeedEntry | SeedMutation>;
   components: Readonly<Record<string, NonNullable<ShellManifest['components']>[string]>>;

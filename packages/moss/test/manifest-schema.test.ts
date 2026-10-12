@@ -120,6 +120,19 @@ describe('the manifest’s schema', () => {
     ]);
   });
 
+  it('refuses a layout store name under which an action’s own layout is kept, in the app’s shell and in a page’s', () => {
+    const plainLayout = { component: 'Text', children: 'plain' };
+    const misfits = manifestMisfits({
+      ...whole(),
+      shell: { canvases: [], layoutStore: { dock: plainLayout, 'action/home': plainLayout } },
+      pages: { about: { path: '/about', canvases: [], layoutStore: { 'action/home': plainLayout } } },
+    });
+    expect(misfits).toEqual([
+      'shell.layoutStore.action/home: a name beginning with "action/" is where the layout of that action is kept',
+      'pages.about.layoutStore.action/home: a name beginning with "action/" is where the layout of that action is kept',
+    ]);
+  });
+
   it('holds a seam to being a function', () => {
     const misfits = manifestMisfits({
       ...whole(),

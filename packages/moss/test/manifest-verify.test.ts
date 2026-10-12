@@ -24,6 +24,27 @@ const coherent: ManifestCandidate = {
   profiles: new Set(['own', 'studio']),
 };
 
+const naming = (ref: string): ActionDefinition => ({ id: 'panel', layout: { component: 'Stack', children: [{ component: 'Button', ref: 'action/pressed' }, { ref }] } });
+
+describe('verifyManifest — a name under which moss keeps an action’s layout is nobody’s to write', () => {
+  const shipped = (panel: ActionDefinition, more: Partial<ShippedManifest> = {}): ShippedManifest => ({ charter: { public: ['home', 'panel'] }, actions: { home: { id: 'home' }, panel }, ...more });
+
+  it('an action whose layout names one, its own or another’s, is not one that may be served', () => {
+    const errors = (panel: ActionDefinition): string[] => verifyApp(shipped(panel), []).errors.map((error) => `${error.check}: ${error.detail}`);
+    expect(errors(naming('action/panel'))).toEqual(['actions: "panel" names the layout "action/panel": a name beginning with "action/" is where the layout of that action is kept']);
+    expect(errors(naming('action/home'))).toEqual(['actions: "panel" names the layout "action/home": a name beginning with "action/" is where the layout of that action is kept']);
+    expect(errors({ id: 'panel', layout: 'action/home' })).toEqual(['actions: "panel" names the layout "action/home": a name beginning with "action/" is where the layout of that action is kept']);
+    expect(errors(naming('dock'))).toEqual([]);
+  });
+
+  it('nor is a layout variant that names one', () => {
+    const report = verifyApp(shipped({ id: 'panel' }, { charter: { public: { actions: ['home', 'panel'], layouts: ['panel.wide'] } }, layouts: { 'panel.wide': { action: 'panel', layout: { ref: 'action/home' } } } }), []);
+    expect(report.errors.map((error) => `${error.check}: ${error.detail}`)).toEqual([
+      'variants: layout variant "panel.wide" names the layout "action/home": a name beginning with "action/" is where the layout of that action is kept',
+    ]);
+  });
+});
+
 describe('verifyManifest — may this be served', () => {
   it('a coherent candidate refuses nothing and says nothing', () => {
     const report = verifyManifest(coherent);

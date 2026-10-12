@@ -80,7 +80,7 @@ describe('the shell hosts — what a shell is made of is asked of the running ma
           return {
             ...shipped.artifactsFor(shell, roles, installed),
             frame: frameNamed('as published', true),
-            layoutStore: { dock: dockSaying('the dock, as published') },
+            layoutStore: { ...shipped.artifactsFor(shell, roles, installed).layoutStore, dock: dockSaying('the dock, as published') },
             fragments: { sheet: sheetNamed('as published') },
             entries: new Map([[wordsAll.fingerprint, { ...wordsAll, refresh: 'reactive' as const }]]),
           };
@@ -98,6 +98,46 @@ describe('the shell hosts — what a shell is made of is asked of the running ma
       expect(snapshot?.live).toBe(true);
       expect(snapshot?.why).toEqual(['words: its read "load" keeps answering (words/all is reactive)']);
       expect(asked).toEqual([app.shell]);
+    } finally {
+      hosts.stop();
+    }
+  });
+
+  it('a page that only shows something is a file, and one with a field somebody can type in is not: what can be pressed is read off the layout the ref names', async () => {
+    const field: ActionDefinition = { id: 'field', data: { title: '' }, layout: { component: 'Input', model: '$.title' } };
+    const typing: NiscApp = {
+      ...app,
+      charter: { public: ['words', 'field'] },
+      actions: { words, field },
+      pages: { docs, form: { path: '/form', canvases: [{ id: 'main', initial: 'field' }] } },
+    };
+    const running = createRunningManifest({ shipped: typing, grants: scopeGrants(['words']) });
+    const hosts = buildShellHosts({ ...depsWith(running), app: typing });
+    try {
+      const shown = await hosts.pageAt('/docs')?.host.snapshot(null, null);
+      expect(shown?.live).toBe(false);
+      const typed = await hosts.pageAt('/form')?.host.snapshot(null, null);
+      expect(typed?.live).toBe(true);
+      expect(typed?.why).toEqual(['field: a person can act on it']);
+    } finally {
+      hosts.stop();
+    }
+  });
+
+  it('a field in a stored layout the app names by ref counts too', async () => {
+    const framed: ActionDefinition = { id: 'framed', data: { title: '' }, layout: { component: 'Stack', children: [{ ref: 'form' }] } };
+    const typing: NiscApp = {
+      ...app,
+      charter: { public: ['words', 'framed'] },
+      actions: { words, framed },
+      pages: { form: { path: '/form', canvases: [{ id: 'main', initial: 'framed' }], layoutStore: { form: { component: 'Input', model: '$.title' } } } },
+    };
+    const running = createRunningManifest({ shipped: typing, grants: scopeGrants(['words']) });
+    const hosts = buildShellHosts({ ...depsWith(running), app: typing });
+    try {
+      const typed = await hosts.pageAt('/form')?.host.snapshot(null, null);
+      expect(typed?.live).toBe(true);
+      expect(typed?.why).toEqual(['framed: a person can act on it']);
     } finally {
       hosts.stop();
     }
@@ -160,7 +200,7 @@ describe('the shell hosts — a change reaches the living shells of every host',
         artifactsFor: (shell, roles, installed) => {
           const made = shipped.artifactsFor(shell, roles, installed);
           if (!answering.published) return made;
-          return { ...made, frame: frameNamed('as published', true), layoutStore: { dock: dockSaying('the dock, as published') }, fragments: { sheet: sheetNamed('as published') } };
+          return { ...made, frame: frameNamed('as published', true), layoutStore: { ...made.layoutStore, dock: dockSaying('the dock, as published') }, fragments: { sheet: sheetNamed('as published') } };
         },
       }),
     );
@@ -186,6 +226,82 @@ describe('the shell hosts — a change reaches the living shells of every host',
       session?.shell.push('main', 'words', undefined, ['sheet']);
       await settle();
       expect(sent.filter((text) => text.startsWith('{"type":"render"')).at(-1)).toContain('"title":"as published"');
+    } finally {
+      hosts.stop();
+    }
+  });
+
+  it('a layout that changes reaches a screen that is already open, and the screen keeps its data', async () => {
+    const running = createRunningManifest({ shipped: granting, grants: scopeGrants(['words']) });
+    const hosts = buildShellHosts({ ...depsWith(running), app: granting });
+    try {
+      const mine = await hosts.shells?.session('t', 'usr_1');
+      const sent: string[] = [];
+      mine?.attach({ send: (text) => void sent.push(text), close: () => undefined });
+      await settle();
+      const open = mine?.shell.getCanvasState('main').stack.at(-1)?.id ?? '';
+      const instance = mine?.shell.getRuntime(open);
+      instance?.setData({ ...instance.getData(), title: 'Typed since' });
+      await settle();
+      const drawn = (): string => sent.filter((text) => text.startsWith('{"type":"render"')).at(-1) ?? '';
+      expect(drawn()).toContain('Typed since');
+      expect(drawn()).not.toContain('Heading');
+
+      running.replace('edits', { words: { ...words, layout: { component: 'Heading', children: '$.title' } } });
+      hosts.adopt();
+      await settle();
+
+      expect(mine?.shell.getCanvasState('main').stack.at(-1)?.id).toBe(open);
+      expect(drawn()).toContain('Heading');
+      expect(drawn()).toContain('Typed since');
+    } finally {
+      hosts.stop();
+    }
+  });
+
+  it('the layout of an action that left is taken out of the shell’s store with it', async () => {
+    const running = createRunningManifest({ shipped: granting, grants: scopeGrants(['words']) });
+    const hosts = buildShellHosts({ ...depsWith(running), app: granting });
+    try {
+      const mine = await hosts.shells?.session('t', 'usr_1');
+      running.replace('bundles', { 'ext.notes': notes });
+      hosts.adopt();
+      await settle();
+      expect(mine?.shell.layoutStore.get('action/ext.notes')).toEqual(notes.layout);
+
+      running.replace('bundles', {});
+      hosts.adopt();
+      await settle();
+      expect(mine?.shell.layoutStore.get('action/ext.notes')).toBeUndefined();
+      expect(mine?.shell.layoutStore.get('action/words')).toEqual(words.layout);
+      expect(mine?.shell.layoutStore.get('dock')).toBeDefined();
+    } finally {
+      hosts.stop();
+    }
+  });
+
+  it('a session’s shell hands out a definition with its layout in place, as it stands now, and its store is to read', async () => {
+    const running = createRunningManifest({ shipped: granting, grants: scopeGrants(['words']) });
+    const hosts = buildShellHosts({ ...depsWith(running), app: granting });
+    try {
+      const mine = await hosts.shells?.session('t', 'usr_1');
+      await settle();
+      const open = mine?.shell.getCanvasState('main').stack.at(-1)?.id ?? '';
+      const layoutOf = (): string => JSON.stringify(mine?.shell.getRuntime(open)?.definition.layout);
+      expect(layoutOf()).toContain('"component":"Text"');
+      expect(layoutOf()).not.toContain('action/words');
+      expect(mine?.shell.getRuntime(open)?.definition.id).toBe('words');
+      expect(mine?.shell.getRuntime(open)?.getData()).toMatchObject({ title: 'Hello' });
+      expect(mine?.shell.getRuntime('nobody')).toBeUndefined();
+
+      running.replace('edits', { words: { ...words, layout: { component: 'Heading', children: '$.title' } } });
+      hosts.adopt();
+      await settle();
+      expect(layoutOf()).toContain('"component":"Heading"');
+
+      expect(() => mine?.shell.layoutStore.set('action/words', { component: 'Text', children: 'mine' })).toThrow(/^moss: layoutStore\.set was called on a session's shell\./);
+      expect(() => mine?.shell.layoutStore.delete('action/words')).toThrow(/^moss: layoutStore\.delete was called on a session's shell\./);
+      expect(mine?.shell.layoutStore.get('action/words')).toEqual({ component: 'Heading', children: '$.title' });
     } finally {
       hosts.stop();
     }

@@ -1,4 +1,4 @@
-export { defineApp, entriesOf } from './app';
+export { actionLayoutRef, defineApp, entriesOf } from './app';
 export type {
   CanvasSeed,
   FunctionSession,

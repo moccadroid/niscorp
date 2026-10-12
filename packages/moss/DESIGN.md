@@ -72,7 +72,11 @@ entries its reads replay) is answered by the running manifest in one function,
 for a shell and a set of roles (`artifactsFor`, `src/artifactory/running.ts`). A shell is built
 from that answer and adopts it: an adopt puts in place the actions that are
 held now, and the frame, each `{ ref }` of the layout store and each fragment
-that the answer says differently from the last time. (The canvases are what a
+that the answer says differently from the last time. Every action's layout is
+one of those refs: the answer holds it in the layout store under
+`action/<id>`, and the definition names it. So a layout is changed by setting
+a ref, which a screen that is open follows with its data kept, and not by
+registering the action again, which only a screen opened afterwards sees. (The canvases are what a
 shell starts with: an adopt does not take them again, a reset does.) The
 entries vex replays it asks the running manifest for as well, before its own
 cache table; nothing else in moss reads one of the four off what the app
@@ -160,8 +164,8 @@ open.)
 Per-principal UI difference is existence (ring 1) or a served variant (ring 2),
 never a runtime capability flag in a layout. A layout variant (`NiscApp.layouts`)
 is `{ action, layout }` under a minted id; the charter's `layouts` section
-selects who holds which. At shell build, moss substitutes the granted variant's
-layout onto the definition *before* the shell exists, so every downstream render
+selects who holds which. At shell build, moss puts the granted variant's
+layout where that action's layout is kept *before* the shell exists, so every downstream render
 and serialize is already per-principal and the terminal renders what it is served
 — nothing on the wire says why a button is absent. The base layout is the floor
 (the least-privileged holder's shape); variants enrich upward as grants, so

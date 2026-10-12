@@ -124,6 +124,12 @@ export type PageManifest = ShellManifest & {
 
 export const defineApp = (app: NiscApp): NiscApp => app;
 
+export const actionLayoutRef = (actionId: string): string => `action/${actionId}`;
+
+export const isActionLayoutRef = (name: string): boolean => name.startsWith('action/');
+
+export const ACTION_LAYOUT_NAME_REFUSAL = 'a name beginning with "action/" is where the layout of that action is kept';
+
 export const entriesOf = (app: Pick<NiscApp, 'entries'>): readonly (SeedEntry | SeedMutation)[] => app.entries ?? [];
 
 export const wearableOf = (app: Pick<NiscApp, 'wearable' | 'assignments'>): readonly (readonly string[])[] => {

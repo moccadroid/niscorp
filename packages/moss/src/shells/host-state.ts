@@ -1,4 +1,4 @@
-import type { ActionFragment, LayoutNode, Shell } from '@niscorp/nova';
+import type { ActionDefinition, ActionFragment, LayoutNode, Shell } from '@niscorp/nova';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Emit } from '../runtime';
 import type { ShellComposition, ShellConnection, ShellHostConfig, ShellOpening } from './types';
@@ -14,6 +14,13 @@ export const layoutsOf = (made: Pick<ShellComposition, 'frame' | 'layoutStore' |
   layoutStore: made.layoutStore ?? {},
   fragments: made.fragments ?? {},
 });
+
+// An action's layout is kept in the shell's layout store and named by ref:
+// this is the definition as it was written, with the layout the store holds now.
+export const withLayoutInPlace = (definition: ActionDefinition, store: Shell['layoutStore']): ActionDefinition => {
+  const layout = definition.layout;
+  return layout === undefined || typeof layout === 'string' ? definition : { ...definition, layout: store.resolveReferences(layout) };
+};
 
 export type Live = {
   shell: Shell;
