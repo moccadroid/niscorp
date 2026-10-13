@@ -2,8 +2,8 @@
 
 **Status: Proposed (2026-10-12), ready to build from. What it has to do
 (part 2) and its ten design decisions (part 9) are the owner's and are
-settled. Steps 1 to 6 of part 6 are built (2026-10-13), on the branch
-`worktree-artifactory`; nothing else is. Part 0 is for whoever builds it, part 6 is the
+settled. Steps 1 to 6 of part 6 and the first part of step 9 are built
+(2026-10-13), on the branch `worktree-artifactory`; nothing else is. Part 0 is for whoever builds it, part 6 is the
 build, step by step, and part 7 is what needs the owner's word before it is
 touched.**
 
@@ -670,7 +670,12 @@ may call a function on its owner's roles' list and no other.
 force has a slot for, and takes out one no layout has a slot for any more
 (part 5, "Canvases"). *Done when:* a generated frame with a slot for a new
 canvas shows that canvas on its owner's open screen, and taking the frame back
-removes it.
+removes it. *Its first part is built (2026-10-13):* the shell's own layout
+and each canvas's are in the layout store, under `frame` and `canvas/<id>`,
+and the shell draws each by that name (`shellWithStoredLayouts`,
+`artifactory/artifacts.ts`). Nothing is drawn differently, and neither can be
+saved yet. The rest waits for the owner's word (part 8, "Step 9, its first
+part as built").
 
 **Step 10. Integrations through the one check.** The integrations feature asks
 the artifactory to check a bundle's actions and layouts, in place of the three
@@ -720,6 +725,33 @@ shell. On the whole shell (`unverifiedShell`) they see the ref.
   published is what can be generated. And a published default wins over a
   build that is deployed later, until it is taken back. Both follow from what
   is decided, and are said here so that nobody is surprised by them.
+
+**Step 9, its first part as built.**
+
+- **The shell's own layout is in the layout store under `frame`, and a
+  canvas's under `canvas/<id>`.** An app writes `layout` and `actionLayout` as
+  before. A shell manifest with no `layout` has no `frame` in its store and is
+  drawn with nova's own. A canvas with no `actionLayout`, or with the name of
+  a stored layout, is handed over as it is.
+- **A manifest's `layoutStore` declares neither name**, in the app's shell or
+  in a page: the boot is refused, with the sentence that says where. This is
+  what an app can notice, and it breaks one that has a stored layout under
+  `frame` or under `canvas/`. None of the five lab apps has. Its changeset
+  line needs the owner's word.
+- **The shell host calls nova's `setCanvasLayout` no longer.** The name of the
+  shell's layout is given when the shell is built, and a changed layout is a
+  changed ref.
+- **Not decided, the owner's to say:**
+  - Which shells take a saved frame: the app's own shell only, or a page's
+    too.
+  - Whether a saved frame has to keep a slot for every canvas the shell
+    manifest declares.
+  - Whether a layout that names `frame` or `canvas/<id>` by `{ ref }` is
+    refused, as one that names `action/<id>` is. Until it is, such a ref draws
+    the layout kept there, where before it drew nothing.
+  - A shell manifest with no `layout` has no frame to take the place of. By
+    the rule of step 3 (a saved layout fills a ref the build has) no frame
+    can be saved for it.
 
 **Step 6 as built.**
 
