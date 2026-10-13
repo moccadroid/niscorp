@@ -2,7 +2,7 @@
 
 **Status: Proposed (2026-10-12), ready to build from. What it has to do
 (part 2) and its ten design decisions (part 9) are the owner's and are
-settled. Steps 1 to 4 of part 6 are built (2026-10-13), on the branch
+settled. Steps 1 to 5 of part 6 are built (2026-10-13), on the branch
 `worktree-artifactory`; nothing else is. Part 0 is for whoever builds it, part 6 is the
 build, step by step, and part 7 is what needs the owner's word before it is
 touched.**
@@ -21,8 +21,8 @@ owner's standing decisions. Then this file. Then the code part 4 names.
 
 **Where the repository stands.** Start from the branch `worktree-artifactory`,
 or from `main` once that branch is in it. Moss is
-`packages/moss/src`: 94 files in 16 modules, about 8,130 lines of code and
-440 comment lines. `pnpm verify` passes on the branch. CI has passed on
+`packages/moss/src`: 95 files in 16 modules, about 8,360 lines of code and
+490 comment lines. `pnpm verify` passes on the branch. CI has passed on
 `main`, and has not run on the branch until it is pushed.
 
 **The owner's rules.** Each was learned the hard way.
@@ -364,7 +364,9 @@ whose `principal` is their `userId`. Vex keeps that on every read and write.
 No entry names a principal, and moss's code passes none. The same rule is in
 the policy an app's charter compiles to, so a role that is granted the two
 tables reaches its own rows there. The tables are moss's and an app's charter
-does not have to name them.
+does not have to name them. What is published for everybody is the rows of
+one principal that no caller is, `*`, under that same rule ("Publishing a
+default", below).
 
 - `artifacts`: a row is one version of one artifact, which is what one save
   says about it. `kind` (action, layout, fragment, entry), `id`, `principal`
@@ -373,7 +375,8 @@ does not have to name them.
   from (the room left for merging), the save it belongs to, and `created_at`.
 - `artifact_saves`: a row is one save. Its `id`, who made it, whose it is,
   and `created_at`. A save holds one or several
-  versions.
+  versions. Who made it is the saver for a person's own, and whoever
+  published for a default.
 
 No row is changed or deleted, so `created_at` is the one time a row has, and
 there is no version counter: the latest save that touches an artifact says
@@ -387,8 +390,11 @@ fills, a fingerprint.
 **Ids.** The artifactory gives a generated action its id: `generated.` and a
 uuid. Nobody passes one in. Nothing shipped, published or from an
 integration may begin with `generated.`. A generated id is never held against
-the charter's globs: it is in its owner's catalog because they own it, and in
-nobody else's.
+the charter's globs: it is among the actions its owner's shells are built with
+because they own it, and among nobody else's. It is in no catalog (the
+owner's, 2026-10-13; it was to be in its owner's catalog): the catalog is what
+the charter grants, and what somebody generated is listed by
+`session.artifacts.list('action')`.
 
 **Layouts.** Every layout sits in the shell's layout store under the name of
 what draws it: `action/<id>`, `canvas/<id>`, `frame`. An app goes on writing
@@ -401,11 +407,15 @@ variant of my roles; the published default; the build's copy. Moss knows that
 several layouts may fill one ref, and nothing about why an app has several.
 
 **What goes with an action.** A layout names the ref it fills, and so the
-action it is for. A default layout's id is that ref; one of a person's own has
-an id moss gave it. Taking a generated action out of force takes its owner's
-layouts for it out of force in the same save, and a restore brings them back
-together. A layout for an action that does not exist for its owner is not
-loaded. When versions are pruned, the first to go are those for an action that
+action it is for. A layout's id is one moss gave it, a person's own and a
+published one alike (the owner's, 2026-10-13; a default's id was to be its
+ref, one for each ref): several may be kept for a ref, and one is marked in
+use. A layout for an action that does not exist for its owner is not
+loaded, and that is how a generated action that is taken out of force takes
+its owner's layouts for it along (the owner's, 2026-10-13; they were to be
+written out of force in the same save): no row is written for them, they stay
+listed and are not drawn, and they are drawn again when the action is
+restored. When versions are pruned, the first to go are those for an action that
 exists nowhere any more.
 
 **Canvases.** A canvas exists for a shell while a layout in force holds a
@@ -423,9 +433,29 @@ shell at once, so its owner sees it. It is gone when the shell is.
 "saving and publishing are one call", told who it is for). No call names whose
 rows are meant: a function that saves reaches its own principal's rows and
 nothing else, whatever it passes. A default for everybody is a different
-question (who may change what everybody sees) and is not a way of saving. It
-is its own step, not in the list of part 6 yet, and how the charter authorizes
-it is to be proposed to the owner first.
+question (who may change what everybody sees) and is not a way of saving from
+a session.
+
+**Publishing a default** (the owner's, 2026-10-13). A published layout is a
+row of the same two tables, read and written by the same three entries under
+the same row rule. Its `principal` is `*`: one principal that stands for
+everybody and that no caller is. A publish is a save replayed with `*` as the
+`userId`, so history, going back, reset, the mark for the one in use and the
+check are a person's, with no second path. It is called on the server:
+`server.defaults(publisher)` answers the five calls a session's `artifacts`
+has. No session can reach it: every write a session makes carries its own
+`userId`, by the rule, and moss refuses a caller whose `userId` is `*`
+wherever it composes a caller's scope for vex (its own entries, the routes, an
+intent a function asks). Only the app's own server code
+calls `defaults`, as only it calls `replaceActions`. **Who may publish is the
+charter's**: the app puts the call in a function and the charter says who
+holds the action that calls it. Who published is kept with the save
+(`created_by`), written by the rule from a scope value no caller's scope may
+carry (`artifactSavedBy`). One read of what is published answers every shell a
+process builds: a boot makes it, and the first shell after a publish there or
+a move of the generation pointer makes it again. It is laid under what a
+person saved. A publish has this process's living shells adopt and moves the
+pointer.
 
 **Who may save.** A function that calls `session.artifacts.save` is the app's,
 an action calls it, and the charter says who holds that action. There is no
@@ -463,8 +493,9 @@ the kind's schema (nova's, vex's), `auditAction`, the layout against the kit
 (`layoutMisfits`), the chains that never end (`endlessChains`), a read against
 the schema (`engine.compile`), and a generated action's endpoints against what
 it may call: a read its owner may replay, a function on the charter's list,
-and nothing else. A save for everybody also passes what a boot verifies
-(`verifyManifest`). A version that fails when a shell is built is left out,
+and nothing else. A published action also passes what a boot verifies
+(`verifyManifest`), from step 5 on; of a layout a boot verifies only that it
+names no ref under `action/`, which every save checks. A version that fails when a shell is built is left out,
 and what is under it shows.
 
 **Functions and the charter.** The manifest declares its functions by name
@@ -550,8 +581,8 @@ principal with their rows and is awaited: under an action's ref it answers
 their own layout marked in use, else their roles' layout variant, else the
 build's. A save tells whoever follows that principal (`onChangeFor`), which
 the server answers by having their shells adopt and by the fabric's fourth
-message, `adopt`. `catalogFor` follows in step 5, where a person's own actions
-make the catalog theirs. No lab app saves a layout yet: lyceum does in step 6.
+message, `adopt`. `catalogFor` stays as it is: what somebody generated is in
+no catalog (step 5). No lab app saves a layout yet: lyceum does in step 6.
 *Tests that failed first:* `artifactory-saved.test.ts` (the calls, the order
 at a ref, what is refused, what is left out), `server-saved.test.ts` (open
 screens, two processes on one fabric), cases in `server-assemble.test.ts`
@@ -559,18 +590,51 @@ screens, two processes on one fabric), cases in `server-assemble.test.ts`
 a real database in the case of `baselines.test.ts` that already has one up
 (whose a row is, what a charter's grant reaches). *Done when:* a generated
 layout for a shipped action shows on its owner's open screen at once and on
-nobody else's, and nobody reads or writes a row that is not theirs. *Not in
-this step any more:* a published layout that shows for everybody and wins
-over the build's (see "Saving is the session's principal's", part 5).
+nobody else's, and nobody reads or writes a row that is not theirs.
 
-**Step 5. Generated actions and fragments.** The id (part 5, "Ids"), the
-catalog of a principal with what they own, the check of a generated action's
-endpoints, what goes with an action. A generated action calls reads only,
-until step 8. Publishing an action gives it its id. *Done when:* a generated
-action exists in its owner's shell and catalog and in nobody else's; one that
-names a vex write, a function, or a read its owner may not replay is refused
-with a sentence; removing it takes its layouts along and a restore brings
-both back.
+**Step 4b. A layout published for everybody. Built (2026-10-13).** Part 5,
+"Publishing a default". `server.defaults(publisher)` (`server/server.ts`)
+answers the calls of `artifactory/session.ts` over the rows of `*`
+(`savedRowsOver(...).published`, `artifactory/saves.ts`), held to every
+action in force. The running manifest keeps one read of what is published and
+drops it when this process publishes or the pointer moves (`readPublished` is
+the boot's read, made once the pointer is watched), and `artifactsFor` lays it
+over the build's and under a role's layout variant and a person's own.
+`callerScope` refuses a caller whose `userId` is `*`, or whose scope says who
+made a save, for moss's own entries, the routes and a function's intents. No
+migration and no new entry: the write rule of `artifact_saves` now takes
+`created_by` from `artifactSavedBy`. *Tests
+that failed first:* cases in `artifactory-saved.test.ts` (the order at a ref,
+the calls, what is refused, what is left out, two processes on one pointer,
+whose rows a call reaches), `server-assemble.test.ts` (open shells, a boot,
+a caller whose `userId` is `*`), `server-saved.test.ts` (open screens) and
+the rows on a real database in `baselines.test.ts`. *Done when:* a layout an
+owner publishes shows on every open screen without a deploy, a person's own
+stays over it, and no session can write or change one.
+
+**Step 5. Generated actions and fragments. Built (2026-10-13)**, as the list
+the owner approved that day, which is narrower than this step was written.
+`session.artifacts` keeps two more kinds, `action` and `fragment`
+(`artifactory/session.ts`). Moss gives the id (`generated.` and a uuid), and
+no action in force and no fragment a shell ships has one under that prefix
+(`manifest/verify.ts`, `manifest/schema.ts`). The check is
+`artifactory/generated.ts`: nova's schema, the id, the layout against the kit
+and the names under `action/`, each endpoint (a `POST` to the app's vex route
+naming one fingerprint of a read in force its owner may replay), and nova's
+audit with what its owner holds as the catalog. `artifactsFor` adds what
+passes to the actions and the fragments a shell is built from, each action's
+layout under its ref, and leaves out what does not, with a line. What a caller
+may replay is `data`'s to say, handed over by the server (`server/hosts.ts`).
+*Tests that failed first:* `artifactory-generated.test.ts`, and cases in
+`server-saved.test.ts` (an open shell), `server-assemble.test.ts` (the read
+answered as its owner) and `manifest-schema.test.ts`. *Done when:* a generated
+action exists in its owner's shell and in nobody else's; one that names a vex
+write, a function, or a read its owner may not replay is refused with a
+sentence; removing it takes its layouts along and a restore brings both back.
+*Not in this step any more:* the catalog (part 5, "Ids"); publishing an
+action, which is to be proposed on its own, because it changes the live list
+and what a boot verifies; a fragment of one's own in the place of a shipped
+one; saving and opening in one call, which is the draft's (step 6).
 
 **Step 6. The draft.** In the shell, on the function session (part 5, "The
 draft"). Lyceum shows it. Relay's builder, atrium's preview and lyceum's two
@@ -613,6 +677,7 @@ Ask with the concrete change, at the step that needs it.
 | **charter:** one part, which functions the generated actions of a role may call | the charter decides what a generated action may run | 8 |
 | **moss, the fabric:** one more message, "bring this principal's shells level" | a person's own save reaches their screens in another process; the message says what to do, and nothing about why | 4, built: `adopt` |
 | **moss, the function session:** the draft, and saving | the names are the owner's to hear before they are built | 4 built: `session.artifacts`; 6 |
+| **moss, `MossServer`:** `defaults(publisher)` | publishing is the app's own server code's, and no session's | 4b, built |
 
 Nova owes nothing. Its reflection (`describeInstance`, which the devtools use)
 and its audit read a layout off the definition and do not look behind a ref:
@@ -640,15 +705,70 @@ shell. On the whole shell (`unverifiedShell`) they see the ref.
   build that is deployed later, until it is taken back. Both follow from what
   is decided, and are said here so that nobody is surprised by them.
 
-**A default for everybody.** Part 2 ("Publishing") and decision D7 say what it
-has to do. How it is done is open again: it was built as an argument on the
-calls of `session.artifacts` that moss did not check, and that is gone. To be
-proposed to the owner: how the charter authorizes a write that changes what
-everybody sees, and how a process reads rows that are nobody's (at boot and
-when the pointer moves, where there is no caller). The `principal` columns
-refuse a null, so rows that are nobody's need a migration or a table of their
-own. Until then the order at a ref has no published default in it, and D7 is
-to be looked at again with the owner.
+**Step 5 as built.**
+
+- **The artifactory checks the artifact, and nothing about what it is combined
+  with** (the owner's, 2026-10-13). A generated action emits and listens on
+  channels as any action does, and the steps of a generated fragment run
+  inside the action it is wrapped around, with that action's endpoints: both
+  are nova's, and what an app hangs on a message is that app's. A refusal for
+  either was proposed and turned down: it would have been a rule taken from
+  what two lab apps happen to do. What an assistant may generate is the app's
+  to decide, in its prompt and in the function that calls `save`.
+- **`session.actions` holds the ids moss gave to the actions its principal
+  generated**, beside the ids their roles are granted: it is the ids of the
+  actions the shell was built with, and so are the `actions` the `inputs` and
+  `seeds` hooks are handed. Left as it is (the owner's, 2026-10-13).
+- **Nova keeps actions and fragments in two registries**, with a call to take
+  an action out of a shell and none for a fragment. So a fragment that left
+  stays in a shell that is already open until that shell is built again. Not
+  to be patched with a second call: one registry in nova for both, told apart
+  by `kind`, is to be proposed to the owner as a change of its own.
+- **What a generated action may open is held against what was in force for
+  its owner when it was checked**, one of their own that is itself left out
+  included. Nova refuses the push when it runs.
+- **A fragment is not run through nova's audit**, which reads an action. It
+  is held to its schema, its id, its layout and its endpoints.
+- **A read is named by its fingerprint and not by the route it is called
+  through.** One called through a resource's route that does not serve it is
+  refused by vex when it runs.
+- **The check asks what a caller may replay once for each save and once for
+  each shell built for somebody who has a generated action or fragment with
+  an endpoint**, and not otherwise.
+
+**Step 4b as built, where the owner has not been asked.**
+
+- **A caller whose `userId` is `*` is refused everywhere**, not only where
+  they save: no shell is built for them, and `/api/vex` answers 500. An app
+  whose `scope` answered `*` for somebody worked before this and does not
+  now.
+- **An app's own entry cannot make a save for a caller.** `created_by` is
+  written from `artifactSavedBy`, which no caller's scope carries (one that
+  does is refused, as `*` is: an app whose `scope` answers a value by that
+  name does not run), so an insert or update of `artifact_saves` through an
+  app's charter is refused (500). Before, a role that was granted the table
+  could insert a save of its own. It can still read its rows, and add or
+  remove versions of its own where its charter grants that. `executeAs` is
+  the app's own code and hands vex the scope it is given.
+- **Another process follows a publish within one poll of the pointer** (60 s
+  unless `sessionRevalidateMs` says otherwise), as it follows a set of
+  actions. The fabric carries nothing for a publish.
+- **A publish is held to every action in force with the layout it is built
+  with**, not to what one role holds. Under a role's layout variant it is not
+  drawn, and it is not checked against that variant.
+- **`publisher` is what the app hands over.** Moss keeps it and does not ask
+  whether it is anybody.
+- **A publish drops every identity record and has every living shell adopt**,
+  as `refresh` does.
+- **Of a published layout that no longer passes, each line is said once for
+  each read of the rows.** A person's own is said at each shell built for
+  them.
+- **A read of what is published that fails fails the shell that asked**, as
+  a read of a person's own rows does, and the next shell asks again. A
+  publish is announced whether or not this process can read the rows back.
+- **Where a set of actions a process loads is refused when the pointer
+  moves**, the shells it builds from then on draw what is published now, and
+  its living shells follow when the move is followed, at a later look.
 
 **Step 4 as built, where the owner has not been asked.**
 
@@ -702,7 +822,8 @@ Settled on 2026-10-12. The reasoning is in parts 2 and 5.
 
 - **D1.** A module of its own, `packages/moss/src/artifactory/`.
 - **D2.** Two tables: a row per version, a row per save.
-- **D3.** The artifactory gives a generated action its id. It exists for its
+- **D3.** (Its last sentence is kept by its effect, 2026-10-13: part 5, "What
+  goes with an action".) The artifactory gives a generated action its id. It exists for its
   owner and nobody else, and is never held against a charter glob. Removing
   it takes its owner's layouts for it along.
 - **D4.** Every layout by ref. A change to an action's definition, not its
@@ -711,8 +832,10 @@ Settled on 2026-10-12. The reasoning is in parts 2 and 5.
   cache vex is built with.
 - **D6.** A generated action calls reads its owner may replay and functions on
   the charter's list, and makes no vex write.
-- **D7.** Publishing is the save a person makes of their own, told it is for
-  everybody, through a function the app ships for its owners.
+- **D7.** Publishing is the save a person makes, made by the app's own server
+  code as the one principal that stands for everybody, from a function the
+  app ships for its owners. (Changed 2026-10-13: it was "the save a person
+  makes of their own, told it is for everybody".)
 - **D8.** Somebody else's publish while my screen is open is adopted in place.
 - **D9.** Integrations' actions and an app's named sets are in the live list,
   not in the tables.
