@@ -17,7 +17,7 @@ export type ShellHostsDeps = {
   app: Pick<NiscApp, 'shell' | 'pages' | 'phrases' | 'functions' | 'onSession' | 'runs' | 'phraseKeys'>;
   runtime: Pick<NiscRuntime, 'telemetry' | 'shellIdleMs' | 'shellFrameDelta' | 'endpointTimeoutMs'>;
   identity: Pick<Identity, 'resolve' | 'composeScope'>;
-  running: Pick<RunningManifest, 'artifactsFor' | 'sessionArtifacts'>;
+  running: Pick<RunningManifest, 'artifactsFor' | 'sessionArtifacts' | 'draftSavingFor'>;
   // What was saved, as the caller whose scope it is handed.
   savedAs: (scope: Record<string, unknown>) => SavedRows;
   data: Pick<Data, 'answerIntent' | 'fingerprintsFor'>;
@@ -50,13 +50,14 @@ const hostConfig = (deps: ShellHostsDeps, shell: ShellManifest, kept: boolean): 
     };
   };
   return {
-    composition: async (principal) => {
+    composition: async (principal, drafted) => {
       const { resolved, saved, ...held } = await callerOf(principal);
       // Nobody signed in has no rows of their own: they share one `userId`.
-      const who = { principal, ...held, ...(principal === null ? {} : { saved }) };
+      const who = { principal, ...held, ...(principal === null ? {} : { saved, ...(drafted === undefined ? {} : { drafted }) }) };
       return { roles: resolved.roles, scope: resolved.scope, ...(await running.artifactsFor(shell, who)) };
     },
     artifacts: (principal) => running.sessionArtifacts(principal, () => callerOf(principal)),
+    draftSaving: (principal) => running.draftSavingFor(shell, principal, () => callerOf(principal)),
     hooks: {
       ...(shell.inputs !== undefined ? { inputs: shell.inputs } : {}),
       ...(shell.seeds !== undefined ? { seeds: shell.seeds } : {}),

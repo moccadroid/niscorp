@@ -95,11 +95,27 @@ export type SessionArtifacts = {
   reset: (kind: ArtifactKind, id: string) => Promise<{ save: string }>;
 };
 
+export type DraftArtifact = { kind: ArtifactKind; id: string; body: unknown };
+
+// What is being generated in this one shell, before it is saved. A put is in
+// the shell when it answers. Nothing of it is kept anywhere else, and it is
+// gone when the shell is.
+export type SessionDraft = {
+  put: (artifacts: readonly { kind: ArtifactKind; id?: string; body: unknown }[]) => Promise<{ step: number; artifacts: readonly { kind: ArtifactKind; id: string }[] }>;
+  list: () => readonly DraftArtifact[];
+  remove: (kind: ArtifactKind, id: string) => Promise<{ step: number }>;
+  // `0`: none of it.
+  show: (step: number) => Promise<void>;
+  discard: () => Promise<void>;
+  save: () => Promise<{ save: string; artifacts: readonly { kind: ArtifactKind; id: string }[] }>;
+};
+
 export type FunctionSession = {
   // The members that change what a shell is made of (`registerAction`,
   // `setLayout`, `addCanvas` and their kin) throw on this one.
   shell: Shell;
   artifacts: SessionArtifacts;
+  draft: SessionDraft;
   principal: string | null;
   roles: readonly string[];
   identity: Record<string, unknown>;

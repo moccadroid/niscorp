@@ -2,7 +2,7 @@ import type { ActionDefinition, ActionFragment, FetchFn, LayoutNode, RenderNode,
 import type { PhraseKeys } from '@niscorp/nova/i18n';
 import type { QueryResponse, SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Intent, QueryWriters } from '../data';
-import type { NiscApp, SessionArtifacts, ShellCanvas, ShellManifest } from '../manifest';
+import type { ArtifactKind, DraftArtifact, NiscApp, SessionArtifacts, ShellCanvas, ShellManifest } from '../manifest';
 import type { Telemetry } from '../runtime';
 
 export type ShellComposition = {
@@ -36,8 +36,15 @@ export type ShellLimits = {
   endpointTimeoutMs?: number;
 };
 
+// What a shell asks of whoever checks what is put into its draft, and saves it.
+export type DraftSaving = {
+  put: (artifacts: unknown, drafted: readonly DraftArtifact[]) => Promise<{ drafted: readonly DraftArtifact[]; put: readonly { kind: ArtifactKind; id: string }[] }>;
+  save: (drafted: readonly DraftArtifact[]) => Promise<{ save: string; artifacts: readonly { kind: ArtifactKind; id: string }[] }>;
+};
+
 export type ShellHostConfig = {
-  composition: (principal: string | null) => Promise<ShellComposition>;
+  // `drafted`: what the draft of the shell this is asked for holds.
+  composition: (principal: string | null, drafted?: readonly DraftArtifact[]) => Promise<ShellComposition>;
   hooks: ShellHooks;
   phraseKeys?: PhraseKeys;
   kept?: boolean;
@@ -45,6 +52,7 @@ export type ShellHostConfig = {
   wrapWire?: (inner: FetchFn) => FetchFn;
   answerIntent?: (principal: string | null, writers: QueryWriters, asked: Intent) => Promise<QueryResponse>;
   artifacts?: (principal: string | null) => SessionArtifacts;
+  draftSaving?: (principal: string | null) => DraftSaving;
   revokeSessions?: (principal: string) => Promise<void>;
   telemetry?: Telemetry;
   limits?: ShellLimits;

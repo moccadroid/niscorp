@@ -27,7 +27,7 @@ const SaveIdSchema = z.uuid();
 
 const ToSaveSchema = z.array(z.strictObject({ kind: z.string(), id: z.string().optional(), body: z.unknown() })).min(1);
 
-type Written = Pick<SavedVersion, 'kind' | 'id' | 'body' | 'copiedFrom'>;
+export type Written = Pick<SavedVersion, 'kind' | 'id' | 'body' | 'copiedFrom'>;
 
 const NEW_ID: Readonly<Record<ArtifactKind, () => string>> = { layout: randomUUID, action: generatedId, fragment: generatedId };
 
@@ -40,9 +40,9 @@ const listed = (version: SavedVersion, kind: ArtifactKind): ArtifactVersion => (
   body: version.body,
 });
 
-const withoutMark = ({ use: _mark, ...layout }: Record<string, unknown>): Record<string, unknown> => layout;
+export const withoutMark = ({ use: _mark, ...layout }: Record<string, unknown>): Record<string, unknown> => layout;
 
-const checked = async (kind: ArtifactKind, id: string, body: unknown, heldTo: HeldTo): Promise<unknown> => {
+export const checked = async (kind: ArtifactKind, id: string, body: unknown, heldTo: HeldTo): Promise<unknown> => {
   if (kind === 'layout') {
     const read = readLayout(body, heldTo.layouts);
     if ('refusal' in read) throw new Error(`moss: the layout for "${refOf(body) ?? '(no ref)'}" is refused: ${read.refusal}`);
@@ -53,6 +53,16 @@ const checked = async (kind: ArtifactKind, id: string, body: unknown, heldTo: He
   return read.body;
 };
 
+export const markedRefs = (versions: readonly Pick<Written, 'kind' | 'body'>[]): string[] => {
+  const marked = versions.flatMap((version) => {
+    const ref = refOf(version.body);
+    return version.kind === 'layout' && isRecord(version.body) && version.body['use'] === true && ref !== undefined ? [ref] : [];
+  });
+  const twice = marked.find((ref, at) => marked.indexOf(ref) !== at);
+  if (twice !== undefined) throw new Error(`moss: two layouts of one save are marked in use for "${twice}". One is in use at a time.`);
+  return marked;
+};
+
 // A save that says which layout is in use for a ref, by marking one or by taking
 // the one in use out (a reset, or a save of it without the mark), takes the mark
 // off the holder's others for that ref. Two saves at the same moment can each
@@ -60,12 +70,7 @@ const checked = async (kind: ArtifactKind, id: string, body: unknown, heldTo: He
 // of the one that was taken out.
 const unmarked = (versions: readonly Written[], inForce: readonly SavedVersion[]): Written[] => {
   const layouts = versions.filter((version) => version.kind === 'layout');
-  const marked = layouts.flatMap((version) => {
-    const ref = refOf(version.body);
-    return isRecord(version.body) && version.body['use'] === true && ref !== undefined ? [ref] : [];
-  });
-  const twice = marked.find((ref, at) => marked.indexOf(ref) !== at);
-  if (twice !== undefined) throw new Error(`moss: two layouts of one save are marked in use for "${twice}". One is in use at a time.`);
+  const marked = markedRefs(layouts);
   const saved = new Set(layouts.map((version) => version.id));
   const takenOut = inForce.flatMap((held) => (isInUse(held) && saved.has(held.id) ? [refOf(held.body)] : []));
   const decided = new Set([...marked, ...takenOut]);
@@ -77,10 +82,13 @@ const unmarked = (versions: readonly Written[], inForce: readonly SavedVersion[]
   });
 };
 
-export const savedArtifacts = ({ holder, whose, kinds, written }: SavedArtifactsDeps): SessionArtifacts => {
+export const idsOf = (versions: readonly (Written & { kind: ArtifactKind })[]): { kind: ArtifactKind; id: string }[] => versions.map(({ kind, id }) => ({ kind, id }));
+
+// `nobody`: what is said where nobody is signed in.
+export const savingFor = ({ holder, whose, kinds, written }: SavedArtifactsDeps, nobody: string) => {
   // Everybody nobody is signed in for shares one `userId`: what one of them saved would be all of theirs.
   const requireHolder = (): (() => Promise<Holder>) => {
-    if (holder === undefined) throw new Error('moss: nobody is signed in to this session, and a save is somebody’s.');
+    if (holder === undefined) throw new Error(nobody);
     return holder;
   };
 
@@ -90,34 +98,50 @@ export const savedArtifacts = ({ holder, whose, kinds, written }: SavedArtifacts
     return known;
   };
 
-  const write = async (saved: SavedRows, versions: readonly Written[], inForce: readonly SavedVersion[]): Promise<string> => {
+  const askedOf = (artifacts: unknown): { kind: ArtifactKind; id?: string | undefined; body: unknown }[] => {
+    const asked = ToSaveSchema.safeParse(artifacts);
+    if (!asked.success) throw new Error('moss: a save holds one or several artifacts, each `{ kind, id?, body }` and nothing else.');
+    return asked.data.map((artifact) => ({ ...artifact, kind: ofKind(artifact.kind) }));
+  };
+
+  // Each under its id, and checked. `inForce`: what an id that was named has to be among.
+  const checkedEach = async (asked: ReturnType<typeof askedOf>, inForce: readonly SavedVersion[], held: HeldTo): Promise<(Written & { kind: ArtifactKind })[]> => {
+    const versions: (Written & { kind: ArtifactKind })[] = [];
+    for (const { kind, id: named, body } of asked) {
+      const id = named ?? NEW_ID[kind]();
+      versions.push({ kind, id, body: await checked(kind, id, body, held), copiedFrom: null });
+    }
+    const notTheirs = asked.find(({ kind, id }) => id !== undefined && !inForce.some((version) => version.kind === kind && version.id === id));
+    if (notTheirs !== undefined) {
+      throw new Error(`moss: there is no ${notTheirs.kind} "${notTheirs.id}" ${whose}. Leave the id out, and moss gives a new ${notTheirs.kind} its id.`);
+    }
     const twice = versions.find((version, at) => versions.findIndex((other) => other.kind === version.kind && other.id === version.id) !== at);
     if (twice !== undefined) throw new Error(`moss: the ${twice.kind} "${twice.id}" is in one save twice.`);
+    return versions;
+  };
+
+  const write = async (saved: SavedRows, versions: readonly Written[], inForce: readonly SavedVersion[]): Promise<string> => {
     const save = randomUUID();
     await saved.write({ id: save, versions: [...versions, ...unmarked(versions, inForce)] });
     written();
     return save;
   };
 
+  return { requireHolder, ofKind, askedOf, checkedEach, write };
+};
+
+export const savedArtifacts = (deps: SavedArtifactsDeps): SessionArtifacts => {
+  const { holder, whose, kinds } = deps;
+  const { requireHolder, ofKind, askedOf, checkedEach, write } = savingFor(deps, 'moss: nobody is signed in to this session, and a save is somebody’s.');
+
   return {
     save: async (artifacts) => {
       const holderOf = requireHolder();
-      const toSave = ToSaveSchema.safeParse(artifacts);
-      if (!toSave.success) throw new Error('moss: a save holds one or several artifacts, each `{ kind, id?, body }` and nothing else.');
-      const asked = toSave.data.map((artifact) => ({ ...artifact, kind: ofKind(artifact.kind) }));
+      const asked = askedOf(artifacts);
       const { saved, heldTo } = await holderOf();
       const inForce = await saved.inForce();
-      const held = await heldTo(inForce);
-      const versions: (Written & { kind: ArtifactKind })[] = [];
-      for (const { kind, id: named, body } of asked) {
-        const id = named ?? NEW_ID[kind]();
-        versions.push({ kind, id, body: await checked(kind, id, body, held), copiedFrom: null });
-      }
-      const notTheirs = asked.find(({ kind, id }) => id !== undefined && !inForce.some((version) => version.kind === kind && version.id === id));
-      if (notTheirs !== undefined) {
-        throw new Error(`moss: there is no ${notTheirs.kind} "${notTheirs.id}" ${whose}. Leave the id out, and moss gives a new ${notTheirs.kind} its id.`);
-      }
-      return { save: await write(saved, versions, inForce), artifacts: versions.map(({ kind, id }) => ({ kind, id })) };
+      const versions = await checkedEach(asked, inForce, await heldTo(inForce));
+      return { save: await write(saved, versions, inForce), artifacts: idsOf(versions) };
     },
 
     list: async (kind) => {

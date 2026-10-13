@@ -3,6 +3,7 @@ export type {
   ArtifactKind,
   ArtifactVersion,
   CanvasSeed,
+  DraftArtifact,
   FunctionSession,
   LayoutVariant,
   NiscApp,
@@ -11,6 +12,7 @@ export type {
   RunSink,
   RunTurn,
   SessionArtifacts,
+  SessionDraft,
   ShellCanvas,
   ShellManifest,
 } from './app';

@@ -1,9 +1,10 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import type { CacheEntry, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { actionOfLayoutRef, candidateOf, entriesOf, entryMisfits, freezeDeep, refusalOf, verifyManifest } from '../manifest';
-import type { KitComponents, ManifestCandidate, ManifestReport, SessionArtifacts, ShellManifest, ShippedManifest } from '../manifest';
+import type { DraftArtifact, KitComponents, ManifestCandidate, ManifestReport, SessionArtifacts, ShellManifest, ShippedManifest } from '../manifest';
 import type { ShellArtifacts } from './artifacts';
 import { shellComponents } from './artifacts';
+import { draftSaving, laidOver } from './draft';
 import { compileEntries, createEntriesInForce } from './entries';
 import { createGeneration } from './generation';
 import type { Generation, Pointer } from './generation';
@@ -15,7 +16,7 @@ import { actionsWithStoredLayouts, createRoleMemo, narrowedBy } from './roles';
 import type { Catalog, CatalogFilter, StoredLayouts } from './roles';
 import type { SavedRows, SavedVersion } from './saves';
 import { savedArtifacts } from './session';
-import type { HeldTo } from './session';
+import type { HeldTo, SavedArtifactsDeps } from './session';
 
 type Actions = Readonly<Record<string, ActionDefinition>>;
 
@@ -39,7 +40,8 @@ export type RolesHeld = { roles: readonly string[]; installed: readonly string[]
 export type Caller = RolesHeld & { saved: SavedRows };
 
 // `saved`: the rows of that principal. Nobody signed in has none.
-export type Who = RolesHeld & { principal: string | null; saved?: SavedRows };
+// `drafted`: what the draft of the shell this is asked for holds.
+export type Who = RolesHeld & { principal: string | null; saved?: SavedRows; drafted?: readonly DraftArtifact[] };
 
 export type OwnedActions = {
   replace: (actions: Record<string, ActionDefinition>) => void;
@@ -63,6 +65,8 @@ export type RunningManifest = {
   catalogFor: (roles: readonly string[], installed: readonly string[] | undefined) => Catalog;
   artifactsFor: (shell: ShellManifest, who: Who) => Promise<ShellArtifacts>;
   sessionArtifacts: (principal: string | null, callerOf: () => Promise<Caller>) => SessionArtifacts;
+  // `shell`: the one the draft is in. What is put into it is held to what that shell can draw.
+  draftSavingFor: (shell: ShellManifest, principal: string | null, callerOf: () => Promise<Caller>) => ReturnType<typeof draftSaving>;
   // `saved`: the rows of what is published, with whoever publishes.
   publishedArtifacts: (saved: SavedRows) => SessionArtifacts;
   // Asks the rows what is published, so that a boot that cannot read it fails.
@@ -202,6 +206,21 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   };
   const listeners = new Set<() => void>();
   const listenersFor = new Set<(principal: string) => void>();
+  const sessionDeps = (principal: string | null, callerOf: () => Promise<Caller>, shell?: ShellManifest): SavedArtifactsDeps => ({
+    whose: 'of yours',
+    kinds: ['layout', 'action', 'fragment'],
+    holder:
+      principal === null
+        ? undefined
+        : async () => {
+            const caller = await callerOf();
+            const held = roleMemo.storedLayoutsFor(caller.roles, caller.installed);
+            return { saved: caller.saved, heldTo: async (inForce) => (await heldWithGenerated(held, inForce, caller, shell)).heldTo };
+          },
+    written: () => {
+      if (principal !== null) for (const listener of [...listenersFor]) tell(listener, principal);
+    },
+  });
   let pointer: Generation | undefined;
 
   let published: Promise<readonly SavedVersion[]> | undefined;
@@ -311,9 +330,9 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       roleMemo.drop();
     },
     catalogFor: roleMemo.catalogFor,
-    artifactsFor: async (shell, { principal, roles, installed, saved, replayable }) => {
+    artifactsFor: async (shell, { principal, roles, installed, saved, replayable, drafted }) => {
       // Asked of the rows at every shell: what somebody saved in another process is theirs here too.
-      const versions = saved === undefined || principal === null ? [] : await saved.inForce();
+      const versions = saved === undefined || principal === null ? [] : laidOver(await saved.inForce(), drafted);
       const whose = `of ${principal ?? 'nobody'}`;
       const theirOwn = await heldWithGenerated(roleMemo.storedLayoutsFor(roles, installed), versions, { replayable }, shell, whose);
       const drawable = theirOwn.heldTo.layouts;
@@ -333,22 +352,8 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
         components: components.of(shell),
       };
     },
-    sessionArtifacts: (principal, callerOf) =>
-      savedArtifacts({
-        whose: 'of yours',
-        kinds: ['layout', 'action', 'fragment'],
-        holder:
-          principal === null
-            ? undefined
-            : async () => {
-                const caller = await callerOf();
-                const held = roleMemo.storedLayoutsFor(caller.roles, caller.installed);
-                return { saved: caller.saved, heldTo: async (inForce) => (await heldWithGenerated(held, inForce, caller)).heldTo };
-              },
-        written: () => {
-          if (principal !== null) for (const listener of [...listenersFor]) tell(listener, principal);
-        },
-      }),
+    sessionArtifacts: (principal, callerOf) => savedArtifacts(sessionDeps(principal, callerOf)),
+    draftSavingFor: (shell, principal, callerOf) => draftSaving(sessionDeps(principal, callerOf, shell)),
     // Held to every action in force with the layout it is built with: who holds
     // which is asked when a shell is built for them.
     publishedArtifacts: (saved) =>

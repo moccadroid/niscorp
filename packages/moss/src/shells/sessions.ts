@@ -5,6 +5,7 @@ import { CLOSE_SIGNED_OUT } from '../protocol';
 import type { ServerMessage } from '../protocol';
 import { spanClock } from '../runtime';
 import type { Emit } from '../runtime';
+import { sessionDraftOn } from './draft';
 import { endShell } from './host-state';
 import type { Cell, HostState, Live } from './host-state';
 import { attach, resync } from './stream';
@@ -84,6 +85,7 @@ export const functionSessionFor = (
       if (artifacts === undefined) throw new Error('moss: this shell host was given nothing to save with.');
       return artifacts;
     },
+    draft: sessionDraftOn({ saving: config.draftSaving?.(principal), liveOf: () => shellRef.live, adopt: host.adoptDraft }),
     principal,
     roles: who.roles,
     identity: who.scope,

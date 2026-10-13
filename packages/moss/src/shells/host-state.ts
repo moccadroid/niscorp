@@ -1,6 +1,7 @@
 import type { ActionDefinition, ActionFragment, LayoutNode, Shell } from '@niscorp/nova';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Emit } from '../runtime';
+import type { DraftState } from './draft';
 import type { ShellComposition, ShellConnection, ShellHostConfig, ShellOpening } from './types';
 
 export type ShellLayouts = {
@@ -28,6 +29,7 @@ export type Live = {
   actionIds: ReadonlySet<string>;
   entries: ReadonlyMap<string, SeedEntry | SeedMutation> | undefined;
   layouts: ShellLayouts;
+  draft: DraftState;
   connections: Set<ShellConnection>;
   sentByCanvas: Map<string, string>;
   sentFrame?: string;
@@ -63,6 +65,8 @@ export type HostState = {
   living: Map<Live, Cell>;
   // How many times what is in force has changed since the host was made.
   changes: number;
+  // Has one shell take its draft as it is to be, for whoever changes the draft to wait on.
+  adoptDraft: (live: Live, next: DraftState) => Promise<void>;
 };
 
 // Disposing stays with the caller: the shell of a session that signs out

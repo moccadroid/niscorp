@@ -248,6 +248,7 @@ What the manifest's in-process functions close over:
 type FunctionSession = {
   shell: Shell;                    // the session's living, durable shell (a getter — a reset replaces it); eight members throw
   artifacts: SessionArtifacts;     // what this principal saved, and saving: `session.artifacts`, below
+  draft: SessionDraft;             // what is being generated in this one shell, before it is saved: `session.draft`, below
   principal: string | null;
   roles: readonly string[];
   identity: Record<string, unknown>;  // the scope half of the resolved identity
@@ -391,7 +392,9 @@ functions: (session) => ({
   `session.artifacts.list('action')`.
 - **It reaches its owner's open shells a moment after the save answers**, as a
   saved layout does, and not before: a function that saves an action and
-  opens it in the same call finds it not there yet.
+  opens it in the same call finds it not there yet. One that is to be seen at
+  once is put into the draft (`session.draft`, below), which answers when the
+  shell has it.
 - **What it defines only reads.** Each endpoint it defines is a `POST` to the
   app's vex route (`/api/vex`, or `/api/<resource>/vex`) whose `request` names
   one fingerprint, written out. That fingerprint is a read the app ships or
@@ -537,6 +540,68 @@ an app's entry that inserts or updates one for a caller is refused (500,
 engine which tables changed, so a read of the app's that follows them
 refreshes, and tell no subscriber of the routes. The function that saved
 knows that it did.
+
+#### `session.draft` — what is being generated in this shell
+
+What a person or a model is still working on is in the draft of the one shell
+it is worked on in. It is shown there at once and saved nowhere: no other
+shell has it, the person's own others included, and it is gone when the shell
+is (a reset, an idle shell that was dropped, a restart).
+
+```typescript
+type SessionDraft = {
+  put: (artifacts: readonly { kind: ArtifactKind; id?: string; body: unknown }[]) => Promise<{ step: number; artifacts: readonly { kind: ArtifactKind; id: string }[] }>;
+  list: () => readonly { kind: ArtifactKind; id: string; body: unknown }[];
+  remove: (kind: ArtifactKind, id: string) => Promise<{ step: number }>;
+  show: (step: number) => Promise<void>;
+  discard: () => Promise<void>;
+  save: () => Promise<{ save: string; artifacts: readonly { kind: ArtifactKind; id: string }[] }>;
+};
+```
+
+```typescript
+functions: (session) => ({
+  'screen.try': async ({ action }) => {
+    const put = await session.draft.put([{ kind: 'action', body: action }]);
+    session.shell.push('main', put.artifacts[0].id);
+  },
+  'screen.keep': async () => session.draft.save(),
+}),
+```
+
+- **`put` takes what `session.artifacts.save` takes and refuses what it
+  refuses**, with the same sentences. Each artifact is checked beside what is
+  in force for the principal with the draft laid over, so a layout may be for
+  an action that is itself in the draft. A draft is one shell's, so what is
+  put into it is held to the components of that shell, where a save is held to
+  those of any shell of the app. A new action or fragment gets its
+  `generated.` id here, and keeps it when the draft is saved. An `id` names
+  one in the draft, or one the principal saved: a new take of it, which stands
+  in for the saved one in this shell until the draft is saved or the take is
+  taken out. A put that marks a layout `use: true` takes the mark off the
+  draft's others for that ref, as a save does.
+- **A put is in the shell when it answers.** The function that put an action
+  opens it on its next line. An open screen follows a drafted layout with what
+  was typed into it kept, as it follows a saved one. A put the shell could not
+  take rejects, and the draft is as it was.
+- **What the shell draws**: what is in the draft, then what `session.artifacts`
+  would draw. A drafted layout marked `use: true` is drawn in place of a saved
+  one that is marked for the same ref.
+- **`list`** answers what the draft holds, and **`remove`** takes one out of
+  it; what is under it is drawn again. **`discard`** empties it.
+- **Each put or removal is a numbered step**, from 1. **`show(step)`** has the
+  shell show the draft as it was after that step, and `show(0)` none of it. A
+  put or a removal while an earlier step is shown goes on from that step: the
+  steps after it are dropped. The steps are the draft's and are saved nowhere.
+- **`save`** is one save of what the draft holds, as the principal's own and
+  under the ids it had, checked once more. The draft is then empty and the
+  shell keeps what it shows. An empty draft is refused.
+- **Calls on one draft are taken in turn**: each starts from the draft as the
+  one before it left it.
+- A session nobody is signed in to has no draft, as it saves nothing. Every
+  call on the draft of a shell that was replaced since is refused (`moss: this
+  session’s shell is gone, and its draft with it.`), `list` and `save` among
+  them: what was in it is saved by nobody.
 
 ### The environment
 

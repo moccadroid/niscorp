@@ -3,6 +3,8 @@ import { snapshotShell } from '@niscorp/nova/reflect';
 import { emitterOf } from '../runtime';
 import { buildShell } from './build';
 import type { BuildRequest } from './build';
+import { SHELL_GONE, draftedIn } from './draft';
+import type { DraftState } from './draft';
 import type { OwnedShellHost, ShellComposition, ShellHost, ShellHostConfig, ShellReport } from './types';
 import { endShell, layoutsOf } from './host-state';
 import type { Cell, HostState, Live } from './host-state';
@@ -75,26 +77,59 @@ const takeLayouts = (live: Live, made: ShellComposition): void => {
   live.layouts = answered;
 };
 
+const takeComposition = (live: Live, made: ShellComposition): void => {
+  for (const [name, contract] of Object.entries(made.components)) {
+    if (!live.shell.registry.has(name)) live.shell.registry.register(name, contract);
+  }
+  for (const id of live.actionIds) if (!Object.hasOwn(made.actions, id)) live.shell.removeAction(id);
+  for (const definition of Object.values(made.actions)) live.shell.registerAction(definition);
+  live.actionIds = new Set(Object.keys(made.actions));
+  live.entries = made.entries;
+  takeLayouts(live, made);
+};
+
+// For the one shell whose draft is to change, and awaited by whoever changes
+// it. The draft is as it is to be only once the shell has taken it: one the
+// shell could not take leaves both as they were.
+const adoptDraft = async (host: HostState, live: Live, next: DraftState): Promise<void> => {
+  for (;;) {
+    const cell = host.living.get(live);
+    if (cell === undefined || cell.live !== live) throw new Error(SHELL_GONE);
+    // Read before the await, as an adopt reads it.
+    const changes = host.changes;
+    const made = await host.config.composition(cell.principal, draftedIn(next));
+    if (live.ended || cell.live !== live) throw new Error(SHELL_GONE);
+    // The shell adopted an answer that was asked for after this one: this one is the older, and is asked for again.
+    if (changes < cell.changes) continue;
+    cell.changes = changes;
+    live.draft = next;
+    takeComposition(live, made);
+    return;
+  }
+};
+
 const adopt = (host: HostState, cell: Cell): void => {
   const adopting = async (): Promise<void> => {
-    if (cell.live.ended) return;
+    const asked = cell.live;
+    if (asked.ended) return;
+    const drafted = asked.draft;
     // Read before the await, so the answer reflects at least this many changes.
     const changes = host.changes;
-    const made = await host.config.composition(cell.principal);
-    // Read after the await: a reset may have replaced the cell's shell meanwhile.
-    const live = cell.live;
+    const made = await host.config.composition(cell.principal, draftedIn(drafted));
+    // The answer holds the draft of the shell it was asked for, and is that
+    // shell's alone. Where a reset replaced it meanwhile the answer is dropped:
+    // the new shell has no draft, and adopts for itself where it is behind
+    // (`registerLiving`).
     // Two changes are answered by app code in either order. An answer for a
     // change the shell already reflects is the older one, and is dropped.
-    if (live.ended || changes <= cell.changes) return;
-    cell.changes = changes;
-    for (const [name, contract] of Object.entries(made.components)) {
-      if (!live.shell.registry.has(name)) live.shell.registry.register(name, contract);
+    if (asked.ended || changes <= cell.changes) return;
+    // The draft moved while this was asked for: it is asked for again, with the draft as it is.
+    if (asked.draft !== drafted) {
+      adopt(host, cell);
+      return;
     }
-    for (const id of live.actionIds) if (!Object.hasOwn(made.actions, id)) live.shell.removeAction(id);
-    for (const definition of Object.values(made.actions)) live.shell.registerAction(definition);
-    live.actionIds = new Set(Object.keys(made.actions));
-    live.entries = made.entries;
-    takeLayouts(live, made);
+    cell.changes = changes;
+    takeComposition(asked, made);
   };
   adopting().catch((error: unknown) => {
     console.error(`[moss/shells] the shell of ${cell.principal ?? 'nobody'} could not adopt what changed, and keeps what it held:`, error);
@@ -272,6 +307,7 @@ export const createShellHost = (config: ShellHostConfig): OwnedShellHost => {
     building: new Map(),
     living: new Map(),
     changes: 0,
+    adoptDraft: (live, next) => adoptDraft(host, live, next),
   };
   const reset = (cell: Cell): void => resetCell(host, cell);
 

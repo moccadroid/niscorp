@@ -3,6 +3,7 @@ import type { CanvasConfig, PublicActionRuntime, Shell } from '@niscorp/nova';
 import { evaluate } from '@niscorp/prism';
 import type { CanvasSeed, ShellCanvas } from '../manifest';
 import { spanClock } from '../runtime';
+import { noDraft } from './draft';
 import { functionSessionFor, instrumentFunctions } from './sessions';
 import type { ShellRef } from './sessions';
 import { layoutsOf, withLayoutInPlace } from './host-state';
@@ -194,6 +195,7 @@ export const buildShell = async (host: HostState, asked: BuildRequest): Promise<
     actionIds: granted,
     entries: made.entries,
     layouts: layoutsOf(made),
+    draft: noDraft(),
     connections: new Set(),
     sentByCanvas: new Map(),
     deltaReady: new Set(),
