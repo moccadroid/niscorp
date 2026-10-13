@@ -719,11 +719,14 @@ shell. On the whole shell (`unverifiedShell`) they see the ref.
   generated**, beside the ids their roles are granted: it is the ids of the
   actions the shell was built with, and so are the `actions` the `inputs` and
   `seeds` hooks are handed. Left as it is (the owner's, 2026-10-13).
-- **Nova keeps actions and fragments in two registries**, with a call to take
-  an action out of a shell and none for a fragment. So a fragment that left
-  stays in a shell that is already open until that shell is built again. Not
-  to be patched with a second call: one registry in nova for both, told apart
-  by `kind`, is to be proposed to the owner as a change of its own.
+- **Nova keeps actions and fragments in one registry** (the owner's,
+  2026-10-13; built the same day, outside the ten steps): `registerAction` and
+  `removeAction` take either, told apart by `kind`, `registerFragment` is
+  gone, a fragment a shell is constructed with is validated, and an id names
+  an action or a fragment and never both. Moss's adopt takes a fragment that
+  left out of a shell that is already open, and what a boot verifies refuses
+  an action under the id of a fragment a shell ships. An app still writes
+  `actions` and `fragments` as two lists; one list for both was not proposed.
 - **What a generated action may open is held against what was in force for
   its owner when it was checked**, one of their own that is itself left out
   included. Nova refuses the push when it runs.

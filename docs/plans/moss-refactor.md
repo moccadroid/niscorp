@@ -76,8 +76,8 @@ file in the same change.
 | `/client`, `/client/node` | the wire client |
 | `/terminal` and its targets | the canvas terminal: react, vue, dom, tty, ink, and their server renderers |
 
-**The shell a session hands out** is nova's `Shell` with nine members that
-throw: `registerAction`, `removeAction`, `registerFragment`, `addCanvas`,
+**The shell a session hands out** is nova's `Shell` with eight members that
+throw: `registerAction`, `removeAction`, `addCanvas`,
 `removeCanvas`, `setCanvasLayout`, `setLayout`, `setPhrases`, `dispose`. Its
 layout store is to read, and a definition read off it is the action as it was
 written, with its layout in place. What
