@@ -224,7 +224,7 @@ describe('what is refused, in a sentence, with nothing written', () => {
   });
 
   it('a kind moss does not save', () =>
-    refused(({ of }) => of('ada').save([{ kind: 'action' as 'layout', body: { id: 'x' } }]), 'moss: "action" is not a kind that is saved. The kinds: layout.'));
+    refused(({ of }) => of('ada').save([{ kind: 'entry' as 'layout', body: { fingerprint: 'x' } }]), 'moss: "entry" is not a kind that is saved. The kinds: layout, action, fragment.'));
 
   it('a body that is not a layout’s', () =>
     refused(({ of }) => of('ada').save([{ kind: 'layout', body: { ref: 'action/home', layout: { component: 7 } } }]), /^moss: the layout for "action\/home" is refused: layout: /));
@@ -273,6 +273,12 @@ describe('what is refused, in a sentence, with nothing written', () => {
 
   it('an id that is not one of theirs', () =>
     refused(({ of }) => of('ada').save([{ ...mine('x'), id: 'somebody-elses' }]), 'moss: there is no layout "somebody-elses" of yours. Leave the id out, and moss gives a new layout its id.'));
+
+  it('a body that is refused is said before an id that is not theirs', () =>
+    refused(
+      ({ of }) => of('ada').save([{ kind: 'layout', id: 'not-theirs', body: { ref: 'action/home', layout: { component: 'Carousel' } } }]),
+      'moss: the layout for "action/home" is refused: layout uses "Carousel", which this app has no component for',
+    ));
 
   it('two of one save marked in use for one ref', () =>
     refused(({ of }) => of('ada').save([mine('one', true), mine('two', true)]), 'moss: two layouts of one save are marked in use for "action/home". One is in use at a time.'));

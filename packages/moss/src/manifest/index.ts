@@ -1,4 +1,4 @@
-export { actionLayoutRef, actionOfLayoutRef, defineApp, entriesOf } from './app';
+export { GENERATED_ID_PREFIX, actionLayoutRef, actionOfLayoutRef, defineApp, entriesOf } from './app';
 export type {
   ArtifactKind,
   ArtifactVersion,

@@ -20,7 +20,7 @@ export type ShellHostsDeps = {
   running: Pick<RunningManifest, 'artifactsFor' | 'sessionArtifacts'>;
   // What was saved, as the caller whose scope it is handed.
   savedAs: (scope: Record<string, unknown>) => SavedRows;
-  data: Pick<Data, 'answerIntent'>;
+  data: Pick<Data, 'answerIntent' | 'fingerprintsFor'>;
   wire: (token: string | null) => FetchFn;
   wrapWire: (inner: FetchFn) => FetchFn;
   revokeSessions: ((principal: string) => Promise<void>) | undefined;
@@ -41,7 +41,13 @@ const hostConfig = (deps: ShellHostsDeps, shell: ShellManifest, kept: boolean): 
   const { app, runtime, identity, running, data } = deps;
   const callerOf = async (principal: string | null) => {
     const resolved = await identity.resolve(principal);
-    return { resolved, roles: resolved.roles, installed: resolved.installed, saved: deps.savedAs(identity.composeScope(principal, resolved)) };
+    return {
+      resolved,
+      roles: resolved.roles,
+      installed: resolved.installed,
+      saved: deps.savedAs(identity.composeScope(principal, resolved)),
+      replayable: () => data.fingerprintsFor(resolved),
+    };
   };
   return {
     composition: async (principal) => {

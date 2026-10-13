@@ -58,7 +58,7 @@ const processOn = (rows: RowsDouble, fabric?: Fabric, userIdOf: (principal: stri
     running,
     // Whose rows a caller is handed follows from the scope the server composed for them, and from nothing else.
     savedAs: (scope) => rows.as(String(scope['userId'])),
-    data: { answerIntent: async () => Promise.reject(new Error('no intent is asked here')) },
+    data: { answerIntent: async () => Promise.reject(new Error('no intent is asked here')), fingerprintsFor: async () => [] },
     wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
     wrapWire: (inner) => inner,
     revokeSessions: undefined,
@@ -145,6 +145,29 @@ describe('a layout saved from a function’s session', () => {
       await settle();
 
       expect(ada.drawn()).toContain('"name":"Text"');
+    });
+  });
+
+  it('a generated action reaches its owner’s open shell and nobody else’s: it is opened there, and is gone from it again after a reset', async () => {
+    const here = processOn(rowsDouble());
+    await stopping([here], async () => {
+      const ada = await here.screenOf('ada');
+      await here.screenOf('ben');
+      await settle();
+
+      const saved = await here.sessionOf('ada').artifacts.save([{ kind: 'action', body: { layout: { component: 'Text', children: 'what ada generated' } } }]);
+      const id = saved.artifacts[0]?.id ?? '';
+      await settle();
+
+      expect(() => here.sessionOf('ben').shell.push('main', id)).toThrow();
+      here.sessionOf('ada').shell.push('main', id);
+      await settle();
+      expect(ada.drawn()).toContain('what ada generated');
+
+      here.sessionOf('ada').shell.pop('main');
+      await here.sessionOf('ada').artifacts.reset('action', id);
+      await settle();
+      expect(() => here.sessionOf('ada').shell.push('main', id)).toThrow();
     });
   });
 

@@ -3,7 +3,7 @@ import { ActionDefinitionSchema, ActionFragmentSchema, LayoutNodeSchema } from '
 import { ConfigSchema } from '@niscorp/prism';
 import { SequenceSchema, depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { MutationDefinitionSchema, QuerySchema, REFRESH_MODES } from '@niscorp/vex';
-import { ACTION_LAYOUT_NAME_REFUSAL, isActionLayoutRef } from './app';
+import { ACTION_LAYOUT_NAME_REFUSAL, GENERATED_ID_PREFIX, isActionLayoutRef } from './app';
 import type { NiscApp } from './app';
 
 const seam = z.custom<(...args: never[]) => unknown>((value) => typeof value === 'function', 'expected a function');
@@ -38,11 +38,13 @@ const ComponentContractSchema = z.looseObject({ meta: z.looseObject({ descriptio
 
 const storedLayoutName = z.string().refine((name) => !isActionLayoutRef(name), { message: ACTION_LAYOUT_NAME_REFUSAL });
 
+const shippedFragmentId = z.string().refine((id) => !id.startsWith(GENERATED_ID_PREFIX), { message: `an id beginning with "${GENERATED_ID_PREFIX}" is where what somebody generated is kept` });
+
 const shell = {
   canvases: z.array(CanvasSchema),
   layout: layout.optional(),
   layoutStore: z.record(storedLayoutName, layout).optional(),
-  fragments: z.record(z.string(), depthChecked(ActionFragmentSchema)).optional(),
+  fragments: z.record(shippedFragmentId, depthChecked(ActionFragmentSchema)).optional(),
   seeds: seam.optional(),
   components: z.record(z.string(), ComponentContractSchema).optional(),
   inputs: seam.optional(),

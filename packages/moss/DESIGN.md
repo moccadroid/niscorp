@@ -86,7 +86,10 @@ holds, never changed (`src/artifactory/saves.ts`). A row is its principal's,
 and vex keeps it so. What is published for everybody is the rows of one
 principal no caller is, under that same rule: publishing is the save a person
 makes, made by the app's own server code as that principal
-(`server.defaults`), and no second mechanism. (The canvases are what a
+(`server.defaults`), and no second mechanism. An action or a fragment
+somebody generated is a row of theirs too: it is added to what their shell is
+built from, under an id moss gave it, and it may only replay reads its owner
+may replay (`src/artifactory/generated.ts`). (The canvases are what a
 shell starts with: an adopt does not take them again, a reset does.) The
 entries vex replays it asks the running manifest for as well, before its own
 cache table; nothing else in moss reads one of the four off what the app

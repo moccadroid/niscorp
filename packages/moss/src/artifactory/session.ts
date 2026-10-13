@@ -2,33 +2,37 @@ import { randomUUID } from 'node:crypto';
 import { isRecord } from '@niscorp/nova/reflect';
 import { z } from 'zod';
 import type { ArtifactKind, ArtifactVersion, SessionArtifacts } from '../manifest';
+import { generatedId, readAction, readFragment } from './generated';
+import type { GeneratedHeldTo } from './generated';
 import { isInUse, readLayout, refOf } from './layouts';
-import type { LayoutHeldTo, SavedLayout } from './layouts';
+import type { LayoutHeldTo } from './layouts';
 import type { SavedRows, SavedVersion } from './saves';
 
-// Whose rows the calls read and write, and what a layout of theirs is held to.
-export type Holder = { saved: SavedRows; heldTo: LayoutHeldTo };
+export type HeldTo = { layouts: LayoutHeldTo; generated: GeneratedHeldTo };
+
+// Whose rows the calls read and write, and what a save of theirs is held to
+// beside what is in force for them: a layout may be for an action they generated.
+export type Holder = { saved: SavedRows; heldTo: (inForce: readonly SavedVersion[]) => Promise<HeldTo> };
 
 export type SavedArtifactsDeps = {
   // Absent: nobody is signed in.
   holder: (() => Promise<Holder>) | undefined;
-  // Whose a layout is, as a refusal says it: "of yours".
+  // Whose an artifact is, as a refusal says it: "of yours".
   whose: string;
+  kinds: readonly ArtifactKind[];
   written: () => void;
 };
-
-const KINDS: readonly string[] = ['layout'] satisfies readonly ArtifactKind[];
 
 const SaveIdSchema = z.uuid();
 
 const ToSaveSchema = z.array(z.strictObject({ kind: z.string(), id: z.string().optional(), body: z.unknown() })).min(1);
 
-type Checked = { id: string; body: SavedLayout | null; copiedFrom: string | null };
+type Written = Pick<SavedVersion, 'kind' | 'id' | 'body' | 'copiedFrom'>;
 
-type Written = Pick<SavedVersion, 'id' | 'body' | 'copiedFrom'>;
+const NEW_ID: Readonly<Record<ArtifactKind, () => string>> = { layout: randomUUID, action: generatedId, fragment: generatedId };
 
-const listed = (version: SavedVersion): ArtifactVersion => ({
-  kind: 'layout',
+const listed = (version: SavedVersion, kind: ArtifactKind): ArtifactVersion => ({
+  kind,
   id: version.id,
   save: version.save,
   createdAt: version.createdAt,
@@ -38,14 +42,15 @@ const listed = (version: SavedVersion): ArtifactVersion => ({
 
 const withoutMark = ({ use: _mark, ...layout }: Record<string, unknown>): Record<string, unknown> => layout;
 
-const ofKind = (kind: unknown): void => {
-  if (typeof kind !== 'string' || !KINDS.includes(kind)) throw new Error(`moss: "${String(kind)}" is not a kind that is saved. The kinds: ${KINDS.join(', ')}.`);
-};
-
-const checked = (body: unknown, held: LayoutHeldTo): SavedLayout => {
-  const read = readLayout(body, held);
-  if ('refusal' in read) throw new Error(`moss: the layout for "${refOf(body) ?? '(no ref)'}" is refused: ${read.refusal}`);
-  return read.layout;
+const checked = async (kind: ArtifactKind, id: string, body: unknown, heldTo: HeldTo): Promise<unknown> => {
+  if (kind === 'layout') {
+    const read = readLayout(body, heldTo.layouts);
+    if ('refusal' in read) throw new Error(`moss: the layout for "${refOf(body) ?? '(no ref)'}" is refused: ${read.refusal}`);
+    return read.layout;
+  }
+  const read = await (kind === 'action' ? readAction : readFragment)(body, id, heldTo.generated);
+  if ('refusal' in read) throw new Error(`moss: the ${kind} is refused: ${read.refusal}`);
+  return read.body;
 };
 
 // A save that says which layout is in use for a ref, by marking one or by taking
@@ -53,34 +58,43 @@ const checked = (body: unknown, held: LayoutHeldTo): SavedLayout => {
 // off the holder's others for that ref. Two saves at the same moment can each
 // leave theirs marked, and without this the one left would be drawn in place
 // of the one that was taken out.
-const unmarked = (versions: readonly Checked[], inForce: readonly SavedVersion[]): Written[] => {
-  const marked = versions.flatMap((version) => (version.body?.use === true ? [version.body.ref] : []));
+const unmarked = (versions: readonly Written[], inForce: readonly SavedVersion[]): Written[] => {
+  const layouts = versions.filter((version) => version.kind === 'layout');
+  const marked = layouts.flatMap((version) => {
+    const ref = refOf(version.body);
+    return isRecord(version.body) && version.body['use'] === true && ref !== undefined ? [ref] : [];
+  });
   const twice = marked.find((ref, at) => marked.indexOf(ref) !== at);
   if (twice !== undefined) throw new Error(`moss: two layouts of one save are marked in use for "${twice}". One is in use at a time.`);
-  const saved = new Set(versions.map((version) => version.id));
+  const saved = new Set(layouts.map((version) => version.id));
   const takenOut = inForce.flatMap((held) => (isInUse(held) && saved.has(held.id) ? [refOf(held.body)] : []));
   const decided = new Set([...marked, ...takenOut]);
   return inForce.flatMap((held): Written[] => {
     const ref = refOf(held.body);
     // One that could not be read stays as it is stored: written again, it would carry this server's stamp over another grammar.
     if (!isInUse(held) || held.unread !== undefined || !isRecord(held.body) || ref === undefined || !decided.has(ref) || saved.has(held.id)) return [];
-    return [{ id: held.id, body: withoutMark(held.body), copiedFrom: held.save }];
+    return [{ kind: 'layout', id: held.id, body: withoutMark(held.body), copiedFrom: held.save }];
   });
 };
 
-export const savedArtifacts = ({ holder, whose, written }: SavedArtifactsDeps): SessionArtifacts => {
+export const savedArtifacts = ({ holder, whose, kinds, written }: SavedArtifactsDeps): SessionArtifacts => {
   // Everybody nobody is signed in for shares one `userId`: what one of them saved would be all of theirs.
   const requireHolder = (): (() => Promise<Holder>) => {
     if (holder === undefined) throw new Error('moss: nobody is signed in to this session, and a save is somebody’s.');
     return holder;
   };
 
-  const write = async (saved: SavedRows, versions: readonly Checked[], inForce: readonly SavedVersion[]): Promise<string> => {
-    const twice = versions.find((version, at) => versions.findIndex((other) => other.id === version.id) !== at);
-    if (twice !== undefined) throw new Error(`moss: the layout "${twice.id}" is in one save twice.`);
+  const ofKind = (kind: unknown): ArtifactKind => {
+    const known = kinds.find((one) => one === kind);
+    if (known === undefined) throw new Error(`moss: "${String(kind)}" is not a kind that is saved. The kinds: ${kinds.join(', ')}.`);
+    return known;
+  };
+
+  const write = async (saved: SavedRows, versions: readonly Written[], inForce: readonly SavedVersion[]): Promise<string> => {
+    const twice = versions.find((version, at) => versions.findIndex((other) => other.kind === version.kind && other.id === version.id) !== at);
+    if (twice !== undefined) throw new Error(`moss: the ${twice.kind} "${twice.id}" is in one save twice.`);
     const save = randomUUID();
-    const held: readonly Written[] = [...versions, ...unmarked(versions, inForce)];
-    await saved.write({ id: save, versions: held.map((version) => ({ kind: 'layout', ...version })) });
+    await saved.write({ id: save, versions: [...versions, ...unmarked(versions, inForce)] });
     written();
     return save;
   };
@@ -90,51 +104,58 @@ export const savedArtifacts = ({ holder, whose, written }: SavedArtifactsDeps): 
       const holderOf = requireHolder();
       const toSave = ToSaveSchema.safeParse(artifacts);
       if (!toSave.success) throw new Error('moss: a save holds one or several artifacts, each `{ kind, id?, body }` and nothing else.');
-      for (const artifact of toSave.data) ofKind(artifact.kind);
+      const asked = toSave.data.map((artifact) => ({ ...artifact, kind: ofKind(artifact.kind) }));
       const { saved, heldTo } = await holderOf();
-      const layouts = toSave.data.map((artifact) => ({ id: artifact.id, body: checked(artifact.body, heldTo) }));
-      const inForce = (await saved.inForce()).filter((version) => version.kind === 'layout');
-      const theirs = new Set(inForce.map((version) => version.id));
-      for (const { id } of layouts) {
-        if (id !== undefined && !theirs.has(id)) throw new Error(`moss: there is no layout "${id}" ${whose}. Leave the id out, and moss gives a new layout its id.`);
+      const inForce = await saved.inForce();
+      const held = await heldTo(inForce);
+      const versions: (Written & { kind: ArtifactKind })[] = [];
+      for (const { kind, id: named, body } of asked) {
+        const id = named ?? NEW_ID[kind]();
+        versions.push({ kind, id, body: await checked(kind, id, body, held), copiedFrom: null });
       }
-      const versions = layouts.map(({ id, body }) => ({ id: id ?? randomUUID(), body, copiedFrom: null }));
-      return { save: await write(saved, versions, inForce), artifacts: versions.map(({ id }) => ({ kind: 'layout', id })) };
+      const notTheirs = asked.find(({ kind, id }) => id !== undefined && !inForce.some((version) => version.kind === kind && version.id === id));
+      if (notTheirs !== undefined) {
+        throw new Error(`moss: there is no ${notTheirs.kind} "${notTheirs.id}" ${whose}. Leave the id out, and moss gives a new ${notTheirs.kind} its id.`);
+      }
+      return { save: await write(saved, versions, inForce), artifacts: versions.map(({ kind, id }) => ({ kind, id })) };
     },
 
     list: async (kind) => {
-      if (kind !== undefined) ofKind(kind);
+      const only = kind === undefined ? undefined : ofKind(kind);
       if (holder === undefined) return [];
       const inForce = await (await holder()).saved.inForce();
-      return inForce.filter((version) => version.body !== null && KINDS.includes(version.kind) && (kind === undefined || version.kind === kind)).map(listed);
+      return inForce.flatMap((version) => {
+        const known = kinds.find((one) => one === version.kind);
+        return version.body !== null && known !== undefined && (only === undefined || known === only) ? [listed(version, known)] : [];
+      });
     },
 
     history: async (kind, id) => {
-      ofKind(kind);
+      const known = ofKind(kind);
       if (holder === undefined) return [];
-      return (await (await holder()).saved.history(kind, id)).map(listed);
+      return (await (await holder()).saved.history(known, id)).map((version) => listed(version, known));
     },
 
     restore: async (kind, id, save) => {
       const holderOf = requireHolder();
-      ofKind(kind);
+      const known = ofKind(kind);
       const { saved, heldTo } = await holderOf();
       // A save is a uuid, and the column refuses to be compared with anything else.
-      const version = SaveIdSchema.safeParse(save).success ? (await saved.history(kind, id, save))[0] : undefined;
-      if (version === undefined) throw new Error(`moss: no layout "${id}" ${whose} was saved in "${save}".`);
-      if (version.unread !== undefined) throw new Error(`moss: the layout "${id}" saved in "${save}" cannot be read: ${version.unread}`);
-      const body = version.body === null ? null : checked(version.body, heldTo);
-      const inForce = (await saved.inForce()).filter((held) => held.kind === kind);
-      return { save: await write(saved, [{ id, body, copiedFrom: version.save }], inForce) };
+      const version = SaveIdSchema.safeParse(save).success ? (await saved.history(known, id, save))[0] : undefined;
+      if (version === undefined) throw new Error(`moss: no ${known} "${id}" ${whose} was saved in "${save}".`);
+      if (version.unread !== undefined) throw new Error(`moss: the ${known} "${id}" saved in "${save}" cannot be read: ${version.unread}`);
+      const inForce = await saved.inForce();
+      const body = version.body === null ? null : await checked(known, id, version.body, await heldTo(inForce));
+      return { save: await write(saved, [{ kind: known, id, body, copiedFrom: version.save }], inForce) };
     },
 
     reset: async (kind, id) => {
       const holderOf = requireHolder();
-      ofKind(kind);
+      const known = ofKind(kind);
       const { saved } = await holderOf();
-      const inForce = (await saved.inForce()).filter((version) => version.kind === kind);
-      if (!inForce.some((version) => version.id === id && version.body !== null)) throw new Error(`moss: no layout "${id}" ${whose} is in force.`);
-      return { save: await write(saved, [{ id, body: null, copiedFrom: null }], inForce) };
+      const inForce = await saved.inForce();
+      if (!inForce.some((version) => version.kind === known && version.id === id && version.body !== null)) throw new Error(`moss: no ${known} "${id}" ${whose} is in force.`);
+      return { save: await write(saved, [{ kind: known, id, body: null, copiedFrom: null }], inForce) };
     },
   };
 };

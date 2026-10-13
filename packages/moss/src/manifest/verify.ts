@@ -8,7 +8,7 @@ import { scopeProfiles } from '@niscorp/vex';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { z } from 'zod';
 import { isBinding } from '@niscorp/nova/i18n';
-import { ACTION_LAYOUT_NAME_REFUSAL, entriesOf, isActionLayoutRef, wearableOf } from './app';
+import { ACTION_LAYOUT_NAME_REFUSAL, GENERATED_ID_PREFIX, entriesOf, isActionLayoutRef, wearableOf } from './app';
 import type { LayoutVariant, NiscApp } from './app';
 
 export type ManifestCandidate = {
@@ -72,6 +72,13 @@ const layoutNameErrors = (actions: ManifestCandidate['actions']): string[] =>
     return refusal === undefined ? [] : [`"${id}" ${refusal}`];
   });
 
+// The id a definition carries is held to it as the one it is listed under is: a shell registers an action under the first.
+const generatedIdErrors = (actions: ManifestCandidate['actions']): string[] =>
+  Object.entries(actions).flatMap(([listed, definition]) => {
+    const taken = [listed, definition.id].find((id) => id.startsWith(GENERATED_ID_PREFIX));
+    return taken === undefined ? [] : [`"${taken}" begins with "${GENERATED_ID_PREFIX}", which is where what somebody generated is kept`];
+  });
+
 const reachErrors = (entries: ManifestCandidate['entries'], profiles: ReadonlySet<string>): string[] => {
   const unknown = entries.flatMap((entry) => (entry.reach !== undefined && !profiles.has(entry.reach) ? [`${entry.fingerprint} declares reach "${entry.reach}"`] : []));
   return unknown.length === 0 ? [] : [...unknown, `known profiles: ${[...profiles].join(', ') || '(none)'}`];
@@ -100,6 +107,7 @@ export const verifyManifest = (candidate: ManifestCandidate): ManifestReport => 
     errors: [
       ...found('actions', unread.map((action) => `"${action.id}" is not an action nova reads: ${action.why}`)),
       ...found('actions', layoutNameErrors(read.actions)),
+      ...found('actions', generatedIdErrors(read.actions)),
       ...found('charter', charter.errors.map((error) => `${error.rule}: ${error.detail}`)),
       ...found('reach', reachErrors(read.entries, read.profiles)),
       ...found('variants', verifyVariants(read)),

@@ -155,7 +155,9 @@ Two per-principal boot hooks, both of which may be async and are handed the
 session's governed `wire`. `inputs` derives boot **data** (nav flags, user
 chips), merged over each canvas's static seed. `seeds` derives boot
 **instances**: by canvas id, the actions to push, in order, ring-1-filtered
-like every other mount — a seed the principal is not granted does not mount.
+like every other mount — a seed for an action the shell is not built with
+does not mount. A shell is built with what its principal is granted and what
+they generated.
 A `CanvasSeed` is an action id or `{ action, input?, with? }`, and a
 `ShellCanvas` is nova's canvas config with `initial` widened to one seed or a
 list of candidates. Neither type is exported by name: `ShellManifest['canvases']`
@@ -249,7 +251,7 @@ type FunctionSession = {
   principal: string | null;
   roles: readonly string[];
   identity: Record<string, unknown>;  // the scope half of the resolved identity
-  actions: readonly string[];      // the session's granted action ids, installs filtered
+  actions: readonly string[];      // the ids of the actions the shell was built with: what the roles are granted, installs filtered, and what the principal generated
   wire: FetchFn;                   // the server's own surfaces, as this session
   grant: (token: string) => void;  // session GRANT (login): send it down, reconnect
   revoke: () => Promise<void>;     // session REVOKE (sign-out): close 4403, evict
@@ -327,24 +329,26 @@ const runs: RunSink = (record) => {
 
 #### `session.artifacts` — what the session's principal saved
 
-A layout somebody or a model generated while the app runs is kept by moss, as
-a version, in two tables of its own. Today the kind that is kept is a layout
-for an action. A session saves for its own principal. A layout for everybody
-is published from the server and never from a session (`server.defaults`,
-under `MossServer` below). Not built yet: the other kinds (an action, a
-fragment, a vex read), and the layout of the frame or of a canvas.
+What somebody or a model generated while the app runs is kept by moss, as a
+version, in two tables of its own. Three kinds are kept: a layout for an
+action, an action, and a fragment. A session saves for its own principal. A
+layout for everybody is published from the server and never from a session
+(`server.defaults`, under `MossServer` below). Not built yet: a vex read, the
+layout of the frame or of a canvas, and an action or a fragment for everybody.
 
 ```typescript
 type SessionArtifacts = {
-  save: (artifacts: readonly { kind: 'layout'; id?: string; body: unknown }[]) => Promise<{ save: string; artifacts: readonly { kind: 'layout'; id: string }[] }>;
-  list: (kind?: 'layout') => Promise<readonly ArtifactVersion[]>;
-  history: (kind: 'layout', id: string) => Promise<readonly ArtifactVersion[]>;
-  restore: (kind: 'layout', id: string, save: string) => Promise<{ save: string }>;
-  reset: (kind: 'layout', id: string) => Promise<{ save: string }>;
+  save: (artifacts: readonly { kind: ArtifactKind; id?: string; body: unknown }[]) => Promise<{ save: string; artifacts: readonly { kind: ArtifactKind; id: string }[] }>;
+  list: (kind?: ArtifactKind) => Promise<readonly ArtifactVersion[]>;
+  history: (kind: ArtifactKind, id: string) => Promise<readonly ArtifactVersion[]>;
+  restore: (kind: ArtifactKind, id: string, save: string) => Promise<{ save: string }>;
+  reset: (kind: ArtifactKind, id: string) => Promise<{ save: string }>;
 };
 
+type ArtifactKind = 'layout' | 'action' | 'fragment';
+
 type ArtifactVersion = {
-  kind: 'layout';
+  kind: ArtifactKind;
   id: string;
   save: string;               // the save this version belongs to
   createdAt: string;          // ISO
@@ -353,7 +357,7 @@ type ArtifactVersion = {
 };
 ```
 
-The two types are reached as `FunctionSession['artifacts']`; neither is
+The three types are reached as `FunctionSession['artifacts']`; none is
 exported by a name of its own.
 
 **A layout's body** is `{ ref, layout, use? }`. `ref` is the name the layout
@@ -365,6 +369,66 @@ functions: (session) => ({
   'layout.keep': async ({ layout }) => session.artifacts.save([{ kind: 'layout', body: { ref: 'action/deals.list', layout, use: true } }]),
 }),
 ```
+
+**A generated action's body** is a nova action definition without an `id`,
+and **a generated fragment's** a nova fragment without one. Moss gives the id:
+`generated.` and a uuid, which `save` answers. A body that names another id is
+refused, and a save that names the `id` of one of the principal's own is a new
+version of it.
+
+```typescript
+functions: (session) => ({
+  'screen.keep': async ({ action }) => session.artifacts.save([{ kind: 'action', body: action }]),
+}),
+```
+
+- **It is its owner's and nobody else's.** It is among the actions (or the
+  fragments) their shells are built with, its layout is in their layout store
+  under `action/<its id>`, and a layout of their own may be saved for it as
+  for a shipped action. No charter grant is asked about it, and it is in no
+  catalog: `/catalog`, the socket's hello and `server.catalogOf` answer what
+  the charter grants. What somebody generated is listed by
+  `session.artifacts.list('action')`.
+- **It reaches its owner's open shells a moment after the save answers**, as a
+  saved layout does, and not before: a function that saves an action and
+  opens it in the same call finds it not there yet.
+- **What it defines only reads.** Each endpoint it defines is a `POST` to the
+  app's vex route (`/api/vex`, or `/api/<resource>/vex`) whose `request` names
+  one fingerprint, written out. That fingerprint is a read the app ships or
+  was handed (`replaceEntries`), and one its owner's policy may replay.
+  Refused, with a sentence: a `fn:` endpoint, a write, a read its owner may
+  not replay, a fingerprint the app does not carry (a query a model wrote,
+  `fp_…`, among them), a fingerprint that is computed, an address with a
+  template in it, and every other address.
+- **Moss checks the artifact, and what it is combined with is nova's.** Once
+  it is in a shell it is an action, or a fragment, like any other. A message
+  it emits reaches every action open in its owner's shell. The steps of a
+  fragment run inside the action it is wrapped around, with that action's
+  endpoints, and where both define an endpoint of one name the action's is
+  the one called. What an assistant is told it may generate is the app's to
+  decide: it writes the prompt, and its own function calls `save`.
+- **A generated action opens the actions its owner holds**, their own
+  generated ones among them, and no other: nova's audit is run on it with
+  those as its catalog, and what it finds refuses the save, as it does for a
+  saved layout. So do a component no shell of the app has, and a layout that
+  names a ref under `action/`. A fragment is held to its schema, its id, its
+  layout and its endpoints, and not to that audit, which reads a whole action:
+  a step of a fragment that opens an action its owner does not hold is refused
+  by nova when it runs, because that action is not in their shell.
+- **It is checked when it is saved and again when a shell is built.** One
+  that no longer passes (its owner lost the grant its read needs, say) is left
+  out of every shell built from then on, with a line (`[moss] the action "…"
+  of … is left out: …`).
+- **A reset takes it out of its owner's shells**, and the layouts they saved
+  for it are not drawn while it is out: a layout whose action its holder has
+  no longer is not loaded. `list('layout')` still lists them. Going back to a
+  version of the action brings both back.
+- **No action an app ships or hands over, and no fragment of a shell, has an
+  id beginning with `generated.`**: a boot, `replaceActions` and the
+  manifest's parse refuse one.
+- A fragment that left, by a reset or because it no longer passes, stays in a
+  shell that is already open until that shell is built again: nova's shell
+  has a call to take an action out and none to take a fragment out.
 
 **Every call is for the session's principal, and no call can be for anybody
 else.** No argument names whose rows are meant. Moss runs its own entries over
@@ -970,7 +1034,8 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   unless its principal has a layout of their own in use or their roles hold a
   layout variant. Several may be kept for one ref and the one marked `use:
   true` is drawn; every publish is a version; a `reset` shows the build's
-  again. `publisher` is who the publish is made by, and is kept with the save
+  again. A layout is the one kind that is published: an action or a fragment
+  is refused here. `publisher` is who the publish is made by, and is kept with the save
   (`artifact_saves.created_by`); an empty one is refused.
   **No session can publish.** The rows are those of one principal no caller
   is (`*`), and every write a session makes carries its own `userId`: vex's

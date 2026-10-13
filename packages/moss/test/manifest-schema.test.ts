@@ -133,6 +133,19 @@ describe('the manifest’s schema', () => {
     ]);
   });
 
+  it('refuses a fragment under an id that is moss’s to give, in the app’s shell and in a page’s', () => {
+    const chrome = { kind: 'fragment', id: 'x', layout: { component: 'Stack', children: [{ slot: 'body' }] } };
+    const misfits = manifestMisfits({
+      ...whole(),
+      shell: { canvases: [], fragments: { sheet: chrome, 'generated.sheet': chrome } },
+      pages: { about: { path: '/about', canvases: [], fragments: { 'generated.sheet': chrome } } },
+    });
+    expect(misfits).toEqual([
+      'shell.fragments.generated.sheet: an id beginning with "generated." is where what somebody generated is kept',
+      'pages.about.fragments.generated.sheet: an id beginning with "generated." is where what somebody generated is kept',
+    ]);
+  });
+
   it('holds a seam to being a function', () => {
     const misfits = manifestMisfits({
       ...whole(),

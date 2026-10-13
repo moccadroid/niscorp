@@ -7,12 +7,15 @@ import { shellComponents } from './artifacts';
 import { compileEntries, createEntriesInForce } from './entries';
 import { createGeneration } from './generation';
 import type { Generation, Pointer } from './generation';
+import { catalogOfGenerated, generatedInForce } from './generated';
+import type { GeneratedHeldTo } from './generated';
 import { layoutsInUse } from './layouts';
 import type { LayoutHeldTo } from './layouts';
 import { actionsWithStoredLayouts, createRoleMemo, narrowedBy } from './roles';
 import type { Catalog, CatalogFilter, StoredLayouts } from './roles';
 import type { SavedRows, SavedVersion } from './saves';
 import { savedArtifacts } from './session';
+import type { HeldTo } from './session';
 
 type Actions = Readonly<Record<string, ActionDefinition>>;
 
@@ -29,7 +32,8 @@ export type RunningManifestConfig = {
   published?: () => Promise<readonly SavedVersion[]>;
 };
 
-export type RolesHeld = { roles: readonly string[]; installed: readonly string[] | undefined };
+// `replayable`: the fingerprints their policy may replay. Absent: none.
+export type RolesHeld = { roles: readonly string[]; installed: readonly string[] | undefined; replayable?: () => Promise<readonly string[]> };
 
 // Whoever a session is for, as the server resolved them: what they hold, and their rows.
 export type Caller = RolesHeld & { saved: SavedRows };
@@ -168,8 +172,9 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   // A layout is saved for every shell its holder may open, and drawn by one:
   // at a save it is held to what any shell of the app can draw, and when a shell
   // is built to what that shell can.
+  const kitOf = (shell?: ShellManifest): KitComponents => (shell === undefined ? (ofTheApp ??= componentsOf(config.shells)) : componentsOf([shell]));
   const heldTo = ({ actions, layouts }: StoredLayouts, shell?: ShellManifest): LayoutHeldTo => ({
-    kit: shell === undefined ? (ofTheApp ??= componentsOf(config.shells)) : componentsOf([shell]),
+    kit: kitOf(shell),
     actionAt: (ref) => {
       const id = actionOfLayoutRef(ref);
       const action = id !== undefined && Object.hasOwn(actions, id) ? actions[id] : undefined;
@@ -177,6 +182,24 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       return action === undefined || layout === undefined ? undefined : { ...action, layout };
     },
   });
+  // What somebody generated and has in force is laid beside what their roles
+  // hold: an action of theirs may open either, and a layout of theirs may be for
+  // either. `whose`: as a line says it of one that is left out. Absent: nothing is said.
+  const heldWithGenerated = async (held: StoredLayouts, versions: readonly SavedVersion[], who: Pick<RolesHeld, 'replayable'>, shell?: ShellManifest, whose?: string) => {
+    let replayable: Promise<ReadonlySet<string>> | undefined;
+    let catalog: ReturnType<GeneratedHeldTo['catalog']> | undefined;
+    const checks: GeneratedHeldTo = {
+      kit: kitOf(shell),
+      entryOf: (fingerprint) => entries.byFingerprint().get(fingerprint),
+      replayable: () => (replayable ??= (async () => new Set((await who.replayable?.()) ?? []))()),
+      catalog: () => (catalog ??= [...Object.values(held.actions).map((action) => ({ id: action.id, input: action.input ?? {} })), ...catalogOfGenerated(versions)]),
+    };
+    const passed = await generatedInForce(versions, checks, whose);
+    const stored = actionsWithStoredLayouts(passed.actions);
+    const all: StoredLayouts =
+      Object.keys(passed.actions).length === 0 ? held : { actions: { ...held.actions, ...stored.actions }, layouts: { ...held.layouts, ...stored.layouts } };
+    return { all, fragments: passed.fragments, heldTo: { layouts: heldTo(all, shell), generated: checks } satisfies HeldTo };
+  };
   const listeners = new Set<() => void>();
   const listenersFor = new Set<(principal: string) => void>();
   let pointer: Generation | undefined;
@@ -288,22 +311,24 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       roleMemo.drop();
     },
     catalogFor: roleMemo.catalogFor,
-    artifactsFor: async (shell, { principal, roles, installed, saved }) => {
+    artifactsFor: async (shell, { principal, roles, installed, saved, replayable }) => {
       // Asked of the rows at every shell: what somebody saved in another process is theirs here too.
-      const versions = saved === undefined ? [] : await saved.inForce();
-      const held = roleMemo.storedLayoutsFor(roles, installed);
-      const drawable = heldTo(held, shell);
-      const theirs = principal === null ? {} : layoutsInUse(versions, { whose: `of ${principal}`, heldTo: drawable });
+      const versions = saved === undefined || principal === null ? [] : await saved.inForce();
+      const whose = `of ${principal ?? 'nobody'}`;
+      const theirOwn = await heldWithGenerated(roleMemo.storedLayoutsFor(roles, installed), versions, { replayable }, shell, whose);
+      const drawable = theirOwn.heldTo.layouts;
+      const theirs = layoutsInUse(versions, { whose, heldTo: drawable });
       // The layout variant of their roles is over what is published: under one, nothing published is loaded.
       const variants = roleMemo.variantsFor(roles);
       const underVariants: LayoutHeldTo = { ...drawable, actionAt: (ref) => (variants.has(actionOfLayoutRef(ref) ?? '') ? undefined : drawable.actionAt(ref)) };
       const everybodys = layoutsInUse(await publishedNow(), { whose: 'published for everybody', heldTo: underVariants, say: sayOnce });
+      const fragments = Object.keys(theirOwn.fragments).length === 0 ? shell.fragments : { ...shell.fragments, ...theirOwn.fragments };
       return {
-        actions: held.actions,
+        actions: theirOwn.all.actions,
         canvases: shell.canvases,
         ...(shell.layout !== undefined ? { frame: shell.layout } : {}),
-        layoutStore: { ...shell.layoutStore, ...held.layouts, ...everybodys, ...theirs },
-        ...(shell.fragments !== undefined ? { fragments: shell.fragments } : {}),
+        layoutStore: { ...shell.layoutStore, ...theirOwn.all.layouts, ...everybodys, ...theirs },
+        ...(fragments !== undefined ? { fragments } : {}),
         entries: entries.byFingerprint(),
         components: components.of(shell),
       };
@@ -311,12 +336,14 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     sessionArtifacts: (principal, callerOf) =>
       savedArtifacts({
         whose: 'of yours',
+        kinds: ['layout', 'action', 'fragment'],
         holder:
           principal === null
             ? undefined
             : async () => {
                 const caller = await callerOf();
-                return { saved: caller.saved, heldTo: heldTo(roleMemo.storedLayoutsFor(caller.roles, caller.installed)) };
+                const held = roleMemo.storedLayoutsFor(caller.roles, caller.installed);
+                return { saved: caller.saved, heldTo: async (inForce) => (await heldWithGenerated(held, inForce, caller)).heldTo };
               },
         written: () => {
           if (principal !== null) for (const listener of [...listenersFor]) tell(listener, principal);
@@ -327,7 +354,8 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     publishedArtifacts: (saved) =>
       savedArtifacts({
         whose: 'published for everybody',
-        holder: async () => ({ saved, heldTo: heldTo(actionsWithStoredLayouts(inForce)) }),
+        kinds: ['layout'],
+        holder: async () => ({ saved, heldTo: async () => (await heldWithGenerated(actionsWithStoredLayouts(inForce), [], {})).heldTo }),
         written: () => {
           dropPublished();
           for (const listener of [...listeners]) tell(listener);

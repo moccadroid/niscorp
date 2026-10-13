@@ -73,7 +73,7 @@ export type RunRecord = {
 
 export type RunSink = (record: RunRecord, session: FunctionSession) => void;
 
-export type ArtifactKind = 'layout';
+export type ArtifactKind = 'layout' | 'action' | 'fragment';
 
 export type ArtifactVersion = {
   kind: ArtifactKind;
@@ -152,6 +152,11 @@ export const actionLayoutRef = (actionId: string): string => `action/${actionId}
 export const isActionLayoutRef = (name: string): boolean => name.startsWith('action/');
 
 export const actionOfLayoutRef = (ref: string): string | undefined => (isActionLayoutRef(ref) ? ref.slice('action/'.length) : undefined);
+
+// The id of an action or a fragment somebody generated is moss's to give, and
+// begins with this. Nothing an app ships or hands over has such an id: the
+// charter grants by id, and one an app chose could stand in for a generated one.
+export const GENERATED_ID_PREFIX = 'generated.';
 
 export const ACTION_LAYOUT_NAME_REFUSAL = 'a name beginning with "action/" is where the layout of that action is kept';
 

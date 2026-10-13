@@ -221,6 +221,49 @@ describe('the server, assembled — what holds only because of where a line stan
     }
   });
 
+  it('a generated action replays a read as its owner: saved where their charter grants the read, it answers in their shell; where it does not, the save is refused', async () => {
+    quiet();
+    const sessions = new Map<string | null, FunctionSession>();
+    const reading = {
+      data: { rows: [] },
+      endpoints: { load: { url: '/api/vex', method: 'POST', request: { fingerprint: 'notes/all' }, target: 'rows' } },
+      lifecycle: { mount: [{ call: 'load' }] },
+      layout: { component: 'Text', children: 'the notes' },
+    };
+    const granted = (data: readonly string[]): NiscApp =>
+      appWith({
+        charter: { public: { actions: ['home'], data: [...data] } },
+        actions: { home: { id: 'home', layout: { component: 'Text', children: 'home' } } },
+        entries: [READ_NOTES],
+        functions: (session) => {
+          sessions.set(session.principal, session);
+          return {};
+        },
+      });
+    const server = await assemble(granted(['notes.read']), {}, rowsKept().entries);
+    try {
+      const maras = await server.shells?.session('t_i_mara', 'i_mara');
+      const saved = await sessions.get('i_mara')?.artifacts.save([{ kind: 'action', body: reading }]);
+      const id = saved?.artifacts[0]?.id ?? '';
+      expect(id).toMatch(/^generated\./);
+
+      const opened = await vi.waitFor(() => maras?.shell.push('main', id) ?? '');
+      await vi.waitFor(() => expect(maras?.shell.getRuntime(opened)?.getData()['rows']).toEqual([{ id: 1, body: 'first' }]));
+    } finally {
+      server.close();
+    }
+
+    const without = await assemble(granted([]), {}, rowsKept().entries);
+    try {
+      await without.shells?.session('t_i_mara', 'i_mara');
+      await expect(sessions.get('i_mara')?.artifacts.save([{ kind: 'action', body: reading }])).rejects.toThrow(
+        'moss: the action is refused: endpoint "load" replays "notes/all", which its owner may not replay',
+      );
+    } finally {
+      without.close();
+    }
+  });
+
   it('a layout published with `server.defaults` reaches every open shell and is kept as everybody’s, by whoever published; the fabric carries nothing for it', async () => {
     quiet();
     const carried: unknown[] = [];

@@ -57,7 +57,7 @@ const processOn = (fabric: Fabric | undefined): Process => {
     identity: { resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, memoKey: 'public' }), composeScope: () => ({}) },
     running,
     savedAs: () => noRows,
-    data: { answerIntent: async () => Promise.reject(new Error('no intent is asked here')) },
+    data: { answerIntent: async () => Promise.reject(new Error('no intent is asked here')), fingerprintsFor: async () => [] },
     wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
     wrapWire: (inner) => inner,
     revokeSessions: undefined,
