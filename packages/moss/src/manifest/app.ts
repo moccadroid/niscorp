@@ -73,10 +73,33 @@ export type RunRecord = {
 
 export type RunSink = (record: RunRecord, session: FunctionSession) => void;
 
+export type ArtifactKind = 'layout';
+
+export type ArtifactVersion = {
+  kind: ArtifactKind;
+  id: string;
+  save: string;
+  createdAt: string;
+  copiedFrom: string | null;
+  // `null`: this version says none is in force.
+  body: unknown;
+};
+
+// What the session's principal saved, and nobody else's: each call reads and
+// writes their rows alone.
+export type SessionArtifacts = {
+  save: (artifacts: readonly { kind: ArtifactKind; id?: string; body: unknown }[]) => Promise<{ save: string; artifacts: readonly { kind: ArtifactKind; id: string }[] }>;
+  list: (kind?: ArtifactKind) => Promise<readonly ArtifactVersion[]>;
+  history: (kind: ArtifactKind, id: string) => Promise<readonly ArtifactVersion[]>;
+  restore: (kind: ArtifactKind, id: string, save: string) => Promise<{ save: string }>;
+  reset: (kind: ArtifactKind, id: string) => Promise<{ save: string }>;
+};
+
 export type FunctionSession = {
   // The members that change what a shell is made of (`registerAction`,
   // `setLayout`, `addCanvas` and their kin) throw on this one.
   shell: Shell;
+  artifacts: SessionArtifacts;
   principal: string | null;
   roles: readonly string[];
   identity: Record<string, unknown>;
@@ -127,6 +150,8 @@ export const defineApp = (app: NiscApp): NiscApp => app;
 export const actionLayoutRef = (actionId: string): string => `action/${actionId}`;
 
 export const isActionLayoutRef = (name: string): boolean => name.startsWith('action/');
+
+export const actionOfLayoutRef = (ref: string): string | undefined => (isActionLayoutRef(ref) ? ref.slice('action/'.length) : undefined);
 
 export const ACTION_LAYOUT_NAME_REFUSAL = 'a name beginning with "action/" is where the layout of that action is kept';
 

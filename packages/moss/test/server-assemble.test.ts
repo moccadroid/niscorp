@@ -1,14 +1,15 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Hono } from 'hono';
 import { scopeGrants } from '@niscorp/vex';
+import type { Data } from '../src/data';
 import { createDataWith } from '../src/data/data';
 import { featureTablesOf } from '../src/data/migrate';
 import { createGrammarUpgrader } from '../src/data/engine';
 import type { Feature, FeatureEnv } from '../src/feature';
-import type { NiscApp } from '../src/manifest';
+import type { FunctionSession, NiscApp } from '../src/manifest';
 import type { NiscRuntime } from '../src/runtime';
-import { assembleServer } from '../src/server/server';
-import { ADD_NOTE, READ_NOTES, engineDouble } from './data-double';
+import { assembleServer, createServer } from '../src/server/server';
+import { ADD_NOTE, READ_NOTES, engineDouble, nothingSavedIn } from './data-double';
 
 const appWith = (more: Partial<NiscApp>): NiscApp => ({
   charter: { public: ['home'] },
@@ -18,12 +19,15 @@ const appWith = (more: Partial<NiscApp>): NiscApp => ({
   ...more,
 });
 
-const assemble = async (app: NiscApp, more: Partial<NiscRuntime> = {}) => {
+const assemble = async (app: NiscApp, more: Partial<NiscRuntime> = {}, artifactEntries?: Data['artifactEntries']) => {
   const double = await engineDouble();
-  const data = createDataWith(
-    { engine: double.engine, adapter: double.adapter, grants: scopeGrants(['notes', 'tags']), grammars: await createGrammarUpgrader({}), upgradeStore: async () => undefined, askFirst: double.askFirst },
-    { db: double.db, charter: app.charter, featureTables: featureTablesOf(app) },
+  const built = nothingSavedIn(
+    createDataWith(
+      { engine: double.engine, adapter: double.adapter, grants: scopeGrants(['notes', 'tags']), grammars: await createGrammarUpgrader({}), upgradeStore: async () => undefined, askFirst: double.askFirst },
+      { db: double.db, charter: app.charter, featureTables: featureTablesOf(app) },
+    ),
   );
+  const data = artifactEntries === undefined ? built : { ...built, artifactEntries };
   return assembleServer({ app, runtime: { pool: { query: async () => ({ rows: [] }) }, db: double.db, session: 'dev-open', ...more }, session: whoseToken, revokeSessions: undefined, data });
 };
 
@@ -42,6 +46,20 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe('what a caller reads and writes of what was saved', () => {
+  it('is not the app’s to say: `behaviors` that name either table refuse the boot, before the database is asked anything', async () => {
+    const asked: string[] = [];
+    const pool = { query: async (text: string) => (asked.push(text), { rows: [] }) };
+    const everybodys = appWith({ behaviors: { notes: { read: [] }, artifacts: { read: [] } } });
+
+    await expect(createServer(everybodys, { pool, db: pool, session: 'dev-open' })).rejects.toThrow(
+      'moss: the app’s `behaviors` say what a caller reads and writes of "artifacts". ' +
+        'Those rows are whoever saved them: moss keeps every read and write of them to the caller’s own, and an app does not say otherwise.',
+    );
+    expect(asked).toEqual([]);
+  });
+});
+
 describe('the server, assembled — a boot that fails stops what it started', () => {
   it('a feature that throws when it is started leaves no interval running', async () => {
     const failing = { name: 'failing', start: () => Promise.reject(new Error('the feature could not start')) };
@@ -56,6 +74,12 @@ describe('the server, assembled — a boot that fails stops what it started', ()
     const { made, left, outcome } = await intervalsDuring(() => assemble(appWith({ pages: { twice } })));
     expect(outcome).toMatchObject({ message: expect.stringMatching(/names the parameter ":id" twice/) });
     expect(made.length).toBeGreaterThan(0);
+    expect(left).toEqual([]);
+  });
+
+  it('a boot that cannot load the entries over what was saved fails there, and leaves no interval running', async () => {
+    const { left, outcome } = await intervalsDuring(() => assemble(appWith({}), {}, () => Promise.reject(new Error('the database went away'))));
+    expect(outcome).toMatchObject({ message: 'the database went away' });
     expect(left).toEqual([]);
   });
 
@@ -147,6 +171,46 @@ describe('the server, assembled — what holds only because of where a line stan
 
       server.replaceActions('extras', { extra: { id: 'extra', data: {} } });
       await vi.waitFor(() => expect(session?.shell.push('main', 'extra')).toEqual(expect.any(String)));
+    } finally {
+      server.close();
+    }
+  });
+
+  it('a layout saved in a function’s session reaches the open shell of its principal and nobody else’s, and the fabric is told to bring that principal’s shells level', async () => {
+    quiet();
+    const sessions = new Map<string | null, FunctionSession>();
+    const carried: unknown[] = [];
+    const kept: Record<string, unknown>[] = [];
+    // One version of each artifact is written here, so what is in force is every row of the caller.
+    // No entry names a principal: whose a row is, is the `userId` of the scope it is replayed with.
+    const saved: Data['artifactEntries'] = async () => async (fingerprint, context, scope) => {
+      const versions = context['versions'];
+      expect(Object.keys(context)).not.toContain('principal');
+      if (fingerprint === 'artifactory/save' && Array.isArray(versions)) {
+        for (const version of versions) kept.push({ ...version, save: context['save'], principal: scope?.['userId'], created_at: new Date(0) });
+      }
+      return fingerprint === 'artifactory/in-force' ? kept.filter((row) => row['principal'] === scope?.['userId']) : [];
+    };
+    const asBuilt = { component: 'Text', children: 'as built' };
+    const asMaraHasIt = { component: 'Text', children: 'as mara has it' };
+    const app = appWith({
+      actions: { home: { id: 'home', layout: asBuilt } },
+      functions: (session) => {
+        sessions.set(session.principal, session);
+        return {};
+      },
+    });
+    const server = await assemble(app, { fabric: { publish: (message) => void carried.push(message), subscribe: () => undefined } }, saved);
+    try {
+      const maras = await server.shells?.session('t_i_mara', 'i_mara');
+      const bens = await server.shells?.session('t_i_ben', 'i_ben');
+
+      await sessions.get('i_mara')?.artifacts.save([{ kind: 'layout', body: { ref: 'action/home', layout: asMaraHasIt, use: true } }]);
+
+      await vi.waitFor(() => expect(maras?.shell.layoutStore.get('action/home')).toEqual(asMaraHasIt));
+      expect(bens?.shell.layoutStore.get('action/home')).toEqual(asBuilt);
+      expect(kept.map((row) => row['principal'])).toEqual(['i_mara']);
+      expect(carried).toEqual([{ kind: 'adopt', principal: 'i_mara', origin: expect.any(String) }]);
     } finally {
       server.close();
     }

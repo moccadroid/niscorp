@@ -1,14 +1,19 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import type { CacheEntry, SeedEntry, SeedMutation } from '@niscorp/vex';
-import { candidateOf, entriesOf, entryMisfits, freezeDeep, refusalOf, verifyManifest } from '../manifest';
-import type { ManifestCandidate, ManifestReport, ShellManifest, ShippedManifest } from '../manifest';
+import { actionOfLayoutRef, candidateOf, entriesOf, entryMisfits, freezeDeep, refusalOf, verifyManifest } from '../manifest';
+import type { KitComponents, ManifestCandidate, ManifestReport, SessionArtifacts, ShellManifest, ShippedManifest } from '../manifest';
 import type { ShellArtifacts } from './artifacts';
 import { shellComponents } from './artifacts';
 import { compileEntries, createEntriesInForce } from './entries';
 import { createGeneration } from './generation';
 import type { Generation, Pointer } from './generation';
+import { layoutsInUse } from './layouts';
+import type { LayoutHeldTo } from './layouts';
 import { createRoleMemo, narrowedBy } from './roles';
 import type { Catalog, CatalogFilter } from './roles';
+import type { SavedRows } from './saves';
+import { createSessionArtifacts } from './session';
+import type { Caller, RolesHeld } from './session';
 
 type Actions = Readonly<Record<string, ActionDefinition>>;
 
@@ -19,7 +24,12 @@ export type RunningManifestConfig = {
   grants: readonly string[];
   installedOnly?: CatalogFilter;
   pointer?: Pointer & { everyMs?: number };
+  // Every shell the app has: what one of them can draw, a saved layout may name.
+  shells: readonly ShellManifest[];
 };
+
+// `saved`: the rows of that principal. Nobody signed in has none.
+export type Who = RolesHeld & { principal: string | null; saved?: SavedRows };
 
 export type OwnedActions = {
   replace: (actions: Record<string, ActionDefinition>) => void;
@@ -41,7 +51,9 @@ export type RunningManifest = {
   onChange: (listener: () => void) => () => void;
   addCatalogFilter: (filter: CatalogFilter) => void;
   catalogFor: (roles: readonly string[], installed: readonly string[] | undefined) => Catalog;
-  artifactsFor: (shell: ShellManifest, roles: readonly string[], installed: readonly string[] | undefined) => ShellArtifacts;
+  artifactsFor: (shell: ShellManifest, who: Who) => Promise<ShellArtifacts>;
+  sessionArtifacts: (principal: string | null, callerOf: () => Promise<Caller>) => SessionArtifacts;
+  onChangeFor: (listener: (principal: string) => void) => () => void;
   generation: () => number;
   stop: () => void;
 };
@@ -49,9 +61,9 @@ export type RunningManifest = {
 const mergedActions = (own: Actions, sets: ReadonlyMap<string, Actions>): Actions =>
   Object.freeze([...sets.values()].reduce<Record<string, ActionDefinition>>((all, set) => ({ ...all, ...set }), { ...own }));
 
-const tell = (listener: () => void): void => {
+const tell = <Told extends unknown[]>(listener: (...told: Told) => void, ...told: Told): void => {
   try {
-    listener();
+    listener(...told);
   } catch (error) {
     console.error('[moss:manifest] a listener to a manifest change threw:', error);
   }
@@ -123,13 +135,41 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
 
   let report = verifiedAtBoot(candidate(inForce));
 
+  const components = createComponentNames((shell) => shellComponents({ actions: inForce, layouts: shipped.layouts }, shell));
+
+  // Of two shells that list one component, what one of them says of its props is kept.
+  const componentsOf = (shells: readonly ShellManifest[]): KitComponents => {
+    const kit = new Map<string, { propsSchema?: unknown }>();
+    for (const shell of shells) {
+      for (const [name, contract] of Object.entries(components.of(shell))) kit.set(name, { propsSchema: contract.meta?.propsSchema ?? kit.get(name)?.propsSchema });
+    }
+    return kit;
+  };
+  // Read again when what is in force changes.
+  let ofTheApp: KitComponents | undefined;
+
   const catalogFilters: CatalogFilter[] = config.installedOnly === undefined ? [] : [config.installedOnly];
   const roleMemo = createRoleMemo({
     manifest: () => ({ charter: shipped.charter, actions: inForce, layouts: shipped.layouts }),
     installedOnly: (ids, installed) => catalogFilters.reduce((kept, narrow) => narrowedBy(narrow, kept, installed), ids),
   });
-  const components = createComponentNames((shell) => shellComponents({ actions: inForce, layouts: shipped.layouts }, shell));
+  // A layout is saved for every shell its holder may open, and drawn by one:
+  // at a save it is held to what any shell of the app can draw, and when a shell
+  // is built to what that shell can.
+  const heldTo = (held: RolesHeld, shell?: ShellManifest): LayoutHeldTo => {
+    const { actions, layouts } = roleMemo.storedLayoutsFor(held.roles, held.installed);
+    return {
+      kit: shell === undefined ? (ofTheApp ??= componentsOf(config.shells)) : componentsOf([shell]),
+      actionAt: (ref) => {
+        const id = actionOfLayoutRef(ref);
+        const action = id !== undefined && Object.hasOwn(actions, id) ? actions[id] : undefined;
+        const layout = Object.hasOwn(layouts, ref) ? layouts[ref] : undefined;
+        return action === undefined || layout === undefined ? undefined : { ...action, layout };
+      },
+    };
+  };
   const listeners = new Set<() => void>();
+  const listenersFor = new Set<(principal: string) => void>();
   let pointer: Generation | undefined;
 
   const applySets = (arrived: ReadonlyMap<string, Actions>, announce: boolean): void => {
@@ -144,6 +184,7 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     report = verified;
     roleMemo.drop();
     components.drop();
+    ofTheApp = undefined;
     for (const listener of [...listeners]) tell(listener);
     if (announce) pointer?.bump();
   };
@@ -155,6 +196,13 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
     for (const [source, load] of loaders) read.push([source, await load()]);
     applySets(new Map(read), false);
   };
+
+  const sessionArtifacts = createSessionArtifacts({
+    heldTo,
+    written: (principal) => {
+      for (const listener of [...listenersFor]) tell(listener, principal);
+    },
+  });
 
   const takeEntries = async (source: string, handed: readonly (SeedEntry | SeedMutation)[]): Promise<void> => {
     owners.assertAppOwned(source);
@@ -216,16 +264,26 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       roleMemo.drop();
     },
     catalogFor: roleMemo.catalogFor,
-    artifactsFor: (shell, roles, installed) => {
+    artifactsFor: async (shell, { principal, roles, installed, saved }) => {
+      // Asked of the rows at every shell: what somebody saved in another process is theirs here too.
+      const versions = saved === undefined ? [] : await saved.inForce();
       const held = roleMemo.storedLayoutsFor(roles, installed);
+      const theirs = principal === null ? {} : layoutsInUse(versions, principal, heldTo({ roles, installed }, shell));
       return {
         actions: held.actions,
         canvases: shell.canvases,
         ...(shell.layout !== undefined ? { frame: shell.layout } : {}),
-        layoutStore: { ...shell.layoutStore, ...held.layouts },
+        layoutStore: { ...shell.layoutStore, ...held.layouts, ...theirs },
         ...(shell.fragments !== undefined ? { fragments: shell.fragments } : {}),
         entries: entries.byFingerprint(),
         components: components.of(shell),
+      };
+    },
+    sessionArtifacts,
+    onChangeFor: (listener) => {
+      listenersFor.add(listener);
+      return () => {
+        listenersFor.delete(listener);
       };
     },
     generation: () => pointer?.current() ?? -1,

@@ -16,6 +16,7 @@ import type { FeatureTables } from './migrate';
 import { POINTER, createOwnEntries, createPointer } from './own-entries';
 import type { OwnEntries, Pointer, Replay } from './own-entries';
 import { createExecuteAs, createPolicies, resolvePolicyForRoles } from './policy';
+import { ARTIFACT_TABLES } from './tables';
 import type { ExecuteAs } from './policy';
 import { createIntentAnswers, createVexRoutes } from './routes';
 import type { AnswerIntent, Intent, QueryWriters } from './routes';
@@ -34,6 +35,10 @@ export type DataConfig = {
   grammars?: readonly Sequence[];
   charter: NiscApp['charter'];
   behaviors?: NiscApp['behaviors'];
+  // Row rules of moss's own, for tables whose rows are somebody's. They are part
+  // of every policy, and are not shown to the engine that writes a query for an
+  // intent: its tables may be a list these are not in.
+  rowRules?: NiscApp['behaviors'];
   telemetry?: Telemetry;
 };
 
@@ -56,6 +61,7 @@ export type Data = {
   executeAs: ExecuteAs;
   answerIntent: (writers: QueryWriters, asked: Intent, who: Caller, scope: Record<string, unknown>) => Promise<QueryResponse>;
   ownEntries: (feature: string, entries: OwnEntries['entries']) => Promise<Replay>;
+  artifactEntries: (entries: OwnEntries['entries'], rules: NonNullable<OwnEntries['rules']>) => Promise<Replay>;
   routes: <E extends Env>(config: DataRoutesConfig<E>) => Hono<E>;
   upgradeStore: (feature: string, store: DocumentStore) => Promise<void>;
   onWrite: (listener: WriteListener) => () => void;
@@ -132,9 +138,12 @@ const createUpgradeStore =
     await prepared.upgradeStore(store);
   };
 
-export const createDataWith = (prepared: PreparedEngine, config: Pick<DataConfig, 'db' | 'charter' | 'behaviors' | 'telemetry' | 'vexConfig' | 'featureTables'>): Data => {
+export const createDataWith = (
+  prepared: PreparedEngine,
+  config: Pick<DataConfig, 'db' | 'charter' | 'behaviors' | 'rowRules' | 'telemetry' | 'vexConfig' | 'featureTables'>,
+): Data => {
   const { grammars, engine, grants } = prepared;
-  const governed = { charter: config.charter, behaviors: config.behaviors };
+  const governed = { charter: config.charter, behaviors: { ...config.behaviors, ...config.rowRules } };
   const policies = createPolicies({ ...governed, grants });
 
   const emit = emitterOf(config.telemetry);
@@ -175,6 +184,7 @@ export const createDataWith = (prepared: PreparedEngine, config: Pick<DataConfig
     }),
     answerIntent: async (writers, asked, who, scope) => answering()(writers, asked, { policy: policies.of(who), scope }),
     ownEntries: async (feature, entries) => ownEntries({ owner: `the feature "${feature}"`, entries, tables: tablesOf(feature) }, onExecute),
+    artifactEntries: (entries, rules) => ownEntries({ owner: 'the artifactory', entries, tables: ARTIFACT_TABLES, rules }, onExecute),
     routes: <E extends Env>(routing: DataRoutesConfig<E>): Hono<E> =>
       createVexRoutes<E>({
         engine,

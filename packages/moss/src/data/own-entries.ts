@@ -1,14 +1,19 @@
 import { createMemoryCache, createQueryEngine, handleDiscovery, handleQuery, seedCache, tablesChangedBy } from '@niscorp/vex';
-import type { DatabaseAdapter, ExecuteRecord, Filter, MutationClient, QueryEngine, ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
+import type { DatabaseAdapter, ExecuteRecord, Filter, MutationClient, QueryEngine, ScopePolicy, ScopeRules, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { z } from 'zod';
 
 export type OwnEntries = {
   owner: string;
   entries: readonly (SeedEntry | SeedMutation)[];
   tables: readonly string[];
+  // What a caller reads and writes of a table whose rows are somebody's. A
+  // table with none holds rows that are nobody's, and its owner's entries
+  // reach all of them.
+  rules?: Readonly<Record<string, ScopeRules>>;
 };
 
-export type Replay = (fingerprint: string, context: Record<string, unknown>) => Promise<unknown>;
+// `scope`: the values of whoever the entry is replayed for, which the rules bind rows to.
+export type Replay = (fingerprint: string, context: Record<string, unknown>, scope?: Record<string, unknown>) => Promise<unknown>;
 
 export type OwnEntriesDeps = {
   adapter: DatabaseAdapter;
@@ -36,7 +41,7 @@ export const createOwnEntries =
       cache,
     });
     await engine.introspect();
-    const policy: ScopePolicy = { default: 'deny', entities: Object.fromEntries(own.tables.map((table) => [table, { public: true }])) };
+    const policy: ScopePolicy = { default: 'deny', entities: Object.fromEntries(own.tables.map((table) => [table, own.rules?.[table] ?? { public: true }])) };
     // Vex's discovery lists the entries a policy can touch, so one it leaves
     // out reads or writes a table that is not the owner's.
     const reachable = new Set((await handleDiscovery({ engine, locked: true, scopePolicy: policy })).fingerprints.map((listed) => listed.fingerprint));
@@ -51,7 +56,7 @@ export const createOwnEntries =
       );
     }
 
-    return async (fingerprint, context) => {
+    return async (fingerprint, context, scope = {}) => {
       const outcome = await handleQuery(
         {
           engine,
@@ -61,7 +66,7 @@ export const createOwnEntries =
           ...(deps.onExecute !== undefined ? { onExecute: deps.onExecute } : {}),
         },
         { fingerprint, context },
-        {},
+        scope,
       );
       if (outcome.status !== 200) throw new Error(`moss: the entry "${fingerprint}" was refused (${outcome.status}): ${messageOf(outcome.body)}`);
       return resultOf(outcome.body);

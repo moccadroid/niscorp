@@ -1,5 +1,6 @@
 import { createMemoryCache, createQueryEngine, seedCache } from '@niscorp/vex';
 import type { CacheBackend, DatabaseAdapter, DatabaseSchema, MutationClient, QueryEngine, SeedEntry, SeedMutation } from '@niscorp/vex';
+import type { Data } from '../src/data';
 import { createEntryCache } from '../src/data/engine';
 import type { HeldEntries } from '../src/data/engine';
 
@@ -29,6 +30,9 @@ export const NOTES_SCHEMA: DatabaseSchema = {
 export const READ_NOTES: SeedEntry = { fingerprint: 'notes/all', dsl: { from: ['notes'], fields: ['notes.id', 'notes.body'] } };
 export const READ_OWN_NOTES: SeedEntry = { ...READ_NOTES, fingerprint: 'notes/mine', reach: 'personal' };
 export const ADD_NOTE: SeedMutation = { fingerprint: 'notes/add', mutation: { op: 'insert', table: 'notes', values: { body: { $context: 'body' } } } };
+
+// The engine double answers every read with its one set of rows, which are no rows of the artifactory's.
+export const nothingSavedIn = (data: Data): Data => ({ ...data, artifactEntries: async () => async () => [] });
 
 export type EngineDouble = {
   engine: QueryEngine;

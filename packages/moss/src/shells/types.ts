@@ -2,7 +2,7 @@ import type { ActionDefinition, ActionFragment, FetchFn, LayoutNode, RenderNode,
 import type { PhraseKeys } from '@niscorp/nova/i18n';
 import type { QueryResponse, SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Intent, QueryWriters } from '../data';
-import type { NiscApp, ShellCanvas, ShellManifest } from '../manifest';
+import type { NiscApp, SessionArtifacts, ShellCanvas, ShellManifest } from '../manifest';
 import type { Telemetry } from '../runtime';
 
 export type ShellComposition = {
@@ -44,6 +44,7 @@ export type ShellHostConfig = {
   wire: (token: string | null) => FetchFn;
   wrapWire?: (inner: FetchFn) => FetchFn;
   answerIntent?: (principal: string | null, writers: QueryWriters, asked: Intent) => Promise<QueryResponse>;
+  artifacts?: (principal: string | null) => SessionArtifacts;
   revokeSessions?: (principal: string) => Promise<void>;
   telemetry?: Telemetry;
   limits?: ShellLimits;
@@ -101,5 +102,6 @@ export type ShellHost = {
 export type OwnedShellHost = {
   host: ShellHost;
   adopt: () => void;
+  adoptFor: (principal: string) => void;
   stop: () => void;
 };

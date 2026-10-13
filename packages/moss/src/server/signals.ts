@@ -7,6 +7,7 @@ export type Signals = {
   invalidateIdentity: (principal: string) => boolean;
   invalidateTag: (tag: string) => number;
   nudge: (principal: string, channel: string) => void;
+  adopt: (principal: string) => void;
   deliver: (principal: string, channel: string, payload?: unknown) => boolean;
 };
 
@@ -14,10 +15,11 @@ export type SignalDeps = {
   fabric: Fabric | undefined;
   identity: Pick<Identity, 'invalidate' | 'invalidateTag'>;
   reset: (principal: string) => boolean;
+  adopt: (principal: string) => void;
   deliver: (principal: string, channel: string, payload?: unknown) => boolean;
 };
 
-export const buildSignals = ({ fabric, identity, reset, deliver }: SignalDeps): Signals => {
+export const buildSignals = ({ fabric, identity, reset, adopt, deliver }: SignalDeps): Signals => {
   const origin = randomBytes(8).toString('hex');
   const applyInvalidateIdentity = (principal: string): boolean => {
     const held = identity.invalidate(principal);
@@ -32,6 +34,7 @@ export const buildSignals = ({ fabric, identity, reset, deliver }: SignalDeps): 
     invalidateIdentity: applyInvalidateIdentity,
     invalidateTag: applyInvalidateTag,
     nudge: applyNudge,
+    adopt,
   });
 
   return {
@@ -52,6 +55,10 @@ export const buildSignals = ({ fabric, identity, reset, deliver }: SignalDeps): 
       applyNudge(principal, channel);
       publish({ kind: 'nudge', principal, channel });
     },
+    adopt: (principal) => {
+      adopt(principal);
+      publish({ kind: 'adopt', principal });
+    },
     // The payload stays in this process. Across processes only the channel is
     // said, and a shell there reads again under its own policy.
     deliver: (principal, channel, payload) => {
@@ -68,6 +75,7 @@ export type FabricApply = {
   invalidateIdentity: (principal: string) => void;
   invalidateTag: (tag: string) => void;
   nudge: (principal: string, channel: string) => void;
+  adopt: (principal: string) => void;
 };
 
 export const wireFabric = (
@@ -100,6 +108,9 @@ export const wireFabric = (
           break;
         case 'nudge':
           apply.nudge(message.principal, message.channel);
+          break;
+        case 'adopt':
+          apply.adopt(message.principal);
           break;
       }
     } catch (err) {

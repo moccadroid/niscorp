@@ -12,7 +12,7 @@ import { createDataWith } from '../src/data/data';
 import { createEntryCache, createGrammarUpgrader } from '../src/data/engine';
 import { featureTablesOf } from '../src/data/migrate';
 import { tableSequencesOf } from '../src/data/migrate';
-import { NOTES_SCHEMA, READ_NOTES, engineDouble, heldDouble } from './data-double';
+import { NOTES_SCHEMA, READ_NOTES, engineDouble, heldDouble, tableNamed } from './data-double';
 
 const charter: Charter = {
   public: [],
@@ -195,6 +195,34 @@ describe('the data module, over an engine', () => {
     await expect(data.answerIntent(writers, asked, who('public'), {})).rejects.toThrow();
     expect(shown[2]).toEqual([]);
   });
+
+  it('row rules of moss’s own are part of every policy, and an intent is still answered where they name a table the engine does not know', async () => {
+    const double = await engineDouble();
+    const governing: Charter = { public: [], reader: { data: ['*.read'] } };
+    const data = createDataWith(
+      {
+        engine: double.engine,
+        adapter: double.adapter,
+        grants: scopeGrants(['notes', 'kept']),
+        grammars: await createGrammarUpgrader({}),
+        upgradeStore: async () => undefined,
+        askFirst: double.askFirst,
+      },
+      { db: double.db, charter: governing, behaviors: { notes: { read: [] } }, rowRules: { kept: { read: [{ match: 'principal', to: 'userId' }] } } },
+    );
+
+    expect(data.policyForRoles(['reader']).entities).toEqual({ notes: { read: [] }, kept: { read: [{ match: 'principal', to: 'userId' }] } });
+
+    const writers = {
+      generateDsl: async () => ({ from: ['notes'], fields: ['notes.id', 'notes.body'] }),
+      mapToShape: async (rows: Record<string, unknown>[]) => {
+        const ir = await compile({ $ref: '$.result' });
+        return { ir, transformed: execute(ir, { result: JSON.parse(JSON.stringify(rows)) }) };
+      },
+    };
+    const answered = await data.answerIntent(writers, { intent: 'every note', shape: [{ id: 0, body: '' }] }, who('reader'), { userId: 'usr_1' });
+    expect(answered.result).toEqual([{ id: 1, body: 'first' }]);
+  });
 });
 
 const TAGS: SeedEntry = { fingerprint: 'tags/all', dsl: { from: ['tags'], fields: ['tags.id'], limit: 10 } };
@@ -325,6 +353,24 @@ describe("the data module — moss's own entries, where the app gave vex a list 
     await expect(data.ownEntries('tagging', [TAGS, POINTER_BY_THE_FEATURE])).rejects.toThrow(/handed over an entry that reads or writes a table that is not its own: "tags\/pointer"/);
     expect(read).toHaveLength(0);
     expect(written).toHaveLength(0);
+  });
+
+  it('the artifactory’s entries are replayed on its two tables under the row rules it hands over, and reach no other table', async () => {
+    const double = await engineDouble([], { entities: [...NOTES_SCHEMA.entities, tableNamed('artifacts'), tableNamed('artifact_saves')] }, ['notes']);
+    const data = createDataWith(
+      { engine: double.engine, adapter: double.adapter, grants: scopeGrants(['notes']), grammars: await createGrammarUpgrader({}), upgradeStore: async () => undefined, askFirst: double.askFirst },
+      { db: double.db, charter },
+    );
+    const rules = { artifacts: { read: [{ match: 'id', to: 'userId' }] }, artifact_saves: {} };
+    const replay = await data.artifactEntries([{ fingerprint: 'artifactory/ids', dsl: { from: ['artifacts'], fields: ['artifacts.id'] } }], rules);
+    await replay('artifactory/ids', {}, { userId: 'ada' });
+    expect(double.tablesRead).toEqual(['artifacts']);
+
+    await expect(data.artifactEntries([READ_NOTES], rules)).rejects.toThrow(/^moss: the artifactory handed over an entry that reads or writes a table that is not its own: "notes\/all"/);
+    // A table its rules give no phase is one its own entries do not reach either.
+    await expect(data.artifactEntries([{ fingerprint: 'artifactory/saves', dsl: { from: ['artifact_saves'], fields: ['artifact_saves.id'] } }], rules)).rejects.toThrow(
+      /handed over an entry that reads or writes a table that is not its own: "artifactory\/saves"/,
+    );
   });
 });
 

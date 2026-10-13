@@ -245,6 +245,7 @@ What the manifest's in-process functions close over:
 ```typescript
 type FunctionSession = {
   shell: Shell;                    // the session's living, durable shell (a getter — a reset replaces it); nine members throw
+  artifacts: SessionArtifacts;     // what this principal saved, and saving: `session.artifacts`, below
   principal: string | null;
   roles: readonly string[];
   identity: Record<string, unknown>;  // the scope half of the resolved identity
@@ -323,6 +324,134 @@ const runs: RunSink = (record) => {
   console.log(record.agentId, record.totalTokens, turns.length);
 };
 ```
+
+#### `session.artifacts` — what the session's principal saved
+
+A layout somebody or a model generated while the app runs is kept by moss, as
+a version, in two tables of its own. Today the kind that is kept is a layout
+for an action. Not built yet: the other kinds (an action, a fragment, a vex
+read), the layout of the frame or of a canvas, and a default that is saved
+for everybody.
+
+```typescript
+type SessionArtifacts = {
+  save: (artifacts: readonly { kind: 'layout'; id?: string; body: unknown }[]) => Promise<{ save: string; artifacts: readonly { kind: 'layout'; id: string }[] }>;
+  list: (kind?: 'layout') => Promise<readonly ArtifactVersion[]>;
+  history: (kind: 'layout', id: string) => Promise<readonly ArtifactVersion[]>;
+  restore: (kind: 'layout', id: string, save: string) => Promise<{ save: string }>;
+  reset: (kind: 'layout', id: string) => Promise<{ save: string }>;
+};
+
+type ArtifactVersion = {
+  kind: 'layout';
+  id: string;
+  save: string;               // the save this version belongs to
+  createdAt: string;          // ISO
+  copiedFrom: string | null;  // the save it is a copy of, where it is one
+  body: unknown;              // null: this version says none is in force
+};
+```
+
+The two types are reached as `FunctionSession['artifacts']`; neither is
+exported by a name of its own.
+
+**A layout's body** is `{ ref, layout, use? }`. `ref` is the name the layout
+of the action it is for is kept under in the shell's layout store,
+`action/<the action's id>`. `layout` is a nova layout.
+
+```typescript
+functions: (session) => ({
+  'layout.keep': async ({ layout }) => session.artifacts.save([{ kind: 'layout', body: { ref: 'action/deals.list', layout, use: true } }]),
+}),
+```
+
+**Every call is for the session's principal, and no call can be for anybody
+else.** No argument names whose rows are meant. Moss runs its own entries over
+the two tables as the caller, with the scope values the routes serve that
+caller under, and under one row rule: a caller reads and writes only the rows
+whose `principal` is their `userId`, and a row they insert or update carries
+it, whatever the statement says. Vex keeps that rule on every read and every
+write; moss's code passes no principal. **Who may save at all is the charter's**: a function that calls
+`session.artifacts.save` is the app's, an action calls it, and the charter
+says who holds that action. A session nobody is signed in to saves nothing
+and lists nothing: everybody who is not signed in shares one `userId`.
+
+- The layout is the principal's and nobody else's. Moss gives it its id, a
+  uuid, and answers it; a save that names that `id` is a new version of the
+  same layout, and an id that is not one of theirs is refused.
+- Several of somebody's own may be for one ref: the one whose body says
+  `use: true` is the one their shells draw, and marking one takes the mark off
+  their others for that ref in the same save. One that is not marked is kept
+  and not drawn.
+- Their open screens follow at once, with what was typed into them kept; in a
+  deployment of several processes the others are told over the fabric
+  (`adopt`, under "Many processes").
+
+**Whose a row is, is the caller's `userId`**: the scope value moss supplies
+for every caller, which an app's `scope` can set. An app that gives a person one account for each tenant
+keeps their layouts apart by tenant. An app where one account spans tenants
+has that person's layouts follow them into each. In neither does anybody read
+or write a row of another account.
+
+**What a shell draws under an action's ref**, the first of these that there
+is: the principal's own layout marked in use; the layout variant their roles
+hold (`app.layouts`); the layout the build ships.
+
+**What is refused**, at a save and at a restore, in a sentence, with nothing
+written: a body that is not `{ ref, layout, use? }`; a `ref` nothing is kept
+under for the principal (an action they do not hold, or one that is not in
+force; an action with no layout of its own, or one that names a layout of the
+store by its id; any name that is not `action/<id>`); a component no shell of
+the app has (and a prop its declared schema refuses, as for an integration's
+layouts); a layout that names a ref under `action/`; and what nova's audit
+(`auditAction`) finds of the action with the layout in place and does not find
+of the action as it is built (a binding to a key the action has no data for,
+a control the action listens on that the layout leaves out, a control no
+trigger handles). The same is asked of every saved layout when a shell is
+built, there against the components of that shell alone: one that does not
+pass is left out, what is under it is drawn, and a line says why (`[moss] the layout "…" of … is left out: …`). One whose ref
+its holder's store keeps nothing under any more (the action left, or they
+hold it no longer) is not loaded and nothing is said.
+
+**Moss changes and deletes no row.** `list` answers the latest version of each
+of the principal's artifacts that has a body. `history` answers the versions
+of one, the newest first (the newest 500). `restore` is a new save that holds
+a copy of a version and says which (`copiedFrom`); it is checked as a save
+is. `reset` is a new save whose version has no body: none of the principal's
+is in force under that id, and what is under it is drawn again. A reset is a
+version too, and can be gone back from. Two saves by one person at the same
+moment can each leave a layout marked in use for one ref. The later one is
+drawn; reset it, and the other marked one is what is under it. The next save
+that marks one takes the mark off the rest.
+
+The rows are in `artifact_saves` (one for each save) and `artifacts` (one for
+each version a save holds), which migration `nisc.moss/5` makes. They are
+read and written through three vex entries of moss's own that no route serves
+(`src/artifactory/saves.ts`). What is in force for an artifact is its latest
+version by `created_at`; every id moss gives is a uuid. A body is kept with
+the grammar stamp it was written at and is brought to the grammars the server
+runs when it is read. What somebody saved is asked of the rows once for each
+shell that is built for them and once for each adopt; nothing of it is kept in
+memory, so a save made in another process is theirs here at the next build
+whether or not a fabric is set. The entries are loaded when the server boots,
+and a boot that cannot load them fails.
+
+**The row rule is moss's, wherever a policy is compiled.** The two tables are
+in the data a charter selects from, as every table is: no role reaches them
+unless its charter grants them. A role that is granted them, by name or by a
+wildcard (`*.read`), reads and writes its own rows there and nobody else's,
+because the same rule is part of the policy `server.policyForRoles` answers.
+An app does not say otherwise: `behaviors` that name either table refuse the
+boot. (A policy an app compiles itself, from its charter and its own
+`behaviors` and without the server, does not carry the rule.) Moss's own
+entries only add rows. An app whose charter grants a role update or delete
+on the two tables, and that ships an entry of its own to do it, lets that
+role change or remove its own rows, and never another's.
+
+**A save is not told to `app.reactions`.** Moss's own entries tell the app's
+engine which tables changed, so a read of the app's that follows them
+refreshes, and tell no subscriber of the routes. The function that saved
+knows that it did.
 
 ### The environment
 
@@ -499,7 +628,8 @@ await revokeAllFor(runtime.pool, 'usr_ada');
 
 **Tables go through a ledger.** moss creates no table on its own: its tables are
 [strata](../strata/README.md) sequences — `MOSS_SEQUENCE` (`nisc.moss`:
-integrations, their actions, the generation pointer) and the sessions table's
+integrations, their actions, the generation pointer, the two tables of what
+was saved) and the sessions table's
 (`nisc.moss.sessions`; the sequence itself is not exported) — and
 `createServer` applies them with the vex cache's sequence in
 one ledgered run before introspection: once, recorded in `strata_ledger`, and
@@ -1245,11 +1375,14 @@ tables changed, so a reactive read over one of them answers again.
 - `runtime.fabric` — `{ publish(message), subscribe(apply) }`, the
   host's transport (Postgres `LISTEN/NOTIFY` is the expected one; the type is
   `NiscRuntime['fabric']`, and is not exported by a name of its own). A
-  message is one of the three signals below with `origin`, the process that
-  sent it, which moss stamps and checks. It carries
-  three signals to the other processes: `invalidate-identity`,
-  `invalidate-tag` and `nudge` — what `server.invalidateIdentity`,
-  `invalidateTag` and `nudge` publish after applying locally. Best-effort:
+  message is one of the four below with `origin`, the process that
+  sent it, which moss stamps and checks. Three are what
+  `server.invalidateIdentity`, `invalidateTag` and `nudge` publish after
+  applying locally: `invalidate-identity`, `invalidate-tag` and `nudge`. The
+  fourth, `adopt`, names a principal and tells a process to bring the shells
+  it holds for them level with what they hold now; moss publishes it when a
+  layout is saved for that principal (`session.artifacts`), and it says
+  nothing of what was saved. Best-effort:
   each targets state that heals on its own clock. Unset, every path behaves as
   in one process. The wiring is `src/server/signals.ts`; it is the server's
   own and is not exported.
@@ -1404,8 +1537,9 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
   runtime, but a typed object of what it needs: one function that answers what
   a principal's shell is made of (who they are, the action definitions they
   hold, each naming its layout by ref, the canvases, the frame, the layout
-  store's seed with those layouts in it, their roles' layout variant in place,
-  the fragments, the entries, the component names), the
+  store's seed with those layouts in it (their roles' layout variant in
+  place, and over it the layout of their own they marked in use), the
+  fragments, the entries, the component names), the
   app's code a shell calls (`inputs`, `seeds`, `phrases`, `functions`,
   `onSession`, `runs`), the wire for a token, and its limits. Everything in
   that answer but who somebody is comes from the running manifest, which is
@@ -1442,7 +1576,7 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
     **A change is the server's.** When what the app consists of changes
     (`server.refresh()`, `server.replaceActions()`, `server.replaceEntries()`, an integration approved
     or removed, a change another process made), every living shell of every
-    host adopts: it is brought level with what its principal holds now, in
+    host adopts (a layout somebody saved for themselves is adopted by the shells of that principal alone): it is brought level with what its principal holds now, in
     place. Every living shell: the ones a host keeps, and the ones it built
     for one connection, which for the app's host is each visitor's and for a
     page's host is everybody's. Definitions that arrived or changed are

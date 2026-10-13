@@ -26,7 +26,7 @@ const world = async (features: readonly Feature[] = []): Promise<{ deps: SeamDep
     { engine: double.engine, adapter: double.adapter, grants, grammars: await createGrammarUpgrader({}), upgradeStore: async () => undefined, askFirst: double.askFirst },
     { db: double.db, charter, featureTables: featureTablesOf({ features }) },
   );
-  const running = createRunningManifest({ shipped: { charter, actions: { home: { id: 'home' } } }, grants });
+  const running = createRunningManifest({ shipped: { charter, actions: { home: { id: 'home' } } }, grants, shells: [] });
   const server = new Hono<Env>();
   const operator = new Hono<Env>();
   const resolved = { roles: ['public'], scope: {}, installed: undefined, memoKey: memoKey(['public'], undefined) };

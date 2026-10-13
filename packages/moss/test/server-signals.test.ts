@@ -10,6 +10,7 @@ import { buildShellHosts } from '../src/server/hosts';
 import type { Hosts } from '../src/server/hosts';
 import { buildSignals } from '../src/server/signals';
 import type { Signals } from '../src/server/signals';
+import { noRows } from './saved-double';
 
 const inbox: ActionDefinition = {
   id: 'inbox',
@@ -22,7 +23,7 @@ const app: NiscApp = {
   shell: { canvases: [{ id: 'main', initial: 'inbox' }] },
   pages: { board: { path: '/board', canvases: [{ id: 'main', initial: 'inbox' }] } },
 };
-const running = createRunningManifest({ shipped: app, grants: scopeGrants([]) });
+const running = createRunningManifest({ shipped: app, grants: scopeGrants([]), shells: [] });
 
 const createBus = (): { endpoint: () => Fabric; carried: FabricMessage[] } => {
   const subscribers: ((message: FabricMessage) => void)[] = [];
@@ -55,12 +56,13 @@ const processOn = (fabric: Fabric | undefined): Process => {
     runtime: {},
     identity: { resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, memoKey: 'public' }), composeScope: () => ({}) },
     running,
+    savedAs: () => noRows,
     data: { answerIntent: async () => Promise.reject(new Error('no intent is asked here')) },
     wire: () => async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
     wrapWire: (inner) => inner,
     revokeSessions: undefined,
   });
-  const signals = buildSignals({ fabric, identity: { invalidate: identity.invalidate, invalidateTag: identity.invalidateTag }, reset: hosts.reset, deliver: hosts.deliver });
+  const signals = buildSignals({ fabric, identity: { invalidate: identity.invalidate, invalidateTag: identity.invalidateTag }, reset: hosts.reset, adopt: hosts.adoptFor, deliver: hosts.deliver });
   return { hosts, signals, resolved, identityOf: identity.get };
 };
 

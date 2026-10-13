@@ -61,10 +61,15 @@ const actionLayoutNamedIn = (layout: unknown): string | undefined => {
   return named;
 };
 
+export const layoutNameRefusal = (layout: unknown): string | undefined => {
+  const named = actionLayoutNamedIn(layout);
+  return named === undefined ? undefined : `names the layout "${named}": ${ACTION_LAYOUT_NAME_REFUSAL}`;
+};
+
 const layoutNameErrors = (actions: ManifestCandidate['actions']): string[] =>
   Object.entries(actions).flatMap(([id, definition]) => {
-    const named = actionLayoutNamedIn(definition.layout);
-    return named === undefined ? [] : [`"${id}" names the layout "${named}": ${ACTION_LAYOUT_NAME_REFUSAL}`];
+    const refusal = layoutNameRefusal(definition.layout);
+    return refusal === undefined ? [] : [`"${id}" ${refusal}`];
   });
 
 const reachErrors = (entries: ManifestCandidate['entries'], profiles: ReadonlySet<string>): string[] => {
@@ -138,8 +143,8 @@ export const verifyVariants = (app: Pick<NiscApp, 'charter' | 'actions' | 'layou
     if (app.actions[variant.action] === undefined) {
       errors.push(`layout variant "${id}" reshapes unknown action "${variant.action}"`);
     }
-    const named = actionLayoutNamedIn(variant.layout);
-    if (named !== undefined) errors.push(`layout variant "${id}" names the layout "${named}": ${ACTION_LAYOUT_NAME_REFUSAL}`);
+    const refusal = layoutNameRefusal(variant.layout);
+    if (refusal !== undefined) errors.push(`layout variant "${id}" ${refusal}`);
   }
   const wearers = new Map<string, readonly string[]>();
   for (const role of Object.keys(app.charter)) wearers.set(`role "${role}"`, [role]);

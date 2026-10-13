@@ -8,6 +8,7 @@ import { buildShellHosts } from '../src/server/hosts';
 import type { ShellHostsDeps } from '../src/server/hosts';
 import { buildSignals } from '../src/server/signals';
 import { turn } from './turn';
+import { noRows } from './saved-double';
 
 const frameNamed = (name: string, dock = false): LayoutNode => ({
   component: 'Frame',
@@ -40,7 +41,7 @@ const app: NiscApp = {
   pages: { docs },
 };
 
-const shipped = createRunningManifest({ shipped: app, grants: scopeGrants(['words']) });
+const shipped = createRunningManifest({ shipped: app, grants: scopeGrants(['words']), shells: [] });
 
 const depsWith = (running: ShellHostsDeps['running']): ShellHostsDeps => ({
   app,
@@ -50,6 +51,7 @@ const depsWith = (running: ShellHostsDeps['running']): ShellHostsDeps => ({
     composeScope: () => ({}),
   },
   running,
+  savedAs: () => noRows,
   data: { answerIntent: async () => Promise.reject(new Error('no intent is asked here')) },
   wire: () => async () => ({ ok: true, status: 200, json: async () => ({ result: [] }), text: async () => '{"result":[]}' }),
   wrapWire: (inner) => inner,
@@ -75,12 +77,14 @@ describe('the shell hosts — what a shell is made of is asked of the running ma
     const asked: ShellManifest[] = [];
     const hosts = buildShellHosts(
       depsWith({
-        artifactsFor: (shell, roles, installed) => {
+        ...shipped,
+        artifactsFor: async (shell, who) => {
           asked.push(shell);
+          const made = await shipped.artifactsFor(shell, who);
           return {
-            ...shipped.artifactsFor(shell, roles, installed),
+            ...made,
             frame: frameNamed('as published', true),
-            layoutStore: { ...shipped.artifactsFor(shell, roles, installed).layoutStore, dock: dockSaying('the dock, as published') },
+            layoutStore: { ...made.layoutStore, dock: dockSaying('the dock, as published') },
             fragments: { sheet: sheetNamed('as published') },
             entries: new Map([[wordsAll.fingerprint, { ...wordsAll, refresh: 'reactive' as const }]]),
           };
@@ -111,7 +115,7 @@ describe('the shell hosts — what a shell is made of is asked of the running ma
       actions: { words, field },
       pages: { docs, form: { path: '/form', canvases: [{ id: 'main', initial: 'field' }] } },
     };
-    const running = createRunningManifest({ shipped: typing, grants: scopeGrants(['words']) });
+    const running = createRunningManifest({ shipped: typing, grants: scopeGrants(['words']), shells: [] });
     const hosts = buildShellHosts({ ...depsWith(running), app: typing });
     try {
       const shown = await hosts.pageAt('/docs')?.host.snapshot(null, null);
@@ -132,7 +136,7 @@ describe('the shell hosts — what a shell is made of is asked of the running ma
       actions: { words, framed },
       pages: { form: { path: '/form', canvases: [{ id: 'main', initial: 'framed' }], layoutStore: { form: { component: 'Input', model: '$.title' } } } },
     };
-    const running = createRunningManifest({ shipped: typing, grants: scopeGrants(['words']) });
+    const running = createRunningManifest({ shipped: typing, grants: scopeGrants(['words']), shells: [] });
     const hosts = buildShellHosts({ ...depsWith(running), app: typing });
     try {
       const typed = await hosts.pageAt('/form')?.host.snapshot(null, null);
@@ -147,9 +151,10 @@ describe('the shell hosts — what a shell is made of is asked of the running ma
     const asked: ShellManifest[] = [];
     const hosts = buildShellHosts(
       depsWith({
-        artifactsFor: (shell, roles, installed) => {
+        ...shipped,
+        artifactsFor: async (shell, who) => {
           asked.push(shell);
-          return { ...shipped.artifactsFor(shell, roles, installed), frame: frameNamed('the page, as published') };
+          return { ...(await shipped.artifactsFor(shell, who)), frame: frameNamed('the page, as published') };
         },
       }),
     );
@@ -173,7 +178,7 @@ describe('the shell hosts — a change reaches the living shells of every host',
     session?.shell.getCanvasState('main').stack.at(-1)?.definitionId;
 
   it('when what the app consists of changes, the shells of the app’s host and of each page’s adopt', async () => {
-    const running = createRunningManifest({ shipped: granting, grants: scopeGrants(['words']) });
+    const running = createRunningManifest({ shipped: granting, grants: scopeGrants(['words']), shells: [] });
     const hosts = buildShellHosts({ ...depsWith(running), app: granting });
     try {
       const mine = await hosts.shells?.session('t', 'usr_1');
@@ -197,8 +202,9 @@ describe('the shell hosts — a change reaches the living shells of every host',
     const answering = { published: false };
     const hosts = buildShellHosts(
       depsWith({
-        artifactsFor: (shell, roles, installed) => {
-          const made = shipped.artifactsFor(shell, roles, installed);
+        ...shipped,
+        artifactsFor: async (shell, who) => {
+          const made = await shipped.artifactsFor(shell, who);
           if (!answering.published) return made;
           return { ...made, frame: frameNamed('as published', true), layoutStore: { ...made.layoutStore, dock: dockSaying('the dock, as published') }, fragments: { sheet: sheetNamed('as published') } };
         },
@@ -232,7 +238,7 @@ describe('the shell hosts — a change reaches the living shells of every host',
   });
 
   it('a layout that changes reaches a screen that is already open, and the screen keeps its data', async () => {
-    const running = createRunningManifest({ shipped: granting, grants: scopeGrants(['words']) });
+    const running = createRunningManifest({ shipped: granting, grants: scopeGrants(['words']), shells: [] });
     const hosts = buildShellHosts({ ...depsWith(running), app: granting });
     try {
       const mine = await hosts.shells?.session('t', 'usr_1');
@@ -260,7 +266,7 @@ describe('the shell hosts — a change reaches the living shells of every host',
   });
 
   it('the layout of an action that left is taken out of the shell’s store with it', async () => {
-    const running = createRunningManifest({ shipped: granting, grants: scopeGrants(['words']) });
+    const running = createRunningManifest({ shipped: granting, grants: scopeGrants(['words']), shells: [] });
     const hosts = buildShellHosts({ ...depsWith(running), app: granting });
     try {
       const mine = await hosts.shells?.session('t', 'usr_1');
@@ -281,7 +287,7 @@ describe('the shell hosts — a change reaches the living shells of every host',
   });
 
   it('a session’s shell hands out a definition with its layout in place, as it stands now, and its store is to read', async () => {
-    const running = createRunningManifest({ shipped: granting, grants: scopeGrants(['words']) });
+    const running = createRunningManifest({ shipped: granting, grants: scopeGrants(['words']), shells: [] });
     const hosts = buildShellHosts({ ...depsWith(running), app: granting });
     try {
       const mine = await hosts.shells?.session('t', 'usr_1');
@@ -310,7 +316,7 @@ describe('the shell hosts — a change reaches the living shells of every host',
   it('a principal’s reset reaches their shell in the app’s host and the ones a page built for them, and nobody else’s', async () => {
     const hosts = buildShellHosts(depsWith(shipped));
     try {
-      const signals = buildSignals({ fabric: undefined, identity: { invalidate: () => true, invalidateTag: () => [] }, reset: hosts.reset, deliver: hosts.deliver });
+      const signals = buildSignals({ fabric: undefined, identity: { invalidate: () => true, invalidateTag: () => [] }, reset: hosts.reset, adopt: hosts.adoptFor, deliver: hosts.deliver });
       const page = hosts.pageAt('/docs')?.host;
       const sessions = [await hosts.shells?.session('t', 'usr_1'), await page?.session('t', 'usr_1'), await page?.session('t', 'usr_2')];
       const before = sessions.map((session) => session?.shell);

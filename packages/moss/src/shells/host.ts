@@ -105,6 +105,13 @@ const adoptAll = (host: HostState): void => {
   for (const cell of [...host.living.values()]) adopt(host, cell);
 };
 
+// Counted as a change of the host's, so the answer is not dropped as one the
+// shell already reflects. The shells of everybody else adopt at the next change.
+const adoptFor = (host: HostState, principal: string): void => {
+  host.changes += 1;
+  for (const cell of shellsOf(host, principal)) adopt(host, cell);
+};
+
 type Built = { live: Live; changes: number };
 
 // Bounded, because a build runs app code, which can hang: past the limit
@@ -281,5 +288,5 @@ export const createShellHost = (config: ShellHostConfig): OwnedShellHost => {
       return theirs.length > 0;
     },
   };
-  return { host: handedOut, adopt: () => adoptAll(host), stop: startSweep(host) };
+  return { host: handedOut, adopt: () => adoptAll(host), adoptFor: (principal) => adoptFor(host, principal), stop: startSweep(host) };
 };

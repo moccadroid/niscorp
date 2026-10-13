@@ -7,6 +7,7 @@ import type { Pointer } from '../src/artifactory/generation';
 import type { RunningManifestConfig } from '../src/artifactory/running';
 import type { ShellManifest } from '../src/manifest';
 import type { ShippedManifest } from '../src/manifest/verify';
+import { nobody } from './saved-double';
 
 type Entry = SeedEntry | SeedMutation;
 
@@ -22,7 +23,7 @@ const misspelt = { ...lost, mappping: { $ref: '$.result' } } as unknown as SeedE
 const shipping = (...entries: Entry[]): ShippedManifest => ({ charter: { public: ['home'] }, actions: { home: { id: 'home' } }, entries });
 
 const running = (shipped: ShippedManifest = shipping(open, close), more: Partial<RunningManifestConfig> = {}): RunningManifest =>
-  createRunningManifest({ shipped, grants: scopeGrants(['deals']), ...more });
+  createRunningManifest({ shipped, grants: scopeGrants(['deals']), shells: [], ...more });
 
 const SHELL: ShellManifest = { canvases: [] };
 const held = async (manifest: RunningManifest): Promise<string[]> => (await manifest.cacheEntries()).map((row) => row.key).sort();
@@ -53,7 +54,7 @@ describe('replaceEntries — a named set of entries that arrived while the app r
     expect(await held(manifest)).toEqual(['deals/close', 'deals/open', 'ext/lost', 'ext/won']);
     expect(await manifest.cacheEntry('ext/won')).toMatchObject({ kind: 'ok', protected: true, dsl: won.dsl });
     expect(manifest.entries().map((entry) => entry.fingerprint)).toEqual(['deals/open', 'deals/close', 'ext/won', 'ext/lost']);
-    expect(manifest.artifactsFor(SHELL, ['public'], undefined).entries.get('ext/won')).toBe(won);
+    expect((await manifest.artifactsFor(SHELL, nobody(['public']))).entries.get('ext/won')).toBe(won);
   });
 
   it('replaces the set of its name whole: an entry it no longer holds is gone', async () => {
@@ -63,7 +64,7 @@ describe('replaceEntries — a named set of entries that arrived while the app r
     await manifest.replaceEntries('bundles', [lost]);
     expect(await held(manifest)).toEqual(['deals/close', 'deals/open', 'ext/lost', 'pay/won']);
     expect(await manifest.cacheEntry('ext/won')).toBeUndefined();
-    expect(manifest.artifactsFor(SHELL, ['public'], undefined).entries.has('ext/won')).toBe(false);
+    expect((await manifest.artifactsFor(SHELL, nobody(['public']))).entries.has('ext/won')).toBe(false);
   });
 
   it('an entry of a set is answered in place of the one the app shipped under that fingerprint, for as long as the set holds it', async () => {
@@ -82,7 +83,7 @@ describe('replaceEntries — a named set of entries that arrived while the app r
     await manifest.replaceEntries('bundles', [won]);
     await manifest.replaceEntries('payments', [narrow]);
     expect(await manifest.cacheEntry('ext/won')).toMatchObject({ dsl: narrow.dsl });
-    expect(manifest.artifactsFor(SHELL, ['public'], undefined).entries.get('ext/won')).toBe(narrow);
+    expect((await manifest.artifactsFor(SHELL, nobody(['public']))).entries.get('ext/won')).toBe(narrow);
     await manifest.replaceEntries('bundles', [won]);
     expect(await manifest.cacheEntry('ext/won')).toMatchObject({ dsl: narrow.dsl });
   });

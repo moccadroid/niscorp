@@ -1,7 +1,7 @@
 import type { FetchFn } from '@niscorp/nova';
 import type { Hono } from 'hono';
 import { VEX_LIVE_ENV } from '@niscorp/vex/hono';
-import type { RunningManifest } from '../artifactory';
+import type { RunningManifest, SavedRows } from '../artifactory';
 import { createWireFollower } from '../data';
 import type { Data } from '../data';
 import { createPageRouter } from '../documents';
@@ -16,7 +16,9 @@ export type ShellHostsDeps = {
   app: Pick<NiscApp, 'shell' | 'pages' | 'phrases' | 'functions' | 'onSession' | 'runs' | 'phraseKeys'>;
   runtime: Pick<NiscRuntime, 'telemetry' | 'shellIdleMs' | 'shellFrameDelta' | 'endpointTimeoutMs'>;
   identity: Pick<Identity, 'resolve' | 'composeScope'>;
-  running: Pick<RunningManifest, 'artifactsFor'>;
+  running: Pick<RunningManifest, 'artifactsFor' | 'sessionArtifacts'>;
+  // What was saved, as the caller whose scope it is handed.
+  savedAs: (scope: Record<string, unknown>) => SavedRows;
   data: Pick<Data, 'answerIntent'>;
   wire: (token: string | null) => FetchFn;
   wrapWire: (inner: FetchFn) => FetchFn;
@@ -28,6 +30,7 @@ export type Hosts = {
   pageAt: MossServer['page'];
   pages: MossServer['pages'];
   adopt: () => void;
+  adoptFor: (principal: string) => void;
   reset: (principal: string) => boolean;
   deliver: (principal: string, channel: string, payload?: unknown) => boolean;
   stop: () => void;
@@ -35,11 +38,18 @@ export type Hosts = {
 
 const hostConfig = (deps: ShellHostsDeps, shell: ShellManifest, kept: boolean): ShellHostConfig => {
   const { app, runtime, identity, running, data } = deps;
+  const callerOf = async (principal: string | null) => {
+    const resolved = await identity.resolve(principal);
+    return { resolved, roles: resolved.roles, installed: resolved.installed, saved: deps.savedAs(identity.composeScope(principal, resolved)) };
+  };
   return {
     composition: async (principal) => {
-      const resolved = await identity.resolve(principal);
-      return { roles: resolved.roles, scope: resolved.scope, ...running.artifactsFor(shell, resolved.roles, resolved.installed) };
+      const { resolved, saved, ...held } = await callerOf(principal);
+      // Nobody signed in has no rows of their own: they share one `userId`.
+      const who = { principal, ...held, ...(principal === null ? {} : { saved }) };
+      return { roles: resolved.roles, scope: resolved.scope, ...(await running.artifactsFor(shell, who)) };
     },
+    artifacts: (principal) => running.sessionArtifacts(principal, () => callerOf(principal)),
     hooks: {
       ...(shell.inputs !== undefined ? { inputs: shell.inputs } : {}),
       ...(shell.seeds !== undefined ? { seeds: shell.seeds } : {}),
@@ -91,6 +101,9 @@ export const buildShellHosts = (deps: ShellHostsDeps): Hosts => {
     pages: Object.entries(pageManifests).map(([name, manifest]) => ({ name, path: manifest.path })),
     adopt: () => {
       for (const made of owned) made.adopt();
+    },
+    adoptFor: (principal) => {
+      for (const made of owned) made.adoptFor(principal);
     },
     // `map`, not `some`: each host is asked, whatever the one before answered.
     reset: (principal) => every.map((host) => host.reset(principal)).includes(true),

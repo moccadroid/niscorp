@@ -1,5 +1,7 @@
-export { actionLayoutRef, defineApp, entriesOf } from './app';
+export { actionLayoutRef, actionOfLayoutRef, defineApp, entriesOf } from './app';
 export type {
+  ArtifactKind,
+  ArtifactVersion,
   CanvasSeed,
   FunctionSession,
   LayoutVariant,
@@ -8,9 +10,10 @@ export type {
   RunRecord,
   RunSink,
   RunTurn,
+  SessionArtifacts,
   ShellCanvas,
   ShellManifest,
 } from './app';
 export { entryMisfits, freezeDeep, receiveManifest } from './schema';
-export { candidateOf, endlessChains, layoutMisfits, refusalOf, variantLayouts, verifyApp, verifyManifest, withVariants } from './verify';
+export { candidateOf, endlessChains, layoutMisfits, layoutNameRefusal, refusalOf, variantLayouts, verifyApp, verifyManifest, withVariants } from './verify';
 export type { KitComponents, ManifestCandidate, ManifestReport, ShippedManifest } from './verify';

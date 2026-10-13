@@ -2,7 +2,7 @@
 
 **Status: Proposed (2026-10-12), ready to build from. What it has to do
 (part 2) and its ten design decisions (part 9) are the owner's and are
-settled. Steps 1 to 3 of part 6 are built (2026-10-12), on the branch
+settled. Steps 1 to 4 of part 6 are built (2026-10-13), on the branch
 `worktree-artifactory`; nothing else is. Part 0 is for whoever builds it, part 6 is the
 build, step by step, and part 7 is what needs the owner's word before it is
 touched.**
@@ -21,8 +21,8 @@ owner's standing decisions. Then this file. Then the code part 4 names.
 
 **Where the repository stands.** Start from the branch `worktree-artifactory`,
 or from `main` once that branch is in it. Moss is
-`packages/moss/src`: 91 files in 16 modules, about 7,650 lines of code and
-380 comment lines. `pnpm verify` passes on the branch. CI has passed on
+`packages/moss/src`: 94 files in 16 modules, about 8,130 lines of code and
+440 comment lines. `pnpm verify` passes on the branch. CI has passed on
 `main`, and has not run on the branch until it is pushed.
 
 **The owner's rules.** Each was learned the hard way.
@@ -152,7 +152,6 @@ The owner's. Not to be asked again.
 - Several layouts may exist for one thing. Generating three of my own while
   the app ships one loses none of them: which one is in use is separate from
   the layouts.
-- The app may ship several styles, and a person chooses one.
 - My own change shows on my open screen at once. What somebody else publishes
   while my screen is open is adopted in place.
 
@@ -205,7 +204,7 @@ The owner's. Not to be asked again.
 **Words**
 
 - Use the words that exist: artifact, kind, version, save, draft, default,
-  publish, principal, ref (of the layout store), layout variant, style, entry,
+  publish, principal, ref (of the layout store), layout variant, entry,
   fingerprint, manifest. "Generated" for what a person or a model produces
   while the app runs. "Steps" only for the draft's own history.
 - Not to be used: made, slot (for anything but nova's canvas slot), look,
@@ -297,7 +296,7 @@ Read against the code on 2026-10-12. Paths are under `packages/moss/src/`.
 | `data/engine.ts` | `createDataLayer`: the vex engine, and the cache it is built with, which asks the artifactory first (`createEntryCache`) |
 | `data/data.ts` | `createData`: `entriesHeldBy`, `fingerprints`, policies, `executeAs`, the pointer's row |
 | `data/own-entries.ts` | how moss reads and writes its own rows through vex (`createOwnEntries`, `POINTER`) |
-| `data/tables.ts` | `MOSS_SEQUENCE` (`nisc.moss`): moss's tables, four migrations so far |
+| `data/tables.ts` | `MOSS_SEQUENCE` (`nisc.moss`): moss's tables, five migrations so far |
 | `data/routes.ts` | the vex routes; `createIntentAnswers`, a query written for an intent while the app runs |
 | `shells/build.ts` | `buildShell`: one nova shell from a `ShellComposition` |
 | `shells/host.ts` | the shell host: build, adopt (`takeLayouts`), reset |
@@ -305,7 +304,7 @@ Read against the code on 2026-10-12. Paths are under `packages/moss/src/`.
 | `shells/snapshot.ts` | a drawn screen, and `shellNeedOf` (does a page need a server behind it) |
 | `server/server.ts` | the boot, one step to a line |
 | `server/hosts.ts` | what a shell is built from for a principal (`composition`) |
-| `server/signals.ts` | what crosses processes on the fabric: a forgotten identity, a forgotten tag, a nudge |
+| `server/signals.ts` | what crosses processes on the fabric: a forgotten identity, a forgotten tag, a nudge, and (since step 4) the word to adopt for one principal |
 
 **What has to change**
 
@@ -315,12 +314,11 @@ Read against the code on 2026-10-12. Paths are under `packages/moss/src/`.
   way to hand an entry over while a server ran. Now the artifactory holds
   them, the engine's cache asks it first, and `server.replaceEntries` hands a
   set over.
-- **`artifactsFor(shell, roles, installed)` is synchronous and asked by
-  roles.** Its answer is kept for each set of roles and install list, never
-  for a person. What one person generated needs the principal, and rows need
-  to be awaited. Its one caller is `server/hosts.ts`, and
-  `ShellHostConfig.composition(principal)` is already by principal and
-  awaited.
+- **`artifactsFor(shell, roles, installed)` was synchronous and asked by
+  roles**, and takes a principal with their rows and is awaited since step 4.
+  What a set of roles holds is still kept for each set of roles and install
+  list; what one person saved is laid over it. Its one caller is
+  `server/hosts.ts`.
 - **`catalogFor(roles, installed)` is the same**, with four callers outside
   `artifactory`: `server.catalogOf` and the socket's catalog
   (`server/server.ts`), the catalog route (`server/routes.ts`), and the seam
@@ -357,24 +355,37 @@ exists and passes the check: the draft in their shell; what they generated;
 the published default; the build's copy.
 
 **Two tables**, appended to `nisc.moss` as its next migration, and read and
-written through vex entries that `data` replays for the artifactory (the way
-`data/own-entries.ts` serves the generation pointer).
+written through vex entries that `data` replays for the artifactory, as
+`data/own-entries.ts` does for the generation pointer, with one difference
+(the owner's, 2026-10-13): the pointer's row is nobody's, and these rows are
+somebody's. So the entries are replayed as the caller, with the caller's
+scope, under a row rule moss ships: a caller reads and writes only the rows
+whose `principal` is their `userId`. Vex keeps that on every read and write.
+No entry names a principal, and moss's code passes none. The same rule is in
+the policy an app's charter compiles to, so a role that is granted the two
+tables reaches its own rows there. The tables are moss's and an app's charter
+does not have to name them.
 
-- `artifacts`: a row is one version of one artifact. `kind` (action, layout,
-  fragment, entry), `id`, `principal` (absent: a default), `version`, `body`
-  (the artifact as authored), `grammar` (the stamp it was written at), which
-  version it was copied from (the room left for merging), and the save it
-  belongs to.
-- `artifact_saves`: a row is one save. Who saved and when, and for whom (the
-  principal, or everybody). A save holds one or several versions, and for
-  each artifact it touches it says which version is in force, or none.
+- `artifacts`: a row is one version of one artifact, which is what one save
+  says about it. `kind` (action, layout, fragment, entry), `id`, `principal`
+  (whose it is), `body` (the artifact as authored; absent: none is in
+  force), `grammar` (the stamp it was written at), the version it was copied
+  from (the room left for merging), the save it belongs to, and `created_at`.
+- `artifact_saves`: a row is one save. Its `id`, who made it, whose it is,
+  and `created_at`. A save holds one or several
+  versions.
 
-No row is changed or deleted. The latest save that touches an artifact says
+No row is changed or deleted, so `created_at` is the one time a row has, and
+there is no version counter: the latest save that touches an artifact says
 what is in force for it. Going back to a version is a new save that holds a
 copy of it. A reset is a new save that says none of mine is in force.
 
+Every id moss gives is a uuid: a save's, and a generated artifact's. An id
+that names something stays that name: an action's id, the ref a default layout
+fills, a fingerprint.
+
 **Ids.** The artifactory gives a generated action its id: `generated.` and a
-random part. Nobody passes one in. Nothing shipped, published or from an
+uuid. Nobody passes one in. Nothing shipped, published or from an
 integration may begin with `generated.`. A generated id is never held against
 the charter's globs: it is in its owner's catalog because they own it, and in
 nobody else's.
@@ -384,15 +395,14 @@ what draws it: `action/<id>`, `canvas/<id>`, `frame`. An app goes on writing
 an action's layout inline; the artifactory moves it into the store when it
 answers what a shell is made of, and the definition names it by `{ ref }`.
 Changing a layout is then `setLayout`, and an open screen follows with its
-data kept. A layout's body is `{ ref, layout, style?, use? }`: `style` says
-which of the app's styles it belongs to, and `use` marks the one of several
-that is in use. At a ref the order is: mine marked in use; the default of the
-style I chose; the layout variant of my roles; the plain default; the build's
-copy. Which style somebody chose is the app's to keep: it reaches the
-artifactory on their identity record, beside their roles.
+data kept. A layout's body is `{ ref, layout, use? }`: `use` marks the one of
+several that is in use. At a ref the order is: mine marked in use; the layout
+variant of my roles; the published default; the build's copy. Moss knows that
+several layouts may fill one ref, and nothing about why an app has several.
 
-**What goes with an action.** A layout's id is the ref it fills, so it names
-the action it is for. Taking a generated action out of force takes its owner's
+**What goes with an action.** A layout names the ref it fills, and so the
+action it is for. A default layout's id is that ref; one of a person's own has
+an id moss gave it. Taking a generated action out of force takes its owner's
 layouts for it out of force in the same save, and a restore brings them back
 together. A layout for an action that does not exist for its owner is not
 loaded. When versions are pruned, the first to go are those for an action that
@@ -409,17 +419,18 @@ artifacts (one numbered step), remove one, show the draft as it was at a step,
 discard it, save it. What is put passes the check and is applied to that one
 shell at once, so its owner sees it. It is gone when the shell is.
 
-**Saving and publishing are one call.** A save is told who it is for: the
-session's principal, or everybody. Nothing else differs: the same check, the
-same two tables, the same history. A save for everybody is a default.
+**Saving is the session's principal's** (the owner's, 2026-10-13; it was
+"saving and publishing are one call", told who it is for). No call names whose
+rows are meant: a function that saves reaches its own principal's rows and
+nothing else, whatever it passes. A default for everybody is a different
+question (who may change what everybody sees) and is not a way of saving. It
+is its own step, not in the list of part 6 yet, and how the charter authorizes
+it is to be proposed to the owner first.
 
-**The trusted channel.** The session handed to an app's functions can already
-do what moss trusts shipped code with (`session.grant`, `session.revoke`).
-Saving is one more of those. Any function may save for the session's own
-principal. A save for everybody is reached the same way, from a function the
-app ships for its owners, and the charter says who holds that function. That
-is the whole channel: no route, no key, no command. A generated action cannot
-reach it, because that function is on no list a generated action may call.
+**Who may save.** A function that calls `session.artifacts.save` is the app's,
+an action calls it, and the charter says who holds that action. There is no
+route, no key and no command. A generated action cannot reach it, because that
+function is on no list a generated action may call.
 
 **What a publish gives an id.** A generated action has an id nobody chose and
 no charter grants. As a default it has to be granted, so whoever publishes it
@@ -464,9 +475,11 @@ calls no function.
 **After a save.** A default moves the generation pointer: every process
 follows and living shells adopt, as for every change of the app today. A
 person's own save is adopted at once by their shells in the process that
-saved; a deployment with several processes carries it to the others on its
-fabric, as it carries a forgotten identity. An answer is kept for a principal
-until they save or the pointer moves, so a request does not ask the database.
+saved; a deployment with several processes tells the others on its fabric to
+bring that principal's shells level. The message says that, and nothing about
+what the person did. An answer is kept for a principal
+until they save or the pointer moves, so a request does not ask the database
+(not built so: part 8).
 
 ## 6. The build
 
@@ -523,16 +536,30 @@ first:* a shell's actions name their layouts by ref and draw what they drew;
 that was a file is still judged a file. *Done when:* those pass, every lab
 app draws what it drew, and part 0's "works" holds.
 
-**Step 4. The two tables, and layouts that are saved.** The migration, the vex
-entries for the rows, and saving a layout for the session's principal or for
-everybody, from a function's session. Resolution for a principal (part 5), the
-order at a ref, styles, which one is in use, history, going back to a
-version, reset. `artifactsFor` and `catalogFor` take a principal and are
-awaited. A person's own save reaches their open screens, and the other
-processes over the fabric. *Tests that fail first:* one for each sentence of
-this step. *Done when:* a generated layout for a shipped action shows on its
-owner's open screen at once and on nobody else's; a published one shows for
-everybody and wins over the build's; taking it back shows the build's again.
+**Step 4. The two tables, and a person's saved layouts. Built (2026-10-13).**
+Migration `nisc.moss/5` makes `artifact_saves` and `artifacts`. Three vex
+entries read and write them (`artifactory/saves.ts`), with the row rule they
+run under, replayed by `data` as the caller (`Data.artifactEntries`; an
+owner's entries may now carry row rules and a replay takes a scope,
+`data/own-entries.ts`). A function's session saves through
+`session.artifacts`: `save`, `list`, `history`, `restore`, `reset`, each for
+the session's principal (`artifactory/session.ts`). `artifactsFor` takes a
+principal with their rows and is awaited: under an action's ref it answers
+their own layout marked in use, else their roles' layout variant, else the
+build's. A save tells whoever follows that principal (`onChangeFor`), which
+the server answers by having their shells adopt and by the fabric's fourth
+message, `adopt`. `catalogFor` follows in step 5, where a person's own actions
+make the catalog theirs. No lab app saves a layout yet: lyceum does in step 6.
+*Tests that failed first:* `artifactory-saved.test.ts` (the calls, the order
+at a ref, what is refused, what is left out), `server-saved.test.ts` (open
+screens, two processes on one fabric), cases in `server-assemble.test.ts`
+(the server's own wiring; `behaviors` that name the tables), and the rows on
+a real database in the case of `baselines.test.ts` that already has one up
+(whose a row is, what a charter's grant reaches). *Done when:* a generated
+layout for a shipped action shows on its owner's open screen at once and on
+nobody else's, and nobody reads or writes a row that is not theirs. *Not in
+this step any more:* a published layout that shows for everybody and wins
+over the build's (see "Saving is the session's principal's", part 5).
 
 **Step 5. Generated actions and fragments.** The id (part 5, "Ids"), the
 catalog of a principal with what they own, the check of a generated action's
@@ -582,9 +609,8 @@ Ask with the concrete change, at the step that needs it.
 | **strata:** one stored kind, for a vex entry | a stored entry carries the stamp it was written at and is upgraded where it is read | 7 |
 | **moss, `NiscApp`:** functions declared by name with a description | today `functions(session)` is one map whose names are not known before a session | 8 |
 | **charter:** one part, which functions the generated actions of a role may call | the charter decides what a generated action may run | 8 |
-| **moss, `IdentityRecord`:** the style somebody chose | the app keeps the choice, and it reaches the artifactory with the roles | 4 |
-| **moss, the fabric:** one more signal, "this principal saved" | a person's own save reaches their screens in another process | 4 |
-| **moss, the function session:** the draft, and saving | the names are the owner's to hear before they are built | 4, 6 |
+| **moss, the fabric:** one more message, "bring this principal's shells level" | a person's own save reaches their screens in another process; the message says what to do, and nothing about why | 4, built: `adopt` |
+| **moss, the function session:** the draft, and saving | the names are the owner's to hear before they are built | 4 built: `session.artifacts`; 6 |
 
 Nova owes nothing. Its reflection (`describeInstance`, which the devtools use)
 and its audit read a layout off the definition and do not look behind a ref:
@@ -611,6 +637,69 @@ shell. On the whole shell (`unverifiedShell`) they see the ref.
   published is what can be generated. And a published default wins over a
   build that is deployed later, until it is taken back. Both follow from what
   is decided, and are said here so that nobody is surprised by them.
+
+**A default for everybody.** Part 2 ("Publishing") and decision D7 say what it
+has to do. How it is done is open again: it was built as an argument on the
+calls of `session.artifacts` that moss did not check, and that is gone. To be
+proposed to the owner: how the charter authorizes a write that changes what
+everybody sees, and how a process reads rows that are nobody's (at boot and
+when the pointer moves, where there is no caller). Until then the order at a
+ref has no published default in it, and D7 is to be looked at again with the
+owner.
+
+**Step 4 as built, where the owner has not been asked.**
+
+- **No answer is kept for a principal.** What they saved is asked of the rows
+  once for each shell built for them and once for each adopt (one indexed
+  read; 0.7 ms on a small table, measured on PGlite). Part 5 says to keep it.
+  Kept, it needs a clock of its own: a process with no fabric never hears of a
+  save made in another.
+- **The audit.** A saved layout is held to what `auditAction` finds of its
+  action with the layout in place and does not find of the action as it is
+  built. So a layout that leaves out a control its action listens on is
+  refused.
+- **A saved layout fills `action/<id>`, where the action has a layout of its
+  own.** An action with none, or one that names a stored layout by its id,
+  cannot be given one. The frame and a canvas's layout are not in the layout
+  store by ref, so neither can be saved. Step 9 needs the frame there.
+- **`session.artifacts` as written**: what a call answers (`save` answers the
+  save's id and each artifact's id, `list` and `history` answer versions with
+  their bodies); `history` answers the newest 500; marking a layout in use
+  writes a version without the mark for each of its holder's others for that
+  ref, and of two that are marked the later counts (two saves at the same
+  moment can leave that; reset the later and the other marked one is drawn,
+  until a save marks one: a reset does not take marks off, and that is not
+  built); `restore` checks the old version as a save is checked and brings it
+  to the grammars the server runs; a reset of what is not in force is
+  refused.
+- **The tables.** `created_by` is the saver's `userId`, as `principal` is,
+  until somebody saves for somebody else; `principal` may be NULL, and nothing
+  writes it so; `artifacts` is keyed by `(save, kind, id)` and refers to its
+  save; one index, `(principal, kind, id, created_at)`; `created_at` is the
+  database's clock, and two versions of one artifact in the same instant are
+  told apart by their save; `copied_from` is a save's id; a reset is a version
+  whose body is null. They are named `artifacts` and `artifact_saves`: an app
+  whose database already has a table by either name cannot take the release
+  that brings them.
+- **Whose a row is, is the caller's `userId`**, which an app's `scope` can set.
+  One account for each tenant keeps a person's layouts apart by tenant; one
+  account across tenants has them follow the person. On a read the rule is
+  one match and stays one. An app whose `scope` answers `userId: null` saves
+  rows nobody reads: no guard is built for it, and making the two `principal`
+  columns NOT NULL would refuse it in the database.
+- **A save is not told to `app.reactions`**, as no write of moss's own entries
+  is. A read of the app's that follows the tables refreshes.
+- **Moss's own entries only add rows.** An app whose charter grants a role
+  update or delete on the two tables, and that ships an entry for it, lets
+  that role change or remove its own rows. A row rule cannot take a verb away
+  that a charter granted; it keeps every verb to the caller's own rows.
+- **A saved layout is held to the components of every shell at a save, and to
+  those of the one shell when it is built.** In a shell that cannot draw it,
+  it is left out with a line.
+- **`AGENTS.md` says nothing of `session.artifacts`.** The words are the
+  owner's.
+- A sentence a refused layout gets from nova's schema can be as short as
+  "layout: Invalid input". It is the schema's own.
 
 ## 9. The ten decisions
 

@@ -1,8 +1,14 @@
+import { randomUUID } from 'node:crypto';
 import { describe, it, expect, vi } from 'vitest';
+import { createMemoryCache, createPostgresAdapter, createQueryEngine, handleQuery, seedCache } from '@niscorp/vex';
+import type { SeedMutation } from '@niscorp/vex';
 import { createPglitePool } from '@niscorp/vex/pglite';
 import { checksumOf, type Sequence } from '@niscorp/strata';
 import { readLedger } from '@niscorp/strata/postgres';
+import { SAVE_ENTRIES, SAVE_ROW_RULES, savedRowsOver } from '../src/artifactory';
 import { MOSS_SEQUENCE } from '../src/data';
+import { createGrammarUpgrader } from '../src/data/engine';
+import { createOwnEntries } from '../src/data/own-entries';
 import { SESSIONS_SEQUENCE } from '../src/identity';
 import { createServer } from '../src/server';
 import { pristineDatabases } from './pristine-database';
@@ -17,6 +23,7 @@ const PINNED: ReadonlyArray<[Sequence, number, string]> = [
   [MOSS_SEQUENCE, 2, '92bd612e35a830e2f58de2327451a8e3346e7bc102ab0b49777c349792894b1a'],
   [MOSS_SEQUENCE, 3, 'b05aa252f4f3b70dad03282552ac6b94c5d4e5012d964c23cb32fedbb4f8b60f'],
   [MOSS_SEQUENCE, 4, 'd4fdae75451da4bb3d46c6b31c8ad1797f1c0a487eb85708f30c5d4e5e37ce5b'],
+  [MOSS_SEQUENCE, 5, '6f15348b5cf5a45e29794fca4c501ad8e2b8847639d33aa47b2b6d0c37a115c5'],
   [SESSIONS_SEQUENCE, 1, '83a62e0217940bfe62136052c18f730947355d20e481d9aceb76463251b33700'],
 ];
 
@@ -32,7 +39,9 @@ describe('baselines — applied migrations are history', () => {
 });
 
 describe('boot — every owner through one ledger', () => {
-  const app = { charter: {}, actions: {} };
+  // `reader` grants a wildcard over the data, which reaches moss's own tables as it reaches the app's.
+  // `everything` grants every verb on the two tables of what was saved, as an app's charter may.
+  const app = { charter: { reader: { data: ['*.read'] }, everything: { data: ['artifacts.*', 'artifact_saves.*'] } }, actions: {} };
   const quietly = <T>(run: () => Promise<T>): Promise<T> => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     return run().finally(() => warn.mockRestore());
@@ -40,12 +49,115 @@ describe('boot — every owner through one ledger', () => {
 
   it('a fresh database is migrated once and recorded; the next boot finds nothing to do', async () => {
     const pool = createPglitePool(freshDatabase());
-    await quietly(() => createServer(app, { pool, db: pool, session: 'sessions' }));
+    const booted = await quietly(() => createServer(app, { pool, db: pool, session: 'sessions' }));
     const ledger = await readLedger(pool);
-    expect(ledger.map((r) => `${r.sequence}/${r.n}`)).toEqual(['nisc.moss/1', 'nisc.moss/2', 'nisc.moss/3', 'nisc.moss/4', 'nisc.moss.sessions/1', 'nisc.vex.cache/1']);
+    expect(ledger.map((r) => `${r.sequence}/${r.n}`)).toEqual(['nisc.moss/1', 'nisc.moss/2', 'nisc.moss/3', 'nisc.moss/4', 'nisc.moss/5', 'nisc.moss.sessions/1', 'nisc.vex.cache/1']);
 
     await quietly(() => createServer(app, { pool, db: pool, session: 'sessions', migrations: 'verify' }));
-    expect((await readLedger(pool)).length).toBe(6);
+    expect((await readLedger(pool)).length).toBe(7);
+
+    // What a charter grants of the two tables of what was saved is kept to the caller's own rows, as moss's
+    // own reads and writes of them are. A table with no such rule is granted whole.
+    const reached = booted.policyForRoles(['reader']).entities;
+    expect(reached['artifacts']).toEqual({ read: [{ match: 'principal', to: 'userId' }] });
+    expect(reached['artifact_saves']).toEqual({ read: [{ match: 'principal', to: 'userId' }] });
+    expect(reached['integrations']).toEqual({ read: [] });
+
+    // The artifactory's rows, on the tables that boot made. Here, because this database is already up.
+    // Its entries name no principal: whose a row is, is vex's to keep, from the `userId` of who they are replayed for.
+    const replay = await createOwnEntries({ adapter: createPostgresAdapter({ pool }), db: pool, engine: { invalidate: () => undefined } })({
+      owner: 'the artifactory',
+      entries: SAVE_ENTRIES,
+      tables: ['artifacts', 'artifact_saves'],
+      rules: SAVE_ROW_RULES,
+    });
+    const rowsAs = savedRowsOver(replay, await createGrammarUpgrader({}));
+    const [ada, ben, cy] = [rowsAs({ userId: 'ada' }), rowsAs({ userId: 'ben' }), rowsAs({ userId: 'cy' })];
+    const layout = (text: string): unknown => ({ ref: 'action/home', layout: { component: 'Text', children: text } });
+    const save = async (as: typeof ada, versions: { id: string; body: unknown; copiedFrom?: string }[]): Promise<string> => {
+      const id = randomUUID();
+      await as.write({ id, versions: versions.map((version) => ({ kind: 'layout', copiedFrom: null, ...version })) });
+      return id;
+    };
+    const first = await save(ada, [{ id: 'one', body: layout('one, first') }]);
+    const second = await save(ada, [
+      { id: 'one', body: layout('one, second'), copiedFrom: first },
+      { id: 'two', body: layout('two') },
+    ]);
+    const reset = await save(ada, [{ id: 'two', body: null }]);
+    // The same id as one of ada's: an id is its holder's, and is nobody else's row.
+    const bens = await save(ben, [{ id: 'one', body: layout('ben’s') }]);
+
+    const stored = async (table: string, columns: string): Promise<unknown[]> => (await pool.query(`SELECT DISTINCT ${columns} FROM ${table} ORDER BY 1`)).rows;
+    expect(await stored('artifacts', 'principal')).toEqual([{ principal: 'ada' }, { principal: 'ben' }]);
+    expect(await stored('artifact_saves', 'principal, created_by')).toEqual([{ principal: 'ada', created_by: 'ada' }, { principal: 'ben', created_by: 'ben' }]);
+
+    expect((await ada.inForce()).map((version) => [version.id, version.save, version.body, version.copiedFrom])).toEqual([
+      ['one', second, layout('one, second'), first],
+      ['two', reset, null, null],
+    ]);
+    expect((await ben.inForce()).map((version) => [version.id, version.save, version.body])).toEqual([['one', bens, layout('ben’s')]]);
+    expect(await cy.inForce()).toEqual([]);
+    expect((await ada.history('layout', 'one')).map((version) => version.save)).toEqual([second, first]);
+    expect((await ada.history('layout', 'one', first)).map((version) => version.body)).toEqual([layout('one, first')]);
+    expect(await ben.history('layout', 'one', first)).toEqual([]);
+    expect(await ben.history('layout', 'two')).toEqual([]);
+    expect((await ada.inForce())[0]?.createdAt).toMatch(/^\d{4}-\d\d-\d\dT/);
+    // With no `userId` there is nobody whose rows these are: vex refuses the read and the write.
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await expect(rowsAs({}).inForce()).rejects.toThrow(/"artifactory\/in-force" was refused/);
+    await expect(save(rowsAs({}), [{ id: 'nobodys', body: layout('nobody’s') }])).rejects.toThrow(/"artifactory\/save" was refused/);
+    quiet.mockRestore();
+    expect(await stored('artifacts', 'principal')).toEqual([{ principal: 'ada' }, { principal: 'ben' }]);
+
+    // What an app could do with every verb granted on the two tables, through entries of its own: each of
+    // the ways one caller could write a row that is not theirs, or reach one that is another's.
+    const plant: SeedMutation = {
+      fingerprint: 'app/plant',
+      mutation: [
+        { op: 'insert', table: 'artifact_saves', values: { id: { $context: 'save' }, principal: { $context: 'whose' }, created_by: { $context: 'whose' } } },
+        { op: 'insert', table: 'artifacts', values: { save: { $context: 'save' }, kind: 'layout', id: { $context: 'id' }, principal: { $context: 'whose' }, body: null } },
+      ],
+    };
+    const handOver: SeedMutation = {
+      fingerprint: 'app/hand-over',
+      mutation: { op: 'update', table: 'artifacts', set: { principal: { $context: 'whose' } }, where: { eq: ['artifacts.save', { $context: 'save' }] } },
+    };
+    const blank: SeedMutation = { fingerprint: 'app/blank', mutation: { op: 'update', table: 'artifacts', set: { body: null }, where: { eq: ['artifacts.save', { $context: 'save' }] } } };
+    const remove: SeedMutation = { fingerprint: 'app/remove', mutation: { op: 'delete', table: 'artifacts', where: { eq: ['artifacts.save', { $context: 'save' }] } } };
+    const cache = createMemoryCache();
+    await seedCache(cache, [plant, handOver, blank, remove]);
+    const engine = createQueryEngine({ adapter: createPostgresAdapter({ pool }), cache });
+    await engine.introspect();
+    const granted = booted.policyForRoles(['everything']);
+    const asAda = async (fingerprint: string, context: Record<string, unknown>): Promise<number> =>
+      (await handleQuery({ engine, locked: true, scopePolicy: granted, mutations: { client: pool, policy: granted } }, { fingerprint, context }, { userId: 'ada' })).status;
+    const whose = async (save: string): Promise<unknown[]> => (await pool.query('SELECT principal, body FROM artifacts WHERE save = $1', [save])).rows;
+
+    const planted = randomUUID();
+    expect(await asAda('app/plant', { save: planted, id: 'planted', whose: 'ben' })).toBe(200);
+    expect(await whose(planted)).toEqual([{ principal: 'ada', body: null }]);
+    expect((await pool.query('SELECT principal, created_by FROM artifact_saves WHERE id = $1', [planted])).rows).toEqual([{ principal: 'ada', created_by: 'ada' }]);
+
+    expect(await asAda('app/hand-over', { save: second, whose: 'ben' })).toBe(200);
+    expect((await whose(second)).map((row) => Reflect.get(Object(row), 'principal'))).toEqual(['ada', 'ada']);
+    expect(await ben.history('layout', 'two')).toEqual([]);
+
+    expect(await asAda('app/blank', { save: bens })).toBe(200);
+    expect(await whose(bens)).toEqual([{ principal: 'ben', body: layout('ben’s') }]);
+    expect(await asAda('app/remove', { save: bens })).toBe(200);
+    expect(await whose(bens)).toHaveLength(1);
+
+    // Its own rows a caller may remove where an app's charter grants the verb and the app ships the entry:
+    // moss removes none.
+    expect(await asAda('app/remove', { save: planted })).toBe(200);
+    expect(await whose(planted)).toEqual([]);
+
+    // More in force than one read answers: the rest is asked for after the last of the page before.
+    await save(cy, Array.from({ length: 501 }, (_, n) => ({ id: `layout-${String(n).padStart(3, '0')}`, body: layout(`number ${n}`) })));
+    const many = await cy.inForce();
+    expect(many).toHaveLength(501);
+    expect(new Set(many.map((version) => version.id)).size).toBe(501);
   });
 
   it("migrations: 'verify' refuses a database nobody migrated — and creates nothing", async () => {

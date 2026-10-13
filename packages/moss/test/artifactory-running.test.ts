@@ -7,6 +7,7 @@ import type { Pointer } from '../src/artifactory/generation';
 import type { ShellManifest } from '../src/manifest';
 import type { RunningManifestConfig } from '../src/artifactory/running';
 import type { ShippedManifest } from '../src/manifest/verify';
+import { nobody } from './saved-double';
 
 const home: ActionDefinition = { id: 'home' };
 const panel: ActionDefinition = { id: 'panel' };
@@ -25,11 +26,11 @@ const installedOnly: RunningManifestConfig['installedOnly'] = (ids, installed) =
   installed === undefined ? ids : ids.filter((id) => !id.startsWith('ext.') || installed.has(id.split('.')[1] ?? ''));
 
 const running = (shipped: ShippedManifest, more: Partial<RunningManifestConfig> = {}): ReturnType<typeof createRunningManifest> =>
-  createRunningManifest({ shipped, grants: scopeGrants(['deals']), installedOnly, ...more });
+  createRunningManifest({ shipped, grants: scopeGrants(['deals']), installedOnly, shells: [], ...more });
 
 const SHELL: ShellManifest = { canvases: [] };
-const definitionsOf = (manifest: RunningManifest, roles: readonly string[], installed?: readonly string[]): Readonly<Record<string, ActionDefinition>> =>
-  manifest.artifactsFor(SHELL, roles, installed).actions;
+const definitionsOf = async (manifest: RunningManifest, roles: readonly string[], installed?: readonly string[]): Promise<Readonly<Record<string, ActionDefinition>>> =>
+  (await manifest.artifactsFor(SHELL, nobody(roles, installed))).actions;
 
 const unservable: Record<string, ActionDefinition> = { 'home.sub': { id: 'home.sub' } };
 
@@ -53,11 +54,11 @@ describe('createRunningManifest — creating it is the boot check', () => {
     }
   });
 
-  it('holds the entries the app serves: the list as it shipped them, and each by its fingerprint for a shell', () => {
+  it('holds the entries the app serves: the list as it shipped them, and each by its fingerprint for a shell', async () => {
     const shipped = shippedApp();
     const manifest = running(shipped);
     expect(manifest.entries()).toEqual(shipped.entries);
-    const byFingerprint = manifest.artifactsFor(SHELL, ['public'], undefined).entries;
+    const byFingerprint = (await manifest.artifactsFor(SHELL, nobody(['public']))).entries;
     expect(byFingerprint.get('deals/open')?.fingerprint).toBe('deals/open');
     expect(byFingerprint.get('deals/closed')).toBeUndefined();
   });
@@ -76,15 +77,15 @@ describe('replace — a named set of actions that arrived while the app runs', (
     expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', grades.id, pay.id]);
   });
 
-  it('accepted: what each set of roles held is dropped, and whoever listens is told once', () => {
+  it('accepted: what each set of roles held is dropped, and whoever listens is told once', async () => {
     const manifest = running(shippedApp());
     const told = vi.fn();
     const stop = manifest.onChange(told);
     const before = manifest.catalogFor(['member'], undefined);
-    const definitionsBefore = definitionsOf(manifest, ['member']);
+    const definitionsBefore = await definitionsOf(manifest, ['member']);
     const verifiedBy = manifest.report();
     expect(manifest.catalogFor(['member'], undefined)).toBe(before);
-    expect(definitionsOf(manifest, ['member'])).toBe(definitionsBefore);
+    expect(await definitionsOf(manifest, ['member'])).toBe(definitionsBefore);
     expect(before.ids).toEqual(['home', 'panel']);
 
     manifest.replace('bundles', { [desk.id]: desk });
@@ -94,7 +95,7 @@ describe('replace — a named set of actions that arrived while the app runs', (
     expect(after).not.toBe(before);
     expect(after.ids).toEqual([desk.id, 'home', 'panel']);
     expect(after.hash).not.toBe(before.hash);
-    expect(definitionsOf(manifest, ['member'])).not.toBe(definitionsBefore);
+    expect(await definitionsOf(manifest, ['member'])).not.toBe(definitionsBefore);
     expect(manifest.report()).not.toBe(verifiedBy);
 
     stop();
@@ -102,7 +103,7 @@ describe('replace — a named set of actions that arrived while the app runs', (
     expect(told).toHaveBeenCalledTimes(1);
   });
 
-  it('refused: the actions in force, what the roles held and whoever listens are untouched', () => {
+  it('refused: the actions in force, what the roles held and whoever listens are untouched', async () => {
     const shipped = shippedApp();
     const manifest = running(shipped);
     manifest.replace('bundles', { [desk.id]: desk });
@@ -110,7 +111,7 @@ describe('replace — a named set of actions that arrived while the app runs', (
     manifest.onChange(told);
     const inForce = manifest.actions();
     const held = manifest.catalogFor(['member'], undefined);
-    const definitionsHeld = definitionsOf(manifest, ['member']);
+    const definitionsHeld = await definitionsOf(manifest, ['member']);
     const verifiedBy = manifest.report();
     const appsRecord = shipped.actions;
 
@@ -119,7 +120,7 @@ describe('replace — a named set of actions that arrived while the app runs', (
     expect(manifest.actions()).toBe(inForce);
     expect(Object.keys(manifest.actions())).toEqual(['home', 'panel', desk.id]);
     expect(manifest.catalogFor(['member'], undefined)).toBe(held);
-    expect(definitionsOf(manifest, ['member'])).toBe(definitionsHeld);
+    expect(await definitionsOf(manifest, ['member'])).toBe(definitionsHeld);
     expect(manifest.report()).toBe(verifiedBy);
     expect(told).not.toHaveBeenCalled();
     expect(shipped.actions).toBe(appsRecord);
@@ -199,7 +200,7 @@ describe('what a set of roles holds', () => {
   });
 
   it('with no filter every granted action is there; one said later narrows what is answered next', () => {
-    const manifest = createRunningManifest({ shipped: shippedApp(), grants: scopeGrants(['deals']) });
+    const manifest = createRunningManifest({ shipped: shippedApp(), grants: scopeGrants(['deals']), shells: [] });
     manifest.replace('bundles', { [desk.id]: desk, [pay.id]: pay });
     const everything = manifest.catalogFor(['member'], ['belts']);
     expect(everything.ids).toEqual([desk.id, pay.id, 'home', 'panel']);
@@ -213,13 +214,13 @@ describe('what a set of roles holds', () => {
     expect(manifest.catalogFor(['member'], ['belts']).ids).toEqual([desk.id, 'home']);
   });
 
-  it('a filter that answers an id it was not handed grants nothing: neither the id nor its definition', () => {
-    const manifest = createRunningManifest({ shipped: shippedApp(), grants: scopeGrants(['deals']) });
+  it('a filter that answers an id it was not handed grants nothing: neither the id nor its definition', async () => {
+    const manifest = createRunningManifest({ shipped: shippedApp(), grants: scopeGrants(['deals']), shells: [] });
     manifest.replace('bundles', { [desk.id]: desk });
     manifest.addCatalogFilter((ids) => [...ids, 'panel', desk.id]);
 
     expect(manifest.catalogFor(['public'], undefined).ids).toEqual(['home']);
-    expect(Object.keys(definitionsOf(manifest, ['public']))).toEqual(['home']);
+    expect(Object.keys(await definitionsOf(manifest, ['public']))).toEqual(['home']);
     expect(manifest.catalogFor(['member'], undefined).ids).toEqual([desk.id, 'home', 'panel']);
   });
 
@@ -232,13 +233,13 @@ describe('what a set of roles holds', () => {
   });
 
   it('the one a manifest is made with is held to it too', () => {
-    const manifest = createRunningManifest({ shipped: shippedApp(), grants: scopeGrants(['deals']), installedOnly: (ids) => [...ids, 'panel'] });
+    const manifest = createRunningManifest({ shipped: shippedApp(), grants: scopeGrants(['deals']), installedOnly: (ids) => [...ids, 'panel'], shells: [] });
     expect(manifest.catalogFor(['public'], undefined).ids).toEqual(['home']);
   });
 
-  it('the definitions held are the granted ones, each naming its layout by ref, and the store holds the layout variant those roles hold in its place', () => {
+  it('the definitions held are the granted ones, each naming its layout by ref, and the store holds the layout variant those roles hold in its place', async () => {
     const base: ActionDefinition = { id: 'panel', layout: { component: 'Text', children: 'base' } };
-    const layoutsOf = (roles: readonly string[], installed?: readonly string[]): Readonly<Record<string, unknown>> => manifest.artifactsFor(SHELL, roles, installed).layoutStore ?? {};
+    const layoutsOf = async (roles: readonly string[], installed?: readonly string[]): Promise<Readonly<Record<string, unknown>>> => (await manifest.artifactsFor(SHELL, nobody(roles, installed))).layoutStore;
     const shipped: ShippedManifest = {
       ...shippedApp(),
       charter: { public: ['home'], member: { actions: ['home', 'panel', 'ext.*'] }, lead: { extends: ['member'], layouts: ['panel.wide'] } },
@@ -248,28 +249,28 @@ describe('what a set of roles holds', () => {
     const manifest = running(shipped);
     manifest.replace('bundles', { [desk.id]: desk, [pay.id]: pay });
 
-    const member = definitionsOf(manifest, ['member'], ['belts']);
+    const member = await definitionsOf(manifest, ['member'], ['belts']);
     expect(Object.keys(member)).toEqual(manifest.catalogFor(['member'], ['belts']).ids);
     expect(member['panel']).toEqual({ id: 'panel', layout: { ref: 'action/panel' } });
-    expect(layoutsOf(['member'], ['belts'])).toEqual({ 'action/panel': base.layout });
-    expect(layoutsOf(['member'], ['belts'])['action/panel']).toBe(base.layout);
+    expect(await layoutsOf(['member'], ['belts'])).toEqual({ 'action/panel': base.layout });
+    expect((await layoutsOf(['member'], ['belts']))['action/panel']).toBe(base.layout);
     expect(member[desk.id]).toBe(desk);
     expect(member[pay.id]).toBeUndefined();
-    expect(Object.keys(definitionsOf(manifest, ['public']))).toEqual(['home']);
+    expect(Object.keys(await definitionsOf(manifest, ['public']))).toEqual(['home']);
 
-    const lead = definitionsOf(manifest, ['lead'], ['belts']);
+    const lead = await definitionsOf(manifest, ['lead'], ['belts']);
     expect(lead['panel']).toEqual({ id: 'panel', layout: { ref: 'action/panel' } });
-    expect(layoutsOf(['lead'], ['belts'])).toEqual({ 'action/panel': { component: 'Text', children: 'wide' } });
+    expect(await layoutsOf(['lead'], ['belts'])).toEqual({ 'action/panel': { component: 'Text', children: 'wide' } });
     expect(base.layout).toEqual({ component: 'Text', children: 'base' });
     expect(lead['home']).toBe(home);
 
-    expect(definitionsOf(manifest, ['lead'], ['belts'])).toBe(lead);
+    expect(await definitionsOf(manifest, ['lead'], ['belts'])).toBe(lead);
     manifest.replace('bundles', { [desk.id]: desk });
-    expect(definitionsOf(manifest, ['lead'], ['belts'])).not.toBe(lead);
-    expect(Object.keys(definitionsOf(manifest, ['member']))).toEqual([desk.id, 'home', 'panel']);
+    expect(await definitionsOf(manifest, ['lead'], ['belts'])).not.toBe(lead);
+    expect(Object.keys(await definitionsOf(manifest, ['member']))).toEqual([desk.id, 'home', 'panel']);
   });
 
-  it('what a shell is made of is one answer: the definitions held, the shell as its manifest says it, and the entries', () => {
+  it('what a shell is made of is one answer: the definitions held, the shell as its manifest says it, and the entries', async () => {
     const wide = { component: 'Text', children: 'wide' };
     const shipped: ShippedManifest = {
       ...shippedApp(),
@@ -286,7 +287,7 @@ describe('what a set of roles holds', () => {
     const page: ShellManifest = { canvases: [{ id: 'main', initial: 'panel' }] };
     const manifest = running(shipped);
 
-    const made = manifest.artifactsFor(shell, ['member'], undefined);
+    const made = await manifest.artifactsFor(shell, nobody(['member']));
     expect(Object.keys(made.actions)).toEqual(['home', 'panel']);
     expect(made.actions['panel']?.layout).toEqual({ ref: 'action/panel' });
     expect(made.canvases).toBe(shell.canvases);
@@ -298,7 +299,7 @@ describe('what a set of roles holds', () => {
     expect([...made.entries.keys()]).toEqual(['deals/open']);
     expect(Object.keys(made.components).sort()).toEqual(['ActionSlot', 'CanvasSlot', 'Frame', 'Sheet', 'Text']);
 
-    const forPage = manifest.artifactsFor(page, ['public'], undefined);
+    const forPage = await manifest.artifactsFor(page, nobody(['public']));
     expect(forPage.canvases).toBe(page.canvases);
     expect('frame' in forPage || 'fragments' in forPage).toBe(false);
     expect(forPage.layoutStore).toEqual({});
@@ -306,17 +307,17 @@ describe('what a set of roles holds', () => {
     expect(forPage.entries).toBe(made.entries);
   });
 
-  it('an action with no layout, or one that names a layout of the store by its id, is handed over as it is', () => {
+  it('an action with no layout, or one that names a layout of the store by its id, is handed over as it is', async () => {
     const bare: ActionDefinition = { id: 'home' };
     const byId: ActionDefinition = { id: 'panel', layout: 'dock' };
     const manifest = running({ ...shippedApp(), actions: { home: bare, panel: byId } });
-    const made = manifest.artifactsFor({ canvases: [], layoutStore: { dock: { component: 'Text', children: 'dock' } } }, ['member'], undefined);
+    const made = await manifest.artifactsFor({ canvases: [], layoutStore: { dock: { component: 'Text', children: 'dock' } } }, nobody(['member']));
     expect(made.actions['home']).toBe(bare);
     expect(made.actions['panel']).toBe(byId);
     expect(Object.keys(made.layoutStore ?? {})).toEqual(['dock']);
   });
 
-  it('the component names a shell may mention are read off the actions in force and the shell, with the contracts it declares', () => {
+  it('the component names a shell may mention are read off the actions in force and the shell, with the contracts it declares', async () => {
     const manifest = running({ ...shippedApp(), actions: { home: { id: 'home', layout: { component: 'Heading', children: 'Home' } }, panel } });
     const shell = {
       canvases: [{ id: 'main', initial: 'home' }],
@@ -324,15 +325,15 @@ describe('what a set of roles holds', () => {
       fragments: { sheet: { kind: 'fragment' as const, id: 'sheet', layout: { component: 'Sheet', children: [{ slot: 'body' }] } } },
       components: { Chart: { meta: { description: 'a chart' } } },
     };
-    const componentsOf = (): Readonly<Record<string, unknown>> => manifest.artifactsFor(shell, ['public'], undefined).components;
-    const read = componentsOf();
+    const componentsOf = async (): Promise<Readonly<Record<string, unknown>>> => (await manifest.artifactsFor(shell, nobody(['public']))).components;
+    const read = await componentsOf();
     expect(Object.keys(read).sort()).toEqual(['ActionSlot', 'CanvasSlot', 'Chart', 'Frame', 'Heading', 'Sheet']);
     expect(read['Chart']).toEqual({ meta: { description: 'a chart' } });
     expect(read['Heading']).toEqual({});
-    expect(componentsOf()).toBe(read);
+    expect(await componentsOf()).toBe(read);
 
     manifest.replace('bundles', { [desk.id]: { id: desk.id, layout: { component: 'Ledger' } } });
-    expect(Object.keys(componentsOf())).toContain('Ledger');
+    expect(Object.keys(await componentsOf())).toContain('Ledger');
   });
 });
 

@@ -78,7 +78,12 @@ export const functionSessionFor = (
 ): FunctionSession => {
   const { config } = host;
   const { principal } = who;
+  const artifacts = config.artifacts?.(principal);
   const session: FunctionSession = {
+    get artifacts() {
+      if (artifacts === undefined) throw new Error('moss: this shell host was given nothing to save with.');
+      return artifacts;
+    },
     principal,
     roles: who.roles,
     identity: who.scope,

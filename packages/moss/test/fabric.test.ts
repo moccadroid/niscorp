@@ -27,6 +27,7 @@ describe('wireFabric', () => {
       invalidateIdentity: (p) => calls.push(['identity', p]),
       invalidateTag: (t) => calls.push(['tenant', t]),
       nudge: (p, c) => calls.push(['nudge', p, c]),
+      adopt: (p) => calls.push(['adopt', p]),
     };
     return { calls, apply };
   };
@@ -63,7 +64,7 @@ describe('wireFabric', () => {
 
   it('a throwing applier is contained', () => {
     const { fabric, feed } = collector();
-    wireFabric(fabric, 'me', { invalidateIdentity: () => { throw new Error('boom'); }, invalidateTag: () => {}, nudge: () => {} });
+    wireFabric(fabric, 'me', { invalidateIdentity: () => { throw new Error('boom'); }, invalidateTag: () => {}, nudge: () => {}, adopt: () => {} });
     expect(() => feed({ kind: 'invalidate-identity', principal: 'p1', origin: 'other' })).not.toThrow();
   });
 
@@ -158,6 +159,7 @@ const makeNode = (fabric: Fabric | undefined, origin: string, shells: ShellHost)
     invalidateIdentity: (p) => { applied.identity += 1; identities.invalidate(p); shells.reset(p); },
     invalidateTag: (t) => { applied.tenant += 1; identities.invalidateTag(t); },
     nudge: (p, c) => { applied.nudge += 1; shells.deliver(p, c); },
+    adopt: () => undefined,
   };
   const publish = wireFabric(fabric, origin, apply);
   return {
@@ -222,7 +224,7 @@ describe('two processes over one fabric', () => {
   it('a throwing subscriber on B does not harm the transport or A', () => {
     const bus = createBus();
     const a = makeNode(bus.endpoint(), 'A', standHost(hostConfig(shellCtx())));
-    wireFabric(bus.endpoint(), 'B', { invalidateIdentity: () => { throw new Error('B is angry'); }, invalidateTag: () => {}, nudge: () => {} });
+    wireFabric(bus.endpoint(), 'B', { invalidateIdentity: () => { throw new Error('B is angry'); }, invalidateTag: () => {}, nudge: () => {}, adopt: () => {} });
     expect(() => a.invalidateIdentity('usr_1')).not.toThrow();
     expect(a.applied.identity).toBe(1);
   });

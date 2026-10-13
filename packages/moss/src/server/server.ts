@@ -3,7 +3,7 @@ import { createIdentity, sessionRemainingMs, sessionRevokerOf, sessionVerifierOf
 import type { Identity } from '../identity';
 import { createData, featureTablesOf } from '../data';
 import type { Data } from '../data';
-import { createRunningManifest } from '../artifactory';
+import { SAVE_ENTRIES, SAVE_ROW_RULES, createRunningManifest, savedRowsOver } from '../artifactory';
 import type { RunningManifest } from '../artifactory';
 import { receiveManifest } from '../manifest';
 import type { NiscApp } from '../manifest';
@@ -31,6 +31,20 @@ export const createServerWith = async (app: NiscApp, runtime: NiscRuntime, dataO
 
 export const createServer = (app: NiscApp, runtime: NiscRuntime): Promise<MossServer> => createServerWith(app, runtime, buildData);
 
+// What a caller reads and writes of what was saved is moss's to say, wherever a
+// policy is compiled: for moss's own entries, and for an app whose charter
+// grants the two tables.
+const rowRulesBeside = (behaviors: NiscApp['behaviors']): typeof SAVE_ROW_RULES => {
+  const declared = Object.keys(SAVE_ROW_RULES).filter((table) => Object.hasOwn(behaviors ?? {}, table));
+  if (declared.length > 0) {
+    throw new Error(
+      `moss: the app’s \`behaviors\` say what a caller reads and writes of ${declared.map((table) => `"${table}"`).join(' and ')}. ` +
+        'Those rows are whoever saved them: moss keeps every read and write of them to the caller’s own, and an app does not say otherwise.',
+    );
+  }
+  return SAVE_ROW_RULES;
+};
+
 const buildData = (app: NiscApp, runtime: NiscRuntime): Promise<Data> =>
   createData({
     pool: runtime.pool,
@@ -44,6 +58,7 @@ const buildData = (app: NiscApp, runtime: NiscRuntime): Promise<Data> =>
     grammars: app.grammars,
     charter: app.charter,
     behaviors: app.behaviors,
+    rowRules: rowRulesBeside(app.behaviors),
     telemetry: runtime.telemetry,
   });
 
@@ -78,16 +93,18 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerD
   const registered = emptyRegister();
   mountRoutes(server, { app, session, credentials: registered.credentials, identity, running, data });
 
-  const hosts = buildShellHosts({ app, runtime, identity, running, data, wire: createInternalWire(server), wrapWire: composeWireWraps(registered), revokeSessions });
+  const savedAs = savedRowsOver(await data.artifactEntries(SAVE_ENTRIES, SAVE_ROW_RULES), data.grammars);
+  const hosts = buildShellHosts({ app, runtime, identity, running, data, savedAs, wire: createInternalWire(server), wrapWire: composeWireWraps(registered), revokeSessions });
   stops.push(hosts.stop);
 
-  const signals = buildSignals({ fabric: runtime.fabric, identity, reset: hosts.reset, deliver: hosts.deliver });
+  const signals = buildSignals({ fabric: runtime.fabric, identity, reset: hosts.reset, adopt: hosts.adoptFor, deliver: hosts.deliver });
 
   running.onChange(() => {
     // Before the adopt, which resolves each principal again.
     identity.invalidateAll();
     hosts.adopt();
   });
+  running.onChangeFor(signals.adopt);
 
   const operator = operatorPrefix(runtime);
   // The features mount their routes before the operator prefix is mounted: a
@@ -144,6 +161,7 @@ export const buildRunningManifest = async (
     grants: data.grants,
     // Polled on the clock a socket's credential is re-verified on.
     pointer: { read: data.pointer.read, move: data.pointer.move, ...(runtime.sessionRevalidateMs !== undefined ? { everyMs: runtime.sessionRevalidateMs } : {}) },
+    shells: [...(app.shell !== undefined ? [app.shell] : []), ...Object.values(app.pages ?? {})],
   });
   data.dropOnChange(running.onChange);
   data.entriesHeldBy({ get: running.cacheEntry, entries: running.cacheEntries });

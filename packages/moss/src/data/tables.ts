@@ -153,5 +153,41 @@ export const MOSS_SEQUENCE: Sequence = {
         },
       ],
     },
+    {
+      description: 'The artifactory’s two tables: a row for each save, and a row for each version of an artifact a save holds',
+      steps: [
+        {
+          kind: 'sql',
+          sql: `CREATE TABLE artifact_saves (
+  id          uuid PRIMARY KEY,
+  created_by  text NOT NULL,
+  -- Whose the save is: the userId of whoever made it, written by vex.
+  principal   text,
+  created_at  timestamptz NOT NULL DEFAULT now()
+)`,
+        },
+        {
+          kind: 'sql',
+          sql: `CREATE TABLE artifacts (
+  save         uuid NOT NULL REFERENCES artifact_saves(id),
+  kind         text NOT NULL,
+  id           text NOT NULL,
+  -- Whose the version is, as its save's.
+  principal    text,
+  -- null, as SQL or as JSON: this version says none is in force.
+  body         jsonb,
+  grammar      jsonb NOT NULL DEFAULT '{}'::jsonb,
+  -- The save whose version of this artifact this one is a copy of.
+  copied_from  uuid,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (save, kind, id)
+)`,
+        },
+        // What is in force for an artifact is its latest row, and that is asked at every shell.
+        { kind: 'sql', sql: `CREATE INDEX artifacts_latest ON artifacts (principal, kind, id, created_at)` },
+      ],
+    },
   ],
 };
+
+export const ARTIFACT_TABLES: readonly string[] = ['artifacts', 'artifact_saves'];

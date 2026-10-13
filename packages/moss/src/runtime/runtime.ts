@@ -79,6 +79,7 @@ export const FabricMessageSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('invalidate-identity'), principal: z.string(), ...stamp }),
   z.strictObject({ kind: z.literal('invalidate-tag'), tag: z.string(), ...stamp }),
   z.strictObject({ kind: z.literal('nudge'), principal: z.string(), channel: z.string(), ...stamp }),
+  z.strictObject({ kind: z.literal('adopt'), principal: z.string(), ...stamp }),
 ]);
 
 export type FabricMessage = z.infer<typeof FabricMessageSchema>;

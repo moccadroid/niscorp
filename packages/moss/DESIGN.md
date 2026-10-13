@@ -69,14 +69,20 @@ loader is that process's alone. A library every process reads is the part that i
 And there is one place it will be asked. Everything a shell loads that
 somebody authored (its actions, its frame and layout store, its fragments, the
 entries its reads replay) is answered by the running manifest in one function,
-for a shell and a set of roles (`artifactsFor`, `src/artifactory/running.ts`). A shell is built
+for a shell and a principal with their roles (`artifactsFor`, `src/artifactory/running.ts`). A shell is built
 from that answer and adopts it: an adopt puts in place the actions that are
 held now, and the frame, each `{ ref }` of the layout store and each fragment
 that the answer says differently from the last time. Every action's layout is
 one of those refs: the answer holds it in the layout store under
 `action/<id>`, and the definition names it. So a layout is changed by setting
 a ref, which a screen that is open follows with its data kept, and not by
-registering the action again, which only a screen opened afterwards sees. (The canvases are what a
+registering the action again, which only a screen opened afterwards sees. It
+is also how a saved layout reaches a screen: under an action's ref the answer
+holds the principal's own layout that is marked in use, else the layout
+variant their roles hold, else the build's. The first two tables of the
+library are built for that: a row for each save and a row for each version it
+holds, never changed (`src/artifactory/saves.ts`). A row is its principal's,
+and vex keeps it so. (The canvases are what a
 shell starts with: an adopt does not take them again, a reset does.) The
 entries vex replays it asks the running manifest for as well, before its own
 cache table; nothing else in moss reads one of the four off what the app
@@ -188,8 +194,10 @@ entry.
 2. **What exists for them?** `artifactory`: what the app consists of right
    now, with one writer, and what a set of roles holds of it. Every artifact a
    shell is handed is asked of it: the actions, the frame and the layout
-   store, the fragments and the entries, in one answer for a shell and a set
-   of roles, and read off the app by nothing else. It is the one holder of the
+   store, the fragments and the entries, in one answer for a shell and a
+   principal, and read off the app by nothing else. It keeps what somebody
+   saved while the app runs (a layout, today) and answers it in the same
+   place. It is the one holder of the
    entries too: the ones the app shipped and each set handed over, compiled as
    vex replays them. It stands on `manifest`,
    the app as it was handed over: the types an app is written in, the schema
@@ -270,8 +278,9 @@ The table has no cycle, and what it leaves out is as deliberate as what it
 names. `shells` does not import `identity`: who somebody is, it is told.
 `socket` does not import `artifactory`: what somebody holds is a function it
 is handed. `artifactory` and `data` do not import each other: the generation
-pointer's row is `data`'s, when it moves is the artifactory's, and each
-reaches the other as functions the server hands over. `integrations` does not
+pointer's row is `data`'s, when it moves is the artifactory's, the entries
+over the artifactory's two tables are written by the artifactory and replayed
+by `data`, and each reaches the other as functions the server hands over. `integrations` does not
 import `data`: what it reads and writes it
 authors as vex entries and replays through a seam. Nor `manifest`: what it
 asks about a bundle before letting it in (does a layout fit the kit, which
@@ -297,6 +306,7 @@ that made the table:
 |---|---|---|---|
 | `sessions` | `identity` | `identity/sessions.ts`: five statements straight to the pool, before anybody is signed in | Its table is made in `data`'s one migration run, from a sequence `identity` declares |
 | `moss_generation` | `data` | `data/own-entries.ts`: two entries, one that reads and one that moves | `artifactory` decides when it moves (`artifactory/generation.ts`), through a function `data` hands over |
+| `artifact_saves`, `artifacts` | `artifactory` | `artifactory/saves.ts`: three vex entries and the row rule they run under, replayed through a function `data` hands over (`Data.artifactEntries`) | The two tables are made by the core's sequence (`data/tables.ts`, `nisc.moss/5`). Their rows are somebody's, unlike the pointer's: the entries are replayed with the caller's scope, and vex keeps every read and write to the rows whose `principal` is the caller's `userId`. Moss updates and deletes no row, so a stored body is not rewritten when a grammar moves: it is brought to the current grammars where it is read |
 | `integrations`, `integration_actions` | the `integrations` feature | `integrations/entries.ts`: vex entries, replayed through the seam the feature is handed | The two tables are made by the core's own sequence (`data/tables.ts`, `nisc.moss`): that is the history every database has run, and it is not edited. The documents stored in `integration_actions` are brought to the current grammars by `data`, which holds the pool, when the feature asks through its seam |
 
 `data` holds the engine and the one ledgered migration run, so every owner's
@@ -864,7 +874,7 @@ On the record, so nothing reads as finished that isn't:
   processes today is invalidation only: `refresh` moves a generation pointer
   every process polls (`src/artifactory/generation.ts` holds the clock; the row is
   read and moved through vex, `src/data/own-entries.ts`), and an optional fabric
-  (`runtime.fabric`, `src/server/signals.ts`) carries identity invalidations and nudges.
+  (`runtime.fabric`, `src/server/signals.ts`) carries identity invalidations, nudges, and the word to adopt for one principal.
   A set of actions does not cross: a process that follows the pointer reads
   again the sets it has a loader for, and a set handed to another process
   with `replaceActions` alone never reaches it (DOCS.md, "Many processes").
