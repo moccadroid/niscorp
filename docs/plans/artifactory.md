@@ -674,7 +674,7 @@ canvas shows that canvas on its owner's open screen, and taking the frame back
 removes it. As built: the shell's own layout and each canvas's are in the
 layout store, under `frame` and `canvas/<id>`, and the shell draws each by
 that name (`shellWithStoredLayouts`, `artifactory/artifacts.ts`); a layout
-saved under `frame` takes the place of the app's own shell's
+saved under `frame` or `canvas/<id>` takes the place of the app's own shell's
 (`artifactory/layouts.ts`); the answer for a shell lists the canvases its
 layouts hold a slot for and its manifest does not declare (`slottedCanvases`),
 and an adopt takes out one that none holds a slot for any more
@@ -800,7 +800,12 @@ shell. On the whole shell (`unverifiedShell`) they see the ref.
 - **A frame that names a ref nothing is kept under is saved.** Nova draws its
   error box in that place (`LAYOUT_REF_NOT_FOUND`) and the rest of the frame,
   as it does in an action's layout.
-- **Not built:** saving the layout of a canvas, and of a page's shell.
+- **A canvas's layout is saved as the frame is**, under `canvas/<id>`, for the
+  app's own shell, where the canvas has a layout of its own. Part 2 has it
+  among what can be saved. It was left out of the list this step was first
+  built from, by the builder's error, and built on the same go (2026-10-14).
+- **Not built:** a layout of a page's shell, which follows from a saved
+  layout being the app's own shell's.
 
 **Step 6 as built.**
 
