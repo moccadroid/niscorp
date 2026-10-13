@@ -1,9 +1,9 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import type { CacheEntry, SeedEntry, SeedMutation } from '@niscorp/vex';
-import { actionOfLayoutRef, candidateOf, entriesOf, entryMisfits, freezeDeep, refusalOf, verifyManifest } from '../manifest';
+import { FRAME_LAYOUT_REF, actionOfLayoutRef, candidateOf, entriesOf, entryMisfits, freezeDeep, refusalOf, verifyManifest } from '../manifest';
 import type { DraftArtifact, KitComponents, ManifestCandidate, ManifestReport, SessionArtifacts, ShellManifest, ShippedManifest } from '../manifest';
 import type { ShellArtifacts } from './artifacts';
-import { shellComponents, shellWithStoredLayouts } from './artifacts';
+import { shellComponents, shellWithStoredLayouts, slottedCanvases } from './artifacts';
 import { draftSaving, laidOver } from './draft';
 import { compileEntries, createEntriesInForce } from './entries';
 import { createGeneration } from './generation';
@@ -177,15 +177,22 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   // at a save it is held to what any shell of the app can draw, and when a shell
   // is built to what that shell can.
   const kitOf = (shell?: ShellManifest): KitComponents => (shell === undefined ? (ofTheApp ??= componentsOf(config.shells)) : componentsOf([shell]));
-  const heldTo = ({ actions, layouts }: StoredLayouts, shell?: ShellManifest): LayoutHeldTo => ({
-    kit: kitOf(shell),
-    actionAt: (ref) => {
-      const id = actionOfLayoutRef(ref);
-      const action = id !== undefined && Object.hasOwn(actions, id) ? actions[id] : undefined;
-      const layout = Object.hasOwn(layouts, ref) ? layouts[ref] : undefined;
-      return action === undefined || layout === undefined ? undefined : { ...action, layout };
-    },
-  });
+  // The app's own shell, where the layout store keeps its layout under `frame`.
+  const framed = shipped.shell !== undefined && shellWithStoredLayouts(shipped.shell).frame === FRAME_LAYOUT_REF ? shipped.shell : undefined;
+  const heldTo = ({ actions, layouts }: StoredLayouts, shell?: ShellManifest): LayoutHeldTo => {
+    const kit = kitOf(shell);
+    return {
+      kit,
+      // A saved frame is the app's own shell's, whichever shell it is saved from: a page draws the one it declares.
+      ...(framed !== undefined && (shell === undefined || shell === framed) ? { frame: { kit: shell === framed ? kit : kitOf(framed) } } : {}),
+      actionAt: (ref) => {
+        const id = actionOfLayoutRef(ref);
+        const action = id !== undefined && Object.hasOwn(actions, id) ? actions[id] : undefined;
+        const layout = Object.hasOwn(layouts, ref) ? layouts[ref] : undefined;
+        return action === undefined || layout === undefined ? undefined : { ...action, layout };
+      },
+    };
+  };
   // What somebody generated and has in force is laid beside what their roles
   // hold: an action of theirs may open either, and a layout of theirs may be for
   // either. `whose`: as a line says it of one that is left out. Absent: nothing is said.
@@ -343,10 +350,12 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       const everybodys = layoutsInUse(await publishedNow(), { whose: 'published for everybody', heldTo: underVariants, say: sayOnce });
       const fragments = Object.keys(theirOwn.fragments).length === 0 ? shell.fragments : { ...shell.fragments, ...theirOwn.fragments };
       const { layouts: ofShell, ...named } = shellWithStoredLayouts(shell);
+      const layoutStore = { ...shell.layoutStore, ...ofShell, ...theirOwn.all.layouts, ...everybodys, ...theirs };
       return {
         actions: theirOwn.all.actions,
         ...named,
-        layoutStore: { ...shell.layoutStore, ...ofShell, ...theirOwn.all.layouts, ...everybodys, ...theirs },
+        slottedCanvases: slottedCanvases(shell.canvases, [...Object.values(layoutStore), ...Object.values(fragments ?? {}).map((fragment) => fragment.layout)]),
+        layoutStore,
         ...(fragments !== undefined ? { fragments } : {}),
         entries: entries.byFingerprint(),
         components: components.of(shell),

@@ -331,11 +331,12 @@ const runs: RunSink = (record) => {
 #### `session.artifacts` — what the session's principal saved
 
 What somebody or a model generated while the app runs is kept by moss, as a
-version, in two tables of its own. Three kinds are kept: a layout for an
-action, an action, and a fragment. A session saves for its own principal. A
-layout for everybody is published from the server and never from a session
-(`server.defaults`, under `MossServer` below). Not built yet: a vex read, the
-layout of the frame or of a canvas, and an action or a fragment for everybody.
+version, in two tables of its own. Three kinds are kept: a layout (for an
+action, or for the app's own shell), an action, and a fragment. A session
+saves for its own principal. A layout for everybody is published from the
+server and never from a session (`server.defaults`, under `MossServer`
+below). Not built yet: a vex read, the layout of a canvas or of a page's
+shell, and an action or a fragment for everybody.
 
 ```typescript
 type SessionArtifacts = {
@@ -363,7 +364,8 @@ exported by a name of its own.
 
 **A layout's body** is `{ ref, layout, use? }`. `ref` is the name the layout
 of the action it is for is kept under in the shell's layout store,
-`action/<the action's id>`. `layout` is a nova layout.
+`action/<the action's id>`, or `frame` for the layout of the app's own shell
+(further down). `layout` is a nova layout.
 
 ```typescript
 functions: (session) => ({
@@ -414,7 +416,7 @@ functions: (session) => ({
   generated ones among them, and no other: nova's audit is run on it with
   those as its catalog, and what it finds refuses the save, as it does for a
   saved layout. So do a component no shell of the app has, and a layout that
-  names a ref under `action/`. A fragment is held to its schema, its id, its
+  names a ref moss keeps a layout under (`action/…`, `canvas/…`, `frame`). A fragment is held to its schema, its id, its
   layout and its endpoints, and not to that audit, which reads a whole action:
   a step of a fragment that opens an action its owner does not hold is refused
   by nova when it runs, because that action is not in their shell.
@@ -472,9 +474,10 @@ hold (`app.layouts`); the layout published for everybody that is marked in use
 written: a body that is not `{ ref, layout, use? }`; a `ref` nothing is kept
 under for the principal (an action they do not hold, or one that is not in
 force; an action with no layout of its own, or one that names a layout of the
-store by its id; any name that is not `action/<id>`); a component no shell of
+store by its id; any other name but `frame`); a component no shell of
 the app has (and a prop its declared schema refuses, as for an integration's
-layouts); a layout that names a ref under `action/`; and what nova's audit
+layouts); a layout that names a ref moss keeps a layout under (`action/…`,
+`canvas/…`, `frame`); and what nova's audit
 (`auditAction`) finds of the action with the layout in place and does not find
 of the action as it is built (a binding to a key the action has no data for,
 a control the action listens on that the layout leaves out, a control no
@@ -483,6 +486,44 @@ built, there against the components of that shell alone: one that does not
 pass is left out, what is under it is drawn, and a line says why (`[moss] the layout "…" of … is left out: …`). One whose ref
 its holder's store keeps nothing under any more (the action left, or they
 hold it no longer) is not loaded and nothing is said.
+
+**The layout of the app's own shell** is saved under `ref: 'frame'`, with the
+same calls: `session.artifacts.save([{ kind: 'layout', body: { ref: 'frame',
+layout, use: true } }])`.
+
+- **It is the app's own shell's.** Under `frame` that shell draws the first of
+  these that there is: the principal's own marked in use, the one published
+  for everybody that is marked in use, the one the manifest declares. A page
+  draws the layout its own manifest declares, whatever was saved: an app that
+  lets people save a frame has, in a page, a screen no saved frame changes.
+  A draft of a page's shell takes none.
+- **A shell manifest with no `layout` has none to take the place of**, and a
+  save for it is refused as for any ref nothing is kept under.
+- **What is refused**: a body that is not `{ ref, layout, use? }`, a component
+  the app's own shell has none for (and a prop its declared schema refuses),
+  and a layout that names a ref moss keeps a layout under. Nova's audit reads
+  an action, and is not asked of a frame. A frame that names a ref nothing is
+  kept under is saved, and nova draws its error box in that place, as it does
+  in an action's layout.
+- **A frame may leave a canvas of the shell out.** That canvas stays the
+  shell's and is drawn nowhere: what is mounted on it runs unseen, and what an
+  action opens on it does not show. Moss does not refuse it. An app that wants
+  every canvas placed checks the layout in its own function before it saves.
+
+**A canvas that only a layout's slot draws goes when the slot goes.** Nova
+gives a shell a canvas when something is first pushed onto it, whether or not
+its manifest declares it, and it is drawn where a layout has a canvas slot for
+it (`{ component: 'CanvasSlot', props: { canvasId: 'notes' } }`). Moss reads
+which canvases the layouts a shell is built from hold a slot for and its
+manifest does not declare. Every layout counts (the frame, a canvas's, an
+action's that the principal holds, a fragment's, one the app keeps in its
+layout store), the build's and a saved or generated one alike. Once a layout
+leaves force and no other holds a slot for such a canvas, an open shell loses
+the canvas, with what is mounted on it. A slot whose `canvasId` is worked out
+when it is drawn (`'$.c.id'`, a template) counts for none. Moss gives a shell
+no canvas, and the canvases a manifest declares are never taken out. What is
+pushed onto a canvas after its slot went is mounted and drawn nowhere, as on
+any canvas no layout has a slot for.
 
 **Moss changes and deletes no row.** `list` answers the latest version of each
 of the principal's artifacts that has a body. `history` answers the versions
@@ -953,12 +994,19 @@ manifest and `actionLayout` in a canvas; where a shell is built, moss moves
 each into the store and the shell draws it by that name. A shell manifest with
 no `layout` has no `frame` in its store and is drawn with nova's own, and a
 canvas whose `actionLayout` is already the name of a stored layout, or that
-has none, is handed over as it is. Both names belong to moss in a layout
+has none, is handed over as it is. So is a `layout` that is the name of a
+stored layout: the shell draws by that name, and nothing is kept under
+`frame`. Both names belong to moss in a layout
 store, as `action/` does: a manifest whose `layoutStore`, the app's shell's or
 a page's, declares one refuses the boot (`shell.layoutStore.frame: "frame" is
 where the layout of the shell is kept`, `shell.layoutStore.canvas/main: a name
-beginning with "canvas/" is where the layout of that canvas is kept`). Neither
-can be saved yet: `session.artifacts` keeps a layout for an action.
+beginning with "canvas/" is where the layout of that canvas is kept`). So does
+an action's layout, or a layout variant, that names one by `{ ref }` or as its
+layout's name (`"panel" names the layout "frame": …`). Only a node that is
+`{ ref }` and nothing else names a layout: a `ref` a component carries, on its
+node or in its props, names none. The layout of the app's
+own shell can be saved (`session.artifacts`, `ref: 'frame'`); a canvas's
+cannot yet.
 
 **The manifest is read first.** Before a table is created or a row is read,
 `createServer` parses the manifest with a schema, and a manifest that does not
@@ -1112,7 +1160,8 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   'layout', body: { ref: 'action/<id>', layout, use: true } }])` publishes a
   layout for an action, and every shell draws it under that action's ref
   unless its principal has a layout of their own in use or their roles hold a
-  layout variant. Several may be kept for one ref and the one marked `use:
+  layout variant. With `ref: 'frame'` it publishes the layout of the app's own
+  shell, which is drawn for everybody who has none of their own in use. Several may be kept for one ref and the one marked `use:
   true` is drawn; every publish is a version; a `reset` shows the build's
   again. A layout is the one kind that is published: an action or a fragment
   is refused here. `publisher` is who the publish is made by, and is kept with the save
@@ -1789,8 +1838,11 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
     longer is taken out of the store. One
     that is answered as it was is left alone, so a ref the shell's own code
     set since (`shell.setLayout`) stands through a change that did not touch
-    it. What a shell's canvases are, and what is mounted on them, is the
-    shell's own state and is not taken again: a reset builds that afresh. A
+    it. The canvases a shell's manifest declares, and what is mounted on any
+    canvas, are the shell's own state and are not taken again: a reset builds
+    that afresh. A canvas the manifest does not declare, that a layout in
+    force held a slot for, is taken out by an adopt, with what is mounted on
+    it, once no layout holds the slot. A
     shell that cannot adopt is logged and keeps what it held; the rest go on.
     Each shell adopts on its own: one whose principal is never answered (an
     `identity` that hangs for them) holds up no other. So a change asks about

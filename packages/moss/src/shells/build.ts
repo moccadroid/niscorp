@@ -195,6 +195,7 @@ export const buildShell = async (host: HostState, asked: BuildRequest): Promise<
     actionIds: granted,
     entries: made.entries,
     layouts: layoutsOf(made),
+    slottedCanvases: new Set(made.slottedCanvases),
     draft: noDraft(),
     connections: new Set(),
     sentByCanvas: new Map(),

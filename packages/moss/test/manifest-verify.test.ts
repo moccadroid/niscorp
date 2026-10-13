@@ -27,7 +27,7 @@ const coherent: ManifestCandidate = {
 
 const naming = (ref: string): ActionDefinition => ({ id: 'panel', layout: { component: 'Stack', children: [{ component: 'Button', ref: 'action/pressed' }, { ref }] } });
 
-describe('verifyManifest — a name under which moss keeps an action’s layout is nobody’s to write', () => {
+describe('verifyManifest — a name under which moss keeps a layout is nobody’s to write', () => {
   const shipped = (panel: ActionDefinition, more: Partial<ShippedManifest> = {}): ShippedManifest => ({ charter: { public: ['home', 'panel'] }, actions: { home: { id: 'home' }, panel }, ...more });
 
   it('an action whose layout names one, its own or another’s, is not one that may be served', () => {
@@ -35,7 +35,18 @@ describe('verifyManifest — a name under which moss keeps an action’s layout 
     expect(errors(naming('action/panel'))).toEqual(['actions: "panel" names the layout "action/panel": a name beginning with "action/" is where the layout of that action is kept']);
     expect(errors(naming('action/home'))).toEqual(['actions: "panel" names the layout "action/home": a name beginning with "action/" is where the layout of that action is kept']);
     expect(errors({ id: 'panel', layout: 'action/home' })).toEqual(['actions: "panel" names the layout "action/home": a name beginning with "action/" is where the layout of that action is kept']);
+    expect(errors(naming('frame'))).toEqual(['actions: "panel" names the layout "frame": "frame" is where the layout of the shell is kept']);
+    expect(errors(naming('canvas/main'))).toEqual(['actions: "panel" names the layout "canvas/main": a name beginning with "canvas/" is where the layout of that canvas is kept']);
     expect(errors(naming('dock'))).toEqual([]);
+    expect(errors(naming('frame.dock'))).toEqual([]);
+  });
+
+  it('a `ref` a component keeps in its props, and a node’s own, names no layout', () => {
+    const panel: ActionDefinition = {
+      id: 'panel',
+      layout: { component: 'Tabs', ref: 'frame', props: { tabs: [{ label: 'Frame', ref: 'frame' }, { ref: 'canvas/main' }], anchor: { ref: 'action/home' } }, children: [{ ref: 'dock' }] },
+    };
+    expect(verifyApp(shipped(panel), []).errors).toEqual([]);
   });
 
   it('nor is a layout variant that names one', () => {

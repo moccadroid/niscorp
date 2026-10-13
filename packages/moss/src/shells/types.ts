@@ -12,6 +12,8 @@ export type ShellComposition = {
   canvases: readonly ShellCanvas[];
   // The name of the shell's layout in the layout store. With none, nova's own is drawn.
   frame?: string;
+  // The canvases the shell's layouts hold a slot for, beside `canvases`.
+  slottedCanvases?: readonly string[];
   layoutStore?: Readonly<Record<string, LayoutNode>>;
   fragments?: Readonly<Record<string, ActionFragment>>;
   entries?: ReadonlyMap<string, SeedEntry | SeedMutation>;

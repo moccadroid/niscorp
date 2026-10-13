@@ -8,7 +8,7 @@ import { scopeProfiles } from '@niscorp/vex';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { z } from 'zod';
 import { isBinding } from '@niscorp/nova/i18n';
-import { ACTION_LAYOUT_NAME_REFUSAL, GENERATED_ID_PREFIX, entriesOf, isActionLayoutRef, wearableOf } from './app';
+import { GENERATED_ID_PREFIX, entriesOf, keptLayoutNameRefusal, wearableOf } from './app';
 import type { LayoutVariant, NiscApp } from './app';
 
 export type ManifestCandidate = {
@@ -52,20 +52,22 @@ const unreadActions = (actions: ManifestCandidate['actions']): { id: string; why
     return [{ id, why: first === undefined ? 'no reason given' : `${first.path.join('.') || '(root)'}: ${first.message}` }];
   });
 
-// A layout that could name the place its own action's layout is kept would be drawn inside itself without end.
-const actionLayoutNamedIn = (layout: unknown): string | undefined => {
-  if (typeof layout === 'string') return isActionLayoutRef(layout) ? layout : undefined;
-  let named: string | undefined;
-  walkNodes(layout, (record) => {
-    const ref = record['ref'];
-    if (named === undefined && typeof ref === 'string' && record['component'] === undefined && isActionLayoutRef(ref)) named = ref;
-  });
-  return named;
+// A node that is `{ ref }` and nothing else names a layout. What a component keeps in its props is its own, a `ref` there too.
+const layoutsNamedIn = (node: unknown): string[] => {
+  if (Array.isArray(node)) return node.flatMap(layoutsNamedIn);
+  if (!isRecord(node)) return [];
+  const ref = node['ref'];
+  if (typeof ref === 'string' && Object.keys(node).length === 1) return [ref];
+  return Object.entries(node).flatMap(([key, inner]) => (key === 'props' ? [] : layoutsNamedIn(inner)));
 };
 
+// Two layouts moss keeps that could name each other would be drawn inside each other without end: neither names one.
+const keptLayoutNamedIn = (layout: unknown): string | undefined =>
+  (typeof layout === 'string' ? [layout] : layoutsNamedIn(layout)).find((name) => keptLayoutNameRefusal(name) !== undefined);
+
 export const layoutNameRefusal = (layout: unknown): string | undefined => {
-  const named = actionLayoutNamedIn(layout);
-  return named === undefined ? undefined : `names the layout "${named}": ${ACTION_LAYOUT_NAME_REFUSAL}`;
+  const named = keptLayoutNamedIn(layout);
+  return named === undefined ? undefined : `names the layout "${named}": ${keptLayoutNameRefusal(named)}`;
 };
 
 const layoutNameErrors = (actions: ManifestCandidate['actions']): string[] =>

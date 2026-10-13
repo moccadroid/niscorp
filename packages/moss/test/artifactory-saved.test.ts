@@ -235,12 +235,13 @@ describe('what is refused, in a sentence, with nothing written', () => {
   });
 
   it('a ref no action of theirs keeps its layout under', async () => {
-    const nothingUnder = (ref: string): string => `moss: the layout for "${ref}" is refused: nothing is kept under "${ref}". A saved layout takes the place of the layout of an action its holder has, under "action/<the action’s id>".`;
+    const nothingUnder = (ref: string): string => `moss: the layout for "${ref}" is refused: nothing is kept under "${ref}". A saved layout takes the place of the layout of an action its holder has, under "action/<the action’s id>", or of the layout the app’s own shell declares, under "frame".`;
     await refused(({ of }) => of('ada').save([{ kind: 'layout', body: { ref: 'action/gone', layout: saying('x') } }]), nothingUnder('action/gone'));
     await refused(({ of }) => of('ada').save([{ kind: 'layout', body: { ref: 'action/desk', layout: saying('x') } }]), nothingUnder('action/desk'));
     await refused(({ of }) => of('ada').save([{ kind: 'layout', body: { ref: 'action/docked', layout: saying('x') } }]), nothingUnder('action/docked'));
     await refused(({ of }) => of('ada').save([{ kind: 'layout', body: { ref: 'action/bare', layout: saying('x') } }]), nothingUnder('action/bare'));
     await refused(({ of }) => of('ada').save([{ kind: 'layout', body: { ref: 'dock', layout: saying('x') } }]), nothingUnder('dock'));
+    await refused(({ of }) => of('ada').save([{ kind: 'layout', body: { ref: 'frame', layout: saying('x') } }]), nothingUnder('frame'));
   });
 
   it('a component the app has none for', () =>
@@ -249,11 +250,18 @@ describe('what is refused, in a sentence, with nothing written', () => {
       'moss: the layout for "action/home" is refused: layout uses "Carousel", which this app has no component for',
     ));
 
-  it('a layout that names the place an action’s layout is kept', () =>
-    refused(
-      ({ of }) => of('ada').save([{ kind: 'layout', body: { ref: 'action/home', layout: { component: 'Text', children: [{ ref: 'action/home' }] } } }]),
+  it('a layout that names a place moss keeps a layout: an action’s, the shell’s, a canvas’s', async () => {
+    const naming = (ref: string): { kind: 'layout'; body: unknown } => ({ kind: 'layout', body: { ref: 'action/home', layout: { component: 'Text', children: [{ ref }] } } });
+    await refused(
+      ({ of }) => of('ada').save([naming('action/home')]),
       'moss: the layout for "action/home" is refused: it names the layout "action/home": a name beginning with "action/" is where the layout of that action is kept',
-    ));
+    );
+    await refused(({ of }) => of('ada').save([naming('frame')]), 'moss: the layout for "action/home" is refused: it names the layout "frame": "frame" is where the layout of the shell is kept');
+    await refused(
+      ({ of }) => of('ada').save([naming('canvas/main')]),
+      'moss: the layout for "action/home" is refused: it names the layout "canvas/main": a name beginning with "canvas/" is where the layout of that canvas is kept',
+    );
+  });
 
   it('a layout nova’s audit finds something of with it in place of its action’s: a key the action has no data for, a control it listens on left out, a control no trigger handles', async () => {
     const forForm = (layout: LayoutNode): { kind: 'layout'; body: unknown } => ({ kind: 'layout', body: { ref: 'action/form', layout } });
@@ -577,7 +585,7 @@ describe('a layout published for everybody', () => {
 
   it('what is refused of a publish, in a sentence, with nothing written', async () => {
     const { of, published, rows } = world();
-    const nothingUnder = (ref: string): string => `moss: the layout for "${ref}" is refused: nothing is kept under "${ref}". A saved layout takes the place of the layout of an action its holder has, under "action/<the action’s id>".`;
+    const nothingUnder = (ref: string): string => `moss: the layout for "${ref}" is refused: nothing is kept under "${ref}". A saved layout takes the place of the layout of an action its holder has, under "action/<the action’s id>", or of the layout the app’s own shell declares, under "frame".`;
     await expect(published.save([forAll('action/gone', 'x')])).rejects.toThrow(nothingUnder('action/gone'));
     await expect(published.save([forAll('action/docked', 'x')])).rejects.toThrow(nothingUnder('action/docked'));
     await expect(published.save([forAll('dock', 'x')])).rejects.toThrow(nothingUnder('dock'));

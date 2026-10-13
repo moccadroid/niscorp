@@ -4,7 +4,7 @@ import { isRecord } from '@niscorp/nova/reflect';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import type { Upgrader } from '@niscorp/strata';
 import { z } from 'zod';
-import { layoutMisfits, layoutNameRefusal } from '../manifest';
+import { FRAME_LAYOUT_REF, layoutMisfits, layoutNameRefusal } from '../manifest';
 import type { KitComponents } from '../manifest';
 import type { SavedVersion } from './saves';
 
@@ -20,7 +20,21 @@ export type LayoutHeldTo = {
   // The action whose layout the store of whoever the layout is for keeps under
   // this ref, with that layout in place.
   actionAt: (ref: string) => ActionDefinition | undefined;
+  // What a layout saved for the app's own shell is held to. Absent: nothing is
+  // kept under `frame` here, in a page's shell or where the app's own declares no layout.
+  frame?: { kit: KitComponents };
   kit: KitComponents;
+};
+
+const nothingKeptUnder = (ref: string): string =>
+  `nothing is kept under "${ref}". A saved layout takes the place of the layout of an action its holder has, under "action/<the action’s id>", ` +
+  `or of the layout the app’s own shell declares, under "${FRAME_LAYOUT_REF}".`;
+
+// What a layout saved under this ref takes the place of: an action's layout, or the frame.
+const targetAt = (ref: string, heldTo: LayoutHeldTo): { kit: KitComponents; action?: ActionDefinition } | undefined => {
+  if (ref === FRAME_LAYOUT_REF) return heldTo.frame;
+  const action = heldTo.actionAt(ref);
+  return action === undefined ? undefined : { kit: heldTo.kit, action };
 };
 
 export type InUseFor = {
@@ -44,14 +58,14 @@ export const readLayout = (body: unknown, heldTo: LayoutHeldTo): { layout: Saved
     return { refusal: first === undefined ? 'no reason given' : `${first.path.join('.') || '(the body)'}: ${first.message}` };
   }
   const { ref, layout } = parsed.data;
-  const action = heldTo.actionAt(ref);
-  if (action === undefined) {
-    return { refusal: `nothing is kept under "${ref}". A saved layout takes the place of the layout of an action its holder has, under "action/<the action’s id>".` };
-  }
-  const misfits = layoutMisfits(layout, heldTo.kit);
+  const target = targetAt(ref, heldTo);
+  if (target === undefined) return { refusal: nothingKeptUnder(ref) };
+  const misfits = layoutMisfits(layout, target.kit);
   if (misfits.length > 0) return { refusal: misfits.join('; ') };
   const named = layoutNameRefusal(layout);
   if (named !== undefined) return { refusal: `it ${named}` };
+  const { action } = target;
+  if (action === undefined) return { layout: parsed.data };
   // What nova's audit finds of the action with this layout in place, and does
   // not find with the layout it takes the place of: the rest is not this layout's.
   const found = new Set(auditAction(action).issues);
@@ -64,7 +78,7 @@ export const readLayout = (body: unknown, heldTo: LayoutHeldTo): { layout: Saved
 // its action left, or its holder has it no longer.
 const loaded = (version: SavedVersion, { whose, heldTo, say }: InUseFor): SavedLayout | undefined => {
   const ref = refOf(version.body);
-  if (ref === undefined || heldTo.actionAt(ref) === undefined) return undefined;
+  if (ref === undefined || targetAt(ref, heldTo) === undefined) return undefined;
   const read = version.unread !== undefined ? { refusal: version.unread } : readLayout(version.body, heldTo);
   if ('layout' in read) return read.layout;
   (say ?? console.error)(`[moss] the layout "${version.id}" ${whose} is left out: ${read.refusal}`);

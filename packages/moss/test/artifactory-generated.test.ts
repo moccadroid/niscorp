@@ -224,6 +224,8 @@ describe('what is refused of a generated action, in a sentence, with nothing wri
     await refused({ layout: { component: 'Carousel' } }, 'moss: the action is refused: layout uses "Carousel", which this app has no component for');
     await refused({ layout: { component: 'Stack', children: [{ ref: 'action/home' }] } }, 'moss: the action is refused: it names the layout "action/home"');
     await refused({ layout: 'action/home' }, 'moss: the action is refused: it names the layout "action/home"');
+    await refused({ layout: { component: 'Stack', children: [{ ref: 'frame' }] } }, 'moss: the action is refused: it names the layout "frame"');
+    await refused({ layout: 'canvas/main' }, 'moss: the action is refused: it names the layout "canvas/main"');
     await refused({ layout: { component: 'Text', children: '$.missing' } }, 'moss: the action is refused: layout binds "$.missing" but data has no "missing" default');
   });
 

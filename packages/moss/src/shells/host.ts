@@ -75,6 +75,15 @@ const takeLayouts = (live: Live, made: ShellComposition): void => {
   live.layouts = answered;
 };
 
+// Nova gives a shell a canvas when something is first pushed onto it, and
+// keeps it out of the canvases a frame loops over. One that a layout held a
+// slot for, and none holds now, is taken out with what is mounted on it.
+const takeCanvases = (live: Live, made: ShellComposition): void => {
+  const slotted = new Set(made.slottedCanvases);
+  for (const id of live.slottedCanvases) if (!slotted.has(id)) live.shell.removeCanvas(id);
+  live.slottedCanvases = slotted;
+};
+
 const takeComposition = (live: Live, made: ShellComposition): void => {
   for (const [name, contract] of Object.entries(made.components)) {
     if (!live.shell.registry.has(name)) live.shell.registry.register(name, contract);
@@ -84,6 +93,7 @@ const takeComposition = (live: Live, made: ShellComposition): void => {
   live.actionIds = new Set(Object.keys(made.actions));
   live.entries = made.entries;
   takeLayouts(live, made);
+  takeCanvases(live, made);
 };
 
 // For the one shell whose draft is to change, and awaited by whoever changes

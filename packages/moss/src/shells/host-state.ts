@@ -27,6 +27,7 @@ export type Live = {
   actionIds: ReadonlySet<string>;
   entries: ReadonlyMap<string, SeedEntry | SeedMutation> | undefined;
   layouts: ShellLayouts;
+  slottedCanvases: ReadonlySet<string>;
   draft: DraftState;
   connections: Set<ShellConnection>;
   sentByCanvas: Map<string, string>;

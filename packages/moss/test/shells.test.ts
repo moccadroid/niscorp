@@ -1672,6 +1672,64 @@ describe('shells — adopt', () => {
     });
   });
 
+  describe('a canvas the shell’s layouts hold a slot for', () => {
+    const canvasesWorld = (slotted: string[] = []) => {
+      const answer = { slotted };
+      const config = hostConfig({ ...ctx, app: base, resolve: async () => ({ roles: ['member'], scope: {}, catalog: { ids: ['home'] }, variants: new Map() }) });
+      const host = standHost({ ...config, composition: async (principal) => ({ ...(await config.composition(principal)), slottedCanvases: [...answer.slotted] }) });
+      return { host, answer };
+    };
+    const canvasesOf = (session: Awaited<ReturnType<ReturnType<typeof standHost>['session']>>): string[] => Object.keys(session.shell.getState().canvases);
+    const lastOn = (connection: ReturnType<typeof fakeConnection>, canvas: string): unknown => connection.sent.filter((message) => message['type'] === 'render' && message['canvas'] === canvas).at(-1);
+
+    it('is nova’s to give the shell, when something is first pushed onto it; once no layout holds the slot it is taken out with what is mounted on it, and the others keep what is on them', async () => {
+      const { host, answer } = canvasesWorld();
+      const session = await host.session('t', 'usr_1');
+      const connection = fakeConnection();
+      session.attach(connection);
+      await settle();
+      const declared = canvasesOf(session);
+      const open = session.shell.getCanvasState('main').stack.at(-1)?.id;
+
+      answer.slotted = ['notes'];
+      host.adopt();
+      await settle();
+      expect(canvasesOf(session)).toEqual(declared);
+      session.shell.push('notes', 'home');
+      await settle();
+      expect(canvasesOf(session)).toEqual([...declared, 'notes']);
+
+      host.adopt();
+      await settle();
+      expect(canvasesOf(session)).toEqual([...declared, 'notes']);
+
+      answer.slotted = [];
+      host.adopt();
+      await settle();
+      expect(canvasesOf(session)).toEqual(declared);
+      expect(lastOn(connection, 'notes')).toEqual({ type: 'render', canvas: 'notes', tree: [] });
+      expect(mounted(session)).toEqual(['home']);
+      expect(session.shell.getCanvasState('main').stack.at(-1)?.id).toBe(open);
+    });
+
+    it('one a layout held the slot for when the shell was built is taken out the same way, and a canvas no layout ever held a slot for stays', async () => {
+      const { host, answer } = canvasesWorld(['notes']);
+      const session = await host.session('t', 'usr_1');
+      await settle();
+      const declared = canvasesOf(session);
+      session.shell.push('notes', 'home');
+      session.shell.push('theirs', 'home');
+      await settle();
+      expect(canvasesOf(session)).toEqual([...declared, 'notes', 'theirs']);
+
+      answer.slotted = [];
+      host.adopt();
+      await settle();
+
+      expect(canvasesOf(session)).toEqual([...declared, 'theirs']);
+    });
+  });
+
   it('every shell of one principal on a host that keeps none adopts, each for itself', async () => {
     const { host, hold } = world({ kept: false });
     const tabs = [await host.session('t', 'usr_1'), await host.session('t', 'usr_1')];
