@@ -1,5 +1,31 @@
 # @niscorp/nisc
 
+## 0.6.1
+
+### Patch Changes
+
+- Updated dependencies [1dcccd7]
+- Updated dependencies [a4ccf0e]
+- Updated dependencies [c8cbc05]
+- Updated dependencies [d6b2c4a]
+- Updated dependencies [037d26c]
+- Updated dependencies [f55fcbe]
+- Updated dependencies [89adcc3]
+- Updated dependencies [a8b7133]
+- Updated dependencies [2e73b96]
+- Updated dependencies [9b7ccbe]
+- Updated dependencies [f62ee50]
+- Updated dependencies [b4d24e9]
+- Updated dependencies [bf6496f]
+  - @niscorp/cortex@0.1.4
+  - @niscorp/loom@0.3.1
+  - @niscorp/nova@0.3.1
+  - @niscorp/prism@0.3.1
+  - @niscorp/signal@0.1.4
+  - @niscorp/strata@0.1.7
+  - @niscorp/tide@0.1.7
+  - @niscorp/vex@0.3.1
+
 ## 0.6.0
 
 ### Minor Changes
