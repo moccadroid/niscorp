@@ -4,7 +4,7 @@ import type { Charter } from '@niscorp/charter';
 // and moss's `integrations` holds integration key hashes, which are
 // credentials. A deny does not inherit, so every role that allows `*.read`
 // denies these itself.
-const ENGINE_TABLES = ['integrations.*', 'integration_actions.*', 'moss_generation.*', 'strata_ledger.*', 'vex_cache.*'];
+const ENGINE_TABLES = ['integrations.*', 'integration_actions.*', 'moss_generation.*', 'artifact_saves.*', 'artifacts.*', 'strata_ledger.*', 'vex_cache.*'];
 
 export const CHARTER: Charter = {
   public: ['auth.login'],
