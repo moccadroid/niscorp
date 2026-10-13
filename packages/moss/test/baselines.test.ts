@@ -23,7 +23,7 @@ const PINNED: ReadonlyArray<[Sequence, number, string]> = [
   [MOSS_SEQUENCE, 2, '92bd612e35a830e2f58de2327451a8e3346e7bc102ab0b49777c349792894b1a'],
   [MOSS_SEQUENCE, 3, 'b05aa252f4f3b70dad03282552ac6b94c5d4e5012d964c23cb32fedbb4f8b60f'],
   [MOSS_SEQUENCE, 4, 'd4fdae75451da4bb3d46c6b31c8ad1797f1c0a487eb85708f30c5d4e5e37ce5b'],
-  [MOSS_SEQUENCE, 5, '6f15348b5cf5a45e29794fca4c501ad8e2b8847639d33aa47b2b6d0c37a115c5'],
+  [MOSS_SEQUENCE, 5, '0eb5c8bbb44fa43e3052d8c4c6b6f781173fa8d660584c84df1766b28293e039'],
   [SESSIONS_SEQUENCE, 1, '83a62e0217940bfe62136052c18f730947355d20e481d9aceb76463251b33700'],
 ];
 
@@ -103,11 +103,14 @@ describe('boot — every owner through one ledger', () => {
     expect(await ben.history('layout', 'one', first)).toEqual([]);
     expect(await ben.history('layout', 'two')).toEqual([]);
     expect((await ada.inForce())[0]?.createdAt).toMatch(/^\d{4}-\d\d-\d\dT/);
-    // With no `userId` there is nobody whose rows these are: vex refuses the read and the write.
+    // With no `userId` there is nobody whose rows these are: vex refuses the read and the write. With one
+    // that is null, as an app's `scope` could answer, the database refuses the row: none is nobody's.
     const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     await expect(rowsAs({}).inForce()).rejects.toThrow(/"artifactory\/in-force" was refused/);
     await expect(save(rowsAs({}), [{ id: 'nobodys', body: layout('nobody’s') }])).rejects.toThrow(/"artifactory\/save" was refused/);
+    await expect(save(rowsAs({ userId: null }), [{ id: 'nobodys', body: layout('nobody’s') }])).rejects.toThrow(/"artifactory\/save" was refused/);
     quiet.mockRestore();
+    expect((await pool.query('SELECT count(*)::int AS n FROM artifact_saves WHERE principal IS NULL')).rows).toEqual([{ n: 0 }]);
     expect(await stored('artifacts', 'principal')).toEqual([{ principal: 'ada' }, { principal: 'ben' }]);
 
     // What an app could do with every verb granted on the two tables, through entries of its own: each of

@@ -643,9 +643,10 @@ has to do. How it is done is open again: it was built as an argument on the
 calls of `session.artifacts` that moss did not check, and that is gone. To be
 proposed to the owner: how the charter authorizes a write that changes what
 everybody sees, and how a process reads rows that are nobody's (at boot and
-when the pointer moves, where there is no caller). Until then the order at a
-ref has no published default in it, and D7 is to be looked at again with the
-owner.
+when the pointer moves, where there is no caller). The `principal` columns
+refuse a null, so rows that are nobody's need a migration or a table of their
+own. Until then the order at a ref has no published default in it, and D7 is
+to be looked at again with the owner.
 
 **Step 4 as built, where the owner has not been asked.**
 
@@ -667,14 +668,14 @@ owner.
   their bodies); `history` answers the newest 500; marking a layout in use
   writes a version without the mark for each of its holder's others for that
   ref, and of two that are marked the later counts (two saves at the same
-  moment can leave that; reset the later and the other marked one is drawn,
-  until a save marks one: a reset does not take marks off, and that is not
-  built); `restore` checks the old version as a save is checked and brings it
-  to the grammars the server runs; a reset of what is not in force is
+  moment can leave that; a save that marks one for the ref, or takes the one
+  in use out by a reset or by saving it without the mark, takes the mark off
+  the rest); `restore` checks the old version as a save is checked and brings
+  it to the grammars the server runs; a reset of what is not in force is
   refused.
 - **The tables.** `created_by` is the saver's `userId`, as `principal` is,
-  until somebody saves for somebody else; `principal` may be NULL, and nothing
-  writes it so; `artifacts` is keyed by `(save, kind, id)` and refers to its
+  until somebody saves for somebody else; `principal` is never NULL in either
+  table; `artifacts` is keyed by `(save, kind, id)` and refers to its
   save; one index, `(principal, kind, id, created_at)`; `created_at` is the
   database's clock, and two versions of one artifact in the same instant are
   told apart by their save; `copied_from` is a save's id; a reset is a version
@@ -685,8 +686,7 @@ owner.
   One account for each tenant keeps a person's layouts apart by tenant; one
   account across tenants has them follow the person. On a read the rule is
   one match and stays one. An app whose `scope` answers `userId: null` saves
-  rows nobody reads: no guard is built for it, and making the two `principal`
-  columns NOT NULL would refuse it in the database.
+  nothing: the two `principal` columns refuse a null.
 - **A save is not told to `app.reactions`**, as no write of moss's own entries
   is. A read of the app's that follows the tables refreshes.
 - **Moss's own entries only add rows.** An app whose charter grants a role

@@ -378,6 +378,42 @@ describe('a saved layout that does not pass any more', () => {
     expect((await storeOf('ada'))['action/home']).toEqual(saying('the earlier'));
     expect((await of('ada').list()).filter((version) => JSON.stringify(version.body).includes('"use":true')).map((version) => version.id)).toEqual(['earlier']);
   });
+
+  const twoMarked = async (): Promise<World> => {
+    const rows = rowsDouble();
+    await stored(rows, 'ada', 'earlier', { ref: 'action/home', layout: saying('the earlier'), use: true });
+    await stored(rows, 'ada', 'later', { ref: 'action/home', layout: saying('the later'), use: true });
+    return world({}, rows);
+  };
+  const markedOf = async ({ of }: World): Promise<string[]> =>
+    (await of('ada').list()).filter((version) => JSON.stringify(version.body).includes('"use":true')).map((version) => version.id);
+
+  it('of two marked in use for one ref, a reset of the one that is drawn shows what is under both, and not the other of the two', async () => {
+    const made = await twoMarked();
+    await made.of('ada').reset('layout', 'later');
+
+    expect((await made.storeOf('ada'))['action/home']).toEqual(home.layout);
+    expect(await markedOf(made)).toEqual([]);
+    expect((await made.of('ada').list()).map((version) => version.id)).toEqual(['earlier']);
+  });
+
+  it('...and so does a save of it without the mark', async () => {
+    const made = await twoMarked();
+    await made.of('ada').save([{ kind: 'layout', id: 'later', body: { ref: 'action/home', layout: saying('the later') } }]);
+
+    expect((await made.storeOf('ada'))['action/home']).toEqual(home.layout);
+    expect(await markedOf(made)).toEqual([]);
+  });
+
+  it('a reset of one that is not in use leaves the one that is', async () => {
+    const { of, storeOf } = world();
+    const ada = of('ada');
+    await ada.save([mine('in use', true)]);
+    const spare = await ada.save([mine('a spare')]);
+    await ada.reset('layout', spare.artifacts[0]?.id ?? '');
+
+    expect((await storeOf('ada'))['action/home']).toEqual(saying('in use'));
+  });
 });
 
 describe('an app with several shells', () => {

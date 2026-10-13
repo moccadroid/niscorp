@@ -47,16 +47,22 @@ const checked = (body: unknown, held: LayoutHeldTo): SavedLayout => {
   return read.layout;
 };
 
-// Marking one in use takes the mark off the holder's others for that ref, in the same save.
+// A save that says which layout is in use for a ref, by marking one or by taking
+// the one in use out (a reset, or a save of it without the mark), takes the mark
+// off the holder's others for that ref. Two saves at the same moment can each
+// leave theirs marked, and without this the one left would be drawn in place
+// of the one that was taken out.
 const unmarked = (versions: readonly Checked[], inForce: readonly SavedVersion[]): Written[] => {
   const marked = versions.flatMap((version) => (version.body?.use === true ? [version.body.ref] : []));
   const twice = marked.find((ref, at) => marked.indexOf(ref) !== at);
   if (twice !== undefined) throw new Error(`moss: two layouts of one save are marked in use for "${twice}". One is in use at a time.`);
   const saved = new Set(versions.map((version) => version.id));
+  const takenOut = inForce.flatMap((held) => (isInUse(held) && saved.has(held.id) ? [refOf(held.body)] : []));
+  const decided = new Set([...marked, ...takenOut]);
   return inForce.flatMap((held): Written[] => {
     const ref = refOf(held.body);
     // One that could not be read stays as it is stored: written again, it would carry this server's stamp over another grammar.
-    if (!isInUse(held) || held.unread !== undefined || !isRecord(held.body) || ref === undefined || !marked.includes(ref) || saved.has(held.id)) return [];
+    if (!isInUse(held) || held.unread !== undefined || !isRecord(held.body) || ref === undefined || !decided.has(ref) || saved.has(held.id)) return [];
     return [{ id: held.id, body: withoutMark(held.body), copiedFrom: held.save }];
   });
 };
@@ -128,9 +134,9 @@ export const createSessionArtifacts =
         const by = signedIn();
         ofKind(kind);
         const caller = await callerOf();
-        const inForce = await caller.saved.inForce();
-        if (!inForce.some((version) => version.kind === kind && version.id === id && version.body !== null)) throw new Error(`moss: no layout "${id}" of yours is in force.`);
-        return { save: await write(by, caller.saved, [{ id, body: null, copiedFrom: null }], []) };
+        const inForce = (await caller.saved.inForce()).filter((version) => version.kind === kind);
+        if (!inForce.some((version) => version.id === id && version.body !== null)) throw new Error(`moss: no layout "${id}" of yours is in force.`);
+        return { save: await write(by, caller.saved, [{ id, body: null, copiedFrom: null }], inForce) };
       },
     };
   };

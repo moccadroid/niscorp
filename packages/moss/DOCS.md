@@ -421,8 +421,8 @@ is. `reset` is a new save whose version has no body: none of the principal's
 is in force under that id, and what is under it is drawn again. A reset is a
 version too, and can be gone back from. Two saves by one person at the same
 moment can each leave a layout marked in use for one ref. The later one is
-drawn; reset it, and the other marked one is what is under it. The next save
-that marks one takes the mark off the rest.
+drawn. The next save that marks one for that ref, or takes the one in use out
+(a reset, or a save of it without the mark), takes the mark off the rest.
 
 The rows are in `artifact_saves` (one for each save) and `artifacts` (one for
 each version a save holds), which migration `nisc.moss/5` makes. They are
@@ -434,7 +434,9 @@ runs when it is read. What somebody saved is asked of the rows once for each
 shell that is built for them and once for each adopt; nothing of it is kept in
 memory, so a save made in another process is theirs here at the next build
 whether or not a fabric is set. The entries are loaded when the server boots,
-and a boot that cannot load them fails.
+and a boot that cannot load them fails. A row always has a principal: the two
+`principal` columns refuse a null, so an app whose `scope` answers no `userId`
+for somebody saves nothing for them.
 
 **The row rule is moss's, wherever a policy is compiled.** The two tables are
 in the data a charter selects from, as every table is: no role reaches them

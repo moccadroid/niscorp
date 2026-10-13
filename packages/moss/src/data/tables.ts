@@ -162,7 +162,7 @@ export const MOSS_SEQUENCE: Sequence = {
   id          uuid PRIMARY KEY,
   created_by  text NOT NULL,
   -- Whose the save is: the userId of whoever made it, written by vex.
-  principal   text,
+  principal   text NOT NULL,
   created_at  timestamptz NOT NULL DEFAULT now()
 )`,
         },
@@ -173,7 +173,7 @@ export const MOSS_SEQUENCE: Sequence = {
   kind         text NOT NULL,
   id           text NOT NULL,
   -- Whose the version is, as its save's.
-  principal    text,
+  principal    text NOT NULL,
   -- null, as SQL or as JSON: this version says none is in force.
   body         jsonb,
   grammar      jsonb NOT NULL DEFAULT '{}'::jsonb,
