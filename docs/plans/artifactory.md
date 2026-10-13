@@ -3,7 +3,8 @@
 **Status: Proposed (2026-10-12), ready to build from. What it has to do
 (part 2) and its ten design decisions (part 9) are the owner's and are
 settled. Steps 1 to 6 and step 9 of part 6 are built (2026-10-13), on the
-branch `worktree-artifactory`; nothing else is. Part 0 is for whoever builds it, part 6 is the
+branch `worktree-artifactory`; nothing else is. Step 10 is struck
+(2026-10-14), which leaves steps 7 and 8. Part 0 is for whoever builds it, part 6 is the
 build, step by step, and part 7 is what needs the owner's word before it is
 touched.**
 
@@ -680,12 +681,20 @@ and an adopt takes out one that none holds a slot for any more
 (`takeCanvases`, `shells/host.ts`). It adds none: part 8, "Step 9 as built",
 has why, and what else was decided on the way.
 
-**Step 10. Integrations through the one check.** The integrations feature asks
-the artifactory to check a bundle's actions and layouts, in place of the three
-seams it assembles that check from (`refusalOf`, `layoutMisfits`,
-`endlessChains`). Its actions stay in its own table and reach the live list
-as its set does today. *Done when:* the feature's seam is shorter by those,
-and lyra's and lyceum's integrations checks pass.
+**Step 10. Integrations through the one check. Struck (the owner's,
+2026-10-14).** The integrations feature was to ask the artifactory to check a
+bundle's actions and layouts, in place of the three seams the server hands it
+(`refusalOf`, `layoutMisfits`, `endlessChains`). There is no check of its own
+to replace. `refusalOf` is the running manifest verifying a set of actions, as
+`replaceActions` does, and the other two are the functions a boot and the
+check of a saved layout call (`manifest/verify.ts`). They are asked at three
+moments (a bundle taken in, installed, approved), `layoutMisfits` is handed on
+to the host app's own check of a bundle, and a bundle's layouts are held to
+the components the app declares, where a saved layout is held to those its
+shells use. One call in their place would be a wrapper around the same three,
+with nothing an app or whoever writes a bundle could tell apart. No step
+touched the integrations feature, and lyra's, lyceum's and atrium's
+integrations checks pass.
 
 ## 7. What needs the owner's word before it is touched
 
