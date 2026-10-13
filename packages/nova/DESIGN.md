@@ -382,9 +382,8 @@ removeInstance(canvasId, instanceId): void
 replace(canvasId, actionId, input?, fragments?): string
 clear(canvasId): void
 back(): boolean
-registerAction(definition): void
-removeAction(actionId): void
-registerFragment(fragment): void
+registerAction(definition): void      // an action or a fragment
+removeAction(id): void                // an action or a fragment
 addCanvas(config): void
 removeCanvas(canvasId): void
 setCanvasLayout(layout): void
@@ -451,9 +450,13 @@ fire-and-forget failures via a synchronous API without making
 
 An `ActionFragment` is a reusable **partial action** — every
 `ActionDefinition` field optional, plus a `kind: 'fragment'` discriminator.
-It is **abstract**: it lives in a separate registry (`ShellConfig.fragments`
-/ `registerFragment`), can never be `push`ed as an action (its id isn't in
-`actions`, so that throws `UnknownActionError`), and only exists once merged.
+It is **abstract**: it can never be `push`ed as an action (that throws
+`UnknownActionError`), and only exists once merged. A shell keeps actions and
+fragments in one registry, by id, and tells them apart by `kind`: both are
+added with `registerAction` and taken out with `removeAction`, and an id names
+one or the other, never both (`DefinitionValidationError`). An app writes its
+fragments down in `ShellConfig.fragments`, beside `actions`; they are
+validated at construction as actions are.
 Because it is pure data it ships in a DB row and an agent can author it; a
 reference (`with: ['modal']`) collapses an arbitrary amount of chrome to a
 single token in the model's context.

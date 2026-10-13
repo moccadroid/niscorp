@@ -242,7 +242,7 @@ ships in a DB row and can be referenced rather than inlined.
 The orchestrator. `createShell(config)` validates every action
 definition at construction (boundary Zod validation) and returns a
 `Shell` with `push`, `pop`, `popTo`, `removeInstance`, `replace`, `clear`,
-`back`, `originOf`, `registerAction`, `removeAction`, `registerFragment`,
+`back`, `originOf`, `registerAction`, `removeAction`,
 `addCanvas`, `removeCanvas`, `setCanvasLayout`, `setLayout`, `setPhrases`,
 `getPhrases`, `getCanvasState`, `getRuntime`, `getState`,
 `getShellRenderTree`, `getCanvasRenderTree`, `flattenRenderTree`,

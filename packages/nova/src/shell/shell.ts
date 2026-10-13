@@ -27,7 +27,7 @@ import { createChainCount, rememberChainCount } from './chains';
 import { createNavigationHandler, navigatedChannel } from './navigation';
 import type { NavigatedMessage } from './navigation';
 import { createRuntimeRegistry } from './runtime-registry';
-import { createRuntimeFactory, snapshotCanvas, validateActions, validateFragments } from './shell-internals';
+import { createRuntimeFactory, refuseSharedId, snapshotCanvas, validateActions, validateFragments } from './shell-internals';
 import { createTelemetry } from './telemetry';
 import type {
   CanvasChangeHandler,
@@ -43,8 +43,14 @@ import type {
 
 const defaultShellIdFactory = createIdFactory('shell');
 
+const isFragment = (definition: ActionDefinition | ActionFragment): definition is ActionFragment =>
+  typeof definition === 'object' && definition !== null && 'kind' in definition && definition.kind === 'fragment';
+
 export const createShell = (config: ShellConfig): Shell => {
   validateActions(config.actions);
+  validateFragments(config.fragments ?? {});
+  const shared = Object.keys(config.fragments ?? {}).find((fragmentId) => Object.hasOwn(config.actions, fragmentId));
+  if (shared !== undefined) refuseSharedId(shared);
 
   const id = (config.shellIdFn ?? defaultShellIdFactory)();
   const instanceIdFn = config.instanceIdFn ?? createIdFactory('act');
@@ -112,7 +118,15 @@ export const createShell = (config: ShellConfig): Shell => {
   const canvasOrder: string[] = config.canvases.map((cfg) => cfg.id);
   let canvasLayout = config.canvasLayout;
 
-  const actions: Record<string, ActionDefinition> = { ...config.actions };
+  const definitions: Record<string, ActionDefinition | ActionFragment> = { ...config.actions, ...config.fragments };
+  const actionOf = (actionId: string): ActionDefinition | undefined => {
+    const held = definitions[actionId];
+    return held === undefined || isFragment(held) ? undefined : held;
+  };
+  const fragmentOf = (fragmentId: string): ActionFragment | undefined => {
+    const held = definitions[fragmentId];
+    return held !== undefined && isFragment(held) ? held : undefined;
+  };
 
   let phrases = config.phrases;
 
@@ -131,8 +145,6 @@ export const createShell = (config: ShellConfig): Shell => {
       ...(config.onPhraseMiss === undefined ? {} : { onPhraseMiss: config.onPhraseMiss }),
     };
   };
-
-  const fragments: Record<string, ActionFragment> = { ...(config.fragments ?? {}) };
 
   let disposed = false;
 
@@ -161,21 +173,31 @@ export const createShell = (config: ShellConfig): Shell => {
   };
 
   const getDefinition = (actionId: string): ActionDefinition => {
-    const def = actions[actionId];
+    const def = actionOf(actionId);
     if (def === undefined) throw new UnknownActionError(`Unknown action: ${actionId}`, { actionId });
     return def;
   };
 
-  const registerAction = (definition: ActionDefinition): void => {
+  const registerAction = (definition: ActionDefinition | ActionFragment): void => {
     guard();
-    validateActions({ [definition.id]: definition });
-    actions[definition.id] = definition;
+    if (isFragment(definition)) {
+      if (definition.id === undefined) throw new UnknownFragmentError('Fragment is missing an id', { fragmentId: '' });
+      validateFragments({ [definition.id]: definition });
+    } else {
+      validateActions({ [definition.id]: definition });
+    }
+    const held = Object.hasOwn(definitions, definition.id) ? definitions[definition.id] : undefined;
+    if (held !== undefined && isFragment(held) !== isFragment(definition)) refuseSharedId(definition.id);
+    definitions[definition.id] = definition;
   };
 
   const removeAction = (actionId: string): void => {
     guard();
-    if (actions[actionId] === undefined) return;
-    delete actions[actionId];
+    const held = definitions[actionId];
+    if (held === undefined) return;
+    delete definitions[actionId];
+    // Nothing is mounted as a fragment: what was opened with one keeps the definition it was composed into.
+    if (isFragment(held)) return;
     journal.forgetAction(actionId);
     let changed = false;
     for (const [, canvas] of canvases) {
@@ -192,16 +214,9 @@ export const createShell = (config: ShellConfig): Shell => {
   };
 
   const getFragment = (fragmentId: string): ActionFragment => {
-    const frag = fragments[fragmentId];
+    const frag = fragmentOf(fragmentId);
     if (frag === undefined) throw new UnknownFragmentError(`Unknown fragment: ${fragmentId}`, { fragmentId });
     return frag;
-  };
-
-  const registerFragment = (fragment: ActionFragment): void => {
-    guard();
-    if (fragment.id === undefined) throw new UnknownFragmentError('Fragment is missing an id', { fragmentId: '' });
-    validateFragments({ [fragment.id]: fragment });
-    fragments[fragment.id] = fragment;
   };
 
   const resolveDefinition = (actionId: string, fragmentIds?: string[]): ActionDefinition => {
@@ -279,13 +294,13 @@ export const createShell = (config: ShellConfig): Shell => {
     reconcile: (cid, desired, options) => {
       const before = positionOf(cid);
       const known = desired
-        .filter((entry) => actions[entry.actionId] !== undefined)
+        .filter((entry) => actionOf(entry.actionId) !== undefined)
         .map((entry) => (options.with === undefined ? entry : { ...entry, with: options.with }));
       const result = journal.mute(() =>
         reconcileCanvas(shell, cid, known, {
           origin: options.origin,
           ...(options.own === undefined ? {} : { own: options.own }),
-          definitionOf: (actionId) => actions[actionId],
+          definitionOf: actionOf,
         }),
       );
       if (result.changed) journal.record(cid, before);
@@ -452,10 +467,12 @@ export const createShell = (config: ShellConfig): Shell => {
     if (common === canvas.stack.length && common === entry.stack.length) return false;
 
     // Checked before anything moves: a position half put back is a screen
-    // nobody authored.
+    // nobody authored. A frame is put back with its action and each fragment
+    // it was opened with, and any of them may have been taken out since.
     for (let i = common; i < entry.stack.length; i += 1) {
       const frame = entry.stack[i];
-      if (frame !== undefined && actions[frame.action] === undefined) return false;
+      if (frame === undefined) continue;
+      if (actionOf(frame.action) === undefined || frame.with?.some((fragmentId) => fragmentOf(fragmentId) === undefined) === true) return false;
     }
 
     journal.mute(() => {
@@ -633,7 +650,7 @@ export const createShell = (config: ShellConfig): Shell => {
   };
 
   const titleOf = (instance: ActionInstance): string => {
-    const def = registry.get(instance.id)?.definition ?? actions[instance.definitionId];
+    const def = registry.get(instance.id)?.definition ?? actionOf(instance.definitionId);
     if (def?.title !== undefined) {
       const resolved = resolve(def.title, createScopeChain(instance.data));
       if (resolved !== undefined && resolved !== null && resolved !== '') return String(resolved);
@@ -676,7 +693,6 @@ export const createShell = (config: ShellConfig): Shell => {
     back,
     registerAction,
     removeAction,
-    registerFragment,
     addCanvas,
     removeCanvas,
     setCanvasLayout,

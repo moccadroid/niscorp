@@ -451,7 +451,7 @@ In **strict mode** (set `strict: true` on the shell), a failure inside a lifecyc
 
 ## Fragments
 
-An `ActionFragment` is a reusable partial action — chrome plus wired behavior — merged into a concrete action when it is opened with `with: [...]`. It only exists merged; it cannot be pushed on its own. Register fragments on `ShellConfig.fragments` or with `shell.registerFragment`.
+An `ActionFragment` is a reusable partial action — chrome plus wired behavior — merged into a concrete action when it is opened with `with: [...]`. It only exists merged; it cannot be pushed on its own. Hand fragments over in `ShellConfig.fragments`, or add one while the shell runs with `shell.registerAction`, which takes an action or a fragment; `shell.removeAction` takes either out. A fragment and an action do not share an id.
 
 ```ts
 import type { ActionFragment } from '@niscorp/nova';

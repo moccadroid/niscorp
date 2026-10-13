@@ -135,7 +135,7 @@ These are **shared** across every action in the shell. All actions read componen
 
 ### `fragments`
 
-Reusable partial actions (`ActionFragment`s), keyed by id, referenceable from a push/replace effect's `with: [...]`. More can be added at runtime via `shell.registerFragment`.
+Reusable partial actions (`ActionFragment`s), keyed by id, referenceable from a push/replace effect's `with: [...]`. Each is validated at construction, as an action is. The shell keeps them in the registry its actions are in, so an id that is also an action's is refused (`DefinitionValidationError`). More are added while the shell runs with `shell.registerAction`, and one is taken out with `shell.removeAction`.
 
 ### `fetch`, `transform`, and `functions`
 
@@ -194,9 +194,8 @@ type Shell = {
   back: () => boolean;                     // undo the last navigation, anywhere on the shell
 
   // Runtime registration
-  registerAction: (definition: ActionDefinition) => void;
-  removeAction: (actionId: string) => void;   // revocation: unmounts live instances
-  registerFragment: (fragment: ActionFragment) => void;
+  registerAction: (definition: ActionDefinition | ActionFragment) => void;
+  removeAction: (actionId: string) => void;   // an action: unmounts live instances. A fragment: what was opened with it keeps what it was composed into
 
   // Canvas set / layout mutation
   addCanvas: (config: CanvasConfig) => void;
@@ -333,7 +332,8 @@ be returned to; `back` restores the newest.
   false }`) are never recorded, so `back` cannot empty the screen somebody landed
   on. A revoked action takes its entries with it: `removeAction` purges anything
   that would hand it back, and `removeCanvas` drops what can no longer be
-  restored.
+  restored. A position that was opened with a fragment taken out since cannot
+  be put back as it was: `back` skips it and goes to the one before.
 - **Depth.** `ShellConfig.historyDepth` (default 50) bounds the journal;
   `historyDepth: 0` switches it off and makes `back` a no-op.
 
@@ -346,9 +346,8 @@ protocol-level: see its `back` client message.
 The shell starts from `createShell`'s `actions` / `fragments` / `canvases` / `canvasLayout` and can change all four live:
 
 ```ts
-shell.registerAction(definition);        // add (or replace) an action definition
-shell.removeAction(actionId);            // revocation: unmounts live instances, drops the definition
-shell.registerFragment(fragment);        // add a fragment for `with: [...]`
+shell.registerAction(definition);        // add (or replace) an action definition, or a fragment for `with: [...]`
+shell.removeAction(actionId);            // an action: unmounts live instances, drops the definition. A fragment: drops it; a later `with` naming it throws
 shell.addCanvas({ id: 'aside', initial: 'inspector' });  // appends + seeds; no-op if the id exists
 shell.removeCanvas('aside');             // unmounts its instances, then drops it
 shell.setCanvasLayout(layout);           // swap how the shell arranges its canvases
@@ -662,7 +661,7 @@ The shell can produce these:
 - **`UnknownActionError`** — `shell.push(canvas, 'foo')` where `'foo'` isn't in `actions`
 - **`UnknownFragmentError`** — a `fragments` / `with: [...]` id that isn't registered
 - **`ShellDisposedError`** — `push`, `replace`, and the registration / canvas / layout / phrase setters after `dispose()` (`pop`, `popTo`, `removeInstance`, `clear`, `removeCanvas` and `back` are no-ops instead)
-- **`DefinitionValidationError`** — at shell construction, if any action in `actions` fails schema validation; also from `registerAction` / `registerFragment`
+- **`DefinitionValidationError`** — at shell construction, if any action in `actions` or fragment in `fragments` fails schema validation, or an id is in both; also from `registerAction`
 - **`LifecycleError`** — a lifecycle hook step threw (in strict mode propagates, in lax mode routes via `onError`)
 
 Plus all action-level errors (from `ACTION_DOCS.md`) and layout-level errors (from `LAYOUT_DOCS.md`) bubble up through the shell's error pipeline.
@@ -707,7 +706,6 @@ shell.back();                                          // → boolean
 // Runtime registration / canvas mutation
 shell.registerAction(definition);
 shell.removeAction(actionId);
-shell.registerFragment(fragment);
 shell.addCanvas(config);
 shell.removeCanvas(canvasId);
 shell.setCanvasLayout(layout);

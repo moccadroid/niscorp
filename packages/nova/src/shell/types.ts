@@ -112,11 +112,9 @@ export type Shell = {
 
   back: () => boolean;
 
-  registerAction: (definition: ActionDefinition) => void;
+  registerAction: (definition: ActionDefinition | ActionFragment) => void;
 
   removeAction: (actionId: string) => void;
-
-  registerFragment: (fragment: ActionFragment) => void;
 
   addCanvas: (config: CanvasConfig) => void;
   removeCanvas: (canvasId: string) => void;

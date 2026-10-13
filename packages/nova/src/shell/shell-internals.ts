@@ -63,6 +63,13 @@ export const validateFragments = (fragments: Record<string, ActionFragment>): vo
   }
 };
 
+// A shell keeps both in one registry, so an id names an action or a fragment and never both.
+export const refuseSharedId = (id: string): never => {
+  throw new DefinitionValidationError(`"${id}" is the id of an action and of a fragment`, {
+    failures: [{ id, issues: [{ code: 'custom', path: [], message: 'an id names an action or a fragment, never both', input: undefined }] }],
+  });
+};
+
 export const snapshotCanvas = (canvas: Canvas): CanvasState => {
   const stack = canvas.stack.slice();
   return {
