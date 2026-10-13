@@ -2,8 +2,8 @@
 
 **Status: Proposed (2026-10-12), ready to build from. What it has to do
 (part 2) and its ten design decisions (part 9) are the owner's and are
-settled. Steps 1 to 6 of part 6 and the first part of step 9 are built
-(2026-10-13), on the branch `worktree-artifactory`; nothing else is. Part 0 is for whoever builds it, part 6 is the
+settled. Steps 1 to 6 and step 9 of part 6 are built (2026-10-13), on the
+branch `worktree-artifactory`; nothing else is. Part 0 is for whoever builds it, part 6 is the
 build, step by step, and part 7 is what needs the owner's word before it is
 touched.**
 
@@ -666,16 +666,19 @@ fingerprint is refused.
 items for the manifest and for charter first. *Done when:* a generated action
 may call a function on its owner's roles' list and no other.
 
-**Step 9. Canvases through canvas slots.** An adopt adds a canvas a layout in
+**Step 9. Canvases through canvas slots. Built (2026-10-13).** An adopt adds a canvas a layout in
 force has a slot for, and takes out one no layout has a slot for any more
 (part 5, "Canvases"). *Done when:* a generated frame with a slot for a new
 canvas shows that canvas on its owner's open screen, and taking the frame back
-removes it. *Its first part is built (2026-10-13):* the shell's own layout
-and each canvas's are in the layout store, under `frame` and `canvas/<id>`,
-and the shell draws each by that name (`shellWithStoredLayouts`,
-`artifactory/artifacts.ts`). Nothing is drawn differently, and neither can be
-saved yet. The rest waits for the owner's word (part 8, "Step 9, its first
-part as built").
+removes it. As built: the shell's own layout and each canvas's are in the
+layout store, under `frame` and `canvas/<id>`, and the shell draws each by
+that name (`shellWithStoredLayouts`, `artifactory/artifacts.ts`); a layout
+saved under `frame` takes the place of the app's own shell's
+(`artifactory/layouts.ts`); the answer for a shell lists the canvases its
+layouts hold a slot for and its manifest does not declare (`slottedCanvases`),
+and an adopt takes out one that none holds a slot for any more
+(`takeCanvases`, `shells/host.ts`). It adds none: part 8, "Step 9 as built",
+has why, and what else was decided on the way.
 
 **Step 10. Integrations through the one check.** The integrations feature asks
 the artifactory to check a bundle's actions and layouts, in place of the three
@@ -726,32 +729,69 @@ shell. On the whole shell (`unverifiedShell`) they see the ref.
   build that is deployed later, until it is taken back. Both follow from what
   is decided, and are said here so that nobody is surprised by them.
 
-**Step 9, its first part as built.**
+**Step 9 as built.** The builder's recommendations, built on the owner's go
+(2026-10-13).
 
 - **The shell's own layout is in the layout store under `frame`, and a
   canvas's under `canvas/<id>`.** An app writes `layout` and `actionLayout` as
   before. A shell manifest with no `layout` has no `frame` in its store and is
   drawn with nova's own. A canvas with no `actionLayout`, or with the name of
   a stored layout, is handed over as it is.
-- **A manifest's `layoutStore` declares neither name**, in the app's shell or
-  in a page: the boot is refused, with the sentence that says where. This is
-  what an app can notice, and it breaks one that has a stored layout under
-  `frame` or under `canvas/`. None of the five lab apps has. Its changeset
-  line needs the owner's word.
+- **Both names are moss's, as `action/` is.** A manifest's `layoutStore`
+  declares neither, and no action's layout, layout variant, saved layout or
+  generated action or fragment names one by `{ ref }`. Without the second, a
+  layout that names `frame` draws the shell's layout inside itself, and two
+  that name each other are nested by nova until the stack overflows (1,422
+  levels and a tree of 133 KB for a layout of two nodes, measured). The first
+  breaks an app that has a stored layout under `frame` or under `canvas/`;
+  none of the five lab apps has. Its changeset line says so.
 - **The shell host calls nova's `setCanvasLayout` no longer.** The name of the
   shell's layout is given when the shell is built, and a changed layout is a
   changed ref.
-- **Not decided, the owner's to say:**
-  - Which shells take a saved frame: the app's own shell only, or a page's
-    too.
-  - Whether a saved frame has to keep a slot for every canvas the shell
-    manifest declares.
-  - Whether a layout that names `frame` or `canvas/<id>` by `{ ref }` is
-    refused, as one that names `action/<id>` is. Until it is, such a ref draws
-    the layout kept there, where before it drew nothing.
-  - A shell manifest with no `layout` has no frame to take the place of. By
-    the rule of step 3 (a saved layout fills a ref the build has) no frame
-    can be saved for it.
+- **A saved frame is the app's own shell's.** A row says `ref: 'frame'` and
+  not which shell, and a page's frame places other canvases. So a page draws
+  the layout it declares, and is a screen no saved frame changes. A row that
+  says which shell can be added without breaking this.
+- **A frame is not held to having a slot for every canvas its manifest
+  declares.** A canvas a frame leaves out is drawn nowhere. The check was
+  considered and left out: it can only read a slot whose id is written out, it
+  forbids leaving a canvas out on purpose, and, as a saved layout is checked
+  again whenever a shell is built, a deploy that adds a canvas would stop
+  every saved frame from being drawn. An app that wants it checks the layout
+  in its own function before it saves.
+- **A shell manifest with no `layout` has no frame to take the place of.** An
+  open shell could start drawing a saved one, and could not go back to nova's
+  own when it is taken back: nova has no call for that and does not export
+  its own.
+- **Moss gives a shell no canvas, where this plan had an adopt add one**
+  (`addCanvas`, part 5 and step 9). Nova gives a shell a canvas when something
+  is first pushed onto it, and keeps such a canvas out of the canvases a frame
+  loops over (`$.canvases`). Built with `addCanvas`, a canvas a slot named
+  joined that loop, and a frame that loops over the canvases, nova's own among
+  them, drew it twice: once by the loop and once by the slot (the review found
+  it, and it was run). So an adopt only takes out: a canvas the manifest does
+  not declare, that a layout held a slot for, once none does.
+- **Every layout a shell is built from counts for a slot**, the build's and
+  a saved or generated one alike: an action's that the principal holds, a
+  fragment's, a canvas's, the frame, one the app keeps in its layout store. So
+  an app that saves nothing notices one thing: a canvas its manifest does not
+  declare, that an action's layout has a slot for, is taken out of an open
+  shell once that action leaves it. It stayed before, drawn nowhere.
+- **What each layout holds a slot for is read once and kept** with the layout
+  document (a `WeakMap`). Reading every layout each time a shell is asked for
+  took 3.4 ms for 200 layouts of 150 nodes, on the thread every session
+  shares; kept, 0.005 ms.
+- **A layout is named by a node that is `{ ref }` and nothing else.** A `ref`
+  a component carries, on its node or in its props, names none: the check
+  read every record with a `ref` before, which no prop collided with while
+  the only names were under `action/`, and `frame` is a word a prop may hold.
+- **A `layout`, or a canvas's `actionLayout`, that is the name of a stored
+  layout is handed over as it is**, and one written as `null` is none. Nothing
+  is kept under `frame` for such a shell, and no frame is saved for it.
+- **A frame that names a ref nothing is kept under is saved.** Nova draws its
+  error box in that place (`LAYOUT_REF_NOT_FOUND`) and the rest of the frame,
+  as it does in an action's layout.
+- **Not built:** saving the layout of a canvas, and of a page's shell.
 
 **Step 6 as built.**
 
