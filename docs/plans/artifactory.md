@@ -2,7 +2,7 @@
 
 **Status: Proposed (2026-10-12), ready to build from. What it has to do
 (part 2) and its ten design decisions (part 9) are the owner's and are
-settled. Steps 1 to 5 of part 6 are built (2026-10-13), on the branch
+settled. Steps 1 to 6 of part 6 are built (2026-10-13), on the branch
 `worktree-artifactory`; nothing else is. Part 0 is for whoever builds it, part 6 is the
 build, step by step, and part 7 is what needs the owner's word before it is
 touched.**
@@ -636,10 +636,25 @@ action, which is to be proposed on its own, because it changes the live list
 and what a boot verifies; a fragment of one's own in the place of a shipped
 one; saving and opening in one call, which is the draft's (step 6).
 
-**Step 6. The draft.** In the shell, on the function session (part 5, "The
-draft"). Lyceum shows it. Relay's builder, atrium's preview and lyceum's two
-layouts move from `@niscorp/moss/unverified` onto it; the entry stays. *Done
-when:* those three no longer import it, and what they did still works.
+**Step 6. The draft. Built (2026-10-13)**, in moss, and no app uses it yet
+(the owner's: lyceum is wired to it in a session of its own, and no app is
+touched while it works). `session.draft` (`manifest/app.ts`) has `put`,
+`list`, `remove`, `show`, `discard` and `save`. The draft is kept by the shell
+it is in (`shells/draft.ts`): its steps, and which one is shown. The shell
+asks for what it is made of with what its draft holds (`composition`, and
+`artifactsFor` lays it over what was saved, `artifactory/draft.ts`), and a
+change to the draft is awaited (`adoptDraft`, `shells/host.ts`). What is put
+is checked, and a draft is saved, by what a session's save is made of
+(`draftSaving`, `artifactory/draft.ts`). *Tests that failed first:*
+`server-draft.test.ts`. *Done when:* what is put into a draft is on that one
+screen when the put answers and nowhere else, and one call saves it.
+*Not in this step any more:* relay's builder, atrium's preview and lyceum's
+two layouts stay on `@niscorp/moss/unverified`, which they were to leave. Read
+on 2026-10-13, none of the three is something a draft takes: the actions
+relay's model builds replay queries the model wrote (step 7); atrium previews
+another app's layout with components its own shell has none of; lyceum's two
+calls switch a layout of the shell's own store for one session, which is
+neither generated nor saved.
 
 **Step 7. Generated reads that are saved.** Needs part 7's two items for vex
 and strata first. A saved read is the query and its mapping's prism config,
@@ -676,7 +691,7 @@ Ask with the concrete change, at the step that needs it.
 | **moss, `NiscApp`:** functions declared by name with a description | today `functions(session)` is one map whose names are not known before a session | 8 |
 | **charter:** one part, which functions the generated actions of a role may call | the charter decides what a generated action may run | 8 |
 | **moss, the fabric:** one more message, "bring this principal's shells level" | a person's own save reaches their screens in another process; the message says what to do, and nothing about why | 4, built: `adopt` |
-| **moss, the function session:** the draft, and saving | the names are the owner's to hear before they are built | 4 built: `session.artifacts`; 6 |
+| **moss, the function session:** the draft, and saving | the names are the owner's to hear before they are built | 4 built: `session.artifacts`; 6 built: `session.draft` |
 | **moss, `MossServer`:** `defaults(publisher)` | publishing is the app's own server code's, and no session's | 4b, built |
 
 Nova owes nothing. Its reflection (`describeInstance`, which the devtools use)
@@ -688,11 +703,12 @@ shell. On the whole shell (`unverifiedShell`) they see the ref.
 
 - How many versions of one artifact are kept, how large a body may be, and
   when pruning runs. Measure before proposing a number.
-- What lyceum shows in step 6. The owner's to say.
+- What lyceum shows with the draft. The owner's to say, and to build in a
+  session of lyceum's own.
 - Relay's assistant still runs an engine of its own over `vex_cache`, for the
-  queries its model writes. It moves onto the draft (step 6) and onto saved
-  reads (step 7), which is where a query a model wrote gets a place in the
-  artifactory.
+  queries its model writes. It moves onto saved reads (step 7), which is
+  where a query a model wrote gets a place in the artifactory, and onto the
+  draft with them.
 - `nisc migrate` gives its pass, for an entry that was already broken before a
   run, to an entry that has a copy in `vex_cache`: one an earlier release
   wrote, or one an app writes itself for an engine of its own. The pass goes
@@ -704,6 +720,37 @@ shell. On the whole shell (`unverifiedShell`) they see the ref.
   published is what can be generated. And a published default wins over a
   build that is deployed later, until it is taken back. Both follow from what
   is decided, and are said here so that nobody is surprised by them.
+
+**Step 6 as built.**
+
+- **A session nobody is signed in to has no draft.** A draft is what is to be
+  saved, and nobody saves nothing.
+- **A draft layout fills `action/<id>`, as a saved one does.** A layout of the
+  shell's own store (lyceum's `xray` and `renderer`) is not something a draft
+  holds.
+- **A step is the whole draft after it**, kept in the shell's memory, with no
+  bound on how many there are. A shell that is dropped drops them.
+- **`save` saves the step that is shown**, which is the last one unless
+  `show` moved it.
+- **Calls on one draft are taken in turn.**
+- **What is put into a draft is held to what its own shell can draw**, where a
+  save is held to what any shell of the app can. So a put is in the shell
+  whenever it answers.
+- **The draft is as it is to be only once the shell has taken it.** A change
+  to it that the shell could not take leaves both as they were. Where the
+  shell has adopted a later answer while this one was asked for, it is asked
+  for again.
+- **An adopt is the shell's it was asked for.** One that was asked for before
+  the draft moved is asked for again with the draft as it is. One that is
+  answered after a reset replaced its shell is dropped, where before step 6
+  it was applied to the new shell: its answer holds the old shell's draft,
+  and the new shell adopts for itself where it is behind.
+- **A put that marks a layout in use takes the mark off the draft's others for
+  that ref**, as a save does. Two of one put marked for one ref are refused.
+- **The draft's code is in two modules**, as the draft is: the shell keeps it
+  (`shells/draft.ts`, and the adopt in `shells/host.ts`), and the artifactory
+  checks and saves it (`artifactory/draft.ts`). `shells` may not import
+  `artifactory`, so the server hands the second to the first.
 
 **Step 5 as built.**
 
