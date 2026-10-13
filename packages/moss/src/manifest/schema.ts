@@ -3,7 +3,7 @@ import { ActionDefinitionSchema, ActionFragmentSchema, LayoutNodeSchema } from '
 import { ConfigSchema } from '@niscorp/prism';
 import { SequenceSchema, depthRefusal, exceedsDepth } from '@niscorp/strata';
 import { MutationDefinitionSchema, QuerySchema, REFRESH_MODES } from '@niscorp/vex';
-import { ACTION_LAYOUT_NAME_REFUSAL, GENERATED_ID_PREFIX, isActionLayoutRef } from './app';
+import { GENERATED_ID_PREFIX, keptLayoutNameRefusal } from './app';
 import type { NiscApp } from './app';
 
 const seam = z.custom<(...args: never[]) => unknown>((value) => typeof value === 'function', 'expected a function');
@@ -36,7 +36,10 @@ const CanvasSchema = z
 
 const ComponentContractSchema = z.looseObject({ meta: z.looseObject({ description: z.string().optional() }).optional() });
 
-const storedLayoutName = z.string().refine((name) => !isActionLayoutRef(name), { message: ACTION_LAYOUT_NAME_REFUSAL });
+const storedLayoutName = z.string().superRefine((name, ctx) => {
+  const refusal = keptLayoutNameRefusal(name);
+  if (refusal !== undefined) ctx.addIssue({ code: 'custom', message: refusal });
+});
 
 const shippedFragmentId = z.string().refine((id) => !id.startsWith(GENERATED_ID_PREFIX), { message: `an id beginning with "${GENERATED_ID_PREFIX}" is where what somebody generated is kept` });
 

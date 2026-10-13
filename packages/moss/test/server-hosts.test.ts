@@ -27,7 +27,8 @@ const words: ActionDefinition = {
 };
 const wordsAll: SeedEntry = { fingerprint: 'words/all', dsl: { from: ['words'], fields: ['words.id'] } };
 
-const docs = { path: '/docs', canvases: [{ id: 'main', initial: 'words' }], layout: frameNamed('the page, as shipped') };
+const staged: LayoutNode = { component: 'Stage', props: { name: 'the canvas, as shipped' }, children: [{ component: 'ActionSlot', props: { instanceId: '$.active.id' } }] };
+const docs = { path: '/docs', canvases: [{ id: 'main', initial: 'words', actionLayout: staged }], layout: frameNamed('the page, as shipped') };
 const app: NiscApp = {
   charter: { public: ['words'] },
   actions: { words },
@@ -83,8 +84,7 @@ describe('the shell hosts — what a shell is made of is asked of the running ma
           const made = await shipped.artifactsFor(shell, who);
           return {
             ...made,
-            frame: frameNamed('as published', true),
-            layoutStore: { ...made.layoutStore, dock: dockSaying('the dock, as published') },
+            layoutStore: { ...made.layoutStore, frame: frameNamed('as published', true), dock: dockSaying('the dock, as published') },
             fragments: { sheet: sheetNamed('as published') },
             entries: new Map([[wordsAll.fingerprint, { ...wordsAll, refresh: 'reactive' as const }]]),
           };
@@ -154,13 +154,15 @@ describe('the shell hosts — what a shell is made of is asked of the running ma
         ...shipped,
         artifactsFor: async (shell, who) => {
           asked.push(shell);
-          return { ...(await shipped.artifactsFor(shell, who)), frame: frameNamed('the page, as published') };
+          const made = await shipped.artifactsFor(shell, who);
+          return { ...made, layoutStore: { ...made.layoutStore, frame: frameNamed('the page, as published') } };
         },
       }),
     );
     try {
       const snapshot = await hosts.pageAt('/docs')?.host.snapshot(null, null);
       expect(JSON.stringify(snapshot?.frame)).toContain('the page, as published');
+      expect(JSON.stringify(snapshot?.trees['main'])).toContain('"name":"the canvas, as shipped"');
       expect(asked).toEqual([docs]);
     } finally {
       hosts.stop();
@@ -206,7 +208,7 @@ describe('the shell hosts — a change reaches the living shells of every host',
         artifactsFor: async (shell, who) => {
           const made = await shipped.artifactsFor(shell, who);
           if (!answering.published) return made;
-          return { ...made, frame: frameNamed('as published', true), layoutStore: { ...made.layoutStore, dock: dockSaying('the dock, as published') }, fragments: { sheet: sheetNamed('as published') } };
+          return { ...made, layoutStore: { ...made.layoutStore, frame: frameNamed('as published', true), dock: dockSaying('the dock, as published') }, fragments: { sheet: sheetNamed('as published') } };
         },
       }),
     );

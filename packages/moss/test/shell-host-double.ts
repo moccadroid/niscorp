@@ -1,5 +1,5 @@
 import type { ActionDefinition, FetchFn, LayoutNode } from '@niscorp/nova';
-import { shellComponents } from '../src/artifactory/artifacts';
+import { shellComponents, shellWithStoredLayouts } from '../src/artifactory/artifacts';
 import { actionsWithStoredLayouts, definitionsFor } from '../src/artifactory/roles';
 import type { NiscApp, ShellManifest } from '../src/manifest';
 import { createShellHost } from '../src/shells';
@@ -33,14 +33,14 @@ export const hostConfig = (setup: HostSetup): ShellHostConfig => {
     composition: async (principal) => {
       const who = await setup.resolve(principal);
       const held = actionsWithStoredLayouts(definitionsFor(actions(), who.catalog.ids, who.variants));
+      const { layouts: ofShell, ...named } = shellWithStoredLayouts(shell);
       return {
         roles: who.roles,
         scope: who.scope,
         actions: held.actions,
         components: shellComponents({ actions: actions(), layouts: app.layouts }, shell),
-        canvases: shell.canvases,
-        ...(shell.layout !== undefined ? { frame: shell.layout } : {}),
-        layoutStore: { ...shell.layoutStore, ...held.layouts },
+        ...named,
+        layoutStore: { ...shell.layoutStore, ...ofShell, ...held.layouts },
         ...(shell.fragments !== undefined ? { fragments: shell.fragments } : {}),
         ...(setup.entries !== undefined ? { entries: setup.entries } : {}),
       };

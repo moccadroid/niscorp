@@ -133,6 +133,21 @@ describe('the manifest’s schema', () => {
     ]);
   });
 
+  it('refuses a layout store name under which the shell’s layout or a canvas’s is kept, in the app’s shell and in a page’s', () => {
+    const plainLayout = { component: 'Text', children: 'plain' };
+    const misfits = manifestMisfits({
+      ...whole(),
+      shell: { canvases: [], layoutStore: { 'frame.dock': plainLayout, canvas: plainLayout, frame: plainLayout, 'canvas/main': plainLayout } },
+      pages: { about: { path: '/about', canvases: [], layoutStore: { frame: plainLayout, 'canvas/side': plainLayout } } },
+    });
+    expect(misfits).toEqual([
+      'shell.layoutStore.frame: "frame" is where the layout of the shell is kept',
+      'shell.layoutStore.canvas/main: a name beginning with "canvas/" is where the layout of that canvas is kept',
+      'pages.about.layoutStore.frame: "frame" is where the layout of the shell is kept',
+      'pages.about.layoutStore.canvas/side: a name beginning with "canvas/" is where the layout of that canvas is kept',
+    ]);
+  });
+
   it('refuses a fragment under an id that is moss’s to give, in the app’s shell and in a page’s', () => {
     const chrome = { kind: 'fragment', id: 'x', layout: { component: 'Stack', children: [{ slot: 'body' }] } };
     const misfits = manifestMisfits({

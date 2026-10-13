@@ -278,8 +278,9 @@ describe('what a set of roles holds', () => {
       actions: { home, panel: { id: 'panel', layout: { component: 'Text', children: 'base' } } },
       layouts: { 'panel.wide': { action: 'panel', layout: wide } },
     };
+    const listed = { component: 'Text', children: 'each of the side canvas' };
     const shell: ShellManifest = {
-      canvases: [{ id: 'main', initial: 'home' }],
+      canvases: [{ id: 'main', initial: 'home' }, { id: 'side', mode: 'list', actionLayout: listed }, { id: 'rail', actionLayout: 'dock' }],
       layout: { component: 'Frame', children: [{ component: 'CanvasSlot', props: { canvasId: 'main' } }, { ref: 'dock' }] },
       layoutStore: { dock: { component: 'Text', children: 'dock' } },
       fragments: { sheet: { kind: 'fragment', id: 'sheet', layout: { component: 'Sheet', children: [{ slot: 'body' }] } } },
@@ -290,17 +291,20 @@ describe('what a set of roles holds', () => {
     const made = await manifest.artifactsFor(shell, nobody(['member']));
     expect(Object.keys(made.actions)).toEqual(['home', 'panel']);
     expect(made.actions['panel']?.layout).toEqual({ ref: 'action/panel' });
-    expect(made.canvases).toBe(shell.canvases);
-    expect(made.frame).toBe(shell.layout);
-    expect(Object.keys(made.layoutStore ?? {})).toEqual(['dock', 'action/panel']);
+    expect(made.canvases).toEqual([{ id: 'main', initial: 'home' }, { id: 'side', mode: 'list', actionLayout: 'canvas/side' }, { id: 'rail', actionLayout: 'dock' }]);
+    expect(made.frame).toBe('frame');
+    expect(Object.keys(made.layoutStore ?? {})).toEqual(['dock', 'frame', 'canvas/side', 'action/panel']);
     expect(made.layoutStore?.['dock']).toBe(shell.layoutStore?.['dock']);
+    expect(made.layoutStore?.['frame']).toBe(shell.layout);
+    expect(made.layoutStore?.['canvas/side']).toBe(listed);
+    expect(shell.canvases[1]?.actionLayout).toBe(listed);
     expect(made.layoutStore?.['action/panel']).toBe(wide);
     expect(made.fragments).toBe(shell.fragments);
     expect([...made.entries.keys()]).toEqual(['deals/open']);
     expect(Object.keys(made.components).sort()).toEqual(['ActionSlot', 'CanvasSlot', 'Frame', 'Sheet', 'Text']);
 
     const forPage = await manifest.artifactsFor(page, nobody(['public']));
-    expect(forPage.canvases).toBe(page.canvases);
+    expect(forPage.canvases).toEqual(page.canvases);
     expect('frame' in forPage || 'fragments' in forPage).toBe(false);
     expect(forPage.layoutStore).toEqual({});
     expect(Object.keys(forPage.actions)).toEqual(['home']);

@@ -3,7 +3,7 @@ import type { CacheEntry, SeedEntry, SeedMutation } from '@niscorp/vex';
 import { actionOfLayoutRef, candidateOf, entriesOf, entryMisfits, freezeDeep, refusalOf, verifyManifest } from '../manifest';
 import type { DraftArtifact, KitComponents, ManifestCandidate, ManifestReport, SessionArtifacts, ShellManifest, ShippedManifest } from '../manifest';
 import type { ShellArtifacts } from './artifacts';
-import { shellComponents } from './artifacts';
+import { shellComponents, shellWithStoredLayouts } from './artifacts';
 import { draftSaving, laidOver } from './draft';
 import { compileEntries, createEntriesInForce } from './entries';
 import { createGeneration } from './generation';
@@ -342,11 +342,11 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       const underVariants: LayoutHeldTo = { ...drawable, actionAt: (ref) => (variants.has(actionOfLayoutRef(ref) ?? '') ? undefined : drawable.actionAt(ref)) };
       const everybodys = layoutsInUse(await publishedNow(), { whose: 'published for everybody', heldTo: underVariants, say: sayOnce });
       const fragments = Object.keys(theirOwn.fragments).length === 0 ? shell.fragments : { ...shell.fragments, ...theirOwn.fragments };
+      const { layouts: ofShell, ...named } = shellWithStoredLayouts(shell);
       return {
         actions: theirOwn.all.actions,
-        canvases: shell.canvases,
-        ...(shell.layout !== undefined ? { frame: shell.layout } : {}),
-        layoutStore: { ...shell.layoutStore, ...theirOwn.all.layouts, ...everybodys, ...theirs },
+        ...named,
+        layoutStore: { ...shell.layoutStore, ...ofShell, ...theirOwn.all.layouts, ...everybodys, ...theirs },
         ...(fragments !== undefined ? { fragments } : {}),
         entries: entries.byFingerprint(),
         components: components.of(shell),

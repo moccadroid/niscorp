@@ -2,16 +2,34 @@ import { ACTION_SLOT_NAME, CANVAS_SLOT_NAME } from '@niscorp/nova';
 import type { ActionDefinition, ActionFragment, LayoutNode } from '@niscorp/nova';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import { componentsOf } from '@niscorp/nova/reflect';
+import { FRAME_LAYOUT_REF, canvasLayoutRef } from '../manifest';
 import type { NiscApp, ShellCanvas, ShellManifest } from '../manifest';
 
 export type ShellArtifacts = {
   actions: Readonly<Record<string, ActionDefinition>>;
   canvases: readonly ShellCanvas[];
-  frame?: LayoutNode;
+  // The name the layout store keeps the shell's layout under, where its manifest declares one.
+  frame?: string;
   layoutStore: Readonly<Record<string, LayoutNode>>;
   fragments?: Readonly<Record<string, ActionFragment>>;
   entries: ReadonlyMap<string, SeedEntry | SeedMutation>;
   components: Readonly<Record<string, NonNullable<ShellManifest['components']>[string]>>;
+};
+
+type ShellStoredLayouts = Pick<ShellArtifacts, 'canvases' | 'frame'> & { layouts: Readonly<Record<string, LayoutNode>> };
+
+export const shellWithStoredLayouts = (shell: ShellManifest): ShellStoredLayouts => {
+  const layouts: Record<string, LayoutNode> = {};
+  if (shell.layout !== undefined) layouts[FRAME_LAYOUT_REF] = shell.layout;
+  const canvases = shell.canvases.map((canvas) => {
+    const layout = canvas.actionLayout;
+    // A string is already the name of a layout the store holds.
+    if (layout === undefined || typeof layout === 'string') return canvas;
+    const ref = canvasLayoutRef(canvas.id);
+    layouts[ref] = layout;
+    return { ...canvas, actionLayout: ref };
+  });
+  return { canvases, ...(shell.layout !== undefined ? { frame: FRAME_LAYOUT_REF } : {}), layouts };
 };
 
 type Contract = NonNullable<ShellManifest['components']>[string];

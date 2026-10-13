@@ -5,13 +5,11 @@ import type { DraftState } from './draft';
 import type { ShellComposition, ShellConnection, ShellHostConfig, ShellOpening } from './types';
 
 export type ShellLayouts = {
-  frame?: LayoutNode;
   layoutStore: Readonly<Record<string, LayoutNode>>;
   fragments: Readonly<Record<string, ActionFragment>>;
 };
 
-export const layoutsOf = (made: Pick<ShellComposition, 'frame' | 'layoutStore' | 'fragments'>): ShellLayouts => ({
-  ...(made.frame !== undefined ? { frame: made.frame } : {}),
+export const layoutsOf = (made: Pick<ShellComposition, 'layoutStore' | 'fragments'>): ShellLayouts => ({
   layoutStore: made.layoutStore ?? {},
   fragments: made.fragments ?? {},
 });

@@ -71,10 +71,12 @@ somebody authored (its actions, its frame and layout store, its fragments, the
 entries its reads replay) is answered by the running manifest in one function,
 for a shell and a principal with their roles (`artifactsFor`, `src/artifactory/running.ts`). A shell is built
 from that answer and adopts it: an adopt puts in place the actions that are
-held now, and the frame, each `{ ref }` of the layout store and each fragment
-that the answer says differently from the last time. Every action's layout is
-one of those refs: the answer holds it in the layout store under
-`action/<id>`, and the definition names it. So a layout is changed by setting
+held now, and each `{ ref }` of the layout store and each fragment that the
+answer says differently from the last time. Every layout the shell draws is
+one of those refs, under the name of what draws it: the answer holds an
+action's in the layout store under `action/<id>`, and the definition names
+it; the shell's own is under `frame` and a canvas's under `canvas/<id>`
+(`shellWithStoredLayouts`, `src/artifactory/artifacts.ts`). So a layout is changed by setting
 a ref, which a screen that is open follows with its data kept, and not by
 registering the action again, which only a screen opened afterwards sees. It
 is also how a saved layout reaches a screen: under an action's ref the answer

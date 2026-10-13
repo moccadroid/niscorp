@@ -176,6 +176,18 @@ export const GENERATED_ID_PREFIX = 'generated.';
 
 export const ACTION_LAYOUT_NAME_REFUSAL = 'a name beginning with "action/" is where the layout of that action is kept';
 
+export const FRAME_LAYOUT_REF = 'frame';
+
+export const canvasLayoutRef = (canvasId: string): string => `canvas/${canvasId}`;
+
+// Why a layout store an app declares cannot have this name, where moss keeps a layout of its shell under it.
+export const keptLayoutNameRefusal = (name: string): string | undefined => {
+  if (isActionLayoutRef(name)) return ACTION_LAYOUT_NAME_REFUSAL;
+  if (name === FRAME_LAYOUT_REF) return `"${FRAME_LAYOUT_REF}" is where the layout of the shell is kept`;
+  if (name.startsWith('canvas/')) return 'a name beginning with "canvas/" is where the layout of that canvas is kept';
+  return undefined;
+};
+
 export const entriesOf = (app: Pick<NiscApp, 'entries'>): readonly (SeedEntry | SeedMutation)[] => app.entries ?? [];
 
 export const wearableOf = (app: Pick<NiscApp, 'wearable' | 'assignments'>): readonly (readonly string[])[] => {

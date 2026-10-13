@@ -56,8 +56,7 @@ const sameDocument = (one: unknown, other: unknown): boolean => one === other ||
 
 // Only what is answered differently than last time is set: a shell's own code
 // changes these while it runs (`shell.setLayout`), and an adopt must not undo
-// that. Nova cannot remove a frame: one that left stays. A ref or a fragment
-// that is answered no longer is taken out.
+// that. A ref or a fragment that is answered no longer is taken out.
 const takeLayouts = (live: Live, made: ShellComposition): void => {
   const taken = live.layouts;
   const answered = layoutsOf(made);
@@ -73,7 +72,6 @@ const takeLayouts = (live: Live, made: ShellComposition): void => {
   for (const id of Object.keys(taken.fragments)) {
     if (!Object.hasOwn(answered.fragments, id)) live.shell.removeAction(id);
   }
-  if (answered.frame !== undefined && !sameDocument(taken.frame, answered.frame)) live.shell.setCanvasLayout(answered.frame);
   live.layouts = answered;
 };
 

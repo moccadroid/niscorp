@@ -1603,7 +1603,7 @@ describe('shells — adopt', () => {
     const framed = (name: string): LayoutNode => ({ component: 'Frame', props: { name }, children: [{ component: 'CanvasSlot', props: { canvasId: 'main' } }, { ref: 'dock' }, { ref: 'rail' }] });
     const sheet = (title: string): ActionFragment => ({ kind: 'fragment', id: 'sheet', layout: { component: 'Sheet', props: { title }, children: [{ slot: 'body' }] } });
     const layoutsWorld = () => {
-      const answer = { frame: framed('first'), layoutStore: { dock: text('the dock, first'), rail: text('the rail, first') }, fragments: { sheet: sheet('first') } };
+      const answer = { frame: 'frame', layoutStore: { frame: framed('first'), dock: text('the dock, first'), rail: text('the rail, first') }, fragments: { sheet: sheet('first') } };
       const config = hostConfig({ ...ctx, app: base, resolve: async () => ({ roles: ['member'], scope: {}, catalog: { ids: ['home'] }, variants: new Map() }) });
       const host = standHost({
         ...config,
@@ -1624,7 +1624,7 @@ describe('shells — adopt', () => {
       await settle();
       expect(lastFrame(connection)).toContain('"name":"first"');
 
-      answer.frame = framed('second');
+      answer.layoutStore.frame = framed('second');
       answer.layoutStore.dock = text('the dock, second');
       answer.fragments.sheet = sheet('second');
       host.adopt();

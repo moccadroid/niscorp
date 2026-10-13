@@ -141,7 +141,7 @@ boot, and so does a variant of an action the app does not have.
 type ShellManifest = {
   canvases: ShellCanvas[];        // a canvas's `initial` may be a CANDIDATE list
   layout?: LayoutNode;            // the frame — CanvasSlot markers, served verbatim
-  layoutStore?: Record<string, LayoutNode>;   // what a `{ ref: id }` in the frame resolves to at boot; no name begins with `action/`
+  layoutStore?: Record<string, LayoutNode>;   // what a `{ ref: id }` in the frame resolves to at boot; no name is `frame` or begins with `action/` or `canvas/`
   fragments?: Record<string, ActionFragment>;
   inputs?: (session: { principal, actions, roles, identity, wire }) =>
     Record<string, Record<string, unknown>> | Promise<…>;
@@ -947,6 +947,19 @@ is handed over as it is. Three things follow:
   cannot draw another's.
 - **The layout of an action that leaves a shell leaves its store.**
 
+**The shell's own layout and a canvas's are kept there too**, under `frame`
+and `canvas/<the canvas's id>`. An app goes on writing `layout` in its shell
+manifest and `actionLayout` in a canvas; where a shell is built, moss moves
+each into the store and the shell draws it by that name. A shell manifest with
+no `layout` has no `frame` in its store and is drawn with nova's own, and a
+canvas whose `actionLayout` is already the name of a stored layout, or that
+has none, is handed over as it is. Both names belong to moss in a layout
+store, as `action/` does: a manifest whose `layoutStore`, the app's shell's or
+a page's, declares one refuses the boot (`shell.layoutStore.frame: "frame" is
+where the layout of the shell is kept`, `shell.layoutStore.canvas/main: a name
+beginning with "canvas/" is where the layout of that canvas is kept`). Neither
+can be saved yet: `session.artifacts` keeps a layout for an action.
+
 **The manifest is read first.** Before a table is created or a row is read,
 `createServer` parses the manifest with a schema, and a manifest that does not
 parse refuses the boot:
@@ -1720,10 +1733,10 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
   is not exported). It is handed no manifest and no
   runtime, but a typed object of what it needs: one function that answers what
   a principal's shell is made of (who they are, the action definitions they
-  hold, each naming its layout by ref, the canvases, the frame, the layout
-  store's seed with those layouts in it (the published one over the build's,
-  their roles' layout variant over that, and over it the layout of their own
-  they marked in use), the
+  hold, the canvases and the frame, each naming its layout in the layout
+  store, the layout store's seed with those layouts in it (for an action the
+  published one over the build's, their roles' layout variant over that, and
+  over it the layout of their own they marked in use), the
   fragments, the entries, the component names), the
   app's code a shell calls (`inputs`, `seeds`, `phrases`, `functions`,
   `onSession`, `runs`), the wire for a token, and its limits. Everything in
@@ -1767,10 +1780,11 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
     page's host is everybody's. Definitions that arrived or changed are
     registered and mounted instances keep their state; one that left, or is no
     longer granted, is removed and its instances unmounted. The shell's own
-    layouts are taken from the same answer: the frame, each `{ ref }` of the
-    layout store and each fragment that is answered differently from the last
-    time is put in place, and every attached terminal is sent the frame. An
-    action's own layout is one of those refs, so a screen that is open shows a
+    layouts are taken from the same answer: each `{ ref }` of the layout
+    store and each fragment that is answered differently from the last time
+    is put in place, and every attached terminal is sent the frame. The
+    shell's layout, a canvas's and an
+    action's own layout are each one of those refs, so a screen that is open shows a
     layout that changed, with its data kept, and a ref that is answered no
     longer is taken out of the store. One
     that is answered as it was is left alone, so a ref the shell's own code

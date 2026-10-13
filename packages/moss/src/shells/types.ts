@@ -10,7 +10,8 @@ export type ShellComposition = {
   scope: Record<string, unknown>;
   actions: Readonly<Record<string, ActionDefinition>>;
   canvases: readonly ShellCanvas[];
-  frame?: LayoutNode;
+  // The name of the shell's layout in the layout store. With none, nova's own is drawn.
+  frame?: string;
   layoutStore?: Readonly<Record<string, LayoutNode>>;
   fragments?: Readonly<Record<string, ActionFragment>>;
   entries?: ReadonlyMap<string, SeedEntry | SeedMutation>;
