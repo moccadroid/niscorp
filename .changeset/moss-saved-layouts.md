@@ -14,4 +14,4 @@ Moss keeps a layout that was generated while the app runs, for the person who sa
 - **Two tables, in migration `nisc.moss/5`: `artifact_saves` and `artifacts`.** A deployment that boots with `migrations: 'verify'` runs `nisc migrate` first, as for every migration. An app whose database already has a table by either name renames its own before it takes this release.
 - **The fabric carries one more message, `adopt`**: it names a principal and tells a process to bring the shells it holds for them level. A process that runs an earlier release drops it as a message it does not know, as it drops every such message.
 - Not built yet: a default that is saved for everybody; saving an action, a fragment or a vex read; the layout of the frame or of a canvas; a draft.
-- The CLI and `@niscorp/nisc` change in the moss they bring.
+- The CLI and `@niscorp/nisc` change in the moss they bring. `AGENTS.md` gains rule 7b: how a layout generated while the app runs is saved, and that the charter decides who may.
