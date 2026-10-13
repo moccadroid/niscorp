@@ -19,7 +19,7 @@ const appWith = (more: Partial<NiscApp>): NiscApp => ({
   ...more,
 });
 
-const assemble = async (app: NiscApp, more: Partial<NiscRuntime> = {}, artifactEntries?: Data['artifactEntries']) => {
+const assemble = async (app: NiscApp, more: Partial<NiscRuntime> = {}, artifactEntries?: Data['artifactEntries'], pointer?: Data['pointer']) => {
   const double = await engineDouble();
   const built = nothingSavedIn(
     createDataWith(
@@ -27,11 +27,26 @@ const assemble = async (app: NiscApp, more: Partial<NiscRuntime> = {}, artifactE
       { db: double.db, charter: app.charter, featureTables: featureTablesOf(app) },
     ),
   );
-  const data = artifactEntries === undefined ? built : { ...built, artifactEntries };
+  const data = { ...built, ...(artifactEntries === undefined ? {} : { artifactEntries }), ...(pointer === undefined ? {} : { pointer }) };
   return assembleServer({ app, runtime: { pool: { query: async () => ({ rows: [] }) }, db: double.db, session: 'dev-open', ...more }, session: whoseToken, revokeSessions: undefined, data });
 };
 
 const whoseToken = (token: string): string | null => (token.startsWith('t_') ? token.slice(2) : null);
+
+// What the database does for the artifactory's entries, as far as these cases go: one version of each
+// artifact is written, so what is in force is every row of the caller. No entry names a principal: whose
+// a row is, is the `userId` of the scope it is replayed with, and who made it the `artifactSavedBy`.
+const rowsKept = (kept: Record<string, unknown>[] = []): { kept: Record<string, unknown>[]; entries: Data['artifactEntries'] } => ({
+  kept,
+  entries: async () => async (fingerprint, context, scope) => {
+    const versions = context['versions'];
+    expect(Object.keys(context)).not.toContain('principal');
+    if (fingerprint === 'artifactory/save' && Array.isArray(versions)) {
+      for (const version of versions) kept.push({ ...version, save: context['save'], principal: scope?.['userId'], by: scope?.['artifactSavedBy'], created_at: new Date(0) });
+    }
+    return fingerprint === 'artifactory/in-force' ? kept.filter((row) => row['principal'] === scope?.['userId']) : [];
+  },
+});
 
 const intervalsDuring = async (run: () => Promise<unknown>): Promise<{ made: unknown[]; left: unknown[]; outcome: unknown }> => {
   const set = vi.spyOn(globalThis, 'setInterval');
@@ -180,17 +195,7 @@ describe('the server, assembled — what holds only because of where a line stan
     quiet();
     const sessions = new Map<string | null, FunctionSession>();
     const carried: unknown[] = [];
-    const kept: Record<string, unknown>[] = [];
-    // One version of each artifact is written here, so what is in force is every row of the caller.
-    // No entry names a principal: whose a row is, is the `userId` of the scope it is replayed with.
-    const saved: Data['artifactEntries'] = async () => async (fingerprint, context, scope) => {
-      const versions = context['versions'];
-      expect(Object.keys(context)).not.toContain('principal');
-      if (fingerprint === 'artifactory/save' && Array.isArray(versions)) {
-        for (const version of versions) kept.push({ ...version, save: context['save'], principal: scope?.['userId'], created_at: new Date(0) });
-      }
-      return fingerprint === 'artifactory/in-force' ? kept.filter((row) => row['principal'] === scope?.['userId']) : [];
-    };
+    const { kept, entries: saved } = rowsKept();
     const asBuilt = { component: 'Text', children: 'as built' };
     const asMaraHasIt = { component: 'Text', children: 'as mara has it' };
     const app = appWith({
@@ -209,10 +214,102 @@ describe('the server, assembled — what holds only because of where a line stan
 
       await vi.waitFor(() => expect(maras?.shell.layoutStore.get('action/home')).toEqual(asMaraHasIt));
       expect(bens?.shell.layoutStore.get('action/home')).toEqual(asBuilt);
-      expect(kept.map((row) => row['principal'])).toEqual(['i_mara']);
+      expect(kept.map((row) => [row['principal'], row['by']])).toEqual([['i_mara', 'i_mara']]);
       expect(carried).toEqual([{ kind: 'adopt', principal: 'i_mara', origin: expect.any(String) }]);
     } finally {
       server.close();
+    }
+  });
+
+  it('a layout published with `server.defaults` reaches every open shell and is kept as everybody’s, by whoever published; the fabric carries nothing for it', async () => {
+    quiet();
+    const carried: unknown[] = [];
+    const { kept, entries } = rowsKept();
+    const asBuilt = { component: 'Text', children: 'as built' };
+    const asPublished = { component: 'Text', children: 'as published' };
+    const server = await assemble(
+      appWith({ actions: { home: { id: 'home', layout: asBuilt } } }),
+      { fabric: { publish: (message) => void carried.push(message), subscribe: () => undefined } },
+      entries,
+    );
+    try {
+      const maras = await server.shells?.session('t_i_mara', 'i_mara');
+      const nobodys = await server.shells?.session(null, null);
+
+      await server.defaults('i_pat').save([{ kind: 'layout', body: { ref: 'action/home', layout: asPublished, use: true } }]);
+
+      await vi.waitFor(() => expect(maras?.shell.layoutStore.get('action/home')).toEqual(asPublished));
+      await vi.waitFor(() => expect(nobodys?.shell.layoutStore.get('action/home')).toEqual(asPublished));
+      expect(kept.map((row) => [row['principal'], row['by']])).toEqual([['*', 'i_pat']]);
+      expect(carried).toEqual([]);
+
+      const nobody = 'moss: `defaults` is handed who publishes. What is published is everybody’s, and who published it is kept with it.';
+      expect(() => server.defaults('')).toThrow(nobody);
+      expect(() => server.defaults(null as unknown as string)).toThrow(nobody);
+    } finally {
+      server.close();
+    }
+  });
+
+  it('a server that boots reads what is published, and a boot that cannot read it fails', async () => {
+    quiet();
+    const asPublished = { component: 'Text', children: 'as published' };
+    const before = [{ kind: 'layout', id: 'a-default', body: { ref: 'action/home', layout: asPublished, use: true }, save: '0b0e7a52-6f0e-4b8e-9d0c-1f2e3a4b5c6d', principal: '*', created_at: new Date(0) }];
+    const app = appWith({ actions: { home: { id: 'home', layout: { component: 'Text', children: 'as built' } } } });
+    const server = await assemble(app, {}, rowsKept(before).entries);
+    try {
+      expect((await server.shells?.session('t_i_mara', 'i_mara'))?.shell.layoutStore.get('action/home')).toEqual(asPublished);
+    } finally {
+      server.close();
+    }
+
+    const unread: Data['artifactEntries'] = async () => () => Promise.reject(new Error('the database went away'));
+    const { left, outcome } = await intervalsDuring(() => assemble(app, {}, unread));
+    expect(outcome).toMatchObject({ message: 'the database went away' });
+    expect(left).toEqual([]);
+  });
+
+  // Read before the pointer is watched, a publish another process made while the features started would be
+  // neither read nor followed: the pointer's first look is where it counts from.
+  it('what is published is read once the generation pointer is watched', async () => {
+    quiet();
+    const order: string[] = [];
+    const entries: Data['artifactEntries'] = async () => async (fingerprint, _context, scope) => {
+      if (fingerprint === 'artifactory/in-force' && scope?.['userId'] === '*') order.push('what is published is read');
+      return [];
+    };
+    const pointer = { read: async () => (order.push('the pointer is looked at'), 0), move: async () => true };
+    const server = await assemble(appWith({}), {}, entries, pointer);
+    try {
+      expect(order.slice(0, 2)).toEqual(['the pointer is looked at', 'what is published is read']);
+    } finally {
+      server.close();
+    }
+  });
+
+  it('no caller is the principal what is published is kept under: for one whose `userId` says so no shell is built, and no read or write of the app’s is run', async () => {
+    quiet();
+    const everybody = appWith({ charter: { public: { actions: ['home'], data: ['notes.read'] } }, entries: [READ_NOTES], scope: () => ({ userId: '*' }) });
+    const server = await assemble(everybody);
+    const somebody = await assemble({ ...everybody, scope: () => ({}) });
+    const read = { method: 'POST', headers: { authorization: 'Bearer t_i_mara', 'content-type': 'application/json' }, body: JSON.stringify({ fingerprint: 'notes/all', context: {} }) };
+    try {
+      await expect(server.shells?.session('t_i_mara', 'i_mara')).rejects.toThrow(
+        'moss: a caller’s `userId` is "*", and that is whose the rows published for everybody are. No caller is it: the app’s sign-in or its `scope` answers another.',
+      );
+      expect((await server.request('/api/vex', read)).status).toBe(500);
+      expect((await somebody.request('/api/vex', read)).status).toBe(200);
+    } finally {
+      server.close();
+      somebody.close();
+    }
+
+    // Nor does a caller's scope say who made a save.
+    const forging = await assemble({ ...everybody, scope: () => ({ artifactSavedBy: 'somebody-else' }) });
+    try {
+      expect((await forging.request('/api/vex', read)).status).toBe(500);
+    } finally {
+      forging.close();
     }
   });
 

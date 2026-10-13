@@ -79,10 +79,14 @@ a ref, which a screen that is open follows with its data kept, and not by
 registering the action again, which only a screen opened afterwards sees. It
 is also how a saved layout reaches a screen: under an action's ref the answer
 holds the principal's own layout that is marked in use, else the layout
-variant their roles hold, else the build's. The first two tables of the
+variant their roles hold, else the one published for everybody, else the
+build's. The first two tables of the
 library are built for that: a row for each save and a row for each version it
 holds, never changed (`src/artifactory/saves.ts`). A row is its principal's,
-and vex keeps it so. (The canvases are what a
+and vex keeps it so. What is published for everybody is the rows of one
+principal no caller is, under that same rule: publishing is the save a person
+makes, made by the app's own server code as that principal
+(`server.defaults`), and no second mechanism. (The canvases are what a
 shell starts with: an adopt does not take them again, a reset does.) The
 entries vex replays it asks the running manifest for as well, before its own
 cache table; nothing else in moss reads one of the four off what the app
@@ -306,7 +310,7 @@ that made the table:
 |---|---|---|---|
 | `sessions` | `identity` | `identity/sessions.ts`: five statements straight to the pool, before anybody is signed in | Its table is made in `data`'s one migration run, from a sequence `identity` declares |
 | `moss_generation` | `data` | `data/own-entries.ts`: two entries, one that reads and one that moves | `artifactory` decides when it moves (`artifactory/generation.ts`), through a function `data` hands over |
-| `artifact_saves`, `artifacts` | `artifactory` | `artifactory/saves.ts`: three vex entries and the row rule they run under, replayed through a function `data` hands over (`Data.artifactEntries`) | The two tables are made by the core's sequence (`data/tables.ts`, `nisc.moss/5`). Their rows are somebody's, unlike the pointer's: the entries are replayed with the caller's scope, and vex keeps every read and write to the rows whose `principal` is the caller's `userId`. Moss updates and deletes no row, so a stored body is not rewritten when a grammar moves: it is brought to the current grammars where it is read |
+| `artifact_saves`, `artifacts` | `artifactory` | `artifactory/saves.ts`: three vex entries and the row rule they run under, replayed through a function `data` hands over (`Data.artifactEntries`) | The two tables are made by the core's sequence (`data/tables.ts`, `nisc.moss/5`). Their rows are somebody's, unlike the pointer's: the entries are replayed with the caller's scope, and vex keeps every read and write to the rows whose `principal` is the caller's `userId`. What is published for everybody is the rows of the principal `*`, replayed with that as the `userId` by the server's own code and by no caller. Moss updates and deletes no row, so a stored body is not rewritten when a grammar moves: it is brought to the current grammars where it is read |
 | `integrations`, `integration_actions` | the `integrations` feature | `integrations/entries.ts`: vex entries, replayed through the seam the feature is handed | The two tables are made by the core's own sequence (`data/tables.ts`, `nisc.moss`): that is the history every database has run, and it is not edited. The documents stored in `integration_actions` are brought to the current grammars by `data`, which holds the pool, when the feature asks through its seam |
 
 `data` holds the engine and the one ledgered migration run, so every owner's

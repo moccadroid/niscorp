@@ -23,6 +23,13 @@ export type LayoutHeldTo = {
   kit: KitComponents;
 };
 
+export type InUseFor = {
+  // Whose the layouts are, as a line says it of one that is left out: "of ada".
+  whose: string;
+  heldTo: LayoutHeldTo;
+  say?: (line: string) => void;
+};
+
 export const refOf = (body: unknown): string | undefined => {
   const ref = isRecord(body) ? body['ref'] : undefined;
   return typeof ref === 'string' ? ref : undefined;
@@ -55,12 +62,12 @@ export const readLayout = (body: unknown, heldTo: LayoutHeldTo): { layout: Saved
 
 // A layout whose ref the store does not keep is not loaded, and nothing is said:
 // its action left, or its holder has it no longer.
-const loaded = (version: SavedVersion, principal: string, heldTo: LayoutHeldTo): SavedLayout | undefined => {
+const loaded = (version: SavedVersion, { whose, heldTo, say }: InUseFor): SavedLayout | undefined => {
   const ref = refOf(version.body);
   if (ref === undefined || heldTo.actionAt(ref) === undefined) return undefined;
   const read = version.unread !== undefined ? { refusal: version.unread } : readLayout(version.body, heldTo);
   if ('layout' in read) return read.layout;
-  console.error(`[moss] the layout "${version.id}" of ${principal} is left out: ${read.refusal}`);
+  (say ?? console.error)(`[moss] the layout "${version.id}" ${whose} is left out: ${read.refusal}`);
   return undefined;
 };
 
@@ -70,7 +77,7 @@ const isLater = (one: SavedVersion, other: SavedVersion): boolean => (one.create
 
 // Of several marked in use for one ref the latest counts: two saves at once can
 // each leave theirs marked, and the next save takes the mark off all but its own.
-export const layoutsInUse = (inForce: readonly SavedVersion[], principal: string, heldTo: LayoutHeldTo): Readonly<Record<string, LayoutNode>> => {
+export const layoutsInUse = (inForce: readonly SavedVersion[], drawnFor: InUseFor): Readonly<Record<string, LayoutNode>> => {
   const marked = new Map<string, SavedVersion>();
   for (const version of inForce.filter(isInUse)) {
     const ref = refOf(version.body);
@@ -80,7 +87,7 @@ export const layoutsInUse = (inForce: readonly SavedVersion[], principal: string
   }
   const layouts: Record<string, LayoutNode> = {};
   for (const version of marked.values()) {
-    const read = loaded(version, principal, heldTo);
+    const read = loaded(version, drawnFor);
     if (read !== undefined) layouts[read.ref] = read.layout;
   }
   return layouts;

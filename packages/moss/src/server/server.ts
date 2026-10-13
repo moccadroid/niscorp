@@ -4,7 +4,7 @@ import type { Identity } from '../identity';
 import { createData, featureTablesOf } from '../data';
 import type { Data } from '../data';
 import { SAVE_ENTRIES, SAVE_ROW_RULES, createRunningManifest, savedRowsOver } from '../artifactory';
-import type { RunningManifest } from '../artifactory';
+import type { RunningManifest, RunningManifestConfig } from '../artifactory';
 import { receiveManifest } from '../manifest';
 import type { NiscApp } from '../manifest';
 import type { NiscRuntime, SessionVerifier } from '../runtime';
@@ -81,7 +81,8 @@ export const assembleServer = async (deps: ServerDeps): Promise<MossServer> => {
 };
 
 const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerDeps, stops: (() => void)[]): Promise<MossServer> => {
-  const running = await buildRunningManifest(app, runtime, data);
+  const saved = savedRowsOver(await data.artifactEntries(SAVE_ENTRIES, SAVE_ROW_RULES), data.grammars);
+  const running = await buildRunningManifest(app, runtime, data, saved.published().inForce);
   stops.push(running.stop);
 
   const identity = buildIdentity(app, runtime, data);
@@ -93,8 +94,7 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerD
   const registered = emptyRegister();
   mountRoutes(server, { app, session, credentials: registered.credentials, identity, running, data });
 
-  const savedAs = savedRowsOver(await data.artifactEntries(SAVE_ENTRIES, SAVE_ROW_RULES), data.grammars);
-  const hosts = buildShellHosts({ app, runtime, identity, running, data, savedAs, wire: createInternalWire(server), wrapWire: composeWireWraps(registered), revokeSessions });
+  const hosts = buildShellHosts({ app, runtime, identity, running, data, savedAs: saved.of, wire: createInternalWire(server), wrapWire: composeWireWraps(registered), revokeSessions });
   stops.push(hosts.stop);
 
   const signals = buildSignals({ fabric: runtime.fabric, identity, reset: hosts.reset, adopt: hosts.adoptFor, deliver: hosts.deliver });
@@ -116,6 +116,9 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerD
   // Watched only once the features have started: a set of actions a feature
   // hands over while it starts moves nobody's pointer.
   running.watch();
+  // After the pointer is watched: read before it, a publish another process
+  // made while the features started would be neither read nor followed.
+  await running.readPublished();
 
   const socket = buildSocket({ runtime, session, identity, running, hosts });
   stops.push(socket.stop);
@@ -130,6 +133,12 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerD
     replaceActions: running.replace,
     replaceEntries: running.replaceEntries,
     actions: running.actions,
+    defaults: (publisher: string) => {
+      if (typeof publisher !== 'string' || publisher === '') {
+        throw new Error('moss: `defaults` is handed who publishes. What is published is everybody’s, and who published it is kept with it.');
+      }
+      return running.publishedArtifacts(saved.published(publisher));
+    },
     catalogOf: async (principal: string | null) => {
       const resolved = await identity.resolve(principal);
       return running.catalogFor(resolved.roles, resolved.installed);
@@ -155,6 +164,7 @@ export const buildRunningManifest = async (
   app: NiscApp,
   runtime: Pick<NiscRuntime, 'sessionRevalidateMs'>,
   data: Pick<Data, 'grants' | 'dropOnChange' | 'pointer' | 'entriesHeldBy'>,
+  published?: RunningManifestConfig['published'],
 ): Promise<RunningManifest> => {
   const running = createRunningManifest({
     shipped: app,
@@ -162,6 +172,7 @@ export const buildRunningManifest = async (
     // Polled on the clock a socket's credential is re-verified on.
     pointer: { read: data.pointer.read, move: data.pointer.move, ...(runtime.sessionRevalidateMs !== undefined ? { everyMs: runtime.sessionRevalidateMs } : {}) },
     shells: [...(app.shell !== undefined ? [app.shell] : []), ...Object.values(app.pages ?? {})],
+    ...(published !== undefined ? { published } : {}),
   });
   data.dropOnChange(running.onChange);
   data.entriesHeldBy({ get: running.cacheEntry, entries: running.cacheEntries });

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Context, MiddlewareHandler } from 'hono';
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { callerScope } from '../artifactory';
 import type { RunningManifest } from '../artifactory';
 import type { Data } from '../data';
 import type { Identity } from '../identity';
@@ -32,7 +33,7 @@ export const mountRoutes = (server: Hono<Env>, { app, session, credentials, iden
     '/',
     data.routes<Env>({
       resources: app.resources,
-      scope: (c) => identity.composeScope(c.get('principal'), c.get('resolved')),
+      scope: (c) => callerScope(identity.composeScope(c.get('principal'), c.get('resolved'))),
       caller: (c) => c.get('resolved'),
     }),
   );

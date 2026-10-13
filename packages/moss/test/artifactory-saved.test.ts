@@ -1,11 +1,13 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
 import { depthRefusal } from '@niscorp/strata';
 import { z } from 'zod';
-import { createRunningManifest } from '../src/artifactory';
+import { createRunningManifest, savedRowsOver } from '../src/artifactory';
 import type { RunningManifest } from '../src/artifactory';
 import type { RunningManifestConfig } from '../src/artifactory/running';
+import type { SavedVersion } from '../src/artifactory/saves';
+import { createGrammarUpgrader } from '../src/data/engine';
 import type { NiscApp, SessionArtifacts, ShellManifest } from '../src/manifest';
 import { rowsDouble } from './saved-double';
 import type { RowsDouble } from './saved-double';
@@ -45,19 +47,23 @@ type World = {
   running: RunningManifest;
   rows: RowsDouble;
   of: (principal: string | null, roles?: readonly string[]) => SessionArtifacts;
+  published: SessionArtifacts;
   storeOf: (principal: string | null, roles?: readonly string[]) => Promise<Readonly<Record<string, LayoutNode>>>;
 };
 
 const world = (more: Partial<RunningManifestConfig> = {}, rows: RowsDouble = rowsDouble()): World => {
-  const running = createRunningManifest({ shipped: app, grants: scopeGrants([]), shells: [SHELL], ...more });
+  const running = createRunningManifest({ shipped: app, grants: scopeGrants([]), shells: [SHELL], published: () => rows.as('*').inForce(), ...more });
   return {
     running,
     rows,
+    published: running.publishedArtifacts(rows.as('*')),
     of: (principal, roles = ['member']) => running.sessionArtifacts(principal, async () => ({ roles, installed: undefined, saved: rows.as(principal ?? 'nobody') })),
     storeOf: async (principal, roles = ['member']) =>
       (await running.artifactsFor(SHELL, { principal, roles, installed: undefined, ...(principal === null ? {} : { saved: rows.as(principal) }) })).layoutStore,
   };
 };
+
+const forAll = (ref: string, text: string): { kind: 'layout'; body: unknown } => ({ kind: 'layout', body: { ref, layout: saying(text), use: true } });
 
 const mine = (text: string, use?: boolean): { kind: 'layout'; body: unknown } => ({ kind: 'layout', body: { ref: 'action/home', layout: saying(text), ...(use === undefined ? {} : { use }) } });
 
@@ -124,12 +130,12 @@ describe('a layout saved from a session', () => {
     expect((await storeOf('ada'))['action/home']).toEqual(home.layout);
   });
 
-  it('asks for a principal’s rows when their shell is asked for, and asks nothing for nobody', async () => {
+  it('asks for a principal’s rows when their shell is asked for, and asks nothing for nobody but what is published, which is asked once', async () => {
     const { storeOf, rows } = world();
     await storeOf(null, ['public']);
-    expect(rows.asked).toEqual([]);
+    expect(rows.asked).toEqual(['*']);
     await storeOf('ada');
-    expect(rows.asked).toEqual(['ada']);
+    expect(rows.asked).toEqual(['*', 'ada']);
   });
 
   it('tells whoever follows that principal, and nobody who follows what the app consists of: the generation pointer stays where it is', async () => {
@@ -266,7 +272,7 @@ describe('what is refused, in a sentence, with nothing written', () => {
   });
 
   it('an id that is not one of theirs', () =>
-    refused(({ of }) => of('ada').save([{ ...mine('x'), id: 'somebody-elses' }]), 'moss: no layout "somebody-elses" is yours. Leave the id out, and moss gives a new layout its id.'));
+    refused(({ of }) => of('ada').save([{ ...mine('x'), id: 'somebody-elses' }]), 'moss: there is no layout "somebody-elses" of yours. Leave the id out, and moss gives a new layout its id.'));
 
   it('two of one save marked in use for one ref', () =>
     refused(({ of }) => of('ada').save([mine('one', true), mine('two', true)]), 'moss: two layouts of one save are marked in use for "action/home". One is in use at a time.'));
@@ -287,7 +293,7 @@ describe('what is refused, in a sentence, with nothing written', () => {
     expect(await ben.history('layout', id)).toEqual([]);
     await expect(ben.restore('layout', id, saved.save)).rejects.toThrow(`moss: no layout "${id}" of yours was saved in "${saved.save}".`);
     await expect(ben.reset('layout', id)).rejects.toThrow(`moss: no layout "${id}" of yours is in force.`);
-    await expect(ben.save([{ ...mine('x'), id }])).rejects.toThrow(`moss: no layout "${id}" is yours.`);
+    await expect(ben.save([{ ...mine('x'), id }])).rejects.toThrow(`moss: there is no layout "${id}" of yours.`);
     expect(rows.rows).toHaveLength(written);
   });
 });
@@ -354,6 +360,18 @@ describe('a saved layout that does not pass any more', () => {
       expect(said.mock.calls).toEqual([['[moss] the layout "newer" of ada is left out: it was written in a newer grammar than this server runs']]);
     }));
 
+  it('a published one is left out the same way, with a line that is said once and not at every shell', () =>
+    saidWhile(async (said) => {
+      const rows = rowsDouble();
+      await stored(rows, '*', 'broken', { ref: 'action/home', layout: { component: 'Carousel' }, use: true });
+      const { storeOf, running } = world({}, rows);
+      await running.readPublished();
+
+      expect((await storeOf('ada'))['action/home']).toEqual(home.layout);
+      expect((await storeOf('ben'))['action/home']).toEqual(home.layout);
+      expect(said.mock.calls).toEqual([['[moss] the layout "broken" published for everybody is left out: layout uses "Carousel", which this app has no component for']]);
+    }));
+
   it('is not written again when another is marked in use: it would carry this server’s stamp over a grammar it is not in', async () => {
     const rows = rowsDouble();
     await stored(rows, 'ada', 'newer', { ref: 'action/home', layout: saying('from a newer grammar'), use: true });
@@ -413,6 +431,234 @@ describe('a saved layout that does not pass any more', () => {
     await ada.reset('layout', spare.artifacts[0]?.id ?? '');
 
     expect((await storeOf('ada'))['action/home']).toEqual(saying('in use'));
+  });
+});
+
+describe('a layout published for everybody', () => {
+  it('is drawn for everybody who holds its action: under one’s own in use and the layout variant of one’s roles, over the build’s', async () => {
+    const { of, published, storeOf } = world();
+    await of('ada').save([mine('home, as ada has it', true)]);
+    await published.save([forAll('action/home', 'home, as published')]);
+
+    expect((await storeOf('ben'))['action/home']).toEqual(saying('home, as published'));
+    expect((await storeOf(null, ['public']))['action/home']).toEqual(saying('home, as published'));
+    expect((await storeOf('ada'))['action/home']).toEqual(saying('home, as ada has it'));
+    expect((await storeOf('lea', ['lead']))['action/home']).toEqual(saying('home, the leads’ variant'));
+  });
+
+  it('is announced whether or not this process can read the rows afterwards, and a read that failed is made again by the next shell', async () => {
+    const rows = rowsDouble();
+    const away = { reads: 0 };
+    const reader = async (): Promise<SavedVersion[]> => {
+      if (away.reads > 0) {
+        away.reads -= 1;
+        throw new Error('the database went away');
+      }
+      return rows.as('*').inForce();
+    };
+    const moved = vi.fn(async () => true);
+    const { published, storeOf, running } = world({ published: reader, pointer: { read: async () => 0, move: moved, everyMs: 60_000 } }, rows);
+    running.watch();
+    try {
+      const changed = vi.fn();
+      running.onChange(changed);
+      away.reads = 1;
+
+      await published.save([forAll('action/home', 'home, as published')]);
+
+      expect(changed).toHaveBeenCalledTimes(1);
+      await vi.waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
+      await expect(storeOf('ben')).rejects.toThrow('the database went away');
+      expect((await storeOf('ben'))['action/home']).toEqual(saying('home, as published'));
+      await expect(running.readPublished()).resolves.toBeUndefined();
+      away.reads = 1;
+      await expect(running.readPublished()).rejects.toThrow('the database went away');
+    } finally {
+      running.stop();
+    }
+  });
+
+  it('of two publishes close together the later is drawn, though a read of the rows begun before it answers after it', async () => {
+    const rows = rowsDouble();
+    const held: (() => void)[] = [];
+    const holding = { reads: false };
+    const reader = async (): Promise<SavedVersion[]> => {
+      const read = await rows.as('*').inForce();
+      if (holding.reads) await new Promise<void>((release) => held.push(release));
+      return read;
+    };
+    const { published, storeOf } = world({ published: reader }, rows);
+    await published.save([forAll('action/home', 'the first')]);
+    holding.reads = true;
+    const early = storeOf('ben');
+    await vi.waitFor(() => expect(held).toHaveLength(1));
+    holding.reads = false;
+
+    await published.save([forAll('action/home', 'the second')]);
+
+    expect((await storeOf('cy'))['action/home']).toEqual(saying('the second'));
+    held[0]?.();
+    expect((await early)['action/home']).toEqual(saying('the first'));
+    expect((await storeOf('dan'))['action/home']).toEqual(saying('the second'));
+  });
+
+  it('one for an action that only some hold is drawn for them, and is not loaded for the rest', async () => {
+    const { published, storeOf } = world();
+    await published.save([forAll('action/desk', 'desk, as published')]);
+
+    expect((await storeOf('lea', ['lead']))['action/desk']).toEqual(saying('desk, as published'));
+    expect(Object.keys(await storeOf('ada'))).not.toContain('action/desk');
+  });
+
+  it('is kept as rows no session reaches, and one read of them answers every shell until the next publish', async () => {
+    const { of, published, storeOf, rows } = world();
+    const saved = await published.save([forAll('action/home', 'home, as published')]);
+    const id = saved.artifacts[0]?.id ?? '';
+
+    expect(rows.rows.map((row) => row.principal)).toEqual(['*']);
+    expect(await of('ada').list()).toEqual([]);
+    expect(await of('ada').history('layout', id)).toEqual([]);
+    await expect(of('ada').reset('layout', id)).rejects.toThrow(`moss: no layout "${id}" of yours is in force.`);
+    await expect(of('ada').save([{ ...mine('x', true), id }])).rejects.toThrow(`moss: there is no layout "${id}" of yours.`);
+    expect(rows.rows).toHaveLength(1);
+
+    rows.asked.length = 0;
+    await storeOf('ben');
+    await storeOf('cy');
+    expect(rows.asked).toEqual(['ben', '*', 'cy']);
+  });
+
+  it('has the calls a person’s has: several are kept and one is in use, each publish is a version, and a reset shows the build’s again', async () => {
+    const { published, storeOf } = world();
+    const first = await published.save([forAll('action/home', 'the first')]);
+    const second = await published.save([forAll('action/home', 'the second')]);
+    const [firstId, secondId] = [first.artifacts[0]?.id ?? '', second.artifacts[0]?.id ?? ''];
+    const inUse = async (): Promise<string[]> => (await published.list()).filter((version) => JSON.stringify(version.body).includes('"use":true')).map((version) => version.id);
+
+    expect((await storeOf('ben'))['action/home']).toEqual(saying('the second'));
+    expect((await published.list('layout')).map((version) => version.id).sort()).toEqual([firstId, secondId].sort());
+    expect(await inUse()).toEqual([secondId]);
+
+    const restored = await published.restore('layout', firstId, first.save);
+    expect((await storeOf('ben'))['action/home']).toEqual(saying('the first'));
+    expect(await inUse()).toEqual([firstId]);
+    expect((await published.history('layout', firstId)).map((version) => version.save)).toEqual([restored.save, second.save, first.save]);
+
+    await published.reset('layout', firstId);
+    expect((await storeOf('ben'))['action/home']).toEqual(home.layout);
+    expect((await published.list()).map((version) => version.id)).toEqual([secondId]);
+  });
+
+  it('tells whoever follows what the app consists of, and nobody who follows one principal; the generation pointer moves, so that every process reads it', async () => {
+    const moved = vi.fn(async () => true);
+    const { published, running } = world({ pointer: { read: async () => 0, move: moved, everyMs: 60_000 } });
+    running.watch();
+    try {
+      const changed = vi.fn();
+      const changedFor = vi.fn();
+      running.onChange(changed);
+      running.onChangeFor(changedFor);
+
+      await published.save([forAll('action/home', 'home, as published')]);
+
+      expect(changed).toHaveBeenCalledTimes(1);
+      expect(changedFor).not.toHaveBeenCalled();
+      await vi.waitFor(() => expect(moved).toHaveBeenCalledTimes(1));
+    } finally {
+      running.stop();
+    }
+  });
+
+  it('what is refused of a publish, in a sentence, with nothing written', async () => {
+    const { of, published, rows } = world();
+    const nothingUnder = (ref: string): string => `moss: the layout for "${ref}" is refused: nothing is kept under "${ref}". A saved layout takes the place of the layout of an action its holder has, under "action/<the action’s id>".`;
+    await expect(published.save([forAll('action/gone', 'x')])).rejects.toThrow(nothingUnder('action/gone'));
+    await expect(published.save([forAll('action/docked', 'x')])).rejects.toThrow(nothingUnder('action/docked'));
+    await expect(published.save([forAll('dock', 'x')])).rejects.toThrow(nothingUnder('dock'));
+    await expect(published.save([{ kind: 'layout', body: { ref: 'action/home', layout: { component: 'Carousel' }, use: true } }])).rejects.toThrow(
+      'moss: the layout for "action/home" is refused: layout uses "Carousel", which this app has no component for',
+    );
+    await expect(published.save([{ kind: 'layout', body: { ref: 'action/form', layout: saying('with the control left out'), use: true } }])).rejects.toThrow(
+      'moss: the layout for "action/form" is refused: trigger listens on ref "send" but no layout node carries it',
+    );
+    expect(rows.rows).toEqual([]);
+
+    const adas = await of('ada').save([mine('home, as ada has it', true)]);
+    const id = adas.artifacts[0]?.id ?? '';
+    await expect(published.save([{ ...forAll('action/home', 'x'), id }])).rejects.toThrow(
+      `moss: there is no layout "${id}" published for everybody. Leave the id out, and moss gives a new layout its id.`,
+    );
+    await expect(published.reset('layout', id)).rejects.toThrow(`moss: no layout "${id}" published for everybody is in force.`);
+    await expect(published.restore('layout', id, adas.save)).rejects.toThrow(`moss: no layout "${id}" published for everybody was saved in "${adas.save}".`);
+    expect(await published.list()).toEqual([]);
+    expect(rows.rows.map((row) => row.principal)).toEqual(['ada']);
+  });
+});
+
+describe('what is published, in a deployment of several processes', () => {
+  const EVERY_MS = 1_000;
+  const aMoment = (): Promise<unknown> => vi.advanceTimersByTimeAsync(EVERY_MS);
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a process reads it from the rows when it boots, and again when the generation pointer moves', async () => {
+    const at = { n: 0 };
+    const pointer = {
+      read: async () => at.n,
+      move: async (from: number) => {
+        if (at.n !== from) return false;
+        at.n += 1;
+        return true;
+      },
+      everyMs: EVERY_MS,
+    };
+    const rows = rowsDouble();
+    const here = world({ pointer }, rows);
+    await here.published.save([forAll('action/home', 'home, as published')]);
+    const there = world({ pointer }, rows);
+    try {
+      await there.running.readPublished();
+      expect((await there.storeOf('ben'))['action/home']).toEqual(saying('home, as published'));
+
+      here.running.watch();
+      there.running.watch();
+      await aMoment();
+      const told = vi.fn();
+      there.running.onChange(told);
+
+      await here.published.save([forAll('action/home', 'published again')]);
+      await aMoment();
+
+      expect(told).toHaveBeenCalledTimes(1);
+      expect((await there.storeOf('ben'))['action/home']).toEqual(saying('published again'));
+    } finally {
+      here.running.stop();
+      there.running.stop();
+    }
+  });
+});
+
+describe('whose rows a call reaches', () => {
+  it('a caller’s with their scope, what is published as everybody’s with who published it, and no caller is everybody', async () => {
+    const replayed: Record<string, unknown>[] = [];
+    const rowsOf = savedRowsOver(async (_fingerprint, _context, scope = {}) => (replayed.push(scope), []), await createGrammarUpgrader({}));
+
+    await rowsOf.of({ userId: 'ada', studioId: 's_1' }).inForce();
+    await rowsOf.published('pat').write({ id: 'a-save', versions: [] });
+    await rowsOf.published().inForce();
+
+    expect(replayed).toEqual([{ userId: 'ada', studioId: 's_1', artifactSavedBy: 'ada' }, { userId: '*', artifactSavedBy: 'pat' }, { userId: '*' }]);
+    // Who made a save is moss's to say: a caller's scope that says it, as an app's `scope` could, is refused.
+    expect(() => rowsOf.of({ userId: 'ada', artifactSavedBy: 'pat' })).toThrow(
+      'moss: a caller’s scope carries `artifactSavedBy`. Who made a save is written from that value, and it is moss’s to say: the app’s `scope` names its own otherwise.',
+    );
+    expect(() => rowsOf.of({ userId: '*' })).toThrow(
+      'moss: a caller’s `userId` is "*", and that is whose the rows published for everybody are. No caller is it: the app’s sign-in or its `scope` answers another.',
+    );
   });
 });
 

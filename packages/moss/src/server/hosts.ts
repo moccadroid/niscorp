@@ -1,6 +1,7 @@
 import type { FetchFn } from '@niscorp/nova';
 import type { Hono } from 'hono';
 import { VEX_LIVE_ENV } from '@niscorp/vex/hono';
+import { callerScope } from '../artifactory';
 import type { RunningManifest, SavedRows } from '../artifactory';
 import { createWireFollower } from '../data';
 import type { Data } from '../data';
@@ -64,7 +65,7 @@ const hostConfig = (deps: ShellHostsDeps, shell: ShellManifest, kept: boolean): 
     wrapWire: deps.wrapWire,
     answerIntent: async (principal, writers, asked) => {
       const resolved = await identity.resolve(principal);
-      return data.answerIntent(writers, asked, resolved, identity.composeScope(principal, resolved));
+      return data.answerIntent(writers, asked, resolved, callerScope(identity.composeScope(principal, resolved)));
     },
     ...(deps.revokeSessions !== undefined ? { revokeSessions: deps.revokeSessions } : {}),
     ...(runtime.telemetry !== undefined ? { telemetry: runtime.telemetry } : {}),

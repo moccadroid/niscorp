@@ -5,6 +5,7 @@ import type { ScopePolicy, SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { ExecuteAs } from '../data';
 import type { IdentityRecord, IdentityReport, ResolvedIdentity } from '../identity';
 import type { Catalog } from '../artifactory';
+import type { SessionArtifacts } from '../manifest';
 import type { ShellHost } from '../shells';
 import type { SocketAccept } from '../socket';
 
@@ -20,6 +21,11 @@ export type MossServer = Hono<Env> & {
   replaceActions: (source: string, actions: Record<string, ActionDefinition>) => void;
   replaceEntries: (source: string, entries: readonly (SeedEntry | SeedMutation)[]) => Promise<void>;
   actions: () => Readonly<Record<string, ActionDefinition>>;
+  // What is published for everybody, with the calls a session's `artifacts` has.
+  // `publisher`: who a publish is made by. No session reaches these rows: only
+  // the app's own code on the server calls this, and its charter says who holds
+  // the action that does.
+  defaults: (publisher: string) => SessionArtifacts;
   catalogOf: (principal: string | null) => Promise<Catalog>;
   policyForRoles: (roles: readonly string[]) => ScopePolicy;
   charterReport: () => VerifyReport;

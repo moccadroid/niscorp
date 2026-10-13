@@ -9,11 +9,10 @@ import { createGeneration } from './generation';
 import type { Generation, Pointer } from './generation';
 import { layoutsInUse } from './layouts';
 import type { LayoutHeldTo } from './layouts';
-import { createRoleMemo, narrowedBy } from './roles';
-import type { Catalog, CatalogFilter } from './roles';
-import type { SavedRows } from './saves';
-import { createSessionArtifacts } from './session';
-import type { Caller, RolesHeld } from './session';
+import { actionsWithStoredLayouts, createRoleMemo, narrowedBy } from './roles';
+import type { Catalog, CatalogFilter, StoredLayouts } from './roles';
+import type { SavedRows, SavedVersion } from './saves';
+import { savedArtifacts } from './session';
 
 type Actions = Readonly<Record<string, ActionDefinition>>;
 
@@ -26,7 +25,14 @@ export type RunningManifestConfig = {
   pointer?: Pointer & { everyMs?: number };
   // Every shell the app has: what one of them can draw, a saved layout may name.
   shells: readonly ShellManifest[];
+  // What is published for everybody and in force, asked of the rows.
+  published?: () => Promise<readonly SavedVersion[]>;
 };
+
+export type RolesHeld = { roles: readonly string[]; installed: readonly string[] | undefined };
+
+// Whoever a session is for, as the server resolved them: what they hold, and their rows.
+export type Caller = RolesHeld & { saved: SavedRows };
 
 // `saved`: the rows of that principal. Nobody signed in has none.
 export type Who = RolesHeld & { principal: string | null; saved?: SavedRows };
@@ -53,6 +59,12 @@ export type RunningManifest = {
   catalogFor: (roles: readonly string[], installed: readonly string[] | undefined) => Catalog;
   artifactsFor: (shell: ShellManifest, who: Who) => Promise<ShellArtifacts>;
   sessionArtifacts: (principal: string | null, callerOf: () => Promise<Caller>) => SessionArtifacts;
+  // `saved`: the rows of what is published, with whoever publishes.
+  publishedArtifacts: (saved: SavedRows) => SessionArtifacts;
+  // Asks the rows what is published, so that a boot that cannot read it fails.
+  // One answer serves every shell until this process publishes or the pointer
+  // moves: the next shell then asks again.
+  readPublished: () => Promise<void>;
   onChangeFor: (listener: (principal: string) => void) => () => void;
   generation: () => number;
   stop: () => void;
@@ -156,21 +168,39 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   // A layout is saved for every shell its holder may open, and drawn by one:
   // at a save it is held to what any shell of the app can draw, and when a shell
   // is built to what that shell can.
-  const heldTo = (held: RolesHeld, shell?: ShellManifest): LayoutHeldTo => {
-    const { actions, layouts } = roleMemo.storedLayoutsFor(held.roles, held.installed);
-    return {
-      kit: shell === undefined ? (ofTheApp ??= componentsOf(config.shells)) : componentsOf([shell]),
-      actionAt: (ref) => {
-        const id = actionOfLayoutRef(ref);
-        const action = id !== undefined && Object.hasOwn(actions, id) ? actions[id] : undefined;
-        const layout = Object.hasOwn(layouts, ref) ? layouts[ref] : undefined;
-        return action === undefined || layout === undefined ? undefined : { ...action, layout };
-      },
-    };
-  };
+  const heldTo = ({ actions, layouts }: StoredLayouts, shell?: ShellManifest): LayoutHeldTo => ({
+    kit: shell === undefined ? (ofTheApp ??= componentsOf(config.shells)) : componentsOf([shell]),
+    actionAt: (ref) => {
+      const id = actionOfLayoutRef(ref);
+      const action = id !== undefined && Object.hasOwn(actions, id) ? actions[id] : undefined;
+      const layout = Object.hasOwn(layouts, ref) ? layouts[ref] : undefined;
+      return action === undefined || layout === undefined ? undefined : { ...action, layout };
+    },
+  });
   const listeners = new Set<() => void>();
   const listenersFor = new Set<(principal: string) => void>();
   let pointer: Generation | undefined;
+
+  let published: Promise<readonly SavedVersion[]> | undefined;
+  // The line of one that is left out is said once for each read of the rows, and not at every shell.
+  let saidOfPublished = new Set<string>();
+  const dropPublished = (): void => {
+    published = undefined;
+    saidOfPublished = new Set();
+  };
+  const publishedNow = (): Promise<readonly SavedVersion[]> => {
+    if (published !== undefined) return published;
+    const read = (async () => (await config.published?.()) ?? [])();
+    published = read;
+    // A read that failed is made again by the next shell.
+    read.catch(dropPublished);
+    return read;
+  };
+  const sayOnce = (line: string): void => {
+    if (saidOfPublished.has(line)) return;
+    saidOfPublished.add(line);
+    console.error(line);
+  };
 
   const applySets = (arrived: ReadonlyMap<string, Actions>, announce: boolean): void => {
     const next = new Map([...sets, ...arrived]);
@@ -194,15 +224,9 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   const reload = async (): Promise<void> => {
     const read: [string, Actions][] = [];
     for (const [source, load] of loaders) read.push([source, await load()]);
+    dropPublished();
     applySets(new Map(read), false);
   };
-
-  const sessionArtifacts = createSessionArtifacts({
-    heldTo,
-    written: (principal) => {
-      for (const listener of [...listenersFor]) tell(listener, principal);
-    },
-  });
 
   const takeEntries = async (source: string, handed: readonly (SeedEntry | SeedMutation)[]): Promise<void> => {
     owners.assertAppOwned(source);
@@ -268,18 +292,52 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       // Asked of the rows at every shell: what somebody saved in another process is theirs here too.
       const versions = saved === undefined ? [] : await saved.inForce();
       const held = roleMemo.storedLayoutsFor(roles, installed);
-      const theirs = principal === null ? {} : layoutsInUse(versions, principal, heldTo({ roles, installed }, shell));
+      const drawable = heldTo(held, shell);
+      const theirs = principal === null ? {} : layoutsInUse(versions, { whose: `of ${principal}`, heldTo: drawable });
+      // The layout variant of their roles is over what is published: under one, nothing published is loaded.
+      const variants = roleMemo.variantsFor(roles);
+      const underVariants: LayoutHeldTo = { ...drawable, actionAt: (ref) => (variants.has(actionOfLayoutRef(ref) ?? '') ? undefined : drawable.actionAt(ref)) };
+      const everybodys = layoutsInUse(await publishedNow(), { whose: 'published for everybody', heldTo: underVariants, say: sayOnce });
       return {
         actions: held.actions,
         canvases: shell.canvases,
         ...(shell.layout !== undefined ? { frame: shell.layout } : {}),
-        layoutStore: { ...shell.layoutStore, ...held.layouts, ...theirs },
+        layoutStore: { ...shell.layoutStore, ...held.layouts, ...everybodys, ...theirs },
         ...(shell.fragments !== undefined ? { fragments: shell.fragments } : {}),
         entries: entries.byFingerprint(),
         components: components.of(shell),
       };
     },
-    sessionArtifacts,
+    sessionArtifacts: (principal, callerOf) =>
+      savedArtifacts({
+        whose: 'of yours',
+        holder:
+          principal === null
+            ? undefined
+            : async () => {
+                const caller = await callerOf();
+                return { saved: caller.saved, heldTo: heldTo(roleMemo.storedLayoutsFor(caller.roles, caller.installed)) };
+              },
+        written: () => {
+          if (principal !== null) for (const listener of [...listenersFor]) tell(listener, principal);
+        },
+      }),
+    // Held to every action in force with the layout it is built with: who holds
+    // which is asked when a shell is built for them.
+    publishedArtifacts: (saved) =>
+      savedArtifacts({
+        whose: 'published for everybody',
+        holder: async () => ({ saved, heldTo: heldTo(actionsWithStoredLayouts(inForce)) }),
+        written: () => {
+          dropPublished();
+          for (const listener of [...listeners]) tell(listener);
+          pointer?.bump();
+        },
+      }),
+    readPublished: async () => {
+      dropPublished();
+      await publishedNow();
+    },
     onChangeFor: (listener) => {
       listenersFor.add(listener);
       return () => {

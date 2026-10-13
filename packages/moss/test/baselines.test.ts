@@ -71,7 +71,8 @@ describe('boot — every owner through one ledger', () => {
       tables: ['artifacts', 'artifact_saves'],
       rules: SAVE_ROW_RULES,
     });
-    const rowsAs = savedRowsOver(replay, await createGrammarUpgrader({}));
+    const rowsOf = savedRowsOver(replay, await createGrammarUpgrader({}));
+    const rowsAs = rowsOf.of;
     const [ada, ben, cy] = [rowsAs({ userId: 'ada' }), rowsAs({ userId: 'ben' }), rowsAs({ userId: 'cy' })];
     const layout = (text: string): unknown => ({ ref: 'action/home', layout: { component: 'Text', children: text } });
     const save = async (as: typeof ada, versions: { id: string; body: unknown; copiedFrom?: string }[]): Promise<string> => {
@@ -113,14 +114,31 @@ describe('boot — every owner through one ledger', () => {
     expect((await pool.query('SELECT count(*)::int AS n FROM artifact_saves WHERE principal IS NULL')).rows).toEqual([{ n: 0 }]);
     expect(await stored('artifacts', 'principal')).toEqual([{ principal: 'ada' }, { principal: 'ben' }]);
 
+    // What is published for everybody is the rows of one principal no caller is, made by whoever published.
+    // The same entries and the same rule keep them: a caller's read does not reach them, and theirs does not
+    // reach a caller's.
+    const published = await save(rowsOf.published('pat'), [{ id: 'a-default', body: layout('as published') }]);
+    expect((await pool.query('SELECT principal, created_by FROM artifact_saves WHERE id = $1', [published])).rows).toEqual([{ principal: '*', created_by: 'pat' }]);
+    expect((await pool.query('SELECT principal FROM artifacts WHERE save = $1', [published])).rows).toEqual([{ principal: '*' }]);
+    expect((await rowsOf.published().inForce()).map((version) => [version.id, version.save, version.body])).toEqual([['a-default', published, layout('as published')]]);
+    expect((await ada.inForce()).map((version) => version.id)).toEqual(['one', 'two']);
+    expect(await ada.history('layout', 'a-default')).toEqual([]);
+    expect(() => rowsAs({ userId: '*' })).toThrow(/^moss: a caller’s `userId` is "\*"/);
+    const hushed = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    // Read without a publisher, as a process reads them when it boots, they are not written.
+    await expect(save(rowsOf.published(), [{ id: 'nobody-published', body: layout('nobody published') }])).rejects.toThrow(/"artifactory\/save" was refused/);
+    hushed.mockRestore();
+    expect((await pool.query("SELECT count(*)::int AS n FROM artifacts WHERE principal = '*'")).rows).toEqual([{ n: 1 }]);
+
     // What an app could do with every verb granted on the two tables, through entries of its own: each of
     // the ways one caller could write a row that is not theirs, or reach one that is another's.
+    const plantSave: SeedMutation = {
+      fingerprint: 'app/plant-save',
+      mutation: { op: 'insert', table: 'artifact_saves', values: { id: { $context: 'save' }, principal: { $context: 'whose' }, created_by: { $context: 'whose' } } },
+    };
     const plant: SeedMutation = {
       fingerprint: 'app/plant',
-      mutation: [
-        { op: 'insert', table: 'artifact_saves', values: { id: { $context: 'save' }, principal: { $context: 'whose' }, created_by: { $context: 'whose' } } },
-        { op: 'insert', table: 'artifacts', values: { save: { $context: 'save' }, kind: 'layout', id: { $context: 'id' }, principal: { $context: 'whose' }, body: null } },
-      ],
+      mutation: { op: 'insert', table: 'artifacts', values: { save: { $context: 'save' }, kind: 'layout', id: { $context: 'id' }, principal: { $context: 'whose' }, body: null } },
     };
     const handOver: SeedMutation = {
       fingerprint: 'app/hand-over',
@@ -129,7 +147,7 @@ describe('boot — every owner through one ledger', () => {
     const blank: SeedMutation = { fingerprint: 'app/blank', mutation: { op: 'update', table: 'artifacts', set: { body: null }, where: { eq: ['artifacts.save', { $context: 'save' }] } } };
     const remove: SeedMutation = { fingerprint: 'app/remove', mutation: { op: 'delete', table: 'artifacts', where: { eq: ['artifacts.save', { $context: 'save' }] } } };
     const cache = createMemoryCache();
-    await seedCache(cache, [plant, handOver, blank, remove]);
+    await seedCache(cache, [plantSave, plant, handOver, blank, remove]);
     const engine = createQueryEngine({ adapter: createPostgresAdapter({ pool }), cache });
     await engine.introspect();
     const granted = booted.policyForRoles(['everything']);
@@ -137,10 +155,16 @@ describe('boot — every owner through one ledger', () => {
       (await handleQuery({ engine, locked: true, scopePolicy: granted, mutations: { client: pool, policy: granted } }, { fingerprint, context }, { userId: 'ada' })).status;
     const whose = async (save: string): Promise<unknown[]> => (await pool.query('SELECT principal, body FROM artifacts WHERE save = $1', [save])).rows;
 
+    // A save is moss's to make: who made one is written from a scope value no caller's scope carries, so
+    // an app's entry that inserts one is refused, for another and for everybody alike.
     const planted = randomUUID();
-    expect(await asAda('app/plant', { save: planted, id: 'planted', whose: 'ben' })).toBe(200);
-    expect(await whose(planted)).toEqual([{ principal: 'ada', body: null }]);
-    expect((await pool.query('SELECT principal, created_by FROM artifact_saves WHERE id = $1', [planted])).rows).toEqual([{ principal: 'ada', created_by: 'ada' }]);
+    for (const whoseItIs of ['ben', '*', 'ada']) expect(await asAda('app/plant-save', { save: planted, whose: whoseItIs })).toBe(500);
+    expect((await pool.query('SELECT 1 FROM artifact_saves WHERE id = $1', [planted])).rows).toEqual([]);
+
+    // A version an app's entry adds to a save of the caller's is the caller's, whoever it names.
+    for (const whoseItIs of ['ben', '*']) expect(await asAda('app/plant', { save: reset, id: `planted-for-${whoseItIs}`, whose: whoseItIs })).toBe(200);
+    expect((await whose(reset)).map((row) => Reflect.get(Object(row), 'principal'))).toEqual(['ada', 'ada', 'ada']);
+    expect((await pool.query("SELECT count(*)::int AS n FROM artifacts WHERE principal = '*'")).rows).toEqual([{ n: 1 }]);
 
     expect(await asAda('app/hand-over', { save: second, whose: 'ben' })).toBe(200);
     expect((await whose(second)).map((row) => Reflect.get(Object(row), 'principal'))).toEqual(['ada', 'ada']);
@@ -153,8 +177,12 @@ describe('boot — every owner through one ledger', () => {
 
     // Its own rows a caller may remove where an app's charter grants the verb and the app ships the entry:
     // moss removes none.
-    expect(await asAda('app/remove', { save: planted })).toBe(200);
-    expect(await whose(planted)).toEqual([]);
+    expect(await asAda('app/remove', { save: reset })).toBe(200);
+    expect(await whose(reset)).toEqual([]);
+    expect(await asAda('app/remove', { save: published })).toBe(200);
+    expect(await asAda('app/blank', { save: published })).toBe(200);
+    expect(await asAda('app/hand-over', { save: published, whose: 'ada' })).toBe(200);
+    expect(await whose(published)).toEqual([{ principal: '*', body: layout('as published') }]);
 
     // More in force than one read answers: the rest is asked for after the last of the page before.
     await save(cy, Array.from({ length: 501 }, (_, n) => ({ id: `layout-${String(n).padStart(3, '0')}`, body: layout(`number ${n}`) })));

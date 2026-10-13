@@ -23,7 +23,7 @@ export type NewSave = {
   versions: readonly Pick<SavedVersion, 'kind' | 'id' | 'body' | 'copiedFrom'>[];
 };
 
-// The rows of one caller: no call names whose they are.
+// The rows of one principal: no call names whose they are.
 export type SavedRows = {
   // The latest version of each artifact, those that say none is in force among them.
   inForce: () => Promise<SavedVersion[]>;
@@ -41,9 +41,42 @@ const theirs: ScopeMatch = { match: 'principal', to: 'userId' };
 // own. This writes the caller's, whatever the statement says.
 const stamped: ScopeSet = { set: 'principal', to: 'userId' };
 
+// Who made a save is not always whose it is: what is published is everybody's,
+// and made by whoever published it. No caller's scope carries this value
+// (`callerScope`), so only moss's own entries can make a save.
+const MADE_BY = 'artifactSavedBy';
+const madeBy: ScopeSet = { set: 'created_by', to: MADE_BY };
+
 export const SAVE_ROW_RULES: Readonly<Record<string, ScopeRules>> = {
   artifacts: { read: [theirs], write: [theirs, stamped] },
-  artifact_saves: { read: [theirs], write: [theirs, stamped, { set: 'created_by', to: 'userId' }] },
+  artifact_saves: { read: [theirs], write: [theirs, stamped, madeBy] },
+};
+
+// What is published for everybody is the rows of this one principal, under the
+// rule every principal's rows are under.
+export const EVERYBODY = '*';
+
+// A scope the server composed for a caller goes through here before vex is
+// handed it. One whose `userId` is that principal would read and write what is
+// published as their own, and one that says who made a save could make a save
+// as anybody.
+export const callerScope = (scope: Record<string, unknown>): Record<string, unknown> => {
+  if (scope['userId'] === EVERYBODY) {
+    throw new Error(
+      `moss: a caller’s \`userId\` is "${EVERYBODY}", and that is whose the rows published for everybody are. No caller is it: the app’s sign-in or its \`scope\` answers another.`,
+    );
+  }
+  if (Object.hasOwn(scope, MADE_BY)) {
+    throw new Error(`moss: a caller’s scope carries \`${MADE_BY}\`. Who made a save is written from that value, and it is moss’s to say: the app’s \`scope\` names its own otherwise.`);
+  }
+  return scope;
+};
+
+export type SavedRowsOf = {
+  // `scope`: the values of the caller the rows are read and written for, as the routes hand them to vex.
+  of: (scope: Record<string, unknown>) => SavedRows;
+  // `by`: who a save of them is made by. With none they are read, and a write is refused.
+  published: (by?: string) => SavedRows;
 };
 
 const PAGE = 500;
@@ -145,16 +178,14 @@ const versionOf = (row: Row, upgrader: Upgrader): SavedVersion => {
   }
 };
 
-// `scope`: the values of the caller the rows are read and written for, as the routes hand them to vex.
-export const savedRowsOver =
-  (replay: Replay, upgrader: Upgrader) =>
-  (scope: Record<string, unknown>): SavedRows => {
-    const versionsIn = (answered: unknown): SavedVersion[] =>
-      z
-        .array(RowSchema)
-        .parse(answered)
-        .map((row) => versionOf(row, upgrader));
+export const savedRowsOver = (replay: Replay, upgrader: Upgrader): SavedRowsOf => {
+  const versionsIn = (answered: unknown): SavedVersion[] =>
+    z
+      .array(RowSchema)
+      .parse(answered)
+      .map((row) => versionOf(row, upgrader));
 
+  const rows = (scope: Record<string, unknown>): SavedRows => {
     const everyVersionInForce = async (after?: SavedVersion): Promise<SavedVersion[]> => {
       const page = versionsIn(await replay(inForce.fingerprint, { after_kind: after?.kind ?? '', after_id: after?.id ?? '' }, scope));
       const last = page.at(-1);
@@ -170,3 +201,9 @@ export const savedRowsOver =
       },
     };
   };
+
+  return {
+    of: (scope) => rows({ ...callerScope(scope), [MADE_BY]: scope['userId'] }),
+    published: (by) => rows({ userId: EVERYBODY, ...(by === undefined ? {} : { [MADE_BY]: by }) }),
+  };
+};

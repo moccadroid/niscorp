@@ -329,9 +329,10 @@ const runs: RunSink = (record) => {
 
 A layout somebody or a model generated while the app runs is kept by moss, as
 a version, in two tables of its own. Today the kind that is kept is a layout
-for an action. Not built yet: the other kinds (an action, a fragment, a vex
-read), the layout of the frame or of a canvas, and a default that is saved
-for everybody.
+for an action. A session saves for its own principal. A layout for everybody
+is published from the server and never from a session (`server.defaults`,
+under `MossServer` below). Not built yet: the other kinds (an action, a
+fragment, a vex read), and the layout of the frame or of a canvas.
 
 ```typescript
 type SessionArtifacts = {
@@ -395,7 +396,8 @@ or write a row of another account.
 
 **What a shell draws under an action's ref**, the first of these that there
 is: the principal's own layout marked in use; the layout variant their roles
-hold (`app.layouts`); the layout the build ships.
+hold (`app.layouts`); the layout published for everybody that is marked in use
+(`server.defaults`); the layout the build ships.
 
 **What is refused**, at a save and at a restore, in a sentence, with nothing
 written: a body that is not `{ ref, layout, use? }`; a `ref` nothing is kept
@@ -438,6 +440,17 @@ and a boot that cannot load them fails. A row always has a principal: the two
 `principal` columns refuse a null, so an app whose `scope` answers no `userId`
 for somebody saves nothing for them.
 
+**No caller's `userId` is `*`.** What is published for everybody is kept as
+the rows of that one principal, under the same row rule, so a caller whose
+`userId` were `*` would read and write what is published as their own. Moss
+refuses one wherever it composes a caller's scope for vex: no shell is built
+for them (`moss: a caller’s \`userId\` is "*", …`), `/api/vex` answers them
+500, and an intent a function asks for them is refused. An app's sign-in, or
+its `scope`, answers another id. A scope that carries `artifactSavedBy` is
+refused in the same places: who made a save is written from that value, and
+it is moss's to say. (`server.executeAs` is the app's own code, and hands vex
+the scope it is given.)
+
 **The row rule is moss's, wherever a policy is compiled.** The two tables are
 in the data a charter selects from, as every table is: no role reaches them
 unless its charter grants them. A role that is granted them, by name or by a
@@ -448,7 +461,11 @@ boot. (A policy an app compiles itself, from its charter and its own
 `behaviors` and without the server, does not carry the rule.) Moss's own
 entries only add rows. An app whose charter grants a role update or delete
 on the two tables, and that ships an entry of its own to do it, lets that
-role change or remove its own rows, and never another's.
+role change or remove its own rows, and never another's. A save itself (a row
+of `artifact_saves`) is moss's alone to make: who made it (`created_by`) is
+written from a scope value no caller's scope carries (`artifactSavedBy`), so
+an app's entry that inserts or updates one for a caller is refused (500,
+`missing_scope`).
 
 **A save is not told to `app.reactions`.** Moss's own entries tell the app's
 engine which tables changed, so a read of the app's that follows them
@@ -869,7 +886,7 @@ and does not throw.
 #### `MossServer`
 
 `Hono<Env> & { socket; shells?: ShellHost; principalOf; page; pages;
-refresh; replaceActions; replaceEntries; actions; catalogOf;
+refresh; replaceActions; replaceEntries; actions; defaults; catalogOf;
 policyForRoles; charterReport; invalidateIdentity; invalidateTag; identity;
 executeAs; nudge; close; identities? }`.
 It's a Hono app — mount it, extend it, or hand it to a listener.
@@ -945,6 +962,38 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
 - `actions(): Readonly<Record<string, ActionDefinition>>` — the actions in
   force now, by id: what the app shipped, then each set handed over. To read;
   a set changes through `replaceActions`.
+- `defaults(publisher): SessionArtifacts` — what is published for everybody,
+  with the five calls a session's `artifacts` has (`save`, `list`, `history`,
+  `restore`, `reset`) and the same body: `server.defaults(who).save([{ kind:
+  'layout', body: { ref: 'action/<id>', layout, use: true } }])` publishes a
+  layout for an action, and every shell draws it under that action's ref
+  unless its principal has a layout of their own in use or their roles hold a
+  layout variant. Several may be kept for one ref and the one marked `use:
+  true` is drawn; every publish is a version; a `reset` shows the build's
+  again. `publisher` is who the publish is made by, and is kept with the save
+  (`artifact_saves.created_by`); an empty one is refused.
+  **No session can publish.** The rows are those of one principal no caller
+  is (`*`), and every write a session makes carries its own `userId`: vex's
+  row rule, the one a person's own rows are under. Only the app's own code on
+  the server reaches this call, as it reaches `replaceActions`. **Who may
+  publish is the charter's**: the app puts the call in a function, hands it
+  the session's principal as `publisher`, and grants the action that calls
+  that function to the roles that may. A function is declared before the
+  server exists, so the app keeps the server where its functions can reach it.
+  A layout is checked when it is published as one is when it is saved, held to
+  every action in force with the layout it is built with: a ref no such action
+  keeps a layout under is refused, and so is what a save refuses. When a shell
+  is built it is checked again for that shell and that principal: one for an
+  action they do not hold is not loaded, and one that no longer passes is left
+  out with a line (`[moss] the layout "…" published for everybody is left out:
+  …`, said once for each time the rows are read, not at every shell).
+  One read of the rows answers every shell a process builds. A boot makes it,
+  and fails if it cannot. The first shell built after this process publishes,
+  or after the generation pointer moves, makes it again, and a read that fails
+  fails that shell and is made again by the next. A publish has every living
+  shell adopt, as `refresh` does, and moves the pointer, whether or not the
+  rows can be read back: every other process on the same database follows
+  within one poll ([Many processes](#many-processes)).
 - `catalogOf(principal): Promise<{ ids, hash }>` — what a principal holds of the
   actions in force: `{ ids, hash }`, the granted action ids sorted, with a
   content-hash version token (equal hash, equal application). The principal is
@@ -1403,12 +1452,13 @@ tables changed, so a reactive read over one of them answers again.
   (`[moss:fabric] the transport handed over what is not a message…`); the ones
   after it are dropped without a line.
 - The generation pointer — the persistent counter `server.refresh()`,
-  `server.replaceActions()` and `server.replaceEntries()` move
-  (`moss_generation`, one row, part of
+  `server.replaceActions()`, `server.replaceEntries()` and a publish
+  (`server.defaults`) move (`moss_generation`, one row, part of
   `MOSS_SEQUENCE`). Each process polls it (on `sessionRevalidateMs`; 60s when
   that is unset), and when it has moved it reads again every set of actions
-  it has a loader for, runs the check boot runs over what it would then
-  serve, drops what it derived (what each set of roles holds, the compiled
+  it has a loader for, drops what it had read of what is published for
+  everybody (the next shell it builds reads that again), runs the check
+  boot runs over what it would then serve, drops what it derived (what each set of roles holds, the compiled
   policies, the identity records) and has its living shells adopt.
   **The pointer carries no set.** It says that something changed, and a
   process learns what by reading rows. The only set that has a loader is the
@@ -1539,8 +1589,9 @@ for (const error of report.errors) console.error(`${error.check}: ${error.detail
   runtime, but a typed object of what it needs: one function that answers what
   a principal's shell is made of (who they are, the action definitions they
   hold, each naming its layout by ref, the canvases, the frame, the layout
-  store's seed with those layouts in it (their roles' layout variant in
-  place, and over it the layout of their own they marked in use), the
+  store's seed with those layouts in it (the published one over the build's,
+  their roles' layout variant over that, and over it the layout of their own
+  they marked in use), the
   fragments, the entries, the component names), the
   app's code a shell calls (`inputs`, `seeds`, `phrases`, `functions`,
   `onSession`, `runs`), the wire for a token, and its limits. Everything in

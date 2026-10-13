@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
 import type { ActionDefinition, LayoutNode } from '@niscorp/nova';
 import { createRunningManifest } from '../src/artifactory';
-import type { FunctionSession, NiscApp } from '../src/manifest';
+import type { FunctionSession, NiscApp, SessionArtifacts } from '../src/manifest';
 import type { Fabric } from '../src/runtime';
 import type { FabricMessage } from '../src/runtime/runtime';
 import { buildShellHosts } from '../src/server/hosts';
@@ -32,10 +32,10 @@ const createBus = (): { endpoint: () => Fabric; carried: FabricMessage[] } => {
   };
 };
 
-type Process = { hosts: Hosts; sessionOf: (principal: string) => FunctionSession; screenOf: (principal: string) => Promise<Screen> };
+type Process = { hosts: Hosts; published: SessionArtifacts; sessionOf: (principal: string) => FunctionSession; screenOf: (principal: string) => Promise<Screen> };
 type Screen = { drawn: () => string; type: (title: string) => void; instance: () => string | undefined };
 
-const processOn = (rows: RowsDouble, fabric?: Fabric): Process => {
+const processOn = (rows: RowsDouble, fabric?: Fabric, userIdOf: (principal: string | null) => string = (principal) => principal ?? 'anonymous'): Process => {
   const sessions = new Map<string | null, FunctionSession>();
   const app: NiscApp = {
     charter: { public: ['words'] },
@@ -46,10 +46,10 @@ const processOn = (rows: RowsDouble, fabric?: Fabric): Process => {
       return {};
     },
   };
-  const running = createRunningManifest({ shipped: app, grants: scopeGrants([]), shells: [shell] });
+  const running = createRunningManifest({ shipped: app, grants: scopeGrants([]), shells: [shell], published: () => rows.as('*').inForce() });
   const identity = {
     resolve: async () => ({ roles: ['public'], scope: {}, installed: undefined, memoKey: 'public' }),
-    composeScope: (principal: string | null) => ({ userId: principal ?? 'anonymous' }),
+    composeScope: (principal: string | null) => ({ userId: userIdOf(principal) }),
   };
   const hosts = buildShellHosts({
     app,
@@ -68,6 +68,7 @@ const processOn = (rows: RowsDouble, fabric?: Fabric): Process => {
   running.onChangeFor(signals.adopt);
   return {
     hosts,
+    published: running.publishedArtifacts(rows.as('*')),
     sessionOf: (principal) => {
       const session = sessions.get(principal);
       if (session === undefined) throw new Error(`no session was built for ${principal}`);
@@ -147,6 +148,30 @@ describe('a layout saved from a function’s session', () => {
     });
   });
 
+  it('published for everybody, it shows on every open screen at once, with what each had typed; one’s own in use stays over it', async () => {
+    const rows = rowsDouble();
+    const here = processOn(rows);
+    await stopping([here], async () => {
+      const ada = await here.screenOf('ada');
+      const ben = await here.screenOf('ben');
+      await settle();
+      ben.type('Typed since');
+      await settle();
+      const open = ben.instance();
+      await here.sessionOf('ada').artifacts.save([{ kind: 'layout', body: { ref: 'action/words', layout: { component: 'Text', children: 'as ada has it' }, use: true } }]);
+
+      await here.published.save([{ kind: 'layout', body: { ref: 'action/words', layout: heading, use: true } }]);
+      await settle();
+
+      expect(ben.drawn()).toContain('"name":"Heading"');
+      expect(ben.drawn()).toContain('Typed since');
+      expect(ben.instance()).toBe(open);
+      expect(ada.drawn()).toContain('as ada has it');
+      expect(ada.drawn()).not.toContain('Heading');
+      expect(rows.rows.map((row) => row.principal).sort()).toEqual(['*', 'ada']);
+    });
+  });
+
   it('in a deployment of several processes: the others bring that principal’s shells level, told to and told nothing else', async () => {
     const bus = createBus();
     const rows = rowsDouble();
@@ -163,6 +188,18 @@ describe('a layout saved from a function’s session', () => {
       expect(adaOnB.drawn()).toContain('"name":"Heading"');
       expect(benOnB.drawn()).toContain('"name":"Text"');
       expect(bus.carried).toEqual([{ kind: 'adopt', principal: 'ada', origin: expect.any(String) }]);
+    });
+  });
+
+  it('an intent a function asks is not answered for a caller whose `userId` has become the one what is published is kept under', async () => {
+    const now = { everybody: false };
+    const here = processOn(rowsDouble(), undefined, (principal) => (now.everybody ? '*' : (principal ?? 'anonymous')));
+    await stopping([here], async () => {
+      await here.screenOf('ada');
+      now.everybody = true;
+      const writers = { generateDsl: async () => ({}), mapToShape: async () => ({}) } as unknown as Parameters<FunctionSession['answerIntent']>[0];
+
+      await expect(here.sessionOf('ada').answerIntent(writers, { intent: 'anything', shape: {} })).rejects.toThrow('moss: a caller’s `userId` is "*"');
     });
   });
 

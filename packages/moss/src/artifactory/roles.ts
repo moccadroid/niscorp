@@ -37,7 +37,7 @@ export const definitionsFor = (
   variants: ReadonlyMap<string, LayoutNode>,
 ): Readonly<Record<string, ActionDefinition>> => Object.freeze(Object.fromEntries(withVariants(actions, ids, variants)));
 
-type StoredLayouts = {
+export type StoredLayouts = {
   actions: Readonly<Record<string, ActionDefinition>>;
   layouts: Readonly<Record<string, LayoutNode>>;
 };
