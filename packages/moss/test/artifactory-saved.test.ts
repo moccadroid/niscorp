@@ -235,7 +235,7 @@ describe('what is refused, in a sentence, with nothing written', () => {
   });
 
   it('a ref no action of theirs keeps its layout under', async () => {
-    const nothingUnder = (ref: string): string => `moss: the layout for "${ref}" is refused: nothing is kept under "${ref}". A saved layout takes the place of the layout of an action its holder has, under "action/<the action’s id>", or of the layout the app’s own shell declares, under "frame".`;
+    const nothingUnder = (ref: string): string => `moss: the layout for "${ref}" is refused: nothing is kept under "${ref}". A saved layout takes the place of the layout of an action its holder has, under "action/<the action’s id>", or of one the app’s own shell declares: its own under "frame", a canvas’s under "canvas/<the canvas’s id>".`;
     await refused(({ of }) => of('ada').save([{ kind: 'layout', body: { ref: 'action/gone', layout: saying('x') } }]), nothingUnder('action/gone'));
     await refused(({ of }) => of('ada').save([{ kind: 'layout', body: { ref: 'action/desk', layout: saying('x') } }]), nothingUnder('action/desk'));
     await refused(({ of }) => of('ada').save([{ kind: 'layout', body: { ref: 'action/docked', layout: saying('x') } }]), nothingUnder('action/docked'));
@@ -585,7 +585,7 @@ describe('a layout published for everybody', () => {
 
   it('what is refused of a publish, in a sentence, with nothing written', async () => {
     const { of, published, rows } = world();
-    const nothingUnder = (ref: string): string => `moss: the layout for "${ref}" is refused: nothing is kept under "${ref}". A saved layout takes the place of the layout of an action its holder has, under "action/<the action’s id>", or of the layout the app’s own shell declares, under "frame".`;
+    const nothingUnder = (ref: string): string => `moss: the layout for "${ref}" is refused: nothing is kept under "${ref}". A saved layout takes the place of the layout of an action its holder has, under "action/<the action’s id>", or of one the app’s own shell declares: its own under "frame", a canvas’s under "canvas/<the canvas’s id>".`;
     await expect(published.save([forAll('action/gone', 'x')])).rejects.toThrow(nothingUnder('action/gone'));
     await expect(published.save([forAll('action/docked', 'x')])).rejects.toThrow(nothingUnder('action/docked'));
     await expect(published.save([forAll('dock', 'x')])).rejects.toThrow(nothingUnder('dock'));

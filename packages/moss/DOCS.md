@@ -335,8 +335,8 @@ version, in two tables of its own. Three kinds are kept: a layout (for an
 action, or for the app's own shell), an action, and a fragment. A session
 saves for its own principal. A layout for everybody is published from the
 server and never from a session (`server.defaults`, under `MossServer`
-below). Not built yet: a vex read, the layout of a canvas or of a page's
-shell, and an action or a fragment for everybody.
+below). Not built yet: a vex read, a layout of a page's shell, and an action
+or a fragment for everybody.
 
 ```typescript
 type SessionArtifacts = {
@@ -364,8 +364,8 @@ exported by a name of its own.
 
 **A layout's body** is `{ ref, layout, use? }`. `ref` is the name the layout
 of the action it is for is kept under in the shell's layout store,
-`action/<the action's id>`, or `frame` for the layout of the app's own shell
-(further down). `layout` is a nova layout.
+`action/<the action's id>`, or, for a layout of the app's own shell (further
+down), `frame` or `canvas/<a canvas's id>`. `layout` is a nova layout.
 
 ```typescript
 functions: (session) => ({
@@ -474,7 +474,8 @@ hold (`app.layouts`); the layout published for everybody that is marked in use
 written: a body that is not `{ ref, layout, use? }`; a `ref` nothing is kept
 under for the principal (an action they do not hold, or one that is not in
 force; an action with no layout of its own, or one that names a layout of the
-store by its id; any other name but `frame`); a component no shell of
+store by its id; any name that is none of `action/<id>`, `frame` and
+`canvas/<id>`); a component no shell of
 the app has (and a prop its declared schema refuses, as for an integration's
 layouts); a layout that names a ref moss keeps a layout under (`action/…`,
 `canvas/…`, `frame`); and what nova's audit
@@ -487,24 +488,27 @@ pass is left out, what is under it is drawn, and a line says why (`[moss] the la
 its holder's store keeps nothing under any more (the action left, or they
 hold it no longer) is not loaded and nothing is said.
 
-**The layout of the app's own shell** is saved under `ref: 'frame'`, with the
-same calls: `session.artifacts.save([{ kind: 'layout', body: { ref: 'frame',
-layout, use: true } }])`.
+**The layouts of the app's own shell** are saved with the same calls: its own
+under `ref: 'frame'`, and a canvas's under `ref: 'canvas/<the canvas's id>'`.
+`session.artifacts.save([{ kind: 'layout', body: { ref: 'frame', layout, use:
+true } }])`.
 
-- **It is the app's own shell's.** Under `frame` that shell draws the first of
-  these that there is: the principal's own marked in use, the one published
-  for everybody that is marked in use, the one the manifest declares. A page
-  draws the layout its own manifest declares, whatever was saved: an app that
-  lets people save a frame has, in a page, a screen no saved frame changes.
-  A draft of a page's shell takes none.
-- **A shell manifest with no `layout` has none to take the place of**, and a
-  save for it is refused as for any ref nothing is kept under.
+- **They are the app's own shell's.** Under either name that shell draws the
+  first of these that there is: the principal's own marked in use, the one
+  published for everybody that is marked in use, the one the manifest
+  declares. A page draws the layouts its own manifest declares, whatever was
+  saved: an app that lets people save a frame has, in a page, a screen no
+  saved frame changes. A draft of a page's shell takes none.
+- **A shell manifest with no `layout` has none to take the place of**, nor
+  has a canvas with no `actionLayout`, or with one that is the name of a
+  stored layout. A save for one is refused as for any ref nothing is kept
+  under.
 - **What is refused**: a body that is not `{ ref, layout, use? }`, a component
   the app's own shell has none for (and a prop its declared schema refuses),
   and a layout that names a ref moss keeps a layout under. Nova's audit reads
-  an action, and is not asked of a frame. A frame that names a ref nothing is
-  kept under is saved, and nova draws its error box in that place, as it does
-  in an action's layout.
+  an action, and is not asked of these. One that names a ref nothing is kept
+  under is saved, and nova draws its error box in that place, as it does in
+  an action's layout.
 - **A frame may leave a canvas of the shell out.** That canvas stays the
   shell's and is drawn nowhere: what is mounted on it runs unseen, and what an
   action opens on it does not show. Moss does not refuse it. An app that wants
@@ -1004,9 +1008,8 @@ beginning with "canvas/" is where the layout of that canvas is kept`). So does
 an action's layout, or a layout variant, that names one by `{ ref }` or as its
 layout's name (`"panel" names the layout "frame": …`). Only a node that is
 `{ ref }` and nothing else names a layout: a `ref` a component carries, on its
-node or in its props, names none. The layout of the app's
-own shell can be saved (`session.artifacts`, `ref: 'frame'`); a canvas's
-cannot yet.
+node or in its props, names none. Both can be saved for the app's own shell
+(`session.artifacts`).
 
 **The manifest is read first.** Before a table is created or a row is read,
 `createServer` parses the manifest with a schema, and a manifest that does not
@@ -1161,7 +1164,8 @@ It's a Hono app — mount it, extend it, or hand it to a listener.
   layout for an action, and every shell draws it under that action's ref
   unless its principal has a layout of their own in use or their roles hold a
   layout variant. With `ref: 'frame'` it publishes the layout of the app's own
-  shell, which is drawn for everybody who has none of their own in use. Several may be kept for one ref and the one marked `use:
+  shell, and with `ref: 'canvas/<id>'` that of one of its canvases: each is
+  drawn for everybody who has none of their own in use. Several may be kept for one ref and the one marked `use:
   true` is drawn; every publish is a version; a `reset` shows the build's
   again. A layout is the one kind that is published: an action or a fragment
   is refused here. `publisher` is who the publish is made by, and is kept with the save

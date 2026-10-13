@@ -91,9 +91,10 @@ makes, made by the app's own server code as that principal
 (`server.defaults`), and no second mechanism. An action or a fragment
 somebody generated is a row of theirs too: it is added to what their shell is
 built from, under an id moss gave it, and it may only replay reads its owner
-may replay (`src/artifactory/generated.ts`). A layout saved under `frame`
-takes the place of the layout of the app's own shell, a person's own over the
-published one over the build's; a page draws the one it declares. (The
+may replay (`src/artifactory/generated.ts`). A layout saved under `frame` or
+`canvas/<id>` takes the place of that layout of the app's own shell, a
+person's own over the published one over the build's; a page draws the ones
+it declares. (The
 canvases a manifest declares are what a shell starts with: an adopt does not
 take them again, a reset does. Nova gives a shell a canvas when something is
 first pushed onto it; an adopt takes out one the manifest does not declare

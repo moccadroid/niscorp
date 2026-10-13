@@ -1,6 +1,6 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import type { CacheEntry, SeedEntry, SeedMutation } from '@niscorp/vex';
-import { FRAME_LAYOUT_REF, actionOfLayoutRef, candidateOf, entriesOf, entryMisfits, freezeDeep, refusalOf, verifyManifest } from '../manifest';
+import { actionOfLayoutRef, candidateOf, entriesOf, entryMisfits, freezeDeep, refusalOf, verifyManifest } from '../manifest';
 import type { DraftArtifact, KitComponents, ManifestCandidate, ManifestReport, SessionArtifacts, ShellManifest, ShippedManifest } from '../manifest';
 import type { ShellArtifacts } from './artifacts';
 import { shellComponents, shellWithStoredLayouts, slottedCanvases } from './artifacts';
@@ -177,14 +177,14 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
   // at a save it is held to what any shell of the app can draw, and when a shell
   // is built to what that shell can.
   const kitOf = (shell?: ShellManifest): KitComponents => (shell === undefined ? (ofTheApp ??= componentsOf(config.shells)) : componentsOf([shell]));
-  // The app's own shell, where the layout store keeps its layout under `frame`.
-  const framed = shipped.shell !== undefined && shellWithStoredLayouts(shipped.shell).frame === FRAME_LAYOUT_REF ? shipped.shell : undefined;
+  const ownShell = shipped.shell;
+  const ownShellRefs: ReadonlySet<string> = new Set(ownShell === undefined ? [] : Object.keys(shellWithStoredLayouts(ownShell).layouts));
   const heldTo = ({ actions, layouts }: StoredLayouts, shell?: ShellManifest): LayoutHeldTo => {
     const kit = kitOf(shell);
     return {
       kit,
-      // A saved frame is the app's own shell's, whichever shell it is saved from: a page draws the one it declares.
-      ...(framed !== undefined && (shell === undefined || shell === framed) ? { frame: { kit: shell === framed ? kit : kitOf(framed) } } : {}),
+      // A layout saved for the frame or a canvas is the app's own shell's, whichever shell it is saved from.
+      ...(ownShell !== undefined && (shell === undefined || shell === ownShell) ? { ownShell: { refs: ownShellRefs, kit: shell === ownShell ? kit : kitOf(ownShell) } } : {}),
       actionAt: (ref) => {
         const id = actionOfLayoutRef(ref);
         const action = id !== undefined && Object.hasOwn(actions, id) ? actions[id] : undefined;

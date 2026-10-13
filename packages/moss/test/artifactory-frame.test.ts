@@ -16,7 +16,12 @@ const SHELL: ShellManifest = {
   canvases: [{ id: 'main', initial: 'home' }, { id: 'side', actionLayout: saying('each of the side canvas') }],
   layout: framed('as built', slot('side')),
 };
-const ABOUT = { path: '/about', canvases: [{ id: 'main', initial: 'home' }], layout: framed('the page, as built'), components: { Banner: {} } };
+const ABOUT = {
+  path: '/about',
+  canvases: [{ id: 'main', initial: 'home' }, { id: 'side', actionLayout: saying('each of the page’s side canvas') }],
+  layout: framed('the page, as built', slot('side')),
+  components: { Banner: {} },
+};
 
 const world = (shell: ShellManifest = SHELL) => {
   const rows = rowsDouble();
@@ -38,7 +43,7 @@ const world = (shell: ShellManifest = SHELL) => {
 
 const frame = (layout: unknown, use = true): { kind: 'layout'; body: unknown } => ({ kind: 'layout', body: { ref: 'frame', layout, ...(use ? { use: true } : {}) } });
 const nothingUnder = (ref: string): string =>
-  `moss: the layout for "${ref}" is refused: nothing is kept under "${ref}". A saved layout takes the place of the layout of an action its holder has, under "action/<the action’s id>", or of the layout the app’s own shell declares, under "frame".`;
+  `moss: the layout for "${ref}" is refused: nothing is kept under "${ref}". A saved layout takes the place of the layout of an action its holder has, under "action/<the action’s id>", or of one the app’s own shell declares: its own under "frame", a canvas’s under "canvas/<the canvas’s id>".`;
 
 describe('the layout of the app’s own shell, saved from a session', () => {
   it('is its principal’s alone and is drawn in the app’s own shell: marked in use it is what the store holds under `frame`, for nobody else, and a page keeps its own', async () => {
@@ -121,11 +126,6 @@ describe('what is refused of a frame, in a sentence', () => {
     expect(Object.keys(made.layoutStore)).toEqual(['action/home']);
   });
 
-  it('the layout of a canvas: nothing is saved under `canvas/<id>`', async () => {
-    const { of } = world();
-    await expect(of('ada').save([{ kind: 'layout', body: { ref: 'canvas/side', layout: saying('x') } }])).rejects.toThrow(nothingUnder('canvas/side'));
-  });
-
   it('a component the app’s own shell has none for, though a page has it', async () => {
     const { of } = world();
     await expect(of('ada').save([frame({ component: 'Carousel' })])).rejects.toThrow('moss: the layout for "frame" is refused: layout uses "Carousel", which this app has no component for');
@@ -144,6 +144,58 @@ describe('what is refused of a frame, in a sentence', () => {
       'moss: the layout for "frame" is refused: it names the layout "canvas/side": a name beginning with "canvas/" is where the layout of that canvas is kept',
     );
     await expect(of('ada').save([naming('frame')])).rejects.toThrow('moss: the layout for "frame" is refused: it names the layout "frame": "frame" is where the layout of the shell is kept');
+  });
+});
+
+describe('the layout of a canvas of the app’s own shell, saved from a session', () => {
+  const forSide = (layout: unknown, use = true): { kind: 'layout'; body: unknown } => ({ kind: 'layout', body: { ref: 'canvas/side', layout, ...(use ? { use: true } : {}) } });
+  const sideOf = async (made: Promise<{ layoutStore: Readonly<Record<string, LayoutNode>> }>): Promise<LayoutNode | undefined> => (await made).layoutStore['canvas/side'];
+
+  it('is its principal’s alone and is drawn in the app’s own shell, under one published for everybody and over the build’s; a page keeps its own, and a reset shows what is under it', async () => {
+    const { of, published, madeFor } = world();
+    await published.save([forSide(saying('each, as published'))]);
+    const saved = await of('ada').save([forSide(saying('each, as ada has it'))]);
+
+    expect(await sideOf(madeFor('ada'))).toEqual(saying('each, as ada has it'));
+    expect(await sideOf(madeFor('ben'))).toEqual(saying('each, as published'));
+    expect(await sideOf(madeFor('ada', ABOUT))).toBe(ABOUT.canvases[1]?.actionLayout);
+    expect((await madeFor('ada')).canvases[1]).toEqual({ id: 'side', actionLayout: 'canvas/side' });
+
+    await of('ada').reset('layout', saved.artifacts[0]?.id ?? '');
+    expect(await sideOf(madeFor('ada'))).toEqual(saying('each, as published'));
+    await published.reset('layout', (await published.list('layout'))[0]?.id ?? '');
+    expect(await sideOf(madeFor('ada'))).toBe(SHELL.canvases[1]?.actionLayout);
+  });
+
+  it('a draft of the app’s own shell takes one, and a draft of a page’s does not', async () => {
+    const { draftOn } = world();
+    const put = await draftOn(SHELL, 'ada').put([forSide(saying('each, as ada drafts it'))], []);
+    expect(put.drafted.map((one) => one.body)).toEqual([{ ref: 'canvas/side', layout: saying('each, as ada drafts it'), use: true }]);
+
+    await expect(draftOn(ABOUT, 'ada').put([forSide(saying('for the page'))], [])).rejects.toThrow(nothingUnder('canvas/side'));
+  });
+
+  it('is refused for a canvas that has no layout of its own, one that names a stored layout, and one the shell does not have', async () => {
+    const shell: ShellManifest = {
+      canvases: [{ id: 'main', initial: 'home' }, { id: 'rail', actionLayout: 'each' }, { id: 'side', actionLayout: saying('each of the side canvas') }],
+      layout: framed('as built'),
+      layoutStore: { each: saying('each') },
+    };
+    const { of } = world(shell);
+    const under = (ref: string): { kind: 'layout'; body: unknown } => ({ kind: 'layout', body: { ref, layout: saying('x') } });
+
+    await expect(of('ada').save([under('canvas/main')])).rejects.toThrow(nothingUnder('canvas/main'));
+    await expect(of('ada').save([under('canvas/rail')])).rejects.toThrow(nothingUnder('canvas/rail'));
+    await expect(of('ada').save([under('canvas/nowhere')])).rejects.toThrow(nothingUnder('canvas/nowhere'));
+    await expect(of('ada').save([under('canvas/side')])).resolves.toBeDefined();
+  });
+
+  it('is held to what a frame is: the components of the app’s own shell, and no name moss keeps a layout under', async () => {
+    const { of } = world();
+    await expect(of('ada').save([forSide({ component: 'Banner' })])).rejects.toThrow('moss: the layout for "canvas/side" is refused: layout uses "Banner", which this app has no component for');
+    await expect(of('ada').save([forSide({ component: 'Frame', children: [{ ref: 'canvas/side' }] })])).rejects.toThrow(
+      'moss: the layout for "canvas/side" is refused: it names the layout "canvas/side": a name beginning with "canvas/" is where the layout of that canvas is kept',
+    );
   });
 });
 

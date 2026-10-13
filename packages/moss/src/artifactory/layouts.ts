@@ -4,7 +4,7 @@ import { isRecord } from '@niscorp/nova/reflect';
 import { depthRefusal, exceedsDepth } from '@niscorp/strata';
 import type { Upgrader } from '@niscorp/strata';
 import { z } from 'zod';
-import { FRAME_LAYOUT_REF, layoutMisfits, layoutNameRefusal } from '../manifest';
+import { layoutMisfits, layoutNameRefusal } from '../manifest';
 import type { KitComponents } from '../manifest';
 import type { SavedVersion } from './saves';
 
@@ -20,19 +20,20 @@ export type LayoutHeldTo = {
   // The action whose layout the store of whoever the layout is for keeps under
   // this ref, with that layout in place.
   actionAt: (ref: string) => ActionDefinition | undefined;
-  // What a layout saved for the app's own shell is held to. Absent: nothing is
-  // kept under `frame` here, in a page's shell or where the app's own declares no layout.
-  frame?: { kit: KitComponents };
+  // The names the app's own shell keeps its own layouts under (the frame's and
+  // each canvas's), and what a layout saved for one is held to. Absent in a
+  // page's shell: a page draws the layouts it declares.
+  ownShell?: { refs: ReadonlySet<string>; kit: KitComponents };
   kit: KitComponents;
 };
 
 const nothingKeptUnder = (ref: string): string =>
   `nothing is kept under "${ref}". A saved layout takes the place of the layout of an action its holder has, under "action/<the action’s id>", ` +
-  `or of the layout the app’s own shell declares, under "${FRAME_LAYOUT_REF}".`;
+  'or of one the app’s own shell declares: its own under "frame", a canvas’s under "canvas/<the canvas’s id>".';
 
-// What a layout saved under this ref takes the place of: an action's layout, or the frame.
+// What a layout saved under this ref takes the place of: an action's layout, or one of the app's own shell.
 const targetAt = (ref: string, heldTo: LayoutHeldTo): { kit: KitComponents; action?: ActionDefinition } | undefined => {
-  if (ref === FRAME_LAYOUT_REF) return heldTo.frame;
+  if (heldTo.ownShell?.refs.has(ref) === true) return { kit: heldTo.ownShell.kit };
   const action = heldTo.actionAt(ref);
   return action === undefined ? undefined : { kit: heldTo.kit, action };
 };

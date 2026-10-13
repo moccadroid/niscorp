@@ -13,7 +13,8 @@ const slot = (canvasId: string): LayoutNode => ({ component: 'CanvasSlot', props
 const framed = (name: string, ...more: LayoutNode[]): LayoutNode => ({ component: 'Frame', props: { name }, children: [slot('main'), ...more] });
 const inUse = (layout: LayoutNode): { kind: 'layout'; body: unknown } => ({ kind: 'layout', body: { ref: 'frame', layout, use: true } });
 const words: ActionDefinition = { id: 'words', data: { title: 'Hello' }, layout: { component: 'Text', children: '$.title' } };
-const shell = { canvases: [{ id: 'main', initial: 'words' }], layout: framed('as shipped') };
+const staged = (name: string): LayoutNode => ({ component: 'Stage', props: { name }, children: [{ component: 'ActionSlot', props: { instanceId: '$.active.id' } }] });
+const shell = { canvases: [{ id: 'main', initial: 'words', actionLayout: staged('as shipped') }], layout: framed('as shipped') };
 
 type Screen = { frame: () => string; canvases: () => string[]; lastOn: (canvas: string) => string | undefined; open: () => string | undefined; push: (canvas: string) => void };
 
@@ -148,6 +149,27 @@ describe('a frame saved from a function’s session', () => {
       await settle();
       expect(ada.frame()).toContain('"name":"as shipped"');
       expect(ada.canvases()).toEqual(['main']);
+    } finally {
+      here.hosts.stop();
+    }
+  });
+
+  it('the layout of a canvas, saved the same way, shows on its principal’s open screen at once, with what is on the canvas kept', async () => {
+    const here = standing();
+    try {
+      const ada = await here.screenOf('ada');
+      const ben = await here.screenOf('ben');
+      await settle();
+      const open = ada.open();
+      expect(ada.lastOn('main')).toContain('"name":"as shipped"');
+
+      await here.sessionOf('ada').artifacts.save([{ kind: 'layout', body: { ref: 'canvas/main', layout: staged('as ada has it'), use: true } }]);
+      await settle();
+
+      expect(ada.lastOn('main')).toContain('"name":"as ada has it"');
+      expect(ada.lastOn('main')).toContain('Hello');
+      expect(ada.open()).toBe(open);
+      expect(ben.lastOn('main')).toContain('"name":"as shipped"');
     } finally {
       here.hosts.stop();
     }
