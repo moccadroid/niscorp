@@ -477,9 +477,11 @@ follows and living shells adopt, as for every change of the app today. A
 person's own save is adopted at once by their shells in the process that
 saved; a deployment with several processes tells the others on its fabric to
 bring that principal's shells level. The message says that, and nothing about
-what the person did. An answer is kept for a principal
-until they save or the pointer moves, so a request does not ask the database
-(not built so: part 8).
+what the person did. No answer is kept for a principal (the owner's,
+2026-10-13; it was to be kept until they save or the pointer moves): what they
+saved is asked of the rows once for each shell built for them and once for
+each adopt, so a save made in another process is theirs at the next build
+whether or not a fabric is set.
 
 ## 6. The build
 
@@ -650,11 +652,6 @@ to be looked at again with the owner.
 
 **Step 4 as built, where the owner has not been asked.**
 
-- **No answer is kept for a principal.** What they saved is asked of the rows
-  once for each shell built for them and once for each adopt (one indexed
-  read; 0.7 ms on a small table, measured on PGlite). Part 5 says to keep it.
-  Kept, it needs a clock of its own: a process with no fabric never hears of a
-  save made in another.
 - **The audit.** A saved layout is held to what `auditAction` finds of its
   action with the layout in place and does not find of the action as it is
   built. So a layout that leaves out a control its action listens on is
@@ -696,8 +693,6 @@ to be looked at again with the owner.
 - **A saved layout is held to the components of every shell at a save, and to
   those of the one shell when it is built.** In a shell that cannot draw it,
   it is left out with a line.
-- **`AGENTS.md` says nothing of `session.artifacts`.** The words are the
-  owner's.
 - A sentence a refused layout gets from nova's schema can be as short as
   "layout: Invalid input". It is the schema's own.
 
