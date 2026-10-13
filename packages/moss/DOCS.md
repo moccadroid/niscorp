@@ -246,7 +246,7 @@ What the manifest's in-process functions close over:
 
 ```typescript
 type FunctionSession = {
-  shell: Shell;                    // the session's living, durable shell (a getter — a reset replaces it); nine members throw
+  shell: Shell;                    // the session's living, durable shell (a getter — a reset replaces it); eight members throw
   artifacts: SessionArtifacts;     // what this principal saved, and saving: `session.artifacts`, below
   principal: string | null;
   roles: readonly string[];
@@ -268,8 +268,8 @@ deletes every session the principal has (`revokeAllFor`). It need not be
 awaited: a failure is logged. `recordRun` is a
 no-op when the manifest declares no `runs` sink.
 
-**`shell` refuses the nine members that change what a shell is made of**:
-`registerAction`, `removeAction`, `registerFragment`, `addCanvas`,
+**`shell` refuses the eight members that change what a shell is made of**:
+`registerAction`, `removeAction`, `addCanvas`,
 `removeCanvas`, `setCanvasLayout`, `setLayout`, `setPhrases` and `dispose`
 throw, and so do `set` and `delete` on its `layoutStore`, which is to read. A
 definition read off it (`shell.getRuntime(id).definition`) is the action as it
@@ -425,10 +425,12 @@ functions: (session) => ({
   version of the action brings both back.
 - **No action an app ships or hands over, and no fragment of a shell, has an
   id beginning with `generated.`**: a boot, `replaceActions` and the
-  manifest's parse refuse one.
-- A fragment that left, by a reset or because it no longer passes, stays in a
-  shell that is already open until that shell is built again: nova's shell
-  has a call to take an action out and none to take a fragment out.
+  manifest's parse refuse one. Nor is an action under the id of a fragment a
+  shell ships, since a nova shell keeps both in one registry: a boot and
+  `replaceActions` refuse that too.
+- A fragment that left, by a reset or because it no longer passes, is taken
+  out of a shell that is already open, as an action is. What was opened with
+  it stays as it was composed.
 
 **Every call is for the session's principal, and no call can be for anybody
 else.** No argument names whose rows are meant. Moss runs its own entries over

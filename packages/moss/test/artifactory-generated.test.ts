@@ -360,3 +360,23 @@ describe('the ids moss gives to what is generated', () => {
     expect(Object.keys(running.actions())).toEqual(['home', 'desk']);
   });
 });
+
+describe('an action and a fragment a shell ships', () => {
+  it('an action is not under the id of a fragment a shell ships: not at a boot, and not in a set handed over', () => {
+    const sheetAction: ActionDefinition = { id: 'sheet', layout: saying('an action under the fragment’s id') };
+    const shipping = (): unknown => createRunningManifest({ shipped: { ...app, actions: { ...app.actions, sheet: sheetAction } }, grants: scopeGrants([]), shells: [SHELL] });
+    const said = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      expect(shipping).toThrow('"sheet" is the id of an action and of a fragment a shell ships: an id names one of the two');
+      const onAPage = { ...app, shell: { canvases: SHELL.canvases }, pages: { docs: { ...SHELL, path: '/docs' } }, actions: { ...app.actions, sheet: sheetAction } };
+      expect(() => createRunningManifest({ shipped: onAPage, grants: scopeGrants([]), shells: [SHELL] })).toThrow('"sheet" is the id of an action and of a fragment a shell ships');
+    } finally {
+      said.mockRestore();
+    }
+
+    const { running } = world();
+    expect(() => running.replace('extras', { sheet: sheetAction })).toThrow('"sheet" is the id of an action and of a fragment a shell ships: an id names one of the two');
+    expect(() => running.replace('extras', { listedOtherwise: sheetAction })).toThrow('"sheet" is the id of an action and of a fragment a shell ships');
+    expect(Object.keys(running.actions())).toEqual(['home', 'desk']);
+  });
+});

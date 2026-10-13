@@ -47,7 +47,6 @@ const sessionShellOf = (shell: Shell): Shell => {
     },
     registerAction: refuse('registerAction'),
     removeAction: refuse('removeAction'),
-    registerFragment: refuse('registerFragment'),
     addCanvas: refuse('addCanvas'),
     removeCanvas: refuse('removeCanvas'),
     setCanvasLayout: refuse('setCanvasLayout'),

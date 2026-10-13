@@ -15,18 +15,20 @@ export type ManifestCandidate = {
   charter: Charter;
   actions: Readonly<Record<string, ActionDefinition>>;
   layouts: Readonly<Record<string, LayoutVariant>>;
+  fragmentIds: ReadonlySet<string>;
   wearable: readonly (readonly string[])[];
   grants: readonly string[];
   entries: readonly (SeedEntry | SeedMutation)[];
   profiles: ReadonlySet<string>;
 };
 
-export type ShippedManifest = Pick<NiscApp, 'charter' | 'actions' | 'layouts' | 'wearable' | 'assignments' | 'entries' | 'behaviors'>;
+export type ShippedManifest = Pick<NiscApp, 'charter' | 'actions' | 'layouts' | 'wearable' | 'assignments' | 'entries' | 'behaviors' | 'shell' | 'pages'>;
 
 export const candidateOf = (shipped: ShippedManifest, inForce: Pick<ManifestCandidate, 'actions' | 'entries'>, grants: readonly string[]): ManifestCandidate => ({
   charter: shipped.charter,
   actions: inForce.actions,
   layouts: shipped.layouts ?? {},
+  fragmentIds: new Set([shipped.shell, ...Object.values(shipped.pages ?? {})].flatMap((shell) => Object.keys(shell?.fragments ?? {}))),
   wearable: wearableOf(shipped),
   grants,
   entries: inForce.entries,
@@ -79,6 +81,13 @@ const generatedIdErrors = (actions: ManifestCandidate['actions']): string[] =>
     return taken === undefined ? [] : [`"${taken}" begins with "${GENERATED_ID_PREFIX}", which is where what somebody generated is kept`];
   });
 
+// Nova keeps actions and fragments in one registry: a shell built with both under one id is refused there.
+const fragmentIdErrors = (actions: ManifestCandidate['actions'], fragmentIds: ManifestCandidate['fragmentIds']): string[] =>
+  Object.entries(actions).flatMap(([listed, definition]) => {
+    const taken = [listed, definition.id].find((id) => fragmentIds.has(id));
+    return taken === undefined ? [] : [`"${taken}" is the id of an action and of a fragment a shell ships: an id names one of the two`];
+  });
+
 const reachErrors = (entries: ManifestCandidate['entries'], profiles: ReadonlySet<string>): string[] => {
   const unknown = entries.flatMap((entry) => (entry.reach !== undefined && !profiles.has(entry.reach) ? [`${entry.fingerprint} declares reach "${entry.reach}"`] : []));
   return unknown.length === 0 ? [] : [...unknown, `known profiles: ${[...profiles].join(', ') || '(none)'}`];
@@ -108,6 +117,7 @@ export const verifyManifest = (candidate: ManifestCandidate): ManifestReport => 
       ...found('actions', unread.map((action) => `"${action.id}" is not an action nova reads: ${action.why}`)),
       ...found('actions', layoutNameErrors(read.actions)),
       ...found('actions', generatedIdErrors(read.actions)),
+      ...found('actions', fragmentIdErrors(read.actions, read.fragmentIds)),
       ...found('charter', charter.errors.map((error) => `${error.rule}: ${error.detail}`)),
       ...found('reach', reachErrors(read.entries, read.profiles)),
       ...found('variants', verifyVariants(read)),

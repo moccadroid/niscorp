@@ -18,6 +18,7 @@ const coherent: ManifestCandidate = {
   },
   actions: { home, 'admin.panel': panel },
   layouts: {},
+  fragmentIds: new Set(),
   wearable: [['admin']],
   grants: scopeGrants(['deals']),
   entries: [{ fingerprint: 'deals/mine', dsl: { from: ['deals'], fields: ['deals.id'] }, reach: 'own' }],

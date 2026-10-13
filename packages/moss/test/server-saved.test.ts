@@ -171,6 +171,28 @@ describe('a layout saved from a function’s session', () => {
     });
   });
 
+  it('a generated fragment reaches its owner’s open shell, and a reset takes it out of that shell again', async () => {
+    const here = processOn(rowsDouble());
+    await stopping([here], async () => {
+      const ada = await here.screenOf('ada');
+      await settle();
+      const shell = here.sessionOf('ada').shell;
+
+      const saved = await here.sessionOf('ada').artifacts.save([{ kind: 'fragment', body: { layout: { component: 'Heading', children: [{ slot: 'body' }] } } }]);
+      const id = saved.artifacts[0]?.id ?? '';
+      await settle();
+
+      shell.push('main', 'words', undefined, [id]);
+      await settle();
+      expect(ada.drawn()).toContain('"name":"Heading"');
+
+      shell.pop('main');
+      await here.sessionOf('ada').artifacts.reset('fragment', id);
+      await settle();
+      expect(() => shell.push('main', 'words', undefined, [id])).toThrow(`Unknown fragment: ${id}`);
+    });
+  });
+
   it('published for everybody, it shows on every open screen at once, with what each had typed; one’s own in use stays over it', async () => {
     const rows = rowsDouble();
     const here = processOn(rows);
