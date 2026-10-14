@@ -1,5 +1,25 @@
 # @niscorp/cortex
 
+## 0.1.4
+
+### Patch Changes
+
+- 1dcccd7: An envelope with a misspelt key is no longer accepted as the agent's data.
+
+  A model may send the payload alone, without `{ response, data, reasoning }` around it, and cortex reads it as the data when it passes the agent's schema. A schema that takes any object passed everything: under `z.record(z.string(), z.unknown())` the answer `{ respnse: 'Done.', data: { id: 7 } }` came back as the data, whole, and under an object schema whose fields are all optional it came back as `{}`. The run finished with the wrong data and no correction.
+
+  The payload alone is now read only when the schema can tell it from an envelope, which is when the schema refuses an object that holds one unknown key. Under any other schema an unknown key is reported to the model, as it is for an agent with no data schema.
+
+  **What to change:** nothing. An agent whose data schema takes any object (a record, or an object with only optional fields) and whose model sends the payload alone now spends one correction round on it. Prism's mapping agent is one such agent, because any JSON object is a Prism config. A required field in the schema, or `z.strictObject`, keeps the payload-alone reading.
+
+- a4ccf0e: The README states thirteen facts about the API that were written only in source comments, and DESIGN.md gives the condition for reading a bare payload.
+
+  The README now says what `meta.usage.reported` means, what `repeatedCalls(n)` counts (n + 1 identical calls), that `prepareStep`'s `activeTools` takes tool names, what `transport: 'step'` does, the order hooks and gates run in, who receives `run-start`, that `output-partial` is best-effort, the three kinds of `retry`, what a resumed run keeps, the reason on an approval that timed out, how a hand-written delegating tool nests its child's events, and how `estimatedTokens` is counted.
+
+  No behaviour changed.
+
+  **What to change:** nothing.
+
 ## 0.1.3
 
 ### Patch Changes
