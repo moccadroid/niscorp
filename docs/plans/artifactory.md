@@ -2,9 +2,9 @@
 
 **Status: Proposed (2026-10-12), ready to build from. What it has to do
 (part 2) and its ten design decisions (part 9) are the owner's and are
-settled. Steps 1 to 6 and step 9 of part 6 are built (2026-10-13), on the
+settled. Steps 1 to 7 and step 9 of part 6 are built (2026-10-14), on the
 branch `worktree-artifactory`; nothing else is. Step 10 is struck
-(2026-10-14), which leaves steps 7 and 8. Part 0 is for whoever builds it, part 6 is the
+(2026-10-14), which leaves step 8. Part 0 is for whoever builds it, part 6 is the
 build, step by step, and part 7 is what needs the owner's word before it is
 touched.**
 
@@ -657,11 +657,12 @@ another app's layout with components its own shell has none of; lyceum's two
 calls switch a layout of the shell's own store for one session, which is
 neither generated nor saved.
 
-**Step 7. Generated reads that are saved.** Needs part 7's two items for vex
+**Step 7. Generated reads that are saved. Built (2026-10-14).** Needs part 7's two items for vex
 and strata first. A saved read is the query and its mapping's prism config,
 under the fingerprint vex gave it. *Done when:* a saved read survives a
 schema change that does not touch what it reads, and one saved under a shipped
-fingerprint is refused.
+fingerprint is refused. As built: three changes in vex and the read kind in
+the artifactory (`artifactory/reads.ts`); part 8, "Step 7 as built".
 
 **Step 8. The declared functions and the charter's part.** Needs part 7's
 items for the manifest and for charter first. *Done when:* a generated action
@@ -703,8 +704,8 @@ Ask with the concrete change, at the step that needs it.
 
 | What | Why | Step |
 |---|---|---|
-| **vex:** its shape mapper hands back the prism config it compiled, beside the compiled form | a saved read has to be the entry as authored, and the config is kept nowhere today | 7 |
-| **strata:** one stored kind, for a vex entry | a stored entry carries the stamp it was written at and is upgraded where it is read | 7 |
+| **vex:** its shape mapper hands back the prism config it compiled, beside the compiled form | a saved read has to be the entry as authored, and the config is kept nowhere today | 7, built |
+| **strata:** one stored kind, for a vex entry | a stored entry carries the stamp it was written at and is upgraded where it is read | 7, built: declared by vex (`@niscorp/vex/migrations`); strata needed nothing |
 | **moss, `NiscApp`:** functions declared by name with a description | today `functions(session)` is one map whose names are not known before a session | 8 |
 | **charter:** one part, which functions the generated actions of a role may call | the charter decides what a generated action may run | 8 |
 | **moss, the fabric:** one more message, "bring this principal's shells level" | a person's own save reaches their screens in another process; the message says what to do, and nothing about why | 4, built: `adopt` |
@@ -737,6 +738,49 @@ shell. On the whole shell (`unverifiedShell`) they see the ref.
   published is what can be generated. And a published default wins over a
   build that is deployed later, until it is taken back. Both follow from what
   is decided, and are said here so that nobody is surprised by them.
+
+**Step 7 as built** (the owner's go, 2026-10-14).
+
+- **Three changes in vex.** Its shape mapper answers the Prism config it
+  compiled (`config`, required: every app here uses vex's own mapper), and the
+  engine keeps it on the entry it writes (`mapping`), with a column for it in
+  vex's table, a new migration, `nisc.vex.cache/2`. Vex declares one stored
+  kind, `nisc.vex/entry` (`@niscorp/vex/migrations`). And the two lookups that
+  replay an entry hand the cache the scope of whoever asks.
+- **A saved read is answered to its owner alone** (the owner's choice between
+  two, 2026-10-14). Sharing with everybody is publishing, which is not built
+  for a read. Anybody else who sends its fingerprint gets what vex's table still
+  holds under it, as for any query vex wrote and nobody saved.
+- **It is saved with no body**, under the fingerprint vex gave it: moss takes
+  the entry vex wrote for the request from vex's table.
+- **The order of a lookup:** what the app ships or was handed, then the
+  caller's own saved read, then vex's table. The caller's read is asked before
+  vex's table because vex drops a stale copy and does not ask again in the same
+  request. Vex looks an entry up twice in a request (its handler, for the
+  reach, and its engine), so a replay of a fingerprint the app does not ship,
+  by a caller who is signed in, costs two reads of the history of that one id
+  in the caller's rows, and a Prism compile each where a read is saved. Not
+  measured. A caller nobody is signed in for is not asked for: nothing saved is
+  answered to them, though a principal named as they are has the same id.
+- **Held as a query vex wrote:** a saved read is answered not protected, so
+  vex's `maxLimit` applies to it, and a request with an intent and a shape
+  under its fingerprint writes a new query into vex's table, which its owner
+  can save in its place. Answered protected, as the review found it built at
+  first, it ran past `maxLimit`, and such a request was refused.
+- **Its owner's policy applies when it is replayed, and not at the check of a
+  generated action.** One over a read whose tables its owner can no longer
+  read stays in force and its replay is refused, where one over such an entry
+  the app ships is left out. Holding it at the check needs the owner's policy
+  handed to the read's check, which is a new input: brought to the owner, not
+  built.
+- **Moss's data layer hands vex's table only what vex wrote for a request.**
+  Vex writes back an entry it replays; one answered from a saved read is not
+  the table's.
+- **Loom moves with nova and vex.** It depends on both, and the changeset
+  check refuses a breaking release whose dependents do not move. The nova
+  changeset missed it since that change.
+- **Not built:** publishing a read, and relay's assistant moving onto saved
+  reads.
 
 **Step 9 as built.** The builder's recommendations, built on the owner's go
 (2026-10-13).
