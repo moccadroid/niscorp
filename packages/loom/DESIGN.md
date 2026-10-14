@@ -83,7 +83,10 @@ The vocabulary is deliberately small and stable
 description, error, required marker), controls (`text`, `number`, `checkbox`,
 `select`, `raw`), and list actions (`append`, `row-menu`). Structural shapes
 (objects, arrays, unions) are *compositions* of these roles, not roles of their
-own. New variations ride as props rather than new roles.
+own. An array is a `loom:array` holding one `loom:array-item` per element and
+then the `loom:append` button; each `loom:array-item` holds a `loom:box` around
+the element's editor and then the `loom:row-menu`. New variations ride as props
+rather than new roles.
 
 ### Editing is model writes only
 
@@ -127,6 +130,8 @@ not, so Loom follows the document, not the schema.
 
 `parse` stops when it re-enters a type it is already inside and marks the
 back-edge with a `self` node, yielding a finite model from an infinite schema.
+The object or union it re-entered carries `recursive: true`, the mark `toNova`
+reads: a node without it gets no template.
 `toNova` emits the recursive shape once as a named layout template authored
 against `$item`; a `self` reference inside an array points back to that
 template, and Nova resolves it per render against the live data. The form is
@@ -146,10 +151,14 @@ picker, a Prism node editor. A widget is a matcher plus a component: the matcher
 (`{ role, match }`) tests a field by where it sits (its `kind` and dot-path
 within its scope), the compiler applies the first match and emits that field
 under the given role, and the kit supplies the component for that role. Matching
-is structural and resolved at compile time. Because a recursive template
+is structural and resolved at compile time. An array item's segment of the path
+is `*` (`fields.*`, `sort.*.field`). Because a recursive template
 restarts the path, matchers target by suffix and stay depth-agnostic. The
 component, and any data it needs, lives in the React layer — the compiler only
-records which role a field uses.
+records which role a field uses. The component gets the field's current value
+as `value` and its binding as `novaModel`; `useModelWrite(novaModel)`, from
+`@niscorp/loom/react`, returns the function that writes a value to the field
+through the binding pipeline the built-in controls use.
 
 ### Validation
 
@@ -192,10 +201,20 @@ contributed by plugins. The flow:
 - `loadPlugin(plugin)` registers a plugin and calls its `mount(editor)` hook,
   handing it the live editor. Through `mount` a plugin can add canvases, register
   actions, arrange the canvas layout, or load further plugins.
+  `mountView(editor, action, read)` adds a view in one call: it registers
+  `action`, adds a canvas with the action's id that shows it, and sets the
+  action's data to `read(editor)` when called and again on every `change`. A
+  plugin loaded later can remove the view with
+  `editor.shell.removeCanvas(action.id)`.
 - `open(artifact)` selects the plugin named by `artifact.type` and compiles its
   documents into form canvases. The controller then publishes the live document
   values (`editor.documents`) and validation problems (`editor.validations`), and
-  emits `change` / `open` events.
+  emits `change` / `open` events. `editor.plugin` is the selected plugin,
+  `undefined` before the first `open`. The default canvas layout is a row of
+  `loom:column` nodes, one holding the forms and one holding every other canvas;
+  `loom:column` is the kit's sized column, with `grow` (default 1), its
+  flex-grow, and `min` (default 320), the width in pixels it does not shrink
+  below.
 
 ### Documents
 
@@ -228,7 +247,12 @@ The render components — previews, widget components, view panes — are not pa
 of this core. They live in the plugin's React surface and are registered with the
 kit by role. A plugin therefore splits the same way the package does: a
 framework-free core (`@niscorp/loom/plugins/vex`) and a React surface
-(`@niscorp/loom/plugins/vex/react`) that adds the components.
+(`@niscorp/loom/plugins/vex/react`) that adds the components. Each reference
+plugin's core exports `PREVIEW`, the one id its preview goes by: the component
+name, the action id and the canvas id. A surface registers its preview
+component under it, and the component receives the live value as a prop:
+`config` (prism), `query` (vex), `documents` (nova, all of them). The Prism core
+also exports `NODE`, the role of the widget that edits the whole config.
 
 The default Data and Validations JSON panes are themselves plugins. The host
 holds no domain knowledge; it loads what it is given, in order, last load wins.
@@ -237,7 +261,10 @@ holds no domain knowledge; it loads what it is given, in order, last load wins.
 
 `<LoomEditor>` builds a component registry from the loaded plugins' components,
 creates the controller against it, loads the plugins, opens the artifact, and
-renders the shell with `<NovaShell>`. The controller produces the structure and
+renders the shell with `<NovaShell>`. A plugin handed to `<LoomEditor>` is the
+core descriptor plus `components`, a map from role to component: the views its
+`mount` adds and the widgets its matchers name.
+The controller produces the structure and
 drives the shell; React only mounts it and supplies components. A Vue surface
 later would be the same controller with a Vue kit.
 

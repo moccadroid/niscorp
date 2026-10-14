@@ -114,7 +114,8 @@ and `ACTION_SLOT_NAME` — the shell's default layouts reference them:
 - **ActionSlot** (`{ instanceId }`): renders that instance's tree; nothing
   when `instanceId` is missing. Wrap the dispatch handed to the instance's
   subtree with core's `scopeDispatch(dispatch, instanceId)` so its UI events
-  reach its own triggers only. Do not reimplement the stamping rule.
+  reach its own triggers only. An event that already carries an `origin`
+  passes through unchanged. Do not reimplement the stamping rule.
 
 `flattenRenderTree` resolves `CanvasSlot` markers away, but the `ActionSlot`
 marker *survives* flattening: it arrives as a component node with
@@ -138,6 +139,17 @@ that set plus the two slots (`registerNovaReactComponents`,
 Checkbox, Textarea, and Table, with Select and Switch as aliases of Input and
 Checkbox; the TTY and Ink kits ship the DOM kit's names plus Badge (each a
 `defaultRegistry()`).
+
+`Table`, in the three kits that ship it, reads `columns` (`[{ label, cell:
+{ key } }]`, `key` a dotted path into a row) and `rows`. With `rowRef` set, a
+press on a row dispatches `ui:click` on that ref with the row's `clickKey`
+value as payload; `clickKey` defaults to `rowKey`, and `rowKey` to `id`.
+
+`createDomView`, `mountShell` and `renderToString` take a `fallback` component
+in their options for a name the registry does not hold; without one, such a
+name draws a `COMPONENT_NOT_FOUND` marker. The DOM kit exports one
+(`fallback`): a `div` holding the node's children, or with no children its
+`label` or `title` prop and a `count`.
 
 ### 5. SlotWrapper persistence
 
@@ -238,6 +250,12 @@ cleanup runs once, when the element leaves the page for good: it was removed, it
 was replaced because its own props changed, or the view was destroyed
 (`renderToString` destroys the view it drew with, so nothing is left running
 where only markup was wanted). An element that stays is not told anything.
+
+**`dispatch(event)` is for a component with presses of its own** — a table's
+rows, a panel's close button. The event goes to the canvas the component sits
+in, as the instance it sits in; in the frame, outside any `CanvasSlot`, it goes
+nowhere. A node's own `ref` and `model` need none of it: the adapter wires
+those on the element the component returns.
 
 **Children are patched in place only under an element that holds exactly them.**
 The adapter looks at what the component returned:

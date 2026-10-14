@@ -37,7 +37,7 @@ Each provider has a capability profile that Signal uses to pick the right strate
 - **`nativeJsonMode`** — Can it guarantee JSON output?
 - **`toolsWithStructuredOutput`** — Is `response_format` accepted together with `tools` in one request?
 - **`validatesToolArgs`** — Does the endpoint validate tool-call arguments server-side and reject the request on a mismatch?
-- **`manglesNestedToolArgs`** — Does the model corrupt nested tool-call arguments?
+- **`manglesNestedToolArgs`** — Does the model corrupt nested tool-call arguments? For example, a nested array arrives as a JSON string.
 - **`multimodal`** — Does it accept image content?
 - **`supportsEmbedding`** — Can it convert text to vectors?
 
@@ -152,14 +152,25 @@ does) joined with the model's registry row (what the MODEL does, as
 measured by `scripts/probe-model.ts`). There is no override: a fact about
 a model is a row in `src/registry.ts`. A model with no row resolves to the
 conservative `UNMEASURED_MODEL`, and `describe().modelKnown` says so.
+`UNMEASURED_MODEL` assumes the least: `nativeJsonSchema: false`,
+`toolsWithStructuredOutput: false`, `manglesNestedToolArgs: true`,
+`multimodal: false`.
 A custom provider (by `baseUrl`) declares its own `capabilities`.
+`chatProviderEntry(id)` returns a chat provider's registry row, and
+`undefined` for an unknown id and for a decision provider.
 ```typescript
 createSignal('groq').describe()
 // { provider: 'groq', model: 'qwen/qwen3.8-27b', kind: 'chat', modelKnown: true, capabilities: {…} }
 ```
+`describe()` makes no request and does not need an API key. For a custom
+provider `modelKnown` is `false`, and `model` is `undefined` when none is set.
+
 A `reasoningEffort` the model's row does not list is refused when the
 client is built (`SignalError`, `E_VALIDATION_FAILED`), not by a provider 400
-mid-run. An unmeasured model is not checked.
+mid-run. An unmeasured model is not checked. On OpenRouter a row lists what
+the proxy accepts, which is not what the routed model honours: it passes
+`reasoning_effort` through to non-reasoning models too, so an accepted value
+does not mean the model reasons.
 
 ### `.onRetry(handler)`
 Hook called on each validation failure, including the last one that exhausts the retries.
@@ -220,6 +231,38 @@ Schema validation happens at the end of the stream; when the retries are spent t
 ### `.step(request)` / `.stepStream(request, options?)`
 
 The low-level primitives `complete()` and `stream()` are built on: one model call, no tool execution, no schema retries. The caller owns the loop. `step()` takes a `StepRequest` (`messages`, `tools`, `toolChoice`, `output`, `responseFormat`, `options`) and returns a `StepResult` (`content`, `toolCalls`, `usage`, `finishReason`, `raw`, and — when the request carried `output.accept` — the routed `outcome` and `wire` report). `stepStream()` yields `text`, `reasoning` and `tool_call_delta` events and a final `done` carrying the `StepResult`.
+
+- **`messages`** — an assistant turn carries the calls it made as `toolCalls` (`{ id, name, args }`, `args` a JSON string) and has `content: ''` when it only called tools. Each result goes back as a `tool` message whose `toolCallId` is that call's `id`.
+- **`tools`** — each is `{ name, description, parameters }`; `parameters` is the JSON Schema of the tool's input (`z.toJSONSchema()` of a Zod schema).
+- **`output.accept`** — gates and does not transform: `outcome.value` is the accepted candidate itself, not the schema's parsed output, so a transform or a default in the schema is not applied.
+- **`output.outputTool`** — the name of an exit tool. A call to it is routed as output, never as a tool call.
+- **`responseFormat`** — passed to the provider as given. `step()` does not check it against the capabilities: with `tools` on a model without `toolsWithStructuredOutput`, the provider rejects the request.
+- **`toolCalls`** — a call's `args` is the parsed JSON value, or the provider's string when it does not parse. It is not checked against the tool's `parameters`.
+- **`usage`** — `reported: false` means the provider sent no usage and the numbers are an estimate (about 4 characters per token). A stream does not reliably carry its usage.
+- **`outcome`** — also present, without `output.accept`, on a result recovered from a provider rejection.
+- **`wire`** — `rung` names what produced the accepted output: `parse` for content that was valid JSON as it arrived, `call-args` for a call's arguments, otherwise the repair it took. `recovered` is set when the result was recovered from a provider rejection.
+- **`reasoning` events** — the model's thinking, never part of `content`. Only a provider that streams its reasoning produces them; on Groq and OpenRouter Signal asks for it only when `reasoningEffort` is set.
+- **`tool_call_delta` events** — each carries one fragment of a call's arguments (`argsText`) for the call at `index`. The assembled calls are in the `done` event's `toolCalls`.
+
+### `resolveTransport(spec, capabilities)`
+
+For a caller that runs its own loop over `step()`: resolves how an output contract travels — `respond` (the arguments of an exit tool), `native` (`response_format`) or `emit` (message content) — and returns what to put on each request. The `spec`:
+
+- **`wire`** — the full schema of the output contract. It is the `response_format` under `native` and the exit tool's params under `respond`. An endpoint with `validatesToolArgs` is never sent it as tool params.
+- **`looseWire`** — the same contract with the payload left untyped. It replaces `wire` as the exit tool's params when the contract has `data` and `wire` has no JSON Schema, has a `$ref` in it, or is longer than 8,192 characters as one.
+- **`hasData`** — whether the contract carries a typed payload (a `data` field).
+- **`forceTool`** — every turn must be a tool call: under `respond` the result carries `toolChoice: 'required'`. It makes `auto` resolve to `respond` where it would resolve to `emit`, and throws `E_VALIDATION_FAILED` with an explicit `emit`.
+
+The result:
+
+- **`respondDetail`** — under `respond`, how much of the contract the exit tool's params carry: `full` (`wire`), `loose` (`looseWire`) or `permissive` (the endpoint validates tool args, so the params name the envelope fields and constrain nothing).
+- **`respondDescriptor`** — under `respond`, the exit tool to append to the request's `tools`.
+- **`outputToolName`** — under `respond`, the exit tool's name (`RESPOND_TOOL_NAME`). Pass it as `output.outputTool`; the `tool_call_delta` events of a call with that name carry the output as it arrives.
+- **`responseFormat`** — under `native`, the `responseFormat` to send on every request.
+- **`toolChoice`** — `'required'` under `respond` with `forceTool`.
+- **`injectSchemaDoc`** — `true` when the contract has `data` and the transport does not carry its full schema (`emit`, and `respond` with `loose` or `permissive` params): the caller adds its own schema documentation to the prompt.
+- **`finishProtocol`** — the text that tells the model how the run ends under this transport. Add it unchanged as a system message, after any schema documentation.
+- **`corrections`** — the messages to send back when a turn did not finish (`termination`) or its output was invalid (`invalidOutput`). The caller replaces `{issues}` in `invalidOutput` with the evidence.
 
 ### `.count(input)`
 
@@ -286,7 +329,7 @@ const { response } = await createSignal('groq')
 
 1. Zod schema is converted to JSON Schema (draft-07)
 2. Based on capabilities:
-   - `nativeJsonSchema` (and, when tools are set, `toolsWithStructuredOutput`) → sends JSON Schema as `response_format`
+   - `nativeJsonSchema` (and, when tools are set, `toolsWithStructuredOutput`) → sends JSON Schema as `response_format`, with `strict: false`
    - otherwise `nativeJsonMode` and no tools → sends `response_format: json_object` + schema in a system message
    - otherwise → schema in a system message only
 3. The response is normalized by the wire layer (JSON extraction and repairs, each counted only if the result passes the schema)
@@ -466,7 +509,7 @@ result.decisions.urgency.level;      // 0 | 1 | 2 — index into criteria
 
 You declare the questions once and never write an output type. Signal derives both halves from them:
 
-- **The result type.** `choice` → the union of the `criteria` keys; `score` → a level index into `criteria`; `noul` → a boolean.
+- **The result type.** `choice` → the union of the `criteria` keys; `score` → a level index into `criteria`; `noul` → a boolean. A `score` question's `criteria` lists its levels lowest first.
 - **The acceptance gate.** The same derivation at runtime: a choice outside the asked options, a question left unanswered, a distribution over other keys, a probability outside [0, 1] — each fails the call with `E_VALIDATION_FAILED` and the provider's body under `context.raw`.
 
 There is no repair and no correction retry. A decision model writes no bytes to repair and cannot be told what it got wrong.
@@ -485,6 +528,8 @@ if (result.calibrated) {
 }
 ```
 
+On a decision provider `level` is the most probable level and `answer` is `noul >= 0.5`.
+
 On a chat provider `decide()` still works: the same questions run through structured output (native grammar where it exists, the repair ladder, correction retries) and come back as picks alone with `calibrated: false`. Signal does not invent a `1.0` — it would clear every threshold. Emulation is one to two orders of magnitude slower; a caller on a latency budget checks first:
 
 ```typescript
@@ -502,6 +547,8 @@ controller.abort(); // tears down the HTTP request
 ### Provider Support
 
 A provider is one of two kinds. A **decision provider** (`typesafe`) has `decide()` and nothing else — `complete`, `stream`, `step`, `stepStream` and `embed` fail with `E_VERB_NOT_SUPPORTED` before any request is built. A **chat provider** has every verb, `decide()` included, by emulation.
+
+`typesafe`'s default model `jev-latest` is an alias for the provider's current version; `meta.model` is the version the provider reports having answered. A caller that records calibration against a version pins it with `.model('jev-1.13.0')`.
 
 A decision provider by base URL — self-hosted, or the fake a check runs — names its protocol:
 

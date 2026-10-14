@@ -178,9 +178,14 @@ type QueryEngineConfig = {
 ```
 
 - `config.entities`, when set, restricts `introspect()` to those tables.
+- `createPostgresAdapter({ pool, exclude })` names tables the adapter never
+  reports: `introspect()` leaves them out. It is for tables the host owns that
+  are not application data, such as a migration journal.
 - `config.statementTimeoutMs` is enforced by the database (`statement_timeout`),
   set up at `introspect()`. A database that cannot enforce it (PGlite) runs
-  reads unbounded and the engine warns each time `introspect()` runs.
+  reads unbounded and the engine warns each time `introspect()` runs. A `PgPool`
+  declares such a database with `statementTimeouts: false`, as the pool from
+  `createPglitePool` does.
 - `config.maxPresenceVariants` is not a limit on what runs: past it, a response
   carries a warning that the entry has compiled that many distinct
   optional-key combinations.
@@ -189,6 +194,9 @@ type QueryEngineConfig = {
   reads it for one thing: which columns a scope key is bound to, so a generation
   can be told who its caller is (`GenerationCaller.bindings`). `introspect()`
   throws `execution_error` if a rule names a column the database does not have.
+  `scopeBindings(behaviors, tables, scope)` returns that list for the given
+  tables: one entry per table, column and key, sorted, and only for keys
+  `scope` holds a value for.
 - **`rows`** sizes the reactive rows cache — see
   [Reactive reads](#reactive-reads-refresh).
 - `defaultLimit` is applied when a DSL omits `limit`. `maxLimit` clamps a larger
@@ -584,7 +592,9 @@ outer query as `alias.field` — every selected field (under its `as`, if
 aliased) plus every `compute`/`aggregate` alias.
 
 **Joins.** String entity sources are joined automatically by foreign key; a
-source with no FK path to the others is an error. A **nullable** FK compiles to
+source with no FK path to the others is an error. A composite foreign key is
+one relation in the schema (`localFields[i]` pairs with `foreignFields[i]`) and
+joins on every pair. A **nullable** FK compiles to
 a `LEFT JOIN` — a null FK never silently drops the referencing row from the
 read (the joined fields come back null); a non-nullable FK stays an inner
 `JOIN` (equivalent — the column can't be null). Reverse one-to-many joins are
@@ -738,6 +748,10 @@ type ScopeRules = { read?: ScopeMatch[]; write?: ScopeRule[]; insert?: ScopeRule
 type ScopeBehaviors = Record<string, ScopeRules | Record<string, ScopeRules>>;
 ```
 
+A behavior's `write` rules apply to every write verb the grants carry, ahead of
+that verb's own `insert`/`update`/`delete` rules; a delete takes only the
+`match` rules among them.
+
 ### Scoping profiles
 
 A table carries **either** one rule set — the shape above — **or several named
@@ -859,6 +873,9 @@ REQUIRE a `where` (a real vex `Filter`).
   columns: { title: { $context: 'title' } },
   insert: { deal_id: { $context: 'deal_id' } } }
 ```
+
+An `upsert` updates the row when the call's context carries its `key`, and
+inserts when the key is absent or an empty string.
 
 An array of ops is a batch and runs in ONE transaction (the client must
 expose `transaction`; a batch on a non-transactional client is refused).
@@ -1138,6 +1155,7 @@ are not asking the same thing).
 - A replay stamps `lastUsedAt` (at most once a minute per entry);
   `sweepCache(cache, { maxIdleMs })` evicts entries idle past the limit,
   skipping protected ones, and returns how many it evicted. Alive = used.
+  Nothing in vex calls it: a host runs it at startup or on a timer.
 - `protected: true` is written only by the seed path (`seedCache`) or an
   explicit `handleFingerprintPatch` — never by a runtime query.
 - `ExecuteOptions.locked` (and `VexHandlerConfig.locked`) makes an engine call
@@ -1173,6 +1191,8 @@ const cache = createMemoryCache();
 **Postgres** — durable L2. Stores entries as `jsonb`, enforces TTL server-side,
 validates on write, and evicts corrupt/stale rows on read. Used directly it
 reads from Postgres on every `get`, so it is meant to sit behind an L1.
+`onError` receives a write that failed validation and a row evicted on read;
+without it the write throws and the eviction goes to `console.error`.
 
 ```typescript
 const l2 = createPostgresCache({
@@ -1191,7 +1211,9 @@ collects `l2.sequence` (`nisc.vex.cache`) instead of calling `init()`.
 
 **Tiered** — L1 (memory) + L2 (durable), read-through/write-through. Reads hit
 L1; on an L1 miss it promotes a validated L2 entry into L1. Writes go to L1
-synchronously and L2 fire-and-forget.
+synchronously and L2 fire-and-forget. `onError` receives a failed L2 write and
+an invalid L2 entry that was dropped instead of promoted; without it both go to
+`console.error`.
 
 ```typescript
 const cache = createTieredCache({
@@ -1298,7 +1320,8 @@ type `Refresh`).
 
 - **Following.** Pass `{ signal, onChange }` in `ExecuteOptions`: the returned
   promise is the first answer; every later answer that differs goes to
-  `onChange` until `signal` aborts. Over HTTP there is no callback, so
+  `onChange` until `signal` aborts. One without the other follows nothing, and
+  both are ignored for a snapshot entry. Over HTTP there is no callback, so
   `handleQuery(config, body, scope, live?)` takes an in-process `VexLive`
   (`{ signal, onChange }`), and the hono adapter reads one from the request's
   env under `VEX_LIVE_ENV` (the third argument of `app.request`).
@@ -1385,7 +1408,8 @@ await engine.introspect();
   identity mapping and makes no model call. The `@niscorp/vex/agent` subpath
   also exports `vexQueryDslAgent` itself, `createQueryTools` for customizing the
   tool set, and `describeCaller`, which turns `caller.bindings` into the
-  context line the agent reads.
+  context line the agent reads. A run of `vexQueryDslAgent` given no `caller`
+  dep tells the model that nothing identifies the caller.
 
 The reference query agent (`vexQueryDslAgent`, id `vex.query`) is a Cortex
 agent whose envelope payload is a `QuerySchema` query, with six tools:
@@ -1445,10 +1469,14 @@ The rest of `VexHonoConfig`, all optional:
 | Option | Purpose |
 |--------|---------|
 | `locked` | Replay-only endpoint: no generation, no fingerprint management |
-| `getPolicy(c)` | Per-request `ScopePolicy`; governs reads, mutation replay and discovery on this endpoint |
+| `getPolicy(c)` | Per-request `ScopePolicy`; governs reads, mutation replay and discovery on this endpoint. Returning `undefined` leaves the engine's policy and `mutations.policy` in force |
 | `getPolicyForReach(c, reach)` | The same principal's policy at a reach an entry demands |
-| `mutations` | `{ client, policy?, onWrite? }` — enables mutation replay; `policy` is the fallback when `getPolicy` is absent |
+| `mutations` | `{ client, policy?, onWrite? }` — enables mutation replay; `policy` is the fallback when `getPolicy` is absent. A request that gets a policy from neither replays no write: a mutation fingerprint answers 500 |
 | `onExecute` | The execution observer (see [Events](#events)) |
+
+`vex` and `VexHonoConfig` are generic over the hono `Env`: `vex<AppEnv>({ … })`
+hands `getScope`, `getPolicy` and `getPolicyForReach` a `Context<AppEnv>`, so
+they read the host's typed context variables without a cast.
 
 ### Express
 
@@ -1566,7 +1594,9 @@ type ExecuteRecord = {
 ```
 
 With no observer the record is not built. A listener that throws is logged and
-contained.
+contained. `startUnixNano` is epoch nanoseconds read from a millisecond clock;
+`endUnixNano` adds the elapsed time from a monotonic clock, so their difference
+is a sub-millisecond duration while each value alone is millisecond-accurate.
 
 ---
 
@@ -1601,7 +1631,7 @@ handlers recognise both.
 | `invalid_request` | The request failed Zod validation |
 | `invalid_dsl` | The analyzer rejected the resolved query (cartesian product, nesting, etc.) |
 | `missing_scope` | A `$scope` slot the host did not fill. The host's fault, not the request's: the HTTP handler answers 500 and keeps the key names in its log |
-| `scope_denied` | An entity is denied by the scope policy (`VexScopeError`) |
+| `scope_denied` | An entity is denied by the scope policy (`VexScopeError`). `err.entity` names the entity |
 | `missing_context` | A required context value was absent. Reads surface it softly via `meta.missingContext`; a WRITE hard-400s with the full derived signature in `details.expected` |
 | `execution_error` | Schema not loaded, or a database/runtime failure. Also a batch whose `$returned` found no row, or several, where it needs exactly one — `details: { returned, rows }`, nothing written |
 | `agent_failed` | Generation was needed and there is no `generateDsl` hook, or the reference agent's run failed |

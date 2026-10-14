@@ -58,6 +58,17 @@ optional fields get them too. `toNova(model, { empty, includeOptional })`
 changes both: `empty` supplies a kind's starting value, `includeOptional: false`
 leaves optional fields out.
 
+The other options: `value` is the document to edit, used as given in place of
+that starting document. `id` is the id of the action `toNova` returns (default
+`'loom-form'`). `widgets` is the list of custom-widget matchers
+([DESIGN.md](./DESIGN.md), "Custom widgets"). `rootKey` is for a schema whose
+root is not an object (a union, a scalar, an array): its one control binds at
+`$.<rootKey>` and the document is `{ [rootKey]: value }`, which you unwrap when
+you read it. Without `rootKey` a control at the root is bound to nothing, and
+`toNova` throws when the starting document is not an object. An `empty` entry
+is a function `(field, options) => value`, and a field with a schema default
+keeps the default.
+
 This half is headless — no React, no DOM. Use it when you have your own Nova host
 or only need the compiled output.
 
@@ -86,6 +97,7 @@ import { prism } from '@niscorp/loom/plugins/prism/react';
   defaults).
 - `onChange` fires with the live document values on every edit.
 - To switch to a different artifact, give the element a new React `key`.
+  `plugins` and `artifact` are read once, when the element mounts.
 
 Two things the built-in kit draws are worth knowing before you rely on them:
 
@@ -104,12 +116,21 @@ A **plugin** wires one domain into the editor. It contributes the schemas to edi
 reference plugins:
 
 - `prism({ input })` — edit a [Prism](../prism) transform config; the preview
-  applies it to `input` and shows the output.
+  applies it to `input` and shows the output. `schema` replaces the schema of
+  the `config` document (default: Prism's `NodeSchema`).
 - `vex({ run, db })` — edit a [Vex](../vex) query; the preview runs it with `run`
-  and shows the rows. Pass `db` to get column-aware field pickers.
+  and shows the rows. Pass `db` to get column-aware field pickers. The artifact
+  is `{ type: 'vex', documents: { query } }`; `schema` replaces the schema of
+  the `query` document (default: Vex's `QuerySchema`).
 - `nova({ manifest })` — edit a [Nova](../nova) layout built from the
   components the manifest lists (each `{ name, props, container?, render }`,
-  `props` a Zod schema); the preview renders the layout with them.
+  `props` a Zod schema); the preview renders the layout with them. The artifact
+  is `{ type: 'nova', documents: { layout, data } }`. `layout` is one Nova
+  component node: `{ component, props }`, plus a `children` list for a
+  component with `container: true`. `layoutSchema(manifest)` from
+  `@niscorp/loom/plugins/nova` is its schema. `data` is the data the preview
+  renders `layout` against; it has no schema, and its form has one control per
+  key of the `data` the artifact carries.
 
 ## Entry points
 

@@ -139,7 +139,7 @@ Three components that hide the registry/provider/render-tree wiring. Each is als
 <Nova.Canvas id="main" />                     // one canvas, inside a shell provider
 ```
 
-- **`<Nova.Layout>`** — `layout` (a `LayoutNode` or a layout-store id), `data?`, `components?` (registered after the builtins), `registry?` / `store?` (pre-built; with `registry`, `components` and `builtins` are ignored), `builtins?` (default `true`), `strict?`, `onError?`, and the i18n fields `phrases?` / `phraseKeys?` / `onPhraseMiss?` (see `I18N_DOCS.md`). Renders through a `NovaRenderProvider` with no-op dispatch.
+- **`<Nova.Layout>`** — `layout` (a `LayoutNode` or a layout-store id), `data?`, `components?` (registered after the builtins), `registry?` / `store?` (pre-built; with `registry`, `components` and `builtins` are ignored), `builtins?` (default `true`), `strict?`, `onError?`, and the i18n fields `phrases?` / `phraseKeys?` / `onPhraseMiss?` (see `I18N_DOCS.md`). Renders through a `NovaRenderProvider` with no-op dispatch. A `layout` given as an id is read from `store`, so pass the `store` that holds it; an id it does not hold renders nothing.
 - **`<Nova.Shell>`** — `shell`, `registry?` (default `shell.registry`), `slotWrapper?`, `builtins?` (default `true`: registers the default component set on the registry if `CanvasSlot` is missing). Renders the shell's canvasLayout.
 - **`<Nova.Canvas>`** — `id`, plus optional `shell`, `registry?`, `builtins?`. With `shell` it provides its own `NovaShellProvider`; without, it must sit inside one. Renders that canvas's actionLayout.
 
@@ -427,7 +427,7 @@ The same seam, used as a gate: the wrapper decides whether to render the content
 
 ### `useSlotWrapper()`
 
-Reads the active `slotWrapper` from render context (or `undefined`). You rarely call it directly — `ActionSlot` does — but it's there if you build your own slot rendering.
+Reads the active `slotWrapper` from render context (or `undefined`). You rarely call it directly — `ActionSlot` does — but it's there if you build your own slot rendering. Outside a provider it returns `undefined`; it does not throw.
 
 Both examples above ship as runnable demos in the showroom under **Slot wrappers**.
 
@@ -591,6 +591,8 @@ type NovaComponentProps = {
 
 - The shell-backed composables return a `Readonly<Ref<…>>` and take a ref or getter for their id (`useCanvas(() => props.id)`).
 - The render context travels by provide/inject (`NovaRenderKey`, `NovaShellKey`); children reach a component as its default slot.
+- A component receives the node's props, `novaRef` and `novaModel` as Vue props, so one that declares `props` lists each it reads (the kit's `Button` lists `novaRef`); a functional component that declares none receives them all.
+- A slot wrapper is a Vue component: `canvasId`, `instanceId` and `action` arrive as props, the content as its default slot.
 - There is no `Nova` namespace and no `NovaLayout`; `NovaRenderProvider` takes `fallback` but not `textWrapper` / `errorMarker`.
 - `NovaErrorBoundary`'s `onError` receives Vue's info string.
 - The kit is `registerNovaVueComponents(registry)` from `@niscorp/nova/adapters/vue/components`: the same nine names over the same props schemas.

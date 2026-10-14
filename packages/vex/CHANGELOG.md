@@ -1,5 +1,33 @@
 # @niscorp/vex
 
+## 0.3.1
+
+### Patch Changes
+
+- f62ee50: `applyScope` is marked deprecated, and DESIGN.md describes the scope functions as they are.
+
+  The engine checks access with `checkScope` and places row rules with `scopeResolved`, after resolution. `applyScope` stayed as an exported function that runs the access check and returns the query as it came, while DESIGN.md still described it as merging the row filters into the query. It now carries `@deprecated` with that sentence, and the Scope section of DESIGN.md describes `checkScope` and `scopeResolved`.
+
+  No behaviour changed.
+
+  **What to change:** nothing has to. A caller of `applyScope` gets the same check from `checkScope(entities, policy)`. A caller that relied on `applyScope` to filter rows was not being filtered: it goes through the engine, or calls `scopeResolved` on the resolved query.
+
+- b4d24e9: DOCS.md and DESIGN.md state twenty facts about the API that were written only in source comments.
+
+  Among them: the adapter's `exclude` option and `statementTimeouts: false` on a pool; what `scopeBindings` returns; that a composite foreign key is one relation joined on every pair; that a behavior's `write` rules apply to every write verb; when an `upsert` inserts; that nothing in vex calls `sweepCache`; what the Postgres and tiered caches hand `onError`; that `signal` and `onChange` only work together; what the hono adapter does when `getPolicy` returns `undefined` and when no policy covers a write; and what an adapter's `limitReads` and `validateEntry` return.
+
+  No behaviour changed.
+
+  **What to change:** nothing.
+
+- bf6496f: A read with more than one parameterised subquery compiles, and each subquery binds its own values.
+
+  A subquery was compiled apart from its parent, so its parameters were numbered from `$1` again while its values were appended to the parent's list. One parameterised subquery in first place worked. Two of them, or a parameter of the parent ahead of one, produced a statement Postgres refuses (`bind message supplies 2 parameters, but prepared statement requires 1`). A scope rule on a table inside a subquery is such a parameter, so two subqueries over scoped tables were refused as well.
+
+  A subquery now compiles into its parent's parameter list, as an `exists` already did. A read that compiled before compiles to the same SQL.
+
+  **What to change:** nothing. A read that was rewritten to avoid two parameterised subqueries (conditional sums over one source, say) can be written with the subqueries again; it does not have to be.
+
 ## 0.3.0
 
 ### Minor Changes

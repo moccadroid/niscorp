@@ -1,5 +1,21 @@
 # @niscorp/prism
 
+## 0.3.1
+
+### Patch Changes
+
+- f55fcbe: DOCS.md and the README state seven facts about the API that were written only in source comments.
+
+  DOCS.md: a negative index in a `$ref` path is refused, the generated JSON Schema does not carry the `$ref` path rule, and `maxValues` counts a value each time it appears. README: an example's `id` is unique and in kebab-case, an example of several operators has no `op`, which ops `MAPPING_OPS` leaves out, and that the mapping agent's `data` is the config itself.
+
+  No behaviour changed.
+
+  **What to change:** nothing.
+
+- 89adcc3: The optimizer no longer keeps a local `isPlainObject` that only called `isJsonObject`; its three uses call `isJsonObject`. Prism's own `isPlainObject` means an object with no `$` key, and the local one of the same name meant any JSON object. No behaviour changed.
+
+  **What to change:** nothing.
+
 ## 0.3.0
 
 ### Minor Changes

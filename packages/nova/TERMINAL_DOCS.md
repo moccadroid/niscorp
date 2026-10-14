@@ -53,6 +53,9 @@ canvases collapse entirely.
   several live instances that share refs — a tab bar's every button is
   `open` — so the host stamps this as the event's `origin`, as the DOM
   adapter does, or the server's card-deck fallback picks one of them.
+- `label` — a name to list it by: the first line a `ref`'d or `model`'d
+  node printed, cut at 48 characters (the ref when that line is empty); a
+  component that registers its own passes one.
 - `value` — click/row: the dispatch payload; model/toggle: the current
   value. `path` — the model path, display only.
 
@@ -68,6 +71,10 @@ register through `ctx.register`.
 (ctx: { props; children: TtyBlock[]; register }) => TtyBlock   // TtyBlock = { lines: string[] }
 ```
 
+`register({ kind, ref, label, value?, path? })` adds an interactive and
+returns its index; the component prints that `[n]` itself, where it wants
+it.
+
 Kit (`/adapters/tty/components`): `defaultRegistry()` with `Box, Row,
 Stack, Grid, Text, Button, Input, Select, Textarea, Checkbox, Switch,
 Table, Badge, Panel, JsonTree, ActionSlot` (`Select` is `Input`, `Switch`
@@ -76,6 +83,10 @@ is `Checkbox`; the components are also exported by name), plus `fallback`
 render their children; childless ones surface `label`/`title` + `count`)
 and the helpers (`stack`, `inline`, `inlineText`, `pad`, `truncate`,
 `indent`, `str`, `num`, `bool`, `iconGlyph`).
+
+`Box` and `Stack` stack their children. `Row` and `Grid` call `inline`: the
+children join on one line, two spaces apart, while each is a single line,
+and stack as soon as one is not.
 
 ---
 
@@ -96,9 +107,10 @@ An Ink component kit for the React adapter's walker — ESM-only, `ink` and
   provide `FrameControlsContext` at the root (`setTyping` — a focused
   input claims typed digits as text, so the host's number handling must
   stand down). Without providers the kit renders markerless and Tab-only.
-- Marker identity: click-kinds resolve by `value` (a list's rows share one
-  ref and differ by payload), model-kinds by `occurrence` (their value
-  changes as you type). `markerFocusId(n)` is the ink focus id a marked
+- Marker identity: a pressable passes its `value` (a list's rows share one
+  ref and differ by payload), a `Table` row passes its `value` and its
+  `occurrence` (its place among the rows), and an `Input` or a `Checkbox`
+  passes neither and resolves by its ref alone. `markerFocusId(n)` is the ink focus id a marked
   component adopts — `useFocusManager().focus(markerFocusId(n))` jumps to
   it.
 
@@ -110,6 +122,10 @@ only); a focused Input holds a local draft, honours `debounce`, submits `ui:key
 Enter`, and forwards ↑/↓ to the server as `ui:key ArrowDown/ArrowUp` (a
 served palette moves its own highlight). Typed-digit handling is the
 host's job — the kit only displays markers and adopts their focus ids.
+A `ref` on a container (`Box`, `Stack`, `Row`, `Grid`) makes it one focus
+stop with a marker: Enter on it dispatches `ui:click` with its `value` prop
+as payload. Enter in an Input sends a value `debounce` is still holding
+before the `ui:key`.
 
 ### Exports
 
@@ -117,7 +133,8 @@ host's job — the kit only displays markers and adopts their focus ids.
 Textarea, Checkbox, Switch, Table, Badge, Panel, JsonTree, ActionSlot`
 (`Select` and `Textarea` are `Input`, `Switch` is `Checkbox`; the
 components are also exported by name);
-`fallback` (ref'd unknowns are focusable and click on Enter); `TextWrap`,
+`fallback` (ref'd unknowns are focusable and click on Enter; childless
+ones surface `label`/`title` + `count`); `TextWrap`,
 `ErrorMarker`; `useActionable(novaRef, value)` — the full interactive
 convention (marker + focus + Enter-click) for an app's own components;
 `useMarker`, `Mark`, `markerFocusId`, `CanvasMarkersContext`,
@@ -127,4 +144,6 @@ Layout mapping: Grid honours `weights` (flex ratios) and `columns`
 (wrapping tracks); Row honours `justify`/`align`; containers honour
 `border` (incl. sided `'r'`/`'l'`/`'t'`/`'b'`), `padding`, `w`/`width`
 (px→cells at ~8px/cell, percent passthrough), `grow`. What has no
-terminal analog (bg, radius, glow) is absent, never faked.
+terminal analog (bg, radius, glow) is absent, never faked. `JsonTree`
+prints the TTY kit's lines, which do not fold: four levels are open, and
+each object or array lists its first 20 entries.

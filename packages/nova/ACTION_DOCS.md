@@ -567,6 +567,8 @@ Action definitions are validated against `ActionDefinitionSchema` when you pass 
 
 A definition can parse, mount, and render politely while being broken at click time. `auditAction(def, { catalog? })` cross-references the definition against itself: layout bindings ↔ `data` defaults, layout refs ↔ triggers (dead chrome and phantom triggers both), `call` steps ↔ endpoint names, endpoint targets ↔ `data`, mutation paths ↔ `data`, and — when a `catalog` of `{ id, input }` entries is given — push/replace/resetTo targets and their seeded input keys. When a `channels` list is given, every `message:` listen and every `emit` must name a known channel (or one the definition itself emits / listens on); `collectChannels(def)` returns a definition's `{ emits, listens }` to build that list from. Returns `{ ok, issues: string[] }` with precise messages.
 
+A catalog entry's `input` is the target action's `input` schema: seeded keys are checked against its `properties`, and an entry without `properties` passes any key. A step that opens the definition's own id needs no catalog entry.
+
 Scope: SELF-CONTAINED definitions with inline layouts (generated actions above all). Hand-authored actions that receive triggers from fragments or bind stored layouts should audit the COMPOSED definition, or skip.
 
 ---
