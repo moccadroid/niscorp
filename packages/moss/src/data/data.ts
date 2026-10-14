@@ -3,7 +3,7 @@ import { migrate, upgradeStore } from '@niscorp/strata/postgres';
 import { handleDiscovery } from '@niscorp/vex';
 import type { Sequence, Upgrader } from '@niscorp/strata';
 import type { DocumentStore } from '@niscorp/strata/postgres';
-import type { CacheBackend, DatabaseAdapter, ExecuteRecord, MutationClient, PgPool, QueryEngine, QueryEngineConfig, QueryResponse, ScopePolicy } from '@niscorp/vex';
+import type { CacheBackend, CacheEntry, DatabaseAdapter, ExecuteRecord, MutationClient, PgPool, Query, QueryEngine, QueryEngineConfig, QueryResponse, ScopePolicy } from '@niscorp/vex';
 import { memoKey } from '../identity';
 import type { ResolvedIdentity } from '../identity';
 import type { NiscApp } from '../manifest';
@@ -58,6 +58,10 @@ export type Data = {
   policyForRoles: (roles: readonly string[]) => ScopePolicy;
   fingerprints: () => Promise<readonly string[]>;
   fingerprintsFor: (who: Caller) => Promise<string[]>;
+  // What vex's cache answers under a fingerprint for nobody in particular: an entry the artifactory holds, or one vex wrote.
+  vexEntry: (fingerprint: string) => Promise<CacheEntry | undefined>;
+  // Throws, with vex's sentence, where the query does not run against the schema.
+  compileQuery: (dsl: Query) => void;
   executeAs: ExecuteAs;
   answerIntent: (writers: QueryWriters, asked: Intent, who: Caller, scope: Record<string, unknown>) => Promise<QueryResponse>;
   ownEntries: (feature: string, entries: OwnEntries['entries']) => Promise<Replay>;
@@ -175,6 +179,10 @@ export const createDataWith = (
     // copy, and nothing it does to it reaches a policy a request is served under.
     policyForRoles: (roles) => resolvePolicyForRoles(governed, grants, roles),
     fingerprintsFor: async (who) => (await handleDiscovery({ engine, locked: true, scopePolicy: policies.of(who) })).fingerprints.map((entry) => entry.fingerprint).sort(),
+    vexEntry: (fingerprint) => engine.cache.get(fingerprint),
+    compileQuery: (dsl) => {
+      engine.compile(dsl);
+    },
     executeAs: createExecuteAs({
       engine,
       db: config.db,

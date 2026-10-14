@@ -51,10 +51,10 @@ describe('boot — every owner through one ledger', () => {
     const pool = createPglitePool(freshDatabase());
     const booted = await quietly(() => createServer(app, { pool, db: pool, session: 'sessions' }));
     const ledger = await readLedger(pool);
-    expect(ledger.map((r) => `${r.sequence}/${r.n}`)).toEqual(['nisc.moss/1', 'nisc.moss/2', 'nisc.moss/3', 'nisc.moss/4', 'nisc.moss/5', 'nisc.moss.sessions/1', 'nisc.vex.cache/1']);
+    expect(ledger.map((r) => `${r.sequence}/${r.n}`)).toEqual(['nisc.moss/1', 'nisc.moss/2', 'nisc.moss/3', 'nisc.moss/4', 'nisc.moss/5', 'nisc.moss.sessions/1', 'nisc.vex.cache/1', 'nisc.vex.cache/2']);
 
     await quietly(() => createServer(app, { pool, db: pool, session: 'sessions', migrations: 'verify' }));
-    expect((await readLedger(pool)).length).toBe(7);
+    expect((await readLedger(pool)).length).toBe(8);
 
     // What a charter grants of the two tables of what was saved is kept to the caller's own rows, as moss's
     // own reads and writes of them are. A table with no such rule is granted whole.

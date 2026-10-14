@@ -6,9 +6,12 @@ import { generatedId, readAction, readFragment } from './generated';
 import type { GeneratedHeldTo } from './generated';
 import { isInUse, readLayout, refOf } from './layouts';
 import type { LayoutHeldTo } from './layouts';
+import { readSaved, readWritten } from './reads';
+import type { ReadHeldTo } from './reads';
 import type { SavedRows, SavedVersion } from './saves';
 
-export type HeldTo = { layouts: LayoutHeldTo; generated: GeneratedHeldTo };
+// `reads`: absent where no read is saved.
+export type HeldTo = { layouts: LayoutHeldTo; generated: GeneratedHeldTo; reads?: ReadHeldTo };
 
 // Whose rows the calls read and write, and what a save of theirs is held to
 // beside what is in force for them: a layout may be for an action they generated.
@@ -29,7 +32,15 @@ const ToSaveSchema = z.array(z.strictObject({ kind: z.string(), id: z.string().o
 
 export type Written = Pick<SavedVersion, 'kind' | 'id' | 'body' | 'copiedFrom'>;
 
-const NEW_ID: Readonly<Record<ArtifactKind, () => string>> = { layout: randomUUID, action: generatedId, fragment: generatedId };
+// A read keeps the fingerprint vex gave it, and is named by it.
+const NEW_ID: Readonly<Record<ArtifactKind, () => string>> = {
+  layout: randomUUID,
+  action: generatedId,
+  fragment: generatedId,
+  read: () => {
+    throw new Error('moss: a read is saved under the fingerprint vex gave it: name it as the id.');
+  },
+};
 
 const listed = (version: SavedVersion, kind: ArtifactKind): ArtifactVersion => ({
   kind,
@@ -47,6 +58,12 @@ export const checked = async (kind: ArtifactKind, id: string, body: unknown, hel
     const read = readLayout(body, heldTo.layouts);
     if ('refusal' in read) throw new Error(`moss: the layout for "${refOf(body) ?? '(no ref)'}" is refused: ${read.refusal}`);
     return read.layout;
+  }
+  // Asked for, a read is taken from what vex wrote; restored or kept in a draft, it is the body that was taken.
+  if (kind === 'read') {
+    const read = heldTo.reads === undefined ? { refusal: 'no read is saved here' } : body === undefined ? await readWritten(id, heldTo.reads) : await readSaved(body, id, heldTo.reads);
+    if ('refusal' in read) throw new Error(`moss: the read "${id}" is refused: ${read.refusal}`);
+    return read.body;
   }
   const read = await (kind === 'action' ? readAction : readFragment)(body, id, heldTo.generated);
   if ('refusal' in read) throw new Error(`moss: the ${kind} is refused: ${read.refusal}`);
@@ -109,9 +126,10 @@ export const savingFor = ({ holder, whose, kinds, written }: SavedArtifactsDeps,
     const versions: (Written & { kind: ArtifactKind })[] = [];
     for (const { kind, id: named, body } of asked) {
       const id = named ?? NEW_ID[kind]();
+      if (kind === 'read' && body !== undefined) throw new Error(`moss: the read "${id}" is refused: it is what vex wrote for the request. Leave the body out.`);
       versions.push({ kind, id, body: await checked(kind, id, body, held), copiedFrom: null });
     }
-    const notTheirs = asked.find(({ kind, id }) => id !== undefined && !inForce.some((version) => version.kind === kind && version.id === id));
+    const notTheirs = asked.find(({ kind, id }) => id !== undefined && kind !== 'read' && !inForce.some((version) => version.kind === kind && version.id === id));
     if (notTheirs !== undefined) {
       throw new Error(`moss: there is no ${notTheirs.kind} "${notTheirs.id}" ${whose}. Leave the id out, and moss gives a new ${notTheirs.kind} its id.`);
     }

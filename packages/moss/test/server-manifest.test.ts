@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { scopeGrants } from '@niscorp/vex';
 import type { SeedEntry, SeedMutation } from '@niscorp/vex';
 import type { Data } from '../src/data';
+import { compile } from '@niscorp/prism';
 import type { NiscApp } from '../src/manifest';
 import { buildRunningManifest } from '../src/server/server';
+import { rowsDouble } from './saved-double';
 
 type Held = Parameters<Data['entriesHeldBy']>[0];
 
@@ -13,7 +15,7 @@ const unbounded: SeedMutation = { fingerprint: 'deals/clear', mutation: { op: 'd
 
 const appWith = (more: Partial<NiscApp> = {}): NiscApp => ({ charter: { public: ['home'] }, actions: { home: { id: 'home' } }, entries: [open, close], ...more });
 
-const dataDouble = (): { data: Pick<Data, 'grants' | 'dropOnChange' | 'pointer' | 'entriesHeldBy'>; asked: Held[] } => {
+const dataDouble = (): { data: Pick<Data, 'grants' | 'dropOnChange' | 'pointer' | 'entriesHeldBy' | 'vexEntry' | 'compileQuery'>; asked: Held[] } => {
   const asked: Held[] = [];
   return {
     asked,
@@ -24,6 +26,8 @@ const dataDouble = (): { data: Pick<Data, 'grants' | 'dropOnChange' | 'pointer' 
       entriesHeldBy: (held) => {
         asked.push(held);
       },
+      vexEntry: async () => undefined,
+      compileQuery: () => undefined,
     },
   };
 };
@@ -36,6 +40,21 @@ describe('the running manifest, as the server stands it up', () => {
     expect((await asked[0]?.entries())?.map((row) => row.key)).toEqual(['deals/open', 'deals/close']);
     expect(await asked[0]?.get('deals/open')).toMatchObject({ kind: 'ok', protected: true, dsl: open.dsl });
     expect(await asked[0]?.get('deals/open')).toBe(await running.cacheEntry('deals/open'));
+  });
+
+  it('answers, to the person who saved it, a read vex wrote and that person saved', async () => {
+    const { data, asked } = dataDouble();
+    const mapping = { $ref: '$.result' };
+    const written = { kind: 'ok' as const, dsl: { from: ['deals'], fields: ['deals.id'] }, prismIr: await compile(mapping), mapping, requestHash: 'h', createdAt: 1 };
+    const rows = rowsDouble();
+    const running = await buildRunningManifest(appWith(), {}, { ...data, vexEntry: async (fingerprint) => (fingerprint === 'fp_written' ? written : undefined) }, {
+      of: (scope) => rows.as(String(scope['userId'])),
+      published: () => rows.as('*'),
+    });
+    await running.sessionArtifacts('ada', async () => ({ roles: ['public'], installed: undefined, saved: rows.as('ada') })).save([{ kind: 'read', id: 'fp_written', body: undefined }]);
+
+    expect(await asked[0]?.get('fp_written', { userId: 'ada' })).toMatchObject({ kind: 'ok', dsl: written.dsl });
+    expect(await asked[0]?.get('fp_written', { userId: 'ben' })).toBeUndefined();
   });
 
   it('follows a set of entries handed over afterwards', async () => {

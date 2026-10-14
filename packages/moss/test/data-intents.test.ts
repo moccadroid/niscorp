@@ -18,7 +18,7 @@ const world = async () => {
   };
   const mapToShape: MapToShape = async (rows) => {
     const ir = await compile({ $ref: '$.result' });
-    return { ir, transformed: execute(ir, { result: JSON.parse(JSON.stringify(rows)) }) };
+    return { ir, config: { $ref: '$.result' }, transformed: execute(ir, { result: JSON.parse(JSON.stringify(rows)) }) };
   };
   const writers: QueryWriters = { generateDsl, mapToShape };
   const answer = createIntentAnswers({ adapter: double.adapter, schema: NOTES_SCHEMA, cache: double.engine.cache });

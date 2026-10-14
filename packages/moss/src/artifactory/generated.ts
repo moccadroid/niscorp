@@ -41,7 +41,7 @@ const endpointRefusals = async (endpoints: ActionDefinition['endpoints'], heldTo
       continue;
     }
     const entry = heldTo.entryOf(fingerprint);
-    if (entry === undefined) refusals.push(`endpoint "${name}" replays "${fingerprint}", which is no entry the app ships or was handed`);
+    if (entry === undefined) refusals.push(`endpoint "${name}" replays "${fingerprint}", which is no entry the app ships or was handed, nor a read its owner saved`);
     else if ('mutation' in entry) refusals.push(`endpoint "${name}" replays "${fingerprint}", which is a write, and what is generated only reads`);
     else if (!(await heldTo.replayable()).has(fingerprint)) refusals.push(`endpoint "${name}" replays "${fingerprint}", which its owner may not replay`);
   }

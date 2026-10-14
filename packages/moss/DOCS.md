@@ -331,12 +331,12 @@ const runs: RunSink = (record) => {
 #### `session.artifacts` — what the session's principal saved
 
 What somebody or a model generated while the app runs is kept by moss, as a
-version, in two tables of its own. Three kinds are kept: a layout (for an
-action, or for the app's own shell), an action, and a fragment. A session
-saves for its own principal. A layout for everybody is published from the
-server and never from a session (`server.defaults`, under `MossServer`
-below). Not built yet: a vex read, a layout of a page's shell, and an action
-or a fragment for everybody.
+version, in two tables of its own. Four kinds are kept: a layout (for an
+action, or for the app's own shell), an action, a fragment, and a read vex
+wrote. A session saves for its own principal. A layout for everybody is
+published from the server and never from a session (`server.defaults`, under
+`MossServer` below). Not built yet: a layout of a page's shell, and an action,
+a fragment or a read for everybody.
 
 ```typescript
 type SessionArtifacts = {
@@ -347,7 +347,7 @@ type SessionArtifacts = {
   reset: (kind: ArtifactKind, id: string) => Promise<{ save: string }>;
 };
 
-type ArtifactKind = 'layout' | 'action' | 'fragment';
+type ArtifactKind = 'layout' | 'action' | 'fragment' | 'read';
 
 type ArtifactVersion = {
   kind: ArtifactKind;
@@ -400,11 +400,12 @@ functions: (session) => ({
 - **What it defines only reads.** Each endpoint it defines is a `POST` to the
   app's vex route (`/api/vex`, or `/api/<resource>/vex`) whose `request` names
   one fingerprint, written out. That fingerprint is a read the app ships or
-  was handed (`replaceEntries`), and one its owner's policy may replay.
-  Refused, with a sentence: a `fn:` endpoint, a write, a read its owner may
-  not replay, a fingerprint the app does not carry (a query a model wrote,
-  `fp_…`, among them), a fingerprint that is computed, an address with a
-  template in it, and every other address.
+  was handed (`replaceEntries`) that its owner's policy may replay, or a read
+  vex wrote that its owner saved (below). Refused, with a sentence: a `fn:`
+  endpoint, a write, a read its owner may not replay, any other fingerprint (a
+  query a model wrote that nobody saved, `fp_…`, among them), a fingerprint
+  that is computed, an address with a template in it, and every other
+  address.
 - **Moss checks the artifact, and what it is combined with is nova's.** Once
   it is in a shell it is an action, or a fragment, like any other. A message
   it emits reaches every action open in its owner's shell. The steps of a
@@ -464,6 +465,40 @@ for every caller, which an app's `scope` can set. An app that gives a person one
 keeps their layouts apart by tenant. An app where one account spans tenants
 has that person's layouts follow them into each. In neither does anybody read
 or write a row of another account.
+
+**A read vex wrote** for a request (`session.answerIntent`) is saved under
+the fingerprint vex gave it, with no body:
+`session.artifacts.save([{ kind: 'read', id: 'fp_…' }])`. Moss takes the entry
+from vex's own table and keeps it as written: the query, the Prism config of
+its mapping, its shape and its intent.
+
+- **It is answered to the person who saved it and to nobody else.** When one
+  of their requests replays that fingerprint, moss answers it, compiled, from
+  their rows. Anybody else who sends the fingerprint gets what vex's own table
+  still holds under it, as for any query vex wrote and nobody saved, and a
+  caller nobody is signed in for is never answered a saved read.
+- **It is a query vex wrote, and is held as one.** Vex's limits apply to it
+  (`maxLimit`), as they do not to an entry the app ships. A request that names
+  its fingerprint with an intent and a shape is written anew by vex into its
+  own table; the saved read is what its owner is answered until they save the
+  new one.
+- **It survives a schema change that does not touch what it reads.** Vex drops
+  the copy in its own table at the first replay after any schema change; the
+  saved one is not dropped. One whose query no longer runs is refused by vex
+  when it is replayed, and is left out of what is in force with a line
+  (`[moss] the read "fp_…" of … is left out: …`), with any generated action of
+  its owner that replays it.
+- **Its owner's policy applies when it is replayed.** A generated action over a
+  read whose tables its owner can no longer read stays in force, and its
+  replay is refused, where one over such an entry the app ships is left out.
+- **A generated action may replay a read its owner saved**, as it may an entry
+  the app ships that its owner may replay. A draft takes a read too, and an
+  action put into the same draft may replay it.
+- **What is refused**, in a sentence: a read with no id, or with a body; one
+  under the fingerprint of an entry the app ships or was handed; one vex did
+  not write for a request; a write; one whose mapping vex kept no config for
+  (it was written before vex kept one: ask for it again); and one whose query
+  does not run against the schema.
 
 **What a shell draws under an action's ref**, the first of these that there
 is: the principal's own layout marked in use; the layout variant their roles

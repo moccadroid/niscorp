@@ -4,10 +4,11 @@ import { createUpgrader, type Sequence, type Upgrader } from '@niscorp/strata';
 import { NOVA_SEQUENCE } from '@niscorp/nova/migrations';
 import { evaluate } from '@niscorp/prism';
 import { PRISM_SEQUENCE } from '@niscorp/prism/migrations';
+import { VEX_SEQUENCE } from '@niscorp/vex/migrations';
 import type { TelemetrySpan } from '../runtime';
 
 export type HeldEntries = {
-  get: (fingerprint: string) => Promise<CacheEntry | undefined>;
+  get: (fingerprint: string, scope?: Record<string, unknown>) => Promise<CacheEntry | undefined>;
   entries: () => Promise<{ key: string; entry: CacheEntry }[]>;
 };
 
@@ -43,10 +44,10 @@ export const createEntryCache = (table: CacheBackend): EntryCache => {
       held = holder;
     },
     cache: {
-      get: async (key) => (await held?.get(key)) ?? fromTable(await table.get(key)),
-      // Vex stamps an entry it replays by writing it back: one that is held is not the table's to keep.
+      get: async (key, scope) => (await held?.get(key, scope)) ?? fromTable(await table.get(key)),
+      // Vex stamps an entry it replays by writing it back: one that was not written for a request is not the table's to keep.
       set: async (key, entry) => {
-        if ((await held?.get(key)) === undefined) await table.set(key, entry);
+        if (isWrittenForRequest(entry)) await table.set(key, entry);
       },
       delete: (key) => table.delete(key),
       clear: () => table.clear(),
@@ -84,6 +85,7 @@ export const createDataLayer = async (deps: DataLayerDeps): Promise<DataLayer> =
 export const grammarsOf = (app: { grammars?: readonly Sequence[] }): readonly Sequence[] => [
   NOVA_SEQUENCE,
   PRISM_SEQUENCE,
+  VEX_SEQUENCE,
   ...(app.grammars ?? []),
 ];
 

@@ -184,7 +184,7 @@ describe('the data module, over an engine', () => {
       },
       mapToShape: async (rows: Record<string, unknown>[]) => {
         const ir = await compile({ $ref: '$.result' });
-        return { ir, transformed: execute(ir, { result: JSON.parse(JSON.stringify(rows)) }) };
+        return { ir, config: { $ref: '$.result' }, transformed: execute(ir, { result: JSON.parse(JSON.stringify(rows)) }) };
       },
     };
     const asked = { intent: 'every note', shape: [{ id: 0, body: '' }] };
@@ -217,7 +217,7 @@ describe('the data module, over an engine', () => {
       generateDsl: async () => ({ from: ['notes'], fields: ['notes.id', 'notes.body'] }),
       mapToShape: async (rows: Record<string, unknown>[]) => {
         const ir = await compile({ $ref: '$.result' });
-        return { ir, transformed: execute(ir, { result: JSON.parse(JSON.stringify(rows)) }) };
+        return { ir, config: { $ref: '$.result' }, transformed: execute(ir, { result: JSON.parse(JSON.stringify(rows)) }) };
       },
     };
     const answered = await data.answerIntent(writers, { intent: 'every note', shape: [{ id: 0, body: '' }] }, who('reader'), { userId: 'usr_1' });
@@ -490,6 +490,23 @@ describe('the data module — the entries the app serves', () => {
     await post('writer', ADD);
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(await table.keys()).toEqual([]);
+  });
+
+  it('asks the artifactory with the scope of whoever asks, and writes back to the table only what vex wrote for a request', async () => {
+    const table = createMemoryCache();
+    const prismIr = await compile({ $ref: '$.result' });
+    const adas = { kind: 'ok' as const, dsl: BODIES.dsl, prismIr, protected: true, createdAt: 1 };
+    const asked: unknown[] = [];
+    const { cache, askFirst } = createEntryCache(table);
+    askFirst({ get: async (fingerprint, scope) => (asked.push(scope), fingerprint === 'fp_adas' && scope?.['userId'] === 'ada' ? adas : undefined), entries: async () => [] });
+
+    expect(await cache.get('fp_adas', { userId: 'ada' })).toBe(adas);
+    expect(await cache.get('fp_adas', { userId: 'ben' })).toBeUndefined();
+    expect(asked).toEqual([{ userId: 'ada' }, { userId: 'ben' }]);
+
+    await cache.set('fp_adas', { ...adas, lastUsedAt: 2 });
+    await cache.set(WRITTEN, { kind: 'ok', dsl: BODIES.dsl, prismIr, requestHash: 'asked', createdAt: 1 });
+    expect(await table.keys()).toEqual([WRITTEN]);
   });
 });
 

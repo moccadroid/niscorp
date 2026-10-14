@@ -201,7 +201,7 @@ describe('what is refused of a generated action, in a sentence, with nothing wri
   });
 
   it('a fingerprint that is no entry the app ships or was handed: a query a model wrote among them', () =>
-    refused(reading('fp_0123456789abcdef'), 'moss: the action is refused: endpoint "load" replays "fp_0123456789abcdef", which is no entry the app ships or was handed', ['member'], [...MEMBERS, 'fp_0123456789abcdef']));
+    refused(reading('fp_0123456789abcdef'), 'moss: the action is refused: endpoint "load" replays "fp_0123456789abcdef", which is no entry the app ships or was handed, nor a read its owner saved', ['member'], [...MEMBERS, 'fp_0123456789abcdef']));
 
   it('a fingerprint that is not written out', () =>
     refused(calling({ url: '/api/vex', method: 'POST', request: { fingerprint: { $ref: '$.which' } }, target: 'rows' }), 'moss: the action is refused: endpoint "load" names no fingerprint'));

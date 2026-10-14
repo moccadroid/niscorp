@@ -2,6 +2,9 @@ import { z } from 'zod';
 import { createIdentityCache, memoKey } from './cache';
 import type { IdentityCache, IdentityRecord } from './cache';
 
+// The `userId` of a caller nobody is signed in for. Every such caller shares it.
+export const NOBODY_USER_ID = 'anonymous';
+
 export type ResolvedIdentity = {
   roles: readonly string[];
   scope: Record<string, unknown>;
@@ -103,7 +106,7 @@ export const createIdentity = (config: IdentityConfig): Identity => {
   // The scope hook is applied last and for each request, never held with the
   // record: its values may follow the clock.
   const composeScope = (principal: string | null, resolved: ResolvedIdentity): Record<string, unknown> => ({
-    userId: principal ?? 'anonymous',
+    userId: principal ?? NOBODY_USER_ID,
     ...resolved.scope,
     ...(config.scope?.(principal, resolved.record) ?? {}),
   });

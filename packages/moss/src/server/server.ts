@@ -4,7 +4,7 @@ import type { Identity } from '../identity';
 import { createData, featureTablesOf } from '../data';
 import type { Data } from '../data';
 import { SAVE_ENTRIES, SAVE_ROW_RULES, createRunningManifest, savedRowsOver } from '../artifactory';
-import type { RunningManifest, RunningManifestConfig } from '../artifactory';
+import type { RunningManifest, SavedRowsOf } from '../artifactory';
 import { receiveManifest } from '../manifest';
 import type { NiscApp } from '../manifest';
 import type { NiscRuntime, SessionVerifier } from '../runtime';
@@ -82,7 +82,7 @@ export const assembleServer = async (deps: ServerDeps): Promise<MossServer> => {
 
 const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerDeps, stops: (() => void)[]): Promise<MossServer> => {
   const saved = savedRowsOver(await data.artifactEntries(SAVE_ENTRIES, SAVE_ROW_RULES), data.grammars);
-  const running = await buildRunningManifest(app, runtime, data, saved.published().inForce);
+  const running = await buildRunningManifest(app, runtime, data, saved);
   stops.push(running.stop);
 
   const identity = buildIdentity(app, runtime, data);
@@ -163,8 +163,8 @@ const assemble = async ({ app, runtime, session, revokeSessions, data }: ServerD
 export const buildRunningManifest = async (
   app: NiscApp,
   runtime: Pick<NiscRuntime, 'sessionRevalidateMs'>,
-  data: Pick<Data, 'grants' | 'dropOnChange' | 'pointer' | 'entriesHeldBy'>,
-  published?: RunningManifestConfig['published'],
+  data: Pick<Data, 'grants' | 'dropOnChange' | 'pointer' | 'entriesHeldBy' | 'vexEntry' | 'compileQuery'>,
+  saved?: Pick<SavedRowsOf, 'of' | 'published'>,
 ): Promise<RunningManifest> => {
   const running = createRunningManifest({
     shipped: app,
@@ -172,7 +172,7 @@ export const buildRunningManifest = async (
     // Polled on the clock a socket's credential is re-verified on.
     pointer: { read: data.pointer.read, move: data.pointer.move, ...(runtime.sessionRevalidateMs !== undefined ? { everyMs: runtime.sessionRevalidateMs } : {}) },
     shells: [...(app.shell !== undefined ? [app.shell] : []), ...Object.values(app.pages ?? {})],
-    ...(published !== undefined ? { published } : {}),
+    ...(saved !== undefined ? { published: saved.published().inForce, reads: { written: data.vexEntry, compile: data.compileQuery, savedOf: saved.of } } : {}),
   });
   data.dropOnChange(running.onChange);
   data.entriesHeldBy({ get: running.cacheEntry, entries: running.cacheEntries });

@@ -73,7 +73,7 @@ export type RunRecord = {
 
 export type RunSink = (record: RunRecord, session: FunctionSession) => void;
 
-export type ArtifactKind = 'layout' | 'action' | 'fragment';
+export type ArtifactKind = 'layout' | 'action' | 'fragment' | 'read';
 
 export type ArtifactVersion = {
   kind: ArtifactKind;

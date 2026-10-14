@@ -1,10 +1,13 @@
 import type { ActionDefinition } from '@niscorp/nova';
 import type { CacheEntry, SeedEntry, SeedMutation } from '@niscorp/vex';
+import { NOBODY_USER_ID } from '../identity';
 import { actionOfLayoutRef, candidateOf, entriesOf, entryMisfits, freezeDeep, refusalOf, verifyManifest } from '../manifest';
 import type { DraftArtifact, KitComponents, ManifestCandidate, ManifestReport, SessionArtifacts, ShellManifest, ShippedManifest } from '../manifest';
 import type { ShellArtifacts } from './artifacts';
 import { shellComponents, shellWithStoredLayouts, slottedCanvases } from './artifacts';
 import { draftSaving, laidOver } from './draft';
+import { answeredRead, readsInForce, seedOf } from './reads';
+import type { ReadHeldTo, ReadSources, SavedRead } from './reads';
 import { compileEntries, createEntriesInForce } from './entries';
 import { createGeneration } from './generation';
 import type { Generation, Pointer } from './generation';
@@ -31,6 +34,9 @@ export type RunningManifestConfig = {
   shells: readonly ShellManifest[];
   // What is published for everybody and in force, asked of the rows.
   published?: () => Promise<readonly SavedVersion[]>;
+  // Where a read somebody generated is taken from and checked against, and whose
+  // rows a scope reaches. Absent: no read is saved, and none is answered.
+  reads?: ReadSources & { savedOf: (scope: Record<string, unknown>) => SavedRows };
 };
 
 // `replayable`: the fingerprints their policy may replay. Absent: none.
@@ -55,7 +61,8 @@ export type RunningManifest = {
   report: () => ManifestReport;
   replace: (source: string, actions: Record<string, ActionDefinition>) => void;
   replaceEntries: (source: string, entries: readonly (SeedEntry | SeedMutation)[]) => Promise<void>;
-  cacheEntry: (fingerprint: string) => Promise<CacheEntry | undefined>;
+  // `scope`: whose request asks. A read somebody saved is answered to them and to nobody else.
+  cacheEntry: (fingerprint: string, scope?: Record<string, unknown>) => Promise<CacheEntry | undefined>;
   cacheEntries: () => Promise<{ key: string; entry: CacheEntry }[]>;
   claim: (source: string, owner: string) => OwnedActions;
   refresh: () => void;
@@ -193,29 +200,36 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       },
     };
   };
+  const { reads: readSources } = config;
+  const readsHeldTo: ReadHeldTo | undefined =
+    readSources === undefined ? undefined : { isAppEntry: (fingerprint) => entries.byFingerprint().has(fingerprint), sources: readSources };
   // What somebody generated and has in force is laid beside what their roles
   // hold: an action of theirs may open either, and a layout of theirs may be for
   // either. `whose`: as a line says it of one that is left out. Absent: nothing is said.
   const heldWithGenerated = async (held: StoredLayouts, versions: readonly SavedVersion[], who: Pick<RolesHeld, 'replayable'>, shell?: ShellManifest, whose?: string) => {
     let replayable: Promise<ReadonlySet<string>> | undefined;
     let catalog: ReturnType<GeneratedHeldTo['catalog']> | undefined;
+    const reads = readsHeldTo === undefined ? new Map<string, SavedRead>() : await readsInForce(versions, readsHeldTo, whose);
     const checks: GeneratedHeldTo = {
       kit: kitOf(shell),
-      entryOf: (fingerprint) => entries.byFingerprint().get(fingerprint),
-      replayable: () => (replayable ??= (async () => new Set((await who.replayable?.()) ?? []))()),
+      entryOf: (fingerprint) => {
+        const read = reads.get(fingerprint);
+        return entries.byFingerprint().get(fingerprint) ?? (read === undefined ? undefined : seedOf(fingerprint, read));
+      },
+      replayable: () => (replayable ??= (async () => new Set([...((await who.replayable?.()) ?? []), ...reads.keys()]))()),
       catalog: () => (catalog ??= [...Object.values(held.actions).map((action) => ({ id: action.id, input: action.input ?? {} })), ...catalogOfGenerated(versions)]),
     };
     const passed = await generatedInForce(versions, checks, whose);
     const stored = actionsWithStoredLayouts(passed.actions);
     const all: StoredLayouts =
       Object.keys(passed.actions).length === 0 ? held : { actions: { ...held.actions, ...stored.actions }, layouts: { ...held.layouts, ...stored.layouts } };
-    return { all, fragments: passed.fragments, heldTo: { layouts: heldTo(all, shell), generated: checks } satisfies HeldTo };
+    return { all, fragments: passed.fragments, heldTo: { layouts: heldTo(all, shell), generated: checks, ...(readsHeldTo !== undefined ? { reads: readsHeldTo } : {}) } satisfies HeldTo };
   };
   const listeners = new Set<() => void>();
   const listenersFor = new Set<(principal: string) => void>();
   const sessionDeps = (principal: string | null, callerOf: () => Promise<Caller>, shell?: ShellManifest): SavedArtifactsDeps => ({
     whose: 'of yours',
-    kinds: ['layout', 'action', 'fragment'],
+    kinds: readSources === undefined ? ['layout', 'action', 'fragment'] : ['layout', 'action', 'fragment', 'read'],
     holder:
       principal === null
         ? undefined
@@ -306,7 +320,16 @@ export const createRunningManifest = (config: RunningManifestConfig): RunningMan
       entriesTaken = taken.catch(() => undefined);
       return taken;
     },
-    cacheEntry: async (fingerprint) => (await entries.compiled()).get(fingerprint),
+    cacheEntry: async (fingerprint, scope) => {
+      const shippedEntry = (await entries.compiled()).get(fingerprint);
+      const userId = scope?.['userId'];
+      // Nothing saved is answered to a caller nobody is signed in for.
+      if (shippedEntry !== undefined || readSources === undefined || scope === undefined || typeof userId !== 'string' || userId === NOBODY_USER_ID) return shippedEntry;
+      // The newest version is the one in force: a reset writes one with no body.
+      const newest = (await readSources.savedOf(scope).history('read', fingerprint))[0];
+      if (newest === undefined || newest.body === null || newest.unread !== undefined) return undefined;
+      return answeredRead(fingerprint, newest.body);
+    },
     cacheEntries: async () => [...(await entries.compiled())].map(([key, entry]) => ({ key, entry })),
     claim: (source, owner) => {
       owners.claim(source, owner, sets.has(source) || entries.holdsSet(source));

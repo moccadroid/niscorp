@@ -171,7 +171,12 @@ const upgradedAs =
     upgrader.upgrade(body, { kind: grammarKind, stamp }).document;
 
 // What of a body is written in a grammar, by kind.
-const upgradedBody: Readonly<Record<string, Upgraded>> = { layout: upgradedLayoutBody, action: upgradedAs('nisc.nova/action'), fragment: upgradedAs('nisc.nova/fragment') };
+const upgradedBody: Readonly<Record<string, Upgraded>> = {
+  layout: upgradedLayoutBody,
+  action: upgradedAs('nisc.nova/action'),
+  fragment: upgradedAs('nisc.nova/fragment'),
+  read: upgradedAs('nisc.vex/entry'),
+};
 
 const versionOf = (row: Row, upgrader: Upgrader): SavedVersion => {
   const version = { save: row.save, kind: row.kind, id: row.id, copiedFrom: row.copied_from ?? null, createdAt: row.created_at };
