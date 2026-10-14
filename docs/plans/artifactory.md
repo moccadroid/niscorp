@@ -708,7 +708,7 @@ Ask with the concrete change, at the step that needs it.
 |---|---|---|
 | **vex:** its shape mapper hands back the prism config it compiled, beside the compiled form | a saved read has to be the entry as authored, and the config is kept nowhere today | 7, built |
 | **strata:** one stored kind, for a vex entry | a stored entry carries the stamp it was written at and is upgraded where it is read | 7, built: declared by vex (`@niscorp/vex/migrations`); strata needed nothing |
-| **moss, `NiscApp`:** functions declared by name with a description | today `functions(session)` is one map whose names are not known before a session | 8, not built: nothing is added to `defineApp` |
+| **moss, `NiscApp`:** functions declared by name with a description | today `functions(session)` is one map whose names are not known before a session | 8, not built: nothing is added to `defineApp`; after 8, `functions(session)` returns a list of `{ id, description, execute }` |
 | **charter:** one part, which functions the generated actions of a role may call | the charter decides what a generated action may run | 8, built as the part that decides what every session may call |
 | **moss, the fabric:** one more message, "bring this principal's shells level" | a person's own save reaches their screens in another process; the message says what to do, and nothing about why | 4, built: `adopt` |
 | **moss, the function session:** the draft, and saving | the names are the owner's to hear before they are built | 4 built: `session.artifacts`; 6 built: `session.draft` |
@@ -741,6 +741,23 @@ shell. On the whole shell (`unverifiedShell`) they see the ref.
   build that is deployed later, until it is taken back. Both follow from what
   is decided, and are said here so that nobody is surprised by them.
 
+**Functions with descriptions, after step 8** (the owner's go, 2026-10-14).
+
+- **`functions(session)` returns a list of `{ id, description, execute }`**
+  (`FunctionDefinition`, exported): a function carries its id, which the
+  charter's `functions` and every `fn:` endpoint name. `session.functions()`
+  answers `{ id, description? }` for each function a session may call. Two
+  under one id are refused when a shell is built: the boot cannot see them,
+  as a session's functions are known only once it is.
+- **A map of handlers still works, and is deprecated.** The first shell a
+  process builds says once what to change: the map, or the functions with no
+  description (an empty one counts as none).
+- **In moss only.** Nova's `createShell` keeps a name and a handler; moss hands
+  it each `execute`. Nobody but the listing reads a description, and the
+  listing is moss's.
+- **Not built:** an `input` schema on a function. It is the next field when an
+  app's model needs to know what to send.
+
 **Step 8 as built** (the owner's go, 2026-10-14, for the list below).
 
 - **The charter's `functions` part means the same for every session**: the
@@ -750,9 +767,9 @@ shell. On the whole shell (`unverifiedShell`) they see the ref.
   declaration of functions with descriptions; neither was built. A generated
   action holds what its owner's roles grant, as it does for the actions it
   opens and the reads it replays.
-- **Nothing is added to `defineApp`.** `functions(session)` stays as it was.
-  What a function does is the app's to tell its model; `session.functions()`
-  names the ones a session may call.
+- **Nothing was added to `defineApp` in step 8.** `session.functions()` named
+  the functions a session may call; what one does was the app's to tell its
+  model. Descriptions came after it (above).
 - **The boot refuses**, and lists per role combination people wear (and
   `public`) each call of a held action, and of a fragment the shells ship,
   that its grants miss. **`'*'` is said at boot. A grant that names nothing is
