@@ -347,7 +347,7 @@ const runQuery = async (
   try {
     let entryReach: string | undefined;
     if (parsed.data.fingerprint !== undefined) {
-      const entry = await engine.cache.get(parsed.data.fingerprint);
+      const entry = await engine.cache.get(parsed.data.fingerprint, scope);
       if (entry !== undefined && entry.kind === 'ok') entryReach = entry.reach;
       if (probe !== undefined && entryReach !== undefined) probe.reach = entryReach;
       if (entry !== undefined && entry.kind === 'mutation') {

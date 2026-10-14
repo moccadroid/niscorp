@@ -157,7 +157,7 @@ type QueryEngineConfig = {
   cache?: CacheBackend;                     // default: createMemoryCache()
   onEvent?: VexEventHandler;                // pipeline event stream
   generateDsl?: (request, schema, caller) => Promise<Query>;
-  mapToShape?: (rows, shape) => Promise<{ ir: CompiledIr; transformed: JsonValue }>;
+  mapToShape?: (rows, shape) => Promise<{ ir: CompiledIr; config: unknown; transformed: JsonValue }>;
   embed?: (text, dimensions?) => Promise<number[]>;  // text→vector for semantic filters
   behaviors?: ScopeBehaviors;               // which columns a scope key is bound to (see below)
   rows?: LiveRowsConfig;                    // the rows cache behind `refresh: 'reactive'`
@@ -1210,6 +1210,27 @@ demand; `partial` preloads only the listed fingerprints and lazy-fills the
 rest. The tiered cache is single-instance: separate processes keep separate
 L1s.
 
+**Who asks.** The engine hands the two lookups that replay an entry the scope
+of whoever asks (`get(key, scope)`), so a cache a host writes can answer an
+entry to some callers and not to others. The three backends here answer every
+caller alike.
+
+**What a query vex wrote keeps.** The query, the compiled mapping (`prismIr`)
+and the Prism config it was compiled from (`mapping`), which `mapToShape`
+answers as `config`. A compiled form can neither be read back as a config nor
+upgraded when Prism changes, so a host that keeps such an entry for longer
+keeps the config. The Postgres table has a column for it from
+`nisc.vex.cache/2` on: a deployment that runs its migrations before it boots
+runs that one first.
+
+**An entry as a stored document.** `@niscorp/vex/migrations` exports
+`VEX_SEQUENCE`, a strata sequence with one kind, `nisc.vex/entry`: an entry as
+written, `{ dsl, mapping?, shape?, intent?, reach?, refresh? }`, without the
+fingerprint it is kept under, its `mapping` a `nisc.prism/config`. A host that
+stores entries stamps them with it and upgrades them where it reads them, as it
+does nova's and Prism's documents (`VEX_SCHEMAS` is what the grammar check
+snapshots).
+
 ### Seeding
 
 `seedCache(cache, entries)` turns authored entries into **protected** cache
@@ -1312,7 +1333,7 @@ free-form requests.
 ```typescript
 type GenerateDsl = (request: QueryRequest, schema: DatabaseSchema, caller: GenerationCaller) => Promise<Query>;
 type MapToShape  = (rows: Row[], shape: unknown) =>
-  Promise<{ ir: CompiledIr; transformed: JsonValue }>;
+  Promise<{ ir: CompiledIr; config: unknown; transformed: JsonValue }>;
 
 type GenerationCaller = {
   read: (dsl: Query) => Promise<{ rows: Row[]; sql: string; warnings: string[] }>;
@@ -1325,8 +1346,9 @@ type GenerationCaller = {
   `new VexError('unsatisfiable', reason)` — the runtime negative-caches it.
 - `mapToShape` runs when a shape is in play (the request's, or the stored one on
   a fingerprint-only replay) and the entry has no stored mapping; it returns a
-  compiled Prism `ir` plus the mapped result. The `ir` is stored with the entry
-  only on a miss — a replayed entry that has none calls the hook every time.
+  compiled Prism `ir`, the Prism `config` it was compiled from, and the mapped
+  result. Both are stored with the entry only on a miss — a replayed entry that
+  has none calls the hook every time.
   Without the hook the raw rows are returned.
 
 You can implement these however you like. Vex also ships a **reference

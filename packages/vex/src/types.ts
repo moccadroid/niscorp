@@ -19,8 +19,11 @@ export type ScopeBinding = { entity: string; field: string; key: string };
 
 export type GenerateDsl = (request: QueryRequest, schema: DatabaseSchema, caller: GenerationCaller) => Promise<Query>;
 
-/** The IR is replayed against an envelope whose `result` is the rows for an array shape, the first row for any other. */
-export type MapToShape = (rows: Row[], shape: unknown) => Promise<{ ir: CompiledIr; transformed: JsonValue }>;
+/**
+ * The IR is replayed against an envelope whose `result` is the rows for an array shape, the first row for any other.
+ * `config` is the prism config the IR was compiled from: a compiled form cannot be read back, or upgraded when prism changes.
+ */
+export type MapToShape = (rows: Row[], shape: unknown) => Promise<{ ir: CompiledIr; config: unknown; transformed: JsonValue }>;
 
 export type QueryEngineConfig = {
   adapter: DatabaseAdapter;

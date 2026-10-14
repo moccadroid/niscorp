@@ -4,6 +4,7 @@ import { NOVA_SEQUENCE, NOVA_SCHEMAS } from '../packages/nova/dist/migrations/in
 import { evaluate } from '../packages/prism/dist/index.js';
 import { PRISM_SEQUENCE, PRISM_SCHEMAS } from '../packages/prism/dist/migrations/index.js';
 import { createUpgrader } from '../packages/strata/dist/index.js';
+import { VEX_SEQUENCE, VEX_SCHEMAS } from '../packages/vex/dist/migrations/index.js';
 import { snapshotOf, snapshotText, compareSnapshot, checkCorpus, type CorpusDocument, type Snapshot } from '../packages/strata/dist/check/index.js';
 
 const root = resolve(import.meta.dirname, '..');
@@ -12,6 +13,7 @@ const rebaseline = process.argv.includes('--rebaseline');
 const GRAMMARS = [
   { sequence: NOVA_SEQUENCE, schemas: NOVA_SCHEMAS },
   { sequence: PRISM_SEQUENCE, schemas: PRISM_SCHEMAS },
+  { sequence: VEX_SEQUENCE, schemas: VEX_SCHEMAS },
 ] as const;
 
 let failed = 0;
@@ -43,7 +45,7 @@ for (const app of existsSync(corpusDir) ? readdirSync(corpusDir) : []) {
   }
 }
 const upgrader = await createUpgrader(GRAMMARS.map((g) => g.sequence), { transform: evaluate });
-const report = await checkCorpus(upgrader, { ...NOVA_SCHEMAS, ...PRISM_SCHEMAS }, documents);
+const report = await checkCorpus(upgrader, { ...NOVA_SCHEMAS, ...PRISM_SCHEMAS, ...VEX_SCHEMAS }, documents);
 line(
   report.failures.length === 0 && documents.length > 0,
   `corpus: ${report.passed}/${documents.length} captured documents upgrade and parse`,

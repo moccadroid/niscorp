@@ -33,7 +33,7 @@ const quoteIdent = (name: string, label: string): string => {
 };
 
 const SELECT_COLS =
-  'key, kind, intent, shape, dsl, prism_ir, reach, reason, created_at, expires_at, schema_fingerprint, protected, last_used_at, request_hash, refresh';
+  'key, kind, intent, shape, dsl, prism_ir, mapping, reach, reason, created_at, expires_at, schema_fingerprint, protected, last_used_at, request_hash, refresh';
 
 const rowToEntry = (row: Record<string, unknown>): CacheEntry => {
   const createdAt = (row['created_at'] as Date).getTime();
@@ -67,6 +67,7 @@ const rowToEntry = (row: Record<string, unknown>): CacheEntry => {
     kind: 'ok',
     dsl: row['dsl'] as Query,
     ...(row['prism_ir'] != null ? { prismIr: row['prism_ir'] as CompiledIr } : {}),
+    ...(row['mapping'] != null ? { mapping: row['mapping'] } : {}),
     ...(row['reach'] != null ? { reach: row['reach'] as string } : {}),
     ...(isRefresh(row['refresh']) ? { refresh: row['refresh'] } : {}),
     ...meta,
@@ -118,6 +119,10 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
           { kind: 'sql', sql: `ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS refresh text` },
         ],
       },
+      {
+        description: 'The prism config a mapping was compiled from',
+        steps: [{ kind: 'sql', sql: `ALTER TABLE ${qualified} ADD COLUMN IF NOT EXISTS mapping jsonb` }],
+      },
     ],
   };
 
@@ -166,6 +171,7 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
     const isOk = entry.kind === 'ok';
     const dsl = isOk ? JSON.stringify(entry.dsl) : entry.kind === 'mutation' ? JSON.stringify(entry.mutation) : null;
     const prismIr = isOk && entry.prismIr !== undefined ? JSON.stringify(entry.prismIr) : null;
+    const mapping = isOk && entry.mapping !== undefined ? JSON.stringify(entry.mapping) : null;
     const reason = entry.kind === 'unsatisfiable' ? entry.reason : null;
     const intent = entry.intent ?? null;
     const shape = entry.shape !== undefined ? JSON.stringify(entry.shape) : null;
@@ -179,8 +185,8 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
     const refresh = entry.kind === 'ok' ? (entry.refresh ?? null) : null;
 
     await pool.query(
-      `INSERT INTO ${qualified} (key, kind, intent, shape, dsl, prism_ir, reach, reason, created_at, expires_at, schema_fingerprint, protected, last_used_at, request_hash, refresh)
-       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      `INSERT INTO ${qualified} (key, kind, intent, shape, dsl, prism_ir, reach, reason, created_at, expires_at, schema_fingerprint, protected, last_used_at, request_hash, refresh, mapping)
+       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb)
        ON CONFLICT (key) DO UPDATE SET
          kind               = EXCLUDED.kind,
          intent             = EXCLUDED.intent,
@@ -195,8 +201,9 @@ export const createPostgresCache = (config: PostgresCacheConfig): PostgresCache 
          protected          = EXCLUDED.protected,
          last_used_at       = EXCLUDED.last_used_at,
          request_hash       = EXCLUDED.request_hash,
-         refresh            = EXCLUDED.refresh`,
-      [key, entry.kind, intent, shape, dsl, prismIr, reach, reason, createdAt, expiresAt, fingerprint, isProtected, lastUsedAt, requestHash, refresh],
+         refresh            = EXCLUDED.refresh,
+         mapping            = EXCLUDED.mapping`,
+      [key, entry.kind, intent, shape, dsl, prismIr, reach, reason, createdAt, expiresAt, fingerprint, isProtected, lastUsedAt, requestHash, refresh, mapping],
     );
   };
 

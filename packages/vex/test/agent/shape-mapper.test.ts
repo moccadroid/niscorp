@@ -40,8 +40,9 @@ describe('createShapeMapper', () => {
   it('returns the identity for fitting rows without calling the model', async () => {
     const mapper = createShapeMapper(untouchable);
     const rows = [{ name: 'Ada', count: 3 }, { name: 'Ben', count: 1 }];
-    const { transformed } = await mapper(rows, [{ name: '', count: 0 }]);
+    const { transformed, config } = await mapper(rows, [{ name: '', count: 0 }]);
     expect(transformed).toEqual(rows);
+    expect(config).toEqual({ $ref: '$.result' });
   });
 
   it('returns the single row for a fitting single shape', async () => {

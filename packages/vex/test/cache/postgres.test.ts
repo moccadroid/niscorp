@@ -295,8 +295,11 @@ describe('createPostgresCache — the table, through the ledger', () => {
     await cache.init();
     await cache.init();
     const ledger = await pool.query('SELECT sequence, n FROM strata_ledger');
-    expect(ledger.rows).toEqual([{ sequence: 'nisc.vex.cache', n: 1 }]);
-    expect(await columns(pool)).toContain('refresh');
+    expect(ledger.rows).toEqual([
+      { sequence: 'nisc.vex.cache', n: 1 },
+      { sequence: 'nisc.vex.cache', n: 2 },
+    ]);
+    expect(await columns(pool)).toEqual(expect.arrayContaining(['refresh', 'mapping']));
   });
 
   it('a table from before the later columns converges, and its rows survive', async () => {
@@ -304,7 +307,7 @@ describe('createPostgresCache — the table, through the ledger', () => {
     await pool.query(`CREATE TABLE vex_cache (key text PRIMARY KEY, kind text NOT NULL DEFAULT 'ok', dsl jsonb, created_at timestamptz NOT NULL DEFAULT now())`);
     await pool.query(`INSERT INTO vex_cache (key) VALUES ('kept')`);
     await createPostgresCache({ pool }).init();
-    expect(await columns(pool)).toEqual(expect.arrayContaining(['protected', 'last_used_at', 'request_hash', 'reach', 'refresh']));
+    expect(await columns(pool)).toEqual(expect.arrayContaining(['protected', 'last_used_at', 'request_hash', 'reach', 'refresh', 'mapping']));
     expect((await pool.query('SELECT key FROM vex_cache')).rows).toEqual([{ key: 'kept' }]);
   });
 

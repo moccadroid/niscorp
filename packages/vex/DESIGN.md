@@ -260,7 +260,7 @@ Identity is the **fingerprint** (see Cache v2 below). The supporting hashes:
   impossible, so it isn't re-run until the TTL lapses or the schema changes).
 - **Backends.** In-memory (`createMemoryCache`), durable Postgres
   (`createPostgresCache`, jsonb table, server-side TTL, `protected`/
-  `last_used_at`/`request_hash` columns; the table is a strata sequence,
+  `last_used_at`/`request_hash`/`mapping` columns; the table is a strata sequence,
   `nisc.vex.cache`, applied once through the ledger by `init()`;
   validate-on-write and evict-on-read), and tiered (`createTieredCache`, L1 +
   L2 read-through/write-through with `full`/`lazy`/`partial` warm-up). Every
@@ -580,8 +580,9 @@ The engine takes two optional hooks:
   what the person asking could see — and it is keyed (single-flight, negative
   cache) by request AND policy, because two callers who see different tables
   are asking different agents.
-- `mapToShape(rows, shape) → { ir, transformed }` — raw rows → requested shape,
-  returning a compiled Prism IR that is cached for reuse.
+- `mapToShape(rows, shape) → { ir, config, transformed }` — raw rows → requested
+  shape, returning a compiled Prism IR that is cached for reuse, and the Prism
+  config it was compiled from, which is kept beside it (`mapping`).
 
 This is the seam that keeps the core deterministic. Vex ships a reference
 implementation of both, built on `@niscorp/cortex` and `@niscorp/prism` and

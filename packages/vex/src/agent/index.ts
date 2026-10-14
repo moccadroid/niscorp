@@ -98,7 +98,7 @@ export const createShapeMapper = (llm: SignalClient): MapToShape => {
 
     if (rowsFitShape(rows, shape)) {
       const ir = await compile(IDENTITY);
-      return { ir, transformed: execute(ir, envelope) };
+      return { ir, config: IDENTITY, transformed: execute(ir, envelope) };
     }
 
     const result = await mappingAgent.run(
@@ -108,8 +108,9 @@ export const createShapeMapper = (llm: SignalClient): MapToShape => {
 
     if (!result.ok) throw new VexError('agent_failed', `${result.error.code}: ${result.error.message}`);
 
-    const ir = await compile(result.output.data);
+    const config = result.output.data;
+    const ir = await compile(config);
     const transformed = execute(ir, envelope);
-    return { ir, transformed };
+    return { ir, config, transformed };
   };
 };

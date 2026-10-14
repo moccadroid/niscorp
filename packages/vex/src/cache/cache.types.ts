@@ -2,6 +2,7 @@ import type { Query } from '../schemas/query.schema.js';
 import type { CompiledIr } from '@niscorp/prism';
 import type { MutationDefinition } from '../mutations/schema.js';
 import type { Sequence } from '@niscorp/strata';
+import type { ScopeValues } from '../scope/scope.types.js';
 
 export const REFRESH_MODES = ['snapshot', 'reactive'] as const;
 export type Refresh = (typeof REFRESH_MODES)[number];
@@ -23,6 +24,8 @@ export type OkCacheEntry = CacheEntryMeta & {
   kind: 'ok';
   dsl: Query;
   prismIr?: CompiledIr;
+  // The prism config `prismIr` was compiled from, where vex wrote the mapping.
+  mapping?: unknown;
   /**
    * The scope profile this read is served at, whatever the caller's roles say:
    * roles merge to the widest reach any of them grants, which is wrong for a
@@ -46,7 +49,8 @@ export type MutationCacheEntry = CacheEntryMeta & {
 export type CacheEntry = OkCacheEntry | UnsatisfiableCacheEntry | MutationCacheEntry;
 
 export type CacheBackend = {
-  get: (key: string) => Promise<CacheEntry | undefined>;
+  // `scope`: whose request asks, for a cache that answers an entry to some callers and not to others.
+  get: (key: string, scope?: ScopeValues) => Promise<CacheEntry | undefined>;
   set: (key: string, entry: CacheEntry) => Promise<void>;
   delete: (key: string) => Promise<void>;
   clear: () => Promise<void>;

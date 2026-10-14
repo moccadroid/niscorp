@@ -242,13 +242,14 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     validRequest: QueryRequest,
     hasRequest: boolean,
     requestHash: string | undefined,
+    scope: ScopeValues,
   ): Promise<Resolution> => {
     const fp = validRequest.fingerprint;
     if (fp === undefined) {
       return { fingerprint: mintFingerprint(), hit: false, replaced: false };
     }
 
-    const entry = await cache.get(fp);
+    const entry = await cache.get(fp, scope);
     if (entry?.kind === 'mutation') {
       throw new VexError(
         'invalid_request',
@@ -355,7 +356,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     }
   };
 
-  type MapResult = { result: JsonValue; rowCount: number; executionMs: number; mappingMs?: number; mappedIr?: CompiledIr };
+  type MapResult = { result: JsonValue; rowCount: number; executionMs: number; mappingMs?: number; mappedIr?: CompiledIr; mappedConfig?: unknown };
 
   // A mapping reads `$.context` and `$.scope` beside `$.result`, so a reactive
   // read shares rows between callers and maps them per caller.
@@ -390,6 +391,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
     let result: JsonValue = rows as unknown as JsonValue;
     let mappingMs: number | undefined;
     let mappedIr: CompiledIr | undefined = cachedIr;
+    let mappedConfig: unknown;
 
     if (validRequest.shape !== undefined) {
       if (cachedIr !== undefined) {
@@ -402,11 +404,12 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
         mappingMs = Date.now() - mapStart;
         result = mapped.transformed;
         mappedIr = mapped.ir;
+        mappedConfig = mapped.config;
       }
       if (mappingMs !== undefined) emit({ type: 'query.mapped', mappingMs });
     }
 
-    return { result, rowCount: rows.length, executionMs, mappingMs, mappedIr };
+    return { result, rowCount: rows.length, executionMs, mappingMs, mappedIr, ...(mappedConfig !== undefined ? { mappedConfig } : {}) };
   };
 
   const execute = async (
@@ -439,7 +442,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       entities: options?.entities,
     });
 
-    const cached = await resolveFingerprint(validRequest, hasRequest, requestHash);
+    const cached = await resolveFingerprint(validRequest, hasRequest, requestHash, scope);
     emit({ type: 'query.cache', hit: cached.hit, fingerprint: cached.fingerprint, replaced: cached.replaced });
 
     let dsl = cached.dsl;
@@ -537,7 +540,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
       emit({ type: 'query.done', totalMs: Date.now() - t0 });
       return { result, meta: { ...metaOf(rows.length), timing: { executionMs } } };
     }
-    const { result, rowCount, executionMs, mappingMs, mappedIr } = await executeAndMap(
+    const { result, rowCount, executionMs, mappingMs, mappedIr, mappedConfig } = await executeAndMap(
       compiled, effectiveRequest, cached.cachedIr, context, scope,
     );
     const cut = cutNote(engineLimit, shaped.limit, rowCount, effectiveRequest.shape, validRequest.fingerprint);
@@ -549,6 +552,7 @@ export const createQueryEngine = (engineConfig: QueryEngineConfig): QueryEngine 
         kind: 'ok',
         dsl,
         ...(mappedIr !== undefined ? { prismIr: mappedIr } : {}),
+        ...(mappedConfig !== undefined ? { mapping: mappedConfig } : {}),
         createdAt: now,
         lastUsedAt: now,
         ...(requestHash !== undefined ? { requestHash } : {}),

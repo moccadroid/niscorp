@@ -31,6 +31,16 @@
         "default": "./dist/agent/index.cjs"
       }
     },
+    "./migrations": {
+      "import": {
+        "types": "./dist/migrations/index.d.ts",
+        "default": "./dist/migrations/index.js"
+      },
+      "require": {
+        "types": "./dist/migrations/index.d.cts",
+        "default": "./dist/migrations/index.cjs"
+      }
+    },
     "./hono": {
       "import": {
         "types": "./dist/adapters/hono/index.d.ts",
