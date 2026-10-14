@@ -104,7 +104,13 @@ export const functionSessionFor = (
     recordRun: (run) => {
       config.hooks.runs?.({ ...run, at: Date.now(), principal, shellId: shellRef.shell?.id ?? '' }, session);
     },
-    functions: () => Object.keys(shellRef.live?.functions.held ?? {}),
+    functions: () => {
+      const functions = shellRef.live?.functions;
+      return Object.keys(functions?.held ?? {}).map((id) => {
+        const description = functions?.descriptions[id];
+        return description === undefined ? { id } : { id, description };
+      });
+    },
   };
   return session;
 };

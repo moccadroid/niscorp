@@ -7,6 +7,7 @@ import { createWireFollower } from '../data';
 import type { Data } from '../data';
 import { createPageRouter } from '../documents';
 import type { Identity } from '../identity';
+import { functionsWarning } from '../manifest';
 import type { NiscApp, ShellManifest } from '../manifest';
 import type { NiscRuntime } from '../runtime';
 import { createShellHost } from '../shells';
@@ -84,15 +85,31 @@ const hostConfig = (deps: ShellHostsDeps, shell: ShellManifest, kept: boolean): 
   };
 };
 
+// Said at the first shell any of the server's hosts builds: the app's
+// functions are known once a session is.
+const sayingWhatToFix = (functions: NonNullable<NiscApp['functions']>): NonNullable<NiscApp['functions']> => {
+  let said = false;
+  return (session) => {
+    const written = functions(session);
+    if (!said) {
+      said = true;
+      const warning = functionsWarning(written);
+      if (warning !== undefined) console.warn(warning);
+    }
+    return written;
+  };
+};
+
 export const buildShellHosts = (deps: ShellHostsDeps): Hosts => {
   const { app } = deps;
+  const wired = app.functions === undefined ? deps : { ...deps, app: { ...app, functions: sayingWhatToFix(app.functions) } };
   const pageManifests = app.pages ?? {};
   // The router refuses two pages that could answer one path. It is made before
   // any host: a host starts its idle sweep when it is made, and a refusal after
   // that would leave the sweep running.
   const pageRouter = createPageRouter(pageManifests);
-  const shells = app.shell !== undefined ? createShellHost(hostConfig(deps, app.shell, true)) : undefined;
-  const pageHosts = new Map(Object.entries(pageManifests).map(([name, manifest]) => [name, createShellHost(hostConfig(deps, manifest, false))]));
+  const shells = app.shell !== undefined ? createShellHost(hostConfig(wired, app.shell, true)) : undefined;
+  const pageHosts = new Map(Object.entries(pageManifests).map(([name, manifest]) => [name, createShellHost(hostConfig(wired, manifest, false))]));
   const owned = [...(shells !== undefined ? [shells] : []), ...pageHosts.values()];
   const every = owned.map((made) => made.host);
 

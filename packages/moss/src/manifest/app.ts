@@ -8,6 +8,30 @@ import type { IdentityRecord } from '../identity';
 
 export type LayoutVariant = { action: string; layout: LayoutNode };
 
+export type FunctionDefinition = { id: string; description: string; execute: FunctionHandler };
+
+type WrittenFunctions = readonly FunctionDefinition[] | Record<string, FunctionHandler>;
+
+// A handler is a map's value, keyed by its id; a list's values are definitions.
+export const functionsIn = (written: WrittenFunctions): readonly FunctionDefinition[] => {
+  const ids = new Set<string>();
+  return Object.entries<FunctionDefinition | FunctionHandler>(written).map(([key, value]) => {
+    const definition = typeof value === 'function' ? { id: key, description: '', execute: value } : value;
+    if (ids.has(definition.id)) throw new Error(`moss: functions(session) returned "${definition.id}" twice.`);
+    ids.add(definition.id);
+    return definition;
+  });
+};
+
+export const functionsWarning = (written: WrittenFunctions): string | undefined => {
+  const undescribed: string[] = [];
+  for (const value of Object.values<FunctionDefinition | FunctionHandler>(written)) {
+    if (typeof value === 'function') return '[moss] functions(session) returned a map of handlers, which is deprecated: return a list of { id, description, execute }.';
+    if (value.description === '') undescribed.push(value.id);
+  }
+  return undescribed.length === 0 ? undefined : `[moss] functions with no description: ${undescribed.join(', ')}. Give each a description.`;
+};
+
 export type NiscApp = {
   charter: Charter;
   assignments?: Record<string, readonly string[]>;
@@ -28,7 +52,8 @@ export type NiscApp = {
   shell?: ShellManifest;
   pages?: Record<string, PageManifest>;
   grammars?: readonly Sequence[];
-  functions?: (session: FunctionSession) => Record<string, FunctionHandler>;
+  // A map of handlers is deprecated: return a list of `{ id, description, execute }`.
+  functions?: (session: FunctionSession) => WrittenFunctions;
   // Like `functions`, it runs before the shell finishes building: defer
   // anything that touches `session.shell`.
   onSession?: (session: FunctionSession) => void;
@@ -128,8 +153,8 @@ export type FunctionSession = {
     asked: { intent: string; shape: unknown; context?: Record<string, unknown> },
   ) => Promise<QueryResponse>;
   recordRun: (run: Omit<RunRecord, 'at' | 'principal' | 'shellId'>) => void;
-  // The names of the app's functions this session may call: those its roles' `functions` grant.
-  functions: () => readonly string[];
+  // The app's functions this session may call: those its roles' `functions` grant.
+  functions: () => readonly { id: string; description?: string }[];
 };
 
 export type CanvasSeed = string | { action: string; input?: Record<string, unknown>; with?: string[] };

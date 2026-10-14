@@ -23,7 +23,11 @@ export const withLayoutInPlace = (definition: ActionDefinition, store: Shell['la
 
 // `held` is the map nova calls into, by reference: what a shell may call
 // follows the roles an adopt answers, as its actions do.
-export type ShellFunctions = { all: Readonly<Record<string, FunctionHandler>>; held: Record<string, FunctionHandler> };
+export type ShellFunctions = {
+  all: Readonly<Record<string, FunctionHandler>>;
+  held: Record<string, FunctionHandler>;
+  descriptions: Readonly<Record<string, string>>;
+};
 
 export const holdGranted = (functions: ShellFunctions, granted: ShellComposition['grantedFunctions']): void => {
   const callable = granted(Object.keys(functions.all));

@@ -64,7 +64,7 @@ type NiscApp = {
   identity?: { as?: string; resolve: (principal, read) => Promise<IdentityRecord> };
   phrases?: (session) => Phrasebook | undefined | Promise<Phrasebook | undefined>;
   phraseKeys?: PhraseKeys;
-  functions?: (session: FunctionSession) => Record<string, FunctionHandler>;
+  functions?: (session: FunctionSession) => readonly FunctionDefinition[] | Record<string, FunctionHandler>;
   onSession?: (session: FunctionSession) => void;
   runs?: RunSink;
   reactions?: readonly { table; op?; run }[];         // see "Reacting to writes"
@@ -98,10 +98,23 @@ Every field is an artifact (authored data) except the code seams — `scope`,
   the policy of the charter role `identity.as` names (it throws when `as` is
   unset). Moss never reads inside the record's `scope`. Absent, `assignments`
   and `scope` answer, and every registered integration is live for everybody.
-- `functions(session)` — the handlers behind `fn:` endpoints. Called once for
-  each shell that is built: the app's, a page's, and the one a reset builds.
-  Like `onSession`, it runs before the shell finishes building, so it must
-  not touch `session.shell` synchronously. **A shell holds only the functions
+- `functions(session)` — the functions behind `fn:` endpoints. Called once
+  for each shell that is built: the app's, a page's, and the one a reset
+  builds. Like `onSession`, it runs before the shell finishes building, so it
+  must not touch `session.shell` synchronously. It returns a list of
+  `FunctionDefinition`, `{ id: string; description: string; execute:
+  FunctionHandler }`: `id` is what the charter's `functions` and an `fn:`
+  endpoint name, `execute` is what an `fn:` endpoint calls, `(data, signal) =>
+  Promise<unknown>`, and `description` says what it does and what to send, for
+  the model that writes a call to it (`session.functions()` lists it). Two
+  under one id are refused when a shell is built: `moss: functions(session)
+  returned "auth.leave" twice.` A map of handlers by id still works and is
+  deprecated. The first shell a process builds says once what to change, read
+  off what that first session's `functions(session)` returned: `[moss]
+  functions(session) returned a map of handlers, which is deprecated: return a
+  list of { id, description, execute }.`, or `[moss] functions with no
+  description: auth.leave. Give each a description.` An empty description
+  counts as none, and a function given by a map has none. **A shell holds only the functions
   its principal's roles grant**, in the charter's `functions` part (names or
   globs, with `extends` and `deny`, as `actions`): a role with none may call
   none, and an `fn:` endpoint to one it does not grant fails when it is called.
@@ -287,7 +300,7 @@ type FunctionSession = {
     asked: { intent: string; shape: unknown; context?: Record<string, unknown> },
   ) => Promise<QueryResponse>;
   recordRun: (run: Omit<RunRecord, 'at' | 'principal' | 'shellId'>) => void;
-  functions: () => readonly string[]; // the names of the app's functions this session may call: what its roles' `functions` grant
+  functions: () => readonly { id: string; description?: string }[]; // the app's functions this session may call, what its roles' `functions` grant
 };
 ```
 
@@ -395,9 +408,13 @@ of the action it is for is kept under in the shell's layout store,
 down), `frame` or `canvas/<a canvas's id>`. `layout` is a nova layout.
 
 ```typescript
-functions: (session) => ({
-  'layout.keep': async ({ layout }) => session.artifacts.save([{ kind: 'layout', body: { ref: 'action/deals.list', layout, use: true } }]),
-}),
+functions: (session) => [
+  {
+    id: 'layout.keep',
+    description: 'Keeps a layout for the deals list as the person’s own. Send { layout }.',
+    execute: async ({ layout }) => session.artifacts.save([{ kind: 'layout', body: { ref: 'action/deals.list', layout, use: true } }]),
+  },
+],
 ```
 
 **A generated action's body** is a nova action definition without an `id`,
@@ -407,9 +424,13 @@ refused, and a save that names the `id` of one of the principal's own is a new
 version of it.
 
 ```typescript
-functions: (session) => ({
-  'screen.keep': async ({ action }) => session.artifacts.save([{ kind: 'action', body: action }]),
-}),
+functions: (session) => [
+  {
+    id: 'screen.keep',
+    description: 'Keeps an action the person generated. Send { action }.',
+    execute: async ({ action }) => session.artifacts.save([{ kind: 'action', body: action }]),
+  },
+],
 ```
 
 - **It is its owner's and nobody else's.** It is among the actions (or the
@@ -426,8 +447,8 @@ functions: (session) => ({
   shell has it.
 - **What it defines replays reads, and calls the functions its owner's roles
   grant.** An `fn:` endpoint names a function its owner's roles grant in the
-  charter's `functions` (`session.functions()` names them, for the model that
-  writes it); one they do not grant is refused. Every other endpoint is a
+  charter's `functions` (`session.functions()` lists them with their
+  descriptions, for the model that writes it); one they do not grant is refused. Every other endpoint is a
   `POST` to the app's vex route (`/api/vex`, or `/api/<resource>/vex`) whose
   `request` names one fingerprint, written out. That fingerprint is a read the app ships or
   was handed (`replaceEntries`) that its owner's policy may replay, or a read
@@ -670,13 +691,17 @@ type SessionDraft = {
 ```
 
 ```typescript
-functions: (session) => ({
-  'screen.try': async ({ action }) => {
-    const put = await session.draft.put([{ kind: 'action', body: action }]);
-    session.shell.push('main', put.artifacts[0].id);
+functions: (session) => [
+  {
+    id: 'screen.try',
+    description: 'Shows an action the person is trying out, without keeping it. Send { action }.',
+    execute: async ({ action }) => {
+      const put = await session.draft.put([{ kind: 'action', body: action }]);
+      session.shell.push('main', put.artifacts[0].id);
+    },
   },
-  'screen.keep': async () => session.draft.save(),
-}),
+  { id: 'screen.keep', description: 'Keeps what the person is trying out.', execute: async () => session.draft.save() },
+],
 ```
 
 - **`put` takes what `session.artifacts.save` takes and refuses what it

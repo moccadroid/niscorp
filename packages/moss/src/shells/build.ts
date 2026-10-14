@@ -1,6 +1,7 @@
 import { createComponentRegistry, createLayoutStore, createShell } from '@niscorp/nova';
-import type { CanvasConfig, PublicActionRuntime, Shell } from '@niscorp/nova';
+import type { CanvasConfig, FunctionHandler, PublicActionRuntime, Shell } from '@niscorp/nova';
 import { evaluate } from '@niscorp/prism';
+import { functionsIn } from '../manifest';
 import type { CanvasSeed, ShellCanvas } from '../manifest';
 import { spanClock } from '../runtime';
 import { noDraft } from './draft';
@@ -156,8 +157,13 @@ export const buildShell = async (host: HostState, asked: BuildRequest): Promise<
   // No await between here and `shellRef.shell = shell`: app code defers its
   // first touch of `session.shell` by a microtask, which has to find the shell
   // there and still land before the shell's mount calls answer.
-  const written = hooks.functions?.(session) ?? {};
-  const functions: ShellFunctions = { all: emit === undefined ? written : instrumentFunctions(written, emit, principal), held: {} };
+  const handlers: Record<string, FunctionHandler> = {};
+  const descriptions: Record<string, string> = {};
+  for (const { id, description, execute } of functionsIn(hooks.functions?.(session) ?? [])) {
+    handlers[id] = execute;
+    if (description !== '') descriptions[id] = description;
+  }
+  const functions: ShellFunctions = { all: emit === undefined ? handlers : instrumentFunctions(handlers, emit, principal), held: {}, descriptions };
   holdGranted(functions, made.grantedFunctions);
   if (kept) hooks.onSession?.(session);
 

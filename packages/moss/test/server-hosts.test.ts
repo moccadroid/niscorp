@@ -353,6 +353,42 @@ describe('the shell hosts — what each host is told', () => {
     }
   });
 
+  it('the functions with no description are said once for the server, at the first shell any of its hosts builds', async () => {
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const functions = () => [
+      { id: 'words.count', description: '', execute: async () => 3 },
+      { id: 'words.tag', description: 'Tags a word.', execute: async () => undefined },
+    ];
+    const hosts = buildShellHosts({ ...depsWith(shipped), app: { ...app, functions } });
+    const said = () => warned.mock.calls.filter(([line]) => String(line).startsWith('[moss] functions'));
+    try {
+      await hosts.pageAt('/docs')?.host.snapshot(null, null);
+      expect(said()).toEqual([['[moss] functions with no description: words.count. Give each a description.']]);
+
+      await hosts.shells?.session('t', 'usr_1');
+      await hosts.pageAt('/docs')?.host.snapshot(null, null);
+      expect(said()).toHaveLength(1);
+    } finally {
+      hosts.stop();
+    }
+  });
+
+  it('a map of handlers still works, and is said once to be deprecated', async () => {
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const functions = () => ({ 'words.count': async () => 3 });
+    const hosts = buildShellHosts({ ...depsWith(shipped), app: { ...app, functions } });
+    try {
+      await hosts.shells?.session('t', 'usr_1');
+      await hosts.shells?.session('t', 'usr_2');
+
+      expect(warned.mock.calls.filter(([line]) => String(line).startsWith('[moss] functions'))).toEqual([
+        ['[moss] functions(session) returned a map of handlers, which is deprecated: return a list of { id, description, execute }.'],
+      ]);
+    } finally {
+      hosts.stop();
+    }
+  });
+
   it('a host that is handed out has no way to adopt and none to stop: those are asked of all of them at once', () => {
     const hosts = buildShellHosts(depsWith(shipped));
     try {

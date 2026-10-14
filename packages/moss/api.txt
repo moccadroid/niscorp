@@ -2,6 +2,7 @@
 . DrawnDocument
 . ExecuteAs
 . ExportedDocument
+. FunctionDefinition
 . FunctionSession
 . IdentityRecord
 . LayoutVariant

@@ -1,5 +1,5 @@
 export { defineApp } from './manifest';
-export type { NiscApp, ShellManifest, PageManifest, FunctionSession, LayoutVariant, RunRecord, RunTurn, RunSink } from './manifest';
+export type { NiscApp, ShellManifest, PageManifest, FunctionDefinition, FunctionSession, LayoutVariant, RunRecord, RunTurn, RunSink } from './manifest';
 export { mintDevToken } from './identity';
 export type { NiscRuntime } from './runtime';
 export type { Telemetry, TelemetrySpan } from './runtime';

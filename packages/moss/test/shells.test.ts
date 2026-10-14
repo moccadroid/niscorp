@@ -215,7 +215,7 @@ describe('shells — the session app code is handed', () => {
       composition: async (principal) => ({ ...(await config.composition(principal)), grantedFunctions: (names) => new Set(names.filter((name) => name === 'notes.list')) }),
     }).session('t', 'usr_1');
 
-    expect(seen.session?.functions()).toEqual(['notes.list']);
+    expect(seen.session?.functions()).toEqual([{ id: 'notes.list' }]);
   });
 
   it('the functions it holds follow the roles an adopt answers, as its actions do', async () => {
@@ -234,13 +234,73 @@ describe('shells — the session app code is handed', () => {
       composition: async (principal) => ({ ...(await config.composition(principal)), grantedFunctions: (names) => new Set(names.filter((name) => granting.names.includes(name))) }),
     });
     await host.session('t', 'usr_1');
-    expect(seen.session?.functions()).toEqual(['notes.list']);
+    expect(seen.session?.functions()).toEqual([{ id: 'notes.list' }]);
 
     granting.names = ['notes.delete'];
     host.adopt();
     for (let i = 0; i < 4; i += 1) await tick();
 
-    expect(seen.session?.functions()).toEqual(['notes.delete']);
+    expect(seen.session?.functions()).toEqual([{ id: 'notes.delete' }]);
+  });
+
+  it('a list of { id, description, execute }: each is called through execute, and named with its description', async () => {
+    const counted: string[] = [];
+    const seen: { session?: FunctionSession } = {};
+    const counting = {
+      ...app,
+      actions: {
+        counter: {
+          ...counter,
+          endpoints: { count: { fn: 'notes.count' } },
+          triggers: [...counter.triggers, { event: 'ui:click', ref: 'count', do: [{ call: 'count' }] }],
+        },
+      },
+      functions: (session: FunctionSession) => {
+        seen.session = session;
+        return [
+          { id: 'notes.count', description: 'Counts the person’s notes.', execute: async () => (counted.push('counted'), 3) },
+          { id: 'notes.list', description: 'Lists the person’s notes.', execute: async () => [] },
+        ];
+      },
+    } as unknown as NiscApp;
+    const session = await standHost(hostConfig({ ...ctx, app: counting })).session('t', 'usr_1');
+
+    expect(seen.session?.functions()).toEqual([
+      { id: 'notes.count', description: 'Counts the person’s notes.' },
+      { id: 'notes.list', description: 'Lists the person’s notes.' },
+    ]);
+    session.dispatch('main', { type: 'ui:click', ref: 'count' });
+    for (let i = 0; i < 4; i += 1) await tick();
+    expect(counted).toEqual(['counted']);
+  });
+
+  it('an empty description counts as none: that function is named by its id alone', async () => {
+    const seen: { session?: FunctionSession } = {};
+    const undescribed = {
+      ...app,
+      functions: (session: FunctionSession) => {
+        seen.session = session;
+        return [
+          { id: 'notes.count', description: '', execute: async () => 3 },
+          { id: 'notes.tag', description: 'Tags a note.', execute: async () => undefined },
+        ];
+      },
+    } as unknown as NiscApp;
+    await standHost(hostConfig({ ...ctx, app: undescribed })).session('t', 'usr_1');
+
+    expect(seen.session?.functions()).toEqual([{ id: 'notes.count' }, { id: 'notes.tag', description: 'Tags a note.' }]);
+  });
+
+  it('two functions under one id are refused when the shell is built', async () => {
+    const twice = {
+      ...app,
+      functions: () => [
+        { id: 'auth.leave', description: 'Signs the person out.', execute: async () => undefined },
+        { id: 'auth.leave', description: 'Signs the person out, again.', execute: async () => undefined },
+      ],
+    } as unknown as NiscApp;
+
+    await expect(standHost(hostConfig({ ...ctx, app: twice })).session('t', 'usr_1')).rejects.toThrow('moss: functions(session) returned "auth.leave" twice.');
   });
 
   it('an intent is answered as the session’s own principal, whoever the app code names', async () => {
