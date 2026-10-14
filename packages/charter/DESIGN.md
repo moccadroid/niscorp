@@ -172,12 +172,14 @@ glob.
 
 ## Sections
 
-A `Section` is `'actions' | 'data' | 'layouts'` — each a universe. `actions`
-selects Nova action ids; `data` selects `table.verb` capabilities; `layouts`
-selects layout-variant ids (ring 2). The sugar keeps the common role terse: a
+A `Section` is `'actions' | 'data' | 'layouts' | 'functions'` — each a
+universe. `actions` selects Nova action ids; `data` selects `table.verb`
+capabilities; `layouts` selects layout-variant ids (ring 2); `functions` selects
+the names of the app's functions. The sugar keeps the common role terse: a
 bare `string[]` is an actions-only role, and top-level `allow`/`deny` are the
 `actions` section (so an actions-only role never names a section). Explicit
-`actions:`/`data:`/`layouts:` selections address each universe directly. Having
+`actions:`/`data:`/`layouts:`/`functions:` selections address each universe
+directly. Having
 *both* the sugar and an explicit `actions:` on one role is the
 `ambiguous-selection` error — resolution would silently drop one.
 
@@ -193,7 +195,9 @@ and the verifier all run per section against the right universe — one matcher,
 one resolver, one set of lints, reused. **Adding a governed surface is adding a
 `Section` value, a universe, and a compiler in the *target* — never a grammar
 change here.** The `layouts` section was exactly that: one enum value, moss
-hands the universe in, moss compiles it to substituted layouts.
+hands the universe in, moss compiles it to substituted layouts. So was
+`functions`: moss hands each shell only the functions its principal's roles
+select.
 
 ---
 

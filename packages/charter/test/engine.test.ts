@@ -64,6 +64,21 @@ describe('resolution', () => {
     expect(sorted(resolveRole(L, variants, 'sales', 'layouts'))).toEqual([]);
     expect(sorted(resolveRole(L, variants, 'bare', 'layouts'))).toEqual([]);
   });
+
+  it('the functions section resolves in its own universe, as the others do; a role with none, or a bare array, grants none', () => {
+    const F: Charter = {
+      member: { actions: ['a.*'], functions: ['notes.*'] },
+      editor: { extends: ['member'], functions: { allow: ['publish'], deny: ['notes.delete'] } },
+      silent: { actions: ['a.*'] },
+      bare: ['a.*'],
+    };
+    const functions = ['notes.add', 'notes.delete', 'publish', 'auth.leave'];
+    expect(sorted(resolveRole(F, functions, 'member', 'functions'))).toEqual(['notes.add', 'notes.delete']);
+    expect(sorted(resolveRole(F, functions, 'editor', 'functions'))).toEqual(['notes.add', 'publish']);
+    expect(sorted(resolveRole(F, functions, 'silent', 'functions'))).toEqual([]);
+    expect(sorted(resolveRole(F, functions, 'bare', 'functions'))).toEqual([]);
+    expect(sorted(resolvePrincipal(F, functions, ['silent', 'member'], 'functions'))).toEqual(['notes.add', 'notes.delete']);
+  });
 });
 
 describe('verifier', () => {
@@ -120,6 +135,17 @@ describe('verifier', () => {
     expect(withU.errors.some((e) => e.rule === 'dead-deny' && e.detail.includes('layouts'))).toBe(true);
     expect(withU.warnings.some((w) => w.rule === 'orphan' && w.detail.includes('a.two.compact'))).toBe(true);
     expect(withU.perRole.find((p) => p.role === 'r')?.layouts).toEqual(['a.one.basic']);
+  });
+
+  it('the functions universe is verified only when handed in: a grant that matches nothing, a deny that matches nothing, a function no role grants', () => {
+    const charter: Charter = { r: { actions: ['a.*'], functions: { allow: ['notes.ad', 'notes.list'], deny: ['zz.*'] } }, all: ['*'] };
+    const without = verifyCharter(charter, universes(gids));
+    expect([...without.errors, ...without.warnings].some((issue) => issue.detail.includes('(functions)'))).toBe(false);
+
+    const withU = verifyCharter(charter, { ...universes(gids), functions: ['notes.add', 'notes.list'] });
+    expect(withU.warnings).toContainEqual({ level: 'warning', rule: 'dead-allow', detail: 'role "r" allows "notes.ad" (functions) which matches nothing' });
+    expect(withU.errors).toContainEqual({ level: 'error', rule: 'dead-deny', detail: 'role "r" denies "zz.*" (functions) which matches nothing — silent means unprotected' });
+    expect(withU.warnings).toContainEqual({ level: 'warning', rule: 'orphan', detail: 'function "notes.add" is granted by no role — deployed but unreachable' });
   });
 
   it('the closure auditor receives each role\'s granted variant ids', () => {

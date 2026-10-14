@@ -1,4 +1,4 @@
-export type Section = 'actions' | 'data' | 'layouts';
+export type Section = 'actions' | 'data' | 'layouts' | 'functions';
 
 export type Selection = string[] | { allow?: string[]; deny?: string[] };
 
@@ -12,6 +12,8 @@ export type RoleDef =
       actions?: Selection;
       data?: Selection;
       layouts?: Selection;
+      // The app's functions a role may call. With none, it may call none.
+      functions?: Selection;
 
       // A name the governed target resolves. Not inherited through `extends`:
       // a desk that extends a member must not take on the member's "only my own

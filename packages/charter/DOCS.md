@@ -26,6 +26,7 @@ type RoleDef =
       actions?: Selection;          // the actions universe
       data?: Selection;             // the data universe
       layouts?: Selection;          // the layouts universe
+      functions?: Selection;        // the app's functions this role may call
       scoping?: string;             // how far this role reaches (see below)
     };
 ```
@@ -94,12 +95,13 @@ Within a section: a bare glob list (sugar for `{ allow }`) or explicit
 ### `Section`
 
 ```typescript
-type Section = 'actions' | 'data' | 'layouts';
+type Section = 'actions' | 'data' | 'layouts' | 'functions';
 ```
 
 Which universe a selection resolves in. `actions` selects Nova action ids,
 `data` selects `table.verb` capabilities, `layouts` selects layout-variant ids
-(ring 2 — moss's dialect).
+(ring 2 — moss's dialect), `functions` selects the names of the app's
+functions (moss's too). A role with no `functions` may call none.
 
 ---
 
@@ -163,11 +165,12 @@ catches these and reports them as `resolution` errors rather than throwing.
 Run every coherence check, per section, against that section's universe. Call
 at boot/CI; refuse to serve if `report.errors` is non-empty.
 
-- `universes: { actions: readonly string[]; data: readonly string[]; layouts?: readonly string[] }`
+- `universes: { actions: readonly string[]; data: readonly string[]; layouts?: readonly string[]; functions?: readonly string[] }`
   — the id sets each section resolves against, handed in by the composer. The
   `layouts` universe is optional: absent, the section is inert (a charter's
   `layouts` keys resolve against nothing and are not verified); handed in, its
   dead-deny/dead-allow/orphan/leaves-only checks run like any other section.
+  So is `functions`, with the same checks.
 - `wearable?: readonly (readonly string[])[]` — the role combinations a principal
   may wear, one entry per combination (not one per person). Defaults to `[]`.
   Read only by the `subtractive-assigned` check. A composer that has an

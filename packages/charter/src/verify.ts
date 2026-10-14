@@ -12,24 +12,31 @@ export type ClosureAuditor = (grantedIds: readonly string[], layoutIds?: readonl
 
 export const verifyCharter = (
   charter: Charter,
-  universes: { actions: readonly string[]; data: readonly string[]; layouts?: readonly string[] },
+  // `layouts`, `functions`: verified where they are handed in.
+  universes: { actions: readonly string[]; data: readonly string[]; layouts?: readonly string[]; functions?: readonly string[] },
   // One entry per combination of roles a principal may hold, not one per principal.
   wearable: readonly (readonly string[])[] = [],
   closure?: ClosureAuditor,
 ): VerifyReport => {
   const actionUniverse = universes.actions;
-  const sections: Section[] = universes.layouts === undefined ? ['actions', 'data'] : ['actions', 'data', 'layouts'];
+  const sections: Section[] = [
+    'actions',
+    'data',
+    ...(universes.layouts === undefined ? [] : (['layouts'] as const)),
+    ...(universes.functions === undefined ? [] : (['functions'] as const)),
+  ];
   const universeOf: Record<Section, readonly string[]> = {
     actions: universes.actions,
     data: universes.data,
     layouts: universes.layouts ?? [],
+    functions: universes.functions ?? [],
   };
 
   const errors: VerifyIssue[] = [];
   const warnings: VerifyIssue[] = [];
   const perRole: RoleClosure[] = [];
 
-  const resolved: Record<Section, Map<string, ReadonlySet<string>>> = { actions: new Map(), data: new Map(), layouts: new Map() };
+  const resolved: Record<Section, Map<string, ReadonlySet<string>>> = { actions: new Map(), data: new Map(), layouts: new Map(), functions: new Map() };
   for (const section of sections) {
     const memo = new Map<string, ReadonlySet<string>>();
     for (const role of Object.keys(charter)) {
@@ -87,6 +94,7 @@ export const verifyCharter = (
   };
   orphans('actions', 'action');
   if (universes.layouts !== undefined) orphans('layouts', 'layout variant');
+  if (universes.functions !== undefined) orphans('functions', 'function');
 
   const ancestorDenied = (role: string, section: Section, seen: Set<string> = new Set()): Set<string> => {
     const out = new Set<string>();
